@@ -947,10 +947,20 @@ async function loadQuizList() {
       api('GET', '/api/student/quizzes?showAll=true')
     ]);
     const liveIds = new Set((liveData.quizzes || []).map(q => q._id));
-    const quizzes = [
+    const merged = [
       ...(liveData.quizzes || []),
       ...(allData.quizzes || []).filter(q => !liveIds.has(q._id))
     ];
+    // Deduplicate: if same title + same startTime, keep the one with more questions
+    const seen = new Map();
+    merged.forEach(q => {
+      const key = q.title + '_' + q.startTime;
+      const existing = seen.get(key);
+      if (!existing || (q.questionCount || 0) > (existing.questionCount || 0)) {
+        seen.set(key, q);
+      }
+    });
+    const quizzes = Array.from(seen.values());
 
     if (quizzes.length === 0) {
       container.innerHTML = '<p style="text-align:center;padding:24px;color:var(--slate)">No quizzes found. Make sure you are enrolled in a course with your lecturer.</p>';
