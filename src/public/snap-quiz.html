@@ -941,11 +941,19 @@ async function loadQuizList() {
   container.innerHTML = '<div class="spinner"></div>';
 
   try {
-    const data = await api('GET', '/api/student/quizzes');
-    const quizzes = data.quizzes || [];
+    // Fetch live + all quizzes so students see upcoming and past too
+    const [liveData, allData] = await Promise.all([
+      api('GET', '/api/student/quizzes'),
+      api('GET', '/api/student/quizzes?showAll=true')
+    ]);
+    const liveIds = new Set((liveData.quizzes || []).map(q => q._id));
+    const quizzes = [
+      ...(liveData.quizzes || []),
+      ...(allData.quizzes || []).filter(q => !liveIds.has(q._id))
+    ];
 
     if (quizzes.length === 0) {
-      container.innerHTML = '<p style="text-align:center;padding:24px">No active quizzes found.</p>';
+      container.innerHTML = '<p style="text-align:center;padding:24px;color:var(--slate)">No quizzes found. Make sure you are enrolled in a course with your lecturer.</p>';
       return;
     }
 
@@ -956,6 +964,9 @@ async function loadQuizList() {
             <div style="font-size:11px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px">${q.course?.code || 'Course'}</div>
             <div style="font-size:16px;font-weight:700;margin-bottom:4px">${q.title}</div>
             <div style="font-size:12px;color:var(--slate)">${q.questionCount} questions · ${q.timeLimit} min</div>
+            <div style="font-size:11px;color:var(--muted);margin-top:3px">
+              ${new Date(q.startTime).toLocaleString()} → ${new Date(q.endTime).toLocaleString()}
+            </div>
           </div>
           <div style="flex-shrink:0">
             ${q.isSubmitted
