@@ -407,11 +407,12 @@ exports.login = async (req, res) => {
 
     let user;
     if (indexNumber) {
-      const query = { indexNumber, role: "student" };
+      const normalizedIndex = indexNumber.trim().toUpperCase();
+      const query = { indexNumber: normalizedIndex, role: "student" };
       if (institutionCode) {
-        const company = await Company.findOne({ institutionCode: institutionCode.toUpperCase() });
+        const company = await Company.findOne({ institutionCode: institutionCode.trim().toUpperCase() });
         if (!company) {
-          return res.status(401).json({ error: "Institution not found" });
+          return res.status(401).json({ error: "Institution not found. Check your Institution Code." });
         }
         query.company = company._id;
       }
@@ -426,13 +427,18 @@ exports.login = async (req, res) => {
       user = await User.findOne({ email }).select("+password");
     }
 
-    if (!user || !user.isActive) {
-      return res.status(401).json({ error: "Invalid credentials" });
+    if (!user) {
+      return res.status(401).json({ error: indexNumber
+        ? "Student not found. Check your Index Number and Institution Code."
+        : "Invalid email or password." });
+    }
+    if (!user.isActive) {
+      return res.status(401).json({ error: "Your account has been deactivated. Contact your admin." });
     }
 
     const isMatch = await user.comparePassword(password);
     if (!isMatch) {
-      return res.status(401).json({ error: "Invalid credentials" });
+      return res.status(401).json({ error: "Incorrect password. Please try again." });
     }
 
     if (!user.isApproved) {
