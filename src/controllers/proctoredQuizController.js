@@ -51,7 +51,7 @@ function computeIntegrity(totalViolations, warningsIssued) {
 
 /** Classify event severity */
 function classifyEvent(eventType) {
-  const critical = ["multiple_faces", "camera_disabled", "identity_mismatch", "session_conflict"];
+  const critical = ["multiple_faces", "camera_disabled", "identity_mismatch", "session_conflict", "phone_detected", "head_turn"];
   const warning = [
     "tab_switch",
     "app_background",
@@ -282,8 +282,13 @@ exports.logEvent = async (req, res) => {
 
       // Level 3 → immediate terminate
       // Note: duration is sent with app_foreground (after returning), not app_background
+      // Track critical violations separately for 2-strike rule
+      if (violationLevel === 3) {
+        session.criticalViolations = (session.criticalViolations || 0) + 1;
+      }
+
       if (
-        violationLevel === 3 ||
+        (violationLevel === 3 && session.criticalViolations >= 2) ||
         ((eventType === "app_background" || eventType === "app_foreground") && duration && duration > 10) ||
         session.totalViolations >= 10
       ) {
