@@ -577,7 +577,7 @@
 
     <div class="field">
       <label>Institution Code</label>
-      <input type="text" id="login-institution" placeholder="e.g. UNIV2024" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false"/>
+      <input type="text" id="login-institution" placeholder="e.g. UNIV2024" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false" oninput="const e=document.getElementById('login-error-msg');if(e)e.style.display='none'"/>
     </div>
     <div class="field">
       <label>Index Number</label>
@@ -588,6 +588,7 @@
       <input type="password" id="login-password" placeholder="••••••••" autocomplete="current-password"/>
     </div>
     <button class="btn btn-primary" id="login-btn">Sign In</button>
+    <div id="login-error-msg" style="display:none;margin-top:12px;padding:10px 14px;background:#450a0a;border:1px solid #dc2626;border-radius:8px;color:#fca5a5;font-size:13px;text-align:center;"></div>
 
     <div class="divider"><span>or</span></div>
     <button class="btn btn-ghost btn-sm" id="show-dashboard-btn">Lecturer Dashboard →</button>
@@ -906,7 +907,7 @@ document.getElementById('login-btn').addEventListener('click', async () => {
 
   try {
     // Try student login via index number
-    const data = await api('POST', '/api/auth/login', { indexNumber, password, institutionCode });
+    const data = await api('POST', '/api/auth/login', { indexNumber, password, institutionCode, loginRole: 'student' });
     state.token = data.token;
     state.user  = data.user;
     state.deviceFingerprint = buildFingerprint();
@@ -914,6 +915,8 @@ document.getElementById('login-btn').addEventListener('click', async () => {
     show('quiz-list-screen');
     toast('Signed in!', 'success');
   } catch (e) {
+    const errEl = document.getElementById('login-error-msg');
+    if (errEl) { errEl.textContent = e.message; errEl.style.display = 'block'; }
     toast(e.message, 'error');
   } finally {
     btn.disabled = false; btn.textContent = 'Sign In';
