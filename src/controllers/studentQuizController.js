@@ -68,8 +68,8 @@ exports.listQuizzes = async (req, res) => {
       const attempt = attemptMap[q._id.toString()];
       obj.hasAttempted = !!attempt;
       obj.isSubmitted = attempt?.isSubmitted || false;
-      obj.myScore = attempt?.score || null;
-      obj.myMaxScore = attempt?.maxScore || null;
+      obj.myScore = attempt?.score ?? null;
+      obj.myMaxScore = attempt?.maxScore ?? null;
 
       const isOpen = now >= q.startTime && now <= q.endTime;
       obj.status = now < q.startTime ? "upcoming" : now > q.endTime ? "closed" : "open";
