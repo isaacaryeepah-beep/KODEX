@@ -2250,7 +2250,15 @@ async function renderStudentQuizzes(content, showAll) {
   try {
     const url = showAll ? '/api/student/quizzes?showAll=true' : '/api/student/quizzes';
     const data = await api(url);
-    const quizzes = data.quizzes || [];
+    // Deduplicate: same title + startTime => keep the one with most questions
+    const raw = data.quizzes || [];
+    const seen = new Map();
+    raw.forEach(q => {
+      const key = q.title + '_' + new Date(q.startTime).getTime();
+      const existing = seen.get(key);
+      if (!existing || (q.questionCount||0) > (existing.questionCount||0)) seen.set(key, q);
+    });
+    const quizzes = Array.from(seen.values());
     content.innerHTML = `
       <div class="page-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;">
         <div><h2>Quizzes</h2><p>Your available quizzes and assessments</p></div>
