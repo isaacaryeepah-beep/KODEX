@@ -239,17 +239,17 @@ html, body { height: 100%; background: var(--navy); color: var(--white); font-fa
 
 <script>
 const API = '';
-// Read from same key as main app (app.js stores token as 'token')
-let authToken = localStorage.getItem('token') || '';
+let authToken = localStorage.getItem('proctor_token') || '';
 let currentQuizId = '';
 let refreshTimer = null;
 let selectedSessionId = null;
 let monitorData = null;
 
-// Redirect to login if not authenticated
+// ── Auth token input ────────────────────────────────────────────────
+const tokenKey = 'proctor_token';
 if (!authToken) {
-  alert('Please log in first.');
-  location.href = '/index.html';
+  authToken = prompt('Enter your lecturer JWT token (from login):') || '';
+  if (authToken) localStorage.setItem(tokenKey, authToken);
 }
 
 // ── Toast ────────────────────────────────────────────────────────────
@@ -272,6 +272,22 @@ async function api(method, path) {
 }
 
 // ── Load Monitor ─────────────────────────────────────────────────────
+// ── Auto-load quiz from URL ?quizId=xxx ─────────────────────────
+(function() {
+  const params = new URLSearchParams(window.location.search);
+  const qid = params.get('quizId');
+  if (qid) {
+    const inp = document.getElementById('quiz-id-input');
+    if (inp) inp.value = qid;
+    currentQuizId = qid;
+    setTimeout(() => {
+      loadMonitor();
+      if (refreshTimer) clearInterval(refreshTimer);
+      refreshTimer = setInterval(loadMonitor, 15000);
+    }, 500);
+  }
+})();
+
 document.getElementById('load-btn').addEventListener('click', () => {
   const id = document.getElementById('quiz-id-input').value.trim();
   if (!id) return toast('Enter a quiz ID', 'error');
@@ -288,7 +304,7 @@ document.getElementById('refresh-btn').addEventListener('click', () => {
 
 async function loadMonitor() {
   try {
-    const data = await api('GET', `/api/proctor/quiz/${currentQuizId}/live-monitor`);
+    const data = await api('GET', `/api/student/quizzes/${currentQuizId}/proctor/live-monitor`);
     monitorData = data;
     renderSidebar(data);
     document.getElementById('quiz-label').textContent = data.quiz?.title || currentQuizId;
@@ -342,7 +358,7 @@ async function loadDetail(sessionId) {
   panel.innerHTML = '<div class="spinner"></div>';
 
   try {
-    const data = await api('GET', `/api/proctor/session/${sessionId}/report`);
+    const data = await api('GET', `/api/student/quizzes/proctor/session/${sessionId}/report`);
     const s = data.session;
     const logs = data.logs || [];
     const snaps = data.snapshots || [];
@@ -424,7 +440,7 @@ async function loadDetail(sessionId) {
     // Load snapshot images
     panel.querySelectorAll('.snap-thumb[data-sid]').forEach(thumb => {
       const sid = thumb.dataset.sid;
-      api('GET', `/api/proctor/snapshot/${sid}`).then(data => {
+      api('GET', `/api/student/quizzes/proctor/snapshot/${sid}`).then(data => {
         const img = document.createElement('img');
         img.src = data.imageData;
         img.style = 'width:100%;height:100%;object-fit:cover;display:block';
