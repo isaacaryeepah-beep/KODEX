@@ -1065,6 +1065,18 @@ async function openQuizQuestionsPanel(quizId) {
           Add New Question
         </div>
         <div style="margin-bottom:14px">
+          <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:7px;display:block">Question Type</label>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <label id="qz-lbl-single" style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:7px 14px;border:2px solid var(--primary);border-radius:8px;background:var(--primary);color:#fff;font-size:13px;font-weight:600">
+              <input type="radio" name="qz-type" value="single" checked onchange="qzToggleType('single')" style="accent-color:#fff"> Single Answer
+            </label>
+            <label id="qz-lbl-multi" style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:7px 14px;border:2px solid var(--border);border-radius:8px;background:var(--card);color:var(--text-light);font-size:13px;font-weight:600">
+              <input type="radio" name="qz-type" value="multiple" onchange="qzToggleType('multiple')" style="accent-color:var(--primary)"> Multiple Answers
+            </label>
+          </div>
+          <p id="qz-type-hint" style="font-size:12px;color:var(--text-muted);margin-top:5px">One correct answer — student picks one option.</p>
+        </div>
+        <div style="margin-bottom:14px">
           <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:5px;display:block">Question Text <span style="color:#dc2626">*</span></label>
           <textarea id="qz-text" rows="3" placeholder="Enter the question…" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;font-family:inherit;resize:vertical;outline:none" onfocus="this.style.borderColor='var(--primary)'" onblur="this.style.borderColor='var(--border)'"></textarea>
         </div>
@@ -1075,28 +1087,34 @@ async function openQuizQuestionsPanel(quizId) {
             <input type="text" id="qz-opt-${i}" placeholder="Option ${l}…" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;font-family:inherit;outline:none" onfocus="this.style.borderColor='var(--primary)'" onblur="this.style.borderColor='var(--border)'"/>
           </div>`).join('')}
         </div>
-        <div style="display:flex;align-items:center;gap:24px;flex-wrap:wrap;margin-bottom:14px">
-          <div>
-            <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:8px;display:block">Correct Answer <span style="color:#dc2626">*</span></label>
-            <div style="display:flex;gap:14px">
-              ${['A','B','C','D'].map((l,i) => `
-              <label style="display:flex;align-items:center;gap:5px;font-size:13px;cursor:pointer;font-weight:500">
-                <input type="radio" name="qz-correct" value="${i}" style="accent-color:var(--primary)"/> ${l}
-              </label>`).join('')}
-            </div>
-          </div>
-          <div>
-            <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:5px;display:block">Marks</label>
-            <input type="number" id="qz-marks" value="1" min="1" style="width:72px;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;font-family:inherit;outline:none"/>
+        <div id="qz-single-wrap" style="margin-bottom:14px">
+          <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:8px;display:block">Correct Answer <span style="color:#dc2626">*</span></label>
+          <div style="display:flex;gap:14px;flex-wrap:wrap">
+            ${['A','B','C','D'].map((l,i) => `
+            <label style="display:flex;align-items:center;gap:5px;font-size:13px;cursor:pointer;font-weight:500">
+              <input type="radio" name="qz-correct" value="${i}" style="accent-color:var(--primary)"/> ${l}
+            </label>`).join('')}
           </div>
         </div>
-        <div id="qz-error" style="color:#dc2626;font-size:13px;font-weight:500;margin-bottom:10px;display:none"></div>
-        <button class="btn btn-primary" onclick="submitQuizQuestion('${quizId}')">
+        <div id="qz-multi-wrap" style="display:none;margin-bottom:14px">
+          <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:8px;display:block">Correct Answers <span style="color:#dc2626">*</span> <span style="font-weight:400;color:var(--text-muted)">(check all that apply)</span></label>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            ${['A','B','C','D'].map((l,i) => `
+            <label id="qz-cblbl-${i}" style="display:flex;align-items:center;gap:5px;padding:6px 12px;border:1.5px solid var(--border);border-radius:7px;cursor:pointer;font-size:13px;font-weight:500;transition:all .15s">
+              <input type="checkbox" value="${i}" id="qz-cb-${i}" name="qz-multi-correct" onchange="qzCbChange(${i})" style="accent-color:var(--primary)"> ${l}
+            </label>`).join('')}
+          </div>
+        </div>
+        <div>
+          <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:5px;display:block">Marks</label>
+          <input type="number" id="qz-marks" value="1" min="1" style="width:72px;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;font-family:inherit;outline:none"/>
+        </div>
+        <div id="qz-error" style="color:#dc2626;font-size:13px;font-weight:500;margin-top:10px;display:none"></div>
+        <button class="btn btn-primary" style="margin-top:14px" onclick="submitQuizQuestion('${quizId}')">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
           Add Question
         </button>
       </div>
-
       <!-- Existing Questions -->
       <div class="card">
         <div style="font-size:14px;font-weight:700;margin-bottom:14px;display:flex;align-items:center;gap:8px">
@@ -1106,26 +1124,24 @@ async function openQuizQuestionsPanel(quizId) {
         <div id="qz-list">
           ${!questions.length
             ? `<div style="text-align:center;padding:28px;color:var(--text-muted);font-size:13px;border:1.5px dashed var(--border);border-radius:8px">No questions yet — add your first question above</div>`
-            : questions.map((q, i) => `
-            <div style="padding:14px;border:1.5px solid var(--border);border-radius:10px;margin-bottom:10px">
-              <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
-                <div style="flex:1">
-                  <div style="font-weight:600;font-size:14px;margin-bottom:8px">Q${i+1}. ${q.questionText}</div>
-                  <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px">
-                    ${q.options.map((o, oi) => `
-                    <span style="padding:4px 10px;border-radius:6px;font-size:12px;font-weight:500;
-                      ${oi === q.correctAnswer
-                        ? 'background:#f0fdf4;color:#166534;border:1px solid #bbf7d0;'
-                        : 'background:var(--bg);color:var(--text-light);border:1px solid var(--border);'}">
-                      ${String.fromCharCode(65+oi)}) ${o}
-                      ${oi === q.correctAnswer ? ' ✓' : ''}
-                    </span>`).join('')}
+            : questions.map((q, i) => {
+                const correctSet = new Set(q.correctAnswers?.length ? q.correctAnswers : (q.correctAnswer != null ? [q.correctAnswer] : []));
+                const typeTag = q.questionType === 'multiple'
+                  ? '<span style="font-size:10px;padding:2px 7px;border-radius:20px;font-weight:600;background:#ede9fe;color:#7c3aed;margin-left:6px">MULTI</span>'
+                  : '<span style="font-size:10px;padding:2px 7px;border-radius:20px;font-weight:600;background:#f0f9ff;color:#0369a1;margin-left:6px">SINGLE</span>';
+                return `<div style="padding:14px;border:1.5px solid var(--border);border-radius:10px;margin-bottom:10px">
+                  <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
+                    <div style="flex:1">
+                      <div style="font-weight:600;font-size:14px;margin-bottom:8px">Q${i+1}.${typeTag} ${q.questionText}</div>
+                      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px">
+                        ${q.options.map((o, oi) => `<span style="padding:4px 10px;border-radius:6px;font-size:12px;font-weight:500;${correctSet.has(oi)?'background:#f0fdf4;color:#166534;border:1px solid #bbf7d0;':'background:var(--bg);color:var(--text-light);border:1px solid var(--border);'}">${String.fromCharCode(65+oi)}) ${o}${correctSet.has(oi)?' ✓':''}</span>`).join('')}
+                      </div>
+                      <div style="font-size:11px;color:var(--text-muted);font-weight:600">${q.marks} mark${q.marks !== 1 ? 's' : ''}</div>
+                    </div>
+                    <button class="btn btn-sm" style="background:#fef2f2;color:#dc2626;border:1px solid #fecaca;flex-shrink:0" onclick="deleteQuizQInline('${quizId}','${q._id}')">Delete</button>
                   </div>
-                  <div style="font-size:11px;color:var(--text-muted);font-weight:600">${q.marks} mark${q.marks !== 1 ? 's' : ''}</div>
-                </div>
-                <button class="btn btn-sm" style="background:#fef2f2;color:#dc2626;border:1px solid #fecaca;flex-shrink:0" onclick="deleteQuizQInline('${quizId}','${q._id}')">Delete</button>
-              </div>
-            </div>`).join('')}
+                </div>`;
+              }).join('')}
         </div>
       </div>
     `;
@@ -1134,24 +1150,48 @@ async function openQuizQuestionsPanel(quizId) {
   }
 }
 
-async function submitQuizQuestion(quizId) {
-  const text = $('qz-text').value.trim();
-  const opts = [0,1,2,3].map(i => $('qz-opt-'+i).value.trim()).filter(o => o);
-  const correctEl = document.querySelector('input[name="qz-correct"]:checked');
-  const marks = parseInt($('qz-marks').value) || 1;
-  const errEl = $('qz-error');
+function qzToggleType(type) {
+  const isMulti = type === 'multiple';
+  $('qz-single-wrap').style.display = isMulti ? 'none' : 'block';
+  $('qz-multi-wrap').style.display  = isMulti ? 'block' : 'none';
+  $('qz-type-hint').textContent = isMulti ? 'Multiple correct answers — student must select all correct options.' : 'One correct answer — student picks one option.';
+  const p = 'display:flex;align-items:center;gap:6px;cursor:pointer;padding:7px 14px;border:2px solid var(--primary);border-radius:8px;background:var(--primary);color:#fff;font-size:13px;font-weight:600';
+  const s = 'display:flex;align-items:center;gap:6px;cursor:pointer;padding:7px 14px;border:2px solid var(--border);border-radius:8px;background:var(--card);color:var(--text-light);font-size:13px;font-weight:600';
+  $('qz-lbl-single').style.cssText = isMulti ? s : p;
+  $('qz-lbl-multi').style.cssText  = isMulti ? p : s;
+}
 
+function qzCbChange(i) {
+  const cb  = $('qz-cb-'+i);
+  const lbl = $('qz-cblbl-'+i);
+  lbl.style.borderColor = cb.checked ? 'var(--primary)' : 'var(--border)';
+  lbl.style.background  = cb.checked ? '#ede9fe' : 'var(--card)';
+  lbl.style.color       = cb.checked ? '#7c3aed' : 'var(--text-light)';
+}
+
+async function submitQuizQuestion(quizId) {
+  const text    = $('qz-text').value.trim();
+  const opts    = [0,1,2,3].map(i => $('qz-opt-'+i).value.trim()).filter(o => o);
+  const marks   = parseInt($('qz-marks').value) || 1;
+  const errEl   = $('qz-error');
+  const isMulti = document.querySelector('input[name="qz-type"]:checked')?.value === 'multiple';
+  errEl.style.display = 'none';
   if (!text) { errEl.textContent = 'Question text is required.'; errEl.style.display = 'block'; return; }
   if (opts.length < 2) { errEl.textContent = 'At least 2 options are required.'; errEl.style.display = 'block'; return; }
-  if (!correctEl) { errEl.textContent = 'Please select the correct answer.'; errEl.style.display = 'block'; return; }
-  const correctAnswer = parseInt(correctEl.value);
-  if (correctAnswer >= opts.length) { errEl.textContent = 'Correct answer must match a filled option.'; errEl.style.display = 'block'; return; }
-
-  errEl.style.display = 'none';
+  let body;
+  if (isMulti) {
+    const correctAnswers = [...document.querySelectorAll('input[name="qz-multi-correct"]:checked')].map(c => parseInt(c.value)).filter(i => i < opts.length);
+    if (!correctAnswers.length) { errEl.textContent = 'Select at least one correct answer.'; errEl.style.display = 'block'; return; }
+    body = { questionText: text, options: opts, questionType: 'multiple', correctAnswers, marks };
+  } else {
+    const correctEl = document.querySelector('input[name="qz-correct"]:checked');
+    if (!correctEl) { errEl.textContent = 'Please select the correct answer.'; errEl.style.display = 'block'; return; }
+    const correctAnswer = parseInt(correctEl.value);
+    if (correctAnswer >= opts.length) { errEl.textContent = 'Correct answer must match a filled option.'; errEl.style.display = 'block'; return; }
+    body = { questionText: text, options: opts, questionType: 'single', correctAnswer, marks };
+  }
   try {
-    await api('POST', `/api/lecturer/quizzes/${quizId}/questions`, {
-      questionText: text, options: opts, correctAnswer, marks
-    });
+    await api('POST', `/api/lecturer/quizzes/${quizId}/questions`, body);
     toast('Question added!', 'ok');
     await openQuizQuestionsPanel(quizId);
   } catch(e) {
@@ -1167,6 +1207,7 @@ async function deleteQuizQInline(quizId, qId) {
     await openQuizQuestionsPanel(quizId);
   } catch(e) { toast('Error: ' + e.message, 'err'); }
 }
+
 
 async function deleteQuizInline(id) {
   if (!confirm('Delete this quiz and all its questions? Cannot be undone.')) return;
