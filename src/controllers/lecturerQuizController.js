@@ -213,7 +213,7 @@ exports.deleteQuiz = async (req, res) => {
 exports.addQuestion = async (req, res) => {
   try {
     const { id } = req.params;
-    const { questionText, options, correctAnswer, marks } = req.body;
+    const { questionText, options, correctAnswer, correctAnswers, questionType, marks } = req.body;
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({ error: "Invalid quiz ID" });
@@ -224,23 +224,35 @@ exports.addQuestion = async (req, res) => {
       return res.status(404).json({ error: "Quiz not found" });
     }
 
-    if (!questionText || !options || correctAnswer === undefined) {
-      return res.status(400).json({ error: "questionText, options, and correctAnswer are required" });
+    if (!questionText || !options) {
+      return res.status(400).json({ error: "questionText and options are required" });
     }
-
     if (!Array.isArray(options) || options.length < 2) {
       return res.status(400).json({ error: "At least 2 options are required" });
     }
 
-    if (correctAnswer < 0 || correctAnswer >= options.length) {
-      return res.status(400).json({ error: "correctAnswer must be a valid option index" });
+    const isMultiple = questionType === "multiple" || (Array.isArray(correctAnswers) && correctAnswers.length > 1);
+
+    if (isMultiple) {
+      if (!Array.isArray(correctAnswers) || correctAnswers.length === 0) {
+        return res.status(400).json({ error: "At least one correct answer is required" });
+      }
+    } else {
+      if (correctAnswer === undefined || correctAnswer === null) {
+        return res.status(400).json({ error: "correctAnswer is required for single-answer questions" });
+      }
+      if (correctAnswer < 0 || correctAnswer >= options.length) {
+        return res.status(400).json({ error: "correctAnswer must be a valid option index" });
+      }
     }
 
     const question = await Question.create({
       quiz: id,
       questionText,
       options,
-      correctAnswer,
+      questionType: isMultiple ? "multiple" : "single",
+      correctAnswer: isMultiple ? (correctAnswers[0] ?? 0) : correctAnswer,
+      correctAnswers: isMultiple ? correctAnswers : [correctAnswer],
       marks: marks || 1,
     });
 
@@ -277,7 +289,7 @@ exports.updateQuestion = async (req, res) => {
       return res.status(404).json({ error: "Question not found" });
     }
 
-    const { questionText, options, correctAnswer, marks } = req.body;
+    const { questionText, options, correctAnswer, correctAnswers, questionType, marks } = req.body;
     if (questionText) question.questionText = questionText;
     if (options) question.options = options;
     if (correctAnswer !== undefined) question.correctAnswer = correctAnswer;
