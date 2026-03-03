@@ -1956,6 +1956,7 @@ async function renderLecturerQuizzes(content) {
                   <button class="btn btn-sm btn-secondary" onclick="viewLecturerQuizDetail('${q._id}')">Details</button>
                   <button class="btn btn-sm btn-primary" onclick="showAddQuestionsView('${q._id}')">Questions</button>
                   <button class="btn btn-sm btn-success" onclick="viewQuizResults('${q._id}')">Results</button>
+                  <button class="btn btn-sm" style="background:#0ea5e9;color:#fff;" onclick="copyQuizId('${q._id}')" title="Copy Quiz ID for Live Monitor">📋 ID</button>
                   <button class="btn btn-sm btn-danger" onclick="deleteLecturerQuiz('${q._id}')">Delete</button>
                 </td>
               </tr>
@@ -2141,6 +2142,16 @@ async function viewLecturerQuizDetail(quizId) {
     content.innerHTML = `
       <div class="page-header"><h2>${q.title}</h2><p>${q.description || 'No description'}</p></div>
       <div class="actions-bar"><button class="btn btn-secondary btn-sm" onclick="renderQuizzes()">← Back</button></div>
+      <div class="card" style="margin-bottom:16px;background:linear-gradient(135deg,#0f172a,#1e293b);border:1px solid #334155;">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">
+          <div>
+            <div style="font-size:11px;text-transform:uppercase;font-weight:700;letter-spacing:1px;color:#38bdf8;margin-bottom:6px;">📋 Quiz ID — for Live Monitor</div>
+            <div style="font-size:14px;font-family:monospace;color:#e2e8f0;background:#0f172a;padding:10px 14px;border-radius:8px;border:1px solid #334155;letter-spacing:1px;word-break:break-all;">${quizId}</div>
+            <div style="font-size:12px;color:#64748b;margin-top:6px;">Paste this ID into the Live Monitor to watch students in real time</div>
+          </div>
+          <button class="btn btn-sm" style="background:#0ea5e9;color:#fff;flex-shrink:0;" onclick="copyQuizId('${quizId}')">📋 Copy ID</button>
+        </div>
+      </div>
       <div class="card" style="margin-bottom:16px;">
         <h3>Quiz Details</h3>
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-top:8px;">
@@ -2169,6 +2180,19 @@ async function viewLecturerQuizDetail(quizId) {
   } catch (e) {
     content.innerHTML = `<div class="card"><p>Error: ${e.message}</p></div>`;
   }
+}
+
+function copyQuizId(id) {
+  navigator.clipboard.writeText(id).then(() => {
+    // Show a brief toast-style alert
+    const el = document.createElement('div');
+    el.textContent = '✓ Quiz ID copied — paste it into Live Monitor';
+    el.style.cssText = 'position:fixed;bottom:24px;right:24px;background:#0ea5e9;color:#fff;padding:12px 18px;border-radius:10px;font-size:14px;font-weight:600;z-index:9999;box-shadow:0 4px 16px rgba(0,0,0,.2);animation:fadeIn .2s ease';
+    document.body.appendChild(el);
+    setTimeout(() => el.remove(), 2800);
+  }).catch(() => {
+    prompt('Copy this Quiz ID:', id);
+  });
 }
 
 async function viewQuizResults(quizId) {
