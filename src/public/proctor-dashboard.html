@@ -196,9 +196,12 @@ html, body { height: 100%; background: var(--navy); color: var(--white); font-fa
 <div id="snap-overlay"><img id="snap-big" src="" alt="Snapshot" /></div>
 
 <div class="topbar">
-  <div>
-    <h1>📊 Proctor Dashboard</h1>
-    <p id="quiz-label">No quiz loaded</p>
+  <div style="display:flex;align-items:center;gap:12px;">
+    <button class="btn btn-ghost" onclick="window.location.href='/index.html'" style="padding:7px 14px;font-size:13px;display:flex;align-items:center;gap:6px;">← Back</button>
+    <div>
+      <h1>📊 Proctor Dashboard</h1>
+      <p id="quiz-label">No quiz loaded</p>
+    </div>
   </div>
   <div class="toolbar">
     <input type="text" id="quiz-id-input" placeholder="Quiz ID…" />
@@ -239,17 +242,16 @@ html, body { height: 100%; background: var(--navy); color: var(--white); font-fa
 
 <script>
 const API = '';
-let authToken = localStorage.getItem('proctor_token') || '';
+// Read from the same key the main portal uses ('token') — no manual entry needed
+let authToken = localStorage.getItem('token') || localStorage.getItem('proctor_token') || '';
 let currentQuizId = '';
 let refreshTimer = null;
 let selectedSessionId = null;
 let monitorData = null;
 
-// ── Auth token input ────────────────────────────────────────────────
-const tokenKey = 'proctor_token';
+// Warn if not logged in instead of using a disruptive prompt
 if (!authToken) {
-  authToken = prompt('Enter your lecturer JWT token (from login):') || '';
-  if (authToken) localStorage.setItem(tokenKey, authToken);
+  setTimeout(() => toast('Not signed in. Please log in from the main portal, then open the Live Monitor again.', 'error'), 700);
 }
 
 // ── Toast ────────────────────────────────────────────────────────────
