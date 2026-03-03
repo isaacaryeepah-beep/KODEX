@@ -2046,42 +2046,86 @@ async function showAddQuestionsView(quizId) {
       <div class="actions-bar"><button class="btn btn-secondary btn-sm" onclick="renderQuizzes()">← Back to Quizzes</button></div>
       <div class="card" style="margin-bottom:16px;">
         <h3>Add New Question</h3>
-        <div class="form-group"><label>Question Text *</label><textarea id="aq-text" rows="3" placeholder="Enter question text" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;"></textarea></div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-          <div class="form-group"><label>Option A *</label><input type="text" id="aq-opt-0" placeholder="Option A" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;"></div>
-          <div class="form-group"><label>Option B *</label><input type="text" id="aq-opt-1" placeholder="Option B" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;"></div>
-          <div class="form-group"><label>Option C</label><input type="text" id="aq-opt-2" placeholder="Option C" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;"></div>
-          <div class="form-group"><label>Option D</label><input type="text" id="aq-opt-3" placeholder="Option D" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;"></div>
+
+        <!-- Question Type -->
+        <div class="form-group" style="margin-bottom:14px;">
+          <label style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.4px;color:#6b7280;">Question Type</label>
+          <div style="display:flex;gap:10px;margin-top:6px;flex-wrap:wrap;">
+            <label id="aq-lbl-single" style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:8px 16px;border:2px solid var(--primary);border-radius:8px;background:var(--primary);color:#fff;font-size:13px;font-weight:600;">
+              <input type="radio" name="aq-type" value="single" checked onchange="aqToggleType('single')" style="accent-color:#fff"> Single Answer
+            </label>
+            <label id="aq-lbl-multi" style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:8px 16px;border:2px solid #e5e7eb;border-radius:8px;background:#fff;color:#374151;font-size:13px;font-weight:600;">
+              <input type="radio" name="aq-type" value="multiple" onchange="aqToggleType('multiple')" style="accent-color:var(--primary)"> Multiple Answers
+            </label>
+          </div>
+          <p id="aq-type-hint" style="font-size:12px;color:#9ca3af;margin-top:5px;">One correct answer — student picks one option.</p>
         </div>
-        <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap;">
-          <div class="form-group"><label>Correct Answer *</label><div style="display:flex;gap:12px;">
-            <label><input type="radio" name="aq-correct" value="0"> A</label>
-            <label><input type="radio" name="aq-correct" value="1"> B</label>
-            <label><input type="radio" name="aq-correct" value="2"> C</label>
-            <label><input type="radio" name="aq-correct" value="3"> D</label>
-          </div></div>
-          <div class="form-group"><label>Marks</label><input type="number" id="aq-marks" value="1" min="1" style="width:80px;padding:8px;border:1px solid #d1d5db;border-radius:6px;"></div>
+
+        <div class="form-group">
+          <label>Question Text *</label>
+          <textarea id="aq-text" rows="3" placeholder="Enter your question here…" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;"></textarea>
         </div>
-        <div id="aq-error" style="color:#ef4444;margin:8px 0;display:none;"></div>
-        <button class="btn btn-primary" onclick="submitAddQuestion('${quizId}')">Add Question</button>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">
+          ${['A','B','C','D'].map((l,i) => `
+          <div class="form-group">
+            <label>Option ${l}${i<2?' *':''}</label>
+            <input type="text" id="aq-opt-${i}" placeholder="Option ${l}" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;">
+          </div>`).join('')}
+        </div>
+
+        <!-- Single: radio buttons -->
+        <div id="aq-single-wrap" style="margin-bottom:12px;">
+          <div class="form-group">
+            <label>Correct Answer *</label>
+            <div style="display:flex;gap:12px;margin-top:4px;flex-wrap:wrap;">
+              ${['A','B','C','D'].map((l,i)=>`<label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:14px;"><input type="radio" name="aq-correct" value="${i}"> ${l}</label>`).join('')}
+            </div>
+          </div>
+        </div>
+
+        <!-- Multiple: checkboxes -->
+        <div id="aq-multi-wrap" style="display:none;margin-bottom:12px;">
+          <div class="form-group">
+            <label>Correct Answers * <span style="font-weight:400;color:#9ca3af;font-size:12px;">(check all that apply)</span></label>
+            <div style="display:flex;gap:8px;margin-top:4px;flex-wrap:wrap;">
+              ${['A','B','C','D'].map((l,i)=>`
+              <label id="aq-cblbl-${i}" style="display:flex;align-items:center;gap:5px;padding:6px 12px;border:1.5px solid #e5e7eb;border-radius:7px;cursor:pointer;font-size:13px;font-weight:500;transition:all .15s;">
+                <input type="checkbox" value="${i}" id="aq-cb-${i}" name="aq-multi-correct" onchange="aqCbChange(${i})"> ${l}
+              </label>`).join('')}
+            </div>
+          </div>
+        </div>
+
+        <div class="form-group" style="display:inline-block;margin-right:16px;">
+          <label>Marks</label>
+          <input type="number" id="aq-marks" value="1" min="1" style="width:80px;padding:8px;border:1px solid #d1d5db;border-radius:6px;">
+        </div>
+        <div id="aq-error" style="color:#ef4444;margin:8px 0;display:none;font-size:13px;"></div>
+        <div style="margin-top:12px;"><button class="btn btn-primary" onclick="submitAddQuestion('${quizId}')">＋ Add Question</button></div>
       </div>
+
       <div class="card">
         <h3>Existing Questions (${questions.length})</h3>
         <div id="aq-questions-list">
-          ${questions.length ? questions.map((q, i) => `
-            <div style="padding:12px;border:1px solid #e5e7eb;border-radius:8px;margin-bottom:8px;">
+          ${questions.length ? questions.map((q, i) => {
+            const correctSet = new Set(q.correctAnswers?.length ? q.correctAnswers : (q.correctAnswer != null ? [q.correctAnswer] : []));
+            const typeLabel = q.questionType === 'multiple'
+              ? '<span style="font-size:10px;padding:2px 7px;border-radius:20px;font-weight:600;background:#ede9fe;color:#7c3aed;margin-left:6px;">MULTI</span>'
+              : '<span style="font-size:10px;padding:2px 7px;border-radius:20px;font-weight:600;background:#f0f9ff;color:#0369a1;margin-left:6px;">SINGLE</span>';
+            return `<div style="padding:12px;border:1px solid #e5e7eb;border-radius:8px;margin-bottom:8px;">
               <div style="display:flex;justify-content:space-between;align-items:flex-start;">
-                <div>
-                  <strong>Q${i + 1}.</strong> ${q.questionText}
-                  <div style="margin-top:4px;font-size:0.9em;color:#6b7280;">
-                    ${q.options.map((o, oi) => `<span style="margin-right:12px;${oi === q.correctAnswer ? 'color:#22c55e;font-weight:bold;' : ''}">${String.fromCharCode(65 + oi)}) ${o}</span>`).join('')}
+                <div style="flex:1;">
+                  <div style="margin-bottom:6px;"><strong>Q${i+1}.</strong>${typeLabel} ${q.questionText}</div>
+                  <div style="display:flex;flex-wrap:wrap;gap:5px;font-size:13px;">
+                    ${q.options.map((o,oi)=>`<span style="padding:3px 9px;border-radius:6px;${correctSet.has(oi)?'background:#f0fdf4;color:#166534;border:1px solid #bbf7d0;font-weight:700;':'background:#f9fafb;color:#6b7280;border:1px solid #e5e7eb;'}">${String.fromCharCode(65+oi)}) ${o}${correctSet.has(oi)?' ✓':''}</span>`).join('')}
                   </div>
-                  <div style="font-size:0.85em;color:#9ca3af;margin-top:2px;">Marks: ${q.marks}</div>
+                  <div style="font-size:12px;color:#9ca3af;margin-top:5px;">Marks: ${q.marks}</div>
                 </div>
                 <button class="btn btn-sm btn-danger" onclick="deleteQuizQuestion('${quizId}','${q._id}')">Delete</button>
               </div>
-            </div>
-          `).join('') : '<p style="color:#9ca3af;">No questions added yet.</p>'}
+            </div>`;
+          }).join('') : '<p style="color:#9ca3af;">No questions added yet.</p>'}
         </div>
       </div>
     `;
@@ -2090,30 +2134,53 @@ async function showAddQuestionsView(quizId) {
   }
 }
 
+function aqToggleType(type) {
+  const isMulti = type === 'multiple';
+  document.getElementById('aq-single-wrap').style.display = isMulti ? 'none' : 'block';
+  document.getElementById('aq-multi-wrap').style.display  = isMulti ? 'block' : 'none';
+  document.getElementById('aq-type-hint').textContent = isMulti
+    ? 'Multiple correct answers — student must select all correct options.'
+    : 'One correct answer — student picks one option.';
+  const primStyle = 'display:flex;align-items:center;gap:6px;cursor:pointer;padding:8px 16px;border:2px solid var(--primary);border-radius:8px;background:var(--primary);color:#fff;font-size:13px;font-weight:600;';
+  const secStyle  = 'display:flex;align-items:center;gap:6px;cursor:pointer;padding:8px 16px;border:2px solid #e5e7eb;border-radius:8px;background:#fff;color:#374151;font-size:13px;font-weight:600;';
+  document.getElementById('aq-lbl-single').style.cssText = isMulti ? secStyle  : primStyle;
+  document.getElementById('aq-lbl-multi').style.cssText  = isMulti ? primStyle : secStyle;
+}
+
+function aqCbChange(i) {
+  const cb  = document.getElementById(`aq-cb-${i}`);
+  const lbl = document.getElementById(`aq-cblbl-${i}`);
+  lbl.style.borderColor = cb.checked ? 'var(--primary)' : '#e5e7eb';
+  lbl.style.background  = cb.checked ? '#ede9fe' : '#fff';
+  lbl.style.color       = cb.checked ? '#7c3aed' : '#374151';
+}
+
 async function submitAddQuestion(quizId) {
   const questionText = document.getElementById('aq-text').value.trim();
-  const options = [
-    document.getElementById('aq-opt-0').value.trim(),
-    document.getElementById('aq-opt-1').value.trim(),
-    document.getElementById('aq-opt-2').value.trim(),
-    document.getElementById('aq-opt-3').value.trim()
-  ].filter(o => o);
-  const correctRadio = document.querySelector('input[name="aq-correct"]:checked');
-  const marks = parseInt(document.getElementById('aq-marks').value) || 1;
-  const errEl = document.getElementById('aq-error');
+  const options = [0,1,2,3].map(i => document.getElementById(`aq-opt-${i}`).value.trim()).filter(o => o);
+  const marks   = parseInt(document.getElementById('aq-marks').value) || 1;
+  const errEl   = document.getElementById('aq-error');
+  const isMulti = document.querySelector('input[name="aq-type"]:checked')?.value === 'multiple';
 
+  errEl.style.display = 'none';
   if (!questionText) { errEl.textContent = 'Question text is required.'; errEl.style.display = 'block'; return; }
   if (options.length < 2) { errEl.textContent = 'At least 2 options are required.'; errEl.style.display = 'block'; return; }
-  if (!correctRadio) { errEl.textContent = 'Please select the correct answer.'; errEl.style.display = 'block'; return; }
 
-  const correctAnswer = parseInt(correctRadio.value);
-  if (correctAnswer >= options.length) { errEl.textContent = 'Correct answer must match a filled option.'; errEl.style.display = 'block'; return; }
+  let body;
+  if (isMulti) {
+    const correctAnswers = [...document.querySelectorAll('input[name="aq-multi-correct"]:checked')].map(c => parseInt(c.value)).filter(i => i < options.length);
+    if (correctAnswers.length === 0) { errEl.textContent = 'Select at least one correct answer.'; errEl.style.display = 'block'; return; }
+    body = { questionText, options, questionType: 'multiple', correctAnswers, marks };
+  } else {
+    const radio = document.querySelector('input[name="aq-correct"]:checked');
+    if (!radio) { errEl.textContent = 'Please select the correct answer.'; errEl.style.display = 'block'; return; }
+    const correctAnswer = parseInt(radio.value);
+    if (correctAnswer >= options.length) { errEl.textContent = 'Correct answer must match a filled option.'; errEl.style.display = 'block'; return; }
+    body = { questionText, options, questionType: 'single', correctAnswer, marks };
+  }
 
   try {
-    await api(`/api/lecturer/quizzes/${quizId}/questions`, {
-      method: 'POST',
-      body: JSON.stringify({ questionText, options, correctAnswer, marks })
-    });
+    await api(`/api/lecturer/quizzes/${quizId}/questions`, { method: 'POST', body: JSON.stringify(body) });
     showAddQuestionsView(quizId);
   } catch (e) {
     errEl.textContent = e.message;
