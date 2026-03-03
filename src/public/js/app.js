@@ -1956,7 +1956,8 @@ async function renderLecturerQuizzes(content) {
                   <button class="btn btn-sm btn-secondary" onclick="viewLecturerQuizDetail('${q._id}')">Details</button>
                   <button class="btn btn-sm btn-primary" onclick="showAddQuestionsView('${q._id}')">Questions</button>
                   <button class="btn btn-sm btn-success" onclick="viewQuizResults('${q._id}')">Results</button>
-                  <button class="btn btn-sm" style="background:#0ea5e9;color:#fff;" onclick="copyQuizId('${q._id}')" title="Copy Quiz ID for Live Monitor">📋 ID</button>
+                  <button class="btn btn-sm" style="background:#dc2626;color:#fff;font-weight:700;" onclick="openLiveMonitor('${q._id}')" title="Open Live Proctor Monitor">🔴 Monitor</button>
+                  <button class="btn btn-sm" style="background:#0ea5e9;color:#fff;" onclick="copyQuizId('${q._id}')" title="Copy Quiz ID">📋 ID</button>
                   <button class="btn btn-sm btn-danger" onclick="deleteLecturerQuiz('${q._id}')">Delete</button>
                 </td>
               </tr>
@@ -2032,6 +2033,7 @@ async function submitCreateQuiz() {
 
 async function showAddQuestionsView(quizId) {
   const content = document.getElementById('main-content');
+  if (!content) { console.error('showAddQuestionsView: main-content element not found'); return; }
   content.innerHTML = '<div class="card"><p>Loading quiz...</p></div>';
   try {
     const data = await api(`/api/lecturer/quizzes/${quizId}`);
@@ -2214,9 +2216,12 @@ async function viewLecturerQuizDetail(quizId) {
           <div>
             <div style="font-size:11px;text-transform:uppercase;font-weight:700;letter-spacing:1px;color:#38bdf8;margin-bottom:6px;">📋 Quiz ID — for Live Monitor</div>
             <div style="font-size:14px;font-family:monospace;color:#e2e8f0;background:#0f172a;padding:10px 14px;border-radius:8px;border:1px solid #334155;letter-spacing:1px;word-break:break-all;">${quizId}</div>
-            <div style="font-size:12px;color:#64748b;margin-top:6px;">Paste this ID into the Live Monitor to watch students in real time</div>
+            <div style="font-size:12px;color:#64748b;margin-top:6px;">Click Monitor to open the live proctor view, or copy the ID to share</div>
           </div>
-          <button class="btn btn-sm" style="background:#0ea5e9;color:#fff;flex-shrink:0;" onclick="copyQuizId('${quizId}')">📋 Copy ID</button>
+          <div style="display:flex;gap:8px;flex-direction:column;">
+            <button class="btn btn-sm" style="background:#dc2626;color:#fff;font-weight:700;white-space:nowrap;" onclick="openLiveMonitor('${quizId}')">🔴 Open Live Monitor</button>
+            <button class="btn btn-sm" style="background:#0ea5e9;color:#fff;flex-shrink:0;" onclick="copyQuizId('${quizId}')">📋 Copy ID</button>
+          </div>
         </div>
       </div>
       <div class="card" style="margin-bottom:16px;">
@@ -2247,6 +2252,10 @@ async function viewLecturerQuizDetail(quizId) {
   } catch (e) {
     content.innerHTML = `<div class="card"><p>Error: ${e.message}</p></div>`;
   }
+}
+
+function openLiveMonitor(quizId) {
+  window.open('/proctor-dashboard.html?quizId=' + quizId, '_blank');
 }
 
 function copyQuizId(id) {
