@@ -171,6 +171,7 @@
   .form-row { grid-template-columns:1fr; }
   .assign-grid { grid-template-columns:1fr; }
 }
+@keyframes slideIn { from{opacity:0;transform:translateY(14px) scale(.97)} to{opacity:1;transform:translateY(0) scale(1)} }
 </style>
 </head>
 <body>
@@ -225,11 +226,11 @@
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
         <span>Dashboard</span>
       </a>
-      <a class="active">
+      <a class="active" onclick="switchTab('assignments')" id="nav-assignments">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
         <span>Assignments</span>
       </a>
-      <a onclick="location.href='/snap-quiz.html'">
+      <a onclick="switchTab('quizzes')" id="nav-quizzes">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c0 2 4 3 6 3s6-1 6-3v-5"/></svg>
         <span>Quizzes</span>
       </a>
@@ -371,6 +372,7 @@ function toast(msg, type=''){
 function fmtDate(d){ return d?new Date(d).toLocaleString('en-GB',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}):'—'; }
 function fmtSize(b){ if(!b)return''; if(b<1024)return b+'B'; if(b<1048576)return(b/1024).toFixed(1)+'KB'; return(b/1048576).toFixed(1)+'MB'; }
 function initials(n){ return(n||'?').split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2); }
+function fmtDate(d){ return d?new Date(d).toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):'—'; }
 
 async function api(method, path, body, isForm){
   const opts={method,headers:{}};
@@ -916,6 +918,377 @@ async function submitAssignment(){
 // ══════════════════════════════════════════════════════════════════════════
 function showDrawer(id){ closeDrawers(false); $(id).classList.add('show'); $('overlay').classList.add('show'); document.body.style.overflow='hidden'; }
 function closeDrawers(hideOv=true){ ['create-drawer','detail-drawer','student-drawer'].forEach(d=>$(d).classList.remove('show')); if(hideOv){ $('overlay').classList.remove('show'); document.body.style.overflow=''; } }
+
+// ══════════════════════════════════════════════════════════════════════════
+//  TAB SWITCHING
+// ══════════════════════════════════════════════════════════════════════════
+function switchTab(tab) {
+  // Update active nav link
+  document.querySelectorAll('.sidebar-nav a').forEach(a => a.classList.remove('active'));
+  const navEl = $('nav-' + tab);
+  if (navEl) navEl.classList.add('active');
+
+  if (tab === 'assignments') {
+    const isLec = ['lecturer','admin','superadmin'].includes(S.role);
+    if (isLec) renderLecturerPage();
+    else renderStudentPage();
+  } else if (tab === 'quizzes') {
+    renderQuizzesPanel();
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+//  QUIZZES PANEL (inside assignments.html)
+// ══════════════════════════════════════════════════════════════════════════
+let QS = { quizzes: [], currentQuizId: null };
+
+async function renderQuizzesPanel() {
+  const isLec = ['lecturer','admin','superadmin'].includes(S.role);
+  $('page-root').innerHTML = `<div class="loading">Loading quizzes…</div>`;
+  try {
+    if (isLec) {
+      await renderLecturerQuizzes();
+    } else {
+      await renderStudentQuizzes();
+    }
+  } catch(e) {
+    $('page-root').innerHTML = `<p style="color:#dc2626;padding:16px">${e.message}</p>`;
+  }
+}
+
+// ── LECTURER QUIZ LIST ────────────────────────────────────────────────────
+async function renderLecturerQuizzes() {
+  const d = await api('GET', '/api/lecturer/quizzes');
+  QS.quizzes = d.quizzes || [];
+  const now = new Date();
+
+  $('page-root').innerHTML = `
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:24px">
+      <div>
+        <h2 style="font-size:21px;font-weight:700;letter-spacing:-.4px;margin-bottom:2px">Quizzes</h2>
+        <p style="color:var(--text-light);font-size:13px">Create proctored quizzes and manage questions</p>
+      </div>
+      <button class="btn btn-primary" onclick="openCreateQuizModal()">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Create Quiz
+      </button>
+    </div>
+    ${!QS.quizzes.length ? `
+      <div class="empty-state" style="text-align:center;padding:60px 20px">
+        <div style="font-size:44px;opacity:.3;margin-bottom:14px">📝</div>
+        <h3 style="font-size:18px;font-weight:700;margin-bottom:6px">No quizzes yet</h3>
+        <p style="color:var(--text-light);font-size:13px;max-width:270px;margin:0 auto 18px">Create your first proctored quiz for students</p>
+        <button class="btn btn-primary" onclick="openCreateQuizModal()">＋ Create Quiz</button>
+      </div>` : `
+    <div class="card" style="padding:0;overflow:hidden">
+      <table style="width:100%;border-collapse:collapse;font-size:13px">
+        <thead>
+          <tr style="background:var(--bg)">
+            <th style="padding:11px 16px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text-muted);border-bottom:1.5px solid var(--border)">Title</th>
+            <th style="padding:11px 16px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text-muted);border-bottom:1.5px solid var(--border)">Course</th>
+            <th style="padding:11px 16px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text-muted);border-bottom:1.5px solid var(--border)">Questions</th>
+            <th style="padding:11px 16px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text-muted);border-bottom:1.5px solid var(--border)">Status</th>
+            <th style="padding:11px 16px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text-muted);border-bottom:1.5px solid var(--border)">Time Window</th>
+            <th style="padding:11px 16px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text-muted);border-bottom:1.5px solid var(--border)">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${QS.quizzes.map(q => {
+            const start = new Date(q.startTime), end = new Date(q.endTime);
+            const isLive = now >= start && now <= end;
+            const isClosed = now > end;
+            const statusBadge = isLive
+              ? `<span style="background:#f0fdf4;color:#166534;border:1px solid #bbf7d0;padding:3px 8px;border-radius:20px;font-size:11px;font-weight:600">● Live</span>`
+              : isClosed
+              ? `<span style="background:#fef2f2;color:#991b1b;border:1px solid #fecaca;padding:3px 8px;border-radius:20px;font-size:11px;font-weight:600">Closed</span>`
+              : `<span style="background:var(--bg);color:var(--text-light);border:1px solid var(--border);padding:3px 8px;border-radius:20px;font-size:11px;font-weight:600">Scheduled</span>`;
+            return `<tr style="border-bottom:1px solid var(--border)">
+              <td style="padding:12px 16px;font-weight:600">${q.title}</td>
+              <td style="padding:12px 16px;color:var(--text-light)">${q.course?.code || 'N/A'}</td>
+              <td style="padding:12px 16px">${q.questionCount || 0}</td>
+              <td style="padding:12px 16px">${statusBadge}</td>
+              <td style="padding:12px 16px;font-size:12px;color:var(--text-light)">${fmtDate(q.startTime)} → ${fmtDate(q.endTime)}</td>
+              <td style="padding:12px 16px">
+                <div style="display:flex;gap:6px;flex-wrap:wrap">
+                  <button class="btn btn-primary btn-sm" onclick="openQuizQuestionsPanel('${q._id}')">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                    Questions
+                  </button>
+                  <button class="btn btn-secondary btn-sm" onclick="copyQuizIdInline('${q._id}')">📋 ID</button>
+                  <button class="btn btn-sm" style="background:#fef2f2;color:#dc2626;border:1px solid #fecaca" onclick="deleteQuizInline('${q._id}')">Delete</button>
+                </div>
+              </td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>`}
+  `;
+}
+
+// ── QUIZ QUESTION BUILDER PANEL ───────────────────────────────────────────
+async function openQuizQuestionsPanel(quizId) {
+  QS.currentQuizId = quizId;
+  $('page-root').innerHTML = `<div class="loading">Loading questions…</div>`;
+  try {
+    const d = await api('GET', `/api/lecturer/quizzes/${quizId}`);
+    const quiz = d.quiz;
+    const questions = quiz.questions || [];
+
+    $('page-root').innerHTML = `
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;flex-wrap:wrap">
+        <button class="btn btn-secondary btn-sm" onclick="renderLecturerQuizzes()">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+          Back to Quizzes
+        </button>
+        <div>
+          <h2 style="font-size:19px;font-weight:700;letter-spacing:-.3px">${quiz.title}</h2>
+          <p style="color:var(--text-light);font-size:13px">${quiz.course?.code || ''} · ${quiz.course?.title || ''} · Total marks: <strong>${quiz.totalMarks || 0}</strong></p>
+        </div>
+        <button class="btn btn-secondary btn-sm" style="margin-left:auto;background:#0ea5e9;color:#fff;border-color:#0ea5e9" onclick="copyQuizIdInline('${quizId}')">📋 Copy Quiz ID</button>
+      </div>
+
+      <!-- Quiz ID card -->
+      <div style="background:linear-gradient(135deg,#0f172a,#1e293b);border-radius:12px;padding:16px 20px;margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+        <div>
+          <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#38bdf8;margin-bottom:5px">Quiz ID — for Live Monitor</div>
+          <div style="font-size:13px;font-family:monospace;color:#e2e8f0;background:#0f172a;padding:8px 13px;border-radius:7px;border:1px solid #334155;word-break:break-all">${quizId}</div>
+          <div style="font-size:11px;color:#64748b;margin-top:5px">Paste into Live Monitor → snap-quiz.html</div>
+        </div>
+        <button class="btn btn-sm" style="background:#0ea5e9;color:#fff;flex-shrink:0" onclick="copyQuizIdInline('${quizId}')">📋 Copy</button>
+      </div>
+
+      <!-- Add Question Form -->
+      <div class="card" style="margin-bottom:16px">
+        <div style="font-size:14px;font-weight:700;margin-bottom:14px;display:flex;align-items:center;gap:8px">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          Add New Question
+        </div>
+        <div style="margin-bottom:14px">
+          <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:5px;display:block">Question Text <span style="color:#dc2626">*</span></label>
+          <textarea id="qz-text" rows="3" placeholder="Enter the question…" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;font-family:inherit;resize:vertical;outline:none" onfocus="this.style.borderColor='var(--primary)'" onblur="this.style.borderColor='var(--border)'"></textarea>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
+          ${['A','B','C','D'].map((l,i) => `
+          <div>
+            <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:5px;display:block">Option ${l}${i < 2 ? ' <span style="color:#dc2626">*</span>' : ''}</label>
+            <input type="text" id="qz-opt-${i}" placeholder="Option ${l}…" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;font-family:inherit;outline:none" onfocus="this.style.borderColor='var(--primary)'" onblur="this.style.borderColor='var(--border)'"/>
+          </div>`).join('')}
+        </div>
+        <div style="display:flex;align-items:center;gap:24px;flex-wrap:wrap;margin-bottom:14px">
+          <div>
+            <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:8px;display:block">Correct Answer <span style="color:#dc2626">*</span></label>
+            <div style="display:flex;gap:14px">
+              ${['A','B','C','D'].map((l,i) => `
+              <label style="display:flex;align-items:center;gap:5px;font-size:13px;cursor:pointer;font-weight:500">
+                <input type="radio" name="qz-correct" value="${i}" style="accent-color:var(--primary)"/> ${l}
+              </label>`).join('')}
+            </div>
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:5px;display:block">Marks</label>
+            <input type="number" id="qz-marks" value="1" min="1" style="width:72px;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;font-family:inherit;outline:none"/>
+          </div>
+        </div>
+        <div id="qz-error" style="color:#dc2626;font-size:13px;font-weight:500;margin-bottom:10px;display:none"></div>
+        <button class="btn btn-primary" onclick="submitQuizQuestion('${quizId}')">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Add Question
+        </button>
+      </div>
+
+      <!-- Existing Questions -->
+      <div class="card">
+        <div style="font-size:14px;font-weight:700;margin-bottom:14px;display:flex;align-items:center;gap:8px">
+          Questions
+          <span style="background:var(--bg);border:1px solid var(--border);padding:1px 8px;border-radius:20px;font-size:11px;color:var(--text-muted);font-weight:400">${questions.length}</span>
+        </div>
+        <div id="qz-list">
+          ${!questions.length
+            ? `<div style="text-align:center;padding:28px;color:var(--text-muted);font-size:13px;border:1.5px dashed var(--border);border-radius:8px">No questions yet — add your first question above</div>`
+            : questions.map((q, i) => `
+            <div style="padding:14px;border:1.5px solid var(--border);border-radius:10px;margin-bottom:10px">
+              <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
+                <div style="flex:1">
+                  <div style="font-weight:600;font-size:14px;margin-bottom:8px">Q${i+1}. ${q.questionText}</div>
+                  <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px">
+                    ${q.options.map((o, oi) => `
+                    <span style="padding:4px 10px;border-radius:6px;font-size:12px;font-weight:500;
+                      ${oi === q.correctAnswer
+                        ? 'background:#f0fdf4;color:#166534;border:1px solid #bbf7d0;'
+                        : 'background:var(--bg);color:var(--text-light);border:1px solid var(--border);'}">
+                      ${String.fromCharCode(65+oi)}) ${o}
+                      ${oi === q.correctAnswer ? ' ✓' : ''}
+                    </span>`).join('')}
+                  </div>
+                  <div style="font-size:11px;color:var(--text-muted);font-weight:600">${q.marks} mark${q.marks !== 1 ? 's' : ''}</div>
+                </div>
+                <button class="btn btn-sm" style="background:#fef2f2;color:#dc2626;border:1px solid #fecaca;flex-shrink:0" onclick="deleteQuizQInline('${quizId}','${q._id}')">Delete</button>
+              </div>
+            </div>`).join('')}
+        </div>
+      </div>
+    `;
+  } catch(e) {
+    $('page-root').innerHTML = `<p style="color:#dc2626;padding:16px">${e.message}</p>`;
+  }
+}
+
+async function submitQuizQuestion(quizId) {
+  const text = $('qz-text').value.trim();
+  const opts = [0,1,2,3].map(i => $('qz-opt-'+i).value.trim()).filter(o => o);
+  const correctEl = document.querySelector('input[name="qz-correct"]:checked');
+  const marks = parseInt($('qz-marks').value) || 1;
+  const errEl = $('qz-error');
+
+  if (!text) { errEl.textContent = 'Question text is required.'; errEl.style.display = 'block'; return; }
+  if (opts.length < 2) { errEl.textContent = 'At least 2 options are required.'; errEl.style.display = 'block'; return; }
+  if (!correctEl) { errEl.textContent = 'Please select the correct answer.'; errEl.style.display = 'block'; return; }
+  const correctAnswer = parseInt(correctEl.value);
+  if (correctAnswer >= opts.length) { errEl.textContent = 'Correct answer must match a filled option.'; errEl.style.display = 'block'; return; }
+
+  errEl.style.display = 'none';
+  try {
+    await api('POST', `/api/lecturer/quizzes/${quizId}/questions`, {
+      questionText: text, options: opts, correctAnswer, marks
+    });
+    toast('Question added!', 'ok');
+    await openQuizQuestionsPanel(quizId);
+  } catch(e) {
+    errEl.textContent = e.message; errEl.style.display = 'block';
+  }
+}
+
+async function deleteQuizQInline(quizId, qId) {
+  if (!confirm('Delete this question?')) return;
+  try {
+    await api('DELETE', `/api/lecturer/quizzes/${quizId}/questions/${qId}`);
+    toast('Question deleted', 'ok');
+    await openQuizQuestionsPanel(quizId);
+  } catch(e) { toast('Error: ' + e.message, 'err'); }
+}
+
+async function deleteQuizInline(id) {
+  if (!confirm('Delete this quiz and all its questions? Cannot be undone.')) return;
+  try {
+    await api('DELETE', `/api/lecturer/quizzes/${id}`);
+    toast('Quiz deleted', 'ok');
+    await renderLecturerQuizzes();
+  } catch(e) { toast('Error: ' + e.message, 'err'); }
+}
+
+function copyQuizIdInline(id) {
+  navigator.clipboard.writeText(id).then(() => {
+    toast('✓ Quiz ID copied — paste into Live Monitor', 'ok');
+  }).catch(() => { prompt('Copy this Quiz ID:', id); });
+}
+
+// ── CREATE QUIZ MODAL ─────────────────────────────────────────────────────
+function openCreateQuizModal() {
+  // Build modal HTML
+  const overlay = document.createElement('div');
+  overlay.id = 'qz-modal-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:300;display:flex;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(3px)';
+  overlay.innerHTML = `
+    <div style="background:var(--card);border-radius:16px;width:100%;max-width:500px;box-shadow:0 20px 60px rgba(0,0,0,.2);animation:slideIn .25s cubic-bezier(.16,1,.3,1)">
+      <div style="padding:20px 24px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
+        <h3 style="font-size:17px;font-weight:700">Create Quiz</h3>
+        <button onclick="document.getElementById('qz-modal-overlay').remove()" style="width:28px;height:28px;border-radius:7px;border:1px solid var(--border);background:var(--bg);cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center">✕</button>
+      </div>
+      <div style="padding:22px 24px;display:flex;flex-direction:column;gap:14px">
+        <div>
+          <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:5px;display:block">Title <span style="color:#dc2626">*</span></label>
+          <input id="qz-m-title" placeholder="Quiz title" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;font-family:inherit;outline:none"/>
+        </div>
+        <div>
+          <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:5px;display:block">Description</label>
+          <input id="qz-m-desc" placeholder="Optional description" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;font-family:inherit;outline:none"/>
+        </div>
+        <div>
+          <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:5px;display:block">Course <span style="color:#dc2626">*</span></label>
+          <select id="qz-m-course" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;font-family:inherit;outline:none">
+            <option value="">Select a course…</option>
+            ${S.courses.map(c => `<option value="${c._id}">${c.code} — ${c.title}</option>`).join('')}
+          </select>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <div>
+            <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:5px;display:block">Start Time <span style="color:#dc2626">*</span></label>
+            <input type="datetime-local" id="qz-m-start" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;font-family:inherit;outline:none"/>
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:5px;display:block">End Time <span style="color:#dc2626">*</span></label>
+            <input type="datetime-local" id="qz-m-end" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;font-family:inherit;outline:none"/>
+          </div>
+        </div>
+        <div>
+          <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:5px;display:block">Time Limit (minutes)</label>
+          <input type="number" id="qz-m-limit" value="30" min="1" style="width:100px;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;font-family:inherit;outline:none"/>
+        </div>
+        <div id="qz-m-error" style="color:#dc2626;font-size:13px;font-weight:500;display:none"></div>
+      </div>
+      <div style="padding:14px 24px;border-top:1px solid var(--border);display:flex;gap:10px;justify-content:flex-end">
+        <button class="btn btn-secondary" onclick="document.getElementById('qz-modal-overlay').remove()">Cancel</button>
+        <button class="btn btn-primary" onclick="submitCreateQuiz()">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Create Quiz
+        </button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+}
+
+async function submitCreateQuiz() {
+  const title = $('qz-m-title').value.trim();
+  const courseId = $('qz-m-course').value;
+  const start = $('qz-m-start').value;
+  const end = $('qz-m-end').value;
+  const timeLimit = parseInt($('qz-m-limit').value) || 30;
+  const errEl = $('qz-m-error');
+
+  if (!title) { errEl.textContent = 'Title is required.'; errEl.style.display = 'block'; return; }
+  if (!courseId) { errEl.textContent = 'Please select a course.'; errEl.style.display = 'block'; return; }
+  if (!start) { errEl.textContent = 'Start time is required.'; errEl.style.display = 'block'; return; }
+  if (!end) { errEl.textContent = 'End time is required.'; errEl.style.display = 'block'; return; }
+  if (new Date(start) >= new Date(end)) { errEl.textContent = 'Start time must be before end time.'; errEl.style.display = 'block'; return; }
+
+  errEl.style.display = 'none';
+  try {
+    const d = await api('POST', '/api/lecturer/quizzes', {
+      title,
+      description: $('qz-m-desc').value.trim(),
+      courseId,
+      startTime: new Date(start).toISOString(),
+      endTime: new Date(end).toISOString(),
+      timeLimit
+    });
+    document.getElementById('qz-modal-overlay')?.remove();
+    toast('Quiz created! Now add questions.', 'ok');
+    await openQuizQuestionsPanel(d.quiz._id);
+  } catch(e) {
+    errEl.textContent = e.message; errEl.style.display = 'block';
+  }
+}
+
+// ── STUDENT QUIZ LIST ─────────────────────────────────────────────────────
+async function renderStudentQuizzes() {
+  $('page-root').innerHTML = `
+    <div style="margin-bottom:22px">
+      <h2 style="font-size:21px;font-weight:700;letter-spacing:-.4px;margin-bottom:2px">Quizzes</h2>
+      <p style="color:var(--text-light);font-size:13px">Your scheduled proctored quizzes</p>
+    </div>
+    <div style="padding:40px;text-align:center;color:var(--text-muted);background:var(--card);border-radius:12px;border:1px solid var(--border)">
+      <div style="font-size:40px;margin-bottom:12px;opacity:.3">🔒</div>
+      <div style="font-size:15px;font-weight:600;margin-bottom:6px">Proctored Quizzes</div>
+      <p style="font-size:13px;max-width:280px;margin:0 auto 16px;line-height:1.6">Quizzes are taken in a secure locked environment. Use the EduCorp exam portal to start a quiz.</p>
+      <a href="/snap-quiz.html" class="btn btn-primary" style="text-decoration:none">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        Open Exam Portal
+      </a>
+    </div>
+  `;
+}
 
 init();
 </script>
