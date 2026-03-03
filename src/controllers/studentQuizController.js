@@ -62,20 +62,31 @@ exports.listQuizzes = async (req, res) => {
     const attemptMap = {};
     myAttempts.forEach((a) => (attemptMap[a.quiz.toString()] = a));
 
-    const result = quizzes.map((q) => {
+    const mapped = quizzes.map((q) => {
       const obj = q.toObject();
       obj.questionCount = qCountMap[q._id.toString()] || 0;
       const attempt = attemptMap[q._id.toString()];
       obj.hasAttempted = !!attempt;
       obj.isSubmitted = attempt?.isSubmitted || false;
-      obj.myScore = attempt?.score ?? null;
-      obj.myMaxScore = attempt?.maxScore ?? null;
+      obj.myScore = attempt?.score || null;
+      obj.myMaxScore = attempt?.maxScore || null;
 
       const isOpen = now >= q.startTime && now <= q.endTime;
       obj.status = now < q.startTime ? "upcoming" : now > q.endTime ? "closed" : "open";
       obj.canAttempt = isOpen && !obj.isSubmitted;
       return obj;
     });
+
+    // Deduplicate: same title + same startTime => keep the one with most questions
+    const seen = new Map();
+    mapped.forEach((q) => {
+      const key = q.title + '_' + new Date(q.startTime).getTime();
+      const existing = seen.get(key);
+      if (!existing || q.questionCount > existing.questionCount) {
+        seen.set(key, q);
+      }
+    });
+    const result = Array.from(seen.values());
 
     res.json({ quizzes: result });
   } catch (error) {
