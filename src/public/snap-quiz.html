@@ -590,23 +590,59 @@ window.addEventListener('load', () => loadMLLibs().catch(() => {}));
       <div class="brand-icon">🎓</div>
       <div class="brand-name">Edu<span>Corp</span></div>
     </div>
-    <h1>Welcome back</h1>
-    <p style="margin: 8px 0 24px">Sign in to start your exam</p>
 
-    <div class="field">
-      <label>Institution Code</label>
-      <input type="text" id="login-institution" placeholder="e.g. UNIV2024" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false" oninput="const e=document.getElementById('login-error-msg');if(e)e.style.display='none'"/>
+    <!-- Tab switcher -->
+    <div style="display:flex;gap:0;background:rgba(255,255,255,.06);border-radius:10px;padding:3px;margin-bottom:22px;">
+      <button id="tab-signin" onclick="switchAuthTab('signin')" style="flex:1;padding:8px;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .18s;background:var(--primary);color:#fff;">Sign In</button>
+      <button id="tab-register" onclick="switchAuthTab('register')" style="flex:1;padding:8px;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;transition:all .18s;background:transparent;color:rgba(255,255,255,.55);">Register</button>
     </div>
-    <div class="field">
-      <label>Index Number</label>
-      <input type="text" id="login-index" placeholder="e.g. ST/2024/001" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+
+    <!-- ── SIGN IN PANEL ── -->
+    <div id="panel-signin">
+      <div class="field">
+        <label>Institution Code</label>
+        <input type="text" id="login-institution" placeholder="e.g. F5S4QW" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false" oninput="clearAuthErr()"/>
+      </div>
+      <div class="field">
+        <label>Index Number</label>
+        <input type="text" id="login-index" placeholder="e.g. DZ112" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" oninput="clearAuthErr()"/>
+      </div>
+      <div class="field">
+        <label>Password</label>
+        <input type="password" id="login-password" placeholder="••••••••" autocomplete="current-password" oninput="clearAuthErr()"/>
+      </div>
+      <button class="btn btn-primary" id="login-btn">Sign In</button>
+      <div id="login-error-msg" style="display:none;margin-top:12px;padding:10px 14px;background:#450a0a;border:1px solid #dc2626;border-radius:8px;color:#fca5a5;font-size:13px;text-align:center;"></div>
+      <p style="font-size:12px;color:rgba(255,255,255,.35);text-align:center;margin-top:14px;">No account yet? <button onclick="switchAuthTab('register')" style="background:none;border:none;color:var(--primary);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;padding:0;">Register here →</button></p>
     </div>
-    <div class="field">
-      <label>Password</label>
-      <input type="password" id="login-password" placeholder="••••••••" autocomplete="current-password"/>
+
+    <!-- ── REGISTER PANEL ── -->
+    <div id="panel-register" style="display:none;">
+      <div class="field">
+        <label>Institution Code</label>
+        <input type="text" id="reg-institution" placeholder="e.g. F5S4QW" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false" oninput="clearAuthErr()"/>
+      </div>
+      <div class="field">
+        <label>Index Number</label>
+        <input type="text" id="reg-index" placeholder="e.g. DZ112" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" oninput="clearAuthErr()"/>
+      </div>
+      <div class="field">
+        <label>Full Name</label>
+        <input type="text" id="reg-name" placeholder="Your full name" autocomplete="name" oninput="clearAuthErr()"/>
+      </div>
+      <div class="field">
+        <label>Password</label>
+        <input type="password" id="reg-password" placeholder="Min. 8 characters" autocomplete="new-password" oninput="clearAuthErr()"/>
+      </div>
+      <div class="field">
+        <label>Confirm Password</label>
+        <input type="password" id="reg-password2" placeholder="Repeat password" autocomplete="new-password" oninput="clearAuthErr()"/>
+      </div>
+      <button class="btn btn-primary" id="register-btn">Create Account</button>
+      <div id="reg-error-msg" style="display:none;margin-top:12px;padding:10px 14px;background:#450a0a;border:1px solid #dc2626;border-radius:8px;color:#fca5a5;font-size:13px;text-align:center;"></div>
+      <div id="reg-success-msg" style="display:none;margin-top:12px;padding:10px 14px;background:#052e16;border:1px solid #22c55e;border-radius:8px;color:#86efac;font-size:13px;text-align:center;"></div>
+      <p style="font-size:12px;color:rgba(255,255,255,.35);text-align:center;margin-top:14px;">Already have an account? <button onclick="switchAuthTab('signin')" style="background:none;border:none;color:var(--primary);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;padding:0;">Sign in →</button></p>
     </div>
-    <button class="btn btn-primary" id="login-btn">Sign In</button>
-    <div id="login-error-msg" style="display:none;margin-top:12px;padding:10px 14px;background:#450a0a;border:1px solid #dc2626;border-radius:8px;color:#fca5a5;font-size:13px;text-align:center;"></div>
 
     <div class="divider"><span>or</span></div>
     <button class="btn btn-ghost btn-sm" id="show-dashboard-btn">Lecturer Dashboard →</button>
@@ -938,6 +974,83 @@ async function api(method, path, body) {
 // ══════════════════════════════════════════════════════════════════
 //  LOGIN
 // ══════════════════════════════════════════════════════════════════
+// ── Auth tab switcher ────────────────────────────────────────────
+function switchAuthTab(tab) {
+  const isSignin = tab === 'signin';
+  document.getElementById('panel-signin').style.display   = isSignin ? 'block' : 'none';
+  document.getElementById('panel-register').style.display = isSignin ? 'none'  : 'block';
+  const activeStyle   = 'flex:1;padding:8px;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .18s;background:var(--primary);color:#fff;';
+  const inactiveStyle = 'flex:1;padding:8px;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;transition:all .18s;background:transparent;color:rgba(255,255,255,.55);';
+  document.getElementById('tab-signin').style.cssText   = isSignin ? activeStyle : inactiveStyle;
+  document.getElementById('tab-register').style.cssText = isSignin ? inactiveStyle : activeStyle;
+  clearAuthErr();
+}
+
+function clearAuthErr() {
+  const e1 = document.getElementById('login-error-msg');
+  const e2 = document.getElementById('reg-error-msg');
+  const s  = document.getElementById('reg-success-msg');
+  if (e1) e1.style.display = 'none';
+  if (e2) e2.style.display = 'none';
+  if (s)  s.style.display  = 'none';
+}
+
+function showAuthError(elId, msg) {
+  const el = document.getElementById(elId);
+  if (el) { el.textContent = msg; el.style.display = 'block'; }
+  toast(msg, 'error');
+}
+
+// ── Register handler ──────────────────────────────────────────────
+document.getElementById('register-btn').addEventListener('click', async () => {
+  const institutionCode = document.getElementById('reg-institution').value.trim();
+  const indexNumber     = document.getElementById('reg-index').value.trim();
+  const name            = document.getElementById('reg-name').value.trim();
+  const password        = document.getElementById('reg-password').value;
+  const password2       = document.getElementById('reg-password2').value;
+
+  if (!institutionCode || !indexNumber || !name || !password) {
+    return showAuthError('reg-error-msg', 'All fields are required.');
+  }
+  if (password.length < 8) {
+    return showAuthError('reg-error-msg', 'Password must be at least 8 characters.');
+  }
+  if (password !== password2) {
+    return showAuthError('reg-error-msg', 'Passwords do not match.');
+  }
+
+  const btn = document.getElementById('register-btn');
+  btn.disabled = true; btn.textContent = 'Creating account…';
+
+  try {
+    await api('POST', '/api/auth/register-student', { name, indexNumber, password, institutionCode });
+    const successEl = document.getElementById('reg-success-msg');
+    if (successEl) {
+      successEl.textContent = 'Account created! Signing you in…';
+      successEl.style.display = 'block';
+    }
+    // Auto sign-in after registration
+    setTimeout(async () => {
+      try {
+        const data = await api('POST', '/api/auth/login', { indexNumber, password, institutionCode, loginRole: 'student' });
+        state.token = data.token;
+        state.user  = data.user;
+        state.deviceFingerprint = buildFingerprint();
+        loadQuizList();
+        show('quiz-list-screen');
+        toast('Welcome, ' + (data.user?.name || indexNumber) + '!', 'success');
+      } catch (e2) {
+        showAuthError('reg-error-msg', 'Account created but sign-in failed: ' + e2.message + '. Please sign in manually.');
+        switchAuthTab('signin');
+      }
+    }, 800);
+  } catch (e) {
+    showAuthError('reg-error-msg', e.message || 'Registration failed. Please try again.');
+    btn.disabled = false; btn.textContent = 'Create Account';
+  }
+});
+
+// ── Sign In handler ───────────────────────────────────────────────
 document.getElementById('login-btn').addEventListener('click', async () => {
   const institutionCode = document.getElementById('login-institution').value.trim();
   const indexNumber     = document.getElementById('login-index').value.trim();
@@ -1494,6 +1607,11 @@ function showViolationWarning(level) {
   overlay.classList.add('show');
 }
 
+function dismissStrikeWarning() {
+  var el = document.getElementById('proctor-strike-toast');
+  if (el) el.remove();
+}
+
 // ── Strike warning popup (phone / head turn / multiple faces) ──────────────
 function showProctorStrikeWarning(type, strikeNum) {
   document.getElementById('proctor-strike-toast')?.remove();
@@ -1528,7 +1646,7 @@ function showProctorStrikeWarning(type, strikeNum) {
         : '<span style="color:#ef4444">Submitting your quiz now…</span>') +
     '</div>' +
     (strikeNum < 2
-      ? '<button onclick="document.getElementById('proctor-strike-toast').remove()" style="background:#ef4444;color:#fff;border:none;border-radius:8px;padding:9px 22px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit">I Understand</button>'
+      ? '<button onclick="dismissStrikeWarning()" style="background:#ef4444;color:#fff;border:none;border-radius:8px;padding:9px 22px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit">I Understand</button>'
       : '');
   document.body.appendChild(el);
   if (strikeNum < 2) setTimeout(() => document.getElementById('proctor-strike-toast')?.remove(), 6000);
