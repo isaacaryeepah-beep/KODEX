@@ -10,8 +10,26 @@
 <title>EduCorp — Snap Quiz</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.13.0/dist/tf.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/face-detection@1.0.2/dist/face-detection.js"></script>
+<!-- TF loaded async so it never blocks login UI wiring -->
+<script>
+function loadMLLibs() {
+  return new Promise((resolve) => {
+    const tf = document.createElement('script');
+    tf.src = 'https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.13.0/dist/tf.min.js';
+    tf.onload = () => {
+      const fd = document.createElement('script');
+      fd.src = 'https://cdn.jsdelivr.net/npm/@tensorflow-models/face-detection@1.0.2/dist/face-detection.js';
+      fd.onload = resolve;
+      fd.onerror = resolve; // fail silently — proctoring degrades gracefully
+      document.head.appendChild(fd);
+    };
+    tf.onerror = resolve; // fail silently
+    document.head.appendChild(tf);
+  });
+}
+// Load ML libs after page renders — never blocks login
+window.addEventListener('load', () => loadMLLibs().catch(() => {}));
+</script>
 <style>
   /* ═══════════════════════════════════════════════════════════════
      CSS RESET & VARIABLES
@@ -797,6 +815,18 @@
 
 
 <script>
+// Global error handler — catches any uncaught errors and shows them
+window.addEventListener('error', function(e) {
+  console.error('[Global error]', e.message, e.filename, e.lineno);
+  // Don't let ML/TF errors break the login UI
+  if (e.filename && (e.filename.includes('tensorflow') || e.filename.includes('face-detection'))) {
+    e.preventDefault(); return;
+  }
+});
+window.addEventListener('unhandledrejection', function(e) {
+  console.error('[Unhandled promise]', e.reason);
+});
+
 // ══════════════════════════════════════════════════════════════════
 //  STATE
 // ══════════════════════════════════════════════════════════════════
@@ -887,9 +917,21 @@ async function api(method, path, body) {
   };
   if (state.token) opts.headers['Authorization'] = `Bearer ${state.token}`;
   if (body) opts.body = JSON.stringify(body);
-  const res = await fetch(API + path, opts);
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+
+  let res;
+  try {
+    res = await fetch(API + path, opts);
+  } catch (networkErr) {
+    throw new Error('Network error — check your connection. (' + networkErr.message + ')');
+  }
+
+  let data = {};
+  try { data = await res.json(); } catch (e) { /* non-JSON response */ }
+
+  if (!res.ok) {
+    const msg = data.error || data.message || ('Server error ' + res.status);
+    throw new Error(msg);
+  }
   return data;
 }
 
@@ -907,7 +949,10 @@ document.getElementById('login-btn').addEventListener('click', async () => {
 
   try {
     // Try student login via index number
-    const data = await api('POST', '/api/auth/login', { indexNumber, password, institutionCode, loginRole: 'student' });
+    const payload = { indexNumber, password, institutionCode, loginRole: 'student' };
+    console.log('[Login] Sending:', { indexNumber, institutionCode, loginRole: 'student' });
+    const data = await api('POST', '/api/auth/login', payload);
+    console.log('[Login] Success:', data.user?.role, data.user?.indexNumber);
     state.token = data.token;
     state.user  = data.user;
     state.deviceFingerprint = buildFingerprint();
@@ -916,8 +961,10 @@ document.getElementById('login-btn').addEventListener('click', async () => {
     toast('Signed in!', 'success');
   } catch (e) {
     const errEl = document.getElementById('login-error-msg');
-    if (errEl) { errEl.textContent = e.message; errEl.style.display = 'block'; }
-    toast(e.message, 'error');
+    const msg = e.message || 'Sign in failed. Please try again.';
+    if (errEl) { errEl.textContent = msg; errEl.style.display = 'block'; }
+    toast(msg, 'error');
+    console.error('[Login error]', e);
   } finally {
     btn.disabled = false; btn.textContent = 'Sign In';
   }
