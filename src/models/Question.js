@@ -13,6 +13,11 @@ const questionSchema = new mongoose.Schema(
       required: [true, "Question text is required"],
       trim: true,
     },
+    questionType: {
+      type: String,
+      enum: ["single", "multiple"],
+      default: "single",
+    },
     options: {
       type: [String],
       required: true,
@@ -21,10 +26,16 @@ const questionSchema = new mongoose.Schema(
         message: "At least 2 options are required",
       },
     },
+    // Single correct answer (legacy + single type)
     correctAnswer: {
       type: Number,
-      required: [true, "Correct answer index is required"],
       min: 0,
+      default: null,
+    },
+    // Multiple correct answers (array of indices)
+    correctAnswers: {
+      type: [Number],
+      default: [],
     },
     marks: {
       type: Number,
