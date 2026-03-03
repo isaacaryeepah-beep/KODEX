@@ -1051,12 +1051,14 @@ async function loadFaceModel() {
 }
 
 async function detectFaces(videoEl) {
-  if (!state.faceModel) return { faces: [], count: 0, detected: false, centered: false };
+  if (!state.faceModel) return { faces: [], count: 0, detected: false, centered: false, headTurn: false };
   try {
     const faces = await state.faceModel.estimateFaces(videoEl);
     const count = faces.length;
     const detected = count > 0;
     let centered = false;
+    let headTurn = false;
+
     if (detected && faces[0].box) {
       const { xMin, yMin, width, height } = faces[0].box;
       const cx = xMin + width / 2;
@@ -1064,9 +1066,54 @@ async function detectFaces(videoEl) {
       const vw = videoEl.videoWidth || 640;
       const vh = videoEl.videoHeight || 480;
       centered = Math.abs(cx - vw/2) < vw*0.25 && Math.abs(cy - vh/2) < vh*0.3;
+
+      // Head turn detection using MediaPipe keypoints
+      // 0=rightEye,1=leftEye,2=nose,3=mouth,4=rightEar,5=leftEar
+      const kp = faces[0].keypoints;
+      if (kp && kp.length >= 6) {
+        const nose = kp[2], rightEar = kp[4], leftEar = kp[5];
+        const rightEye = kp[0], leftEye = kp[1];
+        if (rightEar && leftEar && nose) {
+          const dR = Math.abs(nose.x - rightEar.x);
+          const dL = Math.abs(nose.x - leftEar.x);
+          const ratio = dR > dL ? dR / dL : dL / dR;
+          if (ratio > 2.5) headTurn = true;
+        }
+        if (!headTurn && rightEye && leftEye && nose) {
+          const eyeMidX = (rightEye.x + leftEye.x) / 2;
+          const noseOff = Math.abs(nose.x - eyeMidX);
+          const eyeSpan = Math.abs(rightEye.x - leftEye.x);
+          if (eyeSpan > 0 && noseOff / eyeSpan > 0.35) headTurn = true;
+        }
+      }
     }
-    return { faces, count, detected, centered };
-  } catch { return { faces: [], count: 0, detected: false, centered: false }; }
+    return { faces, count, detected, centered, headTurn };
+  } catch { return { faces: [], count: 0, detected: false, centered: false, headTurn: false }; }
+}
+
+// Phone detection: looks for bright rectangular screen in frame
+let _phoneCanvas = null;
+function detectPhoneInFrame(videoEl) {
+  try {
+    if (!_phoneCanvas) {
+      _phoneCanvas = document.createElement('canvas');
+      _phoneCanvas.width = 160; _phoneCanvas.height = 120;
+    }
+    const ctx = _phoneCanvas.getContext('2d');
+    ctx.drawImage(videoEl, 0, 0, 160, 120);
+    const d = ctx.getImageData(0, 0, 160, 120).data;
+    let brightCols = 0;
+    for (let x = 48; x < 112; x += 4) {
+      let bright = 0, total = 0;
+      for (let y = 12; y < 108; y += 4) {
+        const i = (y * 160 + x) * 4;
+        if ((d[i] + d[i+1] + d[i+2]) / 3 > 200) bright++;
+        total++;
+      }
+      if (total > 0 && bright / total > 0.6) brightCols++;
+    }
+    return brightCols / 16 > 0.3;
+  } catch { return false; }
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -1228,18 +1275,36 @@ function startProctoring() {
     logEvent('heartbeat').catch(console.warn);
   }, 10000);
 
-  // ── Face monitoring every 3s ─────────────────────────────────
+  // ── Face + Head-turn + Phone monitoring every 3s ─────────────
+  state.criticalStrikesThisSession = 0;
   state.faceCheckInterval = setInterval(async () => {
     if (!state.examActive) return;
-    const { count, detected, centered } = await detectFaces(examVideo);
+    const { count, detected, centered, headTurn } = await detectFaces(examVideo);
+    const phoneDetected = detectPhoneInFrame(examVideo);
     const floatingCam = document.getElementById('floating-cam');
     const dot = document.getElementById('ps-dot');
     const text = document.getElementById('ps-text');
     const camInd = document.getElementById('cam-indicator');
 
-    if (count > 1) {
-      setProctorStatus('red', '⚠ Multiple', floatingCam, dot, text);
+    if (phoneDetected) {
+      setProctorStatus('red', '🚫 Phone!', floatingCam, dot, text);
       camInd.className = 'red';
+      state.criticalStrikesThisSession++;
+      showProctorStrikeWarning('phone_detected', state.criticalStrikesThisSession);
+      logEvent('phone_detected').catch(console.warn);
+
+    } else if (headTurn) {
+      setProctorStatus('red', '⚠ Head turn!', floatingCam, dot, text);
+      camInd.className = 'red';
+      state.criticalStrikesThisSession++;
+      showProctorStrikeWarning('head_turn', state.criticalStrikesThisSession);
+      logEvent('head_turn').catch(console.warn);
+
+    } else if (count > 1) {
+      setProctorStatus('red', '⚠ Multiple faces', floatingCam, dot, text);
+      camInd.className = 'red';
+      state.criticalStrikesThisSession++;
+      showProctorStrikeWarning('multiple_faces', state.criticalStrikesThisSession);
       logEvent('multiple_faces', { count }).catch(console.warn);
 
     } else if (!detected) {
@@ -1258,7 +1323,13 @@ function startProctoring() {
       if (state.lastFaceState !== 'green') logEvent('face_detected').catch(console.warn);
     }
 
-    state.lastFaceState = count > 1 ? 'red' : !detected ? 'red' : !centered ? 'yellow' : 'green';
+    // 2-strike auto-submit
+    if (state.criticalStrikesThisSession >= 2) {
+      state.criticalStrikesThisSession = 0; // reset to avoid repeat triggers
+      showAutoSubmitCountdown();
+    }
+
+    state.lastFaceState = phoneDetected || headTurn || count > 1 ? 'red' : !detected ? 'red' : !centered ? 'yellow' : 'green';
   }, 3000);
 
   // ── Periodic snapshots every 30s ─────────────────────────────
@@ -1373,6 +1444,83 @@ function showViolationWarning(level) {
   overlay.classList.add('show');
 }
 
+// ── Strike warning popup (phone / head turn / multiple faces) ──────────────
+function showProctorStrikeWarning(type, strikeNum) {
+  document.getElementById('proctor-strike-toast')?.remove();
+  const labels = {
+    phone_detected: '📱 Phone Detected',
+    head_turn: '↩ Head Turning Detected',
+    multiple_faces: '👥 Multiple Faces Detected'
+  };
+  const label = labels[type] || '⚠ Violation';
+  const el = document.createElement('div');
+  el.id = 'proctor-strike-toast';
+  el.style.cssText = [
+    'position:fixed', 'top:50%', 'left:50%',
+    'transform:translate(-50%,-50%)',
+    'z-index:9998',
+    'background:#1e293b',
+    'border:2px solid #ef4444',
+    'border-radius:16px',
+    'padding:28px 32px',
+    'text-align:center',
+    'max-width:340px',
+    'width:90%',
+    'box-shadow:0 20px 60px rgba(0,0,0,.75)'
+  ].join(';');
+  el.innerHTML =
+    '<div style="font-size:40px;margin-bottom:10px">⚠️</div>' +
+    '<div style="font-size:19px;font-weight:700;color:#ef4444;margin-bottom:8px">' + label + '</div>' +
+    '<div style="font-size:14px;color:#94a3b8;line-height:1.6;margin-bottom:16px">' +
+      'Strike <span style="color:#fbbf24;font-size:20px;font-weight:800">' + strikeNum + '</span> of 2<br>' +
+      (strikeNum < 2
+        ? '<span style="color:#fbbf24">⚠ One more violation will auto-submit your quiz!</span>'
+        : '<span style="color:#ef4444">Submitting your quiz now…</span>') +
+    '</div>' +
+    (strikeNum < 2
+      ? '<button onclick="document.getElementById('proctor-strike-toast').remove()" style="background:#ef4444;color:#fff;border:none;border-radius:8px;padding:9px 22px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit">I Understand</button>'
+      : '');
+  document.body.appendChild(el);
+  if (strikeNum < 2) setTimeout(() => document.getElementById('proctor-strike-toast')?.remove(), 6000);
+}
+
+// ── Auto-submit countdown when 2nd critical violation hits ─────────────────
+function showAutoSubmitCountdown() {
+  document.getElementById('proctor-strike-toast')?.remove();
+  const el = document.createElement('div');
+  el.style.cssText = [
+    'position:fixed', 'inset:0',
+    'z-index:10000',
+    'background:rgba(0,0,0,.88)',
+    'display:flex',
+    'align-items:center',
+    'justify-content:center'
+  ].join(';');
+  el.innerHTML =
+    '<div style="background:#1e293b;border:2px solid #ef4444;border-radius:16px;padding:36px 32px;text-align:center;max-width:360px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,.8)">' +
+      '<div style="font-size:52px;margin-bottom:12px">🚫</div>' +
+      '<div style="font-size:20px;font-weight:700;color:#ef4444;margin-bottom:8px">Quiz Auto-Submitting</div>' +
+      '<div style="font-size:14px;color:#94a3b8;margin-bottom:20px;line-height:1.6">' +
+        'You received <strong style="color:#fbbf24">2 critical violations</strong>.<br>' +
+        'Your work is being submitted automatically.' +
+      '</div>' +
+      '<div style="font-size:58px;font-weight:800;color:#fbbf24;line-height:1" id="asc-num">5</div>' +
+      '<div style="font-size:12px;color:#64748b;margin-top:6px">seconds</div>' +
+    '</div>';
+  document.body.appendChild(el);
+  let secs = 5;
+  const timer = setInterval(function() {
+    secs--;
+    const n = document.getElementById('asc-num');
+    if (n) n.textContent = secs;
+    if (secs <= 0) {
+      clearInterval(timer);
+      el.remove();
+      submitExam();
+    }
+  }, 1000);
+}
+
 function terminateExam(reason) {
   state.examActive = false;
   stopExamCleanup();
@@ -1385,6 +1533,8 @@ function terminateExam(reason) {
     app_background: 'You left the exam for too long.',
     tab_switch: 'Repeated tab switching was detected.',
     identity_mismatch: 'Identity verification failed.',
+    phone_detected: 'A phone was detected in the camera frame.',
+    head_turn: 'Repeated head turning away from screen was detected.',
   };
   overlay.innerHTML = `
     <div class="violation-icon">⛔</div>
