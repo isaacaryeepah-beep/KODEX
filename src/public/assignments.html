@@ -1,0 +1,1147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
+<title>Assignments — EduCorp</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<style>
+:root{
+  --bg:#f5f4f1;--surface:#fff;--ink:#0d0f14;--ink2:#383c48;
+  --muted:#888789;--border:#e3e1db;--accent:#2d5be3;--accent2:#1a3db5;
+  --green:#16a34a;--amber:#d97706;--red:#dc2626;--purple:#7c3aed;
+  --r:10px;--shadow:0 2px 12px rgba(0,0,0,.07);
+  --sans:'DM Sans',sans-serif;--display:'Syne',sans-serif;--mono:'DM Mono',monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--sans);background:var(--bg);color:var(--ink);min-height:100vh;font-size:15px;line-height:1.5}
+a{text-decoration:none;color:inherit}
+
+/* ── TOP BAR ── */
+.topbar{
+  position:sticky;top:0;z-index:100;
+  background:var(--surface);border-bottom:1px solid var(--border);
+  height:58px;display:flex;align-items:center;padding:0 28px;gap:16px;
+}
+.logo{font-family:var(--display);font-size:18px;font-weight:800;letter-spacing:-.5px}
+.logo span{color:var(--accent)}
+.topbar-nav{display:flex;gap:4px;margin-left:20px}
+.nav-pill{
+  padding:6px 14px;border-radius:6px;font-size:13px;font-weight:500;
+  color:var(--muted);cursor:pointer;border:none;background:transparent;font-family:var(--sans);
+  transition:background .15s,color .15s;
+}
+.nav-pill:hover{background:var(--bg);color:var(--ink)}
+.nav-pill.active{background:var(--accent);color:#fff}
+.topbar-right{margin-left:auto;display:flex;align-items:center;gap:10px}
+.user-chip{
+  display:flex;align-items:center;gap:8px;padding:5px 12px 5px 6px;
+  background:var(--bg);border-radius:20px;font-size:13px;
+}
+.user-avatar{
+  width:26px;height:26px;border-radius:50%;background:var(--accent);
+  display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;font-weight:700;
+}
+
+/* ── PAGE LAYOUT ── */
+.page{max-width:1060px;margin:0 auto;padding:28px 24px}
+.page-head{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:24px;gap:12px;flex-wrap:wrap}
+.page-head h1{font-family:var(--display);font-size:24px;font-weight:800}
+.page-head p{color:var(--muted);font-size:13px;margin-top:3px}
+
+/* ── BUTTONS ── */
+.btn{
+  display:inline-flex;align-items:center;gap:6px;
+  padding:9px 18px;border-radius:8px;font-size:14px;font-weight:500;
+  border:none;cursor:pointer;font-family:var(--sans);transition:all .15s;
+}
+.btn-primary{background:var(--accent);color:#fff}
+.btn-primary:hover{background:var(--accent2)}
+.btn-ghost{background:transparent;color:var(--ink);border:1.5px solid var(--border)}
+.btn-ghost:hover{background:var(--bg)}
+.btn-danger{background:var(--red);color:#fff}
+.btn-danger:hover{background:#b91c1c}
+.btn-green{background:var(--green);color:#fff}
+.btn-green:hover{background:#15803d}
+.btn-sm{padding:6px 12px;font-size:13px;border-radius:7px}
+.btn-xs{padding:4px 9px;font-size:12px;border-radius:6px}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+
+/* ── CARDS ── */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);box-shadow:var(--shadow)}
+.card-head{padding:18px 22px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.card-head h2{font-family:var(--display);font-size:16px;font-weight:700}
+.card-body{padding:22px}
+
+/* ── ASSIGNMENT GRID ── */
+.assign-grid{display:grid;gap:14px}
+.acard{
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--r);
+  padding:20px 22px;cursor:pointer;transition:box-shadow .2s,border-color .2s;
+  display:grid;grid-template-columns:1fr auto;gap:10px;align-items:start;
+}
+.acard:hover{box-shadow:0 4px 20px rgba(0,0,0,.1);border-color:#c9c7c0}
+.acard-title{font-family:var(--display);font-size:16px;font-weight:700;margin-bottom:4px}
+.acard-course{font-size:12px;color:var(--accent);font-weight:600;margin-bottom:6px;font-family:var(--mono)}
+.acard-desc{font-size:13px;color:var(--ink2);margin-bottom:10px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.acard-tags{display:flex;flex-wrap:wrap;gap:6px}
+.tag{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:600;font-family:var(--mono)}
+.tag-blue{background:#eff6ff;color:#1d4ed8}
+.tag-amber{background:#fef3c7;color:#92400e}
+.tag-red{background:#fef2f2;color:#991b1b}
+.tag-green{background:#f0fdf4;color:#166534}
+.tag-purple{background:#f5f3ff;color:#6d28d9}
+.tag-gray{background:#f3f4f6;color:#4b5563;border:1px solid var(--border)}
+.acard-stat{text-align:right}
+.acard-num{font-family:var(--display);font-size:30px;font-weight:800;color:var(--accent);line-height:1}
+.acard-lbl{font-size:11px;color:var(--muted);margin-top:2px}
+
+/* ── EMPTY ── */
+.empty{text-align:center;padding:60px 24px}
+.empty-icon{font-size:44px;margin-bottom:14px;opacity:.35}
+.empty h3{font-family:var(--display);font-size:19px;font-weight:800;margin-bottom:6px}
+.empty p{color:var(--muted);font-size:13px;max-width:300px;margin:0 auto 20px;line-height:1.6}
+
+/* ── OVERLAY + DRAWER ── */
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:200;opacity:0;pointer-events:none;transition:opacity .25s}
+.overlay.show{opacity:1;pointer-events:auto}
+.drawer{
+  position:fixed;top:0;right:0;bottom:0;width:600px;max-width:100vw;
+  background:var(--surface);z-index:201;
+  transform:translateX(100%);transition:transform .3s cubic-bezier(.4,0,.2,1);
+  display:flex;flex-direction:column;box-shadow:-6px 0 32px rgba(0,0,0,.12);
+}
+.drawer.show{transform:none}
+.drawer-head{
+  padding:18px 22px;border-bottom:1px solid var(--border);
+  display:flex;align-items:center;justify-content:space-between;flex-shrink:0;
+}
+.drawer-head h2{font-family:var(--display);font-size:17px;font-weight:800}
+.drawer-body{flex:1;overflow-y:auto;padding:22px}
+.drawer-foot{padding:14px 22px;border-top:1px solid var(--border);display:flex;gap:10px;justify-content:flex-end;flex-shrink:0}
+
+/* ── FORM ── */
+.fg{margin-bottom:18px}
+.fg label{display:block;font-size:13px;font-weight:600;margin-bottom:5px;color:var(--ink)}
+.fg label .req{color:var(--red)}
+.fg input,.fg textarea,.fg select{
+  width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;
+  font-size:14px;font-family:var(--sans);color:var(--ink);background:#fff;outline:none;
+  transition:border-color .15s;
+}
+.fg input:focus,.fg textarea:focus,.fg select:focus{border-color:var(--accent)}
+.fg textarea{resize:vertical;min-height:72px}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.fg-check{display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;font-weight:400}
+.fg-check input{width:auto}
+.fg-checks{display:flex;gap:20px;margin-bottom:18px}
+
+/* ── PDF UPLOAD ZONE ── */
+.drop-zone{
+  border:2px dashed var(--border);border-radius:var(--r);
+  padding:28px;text-align:center;cursor:pointer;background:#fafaf8;
+  transition:border-color .2s,background .2s;
+}
+.drop-zone:hover,.drop-zone.over{border-color:var(--accent);background:#eff6ff}
+.drop-zone input{display:none}
+.drop-zone .di{font-size:28px;margin-bottom:8px}
+.drop-zone strong{font-size:14px;display:block;margin-bottom:4px}
+.drop-zone p{font-size:12px;color:var(--muted)}
+.file-attached{
+  display:flex;align-items:center;gap:10px;
+  padding:10px 14px;background:#eff6ff;border-radius:8px;margin-top:10px;
+}
+.file-attached span{flex:1;font-size:13px;font-weight:500;color:var(--accent);font-family:var(--mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.file-attached small{color:var(--muted);font-size:11px;white-space:nowrap}
+.file-rm{background:none;border:none;cursor:pointer;color:var(--red);font-size:18px;padding:2px 4px;line-height:1}
+
+/* ── QUESTION BUILDER ── */
+.q-list{display:grid;gap:10px;margin-top:6px}
+.q-item{border:1.5px solid var(--border);border-radius:9px;overflow:hidden}
+.q-head{
+  padding:11px 15px;background:#fafaf8;display:flex;align-items:center;
+  justify-content:space-between;cursor:pointer;font-size:13px;font-weight:600;
+}
+.q-head:hover{background:#f2f0ea}
+.q-body{padding:16px;display:none;border-top:1px solid var(--border)}
+.q-body.open{display:block}
+.opt-row{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.opt-letter{
+  width:22px;height:22px;border-radius:50%;background:var(--bg);
+  display:flex;align-items:center;justify-content:center;
+  font-size:10px;font-weight:700;color:var(--muted);flex-shrink:0;
+}
+.opt-row input[type=text]{flex:1;padding:7px 10px;font-size:13px}
+.opt-chk{
+  width:18px;height:18px;border-radius:4px;border:2px solid var(--border);
+  cursor:pointer;flex-shrink:0;accent-color:var(--green);
+}
+.opt-chk:checked{accent-color:var(--green)}
+.opt-rm{background:none;border:none;cursor:pointer;color:var(--muted);font-size:16px;padding:0 3px;line-height:1}
+.opt-rm:hover{color:var(--red)}
+.q-foot{display:flex;gap:10px;align-items:center;margin-top:10px;flex-wrap:wrap}
+.q-foot label{display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;font-weight:400}
+.q-foot input[type=number]{width:64px;padding:5px 8px;font-size:13px;border:1.5px solid var(--border);border-radius:6px}
+.correct-hint{font-size:11px;color:var(--green);margin-top:5px;font-weight:500}
+
+/* ── SUBMISSION TABLE ── */
+.sub-table{width:100%;border-collapse:collapse;font-size:13px}
+.sub-table th{text-align:left;padding:8px 12px;font-size:11px;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);font-weight:600;border-bottom:1.5px solid var(--border)}
+.sub-table td{padding:10px 12px;border-bottom:1px solid var(--border)}
+.sub-table tr:last-child td{border-bottom:none}
+.sub-table tr:hover td{background:#fafaf8}
+.score-pill{
+  display:inline-block;padding:3px 9px;border-radius:20px;
+  font-size:12px;font-weight:700;font-family:var(--mono);
+}
+.score-pill.good{background:#f0fdf4;color:var(--green)}
+.score-pill.mid{background:#fef3c7;color:var(--amber)}
+.score-pill.low{background:#fef2f2;color:var(--red)}
+
+/* ── STUDENT QUESTION VIEW ── */
+.sq-item{
+  background:var(--surface);border:1.5px solid var(--border);border-radius:var(--r);
+  padding:18px 20px;margin-bottom:14px;
+}
+.sq-item .sq-head{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px}
+.sq-qtext{font-size:15px;font-weight:600;flex:1;line-height:1.5}
+.sq-marks{font-family:var(--mono);font-size:12px;color:var(--muted);white-space:nowrap;margin-left:12px}
+.sq-hint{font-size:11px;color:var(--accent);margin-bottom:10px;font-weight:600}
+.opt-choice{
+  display:flex;align-items:center;gap:10px;padding:9px 13px;
+  border:1.5px solid var(--border);border-radius:8px;margin-bottom:7px;
+  cursor:pointer;transition:all .15s;user-select:none;
+}
+.opt-choice:hover{border-color:var(--accent);background:#f0f5ff}
+.opt-choice.picked{border-color:var(--accent);background:#eff6ff}
+.opt-choice.correct-show{border-color:var(--green);background:#f0fdf4}
+.opt-choice.wrong-show{border-color:var(--red);background:#fef2f2}
+.opt-box{
+  width:20px;height:20px;border-radius:4px;border:2px solid var(--border);
+  flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:11px;
+  transition:all .15s;
+}
+.opt-choice.picked .opt-box{background:var(--accent);border-color:var(--accent);color:#fff}
+.opt-choice.correct-show .opt-box{background:var(--green);border-color:var(--green);color:#fff}
+.opt-choice.wrong-show .opt-box{background:var(--red);border-color:var(--red);color:#fff}
+
+/* ── RESULT DISPLAY ── */
+.result-band{
+  background:linear-gradient(135deg,var(--accent),var(--purple));
+  color:#fff;border-radius:var(--r);padding:24px 22px;margin-bottom:20px;
+}
+.result-band .score{font-family:var(--display);font-size:48px;font-weight:800;line-height:1}
+.result-band .score small{font-size:20px;opacity:.7}
+.result-band p{font-size:14px;opacity:.85;margin-top:6px}
+.expl-box{margin-top:8px;padding:8px 12px;background:rgba(0,0,0,.06);border-radius:6px;font-size:12px;color:rgba(255,255,255,.9)}
+
+/* ── GRADE FORM ── */
+.grade-form{display:flex;gap:10px;align-items:center;margin-top:6px}
+.grade-form input{width:80px}
+.grade-form textarea{flex:1;min-height:auto}
+
+/* ── TOAST ── */
+.toast{
+  position:fixed;bottom:22px;right:22px;z-index:999;
+  background:var(--ink);color:#fff;padding:11px 18px;border-radius:9px;
+  font-size:14px;max-width:320px;opacity:0;transform:translateY(6px);
+  transition:all .25s;pointer-events:none;
+}
+.toast.show{opacity:1;transform:none}
+.toast.ok{background:var(--green)}
+.toast.err{background:var(--red)}
+
+/* ── MISC ── */
+.divider{border:none;border-top:1px solid var(--border);margin:16px 0}
+.loading{text-align:center;padding:40px;color:var(--muted);font-size:13px}
+.badge{display:inline-block;padding:2px 7px;border-radius:4px;font-size:11px;font-weight:600;font-family:var(--mono)}
+.badge-sub{background:#eff6ff;color:var(--accent)}
+.badge-graded{background:#f5f3ff;color:var(--purple)}
+.badge-late{background:#fef2f2;color:var(--red)}
+@media(max-width:660px){.drawer{width:100%}.form-row{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+
+<!-- ── TOP BAR ── -->
+<header class="topbar">
+  <div class="logo">Edu<span>Corp</span></div>
+  <nav class="topbar-nav">
+    <button class="nav-pill" onclick="location.href='/index.html'">🏠 Home</button>
+    <button class="nav-pill active">📋 Assignments</button>
+    <button class="nav-pill" onclick="location.href='/snap-quiz.html'">📝 Quizzes</button>
+  </nav>
+  <div class="topbar-right">
+    <div class="user-chip">
+      <div class="user-avatar" id="u-init">?</div>
+      <span id="u-name">Loading…</span>
+    </div>
+    <button class="btn btn-ghost btn-sm" onclick="logout()">Sign out</button>
+  </div>
+</header>
+
+<!-- ── PAGE ── -->
+<div class="page" id="page-root"></div>
+
+<!-- ── OVERLAY ── -->
+<div class="overlay" id="overlay" onclick="closeDrawers()"></div>
+
+<!-- ══ DRAWER: CREATE / EDIT ASSIGNMENT ══ -->
+<div class="drawer" id="create-drawer">
+  <div class="drawer-head">
+    <h2 id="create-heading">New Assignment</h2>
+    <button class="btn btn-ghost btn-sm" onclick="closeDrawers()">✕</button>
+  </div>
+  <div class="drawer-body">
+    <input type="hidden" id="edit-id"/>
+
+    <div class="fg"><label>Title <span class="req">*</span></label><input type="text" id="a-title" placeholder="e.g. Research Report — Climate Change"/></div>
+    <div class="fg"><label>Description</label><textarea id="a-desc" rows="2" placeholder="Brief overview of the assignment…"></textarea></div>
+    <div class="fg">
+      <label>Course <span class="req">*</span></label>
+      <select id="a-course"><option value="">Select a course…</option></select>
+    </div>
+    <div class="form-row">
+      <div class="fg"><label>Release Date <span class="req">*</span></label><input type="datetime-local" id="a-release"/></div>
+      <div class="fg"><label>Due Date <span class="req">*</span></label><input type="datetime-local" id="a-due"/></div>
+    </div>
+    <div class="fg-checks">
+      <label class="fg-check"><input type="checkbox" id="a-filesub" checked/> Allow file submission</label>
+      <label class="fg-check"><input type="checkbox" id="a-late"/> Allow late submission</label>
+    </div>
+
+    <!-- PDF Brief -->
+    <div class="fg">
+      <label>Assignment Brief (PDF / Word, max 15 MB)</label>
+      <div class="drop-zone" id="drop-zone"
+           ondragover="event.preventDefault();this.classList.add('over')"
+           ondragleave="this.classList.remove('over')"
+           ondrop="handleDrop(event)"
+           onclick="document.getElementById('pdf-input').click()">
+        <input type="file" id="pdf-input" accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onchange="handleFileSelect(event)"/>
+        <div class="di">📄</div>
+        <strong>Click to upload or drag & drop</strong>
+        <p>PDF or Word document</p>
+      </div>
+      <div class="file-attached" id="pdf-preview" style="display:none">
+        <span>📄</span>
+        <span id="pdf-fname">filename.pdf</span>
+        <small id="pdf-fsize"></small>
+        <button class="file-rm" onclick="removePdf()" title="Remove">✕</button>
+      </div>
+      <div id="pdf-existing" style="display:none;margin-top:8px">
+        <span style="font-size:12px;color:var(--muted)">Existing file: </span>
+        <span id="pdf-existing-name" style="font-size:12px;color:var(--accent);font-family:var(--mono)"></span>
+        <span style="font-size:11px;color:var(--muted)"> (upload a new file to replace)</span>
+      </div>
+    </div>
+
+    <!-- Questions -->
+    <div class="fg">
+      <label style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+        Questions (MCQ — tick all correct answers)
+        <button class="btn btn-ghost btn-sm" onclick="addQDraft()">＋ Add Question</button>
+      </label>
+      <div class="q-list" id="q-draft-list">
+        <div id="q-empty-hint" style="text-align:center;padding:18px;color:var(--muted);font-size:13px;border:1.5px dashed var(--border);border-radius:8px">
+          No questions yet — optional
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="drawer-foot">
+    <button class="btn btn-ghost" onclick="closeDrawers()">Cancel</button>
+    <button class="btn btn-primary" id="save-btn" onclick="saveAssignment()">💾 Save Assignment</button>
+  </div>
+</div>
+
+<!-- ══ DRAWER: ASSIGNMENT DETAIL (Lecturer) ══ -->
+<div class="drawer" id="detail-drawer">
+  <div class="drawer-head">
+    <h2 id="detail-heading">Assignment</h2>
+    <button class="btn btn-ghost btn-sm" onclick="closeDrawers()">✕</button>
+  </div>
+  <div class="drawer-body" id="detail-body"><div class="loading">Loading…</div></div>
+</div>
+
+<!-- ══ DRAWER: STUDENT ASSIGNMENT ══ -->
+<div class="drawer" id="student-drawer">
+  <div class="drawer-head">
+    <h2 id="stu-heading">Assignment</h2>
+    <button class="btn btn-ghost btn-sm" onclick="closeDrawers()">✕</button>
+  </div>
+  <div class="drawer-body" id="stu-body"><div class="loading">Loading…</div></div>
+  <div class="drawer-foot" id="stu-foot" style="display:none">
+    <button class="btn btn-ghost" onclick="closeDrawers()">Close</button>
+    <button class="btn btn-primary" id="stu-submit-btn" onclick="submitAssignment()">📤 Submit</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ══════════════════════════════════════════════════════════════════════════
+//  STATE
+// ══════════════════════════════════════════════════════════════════════════
+const S = {
+  token:       localStorage.getItem('token') || '',
+  user:        null,
+  role:        null,
+  courses:     [],
+  assignments: [],
+  pdfFile:     null,         // File object for new PDF
+  pdfExisting: null,         // existing filename string
+  qDrafts:     [],           // [{text, options:[{text,correct}], marks, partial, expl}]
+  editId:      null,
+  currentAsgn: null,         // assignment open in student drawer
+  stuAnswers:  {},           // questionIndex → [selectedIndices]
+  stuFile:     null,         // File for student submission
+};
+
+// ══════════════════════════════════════════════════════════════════════════
+//  HELPERS
+// ══════════════════════════════════════════════════════════════════════════
+const $  = (id) => document.getElementById(id);
+const ov = () => $('overlay');
+let toastTimer;
+function toast(msg, type=''){
+  const el = $('toast'); el.textContent = msg; el.className = `toast show ${type}`;
+  clearTimeout(toastTimer); toastTimer = setTimeout(()=>el.classList.remove('show'),3500);
+}
+function fmtDate(d){ return d ? new Date(d).toLocaleString('en-GB',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '—'; }
+function fmtSize(bytes){ if(!bytes) return ''; if(bytes<1024) return bytes+'B'; if(bytes<1048576) return (bytes/1024).toFixed(1)+'KB'; return (bytes/1048576).toFixed(1)+'MB'; }
+function initials(name){ return (name||'?').split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2); }
+
+async function api(method, path, body, isForm){
+  const opts = { method, headers:{} };
+  if(S.token) opts.headers['Authorization'] = `Bearer ${S.token}`;
+  if(isForm){ opts.body = body; }
+  else if(body){ opts.headers['Content-Type']='application/json'; opts.body=JSON.stringify(body); }
+  const res = await fetch(path, opts);
+  if(res.headers.get('content-type')?.includes('application/json')){
+    const d = await res.json();
+    if(!res.ok) throw new Error(d.error || `HTTP ${res.status}`);
+    return d;
+  }
+  // binary response (file download)
+  if(!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res;
+}
+
+function logout(){ localStorage.removeItem('token'); location.href='/index.html'; }
+
+// ══════════════════════════════════════════════════════════════════════════
+//  INIT
+// ══════════════════════════════════════════════════════════════════════════
+async function init(){
+  if(!S.token){ location.href='/index.html'; return; }
+  try{
+    const d = await api('GET','/api/auth/me');
+    S.user = d.user || d;
+    S.role = S.user.role;
+    $('u-name').textContent  = S.user.name || S.user.email || 'User';
+    $('u-init').textContent  = initials(S.user.name || '?');
+    if(['lecturer','admin','superadmin'].includes(S.role)){
+      await loadCourses();
+      await renderLecturerPage();
+    } else {
+      await renderStudentPage();
+    }
+  } catch(e){
+    if(e.message.includes('401')||e.message.toLowerCase().includes('token')){ logout(); return; }
+    toast('Failed to load: '+e.message,'err');
+  }
+}
+
+async function loadCourses(){
+  try{
+    const d = await api('GET','/api/courses');
+    S.courses = d.courses || d || [];
+  } catch(_){ S.courses=[]; }
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+//  LECTURER — RENDER PAGE
+// ══════════════════════════════════════════════════════════════════════════
+async function renderLecturerPage(){
+  $('page-root').innerHTML = `
+    <div class="page-head">
+      <div><h1>Assignments</h1><p>Create, schedule and grade student assignments</p></div>
+      <button class="btn btn-primary" onclick="openCreate()">＋ New Assignment</button>
+    </div>
+    <div id="lec-list"><div class="loading">Loading…</div></div>`;
+  await loadLecturerAssignments();
+}
+
+async function loadLecturerAssignments(){
+  try{
+    const d = await api('GET','/api/assignments/lecturer');
+    S.assignments = d.assignments || [];
+    renderLecturerList();
+  } catch(e){ toast('Failed to load assignments: '+e.message,'err'); }
+}
+
+function renderLecturerList(){
+  const el = $('lec-list');
+  if(!S.assignments.length){
+    el.innerHTML = `<div class="empty"><div class="empty-icon">📋</div><h3>No assignments yet</h3><p>Create your first assignment to share with students</p><button class="btn btn-primary" onclick="openCreate()">＋ Create Assignment</button></div>`;
+    return;
+  }
+  const now = new Date();
+  el.innerHTML = `<div class="assign-grid">${S.assignments.map(a=>{
+    const due    = new Date(a.dueDate);
+    const rel    = new Date(a.releaseDate);
+    const isDue  = now > due;
+    const isLive = now >= rel && now <= due;
+    return `<div class="acard" onclick="openDetail('${a._id}')">
+      <div>
+        <div class="acard-course">${a.course?.code||''} — ${a.course?.title||'Course'}</div>
+        <div class="acard-title">${a.title}</div>
+        <div class="acard-desc">${a.description||'No description'}</div>
+        <div class="acard-tags">
+          ${isLive?`<span class="tag tag-green">🟢 Live</span>`:''}
+          ${isDue?`<span class="tag tag-red">⏰ Closed</span>`:''}
+          ${!isLive&&!isDue?`<span class="tag tag-gray">⏳ Scheduled</span>`:''}
+          <span class="tag tag-amber">Due ${fmtDate(a.dueDate)}</span>
+          ${a.hasPdf?`<span class="tag tag-blue">📄 PDF Brief</span>`:''}
+          ${a.questionCount?`<span class="tag tag-purple">❓ ${a.questionCount} Qs</span>`:''}
+        </div>
+      </div>
+      <div class="acard-stat">
+        <div class="acard-num">${a.submissionCount}</div>
+        <div class="acard-lbl">submissions</div>
+        ${a.gradedCount?`<div style="font-size:11px;color:var(--green);margin-top:4px">✓ ${a.gradedCount} graded</div>`:''}
+      </div>
+    </div>`;
+  }).join('')}</div>`;
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+//  LECTURER — CREATE / EDIT DRAWER
+// ══════════════════════════════════════════════════════════════════════════
+function openCreate(){
+  S.editId = null; S.pdfFile = null; S.pdfExisting = null; S.qDrafts = [];
+  $('create-heading').textContent = 'New Assignment';
+  $('edit-id').value = '';
+  $('a-title').value = ''; $('a-desc').value = ''; $('a-course').value = '';
+  $('a-release').value = ''; $('a-due').value = '';
+  $('a-filesub').checked = true; $('a-late').checked = false;
+  $('pdf-preview').style.display = 'none';
+  $('pdf-existing').style.display = 'none';
+  $('pdf-input').value = '';
+
+  // Populate course dropdown
+  $('a-course').innerHTML = `<option value="">Select a course…</option>` +
+    S.courses.map(c=>`<option value="${c._id}">${c.code} — ${c.title}</option>`).join('');
+
+  renderQDrafts();
+  showDrawer('create-drawer');
+}
+
+async function openEdit(id){
+  try{
+    const d = await api('GET',`/api/assignments/lecturer/${id}`);
+    const a = d.assignment;
+    S.editId = id;
+    S.pdfExisting = a.pdfBrief?.originalName || null;
+    S.pdfFile = null;
+
+    // Reconstruct question drafts from saved data
+    S.qDrafts = (a.questions||[]).map(q=>({
+      _id:     q._id,
+      text:    q.questionText,
+      options: q.options.map((opt,i)=>({ text:opt, correct: (q.correctAnswers||[]).includes(i) })),
+      marks:   q.marks||1,
+      partial: q.allowPartialMarks||false,
+      expl:    q.explanation||'',
+    }));
+
+    $('create-heading').textContent = 'Edit Assignment';
+    $('edit-id').value = id;
+    $('a-title').value   = a.title;
+    $('a-desc').value    = a.description||'';
+    $('a-course').innerHTML = `<option value="">Select a course…</option>` +
+      S.courses.map(c=>`<option value="${c._id}" ${c._id===a.course?._id?'selected':''}>${c.code} — ${c.title}</option>`).join('');
+    $('a-release').value = toDatetimeLocal(a.releaseDate);
+    $('a-due').value     = toDatetimeLocal(a.dueDate);
+    $('a-filesub').checked = a.allowFileSubmission;
+    $('a-late').checked    = a.allowLateSubmission;
+
+    $('pdf-preview').style.display = 'none';
+    $('pdf-existing').style.display = S.pdfExisting ? 'block' : 'none';
+    $('pdf-existing-name').textContent = S.pdfExisting||'';
+
+    renderQDrafts();
+    closeDrawers();
+    showDrawer('create-drawer');
+  } catch(e){ toast('Failed to load assignment: '+e.message,'err'); }
+}
+
+function toDatetimeLocal(d){ if(!d) return ''; return new Date(d).toISOString().slice(0,16); }
+
+async function saveAssignment(){
+  const btn = $('save-btn');
+  const title      = $('a-title').value.trim();
+  const courseId   = $('a-course').value;
+  const releaseVal = $('a-release').value;
+  const dueVal     = $('a-due').value;
+
+  if(!title)       return toast('Title is required','err');
+  if(!courseId)    return toast('Please select a course','err');
+  if(!releaseVal)  return toast('Release date is required','err');
+  if(!dueVal)      return toast('Due date is required','err');
+  if(new Date(releaseVal)>=new Date(dueVal)) return toast('Release date must be before due date','err');
+
+  btn.disabled = true; btn.textContent = 'Saving…';
+
+  try{
+    const payload = {
+      title, courseId,
+      description:         $('a-desc').value.trim(),
+      releaseDate:         new Date(releaseVal).toISOString(),
+      dueDate:             new Date(dueVal).toISOString(),
+      allowFileSubmission: $('a-filesub').checked,
+      allowLateSubmission: $('a-late').checked,
+    };
+
+    let saved;
+    if(S.editId){
+      const d = await api('PUT',`/api/assignments/lecturer/${S.editId}`, payload);
+      saved = d.assignment;
+    } else {
+      const d = await api('POST','/api/assignments/lecturer', payload);
+      saved = d.assignment;
+    }
+
+    const asgnId = saved._id;
+
+    // Upload PDF if new file selected
+    if(S.pdfFile){
+      const form = new FormData();
+      form.append('pdf', S.pdfFile);
+      await api('POST',`/api/assignments/lecturer/${asgnId}/pdf`, form, true);
+    }
+
+    // Save questions (delete old + re-add) — only if they changed
+    if(!S.editId || S.qDrafts.some(q=>!q._id)){
+      // For edit: delete any questions that were removed, add new ones
+      // Simple approach: send each draft that has no _id as a new question
+      for(const q of S.qDrafts){
+        if(q._id) continue; // already saved
+        const correctAnswers = q.options.map((o,i)=>o.correct?i:null).filter(i=>i!==null);
+        if(correctAnswers.length===0){ toast('Each question must have at least one correct answer','err'); continue; }
+        await api('POST',`/api/assignments/lecturer/${asgnId}/questions`,{
+          questionText:   q.text,
+          options:        q.options.map(o=>o.text),
+          correctAnswers,
+          marks:          q.marks||1,
+          allowPartialMarks: q.partial||false,
+          explanation:    q.expl||null,
+        });
+      }
+    }
+
+    toast(S.editId ? 'Assignment updated!' : 'Assignment created!','ok');
+    closeDrawers();
+    await loadLecturerAssignments();
+  } catch(e){
+    toast('Error: '+e.message,'err');
+  } finally {
+    btn.disabled = false; btn.textContent = '💾 Save Assignment';
+  }
+}
+
+// ── PDF Handling ──────────────────────────────────────────────────────────
+function handleFileSelect(e){
+  const file = e.target.files[0];
+  if(!file) return;
+  applyPdfFile(file);
+}
+function handleDrop(e){
+  e.preventDefault();
+  $('drop-zone').classList.remove('over');
+  const file = e.dataTransfer.files[0];
+  if(!file) return;
+  applyPdfFile(file);
+}
+function applyPdfFile(file){
+  const allowed=['application/pdf','application/msword','application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+  if(!allowed.includes(file.type)){ toast('Only PDF or Word files are accepted','err'); return; }
+  if(file.size > 15*1024*1024){ toast('File too large (max 15 MB)','err'); return; }
+  S.pdfFile = file;
+  $('pdf-fname').textContent = file.name;
+  $('pdf-fsize').textContent = fmtSize(file.size);
+  $('pdf-preview').style.display = 'flex';
+  $('pdf-existing').style.display = 'none';
+}
+function removePdf(){ S.pdfFile=null; $('pdf-preview').style.display='none'; $('pdf-input').value=''; }
+
+// ── Question Drafts ───────────────────────────────────────────────────────
+function addQDraft(){
+  S.qDrafts.push({ text:'', options:[{text:'',correct:false},{text:'',correct:false}], marks:1, partial:false, expl:'' });
+  renderQDrafts();
+  // Expand the new question
+  const items = document.querySelectorAll('.q-body');
+  if(items.length) items[items.length-1].classList.add('open');
+}
+
+function renderQDrafts(){
+  const list = $('q-draft-list');
+  const hint = $('q-empty-hint');
+  if(!S.qDrafts.length){
+    list.innerHTML = '';
+    if(!hint.parentNode) list.appendChild(hint);
+    hint.style.display='block';
+    return;
+  }
+  if(hint) hint.style.display='none';
+  const letters = ['A','B','C','D','E','F','G','H'];
+  list.innerHTML = S.qDrafts.map((q,qi)=>`
+    <div class="q-item">
+      <div class="q-head" onclick="toggleQ(${qi})">
+        <span>Q${qi+1}: ${q.text||'(no text yet)'}</span>
+        <span style="display:flex;gap:6px">
+          <button class="btn btn-xs btn-ghost" onclick="event.stopPropagation();removeQDraft(${qi})">🗑</button>
+          <span style="color:var(--muted);font-size:12px">${q.options.filter(o=>o.correct).length} correct ▸</span>
+        </span>
+      </div>
+      <div class="q-body ${qi===S.qDrafts.length-1?'open':''}" id="qb-${qi}">
+        <div class="fg"><label>Question Text <span class="req">*</span></label>
+          <input type="text" value="${escHtml(q.text)}" oninput="S.qDrafts[${qi}].text=this.value;refreshQHead(${qi})" placeholder="Enter the question…"/>
+        </div>
+        <label style="font-size:13px;font-weight:600;margin-bottom:8px;display:block">Options <span style="color:var(--muted);font-weight:400">(✓ tick all correct answers)</span></label>
+        <div id="opts-${qi}">
+          ${q.options.map((o,oi)=>`
+            <div class="opt-row">
+              <div class="opt-letter">${letters[oi]||oi+1}</div>
+              <input type="text" value="${escHtml(o.text)}" oninput="S.qDrafts[${qi}].options[${oi}].text=this.value" placeholder="Option ${letters[oi]||oi+1}…"/>
+              <input type="checkbox" class="opt-chk" title="Correct answer" ${o.correct?'checked':''} onchange="S.qDrafts[${qi}].options[${oi}].correct=this.checked;refreshQHead(${qi})"/>
+              <button class="opt-rm" onclick="removeOpt(${qi},${oi})" title="Remove">✕</button>
+            </div>`).join('')}
+        </div>
+        ${q.options.filter(o=>o.correct).length>1?`<div class="correct-hint">✓ Multiple correct answers — ${q.options.filter(o=>o.correct).length} selected</div>`:''}
+        ${q.options.filter(o=>o.correct).length===0?`<div style="font-size:11px;color:var(--red);margin-top:4px;font-weight:500">⚠ No correct answer selected yet</div>`:''}
+        <button class="btn btn-ghost btn-xs" style="margin-top:8px" onclick="addOpt(${qi})" ${q.options.length>=8?'disabled':''}>＋ Add option</button>
+        <div class="q-foot">
+          <label>Marks: <input type="number" value="${q.marks}" min="0" step="0.5" style="width:60px" oninput="S.qDrafts[${qi}].marks=parseFloat(this.value)||1"/></label>
+          <label class="fg-check"><input type="checkbox" ${q.partial?'checked':''} onchange="S.qDrafts[${qi}].partial=this.checked"/> Partial marks</label>
+          <label style="flex:1">Explanation: <input type="text" value="${escHtml(q.expl)}" oninput="S.qDrafts[${qi}].expl=this.value" placeholder="(shown after submit, optional)" style="font-size:12px"/></label>
+        </div>
+      </div>
+    </div>`).join('');
+}
+
+function toggleQ(i){ const el = $('qb-'+i); el.classList.toggle('open'); }
+function refreshQHead(i){ const h = document.querySelectorAll('.q-head')[i]; if(h) h.querySelector('span').textContent = `Q${i+1}: ${S.qDrafts[i].text||'(no text yet)'}`; }
+function removeQDraft(i){ S.qDrafts.splice(i,1); renderQDrafts(); }
+function addOpt(qi){ if(S.qDrafts[qi].options.length<8){ S.qDrafts[qi].options.push({text:'',correct:false}); renderQDrafts(); } }
+function removeOpt(qi,oi){ if(S.qDrafts[qi].options.length>2){ S.qDrafts[qi].options.splice(oi,1); renderQDrafts(); } else toast('At least 2 options required','err'); }
+function escHtml(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+// ══════════════════════════════════════════════════════════════════════════
+//  LECTURER — DETAIL DRAWER
+// ══════════════════════════════════════════════════════════════════════════
+async function openDetail(id){
+  showDrawer('detail-drawer');
+  try{
+    const d = await api('GET',`/api/assignments/lecturer/${id}`);
+    const a = d.assignment;
+    const subs = d.submissions || [];
+    $('detail-heading').textContent = a.title;
+
+    const now = new Date();
+    const isDue = now > new Date(a.dueDate);
+
+    $('detail-body').innerHTML = `
+      <div style="margin-bottom:18px">
+        <div style="font-size:12px;color:var(--accent);font-weight:600;font-family:var(--mono);margin-bottom:4px">${a.course?.code} — ${a.course?.title}</div>
+        <p style="font-size:14px;color:var(--ink2);margin-bottom:12px">${a.description||'No description'}</p>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px">
+          <span class="tag tag-gray">📅 Released: ${fmtDate(a.releaseDate)}</span>
+          <span class="tag ${isDue?'tag-red':'tag-amber'}">⏰ Due: ${fmtDate(a.dueDate)}</span>
+          ${a.hasPdf?`<span class="tag tag-blue">📄 PDF brief attached</span>`:''}
+          ${a.questions.length?`<span class="tag tag-purple">❓ ${a.questions.length} questions — ${a.totalMarks} marks</span>`:''}
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-ghost btn-sm" onclick="openEdit('${a._id}')">✏️ Edit</button>
+          ${a.hasPdf?`<button class="btn btn-ghost btn-sm" onclick="downloadPdf('${a._id}')">⬇️ Download Brief</button>`:''}
+          <button class="btn btn-danger btn-sm" onclick="deleteAssignment('${a._id}')">🗑 Delete</button>
+        </div>
+      </div>
+      <hr class="divider"/>
+      <h3 style="font-family:var(--display);font-size:15px;font-weight:700;margin-bottom:12px">Submissions (${subs.length})</h3>
+      ${!subs.length?`<div class="empty" style="padding:28px"><div class="empty-icon">📭</div><p>No submissions yet</p></div>`:`
+      <table class="sub-table">
+        <thead><tr><th>Student</th><th>MCQ Score</th><th>Status</th><th>Submitted</th><th></th></tr></thead>
+        <tbody>
+          ${subs.map(s=>{
+            const pct = a.totalMarks>0?Math.round((s.questionScore/a.totalMarks)*100):null;
+            const cls = pct===null?'':'pct>=70?'good':pct>=40?'mid':'low'
+              .replace('pct',pct).replace(/^/,'');
+            const scoreClass = pct===null?'':pct>=70?'good':pct>=40?'mid':'low';
+            return `<tr>
+              <td><strong>${s.student?.name||'—'}</strong><br><span style="font-size:11px;color:var(--muted);font-family:var(--mono)">${s.student?.indexNumber||s.student?.email||''}</span></td>
+              <td>${a.totalMarks>0?`<span class="score-pill ${scoreClass}">${s.questionScore}/${a.totalMarks}</span>`:'<span style="color:var(--muted);font-size:12px">N/A</span>'}</td>
+              <td>
+                <span class="badge ${s.status==='graded'?'badge-graded':'badge-sub'}">${s.status}</span>
+                ${s.isLate?`<span class="badge badge-late" style="margin-left:4px">late</span>`:''}
+              </td>
+              <td style="font-size:12px;color:var(--muted)">${fmtDate(s.submittedAt)}</td>
+              <td style="display:flex;gap:5px;flex-wrap:wrap">
+                ${s.submittedFile?.originalName?`<button class="btn btn-ghost btn-xs" onclick="downloadSubFile('${s._id}')">📥</button>`:''}
+                <button class="btn btn-primary btn-xs" onclick="openGrade('${s._id}','${a._id}','${a.totalMarks}','${s.manualGrade||''}')">Grade</button>
+              </td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>`}`;
+  } catch(e){ $('detail-body').innerHTML=`<p style="color:var(--red)">${e.message}</p>`; }
+}
+
+async function downloadPdf(id){
+  try{
+    const res = await api('GET',`/api/assignments/lecturer/${id}/pdf`,null,false);
+    const blob = await res.blob();
+    const cd   = res.headers.get('content-disposition')||'';
+    const fn   = cd.match(/filename="?([^"]+)"?/)?.[1]||'brief.pdf';
+    triggerDownload(blob, fn);
+  } catch(e){ toast('Download failed: '+e.message,'err'); }
+}
+
+async function downloadSubFile(subId){
+  try{
+    const res = await api('GET',`/api/assignments/lecturer/submissions/${subId}/file`,null,false);
+    const blob = await res.blob();
+    const cd   = res.headers.get('content-disposition')||'';
+    const fn   = cd.match(/filename="?([^"]+)"?/)?.[1]||'submission';
+    triggerDownload(blob, fn);
+  } catch(e){ toast('Download failed: '+e.message,'err'); }
+}
+
+function triggerDownload(blob, filename){
+  const url = URL.createObjectURL(blob);
+  const a   = document.createElement('a');
+  a.href = url; a.download = filename; a.click();
+  setTimeout(()=>URL.revokeObjectURL(url), 1000);
+}
+
+async function deleteAssignment(id){
+  if(!confirm('Delete this assignment and all submissions? This cannot be undone.')) return;
+  try{
+    await api('DELETE',`/api/assignments/lecturer/${id}`);
+    toast('Assignment deleted','ok');
+    closeDrawers();
+    await loadLecturerAssignments();
+  } catch(e){ toast('Error: '+e.message,'err'); }
+}
+
+function openGrade(subId, asgnId, maxMarks, currentGrade){
+  const grade = prompt(`Manual grade for this submission (0–${maxMarks}):`, currentGrade||'');
+  if(grade===null) return;
+  const feedback = prompt('Feedback for student (optional):','');
+  if(feedback===null) return;
+  gradeSubmission(subId, grade, feedback, asgnId);
+}
+
+async function gradeSubmission(subId, grade, feedback, asgnId){
+  try{
+    await api('POST',`/api/assignments/lecturer/submissions/${subId}/grade`,{ manualGrade: parseFloat(grade)||0, feedback });
+    toast('Submission graded!','ok');
+    await openDetail(asgnId);
+  } catch(e){ toast('Grading failed: '+e.message,'err'); }
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+//  STUDENT — RENDER PAGE
+// ══════════════════════════════════════════════════════════════════════════
+async function renderStudentPage(){
+  $('page-root').innerHTML = `
+    <div class="page-head">
+      <div><h1>My Assignments</h1><p>View, download and submit your course assignments</p></div>
+    </div>
+    <div id="stu-list"><div class="loading">Loading…</div></div>`;
+  await loadStudentAssignments();
+}
+
+async function loadStudentAssignments(){
+  try{
+    const d = await api('GET','/api/assignments/student');
+    S.assignments = d.assignments||[];
+    renderStudentList();
+  } catch(e){ toast('Failed to load assignments: '+e.message,'err'); }
+}
+
+function renderStudentList(){
+  const el = $('stu-list');
+  if(!S.assignments.length){
+    el.innerHTML=`<div class="empty"><div class="empty-icon">📖</div><h3>No assignments yet</h3><p>Your lecturers haven't posted any assignments yet</p></div>`;
+    return;
+  }
+  const now = new Date();
+  el.innerHTML=`<div class="assign-grid">${S.assignments.map(a=>{
+    const sub = a.mySubmission;
+    const overdue = a.isOverdue;
+    let statusTag = '';
+    if(sub?.status==='graded') statusTag=`<span class="tag tag-purple">✓ Graded</span>`;
+    else if(sub) statusTag=`<span class="tag tag-green">✓ Submitted</span>`;
+    else if(overdue) statusTag=`<span class="tag tag-red">⏰ Overdue</span>`;
+    else statusTag=`<span class="tag tag-amber">📌 ${a.daysUntilDue>0?a.daysUntilDue+'d left':'Due today'}</span>`;
+
+    return `<div class="acard" onclick="openStudentAssignment('${a._id}')">
+      <div>
+        <div class="acard-course">${a.course?.code||''} — ${a.course?.title||''} · ${a.createdBy?.name||''}</div>
+        <div class="acard-title">${a.title}</div>
+        <div class="acard-desc">${a.description||'No description'}</div>
+        <div class="acard-tags">
+          ${statusTag}
+          ${a.hasPdf?`<span class="tag tag-blue">📄 Brief available</span>`:''}
+          ${a.questionCount?`<span class="tag tag-purple">❓ ${a.questionCount} questions</span>`:''}
+          ${sub?.isLate?`<span class="tag tag-red">⚠ Late</span>`:''}
+        </div>
+      </div>
+      <div class="acard-stat">
+        <div style="font-size:12px;color:var(--muted)">${fmtDate(a.dueDate)}</div>
+        ${sub?.questionScore!=null&&a.totalMarks>0?`<div style="font-family:var(--display);font-size:22px;font-weight:800;color:var(--green);margin-top:6px">${sub.questionScore}<span style="font-size:13px;color:var(--muted)">/${a.totalMarks}</span></div>`:''}
+        ${sub?.manualGrade!=null?`<div style="font-size:11px;color:var(--purple);font-weight:600">Grade: ${sub.manualGrade}</div>`:''}
+      </div>
+    </div>`;
+  }).join('')}</div>`;
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+//  STUDENT — OPEN ASSIGNMENT DRAWER
+// ══════════════════════════════════════════════════════════════════════════
+async function openStudentAssignment(id){
+  S.stuAnswers = {}; S.stuFile = null; S.currentAsgn = null;
+  $('stu-body').innerHTML='<div class="loading">Loading…</div>';
+  $('stu-foot').style.display='none';
+  showDrawer('student-drawer');
+
+  try{
+    const d = await api('GET',`/api/assignments/student/${id}`);
+    const a  = d.assignment;
+    const sub= d.submission;
+    const ov = d.isOverdue;
+    S.currentAsgn = a;
+    $('stu-heading').textContent = a.title;
+
+    // If already graded, show results
+    if(sub?.status==='graded'){
+      renderStudentResult(a, sub);
+      return;
+    }
+
+    // If submitted (not yet graded), show read-only answers
+    if(sub?.status==='submitted'){
+      renderStudentSubmitted(a, sub);
+      return;
+    }
+
+    // Not submitted — show submission form
+    const canSubmit = !ov || a.allowLateSubmission;
+    renderStudentForm(a, ov, canSubmit);
+
+    if(canSubmit){
+      $('stu-foot').style.display='flex';
+      $('stu-submit-btn').disabled = false;
+    }
+  } catch(e){
+    $('stu-body').innerHTML=`<p style="color:var(--red);padding:20px">${e.message}</p>`;
+  }
+}
+
+function renderStudentForm(a, isOverdue, canSubmit){
+  const lines = [];
+  lines.push(`<p style="font-size:13px;color:var(--ink2);margin-bottom:14px">${a.description||''}</p>`);
+  lines.push(`<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px">
+    <span class="tag tag-gray">📅 Released ${fmtDate(a.releaseDate)}</span>
+    <span class="tag ${isOverdue?'tag-red':'tag-amber'}">⏰ Due ${fmtDate(a.dueDate)}</span>
+    ${a.totalMarks?`<span class="tag tag-purple">🏆 ${a.totalMarks} marks total</span>`:''}
+  </div>`);
+
+  if(isOverdue && !canSubmit){
+    lines.push(`<div style="padding:16px;background:#fef2f2;border-radius:8px;color:var(--red);font-size:14px;font-weight:600;margin-bottom:16px">⏰ Deadline has passed — submissions closed</div>`);
+  }
+
+  if(a.hasPdf){
+    lines.push(`<div style="margin-bottom:20px;padding:14px;background:#eff6ff;border-radius:8px;display:flex;align-items:center;justify-content:space-between">
+      <div><strong style="font-size:14px">📄 Assignment Brief</strong><br><span style="font-size:12px;color:var(--muted)">${a.pdfName}</span></div>
+      <button class="btn btn-primary btn-sm" onclick="downloadStudentPdf('${a._id}')">⬇️ Download</button>
+    </div>`);
+  }
+
+  if(a.questions?.length){
+    lines.push(`<h3 style="font-family:var(--display);font-size:15px;font-weight:700;margin-bottom:12px">Questions</h3>`);
+    a.questions.forEach((q,i)=>{
+      const multipleCorrect = false; // we don't tell students how many are correct
+      lines.push(`<div class="sq-item">
+        <div class="sq-head">
+          <div class="sq-qtext">Q${i+1}. ${q.questionText}</div>
+          <div class="sq-marks">${q.marks} pt${q.marks!==1?'s':''}</div>
+        </div>
+        <div class="sq-hint">Select all correct answers</div>
+        <div id="opts-stu-${i}">
+          ${q.options.map((opt,oi)=>`
+            <div class="opt-choice" id="opt-${i}-${oi}" onclick="toggleStudentAnswer(${i},${oi})">
+              <div class="opt-box">✓</div>
+              <span style="font-size:14px">${opt}</span>
+            </div>`).join('')}
+        </div>
+      </div>`);
+    });
+  }
+
+  if(canSubmit && a.allowFileSubmission){
+    lines.push(`<hr class="divider"/>
+    <h3 style="font-family:var(--display);font-size:15px;font-weight:700;margin-bottom:10px">Submit Your Work</h3>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:12px">Upload your completed work as a PDF or Word document (max 20 MB)</p>
+    <div class="drop-zone" id="stu-drop"
+         ondragover="event.preventDefault();this.classList.add('over')"
+         ondragleave="this.classList.remove('over')"
+         ondrop="handleStuDrop(event)"
+         onclick="document.getElementById('stu-file-input').click()">
+      <input type="file" id="stu-file-input" accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onchange="handleStuFile(event)"/>
+      <div class="di">📤</div>
+      <strong>Click to attach your work</strong>
+      <p>PDF or Word document</p>
+    </div>
+    <div class="file-attached" id="stu-file-preview" style="display:none">
+      <span>📄</span>
+      <span id="stu-fname">filename.pdf</span>
+      <small id="stu-fsize"></small>
+      <button class="file-rm" onclick="removeStuFile()">✕</button>
+    </div>`);
+  }
+
+  $('stu-body').innerHTML = lines.join('');
+}
+
+function renderStudentSubmitted(a, sub){
+  $('stu-body').innerHTML = `
+    <div style="padding:14px;background:#f0fdf4;border-radius:8px;margin-bottom:18px">
+      <strong style="color:var(--green)">✓ Submitted ${fmtDate(sub.submittedAt)}</strong>
+      ${sub.isLate?`<span class="badge badge-late" style="margin-left:8px">Late</span>`:''}
+      <p style="font-size:13px;color:var(--ink2);margin-top:4px">Awaiting lecturer review.</p>
+    </div>
+    ${a.totalMarks&&sub.questionScore!=null?`<p style="font-size:14px;margin-bottom:16px">MCQ Score: <strong>${sub.questionScore} / ${a.totalMarks}</strong></p>`:''}
+    ${a.hasPdf?`<button class="btn btn-ghost btn-sm" onclick="downloadStudentPdf('${a._id}')">⬇️ Download Brief</button>`:''}
+  `;
+}
+
+function renderStudentResult(a, sub){
+  const pct = a.totalMarks>0 ? Math.round((sub.questionScore/a.totalMarks)*100) : null;
+  const finalGrade = sub.manualGrade!=null ? sub.manualGrade : sub.questionScore;
+  let lines = [];
+
+  lines.push(`<div class="result-band">
+    <div class="score">${finalGrade}<small>/${a.totalMarks||'—'}</small></div>
+    <p>${pct!=null?pct+'% on MCQ questions':''} ${sub.isLate?'(late submission)':''}</p>
+    ${sub.feedback?`<div class="expl-box">💬 Lecturer feedback: ${sub.feedback}</div>`:''}
+  </div>`);
+
+  if(a.hasPdf){
+    lines.push(`<button class="btn btn-ghost btn-sm" style="margin-bottom:16px" onclick="downloadStudentPdf('${a._id}')">⬇️ Download Brief</button>`);
+  }
+
+  if(sub.answers?.length){
+    lines.push(`<h3 style="font-family:var(--display);font-size:15px;font-weight:700;margin-bottom:12px">Question Results</h3>`);
+    sub.answers.forEach((ans,i)=>{
+      const q = a.questions[ans.questionIndex];
+      if(!q) return;
+      lines.push(`<div class="sq-item answer-item ${ans.isCorrect?'correct':'wrong'}" style="border:1.5px solid ${ans.isCorrect?'#86efac':'#fca5a5'};background:${ans.isCorrect?'#f0fdf4':'#fef2f2'}">
+        <div class="sq-head"><div class="sq-qtext">Q${ans.questionIndex+1}. ${q.questionText}</div>
+        <div class="sq-marks" style="color:${ans.isCorrect?'var(--green)':'var(--red)'}">${ans.marksAwarded}/${q.marks}pt</div></div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px">
+          ${q.options.map((opt,oi)=>{
+            const picked = (ans.selectedAnswers||[]).includes(oi);
+            return `<span class="tag ${picked?'tag-blue':'tag-gray'}" style="font-family:var(--sans)">${String.fromCharCode(65+oi)}. ${opt}</span>`;
+          }).join('')}
+        </div>
+        ${q.explanation?`<div style="margin-top:6px;padding:8px;background:rgba(0,0,0,.05);border-radius:6px;font-size:12px;color:var(--ink2)">💡 ${q.explanation}</div>`:''}
+      </div>`);
+    });
+  }
+
+  $('stu-body').innerHTML = lines.join('');
+}
+
+// Student answer selection
+function toggleStudentAnswer(qi, oi){
+  if(!S.stuAnswers[qi]) S.stuAnswers[qi]=[];
+  const idx = S.stuAnswers[qi].indexOf(oi);
+  if(idx===-1){ S.stuAnswers[qi].push(oi); }
+  else{ S.stuAnswers[qi].splice(idx,1); }
+  // Update UI
+  const el = $(`opt-${qi}-${oi}`);
+  if(S.stuAnswers[qi].includes(oi)) el.classList.add('picked');
+  else el.classList.remove('picked');
+}
+
+// Student file handling
+function handleStuFile(e){ const f=e.target.files[0]; if(f) applyStuFile(f); }
+function handleStuDrop(e){ e.preventDefault(); $('stu-drop').classList.remove('over'); if(e.dataTransfer.files[0]) applyStuFile(e.dataTransfer.files[0]); }
+function applyStuFile(f){
+  if(f.size>20*1024*1024){ toast('File too large (max 20MB)','err'); return; }
+  S.stuFile=f;
+  $('stu-fname').textContent=f.name; $('stu-fsize').textContent=fmtSize(f.size);
+  $('stu-file-preview').style.display='flex';
+}
+function removeStuFile(){ S.stuFile=null; $('stu-file-preview').style.display='none'; $('stu-file-input').value=''; }
+
+async function downloadStudentPdf(id){
+  try{
+    const res = await api('GET',`/api/assignments/student/${id}/pdf`,null,false);
+    const blob = await res.blob();
+    const cd   = res.headers.get('content-disposition')||'';
+    const fn   = cd.match(/filename="?([^"]+)"?/)?.[1]||'brief.pdf';
+    triggerDownload(blob,fn);
+  } catch(e){ toast('Download failed: '+e.message,'err'); }
+}
+
+async function submitAssignment(){
+  if(!S.currentAsgn) return;
+  const id = S.currentAsgn._id;
+  const btn = $('stu-submit-btn');
+  btn.disabled=true; btn.textContent='Submitting…';
+
+  try{
+    const answers = Object.entries(S.stuAnswers).map(([qi,sel])=>({ questionIndex:parseInt(qi), selectedAnswers:sel }));
+    const form = new FormData();
+    form.append('answers', JSON.stringify(answers));
+    if(S.stuFile) form.append('file', S.stuFile);
+
+    const d = await api('POST',`/api/assignments/student/${id}/submit`, form, true);
+    toast('Assignment submitted!','ok');
+    $('stu-foot').style.display='none';
+
+    // Show result
+    const updated = await api('GET',`/api/assignments/student/${id}`);
+    renderStudentResult(updated.assignment, updated.submission);
+    await loadStudentAssignments();
+  } catch(e){
+    toast('Submission failed: '+e.message,'err');
+    btn.disabled=false; btn.textContent='📤 Submit';
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+//  DRAWER HELPERS
+// ══════════════════════════════════════════════════════════════════════════
+function showDrawer(id){
+  closeDrawers(false);
+  $(id).classList.add('show');
+  ov().classList.add('show');
+}
+function closeDrawers(hideOv=true){
+  ['create-drawer','detail-drawer','student-drawer'].forEach(d=>$(d).classList.remove('show'));
+  if(hideOv) ov().classList.remove('show');
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+//  BOOT
+// ══════════════════════════════════════════════════════════════════════════
+init();
+</script>
+</body>
+</html>
