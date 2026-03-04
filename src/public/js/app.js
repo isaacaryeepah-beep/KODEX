@@ -269,6 +269,47 @@ function showAdminLogin() {
   document.getElementById('admin-register-form').classList.add('hidden');
   document.getElementById('admin-login-form').classList.remove('hidden');
   document.getElementById('admin-auth-error').style.display = 'none';
+  const f = document.getElementById('admin-forgot-form'); if(f) f.classList.add('hidden');
+}
+
+function showAdminForgot() {
+  document.getElementById('admin-login-form').classList.add('hidden');
+  document.getElementById('admin-register-form').classList.add('hidden');
+  const f = document.getElementById('admin-forgot-form'); if(f) f.classList.remove('hidden');
+  const rc = document.getElementById('admin-reset-code-group'); if(rc) rc.classList.add('hidden');
+  const np = document.getElementById('admin-new-password-group'); if(np) np.classList.add('hidden');
+  const btn = document.getElementById('admin-forgot-btn'); if(btn) btn.textContent = 'Request Reset Code';
+  adminForgotStep = 'request';
+}
+
+let adminForgotEmail = '', adminForgotStep = 'request';
+async function handleAdminForgotPassword() {
+  if (adminForgotStep === 'request') {
+    const email = document.getElementById('admin-forgot-email').value.trim();
+    if (!email) return showAdminError('Please enter your email');
+    try {
+      const data = await api('/api/auth/forgot-password-email', { method: 'POST', body: JSON.stringify({ email }) });
+      adminForgotEmail = email; adminForgotStep = 'reset';
+      document.getElementById('admin-reset-code-group').classList.remove('hidden');
+      document.getElementById('admin-new-password-group').classList.remove('hidden');
+      document.getElementById('admin-forgot-btn').textContent = 'Reset Password';
+      const el = document.getElementById('admin-auth-error');
+      el.textContent = data.message + (data.resetCode ? ' Code: ' + data.resetCode : '');
+      el.style.display = 'block'; el.style.background = '#f0fdf4'; el.style.color = '#15803d';
+    } catch(e) { showAdminError(e.message); }
+  } else {
+    const resetCode = document.getElementById('admin-reset-code').value;
+    const newPassword = document.getElementById('admin-new-password').value;
+    if (!resetCode || !newPassword) return showAdminError('Please fill all fields');
+    if (newPassword.length < 8) return showAdminError('Password must be at least 8 characters');
+    try {
+      await api('/api/auth/reset-password-email', { method: 'POST', body: JSON.stringify({ email: adminForgotEmail, resetCode, newPassword }) });
+      adminForgotStep = 'request'; showAdminLogin();
+      const el = document.getElementById('admin-auth-error');
+      el.textContent = 'Password reset! You can now sign in.';
+      el.style.display = 'block'; el.style.background = '#f0fdf4'; el.style.color = '#15803d';
+    } catch(e) { showAdminError(e.message); }
+  }
 }
 
 function showAdminError(msg) {
@@ -290,6 +331,47 @@ function showLecturerLogin() {
   document.getElementById('lecturer-register-form').classList.add('hidden');
   document.getElementById('lecturer-login-form').classList.remove('hidden');
   document.getElementById('lecturer-auth-error').style.display = 'none';
+  const f = document.getElementById('lecturer-forgot-form'); if(f) f.classList.add('hidden');
+}
+
+function showLecturerForgot() {
+  document.getElementById('lecturer-login-form').classList.add('hidden');
+  document.getElementById('lecturer-register-form').classList.add('hidden');
+  const f = document.getElementById('lecturer-forgot-form'); if(f) f.classList.remove('hidden');
+  const rc = document.getElementById('lecturer-reset-code-group'); if(rc) rc.classList.add('hidden');
+  const np = document.getElementById('lecturer-new-password-group'); if(np) np.classList.add('hidden');
+  const btn = document.getElementById('lecturer-forgot-btn'); if(btn) btn.textContent = 'Request Reset Code';
+  lecturerForgotStep = 'request';
+}
+
+let lecturerForgotEmail = '', lecturerForgotStep = 'request';
+async function handleLecturerForgotPassword() {
+  if (lecturerForgotStep === 'request') {
+    const email = document.getElementById('lecturer-forgot-email').value.trim();
+    if (!email) return showLecturerError('Please enter your email');
+    try {
+      const data = await api('/api/auth/forgot-password-email', { method: 'POST', body: JSON.stringify({ email }) });
+      lecturerForgotEmail = email; lecturerForgotStep = 'reset';
+      document.getElementById('lecturer-reset-code-group').classList.remove('hidden');
+      document.getElementById('lecturer-new-password-group').classList.remove('hidden');
+      document.getElementById('lecturer-forgot-btn').textContent = 'Reset Password';
+      const el = document.getElementById('lecturer-auth-error');
+      el.textContent = data.message + (data.resetCode ? ' Code: ' + data.resetCode : '');
+      el.style.display = 'block'; el.style.background = '#f0fdf4'; el.style.color = '#15803d';
+    } catch(e) { showLecturerError(e.message); }
+  } else {
+    const resetCode = document.getElementById('lecturer-reset-code').value;
+    const newPassword = document.getElementById('lecturer-new-password').value;
+    if (!resetCode || !newPassword) return showLecturerError('Please fill all fields');
+    if (newPassword.length < 8) return showLecturerError('Password must be at least 8 characters');
+    try {
+      await api('/api/auth/reset-password-email', { method: 'POST', body: JSON.stringify({ email: lecturerForgotEmail, resetCode, newPassword }) });
+      lecturerForgotStep = 'request'; showLecturerLogin();
+      const el = document.getElementById('lecturer-auth-error');
+      el.textContent = 'Password reset! You can now sign in.';
+      el.style.display = 'block'; el.style.background = '#f0fdf4'; el.style.color = '#15803d';
+    } catch(e) { showLecturerError(e.message); }
+  }
 }
 
 function showLecturerError(msg) {
@@ -830,6 +912,7 @@ function buildSidebar() {
       links.push({ id: 'assignments', label: 'Assignments / Quiz', icon: assignmentsIcon() });
       links.push({ id: 'meetings', label: 'Meetings', icon: meetingsIcon() });
       links.push({ id: 'reports', label: 'Reports', icon: reportsIcon() });
+      links.push({ id: 'announcements', label: 'Announcements', icon: svgIcon('<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>') });
       links.push({ id: 'subscription', label: 'Subscription', icon: subscriptionIcon() });
       break;
     case 'employee':
@@ -846,6 +929,7 @@ function buildSidebar() {
       links.push({ id: 'assignments', label: 'Assignments / Quiz', icon: assignmentsIcon() });
       links.push({ id: 'meetings', label: 'Meetings', icon: meetingsIcon() });
       links.push({ id: 'reports', label: 'Reports', icon: reportsIcon() });
+      links.push({ id: 'announcements', label: 'Announcements', icon: svgIcon('<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>') });
       break;
     case 'superadmin':
       links.push({ id: 'approvals', label: 'Approvals', icon: approvalsIcon() });
@@ -859,6 +943,11 @@ function buildSidebar() {
       links.push({ id: 'subscription', label: 'Subscription', icon: subscriptionIcon() });
       break;
   }
+
+  // Add universal links for all roles
+  links.push({ id: 'profile',  label: 'My Profile',  icon: svgIcon('<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>') });
+  links.push({ id: 'contact',  label: 'Contact Us',  icon: svgIcon('<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.15 13a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.06 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 21 17z"/>') });
+  links.push({ id: 'about',    label: 'About',       icon: svgIcon('<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>') });
 
   nav.innerHTML = `<div class="sidebar-section-title">Navigation</div>` + links.map(l =>
     `<a onclick="navigateTo('${l.id}')" id="nav-${l.id}">${l.icon} <span>${l.label}</span></a>`
@@ -890,6 +979,10 @@ function navigateTo(view) {
     case 'approvals': renderApprovals(); break;
     case 'search': renderSearch(); break;
     case 'assignments': location.href='/assignments.html'; return;
+    case 'profile':     renderProfile(); break;
+    case 'contact':     renderContact(); break;
+    case 'about':       renderAbout(); break;
+    case 'announcements': renderAnnouncements(); break;
     default: renderDashboard();
   }
 }
@@ -3765,7 +3858,8 @@ async function viewAttendees(sessionId, sessionTitle) {
       <div class="modal" onclick="event.stopPropagation()" style="max-width:600px;width:95%">
         <h3>Attendees — ${sessionTitle}</h3>
         <div id="attendees-content"><div class="spinner" style="margin:20px auto"></div></div>
-        <div class="modal-actions" style="justify-content:flex-end">
+        <div class="modal-actions" style="justify-content:space-between">
+          <button class="btn btn-sm" style="background:#16a34a;color:#fff" onclick="exportSessionCSV('${sessionId}', '${sessionTitle}')">⬇ Export CSV</button>
           <button class="btn btn-secondary btn-sm" onclick="closeModal()">Close</button>
         </div>
       </div>
@@ -3832,6 +3926,311 @@ function closeModal(event) {
 
 if (token) {
   loadUserData();
+}
+
+
+
+// ══════════════════════════════════════════════════════════════════════════════
+//  FEATURE: PROFILE PAGE
+// ══════════════════════════════════════════════════════════════════════════════
+async function renderProfile() {
+  const content = document.getElementById('main-content');
+  if (!content) return;
+  const u = currentUser;
+  content.innerHTML = `
+    <div class="page-header"><h2>My Profile</h2><p>Manage your account details</p></div>
+    <div class="card" style="max-width:520px">
+      <div style="display:flex;align-items:center;gap:16px;margin-bottom:24px;padding-bottom:20px;border-bottom:1px solid var(--border)">
+        <div style="width:64px;height:64px;border-radius:50%;background:linear-gradient(135deg,var(--primary),#6366f1);display:flex;align-items:center;justify-content:center;font-size:26px;font-weight:700;color:#fff;flex-shrink:0">
+          ${(u.name||'?')[0].toUpperCase()}
+        </div>
+        <div>
+          <div style="font-size:18px;font-weight:700">${u.name || 'N/A'}</div>
+          <div style="font-size:13px;color:var(--text-light)">${u.email || u.indexNumber || ''}</div>
+          <span class="role-badge role-${u.role}" style="margin-top:4px;display:inline-block">${u.role}</span>
+        </div>
+      </div>
+
+      <div id="profile-msg" style="display:none;padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:16px"></div>
+
+      <div style="margin-bottom:20px">
+        <h3 style="font-size:14px;font-weight:700;margin-bottom:12px;color:var(--text-primary)">Update Name</h3>
+        <div class="form-group">
+          <label>Full Name</label>
+          <input type="text" id="profile-name" value="${u.name || ''}" placeholder="Your full name">
+        </div>
+      </div>
+
+      <div style="margin-bottom:20px;padding-top:20px;border-top:1px solid var(--border)">
+        <h3 style="font-size:14px;font-weight:700;margin-bottom:12px;color:var(--text-primary)">Change Password</h3>
+        <div class="form-group">
+          <label>Current Password</label>
+          <input type="password" id="profile-current-pw" placeholder="Enter current password">
+        </div>
+        <div class="form-group">
+          <label>New Password</label>
+          <input type="password" id="profile-new-pw" placeholder="Min 8 characters">
+        </div>
+        <div class="form-group">
+          <label>Confirm New Password</label>
+          <input type="password" id="profile-confirm-pw" placeholder="Repeat new password">
+        </div>
+      </div>
+
+      <button class="btn btn-primary" onclick="saveProfile()" style="width:100%">Save Changes</button>
+    </div>
+  `;
+}
+
+async function saveProfile() {
+  const name = document.getElementById('profile-name').value.trim();
+  const currentPassword = document.getElementById('profile-current-pw').value;
+  const newPassword = document.getElementById('profile-new-pw').value;
+  const confirmPw = document.getElementById('profile-confirm-pw').value;
+  const msg = document.getElementById('profile-msg');
+
+  if (newPassword && newPassword !== confirmPw) {
+    msg.textContent = 'New passwords do not match'; msg.style.background = '#fef2f2'; msg.style.color = '#dc2626'; msg.style.display = 'block'; return;
+  }
+  if (newPassword && newPassword.length < 8) {
+    msg.textContent = 'Password must be at least 8 characters'; msg.style.background = '#fef2f2'; msg.style.color = '#dc2626'; msg.style.display = 'block'; return;
+  }
+
+  const body = {};
+  if (name) body.name = name;
+  if (newPassword) { body.currentPassword = currentPassword; body.newPassword = newPassword; }
+
+  try {
+    const data = await api('/api/auth/profile', { method: 'PUT', body: JSON.stringify(body) });
+    if (data.user?.name) { currentUser.name = data.user.name; document.getElementById('user-name').textContent = data.user.name; }
+    msg.textContent = '✅ Profile updated successfully!'; msg.style.background = '#f0fdf4'; msg.style.color = '#15803d'; msg.style.display = 'block';
+    document.getElementById('profile-current-pw').value = '';
+    document.getElementById('profile-new-pw').value = '';
+    document.getElementById('profile-confirm-pw').value = '';
+    setTimeout(() => { msg.style.display = 'none'; }, 4000);
+  } catch(e) {
+    msg.textContent = e.message; msg.style.background = '#fef2f2'; msg.style.color = '#dc2626'; msg.style.display = 'block';
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+//  FEATURE: CONTACT / SUPPORT PAGE
+// ══════════════════════════════════════════════════════════════════════════════
+function renderContact() {
+  const content = document.getElementById('main-content');
+  if (!content) return;
+  content.innerHTML = `
+    <div class="page-header"><h2>Contact Us</h2><p>Get in touch with KODEX support</p></div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;margin-bottom:24px">
+
+      <div class="card" style="text-align:center">
+        <div style="font-size:36px;margin-bottom:12px">📧</div>
+        <div style="font-size:16px;font-weight:700;margin-bottom:6px">Email</div>
+        <p style="font-size:13px;color:var(--text-light);margin-bottom:12px">Send us an email anytime</p>
+        <a href="mailto:nelsonkel78@gmail.com" class="btn btn-primary btn-sm" style="display:inline-block;text-decoration:none">nelsonkel78@gmail.com</a>
+      </div>
+
+      <div class="card" style="text-align:center">
+        <div style="font-size:36px;margin-bottom:12px">📞</div>
+        <div style="font-size:16px;font-weight:700;margin-bottom:6px">Phone</div>
+        <p style="font-size:13px;color:var(--text-light);margin-bottom:12px">Call us during business hours</p>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <a href="tel:+233559545339" class="btn btn-secondary btn-sm" style="text-decoration:none">0559545339</a>
+          <a href="tel:+233536143117" class="btn btn-secondary btn-sm" style="text-decoration:none">0536143117</a>
+          <a href="tel:+233534707844" class="btn btn-secondary btn-sm" style="text-decoration:none">0534707844</a>
+        </div>
+      </div>
+
+      <div class="card" style="text-align:center">
+        <div style="font-size:36px;margin-bottom:12px">💬</div>
+        <div style="font-size:16px;font-weight:700;margin-bottom:6px">WhatsApp</div>
+        <p style="font-size:13px;color:var(--text-light);margin-bottom:12px">Chat with us on WhatsApp</p>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <a href="https://wa.me/233559545339" target="_blank" class="btn btn-sm" style="background:#25d366;color:#fff;text-decoration:none">0559545339</a>
+          <a href="https://wa.me/233536143117" target="_blank" class="btn btn-sm" style="background:#25d366;color:#fff;text-decoration:none">0536143117</a>
+          <a href="https://wa.me/233534707844" target="_blank" class="btn btn-sm" style="background:#25d366;color:#fff;text-decoration:none">0534707844</a>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3 style="margin-bottom:16px">Frequently Asked Questions</h3>
+      ${[
+        ['How do I reset a student's password?', 'Go to Users, find the student, and use the Reset Password action. The student will receive a reset code.'],
+        ['Why can't a student mark attendance?', 'Ensure there is an active session running and the student is enrolled in the correct course roster.'],
+        ['How do I add students to a course?', 'Go to Courses, select the course, and use the Upload Students button to add students via CSV or manually.'],
+        ['What happens when the subscription expires?', 'Access is suspended after the trial/subscription period. Contact us to renew your subscription.'],
+        ['Can students use the system offline?', 'Yes — students can mark attendance offline using a code. It will sync automatically when they reconnect.'],
+      ].map(([q, a]) => `
+        <div style="padding:14px 0;border-bottom:1px solid var(--border)">
+          <div style="font-weight:600;font-size:14px;margin-bottom:4px">❓ ${q}</div>
+          <div style="font-size:13px;color:var(--text-light)">${a}</div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+//  FEATURE: ANNOUNCEMENTS / NOTIFICATIONS
+// ══════════════════════════════════════════════════════════════════════════════
+// Stored in localStorage per company (simple in-app announcements)
+function getAnnouncements() {
+  try {
+    const key = 'announcements_' + (currentUser?.company?._id || currentUser?.company || 'default');
+    return JSON.parse(localStorage.getItem(key) || '[]');
+  } catch(e) { return []; }
+}
+
+function saveAnnouncements(list) {
+  try {
+    const key = 'announcements_' + (currentUser?.company?._id || currentUser?.company || 'default');
+    localStorage.setItem(key, JSON.stringify(list));
+  } catch(e) {}
+}
+
+function renderAnnouncements() {
+  const content = document.getElementById('main-content');
+  if (!content) return;
+  const canPost = ['admin', 'lecturer', 'manager', 'superadmin'].includes(currentUser.role);
+  const announcements = getAnnouncements();
+
+  content.innerHTML = `
+    <div class="page-header"><h2>Announcements</h2><p>Institution-wide notices and updates</p></div>
+
+    ${canPost ? `
+    <div class="card" style="margin-bottom:16px">
+      <h3 style="margin-bottom:12px">Post Announcement</h3>
+      <div class="form-group">
+        <label>Title</label>
+        <input type="text" id="ann-title" placeholder="e.g. Class cancelled tomorrow">
+      </div>
+      <div class="form-group">
+        <label>Message</label>
+        <textarea id="ann-body" rows="3" placeholder="Enter your announcement..." style="width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;font-family:inherit;resize:vertical"></textarea>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <select id="ann-type" style="padding:8px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;background:var(--bg-primary);color:var(--text-primary)">
+          <option value="info">ℹ️ Info</option>
+          <option value="warning">⚠️ Warning</option>
+          <option value="success">✅ Good News</option>
+          <option value="urgent">🚨 Urgent</option>
+        </select>
+        <button class="btn btn-primary btn-sm" onclick="postAnnouncement()">Post</button>
+      </div>
+    </div>
+    ` : ''}
+
+    <div id="announcements-list">
+      ${announcements.length ? announcements.slice().reverse().map(a => `
+        <div class="card" style="margin-bottom:12px;border-left:4px solid ${
+          a.type==='warning'?'#f59e0b':a.type==='success'?'#22c55e':a.type==='urgent'?'#ef4444':'var(--primary)'}">
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">
+            <div style="flex:1">
+              <div style="font-weight:700;font-size:15px;margin-bottom:4px">${a.title}</div>
+              <div style="font-size:13px;color:var(--text-light);margin-bottom:8px">${a.body}</div>
+              <div style="font-size:11px;color:var(--text-light)">
+                Posted by ${a.author} · ${new Date(a.ts).toLocaleString()}
+              </div>
+            </div>
+            ${canPost ? `<button onclick="deleteAnnouncement('${a.id}')" style="background:none;border:none;cursor:pointer;color:var(--text-light);font-size:18px;padding:0 4px" title="Delete">×</button>` : ''}
+          </div>
+        </div>
+      `).join('') : '<div class="card"><div class="empty-state"><p>No announcements yet</p></div></div>'}
+    </div>
+  `;
+}
+
+function postAnnouncement() {
+  const title = document.getElementById('ann-title').value.trim();
+  const body  = document.getElementById('ann-body').value.trim();
+  const type  = document.getElementById('ann-type').value;
+  if (!title || !body) return alert('Please enter a title and message');
+
+  const list = getAnnouncements();
+  list.push({ id: Date.now().toString(), title, body, type, author: currentUser.name || currentUser.role, ts: Date.now() });
+  saveAnnouncements(list);
+  renderAnnouncements();
+}
+
+function deleteAnnouncement(id) {
+  const list = getAnnouncements().filter(a => a.id !== id);
+  saveAnnouncements(list);
+  renderAnnouncements();
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+//  FEATURE: SESSION ATTENDANCE CSV EXPORT
+// ══════════════════════════════════════════════════════════════════════════════
+async function exportSessionCSV(sessionId, sessionTitle) {
+  try {
+    const data = await api('/api/attendance-sessions/' + sessionId + '/records');
+    const records = data.records || [];
+    if (!records.length) { alert('No attendance records to export'); return; }
+
+    const rows = [
+      ['Name', 'Student ID / Email', 'Method', 'Check-in Time', 'Status'],
+      ...records.map(r => [
+        r.student?.name || 'N/A',
+        r.student?.indexNumber || r.student?.email || 'N/A',
+        r.method || 'N/A',
+        r.checkInTime ? new Date(r.checkInTime).toLocaleString() : 'N/A',
+        r.status || 'N/A',
+      ])
+    ];
+
+    const csv = rows.map(row => row.map(v => '"' + String(v).replace(/"/g, '""') + '"').join(',')).join('
+');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = (sessionTitle || 'attendance') + '_' + new Date().toISOString().slice(0,10) + '.csv';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  } catch(e) { alert('Export failed: ' + e.message); }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+//  FEATURE: ABOUT / VERSION PAGE
+// ══════════════════════════════════════════════════════════════════════════════
+function renderAbout() {
+  const content = document.getElementById('main-content');
+  if (!content) return;
+  content.innerHTML = `
+    <div class="page-header"><h2>About</h2><p>KODEX Smart Attendance Platform</p></div>
+    <div class="card" style="max-width:540px;text-align:center;padding:40px 32px">
+      <div style="width:72px;height:72px;border-radius:20px;background:linear-gradient(135deg,var(--primary),#6366f1);display:flex;align-items:center;justify-content:center;margin:0 auto 20px">
+        <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+      </div>
+      <div style="font-size:26px;font-weight:800;margin-bottom:4px">KODEX</div>
+      <div style="font-size:14px;color:var(--text-light);margin-bottom:4px">Smart Attendance Platform</div>
+      <div style="display:inline-block;background:var(--bg);border:1px solid var(--border);border-radius:999px;padding:4px 14px;font-size:12px;font-weight:600;color:var(--text-light);margin-bottom:28px">Version 1.0.0</div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:28px;text-align:left">
+        ${[
+          ['🎓', 'Academic Mode', 'Courses, lecturers, students & proctored quizzes'],
+          ['🏢', 'Corporate Mode', 'Employee attendance, sign-in/out & reporting'],
+          ['📶', 'Offline Support', 'Mark & manage attendance without internet'],
+          ['🔒', 'Secure Proctoring', 'AI-powered face detection & integrity scoring'],
+          ['📊', 'Live Monitoring', 'Real-time attendance dashboard & CSV export'],
+          ['🔔', 'Announcements', 'Broadcast messages to your institution'],
+        ].map(([icon, title, desc]) => `
+          <div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:12px">
+            <div style="font-size:20px;margin-bottom:4px">${icon}</div>
+            <div style="font-weight:700;font-size:13px">${title}</div>
+            <div style="font-size:12px;color:var(--text-light);margin-top:2px">${desc}</div>
+          </div>
+        `).join('')}
+      </div>
+
+      <div style="font-size:13px;color:var(--text-light);padding-top:20px;border-top:1px solid var(--border)">
+        Built by <strong style="color:var(--text-primary)">KODEX</strong> &nbsp;·&nbsp;
+        <a href="mailto:nelsonkel78@gmail.com" style="color:var(--primary)">nelsonkel78@gmail.com</a><br>
+        <span style="font-size:12px">&copy; 2025 KODEX. All rights reserved.</span>
+      </div>
+    </div>
+  `;
 }
 
 
