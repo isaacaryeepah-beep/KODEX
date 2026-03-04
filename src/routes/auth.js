@@ -15,5 +15,8 @@ router.get("/me", authenticate, authController.getMe);
 router.post("/migrate-orphans", authenticate, requireRole("superadmin"), authController.migrateOrphanUsers);
 router.post("/forgot-password", authController.forgotPassword);
 router.post("/reset-password", authController.resetPassword);
+router.post("/forgot-password-email", authController.forgotPasswordEmail);
+router.post("/reset-password-email", authController.resetPasswordEmail);
+router.put("/profile", authenticate, authController.updateProfile);
 
 module.exports = router;
