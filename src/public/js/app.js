@@ -53,10 +53,10 @@ function showOfflineBanner(hasPending) {
     banner = document.createElement('div');
     banner.id = OFFLINE_BANNER_ID;
     banner.style.cssText = [
-      'position:fixed','top:0','left:0','right:0','z-index:9999',
+      'position:fixed','top:60px','left:0','right:0','z-index:9998',
       'display:flex','align-items:center','justify-content:center','gap:8px',
-      'padding:8px 16px','font-size:13px','font-weight:600',
-      'transition:all 0.3s ease','box-shadow:0 2px 8px rgba(0,0,0,0.15)'
+      'padding:7px 16px','font-size:12px','font-weight:600',
+      'transition:all 0.3s ease','box-shadow:0 2px 8px rgba(0,0,0,0.1)'
     ].join(';');
     document.body.prepend(banner);
   }
@@ -1537,7 +1537,7 @@ function _renderSessionsHTML(content, sessions, isOffline) {
               <td>${s.status === 'active' ? `
                 <button class="btn btn-danger btn-sm" onclick="stopSession('${s._id}')">Stop</button>
                 ${!isOffline ? `<button class="btn btn-success btn-sm" onclick="generateQR('${s._id}')">QR Code</button>` : ''}
-                <button class="btn btn-sm" style="font-size:11px;background:var(--bg);border:1px solid var(--border)" onclick="viewAttendees('${s._id}', '${(s.title||'Session').replace(/'/g,'')}')">Attendees</button>
+                <button class="btn btn-sm" style="font-size:11px;background:var(--bg);border:1px solid var(--border)" onclick="viewAttendees('${s._id}', '${(s.title||'Session').replace(/['"]/g,'')}')">Attendees</button>
               ` : ''}</td>
             </tr>
           `).join('')}</tbody>
