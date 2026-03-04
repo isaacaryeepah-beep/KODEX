@@ -37,7 +37,7 @@ const requireActiveSubscription = async (req, res, next) => {
       subscriptionRequired: true,
       message: isLecturer
         ? company.trialUsed
-          ? "Your trial has ended. Please subscribe to continue using Smart Attendance."
+          ? "Your trial has ended. Please subscribe to continue using KODEX."
           : "Your trial has expired. A subscription is required to access lecturer features."
         : company.trialUsed
           ? "Your free trial has ended. Please subscribe to continue."
