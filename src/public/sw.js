@@ -1,5 +1,5 @@
 // ════════════════════════════════════════════════════════════════════
-//  EduCorp Service Worker — Offline Support
+//  KODEX Service Worker — Offline Support
 //  Caches the app shell so it loads offline
 //  API requests are NOT cached here (handled in app.js with localStorage)
 // ════════════════════════════════════════════════════════════════════
