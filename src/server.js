@@ -42,7 +42,7 @@ app.use(express.static(path.join(__dirname, "public"), {
 app.get("/api", (req, res) => {
   res.json({
     status: "running",
-    message: "Smart Attendance API Server",
+    message: "KODEX API Server",
     endpoints: {
       auth: "/api/auth",
       users: "/api/users",
