@@ -1274,27 +1274,116 @@ async function stopSession(id) {
   }
 }
 
+// QR auto-rotation state
+let _qrRotateTimer = null;
+let _qrCountdownTimer = null;
+const QR_EXPIRY_SECONDS = 15;
+
+function _stopQrTimers() {
+  if (_qrRotateTimer)   { clearTimeout(_qrRotateTimer);  _qrRotateTimer = null; }
+  if (_qrCountdownTimer){ clearInterval(_qrCountdownTimer); _qrCountdownTimer = null; }
+}
+
 async function generateQR(sessionId) {
-  try {
-    const data = await api('/api/qr-tokens/generate', { method: 'POST', body: JSON.stringify({ sessionId }) });
-    const container = document.getElementById('modal-container');
-    container.classList.remove('hidden');
-    container.innerHTML = `
-      <div class="modal-overlay" onclick="closeModal(event)">
-        <div class="modal" onclick="event.stopPropagation()" style="text-align:center">
-          <h3>QR Token Generated</h3>
-          <div style="font-size:48px;font-weight:700;color:var(--primary);margin:20px 0;letter-spacing:8px">${data.qrToken.code}</div>
-          <p style="color:var(--text-light);font-size:13px">Share this code with attendees</p>
-          <p style="color:var(--text-light);font-size:12px;margin-top:8px">Expires: ${new Date(data.qrToken.expiresAt).toLocaleString()}</p>
-          <div class="modal-actions" style="justify-content:center">
-            <button class="btn btn-primary btn-sm" onclick="closeModal()">Done</button>
+  _stopQrTimers();
+  const container = document.getElementById('modal-container');
+  container.classList.remove('hidden');
+
+  async function _fetchAndShow() {
+    try {
+      const data = await api('/api/qr-tokens/generate', {
+        method: 'POST',
+        body: JSON.stringify({ sessionId, expirySeconds: QR_EXPIRY_SECONDS })
+      });
+      const code = data.qrToken.code;
+
+      container.innerHTML = `
+        <div class="modal-overlay" onclick="_stopQrTimers();closeModal(event)">
+          <div class="modal" onclick="event.stopPropagation()" style="text-align:center;max-width:380px">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+              <h3 style="margin:0">Attendance QR Code</h3>
+              <button onclick="_stopQrTimers();closeModal()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--text-light)">×</button>
+            </div>
+            <p style="color:var(--text-light);font-size:12px;margin-bottom:16px">Code refreshes every ${QR_EXPIRY_SECONDS}s to prevent sharing</p>
+
+            <!-- Countdown ring -->
+            <div style="position:relative;width:100px;height:100px;margin:0 auto 16px">
+              <svg width="100" height="100" style="transform:rotate(-90deg)">
+                <circle cx="50" cy="50" r="44" fill="none" stroke="#e5e7eb" stroke-width="7"/>
+                <circle id="qr-ring" cx="50" cy="50" r="44" fill="none" stroke="var(--primary)" stroke-width="7"
+                  stroke-linecap="round"
+                  stroke-dasharray="276"
+                  stroke-dashoffset="0"
+                  style="transition:stroke-dashoffset 1s linear,stroke 0.3s"/>
+              </svg>
+              <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center">
+                <span id="qr-countdown" style="font-size:22px;font-weight:800;color:var(--primary)">${QR_EXPIRY_SECONDS}</span>
+              </div>
+            </div>
+
+            <!-- The code -->
+            <div id="qr-code-display" style="font-size:52px;font-weight:800;color:var(--primary);letter-spacing:10px;margin-bottom:8px;font-family:monospace">${code}</div>
+            <p style="color:var(--text-light);font-size:12px;margin-bottom:20px">Students enter this code to mark attendance</p>
+
+            <!-- Status badge -->
+            <div id="qr-status" style="display:inline-flex;align-items:center;gap:6px;background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.3);border-radius:999px;padding:5px 14px;font-size:12px;font-weight:600;color:#16a34a;margin-bottom:20px">
+              <span style="width:7px;height:7px;border-radius:50%;background:#16a34a;display:inline-block;animation:pulse-green 1.5s infinite"></span>
+              Active · Refreshing automatically
+            </div>
+
+            <div class="modal-actions" style="justify-content:center">
+              <button class="btn btn-primary btn-sm" onclick="_stopQrTimers();closeModal()">Close</button>
+            </div>
           </div>
         </div>
-      </div>
-    `;
-  } catch (e) {
-    alert(e.message);
+      `;
+
+      // Animate countdown ring + number
+      let remaining = QR_EXPIRY_SECONDS;
+      const ring = document.getElementById('qr-ring');
+      const countEl = document.getElementById('qr-countdown');
+      const circumference = 276;
+
+      _qrCountdownTimer = setInterval(() => {
+        remaining--;
+        if (countEl) countEl.textContent = remaining;
+        if (ring) {
+          const offset = circumference * (1 - remaining / QR_EXPIRY_SECONDS);
+          ring.style.strokeDashoffset = offset;
+          // Turn orange at 5s, red at 3s
+          if (remaining <= 3)       ring.style.stroke = '#ef4444';
+          else if (remaining <= 5)  ring.style.stroke = '#f97316';
+          else                      ring.style.stroke = 'var(--primary)';
+        }
+        if (remaining <= 0) {
+          clearInterval(_qrCountdownTimer);
+          _qrCountdownTimer = null;
+          // Flash "Refreshing…" 
+          const codeEl = document.getElementById('qr-code-display');
+          if (codeEl) { codeEl.style.opacity = '0.3'; codeEl.textContent = '······'; }
+          const statusEl = document.getElementById('qr-status');
+          if (statusEl) statusEl.innerHTML = '<span style="width:7px;height:7px;border-radius:50%;background:#f59e0b;display:inline-block"></span> Refreshing…';
+        }
+      }, 1000);
+
+      // Schedule next refresh
+      _qrRotateTimer = setTimeout(() => {
+        _stopQrTimers();
+        _fetchAndShow();
+      }, QR_EXPIRY_SECONDS * 1000);
+
+    } catch (e) {
+      container.innerHTML = `
+        <div class="modal-overlay" onclick="_stopQrTimers();closeModal(event)">
+          <div class="modal" style="text-align:center">
+            <p style="color:var(--danger)">${e.message}</p>
+            <button class="btn btn-primary btn-sm" onclick="_stopQrTimers();closeModal()">Close</button>
+          </div>
+        </div>`;
+    }
   }
+
+  await _fetchAndShow();
 }
 
 async function renderUsers() {
@@ -3291,6 +3380,7 @@ async function downloadReport(type, apiBase = 'reports', e) {
 
 function closeModal(event) {
   if (event && event.target !== event.currentTarget) return;
+  _stopQrTimers(); // always clean up QR rotation if active
   document.getElementById('modal-container').classList.add('hidden');
   document.getElementById('modal-container').innerHTML = '';
 }
