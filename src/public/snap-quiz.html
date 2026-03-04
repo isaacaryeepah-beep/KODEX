@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 <meta name="theme-color" content="#0f172a" />
-<title>EduCorp — Snap Quiz</title>
+<title>KODEX — Snap Quiz</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
 <!-- TF loaded async so it never blocks login UI wiring -->
@@ -624,7 +624,7 @@ window.addEventListener('load', () => loadMLLibs().catch(() => {}));
     <button class="btn btn-primary" id="proceed-camera-btn" disabled>Continue to Camera Setup</button>
     <button class="btn btn-ghost" id="back-to-list-btn" style="margin-top:10px">← Back</button>
     <p style="margin-top:16px;font-size:11px;text-align:center;color:var(--slate)">
-      ⚠️ Mobile browser limitations: screen lock detection may vary by device. For maximum enforcement, use the EduCorp app.
+      ⚠️ Mobile browser limitations: screen lock detection may vary by device. For maximum enforcement, use the KODEX app.
     </p>
   </div>
 </div>
@@ -1853,7 +1853,7 @@ setTimeout(() => loadFaceModel().catch(console.warn), 1500);
 const SNAP_LEGAL = {
   terms: {
     title: 'Terms & Conditions',
-    body: `<p style="color:#6b7280;font-size:11px;margin-bottom:16px">Last updated: January 1, 2025 &nbsp;·&nbsp; KODEX Smart Attendance</p>
+    body: `<p style="color:#6b7280;font-size:11px;margin-bottom:16px">Last updated: January 1, 2025 &nbsp;·&nbsp; KODEX</p>
     <h4 style="margin:0 0 6px;color:#111827">1. Acceptance</h4><p>By using the KODEX platform you agree to these Terms. These apply to all students using proctored assessments.</p>
     <h4 style="margin:16px 0 6px;color:#111827">2. Academic Integrity</h4><p>You agree not to share QR codes, attendance tokens, or assessment codes. The platform may auto-submit your assessment if integrity violations are detected.</p>
     <h4 style="margin:16px 0 6px;color:#111827">3. Camera & Proctoring</h4><p>You consent to camera use during assessments for facial presence detection. No images are stored on KODEX servers — processing is on-device only.</p>
@@ -1862,7 +1862,7 @@ const SNAP_LEGAL = {
   },
   privacy: {
     title: 'Privacy Policy',
-    body: `<p style="color:#6b7280;font-size:11px;margin-bottom:16px">Last updated: January 1, 2025 &nbsp;·&nbsp; KODEX Smart Attendance</p>
+    body: `<p style="color:#6b7280;font-size:11px;margin-bottom:16px">Last updated: January 1, 2025 &nbsp;·&nbsp; KODEX</p>
     <h4 style="margin:0 0 6px;color:#111827">1. Data Collected</h4><p>We collect your name, student ID, attendance records, assessment responses, and device information for the purpose of operating the platform.</p>
     <h4 style="margin:16px 0 6px;color:#111827">2. Camera Data</h4><p>Camera access is used only for on-device face detection during proctored assessments. No facial images are transmitted or stored on our servers.</p>
     <h4 style="margin:16px 0 6px;color:#111827">3. Data Sharing</h4><p>Your data is shared only with your registered institution. We do not sell personal data. Data may be disclosed if required by law.</p>
@@ -1880,5 +1880,20 @@ function showSnapLegal(tab) {
 }
 
 </script>
+
+<!-- Legal overlay modal -->
+<div id="snap-legal-overlay" onclick="if(event.target===this)this.style.display='none'" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.6);align-items:center;justify-content:center;padding:16px;">
+  <div style="background:#fff;border-radius:16px;width:100%;max-width:600px;max-height:88vh;display:flex;flex-direction:column;box-shadow:0 24px 64px rgba(0,0,0,0.3);overflow:hidden;">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:18px 22px;border-bottom:1px solid #e5e7eb;flex-shrink:0;">
+      <div id="snap-legal-title" style="font-size:17px;font-weight:700;color:#111827;"></div>
+      <button onclick="document.getElementById('snap-legal-overlay').style.display='none'" style="background:none;border:none;cursor:pointer;font-size:24px;color:#6b7280;line-height:1;">×</button>
+    </div>
+    <div id="snap-legal-body" style="overflow-y:auto;padding:22px;flex:1;font-size:13px;line-height:1.75;color:#374151;"></div>
+    <div style="padding:14px 22px;border-top:1px solid #e5e7eb;display:flex;justify-content:flex-end;background:#f9fafb;flex-shrink:0;">
+      <button onclick="document.getElementById('snap-legal-overlay').style.display='none'" style="background:#111827;color:#fff;border:none;padding:9px 22px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">Close</button>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>
