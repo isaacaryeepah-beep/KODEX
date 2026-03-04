@@ -18,7 +18,8 @@ router.get("/my-attendance", attendanceController.getMyAttendance);
 router.get("/sign-in-status", attendanceController.getSignInStatus);
 router.post("/sign-in", requireRole("employee"), attendanceController.employeeSignIn);
 router.post("/sign-out", requireRole("employee"), attendanceController.employeeSignOut);
-router.get("/:id", companyIsolation, attendanceController.getSession);
 router.post("/mark", enforceLogoutRestriction, attendanceController.markAttendance);
+router.get("/:id/records", companyIsolation, attendanceController.getSessionRecords);
+router.get("/:id", companyIsolation, attendanceController.getSession);
 
 module.exports = router;
