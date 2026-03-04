@@ -407,12 +407,11 @@ exports.login = async (req, res) => {
 
     let user;
     if (indexNumber) {
-      const normalizedIndex = indexNumber.trim().toUpperCase();
-      const query = { indexNumber: normalizedIndex, role: "student" };
+      const query = { indexNumber, role: "student" };
       if (institutionCode) {
-        const company = await Company.findOne({ institutionCode: institutionCode.trim().toUpperCase() });
+        const company = await Company.findOne({ institutionCode: institutionCode.toUpperCase() });
         if (!company) {
-          return res.status(401).json({ error: "Institution not found. Check your Institution Code." });
+          return res.status(401).json({ error: "Institution not found" });
         }
         query.company = company._id;
       }
@@ -427,18 +426,13 @@ exports.login = async (req, res) => {
       user = await User.findOne({ email }).select("+password");
     }
 
-    if (!user) {
-      return res.status(401).json({ error: indexNumber
-        ? "Student not found. Check your Index Number and Institution Code."
-        : "Invalid email or password." });
-    }
-    if (!user.isActive) {
-      return res.status(401).json({ error: "Your account has been deactivated. Contact your admin." });
+    if (!user || !user.isActive) {
+      return res.status(401).json({ error: "Invalid credentials" });
     }
 
     const isMatch = await user.comparePassword(password);
     if (!isMatch) {
-      return res.status(401).json({ error: "Incorrect password. Please try again." });
+      return res.status(401).json({ error: "Invalid credentials" });
     }
 
     if (!user.isApproved) {
@@ -706,5 +700,93 @@ exports.resetPassword = async (req, res) => {
   } catch (error) {
     console.error("Reset password error:", error);
     res.status(500).json({ error: "Failed to reset password" });
+  }
+};
+
+exports.forgotPasswordEmail = async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ error: "Email is required" });
+
+    const user = await User.findOne({ email: email.toLowerCase().trim() });
+    if (!user) return res.status(404).json({ error: "No account found with that email" });
+
+    if (!["admin", "manager", "lecturer", "superadmin"].includes(user.role)) {
+      return res.status(403).json({ error: "This reset method is for admins and lecturers only" });
+    }
+
+    if (user.resetPasswordExpires && user.resetPasswordExpires > Date.now()) {
+      return res.status(429).json({ error: "A reset code was already sent recently. Please wait before requesting again." });
+    }
+
+    const code = String(crypto.randomInt(100000, 1000000));
+    const hashedCode = await bcrypt.hash(code, 10);
+    user.resetPasswordToken = hashedCode;
+    user.resetPasswordExpires = new Date(Date.now() + 60 * 60 * 1000);
+    await user.save({ validateBeforeSave: false });
+
+    res.json({
+      message: "Password reset code generated successfully.",
+      resetCode: code, // In production, send via email. Shown here for dev.
+    });
+  } catch (error) {
+    console.error("Forgot password email error:", error);
+    res.status(500).json({ error: "Failed to generate reset code" });
+  }
+};
+
+exports.resetPasswordEmail = async (req, res) => {
+  try {
+    const { email, resetCode, newPassword } = req.body;
+    if (!email || !resetCode || !newPassword) {
+      return res.status(400).json({ error: "Email, reset code, and new password are required" });
+    }
+    if (newPassword.length < 8) {
+      return res.status(400).json({ error: "Password must be at least 8 characters" });
+    }
+
+    const user = await User.findOne({
+      email: email.toLowerCase().trim(),
+      resetPasswordExpires: { $gt: Date.now() },
+    }).select("+password");
+
+    if (!user) return res.status(400).json({ error: "Invalid or expired reset code" });
+
+    const isValid = await bcrypt.compare(resetCode, user.resetPasswordToken);
+    if (!isValid) return res.status(400).json({ error: "Incorrect reset code" });
+
+    user.password = newPassword;
+    user.resetPasswordToken = null;
+    user.resetPasswordExpires = null;
+    await user.save();
+
+    res.json({ message: "Password reset successfully. You can now sign in." });
+  } catch (error) {
+    console.error("Reset password email error:", error);
+    res.status(500).json({ error: "Failed to reset password" });
+  }
+};
+
+exports.updateProfile = async (req, res) => {
+  try {
+    const { name, currentPassword, newPassword } = req.body;
+    const user = await User.findById(req.user._id).select("+password");
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    if (name && name.trim()) user.name = name.trim();
+
+    if (newPassword) {
+      if (!currentPassword) return res.status(400).json({ error: "Current password is required to set a new password" });
+      if (newPassword.length < 8) return res.status(400).json({ error: "New password must be at least 8 characters" });
+      const isMatch = await bcrypt.compare(currentPassword, user.password);
+      if (!isMatch) return res.status(401).json({ error: "Current password is incorrect" });
+      user.password = newPassword;
+    }
+
+    await user.save();
+    res.json({ message: "Profile updated successfully", user: { name: user.name, email: user.email, role: user.role } });
+  } catch (error) {
+    console.error("Update profile error:", error);
+    res.status(500).json({ error: "Failed to update profile" });
   }
 };
