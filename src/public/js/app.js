@@ -284,31 +284,48 @@ function showAdminForgot() {
 
 let adminForgotEmail = '', adminForgotStep = 'request';
 async function handleAdminForgotPassword() {
+  function setAdminForgotMsg(msg, isSuccess) {
+    let el = document.getElementById('admin-forgot-msg');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'admin-forgot-msg';
+      el.style.cssText = 'padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:12px;display:none';
+      const btn = document.getElementById('admin-forgot-btn');
+      if (btn) btn.parentNode.insertBefore(el, btn);
+    }
+    el.textContent = msg;
+    el.style.background = isSuccess ? '#f0fdf4' : '#fef2f2';
+    el.style.color = isSuccess ? '#15803d' : '#dc2626';
+    el.style.border = isSuccess ? '1px solid #86efac' : '1px solid #fca5a5';
+    el.style.display = 'block';
+  }
+
   if (adminForgotStep === 'request') {
     const email = document.getElementById('admin-forgot-email').value.trim();
-    if (!email) return showAdminError('Please enter your email');
+    if (!email) return setAdminForgotMsg('Please enter your email address', false);
+    const btn = document.getElementById('admin-forgot-btn');
+    btn.textContent = 'Sending...'; btn.disabled = true;
     try {
       const data = await api('/api/auth/forgot-password-email', { method: 'POST', body: JSON.stringify({ email }) });
       adminForgotEmail = email; adminForgotStep = 'reset';
       document.getElementById('admin-reset-code-group').classList.remove('hidden');
       document.getElementById('admin-new-password-group').classList.remove('hidden');
-      document.getElementById('admin-forgot-btn').textContent = 'Reset Password';
-      const el = document.getElementById('admin-auth-error');
-      el.textContent = data.message + (data.resetCode ? ' Code: ' + data.resetCode : '');
-      el.style.display = 'block'; el.style.background = '#f0fdf4'; el.style.color = '#15803d';
-    } catch(e) { showAdminError(e.message); }
+      btn.textContent = 'Reset Password'; btn.disabled = false;
+      setAdminForgotMsg((data.message || 'Code generated.') + (data.resetCode ? ' Your reset code: ' + data.resetCode : ''), true);
+    } catch(e) { btn.textContent = 'Request Reset Code'; btn.disabled = false; setAdminForgotMsg(e.message, false); }
   } else {
-    const resetCode = document.getElementById('admin-reset-code').value;
+    const resetCode = document.getElementById('admin-reset-code').value.trim();
     const newPassword = document.getElementById('admin-new-password').value;
-    if (!resetCode || !newPassword) return showAdminError('Please fill all fields');
-    if (newPassword.length < 8) return showAdminError('Password must be at least 8 characters');
+    if (!resetCode || !newPassword) return setAdminForgotMsg('Please enter the reset code and new password', false);
+    if (newPassword.length < 8) return setAdminForgotMsg('Password must be at least 8 characters', false);
+    const btn = document.getElementById('admin-forgot-btn');
+    btn.textContent = 'Resetting...'; btn.disabled = true;
     try {
       await api('/api/auth/reset-password-email', { method: 'POST', body: JSON.stringify({ email: adminForgotEmail, resetCode, newPassword }) });
-      adminForgotStep = 'request'; showAdminLogin();
-      const el = document.getElementById('admin-auth-error');
-      el.textContent = 'Password reset! You can now sign in.';
-      el.style.display = 'block'; el.style.background = '#f0fdf4'; el.style.color = '#15803d';
-    } catch(e) { showAdminError(e.message); }
+      adminForgotStep = 'request';
+      setAdminForgotMsg('✅ Password reset! Redirecting to sign in...', true);
+      setTimeout(() => { showAdminLogin(); }, 1800);
+    } catch(e) { btn.textContent = 'Reset Password'; btn.disabled = false; setAdminForgotMsg(e.message, false); }
   }
 }
 
@@ -346,31 +363,48 @@ function showLecturerForgot() {
 
 let lecturerForgotEmail = '', lecturerForgotStep = 'request';
 async function handleLecturerForgotPassword() {
+  function setLecturerForgotMsg(msg, isSuccess) {
+    let el = document.getElementById('lecturer-forgot-msg');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'lecturer-forgot-msg';
+      el.style.cssText = 'padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:12px;display:none';
+      const btn = document.getElementById('lecturer-forgot-btn');
+      if (btn) btn.parentNode.insertBefore(el, btn);
+    }
+    el.textContent = msg;
+    el.style.background = isSuccess ? '#f0fdf4' : '#fef2f2';
+    el.style.color = isSuccess ? '#15803d' : '#dc2626';
+    el.style.border = isSuccess ? '1px solid #86efac' : '1px solid #fca5a5';
+    el.style.display = 'block';
+  }
+
   if (lecturerForgotStep === 'request') {
     const email = document.getElementById('lecturer-forgot-email').value.trim();
-    if (!email) return showLecturerError('Please enter your email');
+    if (!email) return setLecturerForgotMsg('Please enter your email address', false);
+    const btn = document.getElementById('lecturer-forgot-btn');
+    btn.textContent = 'Sending...'; btn.disabled = true;
     try {
       const data = await api('/api/auth/forgot-password-email', { method: 'POST', body: JSON.stringify({ email }) });
       lecturerForgotEmail = email; lecturerForgotStep = 'reset';
       document.getElementById('lecturer-reset-code-group').classList.remove('hidden');
       document.getElementById('lecturer-new-password-group').classList.remove('hidden');
-      document.getElementById('lecturer-forgot-btn').textContent = 'Reset Password';
-      const el = document.getElementById('lecturer-auth-error');
-      el.textContent = data.message + (data.resetCode ? ' Code: ' + data.resetCode : '');
-      el.style.display = 'block'; el.style.background = '#f0fdf4'; el.style.color = '#15803d';
-    } catch(e) { showLecturerError(e.message); }
+      btn.textContent = 'Reset Password'; btn.disabled = false;
+      setLecturerForgotMsg((data.message || 'Code generated.') + (data.resetCode ? ' Your reset code: ' + data.resetCode : ''), true);
+    } catch(e) { btn.textContent = 'Request Reset Code'; btn.disabled = false; setLecturerForgotMsg(e.message, false); }
   } else {
-    const resetCode = document.getElementById('lecturer-reset-code').value;
+    const resetCode = document.getElementById('lecturer-reset-code').value.trim();
     const newPassword = document.getElementById('lecturer-new-password').value;
-    if (!resetCode || !newPassword) return showLecturerError('Please fill all fields');
-    if (newPassword.length < 8) return showLecturerError('Password must be at least 8 characters');
+    if (!resetCode || !newPassword) return setLecturerForgotMsg('Please enter the reset code and new password', false);
+    if (newPassword.length < 8) return setLecturerForgotMsg('Password must be at least 8 characters', false);
+    const btn = document.getElementById('lecturer-forgot-btn');
+    btn.textContent = 'Resetting...'; btn.disabled = true;
     try {
       await api('/api/auth/reset-password-email', { method: 'POST', body: JSON.stringify({ email: lecturerForgotEmail, resetCode, newPassword }) });
-      lecturerForgotStep = 'request'; showLecturerLogin();
-      const el = document.getElementById('lecturer-auth-error');
-      el.textContent = 'Password reset! You can now sign in.';
-      el.style.display = 'block'; el.style.background = '#f0fdf4'; el.style.color = '#15803d';
-    } catch(e) { showLecturerError(e.message); }
+      lecturerForgotStep = 'request';
+      setLecturerForgotMsg('✅ Password reset! Redirecting to sign in...', true);
+      setTimeout(() => { showLecturerLogin(); }, 1800);
+    } catch(e) { btn.textContent = 'Reset Password'; btn.disabled = false; setLecturerForgotMsg(e.message, false); }
   }
 }
 
@@ -944,14 +978,18 @@ function buildSidebar() {
       break;
   }
 
-  // Add universal links for all roles
-  links.push({ id: 'profile',  label: 'My Profile',  icon: svgIcon('<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>') });
-  links.push({ id: 'contact',  label: 'Contact Us',  icon: svgIcon('<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.15 13a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.06 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 21 17z"/>') });
-  links.push({ id: 'about',    label: 'About',       icon: svgIcon('<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>') });
+  // Universal links shown for all roles
+  const universalLinks = [
+    { id: 'profile',  label: 'My Profile',  icon: svgIcon('<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>') },
+    { id: 'contact',  label: 'Contact Us',  icon: svgIcon('<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.15 13a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.06 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 21 17z"/>') },
+    { id: 'about',    label: 'About',       icon: svgIcon('<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>') },
+  ];
 
-  nav.innerHTML = `<div class="sidebar-section-title">Navigation</div>` + links.map(l =>
-    `<a onclick="navigateTo('${l.id}')" id="nav-${l.id}">${l.icon} <span>${l.label}</span></a>`
-  ).join('');
+  nav.innerHTML =
+    `<div class="sidebar-section-title">Navigation</div>` +
+    links.map(l => `<a onclick="navigateTo('${l.id}')" id="nav-${l.id}">${l.icon} <span>${l.label}</span></a>`).join('') +
+    `<div class="sidebar-section-title" style="margin-top:12px">Account</div>` +
+    universalLinks.map(l => `<a onclick="navigateTo('${l.id}')" id="nav-${l.id}">${l.icon} <span>${l.label}</span></a>`).join('');
 }
 
 function navigateTo(view) {
