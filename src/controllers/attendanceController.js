@@ -211,6 +211,36 @@ exports.getSession = async (req, res) => {
   }
 };
 
+
+exports.getSessionRecords = async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ error: "Invalid session ID" });
+    }
+
+    const sessionFilter = { _id: id, ...req.companyFilter };
+    if (req.user.role === "lecturer") sessionFilter.createdBy = req.user._id;
+
+    const session = await AttendanceSession.findOne(sessionFilter);
+    if (!session) return res.status(404).json({ error: "Session not found" });
+
+    const records = await AttendanceRecord.find({ session: id })
+      .populate("user", "name email indexNumber role")
+      .sort({ checkInTime: 1 });
+
+    // Normalize: expose as 'student' field for frontend compatibility
+    const normalized = records.map(r => ({
+      ...r.toObject(),
+      student: r.user || null,
+    }));
+
+    res.json({ session, records: normalized });
+  } catch (error) {
+    console.error("Get session records error:", error);
+    res.status(500).json({ error: "Failed to fetch attendance records" });
+  }
+};
 exports.markAttendance = async (req, res) => {
   try {
     const { sessionId, qrToken, code, method, meetingId } = req.body;
