@@ -1,5 +1,160 @@
 const API = '';
 let token = localStorage.getItem('token');
+
+// ══════════════════════════════════════════════════════════════════════════════
+//  OFFLINE SUPPORT MODULE
+//  - Detects online/offline state and shows a banner
+//  - Caches read data (sessions, courses, attendance) in localStorage
+//  - Queues write actions (start/stop session, manual mark, student mark)
+//  - Auto-syncs the queue the moment connection is restored
+// ══════════════════════════════════════════════════════════════════════════════
+
+const OFFLINE_CACHE_KEY   = 'edu_offline_cache';
+const OFFLINE_QUEUE_KEY   = 'edu_offline_queue';
+const OFFLINE_BANNER_ID   = 'offline-banner';
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+function isOnline() { return navigator.onLine; }
+
+function offlineCache(key, data) {
+  try {
+    const store = JSON.parse(localStorage.getItem(OFFLINE_CACHE_KEY) || '{}');
+    store[key] = { data, ts: Date.now() };
+    localStorage.setItem(OFFLINE_CACHE_KEY, JSON.stringify(store));
+  } catch(e) { console.warn('[Offline] Cache write failed', e); }
+}
+
+function offlineRead(key) {
+  try {
+    const store = JSON.parse(localStorage.getItem(OFFLINE_CACHE_KEY) || '{}');
+    return store[key]?.data ?? null;
+  } catch(e) { return null; }
+}
+
+function offlineEnqueue(action) {
+  try {
+    const q = JSON.parse(localStorage.getItem(OFFLINE_QUEUE_KEY) || '[]');
+    q.push({ ...action, queuedAt: Date.now(), id: Math.random().toString(36).slice(2) });
+    localStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(q));
+    showOfflineBanner(true);
+  } catch(e) { console.warn('[Offline] Queue write failed', e); }
+}
+
+function offlineQueueCount() {
+  try {
+    return JSON.parse(localStorage.getItem(OFFLINE_QUEUE_KEY) || '[]').length;
+  } catch(e) { return 0; }
+}
+
+// ── Banner ────────────────────────────────────────────────────────────────────
+function showOfflineBanner(hasPending) {
+  let banner = document.getElementById(OFFLINE_BANNER_ID);
+  if (!banner) {
+    banner = document.createElement('div');
+    banner.id = OFFLINE_BANNER_ID;
+    banner.style.cssText = [
+      'position:fixed','top:0','left:0','right:0','z-index:9999',
+      'display:flex','align-items:center','justify-content:center','gap:8px',
+      'padding:8px 16px','font-size:13px','font-weight:600',
+      'transition:all 0.3s ease','box-shadow:0 2px 8px rgba(0,0,0,0.15)'
+    ].join(';');
+    document.body.prepend(banner);
+  }
+
+  const count = offlineQueueCount();
+  if (!isOnline()) {
+    banner.style.background = '#fef3c7';
+    banner.style.color = '#92400e';
+    banner.style.borderBottom = '2px solid #fbbf24';
+    banner.innerHTML = `
+      <span>📶</span>
+      <span>You're offline — attendance changes will sync when you reconnect</span>
+      ${count > 0 ? `<span style="background:#f59e0b;color:#fff;padding:2px 8px;border-radius:999px;font-size:11px">${count} pending</span>` : ''}
+    `;
+    banner.style.display = 'flex';
+  } else if (count > 0) {
+    banner.style.background = '#eff6ff';
+    banner.style.color = '#1e40af';
+    banner.style.borderBottom = '2px solid #93c5fd';
+    banner.innerHTML = `
+      <span>🔄</span>
+      <span>Back online — syncing ${count} pending action${count !== 1 ? 's' : ''}…</span>
+    `;
+    banner.style.display = 'flex';
+  } else {
+    banner.style.display = 'none';
+  }
+}
+
+function hideOfflineBanner() {
+  const b = document.getElementById(OFFLINE_BANNER_ID);
+  if (b) b.style.display = 'none';
+}
+
+// ── Auto-sync on reconnect ────────────────────────────────────────────────────
+async function syncOfflineQueue() {
+  const raw = localStorage.getItem(OFFLINE_QUEUE_KEY);
+  if (!raw) return;
+  const queue = JSON.parse(raw);
+  if (!queue.length) return;
+
+  console.log(`[Offline] Syncing ${queue.length} queued action(s)…`);
+  showOfflineBanner(true);
+
+  const remaining = [];
+  for (const action of queue) {
+    try {
+      await api(action.url, action.options);
+      console.log(`[Offline] Synced: ${action.label || action.url}`);
+    } catch (e) {
+      console.warn(`[Offline] Sync failed for ${action.url}:`, e.message);
+      // Keep failed items if it's a server error (not 4xx client error)
+      if (!e.message.includes('400') && !e.message.includes('409') && !e.message.includes('404')) {
+        remaining.push(action);
+      }
+    }
+  }
+
+  localStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(remaining));
+
+  if (remaining.length === 0) {
+    hideOfflineBanner();
+    // Refresh whichever attendance view is active
+    const active = document.querySelector('.nav-item.active')?.dataset?.view;
+    if (active === 'sessions') renderSessions();
+    else if (active === 'mark-attendance') renderMarkAttendance();
+    showToastNotif('✅ All offline actions synced!', 'success');
+  } else {
+    showOfflineBanner(true);
+  }
+}
+
+function showToastNotif(msg, type) {
+  const t = document.createElement('div');
+  t.style.cssText = [
+    'position:fixed','bottom:24px','left:50%','transform:translateX(-50%)',
+    'padding:10px 20px','border-radius:8px','font-size:13px','font-weight:600',
+    'z-index:10000','box-shadow:0 4px 16px rgba(0,0,0,0.15)',
+    type === 'success' ? 'background:#dcfce7;color:#166534;border:1px solid #86efac' :
+                         'background:#fef3c7;color:#92400e;border:1px solid #fbbf24'
+  ].join(';');
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 3500);
+}
+
+// Listen for online/offline events
+window.addEventListener('offline', () => showOfflineBanner(false));
+window.addEventListener('online',  () => {
+  showOfflineBanner(true);
+  setTimeout(syncOfflineQueue, 800); // slight delay to ensure connection is stable
+});
+
+// Show banner on load if already offline or has queue
+window.addEventListener('DOMContentLoaded', () => {
+  if (!isOnline() || offlineQueueCount() > 0) showOfflineBanner(!isOnline());
+});
+
 let currentUser = null;
 let currentView = 'dashboard';
 
@@ -1204,33 +1359,61 @@ async function renderAdminDashboard(content) {
 async function renderSessions() {
   const content = document.getElementById('main-content');
   if (!content) return;
+
+  // Offline: render from cache immediately
+  if (!isOnline()) {
+    const cached = offlineRead('sessions');
+    _renderSessionsHTML(content, cached?.sessions || [], true);
+    return;
+  }
+
   try {
     const data = await api('/api/attendance-sessions');
-    content.innerHTML = `
-      <div class="page-header"><h2>Attendance Sessions</h2><p>Manage attendance sessions</p></div>
-      <div class="actions-bar">
-        <button class="btn btn-primary btn-sm" onclick="showStartSessionModal()">Start New Session</button>
-      </div>
-      <div class="card">
-        ${data.sessions.length ? `
-          <table>
-            <thead><tr><th>Title</th><th>Status</th><th>Started</th><th>Stopped</th><th>Actions</th></tr></thead>
-            <tbody>${data.sessions.map(s => `
-              <tr>
-                <td>${s.title || 'Untitled'}</td>
-                <td><span class="status-badge status-${s.status}">${s.status}</span></td>
-                <td>${new Date(s.startedAt).toLocaleString()}</td>
-                <td>${s.stoppedAt ? new Date(s.stoppedAt).toLocaleString() : '-'}</td>
-                <td>${s.status === 'active' ? `<button class="btn btn-danger btn-sm" onclick="stopSession('${s._id}')">Stop</button> <button class="btn btn-success btn-sm" onclick="generateQR('${s._id}')">QR Code</button>` : ''}</td>
-              </tr>
-            `).join('')}</tbody>
-          </table>
-        ` : '<div class="empty-state"><p>No sessions found</p></div>'}
-      </div>
-    `;
+    offlineCache('sessions', data); // cache for offline use
+    _renderSessionsHTML(content, data.sessions || [], false);
   } catch (e) {
-    content.innerHTML = `<div class="card"><p>Error: ${e.message}</p></div>`;
+    // Network failed — fall back to cache
+    const cached = offlineRead('sessions');
+    if (cached) {
+      _renderSessionsHTML(content, cached.sessions || [], true);
+    } else {
+      content.innerHTML = `<div class="card"><p>Error: ${e.message}</p></div>`;
+    }
   }
+}
+
+function _renderSessionsHTML(content, sessions, isOffline) {
+  const pendingCount = offlineQueueCount();
+  content.innerHTML = `
+    <div class="page-header">
+      <h2>Attendance Sessions</h2>
+      <p>Manage attendance sessions${isOffline ? ' <span style="color:#f59e0b;font-weight:600">(Offline — showing cached data)</span>' : ''}</p>
+    </div>
+    <div class="actions-bar">
+      <button class="btn btn-primary btn-sm" onclick="showStartSessionModal()">Start New Session</button>
+      ${pendingCount > 0 ? `<span style="background:#fef3c7;color:#92400e;border:1px solid #fbbf24;border-radius:6px;padding:4px 12px;font-size:12px;font-weight:600">${pendingCount} action${pendingCount!==1?'s':''} pending sync</span>` : ''}
+    </div>
+    <div class="card">
+      ${sessions.length ? `
+        <table>
+          <thead><tr><th>Title</th><th>Status</th><th>Started</th><th>Stopped</th><th>Actions</th></tr></thead>
+          <tbody>${sessions.map(s => `
+            <tr>
+              <td>${s.title || 'Untitled'}</td>
+              <td><span class="status-badge status-${s.status}">${s.status}</span></td>
+              <td>${new Date(s.startedAt).toLocaleString()}</td>
+              <td>${s.stoppedAt ? new Date(s.stoppedAt).toLocaleString() : '-'}</td>
+              <td>${s.status === 'active' ? `
+                <button class="btn btn-danger btn-sm" onclick="stopSession('${s._id}')">Stop</button>
+                ${!isOffline ? `<button class="btn btn-success btn-sm" onclick="generateQR('${s._id}')">QR Code</button>` : ''}
+                <button class="btn btn-sm" style="font-size:11px;background:var(--bg);border:1px solid var(--border)" onclick="viewAttendees('${s._id}', '${(s.title||'Session').replace(/'/g,'')}')">Attendees</button>
+              ` : ''}</td>
+            </tr>
+          `).join('')}</tbody>
+        </table>
+      ` : '<div class="empty-state"><p>No sessions found</p></div>'}
+    </div>
+  `;
 }
 
 function showStartSessionModal() {
@@ -1254,10 +1437,32 @@ function showStartSessionModal() {
 }
 
 async function startSession() {
+  const title = document.getElementById('session-title').value;
+  closeModal();
+
+  if (!isOnline()) {
+    // Queue the start action
+    const tempId = 'offline_' + Date.now();
+    offlineEnqueue({
+      label: `Start session: ${title || 'Untitled'}`,
+      url: '/api/attendance-sessions/start',
+      options: { method: 'POST', body: JSON.stringify({ title }) }
+    });
+    // Optimistically add to cache
+    const cached = offlineRead('sessions') || { sessions: [] };
+    cached.sessions.unshift({
+      _id: tempId, title: title || 'Untitled',
+      status: 'active', startedAt: new Date().toISOString(), stoppedAt: null,
+      _offlinePending: true
+    });
+    offlineCache('sessions', cached);
+    showToastNotif('📶 Session queued — will start when online', 'warn');
+    renderSessions();
+    return;
+  }
+
   try {
-    const title = document.getElementById('session-title').value;
     await api('/api/attendance-sessions/start', { method: 'POST', body: JSON.stringify({ title }) });
-    closeModal();
     renderSessions();
   } catch (e) {
     alert(e.message);
@@ -1266,6 +1471,25 @@ async function startSession() {
 
 async function stopSession(id) {
   if (!confirm('Stop this session?')) return;
+
+  if (!isOnline()) {
+    offlineEnqueue({
+      label: `Stop session ${id}`,
+      url: `/api/attendance-sessions/${id}/stop`,
+      options: { method: 'POST' }
+    });
+    // Optimistically update cache
+    const cached = offlineRead('sessions');
+    if (cached) {
+      const s = cached.sessions.find(s => s._id === id);
+      if (s) { s.status = 'stopped'; s.stoppedAt = new Date().toISOString(); s._offlinePending = true; }
+      offlineCache('sessions', cached);
+    }
+    showToastNotif('📶 Stop queued — will sync when online', 'warn');
+    renderSessions();
+    return;
+  }
+
   try {
     await api(`/api/attendance-sessions/${id}/stop`, { method: 'POST' });
     renderSessions();
@@ -1799,8 +2023,26 @@ async function viewMeetingDetail(id) {
 async function renderCourses() {
   const content = document.getElementById('main-content');
   if (!content) return;
+
+  if (!isOnline()) {
+    const cached = offlineRead('courses');
+    if (cached) {
+      _renderCoursesHTML(content, cached.courses || [], true);
+    } else {
+      content.innerHTML = `
+        <div class="page-header"><h2>My Courses</h2><p>Your enrolled courses</p></div>
+        <div class="card" style="text-align:center;padding:40px">
+          <div style="font-size:48px;margin-bottom:12px">📡</div>
+          <div style="font-size:18px;font-weight:700">Offline</div>
+          <p style="color:var(--text-light);margin-top:8px">Connect once to cache your courses for offline viewing.</p>
+        </div>`;
+    }
+    return;
+  }
+
   try {
     const data = await api('/api/courses');
+    offlineCache('courses', data);
     const canCreate = ['lecturer', 'admin', 'superadmin'].includes(currentUser.role);
     const canManageRoster = ['lecturer', 'admin', 'superadmin'].includes(currentUser.role);
     content.innerHTML = `
@@ -1826,9 +2068,44 @@ async function renderCourses() {
         ` : '<div class="empty-state"><p>No courses found</p></div>'}
       </div>
     `;
+    _renderCoursesHTML(content, data.courses || [], false);
   } catch (e) {
-    content.innerHTML = `<div class="card"><p>Error: ${e.message}</p></div>`;
+    const cached = offlineRead('courses');
+    if (cached) {
+      _renderCoursesHTML(content, cached.courses || [], true);
+    } else {
+      content.innerHTML = `<div class="card"><p>Error: ${e.message}</p></div>`;
+    }
   }
+}
+
+function _renderCoursesHTML(content, courses, isOffline) {
+  const canCreate = ['lecturer', 'admin', 'superadmin'].includes(currentUser.role);
+  const canManageRoster = ['lecturer', 'admin', 'superadmin'].includes(currentUser.role);
+  content.innerHTML = `
+    <div class="page-header">
+      <h2>Courses</h2>
+      <p>Manage academic courses${isOffline ? ' <span style="color:#f59e0b;font-weight:600">(Offline — cached)</span>' : ''}</p>
+    </div>
+    ${canCreate && !isOffline ? '<div class="actions-bar"><button class="btn btn-primary btn-sm" onclick="showCreateCourseModal()">Create Course</button></div>' : ''}
+    <div class="card">
+      ${courses.length ? `
+        <table>
+          <thead><tr><th>Code</th><th>Title</th><th>Lecturer</th><th>Roster</th><th>Enrolled</th>${canManageRoster && !isOffline ? '<th>Actions</th>' : ''}</tr></thead>
+          <tbody>${courses.map(course => `
+            <tr>
+              <td><strong>${course.code}</strong></td>
+              <td>${course.title}</td>
+              <td>${course.lecturer?.name || 'N/A'}</td>
+              <td>${!isOffline ? `<button class="btn btn-sm" style="font-size:11px;background:var(--bg);border:1px solid var(--border)" onclick="viewRoster('${course._id}', '${course.code}')">View Roster</button>` : '—'}</td>
+              <td>${course.enrolledStudents?.length || 0}</td>
+              ${canManageRoster && !isOffline ? `<td><button class="btn btn-primary btn-sm" style="font-size:11px" onclick="showUploadRosterModal('${course._id}', '${course.code}')">Upload Students</button></td>` : ''}
+            </tr>
+          `).join('')}</tbody>
+        </table>
+      ` : '<div class="empty-state"><p>No courses found</p></div>'}
+    </div>
+  `;
 }
 
 function showCreateCourseModal() {
@@ -2769,11 +3046,63 @@ async function renderMyAttendance() {
 async function renderMarkAttendance() {
   const content = document.getElementById('main-content');
   if (!content) return;
-  
+
+  // Offline: show queued state and cached session info
+  if (!isOnline()) {
+    const cachedSession = offlineRead('activeSession');
+    const pendingMark = offlineRead('pendingMark');
+    const pendingCount = offlineQueueCount();
+
+    content.innerHTML = `
+      <div class="page-header"><h2>Mark Attendance</h2><p>Check in to active sessions</p></div>
+      <div class="card" style="border-left:4px solid #f59e0b;background:#fffbeb;margin-bottom:16px">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+          <span style="font-size:20px">📶</span>
+          <div>
+            <div style="font-weight:700;color:#92400e">You're offline</div>
+            <div style="font-size:12px;color:#b45309">Your attendance will be submitted when you reconnect</div>
+          </div>
+        </div>
+        ${pendingCount > 0 ? `<div style="font-size:12px;font-weight:600;color:#92400e;background:#fef3c7;border:1px solid #fbbf24;border-radius:6px;padding:6px 12px;margin-top:8px">${pendingCount} pending action${pendingCount!==1?'s':''} will sync automatically</div>` : ''}
+      </div>
+      ${cachedSession ? `
+        <div class="card" style="border-left:4px solid var(--success);background:#f0fdf4;margin-bottom:16px">
+          <div style="font-size:12px;text-transform:uppercase;color:var(--success);font-weight:700">Last Known Active Session</div>
+          <div style="font-size:18px;font-weight:700;margin-top:4px">${cachedSession.title || 'Untitled Session'}</div>
+          <div style="font-size:13px;color:var(--text-light);margin-top:2px">Started ${new Date(cachedSession.startedAt).toLocaleString()}</div>
+        </div>
+        ${pendingMark ? `
+          <div class="card" style="text-align:center;border-left:4px solid var(--primary)">
+            <div style="font-size:36px;margin-bottom:8px">⏳</div>
+            <div style="font-size:18px;font-weight:700;color:var(--primary)">Attendance Queued</div>
+            <p style="font-size:13px;color:var(--text-light);margin-top:4px">Will be submitted when you go back online</p>
+          </div>
+        ` : `
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px">
+            <div class="card mark-method-card" onclick="showCodeEntryOffline()" style="cursor:pointer;text-align:center;transition:all 0.2s">
+              <div style="font-size:42px;margin-bottom:12px">🔢</div>
+              <div style="font-size:16px;font-weight:700">Enter Code</div>
+              <p style="font-size:12px;color:var(--text-light);margin-top:4px">Type the 6-digit code — will sync when online</p>
+            </div>
+          </div>
+          <div id="mark-input-area" style="margin-top:16px"></div>
+        `}
+      ` : `
+        <div class="card" style="text-align:center;padding:40px 20px">
+          <div style="font-size:48px;margin-bottom:12px">📡</div>
+          <div style="font-size:18px;font-weight:700;margin-bottom:8px">No Cached Session</div>
+          <p style="font-size:14px;color:var(--text-light)">Go online at least once to load session data for offline use.</p>
+        </div>
+      `}
+    `;
+    return;
+  }
+
   let activeSession = null;
   try {
     const data = await api('/api/attendance-sessions/active');
     activeSession = data.session;
+    if (activeSession) offlineCache('activeSession', activeSession); // cache for offline
   } catch (e) {}
 
   const alreadyMarked = activeSession ? await api('/api/attendance-sessions/my-attendance?limit=100')
@@ -2881,11 +3210,25 @@ function showQrEntry() {
 async function submitCodeMark() {
   const code = document.getElementById('mark-code-input')?.value;
   if (!code || code.length !== 6) return alert('Please enter a valid 6-digit code');
+
+  if (!isOnline()) {
+    offlineEnqueue({
+      label: `Mark attendance (code: ${code})`,
+      url: '/api/attendance-sessions/mark',
+      options: { method: 'POST', body: JSON.stringify({ code, method: 'code_mark' }) }
+    });
+    offlineCache('pendingMark', { code, method: 'code_mark', queuedAt: Date.now() });
+    showToastNotif('📶 Attendance queued — will sync when online', 'warn');
+    navigateTo('mark-attendance');
+    return;
+  }
+
   try {
     await api('/api/attendance-sessions/mark', {
       method: 'POST',
       body: JSON.stringify({ code, method: 'code_mark' }),
     });
+    offlineCache('pendingMark', null); // clear pending flag
     alert('Attendance marked successfully!');
     navigateTo('mark-attendance');
   } catch (e) {
@@ -2893,14 +3236,49 @@ async function submitCodeMark() {
   }
 }
 
+// Offline code entry (same as online but available when offline)
+function showCodeEntryOffline() {
+  const area = document.getElementById('mark-input-area');
+  if (!area) return;
+  area.innerHTML = `
+    <div class="card">
+      <div class="card-title">Enter Attendance Code</div>
+      <div style="font-size:12px;color:#92400e;background:#fef3c7;border:1px solid #fbbf24;border-radius:6px;padding:6px 12px;margin-bottom:12px">
+        📶 Offline — code will be submitted automatically when you reconnect
+      </div>
+      <div class="form-group">
+        <label>6-Digit Code</label>
+        <input type="text" id="mark-code-input" placeholder="Enter code" maxlength="6"
+          style="font-size:24px;text-align:center;letter-spacing:8px;font-weight:700" autofocus>
+      </div>
+      <button class="btn btn-primary" onclick="submitCodeMark()" style="width:100%">Queue Attendance</button>
+    </div>
+  `;
+  document.getElementById('mark-code-input')?.focus();
+}
+
 async function submitQrMark() {
   const qrToken = document.getElementById('mark-qr-input')?.value;
   if (!qrToken) return alert('Please enter the QR token');
+
+  if (!isOnline()) {
+    offlineEnqueue({
+      label: 'Mark attendance (QR)',
+      url: '/api/attendance-sessions/mark',
+      options: { method: 'POST', body: JSON.stringify({ qrToken, method: 'qr_mark' }) }
+    });
+    offlineCache('pendingMark', { method: 'qr_mark', queuedAt: Date.now() });
+    showToastNotif('📶 QR attendance queued — will sync when online', 'warn');
+    navigateTo('mark-attendance');
+    return;
+  }
+
   try {
     await api('/api/attendance-sessions/mark', {
       method: 'POST',
       body: JSON.stringify({ qrToken, method: 'qr_mark' }),
     });
+    offlineCache('pendingMark', null);
     alert('Attendance marked successfully!');
     navigateTo('mark-attendance');
   } catch (e) {
@@ -3378,6 +3756,73 @@ async function downloadReport(type, apiBase = 'reports', e) {
   }
 }
 
+// ── View who has marked attendance for a session (offline-aware) ──────────────
+async function viewAttendees(sessionId, sessionTitle) {
+  const container = document.getElementById('modal-container');
+  container.classList.remove('hidden');
+  container.innerHTML = `
+    <div class="modal-overlay" onclick="closeModal(event)">
+      <div class="modal" onclick="event.stopPropagation()" style="max-width:600px;width:95%">
+        <h3>Attendees — ${sessionTitle}</h3>
+        <div id="attendees-content"><div class="spinner" style="margin:20px auto"></div></div>
+        <div class="modal-actions" style="justify-content:flex-end">
+          <button class="btn btn-secondary btn-sm" onclick="closeModal()">Close</button>
+        </div>
+      </div>
+    </div>`;
+
+  const el = document.getElementById('attendees-content');
+  const cacheKey = 'attendees_' + sessionId;
+
+  if (!isOnline()) {
+    const cached = offlineRead(cacheKey);
+    if (cached) {
+      _renderAttendeesHTML(el, cached, true);
+    } else {
+      el.innerHTML = `<div class="card" style="text-align:center;padding:24px">
+        <div style="font-size:36px">📡</div>
+        <p style="margin-top:8px;color:var(--text-light)">No cached data. Connect once to view attendees offline.</p>
+      </div>`;
+    }
+    return;
+  }
+
+  try {
+    const data = await api(`/api/attendance-sessions/${sessionId}/records`);
+    offlineCache(cacheKey, data); // cache for offline
+    _renderAttendeesHTML(el, data, false);
+  } catch (e) {
+    const cached = offlineRead(cacheKey);
+    if (cached) {
+      _renderAttendeesHTML(el, cached, true);
+    } else {
+      el.innerHTML = `<p style="color:var(--danger)">Error: ${e.message}</p>`;
+    }
+  }
+}
+
+function _renderAttendeesHTML(el, data, isOffline) {
+  const records = data.records || [];
+  el.innerHTML = `
+    ${isOffline ? `<div style="background:#fef3c7;border:1px solid #fbbf24;border-radius:6px;padding:8px 12px;font-size:12px;font-weight:600;color:#92400e;margin-bottom:12px">📶 Showing cached data</div>` : ''}
+    <div style="font-size:13px;color:var(--text-light);margin-bottom:12px">${records.length} student${records.length!==1?'s':''} checked in</div>
+    ${records.length ? `
+      <table>
+        <thead><tr><th>Name</th><th>ID</th><th>Method</th><th>Time</th><th>Status</th></tr></thead>
+        <tbody>${records.map(r => `
+          <tr>
+            <td>${r.student?.name || 'N/A'}</td>
+            <td style="font-family:monospace;font-size:12px">${r.student?.indexNumber || r.student?.email || '—'}</td>
+            <td><span style="background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:2px 6px;font-size:11px">${r.method || '—'}</span></td>
+            <td style="font-size:12px">${r.checkInTime ? new Date(r.checkInTime).toLocaleTimeString() : '—'}</td>
+            <td><span class="status-badge status-${r.status}">${r.status}</span></td>
+          </tr>
+        `).join('')}</tbody>
+      </table>
+    ` : '<div class="empty-state"><p>No one has checked in yet</p></div>'}
+  `;
+}
+
 function closeModal(event) {
   if (event && event.target !== event.currentTarget) return;
   _stopQrTimers(); // always clean up QR rotation if active
@@ -3387,4 +3832,14 @@ function closeModal(event) {
 
 if (token) {
   loadUserData();
+}
+
+
+// ── Service Worker Registration ───────────────────────────────────────────────
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js')
+      .then(reg => console.log('[SW] Registered:', reg.scope))
+      .catch(err => console.warn('[SW] Registration failed:', err));
+  });
 }
