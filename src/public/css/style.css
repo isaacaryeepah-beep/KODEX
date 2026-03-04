@@ -40,8 +40,9 @@ body { font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sa
 .portal-divider span { font-size:10px; font-weight:700; color:var(--text-muted); letter-spacing:2px; background:rgba(255,255,255,.9); padding:4px 14px; border-radius:20px; border:1px solid var(--border); }
 
 .portal-cards { display:flex; gap:14px; flex-wrap:wrap; justify-content:center; }
-.portal-card { display:block; background:var(--card); border-radius:var(--radius-xl); box-shadow:var(--shadow-md); padding:30px 22px 24px; width:190px; cursor:pointer; transition:var(--transition); border:1.5px solid var(--border); position:relative; overflow:hidden; -webkit-tap-highlight-color:rgba(79,70,229,.12); touch-action:manipulation; user-select:none; -webkit-user-select:none; -webkit-appearance:none; appearance:none; min-height:44px; text-align:left; font-family:inherit; color:inherit; outline:none; }
-.portal-card * { user-select:none; -webkit-user-select:none; }
+.portal-card { background:var(--card); border-radius:var(--radius-xl); box-shadow:var(--shadow-md); padding:30px 22px 24px; width:190px; cursor:pointer; transition:var(--transition); border:1.5px solid var(--border); position:relative; overflow:hidden; -webkit-tap-highlight-color:rgba(79,70,229,.12); touch-action:manipulation; user-select:none; -webkit-user-select:none; }
+.portal-card * { pointer-events:none; }
+.portal-card > a:first-child { pointer-events:auto; }
 .portal-card::before { content:''; position:absolute; top:0; left:0; right:0; height:3px; background:transparent; transition:var(--transition); }
 .portal-card:hover { transform:translateY(-5px); box-shadow:var(--shadow-xl); }
 .portal-card:active { transform:scale(0.97); opacity:0.9; }
