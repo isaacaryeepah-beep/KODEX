@@ -97,6 +97,21 @@
           </div>
         </div>
       </div>
+      <!-- Footer with T&C and Privacy Policy links -->
+      <div id="portal-footer" style="
+        text-align:center;
+        padding:20px 16px 8px;
+        font-size:12px;
+        color:var(--text-light);
+        border-top:1px solid var(--border);
+        margin-top:24px;
+      ">
+        By using Smart Attendance, you agree to our
+        <a onclick="showLegalModal('terms')" style="color:var(--primary);cursor:pointer;text-decoration:underline;font-weight:500">Terms &amp; Conditions</a>
+        and
+        <a onclick="showLegalModal('privacy')" style="color:var(--primary);cursor:pointer;text-decoration:underline;font-weight:500">Privacy Policy</a>.
+        <div style="margin-top:6px;color:#9ca3af;font-size:11px">&copy; 2025 EduCorp. All rights reserved.</div>
+      </div>
     </div>
 
     <!-- ADMIN AUTH (Corporate & Academic) -->
@@ -395,6 +410,273 @@
   </div>
 
   <div id="modal-container" class="hidden"></div>
+
+  <!-- ── Legal Modal ──────────────────────────────────────────────────────── -->
+  <div id="legal-modal" style="
+    display:none;position:fixed;inset:0;z-index:10000;
+    background:rgba(0,0,0,0.5);
+    display:none;align-items:center;justify-content:center;
+    padding:16px;
+  " onclick="if(event.target===this)closeLegalModal()">
+    <div style="
+      background:#fff;border-radius:16px;
+      width:100%;max-width:640px;max-height:85vh;
+      display:flex;flex-direction:column;
+      box-shadow:0 24px 64px rgba(0,0,0,0.2);
+      overflow:hidden;
+    ">
+      <!-- Header -->
+      <div style="
+        display:flex;align-items:center;justify-content:space-between;
+        padding:20px 24px;border-bottom:1px solid #e5e7eb;flex-shrink:0;
+      ">
+        <div>
+          <div id="legal-modal-title" style="font-size:18px;font-weight:700;color:#111827"></div>
+          <div style="font-size:12px;color:#6b7280;margin-top:2px">EduCorp Smart Attendance Platform</div>
+        </div>
+        <button onclick="closeLegalModal()" style="
+          background:none;border:none;cursor:pointer;
+          width:32px;height:32px;border-radius:8px;
+          display:flex;align-items:center;justify-content:center;
+          font-size:20px;color:#6b7280;
+          transition:background 0.15s;
+        " onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='none'">×</button>
+      </div>
+
+      <!-- Tab switcher -->
+      <div style="display:flex;padding:12px 24px 0;gap:8px;flex-shrink:0;border-bottom:1px solid #e5e7eb">
+        <button id="tab-terms" onclick="switchLegalTab('terms')" style="
+          padding:8px 16px;border:none;border-radius:8px 8px 0 0;
+          font-size:13px;font-weight:600;cursor:pointer;
+          background:#f9fafb;color:#6b7280;
+          border-bottom:2px solid transparent;transition:all 0.15s;
+          margin-bottom:-1px;
+        ">Terms &amp; Conditions</button>
+        <button id="tab-privacy" onclick="switchLegalTab('privacy')" style="
+          padding:8px 16px;border:none;border-radius:8px 8px 0 0;
+          font-size:13px;font-weight:600;cursor:pointer;
+          background:#f9fafb;color:#6b7280;
+          border-bottom:2px solid transparent;transition:all 0.15s;
+          margin-bottom:-1px;
+        ">Privacy Policy</button>
+      </div>
+
+      <!-- Scrollable content -->
+      <div id="legal-modal-body" style="
+        overflow-y:auto;padding:24px;flex:1;
+        font-size:14px;line-height:1.7;color:#374151;
+      "></div>
+
+      <!-- Footer -->
+      <div style="
+        padding:16px 24px;border-top:1px solid #e5e7eb;
+        display:flex;justify-content:flex-end;flex-shrink:0;
+        background:#f9fafb;
+      ">
+        <button onclick="closeLegalModal()" style="
+          background:#111827;color:#fff;border:none;
+          padding:10px 24px;border-radius:8px;
+          font-size:13px;font-weight:600;cursor:pointer;
+        ">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+  // ── Legal modal content ────────────────────────────────────────────────────
+  const LEGAL_CONTENT = {
+    terms: {
+      title: 'Terms & Conditions',
+      html: `
+        <p style="color:#6b7280;font-size:12px;margin-bottom:20px">Last updated: January 1, 2025</p>
+
+        <h3 style="font-size:15px;font-weight:700;color:#111827;margin:0 0 8px">1. Acceptance of Terms</h3>
+        <p>By accessing or using the EduCorp Smart Attendance platform ("Platform"), you agree to be bound by these Terms and Conditions. If you do not agree to these terms, you may not use the Platform. These terms apply to all users including administrators, lecturers, employees, and students.</p>
+
+        <h3 style="font-size:15px;font-weight:700;color:#111827;margin:20px 0 8px">2. Description of Service</h3>
+        <p>EduCorp Smart Attendance is an enterprise attendance management platform that provides tools for tracking attendance, managing courses, conducting proctored assessments, and generating reports. The Platform is provided on a subscription basis to registered institutions and organisations.</p>
+
+        <h3 style="font-size:15px;font-weight:700;color:#111827;margin:20px 0 8px">3. User Accounts & Responsibilities</h3>
+        <p>Users are responsible for maintaining the confidentiality of their login credentials. You agree to:</p>
+        <ul style="padding-left:20px;margin:8px 0">
+          <li>Provide accurate and complete registration information</li>
+          <li>Keep your password secure and not share it with others</li>
+          <li>Notify your administrator immediately of any unauthorised access</li>
+          <li>Use the Platform only for its intended educational or corporate purposes</li>
+          <li>Not attempt to circumvent any security or access controls</li>
+        </ul>
+
+        <h3 style="font-size:15px;font-weight:700;color:#111827;margin:20px 0 8px">4. Academic Integrity</h3>
+        <p>Students using the Platform for proctored assessments agree to:</p>
+        <ul style="padding-left:20px;margin:8px 0">
+          <li>Not engage in any form of academic dishonesty during assessments</li>
+          <li>Not share QR codes, attendance tokens, or assessment codes with others</li>
+          <li>Allow the Platform to use device camera and microphone for proctoring purposes</li>
+          <li>Accept that violation of integrity policies may result in automatic assessment submission or disqualification</li>
+        </ul>
+
+        <h3 style="font-size:15px;font-weight:700;color:#111827;margin:20px 0 8px">5. Attendance Data</h3>
+        <p>Attendance records generated through the Platform are the property of the registered institution. EduCorp processes this data on behalf of institutions and does not independently use, sell, or share attendance records with third parties except as required by law.</p>
+
+        <h3 style="font-size:15px;font-weight:700;color:#111827;margin:20px 0 8px">6. Subscription & Billing</h3>
+        <p>Institutions register with a 14-day free trial. Continued use beyond the trial period requires an active subscription. EduCorp reserves the right to suspend access for accounts with lapsed subscriptions. Refunds are handled on a case-by-case basis.</p>
+
+        <h3 style="font-size:15px;font-weight:700;color:#111827;margin:20px 0 8px">7. Prohibited Uses</h3>
+        <p>You may not use the Platform to:</p>
+        <ul style="padding-left:20px;margin:8px 0">
+          <li>Impersonate another user or falsify attendance records</li>
+          <li>Reverse-engineer, decompile, or copy any part of the Platform</li>
+          <li>Introduce malicious software or attempt unauthorised access</li>
+          <li>Use automated tools to manipulate QR codes or tokens</li>
+          <li>Violate any applicable local, national, or international laws</li>
+        </ul>
+
+        <h3 style="font-size:15px;font-weight:700;color:#111827;margin:20px 0 8px">8. Limitation of Liability</h3>
+        <p>EduCorp shall not be liable for any indirect, incidental, or consequential damages arising from your use of the Platform. The Platform is provided "as is" without warranties of any kind. We do not guarantee uninterrupted or error-free service.</p>
+
+        <h3 style="font-size:15px;font-weight:700;color:#111827;margin:20px 0 8px">9. Modifications</h3>
+        <p>EduCorp reserves the right to modify these Terms at any time. Continued use of the Platform after changes are posted constitutes acceptance of the updated Terms. We will notify institution administrators of material changes via email.</p>
+
+        <h3 style="font-size:15px;font-weight:700;color:#111827;margin:20px 0 8px">10. Governing Law</h3>
+        <p>These Terms are governed by the laws of the jurisdiction in which EduCorp is registered. Any disputes shall be resolved through binding arbitration before recourse to the courts.</p>
+
+        <h3 style="font-size:15px;font-weight:700;color:#111827;margin:20px 0 8px">11. Contact</h3>
+        <p>For questions about these Terms, reach us at:</p>
+        <p>📧 <a href="mailto:nelsonkel78@gmail.com" style="color:var(--primary)">nelsonkel78@gmail.com</a><br>
+        📞 <a href="tel:+233559545339" style="color:var(--primary)">0559545339</a> &nbsp;|&nbsp;
+        <a href="tel:+233536143117" style="color:var(--primary)">0536143117</a> &nbsp;|&nbsp;
+        <a href="tel:+233534707844" style="color:var(--primary)">0534707844</a><br>
+        💬 WhatsApp: <a href="https://wa.me/233559545339" target="_blank" style="color:var(--primary)">0559545339</a> &nbsp;|&nbsp;
+        <a href="https://wa.me/233536143117" target="_blank" style="color:var(--primary)">0536143117</a> &nbsp;|&nbsp;
+        <a href="https://wa.me/233534707844" target="_blank" style="color:var(--primary)">0534707844</a></p>
+      `
+    },
+    privacy: {
+      title: 'Privacy Policy',
+      html: `
+        <p style="color:#6b7280;font-size:12px;margin-bottom:20px">Last updated: January 1, 2025</p>
+
+        <h3 style="font-size:15px;font-weight:700;color:#111827;margin:0 0 8px">1. Introduction</h3>
+        <p>EduCorp ("we", "our", "us") is committed to protecting your personal information. This Privacy Policy explains how we collect, use, store, and safeguard data when you use the Smart Attendance platform. By using the Platform, you consent to the practices described here.</p>
+
+        <h3 style="font-size:15px;font-weight:700;color:#111827;margin:20px 0 8px">2. Data We Collect</h3>
+        <p>We collect the following categories of data:</p>
+        <ul style="padding-left:20px;margin:8px 0">
+          <li><strong>Account data:</strong> Name, email address, student/employee ID, role, and institution affiliation</li>
+          <li><strong>Attendance data:</strong> Check-in times, methods (QR, code, BLE), session details, and location context</li>
+          <li><strong>Assessment data:</strong> Quiz responses, scores, submission timestamps, and proctoring events</li>
+          <li><strong>Device data:</strong> Device fingerprint, IP address, browser type, and operating system</li>
+          <li><strong>Camera data:</strong> Facial detection images captured during proctored sessions (processed locally, not stored)</li>
+          <li><strong>Usage data:</strong> Pages visited, features used, and interaction logs for system improvement</li>
+        </ul>
+
+        <h3 style="font-size:15px;font-weight:700;color:#111827;margin:20px 0 8px">3. How We Use Your Data</h3>
+        <p>We use collected data to:</p>
+        <ul style="padding-left:20px;margin:8px 0">
+          <li>Provide and operate the attendance and assessment services</li>
+          <li>Verify identity and prevent fraudulent attendance marking</li>
+          <li>Generate attendance reports for institutions</li>
+          <li>Enforce academic integrity during proctored assessments</li>
+          <li>Improve Platform performance, reliability, and features</li>
+          <li>Send system notifications and account-related communications</li>
+        </ul>
+
+        <h3 style="font-size:15px;font-weight:700;color:#111827;margin:20px 0 8px">4. Camera & Biometric Data</h3>
+        <p>During proctored quizzes and assessments, the Platform uses your device camera to detect facial presence and head orientation. This processing happens entirely on your device using on-device AI models. <strong>No facial images are transmitted to or stored on EduCorp servers.</strong> Only violation flags (e.g., "face not detected") are recorded.</p>
+
+        <h3 style="font-size:15px;font-weight:700;color:#111827;margin:20px 0 8px">5. Data Sharing</h3>
+        <p>We do not sell your personal data. We may share data with:</p>
+        <ul style="padding-left:20px;margin:8px 0">
+          <li><strong>Your institution:</strong> Attendance records and assessment results are accessible to authorised administrators and lecturers within your institution</li>
+          <li><strong>Service providers:</strong> Cloud hosting and infrastructure providers who process data under strict confidentiality agreements</li>
+          <li><strong>Legal authorities:</strong> When required by law, regulation, or valid legal process</li>
+        </ul>
+
+        <h3 style="font-size:15px;font-weight:700;color:#111827;margin:20px 0 8px">6. Data Retention</h3>
+        <p>Attendance and assessment records are retained for the duration of your institution's active subscription plus 12 months. Account data is deleted within 30 days of a deletion request. Anonymised aggregate data may be retained indefinitely for analytics purposes.</p>
+
+        <h3 style="font-size:15px;font-weight:700;color:#111827;margin:20px 0 8px">7. Your Rights</h3>
+        <p>Depending on your jurisdiction, you may have the right to:</p>
+        <ul style="padding-left:20px;margin:8px 0">
+          <li>Access the personal data we hold about you</li>
+          <li>Request correction of inaccurate data</li>
+          <li>Request deletion of your data (subject to institutional requirements)</li>
+          <li>Object to or restrict certain processing activities</li>
+          <li>Data portability — receive your data in a structured format</li>
+        </ul>
+        <p style="margin-top:8px">To exercise these rights, contact your institution administrator or email <a href="mailto:nelsonkel78@gmail.com" style="color:var(--primary)">nelsonkel78@gmail.com</a>.</p>
+
+        <h3 style="font-size:15px;font-weight:700;color:#111827;margin:20px 0 8px">8. Security</h3>
+        <p>We implement industry-standard security measures including encrypted data transmission (HTTPS/TLS), hashed password storage, device binding, and role-based access controls. Despite these measures, no system is completely secure and we cannot guarantee absolute security.</p>
+
+        <h3 style="font-size:15px;font-weight:700;color:#111827;margin:20px 0 8px">9. Cookies & Local Storage</h3>
+        <p>The Platform uses browser local storage to maintain your session token and cache offline data. No third-party advertising cookies are used. You may clear local storage at any time through your browser settings, which will require you to log in again.</p>
+
+        <h3 style="font-size:15px;font-weight:700;color:#111827;margin:20px 0 8px">10. Children's Privacy</h3>
+        <p>The Platform may be used by students under 18 years of age only under the supervision and authorisation of their registered educational institution. We do not knowingly collect data directly from children outside of an institutional context.</p>
+
+        <h3 style="font-size:15px;font-weight:700;color:#111827;margin:20px 0 8px">11. Changes to This Policy</h3>
+        <p>We may update this Privacy Policy periodically. We will notify institution administrators of significant changes. Continued use of the Platform after changes constitutes acceptance of the updated policy.</p>
+
+        <h3 style="font-size:15px;font-weight:700;color:#111827;margin:20px 0 8px">12. Contact Us</h3>
+        <p>For privacy-related questions or data requests, reach us at:<br>
+        📧 <a href="mailto:nelsonkel78@gmail.com" style="color:var(--primary)">nelsonkel78@gmail.com</a><br>
+        📞 <a href="tel:+233559545339" style="color:var(--primary)">0559545339</a> &nbsp;|&nbsp;
+        <a href="tel:+233536143117" style="color:var(--primary)">0536143117</a> &nbsp;|&nbsp;
+        <a href="tel:+233534707844" style="color:var(--primary)">0534707844</a><br>
+        💬 WhatsApp: <a href="https://wa.me/233559545339" target="_blank" style="color:var(--primary)">0559545339</a> &nbsp;|&nbsp;
+        <a href="https://wa.me/233536143117" target="_blank" style="color:var(--primary)">0536143117</a> &nbsp;|&nbsp;
+        <a href="https://wa.me/233534707844" target="_blank" style="color:var(--primary)">0534707844</a></p>
+      `
+    }
+  };
+
+  let _currentLegalTab = 'terms';
+
+  function showLegalModal(tab) {
+    _currentLegalTab = tab || 'terms';
+    const modal = document.getElementById('legal-modal');
+    modal.style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+    _renderLegalTab(_currentLegalTab);
+  }
+
+  function closeLegalModal() {
+    document.getElementById('legal-modal').style.display = 'none';
+    document.body.style.overflow = '';
+  }
+
+  function switchLegalTab(tab) {
+    _currentLegalTab = tab;
+    _renderLegalTab(tab);
+  }
+
+  function _renderLegalTab(tab) {
+    const content = LEGAL_CONTENT[tab];
+    document.getElementById('legal-modal-title').textContent = content.title;
+    document.getElementById('legal-modal-body').innerHTML = content.html;
+    document.getElementById('legal-modal-body').scrollTop = 0;
+
+    // Update tab styles
+    ['terms', 'privacy'].forEach(t => {
+      const btn = document.getElementById('tab-' + t);
+      if (t === tab) {
+        btn.style.background = '#fff';
+        btn.style.color = '#111827';
+        btn.style.borderBottom = '2px solid #111827';
+      } else {
+        btn.style.background = '#f9fafb';
+        btn.style.color = '#6b7280';
+        btn.style.borderBottom = '2px solid transparent';
+      }
+    });
+  }
+
+  // Close on Escape key
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') closeLegalModal();
+  });
+  </script>
 
   <script src="/js/app.js"></script>
 </body>
