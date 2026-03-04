@@ -37,27 +37,34 @@ window.addEventListener('load', () => loadMLLibs().catch(() => {}));
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
   :root {
-    --navy:    #0f172a;
-    --navy2:   #1e293b;
-    --navy3:   #334155;
-    --slate:   #64748b;
-    --muted:   #94a3b8;
-    --white:   #f8fafc;
-    --accent:  #38bdf8;
-    --accent2: #0ea5e9;
-    --green:   #22c55e;
-    --yellow:  #eab308;
-    --red:     #ef4444;
-    --orange:  #f97316;
+    /* Light theme — clean & minimal */
+    --navy:    #f0f4ff;       /* page background: soft blue-white */
+    --navy2:   #ffffff;       /* card / surface: pure white */
+    --navy3:   #e2e8f0;       /* borders: light grey */
+    --slate:   #64748b;       /* secondary text */
+    --muted:   #94a3b8;       /* tertiary text */
+    --white:   #1e293b;       /* primary text: dark (inverted) */
+    --accent:  #0ea5e9;       /* blue accent */
+    --accent2: #0284c7;       /* deeper blue */
+    --green:   #16a34a;
+    --yellow:  #d97706;
+    --red:     #dc2626;
+    --orange:  #ea580c;
     --font-mono: 'Space Mono', monospace;
     --font-sans: 'Plus Jakarta Sans', sans-serif;
     --r: 16px;
     --r-sm: 10px;
+    /* Light-specific extras */
+    --shadow-sm: 0 1px 3px rgba(0,0,0,0.07), 0 1px 2px rgba(0,0,0,0.05);
+    --shadow-md: 0 4px 16px rgba(0,0,0,0.08), 0 2px 6px rgba(0,0,0,0.05);
+    --shadow-lg: 0 12px 40px rgba(0,0,0,0.10), 0 4px 12px rgba(0,0,0,0.06);
   }
 
   html, body {
     height: 100%;
     background: var(--navy);
+    background-image: radial-gradient(circle at 1px 1px, rgba(14,165,233,0.06) 1px, transparent 0);
+    background-size: 28px 28px;
     color: var(--white);
     font-family: var(--font-sans);
     -webkit-tap-highlight-color: transparent;
@@ -97,12 +104,12 @@ window.addEventListener('load', () => loadMLLibs().catch(() => {}));
   ═══════════════════════════════════════════════════════════════ */
   .card {
     background: var(--navy2);
-    border: 1px solid rgba(255,255,255,0.07);
+    border: 1px solid var(--navy3);
     border-radius: var(--r);
     padding: 28px 24px;
     width: 100%;
     max-width: 480px;
-    box-shadow: 0 24px 64px rgba(0,0,0,0.5);
+    box-shadow: var(--shadow-lg);
   }
 
   /* ═══════════════════════════════════════════════════════════════
@@ -137,10 +144,11 @@ window.addEventListener('load', () => loadMLLibs().catch(() => {}));
     background: var(--navy); border: 1.5px solid var(--navy3);
     border-radius: var(--r-sm); color: var(--white);
     font-family: var(--font-sans); font-size: 15px;
-    outline: none; transition: border-color 0.2s;
+    outline: none; transition: border-color 0.2s, box-shadow 0.2s;
     -webkit-appearance: none;
+    box-shadow: var(--shadow-sm);
   }
-  .field input:focus { border-color: var(--accent); }
+  .field input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(14,165,233,0.15); }
   .field input::placeholder { color: var(--slate); }
 
   /* ═══════════════════════════════════════════════════════════════
@@ -155,11 +163,11 @@ window.addEventListener('load', () => loadMLLibs().catch(() => {}));
     touch-action: manipulation;
     min-height: 54px;
   }
-  .btn-primary { background: linear-gradient(135deg, var(--accent), var(--accent2)); color: var(--navy); }
+  .btn-primary { background: linear-gradient(135deg, var(--accent), var(--accent2)); color: #ffffff; box-shadow: 0 4px 14px rgba(14,165,233,0.35); }
   .btn-primary:active { transform: scale(0.97); opacity: 0.9; }
   .btn-danger  { background: var(--red); color: #fff; }
-  .btn-ghost   { background: transparent; border: 1.5px solid var(--navy3); color: var(--white); }
-  .btn-ghost:active { background: var(--navy3); }
+  .btn-ghost   { background: var(--navy2); border: 1.5px solid var(--navy3); color: var(--white); box-shadow: var(--shadow-sm); }
+  .btn-ghost:active { background: var(--navy); }
   .btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
   .btn-sm {
@@ -172,7 +180,7 @@ window.addEventListener('load', () => loadMLLibs().catch(() => {}));
      DIVIDER
   ═══════════════════════════════════════════════════════════════ */
   .divider { display: flex; align-items: center; gap: 12px; margin: 20px 0; }
-  .divider::before, .divider::after { content: ''; flex: 1; height: 1px; background: var(--navy3); }
+  .divider::before, .divider::after { content: ''; flex: 1; height: 1px; background: var(--navy); }
   .divider span { color: var(--slate); font-size: 12px; font-weight: 600; }
 
   /* ═══════════════════════════════════════════════════════════════
@@ -224,9 +232,9 @@ window.addEventListener('load', () => loadMLLibs().catch(() => {}));
     margin: 0 auto 16px;
     width: fit-content;
   }
-  .face-status.green  { background: rgba(34,197,94,0.15); color: var(--green); border: 1px solid rgba(34,197,94,0.3); }
+  .face-status.green  { background: rgba(22,163,74,0.08); color: var(--green); border: 1px solid rgba(22,163,74,0.25); }
   .face-status.yellow { background: rgba(234,179,8,0.15); color: var(--yellow); border: 1px solid rgba(234,179,8,0.3); }
-  .face-status.red    { background: rgba(239,68,68,0.15); color: var(--red); border: 1px solid rgba(239,68,68,0.3); }
+  .face-status.red    { background: rgba(220,38,38,0.08); color: var(--red); border: 1px solid rgba(220,38,38,0.25); }
   .face-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
   .face-dot.green  { background: var(--green); box-shadow: 0 0 8px var(--green); animation: pulse-green 1.5s infinite; }
   .face-dot.yellow { background: var(--yellow); }
@@ -253,6 +261,7 @@ window.addEventListener('load', () => loadMLLibs().catch(() => {}));
     z-index: 10;
     background: var(--navy2);
     border-bottom: 1px solid var(--navy3);
+    box-shadow: var(--shadow-sm);
     padding: 12px 16px;
     padding-top: calc(12px + env(safe-area-inset-top));
     display: flex; align-items: center; gap: 12px;
@@ -263,6 +272,8 @@ window.addEventListener('load', () => loadMLLibs().catch(() => {}));
     background: var(--navy); border-radius: 8px;
     padding: 8px 14px;
     flex: 1;
+    border: 1px solid var(--navy3);
+    box-shadow: var(--shadow-sm);
   }
   .timer-icon { font-size: 16px; }
   #timer-display {
@@ -277,6 +288,8 @@ window.addEventListener('load', () => loadMLLibs().catch(() => {}));
     background: var(--navy); border-radius: 8px;
     padding: 8px 14px; font-size: 12px; font-weight: 700;
     color: var(--muted); white-space: nowrap;
+    border: 1px solid var(--navy3);
+    box-shadow: var(--shadow-sm);
   }
   .progress-pill span { color: var(--white); }
 
@@ -290,7 +303,7 @@ window.addEventListener('load', () => loadMLLibs().catch(() => {}));
     border: 2px solid var(--navy3);
     z-index: 100;
     cursor: move;
-    box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+    box-shadow: var(--shadow-md);
     touch-action: none;
     transition: border-color 0.3s;
   }
@@ -319,6 +332,7 @@ window.addEventListener('load', () => loadMLLibs().catch(() => {}));
     border-radius: var(--r);
     padding: 20px;
     margin-bottom: 16px;
+    box-shadow: var(--shadow-sm);
   }
   .q-meta {
     display: flex; align-items: center; justify-content: space-between;
@@ -330,7 +344,8 @@ window.addEventListener('load', () => loadMLLibs().catch(() => {}));
   }
   .q-marks {
     font-size: 11px; font-weight: 600; color: var(--slate);
-    background: var(--navy); border-radius: 6px; padding: 3px 8px;
+    background: var(--navy); border: 1px solid var(--navy3);
+    border-radius: 6px; padding: 3px 8px;
   }
   .q-text { font-size: 16px; font-weight: 500; line-height: 1.55; margin-bottom: 20px; }
 
@@ -344,18 +359,20 @@ window.addEventListener('load', () => loadMLLibs().catch(() => {}));
     transition: all 0.18s; -webkit-tap-highlight-color: transparent;
     touch-action: manipulation;
     min-height: 54px;
+    box-shadow: var(--shadow-sm);
   }
   .option-item:active { transform: scale(0.985); }
   .option-item.selected {
     border-color: var(--accent);
-    background: rgba(56, 189, 248, 0.08);
+    background: rgba(14, 165, 233, 0.08);
+    box-shadow: 0 0 0 3px rgba(14,165,233,0.12);
   }
   .option-letter {
     width: 28px; height: 28px; flex-shrink: 0;
     border-radius: 8px;
     background: var(--navy2); border: 1.5px solid var(--navy3);
     display: flex; align-items: center; justify-content: center;
-    font-family: var(--font-mono); font-size: 12px; font-weight: 700; color: var(--muted);
+    font-family: var(--font-mono); font-size: 12px; font-weight: 700; color: var(--slate);
     transition: all 0.18s;
   }
   .option-item.selected .option-letter {
@@ -369,6 +386,7 @@ window.addEventListener('load', () => loadMLLibs().catch(() => {}));
     bottom: 0; left: 0; right: 0;
     background: var(--navy2);
     border-top: 1px solid var(--navy3);
+    box-shadow: 0 -4px 16px rgba(0,0,0,0.06);
     padding: 12px 16px;
     padding-bottom: calc(12px + env(safe-area-inset-bottom));
     display: flex; gap: 10px;
@@ -380,7 +398,7 @@ window.addEventListener('load', () => loadMLLibs().catch(() => {}));
   ═══════════════════════════════════════════════════════════════ */
   #violation-overlay {
     position: fixed; inset: 0;
-    background: rgba(15,23,42,0.95);
+    background: rgba(240,244,255,0.97);
     z-index: 200;
     display: flex; flex-direction: column;
     align-items: center; justify-content: center;
@@ -418,6 +436,7 @@ window.addEventListener('load', () => loadMLLibs().catch(() => {}));
     background: var(--navy); border: 1px solid var(--navy3);
     border-radius: var(--r-sm); padding: 12px;
     text-align: center;
+    box-shadow: var(--shadow-sm);
   }
   .stat-val { font-family: var(--font-mono); font-size: 20px; font-weight: 700; }
   .stat-key { font-size: 11px; color: var(--slate); margin-top: 2px; }
@@ -425,95 +444,9 @@ window.addEventListener('load', () => loadMLLibs().catch(() => {}));
   /* ═══════════════════════════════════════════════════════════════
      LECTURER DASHBOARD
   ═══════════════════════════════════════════════════════════════ */
-  #dashboard-screen {
-    justify-content: flex-start;
-    padding: 0;
-    overflow: hidden;
-  }
-  .dash-topbar {
-    background: var(--navy2); border-bottom: 1px solid var(--navy3);
-    padding: 14px 16px; padding-top: calc(14px + env(safe-area-inset-top));
-    display: flex; align-items: center; justify-content: space-between;
-    position: sticky; top: 0; z-index: 10;
-  }
-  .dash-body { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 16px; }
-
-  .student-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-    gap: 12px;
-  }
-  .student-card {
-    background: var(--navy2); border: 1.5px solid var(--navy3);
-    border-radius: var(--r-sm); padding: 14px 12px;
-    cursor: pointer; transition: all 0.2s;
-    position: relative; overflow: hidden;
-  }
-  .student-card:active { transform: scale(0.97); }
-  .student-card .stu-name { font-size: 13px; font-weight: 700; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .student-card .stu-idx  { font-family: var(--font-mono); font-size: 10px; color: var(--slate); margin-bottom: 10px; }
-  .student-card .stu-score { font-family: var(--font-mono); font-size: 18px; font-weight: 700; }
-  .student-card .stu-label { font-size: 10px; color: var(--slate); }
-  .student-card .stu-badge {
-    position: absolute; top: 8px; right: 8px;
-    width: 10px; height: 10px; border-radius: 50%;
-  }
-  .student-card .stu-badge.green  { background: var(--green); box-shadow: 0 0 6px var(--green); }
-  .student-card .stu-badge.yellow { background: var(--yellow); }
-  .student-card .stu-badge.red    { background: var(--red); animation: blink 1s infinite; }
-  .student-card .stu-badge.grey   { background: var(--slate); }
-
-  .platform-tag {
-    display: inline-block; padding: 2px 7px;
-    background: var(--navy); border-radius: 4px;
-    font-size: 9px; font-weight: 600; color: var(--muted);
-    text-transform: uppercase; letter-spacing: 0.5px;
-    margin-top: 6px;
-  }
-
-  /* Summary bar */
-  .summary-bar {
-    display: flex; gap: 10px; margin-bottom: 16px; overflow-x: auto;
-    scrollbar-width: none;
-  }
-  .summary-bar::-webkit-scrollbar { display: none; }
-  .sum-item {
-    background: var(--navy2); border: 1px solid var(--navy3);
-    border-radius: var(--r-sm); padding: 10px 16px;
-    text-align: center; min-width: 80px; flex-shrink: 0;
-  }
-  .sum-val { font-family: var(--font-mono); font-size: 20px; font-weight: 700; }
   .sum-key { font-size: 10px; color: var(--slate); font-weight: 600; text-transform: uppercase; }
 
-  /* Session detail modal */
-  #session-modal {
-    position: fixed; inset: 0; z-index: 300;
-    background: rgba(0,0,0,0.7);
-    display: flex; align-items: flex-end;
-    opacity: 0; pointer-events: none;
-    transition: opacity 0.3s;
-  }
-  #session-modal.show { opacity: 1; pointer-events: auto; }
-  .modal-sheet {
-    background: var(--navy2); border-top: 1px solid var(--navy3);
-    border-radius: 24px 24px 0 0;
-    padding: 24px 20px; width: 100%;
-    max-height: 80vh; overflow-y: auto;
-    padding-bottom: calc(24px + env(safe-area-inset-bottom));
-    transform: translateY(40px);
-    transition: transform 0.3s;
-  }
-  #session-modal.show .modal-sheet { transform: translateY(0); }
-  .modal-handle { width: 40px; height: 4px; background: var(--navy3); border-radius: 2px; margin: 0 auto 20px; }
 
-  /* Log items */
-  .log-item {
-    display: flex; align-items: flex-start; gap: 12px;
-    padding: 10px 0; border-bottom: 1px solid var(--navy3);
-  }
-  .log-icon { font-size: 16px; flex-shrink: 0; margin-top: 1px; }
-  .log-event { font-size: 13px; font-weight: 600; }
-  .log-time  { font-size: 11px; color: var(--slate); font-family: var(--font-mono); }
 
   /* Alert toast */
   #toast {
@@ -522,7 +455,8 @@ window.addEventListener('load', () => loadMLLibs().catch(() => {}));
     border-radius: 10px; padding: 12px 20px;
     font-size: 13px; font-weight: 600; white-space: nowrap;
     z-index: 500; opacity: 0; pointer-events: none;
-    transition: opacity 0.3s; box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+    transition: opacity 0.3s; box-shadow: var(--shadow-md);
+    color: var(--white);
   }
   #toast.show { opacity: 1; }
   #toast.error { border-color: var(--red); color: var(--red); }
@@ -554,7 +488,6 @@ window.addEventListener('load', () => loadMLLibs().catch(() => {}));
     .q-text { font-size: 18px; }
     .option-item { padding: 18px 20px; min-height: 64px; }
     .option-text { font-size: 16px; }
-    .student-grid { grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); }
   }
 
   @media (min-width: 900px) {
@@ -581,7 +514,7 @@ window.addEventListener('load', () => loadMLLibs().catch(() => {}));
 <div id="login-screen" class="screen">
   <div class="card">
     <div style="margin-bottom:16px">
-      <button onclick="location.href='/index.html'" style="display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);color:rgba(255,255,255,.65);padding:7px 13px;border-radius:8px;font-size:13px;font-weight:500;cursor:pointer;font-family:inherit;transition:all .18s ease" onmouseover="this.style.background='rgba(255,255,255,.13)';this.style.color='#fff'" onmouseout="this.style.background='rgba(255,255,255,.07)';this.style.color='rgba(255,255,255,.65)'">
+      <button onclick="location.href='/index.html'" style="display:inline-flex;align-items:center;gap:6px;background:#f1f5f9;border:1px solid #e2e8f0;color:#475569;padding:7px 13px;border-radius:8px;font-size:13px;font-weight:500;cursor:pointer;font-family:inherit;transition:all .18s ease" onmouseover="this.style.background='#e2e8f0';this.style.color='#1e293b'" onmouseout="this.style.background='#f1f5f9';this.style.color='#475569'">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
         Back to Portal
       </button>
@@ -612,7 +545,7 @@ window.addEventListener('load', () => loadMLLibs().catch(() => {}));
         <input type="password" id="login-password" placeholder="••••••••" autocomplete="current-password" oninput="clearAuthErr()"/>
       </div>
       <button class="btn btn-primary" id="login-btn">Sign In</button>
-      <div id="login-error-msg" style="display:none;margin-top:12px;padding:10px 14px;background:#450a0a;border:1px solid #dc2626;border-radius:8px;color:#fca5a5;font-size:13px;text-align:center;"></div>
+      <div id="login-error-msg" style="display:none;margin-top:12px;padding:10px 14px;background:#fef2f2;border:1px solid #fca5a5;border-radius:8px;color:#dc2626;font-size:13px;text-align:center;"></div>
       <p style="font-size:12px;color:rgba(255,255,255,.35);text-align:center;margin-top:14px;">No account yet? <button onclick="switchAuthTab('register')" style="background:none;border:none;color:var(--primary);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;padding:0;">Register here →</button></p>
     </div>
 
@@ -639,13 +572,11 @@ window.addEventListener('load', () => loadMLLibs().catch(() => {}));
         <input type="password" id="reg-password2" placeholder="Repeat password" autocomplete="new-password" oninput="clearAuthErr()"/>
       </div>
       <button class="btn btn-primary" id="register-btn">Create Account</button>
-      <div id="reg-error-msg" style="display:none;margin-top:12px;padding:10px 14px;background:#450a0a;border:1px solid #dc2626;border-radius:8px;color:#fca5a5;font-size:13px;text-align:center;"></div>
-      <div id="reg-success-msg" style="display:none;margin-top:12px;padding:10px 14px;background:#052e16;border:1px solid #22c55e;border-radius:8px;color:#86efac;font-size:13px;text-align:center;"></div>
+      <div id="reg-error-msg" style="display:none;margin-top:12px;padding:10px 14px;background:#fef2f2;border:1px solid #fca5a5;border-radius:8px;color:#dc2626;font-size:13px;text-align:center;"></div>
+      <div id="reg-success-msg" style="display:none;margin-top:12px;padding:10px 14px;background:#f0fdf4;border:1px solid #86efac;border-radius:8px;color:#16a34a;font-size:13px;text-align:center;"></div>
       <p style="font-size:12px;color:rgba(255,255,255,.35);text-align:center;margin-top:14px;">Already have an account? <button onclick="switchAuthTab('signin')" style="background:none;border:none;color:var(--primary);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;padding:0;">Sign in →</button></p>
     </div>
 
-    <div class="divider"><span>or</span></div>
-    <button class="btn btn-ghost btn-sm" id="show-dashboard-btn">Lecturer Dashboard →</button>
   </div>
 </div>
 
@@ -805,49 +736,12 @@ window.addEventListener('load', () => loadMLLibs().catch(() => {}));
 ────────────────────────────────────────────────────────────────────────── -->
 <div id="violation-overlay">
   <div class="violation-icon" id="v-icon">⛔</div>
-  <div class="violation-title" id="v-title">Exam Terminated</div>
-  <div class="violation-msg" id="v-msg">Your exam has been terminated due to repeated proctoring violations.</div>
+  <div class="violation-title" style="color:#1e293b" id="v-title">Exam Terminated</div>
+  <div class="violation-msg" style="color:#475569" id="v-msg">Your exam has been terminated due to repeated proctoring violations.</div>
   <button class="btn btn-ghost" id="v-close-btn" style="max-width:280px">Return to Home</button>
 </div>
 
-<!-- ─────────────────────────────────────────────────────────────────────────
-     SCREEN 8: LECTURER DASHBOARD
-────────────────────────────────────────────────────────────────────────── -->
-<div id="dashboard-screen" class="screen hidden">
-  <div class="dash-topbar">
-    <div>
-      <h2>📊 Live Monitor</h2>
-      <p id="dash-quiz-title" style="font-size:12px;color:var(--slate);margin-top:2px">Select a quiz to monitor</p>
-    </div>
-    <div style="display:flex;gap:8px">
-      <button class="btn btn-ghost btn-sm" id="dash-refresh-btn" style="width:auto;padding:8px 14px">↻</button>
-      <button class="btn btn-ghost btn-sm" id="dash-back-btn" style="width:auto;padding:8px 14px">← Back</button>
-    </div>
-  </div>
 
-  <div class="dash-body">
-    <div style="margin-bottom:16px" id="dash-quiz-selector">
-      <div class="field">
-        <label>Quiz ID</label>
-        <input type="text" id="dash-quiz-id" placeholder="Paste quiz ID to monitor…" />
-      </div>
-      <button class="btn btn-primary btn-sm" id="dash-load-btn">Load Monitor</button>
-    </div>
-
-    <div class="summary-bar" id="dash-summary"></div>
-    <div class="student-grid" id="student-grid"></div>
-  </div>
-</div>
-
-<!-- ─────────────────────────────────────────────────────────────────────────
-     SESSION DETAIL MODAL
-────────────────────────────────────────────────────────────────────────── -->
-<div id="session-modal">
-  <div class="modal-sheet">
-    <div class="modal-handle"></div>
-    <div id="modal-content"></div>
-  </div>
-</div>
 
 
 <script>
@@ -1083,18 +977,18 @@ document.getElementById('login-btn').addEventListener('click', async () => {
   }
 });
 
-document.getElementById('show-dashboard-btn').addEventListener('click', async () => {
-  const indexNumber = document.getElementById('login-index').value.trim();
-  const password    = document.getElementById('login-password').value;
-  if (indexNumber && password) {
-    try {
-      const data = await api('POST', '/api/auth/login', { indexNumber, password });
-      state.token = data.token;
-      state.user  = data.user;
-    } catch (e) { /* ignore if not logged in — dashboard loads w/ token */ }
-  }
-  show('dashboard-screen');
-});
+
+
+
+
+
+
+
+
+
+
+
+
 
 document.getElementById('logout-btn').addEventListener('click', () => {
   state.token = null; state.user = null;
@@ -1149,10 +1043,10 @@ async function loadQuizList() {
           </div>
           <div style="flex-shrink:0">
             ${q.isSubmitted
-              ? `<span style="background:rgba(34,197,94,0.15);color:var(--green);border:1px solid rgba(34,197,94,0.3);border-radius:6px;padding:4px 10px;font-size:11px;font-weight:700">Done</span>`
+              ? `<span style="background:rgba(22,163,74,0.08);color:var(--green);border:1px solid rgba(34,197,94,0.3);border-radius:6px;padding:4px 10px;font-size:11px;font-weight:700">Done</span>`
               : q.canAttempt
-                ? `<span style="background:rgba(56,189,248,0.15);color:var(--accent);border:1px solid rgba(56,189,248,0.3);border-radius:6px;padding:4px 10px;font-size:11px;font-weight:700">Open</span>`
-                : `<span style="background:rgba(100,116,139,0.15);color:var(--slate);border:1px solid rgba(100,116,139,0.3);border-radius:6px;padding:4px 10px;font-size:11px;font-weight:700">${q.status}</span>`
+                ? `<span style="background:rgba(14,165,233,0.08);color:var(--accent);border:1px solid rgba(56,189,248,0.3);border-radius:6px;padding:4px 10px;font-size:11px;font-weight:700">Open</span>`
+                : `<span style="background:#f8fafc;color:var(--slate);border:1px solid rgba(100,116,139,0.3);border-radius:6px;padding:4px 10px;font-size:11px;font-weight:700">${q.status}</span>`
             }
           </div>
         </div>
@@ -1600,8 +1494,8 @@ function showViolationWarning(level) {
   const overlay = document.getElementById('violation-overlay');
   overlay.innerHTML = `
     <div class="violation-icon">⚠️</div>
-    <div class="violation-title">Warning #${level}</div>
-    <div class="violation-msg">Repeated violations detected. Your exam may be terminated if this continues.</div>
+    <div class="violation-title" style="color:#1e293b">Warning #${level}</div>
+    <div class="violation-msg" style="color:#475569">Repeated violations detected. Your exam may be terminated if this continues.</div>
     <button class="btn btn-primary" style="max-width:280px" onclick="this.closest('#violation-overlay').classList.remove('show')">I understand</button>
   `;
   overlay.classList.add('show');
@@ -1627,7 +1521,7 @@ function showProctorStrikeWarning(type, strikeNum) {
     'position:fixed', 'top:50%', 'left:50%',
     'transform:translate(-50%,-50%)',
     'z-index:9998',
-    'background:#1e293b',
+    'background:#ffffff',
     'border:2px solid #ef4444',
     'border-radius:16px',
     'padding:28px 32px',
@@ -1639,7 +1533,7 @@ function showProctorStrikeWarning(type, strikeNum) {
   el.innerHTML =
     '<div style="font-size:40px;margin-bottom:10px">⚠️</div>' +
     '<div style="font-size:19px;font-weight:700;color:#ef4444;margin-bottom:8px">' + label + '</div>' +
-    '<div style="font-size:14px;color:#94a3b8;line-height:1.6;margin-bottom:16px">' +
+    '<div style="font-size:14px;color:#64748b;line-height:1.6;margin-bottom:16px">' +
       'Strike <span style="color:#fbbf24;font-size:20px;font-weight:800">' + strikeNum + '</span> of 2<br>' +
       (strikeNum < 2
         ? '<span style="color:#fbbf24">⚠ One more violation will auto-submit your quiz!</span>'
@@ -1659,16 +1553,16 @@ function showAutoSubmitCountdown() {
   el.style.cssText = [
     'position:fixed', 'inset:0',
     'z-index:10000',
-    'background:rgba(0,0,0,.88)',
+    'background:rgba(240,244,255,0.97)',
     'display:flex',
     'align-items:center',
     'justify-content:center'
   ].join(';');
   el.innerHTML =
-    '<div style="background:#1e293b;border:2px solid #ef4444;border-radius:16px;padding:36px 32px;text-align:center;max-width:360px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,.8)">' +
+    '<div style="background:#ffffff;border:2px solid #dc2626;border-radius:16px;padding:36px 32px;text-align:center;max-width:360px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,.8)">' +
       '<div style="font-size:52px;margin-bottom:12px">🚫</div>' +
       '<div style="font-size:20px;font-weight:700;color:#ef4444;margin-bottom:8px">Quiz Auto-Submitting</div>' +
-      '<div style="font-size:14px;color:#94a3b8;margin-bottom:20px;line-height:1.6">' +
+      '<div style="font-size:14px;color:#475569;margin-bottom:20px;line-height:1.6">' +
         'You received <strong style="color:#fbbf24">2 critical violations</strong>.<br>' +
         'Your work is being submitted automatically.' +
       '</div>' +
@@ -1706,8 +1600,8 @@ function terminateExam(reason) {
   };
   overlay.innerHTML = `
     <div class="violation-icon">⛔</div>
-    <div class="violation-title">Exam Terminated</div>
-    <div class="violation-msg">${reasonMap[reason] || 'Proctoring violations exceeded the allowed threshold.'}</div>
+    <div class="violation-title" style="color:#1e293b">Exam Terminated</div>
+    <div class="violation-msg" style="color:#475569">${reasonMap[reason] || 'Proctoring violations exceeded the allowed threshold.'}</div>
     <div style="color:var(--slate);font-size:12px;margin-bottom:20px">Integrity Score: ${state.integrityScore} / 100</div>
     <button class="btn btn-ghost" style="max-width:280px" onclick="document.getElementById('violation-overlay').classList.remove('show');show('quiz-list-screen')">Return to Dashboard</button>
   `;
@@ -1936,107 +1830,12 @@ document.getElementById('done-btn').addEventListener('click', () => {
 // ══════════════════════════════════════════════════════════════════
 //  LECTURER DASHBOARD
 // ══════════════════════════════════════════════════════════════════
-document.getElementById('dash-back-btn').addEventListener('click', () => show('login-screen'));
-document.getElementById('dash-refresh-btn').addEventListener('click', () => {
-  const qId = document.getElementById('dash-quiz-id').value.trim();
-  if (qId) loadMonitor(qId);
-});
-document.getElementById('dash-load-btn').addEventListener('click', () => {
-  const qId = document.getElementById('dash-quiz-id').value.trim();
-  if (!qId) return toast('Enter a quiz ID', 'error');
-  loadMonitor(qId);
-});
 
-async function loadMonitor(quizId) {
-  const grid = document.getElementById('student-grid');
-  const summary = document.getElementById('dash-summary');
-  grid.innerHTML = '<div class="spinner"></div>';
-  summary.innerHTML = '';
 
-  try {
-    const data = await api('GET', `/api/proctor/quiz/${quizId}/live-monitor`);
-    document.getElementById('dash-quiz-title').textContent = data.quiz?.title || quizId;
 
-    const s = data.summary || {};
-    summary.innerHTML = `
-      <div class="sum-item"><div class="sum-val">${s.total ?? 0}</div><div class="sum-key">Total</div></div>
-      <div class="sum-item"><div class="sum-val" style="color:var(--green)">${s.active ?? 0}</div><div class="sum-key">Active</div></div>
-      <div class="sum-item"><div class="sum-val" style="color:var(--accent)">${s.completed ?? 0}</div><div class="sum-key">Done</div></div>
-      <div class="sum-item"><div class="sum-val" style="color:var(--red)">${s.terminated ?? 0}</div><div class="sum-key">Terminated</div></div>
-    `;
 
-    const sessions = data.sessions || [];
-    if (sessions.length === 0) {
-      grid.innerHTML = '<p style="color:var(--slate);text-align:center;padding:24px">No students yet.</p>';
-      return;
-    }
 
-    grid.innerHTML = sessions.map(s => `
-      <div class="student-card" data-sid="${s.sessionId}">
-        <div class="stu-badge ${s.statusColor}"></div>
-        <div class="stu-name">${s.student?.name || 'Student'}</div>
-        <div class="stu-idx">${s.student?.indexNumber || '—'}</div>
-        <div class="stu-score" style="color:var(--${s.integrityScore >= 75 ? 'green' : s.integrityScore >= 50 ? 'yellow' : 'red'})">${s.integrityScore}<span style="font-size:11px;color:var(--slate)">/100</span></div>
-        <div class="stu-label">Integrity</div>
-        <span class="platform-tag">${s.platform}</span>
-        ${s.status !== 'active' ? `<div style="margin-top:6px;font-size:10px;color:var(--${s.status === 'completed' ? 'green' : 'red'})">${s.status.toUpperCase()}</div>` : `<div style="margin-top:6px;font-size:10px;color:var(--muted)">${s.remainingMinutes}m left · ${s.totalViolations}V</div>`}
-      </div>
-    `).join('');
 
-    grid.querySelectorAll('[data-sid]').forEach(card => {
-      card.addEventListener('click', () => loadSessionDetail(card.dataset.sid));
-    });
-
-  } catch (e) {
-    grid.innerHTML = `<p style="color:var(--red)">Error: ${e.message}</p>`;
-  }
-}
-
-async function loadSessionDetail(sessionId) {
-  const modal = document.getElementById('session-modal');
-  const content = document.getElementById('modal-content');
-  modal.classList.add('show');
-  content.innerHTML = '<div class="spinner" style="margin:40px auto"></div>';
-
-  // Close on backdrop click
-  modal.addEventListener('click', e => { if (e.target === modal) modal.classList.remove('show'); }, { once: true });
-
-  try {
-    const data = await api('GET', `/api/proctor/session/${sessionId}/report`);
-    const s = data.session;
-    const logs = data.logs || [];
-
-    const iconMap = {
-      tab_switch: '🔀', app_background: '📵', face_missing: '😶', multiple_faces: '👥',
-      camera_disabled: '📷', exam_started: '▶️', exam_submitted: '✅', exam_terminated: '⛔',
-      warning_issued: '⚠️', orientation_change: '🔄', face_off_center: '🎯', heartbeat: '💓',
-      copy_attempt: '📋', face_detected: '✓',
-    };
-
-    content.innerHTML = `
-      <h2 style="margin-bottom:4px">${s.student?.name || 'Student'}</h2>
-      <p style="font-family:var(--font-mono);font-size:12px;color:var(--slate)">${s.student?.indexNumber || ''}</p>
-      <div class="result-stats" style="margin:16px 0">
-        <div class="stat-box"><div class="stat-val" style="color:var(--${s.integrityScore >= 75 ? 'green' : 'red'})">${s.integrityScore}</div><div class="stat-key">Integrity</div></div>
-        <div class="stat-box"><div class="stat-val" style="color:var(--red)">${s.totalViolations ?? 0}</div><div class="stat-key">Violations</div></div>
-        <div class="stat-box"><div class="stat-val">${s.platform}</div><div class="stat-key">Platform</div></div>
-        <div class="stat-box"><div class="stat-val" style="color:var(--${s.status === 'completed' ? 'green' : s.status === 'terminated' ? 'red' : 'accent'})">${s.status}</div><div class="stat-key">Status</div></div>
-      </div>
-      <div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:12px">Event Log</div>
-      ${logs.slice(-30).reverse().map(l => `
-        <div class="log-item">
-          <span class="log-icon">${iconMap[l.eventType] || '📋'}</span>
-          <div>
-            <div class="log-event">${l.eventType.replace(/_/g,' ')}</div>
-            <div class="log-time">${new Date(l.timestamp).toLocaleTimeString()} · ${l.severity}</div>
-          </div>
-        </div>
-      `).join('')}
-    `;
-  } catch (e) {
-    content.innerHTML = `<p style="color:var(--red)">Error: ${e.message}</p>`;
-  }
-}
 
 // ══════════════════════════════════════════════════════════════════
 //  INIT
