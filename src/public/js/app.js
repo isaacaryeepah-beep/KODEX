@@ -717,6 +717,7 @@ function navigateTo(view) {
   if (navEl) navEl.classList.add('active');
 
   const content = document.getElementById('main-content');
+  if (!content) return;
   content.innerHTML = '<div class="loading">Loading...</div>';
 
   switch (view) {
@@ -740,6 +741,7 @@ function navigateTo(view) {
 
 async function renderDashboard() {
   const content = document.getElementById('main-content');
+  if (!content) return;
   const role = currentUser.role;
 
   try {
@@ -772,6 +774,7 @@ async function renderDashboard() {
 
 async function renderApprovals() {
   const content = document.getElementById('main-content');
+  if (!content) return;
   try {
     const data = await api('/api/approvals/pending');
     const pending = data.pending || [];
@@ -961,6 +964,7 @@ async function employeeSignOut() {
 
 async function renderSignInOut() {
   const content = document.getElementById('main-content');
+  if (!content) return;
   try {
     const [statusData, attendanceData] = await Promise.all([
       api('/api/attendance-sessions/sign-in-status').catch(() => ({ signedIn: false, record: null })),
@@ -1199,6 +1203,7 @@ async function renderAdminDashboard(content) {
 
 async function renderSessions() {
   const content = document.getElementById('main-content');
+  if (!content) return;
   try {
     const data = await api('/api/attendance-sessions');
     content.innerHTML = `
@@ -1294,6 +1299,7 @@ async function generateQR(sessionId) {
 
 async function renderUsers() {
   const content = document.getElementById('main-content');
+  if (!content) return;
   try {
     const data = await api('/api/users');
     const mode = currentUser.company?.mode || 'corporate';
@@ -1496,6 +1502,7 @@ async function deleteUserPermanently(id, name) {
 
 async function renderMeetings() {
   const content = document.getElementById('main-content');
+  if (!content) return;
   try {
     const data = await api('/api/zoom');
     const canCreate = ['manager', 'lecturer', 'admin', 'superadmin'].includes(currentUser.role);
@@ -1641,6 +1648,7 @@ async function cancelMeeting(id) {
 
 async function viewMeetingDetail(id) {
   const content = document.getElementById('main-content');
+  if (!content) return;
   content.innerHTML = '<div class="card"><p>Loading meeting details...</p></div>';
   try {
     const data = await api(`/api/zoom/${id}`);
@@ -1701,6 +1709,7 @@ async function viewMeetingDetail(id) {
 
 async function renderCourses() {
   const content = document.getElementById('main-content');
+  if (!content) return;
   try {
     const data = await api('/api/courses');
     const canCreate = ['lecturer', 'admin', 'superadmin'].includes(currentUser.role);
@@ -1908,6 +1917,7 @@ let quizTimerInterval = null;
 
 async function renderQuizzes() {
   const content = document.getElementById('main-content');
+  if (!content) return;
   const role = currentUser.role;
   if (role === 'lecturer') {
     await renderLecturerQuizzes(content);
@@ -2033,6 +2043,7 @@ async function submitCreateQuiz() {
 
 async function showAddQuestionsView(quizId) {
   const content = document.getElementById('main-content');
+  if (!content) return;
   if (!content) { console.error('showAddQuestionsView: main-content element not found'); return; }
   content.innerHTML = '<div class="card"><p>Loading quiz...</p></div>';
   try {
@@ -2202,6 +2213,7 @@ async function deleteQuizQuestion(quizId, questionId) {
 
 async function viewLecturerQuizDetail(quizId) {
   const content = document.getElementById('main-content');
+  if (!content) return;
   content.innerHTML = '<div class="card"><p>Loading...</p></div>';
   try {
     const data = await api(`/api/lecturer/quizzes/${quizId}`);
@@ -2273,6 +2285,7 @@ function copyQuizId(id) {
 
 async function viewQuizResults(quizId) {
   const content = document.getElementById('main-content');
+  if (!content) return;
   content.innerHTML = '<div class="card"><p>Loading results...</p></div>';
   try {
     const data = await api(`/api/lecturer/quizzes/${quizId}/results`);
@@ -2376,6 +2389,7 @@ async function renderStudentQuizzes(content, showAll) {
 
 async function startStudentQuiz(quizId) {
   const content = document.getElementById('main-content');
+  if (!content) return;
   content.innerHTML = '<div class="card"><p>Loading quiz...</p></div>';
   if (quizTimerInterval) { clearInterval(quizTimerInterval); quizTimerInterval = null; }
 
@@ -2462,6 +2476,7 @@ async function submitStudentQuiz(quizId) {
   });
 
   const content = document.getElementById('main-content');
+  if (!content) return;
   try {
     const data = await api(`/api/student/quizzes/${quizId}/submit`, {
       method: 'POST',
@@ -2489,6 +2504,7 @@ async function submitStudentQuiz(quizId) {
 
 async function viewStudentResult(quizId) {
   const content = document.getElementById('main-content');
+  if (!content) return;
   content.innerHTML = '<div class="card"><p>Loading result...</p></div>';
   try {
     const data = await api(`/api/student/quizzes/${quizId}/result`);
@@ -2566,6 +2582,7 @@ async function renderAdminQuizzes(content) {
 
 async function viewAdminQuizDetail(quizId) {
   const content = document.getElementById('main-content');
+  if (!content) return;
   content.innerHTML = '<div class="card"><p>Loading...</p></div>';
   try {
     const data = await api(`/api/admin/quizzes/${quizId}`);
@@ -2631,6 +2648,7 @@ async function viewAdminQuizDetail(quizId) {
 
 async function renderMyAttendance() {
   const content = document.getElementById('main-content');
+  if (!content) return;
   try {
     const data = await api('/api/attendance-sessions/my-attendance');
     content.innerHTML = `
@@ -2661,6 +2679,7 @@ async function renderMyAttendance() {
 
 async function renderMarkAttendance() {
   const content = document.getElementById('main-content');
+  if (!content) return;
   
   let activeSession = null;
   try {
@@ -2900,6 +2919,7 @@ async function markAttendance() {
 
 async function renderSubscription() {
   const content = document.getElementById('main-content');
+  if (!content) return;
   try {
     const [statusData, plansData] = await Promise.all([
       api('/api/payments/status'),
@@ -2986,6 +3006,7 @@ async function subscribePlan(plan, provider) {
 
 async function renderSearch() {
   const content = document.getElementById('main-content');
+  if (!content) return;
   const mode = currentUser.company?.mode || 'corporate';
   const isAcademic = mode === 'academic';
   const role = currentUser.role;
@@ -3100,6 +3121,7 @@ async function doSearch() {
 
 function renderReports() {
   const content = document.getElementById('main-content');
+  if (!content) return;
   const role = currentUser.role;
   const mode = currentUser.company?.mode || 'corporate';
   const isAcademic = mode === 'academic';
