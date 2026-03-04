@@ -13,7 +13,7 @@ const router = express.Router();
 router.use(authenticate);
 router.use(requireActiveSubscription);
 
-const DEFAULT_EXPIRY_MINUTES = 5;
+const DEFAULT_EXPIRY_SECONDS = 15;
 
 router.post(
   "/generate",
@@ -21,7 +21,7 @@ router.post(
   companyIsolation,
   async (req, res) => {
     try {
-      const { sessionId, expiryMinutes } = req.body;
+      const { sessionId, expiryMinutes, expirySeconds } = req.body;
 
       if (!sessionId || !mongoose.Types.ObjectId.isValid(sessionId)) {
         return res.status(400).json({ error: "Valid session ID is required" });
@@ -42,8 +42,14 @@ router.post(
         return res.status(400).json({ error: "Attendance session is not active" });
       }
 
-      const expiry = parseInt(expiryMinutes) || DEFAULT_EXPIRY_MINUTES;
-      const expiresAt = new Date(Date.now() + expiry * 60 * 1000);
+      // Support seconds (for 15s rotation) or minutes fallback
+      let expiresAt;
+      if (expirySeconds) {
+        expiresAt = new Date(Date.now() + parseInt(expirySeconds) * 1000);
+      } else {
+        const mins = parseInt(expiryMinutes) || Math.ceil(DEFAULT_EXPIRY_SECONDS / 60);
+        expiresAt = new Date(Date.now() + mins * 60 * 1000);
+      }
 
       let qrToken;
       const maxRetries = 3;
