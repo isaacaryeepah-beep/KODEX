@@ -842,7 +842,7 @@ function getPortalName(role) {
     admin: 'Admin Portal',
     superadmin: 'Admin Portal'
   };
-  return names[role] || 'Smart Attendance';
+  return names[role] || 'KODEX';
 }
 
 function getPortalAttr(role) {
@@ -1051,7 +1051,7 @@ async function renderDashboard() {
         await renderAdminDashboard(content);
         break;
       default:
-        content.innerHTML = `<div class="card"><p>Welcome to Smart Attendance!</p></div>`;
+        content.innerHTML = `<div class="card"><p>Welcome to KODEX!</p></div>`;
     }
   } catch (e) {
     content.innerHTML = `<div class="card"><p>Welcome to ${getPortalName(role)}!</p></div>`;
@@ -4236,13 +4236,13 @@ function renderAbout() {
   const content = document.getElementById('main-content');
   if (!content) return;
   content.innerHTML = `
-    <div class="page-header"><h2>About</h2><p>KODEX Smart Attendance Platform</p></div>
+    <div class="page-header"><h2>About</h2><p>KODEX KODEX Platform</p></div>
     <div class="card" style="max-width:540px;text-align:center;padding:40px 32px">
       <div style="width:72px;height:72px;border-radius:20px;background:linear-gradient(135deg,var(--primary),#6366f1);display:flex;align-items:center;justify-content:center;margin:0 auto 20px">
         <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
       </div>
       <div style="font-size:26px;font-weight:800;margin-bottom:4px">KODEX</div>
-      <div style="font-size:14px;color:var(--text-light);margin-bottom:4px">Smart Attendance Platform</div>
+      <div style="font-size:14px;color:var(--text-light);margin-bottom:4px">KODEX Platform</div>
       <div style="display:inline-block;background:var(--bg);border:1px solid var(--border);border-radius:999px;padding:4px 14px;font-size:12px;font-weight:600;color:var(--text-light);margin-bottom:28px">Version 1.0.0</div>
 
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:28px;text-align:left">
