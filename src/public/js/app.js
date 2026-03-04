@@ -481,43 +481,25 @@ function showPendingApproval(message) {
 }
 
 async function handleAdminLogin() {
+  const btn = document.querySelector('#admin-login-form button[type="submit"]');
   try {
-    const email = document.getElementById('admin-login-email').value;
+    const email = document.getElementById('admin-login-email').value.trim();
     const password = document.getElementById('admin-login-password').value;
     if (!email) return showAdminError('Please enter your email');
     if (!password) return showAdminError('Please enter your password');
-    const data = await api('/api/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) });
-
-    // Block non-admin roles from admin portals
-    const userRole = data.user?.role;
-    if (!['admin', 'superadmin', 'manager'].includes(userRole)) {
-      try { await api('/api/auth/logout', { method: 'POST' }); } catch(e) {}
-      if (userRole === 'lecturer') {
-        return showAdminError('Invalid email or password. Please try again.');
-      } else if (userRole === 'student') {
-        return showAdminError('Invalid email or password. Please try again.');
-      } else {
-        return showAdminError('Invalid email or password. Please try again.');
-      }
-    }
-
-    const companyMode = data.user && data.user.company ? data.user.company.mode : 'corporate';
-    const expectedMode = selectedPortalType === 'admin-academic' ? 'academic' : 'corporate';
-    if (companyMode !== expectedMode) {
-      try { await api('/api/auth/logout', { method: 'POST' }); } catch(e) {}
-      if (expectedMode === 'academic') {
-        return showAdminError('Invalid email or password. Please try again.');
-      } else {
-        return showAdminError('Invalid email or password. Please try again.');
-      }
-    }
-
+    if (btn) { btn.textContent = 'Signing in…'; btn.disabled = true; }
+    const portalMode = selectedPortalType === 'admin-academic' ? 'academic' : 'corporate';
+    const data = await api('/api/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ email, password, loginRole: 'admin', portalMode })
+    });
     token = data.token;
     localStorage.setItem('token', token);
     currentUser = data.user;
     showDashboard(data);
   } catch (e) {
-    showAdminError('Invalid email or password. Please try again.');
+    if (btn) { btn.textContent = 'Sign In'; btn.disabled = false; }
+    showAdminError(e.message || 'Invalid email or password. Please try again.');
   }
 }
 
@@ -546,27 +528,19 @@ async function handleAdminRegister() {
 }
 
 async function handleLecturerLogin() {
+  const btn = document.querySelector('#lecturer-login-form button[type="submit"]');
   try {
-    const email = document.getElementById('lecturer-login-email').value;
+    const email = document.getElementById('lecturer-login-email').value.trim();
     const password = document.getElementById('lecturer-login-password').value;
     if (!email) return showLecturerError('Please enter your email');
     if (!password) return showLecturerError('Please enter your password');
-    const data = await api('/api/auth/login', { method: 'POST', body: JSON.stringify({ email, password, portalMode: 'academic' }) });
-
-    // ✅ Only lecturers allowed in lecturer portal
-    const userRole = data.user?.role;
-    if (userRole !== 'lecturer') {
-      try { await api('/api/auth/logout', { method: 'POST' }); } catch(e) {}
-      if (userRole === 'admin' || userRole === 'superadmin') {
-        return showLecturerError('Invalid email or password. Please try again.');
-      } else if (userRole === 'student') {
-        return showLecturerError('Invalid email or password. Please try again.');
-      } else {
-        return showLecturerError('Invalid email or password. Please try again.');
-      }
-    }
-
+    if (btn) { btn.textContent = 'Signing in…'; btn.disabled = true; }
+    const data = await api('/api/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ email, password, loginRole: 'lecturer', portalMode: 'academic' })
+    });
     if (data.user && !data.user.isApproved) {
+      if (btn) { btn.textContent = 'Sign In'; btn.disabled = false; }
       return showPendingApproval('Your account is pending admin approval. Please wait for your institution admin to approve your account.');
     }
     token = data.token;
@@ -574,7 +548,8 @@ async function handleLecturerLogin() {
     currentUser = data.user;
     showDashboard(data);
   } catch (e) {
-    showLecturerError('Invalid email or password. Please try again.');
+    if (btn) { btn.textContent = 'Sign In'; btn.disabled = false; }
+    showLecturerError(e.message || 'Invalid email or password. Please try again.');
   }
 }
 
@@ -653,15 +628,21 @@ function showEmployeeRegister() {
 }
 
 async function handleEmployeeLogin() {
+  const btn = document.querySelector('#employee-login-form button[type="submit"]');
   try {
-    const email = document.getElementById('employee-login-email').value;
-    const institutionCode = document.getElementById('employee-login-code').value;
+    const email = document.getElementById('employee-login-email').value.trim();
+    const institutionCode = document.getElementById('employee-login-code').value.trim().toUpperCase();
     const password = document.getElementById('employee-login-password').value;
     if (!email) return showEmployeeError('Please enter your email');
     if (!institutionCode) return showEmployeeError('Please enter your institution code');
     if (!password) return showEmployeeError('Please enter your password');
-    const data = await api('/api/auth/login', { method: 'POST', body: JSON.stringify({ email, password, institutionCode, loginRole: 'employee' }) });
+    if (btn) { btn.textContent = 'Signing in…'; btn.disabled = true; }
+    const data = await api('/api/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ email, password, institutionCode, loginRole: 'employee' })
+    });
     if (data.user && !data.user.isApproved) {
+      if (btn) { btn.textContent = 'Sign In'; btn.disabled = false; }
       return showPendingApproval('Your account is pending admin approval. Please wait for your admin to approve your account.');
     }
     token = data.token;
@@ -669,7 +650,8 @@ async function handleEmployeeLogin() {
     currentUser = data.user;
     showDashboard(data);
   } catch (e) {
-    showEmployeeError('Invalid email or password. Please try again.');
+    if (btn) { btn.textContent = 'Sign In'; btn.disabled = false; }
+    showEmployeeError(e.message || 'Invalid email or password. Please try again.');
   }
 }
 
@@ -699,20 +681,26 @@ async function handleEmployeeRegister() {
 }
 
 async function handleStudentLogin() {
+  const btn = document.querySelector('#student-login-form button[type="submit"]');
   try {
-    const indexNumber = document.getElementById('student-login-index').value;
-    const institutionCode = document.getElementById('student-login-code').value;
+    const indexNumber = document.getElementById('student-login-index').value.trim();
+    const institutionCode = document.getElementById('student-login-code').value.trim().toUpperCase();
     const password = document.getElementById('student-login-password').value;
     if (!indexNumber) return showStudentError('Please enter your student ID');
     if (!institutionCode) return showStudentError('Please enter your institution code');
     if (!password) return showStudentError('Please enter your password');
-    const data = await api('/api/auth/login', { method: 'POST', body: JSON.stringify({ indexNumber, password, institutionCode }) });
+    if (btn) { btn.textContent = 'Signing in…'; btn.disabled = true; }
+    const data = await api('/api/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ indexNumber, password, institutionCode, loginRole: 'student' })
+    });
     token = data.token;
     localStorage.setItem('token', token);
     currentUser = data.user;
     showDashboard(data);
   } catch (e) {
-    showStudentError('Invalid student ID or password. Please try again.');
+    if (btn) { btn.textContent = 'Sign In'; btn.disabled = false; }
+    showStudentError(e.message || 'Invalid student ID or password. Please try again.');
   }
 }
 
@@ -4094,8 +4082,8 @@ function renderContact() {
     <div class="card">
       <h3 style="margin-bottom:16px">Frequently Asked Questions</h3>
       ${[
-        ['How do I reset a student's password?', 'Go to Users, find the student, and use the Reset Password action. The student will receive a reset code.'],
-        ['Why can't a student mark attendance?', 'Ensure there is an active session running and the student is enrolled in the correct course roster.'],
+        ["How do I reset a student's password?", 'Go to Users, find the student, and use the Reset Password action. The student will receive a reset code.'],
+        ["Why can't a student mark attendance?", 'Ensure there is an active session running and the student is enrolled in the correct course roster.'],
         ['How do I add students to a course?', 'Go to Courses, select the course, and use the Upload Students button to add students via CSV or manually.'],
         ['What happens when the subscription expires?', 'Access is suspended after the trial/subscription period. Contact us to renew your subscription.'],
         ['Can students use the system offline?', 'Yes — students can mark attendance offline using a code. It will sync automatically when they reconnect.'],
@@ -4217,8 +4205,7 @@ async function exportSessionCSV(sessionId, sessionTitle) {
       ])
     ];
 
-    const csv = rows.map(row => row.map(v => '"' + String(v).replace(/"/g, '""') + '"').join(',')).join('
-');
+    const csv = rows.map(row => row.map(v => '"' + String(v).replace(/"/g, '""')+'"').join(',')).join('\n');
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
