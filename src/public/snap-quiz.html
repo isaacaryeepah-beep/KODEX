@@ -547,6 +547,12 @@ window.addEventListener('load', () => loadMLLibs().catch(() => {}));
       <button class="btn btn-primary" id="login-btn">Sign In</button>
       <div id="login-error-msg" style="display:none;margin-top:12px;padding:10px 14px;background:#fef2f2;border:1px solid #fca5a5;border-radius:8px;color:#dc2626;font-size:13px;text-align:center;"></div>
       <p style="font-size:12px;color:rgba(255,255,255,.35);text-align:center;margin-top:14px;">No account yet? <button onclick="switchAuthTab('register')" style="background:none;border:none;color:var(--primary);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;padding:0;">Register here →</button></p>
+      <p style="font-size:11px;color:rgba(255,255,255,.25);text-align:center;margin-top:10px;">
+        <a onclick="showSnapLegal('terms')" style="color:rgba(255,255,255,.4);cursor:pointer;text-decoration:underline">Terms</a>
+        &nbsp;&amp;&nbsp;
+        <a onclick="showSnapLegal('privacy')" style="color:rgba(255,255,255,.4);cursor:pointer;text-decoration:underline">Privacy Policy</a>
+        &nbsp;·&nbsp;&copy; 2025 KODEX
+      </p>
     </div>
 
     <!-- ── REGISTER PANEL ── -->
@@ -1844,6 +1850,35 @@ state.deviceFingerprint = buildFingerprint();
 
 // Warm up TF model in background
 setTimeout(() => loadFaceModel().catch(console.warn), 1500);
+const SNAP_LEGAL = {
+  terms: {
+    title: 'Terms & Conditions',
+    body: `<p style="color:#6b7280;font-size:11px;margin-bottom:16px">Last updated: January 1, 2025 &nbsp;·&nbsp; KODEX Smart Attendance</p>
+    <h4 style="margin:0 0 6px;color:#111827">1. Acceptance</h4><p>By using the KODEX platform you agree to these Terms. These apply to all students using proctored assessments.</p>
+    <h4 style="margin:16px 0 6px;color:#111827">2. Academic Integrity</h4><p>You agree not to share QR codes, attendance tokens, or assessment codes. The platform may auto-submit your assessment if integrity violations are detected.</p>
+    <h4 style="margin:16px 0 6px;color:#111827">3. Camera & Proctoring</h4><p>You consent to camera use during assessments for facial presence detection. No images are stored on KODEX servers — processing is on-device only.</p>
+    <h4 style="margin:16px 0 6px;color:#111827">4. Attendance</h4><p>Attendance codes expire every 15 seconds to prevent sharing. Attempting to share or use an expired code is a violation of these Terms.</p>
+    <h4 style="margin:16px 0 6px;color:#111827">5. Contact</h4><p>📧 nelsonkel78@gmail.com &nbsp;·&nbsp; 📞 0559545339 / 0536143117 / 0534707844</p>`
+  },
+  privacy: {
+    title: 'Privacy Policy',
+    body: `<p style="color:#6b7280;font-size:11px;margin-bottom:16px">Last updated: January 1, 2025 &nbsp;·&nbsp; KODEX Smart Attendance</p>
+    <h4 style="margin:0 0 6px;color:#111827">1. Data Collected</h4><p>We collect your name, student ID, attendance records, assessment responses, and device information for the purpose of operating the platform.</p>
+    <h4 style="margin:16px 0 6px;color:#111827">2. Camera Data</h4><p>Camera access is used only for on-device face detection during proctored assessments. No facial images are transmitted or stored on our servers.</p>
+    <h4 style="margin:16px 0 6px;color:#111827">3. Data Sharing</h4><p>Your data is shared only with your registered institution. We do not sell personal data. Data may be disclosed if required by law.</p>
+    <h4 style="margin:16px 0 6px;color:#111827">4. Retention</h4><p>Records are kept for the duration of your institution's subscription plus 12 months, then deleted.</p>
+    <h4 style="margin:16px 0 6px;color:#111827">5. Contact</h4><p>📧 nelsonkel78@gmail.com &nbsp;·&nbsp; 📞 0559545339 / 0536143117 / 0534707844</p>`
+  }
+};
+
+function showSnapLegal(tab) {
+  const d = SNAP_LEGAL[tab];
+  document.getElementById('snap-legal-title').textContent = d.title;
+  document.getElementById('snap-legal-body').innerHTML = d.body;
+  const ov = document.getElementById('snap-legal-overlay');
+  ov.style.display = 'flex';
+}
+
 </script>
 </body>
 </html>
