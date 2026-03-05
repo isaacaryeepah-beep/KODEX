@@ -53,12 +53,15 @@ function computeIntegrity(totalViolations, warningsIssued) {
 function classifyEvent(eventType) {
   const critical = ["multiple_faces", "camera_disabled", "identity_mismatch", "session_conflict", "phone_detected", "head_turn"];
   const warning = [
-    "tab_switch",
-    "app_background",
+    "tab_switch",        // kept for legacy
+    "app_background",    // sent by frontend when tab is hidden
+    "app_foreground",    // sent on return — duration checked separately
     "face_missing",
+    "face_off_center",   // was missing — now logged as warning
     "rapid_switching",
     "copy_attempt",
     "screenshot_attempt",
+    "orientation_change",
   ];
   if (critical.includes(eventType)) return { severity: "critical", violationLevel: 3 };
   if (warning.includes(eventType)) return { severity: "warning", violationLevel: 2 };
@@ -276,32 +279,44 @@ exports.logEvent = async (req, res) => {
     let action = "logged"; // logged | warned | terminated
 
     // ── Violation enforcement ──────────────────────────────────────────────
-    if (violationLevel > 0) {
+
+    // Background too long — terminate immediately regardless of violation level
+    const backgroundTooLong =
+      (eventType === "app_foreground") && duration && duration > 10;
+
+    if (backgroundTooLong) {
+      session.totalViolations += 1;
+      session.integrityScore = computeIntegrity(session.totalViolations, session.warningsIssued);
+      session.status = "terminated";
+      session.violationLevel = 3;
+      session.terminationReason = "app_background_timeout";
+      session.endedAt = new Date();
+      await DeviceLock.updateMany(
+        { session: session._id },
+        { isActive: false, releasedAt: new Date(), releaseReason: "terminated" }
+      );
+      action = "terminated";
+    } else if (violationLevel > 0) {
       session.totalViolations += 1;
       session.integrityScore = computeIntegrity(session.totalViolations, session.warningsIssued);
 
-      // Level 3 → immediate terminate
-      // Note: duration is sent with app_foreground (after returning), not app_background
-      // Track critical violations separately for 2-strike rule
+      // Track critical violations for 2-strike rule
       if (violationLevel === 3) {
         session.criticalViolations = (session.criticalViolations || 0) + 1;
       }
 
       if (
         (violationLevel === 3 && session.criticalViolations >= 2) ||
-        ((eventType === "app_background" || eventType === "app_foreground") && duration && duration > 10) ||
         session.totalViolations >= 10
       ) {
         session.status = "terminated";
         session.violationLevel = 3;
         session.terminationReason = eventType;
         session.endedAt = new Date();
-
         await DeviceLock.updateMany(
           { session: session._id },
           { isActive: false, releasedAt: new Date(), releaseReason: "terminated" }
         );
-
         action = "terminated";
       } else if (session.totalViolations % 3 === 0) {
         // Issue a warning every 3 violations
