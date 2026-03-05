@@ -85,6 +85,10 @@ const quizSessionSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+    criticalViolations: {
+      type: Number,
+      default: 0,
+    },
 
     // Identity verification
     identityVerified: {
