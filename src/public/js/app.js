@@ -2718,13 +2718,15 @@ async function renderLecturerQuizzes(content) {
                 <td>${q.attemptCount || 0}</td>
                 <td style="font-size:0.85em;">${new Date(q.startTime).toLocaleString()} — ${new Date(q.endTime).toLocaleString()}</td>
                 <td>${quizStatusBadge(q)}</td>
-                <td style="white-space:nowrap;">
-                  <button class="btn btn-sm btn-secondary" onclick="viewLecturerQuizDetail('${q._id}')">Details</button>
-                  <button class="btn btn-sm btn-primary" onclick="showAddQuestionsView('${q._id}')">Questions</button>
-                  <button class="btn btn-sm btn-success" onclick="viewQuizResults('${q._id}')">Results</button>
-                  <button class="btn btn-sm" style="background:#dc2626;color:#fff;font-weight:700;" onclick="openLiveMonitor('${q._id}')" title="Open Live Proctor Monitor">🔴 Monitor</button>
-                  <button class="btn btn-sm" style="background:#0ea5e9;color:#fff;" onclick="copyQuizId('${q._id}')" title="Copy Quiz ID">📋 ID</button>
-                  <button class="btn btn-sm btn-danger" onclick="deleteLecturerQuiz('${q._id}')">Delete</button>
+                <td>
+                  <div style="display:flex;flex-wrap:wrap;gap:5px;">
+                    <button class="btn btn-sm btn-primary" onclick="showAddQuestionsView('${q._id}')">Questions</button>
+                    <button class="btn btn-sm btn-secondary" onclick="viewLecturerQuizDetail('${q._id}')">Details</button>
+                    <button class="btn btn-sm btn-success" onclick="viewQuizResults('${q._id}')">Results</button>
+                    <button class="btn btn-sm" style="background:#dc2626;color:#fff;font-weight:700;" onclick="openLiveMonitor('${q._id}')" title="Live Monitor">🔴</button>
+                    <button class="btn btn-sm" style="background:#0ea5e9;color:#fff;" onclick="copyQuizId('${q._id}')" title="Copy Quiz ID">📋</button>
+                    <button class="btn btn-sm" style="background:#fef2f2;color:#dc2626;border:1px solid #fecaca;font-weight:600;" onclick="deleteLecturerQuiz('${q._id}')">Delete</button>
+                  </div>
                 </td>
               </tr>
             `).join('')}</tbody>
