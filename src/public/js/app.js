@@ -466,11 +466,17 @@ async function handleAdminForgotPassword() {
 
 function showAdminError(msg) {
   const el = document.getElementById('admin-auth-error');
+  if (!el) return;
   el.textContent = msg;
   el.style.display = 'block';
   el.style.background = '';
   el.style.color = '';
-  setTimeout(() => el.style.display = 'none', 5000);
+  // Shake + keep visible for 8 seconds
+  el.classList.remove('shake');
+  void el.offsetWidth; // force reflow to restart animation
+  el.classList.add('shake');
+  clearTimeout(el._hideTimer);
+  el._hideTimer = setTimeout(() => { el.style.display = 'none'; el.classList.remove('shake'); }, 8000);
 }
 
 function showLecturerRegister() {
@@ -545,20 +551,32 @@ async function handleLecturerForgotPassword() {
 
 function showLecturerError(msg) {
   const el = document.getElementById('lecturer-auth-error');
+  if (!el) return;
   el.textContent = msg;
   el.style.display = 'block';
   el.style.background = '';
   el.style.color = '';
-  setTimeout(() => el.style.display = 'none', 5000);
+  // Shake + keep visible for 8 seconds
+  el.classList.remove('shake');
+  void el.offsetWidth; // force reflow to restart animation
+  el.classList.add('shake');
+  clearTimeout(el._hideTimer);
+  el._hideTimer = setTimeout(() => { el.style.display = 'none'; el.classList.remove('shake'); }, 8000);
 }
 
 function showEmployeeError(msg) {
   const el = document.getElementById('employee-auth-error');
+  if (!el) return;
   el.textContent = msg;
   el.style.display = 'block';
   el.style.background = '';
   el.style.color = '';
-  setTimeout(() => el.style.display = 'none', 5000);
+  // Shake + keep visible for 8 seconds
+  el.classList.remove('shake');
+  void el.offsetWidth; // force reflow to restart animation
+  el.classList.add('shake');
+  clearTimeout(el._hideTimer);
+  el._hideTimer = setTimeout(() => { el.style.display = 'none'; el.classList.remove('shake'); }, 8000);
 }
 
 function showStudentRegister() {
@@ -589,11 +607,17 @@ function showStudentForgot() {
 
 function showStudentError(msg) {
   const el = document.getElementById('student-auth-error');
+  if (!el) return;
   el.textContent = msg;
   el.style.display = 'block';
   el.style.background = '';
   el.style.color = '';
-  setTimeout(() => el.style.display = 'none', 5000);
+  // Shake + keep visible for 8 seconds
+  el.classList.remove('shake');
+  void el.offsetWidth; // force reflow to restart animation
+  el.classList.add('shake');
+  clearTimeout(el._hideTimer);
+  el._hideTimer = setTimeout(() => { el.style.display = 'none'; el.classList.remove('shake'); }, 8000);
 }
 
 function showPendingApproval(message) {
@@ -638,22 +662,20 @@ async function handleAdminLogin() {
   try {
     const email = document.getElementById('admin-login-email').value.trim();
     const password = document.getElementById('admin-login-password').value;
-    if (!email) return showAdminError('Please enter your email');
-    if (!password) return showAdminError('Please enter your password');
+    if (!email) return showAdminError('Please enter your email.');
+    if (!password) return showAdminError('Please enter your password.');
     if (btn) { btn.textContent = 'Signing in…'; btn.disabled = true; }
+
     const portalMode = selectedPortalType === 'admin-academic' ? 'academic' : 'corporate';
     const credentials = { email, password, loginRole: 'admin', portalMode };
 
     let data;
     if (!isOnline()) {
-      // ── OFFLINE PATH ──
       showOfflineLoginNotice('admin-login-form');
       data = await attemptOfflineLogin(credentials);
     } else {
-      // ── ONLINE PATH ──
       removeOfflineLoginNotice();
       data = await api('/api/auth/login', { method: 'POST', body: JSON.stringify(credentials) });
-      // Cache profile for future offline logins
       await saveOfflineProfile(credentials, data);
     }
 
@@ -664,32 +686,25 @@ async function handleAdminLogin() {
   } catch (e) {
     if (btn) { btn.textContent = 'Sign In'; btn.disabled = false; }
     const msg = e.message || '';
-    // Auto-switch portal if user is on the wrong one
-    if (msg.toLowerCase().includes('academic') && selectedPortalType === 'admin-corporate') {
-      showAdminError('Your account is on the Academic portal. Switching you there now…');
-      setTimeout(() => {
-        selectPortal('admin-academic');
-        // Pre-fill email so user doesn't have to retype
-        const emailVal = document.getElementById('admin-login-email')?.value;
-        if (emailVal) {
-          setTimeout(() => {
-            const el = document.getElementById('admin-login-email');
-            if (el) el.value = emailVal;
-          }, 100);
-        }
-      }, 1200);
-    } else if (msg.toLowerCase().includes('corporate') && selectedPortalType === 'admin-academic') {
-      showAdminError('Your account is on the Corporate portal. Switching you there now…');
-      setTimeout(() => {
-        selectPortal('admin-corporate');
-        const emailVal = document.getElementById('admin-login-email')?.value;
-        if (emailVal) {
-          setTimeout(() => {
-            const el = document.getElementById('admin-login-email');
-            if (el) el.value = emailVal;
-          }, 100);
-        }
-      }, 1200);
+    const m = msg.toLowerCase();
+
+    // ── Strict portal enforcement — tell them exactly what's wrong ──
+    if (m.includes('academic') && selectedPortalType === 'admin-corporate') {
+      showAdminError('Wrong portal. Your account belongs to the Academic portal — please go back and select "Academic Admin".');
+    } else if (m.includes('corporate') && selectedPortalType === 'admin-academic') {
+      showAdminError('Wrong portal. Your account belongs to the Corporate portal — please go back and select "Corporate Admin".');
+    } else if (m.includes('lecturer')) {
+      showAdminError('Wrong portal. Your account is registered as a Lecturer. Please go back and use the Lecturer portal.');
+    } else if (m.includes('employee')) {
+      showAdminError('Wrong portal. Your account is registered as an Employee. Please go back and use the Employee portal.');
+    } else if (m.includes('pending approval')) {
+      showAdminError('Your account is pending approval. Please contact your institution admin.');
+    } else if (m.includes('too many')) {
+      showAdminError('Too many failed attempts. Please wait 15 minutes and try again.');
+    } else if (m.includes('invalid credentials') || m.includes('wrong') || m.includes('incorrect')) {
+      showAdminError('Wrong email or password. Please try again.');
+    } else if (m.includes('network') || m.includes('fetch')) {
+      showAdminError('Network error. Please check your connection and try again.');
     } else {
       showAdminError(friendlyError(msg) || 'Wrong email or password. Please try again.');
     }
@@ -753,7 +768,17 @@ async function handleLecturerLogin() {
     showDashboard(data);
   } catch (e) {
     if (btn) { btn.textContent = 'Sign In'; btn.disabled = false; }
-    showLecturerError(friendlyError(e.message) || 'Wrong email or password. Please try again.');
+    const msg = e.message || '';
+    const m = msg.toLowerCase();
+    if (m.includes('admin') || m.includes('employee') || m.includes('student')) {
+      showLecturerError('Wrong portal. Your account is not registered as a Lecturer. Please go back and choose the correct portal.');
+    } else if (m.includes('pending approval')) {
+      showLecturerError('Your account is pending approval. Please contact your institution admin.');
+    } else if (m.includes('too many')) {
+      showLecturerError('Too many failed attempts. Please wait 15 minutes and try again.');
+    } else {
+      showLecturerError('Wrong email or password. Please try again.');
+    }
   }
 }
 
@@ -862,7 +887,17 @@ async function handleEmployeeLogin() {
     showDashboard(data);
   } catch (e) {
     if (btn) { btn.textContent = 'Sign In'; btn.disabled = false; }
-    showEmployeeError(friendlyError(e.message) || 'Wrong email or password. Please try again.');
+    const msg2 = e.message || '';
+    const m2 = msg2.toLowerCase();
+    if (m2.includes('admin') || m2.includes('lecturer') || m2.includes('student')) {
+      showEmployeeError('Wrong portal. Your account is not registered as an Employee. Please go back and choose the correct portal.');
+    } else if (m2.includes('company not found') || m2.includes('institution not found')) {
+      showEmployeeError('Institution code not found. Please check the code and try again.');
+    } else if (m2.includes('too many')) {
+      showEmployeeError('Too many failed attempts. Please wait 15 minutes and try again.');
+    } else {
+      showEmployeeError('Wrong email, institution code, or password. Please try again.');
+    }
   }
 }
 
@@ -922,7 +957,17 @@ async function handleStudentLogin() {
     showDashboard(data);
   } catch (e) {
     if (btn) { btn.textContent = 'Sign In'; btn.disabled = false; }
-    showStudentError(friendlyError(e.message) || 'Wrong student ID or password. Please try again.');
+    const msg3 = e.message || '';
+    const m3 = msg3.toLowerCase();
+    if (m3.includes('admin') || m3.includes('lecturer') || m3.includes('employee')) {
+      showStudentError('Wrong portal. Your account is not registered as a Student. Please go back and choose the correct portal.');
+    } else if (m3.includes('institution not found')) {
+      showStudentError('Institution code not found. Please check and try again.');
+    } else if (m3.includes('too many')) {
+      showStudentError('Too many failed attempts. Please wait 15 minutes and try again.');
+    } else {
+      showStudentError('Wrong student ID, institution code, or password. Please try again.');
+    }
   }
 }
 
@@ -1025,6 +1070,15 @@ async function handleLogout() {
   document.getElementById('dashboard-page').classList.add('hidden');
   document.getElementById('dashboard-page').removeAttribute('data-portal');
   document.getElementById('auth-page').style.display = 'flex';
+
+  // Clean up mobile UI elements
+  const bottomNav = document.getElementById('bottom-nav');
+  if (bottomNav) bottomNav.remove();
+  const overlay = document.getElementById('sidebar-overlay');
+  if (overlay) overlay.remove();
+  document.body.style.overflow = '';
+  document.body.style.cssText = document.body.style.cssText; // flush
+
   showPortalSelector();
 }
 
