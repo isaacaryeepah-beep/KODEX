@@ -663,7 +663,36 @@ async function handleAdminLogin() {
     showDashboard(data);
   } catch (e) {
     if (btn) { btn.textContent = 'Sign In'; btn.disabled = false; }
-    showAdminError(friendlyError(e.message) || 'Wrong email or password. Please try again.');
+    const msg = e.message || '';
+    // Auto-switch portal if user is on the wrong one
+    if (msg.toLowerCase().includes('academic') && selectedPortalType === 'admin-corporate') {
+      showAdminError('Your account is on the Academic portal. Switching you there now…');
+      setTimeout(() => {
+        selectPortal('admin-academic');
+        // Pre-fill email so user doesn't have to retype
+        const emailVal = document.getElementById('admin-login-email')?.value;
+        if (emailVal) {
+          setTimeout(() => {
+            const el = document.getElementById('admin-login-email');
+            if (el) el.value = emailVal;
+          }, 100);
+        }
+      }, 1200);
+    } else if (msg.toLowerCase().includes('corporate') && selectedPortalType === 'admin-academic') {
+      showAdminError('Your account is on the Corporate portal. Switching you there now…');
+      setTimeout(() => {
+        selectPortal('admin-corporate');
+        const emailVal = document.getElementById('admin-login-email')?.value;
+        if (emailVal) {
+          setTimeout(() => {
+            const el = document.getElementById('admin-login-email');
+            if (el) el.value = emailVal;
+          }, 100);
+        }
+      }, 1200);
+    } else {
+      showAdminError(friendlyError(msg) || 'Wrong email or password. Please try again.');
+    }
   }
 }
 
