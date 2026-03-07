@@ -1,5 +1,7 @@
 const axios = require("axios");
 const Company = require("../models/Company");
+const User    = require("../models/User");
+const { sendSubscriptionConfirmed } = require("../services/emailService");
 
 const PAYSTACK_BASE_URL = "https://api.paystack.co";
 const PAYSTACK_SECRET_KEY = process.env.PAYSTACK_SECRET_KEY;
@@ -170,7 +172,19 @@ exports.verifyPaystackSubscription = async (req, res) => {
     }
 
     const now = new Date();
-    const endDate = plan === "monthly" ? addMonths(now, 1) : addYears(now, 1);
+
+    // ── Subscription stacking ──────────────────────────────────────────────
+    // If the company already has an active subscription, extend from the
+    // current end date rather than from today — so early renewals stack up.
+    const existingCompany = await Company.findById(companyId).lean();
+    const baseDate =
+      existingCompany?.subscriptionActive &&
+      existingCompany?.subscriptionEndDate &&
+      new Date(existingCompany.subscriptionEndDate) > now
+        ? new Date(existingCompany.subscriptionEndDate)   // extend from current end
+        : now;                                             // new subscription from today
+
+    const endDate = plan === "monthly" ? addMonths(baseDate, 1) : addYears(baseDate, 1);
 
     const company = await Company.findByIdAndUpdate(
       companyId,
@@ -189,6 +203,22 @@ exports.verifyPaystackSubscription = async (req, res) => {
     );
 
     if (!company) return res.status(404).json({ error: "Company not found" });
+
+    // Send confirmation email to the paying user
+    try {
+      const user = await User.findById(meta.userId).select('email firstName lastName').lean();
+      if (user) {
+        await sendSubscriptionConfirmed({
+          email:     user.email,
+          name:      [user.firstName, user.lastName].filter(Boolean).join(' ') || user.email.split('@')[0],
+          plan,
+          endDate:   company.subscriptionEndDate,
+          amountGhs: meta.amountGhs,
+        });
+      }
+    } catch (emailErr) {
+      console.error('Confirmation email failed:', emailErr.message); // non-fatal
+    }
 
     return res.json({
       message: "Subscription activated ✅",
