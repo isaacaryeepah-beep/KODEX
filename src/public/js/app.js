@@ -644,7 +644,7 @@ function showPendingApproval(message) {
 function friendlyError(msg) {
   if (!msg) return null;
   const m = msg.toLowerCase();
-  if (m.includes('invalid credentials'))         return 'Wrong email or password. Please try again.';
+  if (m.includes('invalid credentials'))         return 'Wrong Email or Password.';
   if (m.includes('institution not found'))        return 'Institution code not found. Please check and try again.';
   if (m.includes('company not found'))            return 'Institution code not found. Please check and try again.';
   if (m.includes('pending approval'))             return msg; // keep as-is — informative
@@ -702,11 +702,11 @@ async function handleAdminLogin() {
     } else if (m.includes('too many')) {
       showAdminError('Too many failed attempts. Please wait 15 minutes and try again.');
     } else if (m.includes('invalid credentials') || m.includes('wrong') || m.includes('incorrect')) {
-      showAdminError('Wrong email or password. Please try again.');
+      showAdminError('Wrong Email or Password.');
     } else if (m.includes('network') || m.includes('fetch')) {
       showAdminError('Network error. Please check your connection and try again.');
     } else {
-      showAdminError(friendlyError(msg) || 'Wrong email or password. Please try again.');
+      showAdminError(friendlyError(msg) || 'Wrong Email or Password.');
     }
   }
 }
@@ -777,7 +777,7 @@ async function handleLecturerLogin() {
     } else if (m.includes('too many')) {
       showLecturerError('Too many failed attempts. Please wait 15 minutes and try again.');
     } else {
-      showLecturerError('Wrong email or password. Please try again.');
+      showLecturerError('Wrong Email or Password.');
     }
   }
 }
@@ -896,7 +896,7 @@ async function handleEmployeeLogin() {
     } else if (m2.includes('too many')) {
       showEmployeeError('Too many failed attempts. Please wait 15 minutes and try again.');
     } else {
-      showEmployeeError('Wrong email, institution code, or password. Please try again.');
+      showEmployeeError('Wrong Email or Password.');
     }
   }
 }
@@ -966,7 +966,7 @@ async function handleStudentLogin() {
     } else if (m3.includes('too many')) {
       showStudentError('Too many failed attempts. Please wait 15 minutes and try again.');
     } else {
-      showStudentError('Wrong student ID, institution code, or password. Please try again.');
+      showStudentError('Wrong Student ID or Password.');
     }
   }
 }
