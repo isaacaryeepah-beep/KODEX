@@ -6,8 +6,8 @@ const PAYSTACK_SECRET_KEY = process.env.PAYSTACK_SECRET_KEY;
 
 // ✅ Your fixed prices
 const PRICES_GHS = {
-  monthly: 120,
-  yearly: 1152,
+  monthly: 200,
+  yearly: 2000, // 200 × 12 = 2400, discounted to 2000 (2 months free)
 };
 
 // ✅ Set end date helper
@@ -64,18 +64,8 @@ exports.getSubscriptionStatus = async (req, res) => {
 exports.getPlans = async (req, res) => {
   return res.json({
     plans: [
-      {
-        id: "monthly",
-        name: "Monthly Plan",
-        stripe: { label: "Not available" },
-        paystack: { label: "GHS 120 / month" },
-      },
-      {
-        id: "yearly",
-        name: "Yearly Plan",
-        stripe: { label: "Not available" },
-        paystack: { label: "GHS 1,152 / year" },
-      },
+      { id: "monthly", name: "Monthly Plan",  stripe: { label: "Not available" }, paystack: { label: "GHS 200 / month" } },
+      { id: "yearly",  name: "Annual Plan",   stripe: { label: "Not available" }, paystack: { label: "GHS 2,000 / year (save GHS 400 — 2 months free)" } },
     ],
   });
 };
