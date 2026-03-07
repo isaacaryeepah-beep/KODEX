@@ -130,12 +130,14 @@ app.use("/api/search", searchRoutes);
 app.use("/api/proctor", proctoredQuizRoutes);
 app.use("/api/assignments", assignmentRoutes);
 app.use("/api/ai",          aiProxyRoutes);
-const shiftRoutes    = require("./routes/shifts");
-const leaveRoutes    = require("./routes/leaves");
-const trainingRoutes = require("./routes/training");
-app.use("/api/shifts",   shiftRoutes);
-app.use("/api/leaves",   leaveRoutes);
-app.use("/api/training", trainingRoutes);
+const shiftRoutes       = require("./routes/shifts");
+const leaveRoutes       = require("./routes/leaves");
+const trainingRoutes    = require("./routes/training");
+const performanceRoutes = require("./routes/performance");
+app.use("/api/shifts",      shiftRoutes);
+app.use("/api/leaves",      leaveRoutes);
+app.use("/api/training",    trainingRoutes);
+app.use("/api/performance", performanceRoutes);
 
 app.use((req, res) => {
   const indexPath = path.join(__dirname, "public", "index.html");
