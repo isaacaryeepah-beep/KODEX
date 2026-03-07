@@ -1186,6 +1186,10 @@ function buildSidebar() {
         links.push({ id: 'courses', label: 'Courses', icon: coursesIcon() });
         links.push({ id: 'quizzes', label: 'Quizzes', icon: quizzesIcon() });
       }
+      if (currentUser.company?.mode === 'corporate') {
+        links.push({ id: 'shifts', label: 'Shifts', icon: svgIcon('<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>') });
+        links.push({ id: 'leave-requests', label: 'Leave Requests', icon: svgIcon('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>') });
+      }
       links.push({ id: 'meetings', label: 'Meetings', icon: meetingsIcon() });
       links.push({ id: 'reports', label: 'Reports', icon: reportsIcon() });
       links.push({ id: 'subscription', label: 'Subscription', icon: subscriptionIcon() });
@@ -1194,6 +1198,10 @@ function buildSidebar() {
       links.push({ id: 'approvals', label: 'Approvals', icon: approvalsIcon() });
       links.push({ id: 'sessions', label: 'Sessions', icon: sessionsIcon() });
       links.push({ id: 'users', label: 'Users', icon: usersIcon() });
+      if (currentUser.company?.mode === 'corporate') {
+        links.push({ id: 'shifts', label: 'Shifts', icon: svgIcon('<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>') });
+        links.push({ id: 'leave-requests', label: 'Leave Requests', icon: svgIcon('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>') });
+      }
       links.push({ id: 'meetings', label: 'Meetings', icon: meetingsIcon() });
       links.push({ id: 'reports', label: 'Reports', icon: reportsIcon() });
       break;
@@ -1211,6 +1219,8 @@ function buildSidebar() {
     case 'employee':
       links.push({ id: 'sign-in-out', label: 'Sign In / Out', icon: attendanceIcon() });
       links.push({ id: 'my-attendance', label: 'My Attendance', icon: sessionsIcon() });
+      links.push({ id: 'my-shift', label: 'My Shift', icon: svgIcon('<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>') });
+      links.push({ id: 'my-leaves', label: 'Leave', icon: svgIcon('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>') });
       links.push({ id: 'meetings', label: 'Meetings', icon: meetingsIcon() });
       links.push({ id: 'reports', label: 'Reports', icon: reportsIcon() });
       break;
@@ -1273,6 +1283,10 @@ function navigateTo(view) {
     case 'sign-in-out': renderSignInOut(); break;
     case 'subscription': renderSubscription(); break;
     case 'reports': renderReports(); break;
+    case 'shifts': renderShifts(); break;
+    case 'leave-requests': renderLeaveRequests(); break;
+    case 'my-shift': renderMyShift(); break;
+    case 'my-leaves': renderMyLeaves(); break;
     case 'approvals': renderApprovals(); break;
     case 'search': renderSearch(); break;
     case 'assignments': location.href='/assignments.html'; return;
@@ -2702,7 +2716,7 @@ function closeQuizModal() {
 
 async function renderLecturerQuizzes(content) {
   try {
-    const data = await api('/api/lecturer/quizzes?source=proctored');
+    const data = await api('/api/lecturer/quizzes');
     content.innerHTML = `
       <div class="page-header"><h2>Quizzes</h2><p>Manage your quizzes and assessments</p></div>
       <div class="actions-bar"><button class="btn btn-primary btn-sm" onclick="showCreateQuizModal()">Create Quiz</button></div>
@@ -2718,15 +2732,13 @@ async function renderLecturerQuizzes(content) {
                 <td>${q.attemptCount || 0}</td>
                 <td style="font-size:0.85em;">${new Date(q.startTime).toLocaleString()} — ${new Date(q.endTime).toLocaleString()}</td>
                 <td>${quizStatusBadge(q)}</td>
-                <td>
-                  <div style="display:flex;flex-wrap:wrap;gap:5px;">
-                    <button class="btn btn-sm btn-primary" onclick="showAddQuestionsView('${q._id}')">Questions</button>
-                    <button class="btn btn-sm btn-secondary" onclick="viewLecturerQuizDetail('${q._id}')">Details</button>
-                    <button class="btn btn-sm btn-success" onclick="viewQuizResults('${q._id}')">Results</button>
-                    <button class="btn btn-sm" style="background:#dc2626;color:#fff;font-weight:700;" onclick="openLiveMonitor('${q._id}')" title="Live Monitor">🔴</button>
-                    <button class="btn btn-sm" style="background:#0ea5e9;color:#fff;" onclick="copyQuizId('${q._id}')" title="Copy Quiz ID">📋</button>
-                    <button class="btn btn-sm" style="background:#fef2f2;color:#dc2626;border:1px solid #fecaca;font-weight:600;" onclick="deleteLecturerQuiz('${q._id}')">Delete</button>
-                  </div>
+                <td style="white-space:nowrap;">
+                  <button class="btn btn-sm btn-secondary" onclick="viewLecturerQuizDetail('${q._id}')">Details</button>
+                  <button class="btn btn-sm btn-primary" onclick="showAddQuestionsView('${q._id}')">Questions</button>
+                  <button class="btn btn-sm btn-success" onclick="viewQuizResults('${q._id}')">Results</button>
+                  <button class="btn btn-sm" style="background:#dc2626;color:#fff;font-weight:700;" onclick="openLiveMonitor('${q._id}')" title="Open Live Proctor Monitor">🔴 Monitor</button>
+                  <button class="btn btn-sm" style="background:#0ea5e9;color:#fff;" onclick="copyQuizId('${q._id}')" title="Copy Quiz ID">📋 ID</button>
+                  <button class="btn btn-sm btn-danger" onclick="deleteLecturerQuiz('${q._id}')">Delete</button>
                 </td>
               </tr>
             `).join('')}</tbody>
@@ -2792,7 +2804,7 @@ async function submitCreateQuiz() {
   try {
     const data = await api('/api/lecturer/quizzes', {
       method: 'POST',
-      body: JSON.stringify({ title, description, courseId, timeLimit, startTime: new Date(startTime).toISOString(), endTime: new Date(endTime).toISOString(), source: 'proctored' })
+      body: JSON.stringify({ title, description, courseId, timeLimit, startTime: new Date(startTime).toISOString(), endTime: new Date(endTime).toISOString() })
     });
     closeQuizModal();
     showAddQuestionsView(data.quiz._id);
@@ -4998,4 +5010,423 @@ async function addAIQuizQuestions(quizId) {
   if (typeof toast === 'function') toast(msg, added > 0 ? 'ok' : 'err');
   else alert(msg);
   await showAddQuestionsView(quizId);
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+//  CORPORATE PHASE 1 — SHIFTS & LEAVE
+// ══════════════════════════════════════════════════════════════════════════
+
+// ── SHIFTS (Admin/Manager) ─────────────────────────────────────────────────
+async function renderShifts() {
+  const content = document.getElementById('main-content');
+  if (!content) return;
+  content.innerHTML = '<div class="loading">Loading shifts…</div>';
+  try {
+    const [shiftsData, assignmentsData, usersData] = await Promise.all([
+      api('/api/shifts'),
+      api('/api/shifts/assignments'),
+      api('/api/users').catch(() => ({ users: [] })),
+    ]);
+    const shifts = shiftsData.shifts || [];
+    const assignments = assignmentsData.assignments || [];
+    const users = (usersData.users || []).filter(u => u.role === 'employee' || u.role === 'manager');
+
+    content.innerHTML = `
+      <div class="page-header">
+        <h2>Shift Management</h2>
+        <p>Create shifts and assign employees</p>
+      </div>
+
+      <!-- Create Shift -->
+      <div class="card" style="margin-bottom:20px">
+        <h3 style="margin-bottom:14px;font-size:15px;font-weight:700">Create New Shift</h3>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;margin-bottom:12px">
+          <div>
+            <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:4px">Shift Name *</label>
+            <input id="sh-name" placeholder="e.g. Morning Shift" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:4px">Start Time *</label>
+            <input id="sh-start" type="time" value="08:00" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:4px">End Time *</label>
+            <input id="sh-end" type="time" value="17:00" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:4px">Grace Period (min)</label>
+            <input id="sh-grace" type="number" value="15" min="0" max="60" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
+          </div>
+        </div>
+        <div style="margin-bottom:12px">
+          <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:6px">Working Days</label>
+          <div style="display:flex;gap:6px;flex-wrap:wrap" id="sh-days">
+            ${['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map(d => `
+              <label style="display:flex;align-items:center;gap:4px;padding:5px 10px;border:1.5px solid #e5e7eb;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600">
+                <input type="checkbox" value="${d}" ${['Mon','Tue','Wed','Thu','Fri'].includes(d) ? 'checked' : ''}> ${d}
+              </label>`).join('')}
+          </div>
+        </div>
+        <div id="sh-error" style="color:#ef4444;font-size:13px;margin-bottom:8px;display:none"></div>
+        <button class="btn btn-primary" onclick="submitCreateShift()">+ Create Shift</button>
+      </div>
+
+      <!-- Shifts List -->
+      <div class="card" style="margin-bottom:20px">
+        <h3 style="margin-bottom:14px;font-size:15px;font-weight:700">Shifts (${shifts.length})</h3>
+        ${shifts.length ? `
+          <div style="display:flex;flex-direction:column;gap:8px">
+            ${shifts.map(s => `
+              <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border:1px solid #e5e7eb;border-radius:8px;flex-wrap:wrap;gap:8px">
+                <div>
+                  <div style="font-weight:700;font-size:14px">${s.name}</div>
+                  <div style="font-size:12px;color:#6b7280">${s.startTime} – ${s.endTime} · Grace: ${s.gracePeriodMinutes}min · ${(s.days||[]).join(', ')}</div>
+                </div>
+                <button class="btn btn-sm" style="background:#fef2f2;color:#dc2626;border:1px solid #fecaca" onclick="deleteShift('${s._id}')">Delete</button>
+              </div>`).join('')}
+          </div>` : '<p style="color:#9ca3af;font-size:13px">No shifts created yet.</p>'}
+      </div>
+
+      <!-- Assign Shift -->
+      <div class="card" style="margin-bottom:20px">
+        <h3 style="margin-bottom:14px;font-size:15px;font-weight:700">Assign Shift to Employee</h3>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;margin-bottom:12px">
+          <div>
+            <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:4px">Employee *</label>
+            <select id="sh-emp" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
+              <option value="">Select employee…</option>
+              ${users.map(u => `<option value="${u._id}">${u.name}${u.department ? ' · '+u.department : ''}</option>`).join('')}
+            </select>
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:4px">Shift *</label>
+            <select id="sh-shift" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
+              <option value="">Select shift…</option>
+              ${shifts.map(s => `<option value="${s._id}">${s.name} (${s.startTime}–${s.endTime})</option>`).join('')}
+            </select>
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:4px">Start Date *</label>
+            <input id="sh-asgn-start" type="date" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px" value="${new Date().toISOString().split('T')[0]}">
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:4px">End Date (optional)</label>
+            <input id="sh-asgn-end" type="date" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
+          </div>
+        </div>
+        <div id="sh-asgn-error" style="color:#ef4444;font-size:13px;margin-bottom:8px;display:none"></div>
+        <button class="btn btn-primary" onclick="submitAssignShift()">Assign Shift</button>
+      </div>
+
+      <!-- Current Assignments -->
+      <div class="card">
+        <h3 style="margin-bottom:14px;font-size:15px;font-weight:700">Current Assignments (${assignments.length})</h3>
+        ${assignments.length ? `
+          <table style="width:100%;border-collapse:collapse;font-size:13px">
+            <thead>
+              <tr style="background:#f9fafb">
+                <th style="padding:10px;text-align:left;border-bottom:1px solid #e5e7eb">Employee</th>
+                <th style="padding:10px;text-align:left;border-bottom:1px solid #e5e7eb">Department</th>
+                <th style="padding:10px;text-align:left;border-bottom:1px solid #e5e7eb">Shift</th>
+                <th style="padding:10px;text-align:left;border-bottom:1px solid #e5e7eb">Hours</th>
+                <th style="padding:10px;text-align:left;border-bottom:1px solid #e5e7eb">Since</th>
+                <th style="padding:10px;text-align:left;border-bottom:1px solid #e5e7eb">Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${assignments.map(a => `
+                <tr style="border-bottom:1px solid #f3f4f6">
+                  <td style="padding:10px;font-weight:600">${a.employee?.name || 'Unknown'}</td>
+                  <td style="padding:10px;color:#6b7280">${a.employee?.department || '—'}</td>
+                  <td style="padding:10px">${a.shift?.name || '—'}</td>
+                  <td style="padding:10px;color:#6b7280">${a.shift?.startTime || ''}–${a.shift?.endTime || ''}</td>
+                  <td style="padding:10px;color:#6b7280">${new Date(a.startDate).toLocaleDateString()}</td>
+                  <td style="padding:10px">
+                    <button class="btn btn-sm" style="background:#fef2f2;color:#dc2626;border:1px solid #fecaca" onclick="removeShiftAssignment('${a._id}')">Remove</button>
+                  </td>
+                </tr>`).join('')}
+            </tbody>
+          </table>` : '<p style="color:#9ca3af;font-size:13px">No assignments yet.</p>'}
+      </div>
+    `;
+  } catch(e) {
+    content.innerHTML = `<div class="card"><p style="color:#ef4444">Error: ${e.message}</p></div>`;
+  }
+}
+
+async function submitCreateShift() {
+  const name = document.getElementById('sh-name').value.trim();
+  const startTime = document.getElementById('sh-start').value;
+  const endTime = document.getElementById('sh-end').value;
+  const gracePeriodMinutes = parseInt(document.getElementById('sh-grace').value) || 15;
+  const days = [...document.querySelectorAll('#sh-days input:checked')].map(c => c.value);
+  const errEl = document.getElementById('sh-error');
+  errEl.style.display = 'none';
+  if (!name || !startTime || !endTime) { errEl.textContent = 'Name, start and end time are required.'; errEl.style.display = 'block'; return; }
+  if (!days.length) { errEl.textContent = 'Select at least one working day.'; errEl.style.display = 'block'; return; }
+  const btn = event.target; btn.disabled = true; btn.textContent = 'Creating…';
+  try {
+    await api('/api/shifts', { method: 'POST', body: JSON.stringify({ name, startTime, endTime, gracePeriodMinutes, days }) });
+    toast('Shift created!', 'ok');
+    renderShifts();
+  } catch(e) {
+    errEl.textContent = e.message; errEl.style.display = 'block';
+    btn.disabled = false; btn.textContent = '+ Create Shift';
+  }
+}
+
+async function deleteShift(id) {
+  if (!confirm('Delete this shift? Employees assigned to it will need a new shift.')) return;
+  try {
+    await api(`/api/shifts/${id}`, { method: 'DELETE' });
+    toast('Shift deleted', 'ok');
+    renderShifts();
+  } catch(e) { toast(e.message, 'err'); }
+}
+
+async function submitAssignShift() {
+  const employeeId = document.getElementById('sh-emp').value;
+  const shiftId = document.getElementById('sh-shift').value;
+  const startDate = document.getElementById('sh-asgn-start').value;
+  const endDate = document.getElementById('sh-asgn-end').value;
+  const errEl = document.getElementById('sh-asgn-error');
+  errEl.style.display = 'none';
+  if (!employeeId || !shiftId || !startDate) { errEl.textContent = 'Employee, shift and start date are required.'; errEl.style.display = 'block'; return; }
+  const btn = event.target; btn.disabled = true; btn.textContent = 'Assigning…';
+  try {
+    await api('/api/shifts/assign', { method: 'POST', body: JSON.stringify({ employeeId, shiftId, startDate, endDate: endDate || null }) });
+    toast('Shift assigned!', 'ok');
+    renderShifts();
+  } catch(e) {
+    errEl.textContent = e.message; errEl.style.display = 'block';
+    btn.disabled = false; btn.textContent = 'Assign Shift';
+  }
+}
+
+async function removeShiftAssignment(id) {
+  if (!confirm('Remove this shift assignment?')) return;
+  try {
+    await api(`/api/shifts/assignments/${id}`, { method: 'DELETE' });
+    toast('Assignment removed', 'ok');
+    renderShifts();
+  } catch(e) { toast(e.message, 'err'); }
+}
+
+// ── MY SHIFT (Employee) ────────────────────────────────────────────────────
+async function renderMyShift() {
+  const content = document.getElementById('main-content');
+  if (!content) return;
+  content.innerHTML = '<div class="loading">Loading your shift…</div>';
+  try {
+    const { assignment } = await api('/api/shifts/my-shift');
+    const s = assignment?.shift;
+    content.innerHTML = `
+      <div class="page-header"><h2>My Shift</h2><p>Your assigned working hours</p></div>
+      ${assignment && s ? `
+        <div class="card" style="text-align:center;padding:40px 24px;border-left:4px solid var(--primary)">
+          <div style="font-size:48px;margin-bottom:12px">🕐</div>
+          <div style="font-size:22px;font-weight:800;margin-bottom:6px">${s.name}</div>
+          <div style="font-size:32px;font-weight:700;color:var(--primary);margin-bottom:8px">${s.startTime} – ${s.endTime}</div>
+          <div style="font-size:14px;color:#6b7280;margin-bottom:4px">Working days: <strong>${(s.days||[]).join(', ')}</strong></div>
+          <div style="font-size:13px;color:#9ca3af">Grace period: ${s.gracePeriodMinutes} minutes · Assigned since ${new Date(assignment.startDate).toLocaleDateString()}</div>
+          ${assignment.endDate ? `<div style="font-size:13px;color:#f59e0b;margin-top:8px">⚠️ This assignment ends on ${new Date(assignment.endDate).toLocaleDateString()}</div>` : ''}
+        </div>` : `
+        <div class="card" style="text-align:center;padding:60px 24px">
+          <div style="font-size:48px;opacity:.3;margin-bottom:16px">📅</div>
+          <div style="font-size:16px;font-weight:600;margin-bottom:6px">No shift assigned</div>
+          <p style="color:#9ca3af;font-size:13px">Contact your manager to get a shift assigned to you.</p>
+        </div>`}
+    `;
+  } catch(e) {
+    content.innerHTML = `<div class="card"><p style="color:#ef4444">Error: ${e.message}</p></div>`;
+  }
+}
+
+// ── LEAVE REQUESTS (Admin/Manager) ────────────────────────────────────────
+async function renderLeaveRequests() {
+  const content = document.getElementById('main-content');
+  if (!content) return;
+  content.innerHTML = '<div class="loading">Loading leave requests…</div>';
+  try {
+    const [pendingData, allData] = await Promise.all([
+      api('/api/leaves/pending'),
+      api('/api/leaves?status=approved'),
+    ]);
+    const pending = pendingData.leaves || [];
+    const approved = allData.leaves || [];
+
+    const leaveTypeBadge = t => ({
+      annual: '<span style="background:#eff6ff;color:#1d4ed8;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600">Annual</span>',
+      sick:   '<span style="background:#fef2f2;color:#dc2626;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600">Sick</span>',
+      maternity: '<span style="background:#fdf4ff;color:#9333ea;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600">Maternity</span>',
+      paternity: '<span style="background:#f0fdf4;color:#16a34a;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600">Paternity</span>',
+      unpaid: '<span style="background:#f9fafb;color:#6b7280;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600">Unpaid</span>',
+      other:  '<span style="background:#fffbeb;color:#d97706;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600">Other</span>',
+    }[t] || t);
+
+    content.innerHTML = `
+      <div class="page-header"><h2>Leave Requests</h2><p>Review and approve employee leave</p></div>
+
+      <!-- Pending -->
+      <div class="card" style="margin-bottom:20px">
+        <h3 style="margin-bottom:14px;font-size:15px;font-weight:700">⏳ Pending Approval (${pending.length})</h3>
+        ${pending.length ? pending.map(l => `
+          <div style="padding:14px;border:1px solid #fed7aa;border-radius:8px;background:#fffbeb;margin-bottom:10px">
+            <div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:8px">
+              <div>
+                <div style="font-weight:700;font-size:14px">${l.employee?.name || 'Unknown'} ${leaveTypeBadge(l.type)}</div>
+                <div style="font-size:12px;color:#6b7280;margin-top:3px">${l.employee?.department || 'No dept'} · ${new Date(l.startDate).toLocaleDateString()} → ${new Date(l.endDate).toLocaleDateString()} · <strong>${l.days} day${l.days!==1?'s':''}</strong></div>
+                ${l.reason ? `<div style="font-size:12px;color:#374151;margin-top:4px;font-style:italic">"${l.reason}"</div>` : ''}
+              </div>
+              <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+                <input id="note-${l._id}" placeholder="Note (optional)" style="padding:6px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:12px;width:160px">
+                <button class="btn btn-sm" style="background:#f0fdf4;color:#16a34a;border:1px solid #bbf7d0;font-weight:600" onclick="reviewLeave('${l._id}','approved')">✓ Approve</button>
+                <button class="btn btn-sm" style="background:#fef2f2;color:#dc2626;border:1px solid #fecaca;font-weight:600" onclick="reviewLeave('${l._id}','rejected')">✗ Reject</button>
+              </div>
+            </div>
+          </div>`).join('') : '<p style="color:#9ca3af;font-size:13px">No pending requests.</p>'}
+      </div>
+
+      <!-- Recent Approved -->
+      <div class="card">
+        <h3 style="margin-bottom:14px;font-size:15px;font-weight:700">✅ Recently Approved</h3>
+        ${approved.length ? `
+          <table style="width:100%;border-collapse:collapse;font-size:13px">
+            <thead>
+              <tr style="background:#f9fafb">
+                <th style="padding:10px;text-align:left;border-bottom:1px solid #e5e7eb">Employee</th>
+                <th style="padding:10px;text-align:left;border-bottom:1px solid #e5e7eb">Type</th>
+                <th style="padding:10px;text-align:left;border-bottom:1px solid #e5e7eb">Dates</th>
+                <th style="padding:10px;text-align:left;border-bottom:1px solid #e5e7eb">Days</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${approved.slice(0,20).map(l => `
+                <tr style="border-bottom:1px solid #f3f4f6">
+                  <td style="padding:10px;font-weight:600">${l.employee?.name || 'Unknown'}</td>
+                  <td style="padding:10px">${leaveTypeBadge(l.type)}</td>
+                  <td style="padding:10px;color:#6b7280;font-size:12px">${new Date(l.startDate).toLocaleDateString()} → ${new Date(l.endDate).toLocaleDateString()}</td>
+                  <td style="padding:10px">${l.days}</td>
+                </tr>`).join('')}
+            </tbody>
+          </table>` : '<p style="color:#9ca3af;font-size:13px">No approved leaves yet.</p>'}
+      </div>
+    `;
+  } catch(e) {
+    content.innerHTML = `<div class="card"><p style="color:#ef4444">Error: ${e.message}</p></div>`;
+  }
+}
+
+async function reviewLeave(id, action) {
+  const note = document.getElementById(`note-${id}`)?.value || '';
+  const btn = event.target; btn.disabled = true;
+  try {
+    await api(`/api/leaves/${id}/review`, { method: 'PATCH', body: JSON.stringify({ action, note }) });
+    toast(action === 'approved' ? 'Leave approved ✓' : 'Leave rejected', action === 'approved' ? 'ok' : 'err');
+    renderLeaveRequests();
+  } catch(e) {
+    toast(e.message, 'err');
+    btn.disabled = false;
+  }
+}
+
+// ── MY LEAVES (Employee) ──────────────────────────────────────────────────
+async function renderMyLeaves() {
+  const content = document.getElementById('main-content');
+  if (!content) return;
+  content.innerHTML = '<div class="loading">Loading…</div>';
+  try {
+    const { leaves } = await api('/api/leaves/my');
+
+    const statusBadge = s => ({
+      pending:   '<span style="background:#fffbeb;color:#d97706;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600">Pending</span>',
+      approved:  '<span style="background:#f0fdf4;color:#16a34a;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600">Approved</span>',
+      rejected:  '<span style="background:#fef2f2;color:#dc2626;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600">Rejected</span>',
+      cancelled: '<span style="background:#f9fafb;color:#6b7280;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600">Cancelled</span>',
+    }[s] || s);
+
+    content.innerHTML = `
+      <div class="page-header"><h2>My Leave</h2><p>Request and track your leave</p></div>
+
+      <!-- Request Form -->
+      <div class="card" style="margin-bottom:20px">
+        <h3 style="margin-bottom:14px;font-size:15px;font-weight:700">Request Leave</h3>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin-bottom:10px">
+          <div>
+            <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:4px">Leave Type *</label>
+            <select id="lv-type" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
+              <option value="annual">Annual Leave</option>
+              <option value="sick">Sick Leave</option>
+              <option value="maternity">Maternity Leave</option>
+              <option value="paternity">Paternity Leave</option>
+              <option value="unpaid">Unpaid Leave</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:4px">Start Date *</label>
+            <input id="lv-start" type="date" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:4px">End Date *</label>
+            <input id="lv-end" type="date" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
+          </div>
+        </div>
+        <div style="margin-bottom:10px">
+          <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:4px">Reason (optional)</label>
+          <textarea id="lv-reason" rows="2" placeholder="Brief reason for leave…" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;resize:vertical"></textarea>
+        </div>
+        <div id="lv-error" style="color:#ef4444;font-size:13px;margin-bottom:8px;display:none"></div>
+        <button class="btn btn-primary" onclick="submitLeaveRequest()">Submit Request</button>
+      </div>
+
+      <!-- History -->
+      <div class="card">
+        <h3 style="margin-bottom:14px;font-size:15px;font-weight:700">My Leave History</h3>
+        ${leaves.length ? leaves.map(l => `
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border:1px solid #e5e7eb;border-radius:8px;margin-bottom:8px;flex-wrap:wrap;gap:8px">
+            <div>
+              <div style="font-size:13px;font-weight:600">${l.type.charAt(0).toUpperCase()+l.type.slice(1)} Leave · ${l.days} day${l.days!==1?'s':''}</div>
+              <div style="font-size:12px;color:#6b7280">${new Date(l.startDate).toLocaleDateString()} → ${new Date(l.endDate).toLocaleDateString()}</div>
+              ${l.reviewNote ? `<div style="font-size:11px;color:#9ca3af;margin-top:2px">Note: ${l.reviewNote}</div>` : ''}
+            </div>
+            <div style="display:flex;align-items:center;gap:8px">
+              ${statusBadge(l.status)}
+              ${l.status === 'pending' ? `<button class="btn btn-sm" style="background:#fef2f2;color:#dc2626;border:1px solid #fecaca;font-size:11px" onclick="cancelLeave('${l._id}')">Cancel</button>` : ''}
+            </div>
+          </div>`).join('') : '<p style="color:#9ca3af;font-size:13px">No leave requests yet.</p>'}
+      </div>
+    `;
+  } catch(e) {
+    content.innerHTML = `<div class="card"><p style="color:#ef4444">Error: ${e.message}</p></div>`;
+  }
+}
+
+async function submitLeaveRequest() {
+  const type = document.getElementById('lv-type').value;
+  const startDate = document.getElementById('lv-start').value;
+  const endDate = document.getElementById('lv-end').value;
+  const reason = document.getElementById('lv-reason').value.trim();
+  const errEl = document.getElementById('lv-error');
+  errEl.style.display = 'none';
+  if (!startDate || !endDate) { errEl.textContent = 'Start and end dates are required.'; errEl.style.display = 'block'; return; }
+  if (new Date(endDate) < new Date(startDate)) { errEl.textContent = 'End date must be after start date.'; errEl.style.display = 'block'; return; }
+  const btn = event.target; btn.disabled = true; btn.textContent = 'Submitting…';
+  try {
+    await api('/api/leaves', { method: 'POST', body: JSON.stringify({ type, startDate, endDate, reason }) });
+    toast('Leave request submitted!', 'ok');
+    renderMyLeaves();
+  } catch(e) {
+    errEl.textContent = e.message; errEl.style.display = 'block';
+    btn.disabled = false; btn.textContent = 'Submit Request';
+  }
+}
+
+async function cancelLeave(id) {
+  if (!confirm('Cancel this leave request?')) return;
+  try {
+    await api(`/api/leaves/${id}/cancel`, { method: 'PATCH' });
+    toast('Leave request cancelled', 'ok');
+    renderMyLeaves();
+  } catch(e) { toast(e.message, 'err'); }
 }
