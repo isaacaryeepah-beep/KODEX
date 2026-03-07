@@ -64,13 +64,17 @@ app.use(cors({
 }));
 
 // ── Body parsing with safe limit ──────────────────────────────────────────────
-app.use(express.json({ limit: "2mb" })); // reduced from 10mb — no need for more
+app.use(express.json({ limit: "10mb" })); // kept at 10mb — proctored quiz snapshots need it
 
 // ── Global input sanitizer (NoSQL injection + XSS prevention) ────────────────
 app.use(sanitizeInputs);
 
 // ── General API rate limit (200 req / 15min per IP) ──────────────────────────
-app.use("/api/", apiLimiter);
+// Exclude snapshot upload from general rate limit (large payloads, frequent during quizzes)
+app.use("/api/", (req, res, next) => {
+  if (req.path.includes('/snapshot') || req.path.includes('/health')) return next();
+  return apiLimiter(req, res, next);
+});
 app.use(express.static(path.join(__dirname, "public"), {
   setHeaders: (res) => {
     res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
