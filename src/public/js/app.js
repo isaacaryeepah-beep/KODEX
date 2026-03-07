@@ -2784,6 +2784,9 @@ async function submitCreateQuiz() {
     errEl.style.display = 'block';
     return;
   }
+  // Prevent double-submit
+  const submitBtn = document.querySelector('#create-quiz-modal .btn-primary, #quiz-modal .btn-primary');
+  if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Creating…'; }
   try {
     const data = await api('/api/lecturer/quizzes', {
       method: 'POST',
@@ -2792,6 +2795,7 @@ async function submitCreateQuiz() {
     closeQuizModal();
     showAddQuestionsView(data.quiz._id);
   } catch (e) {
+    if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Create Quiz'; }
     errEl.textContent = e.message;
     errEl.style.display = 'block';
   }
