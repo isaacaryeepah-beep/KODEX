@@ -82,7 +82,12 @@ exports.listQuizzes = async (req, res) => {
     const filter = { company: req.user.company, createdBy: req.user._id };
 
     // Filter by source if provided (proctored = main portal, assignment = assignments page)
-    if (req.query.source) filter.source = req.query.source;
+    // Legacy quizzes have no source field — treat them as proctored
+    if (req.query.source === 'assignment') {
+      filter.source = 'assignment';
+    } else if (req.query.source === 'proctored') {
+      filter.$or = [{ source: 'proctored' }, { source: { $exists: false } }, { source: null }];
+    }
 
     if (courseId) {
       if (!mongoose.Types.ObjectId.isValid(courseId)) {
