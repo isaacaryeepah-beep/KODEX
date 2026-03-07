@@ -50,6 +50,12 @@ const quizSchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
+    source: {
+      type: String,
+      enum: ['proctored', 'assignment'],
+      default: 'proctored',
+      index: true,
+    },
   },
   {
     timestamps: true,
