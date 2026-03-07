@@ -4601,9 +4601,9 @@ function buildBottomNav(role) {
   const PRIORITY = {
     admin:      ['dashboard', 'sessions', 'reports', 'subscription'],
     manager:    ['dashboard', 'sessions', 'reports', 'users'],
-    lecturer:   ['dashboard', 'sessions', 'quizzes', 'reports'],
+    lecturer:   ['dashboard', 'sessions', 'quizzes', 'assignments'],
     employee:   ['dashboard', 'sign-in-out', 'my-attendance', 'reports'],
-    student:    ['dashboard', 'mark-attendance', 'quizzes', 'my-attendance'],
+    student:    ['dashboard', 'mark-attendance', 'quizzes', 'assignments'],
     superadmin: ['dashboard', 'sessions', 'quizzes', 'reports'],
   };
 
