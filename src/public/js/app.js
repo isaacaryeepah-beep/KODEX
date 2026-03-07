@@ -6658,3 +6658,772 @@ async function submitSelfGoal() {
 function showSelfUpdateGoal(goalId, title, current, target, unit) {
   showUpdateGoalProgress(goalId, title, current, target, unit);
 }
+
+// ══════════════════════════════════════════════════════════════════════════════
+//  CORPORATE PHASE 4 — OPERATIONS (Timesheets, Expenses, Assets)
+// ══════════════════════════════════════════════════════════════════════════════
+
+// ── Patch buildSidebar for Phase 4 ───────────────────────────────────────────
+const _p4BuildSidebar = buildSidebar;
+buildSidebar = function() {
+  _p4BuildSidebar();
+  const role = currentUser?.role;
+  const mode = currentUser?.company?.mode;
+  if (mode !== 'corporate') return;
+
+  const opsIcon  = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>`;
+  const assetIcon= `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>`;
+
+  if (['admin','manager','superadmin'].includes(role)) {
+    const perfLink = document.getElementById('nav-performance');
+    if (perfLink) {
+      if (!document.getElementById('nav-timesheets')) {
+        const a = document.createElement('a');
+        a.id = 'nav-timesheets';
+        a.innerHTML = `${opsIcon} <span>Timesheets</span>`;
+        a.onclick = () => navigateTo('timesheets');
+        perfLink.insertAdjacentElement('afterend', a);
+      }
+      if (!document.getElementById('nav-expenses-mgr')) {
+        const a = document.createElement('a');
+        a.id = 'nav-expenses-mgr';
+        a.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg> <span>Expenses</span>`;
+        a.onclick = () => navigateTo('expenses-mgr');
+        document.getElementById('nav-timesheets').insertAdjacentElement('afterend', a);
+      }
+      if (!document.getElementById('nav-assets')) {
+        const a = document.createElement('a');
+        a.id = 'nav-assets';
+        a.innerHTML = `${assetIcon} <span>Assets</span>`;
+        a.onclick = () => navigateTo('assets');
+        document.getElementById('nav-expenses-mgr').insertAdjacentElement('afterend', a);
+      }
+    }
+  } else if (role === 'employee') {
+    const myPerfLink = document.getElementById('nav-my-performance');
+    if (myPerfLink) {
+      if (!document.getElementById('nav-my-timesheet')) {
+        const a = document.createElement('a');
+        a.id = 'nav-my-timesheet';
+        a.innerHTML = `${opsIcon} <span>Timesheet</span>`;
+        a.onclick = () => navigateTo('my-timesheet');
+        myPerfLink.insertAdjacentElement('afterend', a);
+      }
+      if (!document.getElementById('nav-my-expenses')) {
+        const a = document.createElement('a');
+        a.id = 'nav-my-expenses';
+        a.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg> <span>Expenses</span>`;
+        a.onclick = () => navigateTo('my-expenses');
+        document.getElementById('nav-my-timesheet').insertAdjacentElement('afterend', a);
+      }
+      if (!document.getElementById('nav-my-assets')) {
+        const a = document.createElement('a');
+        a.id = 'nav-my-assets';
+        a.innerHTML = `${assetIcon} <span>My Assets</span>`;
+        a.onclick = () => navigateTo('my-assets');
+        document.getElementById('nav-my-expenses').insertAdjacentElement('afterend', a);
+      }
+    }
+  }
+};
+
+// ── Patch navigateTo for Phase 4 ─────────────────────────────────────────────
+const _p4NavigateTo = navigateTo;
+navigateTo = function(view) {
+  if (view === 'timesheets')   { currentView = view; _setNavActive(view); renderTimesheets(); return; }
+  if (view === 'expenses-mgr') { currentView = view; _setNavActive('expenses-mgr'); renderExpensesMgr(); return; }
+  if (view === 'assets')       { currentView = view; _setNavActive(view); renderAssets(); return; }
+  if (view === 'my-timesheet') { currentView = view; _setNavActive('my-timesheet'); renderMyTimesheet(); return; }
+  if (view === 'my-expenses')  { currentView = view; _setNavActive('my-expenses'); renderMyExpenses(); return; }
+  if (view === 'my-assets')    { currentView = view; _setNavActive('my-assets'); renderMyAssets(); return; }
+  _p4NavigateTo(view);
+};
+
+// ── Shared helpers ────────────────────────────────────────────────────────────
+function _statusPill(s) {
+  return ({
+    draft:     'background:#f1f5f9;color:#475569',
+    submitted: 'background:#eff6ff;color:#1d4ed8',
+    approved:  'background:#f0fdf4;color:#16a34a',
+    rejected:  'background:#fef2f2;color:#dc2626',
+    pending:   'background:#fef3c7;color:#d97706',
+  }[s] || 'background:#f3f4f6;color:#6b7280');
+}
+function _pill(label, status) {
+  return `<span style="${_statusPill(status)};padding:2px 10px;border-radius:12px;font-size:11px;font-weight:700;text-transform:uppercase">${label}</span>`;
+}
+
+// ══════════════════════════════════════════════════════════════
+// MANAGER — TIMESHEETS
+// ══════════════════════════════════════════════════════════════
+async function renderTimesheets() {
+  const content = document.getElementById('main-content');
+  content.innerHTML = '<div class="loading">Loading…</div>';
+
+  const period = new Date().toISOString().slice(0, 7);
+
+  try {
+    const { timesheets } = await api(`/api/operations/timesheets?period=${period}`);
+
+    const summary = { total: timesheets.length, submitted: 0, approved: 0, rejected: 0, totalHours: 0 };
+    timesheets.forEach(t => { summary[t.status] = (summary[t.status]||0)+1; summary.totalHours += t.totalHours||0; });
+
+    content.innerHTML = `
+      <div class="page-header"><h2>Timesheets</h2><p>Review and approve employee timesheets</p></div>
+
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap">
+        <label style="font-size:12px;font-weight:700;color:#6b7280">Period:</label>
+        <input type="month" id="ts-period-filter" value="${period}" onchange="filterTimesheets()" style="padding:6px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
+      </div>
+
+      <div class="stats-grid" style="margin-bottom:20px">
+        <div class="stat-card"><div class="stat-value">${summary.total}</div><div class="stat-label">Total</div></div>
+        <div class="stat-card"><div class="stat-value" style="color:#1d4ed8">${summary.submitted||0}</div><div class="stat-label">Pending Review</div></div>
+        <div class="stat-card"><div class="stat-value" style="color:#16a34a">${summary.approved||0}</div><div class="stat-label">Approved</div></div>
+        <div class="stat-card"><div class="stat-value">${summary.totalHours}</div><div class="stat-label">Total Hours</div></div>
+      </div>
+
+      <div class="card">
+        <h3 style="font-size:15px;font-weight:700;margin-bottom:14px">Submitted Timesheets</h3>
+        ${timesheets.length ? `
+        <div style="overflow-x:auto">
+          <table style="width:100%;border-collapse:collapse;font-size:13px">
+            <thead><tr style="background:#f9fafb">
+              <th style="padding:10px;text-align:left;border-bottom:1px solid #e5e7eb">Employee</th>
+              <th style="padding:10px;text-align:left;border-bottom:1px solid #e5e7eb">Period</th>
+              <th style="padding:10px;text-align:center;border-bottom:1px solid #e5e7eb">Hours</th>
+              <th style="padding:10px;text-align:center;border-bottom:1px solid #e5e7eb">Status</th>
+              <th style="padding:10px;text-align:center;border-bottom:1px solid #e5e7eb">Actions</th>
+            </tr></thead>
+            <tbody>
+              ${timesheets.map(t => `
+                <tr style="border-bottom:1px solid #f3f4f6">
+                  <td style="padding:10px;font-weight:600">${t.employee?.name||'—'}<div style="font-size:11px;color:#9ca3af">${t.employee?.department||''}</div></td>
+                  <td style="padding:10px;color:#6b7280">${t.period}</td>
+                  <td style="padding:10px;text-align:center;font-weight:700">${t.totalHours}</td>
+                  <td style="padding:10px;text-align:center">${_pill(t.status, t.status)}</td>
+                  <td style="padding:10px;text-align:center">
+                    <div style="display:flex;gap:6px;justify-content:center;flex-wrap:wrap">
+                      <button class="btn btn-sm" style="font-size:11px" onclick="viewTimesheetDetail('${t._id}','${(t.employee?.name||'').replace(/'/g,"\\'")}','${t.period}')">View</button>
+                      ${t.status === 'submitted' ? `
+                        <button class="btn btn-sm" style="background:#f0fdf4;color:#16a34a;border:1px solid #bbf7d0;font-size:11px" onclick="reviewTimesheet('${t._id}','approved')">✓ Approve</button>
+                        <button class="btn btn-sm" style="background:#fef2f2;color:#dc2626;border:1px solid #fecaca;font-size:11px" onclick="reviewTimesheet('${t._id}','rejected')">✗ Reject</button>
+                      ` : ''}
+                      ${t.status === 'approved' ? `<button class="btn btn-sm" style="background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe;font-size:11px" onclick="exportTimesheet('${t._id}')">⬇ CSV</button>` : ''}
+                    </div>
+                  </td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+        ` : '<p style="color:#9ca3af;font-size:13px">No timesheets for this period.</p>'}
+      </div>
+    `;
+  } catch(e) {
+    content.innerHTML = `<div class="card"><p style="color:#ef4444">Error: ${e.message}</p></div>`;
+  }
+}
+
+async function filterTimesheets() {
+  const period = document.getElementById('ts-period-filter')?.value;
+  if (!period) return;
+  const content = document.getElementById('main-content');
+  content.innerHTML = '<div class="loading">Loading…</div>';
+  try {
+    const { timesheets } = await api(`/api/operations/timesheets?period=${period}`);
+    renderTimesheets._cached = timesheets;
+    renderTimesheets();
+  } catch(e) { content.innerHTML = `<div class="card"><p style="color:#ef4444">${e.message}</p></div>`; }
+}
+
+async function viewTimesheetDetail(id, name, period) {
+  const container = document.getElementById('modal-container');
+  container.classList.remove('hidden');
+  container.innerHTML = `
+    <div class="modal-overlay" onclick="closeModal(event)">
+      <div class="modal" onclick="event.stopPropagation()" style="max-width:560px;width:95%">
+        <h3>Timesheet — ${name} (${period})</h3>
+        <div id="tsd-content"><p>Loading…</p></div>
+        <div class="modal-actions"><button class="btn btn-secondary" onclick="closeModal()">Close</button></div>
+      </div>
+    </div>`;
+  try {
+    const { timesheets } = await api(`/api/operations/timesheets?period=${period}`);
+    const ts = timesheets.find(t => t._id === id);
+    const el = document.getElementById('tsd-content');
+    if (!ts || !ts.entries.length) { el.innerHTML = '<p style="color:#9ca3af">No entries.</p>'; return; }
+    el.innerHTML = `
+      <table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:12px">
+        <thead><tr style="background:#f9fafb">
+          <th style="padding:8px;text-align:left;border-bottom:1px solid #e5e7eb">Date</th>
+          <th style="padding:8px;text-align:center;border-bottom:1px solid #e5e7eb">Hours</th>
+          <th style="padding:8px;text-align:left;border-bottom:1px solid #e5e7eb">Notes</th>
+        </tr></thead>
+        <tbody>
+          ${ts.entries.sort((a,b)=>new Date(a.date)-new Date(b.date)).map(e=>`
+            <tr style="border-bottom:1px solid #f3f4f6">
+              <td style="padding:8px">${new Date(e.date).toLocaleDateString()}</td>
+              <td style="padding:8px;text-align:center;font-weight:600">${e.hoursWorked}</td>
+              <td style="padding:8px;color:#6b7280;font-size:12px">${e.notes||'—'}</td>
+            </tr>
+          `).join('')}
+          <tr style="background:#f9fafb;font-weight:700">
+            <td style="padding:8px">TOTAL</td>
+            <td style="padding:8px;text-align:center">${ts.totalHours}</td>
+            <td></td>
+          </tr>
+        </tbody>
+      </table>
+      ${ts.reviewNote ? `<p style="font-size:12px;color:#6b7280">Note: ${ts.reviewNote}</p>` : ''}
+    `;
+  } catch(e) {
+    document.getElementById('tsd-content').innerHTML = `<p style="color:#ef4444">${e.message}</p>`;
+  }
+}
+
+async function reviewTimesheet(id, action) {
+  const note = action === 'rejected' ? prompt('Reason for rejection (optional):') || '' : '';
+  try {
+    await api(`/api/operations/timesheets/${id}/review`, { method: 'PATCH', body: JSON.stringify({ action, note }) });
+    toast(`Timesheet ${action}!`, 'ok');
+    renderTimesheets();
+  } catch(e) { toast(e.message, 'err'); }
+}
+
+function exportTimesheet(id) {
+  const token = localStorage.getItem('kodex_token') || localStorage.getItem('token');
+  window.open(`/api/operations/timesheets/${id}/export?token=${token}`, '_blank');
+}
+
+// ══════════════════════════════════════════════════════════════
+// MANAGER — EXPENSES
+// ══════════════════════════════════════════════════════════════
+async function renderExpensesMgr() {
+  const content = document.getElementById('main-content');
+  content.innerHTML = '<div class="loading">Loading…</div>';
+  try {
+    const { expenses } = await api('/api/operations/expenses');
+    const pending  = expenses.filter(e => e.status === 'pending');
+    const approved = expenses.filter(e => e.status === 'approved');
+    const totalPending  = pending.reduce((s,e)=>s+e.amount,0);
+    const totalApproved = approved.reduce((s,e)=>s+e.amount,0);
+
+    const catIcon = c => ({travel:'✈️',meals:'🍽️',equipment:'🖥️',software:'💿',training:'📚',other:'📎'}[c]||'📎');
+
+    content.innerHTML = `
+      <div class="page-header"><h2>Expense Claims</h2><p>Review and approve employee expense claims</p></div>
+
+      <div class="stats-grid" style="margin-bottom:20px">
+        <div class="stat-card"><div class="stat-value">${expenses.length}</div><div class="stat-label">Total Claims</div></div>
+        <div class="stat-card" style="border-left:3px solid #f59e0b"><div class="stat-value" style="color:#f59e0b">${pending.length}</div><div class="stat-label">Pending</div></div>
+        <div class="stat-card"><div class="stat-value" style="color:#16a34a">${approved.length}</div><div class="stat-label">Approved</div></div>
+        <div class="stat-card"><div class="stat-value">${totalApproved.toFixed(2)}</div><div class="stat-label">Total Approved (GHS)</div></div>
+      </div>
+
+      ${pending.length ? `
+      <div class="card" style="margin-bottom:16px">
+        <h3 style="font-size:15px;font-weight:700;margin-bottom:12px">Pending Review (${pending.length})</h3>
+        ${pending.map(e => `
+          <div style="padding:14px;border:1px solid #fde68a;border-radius:10px;background:#fffbeb;margin-bottom:10px">
+            <div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:8px">
+              <div>
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+                  <span style="font-size:16px">${catIcon(e.category)}</span>
+                  <span style="font-weight:700">${e.title}</span>
+                </div>
+                <div style="font-size:12px;color:#6b7280">${e.employee?.name||'—'} · ${new Date(e.date).toLocaleDateString()} · ${e.currency} <strong>${e.amount.toFixed(2)}</strong></div>
+                ${e.notes ? `<div style="font-size:12px;color:#9ca3af;margin-top:4px">${e.notes}</div>` : ''}
+              </div>
+              <div style="display:flex;gap:6px">
+                <button class="btn btn-sm" style="background:#f0fdf4;color:#16a34a;border:1px solid #bbf7d0" onclick="reviewExpense('${e._id}','approved')">✓ Approve</button>
+                <button class="btn btn-sm" style="background:#fef2f2;color:#dc2626;border:1px solid #fecaca" onclick="reviewExpense('${e._id}','rejected')">✗ Reject</button>
+              </div>
+            </div>
+          </div>
+        `).join('')}
+      </div>` : ''}
+
+      <div class="card">
+        <h3 style="font-size:15px;font-weight:700;margin-bottom:12px">All Claims</h3>
+        ${expenses.length ? `
+        <div style="overflow-x:auto">
+          <table style="width:100%;border-collapse:collapse;font-size:13px">
+            <thead><tr style="background:#f9fafb">
+              <th style="padding:10px;text-align:left;border-bottom:1px solid #e5e7eb">Employee</th>
+              <th style="padding:10px;text-align:left;border-bottom:1px solid #e5e7eb">Title</th>
+              <th style="padding:10px;text-align:left;border-bottom:1px solid #e5e7eb">Category</th>
+              <th style="padding:10px;text-align:right;border-bottom:1px solid #e5e7eb">Amount</th>
+              <th style="padding:10px;text-align:center;border-bottom:1px solid #e5e7eb">Status</th>
+              <th style="padding:10px;text-align:left;border-bottom:1px solid #e5e7eb">Date</th>
+            </tr></thead>
+            <tbody>
+              ${expenses.map(e=>`
+                <tr style="border-bottom:1px solid #f3f4f6">
+                  <td style="padding:10px;font-weight:600">${e.employee?.name||'—'}</td>
+                  <td style="padding:10px">${e.title}</td>
+                  <td style="padding:10px">${catIcon(e.category)} ${e.category}</td>
+                  <td style="padding:10px;text-align:right;font-weight:700">${e.currency} ${e.amount.toFixed(2)}</td>
+                  <td style="padding:10px;text-align:center">${_pill(e.status,e.status)}</td>
+                  <td style="padding:10px;font-size:12px;color:#6b7280">${new Date(e.date).toLocaleDateString()}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+        ` : '<p style="color:#9ca3af;font-size:13px">No expense claims yet.</p>'}
+      </div>
+    `;
+  } catch(e) {
+    content.innerHTML = `<div class="card"><p style="color:#ef4444">Error: ${e.message}</p></div>`;
+  }
+}
+
+async function reviewExpense(id, action) {
+  const note = action === 'rejected' ? prompt('Reason for rejection (optional):') || '' : '';
+  try {
+    await api(`/api/operations/expenses/${id}/review`, { method: 'PATCH', body: JSON.stringify({ action, note }) });
+    toast(`Expense ${action}!`, 'ok');
+    renderExpensesMgr();
+  } catch(e) { toast(e.message, 'err'); }
+}
+
+// ══════════════════════════════════════════════════════════════
+// MANAGER — ASSETS
+// ══════════════════════════════════════════════════════════════
+async function renderAssets() {
+  const content = document.getElementById('main-content');
+  content.innerHTML = '<div class="loading">Loading…</div>';
+  try {
+    const { assets } = await api('/api/operations/assets');
+    const assigned   = assets.filter(a => a.assignedTo);
+    const unassigned = assets.filter(a => !a.assignedTo);
+
+    const catIcon = c => ({laptop:'💻',phone:'📱',vehicle:'🚗',furniture:'🪑',equipment:'⚙️',other:'📦'}[c]||'📦');
+    const condColor = c => ({new:'#16a34a',good:'#3b82f6',fair:'#f59e0b',poor:'#ef4444'}[c]||'#6b7280');
+
+    content.innerHTML = `
+      <div class="page-header"><h2>Asset Tracking</h2><p>Manage and assign company assets</p></div>
+
+      <div class="stats-grid" style="margin-bottom:20px">
+        <div class="stat-card"><div class="stat-value">${assets.length}</div><div class="stat-label">Total Assets</div></div>
+        <div class="stat-card"><div class="stat-value" style="color:#16a34a">${assigned.length}</div><div class="stat-label">Assigned</div></div>
+        <div class="stat-card"><div class="stat-value" style="color:#f59e0b">${unassigned.length}</div><div class="stat-label">Available</div></div>
+      </div>
+
+      <!-- Add Asset -->
+      <div class="card" style="margin-bottom:16px">
+        <h3 style="font-size:15px;font-weight:700;margin-bottom:12px">Add Asset</h3>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;margin-bottom:10px">
+          ${[
+            ['as-name','Name *','text','e.g. MacBook Pro'],
+            ['as-tag','Asset Tag','text','e.g. AST-001'],
+            ['as-serial','Serial No.','text','Optional'],
+          ].map(([id,label,type,placeholder])=>`
+            <div>
+              <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:4px">${label}</label>
+              <input id="${id}" type="${type}" placeholder="${placeholder}" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
+            </div>
+          `).join('')}
+          <div>
+            <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:4px">Category</label>
+            <select id="as-cat" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
+              ${['laptop','phone','vehicle','furniture','equipment','other'].map(c=>`<option value="${c}">${c}</option>`).join('')}
+            </select>
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:4px">Condition</label>
+            <select id="as-cond" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
+              ${['new','good','fair','poor'].map(c=>`<option value="${c}">${c}</option>`).join('')}
+            </select>
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:4px">Purchase Value (GHS)</label>
+            <input id="as-val" type="number" placeholder="Optional" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
+          </div>
+        </div>
+        <div id="as-error" style="color:#ef4444;font-size:13px;margin-bottom:8px;display:none"></div>
+        <button class="btn btn-primary" onclick="submitCreateAsset()">+ Add Asset</button>
+      </div>
+
+      <!-- Assets list -->
+      <div class="card">
+        <h3 style="font-size:15px;font-weight:700;margin-bottom:12px">All Assets (${assets.length})</h3>
+        ${assets.length ? assets.map(a => `
+          <div style="padding:14px;border:1px solid #e5e7eb;border-radius:10px;margin-bottom:10px">
+            <div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:10px">
+              <div style="flex:1">
+                <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px">
+                  <span style="font-size:18px">${catIcon(a.category)}</span>
+                  <span style="font-weight:700;font-size:14px">${a.name}</span>
+                  ${a.assetTag ? `<span style="font-size:11px;color:#6b7280;background:#f3f4f6;padding:2px 6px;border-radius:4px">${a.assetTag}</span>` : ''}
+                  <span style="width:8px;height:8px;border-radius:50%;background:${condColor(a.condition)};display:inline-block" title="${a.condition}"></span>
+                </div>
+                <div style="font-size:12px;color:#6b7280">
+                  ${a.serialNumber ? `S/N: ${a.serialNumber} · ` : ''}
+                  ${a.purchaseValue ? `GHS ${a.purchaseValue.toLocaleString()} · ` : ''}
+                  ${a.assignedTo ? `<span style="color:#16a34a;font-weight:600">Assigned: ${a.assignedTo.name}</span>` : '<span style="color:#f59e0b">Unassigned</span>'}
+                </div>
+              </div>
+              <div style="display:flex;gap:6px;flex-wrap:wrap">
+                <button class="btn btn-sm" style="background:#f5f3ff;color:#5b21b6;border:1px solid #ddd6fe;font-size:11px" onclick="showAssignAsset('${a._id}','${a.name.replace(/'/g,"\\'")}')">
+                  ${a.assignedTo ? 'Reassign' : 'Assign'}
+                </button>
+                ${a.assignedTo ? `<button class="btn btn-sm" style="background:#fef3c7;color:#d97706;border:1px solid #fde68a;font-size:11px" onclick="unassignAsset('${a._id}')">Unassign</button>` : ''}
+                <button class="btn btn-sm" style="background:#fef2f2;color:#dc2626;border:1px solid #fecaca;font-size:11px" onclick="deleteAsset('${a._id}')">Remove</button>
+              </div>
+            </div>
+          </div>
+        `).join('') : '<p style="color:#9ca3af;font-size:13px">No assets yet. Add one above.</p>'}
+      </div>
+    `;
+  } catch(e) {
+    content.innerHTML = `<div class="card"><p style="color:#ef4444">Error: ${e.message}</p></div>`;
+  }
+}
+
+async function submitCreateAsset() {
+  const name = document.getElementById('as-name').value.trim();
+  const errEl = document.getElementById('as-error');
+  errEl.style.display = 'none';
+  if (!name) { errEl.textContent = 'Name is required.'; errEl.style.display = 'block'; return; }
+  const body = {
+    name,
+    assetTag: document.getElementById('as-tag').value.trim(),
+    serialNumber: document.getElementById('as-serial').value.trim(),
+    category: document.getElementById('as-cat').value,
+    condition: document.getElementById('as-cond').value,
+    purchaseValue: document.getElementById('as-val').value || null,
+  };
+  const btn = event.target; btn.disabled = true; btn.textContent = 'Saving…';
+  try {
+    await api('/api/operations/assets', { method: 'POST', body: JSON.stringify(body) });
+    toast('Asset added!', 'ok');
+    renderAssets();
+  } catch(e) {
+    errEl.textContent = e.message; errEl.style.display = 'block';
+    btn.disabled = false; btn.textContent = '+ Add Asset';
+  }
+}
+
+function showAssignAsset(assetId, name) {
+  const container = document.getElementById('modal-container');
+  container.classList.remove('hidden');
+  container.innerHTML = `
+    <div class="modal-overlay" onclick="closeModal(event)">
+      <div class="modal" onclick="event.stopPropagation()" style="max-width:380px">
+        <h3>Assign: ${name}</h3>
+        <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:4px">Employee ID</label>
+        <input id="assign-emp" placeholder="Paste employee _id" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;margin-bottom:12px">
+        <div id="assign-error" style="color:#ef4444;font-size:13px;margin-bottom:8px;display:none"></div>
+        <div class="modal-actions">
+          <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+          <button class="btn btn-primary" onclick="confirmAssignAsset('${assetId}')">Assign</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+async function confirmAssignAsset(assetId) {
+  const employeeId = document.getElementById('assign-emp').value.trim();
+  const errEl = document.getElementById('assign-error');
+  if (!employeeId) { errEl.textContent = 'Employee ID required.'; errEl.style.display = 'block'; return; }
+  const btn = event.target; btn.disabled = true;
+  try {
+    await api(`/api/operations/assets/${assetId}/assign`, { method: 'PATCH', body: JSON.stringify({ employeeId }) });
+    toast('Asset assigned!', 'ok');
+    closeModal();
+    renderAssets();
+  } catch(e) { errEl.textContent = e.message; errEl.style.display = 'block'; btn.disabled = false; }
+}
+
+async function unassignAsset(assetId) {
+  if (!confirm('Remove assignment for this asset?')) return;
+  try {
+    await api(`/api/operations/assets/${assetId}/assign`, { method: 'PATCH', body: JSON.stringify({ employeeId: null }) });
+    toast('Asset unassigned', 'ok');
+    renderAssets();
+  } catch(e) { toast(e.message, 'err'); }
+}
+
+async function deleteAsset(id) {
+  if (!confirm('Remove this asset from tracking?')) return;
+  try {
+    await api(`/api/operations/assets/${id}`, { method: 'DELETE' });
+    toast('Asset removed', 'ok');
+    renderAssets();
+  } catch(e) { toast(e.message, 'err'); }
+}
+
+// ══════════════════════════════════════════════════════════════
+// EMPLOYEE — TIMESHEET
+// ══════════════════════════════════════════════════════════════
+async function renderMyTimesheet() {
+  const content = document.getElementById('main-content');
+  content.innerHTML = '<div class="loading">Loading…</div>';
+  const period = new Date().toISOString().slice(0, 7);
+
+  try {
+    const { timesheet } = await api(`/api/operations/timesheets/my?period=${period}`);
+    const editable = timesheet.status === 'draft';
+
+    // Build calendar grid for the month
+    const [yr, mo] = period.split('-').map(Number);
+    const daysInMonth = new Date(yr, mo, 0).getDate();
+    const entryMap = {};
+    timesheet.entries.forEach(e => {
+      const d = new Date(e.date).getDate();
+      entryMap[d] = e;
+    });
+
+    content.innerHTML = `
+      <div class="page-header"><h2>My Timesheet</h2><p>Log your daily hours</p></div>
+
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap">
+        <input type="month" id="mts-period" value="${period}" onchange="reloadMyTimesheet()" style="padding:6px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
+        <span>${_pill(timesheet.status, timesheet.status)}</span>
+        ${editable ? `<button class="btn btn-primary btn-sm" onclick="submitMyTimesheet('${period}')">Submit for Approval</button>` : ''}
+      </div>
+
+      <div class="stats-grid" style="margin-bottom:20px">
+        <div class="stat-card"><div class="stat-value">${timesheet.totalHours}</div><div class="stat-label">Total Hours</div></div>
+        <div class="stat-card"><div class="stat-value">${timesheet.entries.length}</div><div class="stat-label">Days Logged</div></div>
+        <div class="stat-card"><div class="stat-value">${daysInMonth}</div><div class="stat-label">Days in Month</div></div>
+      </div>
+
+      ${timesheet.reviewNote ? `<div class="card" style="margin-bottom:14px;border-left:4px solid ${timesheet.status==='approved'?'#22c55e':'#ef4444'}"><p style="font-size:13px;margin:0"><strong>Review note:</strong> ${timesheet.reviewNote}</p></div>` : ''}
+
+      <!-- Log hours form -->
+      ${editable ? `
+      <div class="card" style="margin-bottom:16px">
+        <h3 style="font-size:14px;font-weight:700;margin-bottom:12px">Log Hours</h3>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
+          <div>
+            <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:4px">Date</label>
+            <input id="log-date" type="date" value="${new Date().toISOString().slice(0,10)}" style="padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:4px">Hours</label>
+            <input id="log-hours" type="number" min="0" max="24" step="0.5" value="8" style="width:80px;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
+          </div>
+          <div style="flex:1;min-width:140px">
+            <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:4px">Notes</label>
+            <input id="log-notes" placeholder="Optional notes" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
+          </div>
+          <button class="btn btn-primary" onclick="logHours('${period}')">Log</button>
+        </div>
+      </div>
+      ` : ''}
+
+      <!-- Entries table -->
+      <div class="card">
+        <h3 style="font-size:14px;font-weight:700;margin-bottom:12px">Entries</h3>
+        ${timesheet.entries.length ? `
+        <table style="width:100%;border-collapse:collapse;font-size:13px">
+          <thead><tr style="background:#f9fafb">
+            <th style="padding:8px;text-align:left;border-bottom:1px solid #e5e7eb">Date</th>
+            <th style="padding:8px;text-align:center;border-bottom:1px solid #e5e7eb">Hours</th>
+            <th style="padding:8px;text-align:left;border-bottom:1px solid #e5e7eb">Notes</th>
+          </tr></thead>
+          <tbody>
+            ${timesheet.entries.sort((a,b)=>new Date(a.date)-new Date(b.date)).map(e=>`
+              <tr style="border-bottom:1px solid #f3f4f6">
+                <td style="padding:8px">${new Date(e.date).toLocaleDateString()}</td>
+                <td style="padding:8px;text-align:center;font-weight:600">${e.hoursWorked}</td>
+                <td style="padding:8px;color:#6b7280;font-size:12px">${e.notes||'—'}</td>
+              </tr>
+            `).join('')}
+            <tr style="background:#f9fafb;font-weight:700">
+              <td style="padding:8px">TOTAL</td>
+              <td style="padding:8px;text-align:center">${timesheet.totalHours}</td>
+              <td></td>
+            </tr>
+          </tbody>
+        </table>
+        ` : '<p style="color:#9ca3af;font-size:13px">No hours logged yet.</p>'}
+      </div>
+    `;
+  } catch(e) {
+    content.innerHTML = `<div class="card"><p style="color:#ef4444">Error: ${e.message}</p></div>`;
+  }
+}
+
+async function reloadMyTimesheet() {
+  const period = document.getElementById('mts-period')?.value;
+  const content = document.getElementById('main-content');
+  content.innerHTML = '<div class="loading">Loading…</div>';
+  try {
+    const { timesheet } = await api(`/api/operations/timesheets/my?period=${period}`);
+    renderMyTimesheet._ts = timesheet;
+    renderMyTimesheet();
+  } catch(e) { content.innerHTML = `<div class="card"><p style="color:#ef4444">${e.message}</p></div>`; }
+}
+
+async function logHours(period) {
+  const date  = document.getElementById('log-date').value;
+  const hours = parseFloat(document.getElementById('log-hours').value);
+  const notes = document.getElementById('log-notes').value.trim();
+  if (!date || isNaN(hours)) { toast('Date and hours required', 'err'); return; }
+  const btn = event.target; btn.disabled = true; btn.textContent = 'Saving…';
+  try {
+    await api('/api/operations/timesheets/my/entry', {
+      method: 'POST',
+      body: JSON.stringify({ period, date, hoursWorked: hours, notes }),
+    });
+    toast('Hours logged!', 'ok');
+    renderMyTimesheet();
+  } catch(e) {
+    toast(e.message, 'err');
+    btn.disabled = false; btn.textContent = 'Log';
+  }
+}
+
+async function submitMyTimesheet(period) {
+  if (!confirm('Submit timesheet for approval? You cannot edit it after submission.')) return;
+  try {
+    await api('/api/operations/timesheets/my/submit', { method: 'POST', body: JSON.stringify({ period }) });
+    toast('Timesheet submitted!', 'ok');
+    renderMyTimesheet();
+  } catch(e) { toast(e.message, 'err'); }
+}
+
+// ══════════════════════════════════════════════════════════════
+// EMPLOYEE — EXPENSES
+// ══════════════════════════════════════════════════════════════
+async function renderMyExpenses() {
+  const content = document.getElementById('main-content');
+  content.innerHTML = '<div class="loading">Loading…</div>';
+  try {
+    const { expenses } = await api('/api/operations/expenses/my');
+    const total    = expenses.reduce((s,e)=>s+e.amount, 0);
+    const approved = expenses.filter(e=>e.status==='approved').reduce((s,e)=>s+e.amount,0);
+    const pending  = expenses.filter(e=>e.status==='pending').length;
+
+    const catIcon = c => ({travel:'✈️',meals:'🍽️',equipment:'🖥️',software:'💿',training:'📚',other:'📎'}[c]||'📎');
+
+    content.innerHTML = `
+      <div class="page-header"><h2>My Expenses</h2><p>Submit and track expense claims</p></div>
+
+      <div class="stats-grid" style="margin-bottom:20px">
+        <div class="stat-card"><div class="stat-value">${expenses.length}</div><div class="stat-label">Claims</div></div>
+        <div class="stat-card"><div class="stat-value" style="color:#f59e0b">${pending}</div><div class="stat-label">Pending</div></div>
+        <div class="stat-card"><div class="stat-value" style="color:#16a34a">${approved.toFixed(2)}</div><div class="stat-label">Approved (GHS)</div></div>
+      </div>
+
+      <!-- Submit expense -->
+      <div class="card" style="margin-bottom:16px">
+        <h3 style="font-size:14px;font-weight:700;margin-bottom:12px">New Expense Claim</h3>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin-bottom:10px">
+          <div style="grid-column:1/-1">
+            <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:4px">Title *</label>
+            <input id="exp-title" placeholder="e.g. Uber to client site" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:4px">Category</label>
+            <select id="exp-cat" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
+              ${['travel','meals','equipment','software','training','other'].map(c=>`<option value="${c}">${c}</option>`).join('')}
+            </select>
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:4px">Amount (GHS) *</label>
+            <input id="exp-amount" type="number" min="0" step="0.01" placeholder="0.00" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:4px">Date *</label>
+            <input id="exp-date" type="date" value="${new Date().toISOString().slice(0,10)}" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
+          </div>
+          <div style="grid-column:1/-1">
+            <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:4px">Notes</label>
+            <input id="exp-notes" placeholder="Optional details" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
+          </div>
+        </div>
+        <div id="exp-error" style="color:#ef4444;font-size:13px;margin-bottom:8px;display:none"></div>
+        <button class="btn btn-primary" onclick="submitExpense()">Submit Claim</button>
+      </div>
+
+      <!-- My claims -->
+      <div class="card">
+        <h3 style="font-size:14px;font-weight:700;margin-bottom:12px">My Claims</h3>
+        ${expenses.length ? expenses.map(e => `
+          <div style="padding:12px;border:1px solid #e5e7eb;border-radius:8px;margin-bottom:8px">
+            <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px">
+              <div>
+                <span style="font-size:15px;margin-right:6px">${catIcon(e.category)}</span>
+                <span style="font-weight:600">${e.title}</span>
+                <span style="font-size:12px;color:#6b7280;margin-left:8px">${new Date(e.date).toLocaleDateString()}</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:8px">
+                <span style="font-weight:700">GHS ${e.amount.toFixed(2)}</span>
+                ${_pill(e.status, e.status)}
+              </div>
+            </div>
+            ${e.reviewNote ? `<p style="font-size:12px;color:#6b7280;margin:4px 0 0">Note: ${e.reviewNote}</p>` : ''}
+          </div>
+        `).join('') : '<p style="color:#9ca3af;font-size:13px">No claims yet.</p>'}
+      </div>
+    `;
+  } catch(e) {
+    content.innerHTML = `<div class="card"><p style="color:#ef4444">Error: ${e.message}</p></div>`;
+  }
+}
+
+async function submitExpense() {
+  const title  = document.getElementById('exp-title').value.trim();
+  const amount = document.getElementById('exp-amount').value;
+  const date   = document.getElementById('exp-date').value;
+  const cat    = document.getElementById('exp-cat').value;
+  const notes  = document.getElementById('exp-notes').value.trim();
+  const errEl  = document.getElementById('exp-error');
+  errEl.style.display = 'none';
+  if (!title || !amount || !date) { errEl.textContent = 'Title, amount and date are required.'; errEl.style.display = 'block'; return; }
+  const btn = event.target; btn.disabled = true; btn.textContent = 'Submitting…';
+  try {
+    await api('/api/operations/expenses', { method: 'POST', body: JSON.stringify({ title, category: cat, amount, date, notes }) });
+    toast('Expense claim submitted!', 'ok');
+    renderMyExpenses();
+  } catch(e) {
+    errEl.textContent = e.message; errEl.style.display = 'block';
+    btn.disabled = false; btn.textContent = 'Submit Claim';
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// EMPLOYEE — MY ASSETS
+// ══════════════════════════════════════════════════════════════
+async function renderMyAssets() {
+  const content = document.getElementById('main-content');
+  content.innerHTML = '<div class="loading">Loading…</div>';
+  try {
+    const { assets } = await api('/api/operations/assets/my');
+    const catIcon = c => ({laptop:'💻',phone:'📱',vehicle:'🚗',furniture:'🪑',equipment:'⚙️',other:'📦'}[c]||'📦');
+
+    content.innerHTML = `
+      <div class="page-header"><h2>My Assets</h2><p>Assets assigned to you by your company</p></div>
+      ${assets.length ? assets.map(a => `
+        <div class="card" style="margin-bottom:12px">
+          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+            <div style="font-size:36px">${catIcon(a.category)}</div>
+            <div style="flex:1">
+              <div style="font-weight:700;font-size:16px;margin-bottom:2px">${a.name}</div>
+              <div style="font-size:12px;color:#6b7280">
+                ${a.assetTag ? `Tag: ${a.assetTag} · ` : ''}
+                ${a.serialNumber ? `S/N: ${a.serialNumber} · ` : ''}
+                Condition: <span style="font-weight:600;text-transform:capitalize">${a.condition}</span>
+              </div>
+              ${a.description ? `<div style="font-size:12px;color:#9ca3af;margin-top:4px">${a.description}</div>` : ''}
+              <div style="font-size:11px;color:#9ca3af;margin-top:4px">Assigned ${a.assignedAt ? new Date(a.assignedAt).toLocaleDateString() : '—'}</div>
+            </div>
+          </div>
+        </div>
+      `).join('') : `
+        <div class="card" style="text-align:center;padding:60px 24px">
+          <div style="font-size:48px;opacity:.3;margin-bottom:16px">📦</div>
+          <div style="font-size:16px;font-weight:600;margin-bottom:6px">No assets assigned</div>
+          <p style="color:#9ca3af;font-size:13px">Your manager will assign company assets to you when needed.</p>
+        </div>
+      `}
+    `;
+  } catch(e) {
+    content.innerHTML = `<div class="card"><p style="color:#ef4444">Error: ${e.message}</p></div>`;
+  }
+}
