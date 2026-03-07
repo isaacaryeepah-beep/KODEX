@@ -14,16 +14,16 @@ const shiftSchema = new mongoose.Schema(
       trim: true,
     },
     startTime: {
-      type: String, // "HH:MM" 24h format e.g. "08:00"
+      type: String,
       required: [true, "Start time is required"],
     },
     endTime: {
-      type: String, // "HH:MM" 24h format e.g. "17:00"
+      type: String,
       required: [true, "End time is required"],
     },
     gracePeriodMinutes: {
       type: Number,
-      default: 15, // minutes late before marked "late"
+      default: 15,
     },
     days: {
       type: [String],
@@ -32,7 +32,7 @@ const shiftSchema = new mongoose.Schema(
     },
     department: {
       type: String,
-      default: null, // null = all departments
+      default: null,
     },
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,
