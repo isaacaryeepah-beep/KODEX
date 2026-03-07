@@ -990,38 +990,48 @@ async function renderLecturerQuizzes() {
         <p style="color:var(--text-light);font-size:13px;max-width:270px;margin:0 auto 18px">Create your first proctored quiz for students</p>
         <button class="btn btn-primary" onclick="openCreateQuizModal()">＋ Create Quiz</button>
       </div>` : `
-    <div style="display:flex;flex-direction:column;gap:12px">
-      ${QS.quizzes.map(q => {
-        const start = new Date(q.startTime), end = new Date(q.endTime);
-        const isLive = now >= start && now <= end;
-        const isClosed = now > end;
-        const statusBadge = isLive
-          ? `<span style="background:#f0fdf4;color:#166534;border:1px solid #bbf7d0;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600">● Live</span>`
-          : isClosed
-          ? `<span style="background:#fef2f2;color:#991b1b;border:1px solid #fecaca;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600">Closed</span>`
-          : `<span style="background:var(--bg);color:var(--text-light);border:1px solid var(--border);padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600">Scheduled</span>`;
-        return `
-        <div class="card" style="padding:16px 18px">
-          <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:10px">
-            <div style="flex:1;min-width:0">
-              <div style="font-size:15px;font-weight:700;margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${q.title}</div>
-              <div style="font-size:12px;color:var(--text-light)">${q.course?.code || 'No course'} · ${q.questionCount || 0} questions</div>
-            </div>
-            ${statusBadge}
-          </div>
-          <div style="font-size:12px;color:var(--text-muted);margin-bottom:12px">
-            ${fmtDate(q.startTime)} → ${fmtDate(q.endTime)}
-          </div>
-          <div style="display:flex;gap:8px;flex-wrap:wrap">
-            <button class="btn btn-primary btn-sm" style="flex:1;min-width:120px;justify-content:center" onclick="openQuizQuestionsPanel('${q._id}')">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-              Questions & AI
-            </button>
-            <button class="btn btn-secondary btn-sm" onclick="copyQuizIdInline('${q._id}')">📋 ID</button>
-            <button class="btn btn-sm" style="background:#fef2f2;color:#dc2626;border:1px solid #fecaca" onclick="deleteQuizInline('${q._id}')">Delete</button>
-          </div>
-        </div>`;
-      }).join('')}
+    <div class="card" style="padding:0;overflow:hidden">
+      <table style="width:100%;border-collapse:collapse;font-size:13px">
+        <thead>
+          <tr style="background:var(--bg)">
+            <th style="padding:11px 16px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text-muted);border-bottom:1.5px solid var(--border)">Title</th>
+            <th style="padding:11px 16px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text-muted);border-bottom:1.5px solid var(--border)">Course</th>
+            <th style="padding:11px 16px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text-muted);border-bottom:1.5px solid var(--border)">Questions</th>
+            <th style="padding:11px 16px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text-muted);border-bottom:1.5px solid var(--border)">Status</th>
+            <th style="padding:11px 16px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text-muted);border-bottom:1.5px solid var(--border)">Time Window</th>
+            <th style="padding:11px 16px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text-muted);border-bottom:1.5px solid var(--border)">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${QS.quizzes.map(q => {
+            const start = new Date(q.startTime), end = new Date(q.endTime);
+            const isLive = now >= start && now <= end;
+            const isClosed = now > end;
+            const statusBadge = isLive
+              ? `<span style="background:#f0fdf4;color:#166534;border:1px solid #bbf7d0;padding:3px 8px;border-radius:20px;font-size:11px;font-weight:600">● Live</span>`
+              : isClosed
+              ? `<span style="background:#fef2f2;color:#991b1b;border:1px solid #fecaca;padding:3px 8px;border-radius:20px;font-size:11px;font-weight:600">Closed</span>`
+              : `<span style="background:var(--bg);color:var(--text-light);border:1px solid var(--border);padding:3px 8px;border-radius:20px;font-size:11px;font-weight:600">Scheduled</span>`;
+            return `<tr style="border-bottom:1px solid var(--border)">
+              <td style="padding:12px 16px;font-weight:600">${q.title}</td>
+              <td style="padding:12px 16px;color:var(--text-light)">${q.course?.code || 'N/A'}</td>
+              <td style="padding:12px 16px">${q.questionCount || 0}</td>
+              <td style="padding:12px 16px">${statusBadge}</td>
+              <td style="padding:12px 16px;font-size:12px;color:var(--text-light)">${fmtDate(q.startTime)} → ${fmtDate(q.endTime)}</td>
+              <td style="padding:12px 16px">
+                <div style="display:flex;gap:6px;flex-wrap:wrap">
+                  <button class="btn btn-primary btn-sm" onclick="openQuizQuestionsPanel('${q._id}')">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                    Questions
+                  </button>
+                  <button class="btn btn-secondary btn-sm" onclick="copyQuizIdInline('${q._id}')">📋 ID</button>
+                  <button class="btn btn-sm" style="background:#fef2f2;color:#dc2626;border:1px solid #fecaca" onclick="deleteQuizInline('${q._id}')">Delete</button>
+                </div>
+              </td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
     </div>`}
   `;
 }
@@ -1036,24 +1046,16 @@ async function openQuizQuestionsPanel(quizId) {
     const questions = quiz.questions || [];
 
     $('page-root').innerHTML = `
-      <div style="margin-bottom:20px">
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap">
-          <button class="btn btn-secondary btn-sm" onclick="renderLecturerQuizzes()">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
-            Back
-          </button>
-          <div style="flex:1;min-width:0">
-            <h2 style="font-size:17px;font-weight:700;letter-spacing:-.3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${quiz.title}</h2>
-            <p style="color:var(--text-light);font-size:12px">${quiz.course?.code || ''} · ${quiz.totalMarks || 0} marks</p>
-          </div>
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;flex-wrap:wrap">
+        <button class="btn btn-secondary btn-sm" onclick="renderLecturerQuizzes()">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+          Back to Quizzes
+        </button>
+        <div>
+          <h2 style="font-size:19px;font-weight:700;letter-spacing:-.3px">${quiz.title}</h2>
+          <p style="color:var(--text-light);font-size:13px">${quiz.course?.code || ''} · ${quiz.course?.title || ''} · Total marks: <strong>${quiz.totalMarks || 0}</strong></p>
         </div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <button class="btn btn-sm" style="background:linear-gradient(135deg,#7c3aed,#4f46e5);color:#fff;font-weight:600;display:flex;align-items:center;gap:5px;border:none;flex:1;min-width:160px;justify-content:center" onclick="openAIGeneratePanel('${quizId}')">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
-            ✨ AI Generate Questions
-          </button>
-          <button class="btn btn-secondary btn-sm" style="background:#0ea5e9;color:#fff;border-color:#0ea5e9" onclick="copyQuizIdInline('${quizId}')">📋 Copy ID</button>
-        </div>
+        <button class="btn btn-secondary btn-sm" style="margin-left:auto;background:#0ea5e9;color:#fff;border-color:#0ea5e9" onclick="copyQuizIdInline('${quizId}')">📋 Copy Quiz ID</button>
       </div>
 
       <!-- Quiz ID card -->
@@ -1073,7 +1075,10 @@ async function openQuizQuestionsPanel(quizId) {
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
             Add New Question
           </div>
-
+          <button class="btn btn-sm" style="background:linear-gradient(135deg,#7c3aed,#4f46e5);color:#fff;font-weight:600;display:flex;align-items:center;gap:5px;border:none" onclick="openAIGeneratePanel('${quizId}')">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+            ✨ AI Generate Questions
+          </button>
         </div>
         <div style="margin-bottom:14px">
           <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:7px;display:block">Question Type</label>
@@ -1518,7 +1523,7 @@ async function runAIGenerate(quizId) {
     const styleDesc = mathStyle === 'solve' ? 'calculation/problem-solving questions where students must compute a numeric or algebraic answer'
                     : mathStyle === 'conceptual' ? 'conceptual/theory questions about mathematical properties, theorems and definitions'
                     : 'a mix of calculation problems and conceptual questions';
-    prompt = 'You are an expert mathematics educator creating proctored quiz questions for a KODEX academic platform.\n\nGenerate exactly ' + count + ' ' + difficulty + ' difficulty math multiple-choice questions.\nTopic: "' + topic + '". ' + branch + '\n' + (context ? 'Additional context: ' + context : '') + '\n\nStyle: ' + styleDesc + '.\nQuestion type: ' + qtypeDesc + '.\nEach question must have exactly 4 options (A, B, C, D).\n\nCRITICAL - Mathematical Notation Rules:\n- Use LaTeX wrapped in \\\\( ... \\\\) for ALL inline math expressions\n- Use \\\\[ ... \\\\] for display/block equations\n- Examples: "Solve \\\\( x^2 - 5x + 6 = 0 \\\\)" options like "\\\\( x = 2, 3 \\\\)"\n- ALL numeric answers and expressions must use LaTeX notation\n- Make distractors realistic (common mistakes students make)\n\nReturn ONLY a valid JSON array, no other text, no markdown, no code fences:\n[\n  {\n    "questionText": "Find all values of \\\\( x \\\\) satisfying \\\\( x^2 - 5x + 6 = 0 \\\\).",\n    "options": ["\\\\( x = 2 \\\\text{ and } x = 3 \\\\)", "\\\\( x = -2 \\\\text{ and } x = -3 \\\\)", "\\\\( x = 1 \\\\text{ and } x = 6 \\\\)", "\\\\( x = 5 \\\\text{ and } x = -1 \\\\)"],\n    "correctAnswers": [0],\n    "questionType": "single",\n    "explanation": "Factorising: \\\\( (x-2)(x-3) = 0 \\\\), so \\\\( x = 2 \\\\) or \\\\( x = 3 \\\\)."\n  }\n]\n\nRules:\n- correctAnswers is 0-based indices array\n- questionType: "single" or "multiple"\n- No duplicate questions';
+    prompt = 'You are an expert mathematics educator creating quiz questions for KODEX.\n\nGenerate exactly ' + count + ' ' + difficulty + ' difficulty math MCQ questions.\nTopic: "' + topic + '". ' + branch + '\n' + (context ? 'Context: ' + context : '') + '\n\nStyle: ' + styleDesc + '. Question type: ' + qtypeDesc + '. Each question has exactly 4 options.\n\nIMPORTANT - For math notation use MATHSTART and MATHEND as delimiters instead of backslashes.\nInstead of \\(x^2\\) write MATHSTARTx^2MATHEND\nInstead of \\[x^2=4\\] write DISPSTARTx^2=4DISPEND\n\nReturn ONLY a valid JSON array:\n[\n  {\n    "questionText": "Find x if MATHSTARTx^2 - 5x + 6 = 0MATHEND.",\n    "options": ["MATHSTARTx = 2, 3MATHEND", "MATHSTARTx = -2, -3MATHEND", "MATHSTARTx = 1, 6MATHEND", "MATHSTARTx = 5, -1MATHEND"],\n    "correctAnswers": [0],\n    "questionType": "single",\n    "explanation": "Factorising: MATHSTART(x-2)(x-3)=0MATHEND gives x=2 or x=3."\n  }\n]\n\nRules: correctAnswers = 0-based indices. questionType = single or multiple. No duplicate questions.';
   } else {
     prompt = 'You are an expert educator creating quiz questions for a KODEX academic quiz system.\n\nGenerate exactly ' + count + ' ' + difficulty + ' difficulty multiple choice questions about: "' + topic + '".\n' + (context ? 'Additional context: ' + context : '') + '\n\nQuestion type: ' + qtypeDesc + '\nEach question must have exactly 4 options (A, B, C, D).\n' + (qtype === 'single' ? 'Each question has exactly 1 correct answer.' : qtype === 'multiple' ? 'Each question has 2 or more correct answers.' : 'Mix: some questions have 1 correct answer, some have 2-3 correct answers.') + '\n\nReturn ONLY a valid JSON array, no other text, no markdown, no explanation:\n[\n  {\n    "questionText": "The full question text here?",\n    "options": ["Option A text", "Option B text", "Option C text", "Option D text"],\n    "correctAnswers": [0],\n    "questionType": "single",\n    "explanation": "Brief explanation of why this is correct"\n  }\n]\n\nRules:\n- correctAnswers is an array of 0-based indices of correct options\n- questionType must be "single" or "multiple"\n- For "single" type, correctAnswers has exactly 1 index\n- For "multiple" type, correctAnswers has 2+ indices\n- Make options plausible and similar in length\n- No trivial questions — test real understanding\n- No duplicate questions';
   }
@@ -1539,12 +1544,24 @@ async function runAIGenerate(quizId) {
     const clean = raw.replace(/```json/g, '').replace(/```/g, '').trim();
     const start = clean.indexOf('['), end = clean.lastIndexOf(']');
     if (start === -1 || end === -1) throw new Error('AI returned unexpected format. Please try again.');
-    const questions = JSON.parse(clean.slice(start, end + 1));
+    let jsonStr = clean.slice(start, end + 1);
+    // Fix LaTeX backslashes that break JSON — single \ not followed by valid JSON escape chars
+    jsonStr = jsonStr.replace(/\\(?!["\\/bfnrtu0-9])/g, '\\\\');
+    const questions = JSON.parse(jsonStr);
     if (!Array.isArray(questions) || questions.length === 0) throw new Error('No questions generated. Try a different topic.');
 
+    // Convert MATHSTART/MATHEND placeholders back to LaTeX notation for MathJax
+    function restoreMath(s) {
+      if (typeof s !== 'string') return s;
+      return s.replace(/MATHSTART/g, '\\(').replace(/MATHEND/g, '\\)')
+               .replace(/DISPSTART/g, '\\[').replace(/DISPEND/g, '\\]');
+    }
     _aiGeneratedQuestions = questions.map(q => ({
       ...q,
       marks,
+      questionText: restoreMath(q.questionText),
+      options: (q.options || []).map(restoreMath),
+      explanation: restoreMath(q.explanation),
       questionType: q.questionType || (q.correctAnswers?.length > 1 ? 'multiple' : 'single'),
       correctAnswers: Array.isArray(q.correctAnswers) ? q.correctAnswers : [q.correctAnswers]
     }));
