@@ -2812,7 +2812,13 @@ async function showAddQuestionsView(quizId) {
         <h2>Questions: ${quiz.title}</h2>
         <p>${quiz.course?.code || ''} — ${quiz.course?.title || ''} | Total Marks: <span id="aq-total-marks">${quiz.totalMarks || 0}</span></p>
       </div>
-      <div class="actions-bar"><button class="btn btn-secondary btn-sm" onclick="renderQuizzes()">← Back to Quizzes</button></div>
+      <div class="actions-bar" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <button class="btn btn-secondary btn-sm" onclick="renderQuizzes()">← Back to Quizzes</button>
+        <button class="btn btn-sm" style="background:linear-gradient(135deg,#7c3aed,#4f46e5);color:#fff;font-weight:600;display:flex;align-items:center;gap:5px;border:none" onclick="openAIQuizPanel('${quizId}')">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+          ✨ AI Generate Questions
+        </button>
+      </div>
       <div class="card" style="margin-bottom:16px;">
         <h3>Add New Question</h3>
 
@@ -4681,4 +4687,267 @@ function buildBottomNav(role) {
   // Mark dashboard active by default
   const dashBtn = nav.querySelector('[data-nav-id="dashboard"]');
   if (dashBtn) dashBtn.classList.add('active');
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+//  AI QUESTION GENERATION — app.js (main dashboard / mobile)
+//  Mirrors the same modal in assignments.html but lives here for the
+//  main-app quiz flow (showAddQuestionsView → openAIQuizPanel)
+// ══════════════════════════════════════════════════════════════════════════════
+
+let _aiQuizQuestions = [];
+
+function openAIQuizPanel(quizId) {
+  const existing = document.getElementById('ai-quiz-overlay');
+  if (existing) existing.remove();
+
+  const overlay = document.createElement('div');
+  overlay.id = 'ai-quiz-overlay';
+  overlay.dataset.quizId = quizId;
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:400;display:flex;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(4px)';
+  overlay.innerHTML = `
+    <div style="background:var(--card);border-radius:16px;width:100%;max-width:520px;max-height:92vh;overflow-y:auto;box-shadow:0 25px 80px rgba(0,0,0,.25);animation:slideIn .25s cubic-bezier(.16,1,.3,1)">
+      <div style="padding:18px 22px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:var(--card);z-index:1">
+        <div style="display:flex;align-items:center;gap:10px">
+          <div style="width:32px;height:32px;border-radius:8px;background:linear-gradient(135deg,#7c3aed,#4f46e5);display:flex;align-items:center;justify-content:center">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+          </div>
+          <div>
+            <h3 style="font-size:16px;font-weight:700;margin:0">AI Question Generator</h3>
+            <p style="font-size:12px;color:var(--text-muted);margin:0">Powered by Claude AI</p>
+          </div>
+        </div>
+        <button onclick="document.getElementById('ai-quiz-overlay').remove()" style="width:28px;height:28px;border-radius:7px;border:1px solid var(--border);background:var(--bg);cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center">✕</button>
+      </div>
+      <div style="padding:18px 22px;display:flex;flex-direction:column;gap:14px">
+        <div>
+          <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:6px;display:block">Topic / Subject <span style="color:#dc2626">*</span></label>
+          <input id="aiq-topic" placeholder="e.g. Photosynthesis, Newton's laws, Python loops…" style="width:100%;padding:10px 13px;border:1.5px solid var(--border);border-radius:9px;font-size:14px;font-family:inherit;outline:none" onfocus="this.style.borderColor='#7c3aed'" onblur="this.style.borderColor='var(--border)'"/>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <div>
+            <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:6px;display:block">Questions</label>
+            <select id="aiq-count" style="width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:9px;font-size:14px;font-family:inherit;outline:none">
+              <option value="3">3</option><option value="5" selected>5</option><option value="8">8</option><option value="10">10</option><option value="15">15</option>
+            </select>
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:6px;display:block">Difficulty</label>
+            <select id="aiq-difficulty" style="width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:9px;font-size:14px;font-family:inherit;outline:none">
+              <option value="easy">Easy</option><option value="medium" selected>Medium</option><option value="hard">Hard</option><option value="mixed">Mixed</option>
+            </select>
+          </div>
+        </div>
+        <div>
+          <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:8px;display:block">Question Type</label>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <label style="display:flex;align-items:center;gap:5px;cursor:pointer;padding:7px 13px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-weight:500"><input type="radio" name="aiq-qtype" value="single" checked style="accent-color:var(--primary)"/> Single Answer</label>
+            <label style="display:flex;align-items:center;gap:5px;cursor:pointer;padding:7px 13px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-weight:500"><input type="radio" name="aiq-qtype" value="multiple" style="accent-color:var(--primary)"/> Multiple Answers</label>
+            <label style="display:flex;align-items:center;gap:5px;cursor:pointer;padding:7px 13px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-weight:500"><input type="radio" name="aiq-qtype" value="mixed" style="accent-color:var(--primary)"/> Mixed</label>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:90px 1fr;gap:12px;align-items:start">
+          <div>
+            <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:6px;display:block">Marks/Q</label>
+            <input id="aiq-marks" type="number" value="1" min="1" style="width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:9px;font-size:14px;font-family:inherit;outline:none"/>
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:6px;display:block">Additional Context <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-muted)">(optional)</span></label>
+            <textarea id="aiq-context" rows="2" placeholder="e.g. Year 10 level, focus on cellular respiration…" style="width:100%;padding:10px 13px;border:1.5px solid var(--border);border-radius:9px;font-size:14px;font-family:inherit;resize:vertical;outline:none" onfocus="this.style.borderColor='#7c3aed'" onblur="this.style.borderColor='var(--border)'"></textarea>
+          </div>
+        </div>
+        <!-- Subject toggle -->
+        <div>
+          <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:8px;display:block">Subject Area</label>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <label id="aiq-subj-gen" style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:7px 14px;border:1.5px solid var(--primary);border-radius:8px;background:var(--primary);color:#fff;font-size:13px;font-weight:600">
+              <input type="radio" name="aiq-subject" value="general" checked onchange="aiqToggleSubject('general')" style="accent-color:#fff"/> 📚 General
+            </label>
+            <label id="aiq-subj-math" style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:7px 14px;border:1.5px solid var(--border);border-radius:8px;background:var(--card);color:var(--text-light);font-size:13px;font-weight:600">
+              <input type="radio" name="aiq-subject" value="math" onchange="aiqToggleSubject('math')" style="accent-color:var(--primary)"/> 🧮 Mathematics
+            </label>
+          </div>
+        </div>
+        <!-- Math options -->
+        <div id="aiq-math-opts" style="display:none;flex-direction:column;gap:12px;background:#f5f3ff;border:1.5px solid #e0e7ff;border-radius:10px;padding:14px 16px">
+          <div style="font-size:12px;color:#4f46e5;font-weight:600">🧮 Questions will use LaTeX math notation</div>
+          <div>
+            <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:6px;display:block">Math Branch</label>
+            <select id="aiq-math-branch" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;outline:none;background:#fff;font-family:inherit">
+              <option value="">Any / Mixed</option>
+              <option value="algebra">Algebra</option>
+              <option value="calculus">Calculus</option>
+              <option value="geometry">Geometry &amp; Trigonometry</option>
+              <option value="statistics">Statistics &amp; Probability</option>
+              <option value="linear algebra">Linear Algebra &amp; Matrices</option>
+              <option value="discrete math">Discrete Mathematics</option>
+            </select>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <label style="display:flex;align-items:center;gap:5px;cursor:pointer;padding:6px 12px;border:1.5px solid var(--border);border-radius:7px;font-size:12px;background:#fff"><input type="radio" name="aiq-math-style" value="solve" checked style="accent-color:var(--primary)"/> Solve problems</label>
+            <label style="display:flex;align-items:center;gap:5px;cursor:pointer;padding:6px 12px;border:1.5px solid var(--border);border-radius:7px;font-size:12px;background:#fff"><input type="radio" name="aiq-math-style" value="conceptual" style="accent-color:var(--primary)"/> Conceptual</label>
+            <label style="display:flex;align-items:center;gap:5px;cursor:pointer;padding:6px 12px;border:1.5px solid var(--border);border-radius:7px;font-size:12px;background:#fff"><input type="radio" name="aiq-math-style" value="mixed" style="accent-color:var(--primary)"/> Mixed</label>
+          </div>
+        </div>
+        <div id="aiq-error" style="display:none;padding:10px 13px;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;color:#dc2626;font-size:13px;font-weight:500"></div>
+        <div id="aiq-preview" style="display:none">
+          <div style="font-size:13px;font-weight:700;margin-bottom:10px;display:flex;align-items:center;gap:8px">
+            Preview
+            <span id="aiq-preview-count" style="background:#ede9fe;color:#7c3aed;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600"></span>
+          </div>
+          <div id="aiq-preview-list" style="display:flex;flex-direction:column;gap:9px;max-height:280px;overflow-y:auto;padding-right:3px"></div>
+        </div>
+      </div>
+      <div style="padding:14px 22px;border-top:1px solid var(--border);display:flex;gap:9px;justify-content:flex-end;position:sticky;bottom:0;background:var(--card);border-radius:0 0 16px 16px">
+        <button class="btn btn-secondary" onclick="document.getElementById('ai-quiz-overlay').remove()">Cancel</button>
+        <button id="aiq-gen-btn" class="btn" style="background:linear-gradient(135deg,#7c3aed,#4f46e5);color:#fff;font-weight:600;display:flex;align-items:center;gap:7px" onclick="runAIQuizGenerate(document.getElementById('ai-quiz-overlay').dataset.quizId)">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+          Generate Questions
+        </button>
+        <button id="aiq-add-btn" class="btn btn-primary" style="display:none" onclick="addAIQuizQuestions(document.getElementById('ai-quiz-overlay').dataset.quizId)">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Add All to Quiz
+        </button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+}
+
+function aiqToggleSubject(subj) {
+  const opts  = document.getElementById('aiq-math-opts');
+  const gen   = document.getElementById('aiq-subj-gen');
+  const math  = document.getElementById('aiq-subj-math');
+  if (!opts) return;
+  const isMath = subj === 'math';
+  opts.style.display = isMath ? 'flex' : 'none';
+  const active   = 'display:flex;align-items:center;gap:6px;cursor:pointer;padding:7px 14px;border:1.5px solid var(--primary);border-radius:8px;background:var(--primary);color:#fff;font-size:13px;font-weight:600';
+  const inactive = 'display:flex;align-items:center;gap:6px;cursor:pointer;padding:7px 14px;border:1.5px solid var(--border);border-radius:8px;background:var(--card);color:var(--text-light);font-size:13px;font-weight:600';
+  if (gen)  gen.style.cssText  = isMath ? inactive : active;
+  if (math) math.style.cssText = isMath ? active   : inactive;
+}
+
+async function runAIQuizGenerate(quizId) {
+  const topic      = document.getElementById('aiq-topic')?.value?.trim();
+  const count      = document.getElementById('aiq-count')?.value || '5';
+  const difficulty = document.getElementById('aiq-difficulty')?.value || 'medium';
+  const qtype      = document.querySelector('input[name="aiq-qtype"]:checked')?.value || 'single';
+  const marks      = parseInt(document.getElementById('aiq-marks')?.value) || 1;
+  const context    = document.getElementById('aiq-context')?.value?.trim() || '';
+  const subject    = document.querySelector('input[name="aiq-subject"]:checked')?.value || 'general';
+  const mathBranch = document.getElementById('aiq-math-branch')?.value || '';
+  const mathStyle  = document.querySelector('input[name="aiq-math-style"]:checked')?.value || 'solve';
+  const isMath     = subject === 'math';
+
+  const errEl      = document.getElementById('aiq-error');
+  const btn        = document.getElementById('aiq-gen-btn');
+  const previewDiv = document.getElementById('aiq-preview');
+  const addBtn     = document.getElementById('aiq-add-btn');
+
+  if (!topic) { errEl.textContent = 'Please enter a topic.'; errEl.style.display = 'block'; return; }
+  errEl.style.display = 'none';
+  previewDiv.style.display = 'none';
+  addBtn.style.display = 'none';
+  _aiQuizQuestions = [];
+
+  btn.disabled = true;
+  btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="animation:spin 1s linear infinite"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> Generating…';
+
+  const qtypeDesc = qtype === 'single' ? 'single correct answer (MCQ)' : qtype === 'multiple' ? 'multiple correct answers' : 'a mix of single and multiple correct answer';
+
+  let prompt;
+  if (isMath) {
+    const branch = mathBranch ? 'Branch: ' + mathBranch + '.' : 'Any math branch relevant to the topic.';
+    const styleDesc = mathStyle === 'solve' ? 'calculation/problem-solving questions'
+                    : mathStyle === 'conceptual' ? 'conceptual/theory questions about mathematical properties'
+                    : 'a mix of calculation problems and conceptual questions';
+    prompt = 'You are an expert mathematics educator creating quiz questions for KODEX.\n\nGenerate exactly ' + count + ' ' + difficulty + ' difficulty math MCQ questions about: "' + topic + '". ' + branch + '\n' + (context ? 'Context: ' + context : '') + '\n\nStyle: ' + styleDesc + '. Question type: ' + qtypeDesc + '. Each question has exactly 4 options.\n\nUse LaTeX \\( ... \\) for ALL inline math. Use \\[ ... \\] for display equations.\n\nReturn ONLY a valid JSON array:\n[\n  {\n    "questionText": "Find \\( x \\) if \\( x^2 - 5x + 6 = 0 \\).",\n    "options": ["\\( x = 2, 3 \\)", "\\( x = -2, -3 \\)", "\\( x = 1, 6 \\)", "\\( x = 5, -1 \\)"],\n    "correctAnswers": [0],\n    "questionType": "single",\n    "explanation": "Factorising: \\( (x-2)(x-3)=0 \\)."\n  }\n]';
+  } else {
+    prompt = 'You are an expert educator creating quiz questions for KODEX.\n\nGenerate exactly ' + count + ' ' + difficulty + ' difficulty MCQ questions about: "' + topic + '".\n' + (context ? 'Context: ' + context : '') + '\nQuestion type: ' + qtypeDesc + '. Each question has exactly 4 options.\n\nReturn ONLY a valid JSON array:\n[\n  {\n    "questionText": "Question here?",\n    "options": ["Option A", "Option B", "Option C", "Option D"],\n    "correctAnswers": [0],\n    "questionType": "single",\n    "explanation": "Why this is correct"\n  }\n]\n\ncorrectAnswers = 0-based indices. questionType = "single" or "multiple". No extra text.';
+  }
+
+  try {
+    const token = localStorage.getItem('token') || '';
+    const response = await fetch('/api/ai/generate-questions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+      body: JSON.stringify({ prompt, max_tokens: 4000 })
+    });
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(err.error || 'Server error ' + response.status);
+    }
+    const data = await response.json();
+    const raw   = data.content?.find(c => c.type === 'text')?.text || '';
+    const clean = raw.replace(/```json/g, '').replace(/```/g, '').trim();
+    const start = clean.indexOf('['), end = clean.lastIndexOf(']');
+    if (start === -1 || end === -1) throw new Error('Unexpected AI response format. Try again.');
+    const questions = JSON.parse(clean.slice(start, end + 1));
+    if (!Array.isArray(questions) || !questions.length) throw new Error('No questions generated. Try a different topic.');
+
+    _aiQuizQuestions = questions.map(q => ({
+      ...q,
+      marks,
+      questionType: q.questionType || (q.correctAnswers?.length > 1 ? 'multiple' : 'single'),
+      correctAnswers: Array.isArray(q.correctAnswers) ? q.correctAnswers : [q.correctAnswers],
+    }));
+
+    const L = ['A','B','C','D'];
+    document.getElementById('aiq-preview-count').textContent = _aiQuizQuestions.length + ' questions';
+    document.getElementById('aiq-preview-list').innerHTML = _aiQuizQuestions.map((q, i) => `
+      <div style="border:1.5px solid var(--border);border-radius:10px;padding:13px;background:var(--bg)">
+        <div style="font-size:13px;font-weight:600;margin-bottom:8px;line-height:1.5">
+          Q${i+1}
+          <span style="font-size:10px;padding:2px 7px;border-radius:20px;font-weight:600;margin-left:6px;${q.questionType==='multiple'?'background:#ede9fe;color:#7c3aed':'background:#f0f9ff;color:#0369a1'}">${q.questionType.toUpperCase()}</span>
+          ${q.questionText}
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:6px">
+          ${q.options.map((o, oi) => `<span style="padding:4px 9px;border-radius:6px;font-size:12px;font-weight:500;${q.correctAnswers.includes(oi)?'background:#f0fdf4;color:#166534;border:1px solid #bbf7d0':'background:#fff;color:var(--text-light);border:1px solid var(--border)'}">
+            ${L[oi]}) ${o}${q.correctAnswers.includes(oi)?' ✓':''}</span>`).join('')}
+        </div>
+        ${q.explanation ? `<div style="font-size:11px;color:var(--text-muted);padding:5px 9px;background:#fff;border-radius:6px;border-left:3px solid #7c3aed">💡 ${q.explanation}</div>` : ''}
+      </div>
+    `).join('');
+
+    previewDiv.style.display = 'block';
+    addBtn.style.display = 'flex';
+
+    // Render MathJax if available
+    if (window.MathJax && MathJax.typesetPromise) {
+      MathJax.typesetPromise([document.getElementById('aiq-preview-list')]).catch(() => {});
+    }
+  } catch(e) {
+    errEl.textContent = 'Generation failed: ' + e.message;
+    errEl.style.display = 'block';
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg> Regenerate';
+  }
+}
+
+async function addAIQuizQuestions(quizId) {
+  const btn = document.getElementById('aiq-add-btn');
+  if (!_aiQuizQuestions.length) return;
+  btn.disabled = true; btn.textContent = 'Adding…';
+  let added = 0, failed = 0;
+  for (const q of _aiQuizQuestions) {
+    try {
+      const body = {
+        questionText: q.questionText,
+        options: q.options,
+        questionType: q.questionType,
+        marks: q.marks || 1,
+        explanation: q.explanation || null,
+      };
+      if (q.questionType === 'multiple') { body.correctAnswers = q.correctAnswers; }
+      else { body.correctAnswer = q.correctAnswers[0]; }
+      await api('POST', '/api/lecturer/quizzes/' + quizId + '/questions', body);
+      added++;
+    } catch(e) { failed++; }
+  }
+  document.getElementById('ai-quiz-overlay')?.remove();
+  const msg = added + ' question' + (added !== 1 ? 's' : '') + ' added!' + (failed ? ' (' + failed + ' failed)' : '');
+  if (typeof toast === 'function') toast(msg, added > 0 ? 'ok' : 'err');
+  else alert(msg);
+  await showAddQuestionsView(quizId);
 }
