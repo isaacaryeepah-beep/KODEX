@@ -968,7 +968,7 @@ async function renderQuizzesPanel() {
 
 // ── LECTURER QUIZ LIST ────────────────────────────────────────────────────
 async function renderLecturerQuizzes() {
-  const d = await api('GET', '/api/lecturer/quizzes');
+  const d = await api('GET', '/api/lecturer/quizzes?source=assignment');
   QS.quizzes = d.quizzes || [];
   const now = new Date();
 
@@ -1321,7 +1321,8 @@ async function submitCreateQuiz() {
       courseId,
       startTime: new Date(start).toISOString(),
       endTime: new Date(end).toISOString(),
-      timeLimit
+      timeLimit,
+      source: 'assignment'
     });
     document.getElementById('qz-modal-overlay')?.remove();
     toast('Quiz created! Now add questions.', 'ok');
