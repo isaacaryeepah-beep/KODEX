@@ -173,6 +173,14 @@ const start = async () => {
 
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on port ${PORT}`);
+
+    // Start email scheduler (trial reminders, renewal nudges)
+    try {
+      const { startScheduler } = require("./services/emailScheduler");
+      startScheduler();
+    } catch (e) {
+      console.error("Scheduler failed to start:", e.message);
+    }
   });
 };
 
