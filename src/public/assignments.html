@@ -1311,6 +1311,9 @@ async function submitCreateQuiz() {
   if (new Date(start) >= new Date(end)) { errEl.textContent = 'Start time must be before end time.'; errEl.style.display = 'block'; return; }
 
   errEl.style.display = 'none';
+  // Prevent double-submit
+  const submitBtn = document.querySelector('#qz-modal-overlay .btn-primary');
+  if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Creating…'; }
   try {
     const d = await api('POST', '/api/lecturer/quizzes', {
       title,
@@ -1324,6 +1327,7 @@ async function submitCreateQuiz() {
     toast('Quiz created! Now add questions.', 'ok');
     await openQuizQuestionsPanel(d.quiz._id);
   } catch(e) {
+    if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Create Quiz'; }
     errEl.textContent = e.message; errEl.style.display = 'block';
   }
 }
@@ -1577,7 +1581,9 @@ async function runAIGenerate(quizId) {
 
     const L = ['A','B','C','D'];
     document.getElementById('ai-preview-count').textContent = _aiGeneratedQuestions.length + ' questions';
-    document.getElementById('ai-preview-list').innerHTML = _aiGeneratedQuestions.map((q, i) => `
+    const previewEl = document.getElementById('ai-preview-list');
+    if (!previewEl) return;
+    previewEl.innerHTML = _aiGeneratedQuestions.map((q, i) => `
       <div style="border:1.5px solid var(--border);border-radius:10px;padding:14px;background:var(--bg)">
         <div style="font-size:13px;font-weight:600;margin-bottom:9px;line-height:1.5">
           Q${i+1}
