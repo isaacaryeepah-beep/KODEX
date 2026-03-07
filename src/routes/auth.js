@@ -2,21 +2,23 @@ const express = require("express");
 const authenticate = require("../middleware/auth");
 const { requireRole } = require("../middleware/role");
 const authController = require("../controllers/authController");
+const { loginLimiter, registerLimiter, passwordResetLimiter } = require("../middleware/rateLimiter");
 
 const router = express.Router();
 
-router.post("/register", authController.register);
-router.post("/register-lecturer", authController.registerLecturer);
-router.post("/register-student", authController.registerStudent);
-router.post("/register-employee", authController.registerEmployee);
-router.post("/login", authController.login);
-router.post("/logout", authenticate, authController.logout);
-router.get("/me", authenticate, authController.getMe);
-router.post("/migrate-orphans", authenticate, requireRole("superadmin"), authController.migrateOrphanUsers);
-router.post("/forgot-password", authController.forgotPassword);
-router.post("/reset-password", authController.resetPassword);
-router.post("/forgot-password-email", authController.forgotPasswordEmail);
-router.post("/reset-password-email", authController.resetPasswordEmail);
-router.put("/profile", authenticate, authController.updateProfile);
+// ── Auth routes with rate limiting ───────────────────────────────────────────
+router.post("/register",               registerLimiter,       authController.register);
+router.post("/register-lecturer",      registerLimiter,       authController.registerLecturer);
+router.post("/register-student",       registerLimiter,       authController.registerStudent);
+router.post("/register-employee",      registerLimiter,       authController.registerEmployee);
+router.post("/login",                  loginLimiter,          authController.login);
+router.post("/logout",                 authenticate,          authController.logout);
+router.get("/me",                      authenticate,          authController.getMe);
+router.post("/migrate-orphans",        authenticate, requireRole("superadmin"), authController.migrateOrphanUsers);
+router.post("/forgot-password",        passwordResetLimiter,  authController.forgotPassword);
+router.post("/reset-password",         passwordResetLimiter,  authController.resetPassword);
+router.post("/forgot-password-email",  passwordResetLimiter,  authController.forgotPasswordEmail);
+router.post("/reset-password-email",   passwordResetLimiter,  authController.resetPasswordEmail);
+router.put("/profile",                 authenticate,          authController.updateProfile);
 
 module.exports = router;
