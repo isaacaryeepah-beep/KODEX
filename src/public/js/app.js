@@ -2702,7 +2702,7 @@ function closeQuizModal() {
 
 async function renderLecturerQuizzes(content) {
   try {
-    const data = await api('/api/lecturer/quizzes');
+    const data = await api('/api/lecturer/quizzes?source=proctored');
     content.innerHTML = `
       <div class="page-header"><h2>Quizzes</h2><p>Manage your quizzes and assessments</p></div>
       <div class="actions-bar"><button class="btn btn-primary btn-sm" onclick="showCreateQuizModal()">Create Quiz</button></div>
@@ -2790,7 +2790,7 @@ async function submitCreateQuiz() {
   try {
     const data = await api('/api/lecturer/quizzes', {
       method: 'POST',
-      body: JSON.stringify({ title, description, courseId, timeLimit, startTime: new Date(startTime).toISOString(), endTime: new Date(endTime).toISOString() })
+      body: JSON.stringify({ title, description, courseId, timeLimit, startTime: new Date(startTime).toISOString(), endTime: new Date(endTime).toISOString(), source: 'proctored' })
     });
     closeQuizModal();
     showAddQuestionsView(data.quiz._id);
