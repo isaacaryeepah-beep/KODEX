@@ -4593,64 +4593,92 @@ window.addEventListener('resize', () => {
 });
 
 function buildBottomNav(role) {
-  // Remove existing bottom nav
   const existing = document.getElementById('bottom-nav');
   if (existing) existing.remove();
 
-  // Build from the ACTUAL sidebar links so nothing is ever missing
-  // We wait a tick for the sidebar to be rendered first
-  setTimeout(() => {
-    const sidebarLinks = Array.from(document.querySelectorAll('.sidebar-nav a'));
-    if (!sidebarLinks.length) return;
+  // Priority items per role — most-used actions shown directly in bottom bar
+  // Everything else is accessible via the sidebar (More button)
+  const PRIORITY = {
+    admin:      ['dashboard', 'sessions', 'reports', 'subscription'],
+    manager:    ['dashboard', 'sessions', 'reports', 'users'],
+    lecturer:   ['dashboard', 'sessions', 'quizzes', 'reports'],
+    employee:   ['dashboard', 'sign-in-out', 'my-attendance', 'reports'],
+    student:    ['dashboard', 'mark-attendance', 'quizzes', 'my-attendance'],
+    superadmin: ['dashboard', 'sessions', 'quizzes', 'reports'],
+  };
 
-    // All links: pick first 4 for bottom bar + a "More" button if there are extras
-    const MAX_VISIBLE = 4;
-    const visible = sidebarLinks.slice(0, MAX_VISIBLE);
-    const hasMore = sidebarLinks.length > MAX_VISIBLE;
+  const ICONS = {
+    dashboard:       '<rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>',
+    sessions:        '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
+    quizzes:         '<path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M9 14l2 2 4-4"/>',
+    reports:         '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>',
+    subscription:    '<rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/>',
+    users:           '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
+    'sign-in-out':   '<polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>',
+    'my-attendance': '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
+    'mark-attendance':'<polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>',
+    courses:         '<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>',
+    approvals:       '<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>',
+    meetings:        '<path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2"/>',
+    assignments:     '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>',
+    announcements:   '<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>',
+    search:          '<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>',
+    profile:         '<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
+  };
 
-    const nav = document.createElement('div');
-    nav.id = 'bottom-nav';
-    nav.className = 'bottom-nav';
+  const LABELS = {
+    'sign-in-out': 'Sign In/Out', 'my-attendance': 'Attendance',
+    'mark-attendance': 'Attendance', subscription: 'Subscribe',
+    announcements: 'Notices', assignments: 'Assignments',
+  };
 
-    visible.forEach(link => {
-      const label = link.querySelector('span')?.textContent?.trim() || '';
-      const svgEl = link.querySelector('svg');
-      const btn = document.createElement('button');
-      btn.className = 'bottom-nav-item';
-      btn.innerHTML = (svgEl ? svgEl.outerHTML : '') + `<span>${label}</span>`;
-      btn.dataset.navId = link.id?.replace('nav-', '') || '';
-      btn.onclick = () => {
-        document.querySelectorAll('.bottom-nav-item').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        link.click();
-        closeMobileSidebar();
-      };
-      // Mark active if link is active
-      if (link.classList.contains('active')) btn.classList.add('active');
-      nav.appendChild(btn);
+  const priority = PRIORITY[role] || ['dashboard', 'sessions', 'reports'];
+
+  const nav = document.createElement('div');
+  nav.id = 'bottom-nav';
+  nav.className = 'bottom-nav';
+
+  priority.forEach(id => {
+    const icon = ICONS[id] || ICONS.dashboard;
+    const label = LABELS[id] || (id.charAt(0).toUpperCase() + id.slice(1));
+    const btn = document.createElement('button');
+    btn.className = 'bottom-nav-item';
+    btn.dataset.navId = id;
+    btn.innerHTML = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${icon}</svg><span>${label}</span>`;
+    btn.onclick = () => {
+      document.querySelectorAll('.bottom-nav-item').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      // Trigger the matching sidebar link
+      const sidebarLink = document.getElementById('nav-' + id);
+      if (sidebarLink) sidebarLink.click();
+      else navigateTo(id);
+      closeMobileSidebar();
+    };
+    nav.appendChild(btn);
+  });
+
+  // More button — opens full sidebar for everything else
+  const moreBtn = document.createElement('button');
+  moreBtn.className = 'bottom-nav-item';
+  moreBtn.id = 'bottom-nav-more';
+  moreBtn.innerHTML = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg><span>More</span>`;
+  moreBtn.onclick = () => toggleMobileSidebar();
+  nav.appendChild(moreBtn);
+
+  document.body.appendChild(nav);
+
+  // Sync active state when navigation changes
+  const observer = new MutationObserver(() => {
+    const activeLink = document.querySelector('.sidebar-nav a.active');
+    if (!activeLink) return;
+    const activeId = activeLink.id?.replace('nav-', '');
+    document.querySelectorAll('.bottom-nav-item').forEach(b => {
+      b.classList.toggle('active', b.dataset.navId === activeId);
     });
-
-    // "More" button opens the sidebar drawer to show remaining items
-    if (hasMore) {
-      const moreBtn = document.createElement('button');
-      moreBtn.className = 'bottom-nav-item';
-      moreBtn.innerHTML = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg><span>More</span>`;
-      moreBtn.onclick = () => toggleMobileSidebar();
-      nav.appendChild(moreBtn);
-    }
-
-    document.body.appendChild(nav);
-
-    // Keep bottom nav in sync when sidebar active link changes
-    const observer = new MutationObserver(() => {
-      const activeLink = document.querySelector('.sidebar-nav a.active');
-      if (!activeLink) return;
-      const activeId = activeLink.id?.replace('nav-', '');
-      document.querySelectorAll('.bottom-nav-item').forEach(b => {
-        b.classList.toggle('active', b.dataset.navId === activeId);
-      });
-    });
-    const sidebarNav = document.getElementById('sidebar-nav');
-    if (sidebarNav) observer.observe(sidebarNav, { attributes: true, subtree: true, attributeFilter: ['class'] });
-  }, 100);
+  });
+  const sidebarNav = document.getElementById('sidebar-nav');
+  if (sidebarNav) observer.observe(sidebarNav, { attributes: true, subtree: true, attributeFilter: ['class'] });
+  // Mark dashboard active by default
+  const dashBtn = nav.querySelector('[data-nav-id="dashboard"]');
+  if (dashBtn) dashBtn.classList.add('active');
 }
