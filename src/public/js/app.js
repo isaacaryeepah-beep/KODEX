@@ -5435,3 +5435,547 @@ async function cancelLeave(id) {
     renderMyLeaves();
   } catch(e) { toast(e.message, 'err'); }
 }
+
+// ══════════════════════════════════════════════════════════════════════════════
+//  CORPORATE PHASE 2 — TRAINING & ASSESSMENTS
+// ══════════════════════════════════════════════════════════════════════════════
+
+// ── SIDEBAR: add training nav items ──────────────────────────────────────────
+// Patch buildSidebar to inject training links for corporate mode
+const _origBuildSidebar = buildSidebar;
+buildSidebar = function() {
+  _origBuildSidebar();
+  const role = currentUser?.role;
+  const mode = currentUser?.company?.mode;
+  if (mode !== 'corporate') return;
+
+  const nav = document.getElementById('sidebar-nav');
+  if (!nav) return;
+
+  const trainingIcon = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>`;
+
+  if (['admin','manager','superadmin'].includes(role)) {
+    // Insert after leave-requests link
+    const leaveLink = document.getElementById('nav-leave-requests');
+    if (leaveLink && !document.getElementById('nav-training')) {
+      const a = document.createElement('a');
+      a.id = 'nav-training';
+      a.innerHTML = `${trainingIcon} <span>Training</span>`;
+      a.onclick = () => navigateTo('training');
+      leaveLink.insertAdjacentElement('afterend', a);
+    }
+  } else if (role === 'employee') {
+    const myLeaveLink = document.getElementById('nav-my-leaves');
+    if (myLeaveLink && !document.getElementById('nav-my-training')) {
+      const a = document.createElement('a');
+      a.id = 'nav-my-training';
+      a.innerHTML = `${trainingIcon} <span>My Training</span>`;
+      a.onclick = () => navigateTo('my-training');
+      myLeaveLink.insertAdjacentElement('afterend', a);
+    }
+  }
+};
+
+// ── Patch navigateTo to handle training routes ────────────────────────────────
+const _origNavigateTo = navigateTo;
+navigateTo = function(view) {
+  if (view === 'training')    { currentView = view; _setNavActive(view); renderTraining(); return; }
+  if (view === 'my-training') { currentView = view; _setNavActive(view); renderMyTraining(); return; }
+  _origNavigateTo(view);
+};
+
+function _setNavActive(view) {
+  document.querySelectorAll('.sidebar-nav a').forEach(a => a.classList.remove('active'));
+  const el = document.getElementById(`nav-${view}`);
+  if (el) el.classList.add('active');
+  const content = document.getElementById('main-content');
+  if (content) content.innerHTML = '<div class="loading">Loading...</div>';
+}
+
+// ── ADMIN/MANAGER: Training Hub ───────────────────────────────────────────────
+async function renderTraining() {
+  const content = document.getElementById('main-content');
+  if (!content) return;
+
+  try {
+    const [overviewData, modulesData] = await Promise.all([
+      api('/api/training/overview'),
+      api('/api/training/modules'),
+    ]);
+
+    const { stats, recent } = overviewData;
+    const modules = modulesData.modules || [];
+
+    const typeBadge = t => ({
+      onboarding:   '<span style="background:#dbeafe;color:#1d4ed8;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600">Onboarding</span>',
+      mandatory:    '<span style="background:#fef3c7;color:#d97706;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600">Mandatory</span>',
+      certification:'<span style="background:#d1fae5;color:#065f46;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600">Certification</span>',
+      policy:       '<span style="background:#ede9fe;color:#5b21b6;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600">Policy</span>',
+    }[t] || t);
+
+    content.innerHTML = `
+      <div class="page-header">
+        <h2>Training & Assessments</h2>
+        <p>Create and manage mandatory training modules</p>
+      </div>
+
+      <!-- Stats -->
+      <div class="stats-grid" style="margin-bottom:20px">
+        <div class="stat-card"><div class="stat-value">${stats.modules}</div><div class="stat-label">Modules</div></div>
+        <div class="stat-card"><div class="stat-value">${stats.completed}</div><div class="stat-label">Completions</div></div>
+        <div class="stat-card"><div class="stat-value">${stats.passed}</div><div class="stat-label">Passed</div></div>
+        <div class="stat-card" style="${stats.overdue > 0 ? 'border-left:3px solid #f59e0b' : ''}">
+          <div class="stat-value" style="${stats.overdue > 0 ? 'color:#f59e0b' : ''}">${stats.overdue}</div>
+          <div class="stat-label">Overdue</div>
+        </div>
+      </div>
+
+      <!-- Create Module -->
+      <div class="card" style="margin-bottom:20px">
+        <h3 style="margin-bottom:14px;font-size:15px;font-weight:700">Create Training Module</h3>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;margin-bottom:10px">
+          <div>
+            <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:4px">Title *</label>
+            <input id="tm-title" placeholder="e.g. Fire Safety Training" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:4px">Type</label>
+            <select id="tm-type" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
+              <option value="onboarding">Onboarding</option>
+              <option value="mandatory" selected>Mandatory</option>
+              <option value="certification">Certification</option>
+              <option value="policy">Policy</option>
+            </select>
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:4px">Passing Score (%)</label>
+            <input id="tm-pass" type="number" value="70" min="1" max="100" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:4px">Due In (days)</label>
+            <input id="tm-due" type="number" value="7" min="1" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
+          </div>
+        </div>
+        <div style="margin-bottom:10px">
+          <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:4px">Description</label>
+          <input id="tm-desc" placeholder="Brief description of the module" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
+        </div>
+        <div style="margin-bottom:10px">
+          <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:4px">Training Content</label>
+          <textarea id="tm-content" rows="4" placeholder="Write the training content here. Employees will read this before taking the assessment." style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;resize:vertical"></textarea>
+        </div>
+        <div style="margin-bottom:12px">
+          <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:4px">Video URL (optional)</label>
+          <input id="tm-video" placeholder="https://youtube.com/..." style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
+        </div>
+        <div id="tm-error" style="color:#ef4444;font-size:13px;margin-bottom:8px;display:none"></div>
+        <button class="btn btn-primary" onclick="submitCreateModule()">+ Create Module</button>
+      </div>
+
+      <!-- Modules List -->
+      <div class="card">
+        <h3 style="margin-bottom:14px;font-size:15px;font-weight:700">Modules (${modules.length})</h3>
+        ${modules.length ? modules.map(m => `
+          <div style="padding:16px;border:1px solid #e5e7eb;border-radius:10px;margin-bottom:12px">
+            <div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:8px">
+              <div style="flex:1">
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;flex-wrap:wrap">
+                  <span style="font-weight:700;font-size:15px">${m.title}</span>
+                  ${typeBadge(m.type)}
+                </div>
+                <div style="font-size:12px;color:#6b7280;margin-bottom:8px">${m.description || 'No description'} · Pass: ${m.passingScore}% · Due in ${m.dueInDays}d · ${m.questions.length} question${m.questions.length !== 1 ? 's' : ''}</div>
+                <div style="display:flex;gap:12px;font-size:12px">
+                  <span style="color:#6b7280">👥 ${m.stats.total} assigned</span>
+                  <span style="color:#16a34a">✅ ${m.stats.completed} completed</span>
+                  <span style="color:#2563eb">🏆 ${m.stats.passed} passed</span>
+                </div>
+              </div>
+              <div style="display:flex;gap:6px;flex-wrap:wrap">
+                <button class="btn btn-sm" style="background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe" onclick="showAddTrainingQuestion('${m._id}')">+ Questions</button>
+                <button class="btn btn-sm" style="background:#f0fdf4;color:#16a34a;border:1px solid #bbf7d0" onclick="assignModule('${m._id}')">Assign All</button>
+                <button class="btn btn-sm" style="background:#f5f3ff;color:#5b21b6;border:1px solid #ddd6fe" onclick="viewModuleProgress('${m._id}', '${m.title.replace(/'/g,"\\'")}')">Progress</button>
+                <button class="btn btn-sm" style="background:#fef2f2;color:#dc2626;border:1px solid #fecaca" onclick="deleteModule('${m._id}')">Delete</button>
+              </div>
+            </div>
+          </div>
+        `).join('') : '<p style="color:#9ca3af;font-size:13px">No training modules yet. Create one above.</p>'}
+      </div>
+
+      ${recent.length ? `
+      <div class="card" style="margin-top:16px">
+        <h3 style="margin-bottom:12px;font-size:15px;font-weight:700">Recent Completions</h3>
+        ${recent.map(r => `
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f3f4f6">
+            <div>
+              <span style="font-weight:600;font-size:13px">${r.employee?.name || 'Unknown'}</span>
+              <span style="color:#6b7280;font-size:12px"> completed </span>
+              <span style="font-size:13px">${r.module?.title || 'Module'}</span>
+            </div>
+            <span style="font-size:11px;color:#9ca3af">${new Date(r.completedAt).toLocaleDateString()}</span>
+          </div>
+        `).join('')}
+      </div>
+      ` : ''}
+    `;
+  } catch(e) {
+    content.innerHTML = `<div class="card"><p style="color:#ef4444">Error: ${e.message}</p></div>`;
+  }
+}
+
+async function submitCreateModule() {
+  const title = document.getElementById('tm-title').value.trim();
+  const type = document.getElementById('tm-type').value;
+  const passingScore = parseInt(document.getElementById('tm-pass').value) || 70;
+  const dueInDays = parseInt(document.getElementById('tm-due').value) || 7;
+  const description = document.getElementById('tm-desc').value.trim();
+  const content = document.getElementById('tm-content').value.trim();
+  const videoUrl = document.getElementById('tm-video').value.trim();
+  const errEl = document.getElementById('tm-error');
+  errEl.style.display = 'none';
+
+  if (!title) { errEl.textContent = 'Title is required.'; errEl.style.display = 'block'; return; }
+
+  const btn = event.target; btn.disabled = true; btn.textContent = 'Creating…';
+  try {
+    await api('/api/training/modules', {
+      method: 'POST',
+      body: JSON.stringify({ title, type, description, content, videoUrl, passingScore, dueInDays }),
+    });
+    toast('Module created!', 'ok');
+    renderTraining();
+  } catch(e) {
+    errEl.textContent = e.message; errEl.style.display = 'block';
+    btn.disabled = false; btn.textContent = '+ Create Module';
+  }
+}
+
+async function assignModule(moduleId) {
+  const btn = event.target; btn.disabled = true; btn.textContent = 'Assigning…';
+  try {
+    const data = await api(`/api/training/modules/${moduleId}/assign`, { method: 'POST' });
+    toast(data.message || 'Assigned!', 'ok');
+    renderTraining();
+  } catch(e) {
+    toast(e.message, 'err');
+    btn.disabled = false; btn.textContent = 'Assign All';
+  }
+}
+
+async function deleteModule(id) {
+  if (!confirm('Delete this training module?')) return;
+  try {
+    await api(`/api/training/modules/${id}`, { method: 'DELETE' });
+    toast('Module deleted', 'ok');
+    renderTraining();
+  } catch(e) { toast(e.message, 'err'); }
+}
+
+function showAddTrainingQuestion(moduleId) {
+  const container = document.getElementById('modal-container');
+  container.classList.remove('hidden');
+  container.innerHTML = `
+    <div class="modal-overlay" onclick="if(event.target===this)closeModal()">
+      <div class="modal" onclick="event.stopPropagation()" style="max-width:500px">
+        <h3>Add Question</h3>
+        <div class="form-group">
+          <label>Question *</label>
+          <textarea id="tq-text" rows="2" placeholder="Enter question…" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px"></textarea>
+        </div>
+        ${['A','B','C','D'].map((l,i) => `
+        <div class="form-group">
+          <label>Option ${l}${i<2?' *':''}</label>
+          <input type="text" id="tq-opt-${i}" placeholder="Option ${l}" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
+        </div>`).join('')}
+        <div class="form-group">
+          <label>Correct Answer *</label>
+          <div style="display:flex;gap:12px;margin-top:4px">
+            ${['A','B','C','D'].map((l,i) => `<label style="display:flex;align-items:center;gap:4px;cursor:pointer"><input type="radio" name="tq-correct" value="${i}"> ${l}</label>`).join('')}
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Marks</label>
+          <input type="number" id="tq-marks" value="1" min="1" style="width:80px;padding:8px;border:1px solid #d1d5db;border-radius:6px">
+        </div>
+        <div id="tq-error" style="color:#ef4444;font-size:13px;margin-bottom:8px;display:none"></div>
+        <div class="modal-actions">
+          <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+          <button class="btn btn-primary" onclick="submitTrainingQuestion('${moduleId}')">Add Question</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+async function submitTrainingQuestion(moduleId) {
+  const questionText = document.getElementById('tq-text').value.trim();
+  const options = [0,1,2,3].map(i => document.getElementById(`tq-opt-${i}`).value.trim()).filter(o => o);
+  const correctRadio = document.querySelector('input[name="tq-correct"]:checked');
+  const marks = parseInt(document.getElementById('tq-marks').value) || 1;
+  const errEl = document.getElementById('tq-error');
+  errEl.style.display = 'none';
+
+  if (!questionText) { errEl.textContent = 'Question text is required.'; errEl.style.display = 'block'; return; }
+  if (options.length < 2) { errEl.textContent = 'At least 2 options required.'; errEl.style.display = 'block'; return; }
+  if (!correctRadio) { errEl.textContent = 'Select the correct answer.'; errEl.style.display = 'block'; return; }
+
+  const correctAnswer = parseInt(correctRadio.value);
+  try {
+    await api(`/api/training/modules/${moduleId}/questions`, {
+      method: 'POST',
+      body: JSON.stringify({ questionText, options, correctAnswer, marks }),
+    });
+    closeModal();
+    toast('Question added!', 'ok');
+    renderTraining();
+  } catch(e) {
+    errEl.textContent = e.message; errEl.style.display = 'block';
+  }
+}
+
+async function viewModuleProgress(moduleId, title) {
+  const container = document.getElementById('modal-container');
+  container.classList.remove('hidden');
+  container.innerHTML = `
+    <div class="modal-overlay" onclick="closeModal(event)">
+      <div class="modal" onclick="event.stopPropagation()" style="max-width:650px;width:95%">
+        <h3>Progress — ${title}</h3>
+        <div id="mp-content"><p>Loading…</p></div>
+        <div class="modal-actions"><button class="btn btn-secondary" onclick="closeModal()">Close</button></div>
+      </div>
+    </div>
+  `;
+  try {
+    const { progress } = await api(`/api/training/modules/${moduleId}/progress`);
+    const el = document.getElementById('mp-content');
+
+    const statusBadge = s => ({
+      assigned:    '<span style="background:#f1f5f9;color:#475569;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600">Assigned</span>',
+      in_progress: '<span style="background:#eff6ff;color:#1d4ed8;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600">In Progress</span>',
+      completed:   '<span style="background:#f0fdf4;color:#16a34a;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600">Completed</span>',
+      failed:      '<span style="background:#fef2f2;color:#dc2626;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600">Failed</span>',
+      overdue:     '<span style="background:#fffbeb;color:#d97706;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600">Overdue</span>',
+    }[s] || s);
+
+    if (!progress.length) { el.innerHTML = '<p style="color:#9ca3af">No one assigned yet.</p>'; return; }
+
+    el.innerHTML = `
+      <table style="width:100%;border-collapse:collapse;font-size:13px">
+        <thead><tr style="background:#f9fafb">
+          <th style="padding:10px;text-align:left;border-bottom:1px solid #e5e7eb">Employee</th>
+          <th style="padding:10px;text-align:left;border-bottom:1px solid #e5e7eb">Status</th>
+          <th style="padding:10px;text-align:left;border-bottom:1px solid #e5e7eb">Score</th>
+          <th style="padding:10px;text-align:left;border-bottom:1px solid #e5e7eb">Due</th>
+          <th style="padding:10px;text-align:left;border-bottom:1px solid #e5e7eb">Completed</th>
+        </tr></thead>
+        <tbody>
+          ${progress.map(p => `
+            <tr style="border-bottom:1px solid #f3f4f6">
+              <td style="padding:10px;font-weight:600">${p.employee?.name || 'Unknown'}<div style="font-size:11px;color:#9ca3af">${p.employee?.department || ''}</div></td>
+              <td style="padding:10px">${statusBadge(p.status)}</td>
+              <td style="padding:10px">${p.percentage != null ? `<strong style="color:${p.passed ? '#16a34a' : '#dc2626'}">${p.percentage}%</strong> (${p.score}/${p.maxScore})` : '—'}</td>
+              <td style="padding:10px;font-size:12px;color:#6b7280">${p.dueDate ? new Date(p.dueDate).toLocaleDateString() : '—'}</td>
+              <td style="padding:10px;font-size:12px;color:#6b7280">${p.completedAt ? new Date(p.completedAt).toLocaleDateString() : '—'}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    `;
+  } catch(e) {
+    document.getElementById('mp-content').innerHTML = `<p style="color:#ef4444">Error: ${e.message}</p>`;
+  }
+}
+
+// ── EMPLOYEE: My Training ─────────────────────────────────────────────────────
+async function renderMyTraining() {
+  const content = document.getElementById('main-content');
+  if (!content) return;
+  try {
+    const { progress } = await api('/api/training/my');
+
+    const statusStyle = s => ({
+      assigned:    'background:#f1f5f9;color:#475569',
+      in_progress: 'background:#eff6ff;color:#1d4ed8',
+      completed:   'background:#f0fdf4;color:#16a34a',
+      failed:      'background:#fef2f2;color:#dc2626',
+      overdue:     'background:#fffbeb;color:#d97706',
+    }[s] || '');
+
+    const typeIcon = t => ({ onboarding:'🚀', mandatory:'⚠️', certification:'🏆', policy:'📄' }[t] || '📚');
+
+    const total = progress.length;
+    const completed = progress.filter(p => p.status === 'completed').length;
+    const pending = progress.filter(p => ['assigned','in_progress','overdue'].includes(p.status)).length;
+
+    content.innerHTML = `
+      <div class="page-header"><h2>My Training</h2><p>Complete your assigned training modules</p></div>
+
+      <div class="stats-grid" style="margin-bottom:20px">
+        <div class="stat-card"><div class="stat-value">${total}</div><div class="stat-label">Assigned</div></div>
+        <div class="stat-card"><div class="stat-value" style="color:var(--success)">${completed}</div><div class="stat-label">Completed</div></div>
+        <div class="stat-card"><div class="stat-value" style="color:${pending > 0 ? '#f59e0b' : 'var(--text)'}">${pending}</div><div class="stat-label">Pending</div></div>
+      </div>
+
+      ${progress.length ? progress.map(p => {
+        const m = p.module;
+        if (!m) return '';
+        const isActionable = ['assigned','in_progress','overdue'].includes(p.status);
+        const canRetry = ['failed','overdue'].includes(p.status);
+        return `
+        <div class="card" style="margin-bottom:14px;border-left:4px solid ${
+          p.status === 'completed' ? '#22c55e' :
+          p.status === 'failed'    ? '#ef4444' :
+          p.status === 'overdue'   ? '#f59e0b' : 'var(--primary)'}">
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:10px">
+            <div style="flex:1">
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;flex-wrap:wrap">
+                <span style="font-size:18px">${typeIcon(m.type)}</span>
+                <span style="font-weight:700;font-size:15px">${m.title}</span>
+                <span style="padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600;${statusStyle(p.status)}">${p.status.replace('_',' ')}</span>
+              </div>
+              <div style="font-size:12px;color:#6b7280;margin-bottom:6px">${m.description || ''} · ${m.questions.length} question${m.questions.length !== 1 ? 's' : ''} · Pass: ${m.passingScore}%</div>
+              ${p.dueDate ? `<div style="font-size:12px;color:${new Date(p.dueDate) < new Date() && p.status !== 'completed' ? '#f59e0b' : '#6b7280'}">Due: ${new Date(p.dueDate).toLocaleDateString()}</div>` : ''}
+              ${p.percentage != null ? `<div style="font-size:13px;margin-top:4px;font-weight:600;color:${p.passed ? '#16a34a' : '#dc2626'}">Score: ${p.percentage}% — ${p.passed ? '✅ Passed' : '❌ Failed'}</div>` : ''}
+            </div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              ${isActionable ? `<button class="btn btn-primary btn-sm" onclick="startTrainingModule('${p._id}', '${m._id}')">Start</button>` : ''}
+              ${canRetry ? `<button class="btn btn-sm" style="background:#fef3c7;color:#d97706;border:1px solid #fde68a" onclick="retryTrainingModule('${p._id}')">Retry</button>` : ''}
+              ${p.status === 'completed' ? `<span style="color:#16a34a;font-size:13px;font-weight:600">✓ Complete</span>` : ''}
+            </div>
+          </div>
+        </div>`;
+      }).join('') : `<div class="card" style="text-align:center;padding:60px 24px">
+        <div style="font-size:48px;opacity:.3;margin-bottom:16px">📚</div>
+        <div style="font-size:16px;font-weight:600;margin-bottom:6px">No training assigned</div>
+        <p style="color:#9ca3af;font-size:13px">Your manager will assign training modules when required.</p>
+      </div>`}
+    `;
+  } catch(e) {
+    content.innerHTML = `<div class="card"><p style="color:#ef4444">Error: ${e.message}</p></div>`;
+  }
+}
+
+async function startTrainingModule(progressId, moduleId) {
+  const content = document.getElementById('main-content');
+  if (!content) return;
+  content.innerHTML = '<div class="loading">Loading module…</div>';
+
+  try {
+    await api(`/api/training/my/${progressId}/start`, { method: 'POST' });
+    const { progress } = await api('/api/training/my');
+    const p = progress.find(x => x._id === progressId);
+    if (!p) { renderMyTraining(); return; }
+    const m = p.module;
+
+    content.innerHTML = `
+      <div class="page-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+        <div><h2>${m.title}</h2><p>${m.description || ''}</p></div>
+        <button class="btn btn-secondary btn-sm" onclick="renderMyTraining()">← Back</button>
+      </div>
+
+      ${m.videoUrl ? `
+      <div class="card" style="margin-bottom:16px">
+        <div class="card-title">Training Video</div>
+        <a href="${m.videoUrl}" target="_blank" class="btn btn-primary btn-sm" style="display:inline-flex;align-items:center;gap:6px;text-decoration:none">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+          Watch Video
+        </a>
+      </div>` : ''}
+
+      ${m.content ? `
+      <div class="card" style="margin-bottom:16px">
+        <div class="card-title">Training Material</div>
+        <div style="font-size:14px;line-height:1.7;white-space:pre-wrap;color:var(--text)">${m.content}</div>
+      </div>` : ''}
+
+      ${m.questions.length ? `
+      <div class="card">
+        <div class="card-title">Assessment — ${m.questions.length} Question${m.questions.length !== 1 ? 's' : ''}</div>
+        <p style="font-size:13px;color:#6b7280;margin-bottom:16px">Passing score: ${m.passingScore}%. Answer all questions then click Submit.</p>
+        ${m.questions.map((q, i) => `
+          <div style="padding:14px;border:1px solid #e5e7eb;border-radius:8px;margin-bottom:10px">
+            <div style="font-weight:600;margin-bottom:10px;font-size:14px">Q${i+1}. ${q.questionText} <span style="color:#9ca3af;font-weight:400;font-size:12px">(${q.marks} mark${q.marks !== 1 ? 's' : ''})</span></div>
+            <div style="display:flex;flex-direction:column;gap:6px">
+              ${q.options.map((opt, oi) => `
+                <label style="display:flex;align-items:center;gap:8px;padding:9px 12px;border:1px solid #e5e7eb;border-radius:7px;cursor:pointer;font-size:13px" onmouseover="this.style.background='#f9fafb'" onmouseout="this.style.background=''">
+                  <input type="radio" name="tma-${i}" value="${oi}" style="accent-color:var(--primary)">
+                  <span><strong>${String.fromCharCode(65+oi)}.</strong> ${opt}</span>
+                </label>
+              `).join('')}
+            </div>
+          </div>
+        `).join('')}
+        <div style="margin-top:16px;text-align:center">
+          <button class="btn btn-primary" style="padding:12px 32px;font-size:15px" onclick="submitTrainingAssessment('${progressId}', ${m.questions.length})">Submit Assessment</button>
+        </div>
+      </div>
+      ` : `
+      <div class="card" style="text-align:center;padding:40px">
+        <div style="font-size:36px;margin-bottom:12px">✅</div>
+        <div style="font-size:18px;font-weight:700">No Assessment Required</div>
+        <p style="color:#6b7280;margin:8px 0 16px">This module has no quiz. Mark as read to complete.</p>
+        <button class="btn btn-primary" onclick="markTrainingRead('${progressId}')">Mark as Completed</button>
+      </div>
+      `}
+    `;
+  } catch(e) {
+    content.innerHTML = `<div class="card"><p style="color:#ef4444">Error: ${e.message}</p></div>`;
+  }
+}
+
+async function submitTrainingAssessment(progressId, questionCount) {
+  const answers = [];
+  for (let i = 0; i < questionCount; i++) {
+    const selected = document.querySelector(`input[name="tma-${i}"]:checked`);
+    answers.push({ questionIndex: i, selectedAnswer: selected ? parseInt(selected.value) : -1 });
+  }
+
+  const btn = event.target; btn.disabled = true; btn.textContent = 'Submitting…';
+  try {
+    const data = await api(`/api/training/my/${progressId}/submit`, {
+      method: 'POST',
+      body: JSON.stringify({ answers }),
+    });
+
+    const content = document.getElementById('main-content');
+    const passed = data.passed;
+    content.innerHTML = `
+      <div style="max-width:480px;margin:60px auto;text-align:center">
+        <div class="card">
+          <div style="font-size:56px;margin-bottom:12px">${passed ? '🏆' : '📝'}</div>
+          <h2 style="margin-bottom:8px">${passed ? 'Congratulations!' : 'Not Quite There'}</h2>
+          <div style="font-size:2.5em;font-weight:800;color:${passed ? '#22c55e' : '#ef4444'};margin:16px 0">${data.percentage}%</div>
+          <p style="color:#6b7280">Score: ${data.score} / ${data.maxScore} · Pass mark: ${data.passingScore}%</p>
+          <div style="margin-top:24px;display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
+            ${!passed ? `<button class="btn btn-sm" style="background:#fef3c7;color:#d97706;border:1px solid #fde68a" onclick="renderMyTraining()">Try Again Later</button>` : ''}
+            <button class="btn btn-primary" onclick="renderMyTraining()">Back to Training</button>
+          </div>
+        </div>
+      </div>
+    `;
+  } catch(e) {
+    btn.disabled = false; btn.textContent = 'Submit Assessment';
+    toast(e.message, 'err');
+  }
+}
+
+async function markTrainingRead(progressId) {
+  const btn = event.target; btn.disabled = true; btn.textContent = 'Saving…';
+  try {
+    await api(`/api/training/my/${progressId}/submit`, {
+      method: 'POST',
+      body: JSON.stringify({ answers: [] }),
+    });
+    toast('Module completed! ✅', 'ok');
+    renderMyTraining();
+  } catch(e) {
+    toast(e.message, 'err');
+    btn.disabled = false; btn.textContent = 'Mark as Completed';
+  }
+}
+
+async function retryTrainingModule(progressId) {
+  try {
+    const data = await api(`/api/training/my/${progressId}/retry`, { method: 'POST' });
+    startTrainingModule(progressId, data.progress.module._id || data.progress.module);
+  } catch(e) { toast(e.message, 'err'); }
+}
