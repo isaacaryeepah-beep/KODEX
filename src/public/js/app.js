@@ -5979,3 +5979,682 @@ async function retryTrainingModule(progressId) {
     startTrainingModule(progressId, data.progress.module._id || data.progress.module);
   } catch(e) { toast(e.message, 'err'); }
 }
+
+// ══════════════════════════════════════════════════════════════════════════════
+//  CORPORATE PHASE 3 — PERFORMANCE MANAGEMENT
+// ══════════════════════════════════════════════════════════════════════════════
+
+// ── Patch buildSidebar for Phase 3 nav ───────────────────────────────────────
+const _p2BuildSidebar = buildSidebar;
+buildSidebar = function() {
+  _p2BuildSidebar();
+  const role = currentUser?.role;
+  const mode = currentUser?.company?.mode;
+  if (mode !== 'corporate') return;
+
+  const nav = document.getElementById('sidebar-nav');
+  if (!nav) return;
+
+  const perfIcon = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>`;
+
+  if (['admin','manager','superadmin'].includes(role)) {
+    const trainingLink = document.getElementById('nav-training');
+    if (trainingLink && !document.getElementById('nav-performance')) {
+      const a = document.createElement('a');
+      a.id = 'nav-performance';
+      a.innerHTML = `${perfIcon} <span>Performance</span>`;
+      a.onclick = () => navigateTo('performance');
+      trainingLink.insertAdjacentElement('afterend', a);
+    }
+  } else if (role === 'employee') {
+    const myTrainingLink = document.getElementById('nav-my-training');
+    if (myTrainingLink && !document.getElementById('nav-my-performance')) {
+      const a = document.createElement('a');
+      a.id = 'nav-my-performance';
+      a.innerHTML = `${perfIcon} <span>My Performance</span>`;
+      a.onclick = () => navigateTo('my-performance');
+      myTrainingLink.insertAdjacentElement('afterend', a);
+    }
+  }
+};
+
+// ── Patch navigateTo for Phase 3 ─────────────────────────────────────────────
+const _p2NavigateTo = navigateTo;
+navigateTo = function(view) {
+  if (view === 'performance')    { currentView = view; _setNavActive(view); renderPerformance(); return; }
+  if (view === 'my-performance') { currentView = view; _setNavActive(view); renderMyPerformance(); return; }
+  _p2NavigateTo(view);
+};
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function _starRating(score, max=5) {
+  if (!score) return '<span style="color:#d1d5db">No rating</span>';
+  const full = Math.round(score);
+  return Array.from({length:max}, (_,i) =>
+    `<span style="color:${i < full ? '#f59e0b' : '#d1d5db'};font-size:16px">★</span>`
+  ).join('') + ` <span style="font-size:12px;color:#6b7280">(${score}/5)</span>`;
+}
+
+function _progressBar(pct) {
+  const color = pct >= 100 ? '#22c55e' : pct >= 60 ? '#3b82f6' : pct >= 30 ? '#f59e0b' : '#ef4444';
+  return `<div style="background:#f3f4f6;border-radius:6px;height:8px;width:100%">
+    <div style="background:${color};height:8px;border-radius:6px;width:${Math.min(pct,100)}%;transition:width .3s"></div>
+  </div>`;
+}
+
+function _catBadge(c) {
+  return ({
+    kpi:      '<span style="background:#dbeafe;color:#1d4ed8;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600">KPI</span>',
+    personal: '<span style="background:#ede9fe;color:#5b21b6;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600">Personal</span>',
+    team:     '<span style="background:#d1fae5;color:#065f46;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600">Team</span>',
+    learning: '<span style="background:#fef3c7;color:#d97706;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600">Learning</span>',
+  }[c] || c);
+}
+
+// ── MANAGER: Performance Hub ──────────────────────────────────────────────────
+async function renderPerformance() {
+  const content = document.getElementById('main-content');
+  if (!content) return;
+  content.innerHTML = '<div class="loading">Loading…</div>';
+
+  try {
+    const { overview } = await api('/api/performance/team-overview');
+
+    content.innerHTML = `
+      <div class="page-header">
+        <h2>Performance Management</h2>
+        <p>Team goals, reviews and scorecards</p>
+      </div>
+
+      <!-- Team Overview Table -->
+      <div class="card" style="margin-bottom:20px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px">
+          <h3 style="font-size:15px;font-weight:700;margin:0">Team Overview (${overview.length})</h3>
+          <button class="btn btn-primary btn-sm" onclick="showCreateReviewModal()">+ New Review</button>
+        </div>
+        ${overview.length ? `
+        <div style="overflow-x:auto">
+          <table style="width:100%;border-collapse:collapse;font-size:13px">
+            <thead><tr style="background:#f9fafb">
+              <th style="padding:10px;text-align:left;border-bottom:1px solid #e5e7eb">Employee</th>
+              <th style="padding:10px;text-align:left;border-bottom:1px solid #e5e7eb">Department</th>
+              <th style="padding:10px;text-align:center;border-bottom:1px solid #e5e7eb">Goals</th>
+              <th style="padding:10px;text-align:center;border-bottom:1px solid #e5e7eb">Reviews</th>
+              <th style="padding:10px;text-align:center;border-bottom:1px solid #e5e7eb">Avg Score</th>
+              <th style="padding:10px;text-align:center;border-bottom:1px solid #e5e7eb">Actions</th>
+            </tr></thead>
+            <tbody>
+              ${overview.map(o => `
+                <tr style="border-bottom:1px solid #f3f4f6;cursor:pointer" onclick="viewScorecard('${o.employee._id}', '${(o.employee.name||'').replace(/'/g,"\\'")}')">
+                  <td style="padding:10px;font-weight:600">${o.employee.name}</td>
+                  <td style="padding:10px;color:#6b7280">${o.employee.department || '—'}</td>
+                  <td style="padding:10px;text-align:center">
+                    <span style="font-weight:700">${o.completedGoals}</span><span style="color:#9ca3af">/${o.totalGoals}</span>
+                  </td>
+                  <td style="padding:10px;text-align:center">${o.reviewCount}</td>
+                  <td style="padding:10px;text-align:center">${_starRating(o.avgScore)}</td>
+                  <td style="padding:10px;text-align:center">
+                    <button class="btn btn-sm" style="background:#f5f3ff;color:#5b21b6;border:1px solid #ddd6fe" onclick="event.stopPropagation();viewScorecard('${o.employee._id}','${(o.employee.name||'').replace(/'/g,"\\'")}')">Scorecard</button>
+                  </td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+        ` : '<p style="color:#9ca3af;font-size:13px">No employees yet.</p>'}
+      </div>
+
+      <!-- Set Goal for Employee -->
+      <div class="card">
+        <h3 style="font-size:15px;font-weight:700;margin-bottom:14px">Set Goal for Employee</h3>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;margin-bottom:10px">
+          <div>
+            <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:4px">Employee ID</label>
+            <input id="pg-emp" placeholder="Employee _id or search" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:4px">Goal Title *</label>
+            <input id="pg-title" placeholder="e.g. Close 20 deals" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:4px">Category</label>
+            <select id="pg-cat" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
+              <option value="kpi">KPI</option>
+              <option value="personal">Personal</option>
+              <option value="team">Team</option>
+              <option value="learning">Learning</option>
+            </select>
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:4px">Target Value</label>
+            <input id="pg-target" type="number" placeholder="e.g. 100" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:4px">Unit</label>
+            <input id="pg-unit" placeholder="e.g. deals, calls, %" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:4px">Period</label>
+            <select id="pg-period" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
+              <option value="monthly">Monthly</option>
+              <option value="quarterly" selected>Quarterly</option>
+              <option value="annual">Annual</option>
+            </select>
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:4px">Due Date</label>
+            <input id="pg-due" type="date" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
+          </div>
+        </div>
+        <div id="pg-error" style="color:#ef4444;font-size:13px;margin-bottom:8px;display:none"></div>
+        <button class="btn btn-primary" onclick="submitCreateGoal(false)">+ Set Goal</button>
+      </div>
+    `;
+  } catch(e) {
+    content.innerHTML = `<div class="card"><p style="color:#ef4444">Error: ${e.message}</p></div>`;
+  }
+}
+
+async function viewScorecard(employeeId, name) {
+  const content = document.getElementById('main-content');
+  content.innerHTML = '<div class="loading">Loading scorecard…</div>';
+
+  try {
+    const data = await api(`/api/performance/scorecard/${employeeId}`);
+    const { employee, goals, reviews, stats } = data;
+
+    const statusColor = s => ({active:'#3b82f6',completed:'#22c55e',cancelled:'#9ca3af',overdue:'#f59e0b'}[s]||'#6b7280');
+
+    content.innerHTML = `
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:20px">
+        <div class="page-header" style="margin:0"><h2>Scorecard — ${employee.name}</h2><p>${employee.department || ''} · ${employee.employeeId || ''}</p></div>
+        <button class="btn btn-secondary btn-sm" onclick="renderPerformance()">← Back</button>
+      </div>
+
+      <!-- Stats -->
+      <div class="stats-grid" style="margin-bottom:20px">
+        <div class="stat-card"><div class="stat-value">${stats.totalGoals}</div><div class="stat-label">Total Goals</div></div>
+        <div class="stat-card"><div class="stat-value" style="color:#22c55e">${stats.completedGoals}</div><div class="stat-label">Completed</div></div>
+        <div class="stat-card"><div class="stat-value">${stats.avgProgress}%</div><div class="stat-label">Avg Progress</div></div>
+        <div class="stat-card"><div class="stat-value">${stats.avgReviewScore ? `${stats.avgReviewScore}/5` : '—'}</div><div class="stat-label">Avg Review</div></div>
+      </div>
+
+      <!-- Goals -->
+      <div class="card" style="margin-bottom:16px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px">
+          <h3 style="font-size:15px;font-weight:700;margin:0">Goals (${goals.length})</h3>
+          <button class="btn btn-sm" style="background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe" onclick="showAddGoalForEmployee('${employeeId}','${name.replace(/'/g,"\\'")}')">+ Add Goal</button>
+        </div>
+        ${goals.length ? goals.map(g => {
+          const pct = g.targetValue ? Math.round((g.currentValue/g.targetValue)*100) : null;
+          return `
+          <div style="padding:12px;border:1px solid #e5e7eb;border-radius:8px;margin-bottom:8px">
+            <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;margin-bottom:6px">
+              <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                <span style="font-weight:600;font-size:14px">${g.title}</span>
+                ${_catBadge(g.category)}
+                <span style="width:8px;height:8px;border-radius:50%;background:${statusColor(g.status)};display:inline-block"></span>
+                <span style="font-size:11px;color:#6b7280">${g.status}</span>
+              </div>
+              <div style="display:flex;gap:6px">
+                ${g.status === 'active' ? `<button class="btn btn-sm" style="font-size:11px" onclick="showUpdateGoalProgress('${g._id}','${g.title.replace(/'/g,"\\'")}',${g.currentValue},${g.targetValue||0},'${g.unit||''}')">Update</button>` : ''}
+                <button class="btn btn-sm" style="background:#fef2f2;color:#dc2626;border:1px solid #fecaca;font-size:11px" onclick="deleteGoal('${g._id}','${employeeId}','${name.replace(/'/g,"\\'")}')">Delete</button>
+              </div>
+            </div>
+            ${pct !== null ? `
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+                <div style="flex:1">${_progressBar(pct)}</div>
+                <span style="font-size:12px;font-weight:700;min-width:36px">${pct}%</span>
+              </div>
+              <div style="font-size:12px;color:#6b7280">${g.currentValue} / ${g.targetValue} ${g.unit}</div>
+            ` : `<div style="font-size:12px;color:#9ca3af">No numeric target set</div>`}
+            ${g.dueDate ? `<div style="font-size:11px;color:#9ca3af;margin-top:4px">Due: ${new Date(g.dueDate).toLocaleDateString()}</div>` : ''}
+          </div>`;
+        }).join('') : '<p style="color:#9ca3af;font-size:13px">No goals set yet.</p>'}
+      </div>
+
+      <!-- Reviews -->
+      <div class="card">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px">
+          <h3 style="font-size:15px;font-weight:700;margin:0">Reviews (${reviews.length})</h3>
+          <button class="btn btn-sm" style="background:#f0fdf4;color:#16a34a;border:1px solid #bbf7d0" onclick="showCreateReviewForEmployee('${employeeId}','${name.replace(/'/g,"\\'")}')">+ Add Review</button>
+        </div>
+        ${reviews.length ? reviews.map(r => `
+          <div style="padding:12px;border:1px solid #e5e7eb;border-radius:8px;margin-bottom:8px">
+            <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;margin-bottom:6px">
+              <div>
+                <span style="font-weight:600">${r.period}</span>
+                <span style="font-size:12px;color:#6b7280;margin-left:8px">${r.type} review by ${r.reviewer?.name||'Unknown'}</span>
+                ${r.status === 'submitted' ? '<span style="background:#f0fdf4;color:#16a34a;padding:2px 6px;border-radius:10px;font-size:10px;font-weight:600;margin-left:6px">Submitted</span>' : '<span style="background:#f9fafb;color:#6b7280;padding:2px 6px;border-radius:10px;font-size:10px;font-weight:600;margin-left:6px">Draft</span>'}
+              </div>
+              <div>${_starRating(r.overallScore)}</div>
+            </div>
+            ${r.summary ? `<p style="font-size:13px;color:#374151;margin:4px 0">${r.summary}</p>` : ''}
+            ${r.strengths ? `<p style="font-size:12px;color:#16a34a;margin:2px 0">💪 ${r.strengths}</p>` : ''}
+            ${r.improvements ? `<p style="font-size:12px;color:#d97706;margin:2px 0">📈 ${r.improvements}</p>` : ''}
+            ${r.status === 'draft' ? `<button class="btn btn-sm" style="margin-top:8px;font-size:11px" onclick="submitReview('${r._id}','${employeeId}','${name.replace(/'/g,"\\'")}')">Submit Review</button>` : ''}
+          </div>
+        `).join('') : '<p style="color:#9ca3af;font-size:13px">No reviews yet.</p>'}
+      </div>
+    `;
+  } catch(e) {
+    content.innerHTML = `<div class="card"><p style="color:#ef4444">Error: ${e.message}</p></div>`;
+  }
+}
+
+async function submitCreateGoal(isSelf, employeeId, employeeName) {
+  const prefix = isSelf ? 'myg' : 'pg';
+  const title   = document.getElementById(`${prefix}-title`).value.trim();
+  const cat     = document.getElementById(`${prefix}-cat`).value;
+  const target  = document.getElementById(`${prefix}-target`)?.value;
+  const unit    = document.getElementById(`${prefix}-unit`)?.value.trim() || '';
+  const period  = document.getElementById(`${prefix}-period`).value;
+  const due     = document.getElementById(`${prefix}-due`)?.value;
+  const empId   = isSelf ? null : (document.getElementById(`${prefix}-emp`)?.value.trim() || employeeId);
+  const errEl   = document.getElementById(`${prefix}-error`);
+  if (errEl) errEl.style.display = 'none';
+
+  if (!title) { if (errEl) { errEl.textContent = 'Title is required.'; errEl.style.display = 'block'; } return; }
+
+  const body = { title, category: cat, period };
+  if (empId) body.employeeId = empId;
+  if (target) body.targetValue = parseFloat(target);
+  if (unit) body.unit = unit;
+  if (due) body.dueDate = due;
+
+  const btn = event.target; btn.disabled = true; btn.textContent = 'Saving…';
+  try {
+    await api('/api/performance/goals', { method: 'POST', body: JSON.stringify(body) });
+    toast('Goal created!', 'ok');
+    closeModal();
+    if (isSelf) renderMyPerformance();
+    else if (employeeId) viewScorecard(employeeId, employeeName);
+    else renderPerformance();
+  } catch(e) {
+    if (errEl) { errEl.textContent = e.message; errEl.style.display = 'block'; }
+    else toast(e.message, 'err');
+    btn.disabled = false; btn.textContent = '+ Set Goal';
+  }
+}
+
+function showAddGoalForEmployee(employeeId, name) {
+  const container = document.getElementById('modal-container');
+  container.classList.remove('hidden');
+  container.innerHTML = `
+    <div class="modal-overlay" onclick="closeModal(event)">
+      <div class="modal" onclick="event.stopPropagation()" style="max-width:480px">
+        <h3>Add Goal for ${name}</h3>
+        ${_goalFormFields('mg')}
+        <div id="mg-error" style="color:#ef4444;font-size:13px;margin-bottom:8px;display:none"></div>
+        <div class="modal-actions">
+          <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+          <button class="btn btn-primary" onclick="submitGoalFromModal('${employeeId}','${name.replace(/'/g,"\\'")}')">+ Add Goal</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+function _goalFormFields(prefix) {
+  return `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+      <div style="grid-column:1/-1">
+        <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:4px">Title *</label>
+        <input id="${prefix}-title" placeholder="Goal title" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
+      </div>
+      <div>
+        <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:4px">Category</label>
+        <select id="${prefix}-cat" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
+          <option value="kpi">KPI</option><option value="personal">Personal</option><option value="team">Team</option><option value="learning">Learning</option>
+        </select>
+      </div>
+      <div>
+        <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:4px">Period</label>
+        <select id="${prefix}-period" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
+          <option value="monthly">Monthly</option><option value="quarterly" selected>Quarterly</option><option value="annual">Annual</option>
+        </select>
+      </div>
+      <div>
+        <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:4px">Target</label>
+        <input id="${prefix}-target" type="number" placeholder="e.g. 100" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
+      </div>
+      <div>
+        <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:4px">Unit</label>
+        <input id="${prefix}-unit" placeholder="e.g. calls, %" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
+      </div>
+      <div style="grid-column:1/-1">
+        <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:4px">Due Date</label>
+        <input id="${prefix}-due" type="date" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
+      </div>
+    </div>`;
+}
+
+async function submitGoalFromModal(employeeId, name) {
+  const title   = document.getElementById('mg-title').value.trim();
+  const cat     = document.getElementById('mg-cat').value;
+  const target  = document.getElementById('mg-target').value;
+  const unit    = document.getElementById('mg-unit').value.trim();
+  const period  = document.getElementById('mg-period').value;
+  const due     = document.getElementById('mg-due').value;
+  const errEl   = document.getElementById('mg-error');
+  errEl.style.display = 'none';
+
+  if (!title) { errEl.textContent = 'Title is required.'; errEl.style.display = 'block'; return; }
+
+  const body = { title, category: cat, period, employeeId };
+  if (target) body.targetValue = parseFloat(target);
+  if (unit) body.unit = unit;
+  if (due) body.dueDate = due;
+
+  const btn = event.target; btn.disabled = true; btn.textContent = 'Saving…';
+  try {
+    await api('/api/performance/goals', { method: 'POST', body: JSON.stringify(body) });
+    toast('Goal added!', 'ok');
+    closeModal();
+    viewScorecard(employeeId, name);
+  } catch(e) {
+    errEl.textContent = e.message; errEl.style.display = 'block';
+    btn.disabled = false; btn.textContent = '+ Add Goal';
+  }
+}
+
+function showUpdateGoalProgress(goalId, title, current, target, unit) {
+  const container = document.getElementById('modal-container');
+  container.classList.remove('hidden');
+  container.innerHTML = `
+    <div class="modal-overlay" onclick="closeModal(event)">
+      <div class="modal" onclick="event.stopPropagation()" style="max-width:380px">
+        <h3>Update: ${title}</h3>
+        <p style="font-size:13px;color:#6b7280;margin-bottom:14px">Target: ${target || '—'} ${unit}</p>
+        <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:4px">Current Value *</label>
+        <input id="up-val" type="number" value="${current}" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:14px;margin-bottom:12px">
+        <div id="up-error" style="color:#ef4444;font-size:13px;margin-bottom:8px;display:none"></div>
+        <div class="modal-actions">
+          <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+          <button class="btn btn-primary" onclick="updateGoalProgress('${goalId}')">Save Progress</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+async function updateGoalProgress(goalId) {
+  const val = parseFloat(document.getElementById('up-val').value);
+  const errEl = document.getElementById('up-error');
+  if (isNaN(val)) { errEl.textContent = 'Enter a valid number.'; errEl.style.display = 'block'; return; }
+  const btn = event.target; btn.disabled = true;
+  try {
+    await api(`/api/performance/goals/${goalId}`, { method: 'PATCH', body: JSON.stringify({ currentValue: val }) });
+    toast('Progress updated!', 'ok');
+    closeModal();
+    // Refresh current scorecard view
+    const h2 = document.querySelector('.page-header h2');
+    if (h2 && h2.textContent.includes('Scorecard')) {
+      const match = h2.textContent.match(/Scorecard — (.+)/);
+      if (match) {
+        const empRow = document.querySelector(`button[onclick*="viewScorecard"]`);
+        if (empRow) empRow.click();
+      }
+    }
+  } catch(e) { errEl.textContent = e.message; errEl.style.display = 'block'; btn.disabled = false; }
+}
+
+async function deleteGoal(goalId, employeeId, name) {
+  if (!confirm('Delete this goal?')) return;
+  try {
+    await api(`/api/performance/goals/${goalId}`, { method: 'DELETE' });
+    toast('Goal deleted', 'ok');
+    viewScorecard(employeeId, name);
+  } catch(e) { toast(e.message, 'err'); }
+}
+
+function showCreateReviewModal() {
+  const container = document.getElementById('modal-container');
+  container.classList.remove('hidden');
+  container.innerHTML = `
+    <div class="modal-overlay" onclick="closeModal(event)">
+      <div class="modal" onclick="event.stopPropagation()" style="max-width:500px">
+        <h3>New Performance Review</h3>
+        ${_reviewFormFields('nr')}
+        <div id="nr-error" style="color:#ef4444;font-size:13px;margin-bottom:8px;display:none"></div>
+        <div class="modal-actions">
+          <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+          <button class="btn btn-primary" onclick="submitCreateReview('nr', null, null)">Create Review</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+function showCreateReviewForEmployee(employeeId, name) {
+  const container = document.getElementById('modal-container');
+  container.classList.remove('hidden');
+  container.innerHTML = `
+    <div class="modal-overlay" onclick="closeModal(event)">
+      <div class="modal" onclick="event.stopPropagation()" style="max-width:500px">
+        <h3>Review — ${name}</h3>
+        ${_reviewFormFields('er', employeeId)}
+        <div id="er-error" style="color:#ef4444;font-size:13px;margin-bottom:8px;display:none"></div>
+        <div class="modal-actions">
+          <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+          <button class="btn btn-primary" onclick="submitCreateReview('er','${employeeId}','${name.replace(/'/g,"\\'")}')">Create Review</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+function _reviewFormFields(prefix, employeeId) {
+  return `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+      ${!employeeId ? `<div style="grid-column:1/-1">
+        <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:4px">Employee ID *</label>
+        <input id="${prefix}-emp" placeholder="Paste employee _id" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
+      </div>` : ''}
+      <div>
+        <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:4px">Period *</label>
+        <input id="${prefix}-period" placeholder="e.g. Q1 2026" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
+      </div>
+      <div>
+        <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:4px">Type</label>
+        <select id="${prefix}-type" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
+          <option value="manager">Manager Review</option>
+          <option value="peer">Peer Review</option>
+          <option value="self">Self Review</option>
+        </select>
+      </div>
+      <div>
+        <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:4px">Overall Score (1–5)</label>
+        <input id="${prefix}-score" type="number" min="1" max="5" step="0.5" placeholder="e.g. 4.0" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
+      </div>
+    </div>
+    <div style="margin-bottom:10px">
+      <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:4px">Summary</label>
+      <textarea id="${prefix}-summary" rows="2" placeholder="Overall performance summary…" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;resize:vertical"></textarea>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div>
+        <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:4px">Strengths</label>
+        <textarea id="${prefix}-strengths" rows="2" placeholder="Key strengths…" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;resize:vertical"></textarea>
+      </div>
+      <div>
+        <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:4px">Areas to Improve</label>
+        <textarea id="${prefix}-improve" rows="2" placeholder="Growth areas…" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;resize:vertical"></textarea>
+      </div>
+    </div>`;
+}
+
+async function submitCreateReview(prefix, employeeId, name) {
+  const empId   = employeeId || document.getElementById(`${prefix}-emp`)?.value.trim();
+  const period  = document.getElementById(`${prefix}-period`).value.trim();
+  const type    = document.getElementById(`${prefix}-type`).value;
+  const score   = document.getElementById(`${prefix}-score`).value;
+  const summary = document.getElementById(`${prefix}-summary`).value.trim();
+  const strengths = document.getElementById(`${prefix}-strengths`).value.trim();
+  const improvements = document.getElementById(`${prefix}-improve`).value.trim();
+  const errEl   = document.getElementById(`${prefix}-error`);
+  errEl.style.display = 'none';
+
+  if (!empId) { errEl.textContent = 'Employee ID is required.'; errEl.style.display = 'block'; return; }
+  if (!period) { errEl.textContent = 'Period is required.'; errEl.style.display = 'block'; return; }
+
+  const btn = event.target; btn.disabled = true; btn.textContent = 'Saving…';
+  try {
+    await api('/api/performance/reviews', {
+      method: 'POST',
+      body: JSON.stringify({
+        employeeId: empId, period, type,
+        overallScore: score ? parseFloat(score) : null,
+        summary, strengths, improvements,
+      }),
+    });
+    toast('Review created!', 'ok');
+    closeModal();
+    if (name) viewScorecard(empId, name);
+    else renderPerformance();
+  } catch(e) {
+    errEl.textContent = e.message; errEl.style.display = 'block';
+    btn.disabled = false; btn.textContent = 'Create Review';
+  }
+}
+
+async function submitReview(reviewId, employeeId, name) {
+  if (!confirm('Submit this review? It cannot be edited after submission.')) return;
+  try {
+    await api(`/api/performance/reviews/${reviewId}`, { method: 'PATCH', body: JSON.stringify({ submit: true }) });
+    toast('Review submitted!', 'ok');
+    viewScorecard(employeeId, name);
+  } catch(e) { toast(e.message, 'err'); }
+}
+
+// ── EMPLOYEE: My Performance ──────────────────────────────────────────────────
+async function renderMyPerformance() {
+  const content = document.getElementById('main-content');
+  if (!content) return;
+  content.innerHTML = '<div class="loading">Loading…</div>';
+
+  try {
+    const [goalsData, reviewsData] = await Promise.all([
+      api('/api/performance/goals'),
+      api('/api/performance/reviews'),
+    ]);
+
+    const goals   = goalsData.goals || [];
+    const reviews = reviewsData.reviews.filter(r => r.status === 'submitted') || [];
+
+    const totalGoals = goals.length;
+    const completedGoals = goals.filter(g => g.status === 'completed').length;
+    const activeGoals = goals.filter(g => g.status === 'active');
+
+    content.innerHTML = `
+      <div class="page-header"><h2>My Performance</h2><p>Track your goals and view your reviews</p></div>
+
+      <div class="stats-grid" style="margin-bottom:20px">
+        <div class="stat-card"><div class="stat-value">${totalGoals}</div><div class="stat-label">Goals</div></div>
+        <div class="stat-card"><div class="stat-value" style="color:#22c55e">${completedGoals}</div><div class="stat-label">Completed</div></div>
+        <div class="stat-card"><div class="stat-value">${reviews.length}</div><div class="stat-label">Reviews</div></div>
+        <div class="stat-card">
+          <div class="stat-value">${reviews.length && reviews[0].overallScore ? `${reviews[0].overallScore}/5` : '—'}</div>
+          <div class="stat-label">Latest Score</div>
+        </div>
+      </div>
+
+      <!-- Goals -->
+      <div class="card" style="margin-bottom:16px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px">
+          <h3 style="font-size:15px;font-weight:700;margin:0">My Goals</h3>
+          <button class="btn btn-primary btn-sm" onclick="showMyGoalModal()">+ Add Goal</button>
+        </div>
+        ${activeGoals.length ? activeGoals.map(g => {
+          const pct = g.targetValue ? Math.round((g.currentValue/g.targetValue)*100) : null;
+          return `
+          <div style="padding:12px;border:1px solid #e5e7eb;border-radius:8px;margin-bottom:8px">
+            <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;margin-bottom:6px">
+              <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                <span style="font-weight:600;font-size:14px">${g.title}</span>
+                ${_catBadge(g.category)}
+              </div>
+              ${pct !== null ? `<button class="btn btn-sm" style="font-size:11px" onclick="showSelfUpdateGoal('${g._id}','${g.title.replace(/'/g,"\\'")}',${g.currentValue},${g.targetValue},'${g.unit||''}')">Update</button>` : ''}
+            </div>
+            ${pct !== null ? `
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+                <div style="flex:1">${_progressBar(pct)}</div>
+                <span style="font-size:12px;font-weight:700;min-width:36px">${pct}%</span>
+              </div>
+              <div style="font-size:12px;color:#6b7280">${g.currentValue} / ${g.targetValue} ${g.unit} · Due ${g.dueDate ? new Date(g.dueDate).toLocaleDateString() : '—'}</div>
+            ` : ''}
+          </div>`;
+        }).join('') : '<p style="color:#9ca3af;font-size:13px">No active goals. Add your own or wait for your manager to assign goals.</p>'}
+        ${completedGoals > 0 ? `<p style="font-size:12px;color:#16a34a;margin-top:8px">✅ ${completedGoals} goal${completedGoals>1?'s':''} completed</p>` : ''}
+      </div>
+
+      <!-- Reviews -->
+      <div class="card">
+        <h3 style="font-size:15px;font-weight:700;margin-bottom:14px">My Reviews</h3>
+        ${reviews.length ? reviews.map(r => `
+          <div style="padding:14px;border:1px solid #e5e7eb;border-radius:10px;margin-bottom:10px">
+            <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;margin-bottom:8px">
+              <div>
+                <span style="font-weight:700;font-size:15px">${r.period}</span>
+                <span style="font-size:12px;color:#6b7280;margin-left:8px">${r.type} review · ${r.reviewer?.name||'Manager'}</span>
+              </div>
+              <div>${_starRating(r.overallScore)}</div>
+            </div>
+            ${r.summary ? `<p style="font-size:13px;line-height:1.6;margin:0 0 8px">${r.summary}</p>` : ''}
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+              ${r.strengths ? `<div style="background:#f0fdf4;padding:10px;border-radius:7px"><div style="font-size:11px;font-weight:700;color:#16a34a;margin-bottom:4px">STRENGTHS</div><div style="font-size:12px">${r.strengths}</div></div>` : ''}
+              ${r.improvements ? `<div style="background:#fffbeb;padding:10px;border-radius:7px"><div style="font-size:11px;font-weight:700;color:#d97706;margin-bottom:4px">IMPROVEMENTS</div><div style="font-size:12px">${r.improvements}</div></div>` : ''}
+            </div>
+          </div>
+        `).join('') : `<p style="color:#9ca3af;font-size:13px">No reviews submitted yet.</p>`}
+      </div>
+    `;
+  } catch(e) {
+    content.innerHTML = `<div class="card"><p style="color:#ef4444">Error: ${e.message}</p></div>`;
+  }
+}
+
+function showMyGoalModal() {
+  const container = document.getElementById('modal-container');
+  container.classList.remove('hidden');
+  container.innerHTML = `
+    <div class="modal-overlay" onclick="closeModal(event)">
+      <div class="modal" onclick="event.stopPropagation()" style="max-width:440px">
+        <h3>Add Personal Goal</h3>
+        ${_goalFormFields('myg')}
+        <div id="myg-error" style="color:#ef4444;font-size:13px;margin-bottom:8px;display:none"></div>
+        <div class="modal-actions">
+          <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+          <button class="btn btn-primary" onclick="submitSelfGoal()">Add Goal</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+async function submitSelfGoal() {
+  const title  = document.getElementById('myg-title').value.trim();
+  const cat    = document.getElementById('myg-cat').value;
+  const target = document.getElementById('myg-target').value;
+  const unit   = document.getElementById('myg-unit').value.trim();
+  const period = document.getElementById('myg-period').value;
+  const due    = document.getElementById('myg-due').value;
+  const errEl  = document.getElementById('myg-error');
+  errEl.style.display = 'none';
+  if (!title) { errEl.textContent = 'Title is required.'; errEl.style.display = 'block'; return; }
+
+  const body = { title, category: cat, period };
+  if (target) body.targetValue = parseFloat(target);
+  if (unit) body.unit = unit;
+  if (due) body.dueDate = due;
+
+  const btn = event.target; btn.disabled = true; btn.textContent = 'Saving…';
+  try {
+    await api('/api/performance/goals', { method: 'POST', body: JSON.stringify(body) });
+    toast('Goal added!', 'ok');
+    closeModal();
+    renderMyPerformance();
+  } catch(e) {
+    errEl.textContent = e.message; errEl.style.display = 'block';
+    btn.disabled = false; btn.textContent = 'Add Goal';
+  }
+}
+
+function showSelfUpdateGoal(goalId, title, current, target, unit) {
+  showUpdateGoalProgress(goalId, title, current, target, unit);
+}
