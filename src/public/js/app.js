@@ -4499,53 +4499,60 @@ function buildBottomNav(role) {
   const existing = document.getElementById('bottom-nav');
   if (existing) existing.remove();
 
-  // Define nav items per role
-  const navItems = {
-    admin:    [['Dashboard','dashboard'],['Users','users'],['Sessions','sessions'],['Reports','reports']],
-    manager:  [['Dashboard','dashboard'],['Users','users'],['Sessions','sessions'],['Reports','reports']],
-    lecturer: [['Dashboard','dashboard'],['Sessions','sessions'],['Quizzes','quizzes'],['Reports','reports']],
-    student:  [['Dashboard','dashboard'],['Attendance','attendance'],['Quizzes','quizzes'],['Courses','courses']],
-    employee: [['Dashboard','dashboard'],['Attendance','attendance'],['Meetings','meetings'],['Profile','profile']],
-  };
+  // Build from the ACTUAL sidebar links so nothing is ever missing
+  // We wait a tick for the sidebar to be rendered first
+  setTimeout(() => {
+    const sidebarLinks = Array.from(document.querySelectorAll('.sidebar-nav a'));
+    if (!sidebarLinks.length) return;
 
-  const items = navItems[role] || navItems['admin'];
+    // All links: pick first 4 for bottom bar + a "More" button if there are extras
+    const MAX_VISIBLE = 4;
+    const visible = sidebarLinks.slice(0, MAX_VISIBLE);
+    const hasMore = sidebarLinks.length > MAX_VISIBLE;
 
-  const svgs = {
-    dashboard:  '<rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>',
-    users:      '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>',
-    sessions:   '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
-    reports:    '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>',
-    quizzes:    '<path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M9 14l2 2 4-4"/>',
-    courses:    '<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>',
-    attendance: '<polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>',
-    meetings:   '<path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2"/>',
-    profile:    '<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
-  };
+    const nav = document.createElement('div');
+    nav.id = 'bottom-nav';
+    nav.className = 'bottom-nav';
 
-  const nav = document.createElement('div');
-  nav.id = 'bottom-nav';
-  nav.className = 'bottom-nav';
+    visible.forEach(link => {
+      const label = link.querySelector('span')?.textContent?.trim() || '';
+      const svgEl = link.querySelector('svg');
+      const btn = document.createElement('button');
+      btn.className = 'bottom-nav-item';
+      btn.innerHTML = (svgEl ? svgEl.outerHTML : '') + `<span>${label}</span>`;
+      btn.dataset.navId = link.id?.replace('nav-', '') || '';
+      btn.onclick = () => {
+        document.querySelectorAll('.bottom-nav-item').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        link.click();
+        closeMobileSidebar();
+      };
+      // Mark active if link is active
+      if (link.classList.contains('active')) btn.classList.add('active');
+      nav.appendChild(btn);
+    });
 
-  items.forEach(([label, key], i) => {
-    const btn = document.createElement('button');
-    btn.className = 'bottom-nav-item' + (i === 0 ? ' active' : '');
-    btn.innerHTML = `
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${svgs[key] || svgs.dashboard}</svg>
-      <span>${label}</span>
-    `;
-    btn.onclick = () => {
-      document.querySelectorAll('.bottom-nav-item').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      // Mirror the sidebar nav click if it exists
-      const sidebarLinks = document.querySelectorAll('.sidebar-nav a');
-      sidebarLinks.forEach(link => {
-        if (link.textContent.trim().toLowerCase().includes(label.toLowerCase())) {
-          link.click();
-        }
+    // "More" button opens the sidebar drawer to show remaining items
+    if (hasMore) {
+      const moreBtn = document.createElement('button');
+      moreBtn.className = 'bottom-nav-item';
+      moreBtn.innerHTML = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg><span>More</span>`;
+      moreBtn.onclick = () => toggleMobileSidebar();
+      nav.appendChild(moreBtn);
+    }
+
+    document.body.appendChild(nav);
+
+    // Keep bottom nav in sync when sidebar active link changes
+    const observer = new MutationObserver(() => {
+      const activeLink = document.querySelector('.sidebar-nav a.active');
+      if (!activeLink) return;
+      const activeId = activeLink.id?.replace('nav-', '');
+      document.querySelectorAll('.bottom-nav-item').forEach(b => {
+        b.classList.toggle('active', b.dataset.navId === activeId);
       });
-    };
-    nav.appendChild(btn);
-  });
-
-  document.body.appendChild(nav);
+    });
+    const sidebarNav = document.getElementById('sidebar-nav');
+    if (sidebarNav) observer.observe(sidebarNav, { attributes: true, subtree: true, attributeFilter: ['class'] });
+  }, 100);
 }
