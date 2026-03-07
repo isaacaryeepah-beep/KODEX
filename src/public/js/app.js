@@ -2958,10 +2958,13 @@ async function submitAddQuestion(quizId) {
     body = { questionText, options, questionType: 'single', correctAnswer, marks };
   }
 
+  const addBtn = document.querySelector(`button[onclick="submitAddQuestion('${quizId}')"]`);
+  if (addBtn) { addBtn.disabled = true; addBtn.textContent = 'Adding…'; }
   try {
     await api(`/api/lecturer/quizzes/${quizId}/questions`, { method: 'POST', body: JSON.stringify(body) });
     showAddQuestionsView(quizId);
   } catch (e) {
+    if (addBtn) { addBtn.disabled = false; addBtn.textContent = '＋ Add Question'; }
     errEl.textContent = e.message;
     errEl.style.display = 'block';
   }
@@ -4984,7 +4987,7 @@ async function addAIQuizQuestions(quizId) {
       };
       if (q.questionType === 'multiple') { body.correctAnswers = q.correctAnswers; }
       else { body.correctAnswer = q.correctAnswers[0]; }
-      await api('POST', '/api/lecturer/quizzes/' + quizId + '/questions', body);
+      await api('/api/lecturer/quizzes/' + quizId + '/questions', { method: 'POST', body: JSON.stringify(body) });
       added++;
     } catch(e) { failed++; }
   }
