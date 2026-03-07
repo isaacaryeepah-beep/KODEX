@@ -4,6 +4,7 @@ const User = require("../models/User");
 const Company = require("../models/Company");
 const StudentRoster = require("../models/StudentRoster");
 const { generateToken } = require("../utils/jwt");
+const { sendWelcome } = require("../services/emailService");
 
 const SIX_HOURS_MS = 6 * 60 * 60 * 1000;
 
@@ -57,6 +58,15 @@ exports.register = async (req, res) => {
     }
 
     const token = generateToken(user._id);
+
+    // Send welcome email (non-fatal)
+    sendWelcome({
+      email:           user.email,
+      name:            user.name || user.email.split('@')[0],
+      institutionName: company.name,
+      trialDays:       14,
+      trialEndDate:    company.trialEndDate,
+    }).catch(err => console.error('Welcome email failed:', err.message));
 
     res.status(201).json({
       token,
