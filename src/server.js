@@ -25,12 +25,52 @@ const searchRoutes = require("./routes/Search");
 const proctoredQuizRoutes = require("./routes/proctoredQuizzes");
 const assignmentRoutes = require("./routes/assignments");
 
+// ── Security middleware ───────────────────────────────────────────────────────
+const { loginLimiter, registerLimiter, passwordResetLimiter, apiLimiter } = require("./middleware/rateLimiter");
+const { sanitizeInputs } = require("./middleware/sanitize");
+
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-app.use(helmet({ contentSecurityPolicy: false }));
-app.use(cors());
-app.use(express.json({ limit: "10mb" }));
+// ── Helmet: secure HTTP headers ───────────────────────────────────────────────
+app.use(helmet({
+  contentSecurityPolicy: false,      // keep off — your app uses inline scripts
+  crossOriginEmbedderPolicy: false,  // needed for Jitsi/Zoom iframes
+  referrerPolicy: { policy: "strict-origin-when-cross-origin" },
+  hsts: { maxAge: 31536000, includeSubDomains: true }, // force HTTPS for 1 year
+  noSniff: true,         // prevent MIME type sniffing
+  frameguard: { action: "sameorigin" }, // prevent clickjacking
+  xssFilter: true,       // basic XSS protection header
+}));
+
+// ── CORS: only allow your own domain ─────────────────────────────────────────
+const allowedOrigins = [
+  "https://kodex-7l3g.onrender.com",  // your live site
+  "http://localhost:3000",             // local dev
+  "http://localhost:5000",             // local dev
+];
+app.use(cors({
+  origin: (origin, callback) => {
+    // Allow requests with no origin (mobile apps, Postman)
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error(`CORS blocked: ${origin} is not allowed`));
+    }
+  },
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+  credentials: true,
+}));
+
+// ── Body parsing with safe limit ──────────────────────────────────────────────
+app.use(express.json({ limit: "2mb" })); // reduced from 10mb — no need for more
+
+// ── Global input sanitizer (NoSQL injection + XSS prevention) ────────────────
+app.use(sanitizeInputs);
+
+// ── General API rate limit (200 req / 15min per IP) ──────────────────────────
+app.use("/api/", apiLimiter);
 app.use(express.static(path.join(__dirname, "public"), {
   setHeaders: (res) => {
     res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
