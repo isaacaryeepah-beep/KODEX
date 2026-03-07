@@ -20,8 +20,9 @@ const verifyToken = (token) => {
     throw new Error("JWT_SECRET is not set in environment variables!");
   }
   const decoded = jwt.verify(token, process.env.JWT_SECRET);
-  // Reject tokens that weren't generated as access tokens
-  if (decoded.type !== "access") {
+  // Accept old tokens (no type field) for backward compatibility.
+  // New tokens will have type:"access". Only reject if type is explicitly wrong.
+  if (decoded.type && decoded.type !== "access") {
     throw new Error("Invalid token type");
   }
   return decoded;
