@@ -306,7 +306,7 @@ document.getElementById('refresh-btn').addEventListener('click', () => {
 
 async function loadMonitor() {
   try {
-    const data = await api('GET', `/api/student/quizzes/${currentQuizId}/proctor/live-monitor`);
+    const data = await api('GET', `/api/proctor/quiz/${currentQuizId}/live-monitor`);
     monitorData = data;
     renderSidebar(data);
     document.getElementById('quiz-label').textContent = data.quiz?.title || currentQuizId;
@@ -360,7 +360,7 @@ async function loadDetail(sessionId) {
   panel.innerHTML = '<div class="spinner"></div>';
 
   try {
-    const data = await api('GET', `/api/student/quizzes/proctor/session/${sessionId}/report`);
+    const data = await api('GET', `/api/proctor/session/${sessionId}/report`);
     const s = data.session;
     const logs = data.logs || [];
     const snaps = data.snapshots || [];
@@ -442,7 +442,7 @@ async function loadDetail(sessionId) {
     // Load snapshot images
     panel.querySelectorAll('.snap-thumb[data-sid]').forEach(thumb => {
       const sid = thumb.dataset.sid;
-      api('GET', `/api/student/quizzes/proctor/snapshot/${sid}`).then(data => {
+      api('GET', `/api/proctor/snapshot/${sid}`).then(data => {
         const img = document.createElement('img');
         img.src = data.imageData;
         img.style = 'width:100%;height:100%;object-fit:cover;display:block';
