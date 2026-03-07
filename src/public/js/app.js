@@ -4689,6 +4689,48 @@ function buildBottomNav(role) {
   if (dashBtn) dashBtn.classList.add('active');
 }
 
+
+// Robust JSON extractor — handles LaTeX backslashes and MATHSTART/MATHEND placeholders
+function restoreMathPlaceholders(obj) {
+  if (typeof obj === 'string') {
+    return obj.replace(/MATHSTART/g, '\\(').replace(/MATHEND/g, '\\)')
+              .replace(/DISPSTART/g, '\\[').replace(/DISPEND/g, '\\]');
+  }
+  if (Array.isArray(obj)) return obj.map(restoreMathPlaceholders);
+  if (obj && typeof obj === 'object') {
+    const out = {};
+    for (const k in obj) out[k] = restoreMathPlaceholders(obj[k]);
+    return out;
+  }
+  return obj;
+}
+
+function extractAIJson(raw) {
+  // Strip markdown fences
+  let text = raw.replace(/```json/g, '').replace(/```/g, '').trim();
+  // Find the JSON array boundaries
+  const start = text.indexOf('[');
+  const end   = text.lastIndexOf(']');
+  if (start === -1 || end === -1) throw new Error('No JSON array found in AI response. Try again.');
+  text = text.slice(start, end + 1);
+  // Try direct parse first
+  try { return restoreMathPlaceholders(JSON.parse(text)); } catch(e1) {
+    // Fix unescaped backslashes that LaTeX produces
+    try {
+      const fixed = text.replace(/\\(?!["\\/bfnrtu])/g, '\\\\');
+      return restoreMathPlaceholders(JSON.parse(fixed));
+    } catch(e2) {
+      // Last resort: use Function constructor to evaluate as JS
+      try {
+        // eslint-disable-next-line no-new-func
+        return restoreMathPlaceholders(Function('return ' + text)());
+      } catch(e3) {
+        throw new Error('Could not parse AI response. Please try again.');
+      }
+    }
+  }
+}
+
 // ══════════════════════════════════════════════════════════════════════════════
 //  AI QUESTION GENERATION — app.js (main dashboard / mobile)
 //  Mirrors the same modal in assignments.html but lives here for the
@@ -4879,10 +4921,7 @@ async function runAIQuizGenerate(quizId) {
     }
     const data = await response.json();
     const raw   = data.content?.find(c => c.type === 'text')?.text || '';
-    const clean = raw.replace(/```json/g, '').replace(/```/g, '').trim();
-    const start = clean.indexOf('['), end = clean.lastIndexOf(']');
-    if (start === -1 || end === -1) throw new Error('Unexpected AI response format. Try again.');
-    const questions = JSON.parse(clean.slice(start, end + 1));
+    const questions = extractAIJson(raw);
     if (!Array.isArray(questions) || !questions.length) throw new Error('No questions generated. Try a different topic.');
 
     _aiQuizQuestions = questions.map(q => ({
