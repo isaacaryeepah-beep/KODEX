@@ -278,6 +278,11 @@ function showToastNotif(msg, type) {
   setTimeout(() => t.remove(), 3500);
 }
 
+// Alias used by Corporate Phase 1 functions (shifts, leave)
+function toast(msg, type) {
+  showToastNotif(msg, type === 'ok' ? 'success' : 'warn');
+}
+
 // Listen for online/offline events
 window.addEventListener('offline', () => showOfflineBanner(false));
 window.addEventListener('online',  () => {
