@@ -515,3 +515,10 @@ input[type="checkbox"] { width:15px; height:15px; accent-color:var(--portal-prim
   .quick-actions { grid-template-columns: 1fr; }
   table th, table td { padding: 8px 6px; font-size: 11px; }
 }
+
+/* Force sidebar visible when More button opens it on phones
+   Must beat the display:none !important from the 540px breakpoint */
+.sidebar.sidebar-force-open {
+  display: flex !important;
+  flex-direction: column !important;
+}
