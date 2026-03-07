@@ -1,6 +1,6 @@
 const mongoose = require("mongoose");
 
-const leaveRequestSchema = new mongoose.Schema(
+const shiftSchema = new mongoose.Schema(
   {
     company: {
       type: mongoose.Schema.Types.ObjectId,
@@ -8,58 +8,43 @@ const leaveRequestSchema = new mongoose.Schema(
       required: true,
       index: true,
     },
-    employee: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
-      required: true,
-      index: true,
-    },
-    type: {
+    name: {
       type: String,
-      enum: ["annual", "sick", "maternity", "paternity", "unpaid", "other"],
-      required: [true, "Leave type is required"],
+      required: [true, "Shift name is required"],
+      trim: true,
     },
-    startDate: {
-      type: Date,
-      required: [true, "Start date is required"],
+    startTime: {
+      type: String,
+      required: [true, "Start time is required"],
     },
-    endDate: {
-      type: Date,
-      required: [true, "End date is required"],
+    endTime: {
+      type: String,
+      required: [true, "End time is required"],
+    },
+    gracePeriodMinutes: {
+      type: Number,
+      default: 15,
     },
     days: {
-      type: Number, // calculated number of working days
-      required: true,
+      type: [String],
+      enum: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+      default: ["Mon", "Tue", "Wed", "Thu", "Fri"],
     },
-    reason: {
+    department: {
       type: String,
-      trim: true,
-      default: "",
+      default: null,
     },
-    status: {
-      type: String,
-      enum: ["pending", "approved", "rejected", "cancelled"],
-      default: "pending",
-      index: true,
-    },
-    reviewedBy: {
+    createdBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
-      default: null,
+      required: true,
     },
-    reviewedAt: {
-      type: Date,
-      default: null,
-    },
-    reviewNote: {
-      type: String,
-      default: "",
+    isActive: {
+      type: Boolean,
+      default: true,
     },
   },
   { timestamps: true }
 );
 
-leaveRequestSchema.index({ company: 1, employee: 1, status: 1 });
-leaveRequestSchema.index({ company: 1, startDate: 1, endDate: 1 });
-
-module.exports = mongoose.model("LeaveRequest", leaveRequestSchema);
+module.exports = mongoose.model("Shift", shiftSchema);
