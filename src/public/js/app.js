@@ -615,6 +615,24 @@ function showPendingApproval(message) {
   currentUser = null;
 }
 
+
+// Map raw server error messages to friendly user-facing text
+function friendlyError(msg) {
+  if (!msg) return null;
+  const m = msg.toLowerCase();
+  if (m.includes('invalid credentials'))         return 'Wrong email or password. Please try again.';
+  if (m.includes('institution not found'))        return 'Institution code not found. Please check and try again.';
+  if (m.includes('company not found'))            return 'Institution code not found. Please check and try again.';
+  if (m.includes('pending approval'))             return msg; // keep as-is — informative
+  if (m.includes('too many login'))               return 'Too many failed attempts. Please wait 15 minutes.';
+  if (m.includes('too many requests'))            return 'Too many requests. Please slow down and try again.';
+  if (m.includes('no offline profile'))           return 'You\'re offline. Please connect to the internet to login for the first time.';
+  if (m.includes('offline session expired'))      return 'Offline session expired. Please connect to login again.';
+  if (m.includes('incorrect password'))           return 'Incorrect password. Please try again.';
+  if (m.includes('network') || m.includes('fetch')) return 'Network error. Please check your connection.';
+  return msg; // fallback: show as-is
+}
+
 async function handleAdminLogin() {
   const btn = document.querySelector('#admin-login-form button[type="submit"]');
   try {
@@ -645,7 +663,7 @@ async function handleAdminLogin() {
     showDashboard(data);
   } catch (e) {
     if (btn) { btn.textContent = 'Sign In'; btn.disabled = false; }
-    showAdminError(e.message || 'Invalid email or password. Please try again.');
+    showAdminError(friendlyError(e.message) || 'Wrong email or password. Please try again.');
   }
 }
 
@@ -706,7 +724,7 @@ async function handleLecturerLogin() {
     showDashboard(data);
   } catch (e) {
     if (btn) { btn.textContent = 'Sign In'; btn.disabled = false; }
-    showLecturerError(e.message || 'Invalid email or password. Please try again.');
+    showLecturerError(friendlyError(e.message) || 'Wrong email or password. Please try again.');
   }
 }
 
@@ -815,7 +833,7 @@ async function handleEmployeeLogin() {
     showDashboard(data);
   } catch (e) {
     if (btn) { btn.textContent = 'Sign In'; btn.disabled = false; }
-    showEmployeeError(e.message || 'Invalid credentials. Please try again.');
+    showEmployeeError(friendlyError(e.message) || 'Wrong email or password. Please try again.');
   }
 }
 
@@ -875,7 +893,7 @@ async function handleStudentLogin() {
     showDashboard(data);
   } catch (e) {
     if (btn) { btn.textContent = 'Sign In'; btn.disabled = false; }
-    showStudentError(e.message || 'Invalid student ID or password. Please try again.');
+    showStudentError(friendlyError(e.message) || 'Wrong student ID or password. Please try again.');
   }
 }
 
@@ -4467,16 +4485,28 @@ function toggleMobileSidebar() {
   if (isOpen) {
     closeMobileSidebar();
   } else {
-    sidebar.classList.add('open');
-    overlay.classList.add('active');
-    document.body.style.overflow = 'hidden';
+    // 'sidebar-force-open' class beats display:none !important via specificity
+    sidebar.classList.add('sidebar-force-open');
+    requestAnimationFrame(() => {
+      sidebar.classList.add('open');
+      overlay.classList.add('active');
+      document.body.style.overflow = 'hidden';
+    });
   }
 }
 
 function closeMobileSidebar() {
   const sidebar = document.querySelector('.sidebar');
   const overlay = document.getElementById('sidebar-overlay');
-  if (sidebar) sidebar.classList.remove('open');
+  if (sidebar) {
+    sidebar.classList.remove('open');
+    // Remove force-show class after transition completes
+    setTimeout(() => {
+      if (!sidebar.classList.contains('open')) {
+        sidebar.classList.remove('sidebar-force-open');
+      }
+    }, 300);
+  }
   if (overlay) overlay.classList.remove('active');
   document.body.style.overflow = '';
 }
