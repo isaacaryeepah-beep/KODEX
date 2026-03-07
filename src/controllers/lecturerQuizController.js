@@ -42,6 +42,7 @@ exports.createQuiz = async (req, res) => {
       timeLimit: timeLimit || 30,
       startTime: start,
       endTime: end,
+      source: req.body.source === 'assignment' ? 'assignment' : 'proctored',
     });
 
     if (questions && Array.isArray(questions) && questions.length > 0) {
@@ -79,6 +80,9 @@ exports.listQuizzes = async (req, res) => {
   try {
     const { courseId } = req.query;
     const filter = { company: req.user.company, createdBy: req.user._id };
+
+    // Filter by source if provided (proctored = main portal, assignment = assignments page)
+    if (req.query.source) filter.source = req.query.source;
 
     if (courseId) {
       if (!mongoose.Types.ObjectId.isValid(courseId)) {
