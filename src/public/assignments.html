@@ -1545,9 +1545,18 @@ async function runAIGenerate(quizId) {
     const start = clean.indexOf('['), end = clean.lastIndexOf(']');
     if (start === -1 || end === -1) throw new Error('AI returned unexpected format. Please try again.');
     let jsonStr = clean.slice(start, end + 1);
-    // Fix LaTeX backslashes that break JSON — single \ not followed by valid JSON escape chars
-    jsonStr = jsonStr.replace(/\\(?!["\\/bfnrtu0-9])/g, '\\\\');
-    const questions = JSON.parse(jsonStr);
+    let questions;
+    try {
+      questions = JSON.parse(jsonStr);
+    } catch(e1) {
+      try {
+        const fixed = jsonStr.replace(/\\(?!["\\\/bfnrtu0-9])/g, '\\\\');
+        questions = JSON.parse(fixed);
+      } catch(e2) {
+        try { questions = Function('return ' + jsonStr)(); }
+        catch(e3) { throw new Error('Could not parse AI response. Please try again.'); }
+      }
+    }
     if (!Array.isArray(questions) || questions.length === 0) throw new Error('No questions generated. Try a different topic.');
 
     // Convert MATHSTART/MATHEND placeholders back to LaTeX notation for MathJax
