@@ -2,6 +2,141 @@ const API = '';
 let token = localStorage.getItem('token');
 
 // ══════════════════════════════════════════════════════════════════════════════
+//  OFFLINE LOGIN MODULE
+//  - On successful online login, saves a secure profile to localStorage
+//  - On offline login attempt, verifies against the cached profile
+//  - Uses SHA-256 hashing (no plaintext passwords ever stored)
+//  - Supports all roles: admin, lecturer, employee, student
+// ══════════════════════════════════════════════════════════════════════════════
+
+const OFFLINE_LOGIN_KEY = 'kodex_offline_profiles';  // stores cached user profiles
+const OFFLINE_LOGIN_MAX_AGE_DAYS = 30;               // cached profile expires after 30 days
+
+// ── Hash a password with SHA-256 (async, no library needed) ──────────────────
+async function hashPassword(password) {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(password + 'KODEX_SALT_2025'); // salted hash
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+// ── Save user profile after successful online login ───────────────────────────
+async function saveOfflineProfile(credentials, userData) {
+  try {
+    const profiles = JSON.parse(localStorage.getItem(OFFLINE_LOGIN_KEY) || '{}');
+    const profileKey = buildProfileKey(credentials);
+    const passwordHash = await hashPassword(credentials.password);
+
+    profiles[profileKey] = {
+      passwordHash,
+      user: {
+        id: userData.user.id || userData.user._id,
+        name: userData.user.name,
+        email: userData.user.email,
+        role: userData.user.role,
+        isApproved: userData.user.isApproved,
+        indexNumber: userData.user.indexNumber || null,
+        employeeId: userData.user.employeeId || null,
+        company: userData.user.company,
+      },
+      token: userData.token,           // cached JWT (may expire but used for UI)
+      trial: userData.trial || null,
+      savedAt: Date.now(),
+    };
+
+    localStorage.setItem(OFFLINE_LOGIN_KEY, JSON.stringify(profiles));
+    console.log('[OfflineLogin] Profile cached for', credentials.email || credentials.indexNumber);
+  } catch (e) {
+    console.warn('[OfflineLogin] Failed to save profile:', e);
+  }
+}
+
+// ── Build a unique key per user identity ─────────────────────────────────────
+function buildProfileKey(credentials) {
+  if (credentials.indexNumber) {
+    return `student::${credentials.indexNumber}::${(credentials.institutionCode || '').toUpperCase()}`;
+  }
+  if (credentials.employeeId || (credentials.loginRole === 'employee')) {
+    return `employee::${(credentials.email || '').toLowerCase()}::${(credentials.institutionCode || '').toUpperCase()}`;
+  }
+  return `${credentials.loginRole || 'admin'}::${(credentials.email || '').toLowerCase()}`;
+}
+
+// ── Attempt offline login ─────────────────────────────────────────────────────
+async function attemptOfflineLogin(credentials) {
+  try {
+    const profiles = JSON.parse(localStorage.getItem(OFFLINE_LOGIN_KEY) || '{}');
+    const profileKey = buildProfileKey(credentials);
+    const profile = profiles[profileKey];
+
+    if (!profile) {
+      throw new Error('No offline profile found. Please login online at least once first.');
+    }
+
+    // Check if profile has expired
+    const ageMs = Date.now() - profile.savedAt;
+    const ageDays = ageMs / (1000 * 60 * 60 * 24);
+    if (ageDays > OFFLINE_LOGIN_MAX_AGE_DAYS) {
+      throw new Error('Offline session expired. Please connect to the internet to login.');
+    }
+
+    // Verify password hash
+    const enteredHash = await hashPassword(credentials.password);
+    if (enteredHash !== profile.passwordHash) {
+      throw new Error('Incorrect password.');
+    }
+
+    // Return a fake login response matching the real API shape
+    console.log('[OfflineLogin] Offline login successful for', profileKey);
+    return {
+      token: profile.token,
+      user: profile.user,
+      trial: profile.trial,
+      offlineMode: true,   // flag so app knows we're offline
+    };
+  } catch (e) {
+    throw e;
+  }
+}
+
+// ── Clear a specific offline profile (on logout) ──────────────────────────────
+function clearOfflineProfile(userRole, email, indexNumber, institutionCode) {
+  try {
+    const profiles = JSON.parse(localStorage.getItem(OFFLINE_LOGIN_KEY) || '{}');
+    const key = buildProfileKey({ loginRole: userRole, email, indexNumber, institutionCode });
+    delete profiles[key];
+    localStorage.setItem(OFFLINE_LOGIN_KEY, JSON.stringify(profiles));
+  } catch (e) {
+    console.warn('[OfflineLogin] Could not clear profile:', e);
+  }
+}
+
+// ── Show offline login notice on the form ─────────────────────────────────────
+function showOfflineLoginNotice(containerId) {
+  const existing = document.getElementById('offline-login-notice');
+  if (existing) return;
+  const notice = document.createElement('div');
+  notice.id = 'offline-login-notice';
+  notice.style.cssText = [
+    'background:#fef3c7','color:#92400e','border:1px solid #fbbf24',
+    'border-radius:8px','padding:10px 14px','font-size:12px',
+    'margin-bottom:12px','display:flex','align-items:center','gap:8px'
+  ].join(';');
+  notice.innerHTML = `
+    <span style="font-size:16px">📶</span>
+    <span><strong>You're offline.</strong> Signing in with your saved credentials.</span>
+  `;
+  const container = document.getElementById(containerId);
+  if (container) container.prepend(notice);
+}
+
+function removeOfflineLoginNotice() {
+  const n = document.getElementById('offline-login-notice');
+  if (n) n.remove();
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
 //  OFFLINE SUPPORT MODULE
 //  - Detects online/offline state and shows a banner
 //  - Caches read data (sessions, courses, attendance) in localStorage
@@ -489,10 +624,21 @@ async function handleAdminLogin() {
     if (!password) return showAdminError('Please enter your password');
     if (btn) { btn.textContent = 'Signing in…'; btn.disabled = true; }
     const portalMode = selectedPortalType === 'admin-academic' ? 'academic' : 'corporate';
-    const data = await api('/api/auth/login', {
-      method: 'POST',
-      body: JSON.stringify({ email, password, loginRole: 'admin', portalMode })
-    });
+    const credentials = { email, password, loginRole: 'admin', portalMode };
+
+    let data;
+    if (!isOnline()) {
+      // ── OFFLINE PATH ──
+      showOfflineLoginNotice('admin-login-form');
+      data = await attemptOfflineLogin(credentials);
+    } else {
+      // ── ONLINE PATH ──
+      removeOfflineLoginNotice();
+      data = await api('/api/auth/login', { method: 'POST', body: JSON.stringify(credentials) });
+      // Cache profile for future offline logins
+      await saveOfflineProfile(credentials, data);
+    }
+
     token = data.token;
     localStorage.setItem('token', token);
     currentUser = data.user;
@@ -535,14 +681,25 @@ async function handleLecturerLogin() {
     if (!email) return showLecturerError('Please enter your email');
     if (!password) return showLecturerError('Please enter your password');
     if (btn) { btn.textContent = 'Signing in…'; btn.disabled = true; }
-    const data = await api('/api/auth/login', {
-      method: 'POST',
-      body: JSON.stringify({ email, password, loginRole: 'lecturer', portalMode: 'academic' })
-    });
-    if (data.user && !data.user.isApproved) {
-      if (btn) { btn.textContent = 'Sign In'; btn.disabled = false; }
-      return showPendingApproval('Your account is pending admin approval. Please wait for your institution admin to approve your account.');
+    const credentials = { email, password, loginRole: 'lecturer', portalMode: 'academic' };
+
+    let data;
+    if (!isOnline()) {
+      // ── OFFLINE PATH ──
+      showOfflineLoginNotice('lecturer-login-form');
+      data = await attemptOfflineLogin(credentials);
+    } else {
+      // ── ONLINE PATH ──
+      removeOfflineLoginNotice();
+      data = await api('/api/auth/login', { method: 'POST', body: JSON.stringify(credentials) });
+      if (data.user && !data.user.isApproved) {
+        if (btn) { btn.textContent = 'Sign In'; btn.disabled = false; }
+        return showPendingApproval('Your account is pending admin approval. Please wait for your institution admin to approve your account.');
+      }
+      // Cache profile for future offline logins
+      await saveOfflineProfile(credentials, data);
     }
+
     token = data.token;
     localStorage.setItem('token', token);
     currentUser = data.user;
@@ -637,21 +794,28 @@ async function handleEmployeeLogin() {
     if (!institutionCode) return showEmployeeError('Please enter your institution code');
     if (!password) return showEmployeeError('Please enter your password');
     if (btn) { btn.textContent = 'Signing in…'; btn.disabled = true; }
-    const data = await api('/api/auth/login', {
-      method: 'POST',
-      body: JSON.stringify({ email, password, institutionCode, loginRole: 'employee' })
-    });
-    if (data.user && !data.user.isApproved) {
-      if (btn) { btn.textContent = 'Sign In'; btn.disabled = false; }
-      return showPendingApproval('Your account is pending admin approval. Please wait for your admin to approve your account.');
+    const credentials = { email, password, institutionCode, loginRole: 'employee' };
+
+    let data;
+    if (!isOnline()) {
+      // ── OFFLINE PATH ──
+      showOfflineLoginNotice('employee-login-form');
+      data = await attemptOfflineLogin(credentials);
+    } else {
+      // ── ONLINE PATH ──
+      removeOfflineLoginNotice();
+      data = await api('/api/auth/login', { method: 'POST', body: JSON.stringify(credentials) });
+      // Cache profile for future offline logins
+      await saveOfflineProfile(credentials, data);
     }
+
     token = data.token;
     localStorage.setItem('token', token);
     currentUser = data.user;
     showDashboard(data);
   } catch (e) {
     if (btn) { btn.textContent = 'Sign In'; btn.disabled = false; }
-    showEmployeeError(e.message || 'Invalid email or password. Please try again.');
+    showEmployeeError(e.message || 'Invalid credentials. Please try again.');
   }
 }
 
@@ -690,10 +854,21 @@ async function handleStudentLogin() {
     if (!institutionCode) return showStudentError('Please enter your institution code');
     if (!password) return showStudentError('Please enter your password');
     if (btn) { btn.textContent = 'Signing in…'; btn.disabled = true; }
-    const data = await api('/api/auth/login', {
-      method: 'POST',
-      body: JSON.stringify({ indexNumber, password, institutionCode, loginRole: 'student' })
-    });
+    const credentials = { indexNumber, password, institutionCode, loginRole: 'student' };
+
+    let data;
+    if (!isOnline()) {
+      // ── OFFLINE PATH ──
+      showOfflineLoginNotice('student-login-form');
+      data = await attemptOfflineLogin(credentials);
+    } else {
+      // ── ONLINE PATH ──
+      removeOfflineLoginNotice();
+      data = await api('/api/auth/login', { method: 'POST', body: JSON.stringify(credentials) });
+      // Cache profile for future offline logins
+      await saveOfflineProfile(credentials, data);
+    }
+
     token = data.token;
     localStorage.setItem('token', token);
     currentUser = data.user;
@@ -787,7 +962,7 @@ async function handleStudentForgotPassword() {
 
 async function handleLogout() {
   try {
-    await api('/api/auth/logout', { method: 'POST' });
+    if (isOnline()) await api('/api/auth/logout', { method: 'POST' });
   } catch (e) {}
   token = null;
   currentUser = null;
@@ -857,11 +1032,21 @@ function showDashboard(data) {
     const mode = currentUser.company?.mode || 'corporate';
     const topbarLeft = document.querySelector('.topbar-left');
     topbarLeft.innerHTML = `
+      <button class="topbar-menu-btn" onclick="toggleMobileSidebar()" aria-label="Open menu">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      </button>
       <h2>${getPortalName(role)}</h2>
       ${companyName ? `<span class="portal-company">— ${companyName}</span>` : ''}
       <span class="mode-badge">${mode}</span>
     `;
-
+    if (!document.getElementById('sidebar-overlay')) {
+      const overlay = document.createElement('div');
+      overlay.id = 'sidebar-overlay';
+      overlay.className = 'sidebar-overlay';
+      overlay.onclick = closeMobileSidebar;
+      document.body.appendChild(overlay);
+    }
+    buildBottomNav(role);
     const trial = data.trial || null;
     const subscription = data.subscription || null;
     const isSubRole = (role === 'employee' || role === 'student');
@@ -4266,4 +4451,101 @@ if ('serviceWorker' in navigator) {
       .then(reg => console.log('[SW] Registered:', reg.scope))
       .catch(err => console.warn('[SW] Registration failed:', err));
   });
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+//  MOBILE UI MODULE
+//  - Hamburger sidebar drawer (tablet)
+//  - Bottom navigation bar (phone)
+// ══════════════════════════════════════════════════════════════════════════════
+
+function toggleMobileSidebar() {
+  const sidebar = document.querySelector('.sidebar');
+  const overlay = document.getElementById('sidebar-overlay');
+  if (!sidebar || !overlay) return;
+  const isOpen = sidebar.classList.contains('open');
+  if (isOpen) {
+    closeMobileSidebar();
+  } else {
+    sidebar.classList.add('open');
+    overlay.classList.add('active');
+    document.body.style.overflow = 'hidden';
+  }
+}
+
+function closeMobileSidebar() {
+  const sidebar = document.querySelector('.sidebar');
+  const overlay = document.getElementById('sidebar-overlay');
+  if (sidebar) sidebar.classList.remove('open');
+  if (overlay) overlay.classList.remove('active');
+  document.body.style.overflow = '';
+}
+
+// Close sidebar when a nav item is tapped on mobile
+document.addEventListener('click', (e) => {
+  const navLink = e.target.closest('.sidebar-nav a');
+  if (navLink && window.innerWidth <= 768) {
+    closeMobileSidebar();
+  }
+});
+
+// Close sidebar on resize if screen becomes large
+window.addEventListener('resize', () => {
+  if (window.innerWidth > 768) closeMobileSidebar();
+});
+
+function buildBottomNav(role) {
+  // Remove existing bottom nav
+  const existing = document.getElementById('bottom-nav');
+  if (existing) existing.remove();
+
+  // Define nav items per role
+  const navItems = {
+    admin:    [['Dashboard','dashboard'],['Users','users'],['Sessions','sessions'],['Reports','reports']],
+    manager:  [['Dashboard','dashboard'],['Users','users'],['Sessions','sessions'],['Reports','reports']],
+    lecturer: [['Dashboard','dashboard'],['Sessions','sessions'],['Quizzes','quizzes'],['Reports','reports']],
+    student:  [['Dashboard','dashboard'],['Attendance','attendance'],['Quizzes','quizzes'],['Courses','courses']],
+    employee: [['Dashboard','dashboard'],['Attendance','attendance'],['Meetings','meetings'],['Profile','profile']],
+  };
+
+  const items = navItems[role] || navItems['admin'];
+
+  const svgs = {
+    dashboard:  '<rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>',
+    users:      '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>',
+    sessions:   '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
+    reports:    '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>',
+    quizzes:    '<path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M9 14l2 2 4-4"/>',
+    courses:    '<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>',
+    attendance: '<polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>',
+    meetings:   '<path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2"/>',
+    profile:    '<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
+  };
+
+  const nav = document.createElement('div');
+  nav.id = 'bottom-nav';
+  nav.className = 'bottom-nav';
+
+  items.forEach(([label, key], i) => {
+    const btn = document.createElement('button');
+    btn.className = 'bottom-nav-item' + (i === 0 ? ' active' : '');
+    btn.innerHTML = `
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${svgs[key] || svgs.dashboard}</svg>
+      <span>${label}</span>
+    `;
+    btn.onclick = () => {
+      document.querySelectorAll('.bottom-nav-item').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      // Mirror the sidebar nav click if it exists
+      const sidebarLinks = document.querySelectorAll('.sidebar-nav a');
+      sidebarLinks.forEach(link => {
+        if (link.textContent.trim().toLowerCase().includes(label.toLowerCase())) {
+          link.click();
+        }
+      });
+    };
+    nav.appendChild(btn);
+  });
+
+  document.body.appendChild(nav);
 }
