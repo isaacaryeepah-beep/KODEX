@@ -24,6 +24,7 @@ const jitsiRoutes = require("./routes/jitsi");
 const searchRoutes = require("./routes/Search");
 const proctoredQuizRoutes = require("./routes/proctoredQuizzes");
 const assignmentRoutes = require("./routes/assignments");
+const aiProxyRoutes    = require("./routes/aiProxy");
 
 // ── Security middleware ───────────────────────────────────────────────────────
 const { loginLimiter, registerLimiter, passwordResetLimiter, apiLimiter } = require("./middleware/rateLimiter");
@@ -128,6 +129,7 @@ app.use("/api/admin", adminDashboardRoutes);
 app.use("/api/search", searchRoutes);
 app.use("/api/proctor", proctoredQuizRoutes);
 app.use("/api/assignments", assignmentRoutes);
+app.use("/api/ai",          aiProxyRoutes);
 
 app.use((req, res) => {
   const indexPath = path.join(__dirname, "public", "index.html");
