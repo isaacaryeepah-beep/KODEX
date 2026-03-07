@@ -171,6 +171,7 @@
   .form-row { grid-template-columns:1fr; }
   .assign-grid { grid-template-columns:1fr; }
 }
+@keyframes spin { to { transform: rotate(360deg) } }
 @keyframes slideIn { from{opacity:0;transform:translateY(14px) scale(.97)} to{opacity:1;transform:translateY(0) scale(1)} }
 </style>
 </head>
@@ -1110,10 +1111,16 @@ async function openQuizQuestionsPanel(quizId) {
           <input type="number" id="qz-marks" value="1" min="1" style="width:72px;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;font-family:inherit;outline:none"/>
         </div>
         <div id="qz-error" style="color:#dc2626;font-size:13px;font-weight:500;margin-top:10px;display:none"></div>
-        <button class="btn btn-primary" style="margin-top:14px" onclick="submitQuizQuestion('${quizId}')">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-          Add Question
-        </button>
+        <div style="display:flex;gap:10px;margin-top:14px;flex-wrap:wrap;align-items:center">
+          <button class="btn btn-primary" onclick="submitQuizQuestion('${quizId}')">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Add Question
+          </button>
+          <button class="btn" style="background:linear-gradient(135deg,#7c3aed,#4f46e5);color:#fff;display:flex;align-items:center;gap:6px;font-weight:600" onclick="openAIGeneratePanel('${quizId}')">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+            AI Generate Questions
+          </button>
+        </div>
       </div>
       <!-- Existing Questions -->
       <div class="card">
@@ -1332,6 +1339,271 @@ async function renderStudentQuizzes() {
 }
 
 init();
+
+// ══════════════════════════════════════════════════════════════════════════
+//  AI QUESTION GENERATION (Anthropic API via claude-sonnet-4-20250514)
+// ══════════════════════════════════════════════════════════════════════════
+
+function openAIGeneratePanel(quizId) {
+  const existing = document.getElementById('ai-gen-overlay');
+  if (existing) existing.remove();
+
+  const overlay = document.createElement('div');
+  overlay.id = 'ai-gen-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:400;display:flex;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(4px)';
+  overlay.innerHTML = `
+    <div style="background:var(--card);border-radius:16px;width:100%;max-width:520px;max-height:90vh;overflow-y:auto;box-shadow:0 25px 80px rgba(0,0,0,.25);animation:slideIn .25s cubic-bezier(.16,1,.3,1)">
+      <div style="padding:20px 24px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:var(--card);z-index:1">
+        <div style="display:flex;align-items:center;gap:10px">
+          <div style="width:32px;height:32px;border-radius:8px;background:linear-gradient(135deg,#7c3aed,#4f46e5);display:flex;align-items:center;justify-content:center">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+          </div>
+          <div>
+            <h3 style="font-size:16px;font-weight:700;margin:0">AI Question Generator</h3>
+            <p style="font-size:12px;color:var(--text-muted);margin:0">Powered by Claude AI</p>
+          </div>
+        </div>
+        <button onclick="document.getElementById('ai-gen-overlay').remove()" style="width:28px;height:28px;border-radius:7px;border:1px solid var(--border);background:var(--bg);cursor:pointer;font-size:14px">✕</button>
+      </div>
+
+      <div style="padding:22px 24px;display:flex;flex-direction:column;gap:16px">
+
+        <div>
+          <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:6px;display:block">Topic / Subject <span style="color:#dc2626">*</span></label>
+          <input id="ai-topic" placeholder="e.g. Photosynthesis, World War II, Python functions…" style="width:100%;padding:10px 13px;border:1.5px solid var(--border);border-radius:9px;font-size:14px;font-family:inherit;outline:none" onfocus="this.style.borderColor='#7c3aed'" onblur="this.style.borderColor='var(--border)'"/>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <div>
+            <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:6px;display:block">Number of Questions</label>
+            <select id="ai-count" style="width:100%;padding:10px 13px;border:1.5px solid var(--border);border-radius:9px;font-size:14px;font-family:inherit;outline:none">
+              <option value="3">3 questions</option>
+              <option value="5" selected>5 questions</option>
+              <option value="8">8 questions</option>
+              <option value="10">10 questions</option>
+              <option value="15">15 questions</option>
+            </select>
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:6px;display:block">Difficulty</label>
+            <select id="ai-difficulty" style="width:100%;padding:10px 13px;border:1.5px solid var(--border);border-radius:9px;font-size:14px;font-family:inherit;outline:none">
+              <option value="easy">Easy</option>
+              <option value="medium" selected>Medium</option>
+              <option value="hard">Hard</option>
+              <option value="mixed">Mixed</option>
+            </select>
+          </div>
+        </div>
+
+        <div>
+          <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:6px;display:block">Question Type</label>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:7px 14px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-weight:500">
+              <input type="radio" name="ai-qtype" value="single" checked style="accent-color:#7c3aed"> Single Answer
+            </label>
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:7px 14px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-weight:500">
+              <input type="radio" name="ai-qtype" value="multiple" style="accent-color:#7c3aed"> Multiple Answers
+            </label>
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:7px 14px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-weight:500">
+              <input type="radio" name="ai-qtype" value="mixed" style="accent-color:#7c3aed"> Mixed
+            </label>
+          </div>
+        </div>
+
+        <div>
+          <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:6px;display:block">Marks per Question</label>
+          <input type="number" id="ai-marks" value="1" min="1" style="width:80px;padding:9px 12px;border:1.5px solid var(--border);border-radius:9px;font-size:14px;font-family:inherit;outline:none"/>
+        </div>
+
+        <div>
+          <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:6px;display:block">Additional Context <span style="font-weight:400;text-transform:none;color:var(--text-muted)">(optional)</span></label>
+          <textarea id="ai-context" rows="2" placeholder="e.g. Focus on cellular respiration only, suitable for year 10 students…" style="width:100%;padding:10px 13px;border:1.5px solid var(--border);border-radius:9px;font-size:14px;font-family:inherit;resize:vertical;outline:none" onfocus="this.style.borderColor='#7c3aed'" onblur="this.style.borderColor='var(--border)'"></textarea>
+        </div>
+
+        <div id="ai-error" style="display:none;padding:10px 13px;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;color:#dc2626;font-size:13px;font-weight:500"></div>
+
+        <!-- Preview area -->
+        <div id="ai-preview" style="display:none">
+          <div style="font-size:13px;font-weight:700;margin-bottom:10px;display:flex;align-items:center;gap:8px">
+            Preview — Review before adding
+            <span id="ai-preview-count" style="background:#ede9fe;color:#7c3aed;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600"></span>
+          </div>
+          <div id="ai-preview-list" style="display:flex;flex-direction:column;gap:10px;max-height:320px;overflow-y:auto;padding-right:4px"></div>
+        </div>
+      </div>
+
+      <div style="padding:14px 24px;border-top:1px solid var(--border);display:flex;gap:10px;justify-content:flex-end;position:sticky;bottom:0;background:var(--card)">
+        <button class="btn btn-secondary" onclick="document.getElementById('ai-gen-overlay').remove()">Cancel</button>
+        <button id="ai-gen-btn" class="btn" style="background:linear-gradient(135deg,#7c3aed,#4f46e5);color:#fff;font-weight:600;display:flex;align-items:center;gap:7px" onclick="runAIGenerate('${quizId}')">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+          Generate Questions
+        </button>
+        <button id="ai-add-btn" class="btn btn-primary" style="display:none" onclick="addAIQuestionsToQuiz('${quizId}')">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Add All to Quiz
+        </button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+}
+
+let _aiGeneratedQuestions = [];
+
+async function runAIGenerate(quizId) {
+  const topic = document.getElementById('ai-topic')?.value?.trim();
+  const count = document.getElementById('ai-count')?.value || '5';
+  const difficulty = document.getElementById('ai-difficulty')?.value || 'medium';
+  const qtype = document.querySelector('input[name="ai-qtype"]:checked')?.value || 'single';
+  const marks = parseInt(document.getElementById('ai-marks')?.value) || 1;
+  const context = document.getElementById('ai-context')?.value?.trim() || '';
+  const errEl = document.getElementById('ai-error');
+  const btn = document.getElementById('ai-gen-btn');
+  const previewDiv = document.getElementById('ai-preview');
+  const addBtn = document.getElementById('ai-add-btn');
+
+  if (!topic) {
+    errEl.textContent = 'Please enter a topic.';
+    errEl.style.display = 'block';
+    return;
+  }
+  errEl.style.display = 'none';
+  previewDiv.style.display = 'none';
+  addBtn.style.display = 'none';
+  _aiGeneratedQuestions = [];
+
+  btn.disabled = true;
+  btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="animation:spin 1s linear infinite"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> Generating…`;
+
+  const qtypeDesc = qtype === 'single' ? 'single correct answer (MCQ)' : qtype === 'multiple' ? 'multiple correct answers' : 'a mix of single and multiple correct answer';
+  const prompt = `You are an expert educator creating quiz questions for a KODEX academic quiz system.
+
+Generate exactly ${count} ${difficulty} difficulty multiple choice questions about: "${topic}".
+${context ? 'Additional context: ' + context : ''}
+
+Question type: ${qtypeDesc}
+Each question must have exactly 4 options (A, B, C, D).
+${qtype === 'single' ? 'Each question has exactly 1 correct answer.' : qtype === 'multiple' ? 'Each question has 2 or more correct answers.' : 'Mix: some questions have 1 correct answer, some have 2-3 correct answers.'}
+
+Return ONLY a valid JSON array, no other text, no markdown, no explanation:
+[
+  {
+    "questionText": "The full question text here?",
+    "options": ["Option A text", "Option B text", "Option C text", "Option D text"],
+    "correctAnswers": [0],
+    "questionType": "single",
+    "explanation": "Brief explanation of why this is correct"
+  }
+]
+
+Rules:
+- correctAnswers is an array of 0-based indices of correct options
+- questionType must be "single" or "multiple"
+- For "single" type, correctAnswers has exactly 1 index
+- For "multiple" type, correctAnswers has 2+ indices
+- Make options plausible and similar in length
+- No trivial questions — test real understanding
+- No duplicate questions`;
+
+  try {
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 4000,
+        messages: [{ role: 'user', content: prompt }]
+      })
+    });
+
+    if (!response.ok) {
+      const err = await response.json();
+      throw new Error(err.error?.message || 'API error ' + response.status);
+    }
+
+    const data = await response.json();
+    const raw = data.content?.find(c => c.type === 'text')?.text || '';
+
+    // Parse JSON — strip any markdown fences if present
+    const clean = raw.replace(/```json|\n```|```/g, '').trim();
+    const start = clean.indexOf('['), end = clean.lastIndexOf(']');
+    if (start === -1 || end === -1) throw new Error('AI returned unexpected format. Please try again.');
+    const questions = JSON.parse(clean.slice(start, end + 1));
+
+    if (!Array.isArray(questions) || questions.length === 0) {
+      throw new Error('No questions generated. Try a different topic.');
+    }
+
+    // Attach marks and validate
+    _aiGeneratedQuestions = questions.map(q => ({
+      ...q,
+      marks,
+      questionType: q.questionType || (q.correctAnswers?.length > 1 ? 'multiple' : 'single'),
+      correctAnswers: Array.isArray(q.correctAnswers) ? q.correctAnswers : [q.correctAnswers]
+    }));
+
+    // Show preview
+    const L = ['A','B','C','D'];
+    document.getElementById('ai-preview-count').textContent = _aiGeneratedQuestions.length + ' questions';
+    document.getElementById('ai-preview-list').innerHTML = _aiGeneratedQuestions.map((q, i) => `
+      <div style="border:1.5px solid var(--border);border-radius:10px;padding:14px;background:var(--bg)">
+        <div style="font-size:13px;font-weight:600;margin-bottom:9px;line-height:1.5">
+          Q${i+1}
+          <span style="font-size:10px;padding:2px 7px;border-radius:20px;font-weight:600;margin-left:6px;${q.questionType==='multiple'?'background:#ede9fe;color:#7c3aed':'background:#f0f9ff;color:#0369a1'}">${q.questionType.toUpperCase()}</span>
+          ${q.questionText}
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:7px">
+          ${q.options.map((o, oi) => `<span style="padding:4px 9px;border-radius:6px;font-size:12px;font-weight:500;${q.correctAnswers.includes(oi)?'background:#f0fdf4;color:#166534;border:1px solid #bbf7d0':'background:#fff;color:var(--text-light);border:1px solid var(--border)'}">${L[oi]}) ${o}${q.correctAnswers.includes(oi)?' ✓':''}</span>`).join('')}
+        </div>
+        ${q.explanation ? `<div style="font-size:11px;color:var(--text-muted);margin-top:6px;padding:6px 10px;background:#fff;border-radius:6px;border-left:3px solid #7c3aed">💡 ${q.explanation}</div>` : ''}
+      </div>
+    `).join('');
+
+    previewDiv.style.display = 'block';
+    addBtn.style.display = 'flex';
+
+  } catch(e) {
+    errEl.textContent = 'Generation failed: ' + e.message;
+    errEl.style.display = 'block';
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg> Regenerate`;
+  }
+}
+
+async function addAIQuestionsToQuiz(quizId) {
+  const btn = document.getElementById('ai-add-btn');
+  if (!_aiGeneratedQuestions.length) return;
+  btn.disabled = true;
+  btn.textContent = 'Adding…';
+
+  let added = 0, failed = 0;
+  for (const q of _aiGeneratedQuestions) {
+    try {
+      const body = {
+        questionText: q.questionText,
+        options: q.options,
+        questionType: q.questionType,
+        marks: q.marks || 1,
+        explanation: q.explanation || null,
+      };
+      if (q.questionType === 'multiple') {
+        body.correctAnswers = q.correctAnswers;
+      } else {
+        body.correctAnswer = q.correctAnswers[0];
+      }
+      await api('POST', `/api/lecturer/quizzes/${quizId}/questions`, body);
+      added++;
+    } catch(e) {
+      failed++;
+    }
+  }
+
+  document.getElementById('ai-gen-overlay')?.remove();
+  toast(added + ' question' + (added !== 1 ? 's' : '') + ' added!' + (failed ? ' (' + failed + ' failed)' : ''), added > 0 ? 'ok' : 'err');
+  await openQuizQuestionsPanel(quizId);
+}
+
 </script>
 </body>
 </html>
