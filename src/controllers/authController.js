@@ -442,8 +442,8 @@ exports.login = async (req, res) => {
     const company = await Company.findById(user.company);
 
     if (portalMode && company && company.mode !== portalMode && user.role !== "superadmin") {
-      const correctPortal = company.mode === "corporate" ? "Corporate Admin Portal" : "Academic Admin Portal";
-      return res.status(403).json({ error: `Your institution is set up as ${company.mode}. Please use the ${correctPortal} to sign in.` });
+      // Don't reveal which portal is correct — generic error
+      return res.status(401).json({ error: "Invalid credentials" });
     }
 
     // ── Role-portal enforcement ──────────────────────────────────────────────
@@ -457,18 +457,9 @@ exports.login = async (req, res) => {
     };
     if (loginRole && PORTAL_ALLOWED_ROLES[loginRole]) {
       const allowed = PORTAL_ALLOWED_ROLES[loginRole];
+      // Wrong portal — return same error as wrong password (don't reveal account exists)
       if (!allowed.includes(user.role)) {
-        // Give a specific helpful message depending on what they tried
-        if (loginRole === "lecturer" && ["admin", "superadmin"].includes(user.role)) {
-          return res.status(403).json({ error: "You are registered as an Admin. Please use the Admin Portal to sign in." });
-        }
-        if (loginRole === "admin" && user.role === "lecturer") {
-          return res.status(403).json({ error: "You are registered as a Lecturer. Please use the Lecturer Portal to sign in." });
-        }
-        if (loginRole === "admin" && user.role === "employee") {
-          return res.status(403).json({ error: "You are registered as an Employee. Please use the Employee Portal to sign in." });
-        }
-        return res.status(403).json({ error: `This portal is for ${loginRole}s only. Please use the correct portal to sign in.` });
+        return res.status(401).json({ error: "Invalid credentials" });
       }
     }
     // ────────────────────────────────────────────────────────────────────────
