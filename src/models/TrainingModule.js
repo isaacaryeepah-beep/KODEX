@@ -20,8 +20,9 @@ const trainingModuleSchema = new mongoose.Schema(
     content:     { type: String, default: "" },   // Rich text / markdown body
     videoUrl:    { type: String, default: "" },   // Optional video link
     questions:   [questionSchema],                // Assessment questions
-    passingScore: { type: Number, default: 70 },  // % required to pass
-    dueInDays:   { type: Number, default: 7 },    // Days from assignment to complete
+    passingScore:      { type: Number, default: 70 },  // % required to pass
+    dueInDays:         { type: Number, default: 7 },    // Days from assignment to complete
+    timeLimitMinutes:  { type: Number, default: null }, // null = no time limit
     isActive:    { type: Boolean, default: true },
     createdBy:   { type: mongoose.Schema.Types.ObjectId, ref: "User" },
     // Which roles must complete this
