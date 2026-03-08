@@ -261,6 +261,54 @@ async function sendRenewalReminder({ email, name, plan, endDate }) {
   return send({ to: email, subject: `⏰ Your KODEX subscription expires on ${endStr}`, html });
 }
 
+// ── Password Reset OTP Email ──────────────────────────────────────────────────
+async function sendPasswordReset({ email, name, resetCode, role, institutionName }) {
+  const roleLabel = role === 'admin' || role === 'superadmin' ? 'Admin' :
+                    role === 'lecturer' ? 'Lecturer' :
+                    role === 'manager' ? 'Manager' : 'Employee';
+  const html = wrap(`
+    <h1>Password Reset Request 🔐</h1>
+    <p>Hi <span class="highlight">${name || email}</span>, we received a request to reset your password${institutionName ? ` for <strong>${institutionName}</strong>` : ''}.</p>
+
+    <div class="info-box" style="text-align:center">
+      <p style="font-size:13px;color:#6b7280;margin-bottom:8px">YOUR RESET CODE</p>
+      <p style="font-size:36px;font-weight:800;letter-spacing:10px;color:#4f46e5;margin:0">${resetCode}</p>
+      <p style="font-size:12px;color:#9ca3af;margin-top:8px">Valid for 1 hour · Do not share this code</p>
+    </div>
+
+    <p>Enter this code on the KODEX password reset page to set a new password.</p>
+    <p>If you did not request this reset, you can safely ignore this email — your password has not changed.</p>
+
+    <hr class="divider"/>
+    <p style="font-size:12px;color:#9ca3af">This code expires in 1 hour. If you need a new code, request another reset from the login page.</p>
+  `, `KODEX Password Reset Code: ${resetCode}`);
+
+  return send({ to: email, subject: `🔐 Your KODEX password reset code: ${resetCode}`, html });
+}
+
+// ── Admin: User password reset notification ───────────────────────────────────
+async function sendAdminPasswordResetNotice({ adminEmail, adminName, targetUserName, targetUserRole, targetUserEmail, institutionName }) {
+  const html = wrap(`
+    <h1>Password Reset Performed 🔔</h1>
+    <p>Hi <span class="highlight">${adminName}</span>, this is a notification that a password reset was completed on your institution <strong>${institutionName}</strong>.</p>
+
+    <div class="info-box">
+      <p><strong>User:</strong> ${targetUserName}</p>
+      <p><strong>Role:</strong> ${targetUserRole}</p>
+      <p><strong>Email / ID:</strong> ${targetUserEmail}</p>
+      <p><strong>Time:</strong> ${new Date().toLocaleString()}</p>
+    </div>
+
+    <p>If you did not expect this reset, please review your institution's user activity in the KODEX admin panel.</p>
+
+    <div style="text-align:center;margin:28px 0">
+      <a href="${BASE_URL}" class="btn btn-primary">Open KODEX →</a>
+    </div>
+  `, `Password reset notification — ${targetUserName}`);
+
+  return send({ to: adminEmail, subject: `🔔 KODEX: Password reset by ${targetUserName}`, html });
+}
+
 module.exports = {
   sendWelcome,
   sendTrialEndingSoon,
@@ -268,4 +316,6 @@ module.exports = {
   sendGraceNudge,
   sendSubscriptionConfirmed,
   sendRenewalReminder,
+  sendPasswordReset,
+  sendAdminPasswordResetNotice,
 };
