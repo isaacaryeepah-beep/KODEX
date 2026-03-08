@@ -183,3 +183,59 @@ exports.getAttemptDetail = async (req, res) => {
     res.status(500).json({ error: "Failed to fetch attempt" });
   }
 };
+
+// ── Admin: delete any quiz (no createdBy restriction) ────────────────────────
+exports.deleteQuiz = async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(id))
+      return res.status(400).json({ error: "Invalid quiz ID" });
+
+    const quiz = await Quiz.findOne({ _id: id, company: req.user.company });
+    if (!quiz) return res.status(404).json({ error: "Quiz not found" });
+
+    const attempts = await Attempt.find({ quiz: id });
+    const attemptIds = attempts.map(a => a._id);
+    await Answer.deleteMany({ attempt: { $in: attemptIds } });
+    await Attempt.deleteMany({ quiz: id });
+    await Question.deleteMany({ quiz: id });
+    await Quiz.deleteOne({ _id: id });
+
+    res.json({ message: "Quiz deleted" });
+  } catch (e) {
+    console.error("Admin deleteQuiz error:", e);
+    res.status(500).json({ error: "Failed to delete quiz" });
+  }
+};
+
+// ── Admin: find duplicate quizzes (same title, same company) ─────────────────
+exports.getDuplicates = async (req, res) => {
+  try {
+    const dupes = await Quiz.aggregate([
+      { $match: { company: req.user.company } },
+      { $group: {
+          _id: { title: { $toLower: "$title" } },
+          count: { $sum: 1 },
+          quizzes: { $push: { id: "$_id", title: "$title", createdAt: "$createdAt", createdBy: "$createdBy", type: "$type" } }
+      }},
+      { $match: { count: { $gt: 1 } } },
+      { $sort: { count: -1 } },
+    ]);
+
+    // Populate createdBy names
+    const User = require("../models/User");
+    for (const group of dupes) {
+      for (const q of group.quizzes) {
+        if (q.createdBy) {
+          const u = await User.findById(q.createdBy).select("name").lean();
+          q.createdByName = u?.name || "Unknown";
+        }
+      }
+    }
+
+    res.json({ duplicates: dupes });
+  } catch (e) {
+    console.error("getDuplicates error:", e);
+    res.status(500).json({ error: "Failed to find duplicates" });
+  }
+};
