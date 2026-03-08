@@ -218,6 +218,10 @@
 
       <form id="lecturer-forgot-form" class="hidden" onsubmit="event.preventDefault(); handleLecturerForgotPassword();">
         <div class="form-group">
+          <label>Institution Code</label>
+          <input type="text" id="lecturer-forgot-code" placeholder="e.g. ABC123" style="text-transform:uppercase">
+        </div>
+        <div class="form-group">
           <label>Email Address</label>
           <input type="email" id="lecturer-forgot-email" placeholder="lecturer@institution.com">
         </div>
@@ -302,10 +306,37 @@
         </div>
         <button type="submit" class="btn btn-employee">Sign In</button>
         <div class="auth-toggle">
+          <a onclick="showEmployeeForgot()">Forgot password?</a>
+        </div>
+        <div class="auth-toggle">
           <span>Don't have an account?</span>
           <a onclick="showEmployeeRegister()">Register</a>
         </div>
       </form>
+
+      <form id="employee-forgot-form" class="hidden" onsubmit="event.preventDefault(); handleEmployeeForgotPassword();">
+        <div class="form-group">
+          <label>Institution Code</label>
+          <input type="text" id="employee-forgot-code" placeholder="e.g. ABC123" style="text-transform:uppercase">
+        </div>
+        <div class="form-group">
+          <label>Email Address</label>
+          <input type="email" id="employee-forgot-email" placeholder="you@company.com">
+        </div>
+        <div id="employee-reset-code-group" class="form-group hidden">
+          <label>Reset Code</label>
+          <input type="text" id="employee-reset-code" placeholder="6-digit reset code" maxlength="6">
+        </div>
+        <div id="employee-new-password-group" class="form-group hidden">
+          <label>New Password</label>
+          <input type="password" id="employee-new-password" placeholder="Min 8 characters">
+        </div>
+        <button type="submit" class="btn btn-employee" id="employee-forgot-btn">Request Reset Code</button>
+        <div class="auth-toggle">
+          <a onclick="showEmployeeLogin()">Back to Sign In</a>
+        </div>
+      </form>
+
       <form id="employee-register-form" class="hidden" onsubmit="event.preventDefault(); handleEmployeeRegister();">
         <div class="form-group">
           <label>Full Name</label>
