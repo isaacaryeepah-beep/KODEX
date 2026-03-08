@@ -248,3 +248,90 @@ exports.bulkAction = async (req, res) => {
     res.status(500).json({ error: "Failed to perform bulk action" });
   }
 };
+
+exports.getResetLogs = async (req, res) => {
+  try {
+    const users = await User.find({
+      company: req.user.company,
+      "passwordResetLog.0": { $exists: true },
+    }).select("name email indexNumber role passwordResetLog").lean();
+
+    // Flatten all logs into one list sorted by most recent
+    const logs = [];
+    for (const user of users) {
+      for (const log of (user.passwordResetLog || [])) {
+        logs.push({
+          userId:    user._id,
+          userName:  user.name || user.email || user.indexNumber,
+          userRole:  user.role,
+          userEmail: user.email || user.indexNumber,
+          resetAt:   log.resetAt,
+          ipAddress: log.ipAddress,
+          userAgent: log.userAgent,
+          method:    log.method,
+          resetBy:   log.resetBy,
+        });
+      }
+    }
+    logs.sort((a, b) => new Date(b.resetAt) - new Date(a.resetAt));
+    res.json({ logs });
+  } catch (error) {
+    console.error("Get reset logs error:", error);
+    res.status(500).json({ error: "Failed to fetch reset logs" });
+  }
+};
+
+exports.adminResetStudentPassword = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const target = await require('../models/User').findOne({ _id: id, company: req.user.company });
+    if (!target) return res.status(404).json({ error: "User not found" });
+
+    // Generate a memorable temp password: INSTITUTIONCODE-6digits
+    const crypto = require('crypto');
+    const digits = String(crypto.randomInt(100000, 999999));
+    const institutionCode = req.user.company?.institutionCode || 'KODEX';
+    const tempPassword = `${institutionCode}-${digits}`;
+
+    target.password = tempPassword;
+    target.mustChangePassword = true;
+    if (!target.passwordResetLog) target.passwordResetLog = [];
+    target.passwordResetLog.push({
+      resetAt: new Date(),
+      ipAddress: req.ip || req.headers['x-forwarded-for'] || '',
+      userAgent: req.headers['user-agent'] || '',
+      method: 'admin',
+      resetBy: req.user.name || req.user.email || 'Admin',
+    });
+    await target.save();
+
+    res.json({
+      message: "Temporary password generated. Give this to the student.",
+      tempPassword,
+      userName: target.name,
+      userEmail: target.email || target.indexNumber,
+    });
+  } catch (error) {
+    console.error("Admin reset student password error:", error);
+    res.status(500).json({ error: "Failed to reset password" });
+  }
+};
+
+exports.changePasswordAfterReset = async (req, res) => {
+  try {
+    const { newPassword } = req.body;
+    if (!newPassword || newPassword.length < 8) {
+      return res.status(400).json({ error: "New password must be at least 8 characters" });
+    }
+    const user = await require('../models/User').findById(req.user._id).select('+password');
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    user.password = newPassword;
+    user.mustChangePassword = false;
+    await user.save();
+    res.json({ message: "Password changed successfully." });
+  } catch (error) {
+    console.error("Change password after reset error:", error);
+    res.status(500).json({ error: "Failed to change password" });
+  }
+};
