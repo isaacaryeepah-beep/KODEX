@@ -39,7 +39,7 @@ router.get("/modules", ...mw, async (req, res) => {
 // CREATE module
 router.post("/modules", ...mw, canManage, async (req, res) => {
   try {
-    const { title, description, type, content, videoUrl, questions, passingScore, dueInDays, targetRoles, departments } = req.body;
+    const { title, description, type, content, videoUrl, questions, passingScore, dueInDays, timeLimitMinutes, targetRoles, departments } = req.body;
     if (!title) return res.status(400).json({ error: "Title is required" });
 
     const module = await TrainingModule.create({
@@ -48,6 +48,7 @@ router.post("/modules", ...mw, canManage, async (req, res) => {
       questions: questions || [],
       passingScore: passingScore || 70,
       dueInDays: dueInDays || 7,
+      timeLimitMinutes: timeLimitMinutes ? parseInt(timeLimitMinutes) : null,
       targetRoles: targetRoles || ["employee"],
       departments: departments || [],
       createdBy: req.user._id,
@@ -186,7 +187,7 @@ router.get("/my", ...mw, async (req, res) => {
     );
 
     const progress = await TrainingProgress.find({ employee: req.user._id })
-      .populate("module", "title description type passingScore dueInDays videoUrl content questions")
+      .populate("module", "title description type passingScore dueInDays timeLimitMinutes videoUrl content questions")
       .sort({ status: 1, createdAt: -1 });
 
     res.json({ progress });
