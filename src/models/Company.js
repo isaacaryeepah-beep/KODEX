@@ -89,6 +89,22 @@ const companySchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
+    // ── White-label Branding ──────────────────────────────────
+    branding: {
+      logoUrl:        { type: String, default: "" },
+      primaryColor:   { type: String, default: "#6366f1" },
+      accentColor:    { type: String, default: "#4f46e5" },
+      companyTagline: { type: String, default: "" },
+      supportEmail:   { type: String, default: "" },
+      website:        { type: String, default: "" },
+    },
+    // ── Payroll Settings ──────────────────────────────────────
+    payroll: {
+      currency:      { type: String, default: "GHS" },
+      payPeriod:     { type: String, enum: ["weekly","biweekly","monthly"], default: "monthly" },
+      overtimeRate:  { type: Number, default: 1.5 },
+      standardHours: { type: Number, default: 160 },
+    },
   },
   {
     timestamps: true,
