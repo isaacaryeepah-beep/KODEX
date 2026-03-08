@@ -546,12 +546,14 @@ async function handleLecturerForgotPassword() {
   }
 
   if (lecturerForgotStep === 'request') {
+    const institutionCode = document.getElementById('lecturer-forgot-code')?.value.trim().toUpperCase();
     const email = document.getElementById('lecturer-forgot-email').value.trim();
+    if (!institutionCode) return setLecturerForgotMsg('Please enter your institution code', false);
     if (!email) return setLecturerForgotMsg('Please enter your email address', false);
     const btn = document.getElementById('lecturer-forgot-btn');
     btn.textContent = 'Sending...'; btn.disabled = true;
     try {
-      const data = await api('/api/auth/forgot-password-email', { method: 'POST', body: JSON.stringify({ email }) });
+      const data = await api('/api/auth/forgot-password-email', { method: 'POST', body: JSON.stringify({ email, institutionCode }) });
       lecturerForgotEmail = email; lecturerForgotStep = 'reset';
       document.getElementById('lecturer-reset-code-group').classList.remove('hidden');
       document.getElementById('lecturer-new-password-group').classList.remove('hidden');
@@ -868,6 +870,67 @@ function showEmployeeLogin() {
 function showEmployeeRegister() {
   document.getElementById('employee-login-form').classList.add('hidden');
   document.getElementById('employee-register-form').classList.remove('hidden');
+}
+
+function showEmployeeForgot() {
+  document.getElementById('employee-login-form').classList.add('hidden');
+  document.getElementById('employee-register-form').classList.add('hidden');
+  const f = document.getElementById('employee-forgot-form');
+  if (f) f.classList.remove('hidden');
+  document.getElementById('employee-auth-error').textContent = '';
+  employeeForgotStep = 'request';
+  const btn = document.getElementById('employee-forgot-btn');
+  if (btn) btn.textContent = 'Request Reset Code';
+}
+
+function showEmployeeLogin() {
+  const f = document.getElementById('employee-forgot-form');
+  if (f) f.classList.add('hidden');
+  document.getElementById('employee-register-form').classList.add('hidden');
+  document.getElementById('employee-login-form').classList.remove('hidden');
+}
+
+let employeeForgotStep = 'request';
+let employeeForgotEmail = '';
+let employeeForgotCode = '';
+
+async function handleEmployeeForgotPassword() {
+  const errEl = document.getElementById('employee-auth-error');
+  function setMsg(msg, ok) {
+    errEl.textContent = msg;
+    errEl.style.display = 'block';
+    errEl.style.background = ok ? '#f0fdf4' : '#fef2f2';
+    errEl.style.color = ok ? '#15803d' : '#dc2626';
+  }
+  if (employeeForgotStep === 'request') {
+    const institutionCode = document.getElementById('employee-forgot-code')?.value.trim().toUpperCase();
+    const email = document.getElementById('employee-forgot-email')?.value.trim();
+    if (!institutionCode) return setMsg('Please enter your institution code', false);
+    if (!email) return setMsg('Please enter your email address', false);
+    const btn = document.getElementById('employee-forgot-btn');
+    btn.textContent = 'Sending...'; btn.disabled = true;
+    try {
+      const data = await api('/api/auth/forgot-password-email', { method: 'POST', body: JSON.stringify({ email, institutionCode }) });
+      employeeForgotEmail = email; employeeForgotCode = institutionCode; employeeForgotStep = 'reset';
+      document.getElementById('employee-reset-code-group').classList.remove('hidden');
+      document.getElementById('employee-new-password-group').classList.remove('hidden');
+      btn.textContent = 'Reset Password'; btn.disabled = false;
+      setMsg((data.message || 'Code generated.') + (data.resetCode ? ' Your reset code: ' + data.resetCode : ''), true);
+    } catch(e) { btn.textContent = 'Request Reset Code'; btn.disabled = false; setMsg(e.message, false); }
+  } else {
+    const resetCode = document.getElementById('employee-reset-code')?.value.trim();
+    const newPassword = document.getElementById('employee-new-password')?.value;
+    if (!resetCode || !newPassword) return setMsg('Please enter the reset code and new password', false);
+    if (newPassword.length < 8) return setMsg('Password must be at least 8 characters', false);
+    const btn = document.getElementById('employee-forgot-btn');
+    btn.textContent = 'Resetting...'; btn.disabled = true;
+    try {
+      await api('/api/auth/reset-password-email', { method: 'POST', body: JSON.stringify({ email: employeeForgotEmail, institutionCode: employeeForgotCode, resetCode, newPassword }) });
+      employeeForgotStep = 'request';
+      setMsg('✅ Password reset! Redirecting to sign in...', true);
+      setTimeout(() => { showEmployeeLogin(); }, 1800);
+    } catch(e) { btn.textContent = 'Reset Password'; btn.disabled = false; setMsg(e.message, false); }
+  }
 }
 
 async function handleEmployeeLogin() {
@@ -2121,6 +2184,7 @@ async function renderUsers() {
       <div class="page-header"><h2>${pageTitle}</h2><p>${pageDesc}</p></div>
       <div class="actions-bar" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
         ${canManage ? `<button class="btn btn-primary btn-sm" onclick="showCreateUserModal()">${addLabel}</button>` : ''}
+        ${['admin','superadmin'].includes(currentUser.role) ? `<button class="btn btn-sm" style="background:#f59e0b;color:#fff" onclick="renderResetLogs()">🔐 Password Reset Log</button>` : ''}
         ${canManage ? `
           <div id="bulk-actions" style="display:none;gap:8px;align-items:center;margin-left:auto">
             <span id="selected-count" style="font-size:13px;color:var(--text-light)">0 selected</span>
@@ -2159,6 +2223,56 @@ async function renderUsers() {
     `;
   } catch (e) {
     content.innerHTML = `<div class="card"><p>Error: ${e.message}</p></div>`;
+  }
+}
+
+async function renderResetLogs() {
+  const content = document.getElementById('main-content');
+  if (!content) return;
+  content.innerHTML = '<div class="loading">Loading reset logs…</div>';
+  try {
+    const { logs } = await api('/api/users/reset-logs/all');
+    content.innerHTML = `
+      <div class="page-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+        <div><h2>🔐 Password Reset Log</h2><p>All password resets across your institution</p></div>
+        <button class="btn btn-secondary btn-sm" onclick="renderUsers()">← Back to Users</button>
+      </div>
+      <div class="card" style="padding:0;overflow:hidden">
+        ${!logs.length ? `
+          <div style="text-align:center;padding:48px;color:#6b7280">
+            <div style="font-size:36px;margin-bottom:10px">🔒</div>
+            <div style="font-weight:600">No password resets recorded yet</div>
+          </div>
+        ` : `
+          <table>
+            <thead><tr>
+              <th>User</th>
+              <th>Role</th>
+              <th>Email / ID</th>
+              <th>Reset At</th>
+              <th>IP Address</th>
+              <th>Method</th>
+              <th>Device</th>
+            </tr></thead>
+            <tbody>
+              ${logs.map(l => `
+                <tr>
+                  <td style="font-weight:600">${l.userName}</td>
+                  <td><span class="role-badge role-${l.userRole}">${l.userRole}</span></td>
+                  <td style="font-size:12px;color:#6b7280">${l.userEmail}</td>
+                  <td style="font-size:12px;white-space:nowrap">${new Date(l.resetAt).toLocaleString()}</td>
+                  <td style="font-size:12px;font-family:monospace">${l.ipAddress || '—'}</td>
+                  <td><span style="padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600;background:${l.method === 'admin' ? '#fef3c7' : '#f0f9ff'};color:${l.method === 'admin' ? '#92400e' : '#0369a1'}">${l.method === 'admin' ? '👮 Admin' : '👤 Self'}</span></td>
+                  <td style="font-size:11px;color:#9ca3af;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${l.userAgent}">${l.userAgent ? l.userAgent.split(' ').slice(0,3).join(' ') : '—'}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        `}
+      </div>
+    `;
+  } catch(e) {
+    content.innerHTML = `<div class="card"><p style="color:#ef4444">Error: ${e.message}</p></div>`;
   }
 }
 
