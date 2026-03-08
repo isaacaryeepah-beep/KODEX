@@ -466,12 +466,12 @@ async function handleAdminForgotPassword() {
     const btn = document.getElementById('admin-forgot-btn');
     btn.textContent = 'Sending...'; btn.disabled = true;
     try {
-      const data = await api('/api/auth/forgot-password-email', { method: 'POST', body: JSON.stringify({ email }) });
+      const data = await api('/api/auth/forgot-password-admin', { method: 'POST', body: JSON.stringify({ email }) });
       adminForgotEmail = email; adminForgotStep = 'reset';
       document.getElementById('admin-reset-code-group').classList.remove('hidden');
       document.getElementById('admin-new-password-group').classList.remove('hidden');
       btn.textContent = 'Reset Password'; btn.disabled = false;
-      setAdminForgotMsg((data.message || 'Code generated.') + (data.resetCode ? ' Your reset code: ' + data.resetCode : ''), true);
+      setAdminForgotMsg('📧 ' + (data.message || 'Reset code sent. Please check your email inbox.'), true);
     } catch(e) { btn.textContent = 'Request Reset Code'; btn.disabled = false; setAdminForgotMsg(e.message, false); }
   } else {
     const resetCode = document.getElementById('admin-reset-code').value.trim();
@@ -558,7 +558,7 @@ async function handleLecturerForgotPassword() {
       document.getElementById('lecturer-reset-code-group').classList.remove('hidden');
       document.getElementById('lecturer-new-password-group').classList.remove('hidden');
       btn.textContent = 'Reset Password'; btn.disabled = false;
-      setLecturerForgotMsg((data.message || 'Code generated.') + (data.resetCode ? ' Your reset code: ' + data.resetCode : ''), true);
+      setLecturerForgotMsg('📧 ' + (data.message || 'Reset code sent. Please check your email inbox.'), true);
     } catch(e) { btn.textContent = 'Request Reset Code'; btn.disabled = false; setLecturerForgotMsg(e.message, false); }
   } else {
     const resetCode = document.getElementById('lecturer-reset-code').value.trim();
@@ -915,7 +915,7 @@ async function handleEmployeeForgotPassword() {
       document.getElementById('employee-reset-code-group').classList.remove('hidden');
       document.getElementById('employee-new-password-group').classList.remove('hidden');
       btn.textContent = 'Reset Password'; btn.disabled = false;
-      setMsg((data.message || 'Code generated.') + (data.resetCode ? ' Your reset code: ' + data.resetCode : ''), true);
+      setMsg('📧 ' + (data.message || 'Reset code sent. Please check your email inbox.'), true);
     } catch(e) { btn.textContent = 'Request Reset Code'; btn.disabled = false; setMsg(e.message, false); }
   } else {
     const resetCode = document.getElementById('employee-reset-code')?.value.trim();
@@ -1098,7 +1098,7 @@ async function handleStudentForgotPassword() {
       document.getElementById('student-new-password-group').classList.remove('hidden');
       document.getElementById('student-forgot-btn').textContent = 'Reset Password';
       const el = document.getElementById('student-auth-error');
-      el.textContent = data.message + (data.resetCode ? ' Code: ' + data.resetCode : '');
+      el.textContent = data.message + (data.resetCode ? ' Reset code: ' + data.resetCode : '');
       el.style.display = 'block';
       el.style.background = '#f0fdf4';
       el.style.color = '#15803d';
