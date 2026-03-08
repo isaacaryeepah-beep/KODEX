@@ -296,9 +296,9 @@ window.addEventListener('load', () => loadMLLibs().catch(() => {}));
   /* Floating camera preview */
   #floating-cam {
     position: fixed;
-    bottom: 90px; right: 16px;
-    width: 90px; height: 68px;
-    border-radius: 10px;
+    bottom: 100px; right: 12px;
+    width: 72px; height: 54px;
+    border-radius: 8px;
     overflow: hidden;
     border: 2px solid var(--navy3);
     z-index: 100;
@@ -306,6 +306,7 @@ window.addEventListener('load', () => loadMLLibs().catch(() => {}));
     box-shadow: var(--shadow-md);
     touch-action: none;
     transition: border-color 0.3s;
+    opacity: 0.85;
   }
   #floating-cam.cam-green  { border-color: var(--green); }
   #floating-cam.cam-yellow { border-color: var(--yellow); }
@@ -496,8 +497,10 @@ window.addEventListener('load', () => loadMLLibs().catch(() => {}));
     .exam-body { max-width: 740px; margin: 0 auto; }
   }
 
-  /* Extra: prevent zoom on double-tap iOS */
-  * { touch-action: pan-y; }
+  /* Prevent zoom on double-tap iOS — scoped to avoid blocking tap on buttons */
+  input, select, textarea { touch-action: manipulation; }
+  .option-item { touch-action: manipulation; }
+  .btn { touch-action: manipulation; }
   button, a, .option-item { touch-action: manipulation; }
 </style>
 </head>
@@ -1100,15 +1103,26 @@ document.getElementById('cam-back-btn').addEventListener('click', () => {
 async function loadFaceModel() {
   if (state.faceModel) return state.faceModel;
   try {
-    const model = faceDetection.SupportedModels.MediaPipeFaceDetector;
-    const detector = await faceDetection.createDetector(model, {
-      runtime: 'tfjs',
-      maxFaces: 3,
-    });
+    // Timeout after 12s — mobile networks are slow; don't block the exam
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('Model load timeout')), 12000)
+    );
+    const loadPromise = (async () => {
+      const model = faceDetection.SupportedModels.MediaPipeFaceDetector;
+      const detector = await faceDetection.createDetector(model, {
+        runtime: 'tfjs',
+        maxFaces: 3,
+        // Use CPU backend on mobile to avoid GPU memory issues
+        ...(detectClientPlatform() === 'mobile' ? { modelType: 'short' } : {}),
+      });
+      return detector;
+    })();
+    const detector = await Promise.race([loadPromise, timeoutPromise]);
     state.faceModel = detector;
     return detector;
   } catch (e) {
-    console.warn('Face model failed to load:', e);
+    console.warn('[FaceModel] Failed to load:', e.message, '— proctoring via snapshots only');
+    state.faceModelFailed = true;
     return null;
   }
 }
@@ -1199,7 +1213,13 @@ async function initCameraSetup() {
     });
     state.cameraStream = stream;
     video.srcObject = stream;
-    await video.play();
+    video.muted = true;
+    video.setAttribute('playsinline', '');
+    video.setAttribute('webkit-playsinline', '');
+    try { await video.play(); } catch(playErr) {
+      console.warn('[Camera] setup video.play() failed:', playErr.message);
+      setTimeout(() => video.play().catch(() => {}), 300);
+    }
     msg.textContent = 'Camera active. Position your face in the oval.';
 
     // Load face model
@@ -1287,7 +1307,15 @@ document.getElementById('capture-start-btn').addEventListener('click', async () 
     // Transfer stream to exam video
     const examVideo = document.getElementById('exam-video');
     examVideo.srcObject = state.cameraStream;
-    examVideo.play();
+    examVideo.muted = true;
+    examVideo.setAttribute('playsinline', '');
+    examVideo.setAttribute('webkit-playsinline', '');
+    // iOS Safari requires play() in a microtask after srcObject is set
+    try { await examVideo.play(); } catch(playErr) {
+      console.warn('[Camera] examVideo.play() failed:', playErr.message);
+      // Retry once after short delay (iOS Safari quirk)
+      setTimeout(() => examVideo.play().catch(() => {}), 300);
+    }
 
     show('exam-screen');
     document.body.classList.add('exam-active');
