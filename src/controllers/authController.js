@@ -76,6 +76,7 @@ exports.register = async (req, res) => {
         name: user.name,
         role: user.role,
         isApproved: user.isApproved,
+        mustChangePassword: user.mustChangePassword || false,
         company: {
           id: company._id,
           name: company.name,
@@ -164,6 +165,7 @@ exports.registerLecturer = async (req, res) => {
           name: user.name,
           role: user.role,
           isApproved: user.isApproved,
+        mustChangePassword: user.mustChangePassword || false,
           company: {
             id: company._id,
             name: company.name,
@@ -221,6 +223,7 @@ exports.registerLecturer = async (req, res) => {
         name: user.name,
         role: user.role,
         isApproved: user.isApproved,
+        mustChangePassword: user.mustChangePassword || false,
         company: { id: company._id, name: company.name, mode: company.mode },
       },
       message: "Registration successful. Your account is pending admin approval.",
@@ -311,6 +314,7 @@ exports.registerStudent = async (req, res) => {
         name: user.name,
         role: user.role,
         isApproved: user.isApproved,
+        mustChangePassword: user.mustChangePassword || false,
         company: { id: company._id, name: company.name, mode: company.mode },
       },
       token,
@@ -386,6 +390,7 @@ exports.registerEmployee = async (req, res) => {
         name: user.name,
         role: user.role,
         isApproved: user.isApproved,
+        mustChangePassword: user.mustChangePassword || false,
         company: { id: company._id, name: company.name, mode: company.mode },
       },
       message: "Registration successful. Your account is pending admin approval.",
@@ -512,6 +517,7 @@ exports.login = async (req, res) => {
         name: user.name,
         role: user.role,
         isApproved: user.isApproved,
+        mustChangePassword: user.mustChangePassword || false,
         company: company ? {
           id: company._id,
           name: company.name,
