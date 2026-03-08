@@ -3,8 +3,11 @@
 // Checks trial status for every company and sends lifecycle emails
 
 const cron = require('node-cron');
-const Company = require('../models/Company');
-const User    = require('../models/User');
+const Company     = require('../models/Company');
+const User        = require('../models/User');
+const DeviceLock  = require('../models/DeviceLock');
+const QuizSession = require('../models/QuizSession');
+const Quiz        = require('../models/Quiz');
 const {
   sendTrialEndingSoon,
   sendTrialExpired,
@@ -106,16 +109,90 @@ async function runDailyEmails() {
   }
 }
 
+// ── Stale device lock cleanup ─────────────────────────────────────────────────
+// Runs every 5 minutes.
+// A lock is stale if:
+//   - isActive: true
+//   - session lastHeartbeat older than quiz.timeLimit + 10 min grace
+//   - OR session already terminated/completed/expired
+async function cleanStaleLocks() {
+  try {
+    const now = new Date();
+
+    // 1. Release locks whose session is already ended
+    const endedSessions = await QuizSession.find({
+      status: { $in: ['terminated', 'completed', 'expired'] },
+    }).select('_id').lean();
+
+    if (endedSessions.length) {
+      const endedIds = endedSessions.map(s => s._id);
+      const r1 = await DeviceLock.updateMany(
+        { session: { $in: endedIds }, isActive: true },
+        { isActive: false, releasedAt: now, releaseReason: 'expired' }
+      );
+      if (r1.modifiedCount > 0) {
+        console.log(`[LockCleanup] Released ${r1.modifiedCount} lock(s) for ended sessions`);
+      }
+    }
+
+    // 2. Release locks whose heartbeat has gone cold
+    const activeLocks = await DeviceLock.find({ isActive: true })
+      .populate({ path: 'session', select: 'lastHeartbeat status quiz' })
+      .lean();
+
+    const lockIdsToExpire = [];
+    let expiredCount = 0;
+
+    for (const lock of activeLocks) {
+      const session = lock.session;
+      // No session or already ended — release
+      if (!session || session.status !== 'active') {
+        lockIdsToExpire.push(lock._id);
+        continue;
+      }
+
+      const quiz = await Quiz.findById(session.quiz).select('timeLimit').lean();
+      const limitMs = ((quiz?.timeLimit || 60) + 10) * 60 * 1000; // +10 min grace
+      const age = now - new Date(session.lastHeartbeat);
+
+      if (age > limitMs) {
+        lockIdsToExpire.push(lock._id);
+        await QuizSession.findByIdAndUpdate(session._id, {
+          status: 'expired',
+          endedAt: now,
+          terminationReason: 'stale_lock_cleanup',
+        });
+        expiredCount++;
+      }
+    }
+
+    if (lockIdsToExpire.length) {
+      await DeviceLock.updateMany(
+        { _id: { $in: lockIdsToExpire }, isActive: true },
+        { isActive: false, releasedAt: now, releaseReason: 'expired' }
+      );
+      console.log(`[LockCleanup] Expired ${lockIdsToExpire.length} stale lock(s) (${expiredCount} heartbeat timeouts)`);
+    }
+
+  } catch (err) {
+    console.error('[LockCleanup] Error:', err.message);
+  }
+}
+
 // ── Start the cron ─────────────────────────────────────────────────────────────
 function startScheduler() {
-  // Run every day at 08:00 UTC (= 08:00 Ghana time — Ghana is UTC+0)
+  // Daily email check at 08:00 Ghana time
   cron.schedule('0 8 * * *', () => {
     runDailyEmails().catch(err => console.error('[Scheduler] Unhandled error:', err));
-  }, {
-    timezone: 'Africa/Accra',
+  }, { timezone: 'Africa/Accra' });
+
+  // Stale lock cleanup every 5 minutes
+  cron.schedule('*/5 * * * *', () => {
+    cleanStaleLocks().catch(err => console.error('[LockCleanup] Unhandled error:', err));
   });
 
   console.log('[Scheduler] ✅ Email scheduler started — runs daily at 08:00 Accra time');
+  console.log('[Scheduler] ✅ Stale lock cleanup started — runs every 5 minutes');
 }
 
-module.exports = { startScheduler, runDailyEmails };
+module.exports = { startScheduler, runDailyEmails, cleanStaleLocks };
