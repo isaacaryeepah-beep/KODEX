@@ -1,6 +1,26 @@
 const API = '';
 let token = localStorage.getItem('token');
 
+// ── Device fingerprint for 6-hour cross-device logout lock ───────────────────
+function getDeviceFingerprint() {
+  const nav = window.navigator;
+  const raw = [
+    nav.userAgent,
+    nav.language,
+    nav.hardwareConcurrency || '',
+    screen.width, screen.height, screen.colorDepth,
+    nav.platform || '',
+    new Date().getTimezoneOffset(),
+  ].join('|');
+  let hash = 0;
+  for (let i = 0; i < raw.length; i++) {
+    hash = ((hash << 5) - hash + raw.charCodeAt(i)) | 0;
+  }
+  return 'fp_' + Math.abs(hash).toString(16);
+}
+
+
+
 // ══════════════════════════════════════════════════════════════════════════════
 //  OFFLINE LOGIN MODULE
 //  - On successful online login, saves a secure profile to localStorage
@@ -672,7 +692,7 @@ async function handleAdminLogin() {
     if (btn) { btn.textContent = 'Signing in…'; btn.disabled = true; }
 
     const portalMode = selectedPortalType === 'admin-academic' ? 'academic' : 'corporate';
-    const credentials = { email, password, loginRole: 'admin', portalMode };
+    const credentials = { email, password, loginRole: 'admin', portalMode, deviceId: getDeviceFingerprint() };
 
     let data;
     if (!isOnline()) {
@@ -737,7 +757,7 @@ async function handleLecturerLogin() {
     if (!email) return showLecturerError('Please enter your email');
     if (!password) return showLecturerError('Please enter your password');
     if (btn) { btn.textContent = 'Signing in…'; btn.disabled = true; }
-    const credentials = { email, password, loginRole: 'lecturer', portalMode: 'academic' };
+    const credentials = { email, password, loginRole: 'lecturer', portalMode: 'academic', deviceId: getDeviceFingerprint() };
 
     let data;
     if (!isOnline()) {
@@ -860,7 +880,7 @@ async function handleEmployeeLogin() {
     if (!institutionCode) return showEmployeeError('Please enter your institution code');
     if (!password) return showEmployeeError('Please enter your password');
     if (btn) { btn.textContent = 'Signing in…'; btn.disabled = true; }
-    const credentials = { email, password, institutionCode, loginRole: 'employee' };
+    const credentials = { email, password, institutionCode, loginRole: 'employee', deviceId: getDeviceFingerprint() };
 
     let data;
     if (!isOnline()) {
@@ -928,7 +948,7 @@ async function handleStudentLogin() {
     if (!institutionCode) return showStudentError('Please enter your institution code');
     if (!password) return showStudentError('Please enter your password');
     if (btn) { btn.textContent = 'Signing in…'; btn.disabled = true; }
-    const credentials = { indexNumber, password, institutionCode, loginRole: 'student' };
+    const credentials = { indexNumber, password, institutionCode, loginRole: 'student', deviceId: getDeviceFingerprint() };
 
     let data;
     if (!isOnline()) {
