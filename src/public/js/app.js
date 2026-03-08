@@ -1066,6 +1066,7 @@ async function handleLogout() {
   try {
     if (isOnline()) await api('/api/auth/logout', { method: 'POST' });
   } catch (e) {}
+  resetBranding();
   token = null;
   currentUser = null;
   localStorage.removeItem('token');
@@ -1122,6 +1123,68 @@ function getPortalName(role) {
 function getPortalAttr(role) {
   if (role === 'superadmin' || role === 'admin') return 'admin';
   return role;
+}
+
+// ── Apply company white-label branding ────────────────────────────────────────
+async function applyBranding() {
+  try {
+    const mode = currentUser?.company?.mode;
+    if (mode !== 'corporate') return; // academic portals use default branding
+
+    const { branding, companyName } = await api('/api/advanced/branding');
+    if (!branding) return;
+
+    const root = document.documentElement;
+
+    // Apply primary color CSS variables
+    if (branding.primaryColor) {
+      root.style.setProperty('--primary', branding.primaryColor);
+      root.style.setProperty('--primary-dark', branding.accentColor || branding.primaryColor);
+      // Generate a light version for hover/backgrounds
+      root.style.setProperty('--primary-light', branding.primaryColor + '20');
+    }
+
+    // Inject logo into topbar if provided
+    if (branding.logoUrl) {
+      const topbarLeft = document.querySelector('.topbar-left');
+      if (topbarLeft) {
+        // Insert logo before the portal name h2
+        const h2 = topbarLeft.querySelector('h2');
+        if (h2 && !document.getElementById('brand-logo')) {
+          const img = document.createElement('img');
+          img.id = 'brand-logo';
+          img.src = branding.logoUrl;
+          img.alt = companyName || 'Logo';
+          img.style.cssText = 'height:28px;width:auto;border-radius:4px;margin-right:4px;vertical-align:middle';
+          img.onerror = () => img.remove(); // silently hide if URL broken
+          topbarLeft.insertBefore(img, h2);
+        }
+      }
+    }
+
+    // Update page title with company name
+    if (companyName) {
+      document.title = `${companyName} | KODEX`;
+    }
+
+    // Store branding for re-use (e.g. preview in settings)
+    window._kodexBranding = branding;
+
+  } catch (e) {
+    // Branding is non-critical — fail silently
+    console.warn('[Branding] Could not apply branding:', e.message);
+  }
+}
+
+// ── Reset branding to defaults on logout ──────────────────────────────────────
+function resetBranding() {
+  const root = document.documentElement;
+  root.style.removeProperty('--primary');
+  root.style.removeProperty('--primary-dark');
+  root.style.removeProperty('--primary-light');
+  document.getElementById('brand-logo')?.remove();
+  document.title = 'KODEX';
+  window._kodexBranding = null;
 }
 
 function showDashboard(data) {
@@ -1181,6 +1244,7 @@ function showDashboard(data) {
     }
 
     buildSidebar();
+    applyBranding(); // async — applies colors/logo in background
     navigateTo('dashboard');
   } catch (e) {
     console.error('Dashboard error:', e);
