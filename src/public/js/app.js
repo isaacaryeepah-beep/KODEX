@@ -1250,7 +1250,83 @@ function resetBranding() {
   window._kodexBranding = null;
 }
 
+function showForceChangePassword() {
+  // Hide auth, show a full-screen forced change overlay
+  document.getElementById('auth-page').style.display = 'none';
+  const dashPage = document.getElementById('dashboard-page');
+  dashPage.classList.remove('hidden');
+
+  // Build a minimal locked UI
+  const mc = document.getElementById('main-content');
+  const sidebar = document.getElementById('sidebar-nav');
+  if (sidebar) sidebar.innerHTML = '';
+  const topbarLeft = document.querySelector('.topbar-left');
+  if (topbarLeft) topbarLeft.innerHTML = `<h2 style="font-size:16px;font-weight:700">KODEX</h2>`;
+
+  if (mc) mc.innerHTML = `
+    <div style="min-height:80vh;display:flex;align-items:center;justify-content:center;padding:24px">
+      <div style="background:#fff;border-radius:20px;padding:40px 36px;max-width:420px;width:100%;box-shadow:0 8px 40px rgba(99,102,241,0.12);text-align:center;border:1.5px solid #ede9fe">
+        <div style="width:64px;height:64px;background:linear-gradient(135deg,#6366f1,#8b5cf6);border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 20px;font-size:28px">🔐</div>
+        <h2 style="font-size:22px;font-weight:800;margin-bottom:8px;color:#1e1b4b">Set Your New Password</h2>
+        <p style="color:#6b7280;font-size:14px;margin-bottom:28px;line-height:1.6">Your account has been assigned a temporary password by your administrator.<br>Please set a new password to continue.</p>
+
+        <div id="force-change-error" style="display:none;background:#fef2f2;border:1px solid #fecaca;color:#dc2626;padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:16px"></div>
+
+        <div style="text-align:left;margin-bottom:14px">
+          <label style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#6b7280;display:block;margin-bottom:6px">New Password</label>
+          <input id="force-new-password" type="password" placeholder="At least 8 characters"
+            style="width:100%;padding:11px 14px;border:1.5px solid #e5e7eb;border-radius:10px;font-size:14px;outline:none;box-sizing:border-box"
+            onfocus="this.style.borderColor='#6366f1'" onblur="this.style.borderColor='#e5e7eb'">
+        </div>
+        <div style="text-align:left;margin-bottom:24px">
+          <label style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#6b7280;display:block;margin-bottom:6px">Confirm Password</label>
+          <input id="force-confirm-password" type="password" placeholder="Repeat your new password"
+            style="width:100%;padding:11px 14px;border:1.5px solid #e5e7eb;border-radius:10px;font-size:14px;outline:none;box-sizing:border-box"
+            onfocus="this.style.borderColor='#6366f1'" onblur="this.style.borderColor='#e5e7eb'">
+        </div>
+
+        <button onclick="submitForceChangePassword()"
+          style="width:100%;padding:13px;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer;letter-spacing:.3px">
+          Set New Password →
+        </button>
+        <p style="font-size:12px;color:#9ca3af;margin-top:16px">You cannot access the portal until you set a new password.</p>
+      </div>
+    </div>
+  `;
+}
+
+async function submitForceChangePassword() {
+  const newPassword = document.getElementById('force-new-password')?.value;
+  const confirmPassword = document.getElementById('force-confirm-password')?.value;
+  const errEl = document.getElementById('force-change-error');
+
+  function showErr(msg) {
+    errEl.textContent = msg; errEl.style.display = 'block';
+  }
+
+  if (!newPassword || !confirmPassword) return showErr('Please fill in both fields.');
+  if (newPassword.length < 8) return showErr('Password must be at least 8 characters.');
+  if (newPassword !== confirmPassword) return showErr('Passwords do not match.');
+
+  try {
+    await api('/api/users/change-password-after-reset', { method: 'POST', body: JSON.stringify({ newPassword }) });
+    currentUser.mustChangePassword = false;
+    toast('✅ Password updated! Welcome to KODEX.', 'ok');
+    // Re-fetch user data and show dashboard properly
+    const data = await api('/api/auth/me');
+    currentUser = data.user;
+    showDashboard(data);
+  } catch(e) {
+    showErr(e.message || 'Failed to update password. Please try again.');
+  }
+}
+
 function showDashboard(data) {
+  // If admin forced a password reset, intercept and show change screen
+  if (currentUser?.mustChangePassword) {
+    showForceChangePassword();
+    return;
+  }
   try {
     document.getElementById('auth-page').style.display = 'none';
     const dashPage = document.getElementById('dashboard-page');
@@ -2213,6 +2289,7 @@ async function renderUsers() {
                   ${u.isActive
                     ? `<button class="btn btn-sm" style="background:#f59e0b;color:#fff;font-size:11px" onclick="deactivateUser('${u._id}')">Deactivate</button>`
                     : `<button class="btn btn-sm" style="background:#22c55e;color:#fff;font-size:11px" onclick="activateUser('${u._id}')">Activate</button>`}
+                  ${u.role === 'student' ? `<button class="btn btn-sm" style="background:#6366f1;color:#fff;font-size:11px" onclick="adminResetStudentPassword('${u._id}', '${u.name.replace(/'/g, "\\'")}')" title="Generate temp password">🔑 Reset</button>` : ''}
                   <button class="btn btn-danger btn-sm" style="font-size:11px" onclick="deleteUserPermanently('${u._id}', '${u.name.replace(/'/g, "\\'")}')">Delete</button>
                 </td>` : ''}
               </tr>
@@ -2387,6 +2464,42 @@ async function bulkUserAction(action) {
     renderUsers();
   } catch (e) {
     alert(e.message);
+  }
+}
+
+async function adminResetStudentPassword(userId, userName) {
+  if (!confirm(`Reset password for ${userName}?\n\nThis will generate a temporary password that they must change on next login.`)) return;
+  try {
+    const data = await api(`/api/users/${userId}/admin-reset-password`, { method: 'POST' });
+    // Show styled modal with the temp password
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px';
+    overlay.innerHTML = `
+      <div style="background:#fff;border-radius:16px;padding:32px;max-width:420px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,0.3);text-align:center">
+        <div style="width:56px;height:56px;background:#ede9fe;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 16px;font-size:24px">🔑</div>
+        <h3 style="font-size:18px;font-weight:800;margin-bottom:6px">Temporary Password Ready</h3>
+        <p style="color:#6b7280;font-size:13px;margin-bottom:20px">Give this password to <strong>${data.userName}</strong>. They will be required to change it on first login.</p>
+        <div style="background:#f5f3ff;border:2px dashed #8b5cf6;border-radius:10px;padding:16px;margin-bottom:20px">
+          <p style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#7c3aed;margin-bottom:8px">Temporary Password</p>
+          <p id="temp-pw-display" style="font-size:24px;font-weight:800;font-family:monospace;letter-spacing:3px;color:#4f46e5;margin:0">${data.tempPassword}</p>
+        </div>
+        <div style="display:flex;gap:10px;justify-content:center">
+          <button onclick="navigator.clipboard.writeText('${data.tempPassword}').then(()=>this.textContent='✅ Copied!')" 
+            style="padding:10px 20px;background:#6366f1;color:#fff;border:none;border-radius:8px;font-weight:600;cursor:pointer;font-size:14px">
+            📋 Copy Password
+          </button>
+          <button onclick="this.closest('[style*=fixed]').remove()" 
+            style="padding:10px 20px;background:#f3f4f6;color:#374151;border:none;border-radius:8px;font-weight:600;cursor:pointer;font-size:14px">
+            Done
+          </button>
+        </div>
+        <p style="font-size:11px;color:#9ca3af;margin-top:16px">⚠️ This password will not be shown again</p>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+  } catch(e) {
+    toast('Failed to reset password: ' + e.message, 'err');
   }
 }
 
