@@ -15,5 +15,7 @@ router.get("/reports", ctrl.getReports);
 router.get("/", ctrl.listQuizzes);
 router.get("/:id", ctrl.getQuiz);
 router.get("/:id/attempts/:attemptId", ctrl.getAttemptDetail);
+router.get("/utils/duplicates", ctrl.getDuplicates);
+router.delete("/:id", ctrl.deleteQuiz);
 
 module.exports = router;
