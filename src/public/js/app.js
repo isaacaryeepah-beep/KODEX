@@ -7801,7 +7801,7 @@ async function renderBranding() {
           <div>
             <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:4px">Currency</label>
             <select id="pr-currency" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
-              ${['GHS','USD','EUR','GBP','NGN','KES','ZAR'].map(c=>`<option value="${c}">Gfs${c}</option>`).join('')}
+              ${['GHS','USD','EUR','GBP','NGN','KES','ZAR'].map(c=>`<option value="${c}">${c}</option>`).join('')}
             </select>
           </div>
           <div>
