@@ -101,7 +101,7 @@ const companySchema = new mongoose.Schema(
     // ── Payroll Settings ──────────────────────────────────────
     payroll: {
       currency:      { type: String, default: "GHS" },
-      payPeriod:     { type: String, enum: ["weekly","biweekly","monthly"], default: "monthly" },
+      payPeriod:     { type: String, default: "monthly" },
       overtimeRate:  { type: Number, default: 1.5 },
       standardHours: { type: Number, default: 160 },
     },
