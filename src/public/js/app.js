@@ -7427,3 +7427,513 @@ async function renderMyAssets() {
     content.innerHTML = `<div class="card"><p style="color:#ef4444">Error: ${e.message}</p></div>`;
   }
 }
+
+// ══════════════════════════════════════════════════════════════════════════════
+//  CORPORATE PHASE 5 — ADVANCED (Multi-branch, Branding, Payroll, Analytics)
+// ══════════════════════════════════════════════════════════════════════════════
+
+// ── Patch buildSidebar for Phase 5 ───────────────────────────────────────────
+const _p5BuildSidebar = buildSidebar;
+buildSidebar = function() {
+  _p5BuildSidebar();
+  const role = currentUser?.role;
+  const mode = currentUser?.company?.mode;
+  if (mode !== 'corporate' || !['admin','superadmin'].includes(role)) return;
+
+  const icons = {
+    analytics: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="18" y="3" width="4" height="18"/><rect x="10" y="8" width="4" height="13"/><rect x="2" y="13" width="4" height="8"/></svg>`,
+    branches:  `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="3"/><line x1="12" y1="8" x2="12" y2="12"/><circle cx="6" cy="17" r="3"/><circle cx="18" cy="17" r="3"/><path d="M12 12 L6 14"/><path d="M12 12 L18 14"/></svg>`,
+    branding:  `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>`,
+    payroll:   `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>`,
+  };
+
+  const assetLink = document.getElementById('nav-assets');
+  const anchor = assetLink || document.querySelector('.sidebar-nav a:last-child');
+  if (!anchor) return;
+
+  [
+    ['nav-analytics',  icons.analytics, 'Analytics',   'analytics'],
+    ['nav-branches',   icons.branches,  'Branches',    'branches'],
+    ['nav-branding',   icons.branding,  'Branding',    'branding'],
+    ['nav-payroll-exp',icons.payroll,   'Payroll Export','payroll-export'],
+  ].forEach(([id, icon, label, view]) => {
+    if (!document.getElementById(id)) {
+      const a = document.createElement('a');
+      a.id = id;
+      a.innerHTML = `${icon} <span>${label}</span>`;
+      a.onclick = () => navigateTo(view);
+      anchor.insertAdjacentElement('afterend', a);
+    }
+  });
+};
+
+// ── Patch navigateTo for Phase 5 ─────────────────────────────────────────────
+const _p5NavigateTo = navigateTo;
+navigateTo = function(view) {
+  if (view === 'analytics')     { currentView = view; _setNavActive(view); renderAnalytics(); return; }
+  if (view === 'branches')      { currentView = view; _setNavActive(view); renderBranches(); return; }
+  if (view === 'branding')      { currentView = view; _setNavActive(view); renderBranding(); return; }
+  if (view === 'payroll-export'){ currentView = view; _setNavActive('payroll-exp'); renderPayrollExport(); return; }
+  _p5NavigateTo(view);
+};
+
+// ── Mini chart helper (pure CSS bar chart) ────────────────────────────────────
+function _miniBarChart(data, labelKey, valueKey, colorFn) {
+  if (!data || !data.length) return '<p style="color:#9ca3af;font-size:12px">No data</p>';
+  const max = Math.max(...data.map(d => d[valueKey]));
+  return data.map(d => {
+    const pct = max > 0 ? Math.round((d[valueKey] / max) * 100) : 0;
+    const color = colorFn ? colorFn(d) : 'var(--primary)';
+    return `
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+        <div style="font-size:12px;color:#6b7280;min-width:80px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${d[labelKey] || '—'}</div>
+        <div style="flex:1;background:#f3f4f6;border-radius:4px;height:14px">
+          <div style="background:${color};height:14px;border-radius:4px;width:${pct}%;transition:width .4s"></div>
+        </div>
+        <div style="font-size:12px;font-weight:700;min-width:30px;text-align:right">${d[valueKey]}</div>
+      </div>`;
+  }).join('');
+}
+
+// ══════════════════════════════════════════════════════════════
+// ANALYTICS DASHBOARD
+// ══════════════════════════════════════════════════════════════
+async function renderAnalytics() {
+  const content = document.getElementById('main-content');
+  content.innerHTML = '<div class="loading">Loading analytics…</div>';
+  try {
+    const data = await api('/api/advanced/analytics');
+    const { headcount, leave, training, performance, expenses, timesheets } = data;
+
+    const leaveMap = {};
+    (leave.byStatus || []).forEach(l => leaveMap[l._id] = l.count);
+    const expTotal = (expenses.byCategory || []).reduce((s,e) => s + e.total, 0);
+
+    content.innerHTML = `
+      <div class="page-header"><h2>Analytics Dashboard</h2><p>Company-wide performance insights</p></div>
+
+      <!-- Top KPIs -->
+      <div class="stats-grid" style="margin-bottom:24px">
+        <div class="stat-card"><div class="stat-value">${headcount.total}</div><div class="stat-label">Total Employees</div></div>
+        <div class="stat-card"><div class="stat-value">${training.rate}%</div><div class="stat-label">Training Completion</div></div>
+        <div class="stat-card"><div class="stat-value">${performance.goalRate}%</div><div class="stat-label">Goal Completion</div></div>
+        <div class="stat-card"><div class="stat-value">${performance.avgReview ? `${performance.avgReview}/5` : '—'}</div><div class="stat-label">Avg Review Score</div></div>
+        <div class="stat-card"><div class="stat-value">${timesheets.totalHours}</div><div class="stat-label">Hours This Month</div></div>
+        <div class="stat-card"><div class="stat-value">${expTotal.toFixed(0)}</div><div class="stat-label">Expenses This Month</div></div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px;margin-bottom:16px">
+
+        <!-- Headcount by Department -->
+        <div class="card">
+          <div style="font-size:14px;font-weight:700;margin-bottom:14px">👥 Headcount by Department</div>
+          ${_miniBarChart(headcount.byDepartment, '_id', 'count', () => 'var(--primary)')}
+          ${headcount.byBranch.length > 1 ? `
+            <div style="border-top:1px solid #f3f4f6;margin-top:12px;padding-top:12px">
+              <div style="font-size:12px;font-weight:700;color:#6b7280;margin-bottom:8px">BY BRANCH</div>
+              ${_miniBarChart(headcount.byBranch, 'name', 'count', () => '#8b5cf6')}
+            </div>
+          ` : ''}
+        </div>
+
+        <!-- Leave Overview -->
+        <div class="card">
+          <div style="font-size:14px;font-weight:700;margin-bottom:14px">🏖️ Leave (Last 90 Days)</div>
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px">
+            ${[['pending','#f59e0b'],['approved','#22c55e'],['rejected','#ef4444']].map(([s,c]) => `
+              <div style="text-align:center;padding:10px;border-radius:8px;background:#f9fafb">
+                <div style="font-size:22px;font-weight:800;color:${c}">${leaveMap[s]||0}</div>
+                <div style="font-size:11px;color:#6b7280;text-transform:capitalize">${s}</div>
+              </div>
+            `).join('')}
+          </div>
+          ${leave.trend.length ? `
+            <div style="font-size:12px;font-weight:700;color:#6b7280;margin-bottom:8px">MONTHLY TREND</div>
+            ${_miniBarChart(leave.trend, '_id', 'count', () => '#f59e0b')}
+          ` : ''}
+        </div>
+
+        <!-- Training -->
+        <div class="card">
+          <div style="font-size:14px;font-weight:700;margin-bottom:14px">📚 Training Status</div>
+          <div style="text-align:center;padding:20px 0">
+            <div style="position:relative;display:inline-block">
+              <svg width="120" height="120" style="transform:rotate(-90deg)">
+                <circle cx="60" cy="60" r="52" fill="none" stroke="#f3f4f6" stroke-width="12"/>
+                <circle cx="60" cy="60" r="52" fill="none" stroke="#6366f1" stroke-width="12"
+                  stroke-dasharray="${Math.round(2*Math.PI*52*training.rate/100)} ${Math.round(2*Math.PI*52)}"
+                  stroke-linecap="round"/>
+              </svg>
+              <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center">
+                <div style="font-size:24px;font-weight:800">${training.rate}%</div>
+                <div style="font-size:10px;color:#6b7280">complete</div>
+              </div>
+            </div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px">
+            <div style="text-align:center;background:#f0fdf4;padding:10px;border-radius:8px">
+              <div style="font-size:20px;font-weight:700;color:#16a34a">${training.completed}</div>
+              <div style="font-size:11px;color:#6b7280">Completed</div>
+            </div>
+            <div style="text-align:center;background:#f9fafb;padding:10px;border-radius:8px">
+              <div style="font-size:20px;font-weight:700">${training.total - training.completed}</div>
+              <div style="font-size:11px;color:#6b7280">Pending</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Performance -->
+        <div class="card">
+          <div style="font-size:14px;font-weight:700;margin-bottom:14px">🎯 Performance</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
+            <div style="background:#f5f3ff;padding:14px;border-radius:10px;text-align:center">
+              <div style="font-size:28px;font-weight:800;color:#5b21b6">${performance.avgReview || '—'}</div>
+              <div style="font-size:11px;color:#7c3aed">Avg Review /5</div>
+              <div style="font-size:11px;color:#9ca3af">${performance.totalReviews} reviews</div>
+            </div>
+            <div style="background:#f0fdf4;padding:14px;border-radius:10px;text-align:center">
+              <div style="font-size:28px;font-weight:800;color:#16a34a">${performance.goalRate}%</div>
+              <div style="font-size:11px;color:#15803d">Goals Met</div>
+              <div style="font-size:11px;color:#9ca3af">${performance.completedGoals}/${performance.totalGoals}</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Expenses breakdown -->
+        <div class="card">
+          <div style="font-size:14px;font-weight:700;margin-bottom:14px">💳 Expense Breakdown (${expenses.period})</div>
+          ${expenses.byCategory.length ? `
+            <div style="margin-bottom:10px">
+              ${_miniBarChart(expenses.byCategory.map(e => ({...e, label: e._id})), 'label', 'total',
+                () => '#f59e0b')}
+            </div>
+            <div style="font-size:12px;font-weight:700;color:#6b7280;border-top:1px solid #f3f4f6;padding-top:10px">
+              Total Approved: <span style="color:var(--text)">${expTotal.toFixed(2)} GHS</span>
+            </div>
+          ` : '<p style="color:#9ca3af;font-size:12px">No approved expenses this month.</p>'}
+        </div>
+
+        <!-- Timesheets -->
+        <div class="card">
+          <div style="font-size:14px;font-weight:700;margin-bottom:14px">⏱️ Timesheets (${timesheets.period})</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+            <div style="background:#eff6ff;padding:14px;border-radius:10px;text-align:center">
+              <div style="font-size:28px;font-weight:800;color:#1d4ed8">${timesheets.totalHours}</div>
+              <div style="font-size:11px;color:#2563eb">Total Hours</div>
+            </div>
+            <div style="background:#f9fafb;padding:14px;border-radius:10px;text-align:center">
+              <div style="font-size:28px;font-weight:800">${timesheets.count}</div>
+              <div style="font-size:11px;color:#6b7280">Timesheets</div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    `;
+  } catch(e) {
+    content.innerHTML = `<div class="card"><p style="color:#ef4444">Error: ${e.message}</p></div>`;
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// BRANCHES
+// ══════════════════════════════════════════════════════════════
+async function renderBranches() {
+  const content = document.getElementById('main-content');
+  content.innerHTML = '<div class="loading">Loading…</div>';
+  try {
+    const { branches } = await api('/api/advanced/branches');
+
+    content.innerHTML = `
+      <div class="page-header"><h2>Branch Management</h2><p>Manage your company locations</p></div>
+
+      <!-- Create Branch -->
+      <div class="card" style="margin-bottom:16px">
+        <h3 style="font-size:15px;font-weight:700;margin-bottom:12px">Add Branch</h3>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin-bottom:10px">
+          ${[
+            ['br-name','Name *','text','e.g. Accra HQ'],
+            ['br-code','Code','text','e.g. ACC'],
+            ['br-city','City','text','e.g. Accra'],
+            ['br-country','Country','text','e.g. Ghana'],
+            ['br-phone','Phone','text','Optional'],
+          ].map(([id,label,type,ph]) => `
+            <div>
+              <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:4px">${label}</label>
+              <input id="${id}" type="${type}" placeholder="${ph}" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
+            </div>
+          `).join('')}
+          <div>
+            <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:4px">Address</label>
+            <input id="br-addr" placeholder="Street address" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
+          </div>
+        </div>
+        <div id="br-error" style="color:#ef4444;font-size:13px;margin-bottom:8px;display:none"></div>
+        <button class="btn btn-primary" onclick="submitCreateBranch()">+ Add Branch</button>
+      </div>
+
+      <!-- Branches list -->
+      <div class="card">
+        <h3 style="font-size:15px;font-weight:700;margin-bottom:14px">Branches (${branches.length})</h3>
+        ${branches.length ? branches.map(b => `
+          <div style="padding:16px;border:1px solid #e5e7eb;border-radius:10px;margin-bottom:12px">
+            <div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:10px">
+              <div style="flex:1">
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;flex-wrap:wrap">
+                  <span style="font-weight:700;font-size:15px">🏢 ${b.name}</span>
+                  ${b.code ? `<span style="font-size:11px;background:#f3f4f6;color:#6b7280;padding:2px 8px;border-radius:4px;font-weight:600">${b.code}</span>` : ''}
+                  <span style="font-size:12px;color:#6b7280">${b.headcount} employee${b.headcount !== 1 ? 's' : ''}</span>
+                </div>
+                <div style="font-size:12px;color:#9ca3af">
+                  ${[b.address, b.city, b.country].filter(Boolean).join(', ') || 'No address set'}
+                  ${b.phone ? ` · ${b.phone}` : ''}
+                  ${b.manager ? ` · Manager: <strong>${b.manager.name}</strong>` : ''}
+                </div>
+              </div>
+              <div style="display:flex;gap:6px">
+                <button class="btn btn-sm" style="background:#fef2f2;color:#dc2626;border:1px solid #fecaca;font-size:11px" onclick="deleteBranch('${b._id}')">Remove</button>
+              </div>
+            </div>
+          </div>
+        `).join('') : '<p style="color:#9ca3af;font-size:13px">No branches yet. Add your first location above.</p>'}
+      </div>
+    `;
+  } catch(e) {
+    content.innerHTML = `<div class="card"><p style="color:#ef4444">Error: ${e.message}</p></div>`;
+  }
+}
+
+async function submitCreateBranch() {
+  const name = document.getElementById('br-name').value.trim();
+  const errEl = document.getElementById('br-error');
+  errEl.style.display = 'none';
+  if (!name) { errEl.textContent = 'Branch name is required.'; errEl.style.display = 'block'; return; }
+
+  const body = {
+    name,
+    code:    document.getElementById('br-code').value.trim(),
+    city:    document.getElementById('br-city').value.trim(),
+    country: document.getElementById('br-country').value.trim(),
+    phone:   document.getElementById('br-phone').value.trim(),
+    address: document.getElementById('br-addr').value.trim(),
+  };
+  const btn = event.target; btn.disabled = true; btn.textContent = 'Saving…';
+  try {
+    await api('/api/advanced/branches', { method: 'POST', body: JSON.stringify(body) });
+    toast('Branch added!', 'ok');
+    renderBranches();
+  } catch(e) {
+    errEl.textContent = e.message; errEl.style.display = 'block';
+    btn.disabled = false; btn.textContent = '+ Add Branch';
+  }
+}
+
+async function deleteBranch(id) {
+  if (!confirm('Remove this branch? Employees in this branch will be unassigned.')) return;
+  try {
+    await api(`/api/advanced/branches/${id}`, { method: 'DELETE' });
+    toast('Branch removed', 'ok');
+    renderBranches();
+  } catch(e) { toast(e.message, 'err'); }
+}
+
+// ══════════════════════════════════════════════════════════════
+// WHITE-LABEL BRANDING
+// ══════════════════════════════════════════════════════════════
+async function renderBranding() {
+  const content = document.getElementById('main-content');
+  content.innerHTML = '<div class="loading">Loading…</div>';
+  try {
+    const { branding, companyName } = await api('/api/advanced/branding');
+    const payrollData = await api('/api/advanced/analytics').catch(() => null);
+
+    content.innerHTML = `
+      <div class="page-header"><h2>Branding & Settings</h2><p>Customize your portal appearance and payroll configuration</p></div>
+
+      <!-- Branding -->
+      <div class="card" style="margin-bottom:16px">
+        <h3 style="font-size:15px;font-weight:700;margin-bottom:14px">White-Label Branding</h3>
+
+        <!-- Live preview -->
+        <div id="brand-preview" style="padding:16px;border-radius:10px;margin-bottom:20px;background:${branding.primaryColor||'#6366f1'}20;border:2px solid ${branding.primaryColor||'#6366f1'}40">
+          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+            ${branding.logoUrl ? `<img src="${branding.logoUrl}" style="height:40px;width:auto;border-radius:6px" onerror="this.style.display='none'">` : `<div style="width:40px;height:40px;border-radius:8px;background:${branding.primaryColor||'#6366f1'};display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:18px">${companyName?.[0]||'K'}</div>`}
+            <div>
+              <div style="font-weight:800;font-size:16px">${companyName}</div>
+              <div style="font-size:12px;color:#6b7280">${branding.companyTagline||'Powered by KODEX'}</div>
+            </div>
+          </div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;margin-bottom:14px">
+          <div>
+            <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:4px">Logo URL</label>
+            <input id="bd-logo" value="${branding.logoUrl||''}" placeholder="https://…" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px" oninput="updateBrandPreview()">
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:4px">Primary Color</label>
+            <div style="display:flex;gap:6px;align-items:center">
+              <input type="color" id="bd-color" value="${branding.primaryColor||'#6366f1'}" style="width:40px;height:36px;border:1px solid #d1d5db;border-radius:6px;padding:2px;cursor:pointer" oninput="updateBrandPreview()">
+              <input id="bd-color-text" value="${branding.primaryColor||'#6366f1'}" placeholder="#6366f1" style="flex:1;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px" oninput="document.getElementById('bd-color').value=this.value;updateBrandPreview()">
+            </div>
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:4px">Tagline</label>
+            <input id="bd-tagline" value="${branding.companyTagline||''}" placeholder="Your company tagline" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px" oninput="updateBrandPreview()">
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:4px">Support Email</label>
+            <input id="bd-email" value="${branding.supportEmail||''}" placeholder="support@yourcompany.com" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:4px">Website</label>
+            <input id="bd-web" value="${branding.website||''}" placeholder="https://yourcompany.com" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
+          </div>
+        </div>
+        <div id="bd-error" style="color:#ef4444;font-size:13px;margin-bottom:8px;display:none"></div>
+        <button class="btn btn-primary" onclick="saveBranding()">Save Branding</button>
+      </div>
+
+      <!-- Payroll Settings -->
+      <div class="card">
+        <h3 style="font-size:15px;font-weight:700;margin-bottom:14px">Payroll Configuration</h3>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;margin-bottom:14px">
+          <div>
+            <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:4px">Currency</label>
+            <select id="pr-currency" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
+              ${['GHS','USD','EUR','GBP','NGN','KES','ZAR'].map(c=>`<option value="${c}">Gfs${c}</option>`).join('')}
+            </select>
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:4px">Pay Period</label>
+            <select id="pr-period" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
+              <option value="weekly">Weekly</option>
+              <option value="biweekly">Bi-weekly</option>
+              <option value="monthly" selected>Monthly</option>
+            </select>
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:4px">Standard Hours/Month</label>
+            <input id="pr-hours" type="number" value="160" min="1" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:4px">Overtime Rate (×)</label>
+            <input id="pr-ot" type="number" value="1.5" step="0.1" min="1" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
+          </div>
+        </div>
+        <div id="pr-error" style="color:#ef4444;font-size:13px;margin-bottom:8px;display:none"></div>
+        <button class="btn btn-primary" onclick="savePayrollSettings()">Save Payroll Settings</button>
+      </div>
+    `;
+  } catch(e) {
+    content.innerHTML = `<div class="card"><p style="color:#ef4444">Error: ${e.message}</p></div>`;
+  }
+}
+
+function updateBrandPreview() {
+  const logo  = document.getElementById('bd-logo')?.value;
+  const color = document.getElementById('bd-color')?.value || '#6366f1';
+  const tag   = document.getElementById('bd-tagline')?.value || 'Powered by KODEX';
+  const preview = document.getElementById('brand-preview');
+  if (!preview) return;
+  preview.style.background = `${color}20`;
+  preview.style.borderColor = `${color}40`;
+  const img = preview.querySelector('img');
+  const box = preview.querySelector('div > div');
+  if (logo && img) { img.src = logo; img.style.display = ''; }
+  else if (box) box.style.background = color;
+  const tagEl = preview.querySelector('div:last-child div:last-child');
+  if (tagEl) tagEl.textContent = tag;
+}
+
+async function saveBranding() {
+  const body = {
+    logoUrl:        document.getElementById('bd-logo').value.trim(),
+    primaryColor:   document.getElementById('bd-color').value,
+    companyTagline: document.getElementById('bd-tagline').value.trim(),
+    supportEmail:   document.getElementById('bd-email').value.trim(),
+    website:        document.getElementById('bd-web').value.trim(),
+  };
+  const errEl = document.getElementById('bd-error');
+  errEl.style.display = 'none';
+  const btn = event.target; btn.disabled = true; btn.textContent = 'Saving…';
+  try {
+    await api('/api/advanced/branding', { method: 'PATCH', body: JSON.stringify(body) });
+    toast('Branding saved!', 'ok');
+    btn.disabled = false; btn.textContent = 'Save Branding';
+  } catch(e) {
+    errEl.textContent = e.message; errEl.style.display = 'block';
+    btn.disabled = false; btn.textContent = 'Save Branding';
+  }
+}
+
+async function savePayrollSettings() {
+  const body = {
+    currency:      document.getElementById('pr-currency').value,
+    payPeriod:     document.getElementById('pr-period').value,
+    standardHours: parseFloat(document.getElementById('pr-hours').value),
+    overtimeRate:  parseFloat(document.getElementById('pr-ot').value),
+  };
+  const errEl = document.getElementById('pr-error');
+  errEl.style.display = 'none';
+  const btn = event.target; btn.disabled = true; btn.textContent = 'Saving…';
+  try {
+    await api('/api/advanced/payroll-settings', { method: 'PATCH', body: JSON.stringify(body) });
+    toast('Payroll settings saved!', 'ok');
+    btn.disabled = false; btn.textContent = 'Save Payroll Settings';
+  } catch(e) {
+    errEl.textContent = e.message; errEl.style.display = 'block';
+    btn.disabled = false; btn.textContent = 'Save Payroll Settings';
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// PAYROLL EXPORT
+// ══════════════════════════════════════════════════════════════
+async function renderPayrollExport() {
+  const content = document.getElementById('main-content');
+  const period = new Date().toISOString().slice(0, 7);
+  content.innerHTML = `
+    <div class="page-header"><h2>Payroll Export</h2><p>Generate payroll-ready CSV for your finance team</p></div>
+
+    <div class="card" style="max-width:540px">
+      <h3 style="font-size:15px;font-weight:700;margin-bottom:14px">Generate Payroll Report</h3>
+      <p style="font-size:13px;color:#6b7280;margin-bottom:16px;line-height:1.6">
+        Exports all <strong>approved timesheets</strong> and <strong>approved expense claims</strong> for the selected period into a single CSV file compatible with most payroll systems.
+      </p>
+
+      <div style="margin-bottom:16px">
+        <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:6px">Pay Period</label>
+        <input type="month" id="pe-period" value="${period}" style="padding:9px 12px;border:1px solid #d1d5db;border-radius:6px;font-size:14px;width:200px">
+      </div>
+
+      <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:14px;margin-bottom:16px">
+        <div style="font-size:12px;font-weight:700;color:#15803d;margin-bottom:6px">What's included:</div>
+        <ul style="font-size:12px;color:#166534;margin:0;padding-left:16px;line-height:1.8">
+          <li>Employee name, ID and department</li>
+          <li>Regular hours worked (up to standard hours)</li>
+          <li>Overtime hours worked (above standard)</li>
+          <li>Overtime multiplier from payroll settings</li>
+          <li>Total approved expense reimbursements</li>
+        </ul>
+      </div>
+
+      <div style="background:#fef3c7;border:1px solid #fde68a;border-radius:10px;padding:12px;margin-bottom:20px">
+        <div style="font-size:12px;color:#92400e">⚠️ Only <strong>approved</strong> timesheets and expenses are included. Make sure to review all submissions before exporting.</div>
+      </div>
+
+      <button class="btn btn-primary" style="padding:12px 28px;font-size:14px" onclick="downloadPayrollExport()">
+        ⬇ Download CSV
+      </button>
+    </div>
+  `;
+}
+
+function downloadPayrollExport() {
+  const period = document.getElementById('pe-period')?.value || new Date().toISOString().slice(0, 7);
+  const token  = localStorage.getItem('kodex_token') || localStorage.getItem('token') || '';
+  const btn = event.target; btn.disabled = true; btn.textContent = 'Generating…';
+  setTimeout(() => { btn.disabled = false; btn.textContent = '⬇ Download CSV'; }, 3000);
+  window.open(`/api/advanced/payroll-export?period=${period}&token=${token}`, '_blank');
+  toast('Payroll CSV downloading…', 'ok');
+}
