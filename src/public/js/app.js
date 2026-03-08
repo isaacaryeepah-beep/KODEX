@@ -4556,7 +4556,7 @@ function renderContact() {
         ["How do I reset a student's password?", 'Go to Users, find the student, and use the Reset Password action. The student will receive a reset code.'],
         ["Why can't a student mark attendance?", 'Ensure there is an active session running and the student is enrolled in the correct course roster.'],
         ['How do I add students to a course?', 'Go to Courses, select the course, and use the Upload Students button to add students via CSV or manually.'],
-        ['What happens when the subscription expires?', 'Access is suspended after the trial/subscription period. Contact us to renew your subscription.'],
+        ['What happens when the subscription expires?', 'Access is suspended after the trial/subscription period. You can renew anytime from the Subscription page in your dashboard — payments are processed instantly via Paystack.'],
         ['Can students use the system offline?', 'Yes — students can mark attendance offline using a code. It will sync automatically when they reconnect.'],
       ].map(([q, a]) => `
         <div style="padding:14px 0;border-bottom:1px solid var(--border)">
