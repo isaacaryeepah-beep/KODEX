@@ -5632,7 +5632,7 @@ buildSidebar = function() {
     if (leaveLink && !document.getElementById('nav-training')) {
       const a = document.createElement('a');
       a.id = 'nav-training';
-      a.innerHTML = `${trainingIcon} <span>Training</span>`;
+      a.innerHTML = `${trainingIcon} <span>Training & Assessments</span>`;
       a.onclick = () => navigateTo('training');
       leaveLink.insertAdjacentElement('afterend', a);
     }
@@ -5641,7 +5641,7 @@ buildSidebar = function() {
     if (myLeaveLink && !document.getElementById('nav-my-training')) {
       const a = document.createElement('a');
       a.id = 'nav-my-training';
-      a.innerHTML = `${trainingIcon} <span>My Training</span>`;
+      a.innerHTML = `${trainingIcon} <span>My Assessments</span>`;
       a.onclick = () => navigateTo('my-training');
       myLeaveLink.insertAdjacentElement('afterend', a);
     }
@@ -5727,6 +5727,10 @@ async function renderTraining() {
             <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:4px">Due In (days)</label>
             <input id="tm-due" type="number" value="7" min="1" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
           </div>
+          <div>
+            <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:4px">Time Limit (mins)</label>
+            <input id="tm-time" type="number" placeholder="Optional" min="1" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
+          </div>
         </div>
         <div style="margin-bottom:10px">
           <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:4px">Description</label>
@@ -5755,7 +5759,7 @@ async function renderTraining() {
                   <span style="font-weight:700;font-size:15px">${m.title}</span>
                   ${typeBadge(m.type)}
                 </div>
-                <div style="font-size:12px;color:#6b7280;margin-bottom:8px">${m.description || 'No description'} · Pass: ${m.passingScore}% · Due in ${m.dueInDays}d · ${m.questions.length} question${m.questions.length !== 1 ? 's' : ''}</div>
+                <div style="font-size:12px;color:#6b7280;margin-bottom:8px">${m.description || 'No description'} · Pass: ${m.passingScore}% · Due in ${m.dueInDays}d${m.timeLimitMinutes ? ` · ⏱ ${m.timeLimitMinutes}min` : ''} · ${m.questions.length} question${m.questions.length !== 1 ? 's' : ''}</div>
                 <div style="display:flex;gap:12px;font-size:12px">
                   <span style="color:#6b7280">👥 ${m.stats.total} assigned</span>
                   <span style="color:#16a34a">✅ ${m.stats.completed} completed</span>
@@ -5809,9 +5813,10 @@ async function submitCreateModule() {
 
   const btn = event.target; btn.disabled = true; btn.textContent = 'Creating…';
   try {
+    const timeLimitMinutes = parseInt(document.getElementById('tm-time')?.value) || null;
     await api('/api/training/modules', {
       method: 'POST',
-      body: JSON.stringify({ title, type, description, content, videoUrl, passingScore, dueInDays }),
+      body: JSON.stringify({ title, type, description, content, videoUrl, passingScore, dueInDays, timeLimitMinutes }),
     });
     toast('Module created!', 'ok');
     renderTraining();
@@ -5979,7 +5984,7 @@ async function renderMyTraining() {
     const pending = progress.filter(p => ['assigned','in_progress','overdue'].includes(p.status)).length;
 
     content.innerHTML = `
-      <div class="page-header"><h2>My Training</h2><p>Complete your assigned training modules</p></div>
+      <div class="page-header"><h2>My Assessments</h2><p>Complete your assigned training and assessment modules</p></div>
 
       <div class="stats-grid" style="margin-bottom:20px">
         <div class="stat-card"><div class="stat-value">${total}</div><div class="stat-label">Assigned</div></div>
@@ -6004,7 +6009,7 @@ async function renderMyTraining() {
                 <span style="font-weight:700;font-size:15px">${m.title}</span>
                 <span style="padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600;${statusStyle(p.status)}">${p.status.replace('_',' ')}</span>
               </div>
-              <div style="font-size:12px;color:#6b7280;margin-bottom:6px">${m.description || ''} · ${m.questions.length} question${m.questions.length !== 1 ? 's' : ''} · Pass: ${m.passingScore}%</div>
+              <div style="font-size:12px;color:#6b7280;margin-bottom:6px">${m.description || ''} · ${m.questions.length} question${m.questions.length !== 1 ? 's' : ''} · Pass: ${m.passingScore}%${m.timeLimitMinutes ? ` · ⏱ ${m.timeLimitMinutes} min` : ''}</div>
               ${p.dueDate ? `<div style="font-size:12px;color:${new Date(p.dueDate) < new Date() && p.status !== 'completed' ? '#f59e0b' : '#6b7280'}">Due: ${new Date(p.dueDate).toLocaleDateString()}</div>` : ''}
               ${p.percentage != null ? `<div style="font-size:13px;margin-top:4px;font-weight:600;color:${p.passed ? '#16a34a' : '#dc2626'}">Score: ${p.percentage}% — ${p.passed ? '✅ Passed' : '❌ Failed'}</div>` : ''}
             </div>
@@ -6061,8 +6066,11 @@ async function startTrainingModule(progressId, moduleId) {
 
       ${m.questions.length ? `
       <div class="card">
-        <div class="card-title">Assessment — ${m.questions.length} Question${m.questions.length !== 1 ? 's' : ''}</div>
-        <p style="font-size:13px;color:#6b7280;margin-bottom:16px">Passing score: ${m.passingScore}%. Answer all questions then click Submit.</p>
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:12px">
+          <div class="card-title" style="margin:0">Assessment — ${m.questions.length} Question${m.questions.length !== 1 ? 's' : ''}</div>
+          ${m.timeLimitMinutes ? `<div id="training-timer" style="font-size:14px;font-weight:700;color:#ef4444;background:#fef2f2;padding:6px 14px;border-radius:20px;border:1px solid #fecaca">⏱ <span id="training-timer-display">${m.timeLimitMinutes}:00</span></div>` : ''}
+        </div>
+        <p style="font-size:13px;color:#6b7280;margin-bottom:16px">Passing score: ${m.passingScore}%${m.timeLimitMinutes ? ` · Time limit: ${m.timeLimitMinutes} minutes` : ''}. Answer all questions then click Submit.</p>
         ${m.questions.map((q, i) => `
           <div style="padding:14px;border:1px solid #e5e7eb;border-radius:8px;margin-bottom:10px">
             <div style="font-weight:600;margin-bottom:10px;font-size:14px">Q${i+1}. ${q.questionText} <span style="color:#9ca3af;font-weight:400;font-size:12px">(${q.marks} mark${q.marks !== 1 ? 's' : ''})</span></div>
@@ -6089,12 +6097,34 @@ async function startTrainingModule(progressId, moduleId) {
       </div>
       `}
     `;
+    // Start assessment timer if time limit set
+    if (m.timeLimitMinutes && m.questions.length) {
+      let secsLeft = m.timeLimitMinutes * 60;
+      const timerDisplay = document.getElementById('training-timer-display');
+      if (timerDisplay) {
+        window._trainingTimerInterval = setInterval(() => {
+          secsLeft--;
+          const mins = Math.floor(secsLeft / 60);
+          const secs = secsLeft % 60;
+          if (timerDisplay) timerDisplay.textContent = `${mins}:${secs.toString().padStart(2,'0')}`;
+          if (secsLeft <= 60) {
+            document.getElementById('training-timer')?.style && (document.getElementById('training-timer').style.animation = 'pulse 1s infinite');
+          }
+          if (secsLeft <= 0) {
+            clearInterval(window._trainingTimerInterval);
+            toast('⏱ Time is up! Auto-submitting…', 'warn');
+            submitTrainingAssessment(progressId, m.questions.length);
+          }
+        }, 1000);
+      }
+    }
   } catch(e) {
     content.innerHTML = `<div class="card"><p style="color:#ef4444">Error: ${e.message}</p></div>`;
   }
 }
 
 async function submitTrainingAssessment(progressId, questionCount) {
+  if (window._trainingTimerInterval) { clearInterval(window._trainingTimerInterval); window._trainingTimerInterval = null; }
   const answers = [];
   for (let i = 0; i < questionCount; i++) {
     const selected = document.querySelector(`input[name="tma-${i}"]:checked`);
