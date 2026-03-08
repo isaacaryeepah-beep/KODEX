@@ -4,7 +4,7 @@ const User = require("../models/User");
 const Company = require("../models/Company");
 const StudentRoster = require("../models/StudentRoster");
 const { generateToken } = require("../utils/jwt");
-const { sendWelcome } = require("../services/emailService");
+const { sendWelcome, sendPasswordReset, sendAdminPasswordResetNotice } = require("../services/emailService");
 
 const SIX_HOURS_MS = 6 * 60 * 60 * 1000;
 
@@ -695,7 +695,36 @@ exports.resetPassword = async (req, res) => {
     user.password = newPassword;
     user.resetPasswordToken = null;
     user.resetPasswordExpires = null;
+    if (!user.passwordResetLog) user.passwordResetLog = [];
+    user.passwordResetLog.push({
+      resetAt: new Date(),
+      ipAddress: req.ip || req.headers['x-forwarded-for'] || '',
+      userAgent: req.headers['user-agent'] || '',
+      method: 'self',
+      resetBy: user.name || user.indexNumber,
+    });
     await user.save();
+
+    // Notify admin of student reset (non-fatal)
+    try {
+      const Company = require('../models/Company');
+      const admin = await require('../models/User').findOne({
+        company: user.company,
+        role: { $in: ['admin', 'superadmin'] },
+        isActive: true,
+      }).select('email name').lean();
+      const company = await Company.findById(user.company).select('name').lean();
+      if (admin?.email) {
+        sendAdminPasswordResetNotice({
+          adminEmail: admin.email,
+          adminName: admin.name || 'Admin',
+          targetUserName: user.name || user.indexNumber,
+          targetUserRole: user.role,
+          targetUserEmail: user.email || user.indexNumber,
+          institutionName: company?.name || '',
+        }).catch(() => {});
+      }
+    } catch(_) {}
 
     res.json({ message: "Password has been reset successfully" });
   } catch (error) {
@@ -706,14 +735,22 @@ exports.resetPassword = async (req, res) => {
 
 exports.forgotPasswordEmail = async (req, res) => {
   try {
-    const { email } = req.body;
+    const { email, institutionCode } = req.body;
     if (!email) return res.status(400).json({ error: "Email is required" });
+    if (!institutionCode) return res.status(400).json({ error: "Institution code is required" });
 
-    const user = await User.findOne({ email: email.toLowerCase().trim() });
-    if (!user) return res.status(404).json({ error: "No account found with that email" });
+    const company = await Company.findOne({ institutionCode: institutionCode.toUpperCase() });
+    if (!company) return res.status(404).json({ error: "Institution not found. Please check your institution code." });
 
-    if (!["admin", "manager", "lecturer", "superadmin"].includes(user.role)) {
-      return res.status(403).json({ error: "This reset method is for admins and lecturers only" });
+    const user = await User.findOne({ email: email.toLowerCase().trim(), company: company._id });
+    if (!user) return res.status(404).json({ error: "No account found with that email in this institution" });
+
+    if (["admin", "superadmin"].includes(user.role)) {
+      return res.status(403).json({ error: "Admins cannot use this reset method. Please use the Admin portal to reset your password." });
+    }
+
+    if (!["manager", "lecturer", "employee"].includes(user.role)) {
+      return res.status(403).json({ error: "This reset method is not available for your account type" });
     }
 
     if (user.resetPasswordExpires && user.resetPasswordExpires > Date.now()) {
@@ -726,12 +763,56 @@ exports.forgotPasswordEmail = async (req, res) => {
     user.resetPasswordExpires = new Date(Date.now() + 60 * 60 * 1000);
     await user.save({ validateBeforeSave: false });
 
-    res.json({
-      message: "Password reset code generated successfully.",
-      resetCode: code, // In production, send via email. Shown here for dev.
-    });
+    // Send OTP via email (non-fatal)
+    sendPasswordReset({
+      email: user.email,
+      name: user.name,
+      resetCode: code,
+      role: user.role,
+      institutionName: company.name,
+    }).catch(err => console.error('Password reset email failed:', err.message));
+
+    res.json({ message: "A reset code has been sent to your email address. Please check your inbox." });
   } catch (error) {
     console.error("Forgot password email error:", error);
+    res.status(500).json({ error: "Failed to generate reset code" });
+  }
+};
+
+exports.forgotPasswordAdmin = async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ error: "Email is required" });
+
+    const user = await User.findOne({ email: email.toLowerCase().trim() }).populate("company", "name");
+    if (!user) return res.status(404).json({ error: "No account found with that email" });
+
+    if (!["admin", "superadmin"].includes(user.role)) {
+      return res.status(403).json({ error: "This reset method is for admins only. Lecturers and employees should use their own portal's forgot password." });
+    }
+
+    if (user.resetPasswordExpires && user.resetPasswordExpires > Date.now()) {
+      return res.status(429).json({ error: "A reset code was already sent recently. Please wait before requesting again." });
+    }
+
+    const code = String(crypto.randomInt(100000, 1000000));
+    const hashedCode = await bcrypt.hash(code, 10);
+    user.resetPasswordToken = hashedCode;
+    user.resetPasswordExpires = new Date(Date.now() + 60 * 60 * 1000);
+    await user.save({ validateBeforeSave: false });
+
+    // Send OTP via email (non-fatal)
+    sendPasswordReset({
+      email: user.email,
+      name: user.name,
+      resetCode: code,
+      role: user.role,
+      institutionName: user.company?.name || '',
+    }).catch(err => console.error('Password reset email failed:', err.message));
+
+    res.json({ message: "A reset code has been sent to your email address. Please check your inbox." });
+  } catch (error) {
+    console.error("Forgot password admin error:", error);
     res.status(500).json({ error: "Failed to generate reset code" });
   }
 };
@@ -759,7 +840,37 @@ exports.resetPasswordEmail = async (req, res) => {
     user.password = newPassword;
     user.resetPasswordToken = null;
     user.resetPasswordExpires = null;
+    if (!user.passwordResetLog) user.passwordResetLog = [];
+    user.passwordResetLog.push({
+      resetAt: new Date(),
+      ipAddress: req.ip || req.headers['x-forwarded-for'] || '',
+      userAgent: req.headers['user-agent'] || '',
+      method: 'self',
+      resetBy: user.name || user.email,
+    });
     await user.save();
+
+    // Notify admin of the reset (non-fatal)
+    try {
+      const Company = require('../models/Company');
+      const admin = await require('../models/User').findOne({
+        company: user.company,
+        role: { $in: ['admin', 'superadmin'] },
+        isActive: true,
+        email: { $exists: true, $ne: user.email },
+      }).select('email name').lean();
+      const company = await Company.findById(user.company).select('name').lean();
+      if (admin?.email) {
+        sendAdminPasswordResetNotice({
+          adminEmail: admin.email,
+          adminName: admin.name || 'Admin',
+          targetUserName: user.name || user.email,
+          targetUserRole: user.role,
+          targetUserEmail: user.email || user.indexNumber,
+          institutionName: company?.name || '',
+        }).catch(() => {});
+      }
+    } catch(_) {}
 
     res.json({ message: "Password reset successfully. You can now sign in." });
   } catch (error) {
