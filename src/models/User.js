@@ -59,8 +59,16 @@ const userSchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
+    mustChangePassword: { type: Boolean, default: false }, // set true after admin temp reset
     resetPasswordToken: { type: String, default: null },
     resetPasswordExpires: { type: Date, default: null },
+    passwordResetLog: [{
+      resetAt:    { type: Date, default: Date.now },
+      ipAddress:  { type: String, default: '' },
+      userAgent:  { type: String, default: '' },
+      method:     { type: String, default: 'self' }, // 'self' | 'admin'
+      resetBy:    { type: String, default: '' },      // admin name if admin reset
+    }],
     department: {
       type: String,
       trim: true,
