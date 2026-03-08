@@ -47,7 +47,8 @@ app.use(helmet({
 // ── CORS: only allow your own domain ─────────────────────────────────────────
 const allowedOrigins = [
   "https://kodex-7l3g.onrender.com",  // your live site
-  "http://localhost:3000",             // local dev
+  "http://kodex.it.com"
+"http://localhost:3000",             // local dev
   "http://localhost:5000",             // local dev
 ];
 app.use(cors({
