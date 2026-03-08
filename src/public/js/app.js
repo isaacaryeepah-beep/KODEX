@@ -3363,6 +3363,19 @@ async function renderAdminQuizzes(content) {
     const quizzes = data.quizzes || [];
     content.innerHTML = `
       <div class="page-header"><h2>All Quizzes</h2><p>Overview of quizzes across all lecturers</p></div>
+
+      <!-- Duplicate finder tool -->
+      <div class="card" style="margin-bottom:16px;border:2px solid #fde68a;background:#fffbeb">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
+          <div>
+            <div style="font-size:14px;font-weight:700;margin-bottom:2px">🔍 Duplicate Quiz Finder</div>
+            <div style="font-size:12px;color:#92400e">Find and remove quizzes with the same title</div>
+          </div>
+          <button class="btn btn-primary" style="background:#f59e0b;border-color:#f59e0b" onclick="findDuplicateQuizzes()">Scan for Duplicates</button>
+        </div>
+        <div id="duplicates-result" style="margin-top:12px"></div>
+      </div>
+
       <div class="card">
         ${quizzes.length ? `
           <table>
@@ -3376,7 +3389,10 @@ async function renderAdminQuizzes(content) {
                 <td>${q.attemptCount || 0}</td>
                 <td>${q.averageScore || 0}</td>
                 <td>${quizStatusBadge(q)}</td>
-                <td><button class="btn btn-sm btn-secondary" onclick="viewAdminQuizDetail('${q._id}')">View</button></td>
+                <td style="display:flex;gap:6px">
+                  <button class="btn btn-sm btn-secondary" onclick="viewAdminQuizDetail('${q._id}')">View</button>
+                  <button class="btn btn-sm" style="background:#fef2f2;color:#dc2626;border:1px solid #fecaca;font-size:11px" onclick="adminDeleteQuiz('${q._id}','${q.title.replace(/'/g,"\\'")}')">Delete</button>
+                </td>
               </tr>
             `).join('')}</tbody>
           </table>
@@ -3385,6 +3401,74 @@ async function renderAdminQuizzes(content) {
     `;
   } catch (e) {
     content.innerHTML = `<div class="card"><p>Error: ${e.message}</p></div>`;
+  }
+}
+
+async function findDuplicateQuizzes() {
+  const el = document.getElementById('duplicates-result');
+  if (!el) return;
+  el.innerHTML = '<p style="font-size:13px;color:#92400e">Scanning…</p>';
+  try {
+    const { duplicates } = await api('/api/admin/quizzes/utils/duplicates');
+    if (!duplicates.length) {
+      el.innerHTML = '<p style="font-size:13px;color:#16a34a;font-weight:600">✅ No duplicate quizzes found.</p>';
+      return;
+    }
+    el.innerHTML = `
+      <div style="font-size:13px;font-weight:700;color:#92400e;margin-bottom:10px">
+        Found ${duplicates.length} group(s) of duplicates:
+      </div>
+      ${duplicates.map(group => `
+        <div style="border:1px solid #fde68a;border-radius:8px;padding:12px;margin-bottom:10px;background:#fff">
+          <div style="font-weight:700;margin-bottom:8px">
+            "${group._id.title}" — ${group.count} copies
+          </div>
+          <table style="width:100%;font-size:12px;border-collapse:collapse">
+            <thead><tr style="color:#6b7280">
+              <th style="text-align:left;padding:4px 8px">Title</th>
+              <th style="text-align:left;padding:4px 8px">Created By</th>
+              <th style="text-align:left;padding:4px 8px">Date</th>
+              <th style="text-align:left;padding:4px 8px">Type</th>
+              <th style="padding:4px 8px">Action</th>
+            </tr></thead>
+            <tbody>
+              ${group.quizzes.map((q, i) => `
+                <tr style="border-top:1px solid #f3f4f6;${i === 0 ? 'background:#f0fdf4' : ''}">
+                  <td style="padding:6px 8px;font-weight:${i===0?'700':'400'}">${q.title} ${i===0 ? '<span style="font-size:10px;color:#16a34a;font-weight:600">(keep)</span>' : ''}</td>
+                  <td style="padding:6px 8px">${q.createdByName || '—'}</td>
+                  <td style="padding:6px 8px">${new Date(q.createdAt).toLocaleDateString()}</td>
+                  <td style="padding:6px 8px">${q.type || '—'}</td>
+                  <td style="padding:6px 8px;text-align:center">
+                    ${i === 0
+                      ? '<span style="color:#16a34a;font-size:11px">✓ Keep</span>'
+                      : `<button class="btn btn-sm" style="background:#fef2f2;color:#dc2626;border:1px solid #fecaca;font-size:11px" onclick="adminDeleteQuiz('${q.id}','${q.title.replace(/'/g,"\\'")}', true)">Delete</button>`
+                    }
+                  </td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+      `).join('')}
+    `;
+  } catch(e) {
+    el.innerHTML = `<p style="color:#ef4444;font-size:13px">Error: ${e.message}</p>`;
+  }
+}
+
+async function adminDeleteQuiz(id, title, fromDuplicates = false) {
+  if (!confirm(`Delete quiz "${title}"?\n\nThis will permanently remove all questions and submissions.`)) return;
+  try {
+    await api(`/api/admin/quizzes/${id}`, { method: 'DELETE' });
+    toast(`Quiz "${title}" deleted`, 'ok');
+    if (fromDuplicates) {
+      findDuplicateQuizzes(); // re-scan
+    } else {
+      const content = document.getElementById('main-content');
+      if (content) await renderAdminQuizzes(content);
+    }
+  } catch(e) {
+    toast(e.message || 'Failed to delete quiz', 'err');
   }
 }
 
