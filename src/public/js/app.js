@@ -4799,12 +4799,16 @@ function buildBottomNav(role) {
   // Priority items per role — most-used actions shown directly in bottom bar
   // Everything else is accessible via the sidebar (More button)
   const PRIORITY = {
-    admin:      ['dashboard', 'sessions', 'reports', 'subscription'],
+    admin: currentUser?.company?.mode === 'academic'
+      ? ['dashboard', 'sessions', 'quizzes', 'reports']
+      : ['dashboard', 'sessions', 'users', 'reports'],
     manager:    ['dashboard', 'sessions', 'reports', 'users'],
     lecturer:   ['dashboard', 'sessions', 'quizzes', 'assignments'],
     employee:   ['dashboard', 'sign-in-out', 'my-attendance', 'reports'],
     student:    ['dashboard', 'mark-attendance', 'quizzes', 'assignments'],
-    superadmin: ['dashboard', 'sessions', 'quizzes', 'reports'],
+    superadmin: currentUser?.company?.mode === 'academic'
+      ? ['dashboard', 'sessions', 'quizzes', 'reports']
+      : ['dashboard', 'sessions', 'users', 'reports'],
   };
 
   const ICONS = {
