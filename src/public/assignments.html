@@ -374,6 +374,7 @@ const S = {
 //  HELPERS
 // ══════════════════════════════════════════════════════════════════════════
 const $ = id => document.getElementById(id);
+const $safe = (id, fn) => { const el = document.getElementById(id); if (el) fn(el); };
 let toastTimer;
 function toast(msg, type=''){
   const el=$('toast'); el.textContent=msg; el.className=`toast show ${type}`;
@@ -421,7 +422,7 @@ async function init(){
     rb.textContent=S.role.toUpperCase();
     rb.className='role-badge role-'+S.role;
     $('portal-title').textContent=isLecturer?'Lecturer Portal':'Student Portal';
-    if(S.user.company?.name) $('company-name').textContent='— '+S.user.company.name;
+    if(S.user.company?.name) { const cn=$('company-name'); if(cn) cn.textContent='— '+S.user.company.name; }
 
     if(isLecturer){
       await loadCourses();
@@ -529,9 +530,9 @@ async function openEdit(id){
       S.courses.map(c=>`<option value="${c._id}" ${c._id===a.course?._id?'selected':''}>${c.code} — ${c.title}</option>`).join('');
     $('a-release').value=toLocal(a.releaseDate); $('a-due').value=toLocal(a.dueDate);
     $('a-filesub').checked=a.allowFileSubmission; $('a-late').checked=a.allowLateSubmission;
-    $('pdf-preview').style.display='none';
-    $('pdf-existing').style.display=S.pdfExisting?'block':'none';
-    $('pdf-existing-name').textContent=S.pdfExisting||'';
+    const pp=$('pdf-preview'); if(pp) pp.style.display='none';
+    const pe=$('pdf-existing'); if(pe) pe.style.display=S.pdfExisting?'block':'none';
+    const pen=$('pdf-existing-name'); if(pen) pen.textContent=S.pdfExisting||'';
     renderQDrafts(); closeDrawers(); showDrawer('create-drawer');
   } catch(e){ toast('Failed to load: '+e.message,'err'); }
 }
