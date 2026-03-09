@@ -31,7 +31,7 @@ exports.listUsers = async (req, res) => {
 
 exports.createUser = async (req, res) => {
   try {
-    const { email, password, name, role, indexNumber } = req.body;
+    const { email, password, name, role, indexNumber, phone } = req.body;
     const targetRole = role || "employee";
 
     const company = await Company.findById(req.user.company);
@@ -53,10 +53,12 @@ exports.createUser = async (req, res) => {
       return res.status(403).json({ error: "Cannot create user with equal or higher role" });
     }
 
+    const { normalisePhone } = require('../services/smsService');
     const userData = {
       password,
       name,
       role: targetRole,
+      phone: phone ? normalisePhone(phone) : null,
       company: req.user.company,
     };
 
