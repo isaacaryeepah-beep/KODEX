@@ -5,32 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>KODEX</title>
   <link rel="stylesheet" href="/css/style.css">
-  <script>window.MathJax = { tex: { inlineMath: [['\\(','\\)']], displayMath: [['\\[','\\]']], processEscapes: true }, options: { skipHtmlTags: ['script','noscript','style','textarea'] } };</script>
+  <script>window.MathJax = { tex: { inlineMath: [["\\(","\\)"]], displayMath: [["\\[","\\]"]], processEscapes: true }, options: { skipHtmlTags: ["script","noscript","style","textarea"] } };</script>
   <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js"></script>
+</head>
 <body>
   <div id="auth-page">
-    <!-- Hero panel (left side, desktop only) -->
-    <div class="auth-hero">
-      <div class="auth-hero-brand">
-        <div class="brand-icon">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
-        </div>
-        <span class="brand-name">KODEX</span>
-      </div>
-      <div class="auth-hero-body">
-        <h2>Track. Manage.<br><em>Grow together.</em></h2>
-        <p>Enterprise-grade attendance and workforce management platform trusted by organisations across Africa.</p>
-        <div class="auth-hero-chips">
-          <span>📍 Attendance</span>
-          <span>📊 Analytics</span>
-          <span>🏢 Multi-branch</span>
-          <span>🎓 Academic</span>
-          <span>💼 Payroll</span>
-        </div>
-      </div>
-      <div class="auth-hero-footer">kodex.it.com &nbsp;·&nbsp; Enterprise Platform</div>
-    </div>
-
     <div id="portal-selector">
       <div class="portal-header">
         <div class="brand-logo">
@@ -244,10 +223,6 @@
 
       <form id="lecturer-forgot-form" class="hidden" onsubmit="event.preventDefault(); handleLecturerForgotPassword();">
         <div class="form-group">
-          <label>Institution Code</label>
-          <input type="text" id="lecturer-forgot-code" placeholder="e.g. ABC123" style="text-transform:uppercase">
-        </div>
-        <div class="form-group">
           <label>Phone Number</label>
           <input type="tel" id="lecturer-forgot-phone" placeholder="e.g. 0244123456">
         </div>
@@ -336,14 +311,13 @@
         </div>
         <button type="submit" class="btn btn-employee">Sign In</button>
         <div class="auth-toggle">
-          <a onclick="showEmployeeForgot()">Forgot password?</a>
-        </div>
-        <div class="auth-toggle">
           <span>Don't have an account?</span>
           <a onclick="showEmployeeRegister()">Register</a>
         </div>
+        <div class="auth-toggle" style="margin-top:6px">
+          <a onclick="showEmployeeForgot()">Forgot password?</a>
+        </div>
       </form>
-
       <form id="employee-forgot-form" class="hidden" onsubmit="event.preventDefault(); handleEmployeeForgotPassword();">
         <div class="form-group">
           <label>Institution Code</label>
@@ -366,7 +340,6 @@
           <a onclick="showEmployeeLogin()">Back to Sign In</a>
         </div>
       </form>
-
       <form id="employee-register-form" class="hidden" onsubmit="event.preventDefault(); handleEmployeeRegister();">
         <div class="form-group">
           <label>Full Name</label>
@@ -378,7 +351,7 @@
         </div>
         <div class="form-group">
           <label>Phone Number <span style="font-weight:400;color:var(--text-light)">(for SMS OTP reset)</span></label>
-          <input type="tel" id="employee-reg-phone" placeholder="e.g. 0244123456" autocomplete="off">
+          <input type="tel" id="employee-reg-phone" placeholder="e.g. 0244123456">
         </div>
         <div class="form-group">
           <label>Institution Code</label>
@@ -489,7 +462,7 @@
     </div>
   </div>
 
-  <div id="dashboard-page" class="hidden">
+    <div id="dashboard-page" class="hidden">
     <div id="trial-banner" class="trial-banner"></div>
     <div id="trial-expired-banner" class="trial-expired-banner"></div>
 
