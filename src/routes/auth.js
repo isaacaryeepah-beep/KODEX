@@ -19,6 +19,7 @@ router.post("/forgot-password",        passwordResetLimiter,  authController.for
 router.post("/reset-password",         passwordResetLimiter,  authController.resetPassword);
 router.post("/forgot-password-email",  passwordResetLimiter,  authController.forgotPasswordEmail);
 router.post("/reset-password-email",   passwordResetLimiter,  authController.resetPasswordEmail);
+router.post("/forgot-password-admin",  passwordResetLimiter,  authController.forgotPasswordAdmin);  // ← ADDED
 router.put("/profile",                 authenticate,          authController.updateProfile);
 
 module.exports = router;
