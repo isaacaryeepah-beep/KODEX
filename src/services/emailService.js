@@ -1,11 +1,11 @@
 // ─── KODEX Email Service ───────────────────────────────────────────────────
-// Uses Resend (resend.com) — free tier = 3,000 emails/month
-// Set RESEND_API_KEY and EMAIL_FROM in Render environment variables
-// EMAIL_FROM example: "KODEX <no-reply@yourdomain.com>"
-// If RESEND_API_KEY is not set, emails are logged to console only (dev mode)
+// Uses MailerSend API — free tier = 3,000 emails/month
+// Set MAILERSEND_API_KEY and EMAIL_FROM in Render environment variables
+// EMAIL_FROM example: "KODEX <no-reply@kodex.it.com>"
+// If MAILERSEND_API_KEY is not set, emails are logged to console only (dev mode)
 
-const FROM    = process.env.EMAIL_FROM    || 'KODEX <no-reply@kodex.app>';
-const BASE_URL = process.env.APP_URL      || 'https://kodex-7l3g.onrender.com';
+const FROM     = process.env.EMAIL_FROM || 'KODEX <no-reply@kodex.it.com>';
+const BASE_URL = process.env.APP_URL    || 'https://kodex-713g.onrender.com';
 
 // ── Colour palette ────────────────────────────────────────────────────────────
 const C = {
@@ -88,21 +88,46 @@ ${previewText ? `<div style="display:none;max-height:0;overflow:hidden;color:#f1
 }
 
 // ── Send helper ───────────────────────────────────────────────────────────────
+// Parses "Name <email@domain.com>" into { name, email } for MailerSend
+function parseAddress(addr) {
+  const m = addr.match(/^(.+?)\s*<(.+?)>$/);
+  if (m) return { name: m[1].trim(), email: m[2].trim() };
+  return { email: addr.trim() };
+}
+
 async function send({ to, subject, html }) {
-  const apiKey = process.env.RESEND_API_KEY;
+  const apiKey = process.env.MAILERSEND_API_KEY;
   if (!apiKey) {
-    console.log(`[EmailService] No RESEND_API_KEY — would send to ${to}: "${subject}"`);
+    console.log(`[EmailService] No MAILERSEND_API_KEY — would send to ${to}: "${subject}"`);
     return { ok: true, dev: true };
   }
   try {
-    const { Resend } = require('resend');
-    const resend = new Resend(apiKey);
-    const result = await resend.emails.send({ from: FROM, to, subject, html });
-    console.log(`[EmailService] Sent "${subject}" to ${to}`, result?.id || '');
-    return { ok: true, id: result?.id };
+    const axios = require('axios');
+    const from  = parseAddress(FROM);
+    const payload = {
+      from,
+      to: [parseAddress(to)],
+      subject,
+      html,
+    };
+    const response = await axios.post(
+      'https://api.mailersend.com/v1/email',
+      payload,
+      {
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+          'X-Requested-With': 'XMLHttpRequest',
+        },
+      }
+    );
+    const msgId = response.headers['x-message-id'] || '';
+    console.log(`[EmailService] Sent "${subject}" to ${to} — id: ${msgId}`);
+    return { ok: true, id: msgId };
   } catch (err) {
-    console.error(`[EmailService] Failed to send "${subject}" to ${to}:`, err.message);
-    return { ok: false, error: err.message };
+    const detail = err.response?.data || err.message;
+    console.error(`[EmailService] Failed to send "${subject}" to ${to}:`, detail);
+    return { ok: false, error: detail };
   }
 }
 
