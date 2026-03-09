@@ -461,17 +461,17 @@ async function handleAdminForgotPassword() {
   }
 
   if (adminForgotStep === 'request') {
-    const email = document.getElementById('admin-forgot-email').value.trim();
-    if (!email) return setAdminForgotMsg('Please enter your email address', false);
+    const phone = document.getElementById('admin-forgot-phone').value.trim();
+    if (!phone) return setAdminForgotMsg('Please enter your phone number', false);
     const btn = document.getElementById('admin-forgot-btn');
     btn.textContent = 'Sending...'; btn.disabled = true;
     try {
-      const data = await api('/api/auth/forgot-password-admin', { method: 'POST', body: JSON.stringify({ email }) });
-      adminForgotEmail = email; adminForgotStep = 'reset';
+      const data = await api('/api/auth/forgot-password-admin', { method: 'POST', body: JSON.stringify({ phone }) });
+      adminForgotEmail = phone; adminForgotStep = 'reset';
       document.getElementById('admin-reset-code-group').classList.remove('hidden');
       document.getElementById('admin-new-password-group').classList.remove('hidden');
       btn.textContent = 'Reset Password'; btn.disabled = false;
-      setAdminForgotMsg('📧 ' + (data.message || 'Reset code sent. Please check your email inbox.'), true);
+      setAdminForgotMsg('📱 ' + (data.message || 'Reset code sent to your phone via SMS.'), true);
     } catch(e) { btn.textContent = 'Request Reset Code'; btn.disabled = false; setAdminForgotMsg(e.message, false); }
   } else {
     const resetCode = document.getElementById('admin-reset-code').value.trim();
@@ -547,18 +547,18 @@ async function handleLecturerForgotPassword() {
 
   if (lecturerForgotStep === 'request') {
     const institutionCode = document.getElementById('lecturer-forgot-code')?.value.trim().toUpperCase();
-    const email = document.getElementById('lecturer-forgot-email').value.trim();
+    const phone = document.getElementById('lecturer-forgot-phone').value.trim();
     if (!institutionCode) return setLecturerForgotMsg('Please enter your institution code', false);
-    if (!email) return setLecturerForgotMsg('Please enter your email address', false);
+    if (!phone) return setLecturerForgotMsg('Please enter your phone number', false);
     const btn = document.getElementById('lecturer-forgot-btn');
     btn.textContent = 'Sending...'; btn.disabled = true;
     try {
-      const data = await api('/api/auth/forgot-password-email', { method: 'POST', body: JSON.stringify({ email, institutionCode }) });
-      lecturerForgotEmail = email; lecturerForgotStep = 'reset';
+      const data = await api('/api/auth/forgot-password-email', { method: 'POST', body: JSON.stringify({ phone, institutionCode }) });
+      lecturerForgotEmail = phone; lecturerForgotStep = 'reset';
       document.getElementById('lecturer-reset-code-group').classList.remove('hidden');
       document.getElementById('lecturer-new-password-group').classList.remove('hidden');
       btn.textContent = 'Reset Password'; btn.disabled = false;
-      setLecturerForgotMsg('📧 ' + (data.message || 'Reset code sent. Please check your email inbox.'), true);
+      setLecturerForgotMsg('📱 ' + (data.message || 'Reset code sent to your phone via SMS.'), true);
     } catch(e) { btn.textContent = 'Request Reset Code'; btn.disabled = false; setLecturerForgotMsg(e.message, false); }
   } else {
     const resetCode = document.getElementById('lecturer-reset-code').value.trim();
