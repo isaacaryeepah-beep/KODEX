@@ -3,12 +3,16 @@ const User = require("../models/User");
 
 const authenticate = async (req, res, next) => {
   try {
+    // Accept token from Authorization header OR query string (for file downloads)
     const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    let token;
+    if (authHeader && authHeader.startsWith("Bearer ")) {
+      token = authHeader.split(" ")[1];
+    } else if (req.query.token) {
+      token = req.query.token;
+    } else {
       return res.status(401).json({ error: "No token provided" });
     }
-
-    const token = authHeader.split(" ")[1];
     const decoded = verifyToken(token);
 
     const user = await User.findById(decoded.id);
