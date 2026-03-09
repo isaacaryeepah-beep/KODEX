@@ -533,4 +533,4 @@ input[type="checkbox"] { width:15px; height:15px; accent-color:var(--portal-prim
   75%      { transform: translateX(-2px); }
   90%      { transform: translateX(2px); }
 }
-.error-msg.shake { animation: shake-error 0.45s ease; }s
+.error-msg.shake { animation: shake-error 0.45s ease; }
