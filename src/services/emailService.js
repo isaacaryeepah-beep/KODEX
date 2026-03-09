@@ -102,33 +102,53 @@ async function send({ to, subject, html }) {
     return { ok: true, dev: true };
   }
   try {
-    const { MailerSend, EmailParams, Sender, Recipient } = require('mailersend');
-
-    const mailerSend = new MailerSend({ apiKey });
+    const https = require('https');
 
     const fromParsed = parseAddress(FROM);
     const toParsed   = parseAddress(to);
 
-    const sentFrom   = new Sender(fromParsed.email, fromParsed.name);
-    const recipients = [new Recipient(toParsed.email, toParsed.name || toParsed.email)];
+    const payload = JSON.stringify({
+      from: { email: fromParsed.email, name: fromParsed.name },
+      to:   [{ email: toParsed.email,  name: toParsed.name || toParsed.email }],
+      subject,
+      html,
+      text: subject,
+    });
 
-    const emailParams = new EmailParams()
-      .setFrom(sentFrom)
-      .setTo(recipients)
-      .setReplyTo(sentFrom)
-      .setSubject(subject)
-      .setHtml(html)
-      .setText(subject); // plain text fallback
+    const msgId = await new Promise((resolve, reject) => {
+      const req = https.request({
+        hostname: 'api.mailersend.com',
+        path:     '/v1/email',
+        method:   'POST',
+        headers: {
+          'Authorization':  `Bearer ${apiKey}`,
+          'Content-Type':   'application/json',
+          'Content-Length': Buffer.byteLength(payload),
+        },
+      }, (res) => {
+        let body = '';
+        res.on('data', chunk => body += chunk);
+        res.on('end', () => {
+          if (res.statusCode === 202) {
+            resolve(res.headers['x-message-id'] || 'sent');
+          } else {
+            reject(new Error(`MailerSend HTTP ${res.statusCode}: ${body}`));
+          }
+        });
+      });
+      req.on('error', reject);
+      req.write(payload);
+      req.end();
+    });
 
-    const result = await mailerSend.email.send(emailParams);
-    console.log(`[EmailService] Sent "${subject}" to ${to}`);
-    return { ok: true, id: result?.['x-message-id'] || '' };
+    console.log(`[EmailService] SUCCESS sent "${subject}" to ${to} id:${msgId}`);
+    return { ok: true, id: msgId };
   } catch (err) {
-    const detail = err.body || err.message || err;
-    console.error(`[EmailService] Failed to send "${subject}" to ${to}:`, JSON.stringify(detail));
-    return { ok: false, error: detail };
+    console.error(`[EmailService] FAILED "${subject}" to ${to}:`, err.message);
+    return { ok: false, error: err.message };
   }
 }
+
 
 // ═══════════════════════════════════════════════════════════════════════════════
 //  EMAIL TEMPLATES
