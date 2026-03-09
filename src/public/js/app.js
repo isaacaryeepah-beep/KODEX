@@ -481,7 +481,7 @@ async function handleAdminForgotPassword() {
     const btn = document.getElementById('admin-forgot-btn');
     btn.textContent = 'Resetting...'; btn.disabled = true;
     try {
-      await api('/api/auth/reset-password-email', { method: 'POST', body: JSON.stringify({ email: adminForgotEmail, resetCode, newPassword }) });
+      await api('/api/auth/reset-password-email', { method: 'POST', body: JSON.stringify({ phone: adminForgotEmail, resetCode, newPassword }) });
       adminForgotStep = 'request';
       setAdminForgotMsg('✅ Password reset! Redirecting to sign in...', true);
       setTimeout(() => { showAdminLogin(); }, 1800);
@@ -568,7 +568,7 @@ async function handleLecturerForgotPassword() {
     const btn = document.getElementById('lecturer-forgot-btn');
     btn.textContent = 'Resetting...'; btn.disabled = true;
     try {
-      await api('/api/auth/reset-password-email', { method: 'POST', body: JSON.stringify({ email: lecturerForgotEmail, resetCode, newPassword }) });
+      await api('/api/auth/reset-password-email', { method: 'POST', body: JSON.stringify({ phone: lecturerForgotEmail, resetCode, newPassword }) });
       lecturerForgotStep = 'request';
       setLecturerForgotMsg('✅ Password reset! Redirecting to sign in...', true);
       setTimeout(() => { showLecturerLogin(); }, 1800);
@@ -928,7 +928,7 @@ async function handleEmployeeForgotPassword() {
     const btn = document.getElementById('employee-forgot-btn');
     btn.textContent = 'Resetting...'; btn.disabled = true;
     try {
-      await api('/api/auth/reset-password-email', { method: 'POST', body: JSON.stringify({ email: employeeForgotEmail, institutionCode: employeeForgotCode, resetCode, newPassword }) });
+      await api('/api/auth/reset-password-email', { method: 'POST', body: JSON.stringify({ phone: employeeForgotEmail, institutionCode: employeeForgotCode, resetCode, newPassword }) });
       employeeForgotStep = 'request';
       setMsg('✅ Password reset! Redirecting to sign in...', true);
       setTimeout(() => { showEmployeeLogin(); }, 1800);
