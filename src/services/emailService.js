@@ -88,11 +88,11 @@ ${previewText ? `<div style="display:none;max-height:0;overflow:hidden;color:#f1
 }
 
 // ── Send helper ───────────────────────────────────────────────────────────────
-// Parses "Name <email@domain.com>" into { name, email } for MailerSend
+// Parses "Name <email@domain.com>" into { name, email }
 function parseAddress(addr) {
   const m = addr.match(/^(.+?)\s*<(.+?)>$/);
   if (m) return { name: m[1].trim(), email: m[2].trim() };
-  return { email: addr.trim() };
+  return { name: addr.trim(), email: addr.trim() };
 }
 
 async function send({ to, subject, html }) {
@@ -102,31 +102,30 @@ async function send({ to, subject, html }) {
     return { ok: true, dev: true };
   }
   try {
-    const axios = require('axios');
-    const from  = parseAddress(FROM);
-    const payload = {
-      from,
-      to: [parseAddress(to)],
-      subject,
-      html,
-    };
-    const response = await axios.post(
-      'https://api.mailersend.com/v1/email',
-      payload,
-      {
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
-          'X-Requested-With': 'XMLHttpRequest',
-        },
-      }
-    );
-    const msgId = response.headers['x-message-id'] || '';
-    console.log(`[EmailService] Sent "${subject}" to ${to} — id: ${msgId}`);
-    return { ok: true, id: msgId };
+    const { MailerSend, EmailParams, Sender, Recipient } = require('mailersend');
+
+    const mailerSend = new MailerSend({ apiKey });
+
+    const fromParsed = parseAddress(FROM);
+    const toParsed   = parseAddress(to);
+
+    const sentFrom   = new Sender(fromParsed.email, fromParsed.name);
+    const recipients = [new Recipient(toParsed.email, toParsed.name || toParsed.email)];
+
+    const emailParams = new EmailParams()
+      .setFrom(sentFrom)
+      .setTo(recipients)
+      .setReplyTo(sentFrom)
+      .setSubject(subject)
+      .setHtml(html)
+      .setText(subject); // plain text fallback
+
+    const result = await mailerSend.email.send(emailParams);
+    console.log(`[EmailService] Sent "${subject}" to ${to}`);
+    return { ok: true, id: result?.['x-message-id'] || '' };
   } catch (err) {
-    const detail = err.response?.data || err.message;
-    console.error(`[EmailService] Failed to send "${subject}" to ${to}:`, detail);
+    const detail = err.body || err.message || err;
+    console.error(`[EmailService] Failed to send "${subject}" to ${to}:`, JSON.stringify(detail));
     return { ok: false, error: detail };
   }
 }
