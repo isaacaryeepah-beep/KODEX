@@ -1,41 +1,38 @@
-// ─── KODEX SMS Service ────────────────────────────────────────────────────────
-// Uses Arkesel SMS API (arkesel.com)
-// Set ARKESEL_API_KEY and SMS_SENDER_ID in Render environment variables
-// SMS_SENDER_ID must be ≤11 chars e.g. "KODEX"
-// If ARKESEL_API_KEY is not set, OTPs are logged to console only (dev mode)
+// ─── KODEX SMS Service (Arkesel) ─────────────────────────────────────────────
+// Docs: https://developers.arkesel.com
+// Env vars needed in Render:
+//   ARKESEL_API_KEY  — your API key from arkesel.com dashboard
+//   SMS_SENDER_ID    — e.g. "KODEX" (max 11 chars, no spaces)
 // ─────────────────────────────────────────────────────────────────────────────
 
-const https       = require('https');
-const SENDER_ID   = process.env.SMS_SENDER_ID || 'KODEX';
+const https = require('https');
 
-// ── Normalise phone number to Arkesel format (233XXXXXXXXX) ──────────────────
+// Normalise any Ghana phone format → 233XXXXXXXXX
 function normalisePhone(raw) {
   if (!raw) return null;
-  let phone = String(raw).replace(/\s+/g, '').replace(/[^0-9+]/g, '');
-  // +233... → 233...
-  if (phone.startsWith('+')) phone = phone.slice(1);
-  // 0XX... → 233XX...  (Ghana local)
-  if (phone.startsWith('0')) phone = '233' + phone.slice(1);
-  // already 233...
-  return phone;
+  let p = String(raw).replace(/\s+/g, '').replace(/[^0-9+]/g, '');
+  if (p.startsWith('+')) p = p.slice(1);
+  if (p.startsWith('0')) p = '233' + p.slice(1);
+  return p;
 }
 
-// ── Raw SMS send ──────────────────────────────────────────────────────────────
+// Send a raw SMS
 async function sendSms({ to, message }) {
-  const apiKey = process.env.ARKESEL_API_KEY;
-  const phone  = normalisePhone(to);
+  const apiKey   = process.env.ARKESEL_API_KEY;
+  const senderId = process.env.SMS_SENDER_ID || 'KODEX';
+  const phone    = normalisePhone(to);
 
   if (!apiKey) {
-    console.log(`[SmsService] DEV — would send to ${phone}: "${message}"`);
+    console.log(`[SMS] DEV MODE — to:${phone} msg:"${message}"`);
     return { ok: true, dev: true };
   }
   if (!phone) {
-    console.error('[SmsService] Invalid phone number:', to);
+    console.error('[SMS] Invalid phone number:', to);
     return { ok: false, error: 'Invalid phone number' };
   }
 
   const payload = JSON.stringify({
-    sender:     SENDER_ID,
+    sender:     senderId,
     message,
     recipients: [phone],
   });
@@ -52,25 +49,25 @@ async function sendSms({ to, message }) {
       },
     }, (res) => {
       let body = '';
-      res.on('data', chunk => body += chunk);
+      res.on('data', c => body += c);
       res.on('end', () => {
         try {
           const json = JSON.parse(body);
           if (json.status === 'success') {
-            console.log(`[SmsService] ✅ Sent to ${phone}`);
+            console.log(`[SMS] ✅ Sent to ${phone}`);
             resolve({ ok: true });
           } else {
-            console.error(`[SmsService] ❌ Arkesel error:`, json);
+            console.error(`[SMS] ❌ Arkesel error:`, JSON.stringify(json));
             resolve({ ok: false, error: json.message || body });
           }
         } catch (e) {
-          console.error('[SmsService] ❌ Parse error:', body);
+          console.error('[SMS] ❌ Parse error:', body);
           resolve({ ok: false, error: body });
         }
       });
     });
     req.on('error', (err) => {
-      console.error('[SmsService] ❌ Request error:', err.message);
+      console.error('[SMS] ❌ Request error:', err.message);
       resolve({ ok: false, error: err.message });
     });
     req.write(payload);
@@ -78,10 +75,9 @@ async function sendSms({ to, message }) {
   });
 }
 
-// ── Send OTP code via SMS ─────────────────────────────────────────────────────
-async function sendOtp({ phone, code, name, context = 'password reset' }) {
-  const message =
-    `KODEX: Your ${context} code is ${code}. Valid for 1 hour. Do not share this code.`;
+// Send OTP reset code
+async function sendOtp({ phone, code, name }) {
+  const message = `KODEX: Hi ${name}, your password reset code is ${code}. Valid for 1 hour. Do not share this code.`;
   return sendSms({ to: phone, message });
 }
 
