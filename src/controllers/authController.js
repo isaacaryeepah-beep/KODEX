@@ -5,7 +5,7 @@ const Company = require("../models/Company");
 const StudentRoster = require("../models/StudentRoster");
 const { generateToken } = require("../utils/jwt");
 const { sendWelcome, sendAdminPasswordResetNotice } = require("../services/emailService");
-const { sendOtp } = require("../services/smsService");
+const { sendOtp, normalisePhone } = require("../services/smsService");
 
 const SIX_HOURS_MS = 6 * 60 * 60 * 1000;
 
@@ -49,7 +49,7 @@ exports.register = async (req, res) => {
         email,
         password,
         name,
-        phone: phone ? require('../services/smsService').normalisePhone(phone) : null,
+        phone: phone ? normalisePhone(phone) : null,
         company: company._id,
         role: "admin",
         isApproved: true,
@@ -148,7 +148,7 @@ exports.registerLecturer = async (req, res) => {
           email,
           password,
           name,
-          phone: req.body.phone ? require('../services/smsService').normalisePhone(req.body.phone) : null,
+          phone: req.body.phone ? normalisePhone(req.body.phone) : null,
           company: company._id,
           role: "lecturer",
           isApproved: true,
@@ -213,7 +213,7 @@ exports.registerLecturer = async (req, res) => {
       name,
       email,
       password,
-      phone: req.body.phone ? require('../services/smsService').normalisePhone(req.body.phone) : null,
+      phone: req.body.phone ? normalisePhone(req.body.phone) : null,
       company: company._id,
       role: "lecturer",
       isApproved: false,
@@ -286,7 +286,7 @@ exports.registerStudent = async (req, res) => {
       name,
       indexNumber: indexNumber.trim().toUpperCase(),
       password,
-      phone: req.body.phone ? require('../services/smsService').normalisePhone(req.body.phone) : null,
+      phone: req.body.phone ? normalisePhone(req.body.phone) : null,
       company: company._id,
       role: "student",
       isApproved: true,
@@ -379,7 +379,7 @@ exports.registerEmployee = async (req, res) => {
       name,
       email,
       password,
-      phone: req.body.phone ? require('../services/smsService').normalisePhone(req.body.phone) : null,
+      phone: req.body.phone ? normalisePhone(req.body.phone) : null,
       company: company._id,
       role: "employee",
       employeeId,
@@ -747,33 +747,25 @@ exports.resetPassword = async (req, res) => {
 
 exports.forgotPasswordEmail = async (req, res) => {
   try {
-    const { email, phone, institutionCode } = req.body;
-    if (!email && !phone) return res.status(400).json({ error: "Email or phone number is required" });
+    const { phone, institutionCode } = req.body;
+    if (!phone) return res.status(400).json({ error: "Phone number is required" });
     if (!institutionCode) return res.status(400).json({ error: "Institution code is required" });
 
     const company = await Company.findOne({ institutionCode: institutionCode.toUpperCase() });
     if (!company) return res.status(404).json({ error: "Institution not found. Please check your institution code." });
 
-    const { normalisePhone } = require("../services/smsService");
-    let user;
-    if (phone) {
-      const normPhone = normalisePhone(phone);
-      user = await User.findOne({ phone: normPhone, company: company._id })
-          || await User.findOne({ phone: phone.trim(), company: company._id });
-    } else {
-      user = await User.findOne({ email: email.toLowerCase().trim(), company: company._id });
-    }
-    if (!user) return res.status(404).json({ error: "No account found with those details in this institution" });
-    if (!user.phone) return res.status(400).json({ error: "No phone number on file for this account. Please contact your admin." });
+    const normPhone = normalisePhone(phone);
+    const user = await User.findOne({ phone: normPhone, company: company._id })
+               || await User.findOne({ phone: phone.trim(), company: company._id });
+
+    if (!user) return res.status(404).json({ error: "No account found with that phone number in this institution." });
 
     if (["admin", "superadmin"].includes(user.role)) {
-      return res.status(403).json({ error: "Admins cannot use this reset method. Please use the Admin portal to reset your password." });
+      return res.status(403).json({ error: "Admins must use the Admin portal to reset their password." });
     }
-
     if (!["manager", "lecturer", "employee"].includes(user.role)) {
-      return res.status(403).json({ error: "This reset method is not available for your account type" });
+      return res.status(403).json({ error: "This reset method is not available for your account type." });
     }
-
     if (user.resetPasswordExpires && user.resetPasswordExpires > Date.now()) {
       return res.status(429).json({ error: "A reset code was already sent recently. Please wait before requesting again." });
     }
@@ -784,15 +776,14 @@ exports.forgotPasswordEmail = async (req, res) => {
     user.resetPasswordExpires = new Date(Date.now() + 60 * 60 * 1000);
     await user.save({ validateBeforeSave: false });
 
-    // Send OTP via SMS (non-fatal)
-    sendOtp({
-      phone: user.phone,
-      code,
-      name: user.name,
-      context: 'password reset',
-    }).catch(err => console.error('Password reset SMS failed:', err.message));
+    const smsResult = await sendOtp({ phone: normPhone, code, name: user.name });
+    if (!smsResult.ok && !smsResult.dev) {
+      console.error('[ForgotPassword] SMS failed:', smsResult.error);
+      return res.status(500).json({ error: "Failed to send SMS. Please try again or contact your admin." });
+    }
 
-    res.json({ message: "A reset code has been sent to your phone number via SMS." });
+    console.log(`[ForgotPassword] OTP sent to ${normPhone} for ${user.name}`);
+    res.json({ message: "A 6-digit reset code has been sent to your phone via SMS." });
   } catch (error) {
     console.error("Forgot password email error:", error);
     res.status(500).json({ error: "Failed to generate reset code" });
@@ -801,25 +792,18 @@ exports.forgotPasswordEmail = async (req, res) => {
 
 exports.forgotPasswordAdmin = async (req, res) => {
   try {
-    const { email, phone } = req.body;
-    if (!email && !phone) return res.status(400).json({ error: "Email or phone number is required" });
+    const { phone } = req.body;
+    if (!phone) return res.status(400).json({ error: "Phone number is required" });
 
-    const { normalisePhone } = require("../services/smsService");
-    let user;
-    if (phone) {
-      const normPhone = normalisePhone(phone);
-      user = await User.findOne({ phone: normPhone }).populate("company", "name")
-          || await User.findOne({ phone: phone.trim() }).populate("company", "name");
-    } else {
-      user = await User.findOne({ email: email.toLowerCase().trim() }).populate("company", "name");
-    }
-    if (!user) return res.status(404).json({ error: "No account found with those details" });
-    if (!user.phone) return res.status(400).json({ error: "No phone number on file for this account. Please contact support." });
+    const normPhone = normalisePhone(phone);
+    const user = await User.findOne({ phone: normPhone }).populate("company", "name")
+               || await User.findOne({ phone: phone.trim() }).populate("company", "name");
+
+    if (!user) return res.status(404).json({ error: "No account found with that phone number." });
 
     if (!["admin", "superadmin"].includes(user.role)) {
-      return res.status(403).json({ error: "This reset method is for admins only. Lecturers and employees should use their own portal's forgot password." });
+      return res.status(403).json({ error: "This reset method is for admins only. Lecturers and employees should use their own portal." });
     }
-
     if (user.resetPasswordExpires && user.resetPasswordExpires > Date.now()) {
       return res.status(429).json({ error: "A reset code was already sent recently. Please wait before requesting again." });
     }
@@ -830,15 +814,14 @@ exports.forgotPasswordAdmin = async (req, res) => {
     user.resetPasswordExpires = new Date(Date.now() + 60 * 60 * 1000);
     await user.save({ validateBeforeSave: false });
 
-    // Send OTP via SMS (non-fatal)
-    sendOtp({
-      phone: user.phone,
-      code,
-      name: user.name,
-      context: 'password reset',
-    }).catch(err => console.error('Password reset SMS failed:', err.message));
+    const smsResult = await sendOtp({ phone: normPhone, code, name: user.name });
+    if (!smsResult.ok && !smsResult.dev) {
+      console.error('[ForgotPasswordAdmin] SMS failed:', smsResult.error);
+      return res.status(500).json({ error: "Failed to send SMS. Please try again." });
+    }
 
-    res.json({ message: "A reset code has been sent to your phone number via SMS." });
+    console.log(`[ForgotPasswordAdmin] OTP sent to ${normPhone} for ${user.name}`);
+    res.json({ message: "A 6-digit reset code has been sent to your phone via SMS." });
   } catch (error) {
     console.error("Forgot password admin error:", error);
     res.status(500).json({ error: "Failed to generate reset code" });
@@ -847,16 +830,17 @@ exports.forgotPasswordAdmin = async (req, res) => {
 
 exports.resetPasswordEmail = async (req, res) => {
   try {
-    const { email, resetCode, newPassword } = req.body;
-    if (!email || !resetCode || !newPassword) {
-      return res.status(400).json({ error: "Email, reset code, and new password are required" });
+    const { phone, resetCode, newPassword } = req.body;
+    if (!phone || !resetCode || !newPassword) {
+      return res.status(400).json({ error: "Phone number, reset code, and new password are required" });
     }
     if (newPassword.length < 8) {
       return res.status(400).json({ error: "Password must be at least 8 characters" });
     }
 
+    const normPhone = normalisePhone(phone);
     const user = await User.findOne({
-      email: email.toLowerCase().trim(),
+      phone: { $in: [normPhone, phone.trim()] },
       resetPasswordExpires: { $gt: Date.now() },
     }).select("+password");
 
