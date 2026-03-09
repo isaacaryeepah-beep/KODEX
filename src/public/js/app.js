@@ -731,16 +731,17 @@ async function handleAdminRegister() {
   try {
     const name = document.getElementById('admin-reg-name').value;
     const email = document.getElementById('admin-reg-email').value;
+    const phone = document.getElementById('admin-reg-phone').value.trim();
     const password = document.getElementById('admin-reg-password').value;
     const companyName = document.getElementById('admin-reg-company').value;
     const mode = selectedPortalType === 'admin-academic' ? 'academic' : 'corporate';
-    if (!name || !email || !password || !companyName) {
+    if (!name || !email || !phone || !password || !companyName) {
       return showAdminError('Please fill in all fields');
     }
     if (password.length < 8) {
       return showAdminError('Password must be at least 8 characters');
     }
-    const body = { name, email, password, companyName, mode };
+    const body = { name, email, phone, password, companyName, mode };
     const data = await api('/api/auth/register', { method: 'POST', body: JSON.stringify(body) });
     token = data.token;
     localStorage.setItem('token', token);
@@ -813,8 +814,10 @@ async function handleLecturerRegister() {
     }
 
     const dept = document.getElementById('lecturer-reg-dept')?.value?.trim();
+    const phone = document.getElementById('lecturer-reg-phone')?.value?.trim();
     let body = { name, email, password };
     if (dept) body.department = dept;
+    if (phone) body.phone = phone;
     if (regMode === 'create') {
       const institutionName = document.getElementById('lecturer-reg-institution').value;
       if (!institutionName) return showLecturerError('Please enter your institution name');
@@ -904,18 +907,18 @@ async function handleEmployeeForgotPassword() {
   }
   if (employeeForgotStep === 'request') {
     const institutionCode = document.getElementById('employee-forgot-code')?.value.trim().toUpperCase();
-    const email = document.getElementById('employee-forgot-email')?.value.trim();
+    const phone = document.getElementById('employee-forgot-phone')?.value.trim();
     if (!institutionCode) return setMsg('Please enter your institution code', false);
-    if (!email) return setMsg('Please enter your email address', false);
+    if (!phone) return setMsg('Please enter your phone number', false);
     const btn = document.getElementById('employee-forgot-btn');
     btn.textContent = 'Sending...'; btn.disabled = true;
     try {
-      const data = await api('/api/auth/forgot-password-email', { method: 'POST', body: JSON.stringify({ email, institutionCode }) });
-      employeeForgotEmail = email; employeeForgotCode = institutionCode; employeeForgotStep = 'reset';
+      const data = await api('/api/auth/forgot-password-email', { method: 'POST', body: JSON.stringify({ phone, institutionCode }) });
+      employeeForgotEmail = phone; employeeForgotCode = institutionCode; employeeForgotStep = 'reset';
       document.getElementById('employee-reset-code-group').classList.remove('hidden');
       document.getElementById('employee-new-password-group').classList.remove('hidden');
       btn.textContent = 'Reset Password'; btn.disabled = false;
-      setMsg('📧 ' + (data.message || 'Reset code sent. Please check your email inbox.'), true);
+      setMsg('📱 ' + (data.message || 'Reset code sent to your phone via SMS.'), true);
     } catch(e) { btn.textContent = 'Request Reset Code'; btn.disabled = false; setMsg(e.message, false); }
   } else {
     const resetCode = document.getElementById('employee-reset-code')?.value.trim();
@@ -988,7 +991,8 @@ async function handleEmployeeRegister() {
     if (password.length < 8) {
       return showEmployeeError('Password must be at least 8 characters');
     }
-    const data = await api('/api/auth/register-employee', { method: 'POST', body: JSON.stringify({ name, email, password, institutionCode }) });
+    const phone = document.getElementById('employee-reg-phone')?.value?.trim();
+    const data = await api('/api/auth/register-employee', { method: 'POST', body: JSON.stringify({ name, email, phone, password, institutionCode }) });
     const el = document.getElementById('employee-auth-error');
     el.textContent = data.message || 'Registration successful! Your account is pending admin approval.';
     el.style.display = 'block';
@@ -1060,7 +1064,8 @@ async function handleStudentRegister() {
     if (password !== confirm) {
       return showStudentError('Passwords do not match');
     }
-    const data = await api('/api/auth/register-student', { method: 'POST', body: JSON.stringify({ name, indexNumber, password, institutionCode }) });
+    const phone = document.getElementById('student-reg-phone')?.value?.trim();
+    const data = await api('/api/auth/register-student', { method: 'POST', body: JSON.stringify({ name, indexNumber, phone, password, institutionCode }) });
     if (data.token) {
       token = data.token;
       localStorage.setItem('token', token);
