@@ -48,7 +48,7 @@ exports.register = async (req, res) => {
       const phoneExists = await User.findOne({ phone: normPhone });
       if (phoneExists) {
         await Company.findByIdAndDelete(company._id);
-        return res.status(400).json({ error: "Invalid" });
+        return res.status(400).json({ error: "Phone number is already in use" });
       }
     }
 
@@ -113,7 +113,7 @@ exports.register = async (req, res) => {
     }
     if (error.code === 11000) {
       const field = Object.keys(error.keyPattern || {})[0] || "field";
-      if (Object.keys(error.keyPattern || {}).includes("phone")) return res.status(400).json({ error: "Invalid" });
+      if (Object.keys(error.keyPattern || {}).includes("phone")) return res.status(400).json({ error: "Phone number is already in use" });
       return res.status(400).json({ error: `This ${field} is already registered` });
     }
     console.error("Register error:", error.message, error.stack);
@@ -157,7 +157,7 @@ exports.registerLecturer = async (req, res) => {
         const phoneExists = await User.findOne({ phone: normPhone, company: company._id });
         if (phoneExists) {
           await Company.findByIdAndDelete(company._id);
-          return res.status(400).json({ error: "Invalid" });
+          return res.status(400).json({ error: "Phone number is already in use" });
         }
       }
 
@@ -231,7 +231,7 @@ exports.registerLecturer = async (req, res) => {
     if (req.body.phone) {
       const normPhone = normalisePhone(req.body.phone);
       const phoneExists = await User.findOne({ phone: normPhone, company: company._id });
-      if (phoneExists) return res.status(400).json({ error: "Invalid" });
+      if (phoneExists) return res.status(400).json({ error: "Phone number is already in use" });
     }
 
     const user = await User.create({
@@ -263,7 +263,7 @@ exports.registerLecturer = async (req, res) => {
       return res.status(400).json({ error: messages.join(", ") });
     }
     if (error.code === 11000) {
-      if (Object.keys(error.keyPattern || {}).includes("phone")) return res.status(400).json({ error: "Invalid" });
+      if (Object.keys(error.keyPattern || {}).includes("phone")) return res.status(400).json({ error: "Phone number is already in use" });
       return res.status(400).json({ error: "This email is already registered at this institution" });
     }
     console.error("Lecturer register error:", error);
@@ -311,7 +311,7 @@ exports.registerStudent = async (req, res) => {
     if (req.body.phone) {
       const normPhone = normalisePhone(req.body.phone);
       const phoneExists = await User.findOne({ phone: normPhone, company: company._id });
-      if (phoneExists) return res.status(400).json({ error: "Invalid" });
+      if (phoneExists) return res.status(400).json({ error: "Phone number is already in use" });
     }
 
     const user = await User.create({
@@ -363,7 +363,7 @@ exports.registerStudent = async (req, res) => {
       return res.status(400).json({ error: messages.join(", ") });
     }
     if (error.code === 11000) {
-      if (Object.keys(error.keyPattern || {}).includes("phone")) return res.status(400).json({ error: "Invalid" });
+      if (Object.keys(error.keyPattern || {}).includes("phone")) return res.status(400).json({ error: "Phone number is already in use" });
       return res.status(400).json({ error: "This student ID is already registered at this institution" });
     }
     console.error("Student register error:", error);
@@ -400,7 +400,7 @@ exports.registerEmployee = async (req, res) => {
     if (req.body.phone) {
       const normPhone = normalisePhone(req.body.phone);
       const phoneExists = await User.findOne({ phone: normPhone, company: company._id });
-      if (phoneExists) return res.status(400).json({ error: "Invalid" });
+      if (phoneExists) return res.status(400).json({ error: "Phone number is already in use" });
     }
 
     const updatedCompany = await Company.findByIdAndUpdate(
@@ -446,7 +446,7 @@ exports.registerEmployee = async (req, res) => {
       return res.status(400).json({ error: messages.join(", ") });
     }
     if (error.code === 11000) {
-      if (Object.keys(error.keyPattern || {}).includes("phone")) return res.status(400).json({ error: "Invalid" });
+      if (Object.keys(error.keyPattern || {}).includes("phone")) return res.status(400).json({ error: "Phone number is already in use" });
       return res.status(400).json({ error: "This email is already registered at this company" });
     }
     console.error("Employee register error:", error);
@@ -801,10 +801,10 @@ exports.forgotPasswordEmail = async (req, res) => {
     if (!user) return res.status(404).json({ error: "No account found with that phone number in this institution." });
 
     if (["admin", "superadmin"].includes(user.role)) {
-      return res.status(403).json({ error: "Invalid" });
+      return res.status(403).json({ error: "Phone number is already in use" });
     }
     if (user.role === "student") {
-      return res.status(403).json({ error: "Invalid" });
+      return res.status(403).json({ error: "Phone number is already in use" });
     }
     if (!["manager", "lecturer", "employee"].includes(user.role)) {
       return res.status(403).json({ error: "This reset method is not available for your account type." });
@@ -845,10 +845,10 @@ exports.forgotPasswordAdmin = async (req, res) => {
     if (!user) return res.status(404).json({ error: "No account found with that phone number." });
 
     if (user.role === "lecturer") {
-      return res.status(403).json({ error: "Invalid" });
+      return res.status(403).json({ error: "Phone number is already in use" });
     }
     if (["employee", "manager"].includes(user.role)) {
-      return res.status(403).json({ error: "Invalid" });
+      return res.status(403).json({ error: "Phone number is already in use" });
     }
     if (!["admin", "superadmin"].includes(user.role)) {
       return res.status(403).json({ error: "This reset method is for admins only." });
