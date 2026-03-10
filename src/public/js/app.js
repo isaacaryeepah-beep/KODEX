@@ -1736,6 +1736,26 @@ async function renderEmployeeDashboard(content) {
 }
 
 async function employeeSignIn() {
+  // If ESP32 configured, check BLE presence first
+  if (esp32IP) {
+    const detected = await discoverESP32();
+    if (!detected) {
+      alert('You must be at the office to sign in. No office device detected.');
+      return;
+    }
+    // Record sign-in on ESP32 locally
+    try {
+      await esp32Api('/sign-in', {
+        method: 'POST',
+        body: JSON.stringify({ userId: currentUser.id, name: currentUser.name })
+      });
+      alert('Signed in successfully!');
+      renderSignInOut();
+      return;
+    } catch(e) {
+      console.warn('[ESP32] Sign in failed, trying server:', e.message);
+    }
+  }
   try {
     const data = await api('/api/attendance-sessions/sign-in', { method: 'POST' });
     alert(data.message || 'Signed in successfully!');
@@ -1747,6 +1767,25 @@ async function employeeSignIn() {
 
 async function employeeSignOut() {
   if (!confirm('Are you sure you want to sign out?')) return;
+  // If ESP32 configured, check BLE presence first
+  if (esp32IP) {
+    const detected = await discoverESP32();
+    if (!detected) {
+      alert('You must be at the office to sign out. No office device detected.');
+      return;
+    }
+    try {
+      await esp32Api('/sign-out', {
+        method: 'POST',
+        body: JSON.stringify({ userId: currentUser.id, name: currentUser.name })
+      });
+      alert('Signed out successfully!');
+      renderSignInOut();
+      return;
+    } catch(e) {
+      console.warn('[ESP32] Sign out failed, trying server:', e.message);
+    }
+  }
   try {
     const data = await api('/api/attendance-sessions/sign-out', { method: 'POST' });
     alert(data.message ? data.message + (data.duration ? ' Duration: ' + data.duration : '') : 'Signed out successfully!');
@@ -1775,6 +1814,15 @@ async function renderSignInOut() {
         <p>Track your daily attendance</p>
       </div>
 
+      ${esp32IP ? `
+      <div class="card" style="padding:10px 16px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between">
+        <span style="font-size:12px">${bleDetected ? '🟢 Office device detected — sign in/out gated to office' : '🔴 Office device not reachable — connecting...'}</span>
+        <button class="btn btn-sm" style="font-size:10px;padding:3px 8px;background:var(--border)" onclick="configureESP32()">Configure</button>
+      </div>` : `
+      <div class="card" style="padding:10px 16px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between">
+        <span style="font-size:12px;color:var(--text-muted)">⚪ No office device configured — sign in/out works without proximity check</span>
+        <button class="btn btn-sm" style="font-size:10px;padding:3px 8px;background:var(--border)" onclick="configureESP32()">Set up ESP32</button>
+      </div>`}
       <div class="card" style="text-align:center;padding:40px 24px;border-left:4px solid ${signedIn ? 'var(--success)' : 'var(--primary)'}">
         <div style="font-size:56px;margin-bottom:16px">${signedIn ? svgIcon('<polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>', 56) : svgIcon('<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>', 56)}</div>
         <div style="font-size:22px;font-weight:800;color:${signedIn ? 'var(--success)' : 'var(--primary)'}">
