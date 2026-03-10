@@ -9,50 +9,67 @@ const { validateDevice, enforceLogoutRestriction } = require("../middleware/devi
 const { requireActiveSubscription } = require("../middleware/subscription");
 
 const router = express.Router();
-
 router.use(authenticate);
 router.use(requireActiveSubscription);
 
-const DEFAULT_EXPIRY_SECONDS = 15;
+const QR_EXPIRY_SECONDS   = 15;   // QR rotates every 15s — single use
+const VERBAL_EXPIRY_MINUTES = 5;  // Verbal code valid for 5 minutes — multi-use
 
+// ── Generate a token (QR or verbal) ─────────────────────────────────────────
 router.post(
   "/generate",
   requireRole("admin", "manager", "lecturer", "superadmin"),
   companyIsolation,
   async (req, res) => {
     try {
-      const { sessionId, expiryMinutes, expirySeconds } = req.body;
+      const { sessionId, expiryMinutes, expirySeconds, codeType = "qr" } = req.body;
 
       if (!sessionId || !mongoose.Types.ObjectId.isValid(sessionId)) {
         return res.status(400).json({ error: "Valid session ID is required" });
       }
 
       const sessionFilter = { _id: sessionId, ...req.companyFilter };
-      if (req.user.role === "lecturer") {
-        sessionFilter.createdBy = req.user._id;
-      }
+      if (req.user.role === "lecturer") sessionFilter.createdBy = req.user._id;
 
       const session = await AttendanceSession.findOne(sessionFilter);
+      if (!session) return res.status(404).json({ error: "Attendance session not found or access denied" });
+      if (session.status !== "active") return res.status(400).json({ error: "Attendance session is not active" });
 
-      if (!session) {
-        return res.status(404).json({ error: "Attendance session not found or access denied" });
+      // For verbal codes: if one already exists and is still valid, return it (don't keep generating new ones)
+      if (codeType === "verbal") {
+        const existing = await QrToken.findOne({
+          session: sessionId,
+          codeType: "verbal",
+          expiresAt: { $gt: new Date() },
+        });
+        if (existing) {
+          return res.status(200).json({
+            qrToken: {
+              id: existing._id,
+              code: existing.code,
+              token: existing.token,
+              expiresAt: existing.expiresAt,
+              codeType: existing.codeType,
+            },
+          });
+        }
       }
 
-      if (session.status !== "active") {
-        return res.status(400).json({ error: "Attendance session is not active" });
-      }
-
-      // Support seconds (for 15s rotation) or minutes fallback
+      // Calculate expiry
       let expiresAt;
-      if (expirySeconds) {
-        expiresAt = new Date(Date.now() + parseInt(expirySeconds) * 1000);
-      } else {
-        const mins = parseInt(expiryMinutes) || Math.ceil(DEFAULT_EXPIRY_SECONDS / 60);
+      if (codeType === "verbal") {
+        const mins = parseInt(expiryMinutes) || VERBAL_EXPIRY_MINUTES;
         expiresAt = new Date(Date.now() + mins * 60 * 1000);
+      } else {
+        const secs = parseInt(expirySeconds) || QR_EXPIRY_SECONDS;
+        expiresAt = new Date(Date.now() + secs * 1000);
       }
+
+      // Clean up expired tokens for this session to avoid unique index conflicts
+      await QrToken.deleteMany({ session: sessionId, expiresAt: { $lt: new Date() } });
 
       let qrToken;
-      const maxRetries = 3;
+      const maxRetries = 5;
       for (let attempt = 0; attempt < maxRetries; attempt++) {
         try {
           const code = await QrToken.generateUniqueCode(sessionId);
@@ -63,6 +80,7 @@ router.post(
             code,
             token,
             expiresAt,
+            codeType,
             createdBy: req.user._id,
           });
           break;
@@ -84,6 +102,7 @@ router.post(
           code: populated.code,
           token: populated.token,
           expiresAt: populated.expiresAt,
+          codeType: populated.codeType,
           session: populated.session,
           company: populated.company,
           createdBy: populated.createdBy,
@@ -92,20 +111,21 @@ router.post(
     } catch (error) {
       console.error("Generate QR token error:", error);
       if (error.message.includes("Unable to generate unique code")) {
-        return res.status(409).json({ error: error.message });
+        return res.status(409).json({ error: "Could not generate a unique code. Please try again." });
       }
-      res.status(500).json({ error: "Failed to generate QR token" });
+      if (error.code === 11000) {
+        return res.status(409).json({ error: "A code conflict occurred. Please try again." });
+      }
+      res.status(500).json({ error: error.message || "Failed to generate token" });
     }
   }
 );
 
+// ── Validate a token (used by student app before marking) ────────────────────
 router.post("/validate", validateDevice, enforceLogoutRestriction, async (req, res) => {
   try {
     const { token, code, sessionId } = req.body;
-
-    if (!token && !code) {
-      return res.status(400).json({ error: "Token or code is required" });
-    }
+    if (!token && !code) return res.status(400).json({ error: "Token or code is required" });
 
     const query = {};
     if (token) {
@@ -123,16 +143,12 @@ router.post("/validate", validateDevice, enforceLogoutRestriction, async (req, r
       { path: "company", select: "name" },
     ]);
 
-    if (!qrToken) {
-      return res.status(404).json({ valid: false, error: "Token not found" });
-    }
+    if (!qrToken) return res.status(404).json({ valid: false, error: "Token not found" });
+    if (qrToken.isExpired()) return res.status(410).json({ valid: false, error: "Token has expired" });
 
-    if (qrToken.isExpired()) {
-      return res.status(410).json({ valid: false, error: "Token has expired" });
-    }
-
-    if (qrToken.isUsed) {
-      return res.status(410).json({ valid: false, error: "Token has already been used" });
+    // QR tokens are single-use; verbal codes are multi-use
+    if (qrToken.codeType === "qr" && qrToken.isUsed) {
+      return res.status(410).json({ valid: false, error: "QR token has already been used" });
     }
 
     res.json({
@@ -141,6 +157,7 @@ router.post("/validate", validateDevice, enforceLogoutRestriction, async (req, r
         id: qrToken._id,
         code: qrToken.code,
         expiresAt: qrToken.expiresAt,
+        codeType: qrToken.codeType,
         session: qrToken.session,
         company: qrToken.company,
       },
@@ -151,6 +168,7 @@ router.post("/validate", validateDevice, enforceLogoutRestriction, async (req, r
   }
 });
 
+// ── List tokens for a session ────────────────────────────────────────────────
 router.get(
   "/session/:sessionId",
   requireRole("admin", "manager", "lecturer", "superadmin"),
@@ -158,21 +176,13 @@ router.get(
   async (req, res) => {
     try {
       const { sessionId } = req.params;
-
       if (!mongoose.Types.ObjectId.isValid(sessionId)) {
         return res.status(400).json({ error: "Invalid session ID" });
       }
-
       const sessionFilter = { _id: sessionId, ...req.companyFilter };
-      if (req.user.role === "lecturer") {
-        sessionFilter.createdBy = req.user._id;
-      }
-
+      if (req.user.role === "lecturer") sessionFilter.createdBy = req.user._id;
       const session = await AttendanceSession.findOne(sessionFilter);
-
-      if (!session) {
-        return res.status(404).json({ error: "Attendance session not found or access denied" });
-      }
+      if (!session) return res.status(404).json({ error: "Attendance session not found or access denied" });
 
       const tokens = await QrToken.find({ session: sessionId })
         .sort({ createdAt: -1 })
