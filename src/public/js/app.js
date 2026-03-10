@@ -2460,6 +2460,10 @@ function showCreateUserModal() {
           <label>Password</label>
           <input type="password" id="new-user-password" placeholder="Min 8 characters">
         </div>
+        <div class="form-group">
+          <label>Phone Number <span style="color:red">*</span></label>
+          <input type="tel" id="new-user-phone" placeholder="e.g. 0241234567" required>
+        </div>
         <div class="modal-actions">
           <button class="btn btn-secondary btn-sm" onclick="closeModal()">Cancel</button>
           <button class="btn btn-primary btn-sm" onclick="createUser()">Create</button>
@@ -2489,6 +2493,9 @@ async function createUser() {
     } else {
       body.email = document.getElementById('new-user-email').value;
     }
+    const phone = document.getElementById('new-user-phone').value.trim();
+    if (!phone) { alert('Phone number is required.'); return; }
+    body.phone = phone;
     await api('/api/users', { method: 'POST', body: JSON.stringify(body) });
     closeModal();
     renderUsers();
