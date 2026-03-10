@@ -92,6 +92,10 @@ const userSchema = new mongoose.Schema(
 
 userSchema.index({ email: 1, company: 1 }, { unique: true, sparse: true });
 userSchema.index(
+  { phone: 1, company: 1 },
+  { unique: true, sparse: true, partialFilterExpression: { phone: { $type: "string" } } }
+);
+userSchema.index(
   { indexNumber: 1, company: 1 },
   { unique: true, partialFilterExpression: { indexNumber: { $type: "string" } } }
 );
