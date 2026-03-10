@@ -300,11 +300,14 @@ exports.markAttendance = async (req, res) => {
       if (tokenDoc.isExpired()) {
         return res.status(410).json({ error: "QR token has expired" });
       }
-      if (tokenDoc.isUsed) {
+      // QR tokens are single-use; verbal codes are multi-use
+      if (tokenDoc.codeType !== "verbal" && tokenDoc.isUsed) {
         return res.status(410).json({ error: "QR token has already been used" });
       }
-      tokenDoc.isUsed = true;
-      await tokenDoc.save();
+      if (tokenDoc.codeType !== "verbal") {
+        tokenDoc.isUsed = true;
+        await tokenDoc.save();
+      }
       qrTokenRef = tokenDoc._id;
     } else if (qrToken || code) {
       const query = {};
@@ -320,16 +323,18 @@ exports.markAttendance = async (req, res) => {
         return res.status(404).json({ error: "Invalid QR token or code" });
       }
       if (tokenDoc.isExpired()) {
-        return res.status(410).json({ error: "QR token has expired" });
+        return res.status(410).json({ error: "Code has expired" });
       }
-      if (tokenDoc.isUsed) {
+      // QR tokens are single-use; verbal codes are multi-use (all 500 students can use same code)
+      if (tokenDoc.codeType !== "verbal" && tokenDoc.isUsed) {
         return res.status(410).json({ error: "QR token has already been used" });
       }
-
-      tokenDoc.isUsed = true;
-      await tokenDoc.save();
+      if (tokenDoc.codeType !== "verbal") {
+        tokenDoc.isUsed = true;
+        await tokenDoc.save();
+      }
       if (!method) {
-        attendanceMethod = "code_mark";
+        attendanceMethod = tokenDoc.codeType === "verbal" ? "code_mark" : "code_mark";
       }
       qrTokenRef = tokenDoc._id;
     } else if (attendanceMethod === "jitsi_join") {
@@ -543,5 +548,108 @@ exports.getSignInStatus = async (req, res) => {
   } catch (error) {
     console.error("Sign-in status error:", error);
     res.status(500).json({ error: "Failed to get sign-in status" });
+  }
+};
+
+// ── ESP32 offline sync endpoint ────────────────────────────────────────────────
+exports.esp32Sync = async (req, res) => {
+  try {
+    // Validate ESP32 secret
+    const secret = req.headers['x-esp32-secret'];
+    if (!secret || secret !== process.env.ESP32_SECRET) {
+      return res.status(401).json({ error: 'Unauthorized ESP32 request' });
+    }
+
+    const { records, offlineSession, institutionCode } = req.body;
+
+    // Find company by institution code
+    const company = await Company.findOne({ institutionCode: institutionCode?.toUpperCase() });
+    if (!company) {
+      return res.status(404).json({ error: 'Institution not found: ' + institutionCode });
+    }
+
+    let session = null;
+
+    // If session was started offline on ESP32, create it in DB if not exists
+    if (offlineSession) {
+      session = await AttendanceSession.findOne({ _id: offlineSession.id }).catch(() => null);
+      if (!session) {
+        try {
+          session = await AttendanceSession.create({
+            _id: offlineSession.id.startsWith('esp32_') ? undefined : offlineSession.id,
+            title: offlineSession.title || 'Offline Session',
+            company: company._id,
+            status: 'active',
+            startedAt: new Date(offlineSession.startedAt),
+            source: 'esp32_offline',
+          });
+          console.log('[ESP32 Sync] Created offline session:', session._id);
+        } catch (e) {
+          // Session may already exist
+          session = await AttendanceSession.findOne({ company: company._id, status: 'active' }).sort({ startedAt: -1 });
+        }
+      }
+    }
+
+    if (!session) {
+      // Find the most recent active or recently stopped session for this company
+      session = await AttendanceSession.findOne({ company: company._id })
+        .sort({ startedAt: -1 });
+    }
+
+    if (!session) {
+      return res.status(404).json({ error: 'No session found to sync records into' });
+    }
+
+    let synced = 0;
+    let skipped = 0;
+    const errors = [];
+
+    for (const record of (records || [])) {
+      try {
+        // Find user by indexNumber or userId
+        let user = null;
+        if (record.userId) {
+          user = await User.findOne({ _id: record.userId, company: company._id });
+        }
+        if (!user && record.indexNumber) {
+          user = await User.findOne({ indexNumber: record.indexNumber.toUpperCase(), company: company._id });
+        }
+        if (!user) {
+          errors.push({ indexNumber: record.indexNumber, error: 'User not found' });
+          continue;
+        }
+
+        // Check duplicate
+        const existing = await AttendanceRecord.findOne({ session: session._id, user: user._id });
+        if (existing) {
+          skipped++;
+          continue;
+        }
+
+        const markedAt = new Date(record.markedAt || Date.now());
+        const timeSinceStart = markedAt - new Date(session.startedAt);
+        const lateThreshold = 15 * 60 * 1000;
+        const status = timeSinceStart > lateThreshold ? 'late' : 'present';
+
+        await AttendanceRecord.create({
+          session: session._id,
+          user: user._id,
+          company: company._id,
+          status,
+          method: record.method || 'ble_mark',
+          markedAt,
+        });
+        synced++;
+      } catch (e) {
+        errors.push({ indexNumber: record.indexNumber, error: e.message });
+      }
+    }
+
+    console.log(`[ESP32 Sync] institution=${institutionCode} synced=${synced} skipped=${skipped} errors=${errors.length}`);
+    res.json({ ok: true, synced, skipped, errors });
+  } catch (error) {
+    console.error('[ESP32 Sync] Error:', error);
+    res.status(500).json({ error: 'Sync failed: ' + error.message });
   }
 };
