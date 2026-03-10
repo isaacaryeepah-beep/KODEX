@@ -546,6 +546,16 @@ exports.login = async (req, res) => {
       }
     }
 
+    // ── Student device lock ─────────────────────────────────────────────────
+    // Students are locked to a single device. If they log in from a new device
+    // their account is blocked until an admin clears the device lock.
+    if (user.role === "student" && deviceId && user.deviceId && user.deviceId !== deviceId) {
+      return res.status(403).json({
+        error: "This account is active on another device. Please contact your admin to unlock it.",
+        deviceLocked: true,
+      });
+    }
+
     if (deviceId) {
       user.deviceId = deviceId;
       await user.save();
