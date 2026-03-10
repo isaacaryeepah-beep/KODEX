@@ -2045,6 +2045,7 @@ function _renderSessionsHTML(content, sessions, isOffline) {
               <td>${s.status === 'active' ? `
                 <button class="btn btn-danger btn-sm" onclick="stopSession('${s._id}')">Stop</button>
                 ${!isOffline ? `<button class="btn btn-success btn-sm" onclick="generateQR('${s._id}')">QR Code</button>` : ''}
+                ${!isOffline ? `<button class="btn btn-sm" style="background:#7c3aed;color:#fff;font-size:11px" onclick="generateVerbalCode('${s._id}')">Verbal Code</button>` : ''}
                 <button class="btn btn-sm" style="font-size:11px;background:var(--bg);border:1px solid var(--border)" onclick="viewAttendees('${s._id}', '${(s.title||'Session').replace(/['"]/g,'')}')">Attendees</button>
               ` : ''}</td>
             </tr>
@@ -2248,6 +2249,61 @@ async function generateQR(sessionId) {
 
   await _fetchAndShow();
 }
+
+async function generateVerbalCode(sessionId) {
+  const container = document.getElementById('modal-container');
+  container.classList.remove('hidden');
+
+  async function _fetchAndShow() {
+    try {
+      const data = await api('/api/qr-tokens/generate', {
+        method: 'POST',
+        body: JSON.stringify({ sessionId, codeType: 'verbal', expiryMinutes: 5 })
+      });
+      const { code, expiresAt } = data.qrToken;
+      const expiry = new Date(expiresAt);
+      const totalSecs = Math.round((expiry - Date.now()) / 1000);
+
+      container.innerHTML = `
+        <div class="modal-overlay" onclick="closeModal(event)">
+          <div class="modal" onclick="event.stopPropagation()" style="text-align:center;max-width:380px">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+              <h3 style="margin:0">Verbal Attendance Code</h3>
+              <button onclick="closeModal()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--text-light)">×</button>
+            </div>
+            <p style="color:var(--text-light);font-size:12px;margin-bottom:16px">Read this code out loud. All students can use it within the time window.</p>
+            <div style="font-size:64px;font-weight:900;color:#7c3aed;letter-spacing:12px;margin-bottom:8px;font-family:monospace">${code}</div>
+            <div style="display:inline-flex;align-items:center;gap:6px;background:rgba(124,58,237,0.1);border:1px solid rgba(124,58,237,0.3);border-radius:999px;padding:5px 14px;font-size:12px;font-weight:600;color:#7c3aed;margin-bottom:6px">
+              <span style="width:7px;height:7px;border-radius:50%;background:#7c3aed;display:inline-block;animation:pulse-green 1.5s infinite"></span>
+              Multi-use · All students can enter this code
+            </div>
+            <p style="color:var(--text-light);font-size:12px;margin-bottom:4px">Expires in: <span id="verbal-countdown" style="font-weight:700;color:#7c3aed">${Math.floor(totalSecs/60)}m ${totalSecs%60}s</span></p>
+            <p style="color:var(--text-muted);font-size:11px;margin-bottom:20px">Expires at ${expiry.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</p>
+            <div class="modal-actions" style="justify-content:center;gap:8px">
+              <button class="btn btn-sm" style="background:#7c3aed;color:#fff" onclick="generateVerbalCode('${sessionId}')">New Code</button>
+              <button class="btn btn-primary btn-sm" onclick="closeModal()">Close</button>
+            </div>
+          </div>
+        </div>
+      `;
+
+      // Countdown timer
+      let secs = totalSecs;
+      const countEl = () => document.getElementById('verbal-countdown');
+      const timer = setInterval(() => {
+        secs--;
+        if (secs <= 0) { clearInterval(timer); if (countEl()) countEl().textContent = 'Expired'; return; }
+        if (countEl()) countEl().textContent = Math.floor(secs/60) + 'm ' + (secs%60) + 's';
+      }, 1000);
+
+    } catch(e) {
+      container.innerHTML = `<div class="modal-overlay" onclick="closeModal(event)"><div class="modal" onclick="event.stopPropagation()"><p style="color:red">${e.message}</p><button class="btn btn-primary btn-sm" onclick="closeModal()">Close</button></div></div>`;
+    }
+  }
+
+  await _fetchAndShow();
+}
+
 
 async function renderUsers() {
   const content = document.getElementById('main-content');
