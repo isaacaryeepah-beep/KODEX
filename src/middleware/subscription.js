@@ -5,8 +5,9 @@ const requireActiveSubscription = async (req, res, next) => {
     return res.status(401).json({ error: "Authentication required" });
   }
 
-  // Roles fully exempt from subscription checks (lecturers are NOT exempt)
-  const alwaysExempt = ["superadmin", "employee", "student"];
+  // Roles fully exempt from subscription checks
+  // Admin is exempt — they own the company, blocking them locks them out of their own account
+  const alwaysExempt = ["superadmin", "admin", "employee", "student"];
   if (alwaysExempt.includes(req.user.role)) {
     return next();
   }
