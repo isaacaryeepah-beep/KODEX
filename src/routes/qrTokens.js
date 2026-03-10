@@ -66,7 +66,7 @@ router.post(
       }
 
       // Clean up expired tokens for this session to avoid unique index conflicts
-      await QrToken.deleteMany({ session: sessionId, expiresAt: { $lt: new Date() } });
+      await mongoose.model("QrToken").deleteMany({ session: sessionId, expiresAt: { $lt: new Date() } });
 
       let qrToken;
       const maxRetries = 5;
