@@ -15,4 +15,7 @@ router.get("/join/:roomName", ctrl.joinMeeting);
 
 router.post("/attendance", ctrl.trackAttendance);
 
+router.get("/:meetingId/attendance", requireRole("admin", "manager", "lecturer", "superadmin"), ctrl.getMeetingAttendance);
+router.get("/:meetingId/attendance/csv", requireRole("admin", "manager", "lecturer", "superadmin"), ctrl.getMeetingAttendanceCSV);
+
 module.exports = router;
