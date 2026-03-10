@@ -3982,7 +3982,7 @@ async function renderMarkAttendance() {
             <div class="card mark-method-card" onclick="showCodeEntryOffline()" style="cursor:pointer;text-align:center;transition:all 0.2s">
               <div style="font-size:42px;margin-bottom:12px">🔢</div>
               <div style="font-size:16px;font-weight:700">Enter Code</div>
-              <p style="font-size:12px;color:var(--text-light);margin-top:4px">Type the 6-digit code — will sync when online</p>
+              <p style="font-size:12px;color:var(--text-light);margin-top:4px">Type the 4-character code — will sync when online</p>
             </div>
           </div>
           <div id="mark-input-area" style="margin-top:16px"></div>
@@ -4039,7 +4039,7 @@ async function renderMarkAttendance() {
           <div class="card mark-method-card" onclick="showCodeEntry()" style="cursor:pointer;text-align:center;transition:all 0.2s">
             <div style="font-size:36px;margin-bottom:12px">${svgIcon('<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M7 7h.01M7 12h.01M12 7h.01M12 12h.01M17 7h.01M7 17h.01M12 17h.01M17 12h.01M17 17h.01"/>', 42)}</div>
             <div style="font-size:16px;font-weight:700">Enter Code</div>
-            <p style="font-size:12px;color:var(--text-light);margin-top:4px">Type the 6-digit code shown by your lecturer</p>
+            <p style="font-size:12px;color:var(--text-light);margin-top:4px">Type the 4-character code shown by your lecturer</p>
           </div>
           
           <div class="card mark-method-card" onclick="showQrEntry()" style="cursor:pointer;text-align:center;transition:all 0.2s">
@@ -4083,7 +4083,7 @@ function showCodeEntry() {
       <div class="card-title">Enter Attendance Code</div>
       <div class="form-group">
         <label>6-Digit Code</label>
-        <input type="text" id="mark-code-input" placeholder="Enter code" maxlength="6" style="font-size:24px;text-align:center;letter-spacing:8px;font-weight:700" autofocus>
+        <input type="text" id="mark-code-input" placeholder="Enter code" maxlength="4" style="font-size:24px;text-align:center;letter-spacing:8px;font-weight:700;text-transform:uppercase" autofocus>
       </div>
       <button class="btn btn-primary" onclick="submitCodeMark()" style="width:100%">Submit Code</button>
     </div>
@@ -4109,7 +4109,7 @@ function showQrEntry() {
 
 async function submitCodeMark() {
   const code = document.getElementById('mark-code-input')?.value;
-  if (!code || code.length !== 6) return alert('Please enter a valid 6-digit code');
+  if (!code || code.length !== 4) return alert('Please enter the 4-character code.');
 
   if (!isOnline()) {
     offlineEnqueue({
@@ -4148,7 +4148,7 @@ function showCodeEntryOffline() {
       </div>
       <div class="form-group">
         <label>6-Digit Code</label>
-        <input type="text" id="mark-code-input" placeholder="Enter code" maxlength="6"
+        <input type="text" id="mark-code-input" placeholder="Enter code" maxlength="4"
           style="font-size:24px;text-align:center;letter-spacing:8px;font-weight:700" autofocus>
       </div>
       <button class="btn btn-primary" onclick="submitCodeMark()" style="width:100%">Queue Attendance</button>
@@ -4253,7 +4253,7 @@ function showMarkAttendanceModal() {
     <div class="modal-overlay" onclick="closeModal(event)">
       <div class="modal" onclick="event.stopPropagation()">
         <h3>Mark Attendance</h3>
-        <p style="font-size:13px;color:var(--text-light);margin-bottom:16px">Enter the 6-digit code shown by your lecturer or manager.</p>
+        <p style="font-size:13px;color:var(--text-light);margin-bottom:16px">Enter the 4-character code shown by your lecturer or manager.</p>
         <div class="form-group">
           <label>6-Digit Code</label>
           <input type="text" id="attend-code" placeholder="Enter code" maxlength="6" style="font-size:22px;text-align:center;letter-spacing:8px;font-weight:700" autofocus>
