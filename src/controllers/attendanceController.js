@@ -608,7 +608,7 @@ exports.esp32Sync = async (req, res) => {
 
     for (const record of (records || [])) {
       try {
-        // Find user by indexNumber or userId
+        // Find user
         let user = null;
         if (record.userId) {
           user = await User.findOne({ _id: record.userId, company: company._id });
@@ -617,21 +617,34 @@ exports.esp32Sync = async (req, res) => {
           user = await User.findOne({ indexNumber: record.indexNumber.toUpperCase(), company: company._id });
         }
         if (!user) {
-          errors.push({ indexNumber: record.indexNumber, error: 'User not found' });
+          errors.push({ ref: record.indexNumber || record.userId, error: 'User not found' });
           continue;
         }
 
-        // Check duplicate
-        const existing = await AttendanceRecord.findOne({ session: session._id, user: user._id });
-        if (existing) {
-          skipped++;
+        // Corporate sign-in/out records
+        if (record.type === 'sign_in' || record.type === 'sign_out') {
+          const SignInRecord = require('../models/SignInRecord').default || require('../models/SignInRecord');
+          const time = new Date(record.time || Date.now());
+          if (record.type === 'sign_in') {
+            const exists = await SignInRecord.findOne({ user: user._id, checkInTime: { $gte: new Date(time - 60000) } });
+            if (exists) { skipped++; continue; }
+            await SignInRecord.create({ user: user._id, company: company._id, checkInTime: time, source: 'esp32' });
+          } else {
+            const last = await SignInRecord.findOne({ user: user._id, checkOutTime: null }).sort({ checkInTime: -1 });
+            if (last) { last.checkOutTime = time; await last.save(); }
+          }
+          synced++;
           continue;
         }
+
+        // Academic attendance records
+        if (!session) { errors.push({ ref: record.indexNumber, error: 'No session' }); continue; }
+        const existing = await AttendanceRecord.findOne({ session: session._id, user: user._id });
+        if (existing) { skipped++; continue; }
 
         const markedAt = new Date(record.markedAt || Date.now());
         const timeSinceStart = markedAt - new Date(session.startedAt);
-        const lateThreshold = 15 * 60 * 1000;
-        const status = timeSinceStart > lateThreshold ? 'late' : 'present';
+        const status = timeSinceStart > 15 * 60 * 1000 ? 'late' : 'present';
 
         await AttendanceRecord.create({
           session: session._id,
@@ -643,7 +656,7 @@ exports.esp32Sync = async (req, res) => {
         });
         synced++;
       } catch (e) {
-        errors.push({ indexNumber: record.indexNumber, error: e.message });
+        errors.push({ ref: record.indexNumber || record.userId, error: e.message });
       }
     }
 
