@@ -69,7 +69,7 @@ const registerLimiter = createRateLimiter({
 // Password reset: max 5 requests per hour per IP
 const passwordResetLimiter = createRateLimiter({
   windowMs: 60 * 60 * 1000,
-  max: 5,
+  max: 2,
   message: 'Too many password reset attempts. Please wait an hour and try again.',
 });
 
