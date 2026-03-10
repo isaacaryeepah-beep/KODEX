@@ -168,3 +168,109 @@ exports.trackAttendance = async (req, res) => {
     res.status(500).json({ error: "Failed to record attendance" });
   }
 };
+
+// ── Get meeting attendance list ───────────────────────────────────────────────
+exports.getMeetingAttendance = async (req, res) => {
+  try {
+    const { meetingId } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(meetingId)) {
+      return res.status(400).json({ error: 'Invalid meetingId' });
+    }
+
+    const meeting = await JitsiMeeting.findById(meetingId);
+    if (!meeting) return res.status(404).json({ error: 'Meeting not found' });
+    if (req.user.company.toString() !== meeting.companyId.toString()) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    const records = await JitsiAttendance.find({ meetingId })
+      .populate('userId', 'name email indexNumber role')
+      .sort({ timestamp: 1 });
+
+    // Build per-user summary: join time, leave time, duration
+    const userMap = {};
+    for (const r of records) {
+      const uid = r.userId?._id?.toString();
+      if (!uid) continue;
+      if (!userMap[uid]) {
+        userMap[uid] = { user: r.userId, joinTime: null, leaveTime: null };
+      }
+      if (r.action === 'join' && !userMap[uid].joinTime) userMap[uid].joinTime = r.timestamp;
+      if (r.action === 'leave') userMap[uid].leaveTime = r.timestamp;
+    }
+
+    const attendance = Object.values(userMap).map(u => {
+      const join = u.joinTime;
+      const leave = u.leaveTime || meeting.endTime || new Date();
+      const durationMs = join ? (leave - join) : 0;
+      const durationMin = Math.round(durationMs / 60000);
+      return {
+        user: u.user,
+        joinTime: join,
+        leaveTime: u.leaveTime,
+        durationMinutes: durationMin,
+        status: durationMin >= 30 ? 'present' : durationMin > 0 ? 'partial' : 'absent',
+      };
+    });
+
+    res.json({ meeting, attendance, total: attendance.length });
+  } catch (error) {
+    console.error('Get meeting attendance error:', error);
+    res.status(500).json({ error: 'Failed to fetch attendance' });
+  }
+};
+
+// ── Download meeting attendance as CSV (PDF generated client-side) ────────────
+exports.getMeetingAttendanceCSV = async (req, res) => {
+  try {
+    const { meetingId } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(meetingId)) {
+      return res.status(400).json({ error: 'Invalid meetingId' });
+    }
+
+    const meeting = await JitsiMeeting.findById(meetingId).populate('sessionId', 'title');
+    if (!meeting) return res.status(404).json({ error: 'Meeting not found' });
+    if (req.user.company.toString() !== meeting.companyId.toString()) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    const records = await JitsiAttendance.find({ meetingId })
+      .populate('userId', 'name email indexNumber role')
+      .sort({ timestamp: 1 });
+
+    const userMap = {};
+    for (const r of records) {
+      const uid = r.userId?._id?.toString();
+      if (!uid) continue;
+      if (!userMap[uid]) userMap[uid] = { user: r.userId, joinTime: null, leaveTime: null };
+      if (r.action === 'join' && !userMap[uid].joinTime) userMap[uid].joinTime = r.timestamp;
+      if (r.action === 'leave') userMap[uid].leaveTime = r.timestamp;
+    }
+
+    const rows = [['Name', 'Email / Index', 'Role', 'Join Time', 'Leave Time', 'Duration (mins)', 'Status']];
+    for (const u of Object.values(userMap)) {
+      const join = u.joinTime;
+      const leave = u.leaveTime || meeting.endTime || new Date();
+      const dur = join ? Math.round((leave - join) / 60000) : 0;
+      const status = dur >= 30 ? 'Present' : dur > 0 ? 'Partial' : 'Absent';
+      rows.push([
+        u.user?.name || '',
+        u.user?.email || u.user?.indexNumber || '',
+        u.user?.role || '',
+        join ? new Date(join).toLocaleString() : '',
+        u.leaveTime ? new Date(u.leaveTime).toLocaleString() : 'Still in meeting',
+        dur,
+        status,
+      ]);
+    }
+
+    const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
+    const title = meeting.sessionId?.title || 'Meeting';
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename="${title}_attendance.csv"`);
+    res.send(csv);
+  } catch (error) {
+    console.error('Meeting attendance CSV error:', error);
+    res.status(500).json({ error: 'Failed to generate CSV' });
+  }
+};
