@@ -1389,7 +1389,12 @@ function showDashboard(data) {
 
     buildSidebar();
     applyBranding(); // async — applies colors/logo in background
-    navigateTo('dashboard');
+    // If student arrived via QR scan link, go straight to mark-attendance to auto-submit
+    if (new URLSearchParams(window.location.search).get('qr_token')) {
+      navigateTo('mark-attendance');
+    } else {
+      navigateTo('dashboard');
+    }
   } catch (e) {
     console.error('Dashboard error:', e);
     document.getElementById('auth-page').style.display = 'flex';
@@ -2207,40 +2212,61 @@ async function generateQR(sessionId) {
         method: 'POST',
         body: JSON.stringify({ sessionId, expirySeconds: QR_EXPIRY_SECONDS })
       });
-      const code = data.qrToken.code;
+      const { code, token } = data.qrToken;
+      // Encode the token into the QR so students scan → auto-submit
+      // QR encodes a deep link — scanning opens browser → auto-marks attendance
+      const qrDeepLink = `${window.location.origin}${window.location.pathname}?qr_token=${token}&qr_code=${code}`;
+      const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(qrDeepLink)}&bgcolor=ffffff&color=000000&margin=10`;
 
       container.innerHTML = `
         <div class="modal-overlay" onclick="_stopQrTimers();closeModal(event)">
-          <div class="modal" onclick="event.stopPropagation()" style="text-align:center;max-width:380px">
+          <div class="modal" onclick="event.stopPropagation()" style="text-align:center;max-width:400px">
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
               <h3 style="margin:0">Attendance QR Code</h3>
               <button onclick="_stopQrTimers();closeModal()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--text-light)">×</button>
             </div>
-            <p style="color:var(--text-light);font-size:12px;margin-bottom:16px">Code refreshes every ${QR_EXPIRY_SECONDS}s to prevent sharing</p>
+            <p style="color:var(--text-light);font-size:12px;margin-bottom:16px">Students scan this with their phone camera to mark attendance</p>
 
-            <!-- Countdown ring -->
-            <div style="position:relative;width:100px;height:100px;margin:0 auto 16px">
-              <svg width="100" height="100" style="transform:rotate(-90deg)">
-                <circle cx="50" cy="50" r="44" fill="none" stroke="#e5e7eb" stroke-width="7"/>
-                <circle id="qr-ring" cx="50" cy="50" r="44" fill="none" stroke="var(--primary)" stroke-width="7"
-                  stroke-linecap="round"
-                  stroke-dasharray="276"
-                  stroke-dashoffset="0"
-                  style="transition:stroke-dashoffset 1s linear,stroke 0.3s"/>
-              </svg>
-              <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center">
-                <span id="qr-countdown" style="font-size:22px;font-weight:800;color:var(--primary)">${QR_EXPIRY_SECONDS}</span>
+            <!-- QR Code Image -->
+            <div id="qr-code-display" style="position:relative;display:inline-block;margin-bottom:12px">
+              <img src="${qrImageUrl}" id="qr-img" width="240" height="240"
+                style="border-radius:12px;border:3px solid var(--primary);display:block"
+                onerror="this.style.display='none';document.getElementById('qr-fallback').style.display='block'"/>
+              <!-- Fallback: show text code if image fails -->
+              <div id="qr-fallback" style="display:none;width:240px;height:240px;border-radius:12px;border:3px solid var(--primary);display:flex;align-items:center;justify-content:center;background:#f8f9ff">
+                <span style="font-size:48px;font-weight:900;color:var(--primary);letter-spacing:8px;font-family:monospace">${code}</span>
+              </div>
+              <!-- Refresh overlay when expiring -->
+              <div id="qr-overlay" style="display:none;position:absolute;inset:0;background:rgba(255,255,255,0.85);border-radius:12px;align-items:center;justify-content:center;flex-direction:column;gap:8px">
+                <div style="font-size:28px">🔄</div>
+                <div style="font-size:13px;font-weight:700;color:var(--primary)">Refreshing…</div>
               </div>
             </div>
 
-            <!-- The code -->
-            <div id="qr-code-display" style="font-size:52px;font-weight:800;color:var(--primary);letter-spacing:10px;margin-bottom:8px;font-family:monospace">${code}</div>
-            <p style="color:var(--text-light);font-size:12px;margin-bottom:20px">Students enter this code to mark attendance</p>
+            <!-- Code text below QR for manual fallback -->
+            <div style="font-size:13px;color:var(--text-light);margin-bottom:8px">
+              Or enter code manually: <span style="font-weight:800;color:var(--primary);font-family:monospace;letter-spacing:4px">${code}</span>
+            </div>
 
-            <!-- Status badge -->
-            <div id="qr-status" style="display:inline-flex;align-items:center;gap:6px;background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.3);border-radius:999px;padding:5px 14px;font-size:12px;font-weight:600;color:#16a34a;margin-bottom:20px">
-              <span style="width:7px;height:7px;border-radius:50%;background:#16a34a;display:inline-block;animation:pulse-green 1.5s infinite"></span>
-              Active · Refreshing automatically
+            <!-- Countdown ring -->
+            <div style="display:flex;align-items:center;justify-content:center;gap:12px;margin-bottom:12px">
+              <div style="position:relative;width:64px;height:64px">
+                <svg width="64" height="64" style="transform:rotate(-90deg)">
+                  <circle cx="32" cy="32" r="27" fill="none" stroke="#e5e7eb" stroke-width="5"/>
+                  <circle id="qr-ring" cx="32" cy="32" r="27" fill="none" stroke="var(--primary)" stroke-width="5"
+                    stroke-linecap="round"
+                    stroke-dasharray="170"
+                    stroke-dashoffset="0"
+                    style="transition:stroke-dashoffset 1s linear,stroke 0.3s"/>
+                </svg>
+                <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center">
+                  <span id="qr-countdown" style="font-size:16px;font-weight:800;color:var(--primary)">${QR_EXPIRY_SECONDS}</span>
+                </div>
+              </div>
+              <div id="qr-status" style="display:inline-flex;align-items:center;gap:6px;background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.3);border-radius:999px;padding:5px 14px;font-size:12px;font-weight:600;color:#16a34a">
+                <span style="width:7px;height:7px;border-radius:50%;background:#16a34a;display:inline-block;animation:pulse-green 1.5s infinite"></span>
+                Live · Auto-refreshes every ${QR_EXPIRY_SECONDS}s
+              </div>
             </div>
 
             <div class="modal-actions" style="justify-content:center">
@@ -2254,7 +2280,7 @@ async function generateQR(sessionId) {
       let remaining = QR_EXPIRY_SECONDS;
       const ring = document.getElementById('qr-ring');
       const countEl = document.getElementById('qr-countdown');
-      const circumference = 276;
+      const circumference = 170;
 
       _qrCountdownTimer = setInterval(() => {
         remaining--;
@@ -2270,9 +2296,9 @@ async function generateQR(sessionId) {
         if (remaining <= 0) {
           clearInterval(_qrCountdownTimer);
           _qrCountdownTimer = null;
-          // Flash "Refreshing…" 
-          const codeEl = document.getElementById('qr-code-display');
-          if (codeEl) { codeEl.style.opacity = '0.3'; codeEl.textContent = '······'; }
+          // Show overlay over QR image
+          const overlay = document.getElementById('qr-overlay');
+          if (overlay) overlay.style.display = 'flex';
           const statusEl = document.getElementById('qr-status');
           if (statusEl) statusEl.innerHTML = '<span style="width:7px;height:7px;border-radius:50%;background:#f59e0b;display:inline-block"></span> Refreshing…';
         }
@@ -2345,7 +2371,14 @@ async function generateVerbalCode(sessionId) {
       }, 1000);
 
     } catch(e) {
-      container.innerHTML = `<div class="modal-overlay" onclick="closeModal(event)"><div class="modal" onclick="event.stopPropagation()"><p style="color:red">${e.message}</p><button class="btn btn-primary btn-sm" onclick="closeModal()">Close</button></div></div>`;
+      const msg = e.message || 'Failed to generate code';
+      const isSubError = msg.toLowerCase().includes('subscription') || msg.toLowerCase().includes('trial');
+      container.innerHTML = `<div class="modal-overlay" onclick="closeModal(event)"><div class="modal" onclick="event.stopPropagation()" style="text-align:center;padding:24px">
+        <div style="font-size:36px;margin-bottom:12px">${isSubError ? '🔒' : '⚠️'}</div>
+        <p style="color:red;font-weight:600;margin-bottom:8px">${msg}</p>
+        ${isSubError ? '<p style="font-size:13px;color:var(--text-light)">Go to <b>Subscription</b> to activate your plan.</p>' : ''}
+        <button class="btn btn-primary btn-sm" onclick="closeModal()" style="margin-top:12px">Close</button>
+      </div></div>`;
     }
   }
 
@@ -4106,9 +4139,60 @@ function configureESP32() {
   }
 }
 
+// Auto-submit attendance when student scans QR code (URL contains ?qr_token=)
+async function handleQrScan() {
+  const params = new URLSearchParams(window.location.search);
+  const qrToken = params.get('qr_token');
+  if (!qrToken) return false;
+
+  // Clean URL immediately
+  window.history.replaceState({}, '', window.location.pathname);
+
+  const content = document.getElementById('main-content');
+  if (content) {
+    content.innerHTML = `
+      <div class="card" style="text-align:center;padding:48px 24px;max-width:400px;margin:40px auto">
+        <div style="font-size:48px;margin-bottom:16px">⏳</div>
+        <div style="font-size:18px;font-weight:700">Marking your attendance…</div>
+        <p style="color:var(--text-light);font-size:13px;margin-top:8px">Please wait</p>
+      </div>`;
+  }
+
+  try {
+    await api('/api/attendance-sessions/mark', {
+      method: 'POST',
+      body: JSON.stringify({ qrToken, method: 'qr_mark' }),
+    });
+    if (content) {
+      content.innerHTML = `
+        <div class="card" style="text-align:center;padding:48px 24px;max-width:400px;margin:40px auto;border-left:4px solid var(--success)">
+          <div style="font-size:56px;margin-bottom:16px">✅</div>
+          <div style="font-size:20px;font-weight:800;color:var(--success)">Attendance Marked!</div>
+          <p style="color:var(--text-light);font-size:13px;margin-top:8px">You have been checked in successfully.</p>
+          <button class="btn btn-primary" style="margin-top:20px" onclick="navigateTo('my-attendance')">View My Attendance</button>
+        </div>`;
+    }
+  } catch(e) {
+    if (content) {
+      const expired = e.message?.toLowerCase().includes('expired');
+      content.innerHTML = `
+        <div class="card" style="text-align:center;padding:48px 24px;max-width:400px;margin:40px auto;border-left:4px solid var(--danger)">
+          <div style="font-size:56px;margin-bottom:16px">${expired ? '⏰' : '❌'}</div>
+          <div style="font-size:20px;font-weight:800;color:var(--danger)">${expired ? 'QR Code Expired' : 'Failed'}</div>
+          <p style="color:var(--text-light);font-size:13px;margin-top:8px">${expired ? 'This QR code has expired. Ask your lecturer/manager for a fresh one.' : e.message}</p>
+          <button class="btn btn-secondary" style="margin-top:20px" onclick="navigateTo('mark-attendance')">Go Back</button>
+        </div>`;
+    }
+  }
+  return true;
+}
+
 async function renderMarkAttendance() {
   const content = document.getElementById('main-content');
   if (!content) return;
+
+  // Check if arriving via QR scan deep link
+  if (await handleQrScan()) return;
 
   // Offline: show queued state and cached session info
   if (!isOnline()) {
@@ -4258,16 +4342,18 @@ function showQrEntry() {
   const area = document.getElementById('mark-input-area');
   if (!area) return;
   area.innerHTML = `
-    <div class="card">
-      <div class="card-title">Enter QR Token</div>
-      <div class="form-group">
-        <label>QR Token String</label>
-        <input type="text" id="mark-qr-input" placeholder="Paste QR token here" autofocus>
+    <div class="card" style="text-align:center;padding:32px 24px">
+      <div style="font-size:48px;margin-bottom:12px">📷</div>
+      <div style="font-size:17px;font-weight:700;margin-bottom:8px">Scan the QR Code</div>
+      <p style="font-size:13px;color:var(--text-light);margin-bottom:20px">
+        Point your phone camera at the QR code on the screen.<br>
+        It will open a link — tap it to mark your attendance instantly.
+      </p>
+      <div style="background:#f8f9ff;border:1px solid var(--border);border-radius:10px;padding:16px;font-size:12px;color:var(--text-muted)">
+        No camera? Enter the 4-character code shown below the QR image instead.
       </div>
-      <button class="btn btn-primary" onclick="submitQrMark()" style="width:100%">Verify & Check In</button>
     </div>
   `;
-  document.getElementById('mark-qr-input')?.focus();
 }
 
 async function submitCodeMark() {
