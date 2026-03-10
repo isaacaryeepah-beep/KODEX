@@ -43,6 +43,15 @@ exports.register = async (req, res) => {
       return res.status(400).json({ error: "This email is already registered" });
     }
 
+    if (phone) {
+      const normPhone = normalisePhone(phone);
+      const phoneExists = await User.findOne({ phone: normPhone });
+      if (phoneExists) {
+        await Company.findByIdAndDelete(company._id);
+        return res.status(400).json({ error: "Invalid" });
+      }
+    }
+
     let user;
     try {
       user = await User.create({
@@ -104,6 +113,7 @@ exports.register = async (req, res) => {
     }
     if (error.code === 11000) {
       const field = Object.keys(error.keyPattern || {})[0] || "field";
+      if (Object.keys(error.keyPattern || {}).includes("phone")) return res.status(400).json({ error: "Invalid" });
       return res.status(400).json({ error: `This ${field} is already registered` });
     }
     console.error("Register error:", error.message, error.stack);
@@ -140,6 +150,15 @@ exports.registerLecturer = async (req, res) => {
       if (existingUser) {
         await Company.findByIdAndDelete(company._id);
         return res.status(400).json({ error: "This email is already registered" });
+      }
+
+      if (req.body.phone) {
+        const normPhone = normalisePhone(req.body.phone);
+        const phoneExists = await User.findOne({ phone: normPhone, company: company._id });
+        if (phoneExists) {
+          await Company.findByIdAndDelete(company._id);
+          return res.status(400).json({ error: "Invalid" });
+        }
       }
 
       let user;
@@ -209,6 +228,12 @@ exports.registerLecturer = async (req, res) => {
       return res.status(400).json({ error: "A user with this email already exists at this institution" });
     }
 
+    if (req.body.phone) {
+      const normPhone = normalisePhone(req.body.phone);
+      const phoneExists = await User.findOne({ phone: normPhone, company: company._id });
+      if (phoneExists) return res.status(400).json({ error: "Invalid" });
+    }
+
     const user = await User.create({
       name,
       email,
@@ -238,6 +263,7 @@ exports.registerLecturer = async (req, res) => {
       return res.status(400).json({ error: messages.join(", ") });
     }
     if (error.code === 11000) {
+      if (Object.keys(error.keyPattern || {}).includes("phone")) return res.status(400).json({ error: "Invalid" });
       return res.status(400).json({ error: "This email is already registered at this institution" });
     }
     console.error("Lecturer register error:", error);
@@ -280,6 +306,12 @@ exports.registerStudent = async (req, res) => {
     const existingStudent = await User.findOne({ indexNumber: indexNumber.trim().toUpperCase(), company: company._id });
     if (existingStudent) {
       return res.status(400).json({ error: "A student with this ID already exists at this institution" });
+    }
+
+    if (req.body.phone) {
+      const normPhone = normalisePhone(req.body.phone);
+      const phoneExists = await User.findOne({ phone: normPhone, company: company._id });
+      if (phoneExists) return res.status(400).json({ error: "Invalid" });
     }
 
     const user = await User.create({
@@ -331,6 +363,7 @@ exports.registerStudent = async (req, res) => {
       return res.status(400).json({ error: messages.join(", ") });
     }
     if (error.code === 11000) {
+      if (Object.keys(error.keyPattern || {}).includes("phone")) return res.status(400).json({ error: "Invalid" });
       return res.status(400).json({ error: "This student ID is already registered at this institution" });
     }
     console.error("Student register error:", error);
@@ -362,6 +395,12 @@ exports.registerEmployee = async (req, res) => {
     const existingUser = await User.findOne({ email, company: company._id });
     if (existingUser) {
       return res.status(400).json({ error: "An employee with this email already exists at this company" });
+    }
+
+    if (req.body.phone) {
+      const normPhone = normalisePhone(req.body.phone);
+      const phoneExists = await User.findOne({ phone: normPhone, company: company._id });
+      if (phoneExists) return res.status(400).json({ error: "Invalid" });
     }
 
     const updatedCompany = await Company.findByIdAndUpdate(
@@ -407,6 +446,7 @@ exports.registerEmployee = async (req, res) => {
       return res.status(400).json({ error: messages.join(", ") });
     }
     if (error.code === 11000) {
+      if (Object.keys(error.keyPattern || {}).includes("phone")) return res.status(400).json({ error: "Invalid" });
       return res.status(400).json({ error: "This email is already registered at this company" });
     }
     console.error("Employee register error:", error);
@@ -761,7 +801,10 @@ exports.forgotPasswordEmail = async (req, res) => {
     if (!user) return res.status(404).json({ error: "No account found with that phone number in this institution." });
 
     if (["admin", "superadmin"].includes(user.role)) {
-      return res.status(403).json({ error: "Admins must use the Admin portal to reset their password." });
+      return res.status(403).json({ error: "Invalid" });
+    }
+    if (user.role === "student") {
+      return res.status(403).json({ error: "Invalid" });
     }
     if (!["manager", "lecturer", "employee"].includes(user.role)) {
       return res.status(403).json({ error: "This reset method is not available for your account type." });
@@ -801,8 +844,14 @@ exports.forgotPasswordAdmin = async (req, res) => {
 
     if (!user) return res.status(404).json({ error: "No account found with that phone number." });
 
+    if (user.role === "lecturer") {
+      return res.status(403).json({ error: "Invalid" });
+    }
+    if (["employee", "manager"].includes(user.role)) {
+      return res.status(403).json({ error: "Invalid" });
+    }
     if (!["admin", "superadmin"].includes(user.role)) {
-      return res.status(403).json({ error: "This reset method is for admins only. Lecturers and employees should use their own portal." });
+      return res.status(403).json({ error: "This reset method is for admins only." });
     }
     if (user.resetPasswordExpires && user.resetPasswordExpires > Date.now()) {
       return res.status(429).json({ error: "A reset code was already sent recently. Please wait before requesting again." });
