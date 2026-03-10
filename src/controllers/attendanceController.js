@@ -275,7 +275,7 @@ exports.markAttendance = async (req, res) => {
     }
 
     if (!session) {
-      return res.status(404).json({ error: "No active session found. Please wait for a session to start." });
+      return res.status(404).json({ error: "No active session found. The manager needs to start a session first." });
     }
 
     const existingRecord = await AttendanceRecord.findOne({
@@ -296,10 +296,10 @@ exports.markAttendance = async (req, res) => {
       }
       const tokenDoc = await QrToken.findOne({ token: qrToken });
       if (!tokenDoc) {
-        return res.status(404).json({ error: "Invalid QR token" });
+        return res.status(404).json({ error: "Invalid QR code. Please scan again." });
       }
       if (tokenDoc.isExpired()) {
-        return res.status(410).json({ error: "QR token has expired" });
+        return res.status(410).json({ error: "QR code has expired. Please scan the latest QR code on screen." });
       }
       // QR tokens are single-use; verbal codes are multi-use
       if (tokenDoc.codeType !== "verbal" && tokenDoc.isUsed) {
@@ -321,10 +321,10 @@ exports.markAttendance = async (req, res) => {
 
       const tokenDoc = await QrToken.findOne(query);
       if (!tokenDoc) {
-        return res.status(404).json({ error: "Invalid QR token or code" });
+        return res.status(404).json({ error: "Invalid code. Please check the code and try again." });
       }
       if (tokenDoc.isExpired()) {
-        return res.status(410).json({ error: "Code has expired" });
+        return res.status(410).json({ error: "Code has expired. Please ask your manager for the latest code." });
       }
       // QR tokens are single-use; verbal codes are multi-use (all 500 students can use same code)
       if (tokenDoc.codeType !== "verbal" && tokenDoc.isUsed) {
