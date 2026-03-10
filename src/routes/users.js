@@ -17,5 +17,6 @@ router.delete("/:id/permanent", requireRole("manager", "admin", "superadmin"), c
 router.get("/reset-logs/all", requireRole("admin", "superadmin"), companyIsolation, userController.getResetLogs);
 router.post("/:id/admin-reset-password", requireRole("admin", "superadmin", "manager"), companyIsolation, userController.adminResetStudentPassword);
 router.post("/change-password-after-reset", userController.changePasswordAfterReset);
+router.post("/:id/clear-device-lock", requireRole("admin", "superadmin", "manager"), companyIsolation, userController.clearDeviceLock);
 
 module.exports = router;
