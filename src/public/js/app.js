@@ -3943,6 +3943,120 @@ async function renderMyAttendance() {
   }
 }
 
+
+// ══════════════════════════════════════════════════════════════════════════════
+// ESP32 BLE Integration
+// ══════════════════════════════════════════════════════════════════════════════
+
+const ESP32_BLE_PREFIX   = 'ATT_';
+const ESP32_LOCAL_PORT   = 80;
+let   esp32IP            = localStorage.getItem('kodex_esp32_ip') || null;
+let   bleDetected        = false;
+let   bleScanInterval    = null;
+
+// Save ESP32 IP when found
+function setEsp32IP(ip) {
+  esp32IP = ip;
+  localStorage.setItem('kodex_esp32_ip', ip);
+}
+
+// Call ESP32 local HTTP API
+async function esp32Api(path, options = {}) {
+  if (!esp32IP) throw new Error('ESP32 not found. Make sure you are connected to the same network as the classroom device.');
+  const url = `http://${esp32IP}${path}`;
+  const res = await fetch(url, { ...options, headers: { 'Content-Type': 'application/json', ...(options.headers || {}) } });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'ESP32 request failed');
+  return data;
+}
+
+// Try to find ESP32 on local network by pinging common IPs
+async function discoverESP32() {
+  // Try last known IP first
+  if (esp32IP) {
+    try {
+      const status = await esp32Api('/status');
+      if (status.device === 'KODEX-ESP32') {
+        bleDetected = true;
+        return true;
+      }
+    } catch(e) { /* try scan */ }
+  }
+  return false;
+}
+
+// Check BLE presence via Web Bluetooth API
+async function checkBLEPresence() {
+  if (!navigator.bluetooth) return false;
+  try {
+    // We don't need to connect — just check if device is advertising
+    // Web Bluetooth requires user gesture for full scan, so we rely on ESP32 HTTP discovery
+    return await discoverESP32();
+  } catch(e) {
+    return false;
+  }
+}
+
+// Start session on ESP32 (offline)
+async function startOfflineSession() {
+  const title = prompt('Session title:', 'Attendance Session');
+  if (!title) return;
+  try {
+    const data = await esp32Api('/session/start', {
+      method: 'POST',
+      body: JSON.stringify({ title })
+    });
+    showToast(`✅ Session started! Verbal code: ${data.verbalCode}`);
+    renderSessions();
+  } catch(e) {
+    alert('Could not start session on ESP32: ' + e.message);
+  }
+}
+
+// Stop session on ESP32
+async function stopOfflineSession() {
+  if (!confirm('Stop the current ESP32 session?')) return;
+  try {
+    await esp32Api('/session/stop', { method: 'POST' });
+    showToast('✅ Session stopped');
+    renderSessions();
+  } catch(e) {
+    alert('Error: ' + e.message);
+  }
+}
+
+// Generate new verbal code on ESP32
+async function esp32NewCode() {
+  try {
+    const data = await esp32Api('/session/new-code', { method: 'POST' });
+    showToast(`New code: ${data.verbalCode}`);
+    renderMarkAttendance();
+  } catch(e) {
+    alert('Error: ' + e.message);
+  }
+}
+
+// Submit attendance to ESP32 locally
+async function submitToESP32(code) {
+  const user = currentUser;
+  const body = {
+    code,
+    indexNumber: user.indexNumber || user.employeeId || user.email,
+    userId: user.id
+  };
+  return await esp32Api('/mark', { method: 'POST', body: JSON.stringify(body) });
+}
+
+// Configure ESP32 IP address
+function configureESP32() {
+  const ip = prompt('Enter ESP32 IP address (shown on ESP32 serial monitor):', esp32IP || '192.168.1.100');
+  if (ip) {
+    setEsp32IP(ip);
+    showToast('✅ ESP32 IP saved: ' + ip);
+    renderMarkAttendance();
+  }
+}
+
 async function renderMarkAttendance() {
   const content = document.getElementById('main-content');
   if (!content) return;
@@ -4108,8 +4222,22 @@ function showQrEntry() {
 }
 
 async function submitCodeMark() {
-  const code = document.getElementById('mark-code-input')?.value;
+  const code = document.getElementById('mark-code-input')?.value?.toUpperCase().trim();
   if (!code || code.length !== 4) return alert('Please enter the 4-character code.');
+
+  // If ESP32 is detected, submit locally (works offline)
+  if (bleDetected && esp32IP) {
+    try {
+      await submitToESP32(code);
+      offlineCache('pendingMark', null);
+      alert('Attendance marked successfully!');
+      navigateTo('mark-attendance');
+      return;
+    } catch(e) {
+      // Fall through to server if ESP32 submission fails
+      console.warn('[BLE] ESP32 submission failed, trying server:', e.message);
+    }
+  }
 
   if (!isOnline()) {
     offlineEnqueue({
@@ -4128,7 +4256,7 @@ async function submitCodeMark() {
       method: 'POST',
       body: JSON.stringify({ code, method: 'code_mark' }),
     });
-    offlineCache('pendingMark', null); // clear pending flag
+    offlineCache('pendingMark', null);
     alert('Attendance marked successfully!');
     navigateTo('mark-attendance');
   } catch (e) {
