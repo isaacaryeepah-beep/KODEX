@@ -22,4 +22,7 @@ router.post("/mark", enforceLogoutRestriction, attendanceController.markAttendan
 router.get("/:id/records", companyIsolation, attendanceController.getSessionRecords);
 router.get("/:id", companyIsolation, attendanceController.getSession);
 
+// ESP32 offline sync — authenticated via X-ESP32-Secret header, not JWT
+router.post("/esp32-sync", attendanceController.esp32Sync);
+
 module.exports = router;
