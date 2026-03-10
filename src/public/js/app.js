@@ -2701,6 +2701,7 @@ async function renderMeetings() {
                   ${canControl && m.status === 'active' ? `<button class="btn btn-danger btn-sm" onclick="endMeeting('${m._id}')" style="margin-left:4px;">End</button>` : ''}
                   ${canControl && (m.status === 'scheduled' || m.status === 'active') ? `<button class="btn btn-secondary btn-sm" onclick="cancelMeeting('${m._id}')" style="margin-left:4px;">Cancel</button>` : ''}
                   <button class="btn btn-secondary btn-sm" onclick="viewMeetingDetail('${m._id}')" style="margin-left:4px;">Details</button>
+                  ${canControl && m.status === 'completed' ? `<button class="btn btn-sm" style="margin-left:4px;background:#7c3aed;color:#fff" onclick="viewMeetingAttendance('${m._id}', '${m.title}')">Attendance</button>` : ''}
                 </td>
               </tr>`;
             }).join('')}</tbody>
@@ -8624,4 +8625,89 @@ function downloadPayrollExport() {
   setTimeout(() => { btn.disabled = false; btn.textContent = '⬇ Download CSV'; }, 3000);
   window.open(`/api/advanced/payroll-export?period=${period}&token=${token}`, '_blank');
   toast('Payroll CSV downloading…', 'ok');
+}
+
+// ── Meeting Attendance Modal ──────────────────────────────────────────────────
+async function viewMeetingAttendance(meetingId, title) {
+  const container = document.getElementById('modal-container');
+  container.classList.remove('hidden');
+  container.innerHTML = '<div class="modal-overlay" onclick="closeModal(event)"><div class="modal" onclick="event.stopPropagation()" style="max-width:700px;width:95%"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px"><h3 style="margin:0">Meeting Attendance</h3><button onclick="closeModal()" style="background:none;border:none;font-size:20px;cursor:pointer">×</button></div><div id="meeting-attendance-body"><div class="loading">Loading...</div></div></div></div>';
+
+  try {
+    const data = await api('/api/jitsi/' + meetingId + '/attendance');
+    const attendance = data.attendance || [];
+    const total = data.total || 0;
+    const statusColor = { present: '#22c55e', partial: '#f59e0b', absent: '#ef4444' };
+
+    let rows = '';
+    for (const a of attendance) {
+      const joinStr = a.joinTime ? new Date(a.joinTime).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : '—';
+      const leaveStr = a.leaveTime ? new Date(a.leaveTime).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : '<span style="color:#f59e0b;font-size:11px">In meeting</span>';
+      const statusLabel = a.status ? a.status.charAt(0).toUpperCase() + a.status.slice(1) : '—';
+      rows += '<tr><td style="font-weight:600">' + (a.user && a.user.name ? a.user.name : '—') + '</td>'
+            + '<td style="font-size:12px;color:var(--text-muted)">' + (a.user && (a.user.email || a.user.indexNumber) ? (a.user.email || a.user.indexNumber) : '—') + '</td>'
+            + '<td style="font-size:12px">' + joinStr + '</td>'
+            + '<td style="font-size:12px">' + leaveStr + '</td>'
+            + '<td style="font-size:12px">' + (a.durationMinutes || 0) + 'm</td>'
+            + '<td><span style="background:' + (statusColor[a.status] || '#6b7280') + ';color:#fff;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:600">' + statusLabel + '</span></td></tr>';
+    }
+
+    const token = localStorage.getItem('kodex_token') || '';
+    const csvUrl = '/api/jitsi/' + meetingId + '/attendance/csv?token=' + token;
+
+    let tableHtml = attendance.length
+      ? '<table style="width:100%"><thead><tr><th>Name</th><th>Email / Index</th><th>Joined</th><th>Left</th><th>Duration</th><th>Status</th></tr></thead><tbody>' + rows + '</tbody></table>'
+      : '<div class="empty-state"><p>No attendance records yet.</p></div>';
+
+    document.getElementById('meeting-attendance-body').innerHTML =
+      '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">'
+      + '<span style="font-size:13px;color:var(--text-light)">' + total + ' participant' + (total !== 1 ? 's' : '') + '</span>'
+      + '<div style="display:flex;gap:8px">'
+      + '<a href="' + csvUrl + '" download style="text-decoration:none"><button class="btn btn-sm" style="background:#22c55e;color:#fff">⬇ Download CSV</button></a>'
+      + '<button class="btn btn-sm" style="background:#7c3aed;color:#fff" onclick="printMeetingAttendance(\'' + meetingId + '\', \'' + title.replace(/'/g, "\\'") + '\')">🖨 Print / PDF</button>'
+      + '</div></div>'
+      + tableHtml;
+  } catch(e) {
+    const el = document.getElementById('meeting-attendance-body');
+    if (el) el.innerHTML = '<p style="color:red">' + e.message + '</p>';
+  }
+}
+
+async function printMeetingAttendance(meetingId, title) {
+  try {
+    const data = await api('/api/jitsi/' + meetingId + '/attendance');
+    const attendance = data.attendance || [];
+    const statusColor = { present: '#22c55e', partial: '#f59e0b', absent: '#ef4444' };
+
+    let rows = '';
+    for (const a of attendance) {
+      const joinStr = a.joinTime ? new Date(a.joinTime).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : '—';
+      const leaveStr = a.leaveTime ? new Date(a.leaveTime).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : 'In meeting';
+      const statusLabel = a.status ? a.status.charAt(0).toUpperCase() + a.status.slice(1) : '—';
+      const color = statusColor[a.status] || '#6b7280';
+      rows += '<tr><td>' + (a.user && a.user.name ? a.user.name : '—') + '</td>'
+            + '<td>' + (a.user && (a.user.email || a.user.indexNumber) ? (a.user.email || a.user.indexNumber) : '—') + '</td>'
+            + '<td>' + joinStr + '</td><td>' + leaveStr + '</td>'
+            + '<td>' + (a.durationMinutes || 0) + 'm</td>'
+            + '<td style="color:' + color + ';font-weight:600">' + statusLabel + '</td></tr>';
+    }
+
+    const win = window.open('', '_blank');
+    win.document.write('<!DOCTYPE html><html><head><title>' + title + ' — Attendance</title>'
+      + '<style>body{font-family:Arial,sans-serif;padding:24px}h2{margin-bottom:4px}p{color:#666;margin-bottom:16px}'
+      + 'table{width:100%;border-collapse:collapse}th,td{border:1px solid #ddd;padding:8px;text-align:left;font-size:13px}'
+      + 'th{background:#f3f4f6;font-weight:600}tr:nth-child(even){background:#f9fafb}'
+      + '@media print{button{display:none}}</style></head><body>'
+      + '<h2>' + title + ' — Meeting Attendance</h2>'
+      + '<p>Generated: ' + new Date().toLocaleString() + '</p>'
+      + '<table><thead><tr><th>Name</th><th>Email / Index</th><th>Joined</th><th>Left</th><th>Duration</th><th>Status</th></tr></thead>'
+      + '<tbody>' + rows + '</tbody></table>'
+      + '<br><button onclick="window.print()">🖨 Print</button>'
+      + '</body></html>');
+    win.document.close();
+    win.focus();
+    setTimeout(function() { win.print(); }, 500);
+  } catch(e) {
+    alert('Failed to generate PDF: ' + e.message);
+  }
 }
