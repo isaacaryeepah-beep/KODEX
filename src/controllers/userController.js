@@ -337,3 +337,20 @@ exports.changePasswordAfterReset = async (req, res) => {
     res.status(500).json({ error: "Failed to change password" });
   }
 };
+
+// ── Clear student device lock (admin action) ──────────────────────────────────
+exports.clearDeviceLock = async (req, res) => {
+  try {
+    const user = await User.findOne({ _id: req.params.id, company: req.user.company, role: "student" });
+    if (!user) return res.status(404).json({ error: "Student not found" });
+
+    user.deviceId = null;
+    await user.save({ validateBeforeSave: false });
+
+    console.log(`[DeviceLock] Cleared for student ${user.name} by ${req.user.name}`);
+    res.json({ message: `Device lock cleared for ${user.name}. They can now log in from a new device.` });
+  } catch (error) {
+    console.error("Clear device lock error:", error);
+    res.status(500).json({ error: "Failed to clear device lock" });
+  }
+};
