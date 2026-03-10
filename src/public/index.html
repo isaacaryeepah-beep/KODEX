@@ -223,12 +223,16 @@
 
       <form id="lecturer-forgot-form" class="hidden" onsubmit="event.preventDefault(); handleLecturerForgotPassword();">
         <div class="form-group">
+          <label>Institution Code</label>
+          <input type="text" id="lecturer-forgot-code" placeholder="e.g. KNUST01" style="text-transform:uppercase">
+        </div>
+        <div class="form-group">
           <label>Phone Number</label>
           <input type="tel" id="lecturer-forgot-phone" placeholder="e.g. 0244123456">
         </div>
         <div id="lecturer-reset-code-group" class="form-group hidden">
           <label>Reset Code</label>
-          <input type="text" id="lecturer-reset-code" placeholder="6-digit reset code" maxlength="6">
+          <input type="text" id="lecturer-reset-code" placeholder="Enter reset code from SMS" maxlength="6">
         </div>
         <div id="lecturer-new-password-group" class="form-group hidden">
           <label>New Password</label>
