@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const User = require("../models/User");
 const AttendanceSession = require("../models/AttendanceSession");
 const AttendanceRecord = require("../models/AttendanceRecord");
 const QrToken = require("../models/QrToken");
