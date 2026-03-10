@@ -4432,8 +4432,8 @@ function showMarkAttendanceModal() {
         <h3>Mark Attendance</h3>
         <p style="font-size:13px;color:var(--text-light);margin-bottom:16px">Enter the 4-character code shown by your lecturer or manager.</p>
         <div class="form-group">
-          <label>6-Digit Code</label>
-          <input type="text" id="attend-code" placeholder="Enter code" maxlength="6" style="font-size:22px;text-align:center;letter-spacing:8px;font-weight:700" autofocus>
+          <label>Attendance Code</label>
+          <input type="text" id="attend-code" placeholder="Enter code" maxlength="4" style="font-size:22px;text-align:center;letter-spacing:8px;font-weight:700;text-transform:uppercase" autofocus>
         </div>
         <div class="modal-actions">
           <button class="btn btn-secondary btn-sm" onclick="closeModal()">Cancel</button>
@@ -4448,7 +4448,7 @@ function showMarkAttendanceModal() {
 async function markAttendance() {
   try {
     const code = document.getElementById('attend-code').value;
-    if (!code || code.length < 4) return alert('Please enter a valid code');
+    if (!code || code.length !== 4) return alert('Please enter the 4-character code.');
     await api('/api/attendance-sessions/mark', {
       method: 'POST',
       body: JSON.stringify({ code, method: 'code_mark' }),
