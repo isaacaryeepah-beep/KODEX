@@ -811,13 +811,13 @@ exports.forgotPasswordEmail = async (req, res) => {
     if (!user) return res.status(404).json({ error: "No account found with that phone number in this institution." });
 
     if (["admin", "superadmin"].includes(user.role)) {
-      return res.status(403).json({ error: "Phone number is already in use" });
+      return res.status(403).json({ error: "Invalid input" });
     }
     if (user.role === "student") {
-      return res.status(403).json({ error: "Phone number is already in use" });
+      return res.status(403).json({ error: "Invalid input" });
     }
     if (!["manager", "lecturer", "employee"].includes(user.role)) {
-      return res.status(403).json({ error: "This reset method is not available for your account type." });
+      return res.status(403).json({ error: "Invalid input" });
     }
     if (user.resetPasswordExpires && user.resetPasswordExpires > Date.now()) {
       return res.status(429).json({ error: "A reset code was already sent recently. Please wait before requesting again." });
