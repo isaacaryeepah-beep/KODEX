@@ -819,8 +819,8 @@ exports.forgotPasswordEmail = async (req, res) => {
     if (!["manager", "lecturer", "employee"].includes(user.role)) {
       return res.status(403).json({ error: "Invalid input" });
     }
-    if (user.resetPasswordExpires && user.resetPasswordExpires > Date.now()) {
-      return res.status(429).json({ error: "A reset code was already sent recently. Please wait before requesting again." });
+    if (user.resetPasswordExpires && user.resetPasswordExpires > Date.now() && (user.resetPasswordExpires - Date.now()) > 59 * 60 * 1000) {
+      return res.status(429).json({ error: "A reset code was already sent. Please check your phone or wait 1 minute before trying again." });
     }
 
     const code = String(crypto.randomInt(100000, 1000000));
@@ -831,12 +831,16 @@ exports.forgotPasswordEmail = async (req, res) => {
 
     const smsResult = await sendOtp({ phone: normPhone, code, name: user.name });
     if (!smsResult.ok && !smsResult.dev) {
-      console.error('[ForgotPassword] SMS failed:', smsResult.error);
-      return res.status(500).json({ error: "Failed to send SMS. Please try again or contact your admin." });
+      console.error('[ForgotPasswordEmail] SMS failed:', smsResult.error);
+      // Clear token so user can retry immediately
+      user.resetPasswordToken = null;
+      user.resetPasswordExpires = null;
+      await user.save({ validateBeforeSave: false });
+      return res.status(500).json({ error: "Failed to send SMS. Please try again." });
     }
 
-    console.log(`[ForgotPassword] OTP sent to ${normPhone} for ${user.name}`);
-    res.json({ message: "A 6-digit reset code has been sent to your phone via SMS." });
+    console.log(`[ForgotPasswordEmail] OTP sent to ${normPhone} for ${user.name}`);
+    res.json({ message: "A reset code has been sent to your phone via SMS." });
   } catch (error) {
     console.error("Forgot password email error:", error);
     res.status(500).json({ error: "Failed to generate reset code" });
@@ -863,8 +867,8 @@ exports.forgotPasswordAdmin = async (req, res) => {
     if (!["admin", "superadmin"].includes(user.role)) {
       return res.status(403).json({ error: "This reset method is for admins only." });
     }
-    if (user.resetPasswordExpires && user.resetPasswordExpires > Date.now()) {
-      return res.status(429).json({ error: "A reset code was already sent recently. Please wait before requesting again." });
+    if (user.resetPasswordExpires && user.resetPasswordExpires > Date.now() && (user.resetPasswordExpires - Date.now()) > 59 * 60 * 1000) {
+      return res.status(429).json({ error: "A reset code was already sent. Please check your phone or wait 1 minute before trying again." });
     }
 
     const code = String(crypto.randomInt(100000, 1000000));
