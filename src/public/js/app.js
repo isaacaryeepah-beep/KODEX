@@ -2882,7 +2882,14 @@ async function viewMeetingDetail(id) {
           </div>
         </div>
         <div class="card">
-          <div class="card-title">Attendees (${m.attendees?.length || 0})</div>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+            <div class="card-title" style="margin:0">Attendees (${m.attendees?.length || 0})</div>
+            ${m.status === 'completed' && canManage ? `
+              <div style="display:flex;gap:8px">
+                <button class="btn btn-sm" style="background:#22c55e;color:#fff" onclick="viewMeetingAttendance('${m._id}', '${m.title.replace(/'/g,"\\'")}')">📋 Full Report</button>
+                <button class="btn btn-sm" style="background:#7c3aed;color:#fff" onclick="printMeetingAttendance('${m._id}', '${m.title.replace(/'/g,"\\'")}')">🖨 PDF</button>
+              </div>` : ''}
+          </div>
           ${m.attendees && m.attendees.length ? `
             <table>
               <thead><tr><th>Name</th><th>Index No.</th><th>Role</th><th>Joined At</th><th>Status</th></tr></thead>
