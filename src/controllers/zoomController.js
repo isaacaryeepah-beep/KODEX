@@ -381,3 +381,23 @@ exports.getMeetingAttendees = async (req, res) => {
     res.status(500).json({ error: "Failed to fetch attendees" });
   }
 };
+
+exports.setInviteLink = async (req, res) => {
+  try {
+    const { inviteLink } = req.body;
+    const meeting = await ZoomMeeting.findOne({ _id: req.params.id, company: req.user.company });
+    if (!meeting) return res.status(404).json({ error: 'Meeting not found' });
+
+    // Validate it's a real URL
+    if (inviteLink && !/^https?:\/\/.+/.test(inviteLink)) {
+      return res.status(400).json({ error: 'Please enter a valid URL starting with http or https' });
+    }
+
+    meeting.inviteLink = inviteLink || null;
+    await meeting.save();
+    res.json({ message: 'Invite link saved', inviteLink: meeting.inviteLink });
+  } catch (e) {
+    console.error('Set invite link error:', e);
+    res.status(500).json({ error: 'Failed to save invite link' });
+  }
+};
