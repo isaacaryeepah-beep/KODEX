@@ -1,8 +1,8 @@
-// ─── KODEX SMS Service (Arkesel) ─────────────────────────────────────────────
-// Docs: https://developers.arkesel.com
+// ─── KODEX SMS Service (mNotify) ─────────────────────────────────────────────
+// Docs: https://apps.mnotify.net/docs
 // Env vars needed in Render:
-//   ARKESEL_API_KEY  — your API key from arkesel.com dashboard
-//   SMS_SENDER_ID    — e.g. "KODEX" (max 11 chars, no spaces)
+//   MNOTIFY_API_KEY  — your API key from mnotify.net dashboard
+//   SMS_SENDER_ID    — e.g. "KODEX" (must be approved in mNotify dashboard)
 // ─────────────────────────────────────────────────────────────────────────────
 
 const https = require('https');
@@ -16,9 +16,9 @@ function normalisePhone(raw) {
   return p;
 }
 
-// Send a raw SMS
+// Send a raw SMS via mNotify
 async function sendSms({ to, message }) {
-  const apiKey   = process.env.ARKESEL_API_KEY;
+  const apiKey   = process.env.MNOTIFY_API_KEY;
   const senderId = process.env.SMS_SENDER_ID || 'KODEX';
   const phone    = normalisePhone(to);
 
@@ -31,38 +31,42 @@ async function sendSms({ to, message }) {
     return { ok: false, error: 'Invalid phone number' };
   }
 
-  const payload = JSON.stringify({
-    sender:     senderId,
-    message,
-    recipients: [phone],
+  // mNotify uses query params on GET request
+  const params = new URLSearchParams({
+    key:       apiKey,
+    to:        phone,
+    msg:       message,
+    sender_id: senderId,
   });
 
   return new Promise((resolve) => {
     const req = https.request({
-      hostname: 'sms.arkesel.com',
-      path:     '/api/v2/sms/send',
-      method:   'POST',
-      headers: {
-        'api-key':        apiKey,
-        'Content-Type':   'application/json',
-        'Content-Length': Buffer.byteLength(payload),
-      },
+      hostname: 'apps.mnotify.net',
+      path:     `/smsapi?${params.toString()}`,
+      method:   'GET',
     }, (res) => {
       let body = '';
       res.on('data', c => body += c);
       res.on('end', () => {
         try {
           const json = JSON.parse(body);
-          if (json.status === 'success') {
-            console.log(`[SMS] ✅ Sent to ${phone}`);
+          // mNotify returns status 1000 for success
+          if (json.status === '1000' || json.status === 1000) {
+            console.log(`[SMS] ✅ Sent to ${phone} via mNotify`);
             resolve({ ok: true });
           } else {
-            console.error(`[SMS] ❌ Arkesel error:`, JSON.stringify(json));
-            resolve({ ok: false, error: json.message || body });
+            console.error(`[SMS] ❌ mNotify error:`, JSON.stringify(json));
+            resolve({ ok: false, error: json.title || json.message || body });
           }
         } catch (e) {
-          console.error('[SMS] ❌ Parse error:', body);
-          resolve({ ok: false, error: body });
+          // mNotify sometimes returns plain text
+          if (body.includes('1000')) {
+            console.log(`[SMS] ✅ Sent to ${phone} via mNotify`);
+            resolve({ ok: true });
+          } else {
+            console.error('[SMS] ❌ Parse error:', body);
+            resolve({ ok: false, error: body });
+          }
         }
       });
     });
@@ -70,14 +74,13 @@ async function sendSms({ to, message }) {
       console.error('[SMS] ❌ Request error:', err.message);
       resolve({ ok: false, error: err.message });
     });
-    req.write(payload);
     req.end();
   });
 }
 
 // Send OTP reset code
-async function sendOtp({ phone, code }) {
-  const message = `KODEX: Your password reset code is ${code}. Valid for 1 hour. Do not share this code.`;
+async function sendOtp({ phone, code, name }) {
+  const message = `KODEX: Hi ${name}, your password reset code is ${code}. Valid for 1 hour. Do not share this code.`;
   return sendSms({ to: phone, message });
 }
 
