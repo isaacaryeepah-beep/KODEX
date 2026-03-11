@@ -2731,6 +2731,8 @@ async function renderMeetings() {
                 <td style="white-space:nowrap;">
                   ${m.status === 'active' || m.status === 'scheduled' ? `<button class="btn btn-success btn-sm" onclick="joinMeeting('${m._id}', '${m.joinUrl}')">Join</button>` : ''}
                   ${canControl && m.status === 'scheduled' ? `<button class="btn btn-primary btn-sm" onclick="startMeeting('${m._id}')" style="margin-left:4px;">Start</button>` : ''}
+                  ${canControl ? `<button class="btn btn-sm" style="margin-left:4px;background:#0ea5e9;color:#fff;font-size:11px" onclick="showInviteLinkForm('${m._id}', \`${m.inviteLink || ''}\`)">🔗 Invite Link</button>` : ''}
+                  ${m.inviteLink ? `<a href="${m.inviteLink}" target="_blank" class="btn btn-sm" style="margin-left:4px;background:#f0fdf4;color:#16a34a;border:1px solid #86efac;font-size:11px">▶ Join via Link</a>` : ''}
                   ${canControl && m.status === 'active' ? `<button class="btn btn-danger btn-sm" onclick="endMeeting('${m._id}')" style="margin-left:4px;">End</button>` : ''}
                   ${canControl && (m.status === 'scheduled' || m.status === 'active') ? `<button class="btn btn-secondary btn-sm" onclick="cancelMeeting('${m._id}')" style="margin-left:4px;">Cancel</button>` : ''}
                   <button class="btn btn-secondary btn-sm" onclick="viewMeetingDetail('${m._id}')" style="margin-left:4px;">Details</button>
@@ -2939,6 +2941,8 @@ async function viewMeetingDetail(id) {
           <p><strong>Duration:</strong> ${m.duration} minutes</p>
           ${m.course ? `<p><strong>Course:</strong> ${m.course.code} - ${m.course.title}</p>` : ''}
           <p><strong>Join Link:</strong> <a href="${m.joinUrl}" target="_blank" style="color:#3b82f6;word-break:break-all;">${m.joinUrl}</a></p>
+          ${m.inviteLink ? `<p><strong>Invite Link:</strong> <a href="${m.inviteLink}" target="_blank" style="color:#16a34a;word-break:break-all;font-weight:600">▶ ${m.inviteLink}</a></p>` : ''}
+          ${canManage ? `<button class="btn btn-sm" style="background:#0ea5e9;color:#fff;margin-top:4px" onclick="showInviteLinkForm('${m._id}', \`${m.inviteLink || ''}\`)">🔗 ${m.inviteLink ? 'Update' : 'Add'} Invite Link</button>` : ''}
           <div style="margin-top:12px;">
             ${m.status === 'active' || m.status === 'scheduled' ? `<button class="btn btn-success btn-sm" onclick="joinMeeting('${m._id}', '${m.joinUrl}')">Join Meeting</button>` : ''}
             ${canManage && m.status === 'active' ? `<button class="btn btn-danger btn-sm" style="margin-left:4px;" onclick="endMeeting('${m._id}')">End Meeting</button>` : ''}
@@ -2972,6 +2976,49 @@ async function viewMeetingDetail(id) {
     `;
   } catch (e) {
     content.innerHTML = `<div class="card"><p>Error: ${e.message}</p><button class="btn btn-secondary" onclick="renderMeetings()">Back</button></div>`;
+  }
+}
+
+function showInviteLinkForm(meetingId, currentLink) {
+  const container = document.getElementById('modal-container');
+  container.classList.remove('hidden');
+  container.innerHTML = `
+    <div class="modal-overlay" onclick="closeModal(event)">
+      <div class="modal" onclick="event.stopPropagation()" style="max-width:480px">
+        <h3 style="margin:0 0 6px">Meeting Invite Link</h3>
+        <p style="font-size:13px;color:var(--text-light);margin-bottom:16px">
+          Paste an external meeting link (Google Meet, Zoom, Teams, etc). 
+          Students/employees will see a tap-to-join button in their Meetings page.
+        </p>
+        <div class="form-group">
+          <label>Invite Link</label>
+          <input type="url" id="invite-link-input" placeholder="https://meet.google.com/abc-defg-hij"
+            value="${currentLink}" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;font-size:14px">
+        </div>
+        <div id="invite-link-error" style="color:#ef4444;font-size:13px;margin-bottom:8px;display:none"></div>
+        <div class="modal-actions">
+          <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+          ${currentLink ? `<button class="btn btn-danger btn-sm" onclick="saveInviteLink('${meetingId}', '')">Remove</button>` : ''}
+          <button class="btn btn-primary" onclick="saveInviteLink('${meetingId}', document.getElementById('invite-link-input').value)">Save Link</button>
+        </div>
+      </div>
+    </div>
+  `;
+  setTimeout(() => document.getElementById('invite-link-input')?.focus(), 100);
+}
+
+async function saveInviteLink(meetingId, link) {
+  const errEl = document.getElementById('invite-link-error');
+  try {
+    await api('/api/zoom/' + meetingId + '/invite-link', {
+      method: 'PATCH',
+      body: JSON.stringify({ inviteLink: link.trim() })
+    });
+    closeModal();
+    renderMeetings();
+  } catch(e) {
+    if (errEl) { errEl.textContent = e.message; errEl.style.display = 'block'; }
+    else alert(e.message);
   }
 }
 
