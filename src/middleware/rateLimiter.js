@@ -20,11 +20,12 @@ setInterval(() => {
 
 function createRateLimiter({ windowMs, max, message }) {
   return (req, res, next) => {
-    // Use IP + route as key
-    const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || 
-                req.socket?.remoteAddress || 
+    // Key by IP + route + phone so each person gets their own bucket
+    const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() ||
+                req.socket?.remoteAddress ||
                 'unknown';
-    const key = `${ip}::${req.path}`;
+    const phone = req.body?.phone || req.body?.email || '';
+    const key = `${ip}::${req.path}::${phone}`;
     const now = Date.now();
 
     const existing = requestCounts.get(key);
@@ -66,10 +67,10 @@ const registerLimiter = createRateLimiter({
   message: 'Too many accounts created from this IP. Please try again later.',
 });
 
-// Password reset: max 5 requests per hour per IP
+// Password reset: max 5 attempts per hour per phone number
 const passwordResetLimiter = createRateLimiter({
   windowMs: 60 * 60 * 1000,
-  max: 2,
+  max: 5,
   message: 'Too many password reset attempts. Please wait an hour and try again.',
 });
 
