@@ -85,6 +85,10 @@ const meetingSchema = new mongoose.Schema(
       enum: ["scheduled", "active", "completed", "cancelled"],
       default: "scheduled",
     },
+    inviteLink: {
+      type: String,
+      default: null,
+    },
   },
   {
     timestamps: true,
