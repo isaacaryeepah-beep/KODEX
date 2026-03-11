@@ -18,4 +18,6 @@ router.post("/:id/join", ctrl.joinMeeting);
 router.post("/:id/end", requireRole("manager", "lecturer", "admin", "superadmin"), ctrl.endMeeting);
 router.post("/:id/cancel", requireRole("manager", "lecturer", "admin", "superadmin"), ctrl.cancelMeeting);
 
+router.patch("/:id/invite-link", requireRole("manager", "lecturer", "admin", "superadmin"), ctrl.setInviteLink);
+
 module.exports = router;
