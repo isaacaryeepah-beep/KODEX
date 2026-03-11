@@ -80,7 +80,7 @@ async function sendSms({ to, message }) {
 
 // Send OTP reset code
 async function sendOtp({ phone, code, name }) {
-  const message = `KODEX: Hi ${name}, your password reset code is ${code}. Valid for 1 hour. Do not share this code.`;
+  const message = `Your KODEX verification code is ${code}. Valid for 1 hour.`;
   return sendSms({ to: phone, message });
 }
 
