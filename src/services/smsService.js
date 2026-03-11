@@ -1,22 +1,22 @@
 // ─── KODEX SMS Service (mNotify) ─────────────────────────────────────────────
-// Docs: https://apps.mnotify.net/docs
+// Docs: https://api.mnotify.com/docs
 // Env vars needed in Render:
 //   MNOTIFY_API_KEY  — your API key from mnotify.net dashboard
-//   SMS_SENDER_ID    — e.g. "KODEX" (must be approved in mNotify dashboard)
+//   SMS_SENDER_ID    — e.g. "KODEX" (approved sender ID)
 // ─────────────────────────────────────────────────────────────────────────────
 
 const https = require('https');
 
-// Normalise any Ghana phone format → 233XXXXXXXXX
+// Normalise any Ghana phone format → 0XXXXXXXXX (mNotify prefers local format)
 function normalisePhone(raw) {
   if (!raw) return null;
   let p = String(raw).replace(/\s+/g, '').replace(/[^0-9+]/g, '');
-  if (p.startsWith('+')) p = p.slice(1);
-  if (p.startsWith('0')) p = '233' + p.slice(1);
+  if (p.startsWith('+233')) p = '0' + p.slice(4);
+  if (p.startsWith('233')) p = '0' + p.slice(3);
   return p;
 }
 
-// Send a raw SMS via mNotify
+// Send a raw SMS via mNotify REST API
 async function sendSms({ to, message }) {
   const apiKey   = process.env.MNOTIFY_API_KEY;
   const senderId = process.env.SMS_SENDER_ID || 'KODEX';
@@ -31,42 +31,41 @@ async function sendSms({ to, message }) {
     return { ok: false, error: 'Invalid phone number' };
   }
 
-  // mNotify uses query params on GET request
-  const params = new URLSearchParams({
-    key:       apiKey,
-    to:        phone,
-    msg:       message,
-    sender_id: senderId,
+  const payload = JSON.stringify({
+    recipient:     [phone],
+    sender:        senderId,
+    message,
+    is_schedule:   'false',
+    schedule_date: '',
   });
 
   return new Promise((resolve) => {
     const req = https.request({
-      hostname: 'apps.mnotify.net',
-      path:     `/smsapi?${params.toString()}`,
-      method:   'GET',
+      hostname: 'api.mnotify.com',
+      path:     `/api/sms/quick?key=${apiKey}`,
+      method:   'POST',
+      headers: {
+        'Content-Type':   'application/json',
+        'Content-Length': Buffer.byteLength(payload),
+      },
     }, (res) => {
       let body = '';
       res.on('data', c => body += c);
       res.on('end', () => {
+        console.log(`[SMS] mNotify response (${res.statusCode}):`, body);
         try {
           const json = JSON.parse(body);
-          // mNotify returns status 1000 for success
-          if (json.status === '1000' || json.status === 1000) {
+          // mNotify returns status "success" or code 200
+          if (json.status === 'success' || res.statusCode === 200) {
             console.log(`[SMS] ✅ Sent to ${phone} via mNotify`);
             resolve({ ok: true });
           } else {
             console.error(`[SMS] ❌ mNotify error:`, JSON.stringify(json));
-            resolve({ ok: false, error: json.title || json.message || body });
+            resolve({ ok: false, error: json.message || body });
           }
         } catch (e) {
-          // mNotify sometimes returns plain text
-          if (body.includes('1000')) {
-            console.log(`[SMS] ✅ Sent to ${phone} via mNotify`);
-            resolve({ ok: true });
-          } else {
-            console.error('[SMS] ❌ Parse error:', body);
-            resolve({ ok: false, error: body });
-          }
+          console.error('[SMS] ❌ Parse error:', body);
+          resolve({ ok: false, error: body });
         }
       });
     });
@@ -74,6 +73,7 @@ async function sendSms({ to, message }) {
       console.error('[SMS] ❌ Request error:', err.message);
       resolve({ ok: false, error: err.message });
     });
+    req.write(payload);
     req.end();
   });
 }
