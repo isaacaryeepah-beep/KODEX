@@ -2098,7 +2098,6 @@ function _renderSessionsHTML(content, sessions, isOffline) {
               <td>${s.status === 'active' ? `
                 <button class="btn btn-danger btn-sm" onclick="stopSession('${s._id}')">Stop</button>
                 ${!isOffline ? `<button class="btn btn-success btn-sm" onclick="generateQR('${s._id}')">QR Code</button>` : ''}
-                ${!isOffline ? `<button class="btn btn-sm" style="background:#7c3aed;color:#fff;font-size:11px" onclick="generateVerbalCode('${s._id}')">Verbal Code</button>` : ''}
                 <button class="btn btn-sm" style="font-size:11px;background:var(--bg);border:1px solid var(--border)" onclick="viewAttendees('${s._id}', '${(s.title||'Session').replace(/['"]/g,'')}')">Attendees</button>
               ` : ''}</td>
             </tr>
@@ -2225,7 +2224,7 @@ async function generateQR(sessionId) {
               <h3 style="margin:0">Attendance QR Code</h3>
               <button onclick="_stopQrTimers();closeModal()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--text-light)">×</button>
             </div>
-            <p style="color:var(--text-light);font-size:12px;margin-bottom:16px">Students scan this with their phone camera to mark attendance</p>
+            <p style="color:var(--text-light);font-size:12px;margin-bottom:16px">${currentUser.company?.mode === "corporate" ? "Employees" : "Students"} scan this with their phone camera to mark attendance</p>
 
             <!-- QR Code Image -->
             <div id="qr-code-display" style="position:relative;display:inline-block;margin-bottom:12px">
@@ -4226,11 +4225,7 @@ async function renderMarkAttendance() {
           </div>
         ` : `
           <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px">
-            <div class="card mark-method-card" onclick="showCodeEntryOffline()" style="cursor:pointer;text-align:center;transition:all 0.2s">
-              <div style="font-size:42px;margin-bottom:12px">🔢</div>
-              <div style="font-size:16px;font-weight:700">Enter Code</div>
-              <p style="font-size:12px;color:var(--text-light);margin-top:4px">Type the 4-character code — will sync when online</p>
-            </div>
+
           </div>
           <div id="mark-input-area" style="margin-top:16px"></div>
         `}
@@ -4283,11 +4278,6 @@ async function renderMarkAttendance() {
         </div>
       ` : `
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;margin-bottom:16px">
-          <div class="card mark-method-card" onclick="showCodeEntry()" style="cursor:pointer;text-align:center;transition:all 0.2s">
-            <div style="font-size:36px;margin-bottom:12px">${svgIcon('<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M7 7h.01M7 12h.01M12 7h.01M12 12h.01M17 7h.01M7 17h.01M12 17h.01M17 12h.01M17 17h.01"/>', 42)}</div>
-            <div style="font-size:16px;font-weight:700">Enter Code</div>
-            <p style="font-size:12px;color:var(--text-light);margin-top:4px">Type the 4-character code shown by your lecturer</p>
-          </div>
           
           <div class="card mark-method-card" onclick="showQrEntry()" style="cursor:pointer;text-align:center;transition:all 0.2s">
             <div style="font-size:36px;margin-bottom:12px">${svgIcon('<rect x="2" y="2" width="8" height="8" rx="1"/><rect x="14" y="2" width="8" height="8" rx="1"/><rect x="2" y="14" width="8" height="8" rx="1"/><rect x="14" y="14" width="4" height="4"/><path d="M18 14h4v4M14 18h4v4"/>', 42)}</div>
