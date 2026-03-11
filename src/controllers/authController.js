@@ -1,655 +1,975 @@
-const mongoose = require("mongoose");
+const crypto = require("crypto");
+const bcrypt = require("bcryptjs");
 const User = require("../models/User");
-const AttendanceSession = require("../models/AttendanceSession");
-const AttendanceRecord = require("../models/AttendanceRecord");
-const QrToken = require("../models/QrToken");
 const Company = require("../models/Company");
+const StudentRoster = require("../models/StudentRoster");
+const { generateToken } = require("../utils/jwt");
+const { sendWelcome, sendAdminPasswordResetNotice } = require("../services/emailService");
+const { sendOtp, normalisePhone } = require("../services/smsService");
 
-exports.startSession = async (req, res) => {
+const SIX_HOURS_MS = 6 * 60 * 60 * 1000;
+
+exports.register = async (req, res) => {
   try {
-    const companyId = req.user.company;
+    const { email, password, name, companyName, mode, phone } = req.body;
 
-    const company = await Company.findById(companyId);
-    if (!company || !company.isActive) {
-      return res.status(404).json({ error: "Company not found or inactive" });
+    if (!email || !password || !name || !companyName) {
+      return res.status(400).json({ error: "Email, password, name, and institution name are required" });
     }
 
-    const activeFilter = { company: companyId, status: "active" };
-    if (req.user.role === "lecturer") {
-      activeFilter.createdBy = req.user._id;
+    if (password.length < 8) {
+      return res.status(400).json({ error: "Password must be at least 8 characters" });
     }
 
-    const existingActive = await AttendanceSession.findOne(activeFilter);
+    const companyMode = mode || "corporate";
+    if (!["corporate", "academic"].includes(companyMode)) {
+      return res.status(400).json({ error: "Mode must be corporate or academic" });
+    }
 
-    if (existingActive) {
-      return res.status(409).json({
-        error: "You already have an active session running",
-        session: existingActive,
+    const existingCompany = await Company.findOne({ name: companyName });
+    if (existingCompany) {
+      return res.status(400).json({ error: "An institution with this name already exists. Use your institution code to join instead." });
+    }
+
+    const company = await Company.create({
+      name: companyName,
+      mode: companyMode,
+      subscriptionStatus: "trial",
+    });
+
+    const existingUser = await User.findOne({ email });
+    if (existingUser) {
+      await Company.findByIdAndDelete(company._id);
+      return res.status(400).json({ error: "This email is already registered" });
+    }
+
+    if (phone) {
+      const normPhone = normalisePhone(phone);
+      const phoneExists = await User.findOne({ phone: normPhone });
+      if (phoneExists) {
+        await Company.findByIdAndDelete(company._id);
+        return res.status(400).json({ error: "Phone number is already in use" });
+      }
+    }
+
+    let user;
+    try {
+      user = await User.create({
+        email,
+        password,
+        name,
+        phone: phone ? normalisePhone(phone) : null,
+        company: company._id,
+        role: "admin",
+        isApproved: true,
       });
+    } catch (userError) {
+      await Company.findByIdAndDelete(company._id);
+      throw userError;
     }
 
-    let courseRef = null;
-    if (req.body.courseId) {
-      const Course = require("../models/Course");
-      const courseQuery = { _id: req.body.courseId, company: companyId };
-      if (req.user.role === "lecturer") {
-        courseQuery.lecturer = req.user._id;
-      }
-      const course = await Course.findOne(courseQuery);
-      if (!course) {
-        return res.status(400).json({ error: "Course not found or you don't have access to it" });
-      }
-      courseRef = course._id;
-    }
+    const token = generateToken(user._id);
 
-    const sessionData = {
-      company: companyId,
-      createdBy: req.user._id,
-      title: req.body.title || "",
-      course: courseRef,
-      status: "active",
-      startedAt: new Date(),
-    };
+    // Send welcome email (non-fatal)
+    sendWelcome({
+      email:           user.email,
+      name:            user.name || user.email.split('@')[0],
+      institutionName: company.name,
+      trialDays:       14,
+      trialEndDate:    company.trialEndDate,
+    }).catch(err => console.error('Welcome email failed:', err.message));
 
-    if (company.qrSeed) {
-      sessionData.qrSeed = company.qrSeed;
-    }
-    if (company.bleLocationId) {
-      sessionData.bleLocationId = company.bleLocationId;
-    }
-
-    const session = await AttendanceSession.create(sessionData);
-
-    const populated = await session.populate([
-      { path: "company", select: "name" },
-      { path: "createdBy", select: "name email" },
-      { path: "course", select: "title code" },
-    ]);
-
-    res.status(201).json({ session: populated });
+    res.status(201).json({
+      token,
+      user: {
+        id: user._id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        isApproved: user.isApproved,
+        mustChangePassword: user.mustChangePassword || false,
+        company: {
+          id: company._id,
+          name: company.name,
+          mode: company.mode,
+          institutionCode: company.institutionCode,
+        },
+      },
+      trial: {
+        active: company.isTrialActive,
+        daysRemaining: company.trialDaysRemaining,
+        timeRemaining: company.trialTimeRemaining,
+      },
+      subscription: {
+        active: company.subscriptionActive,
+        status: company.subscriptionStatus,
+        plan: company.subscriptionPlan,
+      },
+    });
   } catch (error) {
     if (error.name === "ValidationError") {
       const messages = Object.values(error.errors).map((e) => e.message);
       return res.status(400).json({ error: messages.join(", ") });
     }
-    console.error("Start session error:", error);
-    res.status(500).json({ error: "Failed to start attendance session" });
-  }
-};
-
-exports.stopSession = async (req, res) => {
-  try {
-    const { id } = req.params;
-
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({ error: "Invalid session ID" });
-    }
-
-    const stopFilter = { _id: id, ...req.companyFilter };
-    if (req.user.role === "lecturer") {
-      stopFilter.createdBy = req.user._id;
-    }
-
-    const session = await AttendanceSession.findOne(stopFilter);
-
-    if (!session) {
-      return res.status(404).json({ error: "Session not found" });
-    }
-
-    if (session.status === "stopped") {
-      return res.status(400).json({ error: "Session is already stopped" });
-    }
-
-    session.status = "stopped";
-    session.stoppedAt = new Date();
-    session.stoppedBy = req.user._id;
-    await session.save();
-
-    const populated = await session.populate([
-      { path: "company", select: "name" },
-      { path: "createdBy", select: "name email" },
-      { path: "stoppedBy", select: "name email" },
-    ]);
-
-    res.json({ session: populated });
-  } catch (error) {
-    console.error("Stop session error:", error);
-    res.status(500).json({ error: "Failed to stop attendance session" });
-  }
-};
-
-exports.listSessions = async (req, res) => {
-  try {
-    const { status, page = 1, limit = 20 } = req.query;
-    const filter = { ...req.companyFilter };
-
-    if (req.user.role === "lecturer") {
-      filter.createdBy = req.user._id;
-    }
-
-    if (status && ["active", "stopped"].includes(status)) {
-      filter.status = status;
-    }
-
-    const skip = (parseInt(page) - 1) * parseInt(limit);
-
-    const [sessions, total] = await Promise.all([
-      AttendanceSession.find(filter)
-        .sort({ startedAt: -1 })
-        .skip(skip)
-        .limit(parseInt(limit))
-        .populate("company", "name")
-        .populate("createdBy", "name email")
-        .populate("stoppedBy", "name email")
-        .populate("course", "title code"),
-      AttendanceSession.countDocuments(filter),
-    ]);
-
-    res.json({
-      sessions,
-      pagination: {
-        total,
-        page: parseInt(page),
-        limit: parseInt(limit),
-        pages: Math.ceil(total / parseInt(limit)),
-      },
-    });
-  } catch (error) {
-    console.error("List sessions error:", error);
-    res.status(500).json({ error: "Failed to fetch attendance sessions" });
-  }
-};
-
-exports.getActiveSession = async (req, res) => {
-  try {
-    const activeFilter = { ...req.companyFilter, status: "active" };
-    if (req.user.role === "lecturer") {
-      activeFilter.createdBy = req.user._id;
-    }
-    const session = await AttendanceSession.findOne(activeFilter)
-      .populate("company", "name")
-      .populate("createdBy", "name email")
-      .populate("course", "title code");
-
-    res.json({ session: session || null });
-  } catch (error) {
-    console.error("Active session error:", error);
-    res.status(500).json({ error: "Failed to fetch active session" });
-  }
-};
-
-exports.getSession = async (req, res) => {
-  try {
-    const { id } = req.params;
-
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({ error: "Invalid session ID" });
-    }
-
-    const getFilter = { _id: id, ...req.companyFilter };
-    if (req.user.role === "lecturer") {
-      getFilter.createdBy = req.user._id;
-    }
-
-    const session = await AttendanceSession.findOne(getFilter)
-      .populate("company", "name")
-      .populate("createdBy", "name email")
-      .populate("stoppedBy", "name email")
-      .populate("course", "title code");
-
-    if (!session) {
-      return res.status(404).json({ error: "Session not found" });
-    }
-
-    const records = await AttendanceRecord.find({ session: id })
-      .populate("user", "name email indexNumber role")
-      .sort({ checkInTime: 1 });
-
-    res.json({ session, records });
-  } catch (error) {
-    console.error("Get session error:", error);
-    res.status(500).json({ error: "Failed to fetch attendance session" });
-  }
-};
-
-
-exports.getSessionRecords = async (req, res) => {
-  try {
-    const { id } = req.params;
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({ error: "Invalid session ID" });
-    }
-
-    const sessionFilter = { _id: id, ...req.companyFilter };
-    if (req.user.role === "lecturer") sessionFilter.createdBy = req.user._id;
-
-    const session = await AttendanceSession.findOne(sessionFilter);
-    if (!session) return res.status(404).json({ error: "Session not found" });
-
-    const records = await AttendanceRecord.find({ session: id })
-      .populate("user", "name email indexNumber role")
-      .sort({ checkInTime: 1 });
-
-    // Normalize: expose as 'student' field for frontend compatibility
-    const normalized = records.map(r => ({
-      ...r.toObject(),
-      student: r.user || null,
-    }));
-
-    res.json({ session, records: normalized });
-  } catch (error) {
-    console.error("Get session records error:", error);
-    res.status(500).json({ error: "Failed to fetch attendance records" });
-  }
-};
-exports.markAttendance = async (req, res) => {
-  try {
-    const { sessionId, qrToken, code, method, meetingId } = req.body;
-
-    const methodMap = {
-      qr: "qr_mark",
-      ble: "ble_mark",
-      manual: "manual",
-      zoom: "jitsi_join",
-    };
-
-    // sessionId is optional — auto-detect the active session if not supplied
-    let session;
-    let resolvedSessionId = sessionId;
-
-    if (resolvedSessionId && mongoose.Types.ObjectId.isValid(resolvedSessionId)) {
-      session = await AttendanceSession.findOne({
-        _id: resolvedSessionId,
-        company: req.user.company,
-        status: "active",
-      });
-    } else {
-      // Auto-detect: find the most recent active session for this company
-      session = await AttendanceSession.findOne({
-        company: req.user.company,
-        status: "active",
-      }).sort({ startedAt: -1 });
-      if (session) {
-        resolvedSessionId = session._id.toString();
-      }
-    }
-
-    if (!session) {
-      return res.status(404).json({ error: "No active session found. The manager needs to start a session first." });
-    }
-
-    const existingRecord = await AttendanceRecord.findOne({
-      session: resolvedSessionId,
-      user: req.user._id,
-    });
-
-    if (existingRecord) {
-      return res.status(409).json({ error: "Attendance already marked for this session" });
-    }
-
-    let attendanceMethod = method ? (methodMap[method] || method) : "manual";
-    let qrTokenRef = null;
-
-    if (attendanceMethod === "qr_mark") {
-      if (!qrToken) {
-        return res.status(400).json({ error: "QR token is required for qr_mark method" });
-      }
-      const tokenDoc = await QrToken.findOne({ token: qrToken });
-      if (!tokenDoc) {
-        return res.status(404).json({ error: "Invalid QR code. Please scan again." });
-      }
-      if (tokenDoc.isExpired()) {
-        return res.status(410).json({ error: "QR code has expired. Please scan the latest QR code on screen." });
-      }
-      // QR is time-gated (15s window) — all students can scan within the window
-      qrTokenRef = tokenDoc._id;
-    } else if (qrToken || code) {
-      const query = {};
-      if (qrToken) {
-        query.token = qrToken;
-      } else {
-        query.code = code;
-        query.session = resolvedSessionId;
-      }
-
-      const tokenDoc = await QrToken.findOne(query);
-      if (!tokenDoc) {
-        return res.status(404).json({ error: "Invalid code. Please check the code and try again." });
-      }
-      if (tokenDoc.isExpired()) {
-        return res.status(410).json({ error: "Code has expired. Please ask your manager for the latest code." });
-      }
-      // QR is time-gated (15s window) — all students can scan within the window
-      if (!method) {
-        attendanceMethod = tokenDoc.codeType === "verbal" ? "code_mark" : "code_mark";
-      }
-      qrTokenRef = tokenDoc._id;
-    } else if (attendanceMethod === "jitsi_join") {
-      if (!meetingId) {
-        return res.status(400).json({ error: "Meeting ID is required for jitsi_join method" });
-      }
-      const ZoomMeeting = require("../models/ZoomMeeting");
-      const meeting = await ZoomMeeting.findById(meetingId);
-      if (!meeting) {
-        return res.status(404).json({ error: "Meeting not found" });
-      }
-    }
-
-    const timeSinceStart = Date.now() - new Date(session.startedAt).getTime();
-    const lateThreshold = 15 * 60 * 1000;
-    const status = timeSinceStart > lateThreshold ? "late" : "present";
-
-    const record = await AttendanceRecord.create({
-      session: resolvedSessionId,
-      user: req.user._id,
-      company: req.user.company,
-      status,
-      method: attendanceMethod,
-      deviceId: req.body.deviceId || req.headers["x-device-id"] || null,
-      qrToken: qrTokenRef,
-    });
-
-    const populated = await record.populate([
-      { path: "user", select: "name email indexNumber role" },
-      { path: "session", select: "title startedAt" },
-    ]);
-
-    res.status(201).json({ record: populated });
-  } catch (error) {
     if (error.code === 11000) {
-      return res.status(409).json({ error: "Attendance already marked for this session" });
+      const field = Object.keys(error.keyPattern || {})[0] || "field";
+      if (Object.keys(error.keyPattern || {}).includes("phone")) return res.status(400).json({ error: "Phone number is already in use" });
+      return res.status(400).json({ error: `This ${field} is already registered` });
     }
-    console.error("Mark attendance error:", error);
-    res.status(500).json({ error: "Failed to mark attendance" });
+    console.error("Register error:", error.message, error.stack);
+    res.status(500).json({ error: error.message || "Registration failed" });
   }
 };
 
-exports.getMyAttendance = async (req, res) => {
+exports.registerLecturer = async (req, res) => {
   try {
-    const { page = 1, limit = 20 } = req.query;
-    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const { name, email, password, institutionCode, institutionName, department } = req.body;
 
-    const filter = { user: req.user._id, company: req.user.company };
-
-    const [records, total] = await Promise.all([
-      AttendanceRecord.find(filter)
-        .sort({ checkInTime: -1 })
-        .skip(skip)
-        .limit(parseInt(limit))
-        .populate("session", "title startedAt stoppedAt status")
-        .populate("company", "name"),
-      AttendanceRecord.countDocuments(filter),
-    ]);
-
-    res.json({
-      records,
-      pagination: {
-        total,
-        page: parseInt(page),
-        limit: parseInt(limit),
-        pages: Math.ceil(total / parseInt(limit)),
-      },
-    });
-  } catch (error) {
-    console.error("My attendance error:", error);
-    res.status(500).json({ error: "Failed to fetch attendance records" });
-  }
-};
-
-// ─── Corporate Employee Sign In / Sign Out ─────────────────────────
-exports.employeeSignIn = async (req, res) => {
-  try {
-    const company = await Company.findById(req.user.company);
-    if (!company || !company.isActive) {
-      return res.status(404).json({ error: "Company not found or inactive" });
+    if (!name || !email || !password) {
+      return res.status(400).json({ error: "Name, email, and password are required" });
     }
 
-    if (company.mode !== "corporate") {
-      return res.status(403).json({ error: "Sign in/out is only available for corporate accounts" });
+    if (password.length < 8) {
+      return res.status(400).json({ error: "Password must be at least 8 characters" });
     }
 
-    // Auto-detect the current active session for the company
-    let session = await AttendanceSession.findOne({
-      company: req.user.company,
-      status: "active",
-    }).sort({ startedAt: -1 });
+    // MODE A: Lecturer creates their own institution (subscribed as admin)
+    if (institutionName && !institutionCode) {
+      const existingCompany = await Company.findOne({ name: institutionName });
+      if (existingCompany) {
+        return res.status(400).json({ error: "An institution with this name already exists. Use your institution code to join instead." });
+      }
 
-    // If no session exists, create an automatic one for the day
-    if (!session) {
-      const today = new Date();
-      const dayTitle = `${today.toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric", year: "numeric" })} — Auto Session`;
-      session = await AttendanceSession.create({
-        company: req.user.company,
-        createdBy: req.user._id,
-        title: dayTitle,
-        status: "active",
-        startedAt: new Date(),
+      const company = await Company.create({
+        name: institutionName,
+        mode: "academic",
+        subscriptionStatus: "trial",
+      });
+
+      const existingUser = await User.findOne({ email });
+      if (existingUser) {
+        await Company.findByIdAndDelete(company._id);
+        return res.status(400).json({ error: "This email is already registered" });
+      }
+
+      if (req.body.phone) {
+        const normPhone = normalisePhone(req.body.phone);
+        const phoneExists = await User.findOne({ phone: normPhone, company: company._id });
+        if (phoneExists) {
+          await Company.findByIdAndDelete(company._id);
+          return res.status(400).json({ error: "Phone number is already in use" });
+        }
+      }
+
+      let user;
+      try {
+        user = await User.create({
+          email,
+          password,
+          name,
+          phone: req.body.phone ? normalisePhone(req.body.phone) : null,
+          company: company._id,
+          role: "lecturer",
+          isApproved: true,
+          department: department || null,
+        });
+      } catch (userError) {
+        await Company.findByIdAndDelete(company._id);
+        throw userError;
+      }
+
+      const token = generateToken(user._id);
+      return res.status(201).json({
+        token,
+        user: {
+          id: user._id,
+          email: user.email,
+          name: user.name,
+          role: user.role,
+          isApproved: user.isApproved,
+        mustChangePassword: user.mustChangePassword || false,
+          company: {
+            id: company._id,
+            name: company.name,
+            mode: company.mode,
+            institutionCode: company.institutionCode,
+          },
+        },
+        trial: {
+          active: company.isTrialActive,
+          daysRemaining: company.trialDaysRemaining,
+          timeRemaining: company.trialTimeRemaining,
+        },
+        subscription: {
+          active: company.subscriptionActive,
+          status: company.subscriptionStatus,
+          plan: company.subscriptionPlan,
+        },
+        message: "Institution created successfully. You are now an approved lecturer.",
       });
     }
 
-    // Check if already signed in
-    const existingRecord = await AttendanceRecord.findOne({
-      session: session._id,
-      user: req.user._id,
-    });
-
-    if (existingRecord && existingRecord.checkInTime && !existingRecord.checkOutTime) {
-      return res.status(409).json({ error: "Already signed in. Please sign out first.", signedIn: true, record: existingRecord });
+    // MODE B: Lecturer joins an existing institution using institution code
+    if (!institutionCode) {
+      return res.status(400).json({ error: "Either institution name (to create) or institution code (to join) is required" });
     }
 
-    if (existingRecord && existingRecord.checkOutTime) {
-      return res.status(409).json({ error: "You have already completed your sign in/out for this session." });
+    const company = await Company.findOne({ institutionCode: institutionCode.toUpperCase(), mode: "academic" });
+    if (!company) {
+      return res.status(404).json({ error: "Institution not found. Please check your institution code." });
     }
 
-    const timeSinceStart = Date.now() - new Date(session.startedAt).getTime();
-    const lateThreshold = 15 * 60 * 1000;
-    const status = timeSinceStart > lateThreshold ? "late" : "present";
+    if (!company.isActive) {
+      return res.status(403).json({ error: "This institution is currently inactive." });
+    }
 
-    const record = await AttendanceRecord.create({
-      session: session._id,
-      user: req.user._id,
-      company: req.user.company,
-      status,
-      method: "manual",
-      checkInTime: new Date(),
+    const existingUser = await User.findOne({ email, company: company._id });
+    if (existingUser) {
+      return res.status(400).json({ error: "A user with this email already exists at this institution" });
+    }
+
+    if (req.body.phone) {
+      const normPhone = normalisePhone(req.body.phone);
+      const phoneExists = await User.findOne({ phone: normPhone, company: company._id });
+      if (phoneExists) return res.status(400).json({ error: "Phone number is already in use" });
+    }
+
+    const user = await User.create({
+      name,
+      email,
+      password,
+      phone: req.body.phone ? normalisePhone(req.body.phone) : null,
+      company: company._id,
+      role: "lecturer",
+      isApproved: false,
+      department: department || null,
     });
-
-    const populated = await record.populate([
-      { path: "user", select: "name email role" },
-      { path: "session", select: "title startedAt" },
-    ]);
 
     res.status(201).json({
-      message: "Signed in successfully",
-      signedIn: true,
-      record: populated,
+      user: {
+        id: user._id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        isApproved: user.isApproved,
+        mustChangePassword: user.mustChangePassword || false,
+        company: { id: company._id, name: company.name, mode: company.mode },
+      },
+      message: "Registration successful. Your account is pending admin approval.",
     });
   } catch (error) {
+    if (error.name === "ValidationError") {
+      const messages = Object.values(error.errors).map((e) => e.message);
+      return res.status(400).json({ error: messages.join(", ") });
+    }
     if (error.code === 11000) {
-      return res.status(409).json({ error: "Already signed in for this session" });
+      if (Object.keys(error.keyPattern || {}).includes("phone")) return res.status(400).json({ error: "Phone number is already in use" });
+      return res.status(400).json({ error: "This email is already registered at this institution" });
     }
-    console.error("Employee sign in error:", error);
-    res.status(500).json({ error: "Sign in failed" });
+    console.error("Lecturer register error:", error);
+    res.status(500).json({ error: "Lecturer registration failed" });
   }
 };
 
-exports.employeeSignOut = async (req, res) => {
+exports.registerStudent = async (req, res) => {
   try {
-    const company = await Company.findById(req.user.company);
-    if (!company || !company.isActive) {
-      return res.status(404).json({ error: "Company not found or inactive" });
+    const { name, indexNumber, password, institutionCode } = req.body;
+
+    if (!name || !indexNumber || !password || !institutionCode) {
+      return res.status(400).json({ error: "Name, student ID, password, and institution code are required" });
     }
 
-    if (company.mode !== "corporate") {
-      return res.status(403).json({ error: "Sign in/out is only available for corporate accounts" });
+    if (password.length < 8) {
+      return res.status(400).json({ error: "Password must be at least 8 characters" });
     }
 
-    // Find today's active sign-in record (no checkout yet)
-    const record = await AttendanceRecord.findOne({
-      user: req.user._id,
-      company: req.user.company,
-      checkOutTime: null,
-    }).sort({ checkInTime: -1 });
-
-    if (!record) {
-      return res.status(404).json({ error: "No active sign-in found. Please sign in first.", signedIn: false });
-    }
-
-    record.checkOutTime = new Date();
-    await record.save();
-
-    const populated = await record.populate([
-      { path: "user", select: "name email role" },
-      { path: "session", select: "title startedAt" },
-    ]);
-
-    const duration = Math.round((record.checkOutTime - record.checkInTime) / 60000);
-
-    res.json({
-      message: "Signed out successfully",
-      signedIn: false,
-      duration: `${Math.floor(duration / 60)}h ${duration % 60}m`,
-      record: populated,
-    });
-  } catch (error) {
-    console.error("Employee sign out error:", error);
-    res.status(500).json({ error: "Sign out failed" });
-  }
-};
-
-exports.getSignInStatus = async (req, res) => {
-  try {
-    // Find the most recent record with no checkout
-    const record = await AttendanceRecord.findOne({
-      user: req.user._id,
-      company: req.user.company,
-      checkOutTime: null,
-    })
-      .sort({ checkInTime: -1 })
-      .populate("session", "title startedAt");
-
-    res.json({
-      signedIn: !!record,
-      record: record || null,
-    });
-  } catch (error) {
-    console.error("Sign-in status error:", error);
-    res.status(500).json({ error: "Failed to get sign-in status" });
-  }
-};
-
-// ── ESP32 offline sync endpoint ────────────────────────────────────────────────
-exports.esp32Sync = async (req, res) => {
-  try {
-    // Validate ESP32 secret
-    const secret = req.headers['x-esp32-secret'];
-    if (!secret || secret !== process.env.ESP32_SECRET) {
-      return res.status(401).json({ error: 'Unauthorized ESP32 request' });
-    }
-
-    const { records, offlineSession, institutionCode } = req.body;
-
-    // Find company by institution code
-    const company = await Company.findOne({ institutionCode: institutionCode?.toUpperCase() });
+    const company = await Company.findOne({ institutionCode: institutionCode.toUpperCase(), mode: "academic" });
     if (!company) {
-      return res.status(404).json({ error: 'Institution not found: ' + institutionCode });
+      return res.status(404).json({ error: "Institution not found. Please check your institution code." });
     }
 
-    let session = null;
-
-    // If session was started offline on ESP32, create it in DB if not exists
-    if (offlineSession) {
-      session = await AttendanceSession.findOne({ _id: offlineSession.id }).catch(() => null);
-      if (!session) {
-        try {
-          session = await AttendanceSession.create({
-            _id: offlineSession.id.startsWith('esp32_') ? undefined : offlineSession.id,
-            title: offlineSession.title || 'Offline Session',
-            company: company._id,
-            status: 'active',
-            startedAt: new Date(offlineSession.startedAt),
-            source: 'esp32_offline',
-          });
-          console.log('[ESP32 Sync] Created offline session:', session._id);
-        } catch (e) {
-          // Session may already exist
-          session = await AttendanceSession.findOne({ company: company._id, status: 'active' }).sort({ startedAt: -1 });
-        }
-      }
+    if (!company.isActive) {
+      return res.status(403).json({ error: "This institution is currently inactive." });
     }
 
-    if (!session) {
-      // Find the most recent active or recently stopped session for this company
-      session = await AttendanceSession.findOne({ company: company._id })
-        .sort({ startedAt: -1 });
+    const rosterEntry = await StudentRoster.findOne({
+      studentId: indexNumber.trim().toUpperCase(),
+      company: company._id,
+    });
+
+    if (!rosterEntry) {
+      return res.status(403).json({
+        error: "Your Student ID was not found in any class roster. Your lecturer must add your Student ID to a class before you can register.",
+      });
     }
 
-    if (!session) {
-      return res.status(404).json({ error: 'No session found to sync records into' });
+    const existingStudent = await User.findOne({ indexNumber: indexNumber.trim().toUpperCase(), company: company._id });
+    if (existingStudent) {
+      return res.status(400).json({ error: "A student with this ID already exists at this institution" });
     }
 
-    let synced = 0;
-    let skipped = 0;
-    const errors = [];
-
-    for (const record of (records || [])) {
-      try {
-        // Find user
-        let user = null;
-        if (record.userId) {
-          user = await User.findOne({ _id: record.userId, company: company._id });
-        }
-        if (!user && record.indexNumber) {
-          user = await User.findOne({ indexNumber: record.indexNumber.toUpperCase(), company: company._id });
-        }
-        if (!user) {
-          errors.push({ ref: record.indexNumber || record.userId, error: 'User not found' });
-          continue;
-        }
-
-        // Corporate sign-in/out records
-        if (record.type === 'sign_in' || record.type === 'sign_out') {
-          const SignInRecord = require('../models/SignInRecord').default || require('../models/SignInRecord');
-          const time = new Date(record.time || Date.now());
-          if (record.type === 'sign_in') {
-            const exists = await SignInRecord.findOne({ user: user._id, checkInTime: { $gte: new Date(time - 60000) } });
-            if (exists) { skipped++; continue; }
-            await SignInRecord.create({ user: user._id, company: company._id, checkInTime: time, source: 'esp32' });
-          } else {
-            const last = await SignInRecord.findOne({ user: user._id, checkOutTime: null }).sort({ checkInTime: -1 });
-            if (last) { last.checkOutTime = time; await last.save(); }
-          }
-          synced++;
-          continue;
-        }
-
-        // Academic attendance records
-        if (!session) { errors.push({ ref: record.indexNumber, error: 'No session' }); continue; }
-        const existing = await AttendanceRecord.findOne({ session: session._id, user: user._id });
-        if (existing) { skipped++; continue; }
-
-        const markedAt = new Date(record.markedAt || Date.now());
-        const timeSinceStart = markedAt - new Date(session.startedAt);
-        const status = timeSinceStart > 15 * 60 * 1000 ? 'late' : 'present';
-
-        await AttendanceRecord.create({
-          session: session._id,
-          user: user._id,
-          company: company._id,
-          status,
-          method: record.method || 'ble_mark',
-          markedAt,
-        });
-        synced++;
-      } catch (e) {
-        errors.push({ ref: record.indexNumber || record.userId, error: e.message });
-      }
+    if (req.body.phone) {
+      const normPhone = normalisePhone(req.body.phone);
+      const phoneExists = await User.findOne({ phone: normPhone, company: company._id });
+      if (phoneExists) return res.status(400).json({ error: "Phone number is already in use" });
     }
 
-    console.log(`[ESP32 Sync] institution=${institutionCode} synced=${synced} skipped=${skipped} errors=${errors.length}`);
-    res.json({ ok: true, synced, skipped, errors });
+    const user = await User.create({
+      name,
+      indexNumber: indexNumber.trim().toUpperCase(),
+      password,
+      phone: req.body.phone ? normalisePhone(req.body.phone) : null,
+      company: company._id,
+      role: "student",
+      isApproved: true,
+    });
+
+    await StudentRoster.updateMany(
+      { studentId: indexNumber.trim().toUpperCase(), company: company._id },
+      { $set: { registered: true, registeredUser: user._id } }
+    );
+
+    const Course = require("../models/Course");
+    const rosterEntries = await StudentRoster.find({
+      studentId: indexNumber.trim().toUpperCase(),
+      company: company._id,
+    });
+    const courseIds = rosterEntries.map((r) => r.course);
+    if (courseIds.length > 0) {
+      await Course.updateMany(
+        { _id: { $in: courseIds } },
+        { $addToSet: { enrolledStudents: user._id } }
+      );
+    }
+
+    const token = generateToken(user._id);
+
+    res.status(201).json({
+      user: {
+        id: user._id,
+        indexNumber: user.indexNumber,
+        name: user.name,
+        role: user.role,
+        isApproved: user.isApproved,
+        mustChangePassword: user.mustChangePassword || false,
+        company: { id: company._id, name: company.name, mode: company.mode },
+      },
+      token,
+      message: "Registration successful. You have been automatically enrolled in your courses.",
+    });
   } catch (error) {
-    console.error('[ESP32 Sync] Error:', error);
-    res.status(500).json({ error: 'Sync failed: ' + error.message });
+    if (error.name === "ValidationError") {
+      const messages = Object.values(error.errors).map((e) => e.message);
+      return res.status(400).json({ error: messages.join(", ") });
+    }
+    if (error.code === 11000) {
+      if (Object.keys(error.keyPattern || {}).includes("phone")) return res.status(400).json({ error: "Phone number is already in use" });
+      return res.status(400).json({ error: "This student ID is already registered at this institution" });
+    }
+    console.error("Student register error:", error);
+    res.status(500).json({ error: "Student registration failed" });
+  }
+};
+
+exports.registerEmployee = async (req, res) => {
+  try {
+    const { name, email, password, institutionCode } = req.body;
+
+    if (!name || !email || !password || !institutionCode) {
+      return res.status(400).json({ error: "Name, email, password, and institution code are required" });
+    }
+
+    if (password.length < 8) {
+      return res.status(400).json({ error: "Password must be at least 8 characters" });
+    }
+
+    const company = await Company.findOne({ institutionCode: institutionCode.toUpperCase(), mode: "corporate" });
+    if (!company) {
+      return res.status(404).json({ error: "Company not found. Please check your institution code." });
+    }
+
+    if (!company.isActive) {
+      return res.status(403).json({ error: "This company is currently inactive." });
+    }
+
+    const existingUser = await User.findOne({ email, company: company._id });
+    if (existingUser) {
+      return res.status(400).json({ error: "An employee with this email already exists at this company" });
+    }
+
+    if (req.body.phone) {
+      const normPhone = normalisePhone(req.body.phone);
+      const phoneExists = await User.findOne({ phone: normPhone, company: company._id });
+      if (phoneExists) return res.status(400).json({ error: "Phone number is already in use" });
+    }
+
+    const updatedCompany = await Company.findByIdAndUpdate(
+      company._id,
+      { $inc: { nextEmployeeSeq: 1 } },
+      { new: true }
+    );
+    const prefix = (company.name || "CO")
+      .substring(0, 3)
+      .toUpperCase()
+      .replace(/[^A-Z]/g, "X");
+    const employeeId = `${prefix}-EMP-${String(updatedCompany.nextEmployeeSeq).padStart(4, "0")}`;
+
+    const user = await User.create({
+      name,
+      email,
+      password,
+      phone: req.body.phone ? normalisePhone(req.body.phone) : null,
+      company: company._id,
+      role: "employee",
+      employeeId,
+      isApproved: false,
+    });
+
+    const token = generateToken(user._id);
+
+    res.status(201).json({
+      user: {
+        id: user._id,
+        email: user.email,
+        employeeId: user.employeeId,
+        name: user.name,
+        role: user.role,
+        isApproved: user.isApproved,
+        mustChangePassword: user.mustChangePassword || false,
+        company: { id: company._id, name: company.name, mode: company.mode },
+      },
+      message: "Registration successful. Your account is pending admin approval.",
+    });
+  } catch (error) {
+    if (error.name === "ValidationError") {
+      const messages = Object.values(error.errors).map((e) => e.message);
+      return res.status(400).json({ error: messages.join(", ") });
+    }
+    if (error.code === 11000) {
+      if (Object.keys(error.keyPattern || {}).includes("phone")) return res.status(400).json({ error: "Phone number is already in use" });
+      return res.status(400).json({ error: "This email is already registered at this company" });
+    }
+    console.error("Employee register error:", error);
+    res.status(500).json({ error: "Employee registration failed" });
+  }
+};
+
+exports.login = async (req, res) => {
+  try {
+    const { email, indexNumber, password, deviceId, institutionCode, loginRole, portalMode } = req.body;
+
+    if (!password) {
+      return res.status(400).json({ error: "Password is required" });
+    }
+
+    if (!email && !indexNumber) {
+      return res.status(400).json({ error: "Email or student ID is required" });
+    }
+
+    let user;
+    if (indexNumber) {
+      const query = { indexNumber, role: "student" };
+      if (institutionCode) {
+        const company = await Company.findOne({ institutionCode: institutionCode.toUpperCase() });
+        if (!company) {
+          return res.status(401).json({ error: "Institution not found" });
+        }
+        query.company = company._id;
+      }
+      user = await User.findOne(query).select("+password");
+    } else if (email && institutionCode && loginRole === "employee") {
+      const company = await Company.findOne({ institutionCode: institutionCode.toUpperCase() });
+      if (!company) {
+        return res.status(401).json({ error: "Company not found" });
+      }
+      user = await User.findOne({ email, company: company._id, role: "employee" }).select("+password");
+    } else {
+      user = await User.findOne({ email }).select("+password");
+    }
+
+    if (!user || !user.isActive) {
+      return res.status(401).json({ error: "Invalid credentials" });
+    }
+
+    const isMatch = await user.comparePassword(password);
+    if (!isMatch) {
+      return res.status(401).json({ error: "Invalid credentials" });
+    }
+
+    if (!user.isApproved) {
+      return res.status(403).json({ error: "Your account is pending approval. Please contact your institution admin." });
+    }
+
+    const company = await Company.findById(user.company);
+
+    if (portalMode && company && company.mode !== portalMode && user.role !== "superadmin") {
+      // Don't reveal which portal is correct — generic error
+      return res.status(401).json({ error: "Invalid credentials" });
+    }
+
+    // ── Role-portal enforcement ──────────────────────────────────────────────
+    // Each portal only accepts specific roles — prevents admins logging in as
+    // lecturers, employees logging in as admins, etc.
+    const PORTAL_ALLOWED_ROLES = {
+      admin:    ["admin", "superadmin", "manager"],
+      lecturer: ["lecturer"],
+      employee: ["employee"],
+      student:  ["student"],
+    };
+    if (loginRole && PORTAL_ALLOWED_ROLES[loginRole]) {
+      const allowed = PORTAL_ALLOWED_ROLES[loginRole];
+      // Wrong portal — return same error as wrong password (don't reveal account exists)
+      if (!allowed.includes(user.role)) {
+        return res.status(401).json({ error: "Invalid credentials" });
+      }
+    }
+    // ────────────────────────────────────────────────────────────────────────
+
+    if (company && !company.hasAccess && user.role !== "superadmin" && user.role !== "admin") {
+      return res.status(403).json({
+        error: "Subscription inactive",
+        message: "Your institution's subscription has expired. Please contact your admin.",
+        subscriptionExpired: true,
+      });
+    }
+
+    if (user.lastLogoutTime) {
+      const timeSinceLogout = Date.now() - new Date(user.lastLogoutTime).getTime();
+      if (timeSinceLogout < SIX_HOURS_MS && deviceId && user.deviceId && user.deviceId !== deviceId) {
+        const remainingMs = SIX_HOURS_MS - timeSinceLogout;
+        const remainingHours = Math.ceil(remainingMs / (60 * 60 * 1000));
+        return res.status(403).json({
+          error: "You must wait 6 hours before signing in to a different account.",
+          remainingHours,
+          restrictedUntil: new Date(new Date(user.lastLogoutTime).getTime() + SIX_HOURS_MS).toISOString(),
+        });
+      }
+    }
+
+    // ── Student device lock ─────────────────────────────────────────────────
+    // Students are locked to a single device. If they log in from a new device
+    // their account is blocked until an admin clears the device lock.
+    if (user.role === "student" && deviceId && user.deviceId && user.deviceId !== deviceId) {
+      return res.status(403).json({
+        error: "This account is active on another device. Please contact your admin to unlock it.",
+        deviceLocked: true,
+      });
+    }
+
+    if (deviceId) {
+      user.deviceId = deviceId;
+      await user.save();
+    }
+
+    const token = generateToken(user._id);
+
+    res.json({
+      token,
+      user: {
+        id: user._id,
+        email: user.email,
+        indexNumber: user.indexNumber,
+        employeeId: user.employeeId,
+        name: user.name,
+        role: user.role,
+        isApproved: user.isApproved,
+        mustChangePassword: user.mustChangePassword || false,
+        company: company ? {
+          id: company._id,
+          name: company.name,
+          mode: company.mode,
+          institutionCode: company.institutionCode,
+        } : null,
+        deviceId: user.deviceId,
+      },
+      trial: company ? {
+        active: company.isTrialActive,
+        daysRemaining: company.trialDaysRemaining,
+        timeRemaining: company.trialTimeRemaining,
+      } : null,
+      subscription: company ? {
+        active: company.subscriptionActive,
+        status: company.subscriptionStatus,
+        plan: company.subscriptionPlan,
+      } : null,
+    });
+  } catch (error) {
+    console.error("Login error:", error);
+    res.status(500).json({ error: "Login failed" });
+  }
+};
+
+exports.logout = async (req, res) => {
+  try {
+    await User.findByIdAndUpdate(req.user._id, {
+      lastLogoutTime: new Date(),
+      deviceId: null,
+    });
+
+    res.json({
+      message: "Logged out successfully",
+      restrictedUntil: new Date(Date.now() + SIX_HOURS_MS).toISOString(),
+    });
+  } catch (error) {
+    console.error("Logout error:", error);
+    res.status(500).json({ error: "Logout failed" });
+  }
+};
+
+exports.getMe = async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id).populate("company", "name mode institutionCode");
+    const company = await Company.findById(user.company);
+
+    const isAdmin = ['admin', 'superadmin', 'manager'].includes(user.role);
+    res.json({
+      user: {
+        ...user.toJSON(),
+        company: company ? {
+          id: company._id,
+          _id: company._id,
+          name: company.name,
+          mode: company.mode,
+          institutionCode: company.institutionCode,
+          ...(isAdmin ? { qrSeed: company.qrSeed, bleLocationId: company.bleLocationId } : {}),
+        } : user.company,
+      },
+      trial: company ? {
+        active: company.isTrialActive,
+        daysRemaining: company.trialDaysRemaining,
+        timeRemaining: company.trialTimeRemaining,
+      } : null,
+      subscription: company ? {
+        active: company.subscriptionActive,
+        status: company.subscriptionStatus,
+        plan: company.subscriptionPlan,
+      } : null,
+    });
+  } catch (error) {
+    console.error("Get me error:", error);
+    res.status(500).json({ error: "Failed to fetch profile" });
+  }
+};
+
+exports.migrateOrphanUsers = async (req, res) => {
+  try {
+    const orphanUsers = await User.find({
+      $or: [{ company: null }, { company: { $exists: false } }],
+    });
+
+    if (orphanUsers.length === 0) {
+      return res.json({ message: "No orphan users found", migrated: 0 });
+    }
+
+    let defaultCompany = await Company.findOne({ name: "Default Institution" });
+    if (!defaultCompany) {
+      defaultCompany = await Company.create({
+        name: "Default Institution",
+        mode: "corporate",
+        subscriptionStatus: "trial",
+      });
+    }
+
+    const result = await User.updateMany(
+      { $or: [{ company: null }, { company: { $exists: false } }] },
+      { $set: { company: defaultCompany._id, isApproved: true } }
+    );
+
+    res.json({
+      message: `Migrated ${result.modifiedCount} orphan users to Default Institution`,
+      migrated: result.modifiedCount,
+      institutionCode: defaultCompany.institutionCode,
+    });
+  } catch (error) {
+    console.error("Migration error:", error);
+    res.status(500).json({ error: "Migration failed" });
+  }
+};
+
+exports.forgotPassword = async (req, res) => {
+  try {
+    const { indexNumber, institutionCode } = req.body;
+
+    if (!indexNumber || !institutionCode) {
+      return res.status(400).json({ error: "Student ID and institution code are required" });
+    }
+
+    const company = await Company.findOne({ institutionCode: institutionCode.toUpperCase() });
+    if (!company) {
+      return res.status(404).json({ error: "Institution not found" });
+    }
+
+    const user = await User.findOne({ indexNumber, company: company._id, role: "student" });
+    if (!user) {
+      return res.status(404).json({ error: "Student not found" });
+    }
+
+    if (user.resetPasswordExpires && user.resetPasswordExpires > Date.now()) {
+      return res.status(429).json({ error: "A reset code was already generated" });
+    }
+
+    const code = String(crypto.randomInt(100000, 1000000));
+    const hashedCode = await bcrypt.hash(code, 10);
+
+    user.resetPasswordToken = hashedCode;
+    user.resetPasswordExpires = new Date(Date.now() + 60 * 60 * 1000);
+    await user.save({ validateBeforeSave: false });
+
+    res.json({
+      message: "Password reset code generated. Please contact your lecturer to get the reset code.",
+      resetCode: code,
+    });
+  } catch (error) {
+    console.error("Forgot password error:", error);
+    res.status(500).json({ error: "Failed to generate reset code" });
+  }
+};
+
+exports.resetPassword = async (req, res) => {
+  try {
+    const { indexNumber, resetCode, newPassword, institutionCode } = req.body;
+
+    if (!indexNumber || !resetCode || !newPassword) {
+      return res.status(400).json({ error: "Student ID, reset code, and new password are required" });
+    }
+
+    const filter = {
+      indexNumber,
+      resetPasswordExpires: { $gt: Date.now() },
+    };
+
+    if (institutionCode) {
+      const company = await Company.findOne({ institutionCode: institutionCode.toUpperCase() });
+      if (company) filter.company = company._id;
+    }
+
+    const user = await User.findOne(filter).select("+password");
+
+    if (!user) {
+      return res.status(400).json({ error: "Invalid or expired reset code" });
+    }
+
+    const isValid = await bcrypt.compare(resetCode, user.resetPasswordToken);
+    if (!isValid) {
+      return res.status(400).json({ error: "Invalid reset code" });
+    }
+
+    user.password = newPassword;
+    user.resetPasswordToken = null;
+    user.resetPasswordExpires = null;
+    if (!user.passwordResetLog) user.passwordResetLog = [];
+    user.passwordResetLog.push({
+      resetAt: new Date(),
+      ipAddress: req.ip || req.headers['x-forwarded-for'] || '',
+      userAgent: req.headers['user-agent'] || '',
+      method: 'self',
+      resetBy: user.name || user.indexNumber,
+    });
+    await user.save();
+
+    // Notify admin of student reset (non-fatal)
+    try {
+      const Company = require('../models/Company');
+      const admin = await require('../models/User').findOne({
+        company: user.company,
+        role: { $in: ['admin', 'superadmin'] },
+        isActive: true,
+      }).select('email name').lean();
+      const company = await Company.findById(user.company).select('name').lean();
+      if (admin?.email) {
+        sendAdminPasswordResetNotice({
+          adminEmail: admin.email,
+          adminName: admin.name || 'Admin',
+          targetUserName: user.name || user.indexNumber,
+          targetUserRole: user.role,
+          targetUserEmail: user.email || user.indexNumber,
+          institutionName: company?.name || '',
+        }).catch(() => {});
+      }
+    } catch(_) {}
+
+    res.json({ message: "Password has been reset successfully" });
+  } catch (error) {
+    console.error("Reset password error:", error);
+    res.status(500).json({ error: "Failed to reset password" });
+  }
+};
+
+exports.forgotPasswordEmail = async (req, res) => {
+  try {
+    const { phone, institutionCode } = req.body;
+    if (!phone) return res.status(400).json({ error: "Phone number is required" });
+    if (!institutionCode) return res.status(400).json({ error: "Institution code is required" });
+
+    const company = await Company.findOne({ institutionCode: institutionCode.toUpperCase() });
+    if (!company) return res.status(404).json({ error: "Institution not found. Please check your institution code." });
+
+    const normPhone = normalisePhone(phone);
+    const user = await User.findOne({ phone: normPhone, company: company._id })
+               || await User.findOne({ phone: phone.trim(), company: company._id });
+
+    if (!user) return res.status(404).json({ error: "No account found with that phone number in this institution." });
+
+    if (["admin", "superadmin"].includes(user.role)) {
+      return res.status(403).json({ error: "Invalid input" });
+    }
+    if (user.role === "student") {
+      return res.status(403).json({ error: "Invalid input" });
+    }
+    if (!["manager", "lecturer", "employee"].includes(user.role)) {
+      return res.status(403).json({ error: "Invalid input" });
+    }
+    if (user.resetPasswordExpires && user.resetPasswordExpires > Date.now()) {
+      return res.status(429).json({ error: "A reset code was already sent recently. Please wait before requesting again." });
+    }
+
+    const code = String(crypto.randomInt(100000, 1000000));
+    const hashedCode = await bcrypt.hash(code, 10);
+    user.resetPasswordToken = hashedCode;
+    user.resetPasswordExpires = new Date(Date.now() + 60 * 60 * 1000);
+    await user.save({ validateBeforeSave: false });
+
+    const smsResult = await sendOtp({ phone: normPhone, code, name: user.name });
+    if (!smsResult.ok && !smsResult.dev) {
+      console.error('[ForgotPassword] SMS failed:', smsResult.error);
+      return res.status(500).json({ error: "Failed to send SMS. Please try again or contact your admin." });
+    }
+
+    console.log(`[ForgotPassword] OTP sent to ${normPhone} for ${user.name}`);
+    res.json({ message: "A 6-digit reset code has been sent to your phone via SMS." });
+  } catch (error) {
+    console.error("Forgot password email error:", error);
+    res.status(500).json({ error: "Failed to generate reset code" });
+  }
+};
+
+exports.forgotPasswordAdmin = async (req, res) => {
+  try {
+    const { phone } = req.body;
+    if (!phone) return res.status(400).json({ error: "Phone number is required" });
+
+    const normPhone = normalisePhone(phone);
+    const user = await User.findOne({ phone: normPhone }).populate("company", "name")
+               || await User.findOne({ phone: phone.trim() }).populate("company", "name");
+
+    if (!user) return res.status(404).json({ error: "No account found with that phone number." });
+
+    if (user.role === "lecturer") {
+      return res.status(403).json({ error: "Phone number is already in use" });
+    }
+    if (["employee", "manager"].includes(user.role)) {
+      return res.status(403).json({ error: "Phone number is already in use" });
+    }
+    if (!["admin", "superadmin"].includes(user.role)) {
+      return res.status(403).json({ error: "This reset method is for admins only." });
+    }
+    if (user.resetPasswordExpires && user.resetPasswordExpires > Date.now()) {
+      return res.status(429).json({ error: "A reset code was already sent recently. Please wait before requesting again." });
+    }
+
+    const code = String(crypto.randomInt(100000, 1000000));
+    const hashedCode = await bcrypt.hash(code, 10);
+    user.resetPasswordToken = hashedCode;
+    user.resetPasswordExpires = new Date(Date.now() + 60 * 60 * 1000);
+    await user.save({ validateBeforeSave: false });
+
+    const smsResult = await sendOtp({ phone: normPhone, code, name: user.name });
+    if (!smsResult.ok && !smsResult.dev) {
+      console.error('[ForgotPasswordAdmin] SMS failed:', smsResult.error);
+      return res.status(500).json({ error: "Failed to send SMS. Please try again." });
+    }
+
+    console.log(`[ForgotPasswordAdmin] OTP sent to ${normPhone} for ${user.name}`);
+    res.json({ message: "A 6-digit reset code has been sent to your phone via SMS." });
+  } catch (error) {
+    console.error("Forgot password admin error:", error);
+    res.status(500).json({ error: "Failed to generate reset code" });
+  }
+};
+
+exports.resetPasswordEmail = async (req, res) => {
+  try {
+    const { phone, resetCode, newPassword } = req.body;
+    if (!phone || !resetCode || !newPassword) {
+      return res.status(400).json({ error: "Phone number, reset code, and new password are required" });
+    }
+    if (newPassword.length < 8) {
+      return res.status(400).json({ error: "Password must be at least 8 characters" });
+    }
+
+    const normPhone = normalisePhone(phone);
+    const user = await User.findOne({
+      phone: { $in: [normPhone, phone.trim()] },
+      resetPasswordExpires: { $gt: Date.now() },
+    }).select("+password");
+
+    if (!user) return res.status(400).json({ error: "Invalid or expired reset code" });
+
+    const isValid = await bcrypt.compare(resetCode, user.resetPasswordToken);
+    if (!isValid) return res.status(400).json({ error: "Incorrect reset code" });
+
+    user.password = newPassword;
+    user.resetPasswordToken = null;
+    user.resetPasswordExpires = null;
+    if (!user.passwordResetLog) user.passwordResetLog = [];
+    user.passwordResetLog.push({
+      resetAt: new Date(),
+      ipAddress: req.ip || req.headers['x-forwarded-for'] || '',
+      userAgent: req.headers['user-agent'] || '',
+      method: 'self',
+      resetBy: user.name || user.email,
+    });
+    await user.save();
+
+    // Notify admin of the reset (non-fatal)
+    try {
+      const Company = require('../models/Company');
+      const admin = await require('../models/User').findOne({
+        company: user.company,
+        role: { $in: ['admin', 'superadmin'] },
+        isActive: true,
+        email: { $exists: true, $ne: user.email },
+      }).select('email name').lean();
+      const company = await Company.findById(user.company).select('name').lean();
+      if (admin?.email) {
+        sendAdminPasswordResetNotice({
+          adminEmail: admin.email,
+          adminName: admin.name || 'Admin',
+          targetUserName: user.name || user.email,
+          targetUserRole: user.role,
+          targetUserEmail: user.email || user.indexNumber,
+          institutionName: company?.name || '',
+        }).catch(() => {});
+      }
+    } catch(_) {}
+
+    res.json({ message: "Password reset successfully. You can now sign in." });
+  } catch (error) {
+    console.error("Reset password email error:", error);
+    res.status(500).json({ error: "Failed to reset password" });
+  }
+};
+
+exports.updateProfile = async (req, res) => {
+  try {
+    const { name, currentPassword, newPassword } = req.body;
+    const user = await User.findById(req.user._id).select("+password");
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    if (name && name.trim()) user.name = name.trim();
+
+    if (newPassword) {
+      if (!currentPassword) return res.status(400).json({ error: "Current password is required to set a new password" });
+      if (newPassword.length < 8) return res.status(400).json({ error: "New password must be at least 8 characters" });
+      const isMatch = await bcrypt.compare(currentPassword, user.password);
+      if (!isMatch) return res.status(401).json({ error: "Current password is incorrect" });
+      user.password = newPassword;
+    }
+
+    await user.save();
+    res.json({ message: "Profile updated successfully", user: { name: user.name, email: user.email, role: user.role } });
+  } catch (error) {
+    console.error("Update profile error:", error);
+    res.status(500).json({ error: "Failed to update profile" });
   }
 };
