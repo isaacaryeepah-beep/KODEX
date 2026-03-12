@@ -146,11 +146,7 @@ router.post("/validate", validateDevice, enforceLogoutRestriction, async (req, r
     if (!qrToken) return res.status(404).json({ valid: false, error: "Token not found" });
     if (qrToken.isExpired()) return res.status(410).json({ valid: false, error: "Token has expired" });
 
-    // QR tokens are single-use; verbal codes are multi-use
-    if (qrToken.codeType === "qr" && qrToken.isUsed) {
-      return res.status(410).json({ valid: false, error: "QR token has already been used" });
-    }
-
+    // QR is time-gated — not single-use
     res.json({
       valid: true,
       qrToken: {
