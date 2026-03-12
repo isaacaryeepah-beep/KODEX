@@ -401,3 +401,81 @@ exports.setInviteLink = async (req, res) => {
     res.status(500).json({ error: 'Failed to save invite link' });
   }
 };
+
+// ── Meeting attendance report (shape matches frontend expectations) ─────────
+exports.getMeetingAttendance = async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ error: 'Invalid meeting ID' });
+    }
+
+    const filter = { _id: id, company: req.user.company };
+    if (req.user.role === 'lecturer') filter.createdBy = req.user._id;
+
+    const meeting = await ZoomMeeting.findOne(filter)
+      .populate('attendees.user', 'name email indexNumber role');
+    if (!meeting) return res.status(404).json({ error: 'Meeting not found' });
+
+    const attendance = meeting.attendees.map(a => {
+      const join = a.joinedAt;
+      const leave = a.leftAt || (meeting.status === 'completed' ? null : new Date());
+      const durationMs = (join && leave) ? (leave - join) : 0;
+      const durationMin = Math.round(durationMs / 60000);
+      return {
+        user: a.user,
+        joinTime: join,
+        leaveTime: a.leftAt || null,
+        durationMinutes: durationMin,
+        status: durationMin >= 30 ? 'present' : durationMin > 0 ? 'partial' : a.status === 'joined' ? 'partial' : 'absent',
+      };
+    });
+
+    res.json({ meeting, attendance, total: attendance.length });
+  } catch (error) {
+    console.error('Get meeting attendance error:', error);
+    res.status(500).json({ error: 'Failed to fetch attendance' });
+  }
+};
+
+// ── Meeting attendance CSV download ──────────────────────────────────────────
+exports.getMeetingAttendanceCSV = async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ error: 'Invalid meeting ID' });
+    }
+
+    const filter = { _id: id, company: req.user.company };
+    if (req.user.role === 'lecturer') filter.createdBy = req.user._id;
+
+    const meeting = await ZoomMeeting.findOne(filter)
+      .populate('attendees.user', 'name email indexNumber role');
+    if (!meeting) return res.status(404).json({ error: 'Meeting not found' });
+
+    const rows = [['Name', 'Email / Index', 'Role', 'Join Time', 'Leave Time', 'Duration (mins)', 'Status']];
+    for (const a of meeting.attendees) {
+      const join = a.joinedAt;
+      const leave = a.leftAt || null;
+      const dur = (join && leave) ? Math.round((leave - join) / 60000) : 0;
+      const status = dur >= 30 ? 'Present' : dur > 0 ? 'Partial' : a.status === 'joined' ? 'Partial' : 'Absent';
+      rows.push([
+        a.user?.name || '',
+        a.user?.email || a.user?.indexNumber || '',
+        a.user?.role || '',
+        join ? new Date(join).toLocaleString() : '',
+        leave ? new Date(leave).toLocaleString() : 'Still in meeting',
+        dur,
+        status,
+      ]);
+    }
+
+    const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename="${meeting.title}_attendance.csv"`);
+    res.send(csv);
+  } catch (error) {
+    console.error('Meeting attendance CSV error:', error);
+    res.status(500).json({ error: 'Failed to generate CSV' });
+  }
+};
