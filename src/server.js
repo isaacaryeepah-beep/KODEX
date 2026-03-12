@@ -14,6 +14,7 @@ const quizRoutes = require("./routes/quizzes");
 const lecturerQuizRoutes = require("./routes/lecturerQuizzes");
 const questionBankRoutes    = require("./routes/questionBank");
 const announcementRoutes    = require("./routes/announcements");
+const webhookRoutes         = require("./routes/webhooks");
 const studentQuizRoutes = require("./routes/studentQuizzes");
 const adminQuizRoutes = require("./routes/adminQuizzes");
 const zoomRoutes = require("./routes/zoom");
@@ -71,6 +72,22 @@ app.use(cors({
 }));
 
 // ── Body parsing with safe limit ──────────────────────────────────────────────
+// ── Raw body for Paystack webhook signature verification ─────────────────────
+app.use((req, res, next) => {
+  if (req.path === "/api/webhooks/paystack") {
+    let raw = "";
+    req.setEncoding("utf8");
+    req.on("data", chunk => { raw += chunk; });
+    req.on("end", () => {
+      req.rawBody = raw;
+      try { req.body = JSON.parse(raw); } catch (_) { req.body = {}; }
+      next();
+    });
+  } else {
+    next();
+  }
+});
+
 app.use(express.json({ limit: "10mb" })); // kept at 10mb — proctored quiz snapshots need it
 
 // ── Global input sanitizer (NoSQL injection + XSS prevention) ────────────────
@@ -125,6 +142,7 @@ app.use("/api/quizzes", quizRoutes);
 app.use("/api/lecturer/quizzes", lecturerQuizRoutes);
 app.use("/api/lecturer/question-bank", questionBankRoutes);
 app.use("/api/announcements",          announcementRoutes);
+app.use("/api/webhooks",               webhookRoutes);      // public — Paystack webhook
 app.use("/api/student/quizzes", studentQuizRoutes);
 app.use("/api/admin/quizzes", adminQuizRoutes);
 app.use("/api/zoom", zoomRoutes);
