@@ -118,7 +118,7 @@ exports.getQuiz = async (req, res) => {
     }
 
     const questions = await Question.find({ quiz: id })
-      .select("-correctAnswer")
+      .select("-correctAnswer -correctAnswerText -acceptedAnswers")
       .sort({ createdAt: 1 });
 
     const attempt = await Attempt.findOne({ quiz: id, student: req.user._id });
@@ -182,7 +182,7 @@ exports.startAttempt = async (req, res) => {
     }
 
     let questions = await Question.find({ quiz: id })
-      .select("-correctAnswer")
+      .select("-correctAnswer -correctAnswerText -acceptedAnswers")
       .sort({ createdAt: 1 });
 
     questions = questions
@@ -263,14 +263,26 @@ exports.submitAttempt = async (req, res) => {
       const question = questionMap[ans.questionId];
       if (!question) continue;
 
-      const isCorrect = question.correctAnswer === ans.selectedAnswer;
+      let isCorrect = false;
+
+      if (question.questionType === "fill") {
+        // Case-insensitive, trimmed match against correctAnswerText + acceptedAnswers
+        const typed = (ans.selectedAnswerText || "").trim().toLowerCase();
+        const primary = (question.correctAnswerText || "").trim().toLowerCase();
+        const accepted = (question.acceptedAnswers || []).map(a => a.trim().toLowerCase());
+        isCorrect = typed.length > 0 && (typed === primary || accepted.includes(typed));
+      } else {
+        isCorrect = question.correctAnswer === ans.selectedAnswer;
+      }
+
       const points = isCorrect ? question.marks : 0;
       totalScore += points;
 
       answerDocs.push({
         attempt: attempt._id,
         question: ans.questionId,
-        selectedAnswer: ans.selectedAnswer,
+        selectedAnswer: question.questionType === "fill" ? null : ans.selectedAnswer,
+        selectedAnswerText: question.questionType === "fill" ? (ans.selectedAnswerText || null) : null,
         isCorrect,
       });
     }
@@ -312,7 +324,7 @@ exports.getMyResult = async (req, res) => {
     }
 
     const answers = await Answer.find({ attempt: attempt._id })
-      .populate("question", "questionText options marks"); // correctAnswer withheld from students
+      .populate("question", "questionText options marks correctAnswerText acceptedAnswers questionType"); // correctAnswer index withheld; text answers shown post-submit
 
     res.json({ attempt, answers });
   } catch (error) {
