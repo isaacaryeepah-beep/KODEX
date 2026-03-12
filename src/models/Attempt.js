@@ -40,12 +40,23 @@ const attemptSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    attemptNumber: {
+      type: Number,
+      default: 1,
+    },
+    // For retake tracking
+    isBestScore: {
+      type: Boolean,
+      default: false,
+    },
   },
   {
     timestamps: true,
   }
 );
 
-attemptSchema.index({ quiz: 1, student: 1 }, { unique: true });
+// No longer unique — students can have multiple attempts per quiz
+attemptSchema.index({ quiz: 1, student: 1, attemptNumber: 1 }, { unique: true });
+attemptSchema.index({ quiz: 1, student: 1 });
 
 module.exports = mongoose.model("Attempt", attemptSchema);
