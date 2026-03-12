@@ -859,10 +859,10 @@ exports.forgotPasswordAdmin = async (req, res) => {
     if (!user) return res.status(404).json({ error: "No account found with that phone number." });
 
     if (user.role === "lecturer") {
-      return res.status(403).json({ error: "Phone number is already in use" });
+      return res.status(403).json({ error: "Invalid input" });
     }
     if (["employee", "manager"].includes(user.role)) {
-      return res.status(403).json({ error: "Phone number is already in use" });
+      return res.status(403).json({ error: "Invalid input" });
     }
     if (!["admin", "superadmin"].includes(user.role)) {
       return res.status(403).json({ error: "This reset method is for admins only." });
@@ -880,6 +880,9 @@ exports.forgotPasswordAdmin = async (req, res) => {
     const smsResult = await sendOtp({ phone: normPhone, code, name: user.name });
     if (!smsResult.ok && !smsResult.dev) {
       console.error('[ForgotPasswordAdmin] SMS failed:', smsResult.error);
+      user.resetPasswordToken = null;
+      user.resetPasswordExpires = null;
+      await user.save({ validateBeforeSave: false });
       return res.status(500).json({ error: "Failed to send SMS. Please try again." });
     }
 
