@@ -62,10 +62,10 @@ exports.getCourseGrades = async (req, res) => {
     }
 
     const students = await User.find({ _id: { $in: studentIds } })
-      .select("name email studentId").lean();
+      .select("name email indexNumber").lean();
 
     // ── Quiz scores ──────────────────────────────────────────────────────────
-    const quizzes = await Quiz.find({ course: courseId, company, isPublished: true }).lean();
+    const quizzes = await Quiz.find({ course: courseId, company, isActive: true }).lean();
     const quizIds = quizzes.map(q => q._id);
 
     // Get best attempts per student per quiz
@@ -159,7 +159,7 @@ exports.getCourseGrades = async (req, res) => {
       const letter = letterGrade(finalPct);
 
       return {
-        student: { _id: student._id, name: student.name, email: student.email, studentId: student.studentId },
+        student: { _id: student._id, name: student.name, email: student.email, studentId: student.indexNumber || student.email },
         quizPct:    Math.round(quizPct * 10) / 10,
         attPct:     Math.round(attPct * 10) / 10,
         manualPct:  Math.round(manualPct * 10) / 10,
@@ -221,7 +221,7 @@ exports.getMyGrades = async (req, res) => {
     const w = gb.weights || { quizzes: 50, attendance: 20, manual: 30 };
 
     // Quizzes
-    const quizzes = await Quiz.find({ course: courseId, company, isPublished: true }).lean();
+    const quizzes = await Quiz.find({ course: courseId, company, isActive: true }).lean();
     const quizIds = quizzes.map(q => q._id);
     const attempts = await Attempt.find({
       quiz: { $in: quizIds }, student: studentId, isSubmitted: true, isBestScore: true,
