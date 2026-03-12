@@ -1710,6 +1710,7 @@ function buildSidebar() {
       links.push({ id: 'quizzes', label: 'Quizzes', icon: quizzesIcon() });
       links.push({ id: 'question-bank', label: 'Question Bank', icon: svgIcon('<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>') });
       links.push({ id: 'assignments', label: 'Assignments / Quiz', icon: assignmentsIcon() });
+      links.push({ id: 'gradebook', label: 'Grade Book', icon: svgIcon('<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>') });
       links.push({ id: 'meetings', label: 'Meetings', icon: meetingsIcon() });
       links.push({ id: 'reports', label: 'Reports', icon: reportsIcon() });
       links.push({ id: 'announcements', label: 'Announcements', icon: svgIcon('<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>') });
@@ -1730,6 +1731,7 @@ function buildSidebar() {
       links.push({ id: 'quizzes', label: 'Quizzes', icon: quizzesIcon() });
       links.push({ id: 'question-bank', label: 'Question Bank', icon: svgIcon('<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>') });
       links.push({ id: 'assignments', label: 'Assignments / Quiz', icon: assignmentsIcon() });
+      links.push({ id: 'gradebook', label: 'My Grades', icon: svgIcon('<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>') });
       links.push({ id: 'meetings', label: 'Meetings', icon: meetingsIcon() });
       links.push({ id: 'reports', label: 'Reports', icon: reportsIcon() });
       links.push({ id: 'announcements', label: 'Announcements', icon: svgIcon('<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>') });
@@ -1795,6 +1797,7 @@ function navigateTo(view) {
     case 'contact':     renderContact(); break;
     case 'about':       renderAbout(); break;
     case 'announcements': renderAnnouncements(); break;
+    case 'gradebook': renderGradeBook(); break;
     default: renderDashboard();
   }
 }
@@ -6396,6 +6399,457 @@ function renderContact() {
 //  FEATURE: ANNOUNCEMENTS / NOTIFICATIONS
 // ══════════════════════════════════════════════════════════════════════════════
 // Stored in localStorage per company (simple in-app announcements)
+// ══════════════════════════════════════════════════════════════════════════════
+//  GRADE BOOK
+// ══════════════════════════════════════════════════════════════════════════════
+
+async function renderGradeBook() {
+  const content = document.getElementById('main-content');
+  if (!content) return;
+  const isStudent = currentUser.role === 'student';
+  if (isStudent) {
+    await renderStudentGradeBook(content);
+  } else {
+    await renderLecturerGradeBook(content);
+  }
+}
+
+// ── STUDENT VIEW ─────────────────────────────────────────────────────────────
+
+async function renderStudentGradeBook(content) {
+  content.innerHTML = '<div class="loading">Loading your grades…</div>';
+  try {
+    const data = await api('/api/gradebook/my-courses');
+    const courses = data.courses || [];
+    content.innerHTML = `
+      <div class="page-header"><h2>My Grades</h2><p>Your academic performance across all courses</p></div>
+      ${courses.length === 0
+        ? '<div class="card"><div class="empty-state"><p>You are not enrolled in any courses yet.</p></div></div>'
+        : `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;">
+            ${courses.map(c => `
+              <div class="card" style="cursor:pointer;transition:transform .15s;border:1.5px solid var(--border);"
+                   onmouseenter="this.style.transform='translateY(-2px)'"
+                   onmouseleave="this.style.transform=''"
+                   onclick="renderStudentCourseGrades('${c._id}','${c.title} (${c.code})')">
+                <div style="font-weight:700;font-size:15px;margin-bottom:4px;">${c.title}</div>
+                <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">${c.code} · ${c.lecturer?.name || 'N/A'}</div>
+                <div style="display:flex;justify-content:space-between;align-items:center;">
+                  <span style="font-size:12px;color:var(--text-light);">${c.enrolledStudents?.length || 0} students</span>
+                  <span class="btn btn-sm btn-primary" style="pointer-events:none;">View Grades →</span>
+                </div>
+              </div>`).join('')}
+           </div>`
+      }`;
+  } catch(e) {
+    content.innerHTML = `<div class="card"><p style="color:#ef4444;">${e.message}</p></div>`;
+  }
+}
+
+async function renderStudentCourseGrades(courseId, courseTitle) {
+  const content = document.getElementById('main-content');
+  content.innerHTML = '<div class="loading">Loading grades…</div>';
+  try {
+    const d = await api('/api/gradebook/my/' + courseId);
+    const bar = (pct, color) => `
+      <div style="background:var(--border);border-radius:4px;height:8px;flex:1;">
+        <div style="width:${Math.min(pct,100)}%;background:${color};height:8px;border-radius:4px;transition:width .4s;"></div>
+      </div>`;
+
+    content.innerHTML = `
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:18px;flex-wrap:wrap;">
+        <button class="btn btn-secondary btn-sm" onclick="renderStudentGradeBook(document.getElementById('main-content'))">← Back</button>
+        <div class="page-header" style="margin:0;padding:0;border:none;"><h2 style="margin:0;">${courseTitle}</h2></div>
+      </div>
+
+      <!-- Final Grade Card -->
+      <div class="card" style="margin-bottom:16px;text-align:center;background:linear-gradient(135deg,var(--card),${d.color}18);border:2px solid ${d.color}40;">
+        <div style="font-size:13px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">Final Grade</div>
+        <div style="font-size:56px;font-weight:900;color:${d.color};line-height:1;">${d.letter}</div>
+        <div style="font-size:22px;font-weight:700;color:${d.color};margin-top:2px;">${d.finalPct}%</div>
+      </div>
+
+      <!-- Component Breakdown -->
+      <div class="card" style="margin-bottom:16px;">
+        <div class="card-title" style="margin-bottom:12px;">Grade Components</div>
+        ${[
+          { label: 'Quizzes', pct: d.quizPct, weight: d.weights.quizzes, color: '#6366f1' },
+          { label: 'Attendance', pct: d.attPct, weight: d.weights.attendance, color: '#22c55e' },
+          { label: 'Manual Grades', pct: d.manualPct, weight: d.weights.manual, color: '#f59e0b' },
+        ].map(c => `
+          <div style="margin-bottom:14px;">
+            <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+              <span style="font-size:13px;font-weight:600;">${c.label} <span style="font-weight:400;color:var(--text-muted);">(${c.weight}% weight)</span></span>
+              <span style="font-size:13px;font-weight:700;color:${c.color};">${c.pct}%</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;">${bar(c.pct, c.color)}</div>
+          </div>`).join('')}
+      </div>
+
+      <!-- Quiz Breakdown -->
+      ${d.quizBreakdown.length ? `
+      <div class="card" style="margin-bottom:16px;">
+        <div class="card-title" style="margin-bottom:10px;">Quiz Scores</div>
+        ${d.quizBreakdown.map(q => `
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border);">
+            <span style="font-size:13px;">${q.title}</span>
+            <span style="font-size:13px;font-weight:700;color:${q.score===null?'var(--text-muted)':'var(--text-primary)'};">
+              ${q.score === null ? 'Not attempted' : q.score + ' / ' + q.maxScore}
+            </span>
+          </div>`).join('')}
+      </div>` : ''}
+
+      <!-- Attendance -->
+      <div class="card" style="margin-bottom:16px;">
+        <div class="card-title" style="margin-bottom:10px;">Attendance</div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+          <span style="font-size:13px;">Sessions attended</span>
+          <span style="font-weight:700;">${d.attendanceBreakdown.attended} / ${d.attendanceBreakdown.total}</span>
+        </div>
+        ${bar(d.attPct, '#22c55e')}
+      </div>
+
+      <!-- Manual Grades -->
+      ${d.manualBreakdown.length ? `
+      <div class="card">
+        <div class="card-title" style="margin-bottom:10px;">Other Grades</div>
+        ${d.manualBreakdown.map(m => `
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border);">
+            <span style="font-size:13px;">${m.label}</span>
+            <span style="font-size:13px;font-weight:700;color:${m.score===null?'var(--text-muted)':'var(--text-primary)'};">
+              ${m.score === null ? 'Not graded' : m.score + ' / ' + m.maxScore}
+            </span>
+          </div>`).join('')}
+      </div>` : ''}
+    `;
+  } catch(e) {
+    content.innerHTML = `<div class="card"><p style="color:#ef4444;">${e.message}</p></div>`;
+  }
+}
+
+// ── LECTURER VIEW ─────────────────────────────────────────────────────────────
+
+async function renderLecturerGradeBook(content) {
+  content.innerHTML = '<div class="loading">Loading courses…</div>';
+  try {
+    const data = await api('/api/gradebook/courses');
+    const courses = data.courses || [];
+    content.innerHTML = `
+      <div class="page-header"><h2>Grade Book</h2><p>Manage grades across your courses</p></div>
+      ${courses.length === 0
+        ? '<div class="card"><div class="empty-state"><p>No courses found.</p></div></div>'
+        : `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;">
+            ${courses.map(c => `
+              <div class="card" style="cursor:pointer;transition:transform .15s;"
+                   onmouseenter="this.style.transform='translateY(-2px)'"
+                   onmouseleave="this.style.transform=''"
+                   onclick="renderLecturerCourseGrades('${c._id}','${c.title} (${c.code})')">
+                <div style="font-weight:700;font-size:15px;margin-bottom:4px;">${c.title}</div>
+                <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">${c.code} · ${c.lecturer?.name || 'N/A'}</div>
+                <div style="display:flex;justify-content:space-between;align-items:center;">
+                  <span style="font-size:12px;color:var(--text-light);">${c.enrolledStudents?.length || 0} students</span>
+                  <span class="btn btn-sm btn-primary" style="pointer-events:none;">Open →</span>
+                </div>
+              </div>`).join('')}
+           </div>`
+      }`;
+  } catch(e) {
+    content.innerHTML = `<div class="card"><p style="color:#ef4444;">${e.message}</p></div>`;
+  }
+}
+
+async function renderLecturerCourseGrades(courseId, courseTitle) {
+  const content = document.getElementById('main-content');
+  content.innerHTML = '<div class="loading">Loading grade book…</div>';
+  try {
+    const d = await api('/api/gradebook/course/' + courseId);
+    const { grades, gradeBook, quizzes, totalSessions } = d;
+    const gb = gradeBook;
+    const w  = gb.weights;
+
+    // Grade distribution summary
+    const dist = { A:0, B:0, C:0, D:0, F:0 };
+    grades.forEach(g => { dist[g.letter] = (dist[g.letter]||0)+1; });
+    const avg = grades.length ? (grades.reduce((s,g) => s+g.finalPct, 0) / grades.length).toFixed(1) : 0;
+
+    content.innerHTML = `
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:18px;flex-wrap:wrap;">
+        <button class="btn btn-secondary btn-sm" onclick="renderLecturerGradeBook(document.getElementById('main-content'))">← Back</button>
+        <div style="flex:1;"><h2 style="margin:0;font-size:18px;">${courseTitle}</h2></div>
+        <button class="btn btn-sm" style="background:#4f46e5;color:#fff;" onclick="openWeightsModal('${courseId}',${w.quizzes},${w.attendance},${w.manual})">⚖️ Weights</button>
+        <button class="btn btn-sm btn-secondary" onclick="openAddManualEntryModal('${courseId}')">＋ Grade Column</button>
+        <button class="btn btn-sm btn-secondary" onclick="exportGradeBookCSV('${courseId}','${courseTitle}')">⬇ CSV</button>
+      </div>
+
+      <!-- Summary Stats -->
+      <div class="stats-grid" style="margin-bottom:16px;">
+        <div class="stat-card"><div class="stat-value">${grades.length}</div><div class="stat-label">Students</div></div>
+        <div class="stat-card"><div class="stat-value">${avg}%</div><div class="stat-label">Class Average</div></div>
+        <div class="stat-card"><div class="stat-value">${quizzes.length}</div><div class="stat-label">Quizzes</div></div>
+        <div class="stat-card"><div class="stat-value">${totalSessions}</div><div class="stat-label">Sessions</div></div>
+        ${Object.entries(dist).map(([l,n]) => `<div class="stat-card"><div class="stat-value" style="color:${{A:'#22c55e',B:'#84cc16',C:'#f59e0b',D:'#f97316',F:'#ef4444'}[l]}">${n}</div><div class="stat-label">Grade ${l}</div></div>`).join('')}
+      </div>
+
+      <!-- Weights display -->
+      <div class="card" style="margin-bottom:16px;display:flex;gap:16px;flex-wrap:wrap;align-items:center;">
+        <span style="font-size:12px;color:var(--text-muted);font-weight:700;text-transform:uppercase;">Weights:</span>
+        <span style="font-size:13px;">📝 Quizzes <strong>${w.quizzes}%</strong></span>
+        <span style="font-size:13px;">📅 Attendance <strong>${w.attendance}%</strong></span>
+        <span style="font-size:13px;">✏️ Manual <strong>${w.manual}%</strong></span>
+      </div>
+
+      <!-- Grade Table -->
+      ${grades.length === 0
+        ? '<div class="card"><div class="empty-state"><p>No enrolled students.</p></div></div>'
+        : `<div class="card" style="overflow-x:auto;">
+            <table style="width:100%;border-collapse:collapse;font-size:13px;">
+              <thead>
+                <tr style="border-bottom:2px solid var(--border);">
+                  <th style="padding:10px 12px;text-align:left;font-size:11px;text-transform:uppercase;color:var(--text-muted);">Student</th>
+                  <th style="padding:10px 8px;text-align:center;font-size:11px;text-transform:uppercase;color:var(--text-muted);">Quizzes</th>
+                  <th style="padding:10px 8px;text-align:center;font-size:11px;text-transform:uppercase;color:var(--text-muted);">Attendance</th>
+                  ${gb.manualEntries.map(e => `<th style="padding:10px 8px;text-align:center;font-size:11px;text-transform:uppercase;color:var(--text-muted);" title="Max: ${e.maxScore}">
+                    ${e.label}
+                    <button onclick="openEditManualScores('${courseId}','${e._id}','${e.label}',${e.maxScore})" style="background:none;border:none;cursor:pointer;color:#6366f1;font-size:11px;margin-left:3px;" title="Enter scores">✏️</button>
+                    <button onclick="confirmDeleteManualEntry('${courseId}','${e._id}')" style="background:none;border:none;cursor:pointer;color:#ef4444;font-size:11px;" title="Delete column">×</button>
+                  </th>`).join('')}
+                  <th style="padding:10px 8px;text-align:center;font-size:11px;text-transform:uppercase;color:var(--text-muted);">Final %</th>
+                  <th style="padding:10px 8px;text-align:center;font-size:11px;text-transform:uppercase;color:var(--text-muted);">Grade</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${grades.map((g, i) => `
+                  <tr style="border-bottom:1px solid var(--border);background:${i%2===0?'transparent':'var(--bg)'};">
+                    <td style="padding:10px 12px;">
+                      <div style="font-weight:600;">${g.student.name}</div>
+                      <div style="font-size:11px;color:var(--text-muted);">${g.student.studentId || g.student.email}</div>
+                    </td>
+                    <td style="padding:10px 8px;text-align:center;">${g.quizPct}%</td>
+                    <td style="padding:10px 8px;text-align:center;">${g.attPct}% <span style="font-size:10px;color:var(--text-muted);">(${g.attendedSessions}/${g.totalSessions})</span></td>
+                    ${gb.manualEntries.map(e => {
+                      const ms = g.manualScores.find(m => m.entryId.toString() === e._id.toString());
+                      return `<td style="padding:10px 8px;text-align:center;">${ms?.score !== null && ms?.score !== undefined ? ms.score + '/' + e.maxScore : '<span style="color:var(--text-muted);">—</span>'}</td>`;
+                    }).join('')}
+                    <td style="padding:10px 8px;text-align:center;font-weight:700;">${g.finalPct}%</td>
+                    <td style="padding:10px 8px;text-align:center;">
+                      <span style="font-weight:900;font-size:16px;color:${g.color};">${g.letter}</span>
+                    </td>
+                  </tr>`).join('')}
+              </tbody>
+            </table>
+          </div>`
+      }
+    `;
+
+    // Store current data globally for CSV export
+    window._gbData = d;
+    window._gbCourseId = courseId;
+
+  } catch(e) {
+    content.innerHTML = `<div class="card"><p style="color:#ef4444;">${e.message}</p></div>`;
+  }
+}
+
+// ── Weights Modal ──────────────────────────────────────────────────────────────
+function openWeightsModal(courseId, qW, aW, mW) {
+  const ol = document.createElement('div');
+  ol.id = 'gb-weights-overlay';
+  ol.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:400;display:flex;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(3px)';
+  ol.innerHTML = `
+    <div style="background:var(--card);border-radius:14px;width:100%;max-width:380px;box-shadow:0 20px 60px rgba(0,0,0,.2);">
+      <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;">
+        <h3 style="font-size:15px;font-weight:700;margin:0;">⚖️ Grade Weights</h3>
+        <button onclick="document.getElementById('gb-weights-overlay').remove()" style="width:26px;height:26px;border-radius:6px;border:1px solid var(--border);background:var(--bg);cursor:pointer;">✕</button>
+      </div>
+      <div style="padding:18px 20px;display:flex;flex-direction:column;gap:12px;">
+        <p style="font-size:12px;color:var(--text-muted);margin:0;">Weights determine how each component contributes to the final grade. They don't need to sum to 100 — they're proportional.</p>
+        ${[['Quizzes','gb-w-quiz',qW],['Attendance','gb-w-att',aW],['Manual Grades','gb-w-man',mW]].map(([label, id, val]) => `
+          <div>
+            <label style="font-size:12px;font-weight:700;margin-bottom:4px;display:block;">${label}</label>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <input type="range" id="${id}" min="0" max="100" value="${val}" style="flex:1;accent-color:var(--primary);" oninput="document.getElementById('${id}-val').textContent=this.value+'%'">
+              <span id="${id}-val" style="font-weight:700;min-width:38px;text-align:right;">${val}%</span>
+            </div>
+          </div>`).join('')}
+        <div id="gb-weights-err" style="display:none;color:#ef4444;font-size:12px;"></div>
+      </div>
+      <div style="padding:12px 20px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end;">
+        <button class="btn btn-secondary" onclick="document.getElementById('gb-weights-overlay').remove()">Cancel</button>
+        <button class="btn btn-primary" onclick="saveWeights('${courseId}')">Save</button>
+      </div>
+    </div>`;
+  document.body.appendChild(ol);
+}
+
+async function saveWeights(courseId) {
+  const quizzes    = +document.getElementById('gb-w-quiz').value;
+  const attendance = +document.getElementById('gb-w-att').value;
+  const manual     = +document.getElementById('gb-w-man').value;
+  try {
+    await api('/api/gradebook/course/' + courseId + '/weights', {
+      method: 'PATCH',
+      body: JSON.stringify({ quizzes, attendance, manual }),
+    });
+    document.getElementById('gb-weights-overlay').remove();
+    toastSuccess('Weights updated ✓');
+    renderLecturerCourseGrades(courseId, '');
+  } catch(e) {
+    const err = document.getElementById('gb-weights-err');
+    if (err) { err.textContent = e.message; err.style.display = 'block'; }
+  }
+}
+
+// ── Add Manual Entry Modal ────────────────────────────────────────────────────
+function openAddManualEntryModal(courseId) {
+  const ol = document.createElement('div');
+  ol.id = 'gb-entry-overlay';
+  ol.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:400;display:flex;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(3px)';
+  ol.innerHTML = `
+    <div style="background:var(--card);border-radius:14px;width:100%;max-width:380px;box-shadow:0 20px 60px rgba(0,0,0,.2);">
+      <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;">
+        <h3 style="font-size:15px;font-weight:700;margin:0;">＋ Add Grade Column</h3>
+        <button onclick="document.getElementById('gb-entry-overlay').remove()" style="width:26px;height:26px;border-radius:6px;border:1px solid var(--border);background:var(--bg);cursor:pointer;">✕</button>
+      </div>
+      <div style="padding:18px 20px;display:flex;flex-direction:column;gap:12px;">
+        <div>
+          <label style="font-size:12px;font-weight:700;margin-bottom:4px;display:block;">Column Label</label>
+          <input id="gb-entry-label" placeholder="e.g. Midterm Exam, Lab Report 1" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;">
+        </div>
+        <div>
+          <label style="font-size:12px;font-weight:700;margin-bottom:4px;display:block;">Maximum Score</label>
+          <input id="gb-entry-max" type="number" min="1" placeholder="e.g. 100" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;">
+        </div>
+        <div id="gb-entry-err" style="display:none;color:#ef4444;font-size:12px;"></div>
+      </div>
+      <div style="padding:12px 20px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end;">
+        <button class="btn btn-secondary" onclick="document.getElementById('gb-entry-overlay').remove()">Cancel</button>
+        <button class="btn btn-primary" onclick="saveManualEntry('${courseId}')">Add Column</button>
+      </div>
+    </div>`;
+  document.body.appendChild(ol);
+}
+
+async function saveManualEntry(courseId) {
+  const label    = document.getElementById('gb-entry-label').value.trim();
+  const maxScore = document.getElementById('gb-entry-max').value;
+  const errEl    = document.getElementById('gb-entry-err');
+  if (!label || !maxScore) {
+    if (errEl) { errEl.textContent = 'Both fields are required.'; errEl.style.display = 'block'; }
+    return;
+  }
+  try {
+    await api('/api/gradebook/course/' + courseId + '/manual-entry', {
+      method: 'POST',
+      body: JSON.stringify({ label, maxScore }),
+    });
+    document.getElementById('gb-entry-overlay').remove();
+    toastSuccess('Grade column added ✓');
+    renderLecturerCourseGrades(courseId, document.querySelector('h2')?.textContent || '');
+  } catch(e) {
+    if (errEl) { errEl.textContent = e.message; errEl.style.display = 'block'; }
+  }
+}
+
+// ── Enter Manual Scores Modal ─────────────────────────────────────────────────
+function openEditManualScores(courseId, entryId, label, maxScore) {
+  const gbData = window._gbData;
+  if (!gbData) { toastError('Grade data not loaded'); return; }
+
+  const ol = document.createElement('div');
+  ol.id = 'gb-scores-overlay';
+  ol.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:400;display:flex;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(3px)';
+
+  const rows = gbData.grades.map(g => {
+    const existing = g.manualScores.find(m => m.entryId.toString() === entryId);
+    return `
+      <tr>
+        <td style="padding:8px 10px;font-size:13px;">${g.student.name}</td>
+        <td style="padding:8px 10px;">
+          <input type="number" min="0" max="${maxScore}" step="0.5"
+                 data-student="${g.student._id}"
+                 value="${existing?.score !== null && existing?.score !== undefined ? existing.score : ''}"
+                 placeholder="/ ${maxScore}"
+                 style="width:80px;padding:5px 8px;border:1.5px solid var(--border);border-radius:6px;font-size:13px;text-align:center;outline:none;">
+        </td>
+      </tr>`;
+  }).join('');
+
+  ol.innerHTML = `
+    <div style="background:var(--card);border-radius:14px;width:100%;max-width:480px;max-height:88vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.2);">
+      <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;background:var(--card);z-index:1;border-radius:14px 14px 0 0;">
+        <h3 style="font-size:15px;font-weight:700;margin:0;">✏️ ${label} <span style="font-weight:400;color:var(--text-muted);">(max ${maxScore})</span></h3>
+        <button onclick="document.getElementById('gb-scores-overlay').remove()" style="width:26px;height:26px;border-radius:6px;border:1px solid var(--border);background:var(--bg);cursor:pointer;">✕</button>
+      </div>
+      <div style="padding:8px 20px;">
+        <table style="width:100%;border-collapse:collapse;">
+          <thead><tr>
+            <th style="padding:8px 10px;text-align:left;font-size:11px;text-transform:uppercase;color:var(--text-muted);">Student</th>
+            <th style="padding:8px 10px;text-align:left;font-size:11px;text-transform:uppercase;color:var(--text-muted);">Score</th>
+          </tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+      <div style="padding:12px 20px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end;position:sticky;bottom:0;background:var(--card);border-radius:0 0 14px 14px;">
+        <button class="btn btn-secondary" onclick="document.getElementById('gb-scores-overlay').remove()">Cancel</button>
+        <button class="btn btn-primary" onclick="submitManualScores('${courseId}','${entryId}')">Save Scores</button>
+      </div>
+    </div>`;
+  document.body.appendChild(ol);
+}
+
+async function submitManualScores(courseId, entryId) {
+  const inputs = document.querySelectorAll('#gb-scores-overlay input[data-student]');
+  const scores = Array.from(inputs).map(inp => ({
+    studentId: inp.dataset.student,
+    score: inp.value !== '' ? inp.value : null,
+  })).filter(s => s.score !== null);
+
+  try {
+    await api('/api/gradebook/course/' + courseId + '/manual-entry/' + entryId + '/scores', {
+      method: 'PUT',
+      body: JSON.stringify({ scores }),
+    });
+    document.getElementById('gb-scores-overlay').remove();
+    toastSuccess('Scores saved ✓');
+    renderLecturerCourseGrades(courseId, document.querySelector('h2')?.textContent || '');
+  } catch(e) {
+    toastError(e.message);
+  }
+}
+
+function confirmDeleteManualEntry(courseId, entryId) {
+  toastConfirm('Delete this grade column? All scores will be lost.', async () => {
+    try {
+      await api('/api/gradebook/course/' + courseId + '/manual-entry/' + entryId, { method: 'DELETE' });
+      toastSuccess('Column deleted');
+      renderLecturerCourseGrades(courseId, document.querySelector('h2')?.textContent || '');
+    } catch(e) { toastError(e.message); }
+  });
+}
+
+// ── CSV Export ────────────────────────────────────────────────────────────────
+function exportGradeBookCSV(courseId, courseTitle) {
+  const d = window._gbData;
+  if (!d || !d.grades.length) { toastWarning('No grades to export'); return; }
+
+  const manualCols = d.gradeBook.manualEntries.map(e => e.label);
+  const header = ['Student Name', 'Student ID', 'Quiz %', 'Attendance %', ...manualCols, 'Final %', 'Grade'];
+
+  const rows = d.grades.map(g => {
+    const manual = d.gradeBook.manualEntries.map(e => {
+      const ms = g.manualScores.find(m => m.entryId.toString() === e._id.toString());
+      return ms?.score !== null && ms?.score !== undefined ? ms.score + '/' + e.maxScore : '';
+    });
+    return [g.student.name, g.student.studentId || g.student.email, g.quizPct+'%', g.attPct+'%', ...manual, g.finalPct+'%', g.letter];
+  });
+
+  const csv = [header, ...rows].map(r => r.map(c => '"' + String(c).replace(/"/g,'""') + '"').join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url; a.download = courseTitle.replace(/[^a-z0-9]/gi,'_') + '_grades.csv';
+  a.click(); URL.revokeObjectURL(url);
+}
+
 // ── Announcements (server-backed) ───────────────────────────────────────────
 
 async function loadAnnBadge() {
