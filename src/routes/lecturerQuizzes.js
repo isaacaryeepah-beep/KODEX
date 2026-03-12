@@ -2,7 +2,8 @@ const express = require("express");
 const authenticate = require("../middleware/auth");
 const { requireRole, requireMode } = require("../middleware/role");
 const { requireActiveSubscription } = require("../middleware/subscription");
-const ctrl = require("../controllers/lecturerQuizController");
+const ctrl    = require("../controllers/lecturerQuizController");
+const aiCtrl  = require("../controllers/aiQuizController");
 
 const router = express.Router();
 
@@ -23,5 +24,6 @@ router.delete("/:id/questions/:questionId", ctrl.deleteQuestion);
 
 router.get("/:id/results", ctrl.getQuizResults);
 router.get("/:id/results/:attemptId", ctrl.getStudentAnswers);
+router.post("/:id/ai-generate", aiCtrl.generateQuestions);
 
 module.exports = router;
