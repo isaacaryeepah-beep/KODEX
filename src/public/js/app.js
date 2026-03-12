@@ -3042,31 +3042,6 @@ async function renderCourses() {
   try {
     const data = await api('/api/courses');
     offlineCache('courses', data);
-    const canCreate = ['lecturer', 'admin', 'superadmin'].includes(currentUser.role);
-    const canManageRoster = ['lecturer', 'admin', 'superadmin'].includes(currentUser.role);
-    content.innerHTML = `
-      <div class="page-header"><h2>Courses</h2><p>Manage academic courses</p></div>
-      ${canCreate ? '<div class="actions-bar"><button class="btn btn-primary btn-sm" onclick="showCreateCourseModal()">Create Course</button></div>' : ''}
-      <div class="card">
-        ${data.courses.length ? `
-          <table>
-            <thead><tr><th>Code</th><th>Title</th><th>Lecturer</th><th>Roster</th><th>Enrolled</th>${canManageRoster ? '<th>Actions</th>' : ''}</tr></thead>
-            <tbody>${data.courses.map(c => `
-              <tr>
-                <td><strong>${c.code}</strong></td>
-                <td>${c.title}</td>
-                <td>${c.lecturer?.name || 'N/A'}</td>
-                <td><button class="btn btn-sm" style="font-size:11px;background:var(--bg);border:1px solid var(--border)" onclick="viewRoster('${c._id}', '${c.code}')">View Roster</button></td>
-                <td>${c.enrolledStudents?.length || 0}</td>
-                ${canManageRoster ? `<td style="white-space:nowrap">
-                  <button class="btn btn-primary btn-sm" style="font-size:11px" onclick="showUploadRosterModal('${c._id}', '${c.code}')">Upload Students</button>
-                </td>` : ''}
-              </tr>
-            `).join('')}</tbody>
-          </table>
-        ` : '<div class="empty-state"><p>No courses found</p></div>'}
-      </div>
-    `;
     _renderCoursesHTML(content, data.courses || [], false);
   } catch (e) {
     const cached = offlineRead('courses');
@@ -3179,7 +3154,7 @@ async function uploadRoster(courseId) {
   const text = document.getElementById('roster-text').value.trim();
   if (!text) return alert('Please enter at least one student');
 
-  const lines = text.split('\\n').filter(l => l.trim());
+  const lines = text.split(/\r?\n/).filter(l => l.trim());
   const students = lines.map(line => {
     const parts = line.split(',').map(p => p.trim());
     return { studentId: parts[0], name: parts[1] || '' };
@@ -8904,3 +8879,4 @@ async function printMeetingAttendance(meetingId, title) {
     alert('Failed to generate PDF: ' + e.message);
   }
 }
+    
