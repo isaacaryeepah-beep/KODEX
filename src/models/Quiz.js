@@ -50,6 +50,18 @@ const quizSchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
+    // 0 = unlimited, 1 = one attempt (default), N = N attempts
+    maxAttempts: {
+      type: Number,
+      default: 1,
+      min: 0,
+    },
+    // Which score counts: "best" or "last"
+    scorePolicy: {
+      type: String,
+      enum: ["best", "last"],
+      default: "best",
+    },
     source: {
       type: String,
       enum: ['proctored', 'assignment'],
