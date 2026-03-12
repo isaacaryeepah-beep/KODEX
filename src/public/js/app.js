@@ -1123,10 +1123,6 @@ function toggleLecturerRegMode() {
   }
 }
 
-function showEmployeeLogin() {
-  document.getElementById('employee-login-form').classList.remove('hidden');
-  document.getElementById('employee-register-form').classList.add('hidden');
-}
 function showEmployeeRegister() {
   document.getElementById('employee-login-form').classList.add('hidden');
   document.getElementById('employee-register-form').classList.remove('hidden');
@@ -1800,6 +1796,16 @@ function navigateTo(view) {
     case 'about':       renderAbout(); break;
     case 'announcements': renderAnnouncements(); break;
     case 'gradebook': renderGradeBook(); break;
+    case 'training':       renderTraining(); break;
+    case 'my-training':    renderMyTraining(); break;
+    case 'performance':    renderPerformance(); break;
+    case 'my-performance': renderPerformance(); break;
+    case 'timesheets':     renderTimesheets(); break;
+    case 'my-timesheet':   renderMyTimesheet(); break;
+    case 'expenses-mgr':   renderExpensesMgr(); break;
+    case 'my-expenses':    renderMyExpenses(); break;
+    case 'assets':         renderAssets(); break;
+    case 'my-assets':      renderMyAssets(); break;
     default: renderDashboard();
   }
 }
