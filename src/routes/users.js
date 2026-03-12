@@ -10,6 +10,7 @@ router.use(authenticate);
 router.get("/", requireRole("employee", "manager", "admin", "superadmin", "lecturer"), companyIsolation, userController.listUsers);
 router.post("/", requireRole("manager", "admin", "superadmin"), companyIsolation, userController.createUser);
 router.post("/bulk", requireRole("manager", "admin", "superadmin"), companyIsolation, userController.bulkAction);
+router.post("/bulk-import", requireRole("admin", "superadmin"), companyIsolation, userController.bulkImportStudents);
 router.patch("/:id", requireRole("manager", "admin", "superadmin"), companyIsolation, userController.updateUser);
 router.patch("/:id/activate", requireRole("manager", "admin", "superadmin"), companyIsolation, userController.activateUser);
 router.delete("/:id", requireRole("manager", "admin", "superadmin"), companyIsolation, userController.deactivateUser);
