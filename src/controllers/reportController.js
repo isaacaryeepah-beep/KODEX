@@ -4,7 +4,8 @@ const AttendanceRecord = require("../models/AttendanceRecord");
 const User = require("../models/User");
 const Course = require("../models/Course");
 const Quiz = require("../models/Quiz");
-const QuizSubmission = require("../models/QuizSubmission");
+const QuizSubmission = require("../models/QuizSubmission"); // legacy — kept for reference
+const Attempt = require("../models/Attempt");
 const Company = require("../models/Company");
 
 function drawHeader(doc, title, institution) {
@@ -100,7 +101,7 @@ exports.attendanceReport = async (req, res) => {
     if (startDate || endDate) {
       filter.checkInTime = {};
       if (startDate) filter.checkInTime.$gte = new Date(startDate);
-      if (endDate) filter.checkInTime.$lte = new Date(endDate);
+      if (endDate) { const ed = new Date(endDate); ed.setHours(23,59,59,999); filter.checkInTime.$lte = ed; }
     }
 
     const [records, company] = await Promise.all([
@@ -193,7 +194,7 @@ exports.sessionReport = async (req, res) => {
     if (startDate || endDate) {
       filter.startedAt = {};
       if (startDate) filter.startedAt.$gte = new Date(startDate);
-      if (endDate) filter.startedAt.$lte = new Date(endDate);
+      if (endDate) { const ed = new Date(endDate); ed.setHours(23,59,59,999); filter.startedAt.$lte = ed; }
     }
 
     const [sessions, company] = await Promise.all([
@@ -304,7 +305,7 @@ exports.performanceReport = async (req, res) => {
     }
 
     const [submissions, company] = await Promise.all([
-      QuizSubmission.find(filter)
+      Attempt.find({ ...filter, isSubmitted: true })
         .populate("student", "name email indexNumber")
         .populate("quiz", "title")
         .sort({ submittedAt: -1 }),
@@ -320,7 +321,7 @@ exports.performanceReport = async (req, res) => {
     drawHeader(doc, "Performance Report", company?.name);
 
     const avgScore = submissions.length > 0
-      ? (submissions.reduce((sum, s) => sum + (s.maxScore > 0 ? (s.totalScore / s.maxScore) * 100 : 0), 0) / submissions.length).toFixed(1)
+      ? (submissions.reduce((sum, s) => sum + (s.maxScore > 0 ? (s.score / s.maxScore) * 100 : 0), 0) / submissions.length).toFixed(1)
       : "0";
 
     doc._summaryX = 50;
@@ -351,13 +352,13 @@ exports.performanceReport = async (req, res) => {
         const studentName = sub.student ? sub.student.name : "Unknown";
         const identifier = sub.student ? (sub.student.indexNumber || sub.student.email || "") : "";
         const quizTitle = sub.quiz ? sub.quiz.title : "N/A";
-        const percentage = sub.maxScore > 0 ? ((sub.totalScore / sub.maxScore) * 100).toFixed(1) : "0";
+        const percentage = sub.maxScore > 0 ? ((sub.score / sub.maxScore) * 100).toFixed(1) : "0";
 
         const row = [
           { text: studentName, width: colWidths[0] },
           { text: identifier, width: colWidths[1] },
           { text: quizTitle, width: colWidths[2] },
-          { text: `${sub.totalScore}/${sub.maxScore} (${percentage}%)`, width: colWidths[3] },
+          { text: `${sub.score}/${sub.maxScore} (${percentage}%)`, width: colWidths[3] },
           { text: new Date(sub.submittedAt).toLocaleDateString(), width: colWidths[4] },
         ];
         y = drawTableRow(doc, row, y);
