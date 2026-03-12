@@ -425,8 +425,6 @@ exports.registerEmployee = async (req, res) => {
       isApproved: false,
     });
 
-    const token = generateToken(user._id);
-
     res.status(201).json({
       user: {
         id: user._id,
@@ -483,6 +481,11 @@ exports.login = async (req, res) => {
         return res.status(401).json({ error: "Company not found" });
       }
       user = await User.findOne({ email, company: company._id, role: "employee" }).select("+password");
+    } else if (email && loginRole === "lecturer") {
+      // Scope lecturer login to academic companies only — prevents cross-company email collision
+      const CompanyModel = require("../models/Company");
+      const academicIds = await CompanyModel.find({ mode: "academic" }, "_id").lean().then(cs => cs.map(c => c._id));
+      user = await User.findOne({ email, company: { $in: academicIds }, role: "lecturer" }).select("+password");
     } else {
       user = await User.findOne({ email }).select("+password");
     }
@@ -525,7 +528,7 @@ exports.login = async (req, res) => {
     }
     // ────────────────────────────────────────────────────────────────────────
 
-    if (company && !company.hasAccess && user.role !== "superadmin" && user.role !== "admin") {
+    if (company && !company.hasAccess && !["superadmin", "admin", "manager"].includes(user.role)) {
       return res.status(403).json({
         error: "Subscription inactive",
         message: "Your institution's subscription has expired. Please contact your admin.",
