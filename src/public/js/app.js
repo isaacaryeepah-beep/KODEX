@@ -8834,7 +8834,7 @@ async function viewMeetingAttendance(meetingId, title) {
   container.innerHTML = '<div class="modal-overlay" onclick="closeModal(event)"><div class="modal" onclick="event.stopPropagation()" style="max-width:700px;width:95%"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px"><h3 style="margin:0">Meeting Attendance</h3><button onclick="closeModal()" style="background:none;border:none;font-size:20px;cursor:pointer">×</button></div><div id="meeting-attendance-body"><div class="loading">Loading...</div></div></div></div>';
 
   try {
-    const data = await api('/api/jitsi/' + meetingId + '/attendance');
+    const data = await api('/api/zoom/' + meetingId + '/attendance');
     const attendance = data.attendance || [];
     const total = data.total || 0;
     const statusColor = { present: '#22c55e', partial: '#f59e0b', absent: '#ef4444' };
@@ -8852,8 +8852,8 @@ async function viewMeetingAttendance(meetingId, title) {
             + '<td><span style="background:' + (statusColor[a.status] || '#6b7280') + ';color:#fff;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:600">' + statusLabel + '</span></td></tr>';
     }
 
-    const token = localStorage.getItem('kodex_token') || '';
-    const csvUrl = '/api/jitsi/' + meetingId + '/attendance/csv?token=' + token;
+    const token = localStorage.getItem('token') || localStorage.getItem('kodex_token') || '';
+    const csvUrl = '/api/zoom/' + meetingId + '/attendance/csv?token=' + token;
 
     let tableHtml = attendance.length
       ? '<table style="width:100%"><thead><tr><th>Name</th><th>Email / Index</th><th>Joined</th><th>Left</th><th>Duration</th><th>Status</th></tr></thead><tbody>' + rows + '</tbody></table>'
@@ -8875,7 +8875,7 @@ async function viewMeetingAttendance(meetingId, title) {
 
 async function printMeetingAttendance(meetingId, title) {
   try {
-    const data = await api('/api/jitsi/' + meetingId + '/attendance');
+    const data = await api('/api/zoom/' + meetingId + '/attendance');
     const attendance = data.attendance || [];
     const statusColor = { present: '#22c55e', partial: '#f59e0b', absent: '#ef4444' };
 
