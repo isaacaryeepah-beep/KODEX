@@ -126,7 +126,6 @@ async function handleChargeSuccess(data) {
   company.subscriptionStatus    = "active";
   company.subscriptionPlan      = plan === "yearly" ? "annual" : "monthly";
   company.subscriptionProvider  = "paystack";
-  company.hasAccess             = true;
   company.trialUsed             = true;
   company.subscriptionStartDate = now;
   company.subscriptionEndDate   = endDate;
