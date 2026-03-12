@@ -401,10 +401,46 @@ exports.getQuizResults = async (req, res) => {
       return obj;
     });
 
+    // Per-question difficulty: how many got each question right
+    const attemptIds = attempts.map((a) => a._id);
+    const allAnswers = await Answer.find({ attempt: { $in: attemptIds } })
+      .populate("question", "questionText marks questionType");
+
+    const questionStats = {};
+    for (const ans of allAnswers) {
+      if (!ans.question) continue;
+      const qid = ans.question._id.toString();
+      if (!questionStats[qid]) {
+        questionStats[qid] = {
+          questionText: ans.question.questionText,
+          marks: ans.question.marks,
+          questionType: ans.question.questionType,
+          correct: 0,
+          total: 0,
+        };
+      }
+      questionStats[qid].total++;
+      if (ans.isCorrect) questionStats[qid].correct++;
+    }
+
+    const questionDifficulty = questions.map((q) => {
+      const qs = questionStats[q._id.toString()] || { correct: 0, total: 0 };
+      return {
+        _id: q._id,
+        questionText: q.questionText,
+        marks: q.marks,
+        questionType: q.questionType,
+        correct: qs.correct,
+        total: qs.total,
+        successRate: qs.total > 0 ? Math.round((qs.correct / qs.total) * 100) : null,
+      };
+    });
+
     res.json({
       quiz: quiz.toObject(),
       questions,
       attempts: attemptsWithPercentage,
+      questionDifficulty,
       stats: {
         totalStudents,
         submitted,
@@ -418,5 +454,34 @@ exports.getQuizResults = async (req, res) => {
   } catch (error) {
     console.error("Get quiz results error:", error);
     res.status(500).json({ error: "Failed to fetch results" });
+  }
+};
+
+exports.getStudentAnswers = async (req, res) => {
+  try {
+    const { id, attemptId } = req.params;
+
+    // Verify quiz belongs to this lecturer
+    const quiz = await Quiz.findOne({ _id: id, company: req.user.company, createdBy: req.user._id });
+    if (!quiz) return res.status(404).json({ error: "Quiz not found" });
+
+    const attempt = await Attempt.findOne({ _id: attemptId, quiz: id, isSubmitted: true })
+      .populate("student", "name email indexNumber");
+    if (!attempt) return res.status(404).json({ error: "Attempt not found" });
+
+    const answers = await Answer.find({ attempt: attemptId })
+      .populate("question", "questionText options marks questionType correctAnswer correctAnswers correctAnswerText acceptedAnswers")
+      .sort({ createdAt: 1 });
+
+    res.json({
+      attempt: {
+        ...attempt.toObject(),
+        percentage: attempt.maxScore > 0 ? Math.round((attempt.score / attempt.maxScore) * 100) : 0,
+      },
+      answers,
+    });
+  } catch (error) {
+    console.error("Get student answers error:", error);
+    res.status(500).json({ error: "Failed to fetch student answers" });
   }
 };
