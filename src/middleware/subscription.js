@@ -58,7 +58,7 @@ const requirePlan = (...allowedPlans) => {
       return res.status(401).json({ error: "Authentication required" });
     }
 
-    const alwaysExempt = ["superadmin", "employee", "student"];
+    const alwaysExempt = ["superadmin", "admin", "employee", "student"];
     if (alwaysExempt.includes(req.user.role)) {
       return next();
     }
