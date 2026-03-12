@@ -12,7 +12,7 @@ const router = express.Router();
 router.use(authenticate);
 router.use(requireActiveSubscription);
 
-const QR_EXPIRY_SECONDS   = 15;   // QR rotates every 15s — single use
+const QR_EXPIRY_SECONDS   = 15;   // QR rotates every 15s — time-gated, multi-use
 const VERBAL_EXPIRY_MINUTES = 5;  // Verbal code valid for 5 minutes — multi-use
 
 // ── Generate a token (QR or verbal) ─────────────────────────────────────────
