@@ -1,4 +1,261 @@
 const API = '';
+
+// ═══════════════════════════════════════════════════════
+// TOAST NOTIFICATION SYSTEM
+// Usage: toast('Message')           → info (default)
+//        toast('Message', 'success') → green
+//        toast('Message', 'error')   → red  
+//        toast('Message', 'warning') → amber
+//        toastConfirm('Sure?', onConfirm) → replaces confirm()
+// ═══════════════════════════════════════════════════════
+
+(function() {
+  // Inject toast CSS once
+  const style = document.createElement('style');
+  style.textContent = `
+    #toast-container {
+      position: fixed;
+      top: 70px;
+      right: 18px;
+      z-index: 9999;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      pointer-events: none;
+      max-width: min(360px, calc(100vw - 36px));
+    }
+    .toast {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      padding: 12px 14px;
+      border-radius: 10px;
+      font-family: 'Inter', -apple-system, sans-serif;
+      font-size: 13px;
+      font-weight: 500;
+      line-height: 1.45;
+      color: #0f172a;
+      background: rgba(255,255,255,0.97);
+      border: 1px solid #e2e8f0;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.10), 0 1px 4px rgba(0,0,0,0.06);
+      pointer-events: all;
+      cursor: pointer;
+      backdrop-filter: blur(12px);
+      transform: translateX(120%);
+      opacity: 0;
+      transition: transform 0.3s cubic-bezier(0.16,1,0.3,1), opacity 0.3s ease;
+      max-width: 100%;
+      word-break: break-word;
+    }
+    .toast.toast-in {
+      transform: translateX(0);
+      opacity: 1;
+    }
+    .toast.toast-out {
+      transform: translateX(120%);
+      opacity: 0;
+      transition: transform 0.25s cubic-bezier(0.4,0,1,1), opacity 0.25s ease;
+    }
+    .toast-icon {
+      font-size: 15px;
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
+    .toast-body { flex: 1; min-width: 0; }
+    .toast-title { font-weight: 600; margin-bottom: 1px; }
+    .toast-msg { color: #475569; font-size: 12.5px; }
+    .toast-close {
+      flex-shrink: 0;
+      font-size: 16px;
+      color: #94a3b8;
+      line-height: 1;
+      padding: 0 2px;
+      cursor: pointer;
+      transition: color 0.15s;
+      margin-top: -1px;
+    }
+    .toast-close:hover { color: #64748b; }
+    .toast-progress {
+      position: absolute;
+      bottom: 0; left: 0;
+      height: 2px;
+      border-radius: 0 0 10px 10px;
+      transition: width linear;
+    }
+    .toast { position: relative; overflow: hidden; }
+
+    /* Types */
+    .toast-success { border-left: 3px solid #10b981; }
+    .toast-success .toast-progress { background: #10b981; }
+    .toast-error   { border-left: 3px solid #ef4444; }
+    .toast-error .toast-progress { background: #ef4444; }
+    .toast-warning { border-left: 3px solid #f59e0b; }
+    .toast-warning .toast-progress { background: #f59e0b; }
+    .toast-info    { border-left: 3px solid #6366f1; }
+    .toast-info .toast-progress { background: #6366f1; }
+
+    /* Confirm toast */
+    .toast-confirm-btns {
+      display: flex;
+      gap: 6px;
+      margin-top: 9px;
+    }
+    .toast-confirm-btns button {
+      flex: 1;
+      padding: 5px 10px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      font-family: inherit;
+      cursor: pointer;
+      border: none;
+      transition: opacity 0.15s;
+    }
+    .toast-confirm-btns button:hover { opacity: 0.85; }
+    .toast-confirm-yes { background: #ef4444; color: white; }
+    .toast-confirm-no  { background: #f1f5f9; color: #475569; border: 1px solid #e2e8f0 !important; }
+
+    /* Mobile */
+    @media (max-width: 540px) {
+      #toast-container { top: auto; bottom: 74px; right: 12px; left: 12px; max-width: 100%; }
+      .toast { transform: translateY(120%); }
+      .toast.toast-in { transform: translateY(0); }
+      .toast.toast-out { transform: translateY(120%); }
+    }
+  `;
+  document.head.appendChild(style);
+
+  // Create container
+  let container;
+  function getContainer() {
+    if (!container || !document.body.contains(container)) {
+      container = document.createElement('div');
+      container.id = 'toast-container';
+      document.body.appendChild(container);
+    }
+    return container;
+  }
+
+  const ICONS = {
+    success: '✓',
+    error:   '✕',
+    warning: '⚠',
+    info:    'ℹ',
+  };
+
+  const TITLES = {
+    success: 'Success',
+    error:   'Error',
+    warning: 'Warning',
+    info:    'Info',
+  };
+
+  const DURATIONS = {
+    success: 3500,
+    error:   5000,
+    warning: 4500,
+    info:    3500,
+  };
+
+  window.toast = function(message, type = 'info', options = {}) {
+    if (!message) return;
+    const c = getContainer();
+    const duration = options.duration || DURATIONS[type] || 3500;
+    const t = type in ICONS ? type : 'info';
+
+    const el = document.createElement('div');
+    el.className = `toast toast-${t}`;
+    el.innerHTML = `
+      <span class="toast-icon">${ICONS[t]}</span>
+      <div class="toast-body">
+        <div class="toast-msg">${message}</div>
+      </div>
+      <span class="toast-close">×</span>
+      <div class="toast-progress" style="width:100%"></div>
+    `;
+
+    const close = () => dismiss(el);
+    el.querySelector('.toast-close').addEventListener('click', e => { e.stopPropagation(); close(); });
+    el.addEventListener('click', close);
+
+    c.appendChild(el);
+    requestAnimationFrame(() => requestAnimationFrame(() => el.classList.add('toast-in')));
+
+    // Progress bar
+    const bar = el.querySelector('.toast-progress');
+    bar.style.transitionDuration = duration + 'ms';
+    requestAnimationFrame(() => requestAnimationFrame(() => { bar.style.width = '0%'; }));
+
+    const timer = setTimeout(close, duration);
+    el._toastTimer = timer;
+
+    // Pause on hover
+    el.addEventListener('mouseenter', () => {
+      clearTimeout(el._toastTimer);
+      bar.style.transitionDuration = '0ms';
+    });
+    el.addEventListener('mouseleave', () => {
+      const remaining = 1000;
+      bar.style.transitionDuration = remaining + 'ms';
+      bar.style.width = '0%';
+      el._toastTimer = setTimeout(close, remaining);
+    });
+
+    return el;
+  };
+
+  function dismiss(el) {
+    if (!el || el._dismissed) return;
+    el._dismissed = true;
+    clearTimeout(el._toastTimer);
+    el.classList.remove('toast-in');
+    el.classList.add('toast-out');
+    setTimeout(() => el.remove(), 300);
+  }
+
+  // Convenience shorthands
+  window.toastSuccess = (msg, opts) => window.toast(msg, 'success', opts);
+  window.toastError   = (msg, opts) => window.toast(msg, 'error',   opts);
+  window.toastWarning = (msg, opts) => window.toast(msg, 'warning', opts);
+  window.toastInfo    = (msg, opts) => window.toast(msg, 'info',    opts);
+
+  // Replaces window.confirm() — returns a Promise
+  window.toastConfirm = function(message, onConfirm, onCancel, opts = {}) {
+    const c = getContainer();
+    const el = document.createElement('div');
+    el.className = 'toast toast-warning';
+    el.innerHTML = `
+      <span class="toast-icon">⚠</span>
+      <div class="toast-body">
+        <div class="toast-msg">${message}</div>
+        <div class="toast-confirm-btns">
+          <button class="toast-confirm-no">${opts.cancelLabel || 'Cancel'}</button>
+          <button class="toast-confirm-yes">${opts.confirmLabel || 'Confirm'}</button>
+        </div>
+      </div>
+    `;
+
+    const dismiss = () => {
+      el.classList.remove('toast-in');
+      el.classList.add('toast-out');
+      setTimeout(() => el.remove(), 300);
+    };
+
+    el.querySelector('.toast-confirm-yes').addEventListener('click', () => {
+      dismiss();
+      if (onConfirm) onConfirm();
+    });
+    el.querySelector('.toast-confirm-no').addEventListener('click', () => {
+      dismiss();
+      if (onCancel) onCancel();
+    });
+
+    c.appendChild(el);
+    requestAnimationFrame(() => requestAnimationFrame(() => el.classList.add('toast-in')));
+  };
+
+})();
+
 let token = localStorage.getItem('token');
 
 // ── Device fingerprint for 6-hour cross-device logout lock ───────────────────
@@ -1611,7 +1868,7 @@ async function approveUser(userId) {
     await api(`/api/approvals/${userId}/approve`, { method: 'PATCH' });
     renderApprovals();
   } catch (e) {
-    alert(e.message);
+    toastError(e.message);
   }
 }
 
@@ -1621,7 +1878,7 @@ async function rejectUser(userId) {
     await api(`/api/approvals/${userId}/reject`, { method: 'DELETE' });
     renderApprovals();
   } catch (e) {
-    alert(e.message);
+    toastError(e.message);
   }
 }
 
@@ -1745,7 +2002,7 @@ async function employeeSignIn() {
   if (esp32IP) {
     const detected = await discoverESP32();
     if (!detected) {
-      alert('You must be at the office to sign in. No office device detected.');
+      toastWarning('You must be at the office to sign in. BLE device not detected.');
       return;
     }
     // Record sign-in on ESP32 locally
@@ -1754,7 +2011,7 @@ async function employeeSignIn() {
         method: 'POST',
         body: JSON.stringify({ userId: currentUser.id, name: currentUser.name })
       });
-      alert('Signed in successfully!');
+      toastSuccess('Signed in successfully!');
       renderSignInOut();
       return;
     } catch(e) {
@@ -1763,10 +2020,10 @@ async function employeeSignIn() {
   }
   try {
     const data = await api('/api/attendance-sessions/sign-in', { method: 'POST' });
-    alert(data.message || 'Signed in successfully!');
+    toastSuccess(data.message || 'Signed in successfully!');
     navigateTo('dashboard');
   } catch (e) {
-    alert(e.message || 'Sign in failed');
+    toastError(e.message || 'Sign in failed');
   }
 }
 
@@ -1776,7 +2033,7 @@ async function employeeSignOut() {
   if (esp32IP) {
     const detected = await discoverESP32();
     if (!detected) {
-      alert('You must be at the office to sign out. No office device detected.');
+      toastWarning('You must be at the office to sign out. BLE device not detected.');
       return;
     }
     try {
@@ -1784,7 +2041,7 @@ async function employeeSignOut() {
         method: 'POST',
         body: JSON.stringify({ userId: currentUser.id, name: currentUser.name })
       });
-      alert('Signed out successfully!');
+      toastSuccess('Signed out successfully!');
       renderSignInOut();
       return;
     } catch(e) {
@@ -1793,10 +2050,10 @@ async function employeeSignOut() {
   }
   try {
     const data = await api('/api/attendance-sessions/sign-out', { method: 'POST' });
-    alert(data.message ? data.message + (data.duration ? ' Duration: ' + data.duration : '') : 'Signed out successfully!');
+    toastSuccess(data.message ? data.message + (data.duration ? ' Duration: ' + data.duration : '') : 'Signed out successfully!');
     navigateTo('dashboard');
   } catch (e) {
-    alert(e.message || 'Sign out failed');
+    toastError(e.message || 'Sign out failed');
   }
 }
 
@@ -1999,7 +2256,7 @@ async function renderAdminDashboard(content) {
           <div style="font-size:28px;font-weight:800;letter-spacing:4px;color:var(--primary);font-family:monospace;margin-top:4px">${instCode}</div>
           <div style="font-size:12px;color:var(--text-light);margin-top:4px">Share this code with ${mode === 'academic' ? 'lecturers and students' : 'employees'} so they can join your institution</div>
         </div>
-        <button class="btn btn-primary btn-sm" onclick="navigator.clipboard.writeText('${instCode}').then(() => alert('Code copied!'))">Copy Code</button>
+        <button class="btn btn-primary btn-sm" onclick="navigator.clipboard.writeText('${instCode}').then(() => toastSuccess('Code copied!'))">Copy Code</button>
       </div>
     </div>
 
@@ -2158,7 +2415,7 @@ async function startSession() {
     await api('/api/attendance-sessions/start', { method: 'POST', body: JSON.stringify({ title }) });
     renderSessions();
   } catch (e) {
-    alert(e.message);
+    toastError(e.message);
   }
 }
 
@@ -2187,7 +2444,7 @@ async function stopSession(id) {
     await api(`/api/attendance-sessions/${id}/stop`, { method: 'POST' });
     renderSessions();
   } catch (e) {
-    alert(e.message);
+    toastError(e.message);
   }
 }
 
@@ -2575,13 +2832,13 @@ async function createUser() {
       body.email = document.getElementById('new-user-email').value;
     }
     const phone = document.getElementById('new-user-phone').value.trim();
-    if (!phone) { alert('Phone number is required.'); return; }
+    if (!phone) { toastWarning('Phone number is required.'); return; }
     body.phone = phone;
     await api('/api/users', { method: 'POST', body: JSON.stringify(body) });
     closeModal();
     renderUsers();
   } catch (e) {
-    alert(e.message);
+    toastError(e.message);
   }
 }
 
@@ -2612,10 +2869,10 @@ async function bulkUserAction(action) {
   if (!confirm(`Are you sure you want to ${labels[action]} ${ids.length} user(s)?${action === 'delete' ? ' This cannot be undone!' : ''}`)) return;
   try {
     const result = await api('/api/users/bulk', { method: 'POST', body: JSON.stringify({ userIds: ids, action }) });
-    alert(result.message);
+    toastSuccess(result.message);
     renderUsers();
   } catch (e) {
-    alert(e.message);
+    toastError(e.message);
   }
 }
 
@@ -2673,7 +2930,7 @@ async function deactivateUser(id) {
     await api(`/api/users/${id}`, { method: 'DELETE' });
     renderUsers();
   } catch (e) {
-    alert(e.message);
+    toastError(e.message);
   }
 }
 
@@ -2683,7 +2940,7 @@ async function activateUser(id) {
     await api(`/api/users/${id}/activate`, { method: 'PATCH' });
     renderUsers();
   } catch (e) {
-    alert(e.message);
+    toastError(e.message);
   }
 }
 
@@ -2693,7 +2950,7 @@ async function deleteUserPermanently(id, name) {
     await api(`/api/users/${id}/permanent`, { method: 'DELETE' });
     renderUsers();
   } catch (e) {
-    alert(e.message);
+    toastError(e.message);
   }
 }
 
@@ -2870,7 +3127,7 @@ async function startMeeting(id) {
 
     renderMeetings();
   } catch (e) {
-    alert(e.message);
+    toastError(e.message);
   }
 }
 
@@ -2882,7 +3139,7 @@ function joinMeeting(id, joinUrl) {
     setTimeout(() => renderMeetings(), 1000);
   }).catch((e) => {
     w.close();
-    alert(e.message || 'Failed to join meeting');
+    toastError(e.message || 'Failed to join meeting');
   });
 }
 
@@ -2892,7 +3149,7 @@ async function endMeeting(id) {
     await api(`/api/zoom/${id}/end`, { method: 'POST' });
     renderMeetings();
   } catch (e) {
-    alert(e.message);
+    toastError(e.message);
   }
 }
 
@@ -2902,7 +3159,7 @@ async function cancelMeeting(id) {
     await api(`/api/zoom/${id}/cancel`, { method: 'POST' });
     renderMeetings();
   } catch (e) {
-    alert(e.message);
+    toastError(e.message);
   }
 }
 
@@ -3015,7 +3272,7 @@ async function saveInviteLink(meetingId, link) {
     renderMeetings();
   } catch(e) {
     if (errEl) { errEl.textContent = e.message; errEl.style.display = 'block'; }
-    else alert(e.message);
+    else toastError(e.message);
   }
 }
 
@@ -3123,7 +3380,7 @@ async function createCourse() {
     closeModal();
     renderCourses();
   } catch (e) {
-    alert(e.message);
+    toastError(e.message);
   }
 }
 
@@ -3152,7 +3409,7 @@ function showUploadRosterModal(courseId, courseCode) {
 
 async function uploadRoster(courseId) {
   const text = document.getElementById('roster-text').value.trim();
-  if (!text) return alert('Please enter at least one student');
+  if (!text) { toastWarning('Please enter at least one student'); return; };
 
   const lines = text.split(/\r?\n/).filter(l => l.trim());
   const students = lines.map(line => {
@@ -3161,7 +3418,7 @@ async function uploadRoster(courseId) {
   });
 
   const invalid = students.filter(s => !s.studentId);
-  if (invalid.length > 0) return alert('Some lines are missing a Student ID');
+  if (invalid.length > 0) { toastWarning('Some lines are missing a Student ID'); return; };
 
   const btn = document.getElementById('roster-upload-btn');
   btn.disabled = true;
@@ -3181,7 +3438,7 @@ async function uploadRoster(courseId) {
     btn.disabled = false;
     document.getElementById('roster-text').value = '';
   } catch (e) {
-    alert(e.message);
+    toastError(e.message);
     btn.textContent = 'Upload Students';
     btn.disabled = false;
   }
@@ -3244,13 +3501,14 @@ async function viewRoster(courseId, courseCode) {
 }
 
 async function removeRosterEntry(courseId, rosterId, courseCode) {
-  if (!window.confirm('Remove this student from the roster?')) return;
-  try {
-    await api(`/api/roster/${courseId}/entries/${rosterId}`, { method: 'DELETE' });
-    viewRoster(courseId, courseCode);
-  } catch (e) {
-    alert(e.message);
-  }
+  toastConfirm('Remove this student from the roster?', async () => {
+    try {
+      await api(`/api/roster/${courseId}/entries/${rosterId}`, { method: 'DELETE' });
+      viewRoster(courseId, courseCode);
+    } catch (e) {
+      toastError(e.message);
+    }
+  });
 }
 
 let quizTimerInterval = null;
@@ -3560,7 +3818,7 @@ async function deleteQuizQuestion(quizId, questionId) {
     await api(`/api/lecturer/quizzes/${quizId}/questions/${questionId}`, { method: 'DELETE' });
     showAddQuestionsView(quizId);
   } catch (e) {
-    alert(e.message);
+    toastError(e.message);
   }
 }
 
@@ -3684,7 +3942,7 @@ async function deleteLecturerQuiz(quizId) {
     await api(`/api/lecturer/quizzes/${quizId}`, { method: 'DELETE' });
     renderQuizzes();
   } catch (e) {
-    alert(e.message);
+    toastError(e.message);
   }
 }
 
@@ -4180,7 +4438,7 @@ async function startOfflineSession() {
     showToast(`✅ Session started! Verbal code: ${data.verbalCode}`);
     renderSessions();
   } catch(e) {
-    alert('Could not start session on ESP32: ' + e.message);
+    toastError('Could not start session on ESP32: ' + e.message);
   }
 }
 
@@ -4192,7 +4450,7 @@ async function stopOfflineSession() {
     showToast('✅ Session stopped');
     renderSessions();
   } catch(e) {
-    alert('Error: ' + e.message);
+    toastError(e.message);
   }
 }
 
@@ -4203,7 +4461,7 @@ async function esp32NewCode() {
     showToast(`New code: ${data.verbalCode}`);
     renderMarkAttendance();
   } catch(e) {
-    alert('Error: ' + e.message);
+    toastError(e.message);
   }
 }
 
@@ -4444,14 +4702,14 @@ function showQrEntry() {
 
 async function submitCodeMark() {
   const code = document.getElementById('mark-code-input')?.value?.toUpperCase().trim();
-  if (!code || code.length !== 4) return alert('Please enter the 4-character code.');
+  if (!code || code.length !== 4) { toastWarning('Please enter the 4-character code.'); return; }
 
   // If ESP32 is detected, submit locally (works offline)
   if (bleDetected && esp32IP) {
     try {
       await submitToESP32(code);
       offlineCache('pendingMark', null);
-      alert('Attendance marked successfully!');
+      toastSuccess('Attendance marked successfully!');
       navigateTo('mark-attendance');
       return;
     } catch(e) {
@@ -4478,10 +4736,10 @@ async function submitCodeMark() {
       body: JSON.stringify({ code, method: 'code_mark' }),
     });
     offlineCache('pendingMark', null);
-    alert('Attendance marked successfully!');
+    toastSuccess('Attendance marked successfully!');
     navigateTo('mark-attendance');
   } catch (e) {
-    alert(e.message);
+    toastError(e.message);
   }
 }
 
@@ -4508,7 +4766,7 @@ function showCodeEntryOffline() {
 
 async function submitQrMark() {
   const qrToken = document.getElementById('mark-qr-input')?.value;
-  if (!qrToken) return alert('Please enter the QR token');
+  if (!qrToken) { toastWarning('Please enter the QR token'); return; };
 
   if (!isOnline()) {
     offlineEnqueue({
@@ -4528,10 +4786,10 @@ async function submitQrMark() {
       body: JSON.stringify({ qrToken, method: 'qr_mark' }),
     });
     offlineCache('pendingMark', null);
-    alert('Attendance marked successfully!');
+    toastSuccess('Attendance marked successfully!');
     navigateTo('mark-attendance');
   } catch (e) {
-    alert(e.message);
+    toastError(e.message);
   }
 }
 
@@ -4541,10 +4799,10 @@ async function markBLE() {
       method: 'POST',
       body: JSON.stringify({ method: 'ble_mark' }),
     });
-    alert('BLE attendance marked successfully!');
+    toastSuccess('Attendance marked via BLE!');
     navigateTo('mark-attendance');
   } catch (e) {
-    alert(e.message);
+    toastError(e.message);
   }
 }
 
@@ -4584,10 +4842,10 @@ async function submitJitsiJoin(meetingId, joinUrl) {
   try {
     await api(`/api/zoom/${meetingId}/join`, { method: 'POST' });
     if (joinUrl) window.open(joinUrl, '_blank');
-    alert('Attendance marked via meeting join!');
+    toastSuccess('Attendance marked via meeting join!');
     navigateTo('mark-attendance');
   } catch (e) {
-    alert(e.message);
+    toastError(e.message);
   }
 }
 
@@ -4616,16 +4874,16 @@ function showMarkAttendanceModal() {
 async function markAttendance() {
   try {
     const code = document.getElementById('attend-code').value;
-    if (!code || code.length !== 4) return alert('Please enter the 4-character code.');
+    if (!code || code.length !== 4) { toastWarning('Please enter the 4-character code.'); return; }
     await api('/api/attendance-sessions/mark', {
       method: 'POST',
       body: JSON.stringify({ code, method: 'code_mark' }),
     });
     closeModal();
-    alert('Attendance marked successfully!');
+    toastSuccess('Attendance marked successfully!');
     renderMyAttendance();
   } catch (e) {
-    alert(e.message);
+    toastError(e.message);
   }
 }
 
@@ -4705,13 +4963,13 @@ async function subscribePlan(plan, provider) {
       if (data.authorization_url) {
         window.location.href = data.authorization_url;
       } else {
-        alert('Could not get payment URL. Please try again.');
+        toastError('Could not get payment URL. Please try again.');
       }
     } catch (e) {
-      alert(e.message);
+      toastError(e.message);
     }
   } else {
-    alert('Stripe is not available. Please use Paystack (GHS).');
+    toastWarning('Please use Paystack (GHS) to subscribe.');
   }
 }
 
@@ -4990,7 +5248,7 @@ async function downloadReport(type, apiBase = 'reports', e) {
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
   } catch (err) {
-    alert(err.message);
+    toastError(err.message);
   } finally {
     if (btn) {
       btn.innerHTML = originalHTML;
@@ -5297,7 +5555,7 @@ function postAnnouncement() {
   const title = document.getElementById('ann-title').value.trim();
   const body  = document.getElementById('ann-body').value.trim();
   const type  = document.getElementById('ann-type').value;
-  if (!title || !body) return alert('Please enter a title and message');
+  if (!title || !body) { toastWarning('Please fill in the title and message'); return; };
 
   const list = getAnnouncements();
   list.push({ id: Date.now().toString(), title, body, type, author: currentUser.name || currentUser.role, ts: Date.now() });
@@ -5318,7 +5576,7 @@ async function exportSessionCSV(sessionId, sessionTitle) {
   try {
     const data = await api('/api/attendance-sessions/' + sessionId + '/records');
     const records = data.records || [];
-    if (!records.length) { alert('No attendance records to export'); return; }
+    if (!records.length) { toastWarning('No attendance records to export'); return; }
 
     const rows = [
       ['Name', 'Student ID / Email', 'Method', 'Check-in Time', 'Status'],
@@ -5339,7 +5597,7 @@ async function exportSessionCSV(sessionId, sessionTitle) {
     a.download = (sessionTitle || 'attendance') + '_' + new Date().toISOString().slice(0,10) + '.csv';
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
     URL.revokeObjectURL(url);
-  } catch(e) { alert('Export failed: ' + e.message); }
+  } catch(e) { toastError('Export failed: ' + e.message); }
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -5840,7 +6098,7 @@ async function addAIQuizQuestions(quizId) {
   document.getElementById('ai-quiz-overlay')?.remove();
   const msg = added + ' question' + (added !== 1 ? 's' : '') + ' added!' + (failed ? ' (' + failed + ' failed)' : '');
   if (typeof toast === 'function') toast(msg, added > 0 ? 'ok' : 'err');
-  else alert(msg);
+  else toastError(msg);
   await showAddQuestionsView(quizId);
 }
 
@@ -8876,7 +9134,6 @@ async function printMeetingAttendance(meetingId, title) {
     win.focus();
     setTimeout(function() { win.print(); }, 500);
   } catch(e) {
-    alert('Failed to generate PDF: ' + e.message);
+    toastError('Failed to generate PDF: ' + e.message);
   }
 }
-    
