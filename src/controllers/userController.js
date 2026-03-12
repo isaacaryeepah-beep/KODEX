@@ -205,6 +205,156 @@ exports.deleteUser = async (req, res) => {
   }
 };
 
+// ── Bulk CSV import ──────────────────────────────────────────────────────────
+// POST /api/users/bulk-import  (multipart/form-data)
+// CSV columns: name*, indexNumber*, email (optional), phone (optional), courseCode (optional)
+// Generates a random password for each student; returns a downloadable results list.
+exports.bulkImportStudents = async (req, res) => {
+  const multer = require("multer");
+  const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 2 * 1024 * 1024 } }).single("csv");
+
+  upload(req, res, async (uploadErr) => {
+    if (uploadErr) return res.status(400).json({ error: uploadErr.message });
+
+    try {
+      const company = await Company.findById(req.user.company);
+      if (!company) return res.status(404).json({ error: "Company not found" });
+      if (company.mode !== "academic") return res.status(400).json({ error: "Bulk student import is for academic mode only" });
+
+      let rows = [];
+
+      if (req.file) {
+        // Parse uploaded CSV
+        const text = req.file.buffer.toString("utf8");
+        const lines = text.split(/\r?\n/).filter(l => l.trim());
+        if (lines.length < 2) return res.status(400).json({ error: "CSV must have a header row and at least one data row" });
+
+        const headers = lines[0].split(",").map(h => h.trim().toLowerCase().replace(/[^a-z]/g, ""));
+        const nameIdx    = headers.findIndex(h => h === "name" || h === "fullname" || h === "studentname");
+        const idxIdx     = headers.findIndex(h => h === "indexnumber" || h === "studentid" || h === "id" || h === "index");
+        const emailIdx   = headers.findIndex(h => h === "email");
+        const phoneIdx   = headers.findIndex(h => h === "phone" || h === "phonenumber" || h === "mobile");
+        const courseIdx  = headers.findIndex(h => h === "coursecode" || h === "course" || h === "code");
+
+        if (nameIdx === -1 || idxIdx === -1) {
+          return res.status(400).json({ error: "CSV must have 'name' and 'indexNumber' columns" });
+        }
+
+        for (let i = 1; i < lines.length; i++) {
+          const cols = lines[i].split(",").map(c => c.trim().replace(/^"|"$/g, ""));
+          if (!cols[nameIdx] && !cols[idxIdx]) continue; // skip blank rows
+          rows.push({
+            name:        (cols[nameIdx] || "").trim(),
+            indexNumber: (cols[idxIdx]  || "").trim().toUpperCase(),
+            email:       emailIdx >= 0 ? (cols[emailIdx] || "").trim() : "",
+            phone:       phoneIdx >= 0 ? (cols[phoneIdx] || "").trim() : "",
+            courseCode:  courseIdx >= 0 ? (cols[courseIdx] || "").trim().toUpperCase() : "",
+          });
+        }
+      } else if (req.body?.students) {
+        // JSON fallback (for testing)
+        rows = Array.isArray(req.body.students) ? req.body.students : JSON.parse(req.body.students);
+      }
+
+      if (!rows.length) return res.status(400).json({ error: "No student rows found" });
+
+      const { normalisePhone } = require("../services/smsService");
+
+      // Pre-load courses referenced in the CSV
+      const courseCodes = [...new Set(rows.map(r => r.courseCode).filter(Boolean))];
+      const courseMap = {};
+      if (courseCodes.length) {
+        const courses = await Course.find({ code: { $in: courseCodes }, company: req.user.company });
+        courses.forEach(c => { courseMap[c.code.toUpperCase()] = c; });
+      }
+
+      // Also support a single courseId passed in the body/query
+      let defaultCourse = null;
+      if (req.body?.courseId || req.query?.courseId) {
+        defaultCourse = await Course.findOne({ _id: req.body?.courseId || req.query?.courseId, company: req.user.company });
+      }
+
+      const results = { created: 0, skipped: 0, errors: [] };
+      const createdStudents = [];
+
+      for (const row of rows) {
+        if (!row.name || !row.indexNumber) {
+          results.errors.push({ row: row.indexNumber || "?", error: "Missing name or indexNumber" });
+          results.skipped++;
+          continue;
+        }
+
+        // Generate a readable temp password: first 3 of name + last 3 of indexNumber + 4-digit random
+        const namePart = row.name.replace(/[^a-zA-Z]/g, "").slice(0, 3).toLowerCase();
+        const idPart   = row.indexNumber.replace(/[^a-zA-Z0-9]/g, "").slice(-3).toLowerCase();
+        const numPart  = String(Math.floor(1000 + Math.random() * 9000));
+        const tempPassword = namePart + idPart + numPart;
+
+        // Build user data — email optional for students
+        const userData = {
+          name: row.name,
+          indexNumber: row.indexNumber,
+          password: tempPassword,
+          role: "student",
+          company: req.user.company,
+          mustChangePassword: true,
+        };
+
+        if (row.email) userData.email = row.email.toLowerCase();
+        if (row.phone) {
+          try { userData.phone = normalisePhone(row.phone); } catch (_) {}
+        }
+
+        try {
+          const user = await User.create(userData);
+          results.created++;
+
+          // Enroll in course if specified
+          const course = (row.courseCode && courseMap[row.courseCode.toUpperCase()]) || defaultCourse;
+          if (course) {
+            await Course.updateOne({ _id: course._id }, { $addToSet: { enrolledStudents: user._id } });
+            // Also add to StudentRoster if not already there
+            const StudentRoster = require("../models/StudentRoster");
+            await StudentRoster.findOneAndUpdate(
+              { studentId: row.indexNumber, course: course._id, company: req.user.company },
+              { $setOnInsert: { studentId: row.indexNumber, name: row.name, course: course._id, company: req.user.company, addedBy: req.user._id, registered: true, registeredUser: user._id } },
+              { upsert: true, new: false }
+            ).catch(() => {}); // ignore duplicate roster errors
+          }
+
+          createdStudents.push({
+            name: user.name,
+            indexNumber: user.indexNumber,
+            email: user.email || "",
+            tempPassword,
+            course: course?.title || "",
+            status: "created",
+          });
+        } catch (err) {
+          if (err.code === 11000) {
+            results.skipped++;
+            results.errors.push({ row: row.indexNumber, error: "Already exists" });
+            createdStudents.push({ name: row.name, indexNumber: row.indexNumber, email: row.email || "", tempPassword: "(existing)", course: "", status: "skipped" });
+          } else {
+            results.skipped++;
+            results.errors.push({ row: row.indexNumber, error: err.message });
+          }
+        }
+      }
+
+      res.json({
+        message: `${results.created} student(s) created, ${results.skipped} skipped`,
+        results,
+        students: createdStudents,
+      });
+    } catch (err) {
+      console.error("Bulk import error:", err);
+      res.status(500).json({ error: "Bulk import failed: " + err.message });
+    }
+  });
+};
+
+
 exports.bulkAction = async (req, res) => {
   try {
     const { userIds, action } = req.body;
