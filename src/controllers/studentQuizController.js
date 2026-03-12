@@ -59,21 +59,38 @@ exports.listQuizzes = async (req, res) => {
 
     const qCountMap = {};
     questionCounts.forEach((q) => (qCountMap[q._id.toString()] = q.count));
-    const attemptMap = {};
-    myAttempts.forEach((a) => (attemptMap[a.quiz.toString()] = a));
+    const attemptsForQuiz = {};
+    myAttempts.forEach((a) => {
+      const qid = a.quiz.toString();
+      if (!attemptsForQuiz[qid]) attemptsForQuiz[qid] = [];
+      attemptsForQuiz[qid].push(a);
+    });
 
     const mapped = quizzes.map((q) => {
       const obj = q.toObject();
       obj.questionCount = qCountMap[q._id.toString()] || 0;
-      const attempt = attemptMap[q._id.toString()];
-      obj.hasAttempted = !!attempt;
-      obj.isSubmitted = attempt?.isSubmitted || false;
-      obj.myScore = attempt?.score || null;
-      obj.myMaxScore = attempt?.maxScore || null;
+      const attempts = attemptsForQuiz[q._id.toString()] || [];
+      const submittedAttempts = attempts.filter(a => a.isSubmitted);
+      const inProgress = attempts.find(a => !a.isSubmitted);
+      const bestAttempt = submittedAttempts.reduce((best, a) => (!best || a.score > best.score) ? a : best, null);
+      const lastAttempt = submittedAttempts[submittedAttempts.length - 1] || null;
+      const countAttempt = q.scorePolicy === 'last' ? lastAttempt : bestAttempt;
+
+      obj.hasAttempted = submittedAttempts.length > 0;
+      obj.isSubmitted = submittedAttempts.length > 0;
+      obj.attemptCount = submittedAttempts.length;
+      obj.maxAttempts = q.maxAttempts || 1;
+      obj.scorePolicy = q.scorePolicy || 'best';
+      obj.myScore = countAttempt?.score ?? null;
+      obj.myMaxScore = countAttempt?.maxScore ?? null;
+      obj.inProgressAttempt = inProgress || null;
 
       const isOpen = now >= q.startTime && now <= q.endTime;
       obj.status = now < q.startTime ? "upcoming" : now > q.endTime ? "closed" : "open";
-      obj.canAttempt = isOpen && !obj.isSubmitted;
+      const attemptsLeft = q.maxAttempts === 0 ? Infinity : (q.maxAttempts || 1) - submittedAttempts.length;
+      obj.attemptsLeft = attemptsLeft === Infinity ? null : attemptsLeft;
+      obj.canAttempt = isOpen && attemptsLeft > 0 && !inProgress;
+      obj.canContinue = isOpen && !!inProgress;
       return obj;
     });
 
@@ -166,18 +183,32 @@ exports.startAttempt = async (req, res) => {
       return res.status(400).json({ error: "Quiz has ended" });
     }
 
-    let attempt = await Attempt.findOne({ quiz: id, student: req.user._id });
-    if (attempt && attempt.isSubmitted) {
-      return res.status(409).json({ error: "You have already submitted this quiz" });
-    }
+    // Count submitted attempts
+    const submittedAttempts = await Attempt.find({ quiz: id, student: req.user._id, isSubmitted: true })
+      .sort({ attemptNumber: 1 });
+    const attemptCount = submittedAttempts.length;
+    const maxAttempts = quiz.maxAttempts || 1;
+
+    // Check if there's an in-progress attempt
+    let attempt = await Attempt.findOne({ quiz: id, student: req.user._id, isSubmitted: false });
 
     if (!attempt) {
+      // Enforce attempt limit (0 = unlimited)
+      if (maxAttempts > 0 && attemptCount >= maxAttempts) {
+        return res.status(409).json({
+          error: maxAttempts === 1
+            ? "You have already submitted this quiz"
+            : `You have used all ${maxAttempts} attempts for this quiz`,
+        });
+      }
+
       attempt = await Attempt.create({
         quiz: id,
         student: req.user._id,
         company: req.user.company,
         startedAt: now,
         maxScore: quiz.totalMarks,
+        attemptNumber: attemptCount + 1,
       });
     }
 
@@ -297,11 +328,25 @@ exports.submitAttempt = async (req, res) => {
     attempt.isSubmitted = true;
     await attempt.save();
 
+    // Update isBestScore flags for this student+quiz
+    const allSubmitted = await Attempt.find({ quiz: id, student: req.user._id, isSubmitted: true }).sort({ score: -1 });
+    const bestScore = allSubmitted[0]?.score ?? 0;
+    await Promise.all(allSubmitted.map((a, i) => {
+      const shouldBeBest = i === 0; // first after sort by score desc = best
+      if (a.isBestScore !== shouldBeBest) { a.isBestScore = shouldBeBest; return a.save(); }
+      return Promise.resolve();
+    }));
+
+    const attemptsLeft = quiz.maxAttempts === 0 ? null : Math.max(0, (quiz.maxAttempts || 1) - allSubmitted.length);
+
     res.json({
       attempt,
       score: totalScore,
       maxScore: quiz.totalMarks,
       percentage: quiz.totalMarks > 0 ? Math.round((totalScore / quiz.totalMarks) * 100) : 0,
+      attemptNumber: attempt.attemptNumber,
+      attemptsLeft,
+      maxAttempts: quiz.maxAttempts,
     });
   } catch (error) {
     console.error("Submit attempt error:", error);
