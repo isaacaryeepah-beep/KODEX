@@ -7,7 +7,7 @@ const Course = require("../models/Course");
 
 exports.createQuiz = async (req, res) => {
   try {
-    const { title, description, courseId, timeLimit, startTime, endTime, questions } = req.body;
+    const { title, description, courseId, timeLimit, startTime, endTime, questions, maxAttempts, scorePolicy } = req.body;
 
     if (!title || !courseId || !startTime || !endTime) {
       return res.status(400).json({ error: "Title, courseId, startTime, and endTime are required" });
@@ -43,6 +43,8 @@ exports.createQuiz = async (req, res) => {
       startTime: start,
       endTime: end,
       source: req.body.source === 'assignment' ? 'assignment' : 'proctored',
+      maxAttempts: maxAttempts !== undefined ? Number(maxAttempts) : 1,
+      scorePolicy: ["best","last"].includes(scorePolicy) ? scorePolicy : "best",
     });
 
     if (questions && Array.isArray(questions) && questions.length > 0) {
@@ -173,12 +175,14 @@ exports.updateQuiz = async (req, res) => {
       return res.status(400).json({ error: "Cannot edit a quiz that already has submissions" });
     }
 
-    const { title, description, timeLimit, startTime, endTime } = req.body;
+    const { title, description, timeLimit, startTime, endTime, maxAttempts, scorePolicy } = req.body;
     if (title) quiz.title = title;
     if (description !== undefined) quiz.description = description;
     if (timeLimit) quiz.timeLimit = timeLimit;
     if (startTime) quiz.startTime = new Date(startTime);
     if (endTime) quiz.endTime = new Date(endTime);
+    if (maxAttempts !== undefined) quiz.maxAttempts = Number(maxAttempts);
+    if (scorePolicy && ["best","last"].includes(scorePolicy)) quiz.scorePolicy = scorePolicy;
 
     await quiz.save();
 
