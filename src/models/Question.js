@@ -15,26 +15,40 @@ const questionSchema = new mongoose.Schema(
     },
     questionType: {
       type: String,
-      enum: ["single", "multiple"],
+      enum: ["single", "multiple", "fill"],
       default: "single",
     },
     options: {
       type: [String],
-      required: true,
+      default: [],
       validate: {
-        validator: (v) => Array.isArray(v) && v.length >= 2,
-        message: "At least 2 options are required",
+        validator: function(v) {
+          // fill-in questions don't need options
+          if (this.questionType === "fill") return true;
+          return Array.isArray(v) && v.length >= 2;
+        },
+        message: "At least 2 options are required for MCQ questions",
       },
     },
-    // Single correct answer (legacy + single type)
+    // Single correct answer index (single/multiple MCQ)
     correctAnswer: {
-      type: Number,
-      min: 0,
+      type: mongoose.Schema.Types.Mixed, // Number for MCQ, null for fill
       default: null,
     },
-    // Multiple correct answers (array of indices)
+    // Multiple correct answer indices (multiple MCQ)
     correctAnswers: {
       type: [Number],
+      default: [],
+    },
+    // Fill-in: primary correct answer string
+    correctAnswerText: {
+      type: String,
+      default: null,
+      trim: true,
+    },
+    // Fill-in: extra accepted answer strings (case-insensitive matched)
+    acceptedAnswers: {
+      type: [String],
       default: [],
     },
     marks: {
