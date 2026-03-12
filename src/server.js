@@ -15,6 +15,7 @@ const lecturerQuizRoutes = require("./routes/lecturerQuizzes");
 const questionBankRoutes    = require("./routes/questionBank");
 const announcementRoutes    = require("./routes/announcements");
 const webhookRoutes         = require("./routes/webhooks");
+const gradeBookRoutes       = require("./routes/gradeBook");
 const studentQuizRoutes = require("./routes/studentQuizzes");
 const adminQuizRoutes = require("./routes/adminQuizzes");
 const zoomRoutes = require("./routes/zoom");
@@ -143,6 +144,7 @@ app.use("/api/lecturer/quizzes", lecturerQuizRoutes);
 app.use("/api/lecturer/question-bank", questionBankRoutes);
 app.use("/api/announcements",          announcementRoutes);
 app.use("/api/webhooks",               webhookRoutes);      // public — Paystack webhook
+app.use("/api/gradebook",              gradeBookRoutes);
 app.use("/api/student/quizzes", studentQuizRoutes);
 app.use("/api/admin/quizzes", adminQuizRoutes);
 app.use("/api/zoom", zoomRoutes);
