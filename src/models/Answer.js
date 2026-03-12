@@ -14,10 +14,16 @@ const answerSchema = new mongoose.Schema(
       required: [true, "Question is required"],
       index: true,
     },
+    // For MCQ: the selected option index (number). For fill-in: -1 (unused)
     selectedAnswer: {
-      type: Number,
-      required: [true, "Selected answer is required"],
-      min: 0,
+      type: mongoose.Schema.Types.Mixed,
+      default: null,
+    },
+    // For fill-in: what the student typed
+    selectedAnswerText: {
+      type: String,
+      default: null,
+      trim: true,
     },
     isCorrect: {
       type: Boolean,
