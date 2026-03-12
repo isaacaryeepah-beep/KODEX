@@ -193,7 +193,6 @@ exports.verifyPaystackSubscription = async (req, res) => {
         subscriptionStatus:   "active",
         subscriptionPlan:     plan === "yearly" ? "annual" : "monthly",
         subscriptionProvider: "paystack",
-        hasAccess:            true,
         trialUsed:            true,
         subscriptionStartDate: now,
         subscriptionEndDate:  endDate,
