@@ -225,7 +225,7 @@ exports.deleteQuiz = async (req, res) => {
 exports.addQuestion = async (req, res) => {
   try {
     const { id } = req.params;
-    const { questionText, options, correctAnswer, correctAnswers, questionType, marks } = req.body;
+    const { questionText, options, correctAnswer, correctAnswers, questionType, marks, correctAnswerText, acceptedAnswers } = req.body;
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({ error: "Invalid quiz ID" });
@@ -243,9 +243,14 @@ exports.addQuestion = async (req, res) => {
       return res.status(400).json({ error: "At least 2 options are required" });
     }
 
-    const isMultiple = questionType === "multiple" || (Array.isArray(correctAnswers) && correctAnswers.length > 1);
+    const isFill     = questionType === "fill";
+    const isMultiple = !isFill && (questionType === "multiple" || (Array.isArray(correctAnswers) && correctAnswers.length > 1));
 
-    if (isMultiple) {
+    if (isFill) {
+      if (!correctAnswerText || !correctAnswerText.trim()) {
+        return res.status(400).json({ error: "correctAnswerText is required for fill-in questions" });
+      }
+    } else if (isMultiple) {
       if (!Array.isArray(correctAnswers) || correctAnswers.length === 0) {
         return res.status(400).json({ error: "At least one correct answer is required" });
       }
@@ -261,10 +266,14 @@ exports.addQuestion = async (req, res) => {
     const question = await Question.create({
       quiz: id,
       questionText,
-      options,
-      questionType: isMultiple ? "multiple" : "single",
-      correctAnswer: isMultiple ? (correctAnswers[0] ?? 0) : correctAnswer,
-      correctAnswers: isMultiple ? correctAnswers : [correctAnswer],
+      options: isFill ? [] : options,
+      questionType: isFill ? "fill" : (isMultiple ? "multiple" : "single"),
+      correctAnswer: isFill ? null : (isMultiple ? (correctAnswers[0] ?? 0) : correctAnswer),
+      correctAnswers: isFill ? [] : (isMultiple ? correctAnswers : [correctAnswer]),
+      correctAnswerText: isFill ? correctAnswerText.trim() : null,
+      acceptedAnswers: isFill && Array.isArray(acceptedAnswers)
+        ? acceptedAnswers.map(a => a.trim()).filter(Boolean)
+        : [],
       marks: marks || 1,
     });
 
@@ -301,10 +310,18 @@ exports.updateQuestion = async (req, res) => {
       return res.status(404).json({ error: "Question not found" });
     }
 
-    const { questionText, options, correctAnswer, correctAnswers, questionType, marks } = req.body;
+    const { questionText, options, correctAnswer, correctAnswers, questionType, marks, correctAnswerText, acceptedAnswers } = req.body;
     if (questionText) question.questionText = questionText;
-    if (options) question.options = options;
-    if (correctAnswer !== undefined) question.correctAnswer = correctAnswer;
+    if (questionType) question.questionType = questionType;
+    if (question.questionType === "fill") {
+      question.options = [];
+      if (correctAnswerText !== undefined) question.correctAnswerText = correctAnswerText ? correctAnswerText.trim() : null;
+      if (Array.isArray(acceptedAnswers)) question.acceptedAnswers = acceptedAnswers.map(a => a.trim()).filter(Boolean);
+    } else {
+      if (options) question.options = options;
+      if (correctAnswer !== undefined) question.correctAnswer = correctAnswer;
+      if (Array.isArray(correctAnswers)) question.correctAnswers = correctAnswers;
+    }
     if (marks !== undefined) question.marks = marks;
 
     await question.save();
