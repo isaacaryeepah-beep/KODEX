@@ -1707,6 +1707,7 @@ function buildSidebar() {
       links.push({ id: 'search', label: 'Search', icon: svgIcon('<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>') });
       links.push({ id: 'courses', label: 'Courses', icon: coursesIcon() });
       links.push({ id: 'quizzes', label: 'Quizzes', icon: quizzesIcon() });
+      links.push({ id: 'question-bank', label: 'Question Bank', icon: svgIcon('<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>') });
       links.push({ id: 'assignments', label: 'Assignments / Quiz', icon: assignmentsIcon() });
       links.push({ id: 'meetings', label: 'Meetings', icon: meetingsIcon() });
       links.push({ id: 'reports', label: 'Reports', icon: reportsIcon() });
@@ -1726,6 +1727,7 @@ function buildSidebar() {
       links.push({ id: 'my-attendance', label: 'My Attendance', icon: sessionsIcon() });
       links.push({ id: 'courses', label: 'My Courses', icon: coursesIcon() });
       links.push({ id: 'quizzes', label: 'Quizzes', icon: quizzesIcon() });
+      links.push({ id: 'question-bank', label: 'Question Bank', icon: svgIcon('<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>') });
       links.push({ id: 'assignments', label: 'Assignments / Quiz', icon: assignmentsIcon() });
       links.push({ id: 'meetings', label: 'Meetings', icon: meetingsIcon() });
       links.push({ id: 'reports', label: 'Reports', icon: reportsIcon() });
@@ -1775,6 +1777,7 @@ function navigateTo(view) {
     case 'meetings': renderMeetings(); break;
     case 'courses': renderCourses(); break;
     case 'quizzes': renderQuizzes(); break;
+    case 'question-bank': renderQuestionBank(); break;
     case 'my-attendance': renderMyAttendance(); break;
     case 'mark-attendance': renderMarkAttendance(); break;
     case 'sign-in-out': renderSignInOut(); break;
@@ -3673,6 +3676,7 @@ async function showAddQuestionsView(quizId) {
       </div>
       <div class="actions-bar" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
         <button class="btn btn-secondary btn-sm" onclick="renderQuizzes()">← Back to Quizzes</button>
+        <button class="btn btn-sm btn-secondary" onclick="openImportFromBankModal('${quizId}')">📚 Import from Bank</button>
         <button class="btn btn-sm" style="background:linear-gradient(135deg,#7c3aed,#4f46e5);color:#fff;font-weight:600;display:flex;align-items:center;gap:5px;border:none" onclick="openAIQuizPanel('${quizId}')">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
           ✨ AI Generate Questions
@@ -3776,7 +3780,10 @@ async function showAddQuestionsView(quizId) {
                     : `<div style="display:flex;flex-wrap:wrap;gap:5px;font-size:13px;">${q.options.map((o,oi)=>`<span style="padding:3px 9px;border-radius:6px;${correctSet.has(oi)?'background:#f0fdf4;color:#166534;border:1px solid #bbf7d0;font-weight:700;':'background:#f9fafb;color:#6b7280;border:1px solid #e5e7eb;'}">${String.fromCharCode(65+oi)}) ${o}${correctSet.has(oi)?' ✓':''}</span>`).join('')}</div>`}
                   <div style="font-size:12px;color:#9ca3af;margin-top:5px;">Marks: ${q.marks}</div>
                 </div>
-                <button class="btn btn-sm btn-danger" onclick="deleteQuizQuestion('${quizId}','${q._id}')">Delete</button>
+                <div style="display:flex;gap:5px;flex-shrink:0;">
+                  <button class="btn btn-sm btn-secondary" title="Save to Question Bank" onclick="saveQuestionToBank('${quizId}','${q._id}')">💾 Save</button>
+                  <button class="btn btn-sm btn-danger" onclick="deleteQuizQuestion('${quizId}','${q._id}')">Delete</button>
+                </div>
               </div>
             </div>`;
           }).join('') : '<p style="color:#9ca3af;">No questions added yet.</p>'}
@@ -4668,6 +4675,370 @@ async function renderMyAttendance() {
   }
 }
 
+
+
+// ══════════════════════════════════════════════════════════════════════════════
+// QUESTION BANK
+// ══════════════════════════════════════════════════════════════════════════════
+
+let _bankQuestions = [];   // cache for import modal
+let _bankTopics    = [];
+
+async function renderQuestionBank() {
+  const content = document.getElementById('main-content');
+  if (!content) return;
+  content.innerHTML = '<div class="loading">Loading question bank…</div>';
+  try {
+    const data = await api('/api/lecturer/question-bank?limit=200');
+    _bankQuestions = data.questions || [];
+    _bankTopics    = data.topics || [];
+
+    const L = ['A','B','C','D'];
+    const typeColors = { single:'#0369a1', multiple:'#7c3aed', fill:'#059669' };
+    const typeBg    = { single:'#f0f9ff', multiple:'#f5f3ff', fill:'#f0fdf4' };
+
+    content.innerHTML = `
+      <div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;">
+        <div>
+          <h2>Question Bank</h2>
+          <p>Save and reuse questions across quizzes — ${data.total || 0} total</p>
+        </div>
+        <button class="btn btn-primary" onclick="openAddToBankModal()">＋ Add Question</button>
+      </div>
+
+      <!-- Filters -->
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;align-items:center;">
+        <input id="bank-search" placeholder="Search questions…" oninput="filterBankList()"
+          style="padding:8px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;flex:1;min-width:180px;">
+        <select id="bank-topic-filter" onchange="filterBankList()"
+          style="padding:8px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;">
+          <option value="">All Topics</option>
+          ${_bankTopics.map(t => `<option value="${t}">${t}</option>`).join('')}
+        </select>
+      </div>
+
+      <div id="bank-list">
+        ${_bankQuestions.length === 0
+          ? `<div class="empty-state"><p>No questions yet. Add your first question or save questions from a quiz.</p></div>`
+          : _bankQuestions.map((q, i) => bankQuestionCard(q, i, L, typeColors, typeBg)).join('')}
+      </div>
+    `;
+  } catch(e) {
+    content.innerHTML = `<div class="card"><p style="color:#ef4444;">Error: ${e.message}</p></div>`;
+  }
+}
+
+function bankQuestionCard(q, i, L, typeColors, typeBg) {
+  const type = q.questionType || 'single';
+  return `
+    <div id="bq-${q._id}" style="border:1.5px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:10px;background:var(--card);">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap;">
+        <div style="flex:1;min-width:0;">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap;">
+            <span style="font-size:11px;padding:2px 8px;border-radius:20px;font-weight:700;background:${(typeBg||{})[type]||'#f3f4f6'};color:${(typeColors||{})[type]||'#374151'}">${type.toUpperCase()}</span>
+            ${q.topic ? `<span style="font-size:11px;padding:2px 8px;border-radius:20px;background:#fef3c7;color:#92400e;font-weight:600;">${q.topic}</span>` : ''}
+            <span style="font-size:11px;color:var(--text-muted);">${q.marks} mark${q.marks !== 1 ? 's' : ''}</span>
+            ${q.useCount > 0 ? `<span style="font-size:11px;color:#9ca3af;">Used ${q.useCount}×</span>` : ''}
+          </div>
+          <div style="font-size:13px;font-weight:600;margin-bottom:8px;line-height:1.5;">${q.questionText}</div>
+          ${type === 'fill'
+            ? `<div style="font-size:12px;color:#059669;padding:4px 10px;background:#f0fdf4;border-radius:6px;display:inline-block;">✓ ${q.correctAnswerText}${q.acceptedAnswers?.length ? ` (+${q.acceptedAnswers.length} alt)` : ''}</div>`
+            : `<div style="display:flex;flex-wrap:wrap;gap:5px;">${(q.options||[]).map((o,oi) => {
+                const isCorrect = type === 'multiple' ? (q.correctAnswers||[]).includes(oi) : q.correctAnswer === oi;
+                return `<span style="padding:3px 9px;border-radius:6px;font-size:12px;${isCorrect?'background:#f0fdf4;color:#166534;border:1px solid #bbf7d0;font-weight:600':'background:var(--bg);color:var(--text-light);border:1px solid var(--border)'}">${L[oi]}) ${o}${isCorrect?' ✓':''}</span>`;
+              }).join('')}</div>`}
+        </div>
+        <div style="display:flex;gap:6px;flex-shrink:0;">
+          <button class="btn btn-sm btn-secondary" onclick="editBankQuestion('${q._id}')">Edit</button>
+          <button class="btn btn-sm btn-danger" onclick="deleteBankQuestion('${q._id}')">Delete</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+function filterBankList() {
+  const search = document.getElementById('bank-search')?.value?.toLowerCase() || '';
+  const topic  = document.getElementById('bank-topic-filter')?.value || '';
+  const L = ['A','B','C','D'];
+  const typeColors = { single:'#0369a1', multiple:'#7c3aed', fill:'#059669' };
+  const typeBg    = { single:'#f0f9ff', multiple:'#f5f3ff', fill:'#f0fdf4' };
+  const filtered = _bankQuestions.filter(q =>
+    (!search || q.questionText.toLowerCase().includes(search)) &&
+    (!topic  || q.topic === topic)
+  );
+  const list = document.getElementById('bank-list');
+  if (!list) return;
+  list.innerHTML = filtered.length === 0
+    ? '<div class="empty-state"><p>No questions match your filters.</p></div>'
+    : filtered.map((q, i) => bankQuestionCard(q, i, L, typeColors, typeBg)).join('');
+}
+
+// ── Add Question to Bank modal ───────────────────────────────────────────────
+function openAddToBankModal(prefill) {
+  const existing = document.getElementById('add-bank-overlay');
+  if (existing) existing.remove();
+  const ol = document.createElement('div');
+  ol.id = 'add-bank-overlay';
+  ol.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:400;display:flex;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(3px)';
+  const p = prefill || {};
+  ol.innerHTML = `
+    <div style="background:var(--card);border-radius:14px;width:100%;max-width:540px;max-height:92vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.2);">
+      <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;background:var(--card);z-index:1;">
+        <h3 style="font-size:15px;font-weight:700;margin:0">${p._id ? 'Edit' : 'Add'} Bank Question</h3>
+        <button onclick="document.getElementById('add-bank-overlay').remove()" style="width:26px;height:26px;border-radius:6px;border:1px solid var(--border);background:var(--bg);cursor:pointer;font-size:13px;">✕</button>
+      </div>
+      <div style="padding:18px 20px;display:flex;flex-direction:column;gap:13px;">
+        <div>
+          <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:5px;display:block;">Question Text *</label>
+          <textarea id="bm-text" rows="3" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;resize:vertical;outline:none;">${p.questionText||''}</textarea>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;">
+          <div>
+            <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:5px;display:block;">Type</label>
+            <select id="bm-type" onchange="bmToggleType()" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;">
+              <option value="single" ${p.questionType==='single'?'selected':''}>Single</option>
+              <option value="multiple" ${p.questionType==='multiple'?'selected':''}>Multiple</option>
+              <option value="fill" ${p.questionType==='fill'?'selected':''}>Fill In</option>
+            </select>
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:5px;display:block;">Marks</label>
+            <input id="bm-marks" type="number" value="${p.marks||1}" min="1" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;">
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:5px;display:block;">Topic Tag</label>
+            <input id="bm-topic" placeholder="e.g. Biology" value="${p.topic||''}" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;">
+          </div>
+        </div>
+        <!-- Options (MCQ) -->
+        <div id="bm-options-wrap">
+          <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:6px;display:block;">Options & Correct Answer</label>
+          ${[0,1,2,3].map(i => {
+            const isCorrect = p.questionType === 'multiple'
+              ? (p.correctAnswers||[]).includes(i)
+              : (p.correctAnswer === i);
+            return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:7px;">
+              <input type="${p.questionType==='multiple'?'checkbox':'radio'}" name="bm-correct" id="bm-opt-check-${i}" value="${i}" ${isCorrect?'checked':''} style="accent-color:var(--primary);width:16px;height:16px;flex-shrink:0;">
+              <input id="bm-opt-${i}" placeholder="Option ${String.fromCharCode(65+i)}" value="${(p.options||[])[i]||''}" style="flex:1;padding:7px 10px;border:1.5px solid var(--border);border-radius:7px;font-size:13px;font-family:inherit;outline:none;">
+            </div>`;
+          }).join('')}
+          <p style="font-size:11px;color:var(--text-muted);margin:0;">Check the correct answer(s).</p>
+        </div>
+        <!-- Fill wrap -->
+        <div id="bm-fill-wrap" style="display:none;">
+          <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:5px;display:block;">Correct Answer *</label>
+          <input id="bm-fill-answer" placeholder="Primary correct answer" value="${p.correctAnswerText||''}" style="width:100%;padding:8px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;margin-bottom:6px;">
+          <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:5px;display:block;">Alternate Accepted Answers <span style="font-weight:400;text-transform:none;">(optional, one per line)</span></label>
+          <textarea id="bm-fill-alts" rows="2" placeholder="alternative 1&#10;alternative 2" style="width:100%;padding:8px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;resize:vertical;outline:none;">${(p.acceptedAnswers||[]).join('\n')}</textarea>
+        </div>
+        <div id="bm-err" style="display:none;padding:8px 12px;background:#fef2f2;border:1px solid #fecaca;border-radius:7px;color:#dc2626;font-size:12px;font-weight:500;"></div>
+      </div>
+      <div style="padding:12px 20px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end;position:sticky;bottom:0;background:var(--card);border-radius:0 0 14px 14px;">
+        <button class="btn btn-secondary" onclick="document.getElementById('add-bank-overlay').remove()">Cancel</button>
+        <button class="btn btn-primary" onclick="submitBankQuestion(${p._id ? `'${p._id}'` : 'null'})">${p._id ? 'Save Changes' : 'Add to Bank'}</button>
+      </div>
+    </div>`;
+  document.body.appendChild(ol);
+  if (p.questionType === 'fill') bmToggleType();
+}
+
+function bmToggleType() {
+  const type = document.getElementById('bm-type')?.value;
+  const optWrap  = document.getElementById('bm-options-wrap');
+  const fillWrap = document.getElementById('bm-fill-wrap');
+  if (!optWrap || !fillWrap) return;
+  if (type === 'fill') {
+    optWrap.style.display  = 'none';
+    fillWrap.style.display = 'block';
+  } else {
+    optWrap.style.display  = 'block';
+    fillWrap.style.display = 'none';
+    // Swap radio/checkbox inputs
+    document.querySelectorAll('input[name="bm-correct"]').forEach(el => {
+      el.type = type === 'multiple' ? 'checkbox' : 'radio';
+    });
+  }
+}
+
+async function submitBankQuestion(existingId) {
+  const type  = document.getElementById('bm-type')?.value || 'single';
+  const text  = document.getElementById('bm-text')?.value?.trim();
+  const marks = parseInt(document.getElementById('bm-marks')?.value) || 1;
+  const topic = document.getElementById('bm-topic')?.value?.trim() || '';
+  const errEl = document.getElementById('bm-err');
+
+  if (!text) { errEl.textContent = 'Question text is required.'; errEl.style.display = 'block'; return; }
+
+  let body = { questionText: text, questionType: type, marks, topic };
+
+  if (type === 'fill') {
+    const ans = document.getElementById('bm-fill-answer')?.value?.trim();
+    if (!ans) { errEl.textContent = 'Correct answer is required for fill-in questions.'; errEl.style.display = 'block'; return; }
+    body.correctAnswerText = ans;
+    body.acceptedAnswers = (document.getElementById('bm-fill-alts')?.value || '').split('\n').map(s=>s.trim()).filter(Boolean);
+    body.options = [];
+  } else {
+    const opts = [0,1,2,3].map(i => document.getElementById('bm-opt-'+i)?.value?.trim() || '');
+    if (opts.filter(Boolean).length < 2) { errEl.textContent = 'At least 2 options required.'; errEl.style.display = 'block'; return; }
+    const checked = [...document.querySelectorAll('input[name="bm-correct"]:checked')].map(el => parseInt(el.value));
+    if (!checked.length) { errEl.textContent = 'Please mark the correct answer(s).'; errEl.style.display = 'block'; return; }
+    body.options = opts;
+    if (type === 'multiple') { body.correctAnswers = checked; }
+    else { body.correctAnswer = checked[0]; }
+  }
+
+  try {
+    if (existingId) {
+      await api('/api/lecturer/question-bank/' + existingId, { method: 'PUT', body: JSON.stringify(body) });
+      toastSuccess('Question updated');
+    } else {
+      await api('/api/lecturer/question-bank', { method: 'POST', body: JSON.stringify(body) });
+      toastSuccess('Question added to bank');
+    }
+    document.getElementById('add-bank-overlay')?.remove();
+    renderQuestionBank();
+  } catch(e) {
+    errEl.textContent = e.message || 'Failed to save question';
+    errEl.style.display = 'block';
+  }
+}
+
+async function editBankQuestion(id) {
+  const q = _bankQuestions.find(q => q._id === id);
+  if (q) { openAddToBankModal(q); return; }
+  // Fallback: fetch from server
+  try {
+    const data = await api('/api/lecturer/question-bank?limit=1');
+    const found = (data.questions || []).find(q => q._id === id);
+    if (found) openAddToBankModal(found);
+  } catch(e) { toastError('Could not load question'); }
+}
+
+async function deleteBankQuestion(id) {
+  toastConfirm('Delete this question from the bank?', async () => {
+    try {
+      await api('/api/lecturer/question-bank/' + id, { method: 'DELETE' });
+      _bankQuestions = _bankQuestions.filter(q => q._id !== id);
+      document.getElementById('bq-'+id)?.remove();
+      toastSuccess('Deleted from bank');
+    } catch(e) { toastError('Delete failed'); }
+  });
+}
+
+// ── Save a quiz question to the bank ────────────────────────────────────────
+async function saveQuestionToBank(quizId, questionId) {
+  const topic = window.prompt('Save this question to your bank.\n\nTopic tag (optional, e.g. "Biology"):') ?? null;
+  if (topic === null) return;
+  try {
+    await api('/api/lecturer/question-bank/save-from-quiz', {
+      method: 'POST',
+      body: JSON.stringify({ questionIds: [questionId], topic: topic.trim() }),
+    });
+    toastSuccess('Question saved to bank ✓');
+  } catch(e) { toastError(e.message || 'Failed to save to bank'); }
+}
+
+// ── Import from Bank modal (inside showAddQuestionsView) ─────────────────────
+async function openImportFromBankModal(quizId) {
+  const existing = document.getElementById('import-bank-overlay');
+  if (existing) existing.remove();
+
+  try {
+    const data = await api('/api/lecturer/question-bank?limit=200');
+    _bankQuestions = data.questions || [];
+    _bankTopics    = data.topics || [];
+  } catch(e) { toastError('Failed to load question bank'); return; }
+
+  if (!_bankQuestions.length) {
+    toastInfo('Your question bank is empty. Add questions from the Question Bank page or save questions from quizzes.');
+    return;
+  }
+
+  const L = ['A','B','C','D'];
+  const ol = document.createElement('div');
+  ol.id = 'import-bank-overlay';
+  ol.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:400;display:flex;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(3px)';
+  ol.innerHTML = `
+    <div style="background:var(--card);border-radius:14px;width:100%;max-width:600px;max-height:92vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.2);">
+      <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;background:var(--card);z-index:1;border-radius:14px 14px 0 0;">
+        <div>
+          <h3 style="font-size:15px;font-weight:700;margin:0">Import from Question Bank</h3>
+          <p style="font-size:12px;color:var(--text-muted);margin:2px 0 0;">Select questions to add to this quiz</p>
+        </div>
+        <button onclick="document.getElementById('import-bank-overlay').remove()" style="width:26px;height:26px;border-radius:6px;border:1px solid var(--border);background:var(--bg);cursor:pointer;font-size:13px;">✕</button>
+      </div>
+      <!-- Search + filter -->
+      <div style="padding:12px 20px;border-bottom:1px solid var(--border);display:flex;gap:8px;flex-wrap:wrap;">
+        <input id="ibm-search" placeholder="Search…" oninput="filterImportList()" style="flex:1;min-width:150px;padding:7px 11px;border:1.5px solid var(--border);border-radius:7px;font-size:13px;font-family:inherit;outline:none;">
+        <select id="ibm-topic" onchange="filterImportList()" style="padding:7px 11px;border:1.5px solid var(--border);border-radius:7px;font-size:13px;font-family:inherit;outline:none;">
+          <option value="">All Topics</option>
+          ${_bankTopics.map(t => `<option value="${t}">${t}</option>`).join('')}
+        </select>
+        <span id="ibm-sel-count" style="font-size:12px;color:var(--primary);font-weight:600;align-self:center;">0 selected</span>
+      </div>
+      <!-- List -->
+      <div id="ibm-list" style="flex:1;overflow-y:auto;padding:12px 20px;display:flex;flex-direction:column;gap:8px;">
+        ${_bankQuestions.map(q => importBankCard(q, L)).join('')}
+      </div>
+      <!-- Footer -->
+      <div style="padding:12px 20px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end;background:var(--card);border-radius:0 0 14px 14px;">
+        <button class="btn btn-secondary" onclick="document.getElementById('import-bank-overlay').remove()">Cancel</button>
+        <button class="btn btn-primary" onclick="confirmImportFromBank('${quizId}')">Import Selected</button>
+      </div>
+    </div>`;
+  document.body.appendChild(ol);
+}
+
+function importBankCard(q, L) {
+  const type = q.questionType || 'single';
+  const typeColors = { single:'#0369a1', multiple:'#7c3aed', fill:'#059669' };
+  const typeBg    = { single:'#f0f9ff', multiple:'#f5f3ff', fill:'#f0fdf4' };
+  return `
+    <label style="display:flex;gap:10px;padding:11px 13px;border:1.5px solid var(--border);border-radius:9px;cursor:pointer;background:var(--bg);" onclick="updateImportCount()">
+      <input type="checkbox" class="ibm-check" value="${q._id}" style="accent-color:var(--primary);width:16px;height:16px;flex-shrink:0;margin-top:2px;">
+      <div style="flex:1;min-width:0;">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:5px;flex-wrap:wrap;">
+          <span style="font-size:10px;padding:1px 7px;border-radius:20px;font-weight:700;background:${typeBg[type]||'#f3f4f6'};color:${typeColors[type]||'#374151'}">${type.toUpperCase()}</span>
+          ${q.topic ? `<span style="font-size:10px;padding:1px 7px;border-radius:20px;background:#fef3c7;color:#92400e;font-weight:600;">${q.topic}</span>` : ''}
+          <span style="font-size:10px;color:var(--text-muted);">${q.marks} mark${q.marks!==1?'s':''}</span>
+        </div>
+        <div style="font-size:13px;font-weight:500;line-height:1.4;">${q.questionText}</div>
+      </div>
+    </label>`;
+}
+
+function filterImportList() {
+  const search = document.getElementById('ibm-search')?.value?.toLowerCase() || '';
+  const topic  = document.getElementById('ibm-topic')?.value || '';
+  const L = ['A','B','C','D'];
+  const filtered = _bankQuestions.filter(q =>
+    (!search || q.questionText.toLowerCase().includes(search)) &&
+    (!topic  || q.topic === topic)
+  );
+  const list = document.getElementById('ibm-list');
+  if (list) list.innerHTML = filtered.map(q => importBankCard(q, L)).join('');
+  updateImportCount();
+}
+
+function updateImportCount() {
+  const count = document.querySelectorAll('.ibm-check:checked').length;
+  const el = document.getElementById('ibm-sel-count');
+  if (el) el.textContent = count + ' selected';
+}
+
+async function confirmImportFromBank(quizId) {
+  const checked = [...document.querySelectorAll('.ibm-check:checked')].map(el => el.value);
+  if (!checked.length) { toastWarning('No questions selected.'); return; }
+  try {
+    const data = await api('/api/lecturer/question-bank/import-to-quiz', {
+      method: 'POST',
+      body: JSON.stringify({ bankQuestionIds: checked, quizId }),
+    });
+    document.getElementById('import-bank-overlay')?.remove();
+    toastSuccess(data.message || checked.length + ' question(s) imported');
+    await showAddQuestionsView(quizId);
+  } catch(e) { toastError(e.message || 'Import failed'); }
+}
 
 // ══════════════════════════════════════════════════════════════════════════════
 // ESP32 BLE Integration
