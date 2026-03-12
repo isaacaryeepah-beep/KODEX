@@ -34,7 +34,7 @@ const qrTokenSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
-    // "qr" = single-use 15s rotating QR scan
+    // "qr" = time-gated 15s rotating QR scan (multi-use within window)
     // "verbal" = multi-use code lecturer reads out loud
     codeType: {
       type: String,
@@ -49,8 +49,10 @@ const qrTokenSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// Non-unique index for query performance only
+// Query performance index
 qrTokenSchema.index({ session: 1, code: 1 });
+// TTL index — MongoDB auto-deletes expired tokens after 1 hour
+qrTokenSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 3600 });
 
 qrTokenSchema.methods.isExpired = function () {
   return new Date() > this.expiresAt;
