@@ -5829,6 +5829,35 @@ async function renderSubscription() {
           <p style="color:var(--danger);font-weight:600">Your free trial has ended. Please subscribe via Paystack or Stripe to continue using premium features.</p>
         </div>
       ` : ''}
+
+      ${sub.active ? `
+        <div class="card" style="margin-top:16px">
+          <div class="card-title" style="margin-bottom:10px">Subscription Details</div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;">
+            <div style="padding:10px 14px;background:var(--bg);border-radius:8px;border:1px solid var(--border);">
+              <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;margin-bottom:4px;">Plan</div>
+              <div style="font-weight:700;">${sub.plan || '—'}</div>
+            </div>
+            <div style="padding:10px 14px;background:var(--bg);border-radius:8px;border:1px solid var(--border);">
+              <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;margin-bottom:4px;">Status</div>
+              <div style="font-weight:700;color:${sub.status==='active'?'#22c55e':sub.status==='past_due'?'#f59e0b':'#ef4444'}">${sub.status}</div>
+            </div>
+            ${sub.endDate ? `<div style="padding:10px 14px;background:var(--bg);border-radius:8px;border:1px solid var(--border);"><div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;margin-bottom:4px;">Expires</div><div style="font-weight:700;">${new Date(sub.endDate).toLocaleDateString()}</div></div>` : ''}
+          </div>
+        </div>
+      ` : ''}
+
+      ${['admin','superadmin'].includes(currentUser.role) ? `
+        <div class="card" style="margin-top:16px;border:1px solid #e0e7ff;background:#f5f3ff;">
+          <div style="font-size:13px;font-weight:700;color:#4f46e5;margin-bottom:8px;">⚙️ Paystack Webhook Setup</div>
+          <p style="font-size:12px;color:#6b7280;margin-bottom:8px;">Add this URL in your Paystack Dashboard under <strong>Settings → API Keys & Webhooks</strong> to enable automatic renewals:</p>
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            <code style="flex:1;padding:8px 12px;background:#fff;border:1px solid #c7d2fe;border-radius:7px;font-size:12px;color:#3730a3;word-break:break-all;">${window.location.origin}/api/webhooks/paystack</code>
+            <button class="btn btn-sm" style="background:#4f46e5;color:#fff;" onclick="navigator.clipboard.writeText(window.location.origin+'/api/webhooks/paystack').then(()=>toastSuccess('Copied!'))">Copy</button>
+          </div>
+          <p style="font-size:11px;color:#9ca3af;margin-top:8px;">Events to enable: <strong>charge.success, subscription.create, subscription.disable, invoice.payment_failed</strong></p>
+        </div>
+      ` : ''}
     `;
   } catch (e) {
     content.innerHTML = `<div class="card"><p>Error: ${e.message}</p></div>`;
