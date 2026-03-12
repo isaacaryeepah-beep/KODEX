@@ -3678,6 +3678,9 @@ async function showAddQuestionsView(quizId) {
             <label id="aq-lbl-multi" style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:8px 16px;border:2px solid #e5e7eb;border-radius:8px;background:#fff;color:#374151;font-size:13px;font-weight:600;">
               <input type="radio" name="aq-type" value="multiple" onchange="aqToggleType('multiple')" style="accent-color:var(--primary)"> Multiple Answers
             </label>
+            <label id="aq-lbl-fill" style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:8px 16px;border:2px solid #e5e7eb;border-radius:8px;background:#fff;color:#374151;font-size:13px;font-weight:600;">
+              <input type="radio" name="aq-type" value="fill" onchange="aqToggleType('fill')" style="accent-color:var(--primary)"> Fill In
+            </label>
           </div>
           <p id="aq-type-hint" style="font-size:12px;color:#9ca3af;margin-top:5px;">One correct answer — student picks one option.</p>
         </div>
@@ -3687,12 +3690,14 @@ async function showAddQuestionsView(quizId) {
           <textarea id="aq-text" rows="3" placeholder="Enter your question here…" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;"></textarea>
         </div>
 
+        <div id="aq-options-section">
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">
           ${['A','B','C','D'].map((l,i) => `
           <div class="form-group">
             <label>Option ${l}${i<2?' *':''}</label>
             <input type="text" id="aq-opt-${i}" placeholder="Option ${l}" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;">
           </div>`).join('')}
+        </div>
         </div>
 
         <!-- Single: radio buttons -->
@@ -3718,6 +3723,18 @@ async function showAddQuestionsView(quizId) {
           </div>
         </div>
 
+        <!-- Fill-in: text answer -->
+        <div id="aq-fill-wrap" style="display:none;margin-bottom:12px;">
+          <div class="form-group">
+            <label>Correct Answer * <span style="font-weight:400;color:#9ca3af;font-size:12px;">(case-insensitive)</span></label>
+            <input type="text" id="aq-fill-answer" placeholder="e.g. Photosynthesis" style="width:100%;padding:9px 12px;border:1.5px solid #d1d5db;border-radius:8px;font-size:13px;">
+          </div>
+          <div class="form-group">
+            <label>Also Accept <span style="font-weight:400;color:#9ca3af;font-size:12px;">(one per line, optional)</span></label>
+            <textarea id="aq-fill-alts" rows="2" placeholder="photo synthesis&#10;photosynthesis process" style="width:100%;padding:8px 12px;border:1.5px solid #d1d5db;border-radius:8px;font-size:12px;font-family:inherit;resize:vertical;"></textarea>
+          </div>
+        </div>
+
         <div class="form-group" style="display:inline-block;margin-right:16px;">
           <label>Marks</label>
           <input type="number" id="aq-marks" value="1" min="1" style="width:80px;padding:8px;border:1px solid #d1d5db;border-radius:6px;">
@@ -3731,16 +3748,19 @@ async function showAddQuestionsView(quizId) {
         <div id="aq-questions-list">
           ${questions.length ? questions.map((q, i) => {
             const correctSet = new Set(q.correctAnswers?.length ? q.correctAnswers : (q.correctAnswer != null ? [q.correctAnswer] : []));
+            const isFillQ = q.questionType === 'fill';
             const typeLabel = q.questionType === 'multiple'
               ? '<span style="font-size:10px;padding:2px 7px;border-radius:20px;font-weight:600;background:#ede9fe;color:#7c3aed;margin-left:6px;">MULTI</span>'
-              : '<span style="font-size:10px;padding:2px 7px;border-radius:20px;font-weight:600;background:#f0f9ff;color:#0369a1;margin-left:6px;">SINGLE</span>';
+              : isFillQ
+                ? '<span style="font-size:10px;padding:2px 7px;border-radius:20px;font-weight:600;background:#fef3c7;color:#92400e;margin-left:6px;">FILL IN</span>'
+                : '<span style="font-size:10px;padding:2px 7px;border-radius:20px;font-weight:600;background:#f0f9ff;color:#0369a1;margin-left:6px;">SINGLE</span>';
             return `<div style="padding:12px;border:1px solid #e5e7eb;border-radius:8px;margin-bottom:8px;">
               <div style="display:flex;justify-content:space-between;align-items:flex-start;">
                 <div style="flex:1;">
                   <div style="margin-bottom:6px;"><strong>Q${i+1}.</strong>${typeLabel} ${q.questionText}</div>
-                  <div style="display:flex;flex-wrap:wrap;gap:5px;font-size:13px;">
-                    ${q.options.map((o,oi)=>`<span style="padding:3px 9px;border-radius:6px;${correctSet.has(oi)?'background:#f0fdf4;color:#166534;border:1px solid #bbf7d0;font-weight:700;':'background:#f9fafb;color:#6b7280;border:1px solid #e5e7eb;'}">${String.fromCharCode(65+oi)}) ${o}${correctSet.has(oi)?' ✓':''}</span>`).join('')}
-                  </div>
+                  ${isFillQ
+                    ? `<div style="font-size:13px;color:#166534;background:#f0fdf4;border:1px solid #bbf7d0;padding:4px 10px;border-radius:6px;display:inline-block;">✓ ${q.correctAnswerText}${q.acceptedAnswers?.length ? ` <span style="color:#6b7280;font-weight:400;">(also: ${q.acceptedAnswers.join(', ')})</span>` : ''}</div>`
+                    : `<div style="display:flex;flex-wrap:wrap;gap:5px;font-size:13px;">${q.options.map((o,oi)=>`<span style="padding:3px 9px;border-radius:6px;${correctSet.has(oi)?'background:#f0fdf4;color:#166534;border:1px solid #bbf7d0;font-weight:700;':'background:#f9fafb;color:#6b7280;border:1px solid #e5e7eb;'}">${String.fromCharCode(65+oi)}) ${o}${correctSet.has(oi)?' ✓':''}</span>`).join('')}</div>`}
                   <div style="font-size:12px;color:#9ca3af;margin-top:5px;">Marks: ${q.marks}</div>
                 </div>
                 <button class="btn btn-sm btn-danger" onclick="deleteQuizQuestion('${quizId}','${q._id}')">Delete</button>
@@ -3757,15 +3777,23 @@ async function showAddQuestionsView(quizId) {
 
 function aqToggleType(type) {
   const isMulti = type === 'multiple';
-  document.getElementById('aq-single-wrap').style.display = isMulti ? 'none' : 'block';
+  const isFill  = type === 'fill';
+  document.getElementById('aq-single-wrap').style.display = (!isMulti && !isFill) ? 'block' : 'none';
   document.getElementById('aq-multi-wrap').style.display  = isMulti ? 'block' : 'none';
+  document.getElementById('aq-fill-wrap').style.display   = isFill  ? 'block' : 'none';
+  // Options section — hide for fill-in
+  const optsEl = document.getElementById('aq-options-section');
+  if (optsEl) optsEl.style.display = isFill ? 'none' : 'block';
   document.getElementById('aq-type-hint').textContent = isMulti
     ? 'Multiple correct answers — student must select all correct options.'
-    : 'One correct answer — student picks one option.';
+    : isFill
+      ? 'Fill in the blank — student types their answer.'
+      : 'One correct answer — student picks one option.';
   const primStyle = 'display:flex;align-items:center;gap:6px;cursor:pointer;padding:8px 16px;border:2px solid var(--primary);border-radius:8px;background:var(--primary);color:#fff;font-size:13px;font-weight:600;';
   const secStyle  = 'display:flex;align-items:center;gap:6px;cursor:pointer;padding:8px 16px;border:2px solid #e5e7eb;border-radius:8px;background:#fff;color:#374151;font-size:13px;font-weight:600;';
-  document.getElementById('aq-lbl-single').style.cssText = isMulti ? secStyle  : primStyle;
+  document.getElementById('aq-lbl-single').style.cssText = (!isMulti && !isFill) ? primStyle : secStyle;
   document.getElementById('aq-lbl-multi').style.cssText  = isMulti ? primStyle : secStyle;
+  document.getElementById('aq-lbl-fill').style.cssText   = isFill  ? primStyle : secStyle;
 }
 
 function aqCbChange(i) {
@@ -3778,26 +3806,36 @@ function aqCbChange(i) {
 
 async function submitAddQuestion(quizId) {
   const questionText = document.getElementById('aq-text').value.trim();
-  const options = [0,1,2,3].map(i => document.getElementById(`aq-opt-${i}`).value.trim()).filter(o => o);
   const marks   = parseInt(document.getElementById('aq-marks').value) || 1;
   const errEl   = document.getElementById('aq-error');
-  const isMulti = document.querySelector('input[name="aq-type"]:checked')?.value === 'multiple';
+  const qType   = document.querySelector('input[name="aq-type"]:checked')?.value || 'single';
+  const isMulti = qType === 'multiple';
+  const isFill  = qType === 'fill';
 
   errEl.style.display = 'none';
   if (!questionText) { errEl.textContent = 'Question text is required.'; errEl.style.display = 'block'; return; }
-  if (options.length < 2) { errEl.textContent = 'At least 2 options are required.'; errEl.style.display = 'block'; return; }
 
   let body;
-  if (isMulti) {
-    const correctAnswers = [...document.querySelectorAll('input[name="aq-multi-correct"]:checked')].map(c => parseInt(c.value)).filter(i => i < options.length);
-    if (correctAnswers.length === 0) { errEl.textContent = 'Select at least one correct answer.'; errEl.style.display = 'block'; return; }
-    body = { questionText, options, questionType: 'multiple', correctAnswers, marks };
+  if (isFill) {
+    const correctAnswerText = document.getElementById('aq-fill-answer').value.trim();
+    if (!correctAnswerText) { errEl.textContent = 'Please enter the correct answer.'; errEl.style.display = 'block'; return; }
+    const altsRaw = document.getElementById('aq-fill-alts').value.trim();
+    const acceptedAnswers = altsRaw ? altsRaw.split('\n').map(s => s.trim()).filter(Boolean) : [];
+    body = { questionText, questionType: 'fill', correctAnswerText, acceptedAnswers, marks };
   } else {
-    const radio = document.querySelector('input[name="aq-correct"]:checked');
-    if (!radio) { errEl.textContent = 'Please select the correct answer.'; errEl.style.display = 'block'; return; }
-    const correctAnswer = parseInt(radio.value);
-    if (correctAnswer >= options.length) { errEl.textContent = 'Correct answer must match a filled option.'; errEl.style.display = 'block'; return; }
-    body = { questionText, options, questionType: 'single', correctAnswer, marks };
+    const options = [0,1,2,3].map(i => document.getElementById(`aq-opt-${i}`).value.trim()).filter(o => o);
+    if (options.length < 2) { errEl.textContent = 'At least 2 options are required.'; errEl.style.display = 'block'; return; }
+    if (isMulti) {
+      const correctAnswers = [...document.querySelectorAll('input[name="aq-multi-correct"]:checked')].map(c => parseInt(c.value)).filter(i => i < options.length);
+      if (correctAnswers.length === 0) { errEl.textContent = 'Select at least one correct answer.'; errEl.style.display = 'block'; return; }
+      body = { questionText, options, questionType: 'multiple', correctAnswers, marks };
+    } else {
+      const radio = document.querySelector('input[name="aq-correct"]:checked');
+      if (!radio) { errEl.textContent = 'Please select the correct answer.'; errEl.style.display = 'block'; return; }
+      const correctAnswer = parseInt(radio.value);
+      if (correctAnswer >= options.length) { errEl.textContent = 'Correct answer must match a filled option.'; errEl.style.display = 'block'; return; }
+      body = { questionText, options, questionType: 'single', correctAnswer, marks };
+    }
   }
 
   const addBtn = document.querySelector(`button[onclick="submitAddQuestion('${quizId}')"]`);
@@ -4022,14 +4060,21 @@ async function startStudentQuiz(quizId) {
           <div class="card" style="margin-bottom:12px;">
             <h4>Question ${i + 1} of ${questions.length} <span style="color:#9ca3af;font-weight:normal;font-size:0.85em;">(${q.marks || 1} marks)</span></h4>
             <p style="margin:8px 0;">${q.questionText}</p>
-            <div style="display:flex;flex-direction:column;gap:8px;">
+            ${q.questionType === 'fill'
+              ? `<div style="margin-top:6px;">
+                  <input type="text" id="sq-fill-${q._id}" placeholder="Type your answer here…"
+                    style="width:100%;padding:11px 14px;border:1.5px solid #d1d5db;border-radius:8px;font-size:14px;font-family:inherit;outline:none;transition:border-color .15s;"
+                    onfocus="this.style.borderColor='#6366f1'" onblur="this.style.borderColor='#d1d5db'">
+                  <p style="font-size:11px;color:#9ca3af;margin-top:5px;">Spelling counts — answer is not case-sensitive.</p>
+                </div>`
+              : `<div style="display:flex;flex-direction:column;gap:8px;">
               ${q.options.map((opt, oi) => `
                 <label style="display:flex;align-items:center;gap:8px;padding:10px;border:1px solid #e5e7eb;border-radius:8px;cursor:pointer;transition:background 0.15s;" onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background=''">
                   <input type="radio" name="sq-${q._id}" value="${oi}" style="accent-color:#3b82f6;">
                   <span><strong>${String.fromCharCode(65 + oi)}.</strong> ${opt}</span>
                 </label>
               `).join('')}
-            </div>
+            </div>`}
           </div>
         `).join('')}
       </div>
@@ -4082,8 +4127,12 @@ async function submitStudentQuiz(quizId) {
   if (quizTimerInterval) { clearInterval(quizTimerInterval); quizTimerInterval = null; }
   const questions = window._quizQuestions || [];
   const answers = questions.map(q => {
+    if (q.questionType === 'fill') {
+      const input = document.getElementById(`sq-fill-${q._id}`);
+      return { questionId: q._id, selectedAnswer: null, selectedAnswerText: input ? input.value.trim() : '' };
+    }
     const selected = document.querySelector(`input[name="sq-${q._id}"]:checked`);
-    return { questionId: q._id, selectedAnswer: selected ? parseInt(selected.value) : -1 };
+    return { questionId: q._id, selectedAnswer: selected ? parseInt(selected.value) : -1, selectedAnswerText: null };
   });
 
   const content = document.getElementById('main-content');
@@ -4137,7 +4186,14 @@ async function viewStudentResult(quizId) {
             <div class="card" style="margin-bottom:12px;border-left:4px solid ${a.isCorrect ? '#22c55e' : '#ef4444'};">
               <h4>Question ${i + 1} <span style="color:#9ca3af;font-weight:normal;font-size:0.85em;">(${q.marks || 1} marks)</span></h4>
               <p style="margin:8px 0;">${q.questionText}</p>
-              <div style="display:flex;flex-direction:column;gap:6px;">
+              ${q.questionType === 'fill'
+                ? `<div style="display:flex;flex-direction:column;gap:6px;font-size:13px;">
+                    <div style="padding:8px 12px;border-radius:6px;border:1px solid ${a.isCorrect ? '#22c55e' : '#ef4444'};background:${a.isCorrect ? '#f0fdf4' : '#fef2f2'};color:${a.isCorrect ? '#15803d' : '#dc2626'};">
+                      ${a.isCorrect ? '✓' : '✗'} Your answer: <strong>${a.selectedAnswerText || '(no answer)'}</strong>
+                    </div>
+                    ${!a.isCorrect ? `<div style="padding:8px 12px;border-radius:6px;border:1px solid #22c55e;background:#f0fdf4;color:#15803d;">← Correct answer: <strong>${q.correctAnswerText || ''}</strong></div>` : ''}
+                  </div>`
+                : `<div style="display:flex;flex-direction:column;gap:6px;">
                 ${q.options.map((opt, oi) => {
                   let style = 'padding:8px 12px;border-radius:6px;border:1px solid #e5e7eb;';
                   if (oi === q.correctAnswer) style += 'background:#f0fdf4;border-color:#22c55e;color:#15803d;';
@@ -4149,7 +4205,7 @@ async function viewStudentResult(quizId) {
                     ${oi === a.selectedAnswer && oi === q.correctAnswer ? ' ✓ Your answer' : ''}
                   </div>`;
                 }).join('')}
-              </div>
+              </div>`}
             </div>
           `;
         }).join('')}
