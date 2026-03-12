@@ -38,7 +38,7 @@ const companySchema = new mongoose.Schema(
     },
     subscriptionStatus: {
       type: String,
-      enum: ["active", "inactive", "trial", "expired"],
+      enum: ["active", "inactive", "trial", "expired", "past_due"],
       default: "trial",
     },
     subscriptionPlan: {
@@ -73,6 +73,15 @@ const companySchema = new mongoose.Schema(
       type: String,
       default: null,
     },
+    // Paystack-specific tracking
+    paystackCustomerCode:    { type: String, default: null },
+    paystackSubscriptionCode:{ type: String, default: null },
+    subscriptionStartDate:   { type: Date,   default: null },
+    subscriptionEndDate:     { type: Date,   default: null },
+    lastPaymentReference:    { type: String, default: null },
+    lastPaymentAmount:       { type: Number, default: null },
+    lastPaymentDate:         { type: Date,   default: null },
+    nextBillingDate:         { type: Date,   default: null },
     nextEmployeeSeq: {
       type: Number,
       default: 0,
