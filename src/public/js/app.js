@@ -2664,6 +2664,7 @@ async function renderUsers() {
       <div class="page-header"><h2>${pageTitle}</h2><p>${pageDesc}</p></div>
       <div class="actions-bar" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
         ${canManage ? `<button class="btn btn-primary btn-sm" onclick="showCreateUserModal()">${addLabel}</button>` : ''}
+        ${['admin','superadmin'].includes(currentUser.role) && mode === 'academic' ? `<button class="btn btn-sm btn-secondary" onclick="showBulkImportModal()">📥 Bulk Import Students</button>` : ''}
         ${['admin','superadmin'].includes(currentUser.role) ? `<button class="btn btn-sm" style="background:#f59e0b;color:#fff" onclick="renderResetLogs()">🔐 Password Reset Log</button>` : ''}
         ${canManage ? `
           <div id="bulk-actions" style="display:none;gap:8px;align-items:center;margin-left:auto">
@@ -4676,6 +4677,219 @@ async function renderMyAttendance() {
 }
 
 
+
+
+// ══════════════════════════════════════════════════════════════════════════════
+// BULK STUDENT IMPORT
+// ══════════════════════════════════════════════════════════════════════════════
+
+async function showBulkImportModal() {
+  const existing = document.getElementById('bulk-import-overlay');
+  if (existing) existing.remove();
+
+  // Load courses for the optional enroll-in dropdown
+  let courses = [];
+  try {
+    const data = await api('/api/courses');
+    courses = (data.courses || []).filter(c => c.isActive);
+  } catch(_) {}
+
+  const ol = document.createElement('div');
+  ol.id = 'bulk-import-overlay';
+  ol.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:400;display:flex;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(3px)';
+  ol.innerHTML = `
+    <div style="background:var(--card);border-radius:14px;width:100%;max-width:560px;max-height:92vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.2);">
+      <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;background:var(--card);z-index:1;border-radius:14px 14px 0 0;">
+        <div>
+          <h3 style="font-size:15px;font-weight:700;margin:0">📥 Bulk Import Students</h3>
+          <p style="font-size:12px;color:var(--text-muted);margin:3px 0 0;">Upload a CSV file to create multiple student accounts at once</p>
+        </div>
+        <button onclick="document.getElementById('bulk-import-overlay').remove()" style="width:26px;height:26px;border-radius:6px;border:1px solid var(--border);background:var(--bg);cursor:pointer;font-size:13px;">✕</button>
+      </div>
+      <div style="padding:18px 20px;display:flex;flex-direction:column;gap:14px;">
+
+        <!-- Template download -->
+        <div style="padding:12px 14px;background:#f0f9ff;border:1px solid #bae6fd;border-radius:9px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+          <div>
+            <div style="font-size:13px;font-weight:600;color:#0369a1;">CSV Format</div>
+            <div style="font-size:12px;color:#0284c7;margin-top:2px;">Required: <strong>name, indexNumber</strong> &nbsp;·&nbsp; Optional: email, phone, courseCode</div>
+          </div>
+          <button class="btn btn-sm" style="background:#0ea5e9;color:#fff;white-space:nowrap;" onclick="downloadImportTemplate()">⬇ Template</button>
+        </div>
+
+        <!-- File upload -->
+        <div>
+          <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:6px;display:block;">CSV File *</label>
+          <label for="bi-csv-file" id="bi-drop-label" style="display:flex;flex-direction:column;align-items:center;gap:6px;padding:18px;border:2px dashed var(--border);border-radius:9px;cursor:pointer;background:var(--bg);transition:border-color .2s" onmouseover="this.style.borderColor='#7c3aed'" onmouseout="this.style.borderColor='var(--border)'">
+            <span style="font-size:22px;">📄</span>
+            <span style="font-size:13px;font-weight:600;">Click to upload CSV</span>
+            <span style="font-size:11px;color:var(--text-muted);">Max 2 MB</span>
+            <input type="file" id="bi-csv-file" accept=".csv,text/csv" style="display:none;" onchange="biPreviewCSV(this)">
+          </label>
+          <div id="bi-file-name" style="display:none;margin-top:7px;padding:6px 11px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;font-size:12px;color:#166534;font-weight:500;"></div>
+        </div>
+
+        <!-- Optional: enroll in course -->
+        <div>
+          <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:6px;display:block;">Enroll in Course <span style="font-weight:400;text-transform:none;">(optional)</span></label>
+          <select id="bi-course" style="width:100%;padding:8px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;">
+            <option value="">— None (or use courseCode column in CSV) —</option>
+            ${courses.map(c => `<option value="${c._id}">${c.title} (${c.code})</option>`).join('')}
+          </select>
+        </div>
+
+        <!-- Preview -->
+        <div id="bi-preview" style="display:none;">
+          <div style="font-size:13px;font-weight:700;margin-bottom:8px;display:flex;align-items:center;gap:8px;">
+            Preview
+            <span id="bi-preview-count" style="background:#ede9fe;color:#7c3aed;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600;"></span>
+          </div>
+          <div style="overflow-x:auto;border:1px solid var(--border);border-radius:8px;">
+            <table style="width:100%;border-collapse:collapse;font-size:12px;">
+              <thead>
+                <tr style="background:var(--bg);">
+                  <th style="padding:7px 10px;text-align:left;border-bottom:1px solid var(--border);font-weight:700;">Name</th>
+                  <th style="padding:7px 10px;text-align:left;border-bottom:1px solid var(--border);font-weight:700;">Index No.</th>
+                  <th style="padding:7px 10px;text-align:left;border-bottom:1px solid var(--border);font-weight:700;">Email</th>
+                  <th style="padding:7px 10px;text-align:left;border-bottom:1px solid var(--border);font-weight:700;">Course</th>
+                </tr>
+              </thead>
+              <tbody id="bi-preview-body"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div id="bi-err" style="display:none;padding:8px 12px;background:#fef2f2;border:1px solid #fecaca;border-radius:7px;color:#dc2626;font-size:12px;font-weight:500;"></div>
+      </div>
+      <div style="padding:12px 20px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end;position:sticky;bottom:0;background:var(--card);border-radius:0 0 14px 14px;">
+        <button class="btn btn-secondary" onclick="document.getElementById('bulk-import-overlay').remove()">Cancel</button>
+        <button id="bi-import-btn" class="btn btn-primary" onclick="runBulkImport()">Import Students</button>
+      </div>
+    </div>`;
+  document.body.appendChild(ol);
+}
+
+let _biRows = [];
+
+function biPreviewCSV(input) {
+  const file = input.files?.[0];
+  if (!file) return;
+  const nameEl = document.getElementById('bi-file-name');
+  if (nameEl) { nameEl.textContent = '📄 ' + file.name; nameEl.style.display = 'block'; }
+
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const text = e.target.result;
+      const lines = text.split(/\r?\n/).filter(l => l.trim());
+      if (lines.length < 2) { showBiErr('CSV must have a header row and at least one data row.'); return; }
+
+      const headers = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/[^a-z]/g, ''));
+      const nameIdx  = headers.findIndex(h => h === 'name' || h === 'fullname' || h === 'studentname');
+      const idxIdx   = headers.findIndex(h => h === 'indexnumber' || h === 'studentid' || h === 'id' || h === 'index');
+      const emailIdx = headers.findIndex(h => h === 'email');
+      const courseIdx= headers.findIndex(h => h === 'coursecode' || h === 'course' || h === 'code');
+
+      if (nameIdx === -1 || idxIdx === -1) {
+        showBiErr("CSV must have 'name' and 'indexNumber' columns.");
+        return;
+      }
+
+      _biRows = [];
+      for (let i = 1; i < lines.length && i <= 101; i++) {
+        const cols = lines[i].split(',').map(c => c.trim().replace(/^"|"$/g, ''));
+        if (!cols[nameIdx] && !cols[idxIdx]) continue;
+        _biRows.push({
+          name:       cols[nameIdx] || '',
+          indexNumber:cols[idxIdx]  || '',
+          email:      emailIdx >= 0 ? (cols[emailIdx] || '') : '',
+          courseCode: courseIdx >= 0 ? (cols[courseIdx] || '') : '',
+        });
+      }
+
+      const tbody = document.getElementById('bi-preview-body');
+      const previewDiv = document.getElementById('bi-preview');
+      const countEl = document.getElementById('bi-preview-count');
+      if (tbody && previewDiv) {
+        tbody.innerHTML = _biRows.slice(0, 5).map(r => `
+          <tr>
+            <td style="padding:6px 10px;border-bottom:1px solid var(--border);">${r.name}</td>
+            <td style="padding:6px 10px;border-bottom:1px solid var(--border);font-family:monospace;">${r.indexNumber}</td>
+            <td style="padding:6px 10px;border-bottom:1px solid var(--border);color:var(--text-muted);">${r.email || '—'}</td>
+            <td style="padding:6px 10px;border-bottom:1px solid var(--border);color:var(--text-muted);">${r.courseCode || '—'}</td>
+          </tr>`).join('') +
+          (_biRows.length > 5 ? `<tr><td colspan="4" style="padding:6px 10px;color:var(--text-muted);font-style:italic;">…and ${_biRows.length - 5} more</td></tr>` : '');
+        if (countEl) countEl.textContent = _biRows.length + ' rows';
+        previewDiv.style.display = 'block';
+        document.getElementById('bi-err')?.style && (document.getElementById('bi-err').style.display = 'none');
+      }
+    } catch(e) { showBiErr('Could not parse CSV: ' + e.message); }
+  };
+  reader.readAsText(file);
+}
+
+function showBiErr(msg) {
+  const el = document.getElementById('bi-err');
+  if (el) { el.textContent = msg; el.style.display = 'block'; }
+}
+
+function downloadImportTemplate() {
+  const csv = 'name,indexNumber,email,phone,courseCode\nJohn Mensah,CS/0001/23,john@example.com,0244123456,CS101\nAkosua Boateng,CS/0002/23,akosua@example.com,,CS101';
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'kodex_student_import_template.csv';
+  a.click();
+}
+
+async function runBulkImport() {
+  const fileInput = document.getElementById('bi-csv-file');
+  const courseId  = document.getElementById('bi-course')?.value || '';
+  const btn = document.getElementById('bi-import-btn');
+  const errEl = document.getElementById('bi-err');
+
+  if (!fileInput?.files?.[0]) { showBiErr('Please select a CSV file.'); return; }
+
+  btn.disabled = true;
+  btn.textContent = 'Importing…';
+  if (errEl) errEl.style.display = 'none';
+
+  try {
+    const formData = new FormData();
+    formData.append('csv', fileInput.files[0]);
+    if (courseId) formData.append('courseId', courseId);
+
+    const token = localStorage.getItem('token') || '';
+    const resp = await fetch('/api/users/bulk-import', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + token },
+      body: formData,
+    });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || 'Import failed');
+
+    document.getElementById('bulk-import-overlay')?.remove();
+    toastSuccess(data.message);
+
+    // Download results CSV with generated passwords
+    if (data.students?.length) {
+      const rows = [['Name','Index Number','Email','Temp Password','Course','Status']];
+      data.students.forEach(s => rows.push([s.name, s.indexNumber, s.email, s.tempPassword, s.course, s.status]));
+      const csvContent = rows.map(r => r.map(v => `"${(v||'').replace(/"/g,'""')}"`).join(',')).join('\n');
+      const blob = new Blob([csvContent], { type: 'text/csv' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'kodex_import_results_' + new Date().toISOString().slice(0,10) + '.csv';
+      a.click();
+    }
+
+    renderUsers();
+  } catch(e) {
+    showBiErr(e.message || 'Import failed');
+    btn.disabled = false;
+    btn.textContent = 'Import Students';
+  }
+}
 
 // ══════════════════════════════════════════════════════════════════════════════
 // QUESTION BANK
