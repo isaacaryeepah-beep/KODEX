@@ -6141,9 +6141,33 @@ function openAIQuizPanel(quizId) {
         <button onclick="document.getElementById('ai-quiz-overlay').remove()" style="width:28px;height:28px;border-radius:7px;border:1px solid var(--border);background:var(--bg);cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center">✕</button>
       </div>
       <div style="padding:18px 22px;display:flex;flex-direction:column;gap:14px">
+        <!-- Source tabs -->
         <div>
-          <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:6px;display:block">Topic / Subject <span style="color:#dc2626">*</span></label>
-          <input id="aiq-topic" placeholder="e.g. Photosynthesis, Newton's laws, Python loops…" style="width:100%;padding:10px 13px;border:1.5px solid var(--border);border-radius:9px;font-size:14px;font-family:inherit;outline:none" onfocus="this.style.borderColor='#7c3aed'" onblur="this.style.borderColor='var(--border)'"/>
+          <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:8px;display:block">Content Source</label>
+          <div style="display:flex;gap:1px;background:var(--border);border-radius:9px;overflow:hidden;margin-bottom:12px;">
+            <button id="aiq-tab-topic" onclick="aiqSwitchTab('topic')" style="flex:1;padding:8px;border:none;cursor:pointer;font-size:12px;font-weight:600;background:var(--primary);color:#fff;font-family:inherit;">📝 Topic</button>
+            <button id="aiq-tab-notes" onclick="aiqSwitchTab('notes')" style="flex:1;padding:8px;border:none;cursor:pointer;font-size:12px;font-weight:600;background:var(--card);color:var(--text-light);font-family:inherit;">📋 Paste Notes</button>
+            <button id="aiq-tab-pdf" onclick="aiqSwitchTab('pdf')" style="flex:1;padding:8px;border:none;cursor:pointer;font-size:12px;font-weight:600;background:var(--card);color:var(--text-light);font-family:inherit;">📄 Upload PDF</button>
+          </div>
+          <!-- Topic input -->
+          <div id="aiq-src-topic">
+            <input id="aiq-topic" placeholder="e.g. Photosynthesis, Newton's laws, Python loops…" style="width:100%;padding:10px 13px;border:1.5px solid var(--border);border-radius:9px;font-size:14px;font-family:inherit;outline:none" onfocus="this.style.borderColor='#7c3aed'" onblur="this.style.borderColor='var(--border)'"/>
+          </div>
+          <!-- Paste notes -->
+          <div id="aiq-src-notes" style="display:none;">
+            <textarea id="aiq-notes" rows="5" placeholder="Paste your lecture notes, textbook content, or any study material here…" style="width:100%;padding:10px 13px;border:1.5px solid var(--border);border-radius:9px;font-size:13px;font-family:inherit;resize:vertical;outline:none;" onfocus="this.style.borderColor='#7c3aed'" onblur="this.style.borderColor='var(--border)'"></textarea>
+            <p style="font-size:11px;color:var(--text-muted);margin-top:4px;">Questions will be generated directly from this material.</p>
+          </div>
+          <!-- PDF upload -->
+          <div id="aiq-src-pdf" style="display:none;">
+            <label for="aiq-pdf-file" style="display:flex;flex-direction:column;align-items:center;gap:8px;padding:20px;border:2px dashed var(--border);border-radius:10px;cursor:pointer;background:var(--bg);transition:border-color .2s;" onmouseover="this.style.borderColor='#7c3aed'" onmouseout="this.style.borderColor='var(--border)'">
+              <span style="font-size:28px;">📄</span>
+              <span style="font-size:13px;font-weight:600;color:var(--text);">Click to upload a PDF</span>
+              <span style="font-size:11px;color:var(--text-muted);">Max 10 MB · Text-based PDFs only</span>
+              <input type="file" id="aiq-pdf-file" accept=".pdf" style="display:none;" onchange="aiqShowPdfName(this)">
+            </label>
+            <div id="aiq-pdf-name" style="display:none;margin-top:8px;padding:7px 12px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:7px;font-size:12px;color:#166534;font-weight:500;"></div>
+          </div>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
           <div>
@@ -6248,7 +6272,34 @@ function aiqToggleSubject(subj) {
   if (math) math.style.cssText = isMath ? active   : inactive;
 }
 
+// Tab switching for AI panel source
+function aiqSwitchTab(tab) {
+  ['topic','notes','pdf'].forEach(t => {
+    const src = document.getElementById('aiq-src-' + t);
+    const btn = document.getElementById('aiq-tab-' + t);
+    if (!src || !btn) return;
+    const active = t === tab;
+    src.style.display = active ? 'block' : 'none';
+    btn.style.background = active ? 'var(--primary)' : 'var(--card)';
+    btn.style.color = active ? '#fff' : 'var(--text-light)';
+  });
+}
+
+function aiqShowPdfName(input) {
+  const nameEl = document.getElementById('aiq-pdf-name');
+  if (!nameEl) return;
+  if (input.files?.[0]) {
+    nameEl.textContent = '📄 ' + input.files[0].name;
+    nameEl.style.display = 'block';
+  } else {
+    nameEl.style.display = 'none';
+  }
+}
+
 async function runAIQuizGenerate(quizId) {
+  const activeTab  = document.getElementById('aiq-src-notes')?.style.display !== 'none' ? 'notes'
+                   : document.getElementById('aiq-src-pdf')?.style.display !== 'none' ? 'pdf'
+                   : 'topic';
   const topic      = document.getElementById('aiq-topic')?.value?.trim();
   const count      = document.getElementById('aiq-count')?.value || '5';
   const difficulty = document.getElementById('aiq-difficulty')?.value || 'medium';
@@ -6265,6 +6316,57 @@ async function runAIQuizGenerate(quizId) {
   const previewDiv = document.getElementById('aiq-preview');
   const addBtn     = document.getElementById('aiq-add-btn');
 
+  // ── If PDF or Notes tab → use backend ai-generate endpoint ──
+  if (activeTab === 'pdf' || activeTab === 'notes') {
+    errEl.style.display = 'none';
+    previewDiv.style.display = 'none';
+    addBtn.style.display = 'none';
+    _aiQuizQuestions = [];
+
+    btn.disabled = true;
+    btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="animation:spin 1s linear infinite"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> Generating…';
+
+    try {
+      const types = qtype === 'mixed' ? 'single,multiple' : qtype === 'fill' ? 'fill' : qtype;
+      const formData = new FormData();
+      formData.append('count', count);
+      formData.append('types', types);
+      formData.append('difficulty', difficulty);
+
+      if (activeTab === 'pdf') {
+        const pdfFile = document.getElementById('aiq-pdf-file')?.files?.[0];
+        if (!pdfFile) { errEl.textContent = 'Please select a PDF file.'; errEl.style.display = 'block'; btn.disabled = false; btn.innerHTML = '✨ Generate Questions'; return; }
+        formData.append('pdf', pdfFile);
+      } else {
+        const notes = document.getElementById('aiq-notes')?.value?.trim();
+        if (!notes) { errEl.textContent = 'Please paste your notes.'; errEl.style.display = 'block'; btn.disabled = false; btn.innerHTML = '✨ Generate Questions'; return; }
+        formData.append('notes', notes);
+      }
+
+      const token = localStorage.getItem('token') || '';
+      const resp = await fetch(`/api/lecturer/quizzes/${quizId}/ai-generate`, {
+        method: 'POST',
+        headers: { 'Authorization': 'Bearer ' + token },
+        body: formData,
+      });
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.error || 'Generation failed');
+
+      // Questions already saved to DB — refresh the view
+      document.getElementById('ai-quiz-overlay')?.remove();
+      toastSuccess(`${data.questions.length} questions generated and added!`);
+      await showAddQuestionsView(quizId);
+      return;
+    } catch(e) {
+      errEl.textContent = e.message;
+      errEl.style.display = 'block';
+      btn.disabled = false;
+      btn.innerHTML = '✨ Regenerate';
+      return;
+    }
+  }
+
+  // ── Topic tab → existing AI proxy flow ──
   if (!topic) { errEl.textContent = 'Please enter a topic.'; errEl.style.display = 'block'; return; }
   errEl.style.display = 'none';
   previewDiv.style.display = 'none';
@@ -6365,8 +6467,7 @@ async function addAIQuizQuestions(quizId) {
   }
   document.getElementById('ai-quiz-overlay')?.remove();
   const msg = added + ' question' + (added !== 1 ? 's' : '') + ' added!' + (failed ? ' (' + failed + ' failed)' : '');
-  if (typeof toast === 'function') toast(msg, added > 0 ? 'ok' : 'err');
-  else toastError(msg);
+  if (added > 0) toastSuccess(msg); else toastError(msg);
   await showAddQuestionsView(quizId);
 }
 
