@@ -210,6 +210,9 @@ exports.deleteQuiz = async (req, res) => {
     await Answer.deleteMany({ attempt: { $in: attemptIds } });
     await Attempt.deleteMany({ quiz: id });
     await Question.deleteMany({ quiz: id });
+    // Clean up proctored quiz sessions
+    const QuizSession = require("../models/QuizSession");
+    await QuizSession.deleteMany({ quiz: id });
     await Quiz.deleteOne({ _id: id });
 
     res.json({ message: "Quiz deleted successfully" });
