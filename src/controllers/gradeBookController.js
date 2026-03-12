@@ -44,7 +44,7 @@ exports.getCourseGrades = async (req, res) => {
 
     // Only the course lecturer or admin can view
     const isAdmin = ["admin", "superadmin"].includes(req.user.role);
-    const isLecturer = course.lecturer._id.toString() === req.user._id.toString();
+    const isLecturer = course.lecturer?._id?.toString() === req.user._id.toString();
     if (!isAdmin && !isLecturer) {
       return res.status(403).json({ error: "Access denied" });
     }
