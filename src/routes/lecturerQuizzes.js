@@ -22,5 +22,6 @@ router.put("/:id/questions/:questionId", ctrl.updateQuestion);
 router.delete("/:id/questions/:questionId", ctrl.deleteQuestion);
 
 router.get("/:id/results", ctrl.getQuizResults);
+router.get("/:id/results/:attemptId", ctrl.getStudentAnswers);
 
 module.exports = router;
