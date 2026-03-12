@@ -189,15 +189,17 @@ exports.verifyPaystackSubscription = async (req, res) => {
     const company = await Company.findByIdAndUpdate(
       companyId,
       {
-        subscriptionActive: true,
-        subscriptionStatus: "active",
-        subscriptionPlan: plan,
-        hasAccess: true,
-        trialUsed: true,
+        subscriptionActive:   true,
+        subscriptionStatus:   "active",
+        subscriptionPlan:     plan === "yearly" ? "annual" : "monthly",
+        subscriptionProvider: "paystack",
+        hasAccess:            true,
+        trialUsed:            true,
         subscriptionStartDate: now,
-        subscriptionEndDate: endDate,
+        subscriptionEndDate:  endDate,
         lastPaymentReference: reference,
-        lastPaymentAmount: meta.amountGhs,
+        lastPaymentAmount:    meta.amountGhs,
+        lastPaymentDate:      now,
       },
       { new: true }
     );
