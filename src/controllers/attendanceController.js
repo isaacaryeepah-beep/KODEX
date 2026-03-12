@@ -301,14 +301,7 @@ exports.markAttendance = async (req, res) => {
       if (tokenDoc.isExpired()) {
         return res.status(410).json({ error: "QR code has expired. Please scan the latest QR code on screen." });
       }
-      // QR tokens are single-use; verbal codes are multi-use
-      if (tokenDoc.codeType !== "verbal" && tokenDoc.isUsed) {
-        return res.status(410).json({ error: "QR token has already been used" });
-      }
-      if (tokenDoc.codeType !== "verbal") {
-        tokenDoc.isUsed = true;
-        await tokenDoc.save();
-      }
+      // QR is time-gated (15s window) — all students/employees can scan within the window
       qrTokenRef = tokenDoc._id;
     } else if (qrToken || code) {
       const query = {};
@@ -326,14 +319,7 @@ exports.markAttendance = async (req, res) => {
       if (tokenDoc.isExpired()) {
         return res.status(410).json({ error: "Code has expired. Please ask your manager for the latest code." });
       }
-      // QR tokens are single-use; verbal codes are multi-use (all 500 students can use same code)
-      if (tokenDoc.codeType !== "verbal" && tokenDoc.isUsed) {
-        return res.status(410).json({ error: "QR token has already been used" });
-      }
-      if (tokenDoc.codeType !== "verbal") {
-        tokenDoc.isUsed = true;
-        await tokenDoc.save();
-      }
+      // QR is time-gated (15s window) — all students/employees can scan within the window
       if (!method) {
         attendanceMethod = tokenDoc.codeType === "verbal" ? "code_mark" : "code_mark";
       }
