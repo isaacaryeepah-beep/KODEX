@@ -3599,6 +3599,17 @@ async function showCreateQuizModal() {
           <div class="form-group"><label>Time Limit (minutes)</label><input type="number" id="cq-timelimit" value="30" min="1" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;"></div>
           <div class="form-group"><label>Start Time *</label><input type="datetime-local" id="cq-start" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;"></div>
           <div class="form-group"><label>End Time *</label><input type="datetime-local" id="cq-end" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;"></div>
+          <div class="form-group">
+            <label>Max Attempts <span style="font-weight:400;color:#9ca3af;font-size:11px;">(0 = unlimited)</span></label>
+            <input type="number" id="cq-max-attempts" value="1" min="0" max="10" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;">
+          </div>
+          <div class="form-group">
+            <label>Score to Record</label>
+            <select id="cq-score-policy" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;">
+              <option value="best">Best Score</option>
+              <option value="last">Last Attempt Score</option>
+            </select>
+          </div>
           <div id="cq-error" style="color:#ef4444;margin:8px 0;display:none;"></div>
           <div class="modal-actions">
             <button class="btn btn-secondary" onclick="closeQuizModal()">Cancel</button>
@@ -3619,6 +3630,8 @@ async function submitCreateQuiz() {
   const timeLimit = parseInt(document.getElementById('cq-timelimit').value) || 30;
   const startTime = document.getElementById('cq-start').value;
   const endTime = document.getElementById('cq-end').value;
+  const maxAttempts = parseInt(document.getElementById('cq-max-attempts')?.value ?? '1');
+  const scorePolicy = document.getElementById('cq-score-policy')?.value || 'best';
   const errEl = document.getElementById('cq-error');
 
   if (!title || !courseId || !startTime || !endTime) {
@@ -3632,7 +3645,7 @@ async function submitCreateQuiz() {
   try {
     const data = await api('/api/lecturer/quizzes', {
       method: 'POST',
-      body: JSON.stringify({ title, description, courseId, timeLimit, startTime: new Date(startTime).toISOString(), endTime: new Date(endTime).toISOString() })
+      body: JSON.stringify({ title, description, courseId, timeLimit, startTime: new Date(startTime).toISOString(), endTime: new Date(endTime).toISOString(), maxAttempts: isNaN(maxAttempts) ? 1 : maxAttempts, scorePolicy })
     });
     closeQuizModal();
     showAddQuestionsView(data.quiz._id);
@@ -3893,6 +3906,8 @@ async function viewLecturerQuizDetail(quizId) {
           <div><strong>Total Marks:</strong> ${q.totalMarks || 0}</div>
           <div><strong>Questions:</strong> ${questions.length}</div>
           <div><strong>Submissions:</strong> ${attempts.length}</div>
+          <div><strong>Max Attempts:</strong> ${q.maxAttempts === 0 ? 'Unlimited' : (q.maxAttempts || 1)}</div>
+          <div><strong>Score Policy:</strong> ${q.scorePolicy === 'last' ? 'Last attempt' : 'Best score'}</div>
           <div><strong>Start:</strong> ${new Date(q.startTime).toLocaleString()}</div>
           <div><strong>End:</strong> ${new Date(q.endTime).toLocaleString()}</div>
           <div><strong>Status:</strong> ${quizStatusBadge(q)}</div>
@@ -4232,9 +4247,17 @@ async function renderStudentQuizzes(content, showAll) {
                 <td style="font-size:0.85em;">${new Date(q.startTime).toLocaleString()}</td>
                 <td style="font-size:0.85em;">${new Date(q.endTime).toLocaleString()}</td>
                 <td><span class="status-badge" style="${statusColors[q.status] || ''}">${statusLabel}</span></td>
-                <td>${q.isSubmitted ? `<strong style="color:#3b82f6;">${q.myScore}/${q.myMaxScore}</strong>` : '—'}</td>
+                <td>
+                  ${q.isSubmitted
+                    ? `<strong style="color:#3b82f6;">${q.myScore}/${q.myMaxScore}</strong>${q.scorePolicy==='best'&&q.attemptCount>1?' <span style="font-size:10px;color:#9ca3af;">(best)</span>':''}`
+                    : '—'}
+                  ${q.maxAttempts !== 1 && q.isSubmitted
+                    ? `<br><span style="font-size:10px;color:#9ca3af;">${q.maxAttempts===0?'Unlimited retakes':q.attemptsLeft===0?'No retakes left':(q.attemptsLeft+' retake'+(q.attemptsLeft!==1?'s':'')+' left')}</span>`
+                    : ''}
+                </td>
                 <td style="white-space:nowrap;">
-                  ${q.canAttempt ? `<button class="btn btn-sm btn-primary" onclick="startStudentQuiz('${q._id}')">Take Quiz</button>` : ''}
+                  ${q.canContinue ? `<button class="btn btn-sm btn-primary" onclick="startStudentQuiz('${q._id}')">Continue</button>` : ''}
+                  ${q.canAttempt && !q.canContinue ? `<button class="btn btn-sm btn-primary" onclick="startStudentQuiz('${q._id}')">${q.attemptCount>0?'Retake':'Take Quiz'}</button>` : ''}
                   ${q.isSubmitted ? `<button class="btn btn-sm btn-secondary" onclick="viewStudentResult('${q._id}')">View Result</button>` : ''}
                 </td>
               </tr>`;
@@ -4385,11 +4408,16 @@ async function viewStudentResult(quizId) {
     const pct = attempt.maxScore > 0 ? Math.round((attempt.score / attempt.maxScore) * 100) : 0;
 
     content.innerHTML = `
-      <div class="page-header">
-        <h2>Quiz Result: ${attempt.quiz?.title || 'Quiz'}</h2>
-        <p>Score: <strong style="color:${pct >= 50 ? '#22c55e' : '#ef4444'};">${attempt.score}/${attempt.maxScore} (${pct}%)</strong></p>
+      <div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;">
+        <div>
+          <h2>Quiz Result: ${attempt.quiz?.title || 'Quiz'}</h2>
+          <p>Score: <strong style="color:${pct >= 50 ? '#22c55e' : '#ef4444'};">${attempt.score}/${attempt.maxScore} (${pct}%)</strong>
+          ${attempt.attemptNumber > 1 ? ` &nbsp;·&nbsp; Attempt ${attempt.attemptNumber}` : ''}</p>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="btn btn-secondary btn-sm" onclick="renderQuizzes()">← Back to Quizzes</button>
+        </div>
       </div>
-      <div class="actions-bar"><button class="btn btn-secondary btn-sm" onclick="renderQuizzes()">← Back to Quizzes</button></div>
       <div id="result-questions">
         ${answers.map((a, i) => {
           const q = a.question;
