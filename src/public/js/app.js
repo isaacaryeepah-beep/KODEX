@@ -3941,32 +3941,215 @@ async function viewQuizResults(quizId) {
     const quiz = data.quiz;
     const stats = data.stats;
     const attempts = data.attempts || [];
+    const qd = data.questionDifficulty || [];
+
+    const pctColor = (p) => p >= 70 ? '#22c55e' : p >= 50 ? '#f59e0b' : '#ef4444';
+    const diffLabel = (r) => r === null ? 'N/A' : r >= 70 ? '😊 Easy' : r >= 40 ? '😐 Medium' : '😰 Hard';
+    const diffColor = (r) => r === null ? '#9ca3af' : r >= 70 ? '#22c55e' : r >= 40 ? '#f59e0b' : '#ef4444';
+
     content.innerHTML = `
-      <div class="page-header"><h2>Results: ${quiz.title}</h2><p>${quiz.course?.code || ''} — ${quiz.course?.title || ''}</p></div>
-      <div class="actions-bar"><button class="btn btn-secondary btn-sm" onclick="renderQuizzes()">← Back</button></div>
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:16px;">
-        <div class="card" style="text-align:center;"><div style="font-size:1.8em;font-weight:bold;color:#3b82f6;">${stats.submitted}</div><div style="color:#6b7280;font-size:0.9em;">Submitted</div></div>
-        <div class="card" style="text-align:center;"><div style="font-size:1.8em;font-weight:bold;color:#22c55e;">${stats.averageScore}</div><div style="color:#6b7280;font-size:0.9em;">Avg Score</div></div>
-        <div class="card" style="text-align:center;"><div style="font-size:1.8em;font-weight:bold;color:#f59e0b;">${stats.passRate}%</div><div style="color:#6b7280;font-size:0.9em;">Pass Rate</div></div>
-        <div class="card" style="text-align:center;"><div style="font-size:1.8em;font-weight:bold;color:#8b5cf6;">${stats.highestScore}/${quiz.totalMarks || 0}</div><div style="color:#6b7280;font-size:0.9em;">Highest</div></div>
+      <div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;">
+        <div>
+          <h2>📊 Results: ${quiz.title}</h2>
+          <p>${quiz.course?.code || ''} — ${quiz.course?.title || ''} &nbsp;|&nbsp; ${quiz.totalMarks || 0} marks total</p>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="btn btn-secondary btn-sm" onclick="viewLecturerQuizDetail('${quizId}')">← Back to Quiz</button>
+          <button class="btn btn-sm" style="background:#059669;color:#fff;" onclick="exportQuizResultsCSV('${quizId}')">⬇ Export CSV</button>
+        </div>
       </div>
-      <div class="card">
-        <h3>Student Submissions</h3>
+
+      <!-- Stats row -->
+      <div class="stats-grid" style="margin-bottom:16px;">
+        <div class="stat-card">
+          <div class="stat-value">${stats.submitted}</div>
+          <div class="stat-label">Submitted</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" style="color:#6b7280;">${stats.notSubmitted}</div>
+          <div class="stat-label">Not Submitted</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">${stats.averageScore}/${quiz.totalMarks||0}</div>
+          <div class="stat-label">Average Score</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" style="color:${pctColor(stats.passRate)};">${stats.passRate}%</div>
+          <div class="stat-label">Pass Rate (≥50%)</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" style="color:#22c55e;">${stats.highestScore}</div>
+          <div class="stat-label">Highest</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" style="color:#ef4444;">${stats.lowestScore}</div>
+          <div class="stat-label">Lowest</div>
+        </div>
+      </div>
+
+      <!-- Score distribution bar -->
+      ${attempts.length ? (() => {
+        const buckets = [0,0,0,0,0]; // 0-19, 20-39, 40-59, 60-79, 80-100
+        attempts.forEach(a => {
+          const p = a.percentage;
+          const i = p >= 80 ? 4 : p >= 60 ? 3 : p >= 40 ? 2 : p >= 20 ? 1 : 0;
+          buckets[i]++;
+        });
+        const max = Math.max(...buckets, 1);
+        const labels = ['0–19%','20–39%','40–59%','60–79%','80–100%'];
+        const colors = ['#ef4444','#f97316','#f59e0b','#84cc16','#22c55e'];
+        return `<div class="card" style="margin-bottom:16px;">
+          <div class="card-title">Score Distribution</div>
+          <div style="display:flex;align-items:flex-end;gap:8px;height:90px;padding:0 4px;">
+            ${buckets.map((n,i) => `
+              <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;">
+                <span style="font-size:11px;font-weight:700;color:${n>0?colors[i]:'#9ca3af'};">${n}</span>
+                <div style="width:100%;background:${colors[i]};border-radius:4px 4px 0 0;height:${Math.max(4, Math.round((n/max)*70))}px;opacity:${n>0?'1':'0.15'};transition:height .3s;"></div>
+                <span style="font-size:10px;color:#9ca3af;">${labels[i]}</span>
+              </div>`).join('')}
+          </div>
+        </div>`;
+      })() : ''}
+
+      <!-- Student submissions table -->
+      <div class="card" style="margin-bottom:16px;">
+        <div class="card-title" style="justify-content:space-between;">
+          <span>Student Submissions (${attempts.length})</span>
+          ${attempts.length ? `<input type="text" id="results-search" placeholder="Search student…"
+            oninput="filterResultsTable(this.value)"
+            style="padding:5px 10px;border:1px solid #e5e7eb;border-radius:6px;font-size:12px;width:180px;">` : ''}
+        </div>
         ${attempts.length ? `
-          <table>
-            <thead><tr><th>Student</th><th>ID</th><th>Score</th><th>Percentage</th><th>Submitted At</th></tr></thead>
-            <tbody>${attempts.map(a => {
-              const pct = a.maxScore > 0 ? Math.round((a.score / a.maxScore) * 100) : 0;
-              return `<tr>
-                <td>${a.student?.name || 'Unknown'}</td>
-                <td>${a.student?.indexNumber || a.student?.email || 'N/A'}</td>
-                <td>${a.score}/${a.maxScore}</td>
-                <td><span style="color:${pct >= 50 ? '#22c55e' : '#ef4444'};font-weight:bold;">${pct}%</span></td>
-                <td>${a.submittedAt ? new Date(a.submittedAt).toLocaleString() : 'N/A'}</td>
-              </tr>`;
-            }).join('')}</tbody>
+          <div class="table-scroll">
+          <table id="results-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Student</th>
+                <th>Index / ID</th>
+                <th>Score</th>
+                <th>%</th>
+                <th>Status</th>
+                <th>Submitted</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              ${attempts.map((a, i) => `
+                <tr data-name="${(a.student?.name||'').toLowerCase()}" data-id="${(a.student?.indexNumber||a.student?.email||'').toLowerCase()}">
+                  <td style="color:#9ca3af;">${i+1}</td>
+                  <td style="font-weight:500;">${a.student?.name || 'Unknown'}</td>
+                  <td style="font-family:monospace;font-size:12px;">${a.student?.indexNumber || a.student?.email || '—'}</td>
+                  <td><strong>${a.score}/${a.maxScore}</strong></td>
+                  <td><span style="font-weight:700;color:${pctColor(a.percentage)};">${a.percentage}%</span></td>
+                  <td><span class="status-badge ${a.percentage >= 50 ? 'status-present' : 'status-absent'}">${a.percentage >= 50 ? 'Pass' : 'Fail'}</span></td>
+                  <td style="font-size:12px;color:#9ca3af;">${a.submittedAt ? new Date(a.submittedAt).toLocaleString() : '—'}</td>
+                  <td><button class="btn btn-sm btn-secondary" onclick="viewStudentQuizAnswers('${quizId}','${a._id}','${a.student?.name||'Student'}')">View</button></td>
+                </tr>`).join('')}
+            </tbody>
           </table>
+          </div>
         ` : '<div class="empty-state"><p>No submissions yet.</p></div>'}
+      </div>
+
+      <!-- Question difficulty analysis -->
+      ${qd.length ? `
+      <div class="card">
+        <div class="card-title">Question Analysis</div>
+        <div style="display:flex;flex-direction:column;gap:8px;">
+          ${qd.map((q,i) => `
+            <div style="padding:10px 12px;border:1px solid #e5e7eb;border-radius:8px;">
+              <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;">
+                <div style="flex:1;min-width:200px;">
+                  <span style="font-size:11px;font-weight:700;color:#9ca3af;text-transform:uppercase;">Q${i+1} · ${q.marks} mark${q.marks>1?'s':''}</span>
+                  <div style="font-size:13px;margin-top:2px;">${q.questionText}</div>
+                </div>
+                <div style="display:flex;align-items:center;gap:12px;flex-shrink:0;">
+                  <span style="font-size:12px;color:#64748b;">${q.correct}/${q.total} correct</span>
+                  <span style="font-size:12px;font-weight:700;color:${diffColor(q.successRate)};">${diffLabel(q.successRate)}</span>
+                  ${q.successRate !== null ? `<div style="width:80px;height:6px;background:#f1f5f9;border-radius:3px;overflow:hidden;">
+                    <div style="height:100%;width:${q.successRate}%;background:${diffColor(q.successRate)};border-radius:3px;"></div>
+                  </div>` : ''}
+                </div>
+              </div>
+            </div>`).join('')}
+        </div>
+      </div>` : ''}
+    `;
+
+    // Store data for CSV export and search
+    window._quizResultsData = { quiz, stats, attempts, quizId };
+  } catch (e) {
+    content.innerHTML = `<div class="card"><p>Error: ${e.message}</p></div>`;
+  }
+}
+
+function filterResultsTable(query) {
+  const q = query.toLowerCase();
+  document.querySelectorAll('#results-table tbody tr').forEach(row => {
+    const name = row.dataset.name || '';
+    const id   = row.dataset.id   || '';
+    row.style.display = (!q || name.includes(q) || id.includes(q)) ? '' : 'none';
+  });
+}
+
+async function viewStudentQuizAnswers(quizId, attemptId, studentName) {
+  const content = document.getElementById('main-content');
+  if (!content) return;
+  content.innerHTML = '<div class="card"><p>Loading…</p></div>';
+  try {
+    const data = await api(`/api/lecturer/quizzes/${quizId}/results/${attemptId}`);
+    const attempt = data.attempt;
+    const answers = data.answers || [];
+    const pct = attempt.percentage;
+
+    content.innerHTML = `
+      <div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;">
+        <div>
+          <h2>${studentName}'s Answers</h2>
+          <p>Score: <strong style="color:${pct>=50?'#22c55e':'#ef4444'};">${attempt.score}/${attempt.maxScore} (${pct}%)</strong>
+          &nbsp;·&nbsp; ${attempt.submittedAt ? new Date(attempt.submittedAt).toLocaleString() : ''}</p>
+        </div>
+        <button class="btn btn-secondary btn-sm" onclick="viewQuizResults('${quizId}')">← Back to Results</button>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:10px;">
+        ${answers.map((a, i) => {
+          const q = a.question;
+          if (!q) return '';
+          const isFill = q.questionType === 'fill';
+          return `
+            <div class="card" style="border-left:4px solid ${a.isCorrect ? '#22c55e' : '#ef4444'};">
+              <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;">
+                <div>
+                  <span style="font-size:11px;font-weight:700;color:#9ca3af;text-transform:uppercase;">Q${i+1} · ${q.marks} mark${q.marks>1?'s':''}</span>
+                  <div style="font-size:14px;font-weight:500;margin-top:2px;">${q.questionText}</div>
+                </div>
+                <span class="status-badge ${a.isCorrect ? 'status-present' : 'status-absent'}" style="flex-shrink:0;">${a.isCorrect ? '✓ Correct' : '✗ Wrong'}</span>
+              </div>
+              ${isFill
+                ? `<div style="display:flex;flex-direction:column;gap:6px;font-size:13px;">
+                    <div style="padding:7px 12px;border-radius:6px;border:1px solid ${a.isCorrect?'#22c55e':'#ef4444'};background:${a.isCorrect?'#f0fdf4':'#fef2f2'};color:${a.isCorrect?'#15803d':'#dc2626'};">
+                      ${a.isCorrect?'✓':'✗'} Student wrote: <strong>${a.selectedAnswerText || '(no answer)'}</strong>
+                    </div>
+                    ${!a.isCorrect ? `<div style="padding:7px 12px;border-radius:6px;border:1px solid #22c55e;background:#f0fdf4;color:#15803d;">✓ Correct: <strong>${q.correctAnswerText||''}</strong></div>` : ''}
+                  </div>`
+                : `<div style="display:flex;flex-direction:column;gap:5px;font-size:13px;">
+                    ${(q.options||[]).map((opt,oi) => {
+                      const isSelected = oi === a.selectedAnswer;
+                      const isCorrect = oi === q.correctAnswer;
+                      let bg = '#f9fafb', border = '#e5e7eb', color = '#374151';
+                      if (isCorrect)  { bg = '#f0fdf4'; border = '#22c55e'; color = '#15803d'; }
+                      if (isSelected && !a.isCorrect) { bg = '#fef2f2'; border = '#ef4444'; color = '#dc2626'; }
+                      return `<div style="padding:7px 12px;border-radius:6px;border:1px solid ${border};background:${bg};color:${color};">
+                        <strong>${String.fromCharCode(65+oi)}.</strong> ${opt}
+                        ${isSelected && a.isCorrect ? ' ✓ Correct answer' : ''}
+                        ${isSelected && !a.isCorrect ? ' ✗ Student chose this' : ''}
+                        ${!isSelected && isCorrect ? ' ← Correct answer' : ''}
+                      </div>`;
+                    }).join('')}
+                  </div>`}
+            </div>`;
+        }).join('')}
       </div>
     `;
   } catch (e) {
@@ -3974,14 +4157,43 @@ async function viewQuizResults(quizId) {
   }
 }
 
+function exportQuizResultsCSV(quizId) {
+  const d = window._quizResultsData;
+  if (!d || d.quizId !== quizId) { toastWarning('Load the results first.'); return; }
+  const rows = [['#','Name','Index/ID','Score','Max Score','Percentage','Status','Submitted At']];
+  d.attempts.forEach((a,i) => {
+    rows.push([
+      i+1,
+      a.student?.name || 'Unknown',
+      a.student?.indexNumber || a.student?.email || '',
+      a.score,
+      a.maxScore,
+      a.percentage + '%',
+      a.percentage >= 50 ? 'Pass' : 'Fail',
+      a.submittedAt ? new Date(a.submittedAt).toLocaleString() : '',
+    ]);
+  });
+  const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${d.quiz.title.replace(/[^a-zA-Z0-9]/g,'_')}_results.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+  toastSuccess('CSV downloaded!');
+}
+
 async function deleteLecturerQuiz(quizId) {
-  if (!confirm('Are you sure you want to delete this quiz? All questions and submissions will be removed.')) return;
-  try {
-    await api(`/api/lecturer/quizzes/${quizId}`, { method: 'DELETE' });
-    renderQuizzes();
-  } catch (e) {
-    toastError(e.message);
-  }
+  toastConfirm('Delete this quiz? All questions and submissions will be removed.', async () => {
+    try {
+      await api(`/api/lecturer/quizzes/${quizId}`, { method: 'DELETE' });
+      renderQuizzes();
+      toastSuccess('Quiz deleted.');
+    } catch (e) {
+      toastError(e.message);
+    }
+  });
 }
 
 async function renderStudentQuizzes(content, showAll) {
