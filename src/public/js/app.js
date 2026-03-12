@@ -2837,6 +2837,9 @@ async function startMeeting(id) {
     const data = await api(`/api/zoom/${id}/start`, { method: 'POST' });
     const joinUrl = data.joinUrl;
 
+    // Record host as an attendee
+    await api(`/api/zoom/${id}/join`, { method: 'POST' }).catch(() => {});
+
     // Open Jitsi meeting immediately in new tab
     window.open(joinUrl, '_blank');
 
@@ -4611,12 +4614,8 @@ async function showJitsiJoin() {
 async function submitJitsiJoin(meetingId, joinUrl) {
   try {
     await api(`/api/zoom/${meetingId}/join`, { method: 'POST' });
-    await api('/api/attendance-sessions/mark', {
-      method: 'POST',
-      body: JSON.stringify({ method: 'jitsi_join', meetingId }),
-    });
-    alert('Attendance marked via meeting join!');
     if (joinUrl) window.open(joinUrl, '_blank');
+    alert('Attendance marked via meeting join!');
     navigateTo('mark-attendance');
   } catch (e) {
     alert(e.message);
