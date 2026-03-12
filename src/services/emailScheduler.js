@@ -21,11 +21,11 @@ async function getAdminsForCompany(companyId) {
     company: companyId,
     role: { $in: ['admin', 'lecturer', 'superadmin'] },
     isActive: true,
-  }).select('email firstName lastName').lean();
+  }).select('email name').lean();
 }
 
 function fullName(user) {
-  return [user.firstName, user.lastName].filter(Boolean).join(' ') || user.email.split('@')[0];
+  return user.name || user.email.split('@')[0];
 }
 
 // ── Daily email job ────────────────────────────────────────────────────────────
