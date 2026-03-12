@@ -169,6 +169,10 @@ exports.removeStudent = async (req, res) => {
   try {
     const { id, studentId } = req.params;
 
+    if (!mongoose.Types.ObjectId.isValid(id) || !mongoose.Types.ObjectId.isValid(studentId)) {
+      return res.status(400).json({ error: "Invalid ID" });
+    }
+
     const removeFilter = { _id: id, ...req.companyFilter };
     if (req.user.role === "lecturer") {
       removeFilter.lecturer = req.user._id;
