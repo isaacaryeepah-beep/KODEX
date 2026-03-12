@@ -1645,6 +1645,7 @@ function showDashboard(data) {
     }
 
     buildSidebar();
+  loadAnnBadge();
     applyBranding(); // async — applies colors/logo in background
     // If student arrived via QR scan link, go straight to mark-attendance to auto-submit
     if (new URLSearchParams(window.location.search).get('qr_token')) {
@@ -1755,7 +1756,7 @@ function buildSidebar() {
 
   nav.innerHTML =
     `<div class="sidebar-section-title">Navigation</div>` +
-    links.map(l => `<a onclick="navigateTo('${l.id}')" id="nav-${l.id}">${l.icon} <span>${l.label}</span></a>`).join('') +
+    links.map(l => `<a onclick="navigateTo('${l.id}')" id="nav-${l.id}">${l.icon} <span>${l.label}</span>${l.id==='announcements'?'<span id="ann-badge" style="display:none;margin-left:auto;background:#ef4444;color:#fff;font-size:10px;font-weight:700;padding:1px 6px;border-radius:20px;min-width:16px;text-align:center;"></span>':''}</a>`).join('') +
     `<div class="sidebar-section-title" style="margin-top:12px">Account</div>` +
     universalLinks.map(l => `<a onclick="navigateTo('${l.id}')" id="nav-${l.id}">${l.icon} <span>${l.label}</span></a>`).join('');
 }
@@ -6366,88 +6367,196 @@ function renderContact() {
 //  FEATURE: ANNOUNCEMENTS / NOTIFICATIONS
 // ══════════════════════════════════════════════════════════════════════════════
 // Stored in localStorage per company (simple in-app announcements)
-function getAnnouncements() {
+// ── Announcements (server-backed) ───────────────────────────────────────────
+
+async function loadAnnBadge() {
   try {
-    const key = 'announcements_' + (currentUser?.company?._id || currentUser?.company || 'default');
-    return JSON.parse(localStorage.getItem(key) || '[]');
-  } catch(e) { return []; }
+    const data = await api('/api/announcements/unread-count');
+    const badge = document.getElementById('ann-badge');
+    if (!badge) return;
+    if (data.count > 0) {
+      badge.textContent = data.count > 99 ? '99+' : data.count;
+      badge.style.display = 'inline-block';
+    } else {
+      badge.style.display = 'none';
+    }
+  } catch(_) {}
 }
 
-function saveAnnouncements(list) {
-  try {
-    const key = 'announcements_' + (currentUser?.company?._id || currentUser?.company || 'default');
-    localStorage.setItem(key, JSON.stringify(list));
-  } catch(e) {}
-}
 
-function renderAnnouncements() {
+
+const ANN_COLORS = { info:'#6366f1', warning:'#f59e0b', success:'#22c55e', urgent:'#ef4444' };
+const ANN_ICONS  = { info:'ℹ️', warning:'⚠️', success:'✅', urgent:'🚨' };
+const ANN_CAN_POST = ['admin','superadmin','lecturer','manager'];
+
+async function renderAnnouncements() {
   const content = document.getElementById('main-content');
   if (!content) return;
-  const canPost = ['admin', 'lecturer', 'manager', 'superadmin'].includes(currentUser.role);
-  const announcements = getAnnouncements();
+  content.innerHTML = '<div class="loading">Loading announcements…</div>';
+  try {
+    const data = await api('/api/announcements');
+    const anns = data.announcements || [];
+    const canPost = ANN_CAN_POST.includes(currentUser.role);
+    const isAdmin = ['admin','superadmin'].includes(currentUser.role);
 
-  content.innerHTML = `
-    <div class="page-header"><h2>Announcements</h2><p>Institution-wide notices and updates</p></div>
+    content.innerHTML = `
+      <div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;">
+        <div>
+          <h2>Announcements</h2>
+          <p>Institution-wide notices and updates</p>
+        </div>
+        ${canPost ? `<button class="btn btn-primary" onclick="openPostAnnouncementModal()">＋ Post Announcement</button>` : ''}
+      </div>
+      <div id="ann-list">
+        ${anns.length === 0
+          ? '<div class="card"><div class="empty-state"><p>No announcements yet.</p></div></div>'
+          : anns.map(a => annCard(a, canPost, isAdmin)).join('')}
+      </div>`;
 
-    ${canPost ? `
-    <div class="card" style="margin-bottom:16px">
-      <h3 style="margin-bottom:12px">Post Announcement</h3>
-      <div class="form-group">
-        <label>Title</label>
-        <input type="text" id="ann-title" placeholder="e.g. Class cancelled tomorrow">
-      </div>
-      <div class="form-group">
-        <label>Message</label>
-        <textarea id="ann-body" rows="3" placeholder="Enter your announcement..." style="width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;font-family:inherit;resize:vertical"></textarea>
-      </div>
-      <div style="display:flex;gap:8px;align-items:center">
-        <select id="ann-type" style="padding:8px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;background:var(--bg-primary);color:var(--text-primary)">
-          <option value="info">ℹ️ Info</option>
-          <option value="warning">⚠️ Warning</option>
-          <option value="success">✅ Good News</option>
-          <option value="urgent">🚨 Urgent</option>
-        </select>
-        <button class="btn btn-primary btn-sm" onclick="postAnnouncement()">Post</button>
-      </div>
-    </div>
-    ` : ''}
+    // Mark all unread as read
+    anns.filter(a => !a.isRead).forEach(a => {
+      api('/api/announcements/' + a._id + '/read', { method: 'PATCH' }).catch(()=>{});
+    });
+  } catch(e) {
+    content.innerHTML = `<div class="card"><p style="color:#ef4444;">Error: ${e.message}</p></div>`;
+  }
+}
 
-    <div id="announcements-list">
-      ${announcements.length ? announcements.slice().reverse().map(a => `
-        <div class="card" style="margin-bottom:12px;border-left:4px solid ${
-          a.type==='warning'?'#f59e0b':a.type==='success'?'#22c55e':a.type==='urgent'?'#ef4444':'var(--primary)'}">
-          <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">
-            <div style="flex:1">
-              <div style="font-weight:700;font-size:15px;margin-bottom:4px">${a.title}</div>
-              <div style="font-size:13px;color:var(--text-light);margin-bottom:8px">${a.body}</div>
-              <div style="font-size:11px;color:var(--text-light)">
-                Posted by ${a.author} · ${new Date(a.ts).toLocaleString()}
-              </div>
-            </div>
-            ${canPost ? `<button onclick="deleteAnnouncement('${a.id}')" style="background:none;border:none;cursor:pointer;color:var(--text-light);font-size:18px;padding:0 4px" title="Delete">×</button>` : ''}
+function annCard(a, canPost, isAdmin) {
+  const color = ANN_COLORS[a.type] || '#6366f1';
+  const icon  = ANN_ICONS[a.type]  || 'ℹ️';
+  const canDelete = isAdmin || (canPost && a.author?._id === (currentUser._id || currentUser.id));
+  const audienceLabel = { all:'Everyone', students:'Students', lecturers:'Lecturers', employees:'Employees' }[a.audience] || 'Everyone';
+  return `
+    <div class="card" style="margin-bottom:12px;border-left:4px solid ${color};position:relative;${a.pinned?'background:linear-gradient(135deg,var(--card),#fefce8);':''}" id="ann-${a._id}">
+      ${a.pinned ? '<div style="position:absolute;top:10px;right:12px;font-size:11px;color:#92400e;font-weight:700;background:#fef3c7;padding:2px 7px;border-radius:20px;">📌 Pinned</div>' : ''}
+      <div style="display:flex;align-items:flex-start;gap:12px;">
+        <div style="font-size:22px;flex-shrink:0;margin-top:2px;">${icon}</div>
+        <div style="flex:1;min-width:0;">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;flex-wrap:wrap;">
+            <span style="font-weight:700;font-size:15px;">${a.title}</span>
+            ${!a.isRead ? '<span style="background:#6366f1;color:#fff;font-size:10px;padding:1px 7px;border-radius:20px;font-weight:700;">NEW</span>' : ''}
+          </div>
+          <div style="font-size:13px;color:var(--text-light);margin-bottom:10px;white-space:pre-wrap;line-height:1.6;">${a.body}</div>
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:11px;color:var(--text-muted);">
+            <span>👤 ${a.author?.name || 'Unknown'}</span>
+            <span>📢 ${audienceLabel}</span>
+            <span>🕐 ${new Date(a.createdAt).toLocaleString()}</span>
+            ${a.readCount > 0 ? `<span>👁 ${a.readCount} read</span>` : ''}
           </div>
         </div>
-      `).join('') : '<div class="card"><div class="empty-state"><p>No announcements yet</p></div></div>'}
-    </div>
-  `;
+        <div style="display:flex;gap:5px;flex-shrink:0;flex-direction:column;align-items:flex-end;">
+          ${isAdmin ? `<button class="btn btn-sm btn-secondary" style="font-size:11px;padding:3px 8px;" onclick="annTogglePin('${a._id}')">${a.pinned?'Unpin':'📌 Pin'}</button>` : ''}
+          ${canDelete ? `<button style="background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:16px;padding:2px 4px;" onclick="annDelete('${a._id}')" title="Delete">×</button>` : ''}
+        </div>
+      </div>
+    </div>`;
 }
 
-function postAnnouncement() {
-  const title = document.getElementById('ann-title').value.trim();
-  const body  = document.getElementById('ann-body').value.trim();
-  const type  = document.getElementById('ann-type').value;
-  if (!title || !body) { toastWarning('Please fill in the title and message'); return; };
+function openPostAnnouncementModal() {
+  const existing = document.getElementById('ann-post-overlay');
+  if (existing) existing.remove();
+  const isAdmin = ['admin','superadmin'].includes(currentUser.role);
 
-  const list = getAnnouncements();
-  list.push({ id: Date.now().toString(), title, body, type, author: currentUser.name || currentUser.role, ts: Date.now() });
-  saveAnnouncements(list);
-  renderAnnouncements();
+  const ol = document.createElement('div');
+  ol.id = 'ann-post-overlay';
+  ol.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:400;display:flex;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(3px)';
+  ol.innerHTML = `
+    <div style="background:var(--card);border-radius:14px;width:100%;max-width:520px;max-height:92vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.2);">
+      <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;background:var(--card);z-index:1;border-radius:14px 14px 0 0;">
+        <h3 style="font-size:15px;font-weight:700;margin:0">📢 Post Announcement</h3>
+        <button onclick="document.getElementById('ann-post-overlay').remove()" style="width:26px;height:26px;border-radius:6px;border:1px solid var(--border);background:var(--bg);cursor:pointer;font-size:13px;">✕</button>
+      </div>
+      <div style="padding:18px 20px;display:flex;flex-direction:column;gap:13px;">
+        <div>
+          <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:5px;display:block;">Title *</label>
+          <input id="ann-title" placeholder="e.g. Class cancelled tomorrow" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;font-family:inherit;outline:none;">
+        </div>
+        <div>
+          <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:5px;display:block;">Message *</label>
+          <textarea id="ann-body" rows="4" placeholder="Enter your announcement…" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;resize:vertical;outline:none;"></textarea>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+          <div>
+            <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:5px;display:block;">Type</label>
+            <select id="ann-type" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;">
+              <option value="info">ℹ️ Info</option>
+              <option value="warning">⚠️ Warning</option>
+              <option value="success">✅ Good News</option>
+              <option value="urgent">🚨 Urgent</option>
+            </select>
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:5px;display:block;">Audience</label>
+            <select id="ann-audience" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;">
+              <option value="all">Everyone</option>
+              <option value="students">Students only</option>
+              <option value="lecturers">Lecturers only</option>
+              <option value="employees">Employees only</option>
+            </select>
+          </div>
+        </div>
+        <div>
+          <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:5px;display:block;">Expires At <span style="font-weight:400;text-transform:none;">(optional)</span></label>
+          <input id="ann-expires" type="datetime-local" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;">
+        </div>
+        ${isAdmin ? `
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;font-weight:500;">
+          <input type="checkbox" id="ann-pinned" style="accent-color:var(--primary);width:15px;height:15px;">
+          📌 Pin this announcement to the top
+        </label>` : ''}
+        <div id="ann-post-err" style="display:none;padding:8px 12px;background:#fef2f2;border:1px solid #fecaca;border-radius:7px;color:#dc2626;font-size:12px;font-weight:500;"></div>
+      </div>
+      <div style="padding:12px 20px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end;position:sticky;bottom:0;background:var(--card);border-radius:0 0 14px 14px;">
+        <button class="btn btn-secondary" onclick="document.getElementById('ann-post-overlay').remove()">Cancel</button>
+        <button class="btn btn-primary" onclick="submitAnnouncement()">📢 Post</button>
+      </div>
+    </div>`;
+  document.body.appendChild(ol);
 }
 
-function deleteAnnouncement(id) {
-  const list = getAnnouncements().filter(a => a.id !== id);
-  saveAnnouncements(list);
-  renderAnnouncements();
+async function submitAnnouncement() {
+  const title    = document.getElementById('ann-title')?.value?.trim();
+  const body     = document.getElementById('ann-body')?.value?.trim();
+  const type     = document.getElementById('ann-type')?.value || 'info';
+  const audience = document.getElementById('ann-audience')?.value || 'all';
+  const expiresAt= document.getElementById('ann-expires')?.value || null;
+  const pinned   = document.getElementById('ann-pinned')?.checked || false;
+  const errEl    = document.getElementById('ann-post-err');
+
+  if (!title || !body) {
+    if (errEl) { errEl.textContent = 'Title and message are required.'; errEl.style.display = 'block'; }
+    return;
+  }
+  try {
+    await api('/api/announcements', {
+      method: 'POST',
+      body: JSON.stringify({ title, body, type, audience, pinned, expiresAt: expiresAt ? new Date(expiresAt).toISOString() : null }),
+    });
+    document.getElementById('ann-post-overlay')?.remove();
+    toastSuccess('Announcement posted ✓');
+    renderAnnouncements();
+  } catch(e) {
+    if (errEl) { errEl.textContent = e.message || 'Failed to post'; errEl.style.display = 'block'; }
+  }
+}
+
+async function annDelete(id) {
+  toastConfirm('Delete this announcement?', async () => {
+    try {
+      await api('/api/announcements/' + id, { method: 'DELETE' });
+      document.getElementById('ann-' + id)?.remove();
+      toastSuccess('Announcement deleted');
+    } catch(e) { toastError('Delete failed'); }
+  });
+}
+
+async function annTogglePin(id) {
+  try {
+    const data = await api('/api/announcements/' + id + '/pin', { method: 'PATCH' });
+    toastSuccess(data.pinned ? 'Pinned ✓' : 'Unpinned');
+    renderAnnouncements();
+  } catch(e) { toastError('Failed to update pin'); }
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
