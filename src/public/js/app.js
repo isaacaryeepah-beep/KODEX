@@ -1681,6 +1681,8 @@ function buildSidebar() {
       if (currentUser.company?.mode === 'academic') {
         links.push({ id: 'courses', label: 'Courses', icon: coursesIcon() });
         links.push({ id: 'quizzes', label: 'Quizzes', icon: quizzesIcon() });
+        links.push({ id: 'gradebook', label: 'Grade Book', icon: svgIcon('<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>') });
+        links.push({ id: 'announcements', label: 'Announcements', icon: svgIcon('<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>') });
       }
       if (currentUser.company?.mode === 'corporate') {
         links.push({ id: 'sign-in-out', label: 'Sign In / Out', icon: attendanceIcon() });
