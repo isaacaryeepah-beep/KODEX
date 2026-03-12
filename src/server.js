@@ -50,7 +50,7 @@ app.use(helmet({
 
 // ── CORS: only allow your own domain ─────────────────────────────────────────
 const allowedOrigins = [
-  "https://kodex-7l3g.onrender.com",  // render subdomain
+  "https://kodex-713g.onrender.com",  // render subdomain
   "https://kodex.it.com",             // custom domain
   "https://www.kodex.it.com",         // www variant
   "http://kodex.it.com",              // http fallback
