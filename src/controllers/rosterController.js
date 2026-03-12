@@ -16,11 +16,9 @@ exports.uploadRoster = async (req, res) => {
       return res.status(400).json({ error: "Invalid course ID" });
     }
 
-    const course = await Course.findOne({
-      _id: courseId,
-      company: req.user.company,
-      lecturer: req.user._id,
-    });
+    const courseFilter = { _id: courseId, company: req.user.company };
+    if (req.user.role === "lecturer") courseFilter.lecturer = req.user._id;
+    const course = await Course.findOne(courseFilter);
 
     if (!course) {
       return res.status(404).json({ error: "Course not found or you don't have access to it" });
@@ -143,11 +141,9 @@ exports.clearRoster = async (req, res) => {
   try {
     const { courseId } = req.params;
 
-    const course = await Course.findOne({
-      _id: courseId,
-      company: req.user.company,
-      lecturer: req.user._id,
-    });
+    const clearFilter = { _id: courseId, company: req.user.company };
+    if (req.user.role === "lecturer") clearFilter.lecturer = req.user._id;
+    const course = await Course.findOne(clearFilter);
 
     if (!course) {
       return res.status(404).json({ error: "Course not found or access denied" });
