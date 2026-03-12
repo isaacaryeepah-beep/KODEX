@@ -1629,7 +1629,7 @@ async function renderLecturerDashboard(content) {
   const [sessionsData, coursesData, quizzesData] = await Promise.all([
     api('/api/attendance-sessions?limit=5').catch(() => ({ sessions: [], pagination: { total: 0 } })),
     api('/api/courses').catch(() => ({ courses: [] })),
-    api('/api/quizzes').catch(() => ({ quizzes: [] })),
+    api('/api/lecturer/quizzes').catch(() => ({ quizzes: [] })),
   ]);
 
   // Count students enrolled across lecturer's courses only
@@ -1882,7 +1882,7 @@ async function renderStudentDashboard(content) {
   const [attendance, coursesData, quizzesData, meetingsData, activeSessionData] = await Promise.all([
     api('/api/attendance-sessions/my-attendance?limit=5').catch(() => ({ records: [], pagination: { total: 0 } })),
     api('/api/courses').catch(() => ({ courses: [] })),
-    api('/api/quizzes').catch(() => ({ quizzes: [] })),
+    api('/api/student/quizzes').catch(() => ({ quizzes: [] })),
     api('/api/zoom').catch(() => ({ meetings: [] })),
     api('/api/attendance-sessions/active').catch(() => ({ session: null })),
   ]);
