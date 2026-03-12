@@ -20,4 +20,7 @@ router.post("/:id/cancel", requireRole("manager", "lecturer", "admin", "superadm
 
 router.patch("/:id/invite-link", requireRole("manager", "lecturer", "admin", "superadmin"), ctrl.setInviteLink);
 
+router.get("/:id/attendance", requireRole("admin", "manager", "lecturer", "superadmin"), ctrl.getMeetingAttendance);
+router.get("/:id/attendance/csv", requireRole("admin", "manager", "lecturer", "superadmin"), ctrl.getMeetingAttendanceCSV);
+
 module.exports = router;
