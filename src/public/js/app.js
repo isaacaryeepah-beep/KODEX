@@ -2730,7 +2730,7 @@ async function renderMeetings() {
                 <td><span class="status-badge" style="${statusStyle(m.status)}">${m.status.charAt(0).toUpperCase() + m.status.slice(1)}</span></td>
                 <td style="white-space:nowrap;">
                   ${m.status === 'active' || m.status === 'scheduled' ? `<button class="btn btn-success btn-sm" onclick="joinMeeting('${m._id}', '${m.joinUrl}')">Join</button>` : ''}
-                  ${canControl && m.status === 'scheduled' ? `<button class="btn btn-primary btn-sm" onclick="startMeeting('${m._id}')" style="margin-left:4px;">Start</button>` : ''}
+                  ${canControl && m.status === 'scheduled' ? `<button class="btn btn-primary btn-sm" onclick="startMeeting('${m._id}')" style="margin-left:4px;">▶ Start Now</button>` : ''}
                   ${canControl ? `<button class="btn btn-sm" style="margin-left:4px;background:#0ea5e9;color:#fff;font-size:11px" onclick="showInviteLinkForm('${m._id}', \`${m.inviteLink || ''}\`)">🔗 Invite Link</button>` : ''}
                   ${m.inviteLink ? `<a href="${m.inviteLink}" target="_blank" class="btn btn-sm" style="margin-left:4px;background:#f0fdf4;color:#16a34a;border:1px solid #86efac;font-size:11px">▶ Join via Link</a>` : ''}
                   ${canControl && m.status === 'active' ? `<button class="btn btn-danger btn-sm" onclick="endMeeting('${m._id}')" style="margin-left:4px;">End</button>` : ''}
@@ -2754,25 +2754,20 @@ function showCreateMeetingModal() {
   container.classList.remove('hidden');
   container.innerHTML = `
     <div class="modal-overlay" onclick="if(event.target===this)closeModal()">
-      <div class="modal" onclick="event.stopPropagation()" style="max-width:500px;">
-        <h3>Schedule Jitsi Meeting</h3>
-        <div class="form-group">
-          <label>Title *</label>
-          <input type="text" id="meeting-title" placeholder="Meeting title" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;">
+      <div class="modal" onclick="event.stopPropagation()" style="max-width:420px;text-align:center;">
+        <div style="font-size:44px;margin-bottom:8px;">🎥</div>
+        <h3 style="margin:0 0 6px;">Start a Meeting</h3>
+        <p style="font-size:13px;color:var(--text-light);margin-bottom:20px;">Enter a title and tap Start — the meeting opens instantly and you can share the link.</p>
+        <div class="form-group" style="text-align:left;">
+          <label>Meeting Title *</label>
+          <input type="text" id="meeting-title" placeholder="e.g. Week 5 Lecture" autofocus
+            style="width:100%;padding:10px;border:1px solid #d1d5db;border-radius:8px;font-size:15px;"
+            onkeydown="if(event.key==='Enter')createAndStartMeeting()">
         </div>
-        <div class="form-group">
-          <label>Start Time *</label>
-          <input type="datetime-local" id="meeting-start" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;">
-        </div>
-        <div class="form-group">
-          <label>End Time *</label>
-          <input type="datetime-local" id="meeting-end" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;">
-        </div>
-        <div id="meeting-error" style="color:#ef4444;margin:8px 0;display:none;"></div>
-        <div class="modal-actions">
+        <div id="meeting-error" style="color:#ef4444;margin:8px 0;display:none;font-size:13px;"></div>
+        <div class="modal-actions" style="justify-content:center;gap:10px;margin-top:16px;">
           <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
-          <button class="btn btn-success" onclick="createAndStartMeeting()" style="gap:6px">🎥 Start Now</button>
-          <button class="btn btn-primary" onclick="createMeeting()">Schedule</button>
+          <button class="btn btn-success" id="start-meeting-btn" onclick="createAndStartMeeting()" style="padding:10px 28px;font-size:15px;">🎥 Start Meeting</button>
         </div>
       </div>
     </div>
@@ -2808,25 +2803,25 @@ async function createMeeting() {
 async function createAndStartMeeting() {
   const title = document.getElementById('meeting-title').value.trim();
   const errEl = document.getElementById('meeting-error');
+  const btn = document.getElementById('start-meeting-btn');
   if (!title) {
     errEl.textContent = 'Please enter a meeting title.';
     errEl.style.display = 'block';
     return;
   }
-  // Set start/end to now + 1hr if not filled
+  if (btn) { btn.textContent = 'Starting…'; btn.disabled = true; }
   const now = new Date();
   const end = new Date(now.getTime() + 60 * 60 * 1000);
-  const startVal = document.getElementById('meeting-start').value || now.toISOString().slice(0,16);
-  const endVal = document.getElementById('meeting-end').value || end.toISOString().slice(0,16);
-
   try {
     const data = await api('/api/zoom', { method: 'POST', body: JSON.stringify({
-      title, scheduledStart: startVal, scheduledEnd: endVal,
+      title,
+      scheduledStart: now.toISOString().slice(0,16),
+      scheduledEnd: end.toISOString().slice(0,16),
     }) });
     closeModal();
-    // Immediately start it
     await startMeeting(data.meeting._id);
   } catch(e) {
+    if (btn) { btn.textContent = '🎥 Start Meeting'; btn.disabled = false; }
     errEl.textContent = e.message;
     errEl.style.display = 'block';
   }
@@ -2843,32 +2838,31 @@ async function startMeeting(id) {
     // Open Jitsi meeting immediately in new tab
     window.open(joinUrl, '_blank');
 
-    // Show invite link modal so lecturer can share it
+    // Show share modal
     const container = document.getElementById('modal-container');
     container.classList.remove('hidden');
     container.innerHTML = `
       <div class="modal-overlay" onclick="closeModal(event)">
         <div class="modal" onclick="event.stopPropagation()" style="max-width:460px;text-align:center">
-          <div style="font-size:48px;margin-bottom:12px">🎥</div>
-          <h3 style="margin:0 0 6px">Meeting Started!</h3>
-          <p style="font-size:13px;color:var(--text-light);margin-bottom:20px">The meeting has opened in a new tab. Share the invite link below with your students/employees.</p>
-
-          <div style="background:#f8f9ff;border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:16px;text-align:left">
-            <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;margin-bottom:6px">Invite Link</div>
-            <div style="font-size:13px;word-break:break-all;color:var(--primary);font-weight:600">${joinUrl}</div>
-          </div>
-
-          <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
-            <button class="btn btn-primary" onclick="
+          <div style="font-size:48px;margin-bottom:10px">🎥</div>
+          <h3 style="margin:0 0 6px">Meeting is Live!</h3>
+          <p style="font-size:13px;color:var(--text-light);margin-bottom:20px">
+            Your meeting opened in a new tab. Share the link below so others can join.
+          </p>
+          <div style="background:#f0fdf4;border:1px solid #86efac;border-radius:10px;padding:14px;margin-bottom:20px;text-align:left">
+            <div style="font-size:11px;font-weight:700;color:#15803d;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">🔗 Invite Link</div>
+            <div style="font-size:13px;word-break:break-all;color:#1d4ed8;font-weight:600;margin-bottom:10px">${joinUrl}</div>
+            <button class="btn btn-primary" style="width:100%;font-size:14px;padding:10px;" onclick="
               navigator.clipboard.writeText('${joinUrl}').then(() => {
-                this.textContent = '✅ Copied!';
-                setTimeout(() => this.textContent = '📋 Copy Link', 2000);
-              }).catch(() => {
-                prompt('Copy this link:', '${joinUrl}');
-              })
+                this.textContent = '✅ Link Copied!';
+                this.style.background = '#16a34a';
+                setTimeout(() => { this.textContent = '📋 Copy Link'; this.style.background = ''; }, 3000);
+              }).catch(() => { prompt('Copy this link:', '${joinUrl}'); })
             ">📋 Copy Link</button>
-            <button class="btn btn-success" onclick="window.open('${joinUrl}', '_blank')">🎥 Rejoin Meeting</button>
-            <button class="btn btn-secondary" onclick="closeModal();renderMeetings()">Close</button>
+          </div>
+          <div style="display:flex;gap:8px;justify-content:center;">
+            <button class="btn btn-success" onclick="window.open('${joinUrl}', '_blank')">🎥 Rejoin</button>
+            <button class="btn btn-secondary" onclick="closeModal();renderMeetings()">Done</button>
           </div>
         </div>
       </div>
