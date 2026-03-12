@@ -234,13 +234,15 @@ exports.submitAttempt = async (req, res) => {
     }
 
     const now = new Date();
-    if (now > quiz.endTime) {
-      return res.status(400).json({ error: "Quiz has ended" });
-    }
-
     const attempt = await Attempt.findOne({ quiz: id, student: req.user._id });
     if (!attempt) {
       return res.status(400).json({ error: "You must start the quiz first" });
+    }
+    // Allow submission if within the student's personal time window (startedAt + timeLimit)
+    // even if quiz.endTime has passed — prevents timer expiry causing a rejection
+    const personalDeadline = new Date(attempt.startedAt.getTime() + quiz.timeLimit * 60 * 1000 + 30000); // +30s grace
+    if (now > quiz.endTime && now > personalDeadline) {
+      return res.status(400).json({ error: "Quiz has ended" });
     }
     if (attempt.isSubmitted) {
       return res.status(409).json({ error: "Quiz already submitted" });
@@ -310,7 +312,7 @@ exports.getMyResult = async (req, res) => {
     }
 
     const answers = await Answer.find({ attempt: attempt._id })
-      .populate("question", "questionText options correctAnswer marks");
+      .populate("question", "questionText options marks"); // correctAnswer withheld from students
 
     res.json({ attempt, answers });
   } catch (error) {
