@@ -100,6 +100,14 @@
               <p>Instructors</p>
               <span class="portal-arrow">&rarr;</span>
             </div>
+            <div class="portal-card hod-portal" onclick="selectPortal('hod')"><a href="javascript:void(0)" onclick="selectPortal('hod')" style="position:absolute;inset:0;z-index:10;-webkit-tap-highlight-color:transparent;" aria-label="Select HOD Portal"></a>
+              <div class="portal-icon">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/><line x1="12" y1="12" x2="12" y2="16"/><line x1="10" y1="14" x2="14" y2="14"/></svg>
+              </div>
+              <h2>HOD</h2>
+              <p>Head of Department</p>
+              <span class="portal-arrow">&rarr;</span>
+            </div>
             <div class="portal-card student-portal" onclick="selectPortal('student')"><a href="javascript:void(0)" onclick="selectPortal('student')" style="position:absolute;inset:0;z-index:10;-webkit-tap-highlight-color:transparent;" aria-label="Select Student Portal"></a>
               <div class="portal-icon">
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
@@ -201,6 +209,54 @@
         <button type="submit" class="btn btn-primary">Create Institution</button>
         <div class="auth-toggle">
           Already registered? <a onclick="showAdminLogin()">Sign in</a>
+        </div>
+      </form>
+    </div>
+
+
+    <!-- HOD AUTH -->
+    <div id="hod-auth" class="auth-container hidden">
+      <div class="auth-back" onclick="backToPortalSelector()" ontouchend="event.preventDefault();backToPortalSelector()" role="button" tabindex="0">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+        Back
+      </div>
+      <h1>HOD Portal</h1>
+      <p class="subtitle">Head of Department Access</p>
+      <div id="hod-auth-error" class="error-msg"></div>
+      <form id="hod-login-form" onsubmit="event.preventDefault(); handleHodLogin();">
+        <div class="form-group">
+          <label>Email</label>
+          <input type="email" id="hod-login-email" placeholder="hod@institution.com" name="hod-email" autocomplete="off">
+        </div>
+        <div class="form-group">
+          <label>Password</label>
+          <input type="password" id="hod-login-password" placeholder="Enter password" name="hod-password" autocomplete="off">
+        </div>
+        <button type="submit" class="btn btn-primary">Sign In</button>
+        <div class="auth-toggle" style="margin-top:8px">
+          <a onclick="showHodForgot()">Forgot password?</a>
+        </div>
+      </form>
+      <form id="hod-forgot-form" class="hidden" onsubmit="event.preventDefault(); handleHodForgotPassword();">
+        <div class="form-group">
+          <label>Institution Code</label>
+          <input type="text" id="hod-forgot-code" placeholder="e.g. KNUST01" style="text-transform:uppercase">
+        </div>
+        <div class="form-group">
+          <label>Phone Number</label>
+          <input type="tel" id="hod-forgot-phone" placeholder="e.g. 0244123456">
+        </div>
+        <div id="hod-reset-code-group" class="form-group hidden">
+          <label>Reset Code</label>
+          <input type="text" id="hod-reset-code" placeholder="Enter reset code from SMS" maxlength="6">
+        </div>
+        <div id="hod-new-password-group" class="form-group hidden">
+          <label>New Password</label>
+          <input type="password" id="hod-new-password" placeholder="Min 8 characters">
+        </div>
+        <button type="submit" class="btn btn-primary" id="hod-forgot-btn">Request Reset Code</button>
+        <div class="auth-toggle">
+          <a onclick="showHodLogin()">Back to Sign In</a>
         </div>
       </form>
     </div>
