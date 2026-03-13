@@ -20,6 +20,7 @@ exports.listUsers = async (req, res) => {
         { _id: { $in: studentIds }, role: "student" },
       ];
     }
+    // HOD sees everyone in the company — no extra filter needed
 
     const users = await User.find(filter).populate("company", "name mode");
     res.json({ users });
@@ -28,6 +29,23 @@ exports.listUsers = async (req, res) => {
     res.status(500).json({ error: "Failed to fetch users" });
   }
 };
+
+exports.getUserStats = async (req, res) => {
+  try {
+    const base = req.companyFilter;
+    const [admins, lecturers, hods, students, employees] = await Promise.all([
+      User.countDocuments({ ...base, role: { $in: ["admin", "manager"] } }),
+      User.countDocuments({ ...base, role: "lecturer" }),
+      User.countDocuments({ ...base, role: "hod" }),
+      User.countDocuments({ ...base, role: "student" }),
+      User.countDocuments({ ...base, role: "employee" }),
+    ]);
+    res.json({ admins, lecturers, hods, students, employees });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to fetch user stats" });
+  }
+};
+
 
 exports.createUser = async (req, res) => {
   try {
@@ -40,7 +58,7 @@ exports.createUser = async (req, res) => {
     }
 
     const corporateRoles = ["manager", "employee"];
-    const academicRoles = ["lecturer", "student"];
+    const academicRoles = ["lecturer", "hod", "student"];
 
     if (company.mode === "corporate" && academicRoles.includes(targetRole)) {
       return res.status(400).json({ error: "Cannot create academic roles in corporate mode" });
