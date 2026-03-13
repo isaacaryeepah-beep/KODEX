@@ -45,6 +45,14 @@ exports.listCourses = async (req, res) => {
       filter.enrolledStudents = req.user._id;
     } else if (req.user.role === "lecturer") {
       filter.lecturer = req.user._id;
+    } else if (req.user.role === "hod" && req.user.department) {
+      // HOD sees courses taught by lecturers in their department
+      const User = require("../models/User");
+      const deptLecturers = await User.find(
+        { company: req.user.company, role: "lecturer", department: req.user.department },
+        "_id"
+      ).lean();
+      filter.lecturer = { $in: deptLecturers.map(u => u._id) };
     }
 
     const courses = await Course.find(filter)
