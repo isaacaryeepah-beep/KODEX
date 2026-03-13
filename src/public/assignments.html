@@ -523,7 +523,7 @@ async function openEdit(id){
     const d=await api('GET',`/api/assignments/lecturer/${id}`);
     const a=d.assignment;
     S.editId=id; S.pdfExisting=a.pdfBrief?.originalName||null; S.pdfFile=null;
-    S.qDrafts=(a.questions||[]).map(q=>({
+    S.qDrafts=(a.questions||[]).map(q=>({ type:q.questionType||'single',
       _id:q._id, text:q.questionText,
       options:q.options.map((opt,i)=>({text:opt,correct:(q.correctAnswers||[]).includes(i)})),
       marks:q.marks||1, partial:q.allowPartialMarks||false, expl:q.explanation||''
@@ -565,9 +565,17 @@ async function saveAssignment(){
     const asgnId=saved._id;
     if(S.pdfFile){ const form=new FormData(); form.append('pdf',S.pdfFile); await api('POST',`/api/assignments/lecturer/${asgnId}/pdf`,form,true); }
     for(const q of S.qDrafts){
-      const ca=q.options.map((o,i)=>o.correct?i:null).filter(i=>i!==null);
-      if(ca.length===0){ toast('Each question needs at least one correct answer','err'); continue; }
-      const qp={questionText:q.text,options:q.options.map(o=>o.text),correctAnswers:ca,marks:q.marks||1,allowPartialMarks:q.partial||false,explanation:q.expl||null};
+      let qp;
+      if(q.type==='fill'){
+        if(!q.fillAnswer?.trim()){ toast('Fill-in question needs a correct answer','err'); continue; }
+        qp={questionText:q.text,questionType:'fill',options:[],correctAnswers:[],correctAnswerText:q.fillAnswer.trim(),marks:q.marks||1,explanation:q.expl||null};
+      } else if(q.type==='explain'){
+        qp={questionText:q.text,questionType:'explain',options:[],correctAnswers:[],modelAnswer:q.modelAnswer||'',marks:q.marks||1,explanation:q.expl||null};
+      } else {
+        const ca=q.options.map((o,i)=>o.correct?i:null).filter(i=>i!==null);
+        if(ca.length===0){ toast('Each question needs at least one correct answer','err'); continue; }
+        qp={questionText:q.text,questionType:q.type||'single',options:q.options.map(o=>o.text),correctAnswers:ca,marks:q.marks||1,allowPartialMarks:q.partial||false,explanation:q.expl||null};
+      }
       if(q._id){ await api('PUT',`/api/assignments/lecturer/${asgnId}/questions/${q._id}`,qp); }
       else { await api('POST',`/api/assignments/lecturer/${asgnId}/questions`,qp); }
     }
@@ -591,7 +599,7 @@ function removePdf(){ S.pdfFile=null; $('pdf-preview').style.display='none'; $('
 
 // ── Question Drafts ──────────────────────────────────────────────────────
 function addQDraft(){
-  S.qDrafts.push({text:'',options:[{text:'',correct:false},{text:'',correct:false}],marks:1,partial:false,expl:''});
+  S.qDrafts.push({text:'',type:'single',options:[{text:'',correct:false},{text:'',correct:false}],marks:1,partial:false,expl:'',fillAnswer:'',modelAnswer:''});
   renderQDrafts();
   const items=document.querySelectorAll('.q-body'); if(items.length) items[items.length-1].classList.add('open');
 }
@@ -603,31 +611,57 @@ function renderQDrafts(){
   list.innerHTML=S.qDrafts.map((q,qi)=>`
     <div class="q-item">
       <div class="q-head" onclick="toggleQ(${qi})">
-        <span>Q${qi+1}: ${q.text||'(no text yet)'}</span>
+        <span style="display:flex;align-items:center;gap:8px;">
+          <span style="font-size:10px;padding:2px 7px;border-radius:20px;font-weight:700;background:${{single:'#f0f9ff',multiple:'#f5f3ff',fill:'#f0fdf4',explain:'#fffbeb'}[q.type||'single']||'#f3f4f6'};color:${{single:'#0369a1',multiple:'#7c3aed',fill:'#059669',explain:'#b45309'}[q.type||'single']||'#374151'}">${{single:'MCQ',multiple:'MULTI',fill:'FILL',explain:'EXPLAIN'}[q.type||'single']||'MCQ'}</span>
+          Q${qi+1}: ${q.text||'(no text yet)'}
+        </span>
         <span style="display:flex;gap:6px;align-items:center">
           <button class="btn btn-xs" style="background:#fef2f2;color:#dc2626;border:1px solid #fecaca" onclick="event.stopPropagation();removeQDraft(${qi})">Remove</button>
-          <span style="color:var(--text-muted);font-size:11px">${q.options.filter(o=>o.correct).length} correct ▾</span>
+          ${(q.type==='fill'||q.type==='explain')?'':'<span style="color:var(--text-muted);font-size:11px">'+q.options.filter(o=>o.correct).length+' correct ▾</span>'}
         </span>
       </div>
       <div class="q-body ${qi===S.qDrafts.length-1?'open':''}" id="qb-${qi}">
-        <div class="fg"><label>Question Text <span class="req">*</span></label>
-          <input type="text" value="${esc(q.text)}" oninput="S.qDrafts[${qi}].text=this.value;rqh(${qi})" placeholder="Enter the question…"/>
+        <div style="display:flex;gap:10px;margin-bottom:10px;align-items:flex-end;flex-wrap:wrap;">
+          <div class="fg" style="flex:1;min-width:180px;margin:0">
+            <label>Question Text <span class="req">*</span></label>
+            <input type="text" value="${esc(q.text)}" oninput="S.qDrafts[${qi}].text=this.value;rqh(${qi})" placeholder="Enter the question…"/>
+          </div>
+          <div style="min-width:130px;">
+            <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-muted);margin-bottom:4px;display:block;">Type</label>
+            <select style="width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;" onchange="S.qDrafts[${qi}].type=this.value;renderQDrafts()">
+              <option value="single" ${(q.type||'single')==='single'?'selected':''}>Single MCQ</option>
+              <option value="multiple" ${q.type==='multiple'?'selected':''}>Multiple MCQ</option>
+              <option value="fill" ${q.type==='fill'?'selected':''}>Fill In</option>
+              <option value="explain" ${q.type==='explain'?'selected':''}>Explain</option>
+            </select>
+          </div>
         </div>
-        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-muted);margin-bottom:8px">Options <span style="text-transform:none;letter-spacing:0;font-weight:400">(✓ tick all correct answers)</span></div>
-        <div id="opts-${qi}">
-          ${q.options.map((o,oi)=>`<div class="opt-row">
-            <div class="opt-letter">${L[oi]||oi+1}</div>
-            <input type="text" value="${esc(o.text)}" oninput="S.qDrafts[${qi}].options[${oi}].text=this.value" placeholder="Option ${L[oi]||oi+1}…"/>
-            <input type="checkbox" class="opt-chk" title="Correct answer" ${o.correct?'checked':''} onchange="S.qDrafts[${qi}].options[${oi}].correct=this.checked;rqh(${qi})"/>
-            <button class="opt-rm" onclick="removeOpt(${qi},${oi})">✕</button>
-          </div>`).join('')}
-        </div>
-        ${q.options.filter(o=>o.correct).length>1?`<div class="correct-hint">✓ ${q.options.filter(o=>o.correct).length} correct answers selected</div>`:''}
-        ${q.options.filter(o=>o.correct).length===0?`<div style="font-size:11px;color:#dc2626;margin-top:4px;font-weight:500">⚠ No correct answer selected yet</div>`:''}
-        <button class="q-add-btn" onclick="addOpt(${qi})" ${q.options.length>=8?'disabled':''}>＋ Add option</button>
+        ${(q.type==='fill') ? `
+          <div class="fg">
+            <label>Correct Answer <span class="req">*</span></label>
+            <input type="text" value="${esc(q.fillAnswer||'')}" oninput="S.qDrafts[${qi}].fillAnswer=this.value" placeholder="The expected answer…"/>
+          </div>` :
+        (q.type==='explain') ? `
+          <div class="fg">
+            <label>Model Answer <span style="font-weight:400;font-size:11px;">(private — for lecturer reference only)</span></label>
+            <textarea rows="3" style="width:100%;padding:8px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;resize:vertical;outline:none;" oninput="S.qDrafts[${qi}].modelAnswer=this.value" placeholder="Write the ideal answer here…">${esc(q.modelAnswer||'')}</textarea>
+          </div>` : `
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-muted);margin-bottom:8px">Options <span style="text-transform:none;letter-spacing:0;font-weight:400">(✓ tick all correct answers)</span></div>
+          <div id="opts-${qi}">
+            ${q.options.map((o,oi)=>`<div class="opt-row">
+              <div class="opt-letter">${L[oi]||oi+1}</div>
+              <input type="text" value="${esc(o.text)}" oninput="S.qDrafts[${qi}].options[${oi}].text=this.value" placeholder="Option ${L[oi]||oi+1}…"/>
+              <input type="checkbox" class="opt-chk" title="Correct answer" ${o.correct?'checked':''} onchange="S.qDrafts[${qi}].options[${oi}].correct=this.checked;rqh(${qi})"/>
+              <button class="opt-rm" onclick="removeOpt(${qi},${oi})">✕</button>
+            </div>`).join('')}
+          </div>
+          ${q.options.filter(o=>o.correct).length>1?`<div class="correct-hint">✓ ${q.options.filter(o=>o.correct).length} correct answers selected</div>`:''}
+          ${q.options.filter(o=>o.correct).length===0?`<div style="font-size:11px;color:#dc2626;margin-top:4px;font-weight:500">⚠ No correct answer selected yet</div>`:''}
+          <button class="q-add-btn" onclick="addOpt(${qi})" ${q.options.length>=8?'disabled':''}>＋ Add option</button>`
+        }
         <div class="q-foot">
           <label>Marks: <input type="number" value="${q.marks}" min="0" step="0.5" style="width:60px" oninput="S.qDrafts[${qi}].marks=parseFloat(this.value)||1"/></label>
-          <label class="fg-check"><input type="checkbox" ${q.partial?'checked':''} onchange="S.qDrafts[${qi}].partial=this.checked"/> Partial marks</label>
+          ${q.type!=='explain'?`<label class="fg-check"><input type="checkbox" ${q.partial?'checked':''} onchange="S.qDrafts[${qi}].partial=this.checked"/> Partial marks</label>`:''}
           <label style="flex:1;display:flex;align-items:center;gap:6px;font-size:12px">Explanation: <input type="text" value="${esc(q.expl)}" oninput="S.qDrafts[${qi}].expl=this.value" placeholder="(shown after submit)" style="font-size:12px;flex:1"/></label>
         </div>
       </div>
@@ -665,6 +699,7 @@ async function openDetail(id){
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
             Edit
           </button>
+          ${a.questions?.length?`<button class="btn btn-secondary btn-sm" onclick="exportAssignmentPDF(${JSON.stringify(a).replace(/"/g,'&quot;')})">⬇ Export Questions PDF</button>`:''}
           ${a.hasPdf?`<button class="btn btn-secondary btn-sm" onclick="downloadPdf('${a._id}')">⬇️ Download Brief</button>`:''}
           <button class="btn btn-sm" style="background:#fef2f2;color:#dc2626;border:1px solid #fecaca" onclick="deleteAssignment('${a._id}')">Delete</button>
         </div>
@@ -709,6 +744,109 @@ async function downloadSubFile(subId){
   catch(e){ toast('Download failed: '+e.message,'err'); }
 }
 function dl(blob,filename){ const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download=filename; a.click(); setTimeout(()=>URL.revokeObjectURL(url),1000); }
+
+async function exportAssignmentPDF(a){
+  const questions = a.questions || [];
+  if(!questions.length){ toast('No questions to export','err'); return; }
+
+  if(!window.jspdf){
+    await new Promise((res,rej)=>{
+      const s=document.createElement('script');
+      s.src='https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+      s.onload=res; s.onerror=rej; document.head.appendChild(s);
+    });
+  }
+
+  const {jsPDF}=window.jspdf;
+  const doc=new jsPDF({unit:'mm',format:'a4'});
+  const pageW=210, margin=18, lineW=pageW-margin*2;
+  let y=margin;
+
+  const addText=(text,fontSize,bold,color,indent)=>{
+    doc.setFontSize(fontSize);
+    doc.setFont('helvetica',bold?'bold':'normal');
+    if(color) doc.setTextColor(...color); else doc.setTextColor(30,30,30);
+    const lines=doc.splitTextToSize(String(text||''),lineW-(indent||0));
+    lines.forEach(line=>{ if(y>275){doc.addPage();y=margin;} doc.text(line,margin+(indent||0),y); y+=fontSize*0.45; });
+    y+=1.5;
+  };
+
+  // Header bar
+  doc.setFillColor(13,17,23);
+  doc.rect(0,0,210,22,'F');
+  doc.setTextColor(255,255,255);
+  doc.setFont('helvetica','bold'); doc.setFontSize(13);
+  doc.text('KODEX — Assignment: '+a.title, margin, 13);
+  doc.setFontSize(8.5); doc.setFont('helvetica','normal');
+  const meta=[(a.course?.code||'')+(a.course?.title?' · '+a.course.title:''), 'Due: '+fmtDate(a.dueDate), questions.length+' questions · '+(a.totalMarks||0)+' pts'].filter(Boolean).join('   ');
+  doc.text(meta, margin, 19);
+  y=32;
+
+  const L=['A','B','C','D','E','F','G','H'];
+  const typeLabel={single:'MCQ (Single)',multiple:'MCQ (Multiple)',fill:'Fill In',explain:'Explain'};
+  const typeColor={single:[3,105,161],multiple:[124,58,237],fill:[5,150,105],explain:[180,83,9]};
+
+  questions.forEach((q,idx)=>{
+    const type=q.questionType||'single';
+    if(y>260){doc.addPage();y=margin;}
+
+    // Type badge
+    const col=typeColor[type]||[60,60,60];
+    doc.setFillColor(...col);
+    doc.roundedRect(margin,y-3.5,28,5.5,1.5,1.5,'F');
+    doc.setTextColor(255,255,255); doc.setFontSize(7.5); doc.setFont('helvetica','bold');
+    doc.text(typeLabel[type]||type.toUpperCase(),margin+1.5,y+0.5);
+
+    const marksText=(q.marks||1)+' mark'+((q.marks||1)!==1?'s':'');
+    doc.setTextColor(100,100,100); doc.setFontSize(8);
+    doc.text(marksText,pageW-margin-doc.getTextWidth(marksText),y+0.5);
+    y+=8;
+
+    // Question text
+    doc.setTextColor(20,20,20); doc.setFont('helvetica','bold'); doc.setFontSize(11);
+    const qLines=doc.splitTextToSize('Q'+(idx+1)+'. '+(q.questionText||''),lineW);
+    qLines.forEach(line=>{ if(y>275){doc.addPage();y=margin;} doc.text(line,margin,y); y+=5.5; });
+    y+=2;
+
+    if(type==='fill'){
+      addText('Answer: '+(q.correctAnswerText||'—'),9.5,false,[5,150,105],2);
+    } else if(type==='explain'){
+      addText('Model Answer:',9,true,[180,83,9],2);
+      addText(q.modelAnswer||'—',9,false,[60,60,60],4);
+    } else {
+      (q.options||[]).forEach((opt,oi)=>{
+        if(!opt) return;
+        const isCorrect=Array.isArray(q.correctAnswers)?q.correctAnswers.includes(oi):(q.correctAnswer===oi);
+        if(isCorrect) doc.setFillColor(240,253,244); else doc.setFillColor(248,250,252);
+        const optLines=doc.splitTextToSize(L[oi]+') '+opt,lineW-6);
+        const boxH=optLines.length*5+4;
+        if(y+boxH>275){doc.addPage();y=margin;}
+        doc.roundedRect(margin+2,y-3,lineW-4,boxH,1.5,1.5,'F');
+        if(isCorrect){doc.setDrawColor(187,247,208);doc.roundedRect(margin+2,y-3,lineW-4,boxH,1.5,1.5,'S');}
+        doc.setTextColor(isCorrect?22:55,isCorrect?101:65,isCorrect?52:81);
+        doc.setFont('helvetica',isCorrect?'bold':'normal'); doc.setFontSize(10);
+        optLines.forEach((line,li)=>{doc.text(line,margin+5,y+li*5);});
+        if(isCorrect){doc.setTextColor(22,101,52);doc.text('✓',pageW-margin-6,y);}
+        y+=boxH+2;
+      });
+    }
+
+    if(q.explanation){
+      y+=1;
+      addText('Note: '+q.explanation,8.5,false,[107,114,128],2);
+    }
+
+    y+=4;
+    if(idx<questions.length-1){
+      doc.setDrawColor(220,220,220);
+      doc.line(margin,y,pageW-margin,y);
+      y+=6;
+    }
+  });
+
+  doc.save('KODEX_Assignment_'+a.title.replace(/[^a-z0-9]/gi,'_')+'_'+new Date().toISOString().slice(0,10)+'.pdf');
+  toast('PDF exported ✓','ok');
+}
 
 async function deleteAssignment(id){
   if(!confirm('Delete this assignment and all submissions? This cannot be undone.')) return;
@@ -821,15 +959,24 @@ function renderStudentForm(a,isOv,canSubmit){
   if(a.questions?.length){
     lines.push(`<div style="font-size:13px;font-weight:700;margin-bottom:12px;display:flex;align-items:center;gap:8px">Questions <span style="background:var(--bg);border:1px solid var(--border);padding:1px 8px;border-radius:20px;font-size:11px;color:var(--text-muted);font-weight:400">${a.questions.length}</span></div>`);
     a.questions.forEach((q,i)=>{
-      lines.push(`<div class="sq-item">
-        <div class="sq-head"><div class="sq-qtext">Q${i+1}. ${q.questionText}</div><div class="sq-marks">${q.marks} pt${q.marks!==1?'s':''}</div></div>
-        <div class="sq-hint">Select all correct answers</div>
-        <div id="opts-stu-${i}">
-          ${q.options.map((opt,oi)=>`<div class="opt-choice" id="opt-${i}-${oi}" onclick="toggleStuAns(${i},${oi})">
+      const qtype=q.questionType||'single';
+      const typeColors={single:'#0369a1',multiple:'#7c3aed',fill:'#059669',explain:'#b45309'};
+      const typeLabels={single:'Single MCQ',multiple:'Multi MCQ',fill:'Fill In',explain:'Explain'};
+      const typeBadge=`<span style="font-size:10px;padding:2px 7px;border-radius:20px;font-weight:700;background:${({single:'#f0f9ff',multiple:'#f5f3ff',fill:'#f0fdf4',explain:'#fffbeb'})[qtype]};color:${typeColors[qtype]};margin-right:6px;">${typeLabels[qtype]}</span>`;
+      let inputHtml;
+      if(qtype==='fill'){
+        inputHtml=`<div class="sq-hint">Type your answer below</div><input type="text" id="fill-ans-${i}" placeholder="Your answer…" style="width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;font-family:inherit;outline:none;margin-top:6px;" oninput="S.stuAnswers=S.stuAnswers||{};S.stuAnswers[${i}]=this.value"/>`;
+      } else if(qtype==='explain'){
+        inputHtml=`<div class="sq-hint">Write your answer below</div><textarea id="explain-ans-${i}" rows="4" placeholder="Write your explanation…" style="width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;font-family:inherit;resize:vertical;outline:none;margin-top:6px;" oninput="S.stuAnswers=S.stuAnswers||{};S.stuAnswers[${i}]=this.value"></textarea>`;
+      } else {
+        inputHtml=`<div class="sq-hint">${qtype==='multiple'?'Select all correct answers':'Select one correct answer'}</div><div id="opts-stu-${i}">${(q.options||[]).map((opt,oi)=>`<div class="opt-choice" id="opt-${i}-${oi}" onclick="toggleStuAns(${i},${oi})">
             <div class="opt-box">✓</div>
             <span style="font-size:14px">${opt}</span>
-          </div>`).join('')}
-        </div>
+          </div>`).join('')}</div>`;
+      }
+      lines.push(`<div class="sq-item">
+        <div class="sq-head"><div class="sq-qtext">${typeBadge}Q${i+1}. ${q.questionText}</div><div class="sq-marks">${q.marks} pt${q.marks!==1?'s':''}</div></div>
+        ${inputHtml}
       </div>`);
     });
   }
@@ -914,7 +1061,14 @@ async function submitAssignment(){
   const id=S.currentAsgn._id, btn=$('stu-submit-btn');
   btn.disabled=true; btn.textContent='Submitting…';
   try{
-    const answers=Object.entries(S.stuAnswers).map(([qi,sel])=>({questionIndex:parseInt(qi),selectedAnswers:sel}));
+    // Collect fill-in and explain answers from DOM inputs
+    const a=S.currentAsgn;
+    (a.questions||[]).forEach((q,i)=>{
+      const qtype=q.questionType||'single';
+      if(qtype==='fill'){ const el=document.getElementById('fill-ans-'+i); if(el) S.stuAnswers[i]=el.value||''; }
+      else if(qtype==='explain'){ const el=document.getElementById('explain-ans-'+i); if(el) S.stuAnswers[i]=el.value||''; }
+    });
+    const answers=Object.entries(S.stuAnswers).map(([qi,sel])=>({questionIndex:parseInt(qi),selectedAnswers:Array.isArray(sel)?sel:[],textAnswer:typeof sel==='string'?sel:undefined})).filter(a=>a!==undefined);
     const form=new FormData(); form.append('answers',JSON.stringify(answers));
     if(S.stuFile) form.append('file',S.stuFile);
     await api('POST',`/api/assignments/student/${id}/submit`,form,true);
