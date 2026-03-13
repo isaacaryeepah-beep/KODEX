@@ -1806,7 +1806,7 @@ function buildSidebar() {
   }
 
   nav.innerHTML =
-    [...links, ...universalLinks].map(l => `<a onclick="navigateTo('${l.id}')" id="nav-${l.id}" data-tooltip="${l.label}">${l.icon}${l.id==='announcements'?'<span id="ann-badge" style="display:none;position:absolute;top:6px;right:6px;background:#ef4444;color:#fff;font-size:9px;font-weight:700;padding:1px 5px;border-radius:20px;min-width:14px;text-align:center;line-height:14px;"></span>':''}</a>`).join('');
+    [...links, ...universalLinks].map(l => `<a onclick="navigateTo('${l.id}')" id="nav-${l.id}" data-tooltip="${l.label}">${l.icon}<span>${l.label}</span>${l.id==='announcements'?'<span id="ann-badge" style="display:none;position:absolute;top:4px;right:4px;background:#ef4444;color:#fff;font-size:9px;font-weight:700;padding:1px 5px;border-radius:20px;min-width:14px;text-align:center;line-height:14px;"></span>':''}</a>`).join('');
 }
 
 function navigateTo(view) {
@@ -8311,7 +8311,7 @@ buildSidebar = function() {
     if (leaveLink && !document.getElementById('nav-training')) {
       const a = document.createElement('a');
       a.id = 'nav-training';
-      a.innerHTML = trainingIcon; a.dataset.tooltip = "Training & Assessments";
+      a.innerHTML = `${trainingIcon}<span>Training & Assessments</span>`; a.dataset.tooltip = "Training & Assessments";
       a.onclick = () => navigateTo('training');
       leaveLink.insertAdjacentElement('afterend', a);
     }
@@ -8320,7 +8320,7 @@ buildSidebar = function() {
     if (myLeaveLink && !document.getElementById('nav-my-training')) {
       const a = document.createElement('a');
       a.id = 'nav-my-training';
-      a.innerHTML = trainingIcon; a.dataset.tooltip = "My Assessments";
+      a.innerHTML = `${trainingIcon}<span>My Assessments</span>`; a.dataset.tooltip = "My Assessments";
       a.onclick = () => navigateTo('my-training');
       myLeaveLink.insertAdjacentElement('afterend', a);
     }
@@ -8883,7 +8883,7 @@ buildSidebar = function() {
     if (trainingLink && !document.getElementById('nav-performance')) {
       const a = document.createElement('a');
       a.id = 'nav-performance';
-      a.innerHTML = perfIcon; a.dataset.tooltip = "Performance";
+      a.innerHTML = `${perfIcon}<span>Performance</span>`; a.dataset.tooltip = "Performance";
       a.onclick = () => navigateTo('performance');
       trainingLink.insertAdjacentElement('afterend', a);
     }
@@ -8892,7 +8892,7 @@ buildSidebar = function() {
     if (myTrainingLink && !document.getElementById('nav-my-performance')) {
       const a = document.createElement('a');
       a.id = 'nav-my-performance';
-      a.innerHTML = perfIcon; a.dataset.tooltip = "My Performance";
+      a.innerHTML = `${perfIcon}<span>My Performance</span>`; a.dataset.tooltip = "My Performance";
       a.onclick = () => navigateTo('my-performance');
       myTrainingLink.insertAdjacentElement('afterend', a);
     }
@@ -9561,21 +9561,21 @@ buildSidebar = function() {
       if (!document.getElementById('nav-timesheets')) {
         const a = document.createElement('a');
         a.id = 'nav-timesheets';
-        a.innerHTML = opsIcon; a.dataset.tooltip = "Timesheets";
+        a.innerHTML = `${opsIcon}<span>Timesheets</span>`; a.dataset.tooltip = "Timesheets";
         a.onclick = () => navigateTo('timesheets');
         perfLink.insertAdjacentElement('afterend', a);
       }
       if (!document.getElementById('nav-expenses-mgr')) {
         const a = document.createElement('a');
         a.id = 'nav-expenses-mgr';
-        a.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>`; a.dataset.tooltip = "Expenses";
+        a.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg><span>Expenses</span>`; a.dataset.tooltip = "Expenses";
         a.onclick = () => navigateTo('expenses-mgr');
         document.getElementById('nav-timesheets').insertAdjacentElement('afterend', a);
       }
       if (!document.getElementById('nav-assets')) {
         const a = document.createElement('a');
         a.id = 'nav-assets';
-        a.innerHTML = assetIcon; a.dataset.tooltip = "Assets";
+        a.innerHTML = `${assetIcon}<span>Assets</span>`; a.dataset.tooltip = "Assets";
         a.onclick = () => navigateTo('assets');
         document.getElementById('nav-expenses-mgr').insertAdjacentElement('afterend', a);
       }
@@ -9586,21 +9586,21 @@ buildSidebar = function() {
       if (!document.getElementById('nav-my-timesheet')) {
         const a = document.createElement('a');
         a.id = 'nav-my-timesheet';
-        a.innerHTML = opsIcon; a.dataset.tooltip = "Timesheet";
+        a.innerHTML = `${opsIcon}<span>Timesheet</span>`; a.dataset.tooltip = "Timesheet";
         a.onclick = () => navigateTo('my-timesheet');
         myPerfLink.insertAdjacentElement('afterend', a);
       }
       if (!document.getElementById('nav-my-expenses')) {
         const a = document.createElement('a');
         a.id = 'nav-my-expenses';
-        a.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>`; a.dataset.tooltip = "Expenses";
+        a.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg><span>Expenses</span>`; a.dataset.tooltip = "Expenses";
         a.onclick = () => navigateTo('my-expenses');
         document.getElementById('nav-my-timesheet').insertAdjacentElement('afterend', a);
       }
       if (!document.getElementById('nav-my-assets')) {
         const a = document.createElement('a');
         a.id = 'nav-my-assets';
-        a.innerHTML = assetIcon; a.dataset.tooltip = "My Assets";
+        a.innerHTML = `${assetIcon}<span>My Assets</span>`; a.dataset.tooltip = "My Assets";
         a.onclick = () => navigateTo('my-assets');
         document.getElementById('nav-my-expenses').insertAdjacentElement('afterend', a);
       }
@@ -10341,7 +10341,7 @@ buildSidebar = function() {
     if (!document.getElementById(id)) {
       const a = document.createElement('a');
       a.id = id;
-      a.innerHTML = icon; a.dataset.tooltip = label;
+      a.innerHTML = `${icon}<span>${label}</span>`; a.dataset.tooltip = label;
       a.onclick = () => navigateTo(view);
       anchor.insertAdjacentElement('afterend', a);
     }
