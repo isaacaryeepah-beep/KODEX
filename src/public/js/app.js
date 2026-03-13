@@ -1857,6 +1857,18 @@ async function renderDashboard() {
   if (!content) return;
   const role = currentUser.role;
 
+  // Clear immediately so stale content from a previous role never flashes
+  content.innerHTML = `<div class="dashboard-skeleton">
+    <div class="skeleton-header"></div>
+    <div class="skeleton-cards">
+      <div class="skeleton-card"></div>
+      <div class="skeleton-card"></div>
+      <div class="skeleton-card"></div>
+      <div class="skeleton-card"></div>
+    </div>
+    <div class="skeleton-body"></div>
+  </div>`;
+
   try {
     switch (role) {
       case 'admin':
