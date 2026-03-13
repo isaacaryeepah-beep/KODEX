@@ -10,19 +10,20 @@ const Quiz      = require("../models/Quiz");
 // ── Helper: build a bank question doc from request body ──────────────────
 function buildBankDoc(body, userId, companyId) {
   const { questionText, questionType, options, correctAnswer, correctAnswers,
-          correctAnswerText, acceptedAnswers, marks, topic } = body;
-  const type = ["single","multiple","fill"].includes(questionType) ? questionType : "single";
+          correctAnswerText, acceptedAnswers, modelAnswer, marks, topic } = body;
+  const type = ["single","multiple","fill","explain"].includes(questionType) ? questionType : "single";
   return {
     company:   companyId,
     createdBy: userId,
     questionText: questionText.trim(),
     questionType: type,
-    options: type === "fill" ? [] : (options || []).map(o => String(o).trim()),
-    correctAnswer: type === "fill" ? null : (correctAnswer ?? null),
+    options: (type === "fill" || type === "explain") ? [] : (options || []).map(o => String(o).trim()),
+    correctAnswer: (type === "fill" || type === "explain") ? null : (correctAnswer ?? null),
     correctAnswers: type === "multiple" ? (correctAnswers || []).map(Number) : [],
     correctAnswerText: type === "fill" ? (correctAnswerText || "").trim() : null,
     acceptedAnswers: type === "fill" && Array.isArray(acceptedAnswers)
       ? acceptedAnswers.map(a => a.trim()).filter(Boolean) : [],
+    modelAnswer: type === "explain" ? (modelAnswer || "").trim() : "",
     marks: Number(marks) || 1,
     topic: (topic || "").trim(),
   };
@@ -74,7 +75,7 @@ exports.update = async (req, res) => {
     if (!q) return res.status(404).json({ error: "Question not found" });
 
     const fields = ["questionText","questionType","options","correctAnswer","correctAnswers",
-                    "correctAnswerText","acceptedAnswers","marks","topic"];
+                    "correctAnswerText","acceptedAnswers","modelAnswer","marks","topic"];
     fields.forEach(f => { if (req.body[f] !== undefined) q[f] = req.body[f]; });
     await q.save();
     res.json({ question: q });
