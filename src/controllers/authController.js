@@ -245,6 +245,17 @@ exports.registerLecturer = async (req, res) => {
       department: department || null,
     });
 
+    // If a department was specified, notify the HOD of that department
+    if (department) {
+      try {
+        const hod = await User.findOne({ company: company._id, role: "hod", department: department.trim() });
+        if (hod) {
+          // Store a pending notification count on HOD (simple increment via a temp field)
+          await User.updateOne({ _id: hod._id }, { $inc: { pendingApprovals: 1 } });
+        }
+      } catch (_) {} // non-critical
+    }
+
     res.status(201).json({
       user: {
         id: user._id,
@@ -255,7 +266,9 @@ exports.registerLecturer = async (req, res) => {
         mustChangePassword: user.mustChangePassword || false,
         company: { id: company._id, name: company.name, mode: company.mode },
       },
-      message: "Registration successful. Your account is pending admin approval.",
+      message: department
+        ? "Registration successful. Your HOD and institution admin will review your account."
+        : "Registration successful. Your account is pending admin approval.",
     });
   } catch (error) {
     if (error.name === "ValidationError") {
