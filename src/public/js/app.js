@@ -1120,6 +1120,9 @@ async function handleLecturerRegister() {
     let body = { name, email, password };
     if (dept) body.department = dept;
     if (phone) body.phone = phone;
+    if (regMode === 'join' && !dept) {
+      return showLecturerError('Department is required when joining an institution.');
+    }
     if (regMode === 'create') {
       const institutionName = document.getElementById('lecturer-reg-institution').value;
       if (!institutionName) return showLecturerError('Please enter your institution name');
@@ -1457,6 +1460,7 @@ async function handleStudentRegister() {
       localStorage.setItem('token', token);
       currentUser = data.user;
       showDashboard(data);
+      if (data.departmentNote) toastWarning(data.departmentNote);
     } else {
       const el = document.getElementById('student-auth-error');
       el.textContent = data.message || 'Registration successful!';
@@ -1465,6 +1469,12 @@ async function handleStudentRegister() {
       el.style.color = '#15803d';
       showStudentLogin();
       document.getElementById('student-auth-error').style.display = 'block';
+      if (data.departmentNote) {
+        const warn = document.createElement('div');
+        warn.style.cssText = 'margin-top:8px;padding:10px 14px;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;font-size:12px;color:#92400e;';
+        warn.textContent = data.departmentNote;
+        el.after(warn);
+      }
     }
   } catch (e) {
     showStudentError(e.message || 'Registration failed');
@@ -1879,15 +1889,16 @@ function buildSidebar() {
       links.push({ id: 'announcements', label: 'Announcements', icon: svgIcon('<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>') });
       break;
     case 'superadmin':
-      links.push({ id: 'approvals', label: 'Approvals', icon: approvalsIcon() });
-      links.push({ id: 'search', label: 'Search', icon: svgIcon('<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>') });
-      links.push({ id: 'sessions', label: 'Sessions', icon: sessionsIcon() });
-      links.push({ id: 'users', label: 'Users', icon: usersIcon() });
-      links.push({ id: 'meetings', label: 'Meetings', icon: meetingsIcon() });
-      links.push({ id: 'courses', label: 'Courses', icon: coursesIcon() });
-      links.push({ id: 'quizzes', label: 'Quizzes', icon: quizzesIcon() });
-      links.push({ id: 'reports', label: 'Reports', icon: reportsIcon() });
-      links.push({ id: 'subscription', label: 'Subscription', icon: subscriptionIcon() });
+      links.push({ id: 'superadmin-platform', label: 'Platform',   icon: svgIcon('<rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>') });
+      links.push({ id: 'approvals',            label: 'Approvals',  icon: approvalsIcon() });
+      links.push({ id: 'search',               label: 'Search',     icon: svgIcon('<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>') });
+      links.push({ id: 'sessions',             label: 'Sessions',   icon: sessionsIcon() });
+      links.push({ id: 'users',                label: 'Users',      icon: usersIcon() });
+      links.push({ id: 'meetings',             label: 'Meetings',   icon: meetingsIcon() });
+      links.push({ id: 'courses',              label: 'Courses',    icon: coursesIcon() });
+      links.push({ id: 'quizzes',              label: 'Quizzes',    icon: quizzesIcon() });
+      links.push({ id: 'reports',              label: 'Reports',    icon: reportsIcon() });
+      links.push({ id: 'subscription',         label: 'Subscription', icon: subscriptionIcon() });
       break;
   }
 
@@ -1944,6 +1955,7 @@ function navigateTo(view) {
     case 'profile':     renderProfile(); break;
     case 'contact':     renderContact(); break;
     case 'about':       renderAbout(); break;
+    case 'superadmin-platform': renderSuperadminDashboard(document.getElementById('main-content')); break;
     case 'hod-overview':  renderHodDashboard(document.getElementById('main-content')); break;
     case 'hod-courses':   renderHodCourses(); break;
     case 'hod-sessions':  renderHodSessions(); break;
@@ -2004,7 +2016,7 @@ async function renderDashboard() {
         await renderStudentDashboard(content);
         break;
       case 'superadmin':
-        await renderAdminDashboard(content);
+        await renderSuperadminDashboard(content);
         break;
       default:
         content.innerHTML = `<div class="card"><p>Welcome to KODEX!</p></div>`;
@@ -2073,6 +2085,16 @@ async function rejectUser(userId) {
   } catch (e) {
     toastError(e.message);
   }
+}
+
+async function superadminToggleCompany(id, currentlyActive) {
+  const action = currentlyActive ? 'deactivate' : 'activate';
+  if (!confirm(`Are you sure you want to ${action} this institution?`)) return;
+  try {
+    await api('/api/superadmin/companies/' + id + '/toggle', { method: 'PATCH' });
+    toastSuccess('Institution ' + (currentlyActive ? 'deactivated' : 'activated') + ' ✓');
+    renderSuperadminDashboard(document.getElementById('main-content'));
+  } catch(e) { toastError(e.message); }
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -2561,6 +2583,89 @@ Current: ${currentDept || 'None'}`, currentDept || '');
     toastSuccess('Department updated to "' + newDept.trim() + '"');
     renderHodLecturers();
   }).catch(e => toastError(e.message || 'Failed to update department'));
+}
+
+
+// ════════════════════════════════════════════════════════════════════════════
+//  SUPERADMIN DASHBOARD
+// ════════════════════════════════════════════════════════════════════════════
+async function renderSuperadminDashboard(content) {
+  if (!content) content = document.getElementById('main-content');
+  content.innerHTML = '<div class="loading">Loading platform overview…</div>';
+  try {
+    const data = await api('/api/superadmin/overview').catch(() => null);
+    const companies = data?.companies || [];
+    const totalCompanies = companies.length;
+    const academic  = companies.filter(c => c.mode === 'academic').length;
+    const corporate = companies.filter(c => c.mode === 'corporate').length;
+    const active    = companies.filter(c => c.isActive).length;
+    const onTrial   = companies.filter(c => c.subscriptionStatus === 'trial' && c.isTrialActive).length;
+    const subscribed = companies.filter(c => c.subscriptionStatus === 'active').length;
+
+    content.innerHTML = `
+      <div class="page-header">
+        <div>
+          <h2>Platform Overview</h2>
+          <p>KODEX Superadmin · All institutions</p>
+        </div>
+      </div>
+
+      <div class="stats-grid" style="margin-bottom:20px;">
+        <div class="stat-card"><div class="stat-value">${totalCompanies}</div><div class="stat-label">TOTAL INSTITUTIONS</div></div>
+        <div class="stat-card"><div class="stat-value" style="color:#16a34a">${active}</div><div class="stat-label">ACTIVE</div></div>
+        <div class="stat-card"><div class="stat-value" style="color:#d97706">${onTrial}</div><div class="stat-label">ON TRIAL</div></div>
+        <div class="stat-card"><div class="stat-value" style="color:#2563eb">${subscribed}</div><div class="stat-label">SUBSCRIBED</div></div>
+      </div>
+
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px;">
+          <div style="font-size:13px;font-weight:700;">All Institutions</div>
+          <div style="display:flex;gap:6px;">
+            <span class="tag tag-blue">Academic: ${academic}</span>
+            <span class="tag tag-green">Corporate: ${corporate}</span>
+          </div>
+        </div>
+        ${companies.length === 0
+          ? '<div class="empty-state"><p>No institutions yet.</p></div>'
+          : `<div style="overflow-x:auto;">
+              <table style="width:100%;border-collapse:collapse;font-size:13px;">
+                <thead><tr style="border-bottom:2px solid var(--border);">
+                  <th style="text-align:left;padding:9px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Institution</th>
+                  <th style="text-align:left;padding:9px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Code</th>
+                  <th style="text-align:left;padding:9px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Mode</th>
+                  <th style="text-align:left;padding:9px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Status</th>
+                  <th style="text-align:left;padding:9px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Subscription</th>
+                  <th style="text-align:left;padding:9px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Created</th>
+                  <th style="text-align:left;padding:9px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;"></th>
+                </tr></thead>
+                <tbody>
+                  ${companies.map(c => `
+                    <tr style="border-bottom:1px solid var(--border);">
+                      <td style="padding:10px 12px;font-weight:600;">${c.name}</td>
+                      <td style="padding:10px 12px;font-family:monospace;font-size:12px;color:var(--text-muted);">${c.institutionCode || '—'}</td>
+                      <td style="padding:10px 12px;"><span class="tag ${c.mode === 'academic' ? 'tag-blue' : 'tag-green'}">${c.mode}</span></td>
+                      <td style="padding:10px 12px;"><span class="tag ${c.isActive ? 'tag-green' : 'tag-red'}">${c.isActive ? 'Active' : 'Inactive'}</span></td>
+                      <td style="padding:10px 12px;">
+                        <span class="tag ${c.subscriptionStatus === 'active' ? 'tag-blue' : c.isTrialActive ? 'tag-amber' : 'tag-gray'}">
+                          ${c.subscriptionStatus === 'active' ? 'Subscribed' : c.isTrialActive ? 'Trial (' + (c.trialDaysRemaining || 0) + 'd)' : 'Expired'}
+                        </span>
+                      </td>
+                      <td style="padding:10px 12px;color:var(--text-muted);font-size:12px;">${fmtDate(c.createdAt)}</td>
+                      <td style="padding:10px 12px;white-space:nowrap;">
+                        <button class="btn btn-xs ${c.isActive ? 'btn-secondary' : ''}" style="${!c.isActive ? 'background:#22c55e;color:#fff;' : 'background:#f59e0b;color:#fff;'}font-size:11px;"
+                          onclick="superadminToggleCompany('${c._id}', ${c.isActive})">
+                          ${c.isActive ? 'Deactivate' : 'Activate'}
+                        </button>
+                      </td>
+                    </tr>`).join('')}
+                </tbody>
+              </table>
+            </div>`}
+      </div>`;
+  } catch(e) {
+    // Fallback to admin dashboard if superadmin API not available
+    await renderAdminDashboard(content);
+  }
 }
 
 
@@ -3416,11 +3521,17 @@ async function generateVerbalCode(sessionId) {
 }
 
 
-async function renderUsers() {
+async function renderUsers(filterRole='', filterDept='', filterSearch='') {
   const content = document.getElementById('main-content');
   if (!content) return;
   try {
-    const data = await api('/api/users');
+    let url = '/api/users';
+    const params = [];
+    if (filterRole) params.push('role=' + encodeURIComponent(filterRole));
+    if (filterDept) params.push('department=' + encodeURIComponent(filterDept));
+    if (params.length) url += '?' + params.join('&');
+
+    const data = await api(url);
     const mode = currentUser.company?.mode || 'corporate';
     const isManager = currentUser.role === 'manager';
     const canManage = ['manager', 'admin', 'superadmin'].includes(currentUser.role);
@@ -3428,14 +3539,50 @@ async function renderUsers() {
     const pageDesc = isManager ? 'Manage your employees' : 'Manage team members';
     const addLabel = isManager ? 'Add Employee' : 'Add User';
 
-    const otherUsers = data.users.filter(u => u._id !== currentUser.id);
+    let otherUsers = data.users.filter(u => u._id !== currentUser.id);
+    if (filterSearch) {
+      const q = filterSearch.toLowerCase();
+      otherUsers = otherUsers.filter(u =>
+        u.name?.toLowerCase().includes(q) ||
+        u.email?.toLowerCase().includes(q) ||
+        u.indexNumber?.toLowerCase().includes(q) ||
+        u.department?.toLowerCase().includes(q)
+      );
+    }
+
+    // Collect unique departments for filter dropdown
+    const allDepts = [...new Set((data.users || []).map(u => u.department).filter(Boolean))].sort();
 
     content.innerHTML = `
-      <div class="page-header"><h2>${pageTitle}</h2><p>${pageDesc}</p></div>
-      <div class="actions-bar" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      <div class="page-header"><h2>${pageTitle}</h2><p>${pageDesc} · ${otherUsers.length} shown</p></div>
+      <div class="actions-bar" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px;">
         ${canManage ? `<button class="btn btn-primary btn-sm" onclick="showCreateUserModal()">${addLabel}</button>` : ''}
         ${['admin','superadmin'].includes(currentUser.role) && mode === 'academic' ? `<button class="btn btn-sm btn-secondary" onclick="showBulkImportModal()">📥 Bulk Import Students</button>` : ''}
         ${['admin','superadmin'].includes(currentUser.role) ? `<button class="btn btn-sm" style="background:#f59e0b;color:#fff" onclick="renderResetLogs()">🔐 Password Reset Log</button>` : ''}
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-left:auto;">
+          <input id="user-search-input" placeholder="Search name / email / ID…" value="${filterSearch}"
+            oninput="renderUsers(document.getElementById('user-role-filter').value, document.getElementById('user-dept-filter').value, this.value)"
+            style="padding:7px 11px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;min-width:180px;">
+          <select id="user-role-filter" onchange="renderUsers(this.value, document.getElementById('user-dept-filter').value, document.getElementById('user-search-input').value)"
+            style="padding:7px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;">
+            <option value="" ${!filterRole?'selected':''}>All Roles</option>
+            ${mode === 'academic'
+              ? `<option value="admin" ${filterRole==='admin'?'selected':''}>Admin</option>
+                 <option value="hod" ${filterRole==='hod'?'selected':''}>HOD</option>
+                 <option value="lecturer" ${filterRole==='lecturer'?'selected':''}>Lecturer</option>
+                 <option value="student" ${filterRole==='student'?'selected':''}>Student</option>`
+              : `<option value="admin" ${filterRole==='admin'?'selected':''}>Admin</option>
+                 <option value="manager" ${filterRole==='manager'?'selected':''}>Manager</option>
+                 <option value="employee" ${filterRole==='employee'?'selected':''}>Employee</option>`}
+          </select>
+          ${mode === 'academic' && allDepts.length > 0 ? `
+          <select id="user-dept-filter" onchange="renderUsers(document.getElementById('user-role-filter').value, this.value, document.getElementById('user-search-input').value)"
+            style="padding:7px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;">
+            <option value="" ${!filterDept?'selected':''}>All Departments</option>
+            ${allDepts.map(d => `<option value="${d}" ${filterDept===d?'selected':''}>${d}</option>`).join('')}
+          </select>` : `<select id="user-dept-filter" style="display:none;"></select>`}
+          ${filterRole || filterDept || filterSearch ? `<button class="btn btn-xs btn-secondary" onclick="renderUsers()">✕ Clear</button>` : ''}
+        </div>
         ${canManage ? `
           <div id="bulk-actions" style="display:none;gap:8px;align-items:center;margin-left:auto">
             <span id="selected-count" style="font-size:13px;color:var(--text-light)">0 selected</span>
@@ -7271,11 +7418,18 @@ async function renderProfile() {
       <div id="profile-msg" style="display:none;padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:16px"></div>
 
       <div style="margin-bottom:20px">
-        <h3 style="font-size:14px;font-weight:700;margin-bottom:12px;color:var(--text-primary)">Update Name</h3>
+        <h3 style="font-size:14px;font-weight:700;margin-bottom:12px;color:var(--text-primary)">Account Details</h3>
         <div class="form-group">
           <label>Full Name</label>
           <input type="text" id="profile-name" value="${u.name || ''}" placeholder="Your full name">
         </div>
+        ${['lecturer','hod','student'].includes(u.role) ? `
+        <div class="form-group">
+          <label>Department ${u.role === 'student' ? '<span style="font-weight:400;font-size:11px;color:var(--text-muted)">(cannot be changed here)</span>' : ''}</label>
+          ${u.role === 'student'
+            ? `<input type="text" value="${u.department || 'Not set'}" disabled style="background:var(--bg);color:var(--text-muted);">`
+            : `<input type="text" id="profile-dept" value="${u.department || ''}" placeholder="e.g. Computer Science">`}
+        </div>` : ''}
       </div>
 
       <div style="margin-bottom:20px;padding-top:20px;border-top:1px solid var(--border)">
@@ -7301,6 +7455,7 @@ async function renderProfile() {
 
 async function saveProfile() {
   const name = document.getElementById('profile-name').value.trim();
+  const dept = document.getElementById('profile-dept')?.value?.trim();
   const currentPassword = document.getElementById('profile-current-pw').value;
   const newPassword = document.getElementById('profile-new-pw').value;
   const confirmPw = document.getElementById('profile-confirm-pw').value;
@@ -7315,11 +7470,15 @@ async function saveProfile() {
 
   const body = {};
   if (name) body.name = name;
+  if (dept !== undefined && ['lecturer','hod'].includes(currentUser.role)) {
+    body.department = dept;
+  }
   if (newPassword) { body.currentPassword = currentPassword; body.newPassword = newPassword; }
 
   try {
     const data = await api('/api/auth/profile', { method: 'PUT', body: JSON.stringify(body) });
     if (data.user?.name) { currentUser.name = data.user.name; document.getElementById('user-name').textContent = data.user.name; }
+    if (data.user?.department !== undefined) { currentUser.department = data.user.department; }
     msg.textContent = '✅ Profile updated successfully!'; msg.style.background = '#f0fdf4'; msg.style.color = '#15803d'; msg.style.display = 'block';
     document.getElementById('profile-current-pw').value = '';
     document.getElementById('profile-new-pw').value = '';
