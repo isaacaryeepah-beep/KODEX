@@ -390,6 +390,31 @@ exports.deleteQuestion = async (req, res) => {
 // ══════════════════════════════════════════════════════════════════════════
 //  LECTURER — Grade submission
 // ══════════════════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════════════════
+//  LECTURER — Get single submission with questions + answers
+// ══════════════════════════════════════════════════════════════════════════
+exports.getSubmission = async (req, res) => {
+  try {
+    const { submissionId } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(submissionId))
+      return res.status(400).json({ error: "Invalid ID" });
+
+    const sub = await AssignmentSubmission.findById(submissionId)
+      .populate("student", "name indexNumber email")
+      .populate("assignment", "company title questions totalMarks createdBy");
+
+    if (!sub) return res.status(404).json({ error: "Submission not found" });
+    if (sub.assignment.company.toString() !== req.user.company.toString())
+      return res.status(403).json({ error: "Access denied" });
+
+    res.json({ submission: sub });
+  } catch (err) {
+    console.error("getSubmission:", err);
+    res.status(500).json({ error: "Failed to fetch submission" });
+  }
+};
+
+
 exports.gradeSubmission = async (req, res) => {
   try {
     const { submissionId } = req.params;
