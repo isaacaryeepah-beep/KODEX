@@ -26,8 +26,13 @@ const questionBankSchema = new mongoose.Schema(
     },
     questionType: {
       type: String,
-      enum: ["single", "multiple", "fill"],
+      enum: ["single", "multiple", "fill", "explain"],
       default: "single",
+    },
+    modelAnswer: {
+      type: String,
+      default: "",
+      trim: true,
     },
     options: {
       type: [String],
