@@ -1449,7 +1449,9 @@ async function handleStudentRegister() {
       return showStudentError('Passwords do not match');
     }
     const phone = document.getElementById('student-reg-phone')?.value?.trim();
-    const data = await api('/api/auth/register-student', { method: 'POST', body: JSON.stringify({ name, indexNumber, phone, password, institutionCode }) });
+    const department = document.getElementById('student-reg-dept')?.value?.trim();
+    if (!department) return showStudentError('Please enter your department.');
+    const data = await api('/api/auth/register-student', { method: 'POST', body: JSON.stringify({ name, indexNumber, phone, password, institutionCode, department }) });
     if (data.token) {
       token = data.token;
       localStorage.setItem('token', token);
@@ -1836,9 +1838,11 @@ function buildSidebar() {
     case 'hod':
       links.push({ id: 'hod-overview',     label: 'Overview',       icon: svgIcon('<rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>') });
       links.push({ id: 'hod-sessions',     label: 'Sessions',       icon: sessionsIcon() });
+      links.push({ id: 'hod-courses',      label: 'Courses',        icon: coursesIcon() });
       links.push({ id: 'hod-lecturers',    label: 'Lecturers',      icon: svgIcon('<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>') });
       links.push({ id: 'hod-students',     label: 'Students',       icon: usersIcon() });
       links.push({ id: 'hod-reports',      label: 'Reports',        icon: reportsIcon() });
+      links.push({ id: 'approvals',        label: 'Approvals',      icon: approvalsIcon() });
       links.push({ id: 'announcements',    label: 'Announcements',  icon: svgIcon('<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>') });
       break;
     case 'lecturer':
@@ -1941,6 +1945,7 @@ function navigateTo(view) {
     case 'contact':     renderContact(); break;
     case 'about':       renderAbout(); break;
     case 'hod-overview':  renderHodDashboard(document.getElementById('main-content')); break;
+    case 'hod-courses':   renderHodCourses(); break;
     case 'hod-sessions':  renderHodSessions(); break;
     case 'hod-lecturers': renderHodLecturers(); break;
     case 'hod-students':  renderHodStudents(); break;
@@ -2015,18 +2020,25 @@ async function renderApprovals() {
   try {
     const data = await api('/api/approvals/pending');
     const pending = data.pending || [];
+    const isHod = currentUser.role === 'hod';
 
     content.innerHTML = `
-      <div class="page-header"><h2>Pending Approvals</h2><p>Review and approve registration requests</p></div>
+      <div class="page-header">
+        <div>
+          <h2>Pending Approvals</h2>
+          <p>${isHod ? `Lecturer approval requests for <strong>${currentUser.department || 'your department'}</strong>` : 'Review and approve registration requests'}</p>
+        </div>
+      </div>
       <div class="card">
         ${pending.length ? `
           <table>
-            <thead><tr><th>Name</th><th>Email / ID</th><th>Role</th><th>Registered</th><th>Actions</th></tr></thead>
+            <thead><tr><th>Name</th><th>Email / ID</th><th>Role</th>${!isHod ? '<th>Department</th>' : ''}<th>Registered</th><th>Actions</th></tr></thead>
             <tbody>${pending.map(u => `
               <tr>
                 <td style="font-weight:500">${u.name}</td>
                 <td>${u.email || u.indexNumber || 'N/A'}</td>
                 <td><span class="status-badge status-active">${u.role}</span></td>
+                ${!isHod ? `<td>${u.department ? `<span style="font-size:11px;padding:2px 7px;border-radius:20px;background:#ecfeff;color:#0891b2;font-weight:600;">${u.department}</span>` : '—'}</td>` : ''}
                 <td>${new Date(u.createdAt).toLocaleDateString()}</td>
                 <td style="white-space:nowrap">
                   <button class="btn btn-sm" style="background:#22c55e;color:#fff" onclick="approveUser('${u._id}')">Approve</button>
@@ -2221,10 +2233,14 @@ async function renderHodLecturers() {
               <div style="width:38px;height:38px;border-radius:50%;background:#ecfeff;color:#0891b2;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px;flex-shrink:0;">
                 ${(u.name||'?')[0].toUpperCase()}
               </div>
-              <div style="min-width:0;">
+              <div style="min-width:0;flex:1;">
                 <div style="font-weight:700;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${u.name}</div>
                 <div style="font-size:11px;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${u.email}</div>
-                <span class="tag ${u.isApproved ? 'tag-green' : 'tag-amber'}" style="margin-top:4px;">${u.isApproved ? 'Active' : 'Pending'}</span>
+                <div style="display:flex;gap:6px;align-items:center;margin-top:4px;flex-wrap:wrap;">
+                  <span class="tag ${u.isApproved ? 'tag-green' : 'tag-amber'}">${u.isApproved ? 'Active' : 'Pending'}</span>
+                  ${u.department ? `<span style="font-size:10px;padding:2px 6px;border-radius:20px;background:#ecfeff;color:#0891b2;font-weight:600;">${u.department}</span>` : ''}
+                  <button class="btn btn-xs btn-secondary" onclick="hodEditLecturerDept('${u._id}','${u.name.replace(/'/g,"\\'")}','${u.department||''}')">Edit Dept</button>
+                </div>
               </div>
             </div>`).join('')}
       </div>`;
@@ -2315,7 +2331,7 @@ async function renderHodReports() {
         <div class="stat-card"><div class="stat-value" style="color:#0891b2">${stats.lecturers || 0}</div><div class="stat-label">LECTURERS</div></div>
       </div>
 
-      <div class="card">
+      <div class="card" style="margin-bottom:16px;">
         <div style="font-size:13px;font-weight:700;margin-bottom:14px;">Attendance by Lecturer</div>
         ${lecRows.length === 0 ? '<p style="color:var(--text-muted);font-size:13px;">No data yet.</p>' : `
         <table style="width:100%;border-collapse:collapse;font-size:13px;">
@@ -2337,10 +2353,117 @@ async function renderHodReports() {
               </tr>`).join('')}
           </tbody>
         </table>`}
+      </div>
+
+      <div class="card">
+        <div style="font-size:13px;font-weight:700;margin-bottom:14px;">Attendance Trend (Last 30 Days)</div>
+        <canvas id="hod-trend-chart" height="120"></canvas>
       </div>`;
+
+    // Build trend chart — group sessions by date
+    const trendMap = {};
+    const now = Date.now();
+    const days30 = 30 * 24 * 60 * 60 * 1000;
+    sessions.filter(s => !s.active && new Date(s.createdAt) > now - days30).forEach(s => {
+      const d = new Date(s.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
+      trendMap[d] = (trendMap[d] || 0) + (s.attendanceCount ?? s.records?.length ?? 0);
+    });
+    const trendLabels = Object.keys(trendMap).slice(-14);
+    const trendData   = trendLabels.map(k => trendMap[k]);
+
+    if (trendLabels.length > 0) {
+      const loadChart = async () => {
+        if (!window.Chart) {
+          await new Promise((res, rej) => {
+            const s = document.createElement('script');
+            s.src = 'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js';
+            s.onload = res; s.onerror = rej; document.head.appendChild(s);
+          });
+        }
+        const ctx = document.getElementById('hod-trend-chart');
+        if (!ctx) return;
+        new Chart(ctx, {
+          type: 'line',
+          data: {
+            labels: trendLabels,
+            datasets: [{
+              label: 'Attendance',
+              data: trendData,
+              borderColor: '#0891b2',
+              backgroundColor: 'rgba(8,145,178,0.1)',
+              borderWidth: 2,
+              fill: true,
+              tension: 0.4,
+              pointRadius: 4,
+              pointBackgroundColor: '#0891b2',
+            }]
+          },
+          options: {
+            responsive: true,
+            plugins: { legend: { display: false } },
+            scales: {
+              y: { beginAtZero: true, ticks: { stepSize: 1 } },
+              x: { grid: { display: false } }
+            }
+          }
+        });
+      };
+      setTimeout(loadChart, 50);
+    }
   } catch(e) {
     content.innerHTML = `<div class="card"><p style="color:#ef4444;">${e.message}</p></div>`;
   }
+}
+
+
+// ── FEATURE 3: HOD — Courses view ──────────────────────────────────────────
+async function renderHodCourses() {
+  const content = document.getElementById('main-content');
+  content.innerHTML = '<div class="loading">Loading courses…</div>';
+  try {
+    const dept = currentUser.department ? '&department=' + encodeURIComponent(currentUser.department) : '';
+    const data = await api('/api/courses?limit=200' + dept);
+    const courses = data.courses || [];
+    content.innerHTML = `
+      <div class="page-header">
+        <div><h2>Courses</h2><p>${courses.length} course${courses.length !== 1 ? 's' : ''} in ${currentUser.department || 'your department'}</p></div>
+      </div>
+      ${courses.length === 0 ? '<div class="empty-state"><p>No courses found for this department.</p></div>' :
+        `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px;">
+          ${courses.map(c => `
+            <div class="card" style="padding:16px 18px;">
+              <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:8px;">
+                <div>
+                  <div style="font-weight:700;font-size:14px;">${c.title}</div>
+                  <div style="font-size:11px;font-family:monospace;color:var(--text-muted);margin-top:2px;">${c.code}</div>
+                </div>
+                <span class="tag tag-blue">${c.enrolledStudents?.length || 0} students</span>
+              </div>
+              <div style="font-size:12px;color:var(--text-muted);margin-bottom:6px;">
+                👨‍🏫 ${c.lecturer?.name || 'Unassigned'}
+              </div>
+              ${c.description ? `<div style="font-size:12px;color:var(--text-muted);line-height:1.5;">${c.description}</div>` : ''}
+            </div>`).join('')}
+        </div>`}`;
+  } catch(e) {
+    content.innerHTML = `<div class="card"><p style="color:#ef4444;">${e.message}</p></div>`;
+  }
+}
+
+// ── FEATURE 4: HOD — Edit lecturer department ───────────────────────────────
+function hodEditLecturerDept(lecturerId, lecturerName, currentDept) {
+  const newDept = prompt(`Change department for ${lecturerName}:
+
+Current: ${currentDept || 'None'}`, currentDept || '');
+  if (newDept === null) return;
+  if (!newDept.trim()) { toastWarning('Department cannot be empty.'); return; }
+  api('/api/users/' + lecturerId, {
+    method: 'PATCH',
+    body: JSON.stringify({ department: newDept.trim() })
+  }).then(() => {
+    toastSuccess('Department updated to "' + newDept.trim() + '"');
+    renderHodLecturers();
+  }).catch(e => toastError(e.message || 'Failed to update department'));
 }
 
 
@@ -7975,7 +8098,7 @@ function buildBottomNav(role) {
       : ['dashboard', 'sessions', 'users', 'reports'],
     manager:    ['dashboard', 'sessions', 'reports', 'users'],
     lecturer:   ['dashboard', 'sessions', 'quizzes', 'assignments'],
-    hod:        ['hod-overview', 'hod-sessions', 'hod-lecturers', 'hod-reports'],
+    hod:        ['hod-overview', 'hod-courses', 'hod-lecturers', 'hod-reports'],
     employee:   ['dashboard', 'sign-in-out', 'my-attendance', 'reports'],
     student:    ['dashboard', 'mark-attendance', 'quizzes', 'assignments'],
     superadmin: currentUser?.company?.mode === 'academic'
@@ -8003,7 +8126,7 @@ function buildBottomNav(role) {
   };
 
   const LABELS = {
-    'hod-overview': 'Overview', 'hod-sessions': 'Sessions', 'hod-lecturers': 'Lecturers',
+    'hod-overview': 'Overview', 'hod-sessions': 'Sessions', 'hod-courses': 'Courses', 'hod-lecturers': 'Lecturers',
     'hod-students': 'Students', 'hod-reports': 'Reports',
     'sign-in-out': 'Sign In/Out', 'my-attendance': 'Attendance',
     'mark-attendance': 'Attendance', subscription: 'Subscribe',
