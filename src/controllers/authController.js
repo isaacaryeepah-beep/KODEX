@@ -486,6 +486,10 @@ exports.login = async (req, res) => {
       const CompanyModel = require("../models/Company");
       const academicIds = await CompanyModel.find({ mode: "academic" }, "_id").lean().then(cs => cs.map(c => c._id));
       user = await User.findOne({ email, company: { $in: academicIds }, role: "lecturer" }).select("+password");
+    } else if (email && loginRole === "hod") {
+      const CompanyModel = require("../models/Company");
+      const academicIds = await CompanyModel.find({ mode: "academic" }, "_id").lean().then(cs => cs.map(c => c._id));
+      user = await User.findOne({ email, company: { $in: academicIds }, role: "hod" }).select("+password");
     } else {
       user = await User.findOne({ email }).select("+password");
     }
@@ -516,6 +520,7 @@ exports.login = async (req, res) => {
     const PORTAL_ALLOWED_ROLES = {
       admin:    ["admin", "superadmin", "manager"],
       lecturer: ["lecturer"],
+      hod:      ["hod"],
       employee: ["employee"],
       student:  ["student"],
     };
