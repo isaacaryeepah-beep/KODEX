@@ -1136,28 +1136,73 @@ function renderStudentSubmitted(a,sub){
 }
 
 function renderStudentResult(a,sub){
-  const pct=a.totalMarks>0?Math.round((sub.questionScore/a.totalMarks)*100):null;
+  const pct=a.totalMarks>0?Math.round(((sub.manualGrade??sub.questionScore)/a.totalMarks)*100):null;
   const fg=sub.manualGrade!=null?sub.manualGrade:sub.questionScore;
+  const scoreColor=pct==null?'#6b7280':pct>=70?'#16a34a':pct>=40?'#d97706':'#dc2626';
   let lines=[];
+
+  // Score band
   lines.push(`<div class="result-band">
-    <div class="score">${fg??'—'}<small>/${a.totalMarks||'—'}</small></div>
-    <p>${pct!=null?pct+'% on MCQ questions':''} ${sub.isLate?'(late submission)':''}</p>
-    ${sub.feedback?`<div class="expl-box">💬 Lecturer feedback: ${sub.feedback}</div>`:''}
+    <div class="score" style="color:${scoreColor}">${fg??'—'}<small>/${a.totalMarks||'—'}</small></div>
+    <p>${pct!=null?pct+'% score':''} ${sub.isLate?'<span class="tag tag-red" style="margin-left:6px">Late</span>':''}</p>
+    ${sub.status==='graded'?'<div style="font-size:12px;color:#16a34a;font-weight:600;margin-top:4px;">✓ Graded by lecturer</div>':'<div style="font-size:12px;color:#d97706;margin-top:4px;">⏳ Awaiting lecturer review</div>'}
   </div>`);
+
+  // Feedback box — prominent
+  if(sub.feedback){
+    lines.push(`<div style="padding:14px 16px;background:#f5f3ff;border:1.5px solid #ddd6fe;border-radius:10px;margin-bottom:16px;">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:#7c3aed;margin-bottom:6px;">💬 Lecturer Feedback</div>
+      <div style="font-size:14px;color:#1e1b4b;line-height:1.6;">${sub.feedback}</div>
+    </div>`);
+  }
+
   if(a.hasPdf) lines.push(`<button class="btn btn-secondary btn-sm" style="margin-bottom:16px" onclick="downloadStudentPdf('${a._id}')">⬇️ Download Brief</button>`);
+
   if(sub.answers?.length){
-    lines.push(`<div style="font-size:13px;font-weight:700;margin-bottom:12px">Question Results</div>`);
+    lines.push(`<div style="font-size:13px;font-weight:700;margin-bottom:12px;">Question Results</div>`);
     sub.answers.forEach(ans=>{
-      const q=a.questions[ans.questionIndex]; if(!q) return;
-      lines.push(`<div class="sq-item" style="border-color:${ans.isCorrect?'#86efac':'#fca5a5'};background:${ans.isCorrect?'#f0fdf4':'#fef2f2'}">
-        <div class="sq-head">
-          <div class="sq-qtext">Q${ans.questionIndex+1}. ${q.questionText}</div>
-          <div class="sq-marks" style="color:${ans.isCorrect?'#16a34a':'#dc2626'}">${ans.marksAwarded}/${q.marks}pt</div>
+      const q=a.questions?.[ans.questionIndex]; if(!q) return;
+      const type=q.questionType||'single';
+      const typeColors={single:'#0369a1',multiple:'#7c3aed',fill:'#059669',explain:'#b45309'};
+      const typeBg={single:'#f0f9ff',multiple:'#f5f3ff',fill:'#f0fdf4',explain:'#fffbeb'};
+      const typeLabels={single:'MCQ',multiple:'MULTI',fill:'Fill In',explain:'Explain'};
+      const needsManual=type==='explain'||ans.needsManualGrading;
+      const borderColor=needsManual?'#fde68a':ans.isCorrect?'#86efac':'#fca5a5';
+      const bgColor=needsManual?'#fffbeb':ans.isCorrect?'#f0fdf4':'#fef2f2';
+
+      let ansHtml='';
+      if(type==='fill'){
+        ansHtml=`<div style="margin-top:8px;padding:10px 12px;background:${ans.isCorrect?'#f0fdf4':'#fef2f2'};border-radius:8px;">
+          <div style="font-size:12px;font-weight:600;color:var(--text-muted);margin-bottom:3px;">Your answer:</div>
+          <div style="font-size:14px;">${ans.textAnswer||'(no answer)'}</div>
+          ${!ans.isCorrect&&q.correctAnswerText?`<div style="font-size:12px;color:#059669;margin-top:6px;font-weight:600;">✓ Expected: ${q.correctAnswerText}</div>`:''}
+        </div>`;
+      } else if(type==='explain'){
+        ansHtml=`<div style="margin-top:8px;padding:10px 12px;background:#fafafa;border:1px solid var(--border);border-radius:8px;font-size:14px;line-height:1.6;white-space:pre-wrap;">${ans.textAnswer||'(no answer)'}</div>
+        ${needsManual?'<div style="font-size:11px;color:#d97706;margin-top:5px;">⏳ Awaiting manual mark from lecturer</div>':''}`;
+      } else {
+        ansHtml=`<div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:8px;">
+          ${(q.options||[]).map((opt,oi)=>{
+            const picked=(ans.selectedAnswers||[]).includes(oi);
+            const isCorr=Array.isArray(q.correctAnswers)?q.correctAnswers.includes(oi):q.correctAnswer===oi;
+            const cls=isCorr&&picked?'tag-green':isCorr?'tag-blue':picked?'tag-red':'tag-gray';
+            return`<span class="tag ${cls}">${String.fromCharCode(65+oi)}. ${opt}${picked?' ✓':''}</span>`;
+          }).join('')}
+        </div>`;
+      }
+
+      lines.push(`<div class="sq-item" style="border-color:${borderColor};background:${bgColor};margin-bottom:10px;">
+        <div class="sq-head" style="flex-wrap:wrap;gap:6px;">
+          <div class="sq-qtext" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+            <span style="font-size:10px;padding:2px 7px;border-radius:20px;font-weight:700;background:${typeBg[type]};color:${typeColors[type]}">${typeLabels[type]}</span>
+            Q${ans.questionIndex+1}. ${q.questionText}
+          </div>
+          <div class="sq-marks" style="color:${ans.marksAwarded>0?'#16a34a':needsManual?'#d97706':'#dc2626'};flex-shrink:0;">
+            ${needsManual?'Pending':ans.marksAwarded+'/'+q.marks+'pt'}
+          </div>
         </div>
-        <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:6px">
-          ${q.options.map((opt,oi)=>{const picked=(ans.selectedAnswers||[]).includes(oi);return`<span class="tag ${picked?'tag-blue':'tag-gray'}">${String.fromCharCode(65+oi)}. ${opt}</span>`;}).join('')}
-        </div>
-        ${q.explanation?`<div style="margin-top:6px;padding:8px;background:rgba(0,0,0,.04);border-radius:6px;font-size:12px;color:var(--text-light)">💡 ${q.explanation}</div>`:''}
+        ${ansHtml}
+        ${q.explanation?`<div style="margin-top:8px;padding:8px 10px;background:rgba(0,0,0,.04);border-radius:6px;font-size:12px;color:var(--text-light);">💡 ${q.explanation}</div>`:''}
       </div>`);
     });
   }
