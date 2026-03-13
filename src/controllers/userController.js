@@ -87,6 +87,23 @@ exports.createUser = async (req, res) => {
       department: department ? department.trim() : null,
     };
 
+    // Enforce one HOD per department
+    if (targetRole === "hod") {
+      if (!department?.trim()) {
+        return res.status(400).json({ error: "Department is required when creating an HOD." });
+      }
+      const existingHod = await User.findOne({
+        company: req.user.company,
+        role: "hod",
+        department: department.trim(),
+      });
+      if (existingHod) {
+        return res.status(400).json({
+          error: `There is already an HOD assigned to the "${department.trim()}" department (${existingHod.name}). Each department can only have one HOD.`,
+        });
+      }
+    }
+
     if (targetRole === "student") {
       if (!indexNumber) {
         return res.status(400).json({ error: "Index number is required for students" });
@@ -133,7 +150,26 @@ exports.updateUser = async (req, res) => {
     const update = {};
     if (name) update.name = name;
     if (typeof isActive === "boolean") update.isActive = isActive;
-    if (department !== undefined) update.department = department ? department.trim() : null;
+    if (department !== undefined) {
+      update.department = department ? department.trim() : null;
+      // If changing department of an HOD, ensure no HOD already exists in target department
+      if (update.department) {
+        const targetUser = await User.findOne({ _id: req.params.id, company: req.user.company });
+        if (targetUser?.role === "hod") {
+          const clash = await User.findOne({
+            company: req.user.company,
+            role: "hod",
+            department: update.department,
+            _id: { $ne: req.params.id },
+          });
+          if (clash) {
+            return res.status(400).json({
+              error: `"${update.department}" already has an HOD (${clash.name}). Each department can only have one HOD.`,
+            });
+          }
+        }
+      }
+    }
 
     if (role) {
       if (ROLE_HIERARCHY[role] >= ROLE_HIERARCHY[req.user.role]) {
