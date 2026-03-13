@@ -1314,8 +1314,6 @@ input[type="checkbox"] {
 }
 
 @media (max-width: 600px) {
-  .portal-card { width: 100%; max-width: 270px; }
-  .portal-cards { flex-direction: column; align-items: center; gap: 9px; }
   .auth-container { padding: 26px 18px; border-radius: var(--radius-lg); }
   .portal-header h1 { font-size: 24px; }
   .form-group input, .form-group select { font-size: 16px !important; }
@@ -1323,12 +1321,12 @@ input[type="checkbox"] {
   .auth-back { min-height: 44px; display: flex; align-items: center; touch-action: manipulation; }
 }
 
-@media (max-width: 540px) {
+@media (max-width: 768px) {
   .bottom-nav { display: flex; }
   .bottom-nav-spacer { display: block; }
   .sidebar { display: none !important; }
-  .sidebar-overlay { display: none !important; }
-  .topbar-menu-btn { display: none !important; }
+  .sidebar-overlay { display: block; }
+  .topbar-menu-btn { display: flex !important; }
 
   .stats-grid { grid-template-columns: 1fr 1fr; gap: 9px; }
   .stat-card { padding: 13px 10px; }
@@ -1359,6 +1357,9 @@ input[type="checkbox"] {
 
 @media (max-width: 380px) {
   .portal-header h1 { font-size: 22px; }
+  /* 3-col academic cards too tight on very small screens — drop to 2-col */
+  #portal-cards-acad .portal-cards { grid-template-columns: 1fr 1fr; }
+}
 }
 
 /* ══════════════════════════════════════════════════
