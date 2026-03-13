@@ -273,7 +273,7 @@ exports.registerLecturer = async (req, res) => {
 
 exports.registerStudent = async (req, res) => {
   try {
-    const { name, indexNumber, password, institutionCode } = req.body;
+    const { name, indexNumber, password, institutionCode, department } = req.body;
 
     if (!name || !indexNumber || !password || !institutionCode) {
       return res.status(400).json({ error: "Name, student ID, password, and institution code are required" });
@@ -322,6 +322,7 @@ exports.registerStudent = async (req, res) => {
       company: company._id,
       role: "student",
       isApproved: true,
+      department: department ? department.trim() : null,
     });
 
     await StudentRoster.updateMany(
