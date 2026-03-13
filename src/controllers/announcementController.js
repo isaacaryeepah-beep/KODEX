@@ -1,7 +1,7 @@
 const Announcement = require("../models/Announcement");
 const mongoose     = require("mongoose");
 
-const CAN_POST = ["admin", "superadmin", "lecturer", "manager"];
+const CAN_POST = ["admin", "superadmin", "lecturer", "manager", "hod"];
 
 // Helper — build the filter for what a given user can SEE
 function visibilityFilter(user) {
@@ -14,6 +14,11 @@ function visibilityFilter(user) {
   if (user.role === "lecturer") {
     // Lecturers see their own posts + announcements addressed to lecturers/all by admin
     return { ...base, $or: [{ author: user._id }, { audience: { $in: ["all", "lecturers"] }, author: { $ne: user._id } }] };
+  }
+
+  if (user.role === "hod") {
+    // HOD sees all announcements in the company
+    return base;
   }
 
   if (user.role === "student") {
@@ -70,7 +75,11 @@ exports.create = async (req, res) => {
     if (req.user.role === "lecturer") {
       resolvedAudience = "students";
     } else {
-      resolvedAudience = ["all", "students", "employees", "lecturers"].includes(audience) ? audience : "all";
+      if (req.user.role === "hod") {
+        resolvedAudience = ["all", "students", "lecturers"].includes(audience) ? audience : "all";
+      } else {
+        resolvedAudience = ["all", "students", "employees", "lecturers"].includes(audience) ? audience : "all";
+      }
     }
 
     const ann = await Announcement.create({
