@@ -3374,11 +3374,12 @@ function toggleUserFields() {
   if (!deptGroup) return;
   const showDept = ['lecturer','hod','student'].includes(role);
   deptGroup.style.display = showDept ? 'block' : 'none';
-  if (deptReq)  deptReq.style.display  = (role === 'lecturer' || role === 'hod') ? 'inline' : 'none';
+  if (deptReq)  deptReq.style.display  = ['lecturer','hod','student'].includes(role) ? 'inline' : 'none';
   if (deptHint) {
-    if (role === 'hod')      deptHint.textContent = 'Each department can only have one HOD.';
+    if (role === 'hod')           deptHint.textContent = 'Each department can only have one HOD.';
     else if (role === 'lecturer') deptHint.textContent = 'Lecturer will only be visible to the HOD of this department.';
-    else                     deptHint.textContent = '(optional)';
+    else if (role === 'student')  deptHint.textContent = 'Student will be visible to the HOD of this department.';
+    else                          deptHint.textContent = '';
   }
 }
 
@@ -3399,8 +3400,9 @@ async function createUser() {
     if (!phone) { toastWarning('Phone number is required.'); return; }
     body.phone = phone;
     const dept = document.getElementById('new-user-dept')?.value?.trim();
-    if (['lecturer','hod'].includes(role) && !dept) {
-      toastWarning('Department is required for ' + (role === 'hod' ? 'HOD' : 'Lecturer') + '.');
+    if (['lecturer','hod','student'].includes(role) && !dept) {
+      const label = role === 'hod' ? 'HOD' : role === 'lecturer' ? 'Lecturer' : 'Student';
+      toastWarning('Department is required for ' + label + '.');
       return;
     }
     if (dept) body.department = dept;
@@ -5390,6 +5392,7 @@ function biPreviewCSV(input) {
       const idxIdx   = headers.findIndex(h => h === 'indexnumber' || h === 'studentid' || h === 'id' || h === 'index');
       const emailIdx = headers.findIndex(h => h === 'email');
       const courseIdx= headers.findIndex(h => h === 'coursecode' || h === 'course' || h === 'code');
+      const deptIdx  = headers.findIndex(h => h === 'department' || h === 'dept' || h === 'faculty');
 
       if (nameIdx === -1 || idxIdx === -1) {
         showBiErr("CSV must have 'name' and 'indexNumber' columns.");
@@ -5405,6 +5408,7 @@ function biPreviewCSV(input) {
           indexNumber:cols[idxIdx]  || '',
           email:      emailIdx >= 0 ? (cols[emailIdx] || '') : '',
           courseCode: courseIdx >= 0 ? (cols[courseIdx] || '') : '',
+          department: deptIdx  >= 0 ? (cols[deptIdx]  || '') : '',
         });
       }
 
@@ -5418,6 +5422,7 @@ function biPreviewCSV(input) {
             <td style="padding:6px 10px;border-bottom:1px solid var(--border);font-family:monospace;">${r.indexNumber}</td>
             <td style="padding:6px 10px;border-bottom:1px solid var(--border);color:var(--text-muted);">${r.email || '—'}</td>
             <td style="padding:6px 10px;border-bottom:1px solid var(--border);color:var(--text-muted);">${r.courseCode || '—'}</td>
+            <td style="padding:6px 10px;border-bottom:1px solid var(--border);color:#0891b2;font-size:12px;">${r.department || '—'}</td>
           </tr>`).join('') +
           (_biRows.length > 5 ? `<tr><td colspan="4" style="padding:6px 10px;color:var(--text-muted);font-style:italic;">…and ${_biRows.length - 5} more</td></tr>` : '');
         if (countEl) countEl.textContent = _biRows.length + ' rows';
