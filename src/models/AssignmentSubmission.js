@@ -1,10 +1,12 @@
 const mongoose = require("mongoose");
 
 const answerSchema = new mongoose.Schema({
-  questionIndex:   { type: Number, required: true },
-  selectedAnswers: { type: [Number], default: [] }, // indices the student chose
-  isCorrect:       { type: Boolean, default: false },
-  marksAwarded:    { type: Number,  default: 0 },
+  questionIndex:       { type: Number,  required: true },
+  selectedAnswers:     { type: [Number], default: [] },      // MCQ indices chosen
+  textAnswer:          { type: String,   default: null },    // fill-in / explain response
+  isCorrect:           { type: Boolean,  default: false },
+  marksAwarded:        { type: Number,   default: 0 },
+  needsManualGrading:  { type: Boolean,  default: false },   // true for explain questions
 });
 
 const assignmentSubmissionSchema = new mongoose.Schema(
