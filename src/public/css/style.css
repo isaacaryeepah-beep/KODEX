@@ -919,35 +919,8 @@ body {
   margin-top: 4px;
 }
 
-/* ── Sidebar vertical divider with dots ── */
-.sidebar-divider-line {
-  width: 1px;
-  background: linear-gradient(to bottom,
-    transparent 0%,
-    rgba(0,0,0,.1) 15%,
-    rgba(0,0,0,.1) 85%,
-    transparent 100%
-  );
-  position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
-  top: 60px;
-  bottom: 60px;
-  pointer-events: none;
-  z-index: -1;
-}
-.sidebar-divider-line::before,
-.sidebar-divider-line::after {
-  content: "";
-  position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 5px; height: 5px;
-  border-radius: 50%;
-  background: rgba(0,0,0,.15);
-}
-.sidebar-divider-line::before { top: -6px; }
-.sidebar-divider-line::after  { bottom: -6px; }
+/* Sidebar divider line removed */
+.sidebar-divider-line { display: none !important; }
 
 /* ── Announcement badge (red line indicator) ── */
 #nav-announcements {
