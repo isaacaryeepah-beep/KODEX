@@ -131,6 +131,11 @@ app.get("/api", (req, res) => {
 });
 
 app.get("/health", (req, res) => {
+
+// Superadmin portal page
+app.get("/superadmin", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "superadmin.html"));
+});
   res.json({ status: "ok", timestamp: new Date().toISOString() });
 });
 
