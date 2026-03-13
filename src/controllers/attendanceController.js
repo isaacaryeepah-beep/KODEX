@@ -127,6 +127,16 @@ exports.listSessions = async (req, res) => {
       filter.createdBy = req.user._id;
     }
 
+    // HOD sees only sessions from lecturers in their department
+    if (req.user.role === "hod" && req.user.department) {
+      const User = require("../models/User");
+      const deptLecturers = await User.find(
+        { company: req.user.company, role: "lecturer", department: req.user.department },
+        "_id"
+      ).lean();
+      filter.createdBy = { $in: deptLecturers.map(u => u._id) };
+    }
+
     if (status && ["active", "stopped"].includes(status)) {
       filter.status = status;
     }
