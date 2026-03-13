@@ -696,6 +696,8 @@ function selectPortal(type) {
     document.getElementById('admin-reg-company').placeholder = isAcademic ? 'Your institution name' : 'Your company name';
   } else if (type === 'lecturer') {
     document.getElementById('lecturer-auth').classList.remove('hidden');
+  } else if (type === 'hod') {
+    document.getElementById('hod-auth').classList.remove('hidden');
   } else if (type === 'employee') {
     document.getElementById('employee-auth').classList.remove('hidden');
   } else {
@@ -706,6 +708,7 @@ function selectPortal(type) {
 function showPortalSelector() {
   document.getElementById('admin-auth').classList.add('hidden');
   document.getElementById('lecturer-auth').classList.add('hidden');
+  document.getElementById('hod-auth').classList.add('hidden');
   document.getElementById('employee-auth').classList.add('hidden');
   document.getElementById('student-auth').classList.add('hidden');
   document.getElementById('portal-selector').classList.remove('hidden');
@@ -1231,6 +1234,92 @@ async function handleEmployeeForgotPassword() {
   }
 }
 
+// ════════════════════════════════════════════════════════════════════════════
+//  HOD AUTH
+// ════════════════════════════════════════════════════════════════════════════
+function showHodLogin() {
+  document.getElementById('hod-login-form').classList.remove('hidden');
+  document.getElementById('hod-forgot-form').classList.add('hidden');
+}
+function showHodForgot() {
+  document.getElementById('hod-login-form').classList.add('hidden');
+  document.getElementById('hod-forgot-form').classList.remove('hidden');
+}
+function showHodError(msg) {
+  const el = document.getElementById('hod-auth-error');
+  if (!el) return;
+  el.textContent = msg; el.style.display = 'block';
+}
+
+async function handleHodLogin() {
+  const btn = document.querySelector('#hod-login-form button[type="submit"]');
+  try {
+    const email    = document.getElementById('hod-login-email').value.trim();
+    const password = document.getElementById('hod-login-password').value;
+    if (!email)    return showHodError('Please enter your email.');
+    if (!password) return showHodError('Please enter your password.');
+    if (btn) { btn.textContent = 'Signing in…'; btn.disabled = true; }
+
+    const credentials = { email, password, loginRole: 'hod', portalMode: 'academic', deviceId: getDeviceFingerprint() };
+    let data;
+    if (!isOnline()) {
+      showOfflineLoginNotice('hod-login-form');
+      data = await attemptOfflineLogin(credentials);
+    } else {
+      removeOfflineLoginNotice();
+      data = await api('/api/auth/login', { method: 'POST', body: JSON.stringify(credentials) });
+      await saveOfflineProfile(credentials, data);
+    }
+    token = data.token;
+    localStorage.setItem('token', token);
+    currentUser = data.user;
+    showDashboard(data);
+  } catch (e) {
+    if (btn) { btn.textContent = 'Sign In'; btn.disabled = false; }
+    showHodError(friendlyError(e.message) || 'Wrong Email or Password.');
+  }
+}
+
+let hodForgotPhone = '';
+let hodForgotCode  = '';
+async function handleHodForgotPassword() {
+  const btn = document.getElementById('hod-forgot-btn');
+  const codeGroup = document.getElementById('hod-reset-code-group');
+  const pwGroup   = document.getElementById('hod-new-password-group');
+  const setMsg = (msg, ok) => {
+    const el = document.getElementById('hod-auth-error');
+    el.textContent = msg; el.style.display = 'block';
+    el.style.background = ok ? '#f0fdf4' : '#fef2f2';
+    el.style.color = ok ? '#15803d' : '#991b1b';
+  };
+  try {
+    btn.disabled = true;
+    const phone = document.getElementById('hod-forgot-phone').value.trim();
+    const institutionCode = document.getElementById('hod-forgot-code').value.trim().toUpperCase();
+    const resetCode = document.getElementById('hod-reset-code').value.trim();
+    const newPassword = document.getElementById('hod-new-password').value;
+
+    if (!codeGroup.classList.contains('hidden') && !pwGroup.classList.contains('hidden')) {
+      await api('/api/auth/reset-password-email', { method: 'POST', body: JSON.stringify({ phone: hodForgotPhone, resetCode, newPassword, institutionCode: hodForgotCode }) });
+      setMsg('Password reset! You can now sign in.', true);
+      setTimeout(showHodLogin, 2000);
+    } else if (!codeGroup.classList.contains('hidden')) {
+      codeGroup.classList.remove('hidden'); pwGroup.classList.remove('hidden');
+      btn.textContent = 'Reset Password';
+      setMsg('Enter the code from your SMS and a new password.', true);
+    } else {
+      if (!phone || !institutionCode) { btn.disabled = false; return setMsg('Phone number and institution code are required.', false); }
+      hodForgotPhone = phone; hodForgotCode = institutionCode;
+      await api('/api/auth/forgot-password-email', { method: 'POST', body: JSON.stringify({ phone, institutionCode }) });
+      codeGroup.classList.remove('hidden');
+      btn.textContent = 'Continue';
+      setMsg('Reset code sent to your phone.', true);
+    }
+  } catch(e) { btn.textContent = 'Request Reset Code'; setMsg(e.message, false); }
+  finally { btn.disabled = false; }
+}
+
+
 async function handleEmployeeLogin() {
   const btn = document.querySelector('#employee-login-form button[type="submit"]');
   try {
@@ -1475,6 +1564,7 @@ function getPortalName(role) {
   const names = {
     manager: 'Manager Portal',
     lecturer: 'Lecturer Portal',
+    hod: 'HOD Portal',
     employee: 'Employee Portal',
     student: 'Student Portal',
     admin: 'Admin Portal',
@@ -1743,6 +1833,14 @@ function buildSidebar() {
       links.push({ id: 'meetings', label: 'Meetings', icon: meetingsIcon() });
       links.push({ id: 'reports', label: 'Reports', icon: reportsIcon() });
       break;
+    case 'hod':
+      links.push({ id: 'hod-overview',     label: 'Overview',       icon: svgIcon('<rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>') });
+      links.push({ id: 'hod-sessions',     label: 'Sessions',       icon: sessionsIcon() });
+      links.push({ id: 'hod-lecturers',    label: 'Lecturers',      icon: svgIcon('<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>') });
+      links.push({ id: 'hod-students',     label: 'Students',       icon: usersIcon() });
+      links.push({ id: 'hod-reports',      label: 'Reports',        icon: reportsIcon() });
+      links.push({ id: 'announcements',    label: 'Announcements',  icon: svgIcon('<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>') });
+      break;
     case 'lecturer':
       links.push({ id: 'sessions', label: 'Sessions', icon: sessionsIcon() });
       links.push({ id: 'search', label: 'Search', icon: svgIcon('<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>') });
@@ -1842,6 +1940,11 @@ function navigateTo(view) {
     case 'profile':     renderProfile(); break;
     case 'contact':     renderContact(); break;
     case 'about':       renderAbout(); break;
+    case 'hod-overview':  renderHodDashboard(document.getElementById('main-content')); break;
+    case 'hod-sessions':  renderHodSessions(); break;
+    case 'hod-lecturers': renderHodLecturers(); break;
+    case 'hod-students':  renderHodStudents(); break;
+    case 'hod-reports':   renderHodReports(); break;
     case 'announcements': renderAnnouncements(); break;
     case 'gradebook': renderGradeBook(); break;
     case 'training':       renderTraining(); break;
@@ -1885,6 +1988,9 @@ async function renderDashboard() {
         break;
       case 'lecturer':
         await renderLecturerDashboard(content);
+        break;
+      case 'hod':
+        await renderHodDashboard(content);
         break;
       case 'employee':
         await renderEmployeeDashboard(content);
@@ -1956,6 +2062,268 @@ async function rejectUser(userId) {
     toastError(e.message);
   }
 }
+
+// ════════════════════════════════════════════════════════════════════════════
+//  HOD — DASHBOARD & VIEWS
+// ════════════════════════════════════════════════════════════════════════════
+async function renderHodDashboard(content) {
+  if (!content) content = document.getElementById('main-content');
+  content.innerHTML = '<div class="loading">Loading overview…</div>';
+  try {
+    const [sessData, userStats] = await Promise.all([
+      api('/api/sessions?limit=5'),
+      api('/api/users/stats')
+    ]);
+    const sessions   = sessData.sessions   || [];
+    const stats      = userStats           || {};
+    const lecturers  = stats.lecturers     || 0;
+    const students   = stats.students      || 0;
+    const hods       = stats.hods          || 0;
+    const activeSess = sessions.filter(s => s.active).length;
+
+    content.innerHTML = `
+      <div class="page-header">
+        <div>
+          <h2>Department Overview</h2>
+          <p>Welcome back, ${currentUser.name} — ${currentUser.company?.name || ''}</p>
+        </div>
+      </div>
+      <div class="stats-grid" style="margin-bottom:20px;">
+        <div class="stat-card" onclick="navigateTo('hod-lecturers')" style="cursor:pointer">
+          <div class="stat-value" style="color:#0891b2">${lecturers}</div>
+          <div class="stat-label">LECTURERS</div>
+        </div>
+        <div class="stat-card" onclick="navigateTo('hod-students')" style="cursor:pointer">
+          <div class="stat-value" style="color:#0891b2">${students}</div>
+          <div class="stat-label">STUDENTS</div>
+        </div>
+        <div class="stat-card" onclick="navigateTo('hod-sessions')" style="cursor:pointer">
+          <div class="stat-value" style="color:#0891b2">${sessions.length}</div>
+          <div class="stat-label">SESSIONS (RECENT)</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" style="color:${activeSess > 0 ? '#16a34a' : '#9ca3af'}">${activeSess}</div>
+          <div class="stat-label">LIVE NOW</div>
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;flex-wrap:wrap;">
+        <div class="card">
+          <div style="font-size:13px;font-weight:700;margin-bottom:12px;">Recent Sessions</div>
+          ${sessions.length === 0 ? '<p style="color:var(--text-muted);font-size:13px;">No sessions yet.</p>' :
+            sessions.slice(0,5).map(s => `
+              <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border);">
+                <div>
+                  <div style="font-size:13px;font-weight:600;">${s.title || s.courseName || 'Untitled'}</div>
+                  <div style="font-size:11px;color:var(--text-muted);">${s.createdBy?.name || '—'} · ${timeAgo(s.createdAt)}</div>
+                </div>
+                <span class="tag ${s.active ? 'tag-green' : 'tag-gray'}">${s.active ? 'Live' : 'Ended'}</span>
+              </div>`).join('')
+          }
+          <button class="btn btn-secondary btn-sm" style="margin-top:12px;width:100%;" onclick="navigateTo('hod-sessions')">View All Sessions →</button>
+        </div>
+
+        <div class="card">
+          <div style="font-size:13px;font-weight:700;margin-bottom:12px;">Quick Actions</div>
+          <div style="display:flex;flex-direction:column;gap:8px;">
+            <button class="btn btn-secondary" onclick="navigateTo('hod-lecturers')">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+              View Lecturers
+            </button>
+            <button class="btn btn-secondary" onclick="navigateTo('hod-students')">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+              View Students
+            </button>
+            <button class="btn btn-secondary" onclick="navigateTo('hod-reports')">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+              Department Reports
+            </button>
+            <button class="btn btn-primary" onclick="navigateTo('announcements')">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+              Post Announcement
+            </button>
+          </div>
+        </div>
+      </div>`;
+  } catch(e) {
+    content.innerHTML = `<div class="card"><p style="color:#ef4444;">Error loading dashboard: ${e.message}</p></div>`;
+  }
+}
+
+async function renderHodSessions() {
+  const content = document.getElementById('main-content');
+  content.innerHTML = '<div class="loading">Loading sessions…</div>';
+  try {
+    const data = await api('/api/sessions?limit=100');
+    const sessions = data.sessions || [];
+    content.innerHTML = `
+      <div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;">
+        <div><h2>All Sessions</h2><p>Department-wide attendance sessions — ${sessions.length} total</p></div>
+      </div>
+      <div style="overflow-x:auto;">
+        <table style="width:100%;border-collapse:collapse;font-size:13px;">
+          <thead>
+            <tr style="border-bottom:2px solid var(--border);">
+              <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Session</th>
+              <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Lecturer</th>
+              <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Attendance</th>
+              <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Date</th>
+              <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${sessions.length === 0 ? '<tr><td colspan="5" style="padding:24px;text-align:center;color:var(--text-muted);">No sessions yet.</td></tr>' :
+              sessions.map(s => `
+                <tr style="border-bottom:1px solid var(--border);">
+                  <td style="padding:10px 12px;font-weight:600;">${s.title || s.courseName || 'Session'}</td>
+                  <td style="padding:10px 12px;color:var(--text-muted);">${s.createdBy?.name || '—'}</td>
+                  <td style="padding:10px 12px;">${s.attendanceCount ?? s.records?.length ?? '—'}</td>
+                  <td style="padding:10px 12px;color:var(--text-muted);font-size:12px;">${fmtDate(s.createdAt)}</td>
+                  <td style="padding:10px 12px;"><span class="tag ${s.active ? 'tag-green' : 'tag-gray'}">${s.active ? 'Live' : 'Ended'}</span></td>
+                </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>`;
+  } catch(e) {
+    content.innerHTML = `<div class="card"><p style="color:#ef4444;">${e.message}</p></div>`;
+  }
+}
+
+async function renderHodLecturers() {
+  const content = document.getElementById('main-content');
+  content.innerHTML = '<div class="loading">Loading lecturers…</div>';
+  try {
+    const data = await api('/api/users?role=lecturer&limit=200');
+    const lecturers = data.users || [];
+    content.innerHTML = `
+      <div class="page-header"><div><h2>Lecturers</h2><p>${lecturers.length} lecturer${lecturers.length !== 1 ? 's' : ''} in your institution</p></div></div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;">
+        ${lecturers.length === 0 ? '<div class="empty-state"><p>No lecturers found.</p></div>' :
+          lecturers.map(u => `
+            <div class="card" style="display:flex;align-items:center;gap:12px;padding:14px 16px;">
+              <div style="width:38px;height:38px;border-radius:50%;background:#ecfeff;color:#0891b2;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px;flex-shrink:0;">
+                ${(u.name||'?')[0].toUpperCase()}
+              </div>
+              <div style="min-width:0;">
+                <div style="font-weight:700;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${u.name}</div>
+                <div style="font-size:11px;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${u.email}</div>
+                <span class="tag ${u.isApproved ? 'tag-green' : 'tag-amber'}" style="margin-top:4px;">${u.isApproved ? 'Active' : 'Pending'}</span>
+              </div>
+            </div>`).join('')}
+      </div>`;
+  } catch(e) {
+    content.innerHTML = `<div class="card"><p style="color:#ef4444;">${e.message}</p></div>`;
+  }
+}
+
+async function renderHodStudents() {
+  const content = document.getElementById('main-content');
+  content.innerHTML = '<div class="loading">Loading students…</div>';
+  try {
+    const data = await api('/api/users?role=student&limit=500');
+    const students = data.users || [];
+    content.innerHTML = `
+      <div class="page-header">
+        <div><h2>Students</h2><p>${students.length} student${students.length !== 1 ? 's' : ''} enrolled</p></div>
+        <input id="hod-stu-search" placeholder="Search students…" oninput="hodFilterStudents()" style="padding:8px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;min-width:200px;">
+      </div>
+      <div id="hod-stu-list" style="overflow-x:auto;">
+        <table style="width:100%;border-collapse:collapse;font-size:13px;">
+          <thead>
+            <tr style="border-bottom:2px solid var(--border);">
+              <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Name</th>
+              <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Index No.</th>
+              <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Email</th>
+              <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Status</th>
+            </tr>
+          </thead>
+          <tbody id="hod-stu-tbody">
+            ${students.length === 0 ? '<tr><td colspan="4" style="padding:24px;text-align:center;color:var(--text-muted);">No students found.</td></tr>' :
+              students.map(u => `
+                <tr class="hod-stu-row" data-name="${(u.name||'').toLowerCase()}" data-index="${(u.indexNumber||'').toLowerCase()}" style="border-bottom:1px solid var(--border);">
+                  <td style="padding:10px 12px;font-weight:600;">${u.name}</td>
+                  <td style="padding:10px 12px;color:var(--text-muted);font-family:monospace;">${u.indexNumber || '—'}</td>
+                  <td style="padding:10px 12px;color:var(--text-muted);">${u.email || '—'}</td>
+                  <td style="padding:10px 12px;"><span class="tag ${u.isApproved ? 'tag-green' : 'tag-amber'}">${u.isApproved ? 'Active' : 'Pending'}</span></td>
+                </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>`;
+  } catch(e) {
+    content.innerHTML = `<div class="card"><p style="color:#ef4444;">${e.message}</p></div>`;
+  }
+}
+
+function hodFilterStudents() {
+  const q = (document.getElementById('hod-stu-search')?.value || '').toLowerCase();
+  document.querySelectorAll('.hod-stu-row').forEach(row => {
+    const match = row.dataset.name.includes(q) || row.dataset.index.includes(q);
+    row.style.display = match ? '' : 'none';
+  });
+}
+
+async function renderHodReports() {
+  const content = document.getElementById('main-content');
+  content.innerHTML = '<div class="loading">Loading reports…</div>';
+  try {
+    const [sessData, userStats] = await Promise.all([
+      api('/api/sessions?limit=200'),
+      api('/api/users/stats')
+    ]);
+    const sessions  = sessData.sessions || [];
+    const stats     = userStats || {};
+    const ended     = sessions.filter(s => !s.active);
+    const totalAtt  = ended.reduce((sum, s) => sum + (s.attendanceCount ?? s.records?.length ?? 0), 0);
+    const avgAtt    = ended.length ? Math.round(totalAtt / ended.length) : 0;
+
+    // Group sessions by lecturer
+    const byLecturer = {};
+    sessions.forEach(s => {
+      const name = s.createdBy?.name || 'Unknown';
+      if (!byLecturer[name]) byLecturer[name] = { sessions: 0, attendance: 0 };
+      byLecturer[name].sessions++;
+      byLecturer[name].attendance += s.attendanceCount ?? s.records?.length ?? 0;
+    });
+    const lecRows = Object.entries(byLecturer).sort((a,b) => b[1].sessions - a[1].sessions);
+
+    content.innerHTML = `
+      <div class="page-header"><div><h2>Department Reports</h2><p>Attendance and activity overview</p></div></div>
+
+      <div class="stats-grid" style="margin-bottom:20px;">
+        <div class="stat-card"><div class="stat-value" style="color:#0891b2">${sessions.length}</div><div class="stat-label">TOTAL SESSIONS</div></div>
+        <div class="stat-card"><div class="stat-value" style="color:#0891b2">${totalAtt}</div><div class="stat-label">TOTAL ATTENDANCE</div></div>
+        <div class="stat-card"><div class="stat-value" style="color:#0891b2">${avgAtt}</div><div class="stat-label">AVG ATTENDANCE</div></div>
+        <div class="stat-card"><div class="stat-value" style="color:#0891b2">${stats.lecturers || 0}</div><div class="stat-label">LECTURERS</div></div>
+      </div>
+
+      <div class="card">
+        <div style="font-size:13px;font-weight:700;margin-bottom:14px;">Attendance by Lecturer</div>
+        ${lecRows.length === 0 ? '<p style="color:var(--text-muted);font-size:13px;">No data yet.</p>' : `
+        <table style="width:100%;border-collapse:collapse;font-size:13px;">
+          <thead>
+            <tr style="border-bottom:2px solid var(--border);">
+              <th style="text-align:left;padding:8px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Lecturer</th>
+              <th style="text-align:left;padding:8px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Sessions</th>
+              <th style="text-align:left;padding:8px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Total Attendance</th>
+              <th style="text-align:left;padding:8px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Avg / Session</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${lecRows.map(([name, d]) => `
+              <tr style="border-bottom:1px solid var(--border);">
+                <td style="padding:9px 12px;font-weight:600;">${name}</td>
+                <td style="padding:9px 12px;">${d.sessions}</td>
+                <td style="padding:9px 12px;">${d.attendance}</td>
+                <td style="padding:9px 12px;color:var(--text-muted);">${d.sessions ? Math.round(d.attendance / d.sessions) : 0}</td>
+              </tr>`).join('')}
+          </tbody>
+        </table>`}
+      </div>`;
+  } catch(e) {
+    content.innerHTML = `<div class="card"><p style="color:#ef4444;">${e.message}</p></div>`;
+  }
+}
+
 
 async function renderLecturerDashboard(content) {
   const [sessionsData, coursesData, quizzesData] = await Promise.all([
@@ -2930,7 +3298,7 @@ function showCreateUserModal() {
   } else if (mode === 'corporate') {
     roles = '<option value="employee">Employee</option><option value="manager">Manager</option>';
   } else {
-    roles = '<option value="student">Student</option><option value="lecturer">Lecturer</option>';
+    roles = '<option value="student">Student</option><option value="lecturer">Lecturer</option><option value="hod">Head of Department (HOD)</option>';
   }
 
   const defaultRole = isManager ? 'employee' : (mode === 'corporate' ? 'employee' : 'student');
@@ -7216,6 +7584,7 @@ function exportGradeBookCSV(courseId, courseTitle) {
 async function loadAnnBadge() {
   try {
     if (currentUser?.role === 'employee') return;
+    if (!['admin','superadmin','manager','lecturer','hod','student'].includes(currentUser?.role)) return;
     const data = await api('/api/announcements/unread-count');
     const badge = document.getElementById('ann-badge');
     if (!badge) return;
@@ -7336,6 +7705,12 @@ function openPostAnnouncementModal() {
             ${currentUser.role === 'lecturer'
               ? `<input type="hidden" id="ann-audience" value="students">
                  <div style="padding:8px 12px;background:var(--bg);border:1.5px solid var(--border);border-radius:8px;font-size:13px;color:var(--text-light);">📚 My Students only</div>`
+              : currentUser.role === 'hod'
+              ? `<select id="ann-audience" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;">
+                  <option value="all">Everyone</option>
+                  <option value="students">Students only</option>
+                  <option value="lecturers">Lecturers only</option>
+                </select>`
               : `<select id="ann-audience" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;">
                   <option value="all">Everyone</option>
                   <option value="students">Students only</option>
@@ -7558,6 +7933,7 @@ function buildBottomNav(role) {
       : ['dashboard', 'sessions', 'users', 'reports'],
     manager:    ['dashboard', 'sessions', 'reports', 'users'],
     lecturer:   ['dashboard', 'sessions', 'quizzes', 'assignments'],
+    hod:        ['hod-overview', 'hod-sessions', 'hod-lecturers', 'hod-reports'],
     employee:   ['dashboard', 'sign-in-out', 'my-attendance', 'reports'],
     student:    ['dashboard', 'mark-attendance', 'quizzes', 'assignments'],
     superadmin: currentUser?.company?.mode === 'academic'
@@ -7585,6 +7961,8 @@ function buildBottomNav(role) {
   };
 
   const LABELS = {
+    'hod-overview': 'Overview', 'hod-sessions': 'Sessions', 'hod-lecturers': 'Lecturers',
+    'hod-students': 'Students', 'hod-reports': 'Reports',
     'sign-in-out': 'Sign In/Out', 'my-attendance': 'Attendance',
     'mark-attendance': 'Attendance', subscription: 'Subscribe',
     announcements: 'Notices', assignments: 'Assignments',
