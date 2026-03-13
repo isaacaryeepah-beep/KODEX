@@ -1489,10 +1489,10 @@ input[type="checkbox"] {
 
 .bottom-nav-item {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
   justify-content: center;
-  gap: 3px;
+  gap: 5px;
   flex: 1;
   height: 58px;
   cursor: pointer;
@@ -1500,27 +1500,38 @@ input[type="checkbox"] {
   transition: all .15s ease;
   border: none;
   background: none;
-  padding: 6px 2px 4px;
+  padding: 0 2px;
   position: relative;
+  border-radius: 10px;
+  min-width: 0;
 }
 
-/* label below icon */
+/* name beside icon */
 .bottom-nav-item .nav-label {
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 600;
   letter-spacing: .1px;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   transition: color .15s;
   line-height: 1;
 }
 
 .bottom-nav-dot { display: none; }
 
-.bottom-nav-item svg { width: 22px; height: 22px; flex-shrink: 0; transition: color .15s; }
-.bottom-nav-item:hover { color: #6b7280; }
+.bottom-nav-item svg { width: 20px; height: 20px; flex-shrink: 0; transition: color .15s; }
+.bottom-nav-item:hover { color: #6b7280; background: rgba(0,0,0,.03); }
 .bottom-nav-item.active { color: var(--portal-primary, #2563eb); }
 .bottom-nav-item.active svg { transform: scale(1.1); }
 .bottom-nav-item:active { transform: scale(.93); }
+
+/* On very small screens shrink labels slightly */
+@media (max-width: 360px) {
+  .bottom-nav-item .nav-label { font-size: 9.5px; }
+  .bottom-nav-item svg { width: 18px; height: 18px; }
+  .bottom-nav-item { gap: 3px; }
+}
 
 .bottom-nav-spacer { display: none; height: calc(58px + env(safe-area-inset-bottom, 0px)); flex-shrink: 0; }
 
