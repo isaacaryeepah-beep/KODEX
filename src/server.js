@@ -27,8 +27,9 @@ const adminDashboardRoutes = require("./routes/adminDashboard");
 const jitsiRoutes = require("./routes/jitsi");
 const searchRoutes = require("./routes/Search");
 const proctoredQuizRoutes = require("./routes/proctoredQuizzes");
-const assignmentRoutes = require("./routes/assignments");
-const aiProxyRoutes    = require("./routes/aiProxy");
+const assignmentRoutes  = require("./routes/assignments");
+const aiProxyRoutes     = require("./routes/aiProxy");
+const superadminRoutes  = require("./routes/superadmin");
 
 // ── Security middleware ───────────────────────────────────────────────────────
 const { loginLimiter, registerLimiter, passwordResetLimiter, apiLimiter } = require("./middleware/rateLimiter");
@@ -170,6 +171,7 @@ app.use("/api/training",    trainingRoutes);
 app.use("/api/performance", performanceRoutes);
 app.use("/api/operations",  operationsRoutes);
 app.use("/api/advanced",    advancedRoutes);
+app.use("/api/superadmin",  superadminRoutes);
 
 app.use((req, res) => {
   const indexPath = path.join(__dirname, "public", "index.html");
