@@ -652,6 +652,38 @@ function showError(msg) {
 
 let selectedPortalType = 'admin-corporate';
 
+// ── Mode selector (Corporate / Academic two-step flow) ────────────────────────
+let _selectedMode = null;
+function selectMode(mode) {
+  const tglCorp  = document.getElementById('mode-tgl-corp');
+  const tglAcad  = document.getElementById('mode-tgl-acad');
+  const cardsCorp = document.getElementById('portal-cards-corp');
+  const cardsAcad = document.getElementById('portal-cards-acad');
+  if (!tglCorp || !tglAcad) return;
+
+  // Collapse both first
+  if (cardsCorp) cardsCorp.classList.remove('visible');
+  if (cardsAcad) cardsAcad.classList.remove('visible');
+  tglCorp.classList.remove('active-corp');
+  tglAcad.classList.remove('active-acad');
+
+  // Toggle off if same mode tapped again
+  if (_selectedMode === mode) { _selectedMode = null; return; }
+
+  const delay = _selectedMode !== null ? 120 : 0;
+  _selectedMode = mode;
+
+  setTimeout(() => {
+    if (mode === 'corp') {
+      tglCorp.classList.add('active-corp');
+      if (cardsCorp) cardsCorp.classList.add('visible');
+    } else {
+      tglAcad.classList.add('active-acad');
+      if (cardsAcad) cardsAcad.classList.add('visible');
+    }
+  }, delay);
+}
+
 function selectPortal(type) {
   selectedPortalType = type;
   document.getElementById('portal-selector').classList.add('hidden');
@@ -7187,7 +7219,7 @@ function renderAbout() {
   const content = document.getElementById('main-content');
   if (!content) return;
   content.innerHTML = `
-    <div class="page-header"><h2>About</h2><p>KODEX KODEX Platform</p></div>
+    <div class="page-header"><h2>About</h2><p>KODEX Platform</p></div>
     <div class="card" style="max-width:540px;text-align:center;padding:40px 32px">
       <div style="width:72px;height:72px;border-radius:20px;background:linear-gradient(135deg,var(--primary),#6366f1);display:flex;align-items:center;justify-content:center;margin:0 auto 20px">
         <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
@@ -7216,7 +7248,7 @@ function renderAbout() {
       <div style="font-size:13px;color:var(--text-light);padding-top:20px;border-top:1px solid var(--border)">
         Built by <strong style="color:var(--text-primary)">KODEX</strong> &nbsp;·&nbsp;
         <a href="mailto:nelsonkel78@gmail.com" style="color:var(--primary)">nelsonkel78@gmail.com</a><br>
-        <span style="font-size:12px">&copy; 2025 KODEX. All rights reserved.</span>
+        <span style="font-size:12px">&copy; 2026 KODEX. All rights reserved.</span>
       </div>
     </div>
   `;
