@@ -1751,3 +1751,23 @@ input[type="checkbox"] {
   .quick-actions-bar .actions-row { gap: 6px; }
   .action-chip { padding: 6px 10px; font-size: 11px; }
 }
+
+/* ── Dashboard skeleton (prevents flash of wrong role content) ── */
+.dashboard-skeleton { padding: 4px 0; animation: pulse 1.4s ease-in-out infinite; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.5} }
+.skeleton-header {
+  height: 56px; background: var(--border); border-radius: var(--radius-md);
+  margin-bottom: 16px; width: 55%;
+}
+.skeleton-cards {
+  display: grid; grid-template-columns: repeat(4,1fr); gap: 10px; margin-bottom: 16px;
+}
+.skeleton-card {
+  height: 88px; background: var(--border); border-radius: var(--radius-md);
+}
+.skeleton-body {
+  height: 200px; background: var(--border); border-radius: var(--radius-md);
+}
+@media (max-width: 768px) {
+  .skeleton-cards { grid-template-columns: 1fr 1fr; }
+}
