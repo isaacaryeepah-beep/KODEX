@@ -1389,9 +1389,9 @@ input[type="checkbox"] {
 }
 
 @media (max-width: 768px) {
+  /* Show floating bottom nav, keep sidebar as drawer (toggled via More) */
   .bottom-nav { display: flex; }
   .bottom-nav-spacer { display: block; }
-  .sidebar { display: none !important; }
   .sidebar-overlay { display: block; }
   .topbar-menu-btn { display: flex !important; }
 
@@ -1410,7 +1410,8 @@ input[type="checkbox"] {
 
   .topbar .user-info strong { display: none; }
   .topbar { padding: 0 12px; height: 52px; }
-  .content { padding: 14px 12px; padding-bottom: calc(60px + 12px); }
+  /* Enough bottom padding so content clears the floating nav pill */
+  .content { padding: 14px 12px; padding-bottom: calc(74px + env(safe-area-inset-bottom, 0px) + 12px); }
   .main-layout { height: calc(100vh - 52px); }
 }
 
@@ -1424,9 +1425,7 @@ input[type="checkbox"] {
 
 @media (max-width: 380px) {
   .portal-header h1 { font-size: 22px; }
-  /* 3-col academic cards too tight on very small screens — drop to 2-col */
   #portal-cards-acad .portal-cards { grid-template-columns: 1fr 1fr; }
-}
 }
 
 /* ══════════════════════════════════════════════════
@@ -1473,7 +1472,7 @@ input[type="checkbox"] {
 .bottom-nav {
   display: none;
   position: fixed;
-  bottom: 14px;
+  bottom: calc(14px + env(safe-area-inset-bottom, 0px));
   left: 50%;
   transform: translateX(-50%);
   height: 60px;
