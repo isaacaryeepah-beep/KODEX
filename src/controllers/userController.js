@@ -87,7 +87,7 @@ exports.createUser = async (req, res) => {
       department: department ? department.trim() : null,
     };
 
-    // Enforce one HOD per department
+    // Department rules
     if (targetRole === "hod") {
       if (!department?.trim()) {
         return res.status(400).json({ error: "Department is required when creating an HOD." });
@@ -102,6 +102,10 @@ exports.createUser = async (req, res) => {
           error: `There is already an HOD assigned to the "${department.trim()}" department (${existingHod.name}). Each department can only have one HOD.`,
         });
       }
+    }
+
+    if (targetRole === "lecturer" && !department?.trim()) {
+      return res.status(400).json({ error: "Department is required when creating a lecturer." });
     }
 
     if (targetRole === "student") {
