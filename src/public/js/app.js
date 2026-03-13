@@ -2259,161 +2259,160 @@ async function renderAdminDashboard(content) {
     api('/api/announcements').catch(() => ({ announcements: [] })),
   ]);
 
-  const activeSessions  = sessionsData.sessions.filter(s => s.status === 'active').length;
-  const totalUsers      = usersData.users.length;
-  const pendingCount    = pendingData.pending.length;
-  const announcements   = announcementsData.announcements || [];
-  const instCode        = currentUser.company?.institutionCode || 'N/A';
-  const mode            = currentUser.company?.mode || 'corporate';
-  const courses         = usersData.users.filter(u => u.role === 'lecturer').length; // proxy; use course count if available
-  const firstName       = currentUser.name.split(' ')[0];
+  const activeSessions = sessionsData.sessions.filter(s => s.status === 'active').length;
+  const totalUsers     = usersData.users.length;
+  const pendingCount   = pendingData.pending.length;
+  const announcements  = announcementsData.announcements || [];
+  const instCode       = currentUser.company?.institutionCode || 'N/A';
+  const mode           = currentUser.company?.mode || 'corporate';
+  const firstName      = currentUser.name.split(' ')[0];
 
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
 
-  const sessionRows = sessionsData.sessions.length ? sessionsData.sessions.map(s => {
-    const isLive = s.status === 'active';
-    return `
-      <div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border-light);">
-        <div style="width:8px;height:8px;border-radius:50%;flex-shrink:0;background:${isLive ? 'var(--success)' : 'var(--border)'}"></div>
-        <div style="flex:1;min-width:0">
-          <div style="font-size:13px;font-weight:500;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${s.title || 'Untitled'}</div>
-          <div style="font-size:11px;color:var(--text-muted)">${s.createdBy?.name || ''}</div>
-        </div>
-        <span style="font-size:11px;color:${isLive ? 'var(--success)' : 'var(--text-muted)'};white-space:nowrap;font-weight:${isLive ? '600' : '400'}">${isLive ? 'Live' : new Date(s.startedAt).toLocaleDateString()}</span>
-      </div>`;
-  }).join('') : `<div class="empty-state" style="padding:20px 0"><p>No sessions yet</p></div>`;
+  const sessionRows = sessionsData.sessions.length
+    ? sessionsData.sessions.map(s => {
+        const isLive = s.status === 'active';
+        return `
+          <div class="session-row">
+            <div class="session-indicator ${isLive ? 'live' : 'ended'}"></div>
+            <div class="session-row-info">
+              <div class="session-row-title">${s.title || 'Untitled'}</div>
+              <div class="session-row-sub">${s.createdBy?.name || ''}</div>
+            </div>
+            <span class="session-row-time ${isLive ? 'live' : 'ended'}">${isLive ? 'Live' : timeAgo(s.startedAt)}</span>
+          </div>`;
+      }).join('')
+    : `<div class="empty-state"><p>No sessions yet</p></div>`;
 
   const typeColors = { info: '#3b82f6', warning: '#f59e0b', success: '#10b981', urgent: '#ef4444' };
-  const annRows = announcements.length ? announcements.slice(0, 5).map(a => {
-    const dot = typeColors[a.type] || '#94a3b8';
-    return `
-      <div style="display:flex;gap:10px;padding:9px 0;border-bottom:1px solid var(--border-light);align-items:flex-start;">
-        <div style="width:8px;height:8px;border-radius:50%;flex-shrink:0;margin-top:4px;background:${dot}"></div>
-        <div>
-          <div style="font-size:13px;font-weight:500;color:var(--text)">${a.title}</div>
-          <div style="font-size:11px;color:var(--text-muted)">${a.audience === 'all' ? 'Everyone' : a.audience.charAt(0).toUpperCase()+a.audience.slice(1)} · ${timeAgo(a.createdAt)}</div>
-        </div>
-      </div>`;
-  }).join('') : `<div class="empty-state" style="padding:20px 0"><p>No announcements yet</p></div>`;
+  const annRows = announcements.length
+    ? announcements.slice(0, 5).map(a => `
+        <div class="ann-row">
+          <div class="ann-dot" style="background:${typeColors[a.type] || '#94a3b8'}"></div>
+          <div>
+            <div class="ann-title">${a.title}</div>
+            <div class="ann-meta">${a.audience === 'all' ? 'Everyone' : a.audience.charAt(0).toUpperCase()+a.audience.slice(1)} · ${timeAgo(a.createdAt)}</div>
+          </div>
+        </div>`).join('')
+    : `<div class="empty-state"><p>No announcements yet</p></div>`;
 
   content.innerHTML = `
     <div style="display:flex;flex-direction:column;gap:14px">
 
       <!-- Welcome row -->
       <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap">
-        <div>
-          <h2 style="font-size:21px;font-weight:700;color:var(--text);letter-spacing:-.4px;margin-bottom:3px">${greeting}, ${firstName} 👋</h2>
-          <p style="font-size:13px;color:var(--text-light);margin:0">Here's what's happening at ${currentUser.company?.name || 'your institution'} today.</p>
+        <div class="dashboard-welcome">
+          <h2>${greeting}, ${firstName} 👋</h2>
+          <p>Here's what's happening at ${currentUser.company?.name || 'your institution'} today.</p>
         </div>
-        <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius-md);padding:12px 18px;text-align:center;min-width:148px">
-          <div style="font-size:9px;text-transform:uppercase;letter-spacing:1.5px;color:var(--text-muted);font-weight:700;margin-bottom:4px">Institution code</div>
-          <div style="font-size:21px;font-weight:800;letter-spacing:5px;color:var(--primary);font-family:monospace;margin-bottom:7px">${instCode}</div>
+        <div class="inst-code-card">
+          <div class="inst-code-label">Institution code</div>
+          <div class="inst-code-value">${instCode}</div>
           <button class="btn btn-secondary btn-sm" onclick="navigator.clipboard.writeText('${instCode}').then(()=>toastSuccess('Code copied!'))">Copy</button>
         </div>
       </div>
 
       <!-- Stat cards -->
       <div class="stats-grid" style="margin:0">
-        <div class="stat-card" style="cursor:pointer;text-align:left;padding:16px" onclick="navigateTo('users')">
-          <div style="position:absolute;top:0;left:0;right:0;height:3px;background:#3b82f6;border-radius:var(--radius-md) var(--radius-md) 0 0"></div>
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-            <span style="font-size:11px;color:var(--text-light);font-weight:500">Total users</span>
-            <div style="width:28px;height:28px;border-radius:7px;background:#eff6ff;display:flex;align-items:center;justify-content:center">
+        <div class="stat-card-v2" onclick="navigateTo('users')">
+          <div class="stat-top-bar" style="background:#3b82f6"></div>
+          <div class="stat-header">
+            <span class="stat-label">Total users</span>
+            <div class="stat-icon" style="background:#eff6ff">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
             </div>
           </div>
-          <div style="font-size:28px;font-weight:800;color:var(--text);letter-spacing:-1px;line-height:1;margin-bottom:4px">${totalUsers}</div>
-          <div style="font-size:11px;color:var(--text-muted)">${mode === 'academic' ? 'Students, lecturers & staff' : 'Employees & managers'}</div>
+          <div class="stat-value">${totalUsers}</div>
+          <div class="stat-trend">${mode === 'academic' ? 'Students, lecturers & staff' : 'Employees & managers'}</div>
         </div>
 
-        <div class="stat-card" style="cursor:pointer;text-align:left;padding:16px" onclick="navigateTo('sessions')">
-          <div style="position:absolute;top:0;left:0;right:0;height:3px;background:var(--success);border-radius:var(--radius-md) var(--radius-md) 0 0"></div>
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-            <span style="font-size:11px;color:var(--text-light);font-weight:500">Active sessions</span>
-            <div style="width:28px;height:28px;border-radius:7px;background:#f0fdf4;display:flex;align-items:center;justify-content:center">
+        <div class="stat-card-v2" onclick="navigateTo('sessions')">
+          <div class="stat-top-bar" style="background:var(--success)"></div>
+          <div class="stat-header">
+            <span class="stat-label">Active sessions</span>
+            <div class="stat-icon" style="background:#f0fdf4">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
             </div>
           </div>
-          <div style="font-size:28px;font-weight:800;color:var(--text);letter-spacing:-1px;line-height:1;margin-bottom:4px">${activeSessions}</div>
-          <div style="font-size:11px;color:${activeSessions > 0 ? 'var(--success)' : 'var(--text-muted)'}">
-            ${activeSessions > 0 ? `<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--success);margin-right:4px;vertical-align:middle"></span>Live now` : 'No active sessions'}
+          <div class="stat-value">${activeSessions}</div>
+          <div class="stat-trend" style="color:${activeSessions > 0 ? 'var(--success)' : 'var(--text-muted)'}">
+            ${activeSessions > 0 ? '<span class="stat-live-dot"></span> Live now' : 'No active sessions'}
           </div>
         </div>
 
-        <div class="stat-card" style="cursor:pointer;text-align:left;padding:16px" onclick="navigateTo('${mode === 'academic' ? 'courses' : 'users'}')">
-          <div style="position:absolute;top:0;left:0;right:0;height:3px;background:#f59e0b;border-radius:var(--radius-md) var(--radius-md) 0 0"></div>
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-            <span style="font-size:11px;color:var(--text-light);font-weight:500">${mode === 'academic' ? 'Meetings' : 'Departments'}</span>
-            <div style="width:28px;height:28px;border-radius:7px;background:#fffbeb;display:flex;align-items:center;justify-content:center">
+        <div class="stat-card-v2" onclick="navigateTo('sessions')">
+          <div class="stat-top-bar" style="background:#f59e0b"></div>
+          <div class="stat-header">
+            <span class="stat-label">Total sessions</span>
+            <div class="stat-icon" style="background:#fffbeb">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
             </div>
           </div>
-          <div style="font-size:28px;font-weight:800;color:var(--text);letter-spacing:-1px;line-height:1;margin-bottom:4px">${sessionsData.pagination?.total || sessionsData.sessions.length}</div>
-          <div style="font-size:11px;color:var(--text-muted)">Total recorded</div>
+          <div class="stat-value">${sessionsData.pagination?.total || sessionsData.sessions.length}</div>
+          <div class="stat-trend">All time</div>
         </div>
 
-        <div class="stat-card" style="cursor:pointer;text-align:left;padding:16px;border-color:${pendingCount > 0 ? '#ddd6fe' : 'var(--border)'}" onclick="navigateTo('approvals')">
-          <div style="position:absolute;top:0;left:0;right:0;height:3px;background:#7c3aed;border-radius:var(--radius-md) var(--radius-md) 0 0"></div>
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-            <span style="font-size:11px;color:var(--text-light);font-weight:500">Pending approvals</span>
-            <div style="width:28px;height:28px;border-radius:7px;background:#f5f3ff;display:flex;align-items:center;justify-content:center">
+        <div class="stat-card-v2" style="${pendingCount > 0 ? 'border-color:#ddd6fe' : ''}" onclick="navigateTo('approvals')">
+          <div class="stat-top-bar" style="background:#7c3aed"></div>
+          <div class="stat-header">
+            <span class="stat-label">Pending approvals</span>
+            <div class="stat-icon" style="background:#f5f3ff">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
             </div>
           </div>
-          <div style="font-size:28px;font-weight:800;color:${pendingCount > 0 ? '#7c3aed' : 'var(--text)'};letter-spacing:-1px;line-height:1;margin-bottom:4px">${pendingCount}</div>
-          <div style="font-size:11px;color:${pendingCount > 0 ? '#7c3aed' : 'var(--text-muted)'}">${pendingCount > 0 ? 'Action needed' : 'All clear'}</div>
+          <div class="stat-value" style="color:${pendingCount > 0 ? '#7c3aed' : 'var(--text)'}">${pendingCount}</div>
+          <div class="stat-trend" style="color:${pendingCount > 0 ? '#7c3aed' : 'var(--text-muted)'}">${pendingCount > 0 ? 'Action needed' : 'All clear'}</div>
         </div>
       </div>
 
       <!-- Quick actions -->
-      <div class="card" style="margin:0;padding:14px 16px">
-        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--text-muted);margin-bottom:10px">Quick actions</div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <button class="btn btn-sm" style="background:#eff6ff;color:#3b82f6;border:1px solid #bfdbfe;font-weight:600" onclick="navigateTo('sessions')">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+      <div class="quick-actions-bar">
+        <div class="section-label">Quick actions</div>
+        <div class="actions-row">
+          <button class="action-chip blue" onclick="navigateTo('sessions')">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
             Start session
           </button>
-          <button class="btn btn-sm" style="background:#f0fdf4;color:#16a34a;border:1px solid #bbf7d0;font-weight:600" onclick="navigateTo('users');setTimeout(showCreateUserModal,300)">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
+          <button class="action-chip green" onclick="navigateTo('users')">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
             Add user
           </button>
           ${pendingCount > 0 ? `
-          <button class="btn btn-sm" style="background:#f5f3ff;color:#7c3aed;border:1px solid #ddd6fe;font-weight:600" onclick="navigateTo('approvals')">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+          <button class="action-chip purple" onclick="navigateTo('approvals')">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
             Review approvals (${pendingCount})
           </button>` : ''}
-          <button class="btn btn-sm" style="background:#fffbeb;color:#d97706;border:1px solid #fde68a;font-weight:600" onclick="navigateTo('announcements')">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#d97706" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+          <button class="action-chip amber" onclick="navigateTo('announcements')">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
             Post announcement
           </button>
-          <button class="btn btn-sm" style="background:var(--bg);color:var(--text-secondary);border:1px solid var(--border);font-weight:600" onclick="navigateTo('reports')">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+          <button class="action-chip slate" onclick="navigateTo('reports')">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
             View reports
           </button>
         </div>
       </div>
 
-      <!-- Bottom row: sessions + announcements -->
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-
-        <div class="card" style="margin:0;padding:16px">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-            <div class="card-title" style="margin:0">Recent sessions</div>
-            <span style="font-size:11px;color:var(--primary);cursor:pointer;font-weight:500" onclick="navigateTo('sessions')">View all →</span>
+      <!-- Bottom panels -->
+      <div class="dashboard-panels">
+        <div class="dashboard-panel">
+          <div class="panel-header">
+            <span class="panel-title">Recent sessions</span>
+            <span class="panel-link" onclick="navigateTo('sessions')">View all →</span>
           </div>
           ${sessionRows}
         </div>
 
-        <div class="card" style="margin:0;padding:16px">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-            <div class="card-title" style="margin:0">Announcements</div>
+        <div class="dashboard-panel">
+          <div class="panel-header">
+            <span class="panel-title">Announcements</span>
             <button class="btn btn-secondary btn-sm" onclick="navigateTo('announcements')">+ Post</button>
           </div>
           ${annRows}
         </div>
-
       </div>
+
     </div>
   `;
 }
