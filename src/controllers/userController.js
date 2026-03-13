@@ -108,6 +108,10 @@ exports.createUser = async (req, res) => {
       return res.status(400).json({ error: "Department is required when creating a lecturer." });
     }
 
+    if (targetRole === "student" && !department?.trim()) {
+      return res.status(400).json({ error: "Department is required when creating a student." });
+    }
+
     if (targetRole === "student") {
       if (!indexNumber) {
         return res.status(400).json({ error: "Index number is required for students" });
@@ -273,7 +277,7 @@ exports.deleteUser = async (req, res) => {
 
 // ── Bulk CSV import ──────────────────────────────────────────────────────────
 // POST /api/users/bulk-import  (multipart/form-data)
-// CSV columns: name*, indexNumber*, email (optional), phone (optional), courseCode (optional)
+// CSV columns: name*, indexNumber*, email (optional), phone (optional), courseCode (optional), department (optional)
 // Generates a random password for each student; returns a downloadable results list.
 exports.bulkImportStudents = async (req, res) => {
   const multer = require("multer");
@@ -301,6 +305,7 @@ exports.bulkImportStudents = async (req, res) => {
         const emailIdx   = headers.findIndex(h => h === "email");
         const phoneIdx   = headers.findIndex(h => h === "phone" || h === "phonenumber" || h === "mobile");
         const courseIdx  = headers.findIndex(h => h === "coursecode" || h === "course" || h === "code");
+        const deptIdx   = headers.findIndex(h => ["department","dept","faculty"].includes(h));
 
         if (nameIdx === -1 || idxIdx === -1) {
           return res.status(400).json({ error: "CSV must have 'name' and 'indexNumber' columns" });
@@ -315,6 +320,7 @@ exports.bulkImportStudents = async (req, res) => {
             email:       emailIdx >= 0 ? (cols[emailIdx] || "").trim() : "",
             phone:       phoneIdx >= 0 ? (cols[phoneIdx] || "").trim() : "",
             courseCode:  courseIdx >= 0 ? (cols[courseIdx] || "").trim().toUpperCase() : "",
+            department:  deptIdx  >= 0 ? (cols[deptIdx]  || "").trim() : "",
           });
         }
       } else if (req.body?.students) {
@@ -370,6 +376,7 @@ exports.bulkImportStudents = async (req, res) => {
         if (row.phone) {
           try { userData.phone = normalisePhone(row.phone); } catch (_) {}
         }
+        if (row.department) userData.department = row.department;
 
         try {
           const user = await User.create(userData);
