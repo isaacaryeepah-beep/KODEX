@@ -188,12 +188,8 @@ exports.joinMeeting = async (req, res) => {
       return res.status(400).json({ error: "Invalid meeting ID" });
     }
 
+    // Any member of the company can join a meeting
     const joinFilter = { _id: id, company: req.user.company };
-    // Lecturers can only join their own meetings — not other lecturers'
-    if (req.user.role === 'lecturer') {
-      joinFilter.createdBy = req.user._id;
-    }
-
     const meeting = await ZoomMeeting.findOne(joinFilter);
 
     if (!meeting) {
