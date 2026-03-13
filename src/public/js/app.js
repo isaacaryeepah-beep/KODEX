@@ -7046,6 +7046,7 @@ function exportGradeBookCSV(courseId, courseTitle) {
 
 async function loadAnnBadge() {
   try {
+    if (currentUser?.role === 'employee') return;
     const data = await api('/api/announcements/unread-count');
     const badge = document.getElementById('ann-badge');
     if (!badge) return;
@@ -7101,7 +7102,7 @@ function annCard(a, canPost, isAdmin) {
   const color = ANN_COLORS[a.type] || '#6366f1';
   const icon  = ANN_ICONS[a.type]  || 'ℹ️';
   const canDelete = isAdmin || (canPost && a.author?._id === (currentUser._id || currentUser.id));
-  const audienceLabel = { all:'Everyone', students:'Students', lecturers:'Lecturers', employees:'Employees' }[a.audience] || 'Everyone';
+  const audienceLabel = { all:'Everyone', students:'Students', employees:'Employees' }[a.audience] || 'Everyone';
   return `
     <div class="card" style="margin-bottom:12px;border-left:4px solid ${color};position:relative;${a.pinned?'background:linear-gradient(135deg,var(--card),#fefce8);':''}" id="ann-${a._id}">
       ${a.pinned ? '<div style="position:absolute;top:10px;right:12px;font-size:11px;color:#92400e;font-weight:700;background:#fef3c7;padding:2px 7px;border-radius:20px;">📌 Pinned</div>' : ''}
@@ -7163,12 +7164,15 @@ function openPostAnnouncementModal() {
           </div>
           <div>
             <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:5px;display:block;">Audience</label>
-            <select id="ann-audience" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;">
-              <option value="all">Everyone</option>
-              <option value="students">Students only</option>
-              <option value="lecturers">Lecturers only</option>
-              <option value="employees">Employees only</option>
-            </select>
+            ${currentUser.role === 'lecturer'
+              ? `<input type="hidden" id="ann-audience" value="students">
+                 <div style="padding:8px 12px;background:var(--bg);border:1.5px solid var(--border);border-radius:8px;font-size:13px;color:var(--text-light);">📚 My Students only</div>`
+              : `<select id="ann-audience" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;">
+                  <option value="all">Everyone</option>
+                  <option value="students">Students only</option>
+                  <option value="employees">Employees only</option>
+                </select>`
+            }
           </div>
         </div>
         <div>
