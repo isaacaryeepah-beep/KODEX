@@ -1,18 +1,19 @@
 const mongoose = require("mongoose");
 
-// ── Embedded question (MCQ — supports multiple correct answers) ───────────
+// ── Embedded question (MCQ, Fill-in, or Explain) ─────────────────────────
 const assignmentQuestionSchema = new mongoose.Schema({
   questionText: {
     type: String,
     required: [true, "Question text is required"],
     trim: true,
   },
+  questionType: {
+    type: String,
+    enum: ["single", "multiple", "fill", "explain"],
+    default: "single",
+  },
   options: {
     type: [String],
-    validate: {
-      validator: (v) => Array.isArray(v) && v.length >= 2,
-      message: "At least 2 options required",
-    },
     default: [],
   },
   // Indices of ALL correct options — supports "select all that apply"
@@ -20,6 +21,10 @@ const assignmentQuestionSchema = new mongoose.Schema({
     type: [Number],
     default: [],
   },
+  // Fill-in correct answer
+  correctAnswerText: { type: String, default: null, trim: true },
+  // Explain model answer (lecturer reference only)
+  modelAnswer: { type: String, default: "", trim: true },
   marks: { type: Number, default: 1, min: 0 },
   // Award partial marks per correct option selected (deduct for wrong picks)
   allowPartialMarks: { type: Boolean, default: false },
