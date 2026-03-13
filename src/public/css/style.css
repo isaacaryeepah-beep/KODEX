@@ -843,7 +843,7 @@ body {
   overflow-x: hidden;
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: flex-start;
   gap: 2px;
   padding: 2px 0 4px;
   scrollbar-width: none;
@@ -873,9 +873,10 @@ body {
 .sidebar-nav a span {
   display: inline;
   font-size: 12.5px;
-  font-weight: 500;
+  font-weight: 700;
   white-space: nowrap;
   transition: color .15s;
+  letter-spacing: .1px;
 }
 
 .sidebar-nav a svg {
@@ -915,6 +916,50 @@ body {
   display: flex;
   justify-content: center;
   margin-top: 4px;
+}
+
+/* ── Sidebar vertical divider with dots ── */
+.sidebar-divider-line {
+  width: 1px;
+  background: linear-gradient(to bottom,
+    transparent 0%,
+    rgba(0,0,0,.1) 15%,
+    rgba(0,0,0,.1) 85%,
+    transparent 100%
+  );
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  top: 60px;
+  bottom: 60px;
+  pointer-events: none;
+  z-index: -1;
+}
+.sidebar-divider-line::before,
+.sidebar-divider-line::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 5px; height: 5px;
+  border-radius: 50%;
+  background: rgba(0,0,0,.15);
+}
+.sidebar-divider-line::before { top: -6px; }
+.sidebar-divider-line::after  { bottom: -6px; }
+
+/* ── Announcement badge (red line indicator) ── */
+#nav-announcements {
+  position: relative;
+}
+#nav-announcements .ann-line {
+  position: absolute;
+  left: 0;
+  top: 20%;
+  bottom: 20%;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: #ef4444;
 }
 
 
@@ -1377,7 +1422,7 @@ input[type="checkbox"] {
     gap: 10px !important;
     justify-content: flex-start !important;
   }
-  .sidebar-nav a span { display: inline !important; font-size: 13px; font-weight: 500; }
+  .sidebar-nav a span { display: inline !important; font-size: 13px; font-weight: 700; letter-spacing: .1px; }
   .sidebar-nav a::after { display: none !important; }
   .sidebar-nav a.active { background: rgba(0,0,0,.06) !important; color: var(--portal-primary, #2563eb) !important; }
   .sidebar-logo {
@@ -1387,7 +1432,7 @@ input[type="checkbox"] {
     border-bottom: 1px solid rgba(0,0,0,.07) !important;
   }
   .sidebar-logo-text { display: block !important; font-size: 14px; font-weight: 800; color: #0d1117; }
-  .sidebar-divider-line { display: none !important; }
+  .sidebar-divider-line { display: block !important; }
   .sidebar-nav a[data-tooltip]:hover::before { display: none !important; }
   .topbar { padding: 0 14px; }
   .topbar-left .portal-company,
