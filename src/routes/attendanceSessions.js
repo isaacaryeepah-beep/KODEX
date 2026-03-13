@@ -15,7 +15,7 @@ router.use(requireActiveSubscription);
 
 router.post("/start", requireRole("admin", "manager", "lecturer", "superadmin"), companyIsolation, attendanceController.startSession);
 router.post("/:id/stop", requireRole("admin", "manager", "lecturer", "superadmin"), companyIsolation, attendanceController.stopSession);
-router.get("/", requireRole("manager", "lecturer", "admin", "superadmin"), companyIsolation, attendanceController.listSessions);
+router.get("/", requireRole("manager", "lecturer", "admin", "superadmin", "hod"), companyIsolation, attendanceController.listSessions);
 router.get("/active", companyIsolation, attendanceController.getActiveSession);
 router.get("/my-attendance", attendanceController.getMyAttendance);
 router.get("/sign-in-status", attendanceController.getSignInStatus);
