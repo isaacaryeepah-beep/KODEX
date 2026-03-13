@@ -12,8 +12,8 @@ function visibilityFilter(user) {
   };
 
   if (user.role === "lecturer") {
-    // Lecturers only see their own announcements
-    return { ...base, author: user._id };
+    // Lecturers see their own posts + announcements addressed to lecturers/all by admin
+    return { ...base, $or: [{ author: user._id }, { audience: { $in: ["all", "lecturers"] }, author: { $ne: user._id } }] };
   }
 
   if (user.role === "student") {
@@ -70,7 +70,7 @@ exports.create = async (req, res) => {
     if (req.user.role === "lecturer") {
       resolvedAudience = "students";
     } else {
-      resolvedAudience = ["all", "students", "employees"].includes(audience) ? audience : "all";
+      resolvedAudience = ["all", "students", "employees", "lecturers"].includes(audience) ? audience : "all";
     }
 
     const ann = await Announcement.create({
