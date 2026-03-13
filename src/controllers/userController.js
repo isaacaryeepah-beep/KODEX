@@ -6,9 +6,10 @@ const { ROLE_HIERARCHY } = require("../middleware/role");
 
 exports.listUsers = async (req, res) => {
   try {
-    const { role } = req.query;
+    const { role, department } = req.query;
     const filter = { ...req.companyFilter };
     if (role) filter.role = role;
+    if (department) filter.department = department;
 
     if (req.user.role === "lecturer") {
       const courses = await Course.find({ lecturer: req.user._id, company: req.user.company });
@@ -20,7 +21,10 @@ exports.listUsers = async (req, res) => {
         { _id: { $in: studentIds }, role: "student" },
       ];
     }
-    // HOD sees everyone in the company — no extra filter needed
+    // HOD sees only users in their department
+    if (req.user.role === "hod" && req.user.department) {
+      filter.department = req.user.department;
+    }
 
     const users = await User.find(filter).populate("company", "name mode");
     res.json({ users });
@@ -32,7 +36,9 @@ exports.listUsers = async (req, res) => {
 
 exports.getUserStats = async (req, res) => {
   try {
-    const base = req.companyFilter;
+    const { department } = req.query;
+    const base = { ...req.companyFilter };
+    if (department) base.department = department;
     const [admins, lecturers, hods, students, employees] = await Promise.all([
       User.countDocuments({ ...base, role: { $in: ["admin", "manager"] } }),
       User.countDocuments({ ...base, role: "lecturer" }),
@@ -49,7 +55,7 @@ exports.getUserStats = async (req, res) => {
 
 exports.createUser = async (req, res) => {
   try {
-    const { email, password, name, role, indexNumber, phone } = req.body;
+    const { email, password, name, role, indexNumber, phone, department } = req.body;
     const targetRole = role || "employee";
 
     const company = await Company.findById(req.user.company);
@@ -78,6 +84,7 @@ exports.createUser = async (req, res) => {
       role: targetRole,
       phone: phone ? normalisePhone(phone) : null,
       company: req.user.company,
+      department: department ? department.trim() : null,
     };
 
     if (targetRole === "student") {
@@ -122,10 +129,11 @@ exports.createUser = async (req, res) => {
 
 exports.updateUser = async (req, res) => {
   try {
-    const { name, role, isActive } = req.body;
+    const { name, role, isActive, department } = req.body;
     const update = {};
     if (name) update.name = name;
     if (typeof isActive === "boolean") update.isActive = isActive;
+    if (department !== undefined) update.department = department ? department.trim() : null;
 
     if (role) {
       if (ROLE_HIERARCHY[role] >= ROLE_HIERARCHY[req.user.role]) {
