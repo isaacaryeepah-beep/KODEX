@@ -7426,7 +7426,7 @@ function buildBottomNav(role) {
     const btn = document.createElement('button');
     btn.className = 'bottom-nav-item';
     btn.dataset.navId = id;
-    btn.innerHTML = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${icon}</svg><span class="bottom-nav-dot"></span>`;
+    btn.innerHTML = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${icon}</svg><span class="nav-label">${label}</span>`;
     btn.onclick = () => {
       document.querySelectorAll('.bottom-nav-item').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
@@ -7443,7 +7443,7 @@ function buildBottomNav(role) {
   const moreBtn = document.createElement('button');
   moreBtn.className = 'bottom-nav-item';
   moreBtn.id = 'bottom-nav-more';
-  moreBtn.innerHTML = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg><span class="bottom-nav-dot"></span>`;
+  moreBtn.innerHTML = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg><span class="nav-label">More</span>`;
   moreBtn.onclick = () => toggleMobileSidebar();
   nav.appendChild(moreBtn);
 
