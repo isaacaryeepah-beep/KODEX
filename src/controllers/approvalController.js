@@ -2,11 +2,13 @@ const User = require("../models/User");
 
 exports.getPendingApprovals = async (req, res) => {
   try {
-    const pending = await User.find({
-      company: req.user.company,
-      isApproved: false,
-      isActive: true,
-    }).populate("company", "name mode");
+    const filter = { company: req.user.company, isApproved: false, isActive: true };
+    // HOD only sees pending lecturers in their own department
+    if (req.user.role === "hod") {
+      filter.role = "lecturer";
+      if (req.user.department) filter.department = req.user.department;
+    }
+    const pending = await User.find(filter).populate("company", "name mode");
 
     res.json({ pending });
   } catch (error) {
@@ -17,11 +19,12 @@ exports.getPendingApprovals = async (req, res) => {
 
 exports.approveUser = async (req, res) => {
   try {
-    const user = await User.findOne({
-      _id: req.params.id,
-      company: req.user.company,
-      isApproved: false,
-    });
+    const filter = { _id: req.params.id, company: req.user.company, isApproved: false };
+    if (req.user.role === "hod") {
+      filter.role = "lecturer";
+      if (req.user.department) filter.department = req.user.department;
+    }
+    const user = await User.findOne(filter);
 
     if (!user) {
       return res.status(404).json({ error: "User not found or already approved" });
@@ -39,11 +42,12 @@ exports.approveUser = async (req, res) => {
 
 exports.rejectUser = async (req, res) => {
   try {
-    const user = await User.findOne({
-      _id: req.params.id,
-      company: req.user.company,
-      isApproved: false,
-    });
+    const filter = { _id: req.params.id, company: req.user.company, isApproved: false };
+    if (req.user.role === "hod") {
+      filter.role = "lecturer";
+      if (req.user.department) filter.department = req.user.department;
+    }
+    const user = await User.findOne(filter);
 
     if (!user) {
       return res.status(404).json({ error: "User not found or already approved" });
