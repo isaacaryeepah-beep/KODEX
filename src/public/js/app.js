@@ -5104,8 +5104,8 @@ async function renderQuestionBank() {
     _bankTopics    = data.topics || [];
 
     const L = ['A','B','C','D'];
-    const typeColors = { single:'#0369a1', multiple:'#7c3aed', fill:'#059669' };
-    const typeBg    = { single:'#f0f9ff', multiple:'#f5f3ff', fill:'#f0fdf4' };
+    const typeColors = { single:'#0369a1', multiple:'#7c3aed', fill:'#059669', explain:'#b45309' };
+    const typeBg    = { single:'#f0f9ff', multiple:'#f5f3ff', fill:'#f0fdf4', explain:'#fffbeb' };
 
     content.innerHTML = `
       <div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;">
@@ -5113,11 +5113,17 @@ async function renderQuestionBank() {
           <h2>Question Bank</h2>
           <p>Save and reuse questions across quizzes — ${data.total || 0} total</p>
         </div>
-        <button class="btn btn-primary" onclick="openAddToBankModal()">＋ Add Question</button>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="btn btn-secondary" id="bank-pdf-btn" onclick="exportBankToPDF()" style="display:none;">⬇ Save PDF (<span id="bank-sel-count">0</span>)</button>
+          <button class="btn btn-primary" onclick="openAddToBankModal()">＋ Add Question</button>
+        </div>
       </div>
 
       <!-- Filters -->
       <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;align-items:center;">
+        <label style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;">
+          <input type="checkbox" id="bank-select-all" onchange="bankSelectAll(this.checked)" style="accent-color:var(--primary);width:15px;height:15px;"> Select All
+        </label>
         <input id="bank-search" placeholder="Search questions…" oninput="filterBankList()"
           style="padding:8px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;flex:1;min-width:180px;">
         <select id="bank-topic-filter" onchange="filterBankList()"
@@ -5140,9 +5146,12 @@ async function renderQuestionBank() {
 
 function bankQuestionCard(q, i, L, typeColors, typeBg) {
   const type = q.questionType || 'single';
+  const isExplain = type === 'explain';
   return `
     <div id="bq-${q._id}" style="border:1.5px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:10px;background:var(--card);">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap;">
+        <label style="display:flex;align-items:flex-start;gap:10px;flex:1;min-width:0;cursor:pointer;">
+          <input type="checkbox" class="bank-q-check" data-id="${q._id}" onchange="bankSelectionChanged()" style="accent-color:var(--primary);width:16px;height:16px;margin-top:2px;flex-shrink:0;">
         <div style="flex:1;min-width:0;">
           <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap;">
             <span style="font-size:11px;padding:2px 8px;border-radius:20px;font-weight:700;background:${(typeBg||{})[type]||'#f3f4f6'};color:${(typeColors||{})[type]||'#374151'}">${type.toUpperCase()}</span>
@@ -5153,11 +5162,15 @@ function bankQuestionCard(q, i, L, typeColors, typeBg) {
           <div style="font-size:13px;font-weight:600;margin-bottom:8px;line-height:1.5;">${q.questionText}</div>
           ${type === 'fill'
             ? `<div style="font-size:12px;color:#059669;padding:4px 10px;background:#f0fdf4;border-radius:6px;display:inline-block;">✓ ${q.correctAnswerText}${q.acceptedAnswers?.length ? ` (+${q.acceptedAnswers.length} alt)` : ''}</div>`
+            : type === 'explain'
+            ? `<div style="font-size:12px;color:#92400e;padding:6px 10px;background:#fffbeb;border-radius:6px;border:1px solid #fde68a;"><strong>Model Answer:</strong> ${q.modelAnswer || '<em>No model answer provided</em>'}</div>`
             : `<div style="display:flex;flex-wrap:wrap;gap:5px;">${(q.options||[]).map((o,oi) => {
                 const isCorrect = type === 'multiple' ? (q.correctAnswers||[]).includes(oi) : q.correctAnswer === oi;
                 return `<span style="padding:3px 9px;border-radius:6px;font-size:12px;${isCorrect?'background:#f0fdf4;color:#166534;border:1px solid #bbf7d0;font-weight:600':'background:var(--bg);color:var(--text-light);border:1px solid var(--border)'}">${L[oi]}) ${o}${isCorrect?' ✓':''}</span>`;
               }).join('')}</div>`}
         </div>
+        </div>
+        </label>
         <div style="display:flex;gap:6px;flex-shrink:0;">
           <button class="btn btn-sm btn-secondary" onclick="editBankQuestion('${q._id}')">Edit</button>
           <button class="btn btn-sm btn-danger" onclick="deleteBankQuestion('${q._id}')">Delete</button>
@@ -5170,8 +5183,8 @@ function filterBankList() {
   const search = document.getElementById('bank-search')?.value?.toLowerCase() || '';
   const topic  = document.getElementById('bank-topic-filter')?.value || '';
   const L = ['A','B','C','D'];
-  const typeColors = { single:'#0369a1', multiple:'#7c3aed', fill:'#059669' };
-  const typeBg    = { single:'#f0f9ff', multiple:'#f5f3ff', fill:'#f0fdf4' };
+  const typeColors = { single:'#0369a1', multiple:'#7c3aed', fill:'#059669', explain:'#b45309' };
+  const typeBg    = { single:'#f0f9ff', multiple:'#f5f3ff', fill:'#f0fdf4', explain:'#fffbeb' };
   const filtered = _bankQuestions.filter(q =>
     (!search || q.questionText.toLowerCase().includes(search)) &&
     (!topic  || q.topic === topic)
@@ -5209,6 +5222,7 @@ function openAddToBankModal(prefill) {
               <option value="single" ${p.questionType==='single'?'selected':''}>Single</option>
               <option value="multiple" ${p.questionType==='multiple'?'selected':''}>Multiple</option>
               <option value="fill" ${p.questionType==='fill'?'selected':''}>Fill In</option>
+              <option value="explain" ${p.questionType==='explain'?'selected':''}>Explain</option>
             </select>
           </div>
           <div>
@@ -5241,6 +5255,11 @@ function openAddToBankModal(prefill) {
           <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:5px;display:block;">Alternate Accepted Answers <span style="font-weight:400;text-transform:none;">(optional, one per line)</span></label>
           <textarea id="bm-fill-alts" rows="2" placeholder="alternative 1&#10;alternative 2" style="width:100%;padding:8px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;resize:vertical;outline:none;">${(p.acceptedAnswers||[]).join('\n')}</textarea>
         </div>
+        <!-- Explain wrap -->
+        <div id="bm-explain-wrap" style="display:none;">
+          <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:5px;display:block;">Model Answer <span style="font-weight:400;text-transform:none;">(for lecturer reference, not shown to students)</span></label>
+          <textarea id="bm-model-answer" rows="4" placeholder="Write the expected/ideal answer here…" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;resize:vertical;outline:none;">${p.modelAnswer||''}</textarea>
+        </div>
         <div id="bm-err" style="display:none;padding:8px 12px;background:#fef2f2;border:1px solid #fecaca;border-radius:7px;color:#dc2626;font-size:12px;font-weight:500;"></div>
       </div>
       <div style="padding:12px 20px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end;position:sticky;bottom:0;background:var(--card);border-radius:0 0 14px 14px;">
@@ -5249,21 +5268,24 @@ function openAddToBankModal(prefill) {
       </div>
     </div>`;
   document.body.appendChild(ol);
-  if (p.questionType === 'fill') bmToggleType();
+  if (p.questionType === 'fill' || p.questionType === 'explain') bmToggleType();
 }
 
 function bmToggleType() {
   const type = document.getElementById('bm-type')?.value;
-  const optWrap  = document.getElementById('bm-options-wrap');
-  const fillWrap = document.getElementById('bm-fill-wrap');
+  const optWrap     = document.getElementById('bm-options-wrap');
+  const fillWrap    = document.getElementById('bm-fill-wrap');
+  const explainWrap = document.getElementById('bm-explain-wrap');
   if (!optWrap || !fillWrap) return;
+  optWrap.style.display     = 'none';
+  fillWrap.style.display    = 'none';
+  if (explainWrap) explainWrap.style.display = 'none';
   if (type === 'fill') {
-    optWrap.style.display  = 'none';
     fillWrap.style.display = 'block';
+  } else if (type === 'explain') {
+    if (explainWrap) explainWrap.style.display = 'block';
   } else {
-    optWrap.style.display  = 'block';
-    fillWrap.style.display = 'none';
-    // Swap radio/checkbox inputs
+    optWrap.style.display = 'block';
     document.querySelectorAll('input[name="bm-correct"]').forEach(el => {
       el.type = type === 'multiple' ? 'checkbox' : 'radio';
     });
@@ -5286,6 +5308,9 @@ async function submitBankQuestion(existingId) {
     if (!ans) { errEl.textContent = 'Correct answer is required for fill-in questions.'; errEl.style.display = 'block'; return; }
     body.correctAnswerText = ans;
     body.acceptedAnswers = (document.getElementById('bm-fill-alts')?.value || '').split('\n').map(s=>s.trim()).filter(Boolean);
+    body.options = [];
+  } else if (type === 'explain') {
+    body.modelAnswer = document.getElementById('bm-model-answer')?.value?.trim() || '';
     body.options = [];
   } else {
     const opts = [0,1,2,3].map(i => document.getElementById('bm-opt-'+i)?.value?.trim() || '');
@@ -5333,6 +5358,150 @@ async function deleteBankQuestion(id) {
       toastSuccess('Deleted from bank');
     } catch(e) { toastError('Delete failed'); }
   });
+}
+
+// ── Selection & PDF Export ──────────────────────────────────────────────────
+function bankSelectionChanged() {
+  const checks = document.querySelectorAll('.bank-q-check:checked');
+  const count = checks.length;
+  const btn = document.getElementById('bank-pdf-btn');
+  const countEl = document.getElementById('bank-sel-count');
+  if (btn) btn.style.display = count > 0 ? 'inline-flex' : 'none';
+  if (countEl) countEl.textContent = count;
+}
+
+function bankSelectAll(checked) {
+  document.querySelectorAll('.bank-q-check').forEach(cb => {
+    cb.checked = checked;
+  });
+  bankSelectionChanged();
+}
+
+async function exportBankToPDF() {
+  const checks = [...document.querySelectorAll('.bank-q-check:checked')];
+  if (!checks.length) { toastError('Select at least one question'); return; }
+  const ids = checks.map(c => c.dataset.id);
+  const selected = _bankQuestions.filter(q => ids.includes(q._id));
+
+  // Load jsPDF if not already loaded
+  if (!window.jspdf) {
+    await new Promise((res, rej) => {
+      const s = document.createElement('script');
+      s.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+      s.onload = res; s.onerror = rej;
+      document.head.appendChild(s);
+    });
+  }
+
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+  const pageW = 210, margin = 18, lineW = pageW - margin * 2;
+  let y = margin;
+
+  const addText = (text, fontSize, bold, color, indent) => {
+    doc.setFontSize(fontSize);
+    doc.setFont('helvetica', bold ? 'bold' : 'normal');
+    if (color) doc.setTextColor(...color); else doc.setTextColor(30, 30, 30);
+    const lines = doc.splitTextToSize(String(text || ''), lineW - (indent||0));
+    lines.forEach(line => {
+      if (y > 275) { doc.addPage(); y = margin; }
+      doc.text(line, margin + (indent||0), y);
+      y += fontSize * 0.45;
+    });
+    y += 1.5;
+  };
+
+  // Title
+  doc.setFillColor(13, 17, 23);
+  doc.rect(0, 0, 210, 22, 'F');
+  doc.setTextColor(255, 255, 255);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(14);
+  doc.text('KODEX — Question Bank Export', margin, 14);
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'normal');
+  doc.text(`${selected.length} question${selected.length !== 1 ? 's' : ''} · ${new Date().toLocaleDateString()}`, margin, 19);
+  y = 32;
+
+  const L = ['A', 'B', 'C', 'D'];
+  const typeLabel = { single: 'MCQ (Single)', multiple: 'MCQ (Multiple)', fill: 'Fill In', explain: 'Explain' };
+  const typeColor = { single: [3, 105, 161], multiple: [124, 58, 237], fill: [5, 150, 105], explain: [180, 83, 9] };
+
+  selected.forEach((q, idx) => {
+    const type = q.questionType || 'single';
+    if (y > 260) { doc.addPage(); y = margin; }
+
+    // Question number + type badge
+    const col = typeColor[type] || [60, 60, 60];
+    doc.setFillColor(...col);
+    doc.roundedRect(margin, y - 3.5, 28, 5.5, 1.5, 1.5, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(7.5);
+    doc.setFont('helvetica', 'bold');
+    doc.text(typeLabel[type] || type.toUpperCase(), margin + 1.5, y + 0.5);
+
+    if (q.topic) {
+      doc.setFillColor(254, 243, 199);
+      doc.roundedRect(margin + 30, y - 3.5, doc.getTextWidth(q.topic) + 5, 5.5, 1.5, 1.5, 'F');
+      doc.setTextColor(146, 64, 14);
+      doc.text(q.topic, margin + 32.5, y + 0.5);
+    }
+
+    const marksText = `${q.marks || 1} mark${(q.marks || 1) !== 1 ? 's' : ''}`;
+    doc.setTextColor(100, 100, 100);
+    doc.setFontSize(8);
+    doc.text(marksText, pageW - margin - doc.getTextWidth(marksText), y + 0.5);
+
+    y += 8;
+
+    // Question text
+    doc.setTextColor(20, 20, 20);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(11);
+    const qLines = doc.splitTextToSize(`Q${idx + 1}. ${q.questionText}`, lineW);
+    qLines.forEach(line => {
+      if (y > 275) { doc.addPage(); y = margin; }
+      doc.text(line, margin, y);
+      y += 5.5;
+    });
+    y += 2;
+
+    if (type === 'fill') {
+      addText(`Answer: ${q.correctAnswerText}`, 9.5, false, [5, 150, 105], 2);
+      if (q.acceptedAnswers?.length) addText(`Also accepted: ${q.acceptedAnswers.join(', ')}`, 8.5, false, [100, 100, 100], 2);
+    } else if (type === 'explain') {
+      addText('Model Answer:', 9, true, [180, 83, 9], 2);
+      addText(q.modelAnswer || '—', 9, false, [60, 60, 60], 4);
+    } else {
+      (q.options || []).forEach((opt, oi) => {
+        if (!opt) return;
+        const isCorrect = type === 'multiple' ? (q.correctAnswers||[]).includes(oi) : q.correctAnswer === oi;
+        if (isCorrect) doc.setFillColor(240, 253, 244); else doc.setFillColor(248, 250, 252);
+        const optLines = doc.splitTextToSize(`${L[oi]}) ${opt}`, lineW - 6);
+        const boxH = optLines.length * 5 + 4;
+        if (y + boxH > 275) { doc.addPage(); y = margin; }
+        doc.roundedRect(margin + 2, y - 3, lineW - 4, boxH, 1.5, 1.5, 'F');
+        if (isCorrect) { doc.setDrawColor(187, 247, 208); doc.roundedRect(margin + 2, y - 3, lineW - 4, boxH, 1.5, 1.5, 'S'); }
+        doc.setTextColor(isCorrect ? 22 : 55, isCorrect ? 101 : 65, isCorrect ? 52 : 81);
+        doc.setFont('helvetica', isCorrect ? 'bold' : 'normal');
+        doc.setFontSize(10);
+        optLines.forEach((line, li) => { doc.text(line, margin + 5, y + li * 5); });
+        if (isCorrect) { doc.setTextColor(22, 101, 52); doc.text('✓', pageW - margin - 6, y); }
+        y += boxH + 2;
+      });
+    }
+
+    // Divider
+    y += 4;
+    if (idx < selected.length - 1) {
+      doc.setDrawColor(220, 220, 220);
+      doc.line(margin, y, pageW - margin, y);
+      y += 6;
+    }
+  });
+
+  doc.save(`KODEX_QuestionBank_${new Date().toISOString().slice(0,10)}.pdf`);
+  toastSuccess(`PDF saved with ${selected.length} question${selected.length !== 1 ? 's' : ''} ✓`);
 }
 
 // ── Save a quiz question to the bank ────────────────────────────────────────
