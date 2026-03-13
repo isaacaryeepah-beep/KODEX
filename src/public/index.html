@@ -21,83 +21,103 @@
         <p class="subtitle">Enterprise Attendance Management Platform</p>
       </div>
 
-      <div class="portal-section corporate-section">
-        <div class="portal-section-label">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
-          <span>Corporate</span>
-        </div>
-        <div class="portal-cards">
-          <div class="portal-card staff-portal" onclick="selectPortal('admin-corporate')"><a href="javascript:void(0)" onclick="selectPortal('admin-corporate')" style="position:absolute;inset:0;z-index:10;-webkit-tap-highlight-color:transparent;" aria-label="Select Admin Portal"></a>
-            <div class="portal-icon">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-                <circle cx="12" cy="7" r="4"/>
-              </svg>
-            </div>
-            <h2>Admin Portal</h2>
-            <p>Admins & Managers</p>
-            <span class="portal-arrow">&rarr;</span>
+      <!-- Mode selector toggles -->
+      <div class="mode-selector-label">Select your workspace</div>
+      <div class="mode-toggles">
+
+        <div class="mode-toggle" id="mode-tgl-corp" onclick="selectMode('corp')">
+          <div class="mode-toggle-icon">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
           </div>
-          <div class="portal-card employee-portal" onclick="selectPortal('employee')"><a href="javascript:void(0)" onclick="selectPortal('employee')" style="position:absolute;inset:0;z-index:10;-webkit-tap-highlight-color:transparent;" aria-label="Select Employee Portal"></a>
-            <div class="portal-icon">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                <rect x="2" y="7" width="20" height="14" rx="2" ry="2"/>
-                <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>
-              </svg>
-            </div>
-            <h2>Employee Portal</h2>
-            <p>Employees & Staff</p>
-            <span class="portal-arrow">&rarr;</span>
+          <h3>Corporate</h3>
+          <p>Businesses &amp; organisations</p>
+          <div class="mode-toggle-check">
+            <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1.5 5 4 7.5 8.5 2.5"/></svg>
           </div>
         </div>
+
+        <div class="mode-toggle" id="mode-tgl-acad" onclick="selectMode('acad')">
+          <div class="mode-toggle-icon">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c0 2 4 3 6 3s6-1 6-3v-5"/></svg>
+          </div>
+          <h3>Academic</h3>
+          <p>Schools &amp; institutions</p>
+          <div class="mode-toggle-check">
+            <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1.5 5 4 7.5 8.5 2.5"/></svg>
+          </div>
+        </div>
+
       </div>
 
-      <div class="portal-divider">
-        <span>OR</span>
-      </div>
+      <!-- Portal cards — revealed after mode selection -->
+      <div class="portal-cards-wrap">
 
-      <div class="portal-section academic-section">
-        <div class="portal-section-label">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c0 2 4 3 6 3s6-1 6-3v-5"/></svg>
-          <span>Academic</span>
-        </div>
-        <div class="portal-cards">
-          <div class="portal-card staff-portal" onclick="selectPortal('admin-academic')"><a href="javascript:void(0)" onclick="selectPortal('admin-academic')" style="position:absolute;inset:0;z-index:10;-webkit-tap-highlight-color:transparent;" aria-label="Select Admin Portal"></a>
-            <div class="portal-icon">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-                <circle cx="12" cy="7" r="4"/>
-              </svg>
-            </div>
-            <h2>Admin Portal</h2>
-            <p>Institution Admins</p>
-            <span class="portal-arrow">&rarr;</span>
+        <div class="portal-cards-section" id="portal-cards-corp">
+          <div class="portal-section-label corp-label">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
+            <span>Corporate portals</span>
           </div>
-          <div class="portal-card lecturer-portal" onclick="selectPortal('lecturer')"><a href="javascript:void(0)" onclick="selectPortal('lecturer')" style="position:absolute;inset:0;z-index:10;-webkit-tap-highlight-color:transparent;" aria-label="Select Lecturer Portal"></a>
-            <div class="portal-icon">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
-                <circle cx="9" cy="7" r="4"/>
-                <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
-                <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
-              </svg>
+          <div class="portal-cards">
+            <div class="portal-card staff-portal" onclick="selectPortal('admin-corporate')"><a href="javascript:void(0)" onclick="selectPortal('admin-corporate')" style="position:absolute;inset:0;z-index:10;-webkit-tap-highlight-color:transparent;" aria-label="Select Admin Portal"></a>
+              <div class="portal-icon">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+              </div>
+              <h2>Admin</h2>
+              <p>Company admin</p>
+              <span class="portal-arrow">&rarr;</span>
             </div>
-            <h2>Lecturer Portal</h2>
-            <p>Lecturers & Instructors</p>
-            <span class="portal-arrow">&rarr;</span>
-          </div>
-          <div class="portal-card student-portal" onclick="selectPortal('student')"><a href="javascript:void(0)" onclick="selectPortal('student')" style="position:absolute;inset:0;z-index:10;-webkit-tap-highlight-color:transparent;" aria-label="Select Student Portal"></a>
-            <div class="portal-icon">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/>
-                <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
-              </svg>
+            <div class="portal-card manager-portal" onclick="selectPortal('manager')"><a href="javascript:void(0)" onclick="selectPortal('manager')" style="position:absolute;inset:0;z-index:10;-webkit-tap-highlight-color:transparent;" aria-label="Select Manager Portal"></a>
+              <div class="portal-icon">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+              </div>
+              <h2>Manager</h2>
+              <p>Team leads</p>
+              <span class="portal-arrow">&rarr;</span>
             </div>
-            <h2>Student Portal</h2>
-            <p>Students & Learners</p>
-            <span class="portal-arrow">&rarr;</span>
+            <div class="portal-card employee-portal" onclick="selectPortal('employee')"><a href="javascript:void(0)" onclick="selectPortal('employee')" style="position:absolute;inset:0;z-index:10;-webkit-tap-highlight-color:transparent;" aria-label="Select Employee Portal"></a>
+              <div class="portal-icon">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
+              </div>
+              <h2>Employee</h2>
+              <p>Staff &amp; workers</p>
+              <span class="portal-arrow">&rarr;</span>
+            </div>
           </div>
         </div>
+
+        <div class="portal-cards-section" id="portal-cards-acad">
+          <div class="portal-section-label acad-label">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c0 2 4 3 6 3s6-1 6-3v-5"/></svg>
+            <span>Academic portals</span>
+          </div>
+          <div class="portal-cards">
+            <div class="portal-card staff-portal" onclick="selectPortal('admin-academic')"><a href="javascript:void(0)" onclick="selectPortal('admin-academic')" style="position:absolute;inset:0;z-index:10;-webkit-tap-highlight-color:transparent;" aria-label="Select Admin Portal"></a>
+              <div class="portal-icon">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+              </div>
+              <h2>Admin</h2>
+              <p>Institution admin</p>
+              <span class="portal-arrow">&rarr;</span>
+            </div>
+            <div class="portal-card lecturer-portal" onclick="selectPortal('lecturer')"><a href="javascript:void(0)" onclick="selectPortal('lecturer')" style="position:absolute;inset:0;z-index:10;-webkit-tap-highlight-color:transparent;" aria-label="Select Lecturer Portal"></a>
+              <div class="portal-icon">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+              </div>
+              <h2>Lecturer</h2>
+              <p>Instructors</p>
+              <span class="portal-arrow">&rarr;</span>
+            </div>
+            <div class="portal-card student-portal" onclick="selectPortal('student')"><a href="javascript:void(0)" onclick="selectPortal('student')" style="position:absolute;inset:0;z-index:10;-webkit-tap-highlight-color:transparent;" aria-label="Select Student Portal"></a>
+              <div class="portal-icon">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+              </div>
+              <h2>Student</h2>
+              <p>Learners</p>
+              <span class="portal-arrow">&rarr;</span>
+            </div>
+          </div>
+        </div>
+
       </div>
       <!-- Footer with T&C and Privacy Policy links -->
       <div id="portal-footer" style="
@@ -112,7 +132,7 @@
         <a onclick="showLegalModal('terms')" style="color:var(--primary);cursor:pointer;text-decoration:underline;font-weight:500">Terms &amp; Conditions</a>
         and
         <a onclick="showLegalModal('privacy')" style="color:var(--primary);cursor:pointer;text-decoration:underline;font-weight:500">Privacy Policy</a>.
-        <div style="margin-top:6px;color:#9ca3af;font-size:11px">&copy; 2025 KODEX. All rights reserved.</div>
+        <div style="margin-top:6px;color:#9ca3af;font-size:11px">&copy; 2026 KODEX. All rights reserved.</div>
       </div>
     </div>
 
@@ -523,7 +543,7 @@
       ">
         <div>
           <div id="legal-modal-title" style="font-size:18px;font-weight:700;color:#111827"></div>
-          <div style="font-size:12px;color:#6b7280;margin-top:2px">KODEX KODEX Platform</div>
+          <div style="font-size:12px;color:#6b7280;margin-top:2px">KODEX Platform</div>
         </div>
         <button onclick="closeLegalModal()" style="
           background:none;border:none;cursor:pointer;
@@ -582,10 +602,10 @@
         <p style="color:#6b7280;font-size:12px;margin-bottom:20px">Last updated: January 1, 2025</p>
 
         <h3 style="font-size:15px;font-weight:700;color:#111827;margin:0 0 8px">1. Acceptance of Terms</h3>
-        <p>By accessing or using the KODEX KODEX platform ("Platform"), you agree to be bound by these Terms and Conditions. If you do not agree to these terms, you may not use the Platform. These terms apply to all users including administrators, lecturers, employees, and students.</p>
+        <p>By accessing or using the KODEX platform ("Platform"), you agree to be bound by these Terms and Conditions. If you do not agree to these terms, you may not use the Platform. These terms apply to all users including administrators, lecturers, employees, and students.</p>
 
         <h3 style="font-size:15px;font-weight:700;color:#111827;margin:20px 0 8px">2. Description of Service</h3>
-        <p>KODEX KODEX is an enterprise attendance management platform that provides tools for tracking attendance, managing courses, conducting proctored assessments, and generating reports. The Platform is provided on a subscription basis to registered institutions and organisations.</p>
+        <p>KODEX is an enterprise attendance management platform that provides tools for tracking attendance, managing courses, conducting proctored assessments, and generating reports. The Platform is provided on a subscription basis to registered institutions and organisations.</p>
 
         <h3 style="font-size:15px;font-weight:700;color:#111827;margin:20px 0 8px">3. User Accounts & Responsibilities</h3>
         <p>Users are responsible for maintaining the confidentiality of their login credentials. You agree to:</p>
