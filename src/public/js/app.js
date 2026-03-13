@@ -1554,6 +1554,11 @@ async function handleLogout() {
   document.body.style.overflow = '';
   document.body.style.cssText = document.body.style.cssText; // flush
 
+  // If loaded from superadmin.html, redirect back to it
+  if (window.__superadminMode) {
+    window.location.href = '/superadmin';
+    return;
+  }
   showPortalSelector();
 }
 
