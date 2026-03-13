@@ -7,7 +7,7 @@ const requireActiveSubscription = async (req, res, next) => {
 
   // Roles fully exempt from subscription checks
   // Admin is exempt — they own the company, blocking them locks them out of their own account
-  const alwaysExempt = ["superadmin", "admin", "employee", "student"];
+  const alwaysExempt = ["superadmin", "admin", "employee", "student"];  // hod & manager follow subscription rules
   if (alwaysExempt.includes(req.user.role)) {
     return next();
   }
@@ -32,7 +32,7 @@ const requireActiveSubscription = async (req, res, next) => {
       return next();
     }
 
-    const isLecturer = req.user.role === "lecturer";
+    const isLecturer = ["lecturer", "hod"].includes(req.user.role);
     return res.status(403).json({
       error: "Subscription required",
       subscriptionRequired: true,
@@ -58,7 +58,7 @@ const requirePlan = (...allowedPlans) => {
       return res.status(401).json({ error: "Authentication required" });
     }
 
-    const alwaysExempt = ["superadmin", "admin", "employee", "student"];
+    const alwaysExempt = ["superadmin", "admin", "employee", "student"];  // hod & manager follow subscription rules
     if (alwaysExempt.includes(req.user.role)) {
       return next();
     }
