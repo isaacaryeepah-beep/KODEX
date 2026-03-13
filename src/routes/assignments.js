@@ -15,6 +15,7 @@ router.get("/lecturer",                                         ...lecturerMW, c
 router.post("/lecturer",                                        ...lecturerMW, ctrl.createAssignment);
 
 // Submission-level routes (static path segment "submissions")
+router.get("/lecturer/submissions/:submissionId",               ...lecturerMW, ctrl.getSubmission);
 router.post("/lecturer/submissions/:submissionId/grade",        ...lecturerMW, ctrl.gradeSubmission);
 router.get("/lecturer/submissions/:submissionId/file",          ...lecturerMW, ctrl.downloadSubmissionFile);
 
