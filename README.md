@@ -1,4 +1,4 @@
-# Testify — Smart Attendance & Quiz SaaS
+# KODEX — Smart Attendance & Quiz SaaS
 
 A multi-company smart attendance and quiz management platform built with Node.js, Express, and MongoDB.
 
