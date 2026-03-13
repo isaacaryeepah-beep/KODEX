@@ -376,10 +376,15 @@ exports.markAttendance = async (req, res) => {
 
 exports.getMyAttendance = async (req, res) => {
   try {
-    const { page = 1, limit = 20 } = req.query;
+    const { page = 1, limit = 20, userId } = req.query;
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
-    const filter = { user: req.user._id, company: req.user.company };
+    // HOD can view any student's attendance in their company
+    let targetUserId = req.user._id;
+    if (userId && req.user.role === "hod") {
+      targetUserId = userId;
+    }
+    const filter = { user: targetUserId, company: req.user.company };
 
     const [records, total] = await Promise.all([
       AttendanceRecord.find(filter)
