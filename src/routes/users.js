@@ -7,7 +7,8 @@ const router = express.Router();
 
 router.use(authenticate);
 
-router.get("/", requireRole("employee", "manager", "admin", "superadmin", "lecturer"), companyIsolation, userController.listUsers);
+router.get("/", requireRole("employee", "manager", "admin", "superadmin", "lecturer", "hod"), companyIsolation, userController.listUsers);
+router.get("/stats", requireRole("admin", "superadmin", "manager", "hod"), companyIsolation, userController.getUserStats);
 router.post("/", requireRole("manager", "admin", "superadmin"), companyIsolation, userController.createUser);
 router.post("/bulk", requireRole("manager", "admin", "superadmin"), companyIsolation, userController.bulkAction);
 router.post("/bulk-import", requireRole("admin", "superadmin"), companyIsolation, userController.bulkImportStudents);
