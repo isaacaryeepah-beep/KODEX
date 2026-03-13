@@ -12,31 +12,49 @@ function gradeAnswers(questions, answers) {
   const gradedAnswers = [];
 
   questions.forEach((q, qIdx) => {
-    const studentAns   = (answers || []).find((a) => a.questionIndex === qIdx);
-    const selected     = studentAns?.selectedAnswers || [];
-    const correct      = q.correctAnswers || [];
+    const studentAns = (answers || []).find((a) => a.questionIndex === qIdx);
+    const type = q.questionType || "single";
 
     let isCorrect    = false;
     let marksAwarded = 0;
 
+    if (type === "explain") {
+      // Explain questions need manual grading — award 0 for now, flag for review
+      const textAnswer = studentAns?.textAnswer || "";
+      gradedAnswers.push({ questionIndex: qIdx, selectedAnswers: [], textAnswer, isCorrect: false, marksAwarded: 0, needsManualGrading: true });
+      return;
+    }
+
+    if (type === "fill") {
+      const textAnswer = (studentAns?.textAnswer || "").trim().toLowerCase();
+      const correct    = (q.correctAnswerText || "").trim().toLowerCase();
+      isCorrect  = textAnswer === correct;
+      marksAwarded = isCorrect ? q.marks : 0;
+      totalScore += marksAwarded;
+      gradedAnswers.push({ questionIndex: qIdx, selectedAnswers: [], textAnswer: studentAns?.textAnswer || "", isCorrect, marksAwarded });
+      return;
+    }
+
+    // MCQ (single / multiple)
+    const selected = studentAns?.selectedAnswers || [];
+    const correct  = q.correctAnswers || [];
+
     if (correct.length === 0) {
-      // No correct answer set — skip grading
       gradedAnswers.push({ questionIndex: qIdx, selectedAnswers: selected, isCorrect: false, marksAwarded: 0 });
       return;
     }
 
     if (q.allowPartialMarks) {
-      const correctHits  = selected.filter((s) => correct.includes(s)).length;
-      const wrongPicks   = selected.filter((s) => !correct.includes(s)).length;
-      const partial      = Math.max(0, correctHits - wrongPicks) / correct.length;
-      marksAwarded       = Math.round(partial * q.marks * 100) / 100;
-      isCorrect          = correctHits === correct.length && wrongPicks === 0;
+      const correctHits = selected.filter((s) => correct.includes(s)).length;
+      const wrongPicks  = selected.filter((s) => !correct.includes(s)).length;
+      const partial     = Math.max(0, correctHits - wrongPicks) / correct.length;
+      marksAwarded      = Math.round(partial * q.marks * 100) / 100;
+      isCorrect         = correctHits === correct.length && wrongPicks === 0;
     } else {
-      // Strict: exact match
-      const allHit   = correct.every((c) => selected.includes(c));
-      const noExtra  = selected.every((s) => correct.includes(s));
-      isCorrect      = allHit && noExtra && selected.length === correct.length;
-      marksAwarded   = isCorrect ? q.marks : 0;
+      const allHit  = correct.every((c) => selected.includes(c));
+      const noExtra = selected.every((s) => correct.includes(s));
+      isCorrect     = allHit && noExtra && selected.length === correct.length;
+      marksAwarded  = isCorrect ? q.marks : 0;
     }
 
     totalScore += marksAwarded;
@@ -264,20 +282,39 @@ exports.downloadPdf = async (req, res) => {
 exports.addQuestion = async (req, res) => {
   try {
     const { id } = req.params;
-    const { questionText, options, correctAnswers, marks, allowPartialMarks, explanation } = req.body;
+    const { questionText, questionType, options, correctAnswers, correctAnswerText, modelAnswer, marks, allowPartialMarks, explanation } = req.body;
+    const type = ["single","multiple","fill","explain"].includes(questionType) ? questionType : "single";
 
     if (!questionText) return res.status(400).json({ error: "questionText is required" });
-    if (!Array.isArray(options) || options.length < 2)
-      return res.status(400).json({ error: "At least 2 options required" });
-    if (!Array.isArray(correctAnswers) || correctAnswers.length < 1)
-      return res.status(400).json({ error: "At least one correct answer index required" });
-    if (correctAnswers.some((i) => i < 0 || i >= options.length))
-      return res.status(400).json({ error: "correctAnswers must be valid option indices" });
+
+    // Type-specific validation
+    if (type === "fill") {
+      if (!correctAnswerText?.trim()) return res.status(400).json({ error: "correctAnswerText is required for fill-in questions" });
+    } else if (type === "explain") {
+      // No required fields beyond questionText
+    } else {
+      if (!Array.isArray(options) || options.length < 2)
+        return res.status(400).json({ error: "At least 2 options required" });
+      if (!Array.isArray(correctAnswers) || correctAnswers.length < 1)
+        return res.status(400).json({ error: "At least one correct answer index required" });
+      if (correctAnswers.some((i) => i < 0 || i >= options.length))
+        return res.status(400).json({ error: "correctAnswers must be valid option indices" });
+    }
 
     const assignment = await Assignment.findOne({ _id: id, company: req.user.company, createdBy: req.user._id });
     if (!assignment) return res.status(404).json({ error: "Assignment not found" });
 
-    assignment.questions.push({ questionText, options, correctAnswers, marks: marks || 1, allowPartialMarks: !!allowPartialMarks, explanation: explanation || null });
+    assignment.questions.push({
+      questionText,
+      questionType: type,
+      options: (type === "fill" || type === "explain") ? [] : options,
+      correctAnswers: (type === "fill" || type === "explain") ? [] : correctAnswers,
+      correctAnswerText: type === "fill" ? (correctAnswerText || "").trim() : null,
+      modelAnswer: type === "explain" ? (modelAnswer || "").trim() : "",
+      marks: marks || 1,
+      allowPartialMarks: type === "single" || type === "multiple" ? !!allowPartialMarks : false,
+      explanation: explanation || null,
+    });
     await assignment.save();
 
     const newQ = assignment.questions[assignment.questions.length - 1];
@@ -300,19 +337,29 @@ exports.updateQuestion = async (req, res) => {
     const q = assignment.questions.id(questionId);
     if (!q) return res.status(404).json({ error: "Question not found" });
 
-    const { questionText, options, correctAnswers, marks, allowPartialMarks, explanation } = req.body;
-    if (questionText   !== undefined) q.questionText    = questionText;
-    if (options        !== undefined) {
-      if (!Array.isArray(options) || options.length < 2) return res.status(400).json({ error: "At least 2 options required" });
-      q.options = options;
+    const { questionText, questionType, options, correctAnswers, correctAnswerText, modelAnswer, marks, allowPartialMarks, explanation } = req.body;
+    const type = questionType ? (["single","multiple","fill","explain"].includes(questionType) ? questionType : q.questionType) : q.questionType;
+    if (questionText !== undefined) q.questionText = questionText;
+    if (questionType !== undefined) q.questionType = type;
+    if (type === "fill") {
+      q.options = []; q.correctAnswers = [];
+      if (correctAnswerText !== undefined) q.correctAnswerText = correctAnswerText;
+    } else if (type === "explain") {
+      q.options = []; q.correctAnswers = [];
+      if (modelAnswer !== undefined) q.modelAnswer = modelAnswer;
+    } else {
+      if (options !== undefined) {
+        if (!Array.isArray(options) || options.length < 2) return res.status(400).json({ error: "At least 2 options required" });
+        q.options = options;
+      }
+      if (correctAnswers !== undefined) {
+        if (!Array.isArray(correctAnswers) || correctAnswers.length < 1) return res.status(400).json({ error: "At least one correct answer required" });
+        q.correctAnswers = correctAnswers;
+      }
     }
-    if (correctAnswers !== undefined) {
-      if (!Array.isArray(correctAnswers) || correctAnswers.length < 1) return res.status(400).json({ error: "At least one correct answer required" });
-      q.correctAnswers = correctAnswers;
-    }
-    if (marks               !== undefined) q.marks              = marks;
-    if (allowPartialMarks   !== undefined) q.allowPartialMarks  = allowPartialMarks;
-    if (explanation         !== undefined) q.explanation        = explanation;
+    if (marks             !== undefined) q.marks             = marks;
+    if (allowPartialMarks !== undefined) q.allowPartialMarks = allowPartialMarks;
+    if (explanation       !== undefined) q.explanation       = explanation;
 
     await assignment.save();
     res.json({ question: q, totalMarks: assignment.totalMarks });
