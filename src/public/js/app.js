@@ -1740,7 +1740,7 @@ function showDashboard(data) {
       </button>
       <h2>${getPortalName(role)}</h2>
       ${companyName ? `<span class="portal-company">— ${companyName}</span>` : ''}
-      <span class="mode-badge">${mode}</span>
+      ${role === 'hod' && currentUser.department ? `<span class="mode-badge" style="background:#ecfeff;color:#0891b2;border:1px solid #a5f3fc;">${currentUser.department}</span>` : `<span class="mode-badge">${mode}</span>`}
     `;
     if (!document.getElementById('sidebar-overlay')) {
       const overlay = document.createElement('div');
@@ -2069,6 +2069,21 @@ async function rejectUser(userId) {
 async function renderHodDashboard(content) {
   if (!content) content = document.getElementById('main-content');
   content.innerHTML = '<div class="loading">Loading overview…</div>';
+
+  // Warn if HOD has no department assigned
+  if (!currentUser.department) {
+    content.innerHTML = `
+      <div class="page-header"><div><h2>Department Overview</h2></div></div>
+      <div style="padding:16px 18px;background:#fffbeb;border:1.5px solid #fde68a;border-radius:10px;margin-bottom:18px;display:flex;gap:12px;align-items:center;">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#d97706" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        <div>
+          <div style="font-weight:700;font-size:13px;color:#92400e;">No Department Assigned</div>
+          <div style="font-size:12px;color:#b45309;margin-top:2px;">Your account has no department set. Please ask your institution admin to update your profile with your department name. Until then you will see all data in the institution.</div>
+        </div>
+      </div>`;
+    // Continue loading without department filter
+  }
+
   try {
     const [sessData, userStats] = await Promise.all([
       api('/api/sessions?limit=5'),
@@ -2085,7 +2100,7 @@ async function renderHodDashboard(content) {
       <div class="page-header">
         <div>
           <h2>Department Overview</h2>
-          <p>Welcome back, ${currentUser.name} — ${currentUser.company?.name || ''}</p>
+          <p>Welcome back, ${currentUser.name} · <strong style="color:#0891b2;">${currentUser.department || 'No Department Assigned'}</strong> — ${currentUser.company?.name || ''}</p>
         </div>
       </div>
       <div class="stats-grid" style="margin-bottom:20px;">
@@ -2154,7 +2169,8 @@ async function renderHodSessions() {
   const content = document.getElementById('main-content');
   content.innerHTML = '<div class="loading">Loading sessions…</div>';
   try {
-    const data = await api('/api/sessions?limit=100');
+    const dept = currentUser.department ? '&department=' + encodeURIComponent(currentUser.department) : '';
+    const data = await api('/api/sessions?limit=100' + dept);
     const sessions = data.sessions || [];
     content.innerHTML = `
       <div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;">
@@ -2193,7 +2209,8 @@ async function renderHodLecturers() {
   const content = document.getElementById('main-content');
   content.innerHTML = '<div class="loading">Loading lecturers…</div>';
   try {
-    const data = await api('/api/users?role=lecturer&limit=200');
+    const dept = currentUser.department ? '&department=' + encodeURIComponent(currentUser.department) : '';
+    const data = await api('/api/users?role=lecturer&limit=200' + dept);
     const lecturers = data.users || [];
     content.innerHTML = `
       <div class="page-header"><div><h2>Lecturers</h2><p>${lecturers.length} lecturer${lecturers.length !== 1 ? 's' : ''} in your institution</p></div></div>
@@ -2220,7 +2237,8 @@ async function renderHodStudents() {
   const content = document.getElementById('main-content');
   content.innerHTML = '<div class="loading">Loading students…</div>';
   try {
-    const data = await api('/api/users?role=student&limit=500');
+    const dept = currentUser.department ? '&department=' + encodeURIComponent(currentUser.department) : '';
+    const data = await api('/api/users?role=student&limit=500' + dept);
     const students = data.users || [];
     content.innerHTML = `
       <div class="page-header">
@@ -2266,9 +2284,10 @@ async function renderHodReports() {
   const content = document.getElementById('main-content');
   content.innerHTML = '<div class="loading">Loading reports…</div>';
   try {
+    const hodDept = currentUser.department ? '&department=' + encodeURIComponent(currentUser.department) : '';
     const [sessData, userStats] = await Promise.all([
-      api('/api/sessions?limit=200'),
-      api('/api/users/stats')
+      api('/api/sessions?limit=200' + hodDept),
+      api('/api/users/stats' + (currentUser.department ? '?department=' + encodeURIComponent(currentUser.department) : ''))
     ]);
     const sessions  = sessData.sessions || [];
     const stats     = userStats || {};
@@ -3349,6 +3368,8 @@ function toggleUserFields() {
   const role = document.getElementById('new-user-role').value;
   document.getElementById('new-user-email-group').classList.toggle('hidden', role === 'student');
   document.getElementById('new-user-index-group').classList.toggle('hidden', role !== 'student');
+  const deptGroup = document.getElementById('new-user-dept-group');
+  if (deptGroup) deptGroup.style.display = ['lecturer','hod','student'].includes(role) ? 'block' : 'none';
 }
 
 async function createUser() {
@@ -3367,6 +3388,8 @@ async function createUser() {
     const phone = document.getElementById('new-user-phone').value.trim();
     if (!phone) { toastWarning('Phone number is required.'); return; }
     body.phone = phone;
+    const dept = document.getElementById('new-user-dept')?.value?.trim();
+    if (dept) body.department = dept;
     await api('/api/users', { method: 'POST', body: JSON.stringify(body) });
     closeModal();
     renderUsers();
