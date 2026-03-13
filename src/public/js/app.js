@@ -2169,9 +2169,23 @@ async function renderHodDashboard(content) {
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
               Post Announcement
             </button>
+            <button class="btn btn-secondary" onclick="navigateTo('approvals')" id="hod-approvals-btn">Pending Approvals</button>
+            <div style="border-top:1px solid var(--border);padding-top:8px;margin-top:4px;">
+              <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-muted);margin-bottom:6px;">Export</div>
+              <div style="display:flex;gap:6px;flex-wrap:wrap;">
+                <button class="btn btn-xs btn-secondary" onclick="hodExportCSV('students')">Students CSV</button>
+                <button class="btn btn-xs btn-secondary" onclick="hodExportCSV('lecturers')">Lecturers CSV</button>
+                <button class="btn btn-xs btn-secondary" onclick="hodExportCSV('attendance')">Attendance CSV</button>
+              </div>
+            </div>
           </div>
         </div>
       </div>`;
+    api('/api/approvals/pending').then(d => {
+      const count = (d.pending || []).length;
+      const btn = document.getElementById('hod-approvals-btn');
+      if (btn && count > 0) btn.innerHTML += ' <span style="background:#ef4444;color:#fff;font-size:10px;font-weight:700;padding:1px 6px;border-radius:20px;margin-left:4px;">' + count + '</span>';
+    }).catch(() => {});
   } catch(e) {
     content.innerHTML = `<div class="card"><p style="color:#ef4444;">Error loading dashboard: ${e.message}</p></div>`;
   }
@@ -2225,7 +2239,10 @@ async function renderHodLecturers() {
     const data = await api('/api/users?role=lecturer&limit=200' + dept);
     const lecturers = data.users || [];
     content.innerHTML = `
-      <div class="page-header"><div><h2>Lecturers</h2><p>${lecturers.length} lecturer${lecturers.length !== 1 ? 's' : ''} in your institution</p></div></div>
+      <div class="page-header">
+        <div><h2>Lecturers</h2><p>${lecturers.length} lecturer${lecturers.length !== 1 ? 's' : ''} in your institution</p></div>
+        <button class="btn btn-secondary btn-sm" onclick="hodExportCSV('lecturers')">Export CSV</button>
+      </div>
       <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;">
         ${lecturers.length === 0 ? '<div class="empty-state"><p>No lecturers found.</p></div>' :
           lecturers.map(u => `
@@ -2259,7 +2276,10 @@ async function renderHodStudents() {
     content.innerHTML = `
       <div class="page-header">
         <div><h2>Students</h2><p>${students.length} student${students.length !== 1 ? 's' : ''} enrolled</p></div>
-        <input id="hod-stu-search" placeholder="Search students…" oninput="hodFilterStudents()" style="padding:8px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;min-width:200px;">
+        <div style="display:flex;gap:8px;align-items:center;">
+          <button class="btn btn-secondary btn-sm" onclick="hodExportCSV('students')">Export CSV</button>
+          <input id="hod-stu-search" placeholder="Search students…" oninput="hodFilterStudents()" style="padding:8px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;min-width:200px;">
+        </div>
       </div>
       <div id="hod-stu-list" style="overflow-x:auto;">
         <table style="width:100%;border-collapse:collapse;font-size:13px;">
@@ -2269,6 +2289,7 @@ async function renderHodStudents() {
               <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Index No.</th>
               <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Email</th>
               <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Status</th>
+              <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;"></th>
             </tr>
           </thead>
           <tbody id="hod-stu-tbody">
@@ -2279,6 +2300,7 @@ async function renderHodStudents() {
                   <td style="padding:10px 12px;color:var(--text-muted);font-family:monospace;">${u.indexNumber || '—'}</td>
                   <td style="padding:10px 12px;color:var(--text-muted);">${u.email || '—'}</td>
                   <td style="padding:10px 12px;"><span class="tag ${u.isApproved ? 'tag-green' : 'tag-amber'}">${u.isApproved ? 'Active' : 'Pending'}</span></td>
+                  <td style="padding:10px 12px;"><button class="btn btn-xs btn-secondary" onclick="hodViewStudentAttendance('${u._id}','${u.name.replace(/'/g,"\\'")}')" >Attendance</button></td>
                 </tr>`).join('')}
           </tbody>
         </table>
@@ -2416,6 +2438,81 @@ async function renderHodReports() {
 }
 
 
+// ── HOD: View student attendance record ────────────────────────────────────
+async function hodViewStudentAttendance(userId, name) {
+  try {
+    const data = await api('/api/attendance-sessions/my-attendance?userId=' + userId);
+    const records = data.records || [];
+    const existing = document.getElementById('hod-att-overlay');
+    if (existing) existing.remove();
+    const ol = document.createElement('div');
+    ol.id = 'hod-att-overlay';
+    ol.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:400;display:flex;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(3px);';
+    ol.innerHTML = `<div style="background:var(--card);border-radius:14px;width:100%;max-width:560px;max-height:88vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.2);">
+      <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;background:var(--card);z-index:1;">
+        <div>
+          <h3 style="font-size:15px;font-weight:700;margin:0;">Attendance — ${name}</h3>
+          <div style="font-size:12px;color:var(--text-muted);margin-top:2px;">${records.length} session${records.length !== 1 ? 's' : ''} attended</div>
+        </div>
+        <button onclick="document.getElementById('hod-att-overlay').remove()" style="width:28px;height:28px;border-radius:6px;border:1px solid var(--border);background:var(--bg);cursor:pointer;font-size:14px;">✕</button>
+      </div>
+      <div style="padding:16px 20px;">
+        ${records.length === 0
+          ? '<div class="empty-state"><p>No attendance records found.</p></div>'
+          : `<table style="width:100%;border-collapse:collapse;font-size:13px;">
+              <thead><tr style="border-bottom:2px solid var(--border);">
+                <th style="text-align:left;padding:8px 10px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Session</th>
+                <th style="text-align:left;padding:8px 10px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Date</th>
+                <th style="text-align:left;padding:8px 10px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Status</th>
+              </tr></thead>
+              <tbody>${records.map(r => `
+                <tr style="border-bottom:1px solid var(--border);">
+                  <td style="padding:9px 10px;font-weight:500;">${r.session?.title || r.session?.courseName || 'Session'}</td>
+                  <td style="padding:9px 10px;color:var(--text-muted);font-size:12px;">${fmtDate(r.markedAt || r.createdAt)}</td>
+                  <td style="padding:9px 10px;"><span class="tag ${r.status === 'present' || r.status === 'joined' ? 'tag-green' : r.status === 'late' ? 'tag-amber' : 'tag-gray'}">${r.status || 'present'}</span></td>
+                </tr>`).join('')}
+              </tbody>
+            </table>`}
+      </div>
+    </div>`;
+    document.body.appendChild(ol);
+  } catch(e) { toastError('Could not load attendance: ' + e.message); }
+}
+
+// ── HOD: Export department data to CSV ─────────────────────────────────────
+async function hodExportCSV(type) {
+  try {
+    const dept = currentUser.department ? '&department=' + encodeURIComponent(currentUser.department) : '';
+    let rows = [], headers = [], filename = '';
+
+    if (type === 'students') {
+      const d = await api('/api/users?role=student&limit=500' + dept);
+      headers = ['Name', 'Index Number', 'Email', 'Department', 'Status'];
+      rows = (d.users || []).map(u => [u.name, u.indexNumber || '', u.email || '', u.department || '', u.isApproved ? 'Active' : 'Pending']);
+      filename = 'KODEX_Students_' + (currentUser.department || 'All') + '.csv';
+    } else if (type === 'lecturers') {
+      const d = await api('/api/users?role=lecturer&limit=200' + dept);
+      headers = ['Name', 'Email', 'Department', 'Status'];
+      rows = (d.users || []).map(u => [u.name, u.email || '', u.department || '', u.isApproved ? 'Active' : 'Pending']);
+      filename = 'KODEX_Lecturers_' + (currentUser.department || 'All') + '.csv';
+    } else if (type === 'attendance') {
+      const hodDept = currentUser.department ? '&department=' + encodeURIComponent(currentUser.department) : '';
+      const d = await api('/api/sessions?limit=200' + hodDept);
+      headers = ['Session', 'Lecturer', 'Date', 'Attendance', 'Status'];
+      rows = (d.sessions || []).map(s => [s.title || s.courseName || 'Session', s.createdBy?.name || '', fmtDate(s.createdAt), s.attendanceCount ?? s.records?.length ?? 0, s.active ? 'Live' : 'Ended']);
+      filename = 'KODEX_Attendance_' + (currentUser.department || 'All') + '.csv';
+    }
+
+    const csv = [headers, ...rows].map(r => r.map(v => '"' + String(v).replace(/"/g, '""') + '"').join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = filename; a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    toastSuccess('CSV exported ✓');
+  } catch(e) { toastError('Export failed: ' + e.message); }
+}
+
+
 // ── FEATURE 3: HOD — Courses view ──────────────────────────────────────────
 async function renderHodCourses() {
   const content = document.getElementById('main-content');
@@ -2482,7 +2579,9 @@ async function renderLecturerDashboard(content) {
   content.innerHTML = `
     <div class="page-header">
       <h2>Welcome back, ${currentUser.name.split(' ')[0]}</h2>
-      <p>Here's an overview of your workspace at ${currentUser.company?.name || 'your institution'}</p>
+      <p>Here's an overview of your workspace at ${currentUser.company?.name || 'your institution'}
+        ${currentUser.department ? ` · <span style="display:inline-flex;align-items:center;gap:4px;padding:2px 8px;background:#fffbeb;border:1px solid #fde68a;border-radius:20px;font-size:12px;font-weight:700;color:#b45309;">${currentUser.department}</span>` : ''}
+      </p>
     </div>
     <div class="stats-grid">
       <div class="stat-card"><div class="stat-value">${totalStudents}</div><div class="stat-label">Students</div></div>
