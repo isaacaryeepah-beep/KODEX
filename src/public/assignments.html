@@ -853,14 +853,139 @@ async function deleteAssignment(id){
   try{ await api('DELETE',`/api/assignments/lecturer/${id}`); toast('Deleted','ok'); closeDrawers(); await loadLecturerAssignments(); }
   catch(e){ toast('Error: '+e.message,'err'); }
 }
-function openGrade(subId,asgnId,max,cur){
-  const g=prompt(`Manual grade (0–${max}):`,cur||''); if(g===null) return;
-  const fb=prompt('Feedback (optional):',''); if(fb===null) return;
-  gradeSubmission(subId,g,fb,asgnId);
+async function openGrade(subId, asgnId, max, cur) {
+  let sub, questions;
+  try {
+    const d = await api('GET', `/api/assignments/lecturer/submissions/${subId}`);
+    sub = d.submission;
+    questions = sub.assignment?.questions || [];
+  } catch(e) {
+    const g = prompt(`Manual grade (0-${max}):`, cur || ''); if (g === null) return;
+    const fb = prompt('Feedback (optional):', ''); if (fb === null) return;
+    await gradeSubmission(subId, g, fb, asgnId); return;
+  }
+
+  const existing = document.getElementById('grade-overlay');
+  if (existing) existing.remove();
+  const ol = document.createElement('div');
+  ol.id = 'grade-overlay';
+  ol.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:500;display:flex;align-items:flex-start;justify-content:center;padding:20px;backdrop-filter:blur(3px);overflow-y:auto;';
+
+  const L = ['A','B','C','D','E','F','G','H'];
+  const typeColors = {single:'#0369a1',multiple:'#7c3aed',fill:'#059669',explain:'#b45309'};
+  const typeLabels = {single:'MCQ',multiple:'MULTI',fill:'Fill In',explain:'Explain'};
+
+  const qRows = questions.map((q, i) => {
+    const type = q.questionType || 'single';
+    const ans = (sub.answers || []).find(a => a.questionIndex === i);
+    const autoMarks = ans?.marksAwarded ?? 0;
+    const needsManual = type === 'explain' || (type === 'fill' && !ans?.isCorrect);
+
+    let ansHtml = '';
+    if (type === 'fill') {
+      ansHtml = `<div style="margin:6px 0;padding:8px 12px;background:${ans?.isCorrect?'#f0fdf4':'#fef2f2'};border-radius:7px;font-size:13px;">
+        <strong>Student:</strong> ${ans?.textAnswer||'(no answer)'}
+        ${ans?.isCorrect?'<span style="color:#16a34a;font-weight:700;margin-left:8px;">Correct</span>':'<span style="color:#dc2626;font-weight:700;margin-left:8px;">Incorrect</span>'}
+      </div><div style="font-size:12px;color:#059669;padding:4px 10px;background:#f0fdf4;border-radius:6px;">Expected: ${q.correctAnswerText||'—'}</div>`;
+    } else if (type === 'explain') {
+      ansHtml = `<div style="margin:6px 0;padding:10px 12px;background:#fafafa;border:1px solid var(--border);border-radius:7px;font-size:13px;line-height:1.6;white-space:pre-wrap;">${ans?.textAnswer||'(no answer)'}</div>
+      ${q.modelAnswer?`<div style="font-size:12px;color:#b45309;padding:6px 12px;background:#fffbeb;border-radius:6px;margin-top:4px;"><strong>Model:</strong> ${q.modelAnswer}</div>`:''}`;
+    } else {
+      const selected = ans?.selectedAnswers || [];
+      ansHtml = `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;">${(q.options||[]).map((opt,oi)=>{
+        const isSel = selected.includes(oi);
+        const isCorr = Array.isArray(q.correctAnswers)?q.correctAnswers.includes(oi):q.correctAnswer===oi;
+        const bg = isCorr&&isSel?'#f0fdf4':isSel?'#fef2f2':isCorr?'#eff6ff':'#f9fafb';
+        return `<span style="padding:3px 9px;border-radius:6px;font-size:12px;background:${bg};border:1px solid var(--border);">${L[oi]}) ${opt}${isSel?' ✓':''}</span>`;
+      }).join('')}</div>`;
+    }
+
+    return `<div style="padding:12px 14px;border:1.5px solid ${needsManual?'#fde68a':'var(--border)'};border-radius:10px;margin-bottom:10px;background:${needsManual?'#fffbeb':'var(--card)'};">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:6px;">
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+          <span style="font-size:10px;padding:2px 7px;border-radius:20px;font-weight:700;background:${({single:'#f0f9ff',multiple:'#f5f3ff',fill:'#f0fdf4',explain:'#fffbeb'})[type]||'#f3f4f6'};color:${typeColors[type]||'#374151'}">${typeLabels[type]||type}</span>
+          <span style="font-size:13px;font-weight:600;">Q${i+1}. ${q.questionText}</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:5px;flex-shrink:0;">
+          ${needsManual
+            ? `<label style="font-size:12px;font-weight:600;color:#92400e;">Mark:</label>
+               <input type="number" id="qmark-${i}" value="${autoMarks}" min="0" max="${q.marks}" step="0.5" style="width:60px;padding:4px 8px;border:1.5px solid #fbbf24;border-radius:6px;font-size:13px;font-family:inherit;outline:none;">
+               <span style="font-size:11px;color:var(--text-muted);">/${q.marks}</span>`
+            : `<span style="font-size:12px;font-weight:700;color:${autoMarks>0?'#16a34a':'#9ca3af'}">${autoMarks}/${q.marks}</span>`}
+        </div>
+      </div>
+      ${ansHtml}
+    </div>`;
+  }).join('');
+
+  const autoScore = (sub.answers||[]).reduce((s,a)=>s+(a.marksAwarded||0),0);
+  const hasManual = questions.some((q,i)=>{
+    const type=q.questionType||'single';
+    const ans=(sub.answers||[]).find(a=>a.questionIndex===i);
+    return type==='explain'||(type==='fill'&&!ans?.isCorrect);
+  });
+
+  ol.innerHTML = `<div style="background:var(--card);border-radius:14px;width:100%;max-width:640px;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.25);margin:auto;">
+    <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;background:var(--card);z-index:1;">
+      <div>
+        <h3 style="font-size:15px;font-weight:700;margin:0;">Grade Submission</h3>
+        <div style="font-size:12px;color:var(--text-muted);margin-top:2px;">${sub.student?.name||'—'} · Auto-score: ${autoScore}/${max}</div>
+      </div>
+      <button onclick="document.getElementById('grade-overlay').remove()" style="width:28px;height:28px;border-radius:6px;border:1px solid var(--border);background:var(--bg);cursor:pointer;font-size:14px;">✕</button>
+    </div>
+    <div style="padding:16px 20px;">
+      ${hasManual?`<div style="padding:10px 14px;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;margin-bottom:14px;font-size:12px;color:#92400e;"><strong>Manual grading needed</strong> — Enter marks for Explain and incorrect Fill-in answers below.</div>`:''}
+      ${qRows}
+      <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border);">
+        <div style="display:flex;gap:12px;flex-wrap:wrap;">
+          <div style="flex:1;min-width:150px;">
+            <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-muted);display:block;margin-bottom:5px;">Override Grade <span style="font-weight:400;text-transform:none;">(optional)</span></label>
+            <input type="number" id="final-grade-input" placeholder="Auto-calculated" min="0" max="${max}" step="0.5" value="${cur||''}"
+              style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;">
+          </div>
+          <div style="flex:2;min-width:200px;">
+            <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-muted);display:block;margin-bottom:5px;">Feedback <span style="font-weight:400;text-transform:none;">(optional)</span></label>
+            <input type="text" id="grade-feedback-input" placeholder="e.g. Good effort, explain more…" value="${sub.feedback||''}"
+              style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;">
+          </div>
+        </div>
+      </div>
+    </div>
+    <div style="padding:12px 20px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end;position:sticky;bottom:0;background:var(--card);border-radius:0 0 14px 14px;">
+      <button class="btn btn-secondary" onclick="document.getElementById('grade-overlay').remove()">Cancel</button>
+      <button class="btn btn-primary" onclick="submitGradeModal('${subId}','${asgnId}',${max})">Save Grade</button>
+    </div>
+  </div>`;
+  document.body.appendChild(ol);
 }
-async function gradeSubmission(subId,g,fb,asgnId){
-  try{ await api('POST',`/api/assignments/lecturer/submissions/${subId}/grade`,{manualGrade:parseFloat(g)||0,feedback:fb}); toast('Graded!','ok'); await openDetail(asgnId); }
-  catch(e){ toast('Grading failed: '+e.message,'err'); }
+
+async function submitGradeModal(subId, asgnId, max) {
+  try {
+    const d = await api('GET', `/api/assignments/lecturer/submissions/${subId}`);
+    const questions = d.submission?.assignment?.questions || [];
+    const answers   = d.submission?.answers || [];
+    let computed = 0;
+    questions.forEach((q, i) => {
+      const input = document.getElementById('qmark-' + i);
+      if (input) computed += Math.min(parseFloat(input.value) || 0, q.marks || 1);
+      else computed += (answers.find(a => a.questionIndex === i)?.marksAwarded || 0);
+    });
+    const override = document.getElementById('final-grade-input')?.value?.trim();
+    const manualGrade = (override !== '' && override !== undefined) ? parseFloat(override) || 0 : computed;
+    const feedback = document.getElementById('grade-feedback-input')?.value || '';
+    await api('POST', `/api/assignments/lecturer/submissions/${subId}/grade`, { manualGrade, feedback });
+    document.getElementById('grade-overlay')?.remove();
+    toast('Graded! ' + manualGrade + ' / ' + max, 'ok');
+    await openDetail(asgnId);
+  } catch(e) { toast('Grading failed: ' + e.message, 'err'); }
+}
+
+async function gradeSubmission(subId, g, fb, asgnId) {
+  try {
+    await api('POST', `/api/assignments/lecturer/submissions/${subId}/grade`, { manualGrade: parseFloat(g)||0, feedback: fb });
+    toast('Graded!', 'ok');
+    await openDetail(asgnId);
+  } catch(e) { toast('Grading failed: ' + e.message, 'err'); }
 }
 
 // ══════════════════════════════════════════════════════════════════════════
