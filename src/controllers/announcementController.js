@@ -3,20 +3,37 @@ const mongoose     = require("mongoose");
 
 const CAN_POST = ["admin", "superadmin", "lecturer", "manager"];
 
+// Helper — build the filter for what a given user can SEE
+function visibilityFilter(user) {
+  const now = new Date();
+  const base = {
+    company: user.company,
+    $or: [{ expiresAt: null }, { expiresAt: { $gte: now } }],
+  };
+
+  if (user.role === "lecturer") {
+    // Lecturers only see their own announcements
+    return { ...base, author: user._id };
+  }
+
+  if (user.role === "student") {
+    // Students see announcements aimed at "all" or "students"
+    return { ...base, audience: { $in: ["all", "students"] } };
+  }
+
+  if (["admin", "superadmin", "manager"].includes(user.role)) {
+    // Admins/managers see everything in their company
+    return base;
+  }
+
+  // Any other role — nothing
+  return { ...base, _id: null };
+}
+
 // GET /api/announcements
 exports.list = async (req, res) => {
   try {
-    const now = new Date();
-    const filter = {
-      company: req.user.company,
-      $or: [{ expiresAt: null }, { expiresAt: { $gte: now } }],
-    };
-
-    // Audience filter — students only see announcements aimed at them
-    if (!CAN_POST.includes(req.user.role)) {
-      const roleAudience = req.user.role === "student" ? "students" : "employees";
-      filter.audience = { $in: ["all", roleAudience] };
-    }
+    const filter = visibilityFilter(req.user);
 
     const announcements = await Announcement.find(filter)
       .populate("author", "name role")
@@ -48,14 +65,22 @@ exports.create = async (req, res) => {
       return res.status(400).json({ error: "Title and body are required" });
     }
 
+    // Lecturers can only post to their own students — force audience to "students"
+    let resolvedAudience;
+    if (req.user.role === "lecturer") {
+      resolvedAudience = "students";
+    } else {
+      resolvedAudience = ["all", "students", "employees"].includes(audience) ? audience : "all";
+    }
+
     const ann = await Announcement.create({
       company:   req.user.company,
       author:    req.user._id,
       title:     title.trim(),
       body:      body.trim(),
-      type:      ["info","warning","success","urgent"].includes(type) ? type : "info",
-      audience:  ["all","students","lecturers","employees"].includes(audience) ? audience : "all",
-      pinned:    !!pinned,
+      type:      ["info", "warning", "success", "urgent"].includes(type) ? type : "info",
+      audience:  resolvedAudience,
+      pinned:    req.user.role === "lecturer" ? false : !!pinned,
       expiresAt: expiresAt ? new Date(expiresAt) : null,
     });
 
@@ -66,7 +91,7 @@ exports.create = async (req, res) => {
   }
 };
 
-// PATCH /api/announcements/:id/read  — mark as read for current user
+// PATCH /api/announcements/:id/read
 exports.markRead = async (req, res) => {
   try {
     await Announcement.updateOne(
@@ -88,7 +113,7 @@ exports.remove = async (req, res) => {
 
     const filter = { _id: req.params.id, company: req.user.company };
     // Non-admins can only delete their own
-    if (!["admin","superadmin"].includes(req.user.role)) {
+    if (!["admin", "superadmin"].includes(req.user.role)) {
       filter.author = req.user._id;
     }
 
@@ -100,10 +125,10 @@ exports.remove = async (req, res) => {
   }
 };
 
-// PATCH /api/announcements/:id/pin  — toggle pin (admin only)
+// PATCH /api/announcements/:id/pin — admin only
 exports.togglePin = async (req, res) => {
   try {
-    if (!["admin","superadmin"].includes(req.user.role)) {
+    if (!["admin", "superadmin"].includes(req.user.role)) {
       return res.status(403).json({ error: "Only admins can pin announcements" });
     }
     const ann = await Announcement.findOne({ _id: req.params.id, company: req.user.company });
@@ -119,16 +144,8 @@ exports.togglePin = async (req, res) => {
 // GET /api/announcements/unread-count
 exports.unreadCount = async (req, res) => {
   try {
-    const now = new Date();
-    const filter = {
-      company: req.user.company,
-      readBy: { $ne: req.user._id },
-      $or: [{ expiresAt: null }, { expiresAt: { $gte: now } }],
-    };
-    if (!CAN_POST.includes(req.user.role)) {
-      const roleAudience = req.user.role === "student" ? "students" : "employees";
-      filter.audience = { $in: ["all", roleAudience] };
-    }
+    const filter = visibilityFilter(req.user);
+    filter.readBy = { $ne: req.user._id };
     const count = await Announcement.countDocuments(filter);
     res.json({ count });
   } catch (err) {
