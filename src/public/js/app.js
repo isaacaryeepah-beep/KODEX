@@ -3236,7 +3236,7 @@ async function renderUsers() {
                 <td>${u.name}</td>
                 ${mode === 'corporate' ? `<td>${u.employeeId || '-'}</td>` : ''}
                 <td>${u.email || u.indexNumber || 'N/A'}</td>
-                <td><span class="role-badge role-${u.role}">${u.role}</span></td>
+                <td><span class="role-badge role-${u.role}">${u.role}</span>${u.department ? `<span style="font-size:10px;margin-left:5px;padding:2px 6px;border-radius:20px;background:#ecfeff;color:#0891b2;font-weight:600;">${u.department}</span>` : ''}</td>
                 <td><span class="status-badge ${u.isActive ? 'status-active' : 'status-stopped'}">${u.isActive ? 'Active' : 'Inactive'}</span></td>
                 ${canManage ? `<td style="white-space:nowrap">
                   ${u.isActive
@@ -3368,8 +3368,18 @@ function toggleUserFields() {
   const role = document.getElementById('new-user-role').value;
   document.getElementById('new-user-email-group').classList.toggle('hidden', role === 'student');
   document.getElementById('new-user-index-group').classList.toggle('hidden', role !== 'student');
-  const deptGroup = document.getElementById('new-user-dept-group');
-  if (deptGroup) deptGroup.style.display = ['lecturer','hod','student'].includes(role) ? 'block' : 'none';
+  const deptGroup  = document.getElementById('new-user-dept-group');
+  const deptReq    = document.getElementById('new-user-dept-req');
+  const deptHint   = document.getElementById('new-user-dept-hint');
+  if (!deptGroup) return;
+  const showDept = ['lecturer','hod','student'].includes(role);
+  deptGroup.style.display = showDept ? 'block' : 'none';
+  if (deptReq)  deptReq.style.display  = (role === 'lecturer' || role === 'hod') ? 'inline' : 'none';
+  if (deptHint) {
+    if (role === 'hod')      deptHint.textContent = 'Each department can only have one HOD.';
+    else if (role === 'lecturer') deptHint.textContent = 'Lecturer will only be visible to the HOD of this department.';
+    else                     deptHint.textContent = '(optional)';
+  }
 }
 
 async function createUser() {
@@ -3389,6 +3399,10 @@ async function createUser() {
     if (!phone) { toastWarning('Phone number is required.'); return; }
     body.phone = phone;
     const dept = document.getElementById('new-user-dept')?.value?.trim();
+    if (['lecturer','hod'].includes(role) && !dept) {
+      toastWarning('Department is required for ' + (role === 'hod' ? 'HOD' : 'Lecturer') + '.');
+      return;
+    }
     if (dept) body.department = dept;
     await api('/api/users', { method: 'POST', body: JSON.stringify(body) });
     closeModal();
