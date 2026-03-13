@@ -2,13 +2,14 @@ const ROLE_HIERARCHY = {
   superadmin: 6,
   admin: 5,
   manager: 4,
+  hod: 3,
   lecturer: 3,
   employee: 2,
   student: 1,
 };
 
 const CORPORATE_ROLES = ["manager", "employee"];
-const ACADEMIC_ROLES = ["lecturer", "student"];
+const ACADEMIC_ROLES = ["lecturer", "hod", "student"];
 const ADMIN_ROLES = ["superadmin", "admin"];
 
 const requireRole = (...allowedRoles) => {
