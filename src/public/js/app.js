@@ -1796,11 +1796,17 @@ function buildSidebar() {
     { id: 'about',    label: 'About',       icon: svgIcon('<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>') },
   ];
 
+  // Inject divider below logo if not already present
+  const sidebar = document.querySelector('.sidebar');
+  if (sidebar && !sidebar.querySelector('.sidebar-divider-line')) {
+    const divider = document.createElement('div');
+    divider.className = 'sidebar-divider-line';
+    const logo = sidebar.querySelector('.sidebar-logo');
+    if (logo) logo.after(divider);
+  }
+
   nav.innerHTML =
-    `<div class="sidebar-section-title">Navigation</div>` +
-    links.map(l => `<a onclick="navigateTo('${l.id}')" id="nav-${l.id}">${l.icon} <span>${l.label}</span>${l.id==='announcements'?'<span id="ann-badge" style="display:none;margin-left:auto;background:#ef4444;color:#fff;font-size:10px;font-weight:700;padding:1px 6px;border-radius:20px;min-width:16px;text-align:center;"></span>':''}</a>`).join('') +
-    `<div class="sidebar-section-title" style="margin-top:12px">Account</div>` +
-    universalLinks.map(l => `<a onclick="navigateTo('${l.id}')" id="nav-${l.id}">${l.icon} <span>${l.label}</span></a>`).join('');
+    [...links, ...universalLinks].map(l => `<a onclick="navigateTo('${l.id}')" id="nav-${l.id}" data-tooltip="${l.label}">${l.icon}${l.id==='announcements'?'<span id="ann-badge" style="display:none;position:absolute;top:6px;right:6px;background:#ef4444;color:#fff;font-size:9px;font-weight:700;padding:1px 5px;border-radius:20px;min-width:14px;text-align:center;line-height:14px;"></span>':''}</a>`).join('');
 }
 
 function navigateTo(view) {
@@ -3168,22 +3174,52 @@ async function renderMeetings() {
 function showCreateMeetingModal() {
   const container = document.getElementById('modal-container');
   container.classList.remove('hidden');
+  // default scheduled start = now+5min, end = now+65min
+  const now = new Date();
+  const pad = n => String(n).padStart(2,'0');
+  const fmt = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  const defStart = fmt(new Date(now.getTime() + 5*60000));
+  const defEnd   = fmt(new Date(now.getTime() + 65*60000));
+
   container.innerHTML = `
     <div class="modal-overlay" onclick="if(event.target===this)closeModal()">
-      <div class="modal" onclick="event.stopPropagation()" style="max-width:420px;text-align:center;">
-        <div style="font-size:44px;margin-bottom:8px;">🎥</div>
-        <h3 style="margin:0 0 6px;">Start a Meeting</h3>
-        <p style="font-size:13px;color:var(--text-light);margin-bottom:20px;">Enter a title and tap Start — the meeting opens instantly and you can share the link.</p>
-        <div class="form-group" style="text-align:left;">
+      <div class="modal" onclick="event.stopPropagation()" style="max-width:460px;">
+        <h3 style="margin:0 0 4px;">Schedule a Meeting</h3>
+        <p style="font-size:13px;color:var(--text-muted);margin-bottom:18px;">Fill in the details below. Start Now skips the schedule and opens immediately.</p>
+
+        <div class="form-group">
           <label>Meeting Title *</label>
-          <input type="text" id="meeting-title" placeholder="e.g. Week 5 Lecture" autofocus
-            style="width:100%;padding:10px;border:1px solid #d1d5db;border-radius:8px;font-size:15px;"
-            onkeydown="if(event.key==='Enter')createAndStartMeeting()">
+          <input type="text" id="meeting-title" placeholder="e.g. Week 5 Lecture" autofocus>
         </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+          <div class="form-group">
+            <label>Start Date &amp; Time *</label>
+            <input type="datetime-local" id="meeting-start" value="${defStart}">
+          </div>
+          <div class="form-group">
+            <label>End Date &amp; Time *</label>
+            <input type="datetime-local" id="meeting-end" value="${defEnd}">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Description <span style="color:var(--text-muted);font-weight:400;">(optional)</span></label>
+          <textarea id="meeting-desc" rows="2" placeholder="What is this meeting about?" style="resize:vertical;"></textarea>
+        </div>
+
         <div id="meeting-error" style="color:#ef4444;margin:8px 0;display:none;font-size:13px;"></div>
-        <div class="modal-actions" style="justify-content:center;gap:10px;margin-top:16px;">
+
+        <div class="modal-actions" style="gap:8px;margin-top:18px;">
           <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
-          <button class="btn btn-success" id="start-meeting-btn" onclick="createAndStartMeeting()" style="padding:10px 28px;font-size:15px;">🎥 Start Meeting</button>
+          <button class="btn btn-success" id="start-meeting-btn" onclick="createAndStartMeeting()" style="gap:6px;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            Start Now
+          </button>
+          <button class="btn btn-primary" onclick="createMeeting()" style="gap:6px;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+            Schedule
+          </button>
         </div>
       </div>
     </div>
@@ -3191,26 +3227,31 @@ function showCreateMeetingModal() {
 }
 
 async function createMeeting() {
-  const title = document.getElementById('meeting-title').value.trim();
-  const start = document.getElementById('meeting-start').value;
-  const end = document.getElementById('meeting-end').value;
+  const title = document.getElementById('meeting-title')?.value.trim();
+  const start = document.getElementById('meeting-start')?.value;
+  const end   = document.getElementById('meeting-end')?.value;
+  const desc  = document.getElementById('meeting-desc')?.value.trim();
   const errEl = document.getElementById('meeting-error');
 
-  if (!title || !start || !end) {
-    errEl.textContent = 'Please fill in all required fields.';
-    errEl.style.display = 'block';
-    return;
-  }
+  if (!title) { errEl.textContent = 'Please enter a meeting title.'; errEl.style.display = 'block'; return; }
+  if (!start || !end) { errEl.textContent = 'Please set a start and end time.'; errEl.style.display = 'block'; return; }
+  if (new Date(end) <= new Date(start)) { errEl.textContent = 'End time must be after start time.'; errEl.style.display = 'block'; return; }
+
+  const schedBtn = document.querySelector('.modal .btn-primary');
+  if (schedBtn) { schedBtn.textContent = 'Scheduling…'; schedBtn.disabled = true; }
 
   try {
     await api('/api/zoom', { method: 'POST', body: JSON.stringify({
       title,
       scheduledStart: start,
       scheduledEnd: end,
+      description: desc || undefined,
     }) });
     closeModal();
     renderMeetings();
+    toastSuccess('Meeting scheduled!');
   } catch (e) {
+    if (schedBtn) { schedBtn.textContent = 'Schedule'; schedBtn.disabled = false; }
     errEl.textContent = e.message;
     errEl.style.display = 'block';
   }
@@ -7385,7 +7426,7 @@ function buildBottomNav(role) {
     const btn = document.createElement('button');
     btn.className = 'bottom-nav-item';
     btn.dataset.navId = id;
-    btn.innerHTML = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${icon}</svg><span>${label}</span>`;
+    btn.innerHTML = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${icon}</svg><span class="bottom-nav-dot"></span>`;
     btn.onclick = () => {
       document.querySelectorAll('.bottom-nav-item').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
@@ -7402,7 +7443,7 @@ function buildBottomNav(role) {
   const moreBtn = document.createElement('button');
   moreBtn.className = 'bottom-nav-item';
   moreBtn.id = 'bottom-nav-more';
-  moreBtn.innerHTML = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg><span>More</span>`;
+  moreBtn.innerHTML = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg><span class="bottom-nav-dot"></span>`;
   moreBtn.onclick = () => toggleMobileSidebar();
   nav.appendChild(moreBtn);
 
