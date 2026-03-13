@@ -2263,8 +2263,9 @@ async function renderAdminDashboard(content) {
   const totalUsers     = usersData.users.length;
   const pendingCount   = pendingData.pending.length;
   const announcements  = announcementsData.announcements || [];
-  const instCode       = currentUser.company?.institutionCode || 'N/A';
-  const mode           = currentUser.company?.mode || 'corporate';
+  const instCode       = currentUser.company?.institutionCode || currentUser.company?.code || 'N/A';
+  const mode           = currentUser.company?.mode || currentUser.mode || (document.getElementById('dashboard-page')?.dataset?.mode) || 'corporate';
+  const isAcademic     = mode === 'academic';
   const firstName      = currentUser.name.split(' ')[0];
 
   const hour = new Date().getHours();
@@ -2324,7 +2325,7 @@ async function renderAdminDashboard(content) {
             </div>
           </div>
           <div class="stat-value">${totalUsers}</div>
-          <div class="stat-trend">${mode === 'academic' ? 'Students, lecturers & staff' : 'Employees & managers'}</div>
+          <div class="stat-trend">${isAcademic ? 'Students, lecturers & staff' : 'Employees & managers'}</div>
         </div>
 
         <div class="stat-card-v2" onclick="navigateTo('sessions')">
