@@ -1489,10 +1489,10 @@ input[type="checkbox"] {
 
 .bottom-nav-item {
   display: flex;
-  flex-direction: row;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: 3px;
   flex: 1;
   height: 58px;
   cursor: pointer;
@@ -1500,24 +1500,23 @@ input[type="checkbox"] {
   transition: all .15s ease;
   border: none;
   background: none;
-  padding: 0 4px;
+  padding: 6px 2px 4px;
   position: relative;
-  border-radius: 10px;
 }
 
-/* label */
+/* label below icon */
 .bottom-nav-item .nav-label {
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 600;
   letter-spacing: .1px;
   white-space: nowrap;
   transition: color .15s;
+  line-height: 1;
 }
 
-/* dot indicator — hidden when labels visible */
 .bottom-nav-dot { display: none; }
 
-.bottom-nav-item svg { width: 20px; height: 20px; flex-shrink: 0; transition: color .15s; }
+.bottom-nav-item svg { width: 22px; height: 22px; flex-shrink: 0; transition: color .15s; }
 .bottom-nav-item:hover { color: #6b7280; }
 .bottom-nav-item.active { color: var(--portal-primary, #2563eb); }
 .bottom-nav-item.active svg { transform: scale(1.1); }
