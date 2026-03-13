@@ -213,6 +213,9 @@ exports.registerLecturer = async (req, res) => {
     if (!institutionCode) {
       return res.status(400).json({ error: "Either institution name (to create) or institution code (to join) is required" });
     }
+    if (!department?.trim()) {
+      return res.status(400).json({ error: "Department is required. Please enter the department you teach in." });
+    }
 
     const company = await Company.findOne({ institutionCode: institutionCode.toUpperCase(), mode: "academic" });
     if (!company) {
@@ -358,6 +361,15 @@ exports.registerStudent = async (req, res) => {
 
     const token = generateToken(user._id);
 
+    // Warn if no HOD exists for the student's department
+    let departmentNote = null;
+    if (department?.trim()) {
+      const hod = await User.findOne({ company: company._id, role: "hod", department: department.trim() });
+      if (!hod) {
+        departmentNote = `No Head of Department found for "${department.trim()}". Your institution admin may not have set one up yet.`;
+      }
+    }
+
     res.status(201).json({
       user: {
         id: user._id,
@@ -369,6 +381,7 @@ exports.registerStudent = async (req, res) => {
         company: { id: company._id, name: company.name, mode: company.mode },
       },
       token,
+      departmentNote,
       message: "Registration successful. You have been automatically enrolled in your courses.",
     });
   } catch (error) {
@@ -981,11 +994,28 @@ exports.resetPasswordEmail = async (req, res) => {
 
 exports.updateProfile = async (req, res) => {
   try {
-    const { name, currentPassword, newPassword } = req.body;
+    const { name, currentPassword, newPassword, department } = req.body;
     const user = await User.findById(req.user._id).select("+password");
     if (!user) return res.status(404).json({ error: "User not found" });
 
     if (name && name.trim()) user.name = name.trim();
+
+    // Allow lecturer/hod to update their own department
+    if (department !== undefined && ["lecturer", "hod"].includes(user.role)) {
+      if (user.role === "hod" && department.trim()) {
+        // Ensure no other HOD has this dept
+        const clash = await User.findOne({
+          company: user.company,
+          role: "hod",
+          department: department.trim(),
+          _id: { $ne: user._id },
+        });
+        if (clash) {
+          return res.status(400).json({ error: `"${department.trim()}" already has an HOD (${clash.name}).` });
+        }
+      }
+      user.department = department.trim() || null;
+    }
 
     if (newPassword) {
       if (!currentPassword) return res.status(400).json({ error: "Current password is required to set a new password" });
@@ -996,7 +1026,7 @@ exports.updateProfile = async (req, res) => {
     }
 
     await user.save();
-    res.json({ message: "Profile updated successfully", user: { name: user.name, email: user.email, role: user.role } });
+    res.json({ message: "Profile updated successfully", user: { name: user.name, email: user.email, role: user.role, department: user.department } });
   } catch (error) {
     console.error("Update profile error:", error);
     res.status(500).json({ error: "Failed to update profile" });
