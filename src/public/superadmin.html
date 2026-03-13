@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>KODEX — Platform Admin</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <style>
+    body { margin: 0; background: #0d1117; min-height: 100vh; display: flex; align-items: center; justify-content: center; font-family: 'DM Sans', sans-serif; }
+
+    .sa-wrap {
+      width: 100%; max-width: 420px; padding: 24px 16px;
+    }
+
+    .sa-card {
+      background: #fff;
+      border-radius: 16px;
+      padding: 36px 32px;
+      box-shadow: 0 24px 64px rgba(0,0,0,.4);
+    }
+
+    .sa-brand {
+      display: flex; align-items: center; gap: 12px; margin-bottom: 28px;
+    }
+    .sa-brand-icon {
+      width: 44px; height: 44px; border-radius: 12px;
+      background: #0d1117;
+      display: flex; align-items: center; justify-content: center;
+      color: #fff; flex-shrink: 0;
+    }
+    .sa-brand-text h1 { font-size: 20px; font-weight: 800; margin: 0; color: #0d1117; letter-spacing: -.4px; }
+    .sa-brand-text p  { font-size: 12px; color: #6b7280; margin: 2px 0 0; }
+
+    .sa-badge {
+      display: inline-flex; align-items: center; gap: 5px;
+      background: #fef3c7; color: #92400e;
+      border: 1px solid #fde68a;
+      border-radius: 20px; padding: 4px 12px;
+      font-size: 11px; font-weight: 700; letter-spacing: .3px;
+      margin-bottom: 24px;
+    }
+
+    .sa-label {
+      font-size: 11px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: .5px; color: #6b7280; display: block; margin-bottom: 6px;
+    }
+    .sa-input {
+      width: 100%; padding: 11px 14px;
+      border: 1.5px solid #e5e7eb; border-radius: 9px;
+      font-size: 14px; font-family: inherit; outline: none;
+      transition: border-color .15s; box-sizing: border-box; margin-bottom: 14px;
+    }
+    .sa-input:focus { border-color: #374151; }
+
+    .sa-btn {
+      width: 100%; padding: 13px;
+      background: #0d1117; color: #fff;
+      border: none; border-radius: 9px;
+      font-size: 14px; font-weight: 700; font-family: inherit;
+      cursor: pointer; transition: all .15s; margin-top: 4px;
+    }
+    .sa-btn:hover { background: #1f2937; }
+    .sa-btn:disabled { opacity: .6; cursor: not-allowed; }
+
+    .sa-err {
+      display: none; margin-top: 12px; padding: 10px 14px;
+      background: #fef2f2; border: 1px solid #fecaca;
+      border-radius: 8px; color: #dc2626; font-size: 13px; font-weight: 500;
+    }
+
+    .sa-footer {
+      text-align: center; margin-top: 20px;
+      font-size: 12px; color: #6b7280;
+    }
+    .sa-footer a { color: #6b7280; text-decoration: none; }
+    .sa-footer a:hover { color: #111; }
+
+    /* Dashboard injected into body after login */
+    #dashboard-page { display: none; }
+    #auth-page { display: none; } /* hide normal auth */
+  </style>
+</head>
+<body>
+
+  <!-- Superadmin Login -->
+  <div class="sa-wrap" id="sa-login-wrap">
+    <div class="sa-card">
+      <div class="sa-brand">
+        <div class="sa-brand-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="9 11 12 14 22 4"/>
+            <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+          </svg>
+        </div>
+        <div class="sa-brand-text">
+          <h1>KODEX</h1>
+          <p>Platform Administration</p>
+        </div>
+      </div>
+
+      <div class="sa-badge">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+        </svg>
+        SUPERADMIN ACCESS
+      </div>
+
+      <form id="sa-form" onsubmit="event.preventDefault(); saLogin();">
+        <label class="sa-label" for="sa-email">Email</label>
+        <input class="sa-input" type="email" id="sa-email" placeholder="superadmin@kodex.it.com" autocomplete="off" required>
+
+        <label class="sa-label" for="sa-password">Password</label>
+        <input class="sa-input" type="password" id="sa-password" placeholder="Enter password" autocomplete="off" required>
+
+        <button class="sa-btn" type="submit" id="sa-btn">Sign In</button>
+      </form>
+
+      <div class="sa-err" id="sa-err"></div>
+
+      <div class="sa-footer">
+        <a href="/">← Back to KODEX</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Dashboard container (populated by app.js after login) -->
+  <div id="auth-page" style="display:none"></div>
+  <div id="dashboard-page" class="hidden">
+    <div id="trial-banner" class="trial-banner" style="display:none"></div>
+    <div id="trial-expired-banner" class="trial-expired-banner" style="display:none"></div>
+    <header class="topbar">
+      <div class="topbar-left">
+        <button class="topbar-menu-btn" onclick="toggleMobileSidebar()" aria-label="Open menu">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
+          </svg>
+        </button>
+        <h2 id="portal-title">Platform Admin</h2>
+      </div>
+      <div class="topbar-right">
+        <div class="user-info">
+          <strong id="user-name"></strong>
+          <span class="role-badge role-admin" id="user-role-badge">SUPERADMIN</span>
+        </div>
+        <button class="btn btn-secondary btn-sm" onclick="logout()">Sign Out</button>
+      </div>
+    </header>
+    <div class="main-layout">
+      <div class="sidebar">
+        <div class="sidebar-logo">
+          <div class="sidebar-logo-icon">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="9 11 12 14 22 4"/>
+              <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+            </svg>
+          </div>
+          <span class="sidebar-logo-text">KODEX</span>
+        </div>
+        <nav class="sidebar-nav" id="sidebar-nav"></nav>
+      </div>
+      <div class="content" id="main-content"></div>
+    </div>
+  </div>
+
+  <div id="modal-container" class="hidden"></div>
+
+  <script>
+    // Override logout to redirect back to superadmin page
+    window.__superadminMode = true;
+
+    async function saLogin() {
+      const btn = document.getElementById('sa-btn');
+      const err = document.getElementById('sa-err');
+      const email    = document.getElementById('sa-email').value.trim();
+      const password = document.getElementById('sa-password').value;
+      err.style.display = 'none';
+      btn.disabled = true; btn.textContent = 'Signing in…';
+
+      try {
+        const res = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password, loginRole: 'admin', deviceId: 'superadmin-' + navigator.userAgent.slice(0,20) })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Login failed');
+        if (data.user?.role !== 'superadmin') throw new Error('Access denied. Superadmin credentials required.');
+
+        // Store token and user like app.js expects
+        localStorage.setItem('token', data.token);
+        window.token = data.token;
+        window.currentUser = data.user;
+
+        // Hide login, show dashboard
+        document.getElementById('sa-login-wrap').style.display = 'none';
+        document.body.style.background = '#f8fafc';
+
+        // Let app.js take over
+        showDashboard(data);
+      } catch(e) {
+        err.textContent = e.message; err.style.display = 'block';
+        btn.disabled = false; btn.textContent = 'Sign In';
+      }
+    }
+
+    // On page load — check if already logged in as superadmin
+    window.addEventListener('DOMContentLoaded', () => {
+      const t = localStorage.getItem('token');
+      if (t) {
+        fetch('/api/auth/me', { headers: { Authorization: 'Bearer ' + t } })
+          .then(r => r.json())
+          .then(data => {
+            if (data.user?.role === 'superadmin') {
+              window.token = t;
+              window.currentUser = data.user;
+              document.getElementById('sa-login-wrap').style.display = 'none';
+              document.body.style.background = '#f8fafc';
+              showDashboard(data);
+            }
+          }).catch(() => {});
+      }
+    });
+  </script>
+
+  <script src="/js/app.js"></script>
+</body>
+</html>
