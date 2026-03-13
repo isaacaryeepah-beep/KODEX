@@ -351,6 +351,7 @@ body {
 .employee-portal:hover  { --card-accent: #059669; background: #fafffe; border-color: #a7f3d0; }
 .lecturer-portal:hover  { --card-accent: #d97706; background: #fffdf5; border-color: #fde68a; }
 .student-portal:hover   { --card-accent: #7c3aed; background: #fdfaff; border-color: #ddd6fe; }
+.hod-portal:hover       { --card-accent: #0891b2; background: #f0fdff; border-color: #a5f3fc; }
 
 .portal-icon {
   width: 44px; height: 44px;
@@ -368,6 +369,7 @@ body {
 .employee-portal:hover .portal-icon { background: #ecfdf5; color: #059669; }
 .lecturer-portal:hover .portal-icon { background: #fffbeb; color: #d97706; }
 .student-portal:hover .portal-icon  { background: #f5f3ff; color: #7c3aed; }
+.hod-portal:hover .portal-icon     { background: #ecfeff; color: #0891b2; }
 
 .portal-card h2 { font-size: 14px; font-weight: 700; margin-bottom: 2px; color: var(--text); }
 .portal-card p  { font-size: 12px; color: var(--text-light); margin-bottom: 16px; }
@@ -384,6 +386,7 @@ body {
 .employee-portal:hover .portal-arrow { color: #059669; }
 .lecturer-portal:hover .portal-arrow { color: #d97706; }
 .student-portal:hover .portal-arrow  { color: #7c3aed; }
+.hod-portal:hover .portal-arrow    { color: #0891b2; }
 
 /* Auth forms */
 .auth-back {
@@ -1299,6 +1302,11 @@ input[type="checkbox"] {
 #dashboard-page[data-portal="student"]  {
   --portal-primary: #7c3aed; --portal-primary-dark: #6d28d9; --portal-primary-light: #a78bfa;
   --sidebar-bg: #160d2e;
+}
+
+#dashboard-page[data-portal="hod"] {
+  --portal-primary: #0891b2; --portal-primary-dark: #0e7490; --portal-primary-light: #22d3ee;
+  --sidebar-bg: #042f3d;
 }
 
 #dashboard-page[data-portal="admin"]    {
