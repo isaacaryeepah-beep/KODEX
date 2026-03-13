@@ -290,12 +290,7 @@ body {
 .corp-label { color: var(--primary); }
 .acad-label { color: #7c3aed; }
 
-/* Manager portal card accent */
-.manager-portal:hover {
-  border-color: #99f6e4 !important;
-  background: #f0fdfa !important;
-}
-.manager-portal:hover .portal-icon { background: #ccfbf1; color: #0f766e; }
+
 
 /* Portal cards */
 .portal-cards {
