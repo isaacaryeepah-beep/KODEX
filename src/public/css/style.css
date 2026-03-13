@@ -859,15 +859,16 @@ body {
   gap: 10px;
   width: calc(100% - 16px);
   height: 40px;
-  border-radius: 10px;
+  border-radius: 0;
   padding: 0 12px;
-  margin: 1px 0;
+  margin: 0;
   color: #9ca3af;
   text-decoration: none;
   cursor: pointer;
   transition: all .15s ease;
   flex-shrink: 0;
   position: relative;
+  border-bottom: 1px solid rgba(0,0,0,.07);
 }
 
 .sidebar-nav a span {
@@ -1413,14 +1414,15 @@ input[type="checkbox"] {
   }
   /* Show labels in mobile drawer */
   .sidebar-nav a {
-    width: auto !important;
+    width: 100% !important;
     height: auto !important;
     flex-direction: row !important;
-    border-radius: 10px !important;
-    padding: 10px 14px !important;
-    margin: 1px 8px !important;
-    gap: 10px !important;
+    border-radius: 0 !important;
+    padding: 12px 20px !important;
+    margin: 0 !important;
+    gap: 12px !important;
     justify-content: flex-start !important;
+    border-bottom: 1px solid rgba(0,0,0,.07) !important;
   }
   .sidebar-nav a span { display: inline !important; font-size: 13px; font-weight: 700; letter-spacing: .1px; }
   .sidebar-nav a::after { display: none !important; }
