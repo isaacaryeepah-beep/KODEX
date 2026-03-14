@@ -1563,6 +1563,22 @@ async function handleLogout() {
 }
 
 async function loadUserData() {
+  // Check for superadmin impersonation token in URL
+  const urlParams = new URLSearchParams(window.location.search);
+  const impToken = urlParams.get('impersonate');
+  if (impToken) {
+    localStorage.setItem('token', impToken);
+    token = impToken;
+    // Clean URL without reload
+    window.history.replaceState({}, '', '/');
+    // Show impersonation banner
+    const banner = document.createElement('div');
+    banner.id = 'impersonate-banner';
+    banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:9999;background:#7c3aed;color:#fff;text-align:center;padding:8px 16px;font-size:13px;font-weight:600;';
+    banner.innerHTML = '🔑 Superadmin Impersonation Mode · <span style="opacity:.8;font-weight:400;">1 hour session</span> · <button onclick="exitImpersonation()" style="margin-left:12px;background:rgba(255,255,255,.2);border:none;color:#fff;padding:3px 10px;border-radius:6px;cursor:pointer;font-weight:700;">Exit</button>';
+    document.body.prepend(banner);
+  }
+
   try {
     const data = await api('/api/auth/me');
     currentUser = data.user;
@@ -2092,14 +2108,86 @@ async function rejectUser(userId) {
   }
 }
 
+function exitImpersonation() {
+  localStorage.removeItem('token');
+  token = null;
+  currentUser = null;
+  window.location.href = '/superadmin';
+}
+
 async function superadminToggleCompany(id, currentlyActive) {
   const action = currentlyActive ? 'deactivate' : 'activate';
-  if (!confirm(`Are you sure you want to ${action} this institution?`)) return;
+  if (!confirm('Are you sure you want to ' + action + ' this institution?')) return;
   try {
     await api('/api/superadmin/companies/' + id + '/toggle', { method: 'PATCH' });
     toastSuccess('Institution ' + (currentlyActive ? 'deactivated' : 'activated') + ' ✓');
     renderSuperadminDashboard(document.getElementById('main-content'));
   } catch(e) { toastError(e.message); }
+}
+
+async function superadminExtendTrial(id, name) {
+  const days = prompt('Extend trial for "' + name + '"\nHow many days to add?', '14');
+  if (!days || isNaN(days) || parseInt(days) < 1) return;
+  try {
+    const data = await api('/api/superadmin/companies/' + id + '/extend-trial', {
+      method: 'PATCH',
+      body: JSON.stringify({ days: parseInt(days) })
+    });
+    toastSuccess(data.message || 'Trial extended ✓');
+    renderSuperadminDashboard(document.getElementById('main-content'));
+  } catch(e) { toastError(e.message); }
+}
+
+async function superadminImpersonate(companyId, name) {
+  if (!confirm('Login as admin of "' + name + '"?\n\nThis gives you full admin access for 1 hour. A separate tab will open.')) return;
+  try {
+    const data = await api('/api/superadmin/impersonate/' + companyId, { method: 'POST' });
+    // Open a new tab with the impersonation token
+    const url = '/?impersonate=' + encodeURIComponent(data.token) + '&company=' + encodeURIComponent(name);
+    window.open(url, '_blank');
+    toastSuccess('Impersonation tab opened · expires in 1 hour');
+  } catch(e) { toastError(e.message); }
+}
+
+async function superadminShowPayments() {
+  const content = document.getElementById('main-content');
+  content.innerHTML = '<div class="loading">Loading payment history…</div>';
+  try {
+    const data = await api('/api/superadmin/payments');
+    const payments = data.payments || [];
+    const total = data.totalRevenue || 0;
+    content.innerHTML = `
+      <div class="page-header">
+        <div><h2>Payment History</h2><p>GHS ${total.toLocaleString()} total revenue · ${payments.length} payments</p></div>
+        <button class="btn btn-secondary btn-sm" onclick="renderSuperadminDashboard(document.getElementById('main-content'))">← Back</button>
+      </div>
+      <div class="card">
+        ${payments.length === 0 ? '<div class="empty-state"><p>No payments recorded yet. Payments appear here after Paystack webhook fires.</p></div>' :
+          `<div style="overflow-x:auto;">
+            <table style="width:100%;border-collapse:collapse;font-size:13px;">
+              <thead><tr style="border-bottom:2px solid var(--border);">
+                <th style="text-align:left;padding:9px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Institution</th>
+                <th style="text-align:left;padding:9px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Amount</th>
+                <th style="text-align:left;padding:9px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Plan</th>
+                <th style="text-align:left;padding:9px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Reference</th>
+                <th style="text-align:left;padding:9px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Date</th>
+              </tr></thead>
+              <tbody>
+                ${payments.map(p => `
+                  <tr style="border-bottom:1px solid var(--border);">
+                    <td style="padding:10px 12px;font-weight:600;">${p.company?.name || '—'}<br><span style="font-size:11px;color:var(--text-muted);font-family:monospace;">${p.company?.institutionCode || ''}</span></td>
+                    <td style="padding:10px 12px;font-weight:700;color:#16a34a;">GHS ${(p.amount || 0).toLocaleString()}</td>
+                    <td style="padding:10px 12px;"><span class="tag ${p.plan === 'yearly' ? 'tag-blue' : 'tag-green'}">${p.plan || 'unknown'}</span></td>
+                    <td style="padding:10px 12px;font-size:11px;font-family:monospace;color:var(--text-muted);">${p.reference || '—'}</td>
+                    <td style="padding:10px 12px;color:var(--text-muted);font-size:12px;">${fmtDate(p.paidAt)}</td>
+                  </tr>`).join('')}
+              </tbody>
+            </table>
+          </div>`}
+      </div>`;
+  } catch(e) {
+    content.innerHTML = '<div class="card"><p style="color:#ef4444;">' + e.message + '</p></div>';
+  }
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -2601,25 +2689,29 @@ async function renderSuperadminDashboard(content) {
     const data = await api('/api/superadmin/overview').catch(() => null);
     const companies = data?.companies || [];
     const totalCompanies = companies.length;
-    const academic  = companies.filter(c => c.mode === 'academic').length;
-    const corporate = companies.filter(c => c.mode === 'corporate').length;
-    const active    = companies.filter(c => c.isActive).length;
-    const onTrial   = companies.filter(c => c.subscriptionStatus === 'trial' && c.isTrialActive).length;
+    const academic   = companies.filter(c => c.mode === 'academic').length;
+    const corporate  = companies.filter(c => c.mode === 'corporate').length;
+    const active     = companies.filter(c => c.isActive).length;
+    const onTrial    = companies.filter(c => c.isTrialActive).length;
     const subscribed = companies.filter(c => c.subscriptionStatus === 'active').length;
+    const totalRevenue = data?.totalRevenue || 0;
+    const totalPayments = data?.totalPayments || 0;
 
     content.innerHTML = `
       <div class="page-header">
-        <div>
-          <h2>Platform Overview</h2>
-          <p>KODEX Superadmin · All institutions</p>
+        <div><h2>Platform Overview</h2><p>KODEX Superadmin · All institutions</p></div>
+        <div style="display:flex;gap:8px;">
+          <button class="btn btn-secondary btn-sm" onclick="superadminShowPayments()">💳 Payment History</button>
         </div>
       </div>
 
       <div class="stats-grid" style="margin-bottom:20px;">
-        <div class="stat-card"><div class="stat-value">${totalCompanies}</div><div class="stat-label">TOTAL INSTITUTIONS</div></div>
+        <div class="stat-card"><div class="stat-value">${totalCompanies}</div><div class="stat-label">INSTITUTIONS</div></div>
         <div class="stat-card"><div class="stat-value" style="color:#16a34a">${active}</div><div class="stat-label">ACTIVE</div></div>
         <div class="stat-card"><div class="stat-value" style="color:#d97706">${onTrial}</div><div class="stat-label">ON TRIAL</div></div>
         <div class="stat-card"><div class="stat-value" style="color:#2563eb">${subscribed}</div><div class="stat-label">SUBSCRIBED</div></div>
+        <div class="stat-card"><div class="stat-value" style="color:#16a34a;font-size:20px;">GHS ${totalRevenue.toLocaleString()}</div><div class="stat-label">TOTAL REVENUE</div></div>
+        <div class="stat-card"><div class="stat-value">${totalPayments}</div><div class="stat-label">PAYMENTS</div></div>
       </div>
 
       <div class="card">
@@ -2630,45 +2722,49 @@ async function renderSuperadminDashboard(content) {
             <span class="tag tag-green">Corporate: ${corporate}</span>
           </div>
         </div>
-        ${companies.length === 0
-          ? '<div class="empty-state"><p>No institutions yet.</p></div>'
-          : `<div style="overflow-x:auto;">
-              <table style="width:100%;border-collapse:collapse;font-size:13px;">
-                <thead><tr style="border-bottom:2px solid var(--border);">
-                  <th style="text-align:left;padding:9px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Institution</th>
-                  <th style="text-align:left;padding:9px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Code</th>
-                  <th style="text-align:left;padding:9px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Mode</th>
-                  <th style="text-align:left;padding:9px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Status</th>
-                  <th style="text-align:left;padding:9px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Subscription</th>
-                  <th style="text-align:left;padding:9px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Created</th>
-                  <th style="text-align:left;padding:9px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;"></th>
-                </tr></thead>
-                <tbody>
-                  ${companies.map(c => `
-                    <tr style="border-bottom:1px solid var(--border);">
-                      <td style="padding:10px 12px;font-weight:600;">${c.name}</td>
-                      <td style="padding:10px 12px;font-family:monospace;font-size:12px;color:var(--text-muted);">${c.institutionCode || '—'}</td>
-                      <td style="padding:10px 12px;"><span class="tag ${c.mode === 'academic' ? 'tag-blue' : 'tag-green'}">${c.mode}</span></td>
-                      <td style="padding:10px 12px;"><span class="tag ${c.isActive ? 'tag-green' : 'tag-red'}">${c.isActive ? 'Active' : 'Inactive'}</span></td>
-                      <td style="padding:10px 12px;">
-                        <span class="tag ${c.subscriptionStatus === 'active' ? 'tag-blue' : c.isTrialActive ? 'tag-amber' : 'tag-gray'}">
-                          ${c.subscriptionStatus === 'active' ? 'Subscribed' : c.isTrialActive ? 'Trial (' + (c.trialDaysRemaining || 0) + 'd)' : 'Expired'}
-                        </span>
-                      </td>
-                      <td style="padding:10px 12px;color:var(--text-muted);font-size:12px;">${fmtDate(c.createdAt)}</td>
-                      <td style="padding:10px 12px;white-space:nowrap;">
-                        <button class="btn btn-xs ${c.isActive ? 'btn-secondary' : ''}" style="${!c.isActive ? 'background:#22c55e;color:#fff;' : 'background:#f59e0b;color:#fff;'}font-size:11px;"
-                          onclick="superadminToggleCompany('${c._id}', ${c.isActive})">
-                          ${c.isActive ? 'Deactivate' : 'Activate'}
-                        </button>
-                      </td>
-                    </tr>`).join('')}
-                </tbody>
-              </table>
-            </div>`}
+        <div style="overflow-x:auto;">
+          <table style="width:100%;border-collapse:collapse;font-size:13px;">
+            <thead><tr style="border-bottom:2px solid var(--border);">
+              <th style="text-align:left;padding:9px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Institution</th>
+              <th style="text-align:left;padding:9px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Users</th>
+              <th style="text-align:left;padding:9px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Mode</th>
+              <th style="text-align:left;padding:9px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Status</th>
+              <th style="text-align:left;padding:9px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Subscription</th>
+              <th style="text-align:left;padding:9px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Revenue</th>
+              <th style="text-align:left;padding:9px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Actions</th>
+            </tr></thead>
+            <tbody>
+              ${companies.length === 0 ? '<tr><td colspan="7" style="padding:24px;text-align:center;color:var(--text-muted);">No institutions yet.</td></tr>' :
+                companies.map(c => `
+                <tr style="border-bottom:1px solid var(--border);">
+                  <td style="padding:10px 12px;">
+                    <div style="font-weight:700;">${c.name}</div>
+                    <div style="font-size:11px;color:var(--text-muted);font-family:monospace;">${c.institutionCode || '—'}</div>
+                  </td>
+                  <td style="padding:10px 12px;font-weight:600;">${c.userCount || 0}</td>
+                  <td style="padding:10px 12px;"><span class="tag ${c.mode === 'academic' ? 'tag-blue' : 'tag-green'}">${c.mode}</span></td>
+                  <td style="padding:10px 12px;"><span class="tag ${c.isActive ? 'tag-green' : 'tag-red'}">${c.isActive ? 'Active' : 'Inactive'}</span></td>
+                  <td style="padding:10px 12px;">
+                    <span class="tag ${c.subscriptionStatus === 'active' ? 'tag-blue' : c.isTrialActive ? 'tag-amber' : 'tag-gray'}">
+                      ${c.subscriptionStatus === 'active' ? 'Subscribed' : c.isTrialActive ? 'Trial (' + (c.trialDaysRemaining || 0) + 'd)' : 'Expired'}
+                    </span>
+                  </td>
+                  <td style="padding:10px 12px;font-size:12px;font-weight:600;color:${c.revenue > 0 ? '#16a34a' : 'var(--text-muted)'};">
+                    ${c.revenue > 0 ? 'GHS ' + c.revenue.toLocaleString() : '—'}
+                  </td>
+                  <td style="padding:10px 12px;white-space:nowrap;display:flex;gap:4px;flex-wrap:wrap;">
+                    <button class="btn btn-xs" style="background:#6366f1;color:#fff;font-size:11px;" onclick="superadminImpersonate('${c._id}','${c.name.replace(/'/g,"\\'")}')" title="Login as admin">🔑 Login</button>
+                    <button class="btn btn-xs btn-secondary" style="font-size:11px;" onclick="superadminExtendTrial('${c._id}','${c.name.replace(/'/g,"\\'")}')">+Trial</button>
+                    <button class="btn btn-xs" style="${c.isActive ? 'background:#f59e0b' : 'background:#22c55e'};color:#fff;font-size:11px;" onclick="superadminToggleCompany('${c._id}',${c.isActive})">
+                      ${c.isActive ? 'Off' : 'On'}
+                    </button>
+                  </td>
+                </tr>`).join('')}
+            </tbody>
+          </table>
+        </div>
       </div>`;
   } catch(e) {
-    // Fallback to admin dashboard if superadmin API not available
     await renderAdminDashboard(content);
   }
 }
