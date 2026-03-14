@@ -511,6 +511,10 @@ exports.adminResetStudentPassword = async (req, res) => {
     const { id } = req.params;
     const target = await require('../models/User').findOne({ _id: id, company: req.user.company });
     if (!target) return res.status(404).json({ error: "User not found" });
+    // Block resetting another admin/superadmin account (security)
+    if (['admin', 'superadmin'].includes(target.role) && !['admin', 'superadmin'].includes(req.user.role)) {
+      return res.status(403).json({ error: "You cannot reset an admin password" });
+    }
 
     // Generate a memorable temp password: INSTITUTIONCODE-6digits
     const crypto = require('crypto');
