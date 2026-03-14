@@ -7,6 +7,7 @@ const User         = require("../models/User");
 const PaymentLog   = require("../models/PaymentLog");
 
 const bcrypt = require("bcryptjs");
+const emailService = require("../services/emailService");
 
 const router = express.Router();
 
@@ -41,13 +42,27 @@ router.get("/overview", async (req, res) => {
 
     const companyIds = companies.map(c => c._id);
 
-    // User counts per company
+    // User counts per company broken down by role
     const userCounts = await User.aggregate([
       { $match: { company: { $in: companyIds } } },
-      { $group: { _id: "$company", total: { $sum: 1 } } }
+      { $group: { _id: { company: "$company", role: "$role" }, count: { $sum: 1 } } }
     ]);
     const countMap = {};
-    userCounts.forEach(c => { countMap[c._id.toString()] = c.total; });
+    userCounts.forEach(({ _id, count }) => {
+      const id = _id.company.toString();
+      if (!countMap[id]) countMap[id] = { total: 0, admin: 0, manager: 0, lecturer: 0, hod: 0, student: 0, employee: 0 };
+      countMap[id][_id.role] = (countMap[id][_id.role] || 0) + count;
+      countMap[id].total += count;
+    });
+
+    // Admin info (email + last login) per company
+    const admins = await User.find({ company: { $in: companyIds }, role: { $in: ["admin", "manager"] } })
+      .select("company email name lastLoginAt role").lean();
+    const adminMap = {};
+    admins.forEach(a => {
+      const id = a.company.toString();
+      if (!adminMap[id]) adminMap[id] = a;
+    });
 
     // Total revenue per company from PaymentLog
     const revenues = await PaymentLog.aggregate([
@@ -66,9 +81,22 @@ router.get("/overview", async (req, res) => {
       const trialDaysRemaining = c.trialEndDate
         ? Math.max(0, Math.ceil((new Date(c.trialEndDate) - Date.now()) / (1000*60*60*24)))
         : 0;
+      const counts = countMap[id] || {};
+      const adm = adminMap[id] || null;
       return {
         ...c,
-        userCount: countMap[id] || 0,
+        userCount: counts.total || 0,
+        roleCounts: {
+          admin: counts.admin || 0,
+          manager: counts.manager || 0,
+          lecturer: counts.lecturer || 0,
+          hod: counts.hod || 0,
+          student: counts.student || 0,
+          employee: counts.employee || 0,
+        },
+        adminEmail: adm?.email || null,
+        adminName: adm?.name || null,
+        lastLoginAt: adm?.lastLoginAt || null,
         revenue: revMap[id]?.total || 0,
         paymentCount: revMap[id]?.count || 0,
         trialDaysRemaining,
@@ -165,6 +193,48 @@ router.post("/impersonate/:companyId", async (req, res) => {
     });
   } catch (err) {
     res.status(500).json({ error: "Failed to generate impersonation token" });
+  }
+});
+
+// ── POST /api/superadmin/email/:companyId ─────────────────────────────────────
+router.post("/email/:companyId", async (req, res) => {
+  try {
+    const { subject, message } = req.body;
+    if (!subject || !message) return res.status(400).json({ error: "Subject and message are required" });
+
+    const company = await Company.findById(req.params.companyId).lean();
+    if (!company) return res.status(404).json({ error: "Institution not found" });
+
+    // Find the admin user for this company
+    const admin = await User.findOne({ company: company._id, role: "admin" }).lean();
+    if (!admin) return res.status(404).json({ error: "No admin found for this institution" });
+
+    const result = await emailService.sendCustom({
+      to: admin.email,
+      toName: admin.name,
+      subject,
+      message,
+    });
+
+    if (!result.ok) return res.status(500).json({ error: result.error || "Failed to send email" });
+
+    res.json({ ok: true, sentTo: admin.email });
+  } catch (err) {
+    console.error("superadmin email:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+
+// ── PATCH /api/superadmin/companies/:id/notes ─────────────────────────────────
+router.patch("/companies/:id/notes", async (req, res) => {
+  try {
+    const { notes } = req.body;
+    const company = await Company.findByIdAndUpdate(req.params.id, { $set: { "superadminNotes": notes } }, { new: true });
+    if (!company) return res.status(404).json({ error: "Not found" });
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to save notes" });
   }
 });
 
