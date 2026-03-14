@@ -4,7 +4,7 @@
 //  API requests are NOT cached here (handled in app.js with localStorage)
 // ════════════════════════════════════════════════════════════════════
 
-const CACHE_NAME = 'kodex-v3';  // ← bumped from educorp-v1 to bust stale cache
+const CACHE_NAME = 'kodex-v4';  // ← bumped from educorp-v1 to bust stale cache
 
 // App shell files to cache on install
 const SHELL_FILES = [
