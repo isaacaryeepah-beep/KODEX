@@ -102,6 +102,11 @@ app.use("/api/", (req, res, next) => {
   if (req.path.includes('/snapshot') || req.path.includes('/health')) return next();
   return apiLimiter(req, res, next);
 });
+// Superadmin portal — must be before static middleware so it takes priority
+app.get("/superadmin", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "superadmin.html"));
+});
+
 app.use(express.static(path.join(__dirname, "public"), {
   setHeaders: (res) => {
     res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
@@ -132,11 +137,6 @@ app.get("/api", (req, res) => {
 });
 
 app.get("/health", (req, res) => {
-
-// Superadmin portal page
-app.get("/superadmin", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "superadmin.html"));
-});
   res.json({ status: "ok", timestamp: new Date().toISOString() });
 });
 
