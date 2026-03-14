@@ -1467,8 +1467,9 @@ async function handleStudentRegister() {
     }
     const phone = document.getElementById('student-reg-phone')?.value?.trim();
     const department = document.getElementById('student-reg-dept')?.value?.trim();
+    const email = document.getElementById('student-reg-email')?.value?.trim();
     if (!department) return showStudentError('Please enter your department.');
-    const data = await api('/api/auth/register-student', { method: 'POST', body: JSON.stringify({ name, indexNumber, phone, password, institutionCode, department }) });
+    const data = await api('/api/auth/register-student', { method: 'POST', body: JSON.stringify({ name, indexNumber, phone, email: email || undefined, password, institutionCode, department }) });
     if (data.token) {
       token = data.token;
       localStorage.setItem('token', token);
