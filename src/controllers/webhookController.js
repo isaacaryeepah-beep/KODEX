@@ -17,7 +17,7 @@ const crypto  = require("crypto");
 const Company    = require("../models/Company");
 const User       = require("../models/User");
 const PaymentLog = require("../models/PaymentLog");
-const { sendSubscriptionConfirmed } = require("../services/emailService");
+const { sendSubscriptionConfirmed, sendPaymentFailed } = require("../services/emailService");
 
 const PAYSTACK_SECRET_KEY = process.env.PAYSTACK_SECRET_KEY;
 const PRICES_GHS = { monthly: 200, yearly: 2000 };
@@ -172,7 +172,7 @@ async function handleSubscriptionCreate(data) {
   if (!email) return;
 
   // Find company by admin email
-  const admin = await User.findOne({ email, role: { $in: ["admin", "manager"] } }).lean();
+  const admin = await User.findOne({ email, role: { $in: ["admin", "superadmin"] } }).lean();
   if (!admin) return;
 
   await Company.findByIdAndUpdate(admin.company, {
@@ -229,5 +229,22 @@ async function handlePaymentFailed(data) {
     console.warn(`[webhook] Payment failed for company ${company._id} — marked past_due`);
   }
 
-  // TODO: send "payment failed" email notification when email template is ready
+  // Send payment failed email to admin
+  try {
+    if (company) {
+      const admin = await User.findOne({ company: company._id, role: { $in: ["admin", "manager"] }, isActive: true }).select("email name").lean();
+      if (admin?.email) {
+        const Company = require("../models/Company");
+        const companyData = await Company.findById(company._id).select("name subscriptionPlan").lean();
+        await sendPaymentFailed({
+          email: admin.email,
+          name: admin.name,
+          plan: companyData?.subscriptionPlan || "monthly",
+          institutionName: companyData?.name || "",
+        });
+      }
+    }
+  } catch(e) {
+    console.error("[webhook] Payment failed email error:", e.message);
+  }
 }
