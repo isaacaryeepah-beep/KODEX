@@ -58,6 +58,60 @@
   --sidebar-border: rgba(255,255,255,.06);
   --sidebar-width: 224px;
 }
+/* ── Dark Mode ────────────────────────────────────────────────────────── */
+[data-theme="dark"] {
+  --bg: #0f172a;
+  --card: #1e293b;
+  --card-hover: #253449;
+  --text: #f1f5f9;
+  --text-secondary: #94a3b8;
+  --text-light: #64748b;
+  --text-muted: #475569;
+  --border: #334155;
+  --border-light: #1e293b;
+  --primary: #6366f1;
+  --primary-dark: #4f46e5;
+  --primary-light: rgba(99,102,241,.15);
+  --sidebar-bg: #0d1117;
+  --sidebar-text: #94a3b8;
+  --sidebar-active: #6366f1;
+  --topbar-bg: #1e293b;
+  --topbar-border: #334155;
+  --input-bg: #1e293b;
+  --input-border: #334155;
+}
+
+[data-theme="dark"] body { background: var(--bg); color: var(--text); }
+[data-theme="dark"] .topbar { background: var(--topbar-bg); border-color: var(--topbar-border); }
+[data-theme="dark"] .card { background: var(--card); border-color: var(--border); }
+[data-theme="dark"] .sidebar { background: var(--sidebar-bg); }
+[data-theme="dark"] input, [data-theme="dark"] textarea, [data-theme="dark"] select {
+  background: var(--input-bg); border-color: var(--input-border); color: var(--text);
+}
+[data-theme="dark"] table { color: var(--text); }
+[data-theme="dark"] th { color: var(--text-secondary); border-color: var(--border); }
+[data-theme="dark"] td { border-color: var(--border); }
+[data-theme="dark"] tr:hover { background: var(--card-hover); }
+[data-theme="dark"] .stat-card-v2, [data-theme="dark"] .stat-card { background: var(--card); border-color: var(--border); }
+[data-theme="dark"] .modal-container .modal, [data-theme="dark"] #modal-container .modal-content { background: var(--card); }
+[data-theme="dark"] .btn-secondary { background: var(--card); border-color: var(--border); color: var(--text); }
+[data-theme="dark"] .loading { color: var(--text-muted); }
+[data-theme="dark"] .page-header p { color: var(--text-secondary); }
+
+/* Dark mode toggle button */
+#dark-mode-btn {
+  background: transparent;
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 16px;
+  cursor: pointer;
+  color: var(--text);
+  line-height: 1;
+}
+#dark-mode-btn:hover { background: var(--primary-light); }
+
+
 
 body {
   font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
