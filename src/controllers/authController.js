@@ -4,7 +4,7 @@ const User = require("../models/User");
 const Company = require("../models/Company");
 const StudentRoster = require("../models/StudentRoster");
 const { generateToken } = require("../utils/jwt");
-const { sendWelcome, sendAdminPasswordResetNotice } = require("../services/emailService");
+const { sendWelcome, sendAdminPasswordResetNotice, sendPasswordReset } = require("../services/emailService");
 const { sendOtp, normalisePhone } = require("../services/smsService");
 
 const SIX_HOURS_MS = 6 * 60 * 60 * 1000;
@@ -875,7 +875,20 @@ exports.forgotPasswordEmail = async (req, res) => {
     }
 
     console.log(`[ForgotPasswordEmail] OTP sent to ${normPhone} for ${user.name}`);
-    res.json({ message: "A reset code has been sent to your phone via SMS." });
+
+    // Also send via email if user has an email address
+    if (user.email) {
+      const company = await Company.findById(user.company).select('name').lean().catch(() => null);
+      sendPasswordReset({
+        email: user.email,
+        name: user.name,
+        resetCode: code,
+        role: user.role,
+        institutionName: company?.name || '',
+      }).catch(err => console.error('[ForgotPasswordEmail] Email send failed:', err.message));
+    }
+
+    res.json({ message: "A reset code has been sent to your phone via SMS." + (user.email ? " It was also sent to your email." : "") });
   } catch (error) {
     console.error("Forgot password email error:", error);
     res.status(500).json({ error: "Failed to generate reset code" });
@@ -922,7 +935,20 @@ exports.forgotPasswordAdmin = async (req, res) => {
     }
 
     console.log(`[ForgotPasswordAdmin] OTP sent to ${normPhone} for ${user.name}`);
-    res.json({ message: "A 6-digit reset code has been sent to your phone via SMS." });
+
+    // Also send via email if user has an email address
+    if (user.email) {
+      const companyData = user.company;
+      sendPasswordReset({
+        email: user.email,
+        name: user.name,
+        resetCode: code,
+        role: user.role,
+        institutionName: companyData?.name || '',
+      }).catch(err => console.error('[ForgotPasswordAdmin] Email send failed:', err.message));
+    }
+
+    res.json({ message: "A 6-digit reset code has been sent to your phone via SMS." + (user.email ? " It was also sent to your email." : "") });
   } catch (error) {
     console.error("Forgot password admin error:", error);
     res.status(500).json({ error: "Failed to generate reset code" });
