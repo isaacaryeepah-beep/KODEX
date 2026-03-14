@@ -14,8 +14,9 @@
  */
 
 const crypto  = require("crypto");
-const Company = require("../models/Company");
-const User    = require("../models/User");
+const Company    = require("../models/Company");
+const User       = require("../models/User");
+const PaymentLog = require("../models/PaymentLog");
 const { sendSubscriptionConfirmed } = require("../services/emailService");
 
 const PAYSTACK_SECRET_KEY = process.env.PAYSTACK_SECRET_KEY;
@@ -132,6 +133,13 @@ async function handleChargeSuccess(data) {
   company.lastPaymentReference  = reference;
   company.lastPaymentAmount     = amountGhs;
   company.lastPaymentDate       = now;
+
+  // Log payment to history
+  await PaymentLog.findOneAndUpdate(
+    { reference },
+    { company: company._id, reference, amount: amountGhs, currency: "GHS", plan, event: "charge.success", paidAt: now },
+    { upsert: true, new: true }
+  ).catch(() => {});
 
   await company.save();
   console.log(`[webhook] Subscription activated for company ${companyId} until ${endDate.toISOString()}`);
