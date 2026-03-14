@@ -17,7 +17,7 @@ router.patch("/:id/activate", requireRole("manager", "admin", "superadmin"), com
 router.delete("/:id", requireRole("manager", "admin", "superadmin"), companyIsolation, userController.deactivateUser);
 router.delete("/:id/permanent", requireRole("manager", "admin", "superadmin"), companyIsolation, userController.deleteUser);
 router.get("/reset-logs/all", requireRole("admin", "superadmin"), companyIsolation, userController.getResetLogs);
-router.post("/:id/admin-reset-password", requireRole("admin", "superadmin", "manager"), companyIsolation, userController.adminResetStudentPassword);
+router.post("/:id/admin-reset-password", requireRole("admin", "superadmin", "manager", "hod"), companyIsolation, userController.adminResetStudentPassword);
 router.post("/change-password-after-reset", userController.changePasswordAfterReset);
 router.post("/:id/clear-device-lock", requireRole("admin", "superadmin", "manager"), companyIsolation, userController.clearDeviceLock);
 
