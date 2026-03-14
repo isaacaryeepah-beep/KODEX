@@ -3731,7 +3731,7 @@ async function renderUsers(filterRole='', filterDept='', filterSearch='') {
                   ${u.isActive
                     ? `<button class="btn btn-sm" style="background:#f59e0b;color:#fff;font-size:11px" onclick="deactivateUser('${u._id}')">Deactivate</button>`
                     : `<button class="btn btn-sm" style="background:#22c55e;color:#fff;font-size:11px" onclick="activateUser('${u._id}')">Activate</button>`}
-                  ${u.role === 'student' ? `<button class="btn btn-sm" style="background:#6366f1;color:#fff;font-size:11px" onclick="adminResetStudentPassword('${u._id}', '${u.name.replace(/'/g, "\\'")}')" title="Generate temp password">🔑 Reset</button>` : ''}
+                  <button class="btn btn-sm" style="background:#6366f1;color:#fff;font-size:11px" onclick="adminResetStudentPassword('${u._id}', '${u.name.replace(/'/g, "\\'")}')" title="Generate temp password">🔑 Reset</button>
                   ${u.role === 'student' && u.deviceId ? `<button class="btn btn-sm" style="background:#f97316;color:#fff;font-size:11px" onclick="clearStudentDeviceLock('${u._id}', '${u.name.replace(/'/g, "\\'")}')" title="Unlock device">🔓 Unlock</button>` : ''}
                   <button class="btn btn-danger btn-sm" style="font-size:11px" onclick="deleteUserPermanently('${u._id}', '${u.name.replace(/'/g, "\\'")}')">Delete</button>
                 </td>` : ''}
@@ -4426,7 +4426,7 @@ function _renderCoursesHTML(content, courses, isOffline) {
               <td>${course.lecturer?.name || 'N/A'}</td>
               <td>${!isOffline ? `<button class="btn btn-sm" style="font-size:11px;background:var(--bg);border:1px solid var(--border)" onclick="viewRoster('${course._id}', '${course.code}')">View Roster</button>` : '—'}</td>
               <td>${course.enrolledStudents?.length || 0}</td>
-              ${canManageRoster && !isOffline ? `<td><button class="btn btn-primary btn-sm" style="font-size:11px" onclick="showUploadRosterModal('${course._id}', '${course.code}')">Upload Students</button></td>` : ''}
+              ${canManageRoster && !isOffline ? `<td style="white-space:nowrap"><button class="btn btn-primary btn-sm" style="font-size:11px" onclick="showUploadRosterModal('${course._id}', '${course.code}')">Upload Students</button> <button class="btn btn-sm" style="font-size:11px;background:#6366f1;color:#fff" onclick="openBulkEmailModal('${course._id}', '${course.title}')">✉️ Email</button></td>` : ''}
             </tr>
           `).join('')}</tbody>
         </table>
@@ -7525,8 +7525,14 @@ async function renderProfile() {
     <div class="page-header"><h2>My Profile</h2><p>Manage your account details</p></div>
     <div class="card" style="max-width:520px">
       <div style="display:flex;align-items:center;gap:16px;margin-bottom:24px;padding-bottom:20px;border-bottom:1px solid var(--border)">
-        <div style="width:64px;height:64px;border-radius:50%;background:linear-gradient(135deg,var(--primary),#6366f1);display:flex;align-items:center;justify-content:center;font-size:26px;font-weight:700;color:#fff;flex-shrink:0">
-          ${(u.name||'?')[0].toUpperCase()}
+        <div style="position:relative;flex-shrink:0">
+          <div id="profile-avatar" style="width:72px;height:72px;border-radius:50%;background:linear-gradient(135deg,var(--primary),#6366f1);display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:700;color:#fff;overflow:hidden;cursor:pointer" onclick="document.getElementById('photo-upload').click()" title="Click to change photo">
+            ${u.profilePhoto ? `<img src="${u.profilePhoto}" style="width:100%;height:100%;object-fit:cover">` : (u.name||'?')[0].toUpperCase()}
+          </div>
+          <div style="position:absolute;bottom:0;right:0;width:22px;height:22px;border-radius:50%;background:var(--primary);display:flex;align-items:center;justify-content:center;cursor:pointer;border:2px solid #fff" onclick="document.getElementById('photo-upload').click()">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          </div>
+          <input type="file" id="photo-upload" accept="image/*" style="display:none" onchange="uploadProfilePhoto(this)">
         </div>
         <div>
           <div style="font-size:18px;font-weight:700">${u.name || 'N/A'}</div>
@@ -8401,6 +8407,122 @@ function renderAbout() {
   `;
 }
 
+
+
+// ── Dark Mode ──────────────────────────────────────────────────────────────────
+function initDarkMode() {
+  const saved = localStorage.getItem('kodex_theme');
+  if (saved === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
+}
+
+function toggleDarkMode() {
+  const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+  if (isDark) {
+    document.documentElement.removeAttribute('data-theme');
+    localStorage.setItem('kodex_theme', 'light');
+  } else {
+    document.documentElement.setAttribute('data-theme', 'dark');
+    localStorage.setItem('kodex_theme', 'dark');
+  }
+  // Update toggle button icon if present
+  const btn = document.getElementById('dark-mode-btn');
+  if (btn) btn.textContent = isDark ? '🌙' : '☀️';
+}
+
+// Call on load
+initDarkMode();
+
+// ── Profile Photo Upload ───────────────────────────────────────────────────────
+async function uploadProfilePhoto(input) {
+  const file = input.files[0];
+  if (!file) return;
+  if (file.size > 2 * 1024 * 1024) { showToast('Image must be under 2MB', 'error'); return; }
+
+  // Convert to base64
+  const reader = new FileReader();
+  reader.onload = async (e) => {
+    const base64 = e.target.result;
+    try {
+      const data = await api('/api/auth/profile', { method: 'PUT', body: JSON.stringify({ profilePhoto: base64 }) });
+      currentUser.profilePhoto = base64;
+      // Update avatar display
+      const avatar = document.getElementById('profile-avatar');
+      if (avatar) avatar.innerHTML = `<img src="${base64}" style="width:100%;height:100%;object-fit:cover">`;
+      showToast('Profile photo updated!', 'success');
+    } catch(e) { showToast('Failed to upload photo: ' + e.message, 'error'); }
+  };
+  reader.readAsDataURL(file);
+}
+
+// ── Push Notifications ─────────────────────────────────────────────────────────
+async function requestPushPermission() {
+  if (!('Notification' in window) || !('serviceWorker' in navigator)) return false;
+  const permission = await Notification.requestPermission();
+  return permission === 'granted';
+}
+
+async function showLocalNotification(title, body, url) {
+  if (!('Notification' in window)) return;
+  if (Notification.permission !== 'granted') {
+    const granted = await requestPushPermission();
+    if (!granted) return;
+  }
+  const reg = await navigator.serviceWorker.ready.catch(() => null);
+  if (reg) {
+    reg.showNotification(title, { body, icon: '/icons/icon-192.png', data: { url: url || '/' } });
+  } else {
+    new Notification(title, { body });
+  }
+}
+
+// ── Bulk Email to Course Students ──────────────────────────────────────────────
+function openBulkEmailModal(courseId, courseName) {
+  const existing = document.getElementById('bulk-email-modal');
+  if (existing) existing.remove();
+
+  const modal = document.createElement('div');
+  modal.id = 'bulk-email-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;display:flex;align-items:center;justify-content:center;padding:20px';
+  modal.innerHTML = `
+    <div style="background:var(--card);border-radius:16px;padding:28px;width:100%;max-width:500px;box-shadow:0 20px 60px rgba(0,0,0,.3)">
+      <h3 style="font-size:16px;font-weight:700;margin-bottom:4px">📧 Email Students</h3>
+      <p style="font-size:13px;color:var(--text-muted);margin-bottom:20px">${courseName}</p>
+      <div class="form-group">
+        <label>Subject</label>
+        <input type="text" id="bulk-email-subject" placeholder="e.g. Assignment reminder">
+      </div>
+      <div class="form-group">
+        <label>Message</label>
+        <textarea id="bulk-email-body" rows="5" placeholder="Your message to all students in this course…" style="width:100%;padding:10px 14px;border:1.5px solid var(--border);border-radius:9px;font-size:14px;font-family:inherit;resize:vertical"></textarea>
+      </div>
+      <div id="bulk-email-status" style="display:none;padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:12px"></div>
+      <div style="display:flex;gap:10px;justify-content:flex-end">
+        <button class="btn btn-secondary" onclick="document.getElementById('bulk-email-modal').remove()">Cancel</button>
+        <button class="btn btn-primary" onclick="sendBulkEmail('${courseId}')">Send to All Students</button>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+}
+
+async function sendBulkEmail(courseId) {
+  const subject = document.getElementById('bulk-email-subject')?.value?.trim();
+  const message = document.getElementById('bulk-email-body')?.value?.trim();
+  const status = document.getElementById('bulk-email-status');
+  if (!subject || !message) { 
+    status.textContent = 'Please enter subject and message.';
+    status.style.cssText = 'display:block;background:#fef2f2;color:#dc2626;padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:12px';
+    return;
+  }
+  try {
+    const data = await api(`/api/courses/${courseId}/email-students`, { method: 'POST', body: JSON.stringify({ subject, message }) });
+    status.textContent = `✓ Email sent to ${data.sentCount} student(s)`;
+    status.style.cssText = 'display:block;background:#f0fdf4;color:#15803d;padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:12px';
+    setTimeout(() => document.getElementById('bulk-email-modal')?.remove(), 2000);
+  } catch(e) {
+    status.textContent = 'Failed: ' + e.message;
+    status.style.cssText = 'display:block;background:#fef2f2;color:#dc2626;padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:12px';
+  }
+}
 
 // ── Service Worker Registration ───────────────────────────────────────────────
 if ('serviceWorker' in navigator) {
