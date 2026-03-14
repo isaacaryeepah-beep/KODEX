@@ -807,7 +807,7 @@ exports.resetPassword = async (req, res) => {
       const Company = require('../models/Company');
       const admin = await require('../models/User').findOne({
         company: user.company,
-        role: { $in: ['admin', 'superadmin'] },
+        role: { $in: ['admin', 'manager'] },
         isActive: true,
       }).select('email name').lean();
       const company = await Company.findById(user.company).select('name').lean();
@@ -968,7 +968,7 @@ exports.resetPasswordEmail = async (req, res) => {
       const Company = require('../models/Company');
       const admin = await require('../models/User').findOne({
         company: user.company,
-        role: { $in: ['admin', 'superadmin'] },
+        role: { $in: ['admin', 'manager'] },
         isActive: true,
         email: { $exists: true, $ne: user.email },
       }).select('email name').lean();
