@@ -289,7 +289,7 @@ exports.registerLecturer = async (req, res) => {
 
 exports.registerStudent = async (req, res) => {
   try {
-    const { name, indexNumber, password, institutionCode, department } = req.body;
+    const { name, indexNumber, password, institutionCode, department, email } = req.body;
 
     if (!name || !indexNumber || !password || !institutionCode) {
       return res.status(400).json({ error: "Name, student ID, password, and institution code are required" });
@@ -335,6 +335,7 @@ exports.registerStudent = async (req, res) => {
       indexNumber: indexNumber.trim().toUpperCase(),
       password,
       phone: req.body.phone ? normalisePhone(req.body.phone) : null,
+      email: email ? email.trim().toLowerCase() : null,
       company: company._id,
       role: "student",
       isApproved: true,
@@ -750,9 +751,23 @@ exports.forgotPassword = async (req, res) => {
     user.resetPasswordExpires = new Date(Date.now() + 60 * 60 * 1000);
     await user.save({ validateBeforeSave: false });
 
+    // Send to student email if available, otherwise give code to lecturer
+    let message = "Password reset code generated. Please contact your lecturer to get the reset code.";
+    if (user.email) {
+      const companyData = await Company.findById(user.company).select("name").lean().catch(() => null);
+      sendPasswordReset({
+        email: user.email,
+        name: user.name,
+        resetCode: code,
+        role: "student",
+        institutionName: companyData?.name || "",
+      }).catch(err => console.error("[ForgotPassword] Email failed:", err.message));
+      message = "A reset code has been sent to your email address.";
+    }
+
     res.json({
-      message: "Password reset code generated. Please contact your lecturer to get the reset code.",
-      resetCode: code,
+      message,
+      resetCode: user.email ? undefined : code, // only expose code to lecturer if no email
     });
   } catch (error) {
     console.error("Forgot password error:", error);
