@@ -2,202 +2,229 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>KODEX — Platform Admin</title>
-  <link rel="stylesheet" href="/css/style.css">
   <style>
-    body { margin: 0; background: #0d1117; min-height: 100vh; display: flex; align-items: center; justify-content: center; font-family: 'DM Sans', sans-serif; }
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{font-family:'DM Sans',system-ui,sans-serif;background:#0d1117;min-height:100vh;color:#111}
 
-    .sa-wrap { width: 100%; max-width: 420px; padding: 24px 16px; }
+    /* ── Login ── */
+    #login-screen{display:flex;align-items:center;justify-content:center;min-height:100vh;padding:24px}
+    .card{background:#fff;border-radius:16px;padding:36px 32px;width:100%;max-width:420px;box-shadow:0 24px 64px rgba(0,0,0,.5)}
+    .brand{display:flex;align-items:center;gap:12px;margin-bottom:28px}
+    .brand-icon{width:44px;height:44px;border-radius:12px;background:#0d1117;display:flex;align-items:center;justify-content:center;color:#fff;flex-shrink:0}
+    .brand h1{font-size:20px;font-weight:800;color:#0d1117}
+    .brand p{font-size:12px;color:#6b7280;margin-top:2px}
+    .badge{display:inline-flex;align-items:center;gap:5px;background:#fef3c7;color:#92400e;border:1px solid #fde68a;border-radius:20px;padding:4px 12px;font-size:11px;font-weight:700;margin-bottom:24px}
+    label{display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#6b7280;margin-bottom:6px}
+    input[type=email],input[type=password]{width:100%;padding:11px 14px;border:1.5px solid #e5e7eb;border-radius:9px;font-size:14px;outline:none;margin-bottom:14px;font-family:inherit}
+    input:focus{border-color:#374151}
+    .btn-login{width:100%;padding:13px;background:#0d1117;color:#fff;border:none;border-radius:9px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;margin-top:4px}
+    .btn-login:hover{background:#1f2937}
+    .btn-login:disabled{opacity:.6;cursor:not-allowed}
+    .err{display:none;margin-top:12px;padding:10px 14px;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;color:#dc2626;font-size:13px}
+    .back-link{text-align:center;margin-top:20px;font-size:12px;color:#6b7280}
+    .back-link a{color:#6b7280;text-decoration:none}
 
-    .sa-card {
-      background: #fff; border-radius: 16px; padding: 36px 32px;
-      box-shadow: 0 24px 64px rgba(0,0,0,.4);
-    }
+    /* ── Dashboard ── */
+    #dashboard{display:none;background:#f1f5f9;min-height:100vh}
+    .topbar{background:#fff;border-bottom:1px solid #e2e8f0;padding:0 24px;height:56px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:10}
+    .topbar-left{display:flex;align-items:center;gap:12px}
+    .topbar h2{font-size:16px;font-weight:700;color:#0d1117}
+    .topbar-right{display:flex;align-items:center;gap:12px}
+    .user-chip{font-size:13px;color:#6b7280}
+    .btn-sm{padding:7px 14px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;border:1.5px solid #e2e8f0;background:#fff;font-family:inherit}
+    .btn-sm:hover{background:#f8fafc}
+    .content{padding:28px 32px;max-width:1200px}
 
-    .sa-brand { display: flex; align-items: center; gap: 12px; margin-bottom: 28px; }
-    .sa-brand-icon {
-      width: 44px; height: 44px; border-radius: 12px; background: #0d1117;
-      display: flex; align-items: center; justify-content: center; color: #fff; flex-shrink: 0;
-    }
-    .sa-brand-text h1 { font-size: 20px; font-weight: 800; margin: 0; color: #0d1117; letter-spacing: -.4px; }
-    .sa-brand-text p  { font-size: 12px; color: #6b7280; margin: 2px 0 0; }
+    /* Stats */
+    .stats{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:16px;margin-bottom:28px}
+    .stat{background:#fff;border-radius:12px;padding:20px;border:1px solid #e2e8f0}
+    .stat-val{font-size:28px;font-weight:800;color:#0d1117}
+    .stat-lbl{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#94a3b8;margin-top:4px}
 
-    .sa-badge {
-      display: inline-flex; align-items: center; gap: 5px;
-      background: #fef3c7; color: #92400e; border: 1px solid #fde68a;
-      border-radius: 20px; padding: 4px 12px;
-      font-size: 11px; font-weight: 700; letter-spacing: .3px; margin-bottom: 24px;
-    }
-
-    .sa-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; color: #6b7280; display: block; margin-bottom: 6px; }
-    .sa-input {
-      width: 100%; padding: 11px 14px; border: 1.5px solid #e5e7eb; border-radius: 9px;
-      font-size: 14px; font-family: inherit; outline: none;
-      transition: border-color .15s; box-sizing: border-box; margin-bottom: 14px;
-    }
-    .sa-input:focus { border-color: #374151; }
-
-    .sa-btn {
-      width: 100%; padding: 13px; background: #0d1117; color: #fff;
-      border: none; border-radius: 9px; font-size: 14px; font-weight: 700;
-      font-family: inherit; cursor: pointer; transition: all .15s; margin-top: 4px;
-    }
-    .sa-btn:hover { background: #1f2937; }
-    .sa-btn:disabled { opacity: .6; cursor: not-allowed; }
-
-    .sa-err {
-      display: none; margin-top: 12px; padding: 10px 14px;
-      background: #fef2f2; border: 1px solid #fecaca;
-      border-radius: 8px; color: #dc2626; font-size: 13px; font-weight: 500;
-    }
-
-    .sa-footer { text-align: center; margin-top: 20px; font-size: 12px; color: #6b7280; }
-    .sa-footer a { color: #6b7280; text-decoration: none; }
-    .sa-footer a:hover { color: #111; }
-
-    #dashboard-page { display: none; }
-    #auth-page { display: none; }
+    /* Table */
+    .table-card{background:#fff;border-radius:12px;border:1px solid #e2e8f0;overflow:hidden;margin-bottom:24px}
+    .table-head{padding:16px 20px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #e2e8f0}
+    .table-head h3{font-size:14px;font-weight:700}
+    table{width:100%;border-collapse:collapse;font-size:13px}
+    th{padding:10px 20px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#94a3b8;border-bottom:1px solid #e2e8f0}
+    td{padding:12px 20px;border-bottom:1px solid #f1f5f9;vertical-align:middle}
+    tr:last-child td{border-bottom:none}
+    .tag{display:inline-block;padding:2px 10px;border-radius:20px;font-size:11px;font-weight:700}
+    .tag-green{background:#dcfce7;color:#166534}
+    .tag-red{background:#fee2e2;color:#991b1b}
+    .tag-blue{background:#dbeafe;color:#1e40af}
+    .tag-amber{background:#fef3c7;color:#92400e}
+    .action-btn{padding:5px 12px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;border:1.5px solid #e2e8f0;background:#fff;font-family:inherit;margin-right:4px}
+    .action-btn:hover{background:#f8fafc}
+    .action-btn.danger{border-color:#fecaca;color:#dc2626}
+    .action-btn.danger:hover{background:#fef2f2}
+    .action-btn.success{border-color:#bbf7d0;color:#16a34a}
+    .empty{padding:40px;text-align:center;color:#94a3b8;font-size:14px}
+    .loading-msg{padding:40px;text-align:center;color:#94a3b8}
   </style>
 </head>
 <body>
 
-  <!-- Superadmin Login -->
-  <div class="sa-wrap" id="sa-login-wrap">
-    <div class="sa-card">
-      <div class="sa-brand">
-        <div class="sa-brand-icon">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <polyline points="9 11 12 14 22 4"/>
-            <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
-          </svg>
-        </div>
-        <div class="sa-brand-text">
-          <h1>KODEX</h1>
-          <p>Platform Administration</p>
-        </div>
-      </div>
-
-      <div class="sa-badge">
-        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-          <rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+<!-- LOGIN -->
+<div id="login-screen">
+  <div class="card">
+    <div class="brand">
+      <div class="brand-icon">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
         </svg>
-        SUPERADMIN ACCESS
       </div>
+      <div><h1>KODEX</h1><p>Platform Administration</p></div>
+    </div>
+    <div class="badge">🔒 SUPERADMIN ACCESS</div>
+    <form onsubmit="doLogin(event)">
+      <label for="em">Email</label>
+      <input type="email" id="em" placeholder="Enter your email" required>
+      <label for="pw">Password</label>
+      <input type="password" id="pw" placeholder="Enter password" required>
+      <button class="btn-login" id="login-btn" type="submit">Sign In</button>
+    </form>
+    <div class="err" id="err"></div>
+    <div class="back-link"><a href="/">← Back to KODEX</a></div>
+  </div>
+</div>
 
-      <form id="sa-form" onsubmit="event.preventDefault(); saLogin();">
-        <label class="sa-label" for="sa-email">Email</label>
-        <input class="sa-input" type="email" id="sa-email" placeholder="Enter your email" autocomplete="off" required>
-
-        <label class="sa-label" for="sa-password">Password</label>
-        <input class="sa-input" type="password" id="sa-password" placeholder="Enter password" autocomplete="off" required>
-
-        <button class="sa-btn" type="submit" id="sa-btn">Sign In</button>
-      </form>
-
-      <div class="sa-err" id="sa-err"></div>
-
-      <div class="sa-footer">
-        <a href="/">← Back to KODEX</a>
-      </div>
+<!-- DASHBOARD -->
+<div id="dashboard">
+  <div class="topbar">
+    <div class="topbar-left">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#0d1117" stroke-width="2"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+      <h2>Platform Overview</h2>
+    </div>
+    <div class="topbar-right">
+      <span class="user-chip" id="user-chip"></span>
+      <button class="btn-sm" onclick="doLogout()">Sign Out</button>
     </div>
   </div>
-
-  <!-- Dashboard container (populated by app.js after login) -->
-  <div id="auth-page" style="display:none"></div>
-  <div id="dashboard-page" class="hidden">
-    <div id="trial-banner" class="trial-banner" style="display:none"></div>
-    <div id="trial-expired-banner" class="trial-expired-banner" style="display:none"></div>
-    <header class="topbar">
-      <div class="topbar-left">
-        <button class="topbar-menu-btn" onclick="toggleMobileSidebar()" aria-label="Open menu">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
-          </svg>
-        </button>
-        <h2 id="portal-title">Platform Admin</h2>
-      </div>
-      <div class="topbar-right">
-        <div class="user-info">
-          <strong id="user-name"></strong>
-          <span class="role-badge role-admin" id="user-role">SUPERADMIN</span>
-        </div>
-        <button class="btn btn-secondary btn-sm" onclick="logout()">Sign Out</button>
-      </div>
-    </header>
-    <div class="main-layout">
-      <div class="sidebar">
-        <div class="sidebar-logo">
-          <div class="sidebar-logo-icon">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <polyline points="9 11 12 14 22 4"/>
-              <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
-            </svg>
-          </div>
-          <span class="sidebar-logo-text">KODEX</span>
-        </div>
-        <nav class="sidebar-nav" id="sidebar-nav"></nav>
-      </div>
-      <div class="content" id="main-content"></div>
-    </div>
+  <div class="content">
+    <div id="dash-body"><div class="loading-msg">Loading…</div></div>
   </div>
+</div>
 
-  <div id="modal-container" class="hidden"></div>
+<script>
+let SA_TOKEN = localStorage.getItem('sa_token') || '';
 
-  <script>
-    window.__superadminMode = true;
-
-    async function saLogin() {
-      const btn = document.getElementById('sa-btn');
-      const err = document.getElementById('sa-err');
-      const email    = document.getElementById('sa-email').value.trim();
-      const password = document.getElementById('sa-password').value;
-      err.style.display = 'none';
-      btn.disabled = true; btn.textContent = 'Signing in…';
-
-      try {
-        const res = await fetch('/api/superadmin/login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, password })
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Login failed');
-        if (data.user?.role !== 'superadmin') throw new Error('Access denied. Superadmin only.');
-
-        localStorage.setItem('token', data.token);
-        window.token = data.token;
-        window.currentUser = data.user;
-
-        document.getElementById('sa-login-wrap').style.display = 'none';
-        document.body.style.background = '#f8fafc';
-
-        showDashboard(data);
-      } catch(e) {
-        err.textContent = e.message; err.style.display = 'block';
-        btn.disabled = false; btn.textContent = 'Sign In';
-      }
-    }
-
-    // Auto-login if already have valid token
-    window.addEventListener('DOMContentLoaded', () => {
-      const t = localStorage.getItem('token');
-      if (t) {
-        fetch('/api/auth/me', { headers: { Authorization: 'Bearer ' + t } })
-          .then(r => r.json())
-          .then(data => {
-            if (data.user?.role === 'superadmin') {
-              window.token = t;
-              window.currentUser = data.user;
-              document.getElementById('sa-login-wrap').style.display = 'none';
-              document.body.style.background = '#f8fafc';
-              showDashboard(data);
-            }
-          }).catch(() => {});
-      }
+async function doLogin(e) {
+  e.preventDefault();
+  const btn = document.getElementById('login-btn');
+  const errEl = document.getElementById('err');
+  errEl.style.display = 'none';
+  btn.disabled = true; btn.textContent = 'Signing in…';
+  try {
+    const r = await fetch('/api/superadmin/login', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ email: document.getElementById('em').value.trim(), password: document.getElementById('pw').value })
     });
-  </script>
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || 'Login failed');
+    SA_TOKEN = d.token;
+    localStorage.setItem('sa_token', SA_TOKEN);
+    document.getElementById('user-chip').textContent = d.user.name;
+    showDashboard();
+  } catch(ex) {
+    errEl.textContent = ex.message; errEl.style.display = 'block';
+    btn.disabled = false; btn.textContent = 'Sign In';
+  }
+}
 
-  <script src="/js/app.js"></script>
+function doLogout() {
+  localStorage.removeItem('sa_token');
+  SA_TOKEN = '';
+  document.getElementById('dashboard').style.display = 'none';
+  document.getElementById('login-screen').style.display = 'flex';
+}
+
+async function api(path, opts={}) {
+  const r = await fetch(path, { ...opts, headers:{'Content-Type':'application/json','Authorization':'Bearer '+SA_TOKEN,...(opts.headers||{})} });
+  const d = await r.json();
+  if (!r.ok) throw new Error(d.error||'Request failed');
+  return d;
+}
+
+async function showDashboard() {
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('dashboard').style.display = 'block';
+  document.getElementById('dash-body').innerHTML = '<div class="loading-msg">Loading platform data…</div>';
+  try {
+    const data = await api('/api/superadmin/overview');
+    const cos = data.companies || [];
+    const total = cos.length, active = cos.filter(c=>c.isActive).length;
+    const trial = cos.filter(c=>c.isTrialActive).length, sub = cos.filter(c=>c.subscriptionStatus==='active').length;
+    const acad = cos.filter(c=>c.mode==='academic').length, corp = cos.filter(c=>c.mode==='corporate').length;
+    const rev = data.totalRevenue || 0;
+
+    document.getElementById('dash-body').innerHTML = `
+      <div class="stats">
+        <div class="stat"><div class="stat-val">${total}</div><div class="stat-lbl">Institutions</div></div>
+        <div class="stat"><div class="stat-val" style="color:#16a34a">${active}</div><div class="stat-lbl">Active</div></div>
+        <div class="stat"><div class="stat-val" style="color:#d97706">${trial}</div><div class="stat-lbl">On Trial</div></div>
+        <div class="stat"><div class="stat-val" style="color:#2563eb">${sub}</div><div class="stat-lbl">Subscribed</div></div>
+        <div class="stat"><div class="stat-val" style="color:#16a34a;font-size:20px">GHS ${rev.toLocaleString()}</div><div class="stat-lbl">Revenue</div></div>
+        <div class="stat"><div class="stat-val">${acad}</div><div class="stat-lbl">Academic</div></div>
+        <div class="stat"><div class="stat-val">${corp}</div><div class="stat-lbl">Corporate</div></div>
+      </div>
+      <div class="table-card">
+        <div class="table-head"><h3>All Institutions</h3></div>
+        <table>
+          <thead><tr><th>Institution</th><th>Users</th><th>Mode</th><th>Status</th><th>Subscription</th><th>Actions</th></tr></thead>
+          <tbody>
+            ${cos.length===0 ? `<tr><td colspan="6" class="empty">No institutions yet.</td></tr>` :
+              cos.map(c=>`
+              <tr>
+                <td><div style="font-weight:700">${esc(c.name)}</div><div style="font-size:11px;color:#94a3b8;font-family:monospace">${c.institutionCode||'—'}</div></td>
+                <td style="font-weight:600">${c.userCount||0}</td>
+                <td><span class="tag ${c.mode==='academic'?'tag-blue':'tag-green'}">${c.mode}</span></td>
+                <td><span class="tag ${c.isActive?'tag-green':'tag-red'}">${c.isActive?'Active':'Inactive'}</span></td>
+                <td><span class="tag ${c.subscriptionStatus==='active'?'tag-green':c.isTrialActive?'tag-amber':'tag-red'}">${c.subscriptionStatus||'trial'}</span></td>
+                <td>
+                  <button class="action-btn ${c.isActive?'danger':'success'}" onclick="toggleCompany('${c._id}',${c.isActive},'${esc(c.name)}')">${c.isActive?'Deactivate':'Activate'}</button>
+                  <button class="action-btn" onclick="extendTrial('${c._id}','${esc(c.name)}')">+Trial</button>
+                </td>
+              </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>`;
+  } catch(ex) {
+    document.getElementById('dash-body').innerHTML = `<div class="empty" style="color:#dc2626">Error: ${ex.message}</div>`;
+  }
+}
+
+async function toggleCompany(id, isActive, name) {
+  if (!confirm(`${isActive?'Deactivate':'Activate'} ${name}?`)) return;
+  try {
+    await api(`/api/superadmin/companies/${id}/toggle`, {method:'PATCH'});
+    showDashboard();
+  } catch(ex) { alert('Error: '+ex.message); }
+}
+
+async function extendTrial(id, name) {
+  const days = prompt(`Extend trial for ${name}. How many days?`, '14');
+  if (!days) return;
+  try {
+    await api(`/api/superadmin/companies/${id}/extend-trial`, {method:'PATCH', body:JSON.stringify({days:parseInt(days)})});
+    alert('Trial extended!');
+    showDashboard();
+  } catch(ex) { alert('Error: '+ex.message); }
+}
+
+function esc(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+// Auto-login if token exists
+if (SA_TOKEN) {
+  api('/api/auth/me').then(d=>{
+    if (d.user?.role==='superadmin') {
+      document.getElementById('user-chip').textContent = d.user.name;
+      showDashboard();
+    } else { localStorage.removeItem('sa_token'); SA_TOKEN=''; }
+  }).catch(()=>{ localStorage.removeItem('sa_token'); SA_TOKEN=''; });
+}
+</script>
 </body>
 </html>
