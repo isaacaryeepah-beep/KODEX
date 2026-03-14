@@ -885,31 +885,50 @@ exports.forgotPasswordEmail = async (req, res) => {
     user.resetPasswordExpires = new Date(Date.now() + 60 * 60 * 1000);
     await user.save({ validateBeforeSave: false });
 
-    const smsResult = await sendOtp({ phone: normPhone, code, name: user.name });
-    if (!smsResult.ok && !smsResult.dev) {
-      console.error('[ForgotPasswordEmail] SMS failed:', smsResult.error);
-      // Clear token so user can retry immediately
+    let smsSent = false;
+    let emailSent = false;
+
+    // Send SMS if phone was provided
+    if (phone) {
+      const normPhone = normalisePhone(phone);
+      const smsResult = await sendOtp({ phone: normPhone, code, name: user.name });
+      if (smsResult.ok || smsResult.dev) {
+        smsSent = true;
+        console.log(`[ForgotPasswordEmail] OTP sent via SMS to ${normPhone}`);
+      } else {
+        console.error('[ForgotPasswordEmail] SMS failed:', smsResult.error);
+      }
+    }
+
+    // Send email if user has email
+    if (user.email) {
+      const companyData = await Company.findById(user.company).select('name').lean().catch(() => null);
+      try {
+        await sendPasswordReset({
+          email: user.email,
+          name: user.name,
+          resetCode: code,
+          role: user.role,
+          institutionName: companyData?.name || '',
+        });
+        emailSent = true;
+        console.log(`[ForgotPasswordEmail] OTP sent via email to ${user.email}`);
+      } catch(err) {
+        console.error('[ForgotPasswordEmail] Email send failed:', err.message);
+      }
+    }
+
+    if (!smsSent && !emailSent) {
       user.resetPasswordToken = null;
       user.resetPasswordExpires = null;
       await user.save({ validateBeforeSave: false });
-      return res.status(500).json({ error: "Failed to send SMS. Please try again." });
+      return res.status(500).json({ error: "Failed to send reset code. Please try again." });
     }
 
-    console.log(`[ForgotPasswordEmail] OTP sent to ${normPhone} for ${user.name}`);
-
-    // Also send via email if user has an email address
-    if (user.email) {
-      const company = await Company.findById(user.company).select('name').lean().catch(() => null);
-      sendPasswordReset({
-        email: user.email,
-        name: user.name,
-        resetCode: code,
-        role: user.role,
-        institutionName: company?.name || '',
-      }).catch(err => console.error('[ForgotPasswordEmail] Email send failed:', err.message));
-    }
-
-    res.json({ message: "A reset code has been sent to your phone via SMS." + (user.email ? " It was also sent to your email." : "") });
+    const channel = smsSent && emailSent ? 'your phone and email'
+      : smsSent ? 'your phone via SMS'
+      : 'your email';
+    res.json({ message: `A reset code has been sent to ${channel}.` });
   } catch (error) {
     console.error("Forgot password email error:", error);
     res.status(500).json({ error: "Failed to generate reset code" });
@@ -952,30 +971,50 @@ exports.forgotPasswordAdmin = async (req, res) => {
     user.resetPasswordExpires = new Date(Date.now() + 60 * 60 * 1000);
     await user.save({ validateBeforeSave: false });
 
-    const smsResult = await sendOtp({ phone: normPhone, code, name: user.name });
-    if (!smsResult.ok && !smsResult.dev) {
-      console.error('[ForgotPasswordAdmin] SMS failed:', smsResult.error);
+    const normPhone = phone ? normalisePhone(phone) : null;
+    let smsSent = false;
+    let emailSent = false;
+
+    // Send SMS if phone provided
+    if (normPhone) {
+      const smsResult = await sendOtp({ phone: normPhone, code, name: user.name });
+      if (smsResult.ok || smsResult.dev) {
+        smsSent = true;
+        console.log(`[ForgotPasswordAdmin] OTP sent via SMS to ${normPhone}`);
+      } else {
+        console.error('[ForgotPasswordAdmin] SMS failed:', smsResult.error);
+      }
+    }
+
+    // Send email if user has email
+    if (user.email) {
+      const companyData = user.company;
+      try {
+        await sendPasswordReset({
+          email: user.email,
+          name: user.name,
+          resetCode: code,
+          role: user.role,
+          institutionName: companyData?.name || '',
+        });
+        emailSent = true;
+        console.log(`[ForgotPasswordAdmin] OTP sent via email to ${user.email}`);
+      } catch(err) {
+        console.error('[ForgotPasswordAdmin] Email send failed:', err.message);
+      }
+    }
+
+    if (!smsSent && !emailSent) {
       user.resetPasswordToken = null;
       user.resetPasswordExpires = null;
       await user.save({ validateBeforeSave: false });
-      return res.status(500).json({ error: "Failed to send SMS. Please try again." });
+      return res.status(500).json({ error: "Failed to send reset code. Please try again." });
     }
 
-    console.log(`[ForgotPasswordAdmin] OTP sent to ${normPhone} for ${user.name}`);
-
-    // Also send via email if user has an email address
-    if (user.email) {
-      const companyData = user.company;
-      sendPasswordReset({
-        email: user.email,
-        name: user.name,
-        resetCode: code,
-        role: user.role,
-        institutionName: companyData?.name || '',
-      }).catch(err => console.error('[ForgotPasswordAdmin] Email send failed:', err.message));
-    }
-
-    res.json({ message: "A 6-digit reset code has been sent to your phone via SMS." + (user.email ? " It was also sent to your email." : "") });
+    const channel = smsSent && emailSent ? 'your phone and email'
+      : smsSent ? 'your phone via SMS'
+      : 'your email';
+    res.json({ message: `A 6-digit reset code has been sent to ${channel}.` });
   } catch (error) {
     console.error("Forgot password admin error:", error);
     res.status(500).json({ error: "Failed to generate reset code" });
