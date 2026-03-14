@@ -758,7 +758,7 @@ function showAdminForgot() {
   adminForgotStep = 'request';
 }
 
-let adminForgotEmail = '', adminForgotStep = 'request';
+let adminForgotEmail = '', adminForgotEmailAddr = '', adminForgotStep = 'request';
 async function handleAdminForgotPassword() {
   function setAdminForgotMsg(msg, isSuccess) {
     let el = document.getElementById('admin-forgot-msg');
@@ -784,7 +784,7 @@ async function handleAdminForgotPassword() {
     btn.textContent = 'Sending...'; btn.disabled = true;
     try {
       const data = await api('/api/auth/forgot-password-admin', { method: 'POST', body: JSON.stringify({ phone: phone || undefined, email: email || undefined }) });
-      adminForgotEmail = phone; adminForgotStep = 'reset';
+      adminForgotEmail = phone || ''; adminForgotEmailAddr = email || ''; adminForgotStep = 'reset';
       document.getElementById('admin-reset-code-group').classList.remove('hidden');
       document.getElementById('admin-new-password-group').classList.remove('hidden');
       btn.textContent = 'Reset Password'; btn.disabled = false;
@@ -798,7 +798,7 @@ async function handleAdminForgotPassword() {
     const btn = document.getElementById('admin-forgot-btn');
     btn.textContent = 'Resetting...'; btn.disabled = true;
     try {
-      await api('/api/auth/reset-password-email', { method: 'POST', body: JSON.stringify({ phone: adminForgotEmail, resetCode, newPassword }) });
+      await api('/api/auth/reset-password-email', { method: 'POST', body: JSON.stringify({ phone: adminForgotEmail || undefined, email: adminForgotEmailAddr || undefined, resetCode, newPassword }) });
       adminForgotStep = 'request';
       setAdminForgotMsg('✅ Password reset! Redirecting to sign in...', true);
       setTimeout(() => { showAdminLogin(); }, 1800);
