@@ -19,7 +19,7 @@ const {
 async function getAdminsForCompany(companyId) {
   return User.find({
     company: companyId,
-    role: { $in: ['admin', 'lecturer', 'superadmin'] },
+    role: { $in: ['admin', 'manager'] },
     isActive: true,
   }).select('email name').lean();
 }
@@ -91,11 +91,13 @@ async function runDailyEmails() {
       try {
         const users = await getAdminsForCompany(company._id);
         for (const user of users) {
+          const planPrice = company.subscriptionPlan === 'annual' ? 2000 : 200;
           await sendRenewalReminder({
-            email:   user.email,
-            name:    fullName(user),
-            plan:    company.subscriptionPlan,
-            endDate: company.subscriptionEndDate,
+            email:     user.email,
+            name:      fullName(user),
+            plan:      company.subscriptionPlan,
+            endDate:   company.subscriptionEndDate,
+            amountGhs: planPrice,
           });
         }
       } catch (err) {
