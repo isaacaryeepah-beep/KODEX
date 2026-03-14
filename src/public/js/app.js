@@ -316,6 +316,8 @@ async function saveOfflineProfile(credentials, userData) {
         indexNumber: userData.user.indexNumber || null,
         employeeId: userData.user.employeeId || null,
         company: userData.user.company,
+        department: userData.user.department || null,
+        profilePhoto: userData.user.profilePhoto || null,
       },
       token: userData.token,           // cached JWT (may expire but used for UI)
       trial: userData.trial || null,
@@ -337,7 +339,8 @@ function buildProfileKey(credentials) {
   if (credentials.employeeId || (credentials.loginRole === 'employee')) {
     return `employee::${(credentials.email || '').toLowerCase()}::${(credentials.institutionCode || '').toUpperCase()}`;
   }
-  return `${credentials.loginRole || 'admin'}::${(credentials.email || '').toLowerCase()}`;
+  const role = credentials.loginRole || 'admin';
+  return `${role}::${(credentials.email || '').toLowerCase()}`;
 }
 
 // ── Attempt offline login ─────────────────────────────────────────────────────
@@ -431,6 +434,12 @@ function isOnline() { return navigator.onLine; }
 function offlineCache(key, data) {
   try {
     const store = JSON.parse(localStorage.getItem(OFFLINE_CACHE_KEY) || '{}');
+    // Prune old attendees_ entries if we have more than 20 (saves localStorage space)
+    const attendeeKeys = Object.keys(store).filter(k => k.startsWith('attendees_'));
+    if (attendeeKeys.length > 20) {
+      // Remove oldest 10
+      attendeeKeys.slice(0, 10).forEach(k => delete store[k]);
+    }
     store[key] = { data, ts: Date.now() };
     localStorage.setItem(OFFLINE_CACHE_KEY, JSON.stringify(store));
   } catch(e) { console.warn('[Offline] Cache write failed', e); }
@@ -521,8 +530,12 @@ async function syncOfflineQueue() {
     } catch (e) {
       console.warn(`[Offline] Sync failed for ${action.url}:`, e.message);
       // Keep failed items if it's a server error (not 4xx client error)
-      if (!e.message.includes('400') && !e.message.includes('409') && !e.message.includes('404')) {
+      const is4xx = e.status >= 400 && e.status < 500 ||
+        e.message.includes('400') || e.message.includes('409') || e.message.includes('404');
+      if (!is4xx) {
         remaining.push(action);
+      } else {
+        console.log(`[Offline] Dropping ${action.label || action.url} — rejected by server (${e.status || e.message})`);
       }
     }
   }
@@ -4639,8 +4652,19 @@ function closeQuizModal() {
 }
 
 async function renderLecturerQuizzes(content) {
+  if (!isOnline()) {
+    const cached = offlineRead('quizzes_lecturer');
+    if (cached) {
+      content.innerHTML = '<div style="background:#fef3c7;color:#92400e;padding:10px 16px;border-radius:8px;font-size:13px;margin-bottom:16px">📡 Offline — showing cached quizzes</div>' + (content.innerHTML || '');
+      _renderLecturerQuizzesHTML(content, cached);
+    } else {
+      content.innerHTML = '<div class="card" style="text-align:center;padding:32px"><div style="font-size:36px">📡</div><p style="margin-top:8px;color:var(--text-light)">No cached data. Connect once to view quizzes offline.</p></div>';
+    }
+    return;
+  }
   try {
     const data = await api('/api/lecturer/quizzes');
+    offlineCache('quizzes_lecturer', data);
     content.innerHTML = `
       <div class="page-header"><h2>Quizzes</h2><p>Manage your quizzes and assessments</p></div>
       <div class="actions-bar"><button class="btn btn-primary btn-sm" onclick="showCreateQuizModal()">Create Quiz</button></div>
@@ -5740,8 +5764,19 @@ async function viewAdminQuizDetail(quizId) {
 async function renderMyAttendance() {
   const content = document.getElementById('main-content');
   if (!content) return;
+  if (!isOnline()) {
+    const cached = offlineRead('my_attendance');
+    if (cached) {
+      content.innerHTML = '<div style="background:#fef3c7;color:#92400e;padding:10px 16px;border-radius:8px;font-size:13px;margin-bottom:16px">📡 Offline — showing cached attendance</div>';
+      _renderMyAttendanceHTML(content, cached);
+    } else {
+      content.innerHTML = '<div class="card" style="text-align:center;padding:32px"><div style="font-size:36px">📡</div><p style="margin-top:8px;color:var(--text-light)">No cached data. Connect once to view attendance offline.</p></div>';
+    }
+    return;
+  }
   try {
     const data = await api('/api/attendance-sessions/my-attendance');
+    offlineCache('my_attendance', data);
     content.innerHTML = `
       <div class="page-header"><h2>My Attendance</h2><p>Your attendance history</p></div>
       <div class="actions-bar">
@@ -8155,9 +8190,20 @@ const ANN_CAN_POST = ['admin','superadmin','lecturer','manager'];
 async function renderAnnouncements() {
   const content = document.getElementById('main-content');
   if (!content) return;
+  if (!isOnline()) {
+    const cached = offlineRead('announcements');
+    if (cached) {
+      content.innerHTML = '<div style="background:#fef3c7;color:#92400e;padding:10px 16px;border-radius:8px;font-size:13px;margin-bottom:16px">📡 Offline — showing cached announcements</div>';
+      _renderAnnouncementsHTML(content, cached);
+    } else {
+      content.innerHTML = '<div class="card" style="text-align:center;padding:32px"><div style="font-size:36px">📡</div><p style="margin-top:8px;color:var(--text-light)">No cached data. Connect once to view announcements offline.</p></div>';
+    }
+    return;
+  }
   content.innerHTML = '<div class="loading">Loading announcements…</div>';
   try {
     const data = await api('/api/announcements');
+    offlineCache('announcements', data);
     const anns = data.announcements || [];
     const canPost = ANN_CAN_POST.includes(currentUser.role);
     const isAdmin = ['admin','superadmin'].includes(currentUser.role);
