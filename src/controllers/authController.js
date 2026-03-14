@@ -847,18 +847,24 @@ exports.resetPassword = async (req, res) => {
 
 exports.forgotPasswordEmail = async (req, res) => {
   try {
-    const { phone, institutionCode } = req.body;
-    if (!phone) return res.status(400).json({ error: "Phone number is required" });
+    const { phone, email, institutionCode } = req.body;
+    if (!phone && !email) return res.status(400).json({ error: "Phone number or email is required" });
     if (!institutionCode) return res.status(400).json({ error: "Institution code is required" });
 
     const company = await Company.findOne({ institutionCode: institutionCode.toUpperCase() });
     if (!company) return res.status(404).json({ error: "Institution not found. Please check your institution code." });
 
-    const normPhone = normalisePhone(phone);
-    const user = await User.findOne({ phone: normPhone, company: company._id })
-               || await User.findOne({ phone: phone.trim(), company: company._id });
+    let user = null;
+    if (phone) {
+      const normPhone = normalisePhone(phone);
+      user = await User.findOne({ phone: normPhone, company: company._id })
+          || await User.findOne({ phone: phone.trim(), company: company._id });
+    }
+    if (!user && email) {
+      user = await User.findOne({ email: email.trim().toLowerCase(), company: company._id });
+    }
 
-    if (!user) return res.status(404).json({ error: "No account found with that phone number in this institution." });
+    if (!user) return res.status(404).json({ error: "No account found with those details in this institution." });
 
     if (["admin", "superadmin"].includes(user.role)) {
       return res.status(403).json({ error: "Invalid input" });
@@ -912,14 +918,20 @@ exports.forgotPasswordEmail = async (req, res) => {
 
 exports.forgotPasswordAdmin = async (req, res) => {
   try {
-    const { phone } = req.body;
-    if (!phone) return res.status(400).json({ error: "Phone number is required" });
+    const { phone, email } = req.body;
+    if (!phone && !email) return res.status(400).json({ error: "Phone number or email is required" });
 
-    const normPhone = normalisePhone(phone);
-    const user = await User.findOne({ phone: normPhone }).populate("company", "name")
-               || await User.findOne({ phone: phone.trim() }).populate("company", "name");
+    let user = null;
+    if (phone) {
+      const normPhone = normalisePhone(phone);
+      user = await User.findOne({ phone: normPhone }).populate("company", "name")
+          || await User.findOne({ phone: phone.trim() }).populate("company", "name");
+    }
+    if (!user && email) {
+      user = await User.findOne({ email: email.trim().toLowerCase(), role: { $in: ["admin", "manager"] } }).populate("company", "name");
+    }
 
-    if (!user) return res.status(404).json({ error: "No account found with that phone number." });
+    if (!user) return res.status(404).json({ error: "No account found with those details." });
 
     if (user.role === "lecturer") {
       return res.status(403).json({ error: "Invalid input" });
