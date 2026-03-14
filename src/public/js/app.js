@@ -643,6 +643,20 @@ function timeAgo(dateStr) {
   return new Date(dateStr).toLocaleDateString();
 }
 
+// ── Date formatting helper ───────────────────────────────────────────────────
+function fmtDate(d) {
+  if (!d) return '—';
+  return new Date(d).toLocaleString('en-GB', {
+    day: 'numeric', month: 'short', year: 'numeric',
+    hour: '2-digit', minute: '2-digit'
+  });
+}
+
+// ── HTML escape helper ────────────────────────────────────────────────────────
+function esc(s) {
+  return (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
 function showError(msg) {
   const el = document.getElementById('auth-error');
   el.textContent = msg;
@@ -2213,7 +2227,7 @@ async function renderHodDashboard(content) {
 
   try {
     const [sessData, userStats] = await Promise.all([
-      api('/api/sessions?limit=5'),
+      api('/api/attendance-sessions?limit=5'),
       api('/api/users/stats')
     ]);
     const sessions   = sessData.sessions   || [];
@@ -2311,7 +2325,7 @@ async function renderHodSessions() {
   content.innerHTML = '<div class="loading">Loading sessions…</div>';
   try {
     const dept = currentUser.department ? '&department=' + encodeURIComponent(currentUser.department) : '';
-    const data = await api('/api/sessions?limit=100' + dept);
+    const data = await api('/api/attendance-sessions?limit=100' + dept);
     const sessions = data.sessions || [];
     content.innerHTML = `
       <div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;">
@@ -2439,7 +2453,7 @@ async function renderHodReports() {
   try {
     const hodDept = currentUser.department ? '&department=' + encodeURIComponent(currentUser.department) : '';
     const [sessData, userStats] = await Promise.all([
-      api('/api/sessions?limit=200' + hodDept),
+      api('/api/attendance-sessions?limit=200' + hodDept),
       api('/api/users/stats' + (currentUser.department ? '?department=' + encodeURIComponent(currentUser.department) : ''))
     ]);
     const sessions  = sessData.sessions || [];
@@ -2612,7 +2626,7 @@ async function hodExportCSV(type) {
       filename = 'KODEX_Lecturers_' + (currentUser.department || 'All') + '.csv';
     } else if (type === 'attendance') {
       const hodDept = currentUser.department ? '&department=' + encodeURIComponent(currentUser.department) : '';
-      const d = await api('/api/sessions?limit=200' + hodDept);
+      const d = await api('/api/attendance-sessions?limit=200' + hodDept);
       headers = ['Session', 'Lecturer', 'Date', 'Attendance', 'Status'];
       rows = (d.sessions || []).map(s => [s.title || s.courseName || 'Session', s.createdBy?.name || '', fmtDate(s.createdAt), s.attendanceCount ?? s.records?.length ?? 0, s.active ? 'Live' : 'Ended']);
       filename = 'KODEX_Attendance_' + (currentUser.department || 'All') + '.csv';
