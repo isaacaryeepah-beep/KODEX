@@ -1023,19 +1023,28 @@ exports.forgotPasswordAdmin = async (req, res) => {
 
 exports.resetPasswordEmail = async (req, res) => {
   try {
-    const { phone, resetCode, newPassword } = req.body;
-    if (!phone || !resetCode || !newPassword) {
-      return res.status(400).json({ error: "Phone number, reset code, and new password are required" });
+    const { phone, email, resetCode, newPassword } = req.body;
+    if ((!phone && !email) || !resetCode || !newPassword) {
+      return res.status(400).json({ error: "Phone or email, reset code, and new password are required" });
     }
     if (newPassword.length < 8) {
       return res.status(400).json({ error: "Password must be at least 8 characters" });
     }
 
-    const normPhone = normalisePhone(phone);
-    const user = await User.findOne({
-      phone: { $in: [normPhone, phone.trim()] },
-      resetPasswordExpires: { $gt: Date.now() },
-    }).select("+password");
+    let user = null;
+    if (phone) {
+      const normPhone = normalisePhone(phone);
+      user = await User.findOne({
+        phone: { $in: [normPhone, phone.trim()] },
+        resetPasswordExpires: { $gt: Date.now() },
+      }).select("+password");
+    }
+    if (!user && email) {
+      user = await User.findOne({
+        email: email.trim().toLowerCase(),
+        resetPasswordExpires: { $gt: Date.now() },
+      }).select("+password");
+    }
 
     if (!user) return res.status(400).json({ error: "Invalid or expired reset code" });
 
