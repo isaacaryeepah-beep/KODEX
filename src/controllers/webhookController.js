@@ -172,7 +172,7 @@ async function handleSubscriptionCreate(data) {
   if (!email) return;
 
   // Find company by admin email
-  const admin = await User.findOne({ email, role: { $in: ["admin", "superadmin"] } }).lean();
+  const admin = await User.findOne({ email, role: { $in: ["admin", "manager"] } }).lean();
   if (!admin) return;
 
   await Company.findByIdAndUpdate(admin.company, {
