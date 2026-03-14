@@ -1095,11 +1095,19 @@ exports.resetPasswordEmail = async (req, res) => {
 
 exports.updateProfile = async (req, res) => {
   try {
-    const { name, currentPassword, newPassword, department } = req.body;
+    const { name, currentPassword, newPassword, department, profilePhoto } = req.body;
     const user = await User.findById(req.user._id).select("+password");
     if (!user) return res.status(404).json({ error: "User not found" });
 
     if (name && name.trim()) user.name = name.trim();
+
+    // Profile photo — store as base64 (max ~2MB)
+    if (profilePhoto !== undefined) {
+      if (profilePhoto && profilePhoto.length > 2 * 1024 * 1024 * 1.4) {
+        return res.status(400).json({ error: "Profile photo must be under 2MB" });
+      }
+      user.profilePhoto = profilePhoto || null;
+    }
 
     // Allow lecturer/hod to update their own department
     if (department !== undefined && ["lecturer", "hod"].includes(user.role)) {
@@ -1127,7 +1135,7 @@ exports.updateProfile = async (req, res) => {
     }
 
     await user.save();
-    res.json({ message: "Profile updated successfully", user: { name: user.name, email: user.email, role: user.role, department: user.department } });
+    res.json({ message: "Profile updated successfully", user: { name: user.name, email: user.email, role: user.role, department: user.department, profilePhoto: user.profilePhoto || null } });
   } catch (error) {
     console.error("Update profile error:", error);
     res.status(500).json({ error: "Failed to update profile" });
