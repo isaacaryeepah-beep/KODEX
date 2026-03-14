@@ -207,11 +207,11 @@ exports.verifyPaystackSubscription = async (req, res) => {
 
     // Send confirmation email to the paying user
     try {
-      const user = await User.findById(meta.userId).select('email firstName lastName').lean();
+      const user = await User.findById(meta.userId).select('email name').lean();
       if (user) {
         await sendSubscriptionConfirmed({
           email:     user.email,
-          name:      [user.firstName, user.lastName].filter(Boolean).join(' ') || user.email.split('@')[0],
+          name:      user.name || user.email.split('@')[0],
           plan,
           endDate:   company.subscriptionEndDate,
           amountGhs: meta.amountGhs,
