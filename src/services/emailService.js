@@ -353,15 +353,27 @@ async function sendAdminPasswordResetNotice({ adminEmail, adminName, targetUserN
   return send({ to: adminEmail, subject: `🔔 KODEX: Password reset by ${targetUserName}`, html });
 }
 
-// 8. Custom message from superadmin to institution admin
-async function sendCustom({ to, toName, subject, message, fromName = 'KODEX Platform' }) {
+
+// 9. Payment failed notification
+async function sendPaymentFailed({ email, name, plan, institutionName }) {
+  const planLabel = plan === 'annual' ? 'Annual' : 'Monthly';
   const html = wrap(`
-    <h1>${subject}</h1>
-    <p>Hi ${toName || 'there'},</p>
-    ${message.split('\n').map(line => line.trim() ? `<p>${line}</p>` : '').join('')}
-    <p style="margin-top:24px;font-size:13px;color:#94a3b8;">This message was sent to you by the KODEX platform team.</p>
-  `, subject);
-  return send({ to, subject: `${subject}`, html });
+    <h1>Payment Failed ⚠️</h1>
+    <p>Hi <span class="highlight">${name || email}</span>, we were unable to process your ${planLabel} subscription payment for <strong>${institutionName || 'your institution'}</strong>.</p>
+
+    <div class="info-box" style="border-left:4px solid #dc2626">
+      <p style="color:#dc2626;font-weight:700;margin-bottom:4px">Action Required</p>
+      <p>Your subscription will be suspended if payment is not received. Please update your payment method in the KODEX dashboard.</p>
+    </div>
+
+    <div style="text-align:center;margin:28px 0">
+      <a href="${BASE_URL}" class="btn btn-primary">Update Payment →</a>
+    </div>
+
+    <p>If you believe this is an error, please contact your bank or try a different card. If the issue persists, contact us at <a href="mailto:support@kodex.it.com">support@kodex.it.com</a>.</p>
+  `, `Payment failed — action required`);
+
+  return send({ to: email, subject: `⚠️ KODEX: Payment failed — action required`, html });
 }
 
 module.exports = {
@@ -373,5 +385,4 @@ module.exports = {
   sendRenewalReminder,
   sendPasswordReset,
   sendAdminPasswordResetNotice,
-  sendCustom,
 };
