@@ -17,9 +17,9 @@
     .brand p{font-size:12px;color:#6b7280;margin-top:2px}
     .badge{display:inline-flex;align-items:center;gap:5px;background:#fef3c7;color:#92400e;border:1px solid #fde68a;border-radius:20px;padding:4px 12px;font-size:11px;font-weight:700;margin-bottom:24px}
     label{display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#6b7280;margin-bottom:6px}
-    input[type=email],input[type=password]{width:100%;padding:11px 14px;border:1.5px solid #e5e7eb;border-radius:9px;font-size:14px;outline:none;margin-bottom:14px;font-family:inherit}
-    input:focus{border-color:#374151}
-    .btn-login{width:100%;padding:13px;background:#0d1117;color:#fff;border:none;border-radius:9px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;margin-top:4px}
+    input[type=email],input[type=password],input[type=text],textarea,select{width:100%;padding:11px 14px;border:1.5px solid #e5e7eb;border-radius:9px;font-size:14px;outline:none;font-family:inherit}
+    input:focus,textarea:focus,select:focus{border-color:#374151}
+    .btn-login{width:100%;padding:13px;background:#0d1117;color:#fff;border:none;border-radius:9px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;margin-top:8px}
     .btn-login:hover{background:#1f2937}
     .btn-login:disabled{opacity:.6;cursor:not-allowed}
     .err{display:none;margin-top:12px;padding:10px 14px;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;color:#dc2626;font-size:13px}
@@ -28,41 +28,94 @@
 
     /* ── Dashboard ── */
     #dashboard{display:none;background:#f1f5f9;min-height:100vh}
-    .topbar{background:#fff;border-bottom:1px solid #e2e8f0;padding:0 24px;height:56px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:10}
-    .topbar-left{display:flex;align-items:center;gap:12px}
+    .topbar{background:#fff;border-bottom:1px solid #e2e8f0;padding:0 24px;height:56px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:10;gap:12px}
+    .topbar-left{display:flex;align-items:center;gap:12px;flex-shrink:0}
     .topbar h2{font-size:16px;font-weight:700;color:#0d1117}
-    .topbar-right{display:flex;align-items:center;gap:12px}
-    .user-chip{font-size:13px;color:#6b7280}
-    .btn-sm{padding:7px 14px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;border:1.5px solid #e2e8f0;background:#fff;font-family:inherit}
+    .topbar-right{display:flex;align-items:center;gap:8px}
+    .user-chip{font-size:13px;color:#6b7280;white-space:nowrap}
+    .btn-sm{padding:7px 14px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;border:1.5px solid #e2e8f0;background:#fff;font-family:inherit;white-space:nowrap}
     .btn-sm:hover{background:#f8fafc}
-    .content{padding:28px 32px;max-width:1200px}
+    .btn-sm.primary{background:#0d1117;color:#fff;border-color:#0d1117}
+    .btn-sm.primary:hover{background:#1f2937}
+    .content{padding:24px 28px;max-width:1400px}
+
+    /* Tabs */
+    .tabs{display:flex;gap:4px;margin-bottom:24px;background:#fff;border-radius:12px;padding:6px;border:1px solid #e2e8f0;width:fit-content}
+    .tab{padding:8px 18px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;border:none;background:transparent;color:#64748b;font-family:inherit}
+    .tab.active{background:#0d1117;color:#fff}
+    .tab:hover:not(.active){background:#f1f5f9}
 
     /* Stats */
-    .stats{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:16px;margin-bottom:28px}
-    .stat{background:#fff;border-radius:12px;padding:20px;border:1px solid #e2e8f0}
-    .stat-val{font-size:28px;font-weight:800;color:#0d1117}
+    .stats{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:14px;margin-bottom:24px}
+    .stat{background:#fff;border-radius:12px;padding:18px;border:1px solid #e2e8f0}
+    .stat-val{font-size:26px;font-weight:800;color:#0d1117}
     .stat-lbl{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#94a3b8;margin-top:4px}
+
+    /* Filters */
+    .filters{display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;align-items:center}
+    .filters input,.filters select{width:auto;padding:8px 12px;border-radius:8px;font-size:13px;border:1.5px solid #e2e8f0;background:#fff}
+    .filters input{min-width:220px}
 
     /* Table */
     .table-card{background:#fff;border-radius:12px;border:1px solid #e2e8f0;overflow:hidden;margin-bottom:24px}
-    .table-head{padding:16px 20px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #e2e8f0}
+    .table-head{padding:14px 20px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #e2e8f0;gap:12px;flex-wrap:wrap}
     .table-head h3{font-size:14px;font-weight:700}
     table{width:100%;border-collapse:collapse;font-size:13px}
-    th{padding:10px 20px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#94a3b8;border-bottom:1px solid #e2e8f0}
-    td{padding:12px 20px;border-bottom:1px solid #f1f5f9;vertical-align:middle}
+    th{padding:9px 16px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#94a3b8;border-bottom:1px solid #e2e8f0;white-space:nowrap}
+    td{padding:11px 16px;border-bottom:1px solid #f1f5f9;vertical-align:middle}
     tr:last-child td{border-bottom:none}
-    .tag{display:inline-block;padding:2px 10px;border-radius:20px;font-size:11px;font-weight:700}
+    tr.clickable:hover{background:#f8fafc;cursor:pointer}
+    .tag{display:inline-block;padding:2px 10px;border-radius:20px;font-size:11px;font-weight:700;white-space:nowrap}
     .tag-green{background:#dcfce7;color:#166534}
     .tag-red{background:#fee2e2;color:#991b1b}
     .tag-blue{background:#dbeafe;color:#1e40af}
     .tag-amber{background:#fef3c7;color:#92400e}
-    .action-btn{padding:5px 12px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;border:1.5px solid #e2e8f0;background:#fff;font-family:inherit;margin-right:4px}
+    .tag-gray{background:#f1f5f9;color:#475569}
+    .action-btn{padding:5px 10px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;border:1.5px solid #e2e8f0;background:#fff;font-family:inherit;margin-right:3px;white-space:nowrap}
     .action-btn:hover{background:#f8fafc}
     .action-btn.danger{border-color:#fecaca;color:#dc2626}
     .action-btn.danger:hover{background:#fef2f2}
     .action-btn.success{border-color:#bbf7d0;color:#16a34a}
+    .action-btn.success:hover{background:#f0fdf4}
+    .role-breakdown{font-size:11px;color:#94a3b8;margin-top:2px}
+    .trial-warn{color:#d97706;font-weight:700}
+    .trial-ok{color:#16a34a}
+    .trial-exp{color:#dc2626;font-weight:700}
     .empty{padding:40px;text-align:center;color:#94a3b8;font-size:14px}
     .loading-msg{padding:40px;text-align:center;color:#94a3b8}
+
+    /* Modal */
+    .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:100;align-items:flex-start;justify-content:center;padding:40px 16px;overflow-y:auto}
+    .modal-overlay.open{display:flex}
+    .modal{background:#fff;border-radius:16px;padding:32px;width:100%;max-width:560px;box-shadow:0 24px 64px rgba(0,0,0,.3);margin:auto}
+    .modal h3{font-size:17px;font-weight:700;margin-bottom:16px}
+    .modal-field{margin-bottom:14px}
+    .modal-field label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#6b7280;display:block;margin-bottom:5px}
+    .modal-field input,.modal-field textarea,.modal-field select{margin-bottom:0;padding:10px 14px}
+    .modal-field textarea{min-height:120px;resize:vertical}
+    .modal-actions{display:flex;gap:10px;margin-top:20px;justify-content:flex-end}
+    .btn-primary{padding:10px 22px;background:#0d1117;color:#fff;border:none;border-radius:9px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit}
+    .btn-primary:hover{background:#1f2937}
+    .btn-primary:disabled{opacity:.6;cursor:not-allowed}
+    .btn-cancel{padding:10px 18px;background:#fff;color:#374151;border:1.5px solid #e5e7eb;border-radius:9px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit}
+    .btn-cancel:hover{background:#f8fafc}
+    .modal-status{margin-top:10px;font-size:13px;font-weight:500;text-align:center}
+    .status-ok{color:#16a34a}
+    .status-err{color:#dc2626}
+
+    /* Detail panel */
+    .detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px}
+    .detail-item label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#94a3b8;display:block;margin-bottom:3px}
+    .detail-item span{font-size:14px;color:#0d1117;font-weight:500}
+    .detail-divider{border:none;border-top:1px solid #e2e8f0;margin:16px 0}
+    .impersonate-banner{background:#fef3c7;border:1px solid #fde68a;border-radius:8px;padding:10px 14px;font-size:13px;color:#92400e;margin-bottom:14px}
+
+    /* Payment table */
+    .pay-amount{font-weight:700;color:#16a34a}
+
+    /* Notes */
+    .notes-area{width:100%;min-height:80px;resize:vertical;border:1.5px solid #e2e8f0;border-radius:8px;padding:10px;font-size:13px;font-family:inherit;color:#374151}
+    .notes-area:focus{outline:none;border-color:#374151}
   </style>
 </head>
 <body>
@@ -81,9 +134,9 @@
     <div class="badge">🔒 SUPERADMIN ACCESS</div>
     <form onsubmit="doLogin(event)">
       <label for="em">Email</label>
-      <input type="email" id="em" placeholder="Enter your email" required>
+      <input type="email" id="em" placeholder="Enter your email" required style="margin-bottom:14px">
       <label for="pw">Password</label>
-      <input type="password" id="pw" placeholder="Enter password" required>
+      <input type="password" id="pw" placeholder="Enter password" required style="margin-bottom:0">
       <button class="btn-login" id="login-btn" type="submit">Sign In</button>
     </form>
     <div class="err" id="err"></div>
@@ -96,21 +149,80 @@
   <div class="topbar">
     <div class="topbar-left">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#0d1117" stroke-width="2"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
-      <h2>Platform Overview</h2>
+      <h2>Platform Admin</h2>
     </div>
     <div class="topbar-right">
       <span class="user-chip" id="user-chip"></span>
+      <button class="btn-sm" onclick="exportCSV()">⬇ CSV</button>
       <button class="btn-sm" onclick="doLogout()">Sign Out</button>
     </div>
   </div>
   <div class="content">
-    <div id="dash-body"><div class="loading-msg">Loading…</div></div>
+    <div class="tabs">
+      <button class="tab active" onclick="switchTab('institutions',this)">🏫 Institutions</button>
+      <button class="tab" onclick="switchTab('payments',this)">💳 Payments</button>
+    </div>
+    <div id="tab-institutions"><div class="loading-msg">Loading…</div></div>
+    <div id="tab-payments" style="display:none"><div class="loading-msg">Loading…</div></div>
+  </div>
+</div>
+
+<!-- EMAIL MODAL -->
+<div class="modal-overlay" id="email-modal">
+  <div class="modal">
+    <h3>✉️ Email Institution Admin</h3>
+    <div class="modal-field">
+      <label>To</label>
+      <input type="text" id="email-to-display" readonly style="background:#f8fafc;color:#64748b">
+    </div>
+    <div class="modal-field">
+      <label>Subject</label>
+      <input type="text" id="email-subject" placeholder="e.g. Your trial is expiring soon">
+    </div>
+    <div class="modal-field">
+      <label>Message</label>
+      <textarea id="email-body" placeholder="Type your message…"></textarea>
+    </div>
+    <div class="modal-status" id="email-status"></div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeModal('email-modal')">Cancel</button>
+      <button class="btn-primary" id="email-send-btn" onclick="sendEmail()">Send Email</button>
+    </div>
+  </div>
+</div>
+
+<!-- DETAIL MODAL -->
+<div class="modal-overlay" id="detail-modal">
+  <div class="modal" style="max-width:620px">
+    <h3 id="detail-title">Institution Details</h3>
+    <div id="detail-body"></div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeModal('detail-modal')">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- NOTES MODAL -->
+<div class="modal-overlay" id="notes-modal">
+  <div class="modal" style="max-width:460px">
+    <h3>📝 Notes</h3>
+    <p style="font-size:13px;color:#64748b;margin-bottom:12px" id="notes-company-name"></p>
+    <textarea class="notes-area" id="notes-text" placeholder="Add private notes about this institution…"></textarea>
+    <div class="modal-status" id="notes-status"></div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeModal('notes-modal')">Cancel</button>
+      <button class="btn-primary" onclick="saveNotes()">Save Notes</button>
+    </div>
   </div>
 </div>
 
 <script>
 let SA_TOKEN = localStorage.getItem('sa_token') || '';
+let allCompanies = [];
+let currentEmailId = '';
+let currentNotesId = '';
 
+// ── Auth ──────────────────────────────────────────────────────────────────────
 async function doLogin(e) {
   e.preventDefault();
   const btn = document.getElementById('login-btn');
@@ -135,8 +247,7 @@ async function doLogin(e) {
 }
 
 function doLogout() {
-  localStorage.removeItem('sa_token');
-  SA_TOKEN = '';
+  localStorage.removeItem('sa_token'); SA_TOKEN = '';
   document.getElementById('dashboard').style.display = 'none';
   document.getElementById('login-screen').style.display = 'flex';
 }
@@ -144,86 +255,350 @@ function doLogout() {
 async function api(path, opts={}) {
   const r = await fetch(path, { ...opts, headers:{'Content-Type':'application/json','Authorization':'Bearer '+SA_TOKEN,...(opts.headers||{})} });
   const d = await r.json();
-  if (!r.ok) throw new Error(d.error||'Request failed');
+  if (!r.ok) throw new Error(d.error || 'Request failed');
   return d;
 }
 
+// ── Dashboard ─────────────────────────────────────────────────────────────────
 async function showDashboard() {
   document.getElementById('login-screen').style.display = 'none';
   document.getElementById('dashboard').style.display = 'block';
-  document.getElementById('dash-body').innerHTML = '<div class="loading-msg">Loading platform data…</div>';
+  loadInstitutions();
+}
+
+function switchTab(tab, btn) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('tab-institutions').style.display = tab === 'institutions' ? 'block' : 'none';
+  document.getElementById('tab-payments').style.display = tab === 'payments' ? 'block' : 'none';
+  if (tab === 'payments') loadPayments();
+}
+
+// ── Institutions Tab ──────────────────────────────────────────────────────────
+async function loadInstitutions() {
+  document.getElementById('tab-institutions').innerHTML = '<div class="loading-msg">Loading platform data…</div>';
   try {
     const data = await api('/api/superadmin/overview');
-    const cos = data.companies || [];
-    const total = cos.length, active = cos.filter(c=>c.isActive).length;
-    const trial = cos.filter(c=>c.isTrialActive).length, sub = cos.filter(c=>c.subscriptionStatus==='active').length;
-    const acad = cos.filter(c=>c.mode==='academic').length, corp = cos.filter(c=>c.mode==='corporate').length;
-    const rev = data.totalRevenue || 0;
+    allCompanies = data.companies || [];
+    renderInstitutions(allCompanies, data);
+  } catch(ex) {
+    document.getElementById('tab-institutions').innerHTML = `<div class="empty" style="color:#dc2626">Error: ${ex.message}</div>`;
+  }
+}
 
-    document.getElementById('dash-body').innerHTML = `
-      <div class="stats">
-        <div class="stat"><div class="stat-val">${total}</div><div class="stat-lbl">Institutions</div></div>
-        <div class="stat"><div class="stat-val" style="color:#16a34a">${active}</div><div class="stat-lbl">Active</div></div>
-        <div class="stat"><div class="stat-val" style="color:#d97706">${trial}</div><div class="stat-lbl">On Trial</div></div>
-        <div class="stat"><div class="stat-val" style="color:#2563eb">${sub}</div><div class="stat-lbl">Subscribed</div></div>
-        <div class="stat"><div class="stat-val" style="color:#16a34a;font-size:20px">GHS ${rev.toLocaleString()}</div><div class="stat-lbl">Revenue</div></div>
-        <div class="stat"><div class="stat-val">${acad}</div><div class="stat-lbl">Academic</div></div>
-        <div class="stat"><div class="stat-val">${corp}</div><div class="stat-lbl">Corporate</div></div>
+function renderInstitutions(cos, data) {
+  const total = cos.length;
+  const active = cos.filter(c=>c.isActive).length;
+  const trial = cos.filter(c=>c.isTrialActive).length;
+  const sub = cos.filter(c=>c.subscriptionStatus==='active').length;
+  const acad = cos.filter(c=>c.mode==='academic').length;
+  const corp = cos.filter(c=>c.mode==='corporate').length;
+  const rev = (data && data.totalRevenue) ? data.totalRevenue : cos.reduce((s,c)=>s+(c.revenue||0),0);
+
+  document.getElementById('tab-institutions').innerHTML = `
+    <div class="stats">
+      <div class="stat"><div class="stat-val">${total}</div><div class="stat-lbl">Institutions</div></div>
+      <div class="stat"><div class="stat-val" style="color:#16a34a">${active}</div><div class="stat-lbl">Active</div></div>
+      <div class="stat"><div class="stat-val" style="color:#d97706">${trial}</div><div class="stat-lbl">On Trial</div></div>
+      <div class="stat"><div class="stat-val" style="color:#2563eb">${sub}</div><div class="stat-lbl">Subscribed</div></div>
+      <div class="stat"><div class="stat-val" style="color:#16a34a;font-size:20px">GHS ${rev.toLocaleString()}</div><div class="stat-lbl">Revenue</div></div>
+      <div class="stat"><div class="stat-val">${acad}</div><div class="stat-lbl">Academic</div></div>
+      <div class="stat"><div class="stat-val">${corp}</div><div class="stat-lbl">Corporate</div></div>
+    </div>
+
+    <div class="filters">
+      <input type="text" id="search-input" placeholder="🔍 Search by name or code…" oninput="filterInstitutions()">
+      <select id="filter-mode" onchange="filterInstitutions()">
+        <option value="">All modes</option>
+        <option value="academic">Academic</option>
+        <option value="corporate">Corporate</option>
+      </select>
+      <select id="filter-status" onchange="filterInstitutions()">
+        <option value="">All statuses</option>
+        <option value="active">Active</option>
+        <option value="inactive">Inactive</option>
+        <option value="trial">On Trial</option>
+        <option value="subscribed">Subscribed</option>
+      </select>
+    </div>
+
+    <div class="table-card">
+      <div class="table-head"><h3>All Institutions</h3></div>
+      <div id="institutions-table-wrap">${buildInstitutionRows(cos)}</div>
+    </div>`;
+}
+
+function buildInstitutionRows(cos) {
+  if (!cos.length) return '<div class="empty">No institutions found.</div>';
+  return `<table>
+    <thead><tr>
+      <th>Institution</th><th>Admin</th><th>Users</th><th>Mode</th>
+      <th>Status</th><th>Trial / Subscription</th><th>Actions</th>
+    </tr></thead>
+    <tbody>
+      ${cos.map(c => {
+        const rc = c.roleCounts || {};
+        const breakdown = c.mode === 'academic'
+          ? `${rc.lecturer||0} lecturers · ${rc.student||0} students`
+          : `${rc.manager||0} managers · ${rc.employee||0} employees`;
+        const trialClass = !c.isTrialActive && c.subscriptionStatus !== 'active' ? 'trial-exp'
+          : c.trialDaysRemaining <= 3 ? 'trial-warn' : 'trial-ok';
+        const trialText = c.subscriptionStatus === 'active' ? 'Subscribed ✓'
+          : c.isTrialActive ? `${c.trialDaysRemaining}d left`
+          : 'Expired';
+        const expDate = c.trialEndDate ? new Date(c.trialEndDate).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}) : '—';
+        return `<tr class="clickable" onclick="showDetail('${c._id}')">
+          <td>
+            <div style="font-weight:700">${esc(c.name)}</div>
+            <div style="font-size:11px;color:#94a3b8;font-family:monospace">${c.institutionCode||'—'}</div>
+          </td>
+          <td>
+            <div style="font-size:13px">${esc(c.adminName||'—')}</div>
+            <div style="font-size:11px;color:#94a3b8">${esc(c.adminEmail||'—')}</div>
+          </td>
+          <td>
+            <div style="font-weight:600">${c.userCount||0}</div>
+            <div class="role-breakdown">${breakdown}</div>
+          </td>
+          <td><span class="tag ${c.mode==='academic'?'tag-blue':'tag-green'}">${c.mode}</span></td>
+          <td><span class="tag ${c.isActive?'tag-green':'tag-red'}">${c.isActive?'Active':'Inactive'}</span></td>
+          <td>
+            <span class="${trialClass}">${trialText}</span>
+            <div style="font-size:11px;color:#94a3b8">expires ${expDate}</div>
+          </td>
+          <td onclick="event.stopPropagation()">
+            <button class="action-btn ${c.isActive?'danger':'success'}" onclick="toggleCompany('${c._id}',${c.isActive},'${esc(c.name)}')">${c.isActive?'Deactivate':'Activate'}</button>
+            <button class="action-btn" onclick="extendTrial('${c._id}','${esc(c.name)}')">+Trial</button>
+            <button class="action-btn" onclick="openEmail('${c._id}','${esc(c.name)}','${esc(c.adminEmail||'')}')">✉️</button>
+            <button class="action-btn" onclick="openNotes('${c._id}','${esc(c.name)}','${esc(c.superadminNotes||'')}')">📝</button>
+            <button class="action-btn" onclick="impersonate('${c._id}','${esc(c.name)}')">🔑</button>
+          </td>
+        </tr>`;
+      }).join('')}
+    </tbody>
+  </table>`;
+}
+
+function filterInstitutions() {
+  const q = document.getElementById('search-input').value.toLowerCase();
+  const mode = document.getElementById('filter-mode').value;
+  const status = document.getElementById('filter-status').value;
+  let filtered = allCompanies.filter(c => {
+    const matchQ = !q || c.name.toLowerCase().includes(q) || (c.institutionCode||'').toLowerCase().includes(q) || (c.adminEmail||'').toLowerCase().includes(q);
+    const matchMode = !mode || c.mode === mode;
+    const matchStatus = !status ||
+      (status === 'active' && c.isActive) ||
+      (status === 'inactive' && !c.isActive) ||
+      (status === 'trial' && c.isTrialActive) ||
+      (status === 'subscribed' && c.subscriptionStatus === 'active');
+    return matchQ && matchMode && matchStatus;
+  });
+  document.getElementById('institutions-table-wrap').innerHTML = buildInstitutionRows(filtered);
+}
+
+// ── Institution Detail ────────────────────────────────────────────────────────
+function showDetail(id) {
+  const c = allCompanies.find(x => x._id === id);
+  if (!c) return;
+  const rc = c.roleCounts || {};
+  const created = c.createdAt ? new Date(c.createdAt).toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'}) : '—';
+  const lastLogin = c.lastLoginAt ? new Date(c.lastLoginAt).toLocaleString('en-GB',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}) : 'Never';
+  const trialEnd = c.trialEndDate ? new Date(c.trialEndDate).toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'}) : '—';
+  const subEnd = c.subscriptionEndDate ? new Date(c.subscriptionEndDate).toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'}) : '—';
+
+  document.getElementById('detail-title').textContent = c.name;
+  document.getElementById('detail-body').innerHTML = `
+    <div class="detail-grid">
+      <div class="detail-item"><label>Institution Code</label><span style="font-family:monospace">${c.institutionCode||'—'}</span></div>
+      <div class="detail-item"><label>Mode</label><span>${c.mode}</span></div>
+      <div class="detail-item"><label>Status</label><span>${c.isActive?'✅ Active':'❌ Inactive'}</span></div>
+      <div class="detail-item"><label>Created</label><span>${created}</span></div>
+      <div class="detail-item"><label>Admin</label><span>${esc(c.adminName||'—')}</span></div>
+      <div class="detail-item"><label>Admin Email</label><span>${esc(c.adminEmail||'—')}</span></div>
+      <div class="detail-item"><label>Last Admin Login</label><span>${lastLogin}</span></div>
+      <div class="detail-item"><label>Total Users</label><span>${c.userCount||0}</span></div>
+    </div>
+    <hr class="detail-divider">
+    <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#94a3b8;margin-bottom:10px">User Breakdown</div>
+    <div class="detail-grid">
+      ${c.mode==='academic' ? `
+        <div class="detail-item"><label>Admins</label><span>${rc.admin||0}</span></div>
+        <div class="detail-item"><label>HODs</label><span>${rc.hod||0}</span></div>
+        <div class="detail-item"><label>Lecturers</label><span>${rc.lecturer||0}</span></div>
+        <div class="detail-item"><label>Students</label><span>${rc.student||0}</span></div>
+      ` : `
+        <div class="detail-item"><label>Admins</label><span>${rc.admin||0}</span></div>
+        <div class="detail-item"><label>Managers</label><span>${rc.manager||0}</span></div>
+        <div class="detail-item"><label>Employees</label><span>${rc.employee||0}</span></div>
+      `}
+    </div>
+    <hr class="detail-divider">
+    <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#94a3b8;margin-bottom:10px">Subscription</div>
+    <div class="detail-grid">
+      <div class="detail-item"><label>Status</label><span>${c.subscriptionStatus||'—'}</span></div>
+      <div class="detail-item"><label>Plan</label><span>${c.subscriptionPlan||'none'}</span></div>
+      <div class="detail-item"><label>Trial Ends</label><span>${trialEnd}</span></div>
+      <div class="detail-item"><label>Sub Ends</label><span>${subEnd}</span></div>
+      <div class="detail-item"><label>Revenue</label><span style="color:#16a34a;font-weight:700">GHS ${(c.revenue||0).toLocaleString()}</span></div>
+      <div class="detail-item"><label>Payments</label><span>${c.paymentCount||0}</span></div>
+    </div>
+    ${c.superadminNotes ? `<hr class="detail-divider"><div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#94a3b8;margin-bottom:8px">Notes</div><div style="font-size:14px;color:#374151;white-space:pre-wrap">${esc(c.superadminNotes)}</div>` : ''}
+  `;
+  document.getElementById('detail-modal').classList.add('open');
+}
+
+// ── Payments Tab ──────────────────────────────────────────────────────────────
+async function loadPayments() {
+  document.getElementById('tab-payments').innerHTML = '<div class="loading-msg">Loading payment history…</div>';
+  try {
+    const data = await api('/api/superadmin/payments');
+    const pays = data.payments || [];
+    const total = data.totalRevenue || 0;
+    document.getElementById('tab-payments').innerHTML = `
+      <div class="stats" style="margin-bottom:20px">
+        <div class="stat"><div class="stat-val" style="color:#16a34a;font-size:20px">GHS ${total.toLocaleString()}</div><div class="stat-lbl">Total Revenue</div></div>
+        <div class="stat"><div class="stat-val">${pays.length}</div><div class="stat-lbl">Total Payments</div></div>
       </div>
       <div class="table-card">
-        <div class="table-head"><h3>All Institutions</h3></div>
+        <div class="table-head"><h3>Payment History</h3></div>
         <table>
-          <thead><tr><th>Institution</th><th>Users</th><th>Mode</th><th>Status</th><th>Subscription</th><th>Actions</th></tr></thead>
+          <thead><tr><th>Institution</th><th>Amount</th><th>Plan</th><th>Reference</th><th>Date</th></tr></thead>
           <tbody>
-            ${cos.length===0 ? `<tr><td colspan="6" class="empty">No institutions yet.</td></tr>` :
-              cos.map(c=>`
-              <tr>
-                <td><div style="font-weight:700">${esc(c.name)}</div><div style="font-size:11px;color:#94a3b8;font-family:monospace">${c.institutionCode||'—'}</div></td>
-                <td style="font-weight:600">${c.userCount||0}</td>
-                <td><span class="tag ${c.mode==='academic'?'tag-blue':'tag-green'}">${c.mode}</span></td>
-                <td><span class="tag ${c.isActive?'tag-green':'tag-red'}">${c.isActive?'Active':'Inactive'}</span></td>
-                <td><span class="tag ${c.subscriptionStatus==='active'?'tag-green':c.isTrialActive?'tag-amber':'tag-red'}">${c.subscriptionStatus||'trial'}</span></td>
-                <td>
-                  <button class="action-btn ${c.isActive?'danger':'success'}" onclick="toggleCompany('${c._id}',${c.isActive},'${esc(c.name)}')">${c.isActive?'Deactivate':'Activate'}</button>
-                  <button class="action-btn" onclick="extendTrial('${c._id}','${esc(c.name)}')">+Trial</button>
-                </td>
-              </tr>`).join('')}
+            ${pays.length===0 ? `<tr><td colspan="5" class="empty">No payments yet.</td></tr>` :
+              pays.map(p => {
+                const date = p.paidAt ? new Date(p.paidAt).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}) : '—';
+                return `<tr>
+                  <td><div style="font-weight:600">${esc(p.company?.name||'Unknown')}</div><div style="font-size:11px;color:#94a3b8">${p.company?.institutionCode||''}</div></td>
+                  <td class="pay-amount">GHS ${(p.amount||0).toLocaleString()}</td>
+                  <td><span class="tag tag-blue">${p.plan||'—'}</span></td>
+                  <td style="font-family:monospace;font-size:12px;color:#64748b">${esc(p.reference||'—')}</td>
+                  <td>${date}</td>
+                </tr>`;
+              }).join('')}
           </tbody>
         </table>
       </div>`;
   } catch(ex) {
-    document.getElementById('dash-body').innerHTML = `<div class="empty" style="color:#dc2626">Error: ${ex.message}</div>`;
+    document.getElementById('tab-payments').innerHTML = `<div class="empty" style="color:#dc2626">Error: ${ex.message}</div>`;
   }
 }
 
+// ── Actions ───────────────────────────────────────────────────────────────────
 async function toggleCompany(id, isActive, name) {
-  if (!confirm(`${isActive?'Deactivate':'Activate'} ${name}?`)) return;
+  if (!confirm(`${isActive?'Deactivate':'Activate'} "${name}"?`)) return;
   try {
     await api(`/api/superadmin/companies/${id}/toggle`, {method:'PATCH'});
-    showDashboard();
+    loadInstitutions();
   } catch(ex) { alert('Error: '+ex.message); }
 }
 
 async function extendTrial(id, name) {
-  const days = prompt(`Extend trial for ${name}. How many days?`, '14');
-  if (!days) return;
+  const days = prompt(`Extend trial for "${name}". How many days to add?`, '14');
+  if (!days || isNaN(days)) return;
   try {
     await api(`/api/superadmin/companies/${id}/extend-trial`, {method:'PATCH', body:JSON.stringify({days:parseInt(days)})});
-    alert('Trial extended!');
-    showDashboard();
+    alert(`Trial extended by ${days} days!`);
+    loadInstitutions();
   } catch(ex) { alert('Error: '+ex.message); }
 }
 
-function esc(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+async function impersonate(id, name) {
+  if (!confirm(`Log in as admin of "${name}"? Opens in a new tab.`)) return;
+  try {
+    const data = await api(`/api/superadmin/impersonate/${id}`, {method:'POST'});
+    const url = `/?impersonate=${data.token}`;
+    window.open(url, '_blank');
+  } catch(ex) { alert('Error: '+ex.message); }
+}
 
-// Auto-login if token exists
+// ── Email ─────────────────────────────────────────────────────────────────────
+function openEmail(id, name, email) {
+  currentEmailId = id;
+  document.getElementById('email-to-display').value = `${name} — ${email||'(no email on file)'}`;
+  document.getElementById('email-subject').value = '';
+  document.getElementById('email-body').value = '';
+  document.getElementById('email-status').textContent = '';
+  document.getElementById('email-send-btn').disabled = false;
+  document.getElementById('email-send-btn').textContent = 'Send Email';
+  document.getElementById('email-modal').classList.add('open');
+}
+
+async function sendEmail() {
+  const subject = document.getElementById('email-subject').value.trim();
+  const message = document.getElementById('email-body').value.trim();
+  const status = document.getElementById('email-status');
+  const btn = document.getElementById('email-send-btn');
+  if (!subject) { status.textContent = 'Please enter a subject.'; status.className = 'modal-status status-err'; return; }
+  if (!message) { status.textContent = 'Please enter a message.'; status.className = 'modal-status status-err'; return; }
+  btn.disabled = true; btn.textContent = 'Sending…';
+  try {
+    const r = await api(`/api/superadmin/email/${currentEmailId}`, {method:'POST', body:JSON.stringify({subject,message})});
+    status.textContent = `✓ Sent to ${r.sentTo}`;
+    status.className = 'modal-status status-ok';
+    btn.textContent = 'Sent!';
+    setTimeout(() => closeModal('email-modal'), 2000);
+  } catch(ex) {
+    status.textContent = 'Failed: '+ex.message;
+    status.className = 'modal-status status-err';
+    btn.disabled = false; btn.textContent = 'Send Email';
+  }
+}
+
+// ── Notes ─────────────────────────────────────────────────────────────────────
+function openNotes(id, name, existing) {
+  currentNotesId = id;
+  document.getElementById('notes-company-name').textContent = name;
+  document.getElementById('notes-text').value = existing || '';
+  document.getElementById('notes-status').textContent = '';
+  document.getElementById('notes-modal').classList.add('open');
+}
+
+async function saveNotes() {
+  const notes = document.getElementById('notes-text').value;
+  const status = document.getElementById('notes-status');
+  try {
+    await api(`/api/superadmin/companies/${currentNotesId}/notes`, {method:'PATCH', body:JSON.stringify({notes})});
+    // Update local data
+    const c = allCompanies.find(x => x._id === currentNotesId);
+    if (c) c.superadminNotes = notes;
+    status.textContent = '✓ Saved'; status.className = 'modal-status status-ok';
+    setTimeout(() => closeModal('notes-modal'), 1200);
+  } catch(ex) {
+    status.textContent = 'Error: '+ex.message; status.className = 'modal-status status-err';
+  }
+}
+
+// ── Export CSV ────────────────────────────────────────────────────────────────
+function exportCSV() {
+  const rows = [['Name','Code','Mode','Status','Subscription','Users','Admin Email','Trial Ends','Revenue','Notes']];
+  allCompanies.forEach(c => {
+    const trialEnd = c.trialEndDate ? new Date(c.trialEndDate).toLocaleDateString() : '';
+    rows.push([
+      c.name, c.institutionCode||'', c.mode,
+      c.isActive?'Active':'Inactive', c.subscriptionStatus||'',
+      c.userCount||0, c.adminEmail||'',
+      trialEnd, c.revenue||0, (c.superadminNotes||'').replace(/\n/g,' ')
+    ]);
+  });
+  const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const a = document.createElement('a');
+  a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
+  a.download = `kodex-institutions-${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+function esc(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+// Auto-login
 if (SA_TOKEN) {
-  api('/api/auth/me').then(d=>{
-    if (d.user?.role==='superadmin') {
+  api('/api/auth/me').then(d => {
+    if (d.user?.role === 'superadmin') {
       document.getElementById('user-chip').textContent = d.user.name;
       showDashboard();
-    } else { localStorage.removeItem('sa_token'); SA_TOKEN=''; }
-  }).catch(()=>{ localStorage.removeItem('sa_token'); SA_TOKEN=''; });
+    } else { localStorage.removeItem('sa_token'); SA_TOKEN = ''; }
+  }).catch(() => { localStorage.removeItem('sa_token'); SA_TOKEN = ''; });
 }
 </script>
 </body>
