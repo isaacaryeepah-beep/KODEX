@@ -98,6 +98,10 @@ const companySchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
+    superadminNotes: {
+      type: String,
+      default: "",
+    },
     // ── White-label Branding ──────────────────────────────────
     branding: {
       logoUrl:        { type: String, default: "" },
