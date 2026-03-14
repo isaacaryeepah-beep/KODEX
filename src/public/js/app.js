@@ -778,11 +778,12 @@ async function handleAdminForgotPassword() {
 
   if (adminForgotStep === 'request') {
     const phone = document.getElementById('admin-forgot-phone').value.trim();
-    if (!phone) return setAdminForgotMsg('Please enter your phone number', false);
+    const email = document.getElementById('admin-forgot-email')?.value?.trim();
+    if (!phone && !email) return setAdminForgotMsg('Please enter your phone number or email.', false);
     const btn = document.getElementById('admin-forgot-btn');
     btn.textContent = 'Sending...'; btn.disabled = true;
     try {
-      const data = await api('/api/auth/forgot-password-admin', { method: 'POST', body: JSON.stringify({ phone }) });
+      const data = await api('/api/auth/forgot-password-admin', { method: 'POST', body: JSON.stringify({ phone: phone || undefined, email: email || undefined }) });
       adminForgotEmail = phone; adminForgotStep = 'reset';
       document.getElementById('admin-reset-code-group').classList.remove('hidden');
       document.getElementById('admin-new-password-group').classList.remove('hidden');
@@ -864,12 +865,13 @@ async function handleLecturerForgotPassword() {
   if (lecturerForgotStep === 'request') {
     const institutionCode = document.getElementById('lecturer-forgot-code')?.value.trim().toUpperCase();
     const phone = document.getElementById('lecturer-forgot-phone').value.trim();
+    const email = document.getElementById('lecturer-forgot-email')?.value?.trim();
     if (!institutionCode) return setLecturerForgotMsg('Please enter your institution code', false);
     if (!phone) return setLecturerForgotMsg('Please enter your phone number', false);
     const btn = document.getElementById('lecturer-forgot-btn');
     btn.textContent = 'Sending...'; btn.disabled = true;
     try {
-      const data = await api('/api/auth/forgot-password-email', { method: 'POST', body: JSON.stringify({ phone, institutionCode }) });
+      const data = await api('/api/auth/forgot-password-email', { method: 'POST', body: JSON.stringify({ phone: phone || undefined, email: email || undefined, institutionCode }) });
       lecturerForgotEmail = phone; lecturerForgotStep = 'reset';
       document.getElementById('lecturer-reset-code-group').classList.remove('hidden');
       document.getElementById('lecturer-new-password-group').classList.remove('hidden');
@@ -1223,12 +1225,13 @@ async function handleEmployeeForgotPassword() {
   if (employeeForgotStep === 'request') {
     const institutionCode = document.getElementById('employee-forgot-code')?.value.trim().toUpperCase();
     const phone = document.getElementById('employee-forgot-phone')?.value.trim();
+    const email = document.getElementById('employee-forgot-email')?.value?.trim();
     if (!institutionCode) return setMsg('Please enter your institution code', false);
     if (!phone) return setMsg('Please enter your phone number', false);
     const btn = document.getElementById('employee-forgot-btn');
     btn.textContent = 'Sending...'; btn.disabled = true;
     try {
-      const data = await api('/api/auth/forgot-password-email', { method: 'POST', body: JSON.stringify({ phone, institutionCode }) });
+      const data = await api('/api/auth/forgot-password-email', { method: 'POST', body: JSON.stringify({ phone: phone || undefined, email: email || undefined, institutionCode }) });
       employeeForgotEmail = phone; employeeForgotCode = institutionCode; employeeForgotStep = 'reset';
       document.getElementById('employee-reset-code-group').classList.remove('hidden');
       document.getElementById('employee-new-password-group').classList.remove('hidden');
@@ -1312,6 +1315,7 @@ async function handleHodForgotPassword() {
   try {
     btn.disabled = true;
     const phone = document.getElementById('hod-forgot-phone').value.trim();
+    const email = document.getElementById('hod-forgot-email')?.value?.trim();
     const institutionCode = document.getElementById('hod-forgot-code').value.trim().toUpperCase();
     const resetCode = document.getElementById('hod-reset-code').value.trim();
     const newPassword = document.getElementById('hod-new-password').value;
@@ -1327,7 +1331,7 @@ async function handleHodForgotPassword() {
     } else {
       if (!phone || !institutionCode) { btn.disabled = false; return setMsg('Phone number and institution code are required.', false); }
       hodForgotPhone = phone; hodForgotCode = institutionCode;
-      await api('/api/auth/forgot-password-email', { method: 'POST', body: JSON.stringify({ phone, institutionCode }) });
+      await api('/api/auth/forgot-password-email', { method: 'POST', body: JSON.stringify({ phone: phone || undefined, email: email || undefined, institutionCode }) });
       codeGroup.classList.remove('hidden');
       btn.textContent = 'Continue';
       setMsg('Reset code sent to your phone.', true);
