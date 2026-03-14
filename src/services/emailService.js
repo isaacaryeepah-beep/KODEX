@@ -353,6 +353,17 @@ async function sendAdminPasswordResetNotice({ adminEmail, adminName, targetUserN
   return send({ to: adminEmail, subject: `🔔 KODEX: Password reset by ${targetUserName}`, html });
 }
 
+// 8. Custom message from superadmin to institution admin
+async function sendCustom({ to, toName, subject, message, fromName = 'KODEX Platform' }) {
+  const html = wrap(`
+    <h1>${subject}</h1>
+    <p>Hi ${toName || 'there'},</p>
+    ${message.split('\n').map(line => line.trim() ? `<p>${line}</p>` : '').join('')}
+    <p style="margin-top:24px;font-size:13px;color:#94a3b8;">This message was sent to you by the KODEX platform team.</p>
+  `, subject);
+  return send({ to, subject: `${subject}`, html });
+}
+
 module.exports = {
   sendWelcome,
   sendTrialEndingSoon,
@@ -362,4 +373,5 @@ module.exports = {
   sendRenewalReminder,
   sendPasswordReset,
   sendAdminPasswordResetNotice,
+  sendCustom,
 };
