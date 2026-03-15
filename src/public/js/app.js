@@ -858,7 +858,7 @@ function showLecturerForgot() {
   lecturerForgotStep = 'request';
 }
 
-let lecturerForgotEmail = '', lecturerForgotStep = 'request';
+let lecturerForgotEmail = '', lecturerForgotIsEmail = false, lecturerForgotStep = 'request';
 async function handleLecturerForgotPassword() {
   function setLecturerForgotMsg(msg, isSuccess) {
     let el = document.getElementById('lecturer-forgot-msg');
@@ -881,16 +881,16 @@ async function handleLecturerForgotPassword() {
     const phone = document.getElementById('lecturer-forgot-phone').value.trim();
     const email = document.getElementById('lecturer-forgot-email')?.value?.trim();
     if (!institutionCode) return setLecturerForgotMsg('Please enter your institution code', false);
-    if (!phone) return setLecturerForgotMsg('Please enter your phone number', false);
+    if (!phone && !email) return setLecturerForgotMsg('Please enter your phone number or email', false);
     const btn = document.getElementById('lecturer-forgot-btn');
     btn.textContent = 'Sending...'; btn.disabled = true;
     try {
       const data = await api('/api/auth/forgot-password-email', { method: 'POST', body: JSON.stringify({ phone: phone || undefined, email: email || undefined, institutionCode }) });
-      lecturerForgotEmail = phone; lecturerForgotStep = 'reset';
+      lecturerForgotEmail = phone || email || ''; lecturerForgotIsEmail = !phone && !!email; lecturerForgotStep = 'reset';
       document.getElementById('lecturer-reset-code-group').classList.remove('hidden');
       document.getElementById('lecturer-new-password-group').classList.remove('hidden');
       btn.textContent = 'Reset Password'; btn.disabled = false;
-      setLecturerForgotMsg('📱 ' + (data.message || 'Reset code sent to your phone via SMS.'), true);
+      setLecturerForgotMsg('✅ ' + (data.message || 'Reset code sent.'), true);
     } catch(e) { btn.textContent = 'Request Reset Code'; btn.disabled = false; setLecturerForgotMsg(e.message, false); }
   } else {
     const resetCode = document.getElementById('lecturer-reset-code').value.trim();
@@ -900,7 +900,7 @@ async function handleLecturerForgotPassword() {
     const btn = document.getElementById('lecturer-forgot-btn');
     btn.textContent = 'Resetting...'; btn.disabled = true;
     try {
-      await api('/api/auth/reset-password-email', { method: 'POST', body: JSON.stringify({ phone: lecturerForgotEmail, resetCode, newPassword }) });
+      await api('/api/auth/reset-password-email', { method: 'POST', body: JSON.stringify({ phone: lecturerForgotIsEmail ? undefined : lecturerForgotEmail, email: lecturerForgotIsEmail ? lecturerForgotEmail : undefined, resetCode, newPassword }) });
       lecturerForgotStep = 'request';
       setLecturerForgotMsg('✅ Password reset! Redirecting to sign in...', true);
       setTimeout(() => { showLecturerLogin(); }, 1800);
@@ -1343,14 +1343,14 @@ async function handleHodForgotPassword() {
       setMsg('Password reset! You can now sign in.', true);
       setTimeout(showHodLogin, 2000);
     } else if (!codeGroup.classList.contains('hidden')) {
-      codeGroup.classList.remove('hidden'); pwGroup.classList.remove('hidden');
+      pwGroup.classList.remove('hidden');
       btn.textContent = 'Reset Password';
-      setMsg('Enter the code from your SMS and a new password.', true);
+      setMsg('Enter the code from your SMS/email and a new password.', true);
     } else {
       if (!phone && !email) { btn.disabled = false; return setMsg('Phone number or email is required.', false); }
       if (!institutionCode) { btn.disabled = false; return setMsg('Institution code is required.', false); }
       hodForgotPhone = phone || email || ''; hodForgotCode = institutionCode;
-      await api('/api/auth/forgot-password-email', { method: 'POST', body: JSON.stringify({ phone: phone || undefined, email: email || undefined, institutionCode }) });
+      const data = await api('/api/auth/forgot-password-email', { method: 'POST', body: JSON.stringify({ phone: phone || undefined, email: email || undefined, institutionCode }) });
       codeGroup.classList.remove('hidden');
       btn.textContent = 'Continue';
       setMsg((data.message || 'Reset code sent.'), true);
