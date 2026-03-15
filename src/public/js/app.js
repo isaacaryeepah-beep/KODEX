@@ -4982,7 +4982,9 @@ async function showAddQuestionsView(quizId) {
 
         <div class="form-group">
           <label>Question Text *</label>
-          <textarea id="aq-text" rows="3" placeholder="Enter your question here…" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;"></textarea>
+          ${getMathToolbar('aq-text')}
+          <textarea id="aq-text" rows="3" placeholder="Enter your question here…" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;" oninput="updateMathPreview('aq-text','aq-math-preview')"></textarea>
+          <div id="aq-math-preview" style="display:none;margin-top:6px;padding:8px 12px;background:#f5f3ff;border:1px solid #e0e7ff;border-radius:6px;font-size:13px;color:#374151;min-height:32px"></div>
         </div>
 
         <div id="aq-options-section">
@@ -5052,7 +5054,7 @@ async function showAddQuestionsView(quizId) {
             return `<div style="padding:12px;border:1px solid #e5e7eb;border-radius:8px;margin-bottom:8px;">
               <div style="display:flex;justify-content:space-between;align-items:flex-start;">
                 <div style="flex:1;">
-                  <div style="margin-bottom:6px;"><strong>Q${i+1}.</strong>${typeLabel} ${q.questionText}</div>
+                  <div class="math-content" style="margin-bottom:6px;"><strong>Q${i+1}.</strong>${typeLabel} ${q.questionText}</div>
                   ${isFillQ
                     ? `<div style="font-size:13px;color:#166534;background:#f0fdf4;border:1px solid #bbf7d0;padding:4px 10px;border-radius:6px;display:inline-block;">✓ ${q.correctAnswerText}${q.acceptedAnswers?.length ? ` <span style="color:#6b7280;font-weight:400;">(also: ${q.acceptedAnswers.join(', ')})</span>` : ''}</div>`
                     : `<div style="display:flex;flex-wrap:wrap;gap:5px;font-size:13px;">${q.options.map((o,oi)=>`<span style="padding:3px 9px;border-radius:6px;${correctSet.has(oi)?'background:#f0fdf4;color:#166534;border:1px solid #bbf7d0;font-weight:700;':'background:#f9fafb;color:#6b7280;border:1px solid #e5e7eb;'}">${String.fromCharCode(65+oi)}) ${o}${correctSet.has(oi)?' ✓':''}</span>`).join('')}</div>`}
@@ -5068,6 +5070,7 @@ async function showAddQuestionsView(quizId) {
         </div>
       </div>
     `;
+    setTimeout(() => renderMath(content), 150);
   } catch (e) {
     content.innerHTML = `<div class="card"><p>Error: ${e.message}</p></div>`;
   }
@@ -5202,14 +5205,15 @@ async function viewLecturerQuizDetail(quizId) {
         <h3>Questions (${questions.length})</h3>
         ${questions.length ? questions.map((qn, i) => `
           <div style="padding:10px;border:1px solid #e5e7eb;border-radius:8px;margin-bottom:8px;">
-            <strong>Q${i + 1}.</strong> ${qn.questionText} <span style="color:#9ca3af;">(${qn.marks} marks)</span>
+            <strong>Q${i + 1}.</strong> <span class="math-content">${qn.questionText}</span> <span style="color:#9ca3af;">(${qn.marks} marks)</span>
             <div style="margin-top:4px;font-size:0.9em;">
-              ${qn.options.map((o, oi) => `<span style="margin-right:10px;${oi === qn.correctAnswer ? 'color:#22c55e;font-weight:bold;' : ''}">${String.fromCharCode(65 + oi)}) ${o}</span>`).join('')}
+              ${qn.options.map((o, oi) => `<span class="math-content" style="margin-right:10px;${oi === qn.correctAnswer ? 'color:#22c55e;font-weight:bold;' : ''}">${String.fromCharCode(65 + oi)}) ${o}</span>`).join('')}
             </div>
           </div>
         `).join('') : '<p style="color:#9ca3af;">No questions.</p>'}
       </div>
     `;
+    setTimeout(() => renderMath(content), 150);
   } catch (e) {
     content.innerHTML = `<div class="card"><p>Error: ${e.message}</p></div>`;
   }
@@ -5362,7 +5366,7 @@ async function viewQuizResults(quizId) {
               <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;">
                 <div style="flex:1;min-width:200px;">
                   <span style="font-size:11px;font-weight:700;color:#9ca3af;text-transform:uppercase;">Q${i+1} · ${q.marks} mark${q.marks>1?'s':''}</span>
-                  <div style="font-size:13px;margin-top:2px;">${q.questionText}</div>
+                  <div class="math-content" style="font-size:13px;margin-top:2px;">${q.questionText}</div>
                 </div>
                 <div style="display:flex;align-items:center;gap:12px;flex-shrink:0;">
                   <span style="font-size:12px;color:#64748b;">${q.correct}/${q.total} correct</span>
@@ -5379,6 +5383,7 @@ async function viewQuizResults(quizId) {
 
     // Store data for CSV export and search
     window._quizResultsData = { quiz, stats, attempts, quizId };
+    setTimeout(() => renderMath(content), 150);
   } catch (e) {
     content.innerHTML = `<div class="card"><p>Error: ${e.message}</p></div>`;
   }
@@ -5422,7 +5427,7 @@ async function viewStudentQuizAnswers(quizId, attemptId, studentName) {
               <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;">
                 <div>
                   <span style="font-size:11px;font-weight:700;color:#9ca3af;text-transform:uppercase;">Q${i+1} · ${q.marks} mark${q.marks>1?'s':''}</span>
-                  <div style="font-size:14px;font-weight:500;margin-top:2px;">${q.questionText}</div>
+                  <div class="math-content" style="font-size:14px;font-weight:500;margin-top:2px;">${q.questionText}</div>
                 </div>
                 <span class="status-badge ${a.isCorrect ? 'status-present' : 'status-absent'}" style="flex-shrink:0;">${a.isCorrect ? '✓ Correct' : '✗ Wrong'}</span>
               </div>
@@ -5579,7 +5584,7 @@ async function startStudentQuiz(quizId) {
         ${questions.map((q, i) => `
           <div class="card" style="margin-bottom:12px;">
             <h4>Question ${i + 1} of ${questions.length} <span style="color:#9ca3af;font-weight:normal;font-size:0.85em;">(${q.marks || 1} marks)</span></h4>
-            <p style="margin:8px 0;">${q.questionText}</p>
+            <p class="math-content" style="margin:8px 0;">${q.questionText}</p>
             ${q.questionType === 'fill'
               ? `<div style="margin-top:6px;">
                   <input type="text" id="sq-fill-${q._id}" placeholder="Type your answer here…"
@@ -6254,7 +6259,7 @@ function bankQuestionCard(q, i, L, typeColors, typeBg) {
             <span style="font-size:11px;color:var(--text-muted);">${q.marks} mark${q.marks !== 1 ? 's' : ''}</span>
             ${q.useCount > 0 ? `<span style="font-size:11px;color:#9ca3af;">Used ${q.useCount}×</span>` : ''}
           </div>
-          <div style="font-size:13px;font-weight:600;margin-bottom:8px;line-height:1.5;">${q.questionText}</div>
+          <div class="math-content" style="font-size:13px;font-weight:600;margin-bottom:8px;line-height:1.5;">${q.questionText}</div>
           ${type === 'fill'
             ? `<div style="font-size:12px;color:#059669;padding:4px 10px;background:#f0fdf4;border-radius:6px;display:inline-block;">✓ ${q.correctAnswerText}${q.acceptedAnswers?.length ? ` (+${q.acceptedAnswers.length} alt)` : ''}</div>`
             : type === 'explain'
@@ -6289,6 +6294,7 @@ function filterBankList() {
   list.innerHTML = filtered.length === 0
     ? '<div class="empty-state"><p>No questions match your filters.</p></div>'
     : filtered.map((q, i) => bankQuestionCard(q, i, L, typeColors, typeBg)).join('');
+  setTimeout(() => renderMath(list), 150);
 }
 
 // ── Add Question to Bank modal ───────────────────────────────────────────────
@@ -6308,6 +6314,7 @@ function openAddToBankModal(prefill) {
       <div style="padding:18px 20px;display:flex;flex-direction:column;gap:13px;">
         <div>
           <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:5px;display:block;">Question Text *</label>
+          ${getMathToolbar('bm-text')}
           <textarea id="bm-text" rows="3" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;resize:vertical;outline:none;">${p.questionText||''}</textarea>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;">
@@ -6676,7 +6683,7 @@ function importBankCard(q, L) {
           ${q.topic ? `<span style="font-size:10px;padding:1px 7px;border-radius:20px;background:#fef3c7;color:#92400e;font-weight:600;">${q.topic}</span>` : ''}
           <span style="font-size:10px;color:var(--text-muted);">${q.marks} mark${q.marks!==1?'s':''}</span>
         </div>
-        <div style="font-size:13px;font-weight:500;line-height:1.4;">${q.questionText}</div>
+        <div class="math-content" style="font-size:13px;font-weight:500;line-height:1.4;">${q.questionText}</div>
       </div>
     </label>`;
 }
@@ -9045,6 +9052,98 @@ function previewLoginPage() {
     </div>`;
 }
 
+
+// ── Math rendering helper (MathJax already loaded in index.html) ─────────────
+function renderMath(container) {
+  if (!window.MathJax) return;
+  try {
+    const el = container || document.getElementById('main-content') || document.body;
+    if (MathJax.typesetPromise) {
+      MathJax.typesetPromise([el]).catch(() => {});
+    } else if (MathJax.Hub) {
+      MathJax.Hub.Queue(['Typeset', MathJax.Hub, el]);
+    }
+  } catch(e) {}
+}
+
+
+
+function updateMathPreview(inputId, previewId) {
+  const input = document.getElementById(inputId);
+  const preview = document.getElementById(previewId);
+  if (!input || !preview) return;
+  const val = input.value.trim();
+  if (!val || (!val.includes('\\(') && !val.includes('\\[') && !val.includes('$'))) {
+    preview.style.display = 'none';
+    return;
+  }
+  preview.style.display = 'block';
+  preview.innerHTML = '<span style="font-size:10px;color:#6b7280;font-weight:600">PREVIEW: </span>' + val;
+  renderMath(preview);
+}
+
+// ── Math Symbol Toolbar ───────────────────────────────────────────────────────
+function insertMathSymbol(targetId, sym) {
+  const el = document.getElementById(targetId);
+  if (!el) return;
+  const start = el.selectionStart;
+  const end   = el.selectionEnd;
+  const val   = el.value;
+  // Wrap selection in \( ... \) if no math delimiters around cursor
+  let insert = sym;
+  el.value = val.slice(0, start) + insert + val.slice(end);
+  el.selectionStart = el.selectionEnd = start + insert.length;
+  el.focus();
+}
+
+function wrapMath(targetId) {
+  const el = document.getElementById(targetId);
+  if (!el) return;
+  const start = el.selectionStart;
+  const end   = el.selectionEnd;
+  const sel   = el.value.slice(start, end);
+  const wrap  = sel ? '\\(' + sel + '\\)' : '\\(  \\)';
+  el.value = el.value.slice(0, start) + wrap + el.value.slice(end);
+  const pos = sel ? start + wrap.length : start + 3;
+  el.selectionStart = el.selectionEnd = pos;
+  el.focus();
+}
+
+function getMathToolbar(targetId) {
+  const syms = [
+    { label: '\\( \\)', tip: 'Wrap in math', action: `wrapMath('${targetId}')` },
+    { label: 'x²', tip: 'Superscript', sym: '^{2}' },
+    { label: 'xₙ', tip: 'Subscript', sym: '_{n}' },
+    { label: '√', tip: 'Square root', sym: '\\sqrt{}' },
+    { label: '∛', tip: 'Cube root', sym: '\\sqrt[3]{}' },
+    { label: 'a/b', tip: 'Fraction', sym: '\\frac{}{}' },
+    { label: '∑', tip: 'Summation', sym: '\\sum_{}^{}' },
+    { label: '∫', tip: 'Integral', sym: '\\int_{}^{}' },
+    { label: 'π', tip: 'Pi', sym: '\\pi' },
+    { label: '∞', tip: 'Infinity', sym: '\\infty' },
+    { label: '±', tip: 'Plus-minus', sym: '\\pm' },
+    { label: '≤', tip: 'Less or equal', sym: '\\leq' },
+    { label: '≥', tip: 'Greater or equal', sym: '\\geq' },
+    { label: '≠', tip: 'Not equal', sym: '\\neq' },
+    { label: 'α', tip: 'Alpha', sym: '\\alpha' },
+    { label: 'β', tip: 'Beta', sym: '\\beta' },
+    { label: 'θ', tip: 'Theta', sym: '\\theta' },
+    { label: 'Δ', tip: 'Delta', sym: '\\Delta' },
+    { label: '×', tip: 'Multiply', sym: '\\times' },
+    { label: '÷', tip: 'Divide', sym: '\\div' },
+  ];
+  return `
+    <div style="margin-bottom:8px">
+      <div style="font-size:11px;color:#6b7280;margin-bottom:4px;font-weight:600">MATH SYMBOLS — click to insert</div>
+      <div style="display:flex;flex-wrap:wrap;gap:4px">
+        ${syms.map(s => s.action
+          ? `<button type="button" title="${s.tip}" onclick="${s.action}" style="padding:3px 8px;border:1px solid #d1d5db;border-radius:5px;background:#f9fafb;font-size:12px;cursor:pointer;font-family:inherit">${s.label}</button>`
+          : `<button type="button" title="${s.tip}" onclick="insertMathSymbol('${targetId}','${s.sym}')" style="padding:3px 8px;border:1px solid #d1d5db;border-radius:5px;background:#f9fafb;font-size:12px;cursor:pointer;font-family:inherit">${s.label}</button>`
+        ).join('')}
+      </div>
+    </div>`;
+}
+
 // ── Service Worker Registration ───────────────────────────────────────────────
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
@@ -9357,12 +9456,51 @@ function openAIQuizPanel(quizId) {
             <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:6px;display:block">Math Branch</label>
             <select id="aiq-math-branch" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;outline:none;background:#fff;font-family:inherit">
               <option value="">Any / Mixed</option>
+              <optgroup label="── Pure Mathematics ──">
+              <option value="arithmetic">Arithmetic &amp; Number Theory</option>
               <option value="algebra">Algebra</option>
-              <option value="calculus">Calculus</option>
-              <option value="geometry">Geometry &amp; Trigonometry</option>
-              <option value="statistics">Statistics &amp; Probability</option>
+              <option value="advanced algebra">Advanced Algebra</option>
+              <option value="calculus">Calculus (Differential &amp; Integral)</option>
+              <option value="multivariable calculus">Multivariable Calculus</option>
+              <option value="geometry">Geometry (Euclidean)</option>
+              <option value="analytic geometry">Analytic Geometry &amp; Coordinate Geometry</option>
+              <option value="trigonometry">Trigonometry</option>
               <option value="linear algebra">Linear Algebra &amp; Matrices</option>
+              <option value="abstract algebra">Abstract Algebra (Groups, Rings, Fields)</option>
+              <option value="real analysis">Real Analysis</option>
+              <option value="complex analysis">Complex Analysis</option>
+              <option value="topology">Topology</option>
+              <option value="number theory">Number Theory</option>
+              <option value="combinatorics">Combinatorics</option>
+              <option value="graph theory">Graph Theory</option>
               <option value="discrete math">Discrete Mathematics</option>
+              <option value="set theory">Set Theory &amp; Logic</option>
+              <option value="mathematical logic">Mathematical Logic &amp; Proof Writing</option>
+              </optgroup>
+              <optgroup label="── Applied Mathematics ──">
+              <option value="statistics">Statistics &amp; Probability</option>
+              <option value="differential equations">Differential Equations (ODEs)</option>
+              <option value="partial differential equations">Partial Differential Equations (PDEs)</option>
+              <option value="numerical methods">Numerical Methods &amp; Analysis</option>
+              <option value="operations research">Operations Research &amp; Optimisation</option>
+              <option value="mathematical modelling">Mathematical Modelling</option>
+              <option value="game theory">Game Theory</option>
+              <option value="information theory">Information Theory</option>
+              </optgroup>
+              <optgroup label="── Engineering &amp; Physics Math ──">
+              <option value="vector calculus">Vector Calculus</option>
+              <option value="fourier analysis">Fourier Analysis &amp; Transforms</option>
+              <option value="laplace transforms">Laplace Transforms</option>
+              <option value="complex numbers">Complex Numbers</option>
+              <option value="Boolean algebra">Boolean Algebra &amp; Logic Gates</option>
+              <option value="financial mathematics">Financial Mathematics</option>
+              </optgroup>
+              <optgroup label="── School Level ──">
+              <option value="primary mathematics">Primary School Mathematics</option>
+              <option value="junior high mathematics">Junior High Mathematics (JHS)</option>
+              <option value="core mathematics">Core Mathematics (SHS)</option>
+              <option value="elective mathematics">Elective Mathematics (SHS)</option>
+              </optgroup>
             </select>
           </div>
           <div style="display:flex;gap:8px;flex-wrap:wrap">
@@ -10492,7 +10630,7 @@ async function startTrainingModule(progressId, moduleId) {
         <p style="font-size:13px;color:#6b7280;margin-bottom:16px">Passing score: ${m.passingScore}%${m.timeLimitMinutes ? ` · Time limit: ${m.timeLimitMinutes} minutes` : ''}. Answer all questions then click Submit.</p>
         ${m.questions.map((q, i) => `
           <div style="padding:14px;border:1px solid #e5e7eb;border-radius:8px;margin-bottom:10px">
-            <div style="font-weight:600;margin-bottom:10px;font-size:14px">Q${i+1}. ${q.questionText} <span style="color:#9ca3af;font-weight:400;font-size:12px">(${q.marks} mark${q.marks !== 1 ? 's' : ''})</span></div>
+            <div class="math-content" style="font-weight:600;margin-bottom:10px;font-size:14px">Q${i+1}. ${q.questionText} <span style="color:#9ca3af;font-weight:400;font-size:12px">(${q.marks} mark${q.marks !== 1 ? 's' : ''})</span></div>
             <div style="display:flex;flex-direction:column;gap:6px">
               ${q.options.map((opt, oi) => `
                 <label style="display:flex;align-items:center;gap:8px;padding:9px 12px;border:1px solid #e5e7eb;border-radius:7px;cursor:pointer;font-size:13px" onmouseover="this.style.background='#f9fafb'" onmouseout="this.style.background=''">
