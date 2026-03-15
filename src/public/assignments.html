@@ -276,7 +276,12 @@ window.MathJax = { tex: { inlineMath: [['\\(','\\)']], displayMath: [['\\[','\\]
     </div>
     <div class="fg-checks">
       <label class="fg-check"><input type="checkbox" id="a-filesub" checked/> Allow file submission</label>
-      <label class="fg-check"><input type="checkbox" id="a-late"/> Allow late submission</label>
+      <label class="fg-check"><input type="checkbox" id="a-late" onchange="document.getElementById('late-penalty-group').style.display=this.checked?'flex':'none'"/> Allow late submission</label>
+    </div>
+    <div class="fg" id="late-penalty-group" style="display:none;align-items:center;gap:8px;margin-top:8px">
+      <label style="white-space:nowrap;font-size:12px;color:var(--text-muted)">Penalty per day late:</label>
+      <input type="number" id="a-late-penalty" min="0" max="100" value="0" style="width:80px;padding:6px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit">
+      <span style="font-size:12px;color:var(--text-muted)">% deducted per day</span>
     </div>
 
     <div class="fg">
@@ -533,7 +538,7 @@ async function openEdit(id){
     $('a-course').innerHTML=`<option value="">Select a course…</option>`+
       S.courses.map(c=>`<option value="${c._id}" ${c._id===a.course?._id?'selected':''}>${c.code} — ${c.title}</option>`).join('');
     $('a-release').value=toLocal(a.releaseDate); $('a-due').value=toLocal(a.dueDate);
-    $('a-filesub').checked=a.allowFileSubmission; $('a-late').checked=a.allowLateSubmission;
+    $('a-filesub').checked=a.allowFileSubmission; $('a-late').checked=a.allowLateSubmission; if($('a-late-penalty'))$('a-late-penalty').value=a.latePenaltyPercent||0; if(document.getElementById('late-penalty-group'))document.getElementById('late-penalty-group').style.display=a.allowLateSubmission?'flex':'none';
     const pp=$('pdf-preview'); if(pp) pp.style.display='none';
     const pe=$('pdf-existing'); if(pe) pe.style.display=S.pdfExisting?'block':'none';
     const pen=$('pdf-existing-name'); if(pen) pen.textContent=S.pdfExisting||'';
@@ -557,7 +562,7 @@ async function saveAssignment(){
     const payload={
       title, courseId, description:$('a-desc').value.trim(),
       releaseDate:new Date(rv).toISOString(), dueDate:new Date(dv).toISOString(),
-      allowFileSubmission:$('a-filesub').checked, allowLateSubmission:$('a-late').checked
+      allowFileSubmission:$('a-filesub').checked, allowLateSubmission:$('a-late').checked, latePenaltyPercent:parseInt($('a-late-penalty')?.value||0)
     };
     let saved;
     if(S.editId){ saved=(await api('PUT',`/api/assignments/lecturer/${S.editId}`,payload)).assignment; }
