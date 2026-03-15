@@ -157,21 +157,7 @@ body {
 
 /* KODEX background watermark */
 .auth-watermark {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  font-family: 'DM Sans', sans-serif;
-  font-size: clamp(100px, 22vw, 220px);
-  font-weight: 800;
-  letter-spacing: -8px;
-  color: transparent;
-  -webkit-text-stroke: 1.5px rgba(37,99,235,.08);
-  text-stroke: 1.5px rgba(37,99,235,.08);
-  user-select: none;
-  pointer-events: none;
-  white-space: nowrap;
-  z-index: 0;
+  display: none;
 }
 
 #portal-selector {
