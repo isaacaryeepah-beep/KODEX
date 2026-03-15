@@ -3211,7 +3211,7 @@ async function viewStudentQuizResult(quizId) {
           <div class="modal-actions"><button class="btn btn-secondary btn-sm" onclick="closeModal()">Close</button></div>
         </div>
       </div>`;
-  } catch(e) { showToast('Could not load result: ' + e.message, 'error'); }
+  } catch(e) { showToastNotif('Could not load result: ' + e.message, 'error'); }
 }
 
 async function renderStudentDashboard(content) {
@@ -4117,10 +4117,10 @@ async function clearStudentDeviceLock(userId, userName) {
   if (!confirm(`Unlock device for ${userName}? They will be able to log in from a new device.`)) return;
   try {
     await api(`/api/users/${userId}/clear-device-lock`, { method: 'POST' });
-    showToast(`✅ Device unlocked for ${userName}`);
+    showToastNotif(`✅ Device unlocked for ${userName}`);
     loadUsersSection();
   } catch(e) {
-    showToast(`❌ ${e.message || 'Failed to unlock device'}`, 'error');
+    showToastNotif(`❌ ${e.message || 'Failed to unlock device'}`, 'error');
   }
 }
 
@@ -6786,7 +6786,7 @@ async function startOfflineSession() {
       method: 'POST',
       body: JSON.stringify({ title })
     });
-    showToast(`✅ Session started! Verbal code: ${data.verbalCode}`);
+    showToastNotif(`✅ Session started! Verbal code: ${data.verbalCode}`);
     renderSessions();
   } catch(e) {
     toastError('Could not start session on ESP32: ' + e.message);
@@ -6798,7 +6798,7 @@ async function stopOfflineSession() {
   if (!confirm('Stop the current ESP32 session?')) return;
   try {
     await esp32Api('/session/stop', { method: 'POST' });
-    showToast('✅ Session stopped');
+    showToastNotif('✅ Session stopped');
     renderSessions();
   } catch(e) {
     toastError(e.message);
@@ -6809,7 +6809,7 @@ async function stopOfflineSession() {
 async function esp32NewCode() {
   try {
     const data = await esp32Api('/session/new-code', { method: 'POST' });
-    showToast(`New code: ${data.verbalCode}`);
+    showToastNotif(`New code: ${data.verbalCode}`);
     renderMarkAttendance();
   } catch(e) {
     toastError(e.message);
@@ -6832,7 +6832,7 @@ function configureESP32() {
   const ip = prompt('Enter ESP32 IP address (shown on ESP32 serial monitor):', esp32IP || '192.168.1.100');
   if (ip) {
     setEsp32IP(ip);
-    showToast('✅ ESP32 IP saved: ' + ip);
+    showToastNotif('✅ ESP32 IP saved: ' + ip);
     renderMarkAttendance();
   }
 }
@@ -7806,8 +7806,7 @@ async function toggle2FA(enable) {
   try {
     await api('/api/auth/2fa/toggle', { method: 'POST', body: JSON.stringify({ enable }) });
     currentUser.twoFactorEnabled = enable;
-    showToast(enable ? "2FA enabled — you will get a code by email each login" : "2FA disabled", enable ? "success" : "info");
-    // Update toggle visual
+    // Update toggle visual immediately
     const span = document.querySelector('#twofa-toggle + span');
     if (span) {
       span.style.background = enable ? 'var(--primary)' : '#d1d5db';
@@ -7815,8 +7814,9 @@ async function toggle2FA(enable) {
       if (dot) dot.style.left = enable ? '23px' : '3px';
     }
     if (cb) cb.checked = enable;
+    showToastNotif(enable ? '2FA enabled — you will get a code by email each login' : '2FA disabled', enable ? 'success' : 'warn');
   } catch(e) {
-    showToast('Failed to update 2FA: ' + e.message, 'error');
+    showToastNotif('Failed to update 2FA: ' + e.message, 'warn');
     // Revert toggle
     if (cb) cb.checked = !enable;
   }
@@ -8690,7 +8690,7 @@ initDarkMode();
 async function uploadProfilePhoto(input) {
   const file = input.files[0];
   if (!file) return;
-  if (file.size > 2 * 1024 * 1024) { showToast('Image must be under 2MB', 'error'); return; }
+  if (file.size > 2 * 1024 * 1024) { showToastNotif('Image must be under 2MB', 'error'); return; }
 
   // Convert to base64
   const reader = new FileReader();
@@ -8702,8 +8702,8 @@ async function uploadProfilePhoto(input) {
       // Update avatar display
       const avatar = document.getElementById('profile-avatar');
       if (avatar) avatar.innerHTML = `<img src="${base64}" style="width:100%;height:100%;object-fit:cover">`;
-      showToast('Profile photo updated!', 'success');
-    } catch(e) { showToast('Failed to upload photo: ' + e.message, 'error'); }
+      showToastNotif('Profile photo updated!', 'success');
+    } catch(e) { showToastNotif('Failed to upload photo: ' + e.message, 'error'); }
   };
   reader.readAsDataURL(file);
 }
@@ -8782,7 +8782,7 @@ async function sendBulkEmail(courseId) {
 // ── Export to Excel (uses SheetJS via CDN) ────────────────────────────────────
 async function exportAttendanceToExcel(sessionId, sessionTitle) {
   try {
-    showToast('Preparing Excel file…', 'info');
+    showToastNotif('Preparing Excel file…', 'info');
     const data = await api(`/api/attendance-sessions/${sessionId}/records`);
     const records = data.records || [];
 
@@ -8822,15 +8822,15 @@ async function exportAttendanceToExcel(sessionId, sessionTitle) {
 
     const filename = `Attendance_${(sessionTitle || 'session').replace(/[^a-z0-9]/gi, '_')}_${new Date().toISOString().slice(0,10)}.xlsx`;
     window.XLSX.writeFile(wb, filename);
-    showToast('Excel file downloaded!', 'success');
+    showToastNotif('Excel file downloaded!', 'success');
   } catch(e) {
-    showToast('Export failed: ' + e.message, 'error');
+    showToastNotif('Export failed: ' + e.message, 'error');
   }
 }
 
 async function exportAllAttendanceToExcel() {
   try {
-    showToast('Preparing Excel file…', 'info');
+    showToastNotif('Preparing Excel file…', 'info');
     const data = await api('/api/attendance-sessions/my-attendance?limit=500');
     const records = data.records || [];
 
@@ -8858,9 +8858,9 @@ async function exportAllAttendanceToExcel() {
     window.XLSX.utils.book_append_sheet(wb, ws, 'My Attendance');
     ws['!cols'] = [{ wch: 30 }, { wch: 15 }, { wch: 12 }, { wch: 15 }];
     window.XLSX.writeFile(wb, `My_Attendance_${new Date().toISOString().slice(0,10)}.xlsx`);
-    showToast('Excel file downloaded!', 'success');
+    showToastNotif('Excel file downloaded!', 'success');
   } catch(e) {
-    showToast('Export failed: ' + e.message, 'error');
+    showToastNotif('Export failed: ' + e.message, 'error');
   }
 }
 
@@ -9274,7 +9274,7 @@ async function uploadExcelStudents(courseId) {
 // ── Attendance Report Card PDF ────────────────────────────────────────────────
 async function generateAttendanceReportCard() {
   try {
-    showToast('Generating report card…', 'info');
+    showToastNotif('Generating report card…', 'info');
     if (!window.jspdf) {
       await new Promise((resolve, reject) => {
         const s = document.createElement('script');
@@ -9365,14 +9365,14 @@ async function generateAttendanceReportCard() {
     doc.setFontSize(8); doc.setTextColor(150,150,150); doc.setFont('helvetica','normal');
     doc.text('Generated automatically by KODEX — kodex.it.com', M, 285);
     doc.save('KODEX_Report_Card_' + (currentUser.indexNumber||'student') + '_' + new Date().toISOString().slice(0,10) + '.pdf');
-    showToast('Report card downloaded!', 'success');
-  } catch(e) { showToast('Failed: ' + e.message, 'error'); }
+    showToastNotif('Report card downloaded!', 'success');
+  } catch(e) { showToastNotif('Failed: ' + e.message, 'error'); }
 }
 
 // ── Course Completion Certificate ─────────────────────────────────────────────
 async function generateCertificate(courseId, courseTitle) {
   try {
-    showToast('Generating certificate…', 'info');
+    showToastNotif('Generating certificate…', 'info');
     if (!window.jspdf) {
       await new Promise((resolve, reject) => {
         const s = document.createElement('script');
@@ -9438,8 +9438,8 @@ async function generateCertificate(courseId, courseTitle) {
     doc.text('kodex.it.com', W/2, H-16, { align: 'center' });
 
     doc.save('KODEX_Certificate_' + (courseTitle||'course').replace(/[^a-z0-9]/gi,'_') + '.pdf');
-    showToast('Certificate downloaded!', 'success');
-  } catch(e) { showToast('Failed: ' + e.message, 'error'); }
+    showToastNotif('Certificate downloaded!', 'success');
+  } catch(e) { showToastNotif('Failed: ' + e.message, 'error'); }
 }
 
 // ── Push Notification Triggers ────────────────────────────────────────────────
