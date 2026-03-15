@@ -4,7 +4,7 @@ const User = require("../models/User");
 const Company = require("../models/Company");
 const StudentRoster = require("../models/StudentRoster");
 const { generateToken } = require("../utils/jwt");
-const { sendWelcome, sendAdminPasswordResetNotice, sendPasswordReset, sendNewInstitutionAlert } = require("../services/emailService");
+const { sendWelcome, sendAdminPasswordResetNotice, sendPasswordReset, sendNewInstitutionAlert, sendLecturerWelcome, sendStudentWelcome, sendEmployeeWelcome, sendHodWelcome } = require("../services/emailService");
 const { sendOtp, normalisePhone } = require("../services/smsService");
 
 const SIX_HOURS_MS = 6 * 60 * 60 * 1000;
@@ -268,6 +268,17 @@ exports.registerLecturer = async (req, res) => {
       } catch (_) {} // non-critical
     }
 
+    // Send welcome email (non-fatal)
+    if (user.email) {
+      sendLecturerWelcome({
+        email: user.email,
+        name: user.name,
+        institutionName: company.name,
+        department: department || null,
+        isApproved: false,
+      }).catch(err => console.error('Lecturer welcome email failed:', err.message));
+    }
+
     res.status(201).json({
       user: {
         id: user._id,
@@ -394,6 +405,16 @@ exports.registerStudent = async (req, res) => {
       departmentNote,
       message: "Registration successful. You have been automatically enrolled in your courses.",
     });
+
+    // Send welcome email if student has email (non-fatal)
+    if (user.email) {
+      sendStudentWelcome({
+        email: user.email,
+        name: user.name,
+        institutionName: company.name,
+        indexNumber: user.indexNumber,
+      }).catch(err => console.error('Student welcome email failed:', err.message));
+    }
   } catch (error) {
     if (error.name === "ValidationError") {
       const messages = Object.values(error.errors).map((e) => e.message);
@@ -461,6 +482,14 @@ exports.registerEmployee = async (req, res) => {
       employeeId,
       isApproved: false,
     });
+
+    // Send welcome email (non-fatal)
+    sendEmployeeWelcome({
+      email: user.email,
+      name: user.name,
+      companyName: company.name,
+      employeeId: user.employeeId,
+    }).catch(err => console.error('Employee welcome email failed:', err.message));
 
     res.status(201).json({
       user: {
