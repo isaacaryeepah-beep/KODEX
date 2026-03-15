@@ -373,6 +373,7 @@ function buildInstitutionRows(cos) {
           </td>
           <td onclick="event.stopPropagation()">
             <button class="action-btn ${c.isActive?'danger':'success'}" onclick="toggleCompany('${c._id}',${c.isActive},'${esc(c.name)}')">${c.isActive?'Deactivate':'Activate'}</button>
+            <button class="action-btn danger" onclick="deleteInstitution('${c._id}','${esc(c.name)}')" title="Permanently delete" style="border-color:#fca5a5;font-weight:700">🗑 Delete</button>
             <button class="action-btn" onclick="extendTrial('${c._id}','${esc(c.name)}')">+Trial</button>
             <button class="action-btn" onclick="openEmail('${c._id}','${esc(c.name)}','${esc(c.adminEmail||'')}')">✉️</button>
             <button class="action-btn" onclick="openNotes('${c._id}','${esc(c.name)}','${esc(c.superadminNotes||'')}')">📝</button>
@@ -530,6 +531,54 @@ async function extendTrial(id, name) {
     </div>`;
   document.body.appendChild(overlay);
   document.getElementById('trial-days-input').focus();
+}
+
+async function deleteInstitution(id, name) {
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
+  overlay.innerHTML = `
+    <div style="background:#fff;border-radius:16px;padding:28px;width:100%;max-width:420px;box-shadow:0 20px 60px rgba(0,0,0,.3)">
+      <div style="width:48px;height:48px;border-radius:12px;background:#fef2f2;display:flex;align-items:center;justify-content:center;font-size:22px;margin-bottom:16px">🗑</div>
+      <h3 style="font-size:16px;font-weight:700;color:#0d1117;margin-bottom:6px">Delete Institution</h3>
+      <p style="font-size:13px;color:#6b7280;margin-bottom:16px">This will permanently delete <strong>${name}</strong> and <strong>all its data</strong> — users, courses, quizzes, attendance records, everything. This cannot be undone.</p>
+      <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:12px 14px;margin-bottom:20px">
+        <p style="font-size:12px;color:#dc2626;font-weight:600;margin-bottom:8px">Type the institution name to confirm:</p>
+        <input id="delete-confirm-input" type="text" placeholder="${name}" style="width:100%;padding:8px 10px;border:1.5px solid #fca5a5;border-radius:6px;font-size:13px;outline:none;font-family:inherit">
+      </div>
+      <div id="delete-msg" style="font-size:13px;margin-bottom:12px;display:none"></div>
+      <div style="display:flex;gap:8px">
+        <button onclick="this.closest('[style*=position]').remove()" style="flex:1;padding:10px;border:1.5px solid #e5e7eb;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;background:#fff">Cancel</button>
+        <button onclick="confirmDeleteInstitution('${id}','${name}')" style="flex:2;padding:10px;background:#dc2626;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">Permanently Delete</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  document.getElementById('delete-confirm-input').focus();
+}
+
+async function confirmDeleteInstitution(id, name) {
+  const typed = document.getElementById('delete-confirm-input')?.value?.trim();
+  const msg   = document.getElementById('delete-msg');
+  if (typed !== name) {
+    msg.textContent = 'Name does not match. Please type exactly: ' + name;
+    msg.style.cssText = 'font-size:13px;margin-bottom:12px;display:block;color:#dc2626';
+    return;
+  }
+  const btn = document.querySelector('[onclick*="confirmDeleteInstitution"]');
+  btn.textContent = 'Deleting…'; btn.disabled = true;
+  try {
+    await api(`/api/superadmin/companies/${id}`, { method: 'DELETE' });
+    msg.textContent = '✅ Institution deleted successfully.';
+    msg.style.cssText = 'font-size:13px;margin-bottom:12px;display:block;color:#16a34a';
+    btn.textContent = 'Done!';
+    setTimeout(() => {
+      document.querySelector('[style*="position:fixed"][style*="z-index:9999"]')?.remove();
+      loadInstitutions();
+    }, 1500);
+  } catch(ex) {
+    msg.textContent = 'Error: ' + ex.message;
+    msg.style.cssText = 'font-size:13px;margin-bottom:12px;display:block;color:#dc2626';
+    btn.textContent = 'Permanently Delete'; btn.disabled = false;
+  }
 }
 
 async function confirmExtendTrial(id) {
