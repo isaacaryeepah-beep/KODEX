@@ -25,6 +25,4 @@ router.post("/2fa/toggle",             authenticate,          authController.tog
 router.post("/2fa/send",               authenticate,          authController.send2FACode);
 router.post("/2fa/verify",             authenticate,          authController.verify2FACode);
 
-router.post("/test-email",              authController.testEmail);
-
 module.exports = router;
