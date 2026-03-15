@@ -1922,10 +1922,13 @@ function buildSidebar() {
       links.push({ id: 'search', label: 'Search', icon: svgIcon('<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>') });
       links.push({ id: 'courses', label: 'Courses', icon: coursesIcon() });
       links.push({ id: 'quizzes', label: 'Quizzes', icon: quizzesIcon() });
+      links.push({ id: 'timetable', label: 'Schedule', icon: svgIcon('<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>') });
+      links.push({ id: 'quiz-history', label: 'My Results', icon: svgIcon('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/>') });
       links.push({ id: 'question-bank', label: 'Question Bank', icon: svgIcon('<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>') });
       links.push({ id: 'assignments', label: 'Assignments / Quiz', icon: assignmentsIcon() });
       links.push({ id: 'gradebook', label: 'Grade Book', icon: svgIcon('<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>') });
       links.push({ id: 'meetings', label: 'Meetings', icon: meetingsIcon() });
+      links.push({ id: 'lecturer-performance', label: 'Performance', icon: svgIcon('<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>') });
       links.push({ id: 'reports', label: 'Reports', icon: reportsIcon() });
       links.push({ id: 'announcements', label: 'Announcements', icon: svgIcon('<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>') });
       links.push({ id: 'subscription', label: 'Subscription', icon: subscriptionIcon() });
@@ -1943,10 +1946,13 @@ function buildSidebar() {
       links.push({ id: 'my-attendance', label: 'My Attendance', icon: sessionsIcon() });
       links.push({ id: 'courses', label: 'My Courses', icon: coursesIcon() });
       links.push({ id: 'quizzes', label: 'Quizzes', icon: quizzesIcon() });
+      links.push({ id: 'timetable', label: 'Schedule', icon: svgIcon('<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>') });
+      links.push({ id: 'quiz-history', label: 'My Results', icon: svgIcon('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/>') });
       links.push({ id: 'question-bank', label: 'Question Bank', icon: svgIcon('<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>') });
       links.push({ id: 'assignments', label: 'Assignments / Quiz', icon: assignmentsIcon() });
       links.push({ id: 'gradebook', label: 'My Grades', icon: svgIcon('<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>') });
       links.push({ id: 'meetings', label: 'Meetings', icon: meetingsIcon() });
+      links.push({ id: 'lecturer-performance', label: 'Performance', icon: svgIcon('<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>') });
       links.push({ id: 'reports', label: 'Reports', icon: reportsIcon() });
       links.push({ id: 'announcements', label: 'Announcements', icon: svgIcon('<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>') });
       break;
@@ -2001,6 +2007,9 @@ function navigateTo(view) {
     case 'meetings': renderMeetings(); break;
     case 'courses': renderCourses(); break;
     case 'quizzes': renderQuizzes(); break;
+    case 'quiz-history': renderStudentQuizHistory(); break;
+    case 'lecturer-performance': renderLecturerPerformance(); break;
+    case 'timetable': renderStudentTimetable(); break;
     case 'question-bank': renderQuestionBank(); break;
     case 'my-attendance': renderMyAttendance(); break;
     case 'mark-attendance': renderMarkAttendance(); break;
@@ -3066,6 +3075,144 @@ async function renderSignInOut() {
   }
 }
 
+
+// ── Lecturer: Student Performance across all quizzes in a course ──────────────
+async function renderLecturerPerformance() {
+  const content = document.getElementById('main-content');
+  if (!content) return;
+  content.innerHTML = '<div class="loading">Loading performance data…</div>';
+  try {
+    const [coursesData, quizzesData] = await Promise.all([
+      api('/api/courses').catch(() => ({ courses: [] })),
+      api('/api/lecturer/quizzes').catch(() => ({ quizzes: [] })),
+    ]);
+    const courses = coursesData.courses || [];
+    const quizzes = quizzesData.quizzes || [];
+
+    content.innerHTML = `
+      <div class="page-header">
+        <h2>Student Performance</h2>
+        <p>Overview of student results across all your quizzes</p>
+      </div>
+      ${quizzes.length === 0 ? '<div class="card"><div class="empty-state"><p>No quizzes yet. Create a quiz to see performance data.</p></div></div>' : `
+      <div class="card">
+        <table>
+          <thead><tr><th>Quiz</th><th>Course</th><th>Submissions</th><th>Avg Score</th><th>Pass Rate</th><th>Highest</th><th>Lowest</th></tr></thead>
+          <tbody>${quizzes.map(q => {
+            const stats = q.stats || {};
+            const avg = stats.averageScore || 0;
+            const passRate = stats.passRate || 0;
+            const color = avg >= 70 ? '#16a34a' : avg >= 50 ? '#d97706' : '#dc2626';
+            return `<tr>
+              <td><strong>${esc(q.title)}</strong></td>
+              <td style="font-size:12px;color:var(--text-muted)">${esc(q.course?.title || '—')}</td>
+              <td>${stats.totalAttempts || 0}</td>
+              <td><strong style="color:${color}">${avg.toFixed(1)}%</strong></td>
+              <td>
+                <div style="display:flex;align-items:center;gap:8px">
+                  <div style="flex:1;height:6px;background:#e5e7eb;border-radius:3px;min-width:60px">
+                    <div style="width:${passRate}%;height:100%;background:${color};border-radius:3px"></div>
+                  </div>
+                  <span style="font-size:12px;color:${color};font-weight:600">${passRate.toFixed(0)}%</span>
+                </div>
+              </td>
+              <td style="color:#16a34a;font-weight:600">${stats.highestScore?.toFixed(1) || '—'}%</td>
+              <td style="color:#dc2626;font-weight:600">${stats.lowestScore?.toFixed(1) || '—'}%</td>
+            </tr>`;
+          }).join('')}</tbody>
+        </table>
+      </div>`}
+    `;
+  } catch(e) {
+    content.innerHTML = `<div class="card"><p style="color:var(--danger)">Error: ${e.message}</p></div>`;
+  }
+}
+
+// ── Student Quiz Results History ─────────────────────────────────────────────
+async function renderStudentQuizHistory() {
+  const content = document.getElementById('main-content');
+  if (!content) return;
+  content.innerHTML = '<div class="loading">Loading quiz history…</div>';
+  try {
+    const data = await api('/api/student/quizzes');
+    const quizzes = data.quizzes || [];
+    const attempted = quizzes.filter(q => q.myAttempt);
+    const avgScore = attempted.length
+      ? Math.round(attempted.reduce((s, q) => s + (q.myAttempt?.percentageScore || 0), 0) / attempted.length)
+      : 0;
+
+    content.innerHTML = `
+      <div class="page-header"><h2>My Quiz Results</h2><p>Your performance across all quizzes</p></div>
+      <div class="stats-grid" style="margin-bottom:20px">
+        <div class="stat-card"><div class="stat-value">${attempted.length}</div><div class="stat-label">Completed</div></div>
+        <div class="stat-card"><div class="stat-value">${quizzes.length - attempted.length}</div><div class="stat-label">Pending</div></div>
+        <div class="stat-card"><div class="stat-value" style="color:${avgScore>=70?'#16a34a':avgScore>=50?'#d97706':'#dc2626'}">${avgScore}%</div><div class="stat-label">Avg Score</div></div>
+      </div>
+      <div class="card">
+        ${attempted.length ? `
+          <table>
+            <thead><tr><th>Quiz</th><th>Course</th><th>Score</th><th>Grade</th><th>Date</th><th></th></tr></thead>
+            <tbody>${attempted.map(q => {
+              const pct = q.myAttempt?.percentageScore || 0;
+              const grade = pct >= 90 ? 'A' : pct >= 80 ? 'B' : pct >= 70 ? 'C' : pct >= 60 ? 'D' : 'F';
+              const color = pct >= 70 ? '#16a34a' : pct >= 50 ? '#d97706' : '#dc2626';
+              return `<tr>
+                <td><strong>${q.title}</strong></td>
+                <td style="font-size:12px;color:var(--text-muted)">${q.course?.title || '—'}</td>
+                <td><strong style="color:${color}">${q.myAttempt.score}/${q.myAttempt.totalMarks} (${pct}%)</strong></td>
+                <td><span style="background:${color}20;color:${color};padding:2px 10px;border-radius:20px;font-size:12px;font-weight:700">${grade}</span></td>
+                <td style="font-size:12px">${fmtDate(q.myAttempt.submittedAt)}</td>
+                <td><button class="btn btn-sm" style="font-size:11px" onclick="viewStudentQuizResult('${q._id}')">View</button></td>
+              </tr>`;
+            }).join('')}</tbody>
+          </table>
+        ` : '<div class="empty-state"><p>No quizzes completed yet.</p></div>'}
+      </div>
+      ${quizzes.filter(q => !q.myAttempt).length ? `
+        <div class="card" style="margin-top:16px">
+          <div class="card-title">Pending Quizzes</div>
+          ${quizzes.filter(q => !q.myAttempt).map(q => `
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border)">
+              <div>
+                <div style="font-weight:600">${q.title}</div>
+                <div style="font-size:12px;color:var(--text-muted)">${q.course?.title || ''} · Due ${fmtDate(q.endTime)}</div>
+              </div>
+              <span style="background:#fef3c7;color:#92400e;padding:2px 10px;border-radius:20px;font-size:11px;font-weight:700">Pending</span>
+            </div>
+          `).join('')}
+        </div>
+      ` : ''}
+    `;
+  } catch(e) {
+    content.innerHTML = `<div class="card"><p style="color:var(--danger)">Error: ${e.message}</p></div>`;
+  }
+}
+
+async function viewStudentQuizResult(quizId) {
+  try {
+    const data = await api(`/api/student/quizzes/${quizId}/result`);
+    navigateTo('quizzes');
+    // Show result in modal
+    const modal = document.getElementById('modal-container');
+    if (!modal) return;
+    modal.classList.remove('hidden');
+    const pct = data.attempt?.percentageScore || 0;
+    const color = pct >= 70 ? '#16a34a' : pct >= 50 ? '#d97706' : '#dc2626';
+    modal.innerHTML = `
+      <div class="modal-overlay" onclick="closeModal(event)">
+        <div class="modal" onclick="event.stopPropagation()" style="max-width:600px;max-height:80vh;overflow-y:auto">
+          <h3>${data.quiz?.title || 'Quiz Result'}</h3>
+          <div style="text-align:center;margin:20px 0;padding:20px;background:${color}10;border-radius:12px">
+            <div style="font-size:48px;font-weight:800;color:${color}">${pct}%</div>
+            <div style="color:var(--text-muted);margin-top:4px">${data.attempt?.score}/${data.attempt?.totalMarks} marks</div>
+          </div>
+          ${data.feedback ? `<div style="padding:12px 16px;background:#f5f3ff;border-radius:8px;margin-bottom:16px;font-size:13px"><strong>Feedback:</strong> ${esc(data.feedback)}</div>` : ''}
+          <div class="modal-actions"><button class="btn btn-secondary btn-sm" onclick="closeModal()">Close</button></div>
+        </div>
+      </div>`;
+  } catch(e) { showToast('Could not load result: ' + e.message, 'error'); }
+}
+
 async function renderStudentDashboard(content) {
   const [attendance, coursesData, quizzesData, meetingsData, activeSessionData] = await Promise.all([
     api('/api/attendance-sessions/my-attendance?limit=5').catch(() => ({ records: [], pagination: { total: 0 } })),
@@ -3166,6 +3313,11 @@ async function renderAdminDashboard(content) {
   ]);
 
   const activeSessions = sessionsData.sessions.filter(s => s.status === 'active').length;
+  // Auto-refresh every 30s if there are active sessions
+  if (activeSessions > 0) {
+    clearTimeout(window._dashRefreshTimer);
+    window._dashRefreshTimer = setTimeout(() => { if (currentView === 'dashboard') renderDashboard(); }, 30000);
+  }
   const totalUsers     = usersData.users.length;
   const pendingCount   = pendingData.pending.length;
   const announcements  = announcementsData.announcements || [];
@@ -7488,6 +7640,7 @@ async function viewAttendees(sessionId, sessionTitle) {
         <div id="attendees-content"><div class="spinner" style="margin:20px auto"></div></div>
         <div class="modal-actions" style="justify-content:space-between">
           <button class="btn btn-sm" style="background:#16a34a;color:#fff" onclick="exportSessionCSV('${sessionId}', '${sessionTitle}')">⬇ Export CSV</button>
+            <button class="btn btn-sm" style="background:#16a34a;color:#fff" onclick="exportAttendanceToExcel('${sessionId}', '${sessionTitle}')">📊 Excel</button>
           <button class="btn btn-secondary btn-sm" onclick="closeModal()">Close</button>
         </div>
       </div>
@@ -7618,9 +7771,44 @@ async function renderProfile() {
         </div>
       </div>
 
+      <div style="margin-bottom:20px;padding-top:20px;border-top:1px solid var(--border)">
+        <h3 style="font-size:14px;font-weight:700;margin-bottom:12px;color:var(--text-primary)">Two-Factor Authentication</h3>
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;background:var(--bg);border-radius:10px;border:1.5px solid var(--border)">
+          <div>
+            <div style="font-weight:600;font-size:14px">Email 2FA</div>
+            <div style="font-size:12px;color:var(--text-muted)">Send a code to your email every time you sign in</div>
+          </div>
+          <label style="position:relative;display:inline-block;width:44px;height:24px;cursor:pointer">
+            <input type="checkbox" id="twofa-toggle" ${currentUser.twoFactorEnabled ? 'checked' : ''} onchange="toggle2FA(this.checked)" style="opacity:0;width:0;height:0">
+            <span style="position:absolute;inset:0;border-radius:24px;background:${currentUser.twoFactorEnabled ? 'var(--primary)' : '#d1d5db'};transition:.2s">
+              <span style="position:absolute;width:18px;height:18px;background:#fff;border-radius:50%;top:3px;left:${currentUser.twoFactorEnabled ? '23px' : '3px'};transition:.2s"></span>
+            </span>
+          </label>
+        </div>
+      </div>
       <button class="btn btn-primary" onclick="saveProfile()" style="width:100%">Save Changes</button>
     </div>
   `;
+}
+
+async function toggle2FA(enable) {
+  try {
+    await api('/api/auth/2fa/toggle', { method: 'POST', body: JSON.stringify({ enable }) });
+    currentUser.twoFactorEnabled = enable;
+    showToast(enable ? "2FA enabled — you will get a code by email each login" : "2FA disabled", enable ? "success" : "info");
+    // Update toggle visual
+    const span = document.querySelector('#twofa-toggle + span');
+    if (span) {
+      span.style.background = enable ? 'var(--primary)' : '#d1d5db';
+      const dot = span.querySelector('span');
+      if (dot) dot.style.left = enable ? '23px' : '3px';
+    }
+  } catch(e) {
+    showToast('Failed: ' + e.message, 'error');
+    // Revert toggle
+    const cb = document.getElementById('twofa-toggle');
+    if (cb) cb.checked = !enable;
+  }
 }
 
 async function saveProfile() {
@@ -8577,6 +8765,284 @@ async function sendBulkEmail(courseId) {
     status.textContent = 'Failed: ' + e.message;
     status.style.cssText = 'display:block;background:#fef2f2;color:#dc2626;padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:12px';
   }
+}
+
+
+// ── Export to Excel (uses SheetJS via CDN) ────────────────────────────────────
+async function exportAttendanceToExcel(sessionId, sessionTitle) {
+  try {
+    showToast('Preparing Excel file…', 'info');
+    const data = await api(`/api/attendance-sessions/${sessionId}/records`);
+    const records = data.records || [];
+
+    // Load SheetJS dynamically
+    if (!window.XLSX) {
+      await new Promise((resolve, reject) => {
+        const s = document.createElement('script');
+        s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+        s.onload = resolve; s.onerror = reject;
+        document.head.appendChild(s);
+      });
+    }
+
+    const rows = [['Student Name', 'Student ID', 'Status', 'Method', 'Check-in Time', 'Course']];
+    records.forEach(r => {
+      rows.push([
+        r.student?.name || '—',
+        r.student?.indexNumber || r.student?.employeeId || '—',
+        r.status,
+        r.method,
+        r.checkInTime ? new Date(r.checkInTime).toLocaleString() : '—',
+        r.session?.course?.title || '—',
+      ]);
+    });
+
+    const ws = window.XLSX.utils.aoa_to_sheet(rows);
+    const wb = window.XLSX.utils.book_new();
+    window.XLSX.utils.book_append_sheet(wb, ws, 'Attendance');
+
+    // Style header row
+    const range = window.XLSX.utils.decode_range(ws['!ref']);
+    for (let C = range.s.c; C <= range.e.c; C++) {
+      const cell = ws[window.XLSX.utils.encode_cell({ r: 0, c: C })];
+      if (cell) cell.s = { font: { bold: true }, fill: { fgColor: { rgb: 'E0E7FF' } } };
+    }
+    ws['!cols'] = [{ wch: 25 }, { wch: 15 }, { wch: 12 }, { wch: 15 }, { wch: 22 }, { wch: 20 }];
+
+    const filename = `Attendance_${(sessionTitle || 'session').replace(/[^a-z0-9]/gi, '_')}_${new Date().toISOString().slice(0,10)}.xlsx`;
+    window.XLSX.writeFile(wb, filename);
+    showToast('Excel file downloaded!', 'success');
+  } catch(e) {
+    showToast('Export failed: ' + e.message, 'error');
+  }
+}
+
+async function exportAllAttendanceToExcel() {
+  try {
+    showToast('Preparing Excel file…', 'info');
+    const data = await api('/api/attendance-sessions/my-attendance?limit=500');
+    const records = data.records || [];
+
+    if (!window.XLSX) {
+      await new Promise((resolve, reject) => {
+        const s = document.createElement('script');
+        s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+        s.onload = resolve; s.onerror = reject;
+        document.head.appendChild(s);
+      });
+    }
+
+    const rows = [['Session', 'Date', 'Status', 'Method']];
+    records.forEach(r => {
+      rows.push([
+        r.session?.title || '—',
+        r.checkInTime ? new Date(r.checkInTime).toLocaleDateString() : '—',
+        r.status,
+        r.method,
+      ]);
+    });
+
+    const ws = window.XLSX.utils.aoa_to_sheet(rows);
+    const wb = window.XLSX.utils.book_new();
+    window.XLSX.utils.book_append_sheet(wb, ws, 'My Attendance');
+    ws['!cols'] = [{ wch: 30 }, { wch: 15 }, { wch: 12 }, { wch: 15 }];
+    window.XLSX.writeFile(wb, `My_Attendance_${new Date().toISOString().slice(0,10)}.xlsx`);
+    showToast('Excel file downloaded!', 'success');
+  } catch(e) {
+    showToast('Export failed: ' + e.message, 'error');
+  }
+}
+
+
+// ── Student Timetable ─────────────────────────────────────────────────────────
+async function renderStudentTimetable() {
+  const content = document.getElementById('main-content');
+  if (!content) return;
+  content.innerHTML = '<div class="loading">Loading timetable…</div>';
+  try {
+    const [sessionsData, meetingsData, quizzesData, assignmentsData] = await Promise.all([
+      api('/api/attendance-sessions?limit=50').catch(() => ({ sessions: [] })),
+      api('/api/zoom').catch(() => ({ meetings: [] })),
+      api('/api/student/quizzes').catch(() => ({ quizzes: [] })),
+      api('/api/assignments/student').catch(() => ({ assignments: [] })),
+    ]);
+
+    const now = new Date();
+    const upcoming = [];
+
+    // Add upcoming sessions
+    (sessionsData.sessions || []).filter(s => s.status === 'active' || new Date(s.startedAt) > now).forEach(s => {
+      upcoming.push({ type: 'session', title: s.title || 'Attendance Session', date: new Date(s.startedAt), color: '#6366f1', icon: '📋', action: () => navigateTo('mark-attendance') });
+    });
+
+    // Add upcoming meetings
+    (meetingsData.meetings || []).filter(m => m.status === 'scheduled' && new Date(m.scheduledStart) > now).forEach(m => {
+      upcoming.push({ type: 'meeting', title: m.title, date: new Date(m.scheduledStart), color: '#0ea5e9', icon: '🎥', url: m.joinUrl });
+    });
+
+    // Add quiz deadlines
+    (quizzesData.quizzes || []).filter(q => !q.myAttempt && new Date(q.endTime) > now).forEach(q => {
+      upcoming.push({ type: 'quiz', title: q.title + ' (Quiz)', date: new Date(q.endTime), color: '#f59e0b', icon: '📝', action: () => navigateTo('quizzes') });
+    });
+
+    // Add assignment deadlines
+    (assignmentsData.assignments || []).filter(a => !a.mySubmission && new Date(a.dueDate) > now).forEach(a => {
+      upcoming.push({ type: 'assignment', title: a.title + ' (Due)', date: new Date(a.dueDate), color: '#ef4444', icon: '📌', action: () => location.href = '/assignments.html' });
+    });
+
+    // Sort by date
+    upcoming.sort((a, b) => a.date - b.date);
+
+    const days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+    const groupByDate = {};
+    upcoming.forEach(item => {
+      const key = item.date.toDateString();
+      if (!groupByDate[key]) groupByDate[key] = [];
+      groupByDate[key].push(item);
+    });
+
+    content.innerHTML = `
+      <div class="page-header">
+        <h2>My Schedule</h2>
+        <p>Upcoming sessions, quizzes, assignments and meetings</p>
+      </div>
+      ${Object.keys(groupByDate).length === 0 ? `
+        <div class="card" style="text-align:center;padding:40px">
+          <div style="font-size:48px">📅</div>
+          <p style="margin-top:12px;color:var(--text-muted)">No upcoming events. You're all caught up!</p>
+        </div>
+      ` : Object.entries(groupByDate).map(([dateStr, items]) => {
+        const d = new Date(dateStr);
+        const isToday = d.toDateString() === now.toDateString();
+        const isTomorrow = d.toDateString() === new Date(now.getTime() + 86400000).toDateString();
+        const label = isToday ? 'Today' : isTomorrow ? 'Tomorrow' : `${days[d.getDay()]}, ${d.getDate()} ${months[d.getMonth()]}`;
+        return `
+          <div style="margin-bottom:20px">
+            <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:${isToday?'var(--primary)':'var(--text-muted)'};margin-bottom:8px">${label}</div>
+            <div class="card" style="padding:0;overflow:hidden">
+              ${items.map((item, i) => `
+                <div style="display:flex;align-items:center;gap:12px;padding:14px 16px;${i>0?'border-top:1px solid var(--border)':''};cursor:pointer" onclick="${item.url ? `window.open('${item.url}','_blank')` : item.action ? `(${item.action.toString()})()` : ''}">
+                  <div style="width:40px;height:40px;border-radius:10px;background:${item.color}15;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">${item.icon}</div>
+                  <div style="flex:1">
+                    <div style="font-weight:600;font-size:14px">${esc(item.title)}</div>
+                    <div style="font-size:12px;color:var(--text-muted)">${item.date.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</div>
+                  </div>
+                  <span style="font-size:11px;padding:2px 10px;border-radius:20px;background:${item.color}15;color:${item.color};font-weight:700;text-transform:capitalize">${item.type}</span>
+                </div>
+              `).join('')}
+            </div>
+          </div>`;
+      }).join('')}
+    `;
+  } catch(e) {
+    content.innerHTML = `<div class="card"><p style="color:var(--danger)">Error: ${e.message}</p></div>`;
+  }
+}
+
+
+// ── Two-Factor Authentication (2FA) via Email ────────────────────────────────
+// Simple email-based 2FA — sends a 6-digit code after password verification
+// Stored in sessionStorage so it clears when browser closes
+
+async function initiate2FA(credentials, loginFn) {
+  try {
+    // First verify password normally
+    const data = await api('/api/auth/login', { method: 'POST', body: JSON.stringify(credentials) });
+    if (!data.token) throw new Error('Login failed');
+
+    // Check if 2FA is enabled for this user
+    if (!data.user?.twoFactorEnabled) {
+      return data; // No 2FA, proceed normally
+    }
+
+    // 2FA required — request code
+    await api('/api/auth/2fa/send', { method: 'POST', headers: { Authorization: 'Bearer ' + data.token } });
+
+    // Show 2FA modal
+    return new Promise((resolve, reject) => {
+      const modal = document.createElement('div');
+      modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
+      modal.innerHTML = `
+        <div style="background:var(--card);border-radius:16px;padding:32px;width:100%;max-width:380px;text-align:center">
+          <div style="font-size:40px;margin-bottom:12px">🔐</div>
+          <h3 style="font-size:17px;font-weight:700;margin-bottom:8px">Two-Factor Authentication</h3>
+          <p style="font-size:13px;color:var(--text-muted);margin-bottom:20px">A 6-digit code was sent to <strong>${data.user.email}</strong></p>
+          <input type="text" id="twofa-code" placeholder="Enter 6-digit code" maxlength="6" style="width:100%;padding:12px;border:1.5px solid var(--border);border-radius:9px;font-size:18px;text-align:center;letter-spacing:8px;font-family:monospace;outline:none;margin-bottom:12px">
+          <div id="twofa-err" style="color:#dc2626;font-size:13px;margin-bottom:10px;display:none"></div>
+          <button onclick="verify2FA('${data.token}')" style="width:100%;padding:12px;background:var(--primary);color:#fff;border:none;border-radius:9px;font-size:14px;font-weight:700;cursor:pointer;margin-bottom:8px">Verify</button>
+          <button onclick="this.closest('div[style]').remove();reject(new Error('2FA cancelled'))" style="width:100%;padding:10px;background:transparent;border:none;color:var(--text-muted);font-size:13px;cursor:pointer">Cancel</button>
+        </div>`;
+      document.body.appendChild(modal);
+      window._2faResolve = resolve;
+      window._2faReject = reject;
+      window._2faData = data;
+      document.getElementById('twofa-code').focus();
+      document.getElementById('twofa-code').addEventListener('keydown', e => { if (e.key === 'Enter') verify2FA(data.token); });
+    });
+  } catch(e) { throw e; }
+}
+
+async function verify2FA(tempToken) {
+  const code = document.getElementById('twofa-code')?.value?.trim();
+  const errEl = document.getElementById('twofa-err');
+  if (!code || code.length !== 6) { errEl.textContent = 'Please enter the 6-digit code'; errEl.style.display='block'; return; }
+  try {
+    const result = await api('/api/auth/2fa/verify', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + tempToken },
+      body: JSON.stringify({ code })
+    });
+    document.querySelector('[style*="position:fixed"][style*="z-index:9999"]')?.remove();
+    window._2faResolve?.({ ...window._2faData, token: result.token || tempToken });
+  } catch(e) {
+    if (errEl) { errEl.textContent = e.message || 'Invalid code'; errEl.style.display = 'block'; }
+  }
+}
+
+
+// ── Branding: Preview login page ─────────────────────────────────────────────
+function previewLoginPage() {
+  const logo  = document.getElementById('bd-logo')?.value || '';
+  const color = document.getElementById('bd-color')?.value || '#6366f1';
+  const tag   = document.getElementById('bd-tagline')?.value || 'Powered by KODEX';
+  const name  = currentUser.company?.name || 'Your Institution';
+  const code  = currentUser.company?.institutionCode || '——';
+
+  const modal = document.getElementById('modal-container');
+  if (!modal) return;
+  modal.classList.remove('hidden');
+  modal.innerHTML = `
+    <div class="modal-overlay" onclick="closeModal(event)">
+      <div class="modal" onclick="event.stopPropagation()" style="max-width:480px;padding:0;overflow:hidden;border-radius:16px">
+        <!-- Preview header -->
+        <div style="background:#f8fafc;padding:12px 16px;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between">
+          <span style="font-size:12px;font-weight:700;color:#64748b">LOGIN PAGE PREVIEW</span>
+          <button onclick="closeModal()" style="background:none;border:none;cursor:pointer;color:#64748b;font-size:18px;line-height:1">×</button>
+        </div>
+        <!-- Simulated login page -->
+        <div style="background:#0d1117;padding:32px;display:flex;align-items:center;justify-content:center;min-height:400px">
+          <div style="background:#fff;border-radius:14px;padding:28px;width:100%;max-width:340px;box-shadow:0 20px 60px rgba(0,0,0,.4)">
+            <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
+              ${logo
+                ? `<img src="${logo}" style="height:40px;width:auto;border-radius:8px" onerror="this.style.display='none'">`
+                : `<div style="width:40px;height:40px;border-radius:10px;background:${color};display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:18px">${name[0]}</div>`}
+              <div>
+                <div style="font-size:16px;font-weight:800;color:#0d1117">${esc(name)}</div>
+                <div style="font-size:11px;color:#6b7280">${esc(tag)}</div>
+              </div>
+            </div>
+            <div style="font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Email</div>
+            <div style="padding:10px 12px;border:1.5px solid #e5e7eb;border-radius:8px;font-size:13px;color:#9ca3af;margin-bottom:12px">admin@example.com</div>
+            <div style="font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Password</div>
+            <div style="padding:10px 12px;border:1.5px solid #e5e7eb;border-radius:8px;font-size:13px;color:#9ca3af;margin-bottom:16px">••••••••</div>
+            <div style="padding:12px;background:${color};color:#fff;border-radius:8px;text-align:center;font-size:14px;font-weight:700">Sign In</div>
+            <div style="text-align:center;margin-top:12px;font-size:11px;color:#9ca3af">Institution Code: <span style="font-family:monospace;font-weight:700;color:#374151">${code}</span></div>
+          </div>
+        </div>
+      </div>
+    </div>`;
 }
 
 // ── Service Worker Registration ───────────────────────────────────────────────
@@ -11946,7 +12412,10 @@ async function renderBranding() {
           </div>
         </div>
         <div id="bd-error" style="color:#ef4444;font-size:13px;margin-bottom:8px;display:none"></div>
-        <button class="btn btn-primary" onclick="saveBranding()">Save Branding</button>
+        <div style="display:flex;gap:10px;flex-wrap:wrap">
+          <button class="btn btn-primary" onclick="saveBranding()">Save Branding</button>
+          <button class="btn btn-secondary" onclick="previewLoginPage()">👁 Preview Login Page</button>
+        </div>
       </div>
 
       <!-- Payroll Settings -->
