@@ -1042,6 +1042,7 @@ async function handleAdminLogin() {
     localStorage.setItem('token', token);
     currentUser = data.user;
     showDashboard(data);
+    requestPushPermission().catch(() => {});
   } catch (e) {
     if (btn) { btn.textContent = 'Sign In'; btn.disabled = false; }
     const msg = e.message || '';
@@ -3268,6 +3269,7 @@ async function renderStudentDashboard(content) {
       <button class="btn btn-secondary btn-sm" onclick="navigateTo('my-attendance')">View History</button>
       <button class="btn btn-secondary btn-sm" onclick="navigateTo('courses')">My Courses</button>
       <button class="btn btn-secondary btn-sm" onclick="navigateTo('quizzes')">Quizzes</button>
+      <button class="btn btn-secondary btn-sm" onclick="generateAttendanceReportCard()">📋 Report Card</button>
     </div>
     
     ${upcomingMeetings.length > 0 ? `
@@ -4671,6 +4673,7 @@ function showUploadRosterModal(courseId, courseCode) {
         <div class="modal-actions">
           <button class="btn btn-secondary btn-sm" onclick="closeModal()">Cancel</button>
           <button class="btn btn-primary btn-sm" id="roster-upload-btn" onclick="uploadRoster('${courseId}')">Upload Students</button>
+          <button class="btn btn-secondary btn-sm" onclick="openExcelImportModal('${courseId}','${(courseCode||courseName||courseTitle||'Course')}')">📊 Import Excel</button>
         </div>
       </div>
     </div>
@@ -9143,6 +9146,316 @@ function getMathToolbar(targetId) {
       </div>
     </div>`;
 }
+
+// ── Bulk Excel Student Import ─────────────────────────────────────────────────
+function openExcelImportModal(courseId, courseName) {
+  const existing = document.getElementById('excel-import-modal');
+  if (existing) existing.remove();
+  const modal = document.createElement('div');
+  modal.id = 'excel-import-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;display:flex;align-items:center;justify-content:center;padding:20px';
+  modal.innerHTML = '<div style="background:var(--card);border-radius:16px;padding:28px;width:100%;max-width:520px;box-shadow:0 20px 60px rgba(0,0,0,.3)">' +
+    '<h3 style="font-size:16px;font-weight:700;margin-bottom:4px">📊 Import Students from Excel</h3>' +
+    '<p style="font-size:13px;color:var(--text-muted);margin-bottom:16px">' + courseName + '</p>' +
+    '<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:12px 14px;margin-bottom:16px;font-size:12px;color:#15803d">' +
+      '<strong>Excel format required:</strong><br>' +
+      'Column A = Student ID &nbsp;|&nbsp; Column B = Full Name &nbsp;|&nbsp; Column C = Email (optional)<br>' +
+      'First row can be a header — it will be skipped automatically.' +
+    '</div>' +
+    '<div id="excel-drop-zone" style="border:2px dashed var(--border);border-radius:10px;padding:32px;text-align:center;cursor:pointer;margin-bottom:16px"' +
+      ' onclick="document.getElementById(\'excel-file-input\').click()"' +
+      ' ondragover="event.preventDefault();this.style.borderColor=\'var(--primary)\'"' +
+      ' ondragleave="this.style.borderColor=\'var(--border)\'"' +
+      ' ondrop="handleExcelDrop(event,\'' + courseId + '\')">' +
+      '<div style="font-size:32px;margin-bottom:8px">📂</div>' +
+      '<div style="font-weight:600;font-size:14px">Drop Excel file here or click to browse</div>' +
+      '<div style="font-size:12px;color:var(--text-muted);margin-top:4px">.xlsx or .xls files only</div>' +
+    '</div>' +
+    '<input type="file" id="excel-file-input" accept=".xlsx,.xls" style="display:none" onchange="processExcelFile(this.files[0],\'' + courseId + '\')">' +
+    '<div id="excel-preview" style="display:none;margin-bottom:16px">' +
+      '<div style="font-size:12px;font-weight:700;color:var(--text-muted);margin-bottom:8px">PREVIEW (first 5 students)</div>' +
+      '<div id="excel-preview-table"></div>' +
+      '<div id="excel-count" style="font-size:13px;color:var(--primary);font-weight:600;margin-top:8px"></div>' +
+    '</div>' +
+    '<div id="excel-msg" style="display:none;margin-bottom:12px;padding:10px 14px;border-radius:8px;font-size:13px"></div>' +
+    '<div style="display:flex;gap:8px">' +
+      '<button onclick="document.getElementById(\'excel-import-modal\').remove()" style="flex:1;padding:10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;background:transparent;color:var(--text)">Cancel</button>' +
+      '<button id="excel-import-btn" onclick="uploadExcelStudents(\'' + courseId + '\')" disabled style="flex:2;padding:10px;background:var(--primary);color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;opacity:.5">Import Students</button>' +
+    '</div></div>';
+  document.body.appendChild(modal);
+}
+
+let _excelStudents = [];
+
+function handleExcelDrop(e, courseId) {
+  e.preventDefault();
+  document.getElementById('excel-drop-zone').style.borderColor = 'var(--border)';
+  const file = e.dataTransfer.files[0];
+  if (file) processExcelFile(file, courseId);
+}
+
+async function processExcelFile(file, courseId) {
+  if (!file) return;
+  if (!file.name.match(/\.xlsx?$/i)) { showExcelMsg('Please upload an Excel file (.xlsx or .xls)', false); return; }
+  if (!window.XLSX) {
+    await new Promise((resolve, reject) => {
+      const s = document.createElement('script');
+      s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+      s.onload = resolve; s.onerror = reject;
+      document.head.appendChild(s);
+    });
+  }
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    try {
+      const wb = window.XLSX.read(ev.target.result, { type: 'array' });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const rows = window.XLSX.utils.sheet_to_json(ws, { header: 1 });
+      _excelStudents = [];
+      for (let i = 0; i < rows.length; i++) {
+        const row = rows[i];
+        const id = String(row[0] || '').trim();
+        const name = String(row[1] || '').trim();
+        if (i === 0 && (id.toLowerCase().includes('id') || id.toLowerCase().includes('student'))) continue;
+        if (!id) continue;
+        _excelStudents.push({ studentId: id, name, email: String(row[2] || '').trim() });
+      }
+      if (_excelStudents.length === 0) { showExcelMsg('No valid students found. Check the format.', false); return; }
+      const preview = document.getElementById('excel-preview');
+      const table = document.getElementById('excel-preview-table');
+      const countEl = document.getElementById('excel-count');
+      preview.style.display = 'block';
+      let rows_html = '<table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr style="background:var(--bg)">' +
+        '<th style="padding:6px 8px;text-align:left;border:1px solid var(--border)">Student ID</th>' +
+        '<th style="padding:6px 8px;text-align:left;border:1px solid var(--border)">Name</th>' +
+        '<th style="padding:6px 8px;text-align:left;border:1px solid var(--border)">Email</th>' +
+        '</tr></thead><tbody>';
+      _excelStudents.slice(0,5).forEach(s => {
+        rows_html += '<tr>' +
+          '<td style="padding:6px 8px;border:1px solid var(--border)">' + esc(s.studentId) + '</td>' +
+          '<td style="padding:6px 8px;border:1px solid var(--border)">' + esc(s.name) + '</td>' +
+          '<td style="padding:6px 8px;border:1px solid var(--border)">' + esc(s.email || '—') + '</td>' +
+          '</tr>';
+      });
+      rows_html += '</tbody></table>';
+      table.innerHTML = rows_html;
+      countEl.textContent = '✅ ' + _excelStudents.length + ' student' + (_excelStudents.length !== 1 ? 's' : '') + ' found in file';
+      const btn = document.getElementById('excel-import-btn');
+      btn.disabled = false; btn.style.opacity = '1';
+    } catch(err) { showExcelMsg('Could not read file: ' + err.message, false); }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function showExcelMsg(msg, ok) {
+  const el = document.getElementById('excel-msg');
+  if (!el) return;
+  el.textContent = msg; el.style.display = 'block';
+  el.style.background = ok ? '#f0fdf4' : '#fef2f2';
+  el.style.color = ok ? '#15803d' : '#dc2626';
+}
+
+async function uploadExcelStudents(courseId) {
+  if (!_excelStudents.length) return;
+  const btn = document.getElementById('excel-import-btn');
+  btn.textContent = 'Importing…'; btn.disabled = true;
+  try {
+    const data = await api('/api/roster/' + courseId + '/upload', { method: 'POST', body: JSON.stringify({ students: _excelStudents }) });
+    showExcelMsg('✅ ' + data.message, true);
+    btn.textContent = 'Done!';
+    setTimeout(() => { document.getElementById('excel-import-modal')?.remove(); _excelStudents = []; }, 2000);
+  } catch(e) {
+    showExcelMsg('Import failed: ' + e.message, false);
+    btn.textContent = 'Import Students'; btn.disabled = false;
+  }
+}
+
+// ── Attendance Report Card PDF ────────────────────────────────────────────────
+async function generateAttendanceReportCard() {
+  try {
+    showToast('Generating report card…', 'info');
+    if (!window.jspdf) {
+      await new Promise((resolve, reject) => {
+        const s = document.createElement('script');
+        s.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+        s.onload = resolve; s.onerror = reject;
+        document.head.appendChild(s);
+      });
+    }
+    const attendanceData = await api('/api/attendance-sessions/my-attendance?limit=500').catch(() => ({ records: [] }));
+    const records = attendanceData.records || [];
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+    const W = 210, M = 20;
+
+    // Header bar
+    doc.setFillColor(79, 70, 229);
+    doc.rect(0, 0, W, 40, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(22); doc.setFont('helvetica', 'bold');
+    doc.text('KODEX', M, 16);
+    doc.setFontSize(11); doc.setFont('helvetica', 'normal');
+    doc.text('Student Attendance Report Card', M, 24);
+    doc.text('Generated: ' + new Date().toDateString(), M, 31);
+
+    // Student info
+    doc.setTextColor(30, 27, 75);
+    doc.setFontSize(14); doc.setFont('helvetica', 'bold');
+    doc.text(currentUser.name || 'Student', M, 52);
+    doc.setFontSize(10); doc.setFont('helvetica', 'normal');
+    doc.setTextColor(100, 100, 100);
+    doc.text('Student ID: ' + (currentUser.indexNumber || 'N/A'), M, 59);
+    doc.text('Institution: ' + (currentUser.company?.name || 'N/A'), M, 65);
+    doc.setDrawColor(199, 210, 254);
+    doc.line(M, 70, W - M, 70);
+
+    // Table header
+    let y = 80;
+    doc.setFontSize(11); doc.setFont('helvetica', 'bold');
+    doc.setTextColor(30, 27, 75);
+    doc.text('Attendance by Course', M, y); y += 8;
+    doc.setFillColor(238, 242, 255);
+    doc.rect(M, y, W - 2*M, 8, 'F');
+    doc.setFontSize(9); doc.setTextColor(79, 70, 229);
+    doc.text('Course', M + 3, y + 5.5);
+    doc.text('Present', 120, y + 5.5);
+    doc.text('Total', 148, y + 5.5);
+    doc.text('Rate', 168, y + 5.5);
+    y += 10;
+
+    // Group by course
+    const byCourse = {};
+    records.forEach(r => {
+      const key = r.session?.course || 'gen';
+      const name = r.session?.courseTitle || 'General';
+      if (!byCourse[key]) byCourse[key] = { name, present: 0, total: 0 };
+      byCourse[key].total++;
+      if (r.status === 'present') byCourse[key].present++;
+    });
+
+    const entries = Object.values(byCourse);
+    if (entries.length === 0) {
+      doc.setTextColor(150,150,150); doc.setFont('helvetica','normal');
+      doc.text('No attendance records found.', M + 3, y + 5);
+    }
+    entries.forEach((c, i) => {
+      if (y > 260) { doc.addPage(); y = 20; }
+      const rate = c.total > 0 ? Math.round((c.present/c.total)*100) : 0;
+      const cr = rate >= 75 ? [22,163,74] : rate >= 50 ? [217,119,6] : [220,38,38];
+      if (i % 2 === 0) { doc.setFillColor(249,250,251); doc.rect(M, y-1, W-2*M, 9, 'F'); }
+      doc.setTextColor(30,27,75); doc.setFont('helvetica','normal'); doc.setFontSize(9);
+      doc.text(c.name.substring(0,44), M + 3, y + 5);
+      doc.text(String(c.present), 120, y + 5);
+      doc.text(String(c.total), 148, y + 5);
+      doc.setTextColor(cr[0], cr[1], cr[2]); doc.setFont('helvetica','bold');
+      doc.text(rate + '%', 168, y + 5);
+      y += 9;
+    });
+
+    // Summary row
+    y += 4;
+    const totalPresent = records.filter(r => r.status === 'present').length;
+    const overall = records.length > 0 ? Math.round((totalPresent/records.length)*100) : 0;
+    doc.setFillColor(79, 70, 229);
+    doc.rect(M, y, W-2*M, 12, 'F');
+    doc.setTextColor(255,255,255); doc.setFont('helvetica','bold'); doc.setFontSize(10);
+    doc.text('Overall Attendance Rate', M + 3, y + 8);
+    doc.text(overall + '%  (' + totalPresent + ' of ' + records.length + ' sessions)', 128, y + 8);
+
+    doc.setFontSize(8); doc.setTextColor(150,150,150); doc.setFont('helvetica','normal');
+    doc.text('Generated automatically by KODEX — kodex.it.com', M, 285);
+    doc.save('KODEX_Report_Card_' + (currentUser.indexNumber||'student') + '_' + new Date().toISOString().slice(0,10) + '.pdf');
+    showToast('Report card downloaded!', 'success');
+  } catch(e) { showToast('Failed: ' + e.message, 'error'); }
+}
+
+// ── Course Completion Certificate ─────────────────────────────────────────────
+async function generateCertificate(courseId, courseTitle) {
+  try {
+    showToast('Generating certificate…', 'info');
+    if (!window.jspdf) {
+      await new Promise((resolve, reject) => {
+        const s = document.createElement('script');
+        s.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+        s.onload = resolve; s.onerror = reject;
+        document.head.appendChild(s);
+      });
+    }
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+    const W = 297, H = 210;
+
+    doc.setDrawColor(79,70,229); doc.setLineWidth(3);
+    doc.rect(8, 8, W-16, H-16);
+    doc.setDrawColor(199,210,254); doc.setLineWidth(1);
+    doc.rect(12, 12, W-24, H-24);
+    [[15,15],[W-15,15],[15,H-15],[W-15,H-15]].forEach(function(pt) {
+      doc.setFillColor(79,70,229); doc.circle(pt[0],pt[1],3,'F');
+    });
+
+    doc.setFontSize(11); doc.setFont('helvetica','normal');
+    doc.setTextColor(99,102,241);
+    doc.text('KODEX', W/2, 28, { align: 'center' });
+    doc.text('Learning & Attendance Management Platform', W/2, 34, { align: 'center' });
+
+    doc.setFontSize(32); doc.setFont('helvetica','bold');
+    doc.setTextColor(30,27,75);
+    doc.text('Certificate of Completion', W/2, 60, { align: 'center' });
+
+    doc.setDrawColor(199,210,254); doc.setLineWidth(0.5);
+    doc.line(60, 65, W-60, 65);
+
+    doc.setFontSize(13); doc.setFont('helvetica','normal');
+    doc.setTextColor(100,100,100);
+    doc.text('This is to certify that', W/2, 78, { align: 'center' });
+
+    doc.setFontSize(28); doc.setFont('helvetica','bold');
+    doc.setTextColor(79,70,229);
+    doc.text(currentUser.name || 'Student Name', W/2, 96, { align: 'center' });
+    var nw = doc.getTextWidth(currentUser.name || 'Student Name');
+    doc.setDrawColor(79,70,229); doc.setLineWidth(0.8);
+    doc.line(W/2 - nw/2, 99, W/2 + nw/2, 99);
+
+    doc.setFontSize(13); doc.setFont('helvetica','normal');
+    doc.setTextColor(100,100,100);
+    doc.text('has successfully completed the course', W/2, 110, { align: 'center' });
+
+    doc.setFontSize(20); doc.setFont('helvetica','bold');
+    doc.setTextColor(30,27,75);
+    doc.text(courseTitle || 'Course Title', W/2, 124, { align: 'center' });
+
+    doc.setFontSize(11); doc.setFont('helvetica','normal');
+    doc.setTextColor(100,100,100);
+    doc.text('at ' + (currentUser.company?.name || 'Institution'), W/2, 133, { align: 'center' });
+    doc.text('Date of Issue: ' + new Date().toDateString(), W/2, 145, { align: 'center' });
+
+    doc.setDrawColor(100,100,100); doc.setLineWidth(0.3);
+    doc.line(W/2-60, 165, W/2+60, 165);
+    doc.setFontSize(9);
+    doc.text('Authorised by KODEX Platform', W/2, 171, { align: 'center' });
+
+    doc.setFontSize(8); doc.setTextColor(199,210,254);
+    doc.text('kodex.it.com', W/2, H-16, { align: 'center' });
+
+    doc.save('KODEX_Certificate_' + (courseTitle||'course').replace(/[^a-z0-9]/gi,'_') + '.pdf');
+    showToast('Certificate downloaded!', 'success');
+  } catch(e) { showToast('Failed: ' + e.message, 'error'); }
+}
+
+// ── Push Notification Triggers ────────────────────────────────────────────────
+async function notifySessionStarted(sessionTitle) {
+  await showLocalNotification('Attendance Session Live!', sessionTitle + ' — Mark your attendance now', '/?view=mark-attendance');
+}
+async function notifyQuizAvailable(quizTitle, endTime) {
+  const mins = Math.round((new Date(endTime) - Date.now()) / 60000);
+  await showLocalNotification('Quiz Available: ' + quizTitle, 'You have ' + mins + ' minutes to complete this quiz', '/?view=quizzes');
+}
+async function notifyAssignmentDue(assignmentTitle, dueDate) {
+  const hours = Math.round((new Date(dueDate) - Date.now()) / 3600000);
+  await showLocalNotification('Assignment Due Soon: ' + assignmentTitle, 'Due in ' + hours + ' hour' + (hours !== 1 ? 's' : ''), '/assignments.html');
+}
+
+
 
 // ── Service Worker Registration ───────────────────────────────────────────────
 if ('serviceWorker' in navigator) {
