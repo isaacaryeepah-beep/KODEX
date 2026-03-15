@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 680 340" width="680" height="340">
+  <style>
+    .lt { fill: #1e1b4b; font-family: 'Plus Jakarta Sans', system-ui, sans-serif; }
+    .ls { fill: #6366f1; font-family: 'Plus Jakarta Sans', system-ui, sans-serif; }
+  </style>
+
+  <!-- Icon: rounded square -->
+  <rect x="192" y="72" width="128" height="128" rx="28" fill="#3730a3"/>
+  <rect x="198" y="78" width="116" height="116" rx="22" fill="#4f46e5"/>
+
+  <!-- K vertical bar -->
+  <rect x="222" y="100" width="17" height="80" rx="4" fill="#ffffff"/>
+  <!-- K top arm -->
+  <polygon points="239,140 288,100 308,100 262,140" fill="#ffffff"/>
+  <!-- K bottom arm -->
+  <polygon points="239,140 288,200 308,200 262,140" fill="#ffffff"/>
+
+  <!-- Accent dots -->
+  <circle cx="302" cy="88" r="6" fill="#818cf8"/>
+  <circle cx="316" cy="88" r="4" fill="#c7d2fe"/>
+  <circle cx="327" cy="88" r="2.5" fill="#e0e7ff"/>
+
+  <!-- Wordmark -->
+  <text x="348" y="152" class="lt" font-size="58" font-weight="800" letter-spacing="-2">KODEX</text>
+
+  <!-- Divider -->
+  <rect x="350" y="164" width="240" height="1.5" rx="1" fill="#c7d2fe"/>
+
+  <!-- Tagline -->
+  <text x="350" y="183" class="ls" font-size="12" font-weight="700" letter-spacing="3.5">LEARNING  ·  ATTENDANCE  ·  MANAGEMENT</text>
+</svg>
