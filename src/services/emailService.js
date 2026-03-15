@@ -95,7 +95,7 @@ function parseAddress(addr) {
   return { name: addr.trim(), email: addr.trim() };
 }
 
-async function send({ to, subject, html }) {
+async function send({ to, subject, html, textBody }) {
   const apiKey = process.env.MAILERSEND_API_KEY;
   if (!apiKey) {
     console.log(`[EmailService] No MAILERSEND_API_KEY — would send to ${to}: "${subject}"`);
@@ -107,12 +107,20 @@ async function send({ to, subject, html }) {
     const fromParsed = parseAddress(FROM);
     const toParsed   = parseAddress(to);
 
+    if (!toParsed.email || !toParsed.email.includes('@')) {
+      console.error(`[EmailService] Invalid recipient address: "${to}"`);
+      return { ok: false, error: `Invalid recipient: ${to}` };
+    }
+
+    // Strip emoji from subject — some mail servers reject them
+    const cleanSubject = subject.replace(/[\u{1F000}-\u{1FFFF}]|[\u{2600}-\u{27FF}]/gu, '').trim();
+
     const payload = JSON.stringify({
       from: { email: fromParsed.email, name: fromParsed.name },
       to:   [{ email: toParsed.email,  name: toParsed.name || toParsed.email }],
-      subject,
+      subject: cleanSubject,
       html,
-      text: subject,
+      text: textBody || cleanSubject,
     });
 
     const msgId = await new Promise((resolve, reject) => {
@@ -132,16 +140,21 @@ async function send({ to, subject, html }) {
           if (res.statusCode === 202) {
             resolve(res.headers['x-message-id'] || 'sent');
           } else {
+            // Log full MailerSend error for debugging
+            console.error(`[EmailService] MailerSend rejected (HTTP ${res.statusCode}) to ${toParsed.email}: ${body}`);
             reject(new Error(`MailerSend HTTP ${res.statusCode}: ${body}`));
           }
         });
       });
-      req.on('error', reject);
+      req.on('error', (err) => {
+        console.error(`[EmailService] Network error sending to ${toParsed.email}:`, err.message);
+        reject(err);
+      });
       req.write(payload);
       req.end();
     });
 
-    console.log(`[EmailService] SUCCESS sent "${subject}" to ${to} id:${msgId}`);
+    console.log(`[EmailService] SUCCESS sent "${cleanSubject}" to ${toParsed.email} id:${msgId}`);
     return { ok: true, id: msgId };
   } catch (err) {
     console.error(`[EmailService] FAILED "${subject}" to ${to}:`, err.message);
@@ -327,7 +340,7 @@ async function sendPasswordReset({ email, name, resetCode, role, institutionName
     <p style="font-size:12px;color:#9ca3af">This code expires in 1 hour. If you need a new code, request another reset from the login page.</p>
   `, `KODEX Password Reset Code: ${resetCode}`);
 
-  return send({ to: email, subject: `🔐 Your KODEX password reset code: ${resetCode}`, html });
+  return send({ to: email, subject: `Your KODEX password reset code: ${resetCode}`, html, textBody: `Your KODEX password reset code is: ${resetCode}\n\nThis code expires in 1 hour. Do not share it with anyone.` });
 }
 
 // ── Admin: User password reset notification ───────────────────────────────────
