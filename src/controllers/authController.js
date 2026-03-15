@@ -592,10 +592,10 @@ exports.login = async (req, res) => {
       });
     }
 
-    if (deviceId) {
-      user.deviceId = deviceId;
-      await user.save();
-    }
+    // Update lastLoginAt and deviceId
+    user.lastLoginAt = new Date();
+    if (deviceId) user.deviceId = deviceId;
+    await user.save();
 
     const token = generateToken(user._id);
 
@@ -608,6 +608,8 @@ exports.login = async (req, res) => {
         employeeId: user.employeeId,
         name: user.name,
         role: user.role,
+        department: user.department || null,
+        profilePhoto: user.profilePhoto || null,
         isApproved: user.isApproved,
         mustChangePassword: user.mustChangePassword || false,
         company: company ? {
@@ -617,6 +619,7 @@ exports.login = async (req, res) => {
           institutionCode: company.institutionCode,
         } : null,
         deviceId: user.deviceId,
+        lastLoginAt: user.lastLoginAt,
       },
       trial: company ? {
         active: company.isTrialActive,
