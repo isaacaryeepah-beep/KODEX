@@ -4,7 +4,7 @@ const User = require("../models/User");
 const Company = require("../models/Company");
 const StudentRoster = require("../models/StudentRoster");
 const { generateToken } = require("../utils/jwt");
-const { sendWelcome, sendAdminPasswordResetNotice, sendPasswordReset } = require("../services/emailService");
+const { sendWelcome, sendAdminPasswordResetNotice, sendPasswordReset, sendNewInstitutionAlert } = require("../services/emailService");
 const { sendOtp, normalisePhone } = require("../services/smsService");
 
 const SIX_HOURS_MS = 6 * 60 * 60 * 1000;
@@ -78,6 +78,15 @@ exports.register = async (req, res) => {
       trialDays:       14,
       trialEndDate:    company.trialEndDate,
     }).catch(err => console.error('Welcome email failed:', err.message));
+
+    // Notify superadmin of new signup (non-fatal)
+    sendNewInstitutionAlert({
+      institutionName: company.name,
+      adminName:       user.name,
+      adminEmail:      user.email,
+      mode:            company.mode,
+      institutionCode: company.institutionCode,
+    }).catch(err => console.error('Superadmin alert failed:', err.message));
 
     res.status(201).json({
       token,
@@ -1093,6 +1102,71 @@ exports.resetPasswordEmail = async (req, res) => {
   } catch (error) {
     console.error("Reset password email error:", error);
     res.status(500).json({ error: "Failed to reset password" });
+  }
+};
+
+
+// ── 2FA: Toggle enable/disable ───────────────────────────────────────────────
+exports.toggle2FA = async (req, res) => {
+  try {
+    const { enable } = req.body;
+    await User.findByIdAndUpdate(req.user._id, { twoFactorEnabled: !!enable });
+    res.json({ ok: true, twoFactorEnabled: !!enable });
+  } catch(e) {
+    res.status(500).json({ error: "Failed to update 2FA setting" });
+  }
+};
+
+// ── 2FA: Send code after password verification ───────────────────────────────
+exports.send2FACode = async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id);
+    if (!user?.email) return res.status(400).json({ error: "No email on file for 2FA" });
+
+    const code = String(crypto.randomInt(100000, 999999));
+    const hashedCode = await bcrypt.hash(code, 10);
+    user.twoFactorCode = hashedCode;
+    user.twoFactorExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 min
+    await user.save({ validateBeforeSave: false });
+
+    const { sendPasswordReset } = require("../services/emailService");
+    await sendPasswordReset({
+      email: user.email,
+      name: user.name,
+      resetCode: code,
+      role: user.role,
+      institutionName: "Two-Factor Authentication",
+    });
+
+    res.json({ ok: true, message: "2FA code sent to your email" });
+  } catch(e) {
+    console.error("2FA send error:", e);
+    res.status(500).json({ error: "Failed to send 2FA code" });
+  }
+};
+
+// ── 2FA: Verify code ─────────────────────────────────────────────────────────
+exports.verify2FACode = async (req, res) => {
+  try {
+    const { code } = req.body;
+    const user = await User.findById(req.user._id).select("+twoFactorCode +twoFactorExpires");
+    if (!user?.twoFactorCode) return res.status(400).json({ error: "No 2FA code pending" });
+    if (user.twoFactorExpires < new Date()) return res.status(400).json({ error: "Code expired. Please sign in again." });
+
+    const isValid = await bcrypt.compare(code, user.twoFactorCode);
+    if (!isValid) return res.status(400).json({ error: "Incorrect code" });
+
+    // Clear the code
+    user.twoFactorCode = null;
+    user.twoFactorExpires = null;
+    await user.save({ validateBeforeSave: false });
+
+    // Issue a fresh full token
+    const token = generateToken(user._id);
+    res.json({ ok: true, token });
+  } catch(e) {
+    console.error("2FA verify error:", e);
+    res.status(500).json({ error: "Verification failed" });
   }
 };
 
