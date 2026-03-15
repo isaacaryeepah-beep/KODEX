@@ -95,71 +95,161 @@ function parseAddress(addr) {
   return { name: addr.trim(), email: addr.trim() };
 }
 
-async function send({ to, subject, html, textBody }) {
+// ── Gmail SMTP sender (primary) ───────────────────────────────────────────────
+async function sendViaGmail({ toEmail, toName, fromEmail, fromName, subject, html, textBody }) {
+  return new Promise((resolve, reject) => {
+    const net = require('net');
+    const tls = require('tls');
+    const user = process.env.GMAIL_USER;
+    const pass = process.env.GMAIL_APP_PASSWORD;
+
+    const auth = Buffer.from(`\x00${user}\x00${pass.replace(/\s/g, '')}`).toString('base64');
+    const boundary = `kodex_${Date.now()}`;
+    const msgBody = [
+      `From: ${fromName} <${fromEmail}>`,
+      `To: ${toName} <${toEmail}>`,
+      `Subject: ${subject}`,
+      `MIME-Version: 1.0`,
+      `Content-Type: multipart/alternative; boundary="${boundary}"`,
+      ``,
+      `--${boundary}`,
+      `Content-Type: text/plain; charset=UTF-8`,
+      ``,
+      textBody || subject,
+      ``,
+      `--${boundary}`,
+      `Content-Type: text/html; charset=UTF-8`,
+      ``,
+      html,
+      ``,
+      `--${boundary}--`,
+    ].join('\r\n');
+
+    const socket = tls.connect({ host: 'smtp.gmail.com', port: 465 }, () => {
+      let step = 0;
+      const send = (cmd) => socket.write(cmd + '\r\n');
+
+      socket.on('data', (data) => {
+        const line = data.toString();
+        if (step === 0 && line.startsWith('220')) { send('EHLO kodex.it.com'); step++; }
+        else if (step === 1 && line.includes('250 ')) { send('AUTH PLAIN ' + auth); step++; }
+        else if (step === 2 && line.startsWith('235')) { send(`MAIL FROM:<${fromEmail}>`); step++; }
+        else if (step === 3 && line.startsWith('250')) { send(`RCPT TO:<${toEmail}>`); step++; }
+        else if (step === 4 && line.startsWith('250')) { send('DATA'); step++; }
+        else if (step === 5 && line.startsWith('354')) { send(msgBody + '\r\n.'); step++; }
+        else if (step === 6 && line.startsWith('250')) { send('QUIT'); resolve({ ok: true, id: line.trim() }); step++; }
+        else if (line.startsWith('5')) { socket.destroy(); reject(new Error(`SMTP error: ${line.trim()}`)); }
+      });
+
+      socket.on('error', reject);
+    });
+
+    socket.on('error', reject);
+  });
+}
+
+// ── MailerSend fallback ───────────────────────────────────────────────────────
+async function sendViaMailerSend({ toEmail, toName, fromEmail, fromName, subject, html, textBody }) {
+  const https = require('https');
   const apiKey = process.env.MAILERSEND_API_KEY;
-  if (!apiKey) {
-    console.log(`[EmailService] No MAILERSEND_API_KEY — would send to ${to}: "${subject}"`);
+
+  const payload = JSON.stringify({
+    from: { email: fromEmail, name: fromName },
+    to:   [{ email: toEmail, name: toName || toEmail }],
+    subject,
+    html,
+    text: textBody || subject,
+  });
+
+  return new Promise((resolve, reject) => {
+    const req = https.request({
+      hostname: 'api.mailersend.com',
+      path:     '/v1/email',
+      method:   'POST',
+      headers: {
+        'Authorization':  `Bearer ${apiKey}`,
+        'Content-Type':   'application/json',
+        'Content-Length': Buffer.byteLength(payload),
+      },
+    }, (res) => {
+      let body = '';
+      res.on('data', chunk => body += chunk);
+      res.on('end', () => {
+        if (res.statusCode === 202) {
+          resolve({ ok: true, id: res.headers['x-message-id'] || 'sent' });
+        } else {
+          console.error(`[EmailService] MailerSend rejected (HTTP ${res.statusCode}): ${body}`);
+          reject(new Error(`MailerSend HTTP ${res.statusCode}: ${body}`));
+        }
+      });
+    });
+    req.on('error', reject);
+    req.write(payload);
+    req.end();
+  });
+}
+
+// ── Main send() — tries Gmail first, falls back to MailerSend ─────────────────
+async function send({ to, subject, html, textBody }) {
+  const gmailUser = process.env.GMAIL_USER;
+  const gmailPass = process.env.GMAIL_APP_PASSWORD;
+  const mailerKey = process.env.MAILERSEND_API_KEY;
+
+  if (!gmailUser && !mailerKey) {
+    console.log(`[EmailService] No credentials — would send to ${to}: "${subject}"`);
     return { ok: true, dev: true };
   }
-  try {
-    const https = require('https');
 
-    const fromParsed = parseAddress(FROM);
-    const toParsed   = parseAddress(to);
+  const toParsed   = parseAddress(to);
+  const fromParsed = parseAddress(FROM);
 
-    if (!toParsed.email || !toParsed.email.includes('@')) {
-      console.error(`[EmailService] Invalid recipient address: "${to}"`);
-      return { ok: false, error: `Invalid recipient: ${to}` };
-    }
-
-    // Strip emoji from subject — some mail servers reject them
-    const cleanSubject = subject.replace(/[\u{1F000}-\u{1FFFF}]|[\u{2600}-\u{27FF}]/gu, '').trim();
-
-    const payload = JSON.stringify({
-      from: { email: fromParsed.email, name: fromParsed.name },
-      to:   [{ email: toParsed.email,  name: toParsed.name || toParsed.email }],
-      subject: cleanSubject,
-      html,
-      text: textBody || cleanSubject,
-    });
-
-    const msgId = await new Promise((resolve, reject) => {
-      const req = https.request({
-        hostname: 'api.mailersend.com',
-        path:     '/v1/email',
-        method:   'POST',
-        headers: {
-          'Authorization':  `Bearer ${apiKey}`,
-          'Content-Type':   'application/json',
-          'Content-Length': Buffer.byteLength(payload),
-        },
-      }, (res) => {
-        let body = '';
-        res.on('data', chunk => body += chunk);
-        res.on('end', () => {
-          if (res.statusCode === 202) {
-            resolve(res.headers['x-message-id'] || 'sent');
-          } else {
-            // Log full MailerSend error for debugging
-            console.error(`[EmailService] MailerSend rejected (HTTP ${res.statusCode}) to ${toParsed.email}: ${body}`);
-            reject(new Error(`MailerSend HTTP ${res.statusCode}: ${body}`));
-          }
-        });
-      });
-      req.on('error', (err) => {
-        console.error(`[EmailService] Network error sending to ${toParsed.email}:`, err.message);
-        reject(err);
-      });
-      req.write(payload);
-      req.end();
-    });
-
-    console.log(`[EmailService] SUCCESS sent "${cleanSubject}" to ${toParsed.email} id:${msgId}`);
-    return { ok: true, id: msgId };
-  } catch (err) {
-    console.error(`[EmailService] FAILED "${subject}" to ${to}:`, err.message);
-    return { ok: false, error: err.message };
+  if (!toParsed.email || !toParsed.email.includes('@')) {
+    console.error(`[EmailService] Invalid recipient: "${to}"`);
+    return { ok: false, error: `Invalid recipient: ${to}` };
   }
+
+  const cleanSubject = subject.replace(/[\u{1F000}-\u{1FFFF}]|[\u{2600}-\u{27FF}]/gu, '').trim();
+
+  // Try Gmail SMTP first
+  if (gmailUser && gmailPass) {
+    try {
+      const result = await sendViaGmail({
+        toEmail: toParsed.email,
+        toName: toParsed.name || toParsed.email,
+        fromEmail: gmailUser,
+        fromName: fromParsed.name || 'KODEX',
+        subject: cleanSubject,
+        html,
+        textBody,
+      });
+      console.log(`[EmailService] Gmail SUCCESS "${cleanSubject}" to ${toParsed.email}`);
+      return { ok: true, id: result.id };
+    } catch (err) {
+      console.error(`[EmailService] Gmail FAILED, trying MailerSend fallback:`, err.message);
+    }
+  }
+
+  // Fallback to MailerSend
+  if (mailerKey) {
+    try {
+      const result = await sendViaMailerSend({
+        toEmail: toParsed.email,
+        toName: toParsed.name || toParsed.email,
+        fromEmail: fromParsed.email,
+        fromName: fromParsed.name || 'KODEX',
+        subject: cleanSubject,
+        html,
+        textBody,
+      });
+      console.log(`[EmailService] MailerSend SUCCESS "${cleanSubject}" to ${toParsed.email}`);
+      return { ok: true, id: result.id };
+    } catch (err) {
+      console.error(`[EmailService] MailerSend FAILED:`, err.message);
+      return { ok: false, error: err.message };
+    }
+  }
+
+  return { ok: false, error: 'No working email provider configured' };
 }
 
 
