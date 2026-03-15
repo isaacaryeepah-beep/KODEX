@@ -651,6 +651,7 @@ exports.login = async (req, res) => {
         profilePhoto: user.profilePhoto || null,
         isApproved: user.isApproved,
         mustChangePassword: user.mustChangePassword || false,
+        twoFactorEnabled: user.twoFactorEnabled || false,
         company: company ? {
           id: company._id,
           name: company.name,
