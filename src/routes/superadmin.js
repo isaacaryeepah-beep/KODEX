@@ -159,6 +159,7 @@ router.delete("/companies/:id", async (req, res) => {
     if (!company) return res.status(404).json({ error: "Institution not found" });
 
     const companyId = company._id;
+    const companyName = company.name;
 
     // Delete all related data
     await Promise.all([
@@ -176,14 +177,54 @@ router.delete("/companies/:id", async (req, res) => {
       require('../models/StudentRoster').deleteMany({ company: companyId }),
       require('../models/GradeBook').deleteMany({ company: companyId }),
       require('../models/PaymentLog').deleteMany({ company: companyId }),
+      require('../models/JitsiMeeting').deleteMany({ companyId }),
+      require('../models/JitsiAttendance').deleteMany({ }),
     ]);
 
-    await Company.findByIdAndDelete(companyId);
+    // Hard delete the company document
+    await Company.deleteOne({ _id: companyId });
 
-    res.json({ message: `Institution "${company.name}" and all its data deleted successfully.` });
+    res.json({ message: `Institution "${companyName}" and all its data deleted successfully.` });
   } catch (err) {
     console.error("Delete company error:", err);
     res.status(500).json({ error: "Failed to delete institution" });
+  }
+});
+
+// ── DELETE /api/superadmin/companies/by-name/:name ───────────────────────────
+// Emergency cleanup — delete any company stuck by name
+router.delete("/companies/by-name/:name", async (req, res) => {
+  try {
+    const name = decodeURIComponent(req.params.name);
+    const companies = await Company.find({ name: { $regex: new RegExp('^' + name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '$', 'i') } });
+    if (!companies.length) return res.status(404).json({ error: "No company found with that name" });
+
+    let deleted = 0;
+    for (const company of companies) {
+      const id = company._id;
+      await Promise.all([
+        require('../models/User').deleteMany({ company: id }),
+        require('../models/AttendanceSession').deleteMany({ company: id }),
+        require('../models/AttendanceRecord').deleteMany({ company: id }),
+        require('../models/Course').deleteMany({ company: id }),
+        require('../models/Quiz').deleteMany({ company: id }),
+        require('../models/Question').deleteMany({ company: id }),
+        require('../models/Attempt').deleteMany({ company: id }),
+        require('../models/Answer').deleteMany({ company: id }),
+        require('../models/Assignment').deleteMany({ company: id }),
+        require('../models/AssignmentSubmission').deleteMany({ company: id }),
+        require('../models/Announcement').deleteMany({ company: id }),
+        require('../models/StudentRoster').deleteMany({ company: id }),
+        require('../models/GradeBook').deleteMany({ company: id }),
+        require('../models/PaymentLog').deleteMany({ company: id }),
+      ]);
+      await Company.deleteOne({ _id: id });
+      deleted++;
+    }
+    res.json({ message: `Deleted ${deleted} company record(s) named "${name}"` });
+  } catch(err) {
+    console.error("Delete by name error:", err);
+    res.status(500).json({ error: "Failed to delete" });
   }
 });
 
