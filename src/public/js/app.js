@@ -7802,6 +7802,7 @@ async function renderProfile() {
 }
 
 async function toggle2FA(enable) {
+  const cb = document.getElementById('twofa-toggle');
   try {
     await api('/api/auth/2fa/toggle', { method: 'POST', body: JSON.stringify({ enable }) });
     currentUser.twoFactorEnabled = enable;
@@ -7813,10 +7814,10 @@ async function toggle2FA(enable) {
       const dot = span.querySelector('span');
       if (dot) dot.style.left = enable ? '23px' : '3px';
     }
+    if (cb) cb.checked = enable;
   } catch(e) {
-    showToast('Failed: ' + e.message, 'error');
+    showToast('Failed to update 2FA: ' + e.message, 'error');
     // Revert toggle
-    const cb = document.getElementById('twofa-toggle');
     if (cb) cb.checked = !enable;
   }
 }
