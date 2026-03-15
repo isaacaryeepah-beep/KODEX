@@ -498,13 +498,67 @@ async function toggleCompany(id, isActive, name) {
 }
 
 async function extendTrial(id, name) {
-  const days = prompt(`Extend trial for "${name}". How many days to add?`, '14');
-  if (!days || isNaN(days)) return;
+  // Build modal
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
+  overlay.innerHTML = `
+    <div style="background:#fff;border-radius:16px;padding:28px;width:100%;max-width:400px;box-shadow:0 20px 60px rgba(0,0,0,.2)">
+      <h3 style="font-size:16px;font-weight:700;margin-bottom:4px;color:#0d1117">Extend Trial</h3>
+      <p style="font-size:13px;color:#6b7280;margin-bottom:20px">${name}</p>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:16px">
+        <button onclick="document.getElementById('trial-days-input').value=14" style="padding:10px;border:1.5px solid #e5e7eb;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;background:#f9fafb">14 days</button>
+        <button onclick="document.getElementById('trial-days-input').value=30" style="padding:10px;border:1.5px solid #e5e7eb;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;background:#f9fafb">30 days</button>
+        <button onclick="document.getElementById('trial-days-input').value=60" style="padding:10px;border:1.5px solid #4f46e5;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;background:#eef2ff;color:#4f46e5">60 days</button>
+        <button onclick="document.getElementById('trial-days-input').value=90" style="padding:10px;border:1.5px solid #e5e7eb;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;background:#f9fafb">90 days</button>
+        <button onclick="document.getElementById('trial-days-input').value=180" style="padding:10px;border:1.5px solid #e5e7eb;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;background:#f9fafb">180 days</button>
+        <button onclick="document.getElementById('trial-days-input').value=365" style="padding:10px;border:1.5px solid #e5e7eb;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;background:#f9fafb">1 year</button>
+      </div>
+
+      <div style="margin-bottom:16px">
+        <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:6px">Or enter custom days</label>
+        <input id="trial-days-input" type="number" value="60" min="1" max="365"
+          style="width:100%;padding:10px 12px;border:1.5px solid #e5e7eb;border-radius:8px;font-size:15px;font-weight:600;text-align:center;outline:none;font-family:inherit">
+      </div>
+
+      <div id="trial-modal-msg" style="font-size:13px;margin-bottom:12px;display:none"></div>
+
+      <div style="display:flex;gap:8px">
+        <button onclick="this.closest('[style*=position]').remove()" style="flex:1;padding:10px;border:1.5px solid #e5e7eb;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;background:#fff">Cancel</button>
+        <button onclick="confirmExtendTrial('${id}')" style="flex:2;padding:10px;background:#4f46e5;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">Extend Trial</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  document.getElementById('trial-days-input').focus();
+}
+
+async function confirmExtendTrial(id) {
+  const days = parseInt(document.getElementById('trial-days-input').value);
+  const msg  = document.getElementById('trial-modal-msg');
+  if (!days || days < 1) {
+    msg.textContent = 'Please enter a valid number of days.';
+    msg.style.cssText = 'font-size:13px;margin-bottom:12px;display:block;color:#dc2626';
+    return;
+  }
+  const btn = document.querySelector('[onclick*="confirmExtendTrial"]');
+  btn.textContent = 'Extending…'; btn.disabled = true;
   try {
-    await api(`/api/superadmin/companies/${id}/extend-trial`, {method:'PATCH', body:JSON.stringify({days:parseInt(days)})});
-    alert(`Trial extended by ${days} days!`);
-    loadInstitutions();
-  } catch(ex) { alert('Error: '+ex.message); }
+    const data = await api(`/api/superadmin/companies/${id}/extend-trial`, {
+      method: 'PATCH',
+      body: JSON.stringify({ days })
+    });
+    msg.textContent = `✅ Trial extended by ${days} days! New end: ${new Date(data.trialEndDate).toDateString()}`;
+    msg.style.cssText = 'font-size:13px;margin-bottom:12px;display:block;color:#16a34a';
+    btn.textContent = 'Done!';
+    setTimeout(() => {
+      document.querySelector('[style*="position:fixed"][style*="z-index:9999"]')?.remove();
+      loadInstitutions();
+    }, 1800);
+  } catch(ex) {
+    msg.textContent = 'Error: ' + ex.message;
+    msg.style.cssText = 'font-size:13px;margin-bottom:12px;display:block;color:#dc2626';
+    btn.textContent = 'Extend Trial'; btn.disabled = false;
+  }
 }
 
 async function impersonate(id, name) {
