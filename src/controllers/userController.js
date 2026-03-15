@@ -138,6 +138,35 @@ exports.createUser = async (req, res) => {
     }
 
     const user = await User.create(userData);
+
+    // Send welcome emails (non-fatal)
+    try {
+      const emailService = require('../services/emailService');
+      if (targetRole === 'hod' && user.email) {
+        emailService.sendHodWelcome({
+          email: user.email,
+          name: user.name,
+          institutionName: company.name,
+          department: userData.department || null,
+        }).catch(() => {});
+      } else if (targetRole === 'lecturer' && user.email) {
+        emailService.sendLecturerWelcome({
+          email: user.email,
+          name: user.name,
+          institutionName: company.name,
+          department: userData.department || null,
+          isApproved: true,
+        }).catch(() => {});
+      } else if (targetRole === 'employee' && user.email) {
+        emailService.sendEmployeeWelcome({
+          email: user.email,
+          name: user.name,
+          companyName: company.name,
+          employeeId: user.employeeId || '',
+        }).catch(() => {});
+      }
+    } catch (_) {}
+
     res.status(201).json({ user });
   } catch (error) {
     if (error.name === "ValidationError") {
