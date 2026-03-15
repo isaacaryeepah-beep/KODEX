@@ -3776,11 +3776,11 @@ async function generateVerbalCode(sessionId) {
               <h3 style="margin:0">Verbal Attendance Code</h3>
               <button onclick="closeModal()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--text-light)">×</button>
             </div>
-            <p style="color:var(--text-light);font-size:12px;margin-bottom:16px">Read this code out loud. All students can use it within the time window.</p>
+            <p style="color:var(--text-light);font-size:12px;margin-bottom:16px">Read this code out loud. All ${currentUser.company?.mode === 'corporate' ? 'employees' : 'students'} can use it within the time window.</p>
             <div style="font-size:64px;font-weight:900;color:#7c3aed;letter-spacing:12px;margin-bottom:8px;font-family:monospace">${code}</div>
             <div style="display:inline-flex;align-items:center;gap:6px;background:rgba(124,58,237,0.1);border:1px solid rgba(124,58,237,0.3);border-radius:999px;padding:5px 14px;font-size:12px;font-weight:600;color:#7c3aed;margin-bottom:6px">
               <span style="width:7px;height:7px;border-radius:50%;background:#7c3aed;display:inline-block;animation:pulse-green 1.5s infinite"></span>
-              Multi-use · All students can enter this code
+              Multi-use · All ${currentUser.company?.mode === 'corporate' ? 'employees' : 'students'} can enter this code
             </div>
             <p style="color:var(--text-light);font-size:12px;margin-bottom:4px">Expires in: <span id="verbal-countdown" style="font-weight:700;color:#7c3aed">${Math.floor(totalSecs/60)}m ${totalSecs%60}s</span></p>
             <p style="color:var(--text-muted);font-size:11px;margin-bottom:20px">Expires at ${expiry.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</p>
@@ -7690,7 +7690,7 @@ function _renderAttendeesHTML(el, data, isOffline) {
   const records = data.records || [];
   el.innerHTML = `
     ${isOffline ? `<div style="background:#fef3c7;border:1px solid #fbbf24;border-radius:6px;padding:8px 12px;font-size:12px;font-weight:600;color:#92400e;margin-bottom:12px">📶 Showing cached data</div>` : ''}
-    <div style="font-size:13px;color:var(--text-light);margin-bottom:12px">${records.length} student${records.length!==1?'s':''} checked in</div>
+    <div style="font-size:13px;color:var(--text-light);margin-bottom:12px">${records.length} ${currentUser.company?.mode === 'corporate' ? 'employee' : 'student'}${records.length!==1?'s':''} checked in</div>
     ${records.length ? `
       <table>
         <thead><tr><th>Name</th><th>ID</th><th>Method</th><th>Time</th><th>Status</th></tr></thead>
