@@ -152,6 +152,41 @@ router.patch("/companies/:id/extend-trial", async (req, res) => {
   }
 });
 
+// ── DELETE /api/superadmin/companies/:id ─────────────────────────────────────
+router.delete("/companies/:id", async (req, res) => {
+  try {
+    const company = await Company.findById(req.params.id);
+    if (!company) return res.status(404).json({ error: "Institution not found" });
+
+    const companyId = company._id;
+
+    // Delete all related data
+    await Promise.all([
+      require('../models/User').deleteMany({ company: companyId }),
+      require('../models/AttendanceSession').deleteMany({ company: companyId }),
+      require('../models/AttendanceRecord').deleteMany({ company: companyId }),
+      require('../models/Course').deleteMany({ company: companyId }),
+      require('../models/Quiz').deleteMany({ company: companyId }),
+      require('../models/Question').deleteMany({ company: companyId }),
+      require('../models/Attempt').deleteMany({ company: companyId }),
+      require('../models/Answer').deleteMany({ company: companyId }),
+      require('../models/Assignment').deleteMany({ company: companyId }),
+      require('../models/AssignmentSubmission').deleteMany({ company: companyId }),
+      require('../models/Announcement').deleteMany({ company: companyId }),
+      require('../models/StudentRoster').deleteMany({ company: companyId }),
+      require('../models/GradeBook').deleteMany({ company: companyId }),
+      require('../models/PaymentLog').deleteMany({ company: companyId }),
+    ]);
+
+    await Company.findByIdAndDelete(companyId);
+
+    res.json({ message: `Institution "${company.name}" and all its data deleted successfully.` });
+  } catch (err) {
+    console.error("Delete company error:", err);
+    res.status(500).json({ error: "Failed to delete institution" });
+  }
+});
+
 // ── GET /api/superadmin/payments ──────────────────────────────────────────────
 router.get("/payments", async (req, res) => {
   try {
