@@ -75,7 +75,7 @@ function safeDeleteFile(filePath) {
 // ══════════════════════════════════════════════════════════════════════════
 exports.createAssignment = async (req, res) => {
   try {
-    const { title, description, courseId, releaseDate, dueDate, allowFileSubmission, allowLateSubmission } = req.body;
+    const { title, description, courseId, releaseDate, dueDate, allowFileSubmission, allowLateSubmission, latePenaltyPercent } = req.body;
 
     if (!title || !courseId || !releaseDate || !dueDate)
       return res.status(400).json({ error: "title, courseId, releaseDate and dueDate are required" });
@@ -96,6 +96,7 @@ exports.createAssignment = async (req, res) => {
       createdBy:   req.user._id,
       releaseDate: new Date(releaseDate),
       dueDate:     new Date(dueDate),
+      latePenaltyPercent: latePenaltyPercent ? Math.min(100, Math.max(0, Number(latePenaltyPercent))) : 0,
       allowFileSubmission: allowFileSubmission !== "false" && allowFileSubmission !== false,
       allowLateSubmission: allowLateSubmission === "true"  || allowLateSubmission === true,
     });
