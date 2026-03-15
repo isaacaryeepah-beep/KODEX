@@ -7154,7 +7154,7 @@ async function renderSubscription() {
         </div>
       ` : ''}
 
-      ${['admin','superadmin'].includes(currentUser.role) ? `
+      ${currentUser.role === 'superadmin' ? `
         <div class="card" style="margin-top:16px;border:1px solid #e0e7ff;background:#f5f3ff;">
           <div style="font-size:13px;font-weight:700;color:#4f46e5;margin-bottom:8px;">⚙️ Paystack Webhook Setup</div>
           <p style="font-size:12px;color:#6b7280;margin-bottom:8px;">Add this URL in your Paystack Dashboard under <strong>Settings → API Keys & Webhooks</strong> to enable automatic renewals:</p>
