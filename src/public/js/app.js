@@ -1034,7 +1034,7 @@ async function handleAdminLogin() {
       data = await attemptOfflineLogin(credentials);
     } else {
       removeOfflineLoginNotice();
-      data = await api('/api/auth/login', { method: 'POST', body: JSON.stringify(credentials) });
+      data = await initiate2FA(credentials);
       await saveOfflineProfile(credentials, data);
     }
 
@@ -1103,7 +1103,7 @@ async function handleLecturerLogin() {
     } else {
       // ── ONLINE PATH ──
       removeOfflineLoginNotice();
-      data = await api('/api/auth/login', { method: 'POST', body: JSON.stringify(credentials) });
+      data = await initiate2FA(credentials);
       if (data.user && !data.user.isApproved) {
         if (btn) { btn.textContent = 'Sign In'; btn.disabled = false; }
         return showPendingApproval('Your account is pending admin approval. Please wait for your institution admin to approve your account.');
@@ -1304,7 +1304,7 @@ async function handleHodLogin() {
       data = await attemptOfflineLogin(credentials);
     } else {
       removeOfflineLoginNotice();
-      data = await api('/api/auth/login', { method: 'POST', body: JSON.stringify(credentials) });
+      data = await initiate2FA(credentials);
       await saveOfflineProfile(credentials, data);
     }
     token = data.token;
@@ -1380,7 +1380,7 @@ async function handleEmployeeLogin() {
     } else {
       // ── ONLINE PATH ──
       removeOfflineLoginNotice();
-      data = await api('/api/auth/login', { method: 'POST', body: JSON.stringify(credentials) });
+      data = await initiate2FA(credentials);
       // Cache profile for future offline logins
       await saveOfflineProfile(credentials, data);
     }
@@ -1449,7 +1449,7 @@ async function handleStudentLogin() {
     } else {
       // ── ONLINE PATH ──
       removeOfflineLoginNotice();
-      data = await api('/api/auth/login', { method: 'POST', body: JSON.stringify(credentials) });
+      data = await initiate2FA(credentials);
       // Cache profile for future offline logins
       await saveOfflineProfile(credentials, data);
     }
