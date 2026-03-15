@@ -64,6 +64,7 @@ const assignmentSchema = new mongoose.Schema(
     // ── Submission settings ──────────────────────────────────────────────
     allowFileSubmission:  { type: Boolean, default: true },
     allowLateSubmission:  { type: Boolean, default: false },
+    latePenaltyPercent:   { type: Number,  default: 0, min: 0, max: 100 },
   },
   { timestamps: true }
 );
