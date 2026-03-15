@@ -376,6 +376,27 @@ async function sendPaymentFailed({ email, name, plan, institutionName }) {
   return send({ to: email, subject: `⚠️ KODEX: Payment failed — action required`, html });
 }
 
+
+// 10. New institution signup notification to superadmin
+async function sendNewInstitutionAlert({ institutionName, adminName, adminEmail, mode, institutionCode }) {
+  const html = wrap(`
+    <h1>New Institution Signed Up 🎉</h1>
+    <p>A new institution has registered on the KODEX platform.</p>
+    <div class="info-box">
+      <p><strong>Institution:</strong> ${institutionName}</p>
+      <p><strong>Mode:</strong> ${mode === 'academic' ? 'Academic (School/University)' : 'Corporate (Company)'}</p>
+      <p><strong>Code:</strong> <span style="font-family:monospace;font-size:18px;font-weight:700;color:#4f46e5;letter-spacing:4px">${institutionCode}</span></p>
+      <p><strong>Admin:</strong> ${adminName}</p>
+      <p><strong>Admin Email:</strong> ${adminEmail}</p>
+    </div>
+    <p>They are now on a 14-day free trial. Log in to the superadmin portal to manage their account.</p>
+    <div style="text-align:center;margin:24px 0">
+      <a href="${BASE_URL}/superadmin" class="btn btn-primary">Open Superadmin →</a>
+    </div>
+  `, `New institution: ${institutionName}`);
+  return send({ to: FROM, subject: `🎉 New institution on KODEX: ${institutionName}`, html });
+}
+
 module.exports = {
   sendWelcome,
   sendTrialEndingSoon,
