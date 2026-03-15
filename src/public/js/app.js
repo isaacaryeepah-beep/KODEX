@@ -4594,7 +4594,7 @@ function _renderCoursesHTML(content, courses, isOffline) {
     <div class="card">
       ${courses.length ? `
         <table>
-          <thead><tr><th>Code</th><th>Title</th><th>Lecturer</th><th>Roster</th><th>Enrolled</th>${canManageRoster && !isOffline ? '<th>Actions</th>' : ''}</tr></thead>
+          <thead><tr><th>Code</th><th>Title</th><th>Lecturer</th><th>Roster</th><th>Enrolled</th>${canManageRoster && !isOffline ? '<th>Actions</th>' : currentUser.role === 'student' ? '<th></th>' : ''}</tr></thead>
           <tbody>${courses.map(course => `
             <tr>
               <td><strong>${course.code}</strong></td>
@@ -4602,7 +4602,7 @@ function _renderCoursesHTML(content, courses, isOffline) {
               <td>${course.lecturer?.name || 'N/A'}</td>
               <td>${!isOffline ? `<button class="btn btn-sm" style="font-size:11px;background:var(--bg);border:1px solid var(--border)" onclick="viewRoster('${course._id}', '${course.code}')">View Roster</button>` : '—'}</td>
               <td>${course.enrolledStudents?.length || 0}</td>
-              ${canManageRoster && !isOffline ? `<td style="white-space:nowrap"><button class="btn btn-primary btn-sm" style="font-size:11px" onclick="showUploadRosterModal('${course._id}', '${course.code}')">Upload Students</button> <button class="btn btn-sm" style="font-size:11px;background:#6366f1;color:#fff" onclick="openBulkEmailModal('${course._id}', '${course.title}')">✉️ Email</button></td>` : ''}
+              ${canManageRoster && !isOffline ? `<td style="white-space:nowrap"><button class="btn btn-primary btn-sm" style="font-size:11px" onclick="showUploadRosterModal('${course._id}', '${course.code}')">Upload Students</button> <button class="btn btn-sm" style="font-size:11px;background:#6366f1;color:#fff" onclick="openBulkEmailModal('${course._id}', '${course.title}')">✉️ Email</button></td>` : currentUser.role === 'student' ? `<td><button class="btn btn-sm" style="font-size:11px;background:#f0fdf4;color:#16a34a;border:1px solid #bbf7d0" onclick="generateCertificate('${course._id}','${course.title}')">🎓 Certificate</button></td>` : ''}
             </tr>
           `).join('')}</tbody>
         </table>
@@ -9323,12 +9323,11 @@ async function generateAttendanceReportCard() {
     doc.text('Rate', 168, y + 5.5);
     y += 10;
 
-    // Group by course
+    // Group by session title (course not populated in my-attendance)
     const byCourse = {};
     records.forEach(r => {
-      const key = r.session?.course || 'gen';
-      const name = r.session?.courseTitle || 'General';
-      if (!byCourse[key]) byCourse[key] = { name, present: 0, total: 0 };
+      const key = r.session?.title || 'General';
+      if (!byCourse[key]) byCourse[key] = { name: key, present: 0, total: 0 };
       byCourse[key].total++;
       if (r.status === 'present') byCourse[key].present++;
     });
