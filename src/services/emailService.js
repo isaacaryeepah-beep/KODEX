@@ -509,4 +509,10 @@ module.exports = {
   sendRenewalReminder,
   sendPasswordReset,
   sendAdminPasswordResetNotice,
+  sendPaymentFailed,
+  sendNewInstitutionAlert,
+  sendLecturerWelcome,
+  sendStudentWelcome,
+  sendEmployeeWelcome,
+  sendHodWelcome,
 };
