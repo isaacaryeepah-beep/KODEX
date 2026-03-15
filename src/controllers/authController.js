@@ -929,6 +929,7 @@ exports.forgotPasswordEmail = async (req, res) => {
 
     let smsSent = false;
     let emailSent = false;
+    let lastEmailError = null;
 
     // Send SMS if phone was provided
     if (phone) {
@@ -945,18 +946,20 @@ exports.forgotPasswordEmail = async (req, res) => {
     // Send email if user has email
     if (user.email) {
       const companyData = await Company.findById(user.company).select('name').lean().catch(() => null);
-      try {
-        await sendPasswordReset({
-          email: user.email,
-          name: user.name,
-          resetCode: code,
-          role: user.role,
-          institutionName: companyData?.name || '',
-        });
+      const emailResult = await sendPasswordReset({
+        email: user.email,
+        name: user.name,
+        resetCode: code,
+        role: user.role,
+        institutionName: companyData?.name || '',
+      }).catch(err => ({ ok: false, error: err.message }));
+
+      if (emailResult.ok) {
         emailSent = true;
         console.log(`[ForgotPasswordEmail] OTP sent via email to ${user.email}`);
-      } catch(err) {
-        console.error('[ForgotPasswordEmail] Email send failed:', err.message);
+      } else {
+        console.error('[ForgotPasswordEmail] Email send failed:', emailResult.error);
+        lastEmailError = emailResult.error;
       }
     }
 
@@ -964,7 +967,8 @@ exports.forgotPasswordEmail = async (req, res) => {
       user.resetPasswordToken = null;
       user.resetPasswordExpires = null;
       await user.save({ validateBeforeSave: false });
-      return res.status(500).json({ error: "Failed to send reset code. Please try again." });
+      const detail = lastEmailError ? ` (${lastEmailError})` : '';
+      return res.status(500).json({ error: `Failed to send reset code${detail}. Check Render logs for details.` });
     }
 
     const channel = smsSent && emailSent ? 'your phone and email'
@@ -1016,8 +1020,7 @@ exports.forgotPasswordAdmin = async (req, res) => {
     const normPhone = phone ? normalisePhone(phone) : null;
     let smsSent = false;
     let emailSent = false;
-
-    // Send SMS if phone provided
+    let lastEmailError = null;
     if (normPhone) {
       const smsResult = await sendOtp({ phone: normPhone, code, name: user.name });
       if (smsResult.ok || smsResult.dev) {
@@ -1031,18 +1034,20 @@ exports.forgotPasswordAdmin = async (req, res) => {
     // Send email if user has email
     if (user.email) {
       const companyData = user.company;
-      try {
-        await sendPasswordReset({
-          email: user.email,
-          name: user.name,
-          resetCode: code,
-          role: user.role,
-          institutionName: companyData?.name || '',
-        });
+      const emailResult = await sendPasswordReset({
+        email: user.email,
+        name: user.name,
+        resetCode: code,
+        role: user.role,
+        institutionName: companyData?.name || '',
+      }).catch(err => ({ ok: false, error: err.message }));
+
+      if (emailResult.ok) {
         emailSent = true;
         console.log(`[ForgotPasswordAdmin] OTP sent via email to ${user.email}`);
-      } catch(err) {
-        console.error('[ForgotPasswordAdmin] Email send failed:', err.message);
+      } else {
+        console.error('[ForgotPasswordAdmin] Email send failed:', emailResult.error);
+        lastEmailError = emailResult.error;
       }
     }
 
@@ -1050,7 +1055,8 @@ exports.forgotPasswordAdmin = async (req, res) => {
       user.resetPasswordToken = null;
       user.resetPasswordExpires = null;
       await user.save({ validateBeforeSave: false });
-      return res.status(500).json({ error: "Failed to send reset code. Please try again." });
+      const detail = lastEmailError ? ` (${lastEmailError})` : '';
+      return res.status(500).json({ error: `Failed to send reset code${detail}. Check Render logs for details.` });
     }
 
     const channel = smsSent && emailSent ? 'your phone and email'
@@ -1246,5 +1252,50 @@ exports.updateProfile = async (req, res) => {
   } catch (error) {
     console.error("Update profile error:", error);
     res.status(500).json({ error: "Failed to update profile" });
+  }
+};
+
+// ── Test email endpoint — only works in non-production or for superadmin ───────
+exports.testEmail = async (req, res) => {
+  try {
+    const { to } = req.body;
+    if (!to) return res.status(400).json({ error: 'Recipient email (to) is required' });
+
+    const apiKey = process.env.MAILERSEND_API_KEY;
+    if (!apiKey) {
+      return res.status(500).json({
+        error: 'MAILERSEND_API_KEY is not set in Render environment variables',
+        fix: 'Go to Render → your KODEX service → Environment → add MAILERSEND_API_KEY'
+      });
+    }
+
+    const emailFrom = process.env.EMAIL_FROM || 'KODEX <no-reply@kodex.it.com>';
+    const result = await sendPasswordReset({
+      email: to,
+      name: 'Test User',
+      resetCode: '123456',
+      role: 'admin',
+      institutionName: 'KODEX Test',
+    });
+
+    if (result.ok) {
+      return res.json({
+        ok: true,
+        message: `Test email sent to ${to}`,
+        mailersendId: result.id,
+        from: emailFrom,
+        note: result.dev ? 'DEV MODE — email was not actually sent (no API key)' : 'Check your inbox and spam folder'
+      });
+    } else {
+      return res.status(500).json({
+        ok: false,
+        error: result.error,
+        from: emailFrom,
+        tip: 'Check Render logs for the full MailerSend error response'
+      });
+    }
+  } catch (err) {
+    console.error('[TestEmail] Error:', err.message);
+    res.status(500).json({ error: err.message });
   }
 };
