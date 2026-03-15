@@ -8,9 +8,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 <meta name="theme-color" content="#0f172a" />
 <title>KODEX — Snap Quiz</title>
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
-<script defer src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
-<script defer src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/contrib/auto-render.min.js"></script>
+<link rel="icon" type="image/svg+xml" href="/kodex-icon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
 <!-- TF loaded async so it never blocks login UI wiring -->
@@ -757,37 +755,6 @@ window.addEventListener('load', () => loadMLLibs().catch(() => {}));
 
 
 <script>
-// ── KaTeX auto-render helper ────────────────────────────────────────────────
-function renderMath(container) {
-  if (!window.renderMathInElement) return;
-  const els = container ? container.querySelectorAll('.math-render') : document.querySelectorAll('.math-render');
-  els.forEach(el => {
-    try {
-      renderMathInElement(el, {
-        delimiters: [
-          { left: '\\(', right: '\\)', display: false },
-          { left: '\\[', right: '\\]', display: true },
-          { left: '$$', right: '$$', display: true },
-          { left: '$', right: '$', display: false },
-        ],
-        throwOnError: false,
-      });
-    } catch(e) {}
-  });
-}
-
-// Auto-render after KaTeX loads
-document.addEventListener('DOMContentLoaded', () => {
-  const check = setInterval(() => {
-    if (window.renderMathInElement) {
-      clearInterval(check);
-      renderMath();
-      // Also observe DOM changes to render new math elements
-      new MutationObserver(() => renderMath()).observe(document.body, { childList: true, subtree: true });
-    }
-  }, 100);
-});
-
 // Global error handler — catches any uncaught errors and shows them
 window.addEventListener('error', function(e) {
   console.error('[Global error]', e.message, e.filename, e.lineno);
@@ -1707,19 +1674,18 @@ function renderQuestion() {
         <span class="q-number">Question ${state.currentIdx + 1}</span>
         <span class="q-marks">${q.marks} pt${q.marks !== 1 ? 's' : ''}</span>
       </div>
-      <div class="q-text math-render">${q.questionText}</div>
+      <div class="q-text">${q.questionText}</div>
       <div class="options-list">
         ${q.options.map((opt, i) => `
           <div class="option-item ${saved === i ? 'selected' : ''}" data-idx="${i}">
             <div class="option-letter">${letters[i]}</div>
-            <div class="option-text math-render">${opt}</div>
+            <div class="option-text">${opt}</div>
           </div>
         `).join('')}
       </div>
     </div>
   `;
 
-  renderMath(container);
   container.querySelectorAll('.option-item').forEach(item => {
     item.addEventListener('click', () => {
       const idx = parseInt(item.dataset.idx);
