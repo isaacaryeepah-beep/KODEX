@@ -11,7 +11,8 @@ const SIX_HOURS_MS = 6 * 60 * 60 * 1000;
 
 exports.register = async (req, res) => {
   try {
-    const { email, password, name, companyName, mode, phone } = req.body;
+    const { password, name, companyName, mode, phone } = req.body;
+    const email = req.body.email ? req.body.email.trim().toLowerCase() : null;
 
     if (!email || !password || !name || !companyName) {
       return res.status(400).json({ error: "Email, password, name, and institution name are required" });
@@ -37,7 +38,7 @@ exports.register = async (req, res) => {
       subscriptionStatus: "trial",
     });
 
-    const existingUser = await User.findOne({ email });
+    const existingUser = await User.findOne({ email: { $regex: new RegExp("^" + email.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "$", "i") } });
     if (existingUser) {
       await Company.findByIdAndDelete(company._id);
       return res.status(400).json({ error: "This email is already registered" });
