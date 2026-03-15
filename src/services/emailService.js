@@ -397,6 +397,109 @@ async function sendNewInstitutionAlert({ institutionName, adminName, adminEmail,
   return send({ to: FROM, subject: `🎉 New institution on KODEX: ${institutionName}`, html });
 }
 
+
+// ── Lecturer welcome email ────────────────────────────────────────────────────
+async function sendLecturerWelcome({ email, name, institutionName, department, isApproved }) {
+  const html = wrap(`
+    <h1>Welcome to KODEX 👋</h1>
+    <p>Hi <span class="highlight">${name}</span>, your lecturer account at <strong>${institutionName}</strong> has been created.</p>
+
+    <div class="info-box">
+      <p><strong>Institution:</strong> ${institutionName}</p>
+      ${department ? `<p><strong>Department:</strong> ${department}</p>` : ''}
+      <p><strong>Status:</strong> <span class="badge ${isApproved ? 'badge-green' : 'badge-orange'}">${isApproved ? 'APPROVED' : 'PENDING APPROVAL'}</span></p>
+    </div>
+
+    ${isApproved
+      ? `<p>You can log in now and start creating courses, attendance sessions, and quizzes.</p>
+         <div style="text-align:center;margin:28px 0">
+           <a href="${BASE_URL}" class="btn btn-primary">Open KODEX →</a>
+         </div>`
+      : `<p>Your account is pending approval by your institution admin. You will be able to log in once approved.</p>`
+    }
+
+    <hr class="divider"/>
+    <p style="font-size:13px">Log in at <a href="${BASE_URL}">${BASE_URL}</a> using your email and the password you set during registration.</p>
+  `, `Welcome to KODEX — ${institutionName}`);
+  return send({ to: email, subject: `Welcome to KODEX — ${institutionName}`, html });
+}
+
+// ── Student welcome email ─────────────────────────────────────────────────────
+async function sendStudentWelcome({ email, name, institutionName, indexNumber }) {
+  if (!email) return; // students may not have email
+  const html = wrap(`
+    <h1>Welcome to KODEX 🎓</h1>
+    <p>Hi <span class="highlight">${name}</span>, your student account at <strong>${institutionName}</strong> is ready.</p>
+
+    <div class="info-box">
+      <p><strong>Institution:</strong> ${institutionName}</p>
+      <p><strong>Student ID:</strong> <span class="highlight">${indexNumber}</span></p>
+    </div>
+
+    <p><strong>What you can do on KODEX:</strong></p>
+    <p>📋 &nbsp;Mark your attendance using QR code or entry code<br/>
+       📝 &nbsp;Take quizzes and see your results instantly<br/>
+       📌 &nbsp;Submit assignments and track your grades<br/>
+       📅 &nbsp;View your schedule and upcoming sessions</p>
+
+    <div style="text-align:center;margin:28px 0">
+      <a href="${BASE_URL}" class="btn btn-primary">Open KODEX →</a>
+    </div>
+
+    <hr class="divider"/>
+    <p style="font-size:13px">Log in using your <strong>Student ID: ${indexNumber}</strong> and the password you set during registration.</p>
+  `, `Welcome to KODEX — ${institutionName}`);
+  return send({ to: email, subject: `Welcome to KODEX — ${institutionName}`, html });
+}
+
+// ── Employee welcome email ────────────────────────────────────────────────────
+async function sendEmployeeWelcome({ email, name, companyName, employeeId }) {
+  const html = wrap(`
+    <h1>Welcome to KODEX 💼</h1>
+    <p>Hi <span class="highlight">${name}</span>, your employee account at <strong>${companyName}</strong> has been created.</p>
+
+    <div class="info-box">
+      <p><strong>Company:</strong> ${companyName}</p>
+      <p><strong>Employee ID:</strong> <span class="highlight">${employeeId}</span></p>
+      <p><strong>Status:</strong> <span class="badge badge-orange">PENDING APPROVAL</span></p>
+    </div>
+
+    <p>Your account is pending approval by your company admin. Once approved you will be able to:</p>
+    <p>✅ &nbsp;Mark your daily attendance<br/>
+       ✅ &nbsp;Submit timesheets and expense claims<br/>
+       ✅ &nbsp;Request and track leave<br/>
+       ✅ &nbsp;Access company training materials</p>
+
+    <hr class="divider"/>
+    <p style="font-size:13px">Log in at <a href="${BASE_URL}">${BASE_URL}</a> using your email and the password you set during registration.</p>
+  `, `Welcome to KODEX — ${companyName}`);
+  return send({ to: email, subject: `Welcome to KODEX — ${companyName}`, html });
+}
+
+// ── HOD welcome email ─────────────────────────────────────────────────────────
+async function sendHodWelcome({ email, name, institutionName, department }) {
+  const html = wrap(`
+    <h1>Welcome to KODEX 🏛️</h1>
+    <p>Hi <span class="highlight">${name}</span>, your Head of Department account at <strong>${institutionName}</strong> has been created.</p>
+
+    <div class="info-box">
+      <p><strong>Institution:</strong> ${institutionName}</p>
+      ${department ? `<p><strong>Department:</strong> ${department}</p>` : ''}
+      <p><strong>Role:</strong> <span class="badge badge-green">HEAD OF DEPARTMENT</span></p>
+    </div>
+
+    <p>As HOD you can approve lecturers in your department, monitor attendance, view department analytics, and manage courses.</p>
+
+    <div style="text-align:center;margin:28px 0">
+      <a href="${BASE_URL}" class="btn btn-primary">Open KODEX →</a>
+    </div>
+
+    <hr class="divider"/>
+    <p style="font-size:13px">Log in at <a href="${BASE_URL}">${BASE_URL}</a> using your email and the password you set.</p>
+  `, `Welcome to KODEX — ${institutionName}`);
+  return send({ to: email, subject: `Welcome to KODEX — ${institutionName}`, html });
+}
+
 module.exports = {
   sendWelcome,
   sendTrialEndingSoon,
