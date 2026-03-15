@@ -318,6 +318,7 @@ async function saveOfflineProfile(credentials, userData) {
         company: userData.user.company,
         department: userData.user.department || null,
         profilePhoto: userData.user.profilePhoto || null,
+        lastLoginAt: userData.user.lastLoginAt || null,
       },
       token: userData.token,           // cached JWT (may expire but used for UI)
       trial: userData.trial || null,
@@ -1225,6 +1226,7 @@ function showEmployeeLogin() {
 
 let employeeForgotStep = 'request';
 let employeeForgotEmail = '';
+let employeeForgotEmailType = 'phone';
 let employeeForgotCode = '';
 
 async function handleEmployeeForgotPassword() {
@@ -1240,12 +1242,13 @@ async function handleEmployeeForgotPassword() {
     const phone = document.getElementById('employee-forgot-phone')?.value.trim();
     const email = document.getElementById('employee-forgot-email')?.value?.trim();
     if (!institutionCode) return setMsg('Please enter your institution code', false);
-    if (!phone) return setMsg('Please enter your phone number', false);
+    if (!phone && !email) return setMsg('Please enter your phone number or email', false);
     const btn = document.getElementById('employee-forgot-btn');
     btn.textContent = 'Sending...'; btn.disabled = true;
     try {
       const data = await api('/api/auth/forgot-password-email', { method: 'POST', body: JSON.stringify({ phone: phone || undefined, email: email || undefined, institutionCode }) });
-      employeeForgotEmail = phone; employeeForgotCode = institutionCode; employeeForgotStep = 'reset';
+      employeeForgotEmail = phone || email || ''; employeeForgotEmailType = phone ? 'phone' : 'email';
+      employeeForgotCode = institutionCode; employeeForgotStep = 'reset';
       document.getElementById('employee-reset-code-group').classList.remove('hidden');
       document.getElementById('employee-new-password-group').classList.remove('hidden');
       btn.textContent = 'Reset Password'; btn.disabled = false;
@@ -1259,7 +1262,7 @@ async function handleEmployeeForgotPassword() {
     const btn = document.getElementById('employee-forgot-btn');
     btn.textContent = 'Resetting...'; btn.disabled = true;
     try {
-      await api('/api/auth/reset-password-email', { method: 'POST', body: JSON.stringify({ phone: employeeForgotEmail, institutionCode: employeeForgotCode, resetCode, newPassword }) });
+      await api('/api/auth/reset-password-email', { method: 'POST', body: JSON.stringify({ phone: employeeForgotEmailType === 'phone' ? employeeForgotEmail : undefined, email: employeeForgotEmailType === 'email' ? employeeForgotEmail : undefined, institutionCode: employeeForgotCode, resetCode, newPassword }) });
       employeeForgotStep = 'request';
       setMsg('✅ Password reset! Redirecting to sign in...', true);
       setTimeout(() => { showEmployeeLogin(); }, 1800);
@@ -1334,7 +1337,8 @@ async function handleHodForgotPassword() {
     const newPassword = document.getElementById('hod-new-password').value;
 
     if (!codeGroup.classList.contains('hidden') && !pwGroup.classList.contains('hidden')) {
-      await api('/api/auth/reset-password-email', { method: 'POST', body: JSON.stringify({ phone: hodForgotPhone, resetCode, newPassword, institutionCode: hodForgotCode }) });
+      const hodIsEmail = hodForgotPhone.includes('@');
+      await api('/api/auth/reset-password-email', { method: 'POST', body: JSON.stringify({ phone: hodIsEmail ? undefined : hodForgotPhone, email: hodIsEmail ? hodForgotPhone : undefined, resetCode, newPassword, institutionCode: hodForgotCode }) });
       setMsg('Password reset! You can now sign in.', true);
       setTimeout(showHodLogin, 2000);
     } else if (!codeGroup.classList.contains('hidden')) {
@@ -1342,12 +1346,13 @@ async function handleHodForgotPassword() {
       btn.textContent = 'Reset Password';
       setMsg('Enter the code from your SMS and a new password.', true);
     } else {
-      if (!phone || !institutionCode) { btn.disabled = false; return setMsg('Phone number and institution code are required.', false); }
-      hodForgotPhone = phone; hodForgotCode = institutionCode;
+      if (!phone && !email) { btn.disabled = false; return setMsg('Phone number or email is required.', false); }
+      if (!institutionCode) { btn.disabled = false; return setMsg('Institution code is required.', false); }
+      hodForgotPhone = phone || email || ''; hodForgotCode = institutionCode;
       await api('/api/auth/forgot-password-email', { method: 'POST', body: JSON.stringify({ phone: phone || undefined, email: email || undefined, institutionCode }) });
       codeGroup.classList.remove('hidden');
       btn.textContent = 'Continue';
-      setMsg('Reset code sent to your phone.', true);
+      setMsg((data.message || 'Reset code sent.'), true);
     }
   } catch(e) { btn.textContent = 'Request Reset Code'; setMsg(e.message, false); }
   finally { btn.disabled = false; }
@@ -1458,6 +1463,8 @@ async function handleStudentLogin() {
     const m3 = msg3.toLowerCase();
     if (m3.includes('too many')) {
       showStudentError('Too many failed attempts. Please wait 15 minutes and try again.');
+    } else if (m3.includes('device') || m3.includes('another device')) {
+      showStudentError('This account is active on another device. Contact your admin to unlock it.');
     } else if (m3.includes('network') || m3.includes('fetch')) {
       showStudentError('Network error. Please check your connection and try again.');
     } else {
@@ -1531,7 +1538,9 @@ async function handleStudentForgotPassword() {
       document.getElementById('student-new-password-group').classList.remove('hidden');
       document.getElementById('student-forgot-btn').textContent = 'Reset Password';
       const el = document.getElementById('student-auth-error');
-      el.textContent = data.message + (data.resetCode ? ' Reset code: ' + data.resetCode : '');
+      // If resetCode returned, show it (no email on account) — give to lecturer
+      const codeHint = data.resetCode ? ' Code: ' + data.resetCode + ' (give this to your lecturer to pass to you)' : '';
+      el.textContent = (data.message || 'Reset code generated.') + codeHint;
       el.style.display = 'block';
       el.style.background = '#f0fdf4';
       el.style.color = '#15803d';
