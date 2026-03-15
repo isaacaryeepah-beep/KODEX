@@ -67,6 +67,9 @@ const userSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+    twoFactorEnabled: { type: Boolean, default: false },
+    twoFactorCode:    { type: String, default: null, select: false },
+    twoFactorExpires: { type: Date, default: null },
     phone: {
       type: String,
       trim: true,
