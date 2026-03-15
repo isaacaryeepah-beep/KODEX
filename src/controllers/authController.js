@@ -997,10 +997,10 @@ exports.forgotPasswordAdmin = async (req, res) => {
     if (user.role === "lecturer") {
       return res.status(403).json({ error: "Invalid input" });
     }
-    if (["employee", "manager"].includes(user.role)) {
+    if (user.role === "employee") {
       return res.status(403).json({ error: "Invalid input" });
     }
-    if (!["admin", "superadmin"].includes(user.role)) {
+    if (!["admin", "superadmin", "manager"].includes(user.role)) {
       return res.status(403).json({ error: "This reset method is for admins only." });
     }
     if (user.resetPasswordExpires && user.resetPasswordExpires > Date.now() && (user.resetPasswordExpires - Date.now()) > 59 * 60 * 1000) {
