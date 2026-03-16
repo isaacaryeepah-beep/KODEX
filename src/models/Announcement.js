@@ -36,6 +36,12 @@ const announcementSchema = new mongoose.Schema(
       enum: ["all", "students", "lecturers", "employees"],
       default: "all",
     },
+    // Optional: target a specific course (lecturer use)
+    course: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Course',
+      default: null,
+    },
     // Optional: pin to top
     pinned: {
       type: Boolean,
