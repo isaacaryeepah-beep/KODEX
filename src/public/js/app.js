@@ -1924,7 +1924,6 @@ function buildSidebar() {
       links.push({ id: 'courses', label: 'Courses', icon: coursesIcon() });
       links.push({ id: 'quizzes', label: 'Quizzes', icon: quizzesIcon() });
       links.push({ id: 'timetable', label: 'Schedule', icon: svgIcon('<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>') });
-      links.push({ id: 'quiz-history', label: 'My Results', icon: svgIcon('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/>') });
       links.push({ id: 'question-bank', label: 'Question Bank', icon: svgIcon('<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>') });
       links.push({ id: 'assignments', label: 'Assignments / Quiz', icon: assignmentsIcon() });
       links.push({ id: 'gradebook', label: 'Grade Book', icon: svgIcon('<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>') });
@@ -2008,7 +2007,7 @@ function navigateTo(view) {
     case 'meetings': renderMeetings(); break;
     case 'courses': renderCourses(); break;
     case 'quizzes': renderQuizzes(); break;
-    case 'quiz-history': currentUser.role === 'lecturer' || currentUser.role === 'hod' ? renderLecturerPerformance() : renderStudentQuizHistory(); break;
+    case 'quiz-history': renderStudentQuizHistory(); break;
     case 'lecturer-performance': renderLecturerPerformance(); break;
     case 'timetable': currentUser.role === 'student' ? renderStudentTimetable() : renderLecturerTimetable(); break;
     case 'question-bank': renderQuestionBank(); break;
