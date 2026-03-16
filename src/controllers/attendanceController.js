@@ -288,6 +288,22 @@ exports.markAttendance = async (req, res) => {
       return res.status(404).json({ error: "No active session found. The manager needs to start a session first." });
     }
 
+    // For students: verify they are enrolled in the course this session belongs to
+    if (req.user.role === 'student' && session.course) {
+      const Course = require('../models/Course');
+      const enrolled = await Course.findOne({
+        _id: session.course,
+        company: req.user.company,
+        enrolledStudents: req.user._id,
+      }).select('_id title level group').lean();
+
+      if (!enrolled) {
+        return res.status(403).json({
+          error: `You are not enrolled in this course. This session belongs to a different class.`,
+        });
+      }
+    }
+
     const existingRecord = await AttendanceRecord.findOne({
       session: resolvedSessionId,
       user: req.user._id,
