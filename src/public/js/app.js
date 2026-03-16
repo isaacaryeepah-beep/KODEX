@@ -3756,16 +3756,31 @@ function _renderSessionsHTML(content, sessions, isOffline) {
   `;
 }
 
-function showStartSessionModal() {
+async function showStartSessionModal() {
   const container = document.getElementById('modal-container');
   container.classList.remove('hidden');
+  container.innerHTML = `<div class="modal-overlay"><div class="modal"><p style="color:var(--text-muted)">Loading courses…</p></div></div>`;
+
+  let courses = [];
+  try {
+    const d = await api('/api/courses');
+    courses = d.courses || d || [];
+  } catch(e) { courses = []; }
+
   container.innerHTML = `
     <div class="modal-overlay" onclick="closeModal(event)">
       <div class="modal" onclick="event.stopPropagation()">
         <h3>Start New Session</h3>
         <div class="form-group">
-          <label>Session Title</label>
-          <input type="text" id="session-title" placeholder="e.g., Morning Roll Call">
+          <label>Course <span style="color:red">*</span></label>
+          <select id="session-course" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
+            <option value="">— Select Course —</option>
+            ${courses.map(c => `<option value="${c._id}">${esc(c.title)}${c.level?' · L'+c.level:''}${c.group?' · Grp '+c.group:''}</option>`).join('')}
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Session Title <span style="font-weight:400;color:var(--text-muted);font-size:12px">(optional)</span></label>
+          <input type="text" id="session-title" placeholder="e.g., Week 5 Lecture">
         </div>
         <div class="modal-actions">
           <button class="btn btn-secondary btn-sm" onclick="closeModal()">Cancel</button>
@@ -3777,18 +3792,19 @@ function showStartSessionModal() {
 }
 
 async function startSession() {
-  const title = document.getElementById('session-title').value;
+  const title    = document.getElementById('session-title')?.value?.trim();
+  const courseId = document.getElementById('session-course')?.value;
+
+  if (!courseId) { toastWarning('Please select a course.'); return; }
   closeModal();
 
   if (!isOnline()) {
-    // Queue the start action
     const tempId = 'offline_' + Date.now();
     offlineEnqueue({
       label: `Start session: ${title || 'Untitled'}`,
       url: '/api/attendance-sessions/start',
-      options: { method: 'POST', body: JSON.stringify({ title }) }
+      options: { method: 'POST', body: JSON.stringify({ title, courseId }) }
     });
-    // Optimistically add to cache
     const cached = offlineRead('sessions') || { sessions: [] };
     cached.sessions.unshift({
       _id: tempId, title: title || 'Untitled',
@@ -3802,7 +3818,7 @@ async function startSession() {
   }
 
   try {
-    await api('/api/attendance-sessions/start', { method: 'POST', body: JSON.stringify({ title }) });
+    await api('/api/attendance-sessions/start', { method: 'POST', body: JSON.stringify({ title, courseId }) });
     renderSessions();
   } catch (e) {
     toastError(e.message);
@@ -4441,7 +4457,7 @@ async function renderMeetings() {
               const isAdmin = ['admin', 'superadmin'].includes(currentUser.role);
               const canControl = canManage && (isCreator || isAdmin);
               return `<tr>
-                <td><strong>${m.title}</strong>${m.course ? `<div style="font-size:0.85em;color:#6b7280;">${m.course.code || m.course.title}</div>` : ''}</td>
+                <td><strong>${m.title}</strong>${m.course ? `<div style="font-size:0.85em;color:#7c3aed;font-weight:600;">${esc(m.course.title||'')}${m.course.level?' · L'+m.course.level:''}${m.course.group?' · Grp '+m.course.group:''}</div>` : ''}</td>
                 <td>${m.createdBy?.name || 'Unknown'}</td>
                 <td style="font-size:0.85em;">${new Date(m.scheduledStart).toLocaleString()}<br><span style="color:#6b7280;">to ${new Date(m.scheduledEnd).toLocaleString()}</span></td>
                 <td>${m.duration} min</td>
@@ -4468,9 +4484,18 @@ async function renderMeetings() {
   }
 }
 
-function showCreateMeetingModal() {
+async function showCreateMeetingModal() {
   const container = document.getElementById('modal-container');
   container.classList.remove('hidden');
+
+  let courses = [];
+  try {
+    const d = await api('/api/courses');
+    courses = d.courses || d || [];
+  } catch(e) { courses = []; }
+
+  const courseOptions = `<option value="">— No specific course —</option>` +
+    courses.map(c => `<option value="${c._id}">${esc(c.title)}${c.level?' · L'+c.level:''}${c.group?' · Grp '+c.group:''}</option>`).join('');
   // default scheduled start = now+5min, end = now+65min
   const now = new Date();
   const pad = n => String(n).padStart(2,'0');
@@ -4505,6 +4530,13 @@ function showCreateMeetingModal() {
           <textarea id="meeting-desc" rows="2" placeholder="What is this meeting about?" style="resize:vertical;"></textarea>
         </div>
 
+        <div class="form-group">
+          <label>Course <span style="color:var(--text-muted);font-weight:400;font-size:12px">(optional)</span></label>
+          <select id="meeting-course" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
+            ${courseOptions}
+          </select>
+        </div>
+
         <div id="meeting-error" style="color:#ef4444;margin:8px 0;display:none;font-size:13px;"></div>
 
         <div class="modal-actions" style="gap:8px;margin-top:18px;">
@@ -4528,6 +4560,7 @@ async function createMeeting() {
   const start = document.getElementById('meeting-start')?.value;
   const end   = document.getElementById('meeting-end')?.value;
   const desc  = document.getElementById('meeting-desc')?.value.trim();
+  const courseId = document.getElementById('meeting-course')?.value || undefined;
   const errEl = document.getElementById('meeting-error');
 
   if (!title) { errEl.textContent = 'Please enter a meeting title.'; errEl.style.display = 'block'; return; }
@@ -4543,6 +4576,7 @@ async function createMeeting() {
       scheduledStart: start,
       scheduledEnd: end,
       description: desc || undefined,
+      courseId: courseId || undefined,
     }) });
     closeModal();
     renderMeetings();
@@ -5141,7 +5175,7 @@ async function showCreateQuizModal() {
           <div class="form-group"><label>Description</label><textarea id="cq-desc" placeholder="Optional description" rows="2" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;"></textarea></div>
           <div class="form-group"><label>Course *</label><select id="cq-course" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;">
             <option value="">Select a course</option>
-            ${courses.map(c => `<option value="${c._id}">${c.code} - ${c.title}</option>`).join('')}
+            ${courses.map(c => `<option value="${c._id}">${esc(c.title)}${c.level?' · L'+c.level:''}${c.group?' · Grp '+c.group:''}</option>`).join('')}
           </select></div>
           <div class="form-group"><label>Time Limit (minutes)</label><input type="number" id="cq-timelimit" value="30" min="1" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;"></div>
           <div class="form-group"><label>Start Time *</label><input type="datetime-local" id="cq-start" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;"></div>
@@ -8720,6 +8754,7 @@ function annCard(a, canPost, isAdmin) {
           <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:11px;color:var(--text-muted);">
             <span>👤 ${a.author?.name || 'Unknown'}</span>
             <span>📢 ${audienceLabel}</span>
+            ${a.course ? `<span style="background:#ede9fe;color:#7c3aed;padding:1px 7px;border-radius:20px;font-weight:700;">📚 ${esc(a.course.title||'')}${a.course.level?' · L'+a.course.level:''}${a.course.group?' · Grp '+a.course.group:''}</span>` : ''}
             <span>🕐 ${new Date(a.createdAt).toLocaleString()}</span>
             ${a.readCount > 0 ? `<span>👁 ${a.readCount} read</span>` : ''}
           </div>
@@ -8732,10 +8767,21 @@ function annCard(a, canPost, isAdmin) {
     </div>`;
 }
 
-function openPostAnnouncementModal() {
+async function openPostAnnouncementModal() {
   const existing = document.getElementById('ann-post-overlay');
   if (existing) existing.remove();
   const isAdmin = ['admin','superadmin'].includes(currentUser.role);
+
+  // Pre-fetch courses for lecturer/hod course selector
+  let courses = [];
+  if (currentUser.role === 'lecturer' || currentUser.role === 'hod') {
+    try {
+      const d = await api('/api/courses');
+      courses = d.courses || d || [];
+    } catch(e) { courses = []; }
+  }
+  const courseOptions = `<option value="">— All my students —</option>` +
+    courses.map(c => `<option value="${c._id}">${esc(c.title)}${c.level?' · L'+c.level:''}${c.group?' · Grp '+c.group:''}</option>`).join('');
 
   const ol = document.createElement('div');
   ol.id = 'ann-post-overlay';
@@ -8787,6 +8833,14 @@ function openPostAnnouncementModal() {
             }
           </div>
         </div>
+        ${currentUser.role === 'lecturer' ? `
+        <div>
+          <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:5px;display:block;">Target Course <span style="font-weight:400;text-transform:none">(optional)</span></label>
+          <select id="ann-course" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;">
+            ${courseOptions}
+          </select>
+          <p style="font-size:11px;color:var(--text-muted);margin-top:3px">Pick a course to target only that group. Leave blank to reach all your students.</p>
+        </div>` : '<input type="hidden" id="ann-course" value="">'}
         <div>
           <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:5px;display:block;">Expires At <span style="font-weight:400;text-transform:none;">(optional)</span></label>
           <input id="ann-expires" type="datetime-local" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;">
@@ -8813,6 +8867,7 @@ async function submitAnnouncement() {
   const audience = document.getElementById('ann-audience')?.value || 'all';
   const expiresAt= document.getElementById('ann-expires')?.value || null;
   const pinned   = document.getElementById('ann-pinned')?.checked || false;
+  const courseId = document.getElementById('ann-course')?.value || null;
   const errEl    = document.getElementById('ann-post-err');
 
   if (!title || !body) {
@@ -8822,7 +8877,7 @@ async function submitAnnouncement() {
   try {
     await api('/api/announcements', {
       method: 'POST',
-      body: JSON.stringify({ title, body, type, audience, pinned, expiresAt: expiresAt ? new Date(expiresAt).toISOString() : null }),
+      body: JSON.stringify({ title, body, type, audience, pinned, expiresAt: expiresAt ? new Date(expiresAt).toISOString() : null, courseId: courseId || undefined }),
     });
     document.getElementById('ann-post-overlay')?.remove();
     toastSuccess('Announcement posted ✓');
