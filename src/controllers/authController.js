@@ -1224,20 +1224,8 @@ exports.updateProfile = async (req, res) => {
       user.profilePhoto = profilePhoto || null;
     }
 
-    // Allow lecturer/hod to update their own department
-    if (department !== undefined && ["lecturer", "hod"].includes(user.role)) {
-      if (user.role === "hod" && department.trim()) {
-        // Ensure no other HOD has this dept
-        const clash = await User.findOne({
-          company: user.company,
-          role: "hod",
-          department: department.trim(),
-          _id: { $ne: user._id },
-        });
-        if (clash) {
-          return res.status(400).json({ error: `"${department.trim()}" already has an HOD (${clash.name}).` });
-        }
-      }
+    // Only lecturers can update their own department — HOD department is admin-controlled
+    if (department !== undefined && user.role === 'lecturer') {
       user.department = department.trim() || null;
     }
 
