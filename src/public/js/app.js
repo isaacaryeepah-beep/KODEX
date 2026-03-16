@@ -9080,6 +9080,118 @@ async function renderLecturerTimetable() {
   }
 }
 
+function openAddSlotModal(presetDay) { _openSlotModal(null, presetDay); }
+
+async function openEditSlotModal(slotId) {
+  const slot = _timetableSlots.find(s => s._id === slotId);
+  if (!slot) return;
+  _openSlotModal(slot);
+}
+
+function _openSlotModal(slot, presetDay) {
+  const container = document.getElementById('modal-container');
+  container.classList.remove('hidden');
+  const isEdit = !!slot;
+  const colorOptions = TIMETABLE_COLORS.map(c =>
+    `<span onclick="document.getElementById('slot-color').value='${c}';document.querySelectorAll('.color-dot').forEach(d=>d.style.outline='none');this.style.outline='3px solid ${c}';this.style.outlineOffset='2px'"
+      class="color-dot" style="display:inline-block;width:22px;height:22px;border-radius:50%;background:${c};cursor:pointer;margin:2px;
+      ${slot?.color===c||(!slot&&c==='#6366f1')?'outline:3px solid '+c+';outline-offset:2px':''}"></span>`
+  ).join('');
+
+  container.innerHTML = `
+    <div class="modal-overlay" onclick="closeModal(event)">
+      <div class="modal" onclick="event.stopPropagation()" style="max-width:420px">
+        <h3 style="margin:0 0 16px">${isEdit ? 'Edit Class Slot' : 'Add Class to Timetable'}</h3>
+
+        <div class="form-group">
+          <label>Course <span style="color:red">*</span></label>
+          <select id="slot-course" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
+            <option value="">Select a course…</option>
+            ${_timetableCourses.map(c=>`<option value="${c._id}" ${slot?.course?._id===c._id||slot?.course===c._id?'selected':''}>${esc(c.title)}${c.code?' ('+c.code+')':''}</option>`).join('')}
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label>Day <span style="color:red">*</span></label>
+          <select id="slot-day" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
+            ${TIMETABLE_DAYS.map((d,i)=>`<option value="${i}" ${(slot?.dayOfWeek===i||(presetDay===i&&!slot))?'selected':''}>${d}</option>`).join('')}
+          </select>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <div class="form-group">
+            <label>Start Time <span style="color:red">*</span></label>
+            <input type="time" id="slot-start" value="${slot?.startTime||'08:00'}"
+              style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
+          </div>
+          <div class="form-group">
+            <label>End Time <span style="color:red">*</span></label>
+            <input type="time" id="slot-end" value="${slot?.endTime||'10:00'}"
+              style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Room / Venue <span style="font-weight:400;color:var(--text-muted)">(optional)</span></label>
+          <input type="text" id="slot-room" value="${slot?.room||''}" placeholder="e.g. LT3, Room 204, Online"
+            style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
+        </div>
+
+        <div class="form-group">
+          <label>Colour</label>
+          <div style="margin-bottom:6px">${colorOptions}</div>
+          <input type="hidden" id="slot-color" value="${slot?.color||'#6366f1'}">
+        </div>
+
+        <div class="modal-actions">
+          <button class="btn btn-secondary btn-sm" onclick="closeModal()">Cancel</button>
+          ${isEdit ? `<button class="btn btn-danger btn-sm" onclick="deleteSlot('${slot._id}')">Delete</button>` : ''}
+          <button class="btn btn-primary btn-sm" onclick="saveSlot(${isEdit?`'${slot._id}'`:'null'})">${isEdit?'Save Changes':'Add to Timetable'}</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+async function saveSlot(slotId) {
+  const courseId  = document.getElementById('slot-course').value;
+  const dayOfWeek = document.getElementById('slot-day').value;
+  const startTime = document.getElementById('slot-start').value;
+  const endTime   = document.getElementById('slot-end').value;
+  const room      = document.getElementById('slot-room').value.trim();
+  const color     = document.getElementById('slot-color').value;
+
+  if (!courseId) { toastWarning('Please select a course'); return; }
+  if (!startTime || !endTime) { toastWarning('Please set start and end time'); return; }
+  if (startTime >= endTime) { toastWarning('End time must be after start time'); return; }
+
+  try {
+    const body = { courseId, dayOfWeek: Number(dayOfWeek), startTime, endTime, room, color };
+    if (slotId) {
+      await api(`/api/timetable/${slotId}`, { method: 'PUT', body: JSON.stringify(body) });
+      showToastNotif('Class updated', 'success');
+    } else {
+      await api('/api/timetable', { method: 'POST', body: JSON.stringify(body) });
+      showToastNotif('Class added to timetable', 'success');
+    }
+    closeModal();
+    renderLecturerTimetable();
+  } catch(e) {
+    toastError(e.message);
+  }
+}
+
+async function deleteSlot(slotId) {
+  if (!confirm('Remove this class from your timetable?')) return;
+  try {
+    await api(`/api/timetable/${slotId}`, { method: 'DELETE' });
+    showToastNotif('Class removed', 'success');
+    closeModal();
+    renderLecturerTimetable();
+  } catch(e) {
+    toastError(e.message);
+  }
+}
+
 
 // ── Two-Factor Authentication (2FA) via Email ────────────────────────────────
 // Simple email-based 2FA — sends a 6-digit code after password verification
