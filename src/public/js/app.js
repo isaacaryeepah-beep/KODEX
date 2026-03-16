@@ -3592,14 +3592,18 @@ async function renderAdminDashboard(content) {
       </div>
 
       <!-- Analytics Charts -->
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:4px">
-        <div class="card">
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;margin-top:4px">
+        <div class="card" style="min-width:0">
           <div style="font-size:13px;font-weight:700;margin-bottom:12px">Attendance Trend (Last 14 Days)</div>
-          <div style="position:relative;height:160px"><canvas id="admin-attendance-chart"></canvas></div>
+          <div style="position:relative;height:180px;width:100%">
+            <canvas id="admin-attendance-chart"></canvas>
+          </div>
         </div>
-        <div class="card">
+        <div class="card" style="min-width:0">
           <div style="font-size:13px;font-weight:700;margin-bottom:12px">Users by Role</div>
-          <div style="position:relative;height:160px"><canvas id="admin-role-chart"></canvas></div>
+          <div style="position:relative;height:180px;width:100%">
+            <canvas id="admin-role-chart"></canvas>
+          </div>
         </div>
       </div>
 
@@ -3645,7 +3649,15 @@ async function _renderAdminCharts(sessionsData, usersData) {
           labels: trendLabels,
           datasets: [{ label: 'Attendance', data: trendData, borderColor: '#6366f1', backgroundColor: 'rgba(99,102,241,0.1)', borderWidth: 2, fill: true, tension: 0.4, pointRadius: 3 }]
         },
-        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } }, x: { ticks: { maxTicksLimit: 7 } } } }
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: {
+            y: { beginAtZero: true, ticks: { stepSize: 1, maxTicksLimit: 4 } },
+            x: { ticks: { maxTicksLimit: 5, maxRotation: 0, autoSkip: true } }
+          }
+        }
       });
     }
 
@@ -3665,7 +3677,16 @@ async function _renderAdminCharts(sessionsData, usersData) {
           labels: roleLabels.map(r => r.charAt(0).toUpperCase() + r.slice(1)),
           datasets: [{ data: roleData, backgroundColor: roleColors.slice(0, roleLabels.length), borderWidth: 2, borderColor: '#fff' }]
         },
-        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { boxWidth: 12, font: { size: 11 } } } } }
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              position: 'bottom',
+              labels: { boxWidth: 10, font: { size: 10 }, padding: 8 }
+            }
+          }
+        }
       });
     }
   } catch(e) {
@@ -4798,11 +4819,16 @@ function _renderCoursesHTML(content, courses, isOffline) {
     <div class="card">
       ${courses.length ? `
         <table>
-          <thead><tr><th>Code</th><th>Title</th><th>Lecturer</th><th>Roster</th><th>Enrolled</th>${canManageRoster && !isOffline ? '<th>Actions</th>' : currentUser.role === 'student' ? '<th></th>' : ''}</tr></thead>
+          <thead><tr><th>Code</th><th>Title</th><th>Level / Group</th><th>Lecturer</th><th>Roster</th><th>Enrolled</th>${canManageRoster && !isOffline ? '<th>Actions</th>' : currentUser.role === 'student' ? '<th></th>' : ''}</tr></thead>
           <tbody>${courses.map(course => `
             <tr>
               <td><strong>${course.code}</strong></td>
               <td>${course.title}</td>
+              <td>
+                ${course.level ? `<span style="font-size:11px;padding:2px 7px;border-radius:20px;background:#ede9fe;color:#7c3aed;font-weight:700;margin-right:4px">L${course.level}</span>` : ''}
+                ${course.group ? `<span style="font-size:11px;padding:2px 7px;border-radius:20px;background:#ecfdf5;color:#059669;font-weight:600">${esc(course.group)}</span>` : ''}
+                ${!course.level && !course.group ? '<span style="color:var(--text-muted);font-size:12px">—</span>' : ''}
+              </td>
               <td>${course.lecturer?.name || 'N/A'}</td>
               <td>${!isOffline ? `<button class="btn btn-sm" style="font-size:11px;background:var(--bg);border:1px solid var(--border)" onclick="viewRoster('${course._id}', '${course.code}')">View Roster</button>` : '—'}</td>
               <td>${course.enrolledStudents?.length || 0}</td>
@@ -4823,12 +4849,33 @@ function showCreateCourseModal() {
       <div class="modal" onclick="event.stopPropagation()">
         <h3>Create Course</h3>
         <div class="form-group">
-          <label>Course Code</label>
-          <input type="text" id="course-code" placeholder="e.g., CS101">
+          <label>Course Code <span style="color:red">*</span></label>
+          <input type="text" id="course-code" placeholder="e.g., CS101" style="text-transform:uppercase">
         </div>
         <div class="form-group">
-          <label>Course Title</label>
+          <label>Course Title <span style="color:red">*</span></label>
           <input type="text" id="course-title" placeholder="Introduction to Computer Science">
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <div class="form-group">
+            <label>Level <span style="color:red">*</span></label>
+            <select id="course-level" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
+              <option value="">— Select Level —</option>
+              <option value="100">Level 100</option>
+              <option value="200">Level 200</option>
+              <option value="300">Level 300</option>
+              <option value="400">Level 400</option>
+              <option value="500">Level 500 (Postgrad)</option>
+              <option value="600">Level 600 (Postgrad)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Group <span style="color:red">*</span></label>
+            <input type="text" id="course-group" placeholder="e.g. A, B, C"
+              style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;text-transform:uppercase"
+              oninput="this.value=this.value.toUpperCase()">
+            <p style="font-size:11px;color:var(--text-muted);margin-top:3px">Use letters: A, B, C etc.</p>
+          </div>
         </div>
         <div class="form-group">
           <label>Description</label>
@@ -4845,12 +4892,24 @@ function showCreateCourseModal() {
 
 async function createCourse() {
   try {
+    const code  = document.getElementById('course-code').value.trim().toUpperCase();
+    const title = document.getElementById('course-title').value.trim();
+    const desc  = document.getElementById('course-desc').value.trim();
+    const level = document.getElementById('course-level').value.trim();
+    const group = document.getElementById('course-group').value.trim();
+
+    if (!code || !title) { toastWarning('Course code and title are required.'); return; }
+    if (!level) { toastWarning('Please select a level.'); return; }
+    if (!group) { toastWarning('Please enter a group (e.g. A, B, C).'); return; }
+
     await api('/api/courses', {
       method: 'POST',
       body: JSON.stringify({
-        code: document.getElementById('course-code').value,
-        title: document.getElementById('course-title').value,
-        description: document.getElementById('course-desc').value,
+        code,
+        title,
+        description: desc,
+        level:  level || undefined,
+        group:  group || undefined,
       }),
     });
     closeModal();
@@ -9257,7 +9316,7 @@ function _openSlotModal(slot, presetDay) {
           <label>Course <span style="color:red">*</span></label>
           <select id="slot-course" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
             <option value="">Select a course…</option>
-            ${_timetableCourses.map(c=>`<option value="${c._id}" ${slot?.course?._id===c._id||slot?.course===c._id?'selected':''}>${esc(c.title)}${c.code?' ('+c.code+')':''}</option>`).join('')}
+            ${_timetableCourses.map(c=>`<option value="${c._id}" ${slot?.course?._id===c._id||slot?.course===c._id?'selected':''}>${esc(c.title)}${c.code?' ('+c.code+')':''}${c.level?' · L'+c.level:''}${c.group?' · '+c.group:''}</option>`).join('')}
           </select>
         </div>
 
