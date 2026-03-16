@@ -3591,8 +3591,86 @@ async function renderAdminDashboard(content) {
         </div>
       </div>
 
+      <!-- Analytics Charts -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:4px">
+        <div class="card">
+          <div style="font-size:13px;font-weight:700;margin-bottom:12px">Attendance Trend (Last 14 Days)</div>
+          <div style="position:relative;height:160px"><canvas id="admin-attendance-chart"></canvas></div>
+        </div>
+        <div class="card">
+          <div style="font-size:13px;font-weight:700;margin-bottom:12px">Users by Role</div>
+          <div style="position:relative;height:160px"><canvas id="admin-role-chart"></canvas></div>
+        </div>
+      </div>
+
     </div>
   `;
+
+  // Load Chart.js and render analytics
+  _renderAdminCharts(sessionsData, usersData);
+}
+
+async function _renderAdminCharts(sessionsData, usersData) {
+  try {
+    if (!window.Chart) {
+      await new Promise((res, rej) => {
+        const s = document.createElement('script');
+        s.src = 'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js';
+        s.onload = res; s.onerror = rej;
+        document.head.appendChild(s);
+      });
+    }
+
+    // Attendance trend — group all sessions by date over last 14 days
+    const allSessions = await api('/api/attendance-sessions?limit=200').catch(() => ({ sessions: [] }));
+    const now = Date.now();
+    const days14 = 14 * 86400000;
+    const trendMap = {};
+    for (let i = 13; i >= 0; i--) {
+      const d = new Date(now - i * 86400000);
+      trendMap[d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })] = 0;
+    }
+    (allSessions.sessions || []).filter(s => s.startedAt && (now - new Date(s.startedAt)) < days14).forEach(s => {
+      const key = new Date(s.startedAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
+      if (key in trendMap) trendMap[key] += s.attendanceCount || 0;
+    });
+    const trendLabels = Object.keys(trendMap);
+    const trendData   = Object.values(trendMap);
+
+    const attCtx = document.getElementById('admin-attendance-chart');
+    if (attCtx) {
+      new Chart(attCtx, {
+        type: 'line',
+        data: {
+          labels: trendLabels,
+          datasets: [{ label: 'Attendance', data: trendData, borderColor: '#6366f1', backgroundColor: 'rgba(99,102,241,0.1)', borderWidth: 2, fill: true, tension: 0.4, pointRadius: 3 }]
+        },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } }, x: { ticks: { maxTicksLimit: 7 } } } }
+      });
+    }
+
+    // Users by role
+    const users = usersData.users || [];
+    const roleCount = {};
+    users.forEach(u => { roleCount[u.role] = (roleCount[u.role] || 0) + 1; });
+    const roleLabels = Object.keys(roleCount);
+    const roleData   = Object.values(roleCount);
+    const roleColors = ['#6366f1','#10b981','#f59e0b','#ef4444','#0ea5e9','#8b5cf6'];
+
+    const roleCtx = document.getElementById('admin-role-chart');
+    if (roleCtx && roleLabels.length > 0) {
+      new Chart(roleCtx, {
+        type: 'doughnut',
+        data: {
+          labels: roleLabels.map(r => r.charAt(0).toUpperCase() + r.slice(1)),
+          datasets: [{ data: roleData, backgroundColor: roleColors.slice(0, roleLabels.length), borderWidth: 2, borderColor: '#fff' }]
+        },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { boxWidth: 12, font: { size: 11 } } } } }
+      });
+    }
+  } catch(e) {
+    console.error('Admin charts error:', e.message);
+  }
 }
 
 
@@ -4458,7 +4536,7 @@ async function createMeeting() {
 async function createAndStartMeeting() {
   const title = document.getElementById('meeting-title').value.trim();
   const errEl = document.getElementById('meeting-error');
-  const btn = document.getElementById('start-meeting-btn');
+  const btn   = document.getElementById('start-meeting-btn');
   if (!title) {
     errEl.textContent = 'Please enter a meeting title.';
     errEl.style.display = 'block';
@@ -4728,7 +4806,7 @@ function _renderCoursesHTML(content, courses, isOffline) {
               <td>${course.lecturer?.name || 'N/A'}</td>
               <td>${!isOffline ? `<button class="btn btn-sm" style="font-size:11px;background:var(--bg);border:1px solid var(--border)" onclick="viewRoster('${course._id}', '${course.code}')">View Roster</button>` : '—'}</td>
               <td>${course.enrolledStudents?.length || 0}</td>
-              ${canManageRoster && !isOffline ? `<td style="white-space:nowrap"><button class="btn btn-primary btn-sm" style="font-size:11px" onclick="showUploadRosterModal('${course._id}', '${course.code}')">Upload Students</button> <button class="btn btn-sm" style="font-size:11px;background:#6366f1;color:#fff" onclick="openBulkEmailModal('${course._id}', '${course.title}')">✉️ Email</button></td>` : currentUser.role === 'student' ? `<td><button class="btn btn-sm" style="font-size:11px;background:#f0fdf4;color:#16a34a;border:1px solid #bbf7d0" onclick="generateCertificate('${course._id}','${course.title}')">🎓 Certificate</button></td>` : ''}
+              ${canManageRoster && !isOffline ? `<td style="white-space:nowrap"><button class="btn btn-primary btn-sm" style="font-size:11px" onclick="showUploadRosterModal('${course._id}', '${course.code}')">Upload Students</button> <button class="btn btn-sm" style="font-size:11px;background:#6366f1;color:#fff" onclick="openBulkEmailModal('${course._id}', '${course.title}')">✉️ Email</button> <button class="btn btn-sm" style="font-size:11px;background:#10b981;color:#fff" onclick="openBulkSmsModal('${course._id}', '${course.title}')">💬 SMS</button></td>` : currentUser.role === 'student' ? `<td><button class="btn btn-sm" style="font-size:11px;background:#f0fdf4;color:#16a34a;border:1px solid #bbf7d0" onclick="generateCertificate('${course._id}','${course.title}')">🎓 Certificate</button></td>` : ''}
             </tr>
           `).join('')}</tbody>
         </table>
@@ -8897,6 +8975,59 @@ async function sendBulkEmail(courseId) {
     status.textContent = `✓ Email sent to ${data.sentCount} student(s)`;
     status.style.cssText = 'display:block;background:#f0fdf4;color:#15803d;padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:12px';
     setTimeout(() => document.getElementById('bulk-email-modal')?.remove(), 2000);
+  } catch(e) {
+    status.textContent = 'Failed: ' + e.message;
+    status.style.cssText = 'display:block;background:#fef2f2;color:#dc2626;padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:12px';
+  }
+}
+
+
+// ── Bulk SMS to students ──────────────────────────────────────────────────────
+function openBulkSmsModal(courseId, courseName) {
+  const existing = document.getElementById('bulk-sms-modal');
+  if (existing) existing.remove();
+
+  const modal = document.createElement('div');
+  modal.id = 'bulk-sms-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;display:flex;align-items:center;justify-content:center;padding:20px';
+  modal.innerHTML = `
+    <div style="background:var(--card);border-radius:16px;padding:28px;width:100%;max-width:500px;box-shadow:0 20px 60px rgba(0,0,0,.3)">
+      <h3 style="font-size:16px;font-weight:700;margin-bottom:4px">💬 SMS Students</h3>
+      <p style="font-size:13px;color:var(--text-muted);margin-bottom:20px">${courseName} — students with phone numbers only</p>
+      <div class="form-group">
+        <label>Message <span style="font-weight:400;color:var(--text-muted);font-size:12px">(max 160 characters)</span></label>
+        <textarea id="bulk-sms-body" rows="4" maxlength="160" placeholder="e.g. Class cancelled today. See you next week."
+          style="width:100%;padding:10px 14px;border:1.5px solid var(--border);border-radius:9px;font-size:14px;font-family:inherit;resize:vertical"
+          oninput="document.getElementById('sms-char-count').textContent=(160-this.value.length)+' remaining'"></textarea>
+        <div id="sms-char-count" style="font-size:11px;color:var(--text-muted);text-align:right;margin-top:3px">160 remaining</div>
+      </div>
+      <div id="bulk-sms-status" style="display:none;padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:12px"></div>
+      <div style="display:flex;gap:10px;justify-content:flex-end">
+        <button class="btn btn-secondary" onclick="document.getElementById('bulk-sms-modal').remove()">Cancel</button>
+        <button class="btn btn-primary" style="background:#10b981;border-color:#10b981" onclick="sendBulkSms('${courseId}')">Send SMS to All Students</button>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+}
+
+async function sendBulkSms(courseId) {
+  const message = document.getElementById('bulk-sms-body')?.value?.trim();
+  const status  = document.getElementById('bulk-sms-status');
+  if (!message) {
+    status.textContent = 'Please enter a message.';
+    status.style.cssText = 'display:block;background:#fef2f2;color:#dc2626;padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:12px';
+    return;
+  }
+  if (message.length > 160) {
+    status.textContent = 'Message too long — max 160 characters.';
+    status.style.cssText = 'display:block;background:#fef2f2;color:#dc2626;padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:12px';
+    return;
+  }
+  try {
+    const data = await api(`/api/courses/${courseId}/sms-students`, { method: 'POST', body: JSON.stringify({ message }) });
+    status.textContent = `✓ SMS sent to ${data.sentCount} student(s)`;
+    status.style.cssText = 'display:block;background:#f0fdf4;color:#15803d;padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:12px';
+    setTimeout(() => document.getElementById('bulk-sms-modal')?.remove(), 2000);
   } catch(e) {
     status.textContent = 'Failed: ' + e.message;
     status.style.cssText = 'display:block;background:#fef2f2;color:#dc2626;padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:12px';
