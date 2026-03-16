@@ -7888,8 +7888,8 @@ async function renderProfile() {
         </div>
         ${['lecturer','hod','student'].includes(u.role) ? `
         <div class="form-group">
-          <label>Department ${u.role === 'student' ? '<span style="font-weight:400;font-size:11px;color:var(--text-muted)">(cannot be changed here)</span>' : ''}</label>
-          ${u.role === 'student'
+          <label>Department ${u.role === 'student' || u.role === 'hod' ? '<span style="font-weight:400;font-size:11px;color:var(--text-muted)">(cannot be changed here — contact admin)</span>' : ''}</label>
+          ${u.role === 'student' || u.role === 'hod'
             ? `<input type="text" value="${u.department || 'Not set'}" disabled style="background:var(--bg);color:var(--text-muted);">`
             : `<input type="text" id="profile-dept" value="${u.department || ''}" placeholder="e.g. Computer Science">`}
         </div>` : ''}
