@@ -1166,14 +1166,15 @@ exports.send2FACode = async (req, res) => {
     user.twoFactorExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 min
     await user.save({ validateBeforeSave: false });
 
+    // Send email — non-fatal so modal always shows even if email is slow
     const { sendPasswordReset } = require("../services/emailService");
-    await sendPasswordReset({
+    sendPasswordReset({
       email: user.email,
       name: user.name,
       resetCode: code,
       role: user.role,
       institutionName: "Two-Factor Authentication",
-    });
+    }).catch(err => console.error("2FA email failed:", err.message));
 
     res.json({ ok: true, message: "2FA code sent to your email" });
   } catch(e) {
