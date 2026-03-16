@@ -1914,6 +1914,8 @@ function buildSidebar() {
       links.push({ id: 'hod-courses',      label: 'Courses',        icon: coursesIcon() });
       links.push({ id: 'hod-lecturers',    label: 'Lecturers',      icon: svgIcon('<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>') });
       links.push({ id: 'hod-students',     label: 'Students',       icon: usersIcon() });
+      links.push({ id: 'hod-quizzes',      label: 'Quizzes',        icon: quizzesIcon() });
+      links.push({ id: 'meetings',         label: 'Meetings',       icon: meetingsIcon() });
       links.push({ id: 'hod-reports',      label: 'Reports',        icon: reportsIcon() });
       links.push({ id: 'approvals',        label: 'Approvals',      icon: approvalsIcon() });
       links.push({ id: 'announcements',    label: 'Announcements',  icon: svgIcon('<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>') });
@@ -2034,6 +2036,7 @@ function navigateTo(view) {
     case 'hod-lecturers': renderHodLecturers(); break;
     case 'hod-students':  renderHodStudents(); break;
     case 'hod-reports':   renderHodReports(); break;
+    case 'hod-quizzes':   renderHodQuizzes(); break;
     case 'announcements': renderAnnouncements(); break;
     case 'gradebook': renderGradeBook(); break;
     case 'training':       renderTraining(); break;
@@ -2509,6 +2512,17 @@ async function renderHodReports() {
     });
     const lecRows = Object.entries(byLecturer).sort((a,b) => b[1].sessions - a[1].sessions);
 
+    // Group sessions by course for attendance rate
+    const byCourse = {};
+    sessions.forEach(s => {
+      const name = s.courseName || s.title || 'Unknown Course';
+      if (!byCourse[name]) byCourse[name] = { sessions: 0, attendance: 0, enrolled: s.enrolledCount || 0 };
+      byCourse[name].sessions++;
+      byCourse[name].attendance += s.attendanceCount ?? s.records?.length ?? 0;
+      if (s.enrolledCount > byCourse[name].enrolled) byCourse[name].enrolled = s.enrolledCount;
+    });
+    const courseRows = Object.entries(byCourse).sort((a,b) => b[1].sessions - a[1].sessions);
+
     content.innerHTML = `
       <div class="page-header"><div><h2>Department Reports</h2><p>Attendance and activity overview</p></div></div>
 
@@ -2517,6 +2531,44 @@ async function renderHodReports() {
         <div class="stat-card"><div class="stat-value" style="color:#0891b2">${totalAtt}</div><div class="stat-label">TOTAL ATTENDANCE</div></div>
         <div class="stat-card"><div class="stat-value" style="color:#0891b2">${avgAtt}</div><div class="stat-label">AVG ATTENDANCE</div></div>
         <div class="stat-card"><div class="stat-value" style="color:#0891b2">${stats.lecturers || 0}</div><div class="stat-label">LECTURERS</div></div>
+      </div>
+
+      <div class="card" style="margin-bottom:16px;">
+        <div style="font-size:13px;font-weight:700;margin-bottom:14px;">Attendance Rate by Course</div>
+        ${courseRows.length === 0 ? '<p style="color:var(--text-muted);font-size:13px;">No data yet.</p>' : `
+        <table style="width:100%;border-collapse:collapse;font-size:13px;">
+          <thead>
+            <tr style="border-bottom:2px solid var(--border);">
+              <th style="text-align:left;padding:8px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Course</th>
+              <th style="text-align:left;padding:8px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Sessions</th>
+              <th style="text-align:left;padding:8px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Total Attendance</th>
+              <th style="text-align:left;padding:8px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Avg / Session</th>
+              <th style="text-align:left;padding:8px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Rate</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${courseRows.map(([name, d]) => {
+              const avg = d.sessions ? Math.round(d.attendance / d.sessions) : 0;
+              const rate = d.enrolled > 0 ? Math.round((avg / d.enrolled) * 100) : null;
+              const rateColor = rate === null ? '#9ca3af' : rate >= 75 ? '#16a34a' : rate >= 50 ? '#d97706' : '#dc2626';
+              return `<tr style="border-bottom:1px solid var(--border);">
+                <td style="padding:9px 12px;font-weight:600;">${name}</td>
+                <td style="padding:9px 12px;">${d.sessions}</td>
+                <td style="padding:9px 12px;">${d.attendance}</td>
+                <td style="padding:9px 12px;">${avg}</td>
+                <td style="padding:9px 12px;">
+                  ${rate !== null
+                    ? `<span style="font-weight:700;color:${rateColor}">${rate}%</span>
+                       <div style="height:4px;background:var(--border);border-radius:2px;margin-top:3px;width:80px;">
+                         <div style="height:4px;background:${rateColor};border-radius:2px;width:${Math.min(rate,100)}%"></div>
+                       </div>`
+                    : '<span style="color:var(--text-muted)">—</span>'
+                  }
+                </td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>`}
       </div>
 
       <div class="card" style="margin-bottom:16px;">
@@ -2643,6 +2695,79 @@ async function hodViewStudentAttendance(userId, name) {
     </div>`;
     document.body.appendChild(ol);
   } catch(e) { toastError('Could not load attendance: ' + e.message); }
+}
+
+// ── HOD: Department quizzes overview ───────────────────────────────────────
+async function renderHodQuizzes() {
+  const content = document.getElementById('main-content');
+  if (!content) return;
+  content.innerHTML = '<div class="loading">Loading quizzes…</div>';
+  try {
+    const dept = currentUser.department ? '?department=' + encodeURIComponent(currentUser.department) : '';
+    const data = await api('/api/lecturer/quizzes' + dept);
+    const quizzes = data.quizzes || [];
+
+    const now = new Date();
+    const live     = quizzes.filter(q => new Date(q.startTime) <= now && new Date(q.endTime) >= now);
+    const upcoming = quizzes.filter(q => new Date(q.startTime) > now);
+    const closed   = quizzes.filter(q => new Date(q.endTime) < now);
+
+    content.innerHTML = `
+      <div class="page-header">
+        <div><h2>Department Quizzes</h2><p>All quizzes in the ${currentUser.department || 'department'}</p></div>
+      </div>
+
+      <div class="stats-grid" style="margin-bottom:20px;">
+        <div class="stat-card"><div class="stat-value" style="color:#22c55e">${live.length}</div><div class="stat-label">LIVE NOW</div></div>
+        <div class="stat-card"><div class="stat-value" style="color:#0891b2">${upcoming.length}</div><div class="stat-label">UPCOMING</div></div>
+        <div class="stat-card"><div class="stat-value" style="color:#6b7280">${closed.length}</div><div class="stat-label">CLOSED</div></div>
+        <div class="stat-card"><div class="stat-value" style="color:#7c3aed">${quizzes.length}</div><div class="stat-label">TOTAL</div></div>
+      </div>
+
+      ${quizzes.length === 0
+        ? '<div class="card"><div class="empty-state"><p>No quizzes in this department yet.</p></div></div>'
+        : `<div class="card">
+            <table style="width:100%;border-collapse:collapse;font-size:13px;">
+              <thead>
+                <tr style="border-bottom:2px solid var(--border);">
+                  <th style="text-align:left;padding:9px 12px;font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-muted);">Title</th>
+                  <th style="text-align:left;padding:9px 12px;font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-muted);">Lecturer</th>
+                  <th style="text-align:left;padding:9px 12px;font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-muted);">Course</th>
+                  <th style="text-align:left;padding:9px 12px;font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-muted);">Questions</th>
+                  <th style="text-align:left;padding:9px 12px;font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-muted);">Duration</th>
+                  <th style="text-align:left;padding:9px 12px;font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-muted);">Status</th>
+                  <th style="text-align:left;padding:9px 12px;font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-muted);">Date</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${quizzes.map(q => {
+                  const start = new Date(q.startTime);
+                  const end   = new Date(q.endTime);
+                  const isLive     = now >= start && now <= end;
+                  const isUpcoming = now < start;
+                  const badge = isLive
+                    ? '<span style="background:#dcfce7;color:#166534;font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;">LIVE</span>'
+                    : isUpcoming
+                    ? '<span style="background:#dbeafe;color:#1e40af;font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;">UPCOMING</span>'
+                    : '<span style="background:#f3f4f6;color:#6b7280;font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;">CLOSED</span>';
+                  const duration = q.durationMinutes ? q.durationMinutes + ' min' : '—';
+                  return `<tr style="border-bottom:1px solid var(--border);">
+                    <td style="padding:9px 12px;font-weight:600;">${q.title || 'Untitled'}</td>
+                    <td style="padding:9px 12px;color:var(--text-muted);">${q.createdBy?.name || '—'}</td>
+                    <td style="padding:9px 12px;color:var(--text-muted);">${q.course?.name || q.courseName || '—'}</td>
+                    <td style="padding:9px 12px;">${q.questions?.length ?? q.questionCount ?? '—'}</td>
+                    <td style="padding:9px 12px;">${duration}</td>
+                    <td style="padding:9px 12px;">${badge}</td>
+                    <td style="padding:9px 12px;color:var(--text-muted);font-size:12px;">${start.toLocaleDateString()}</td>
+                  </tr>`;
+                }).join('')}
+              </tbody>
+            </table>
+          </div>`
+      }`;
+  } catch(e) {
+    content.innerHTML = `<div class="card"><p style="color:#ef4444;">Error loading quizzes: ${e.message}</p></div>`;
+  }
 }
 
 // ── HOD: Export department data to CSV ─────────────────────────────────────
@@ -9567,7 +9692,7 @@ function buildBottomNav(role) {
       : ['dashboard', 'sessions', 'users', 'reports'],
     manager:    ['dashboard', 'sessions', 'reports', 'users'],
     lecturer:   ['dashboard', 'sessions', 'quizzes', 'assignments'],
-    hod:        ['hod-overview', 'hod-courses', 'hod-lecturers', 'hod-reports'],
+    hod:        ['hod-overview', 'hod-courses', 'hod-lecturers', 'hod-reports', 'hod-quizzes', 'meetings'],
     employee:   ['dashboard', 'sign-in-out', 'my-attendance', 'reports'],
     student:    ['dashboard', 'mark-attendance', 'quizzes', 'assignments'],
     superadmin: currentUser?.company?.mode === 'academic'
