@@ -8957,60 +8957,91 @@ async function renderStudentTimetable() {
 // Simple email-based 2FA — sends a 6-digit code after password verification
 // Stored in sessionStorage so it clears when browser closes
 
-async function initiate2FA(credentials, loginFn) {
+async function initiate2FA(credentials) {
+  // Login with password first
+  const data = await api('/api/auth/login', { method: 'POST', body: JSON.stringify(credentials) });
+  if (!data.token) throw new Error('Login failed');
+
+  // If 2FA not enabled, return immediately — normal login
+  if (!data.user?.twoFactorEnabled) return data;
+
+  // 2FA required — send code (non-fatal if email is slow)
   try {
-    // First verify password normally
-    const data = await api('/api/auth/login', { method: 'POST', body: JSON.stringify(credentials) });
-    if (!data.token) throw new Error('Login failed');
-
-    // Check if 2FA is enabled for this user
-    if (!data.user?.twoFactorEnabled) {
-      return data; // No 2FA, proceed normally
-    }
-
-    // 2FA required — request code
     await api('/api/auth/2fa/send', { method: 'POST', headers: { Authorization: 'Bearer ' + data.token } });
+  } catch(e) {
+    console.error('2FA send failed:', e.message);
+    throw new Error('Failed to send 2FA code. Please try again.');
+  }
 
-    // Show 2FA modal
-    return new Promise((resolve, reject) => {
-      const modal = document.createElement('div');
-      modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
-      modal.innerHTML = `
-        <div style="background:var(--card);border-radius:16px;padding:32px;width:100%;max-width:380px;text-align:center">
-          <div style="font-size:40px;margin-bottom:12px">🔐</div>
-          <h3 style="font-size:17px;font-weight:700;margin-bottom:8px">Two-Factor Authentication</h3>
-          <p style="font-size:13px;color:var(--text-muted);margin-bottom:20px">A 6-digit code was sent to <strong>${data.user.email}</strong></p>
-          <input type="text" id="twofa-code" placeholder="Enter 6-digit code" maxlength="6" style="width:100%;padding:12px;border:1.5px solid var(--border);border-radius:9px;font-size:18px;text-align:center;letter-spacing:8px;font-family:monospace;outline:none;margin-bottom:12px">
-          <div id="twofa-err" style="color:#dc2626;font-size:13px;margin-bottom:10px;display:none"></div>
-          <button onclick="verify2FA('${data.token}')" style="width:100%;padding:12px;background:var(--primary);color:#fff;border:none;border-radius:9px;font-size:14px;font-weight:700;cursor:pointer;margin-bottom:8px">Verify</button>
-          <button onclick="this.closest('div[style]').remove();reject(new Error('2FA cancelled'))" style="width:100%;padding:10px;background:transparent;border:none;color:var(--text-muted);font-size:13px;cursor:pointer">Cancel</button>
-        </div>`;
-      document.body.appendChild(modal);
-      window._2faResolve = resolve;
-      window._2faReject = reject;
-      window._2faData = data;
-      document.getElementById('twofa-code').focus();
-      document.getElementById('twofa-code').addEventListener('keydown', e => { if (e.key === 'Enter') verify2FA(data.token); });
-    });
-  } catch(e) { throw e; }
+  // Block everything behind modal — resolve only after successful verify
+  return new Promise((resolve, reject) => {
+    // Remove any existing 2FA modal
+    document.getElementById('kodex-2fa-modal')?.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'kodex-2fa-modal';
+    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px';
+    modal.innerHTML = `
+      <div style="background:#fff;border-radius:16px;padding:32px;width:100%;max-width:360px;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,.3)">
+        <div style="font-size:44px;margin-bottom:12px">🔐</div>
+        <h3 style="font-size:17px;font-weight:700;margin-bottom:8px;color:#111">Two-Factor Authentication</h3>
+        <p style="font-size:13px;color:#6b7280;margin-bottom:20px">A 6-digit code was sent to<br><strong style="color:#111">${data.user.email}</strong></p>
+        <input type="text" id="kodex-2fa-input" placeholder="Enter 6-digit code" maxlength="6" inputmode="numeric"
+          style="width:100%;padding:14px;border:1.5px solid #d1d5db;border-radius:10px;font-size:22px;text-align:center;letter-spacing:10px;font-family:monospace;outline:none;margin-bottom:8px;color:#111;background:#fff">
+        <div id="kodex-2fa-err" style="color:#dc2626;font-size:13px;margin-bottom:12px;min-height:20px"></div>
+        <button id="kodex-2fa-btn" onclick="window._kodex2faVerify('${data.token}')"
+          style="width:100%;padding:13px;background:#4f46e5;color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;margin-bottom:8px">
+          Verify
+        </button>
+        <button onclick="document.getElementById('kodex-2fa-modal').remove();window._kodex2faReject(new Error('2FA cancelled'))"
+          style="width:100%;padding:10px;background:transparent;border:none;color:#9ca3af;font-size:13px;cursor:pointer">
+          Cancel
+        </button>
+      </div>`;
+    document.body.appendChild(modal);
+
+    window._kodex2faResolve = resolve;
+    window._kodex2faReject  = reject;
+    window._kodex2faData    = data;
+
+    const input = document.getElementById('kodex-2fa-input');
+    input.focus();
+    input.addEventListener('keydown', e => { if (e.key === 'Enter') window._kodex2faVerify(data.token); });
+  });
 }
 
-async function verify2FA(tempToken) {
-  const code = document.getElementById('twofa-code')?.value?.trim();
-  const errEl = document.getElementById('twofa-err');
-  if (!code || code.length !== 6) { errEl.textContent = 'Please enter the 6-digit code'; errEl.style.display='block'; return; }
+async function _kodex2faVerify(tempToken) {
+  window._kodex2faVerify = _kodex2faVerify; // make global
+  const input = document.getElementById('kodex-2fa-input');
+  const errEl = document.getElementById('kodex-2fa-err');
+  const btn   = document.getElementById('kodex-2fa-btn');
+  const code  = input?.value?.trim();
+
+  if (!code || code.length !== 6) {
+    if (errEl) errEl.textContent = 'Please enter the 6-digit code';
+    return;
+  }
+
+  if (btn) { btn.textContent = 'Verifying…'; btn.disabled = true; }
+  if (errEl) errEl.textContent = '';
+
   try {
     const result = await api('/api/auth/2fa/verify', {
       method: 'POST',
       headers: { Authorization: 'Bearer ' + tempToken },
-      body: JSON.stringify({ code })
+      body: JSON.stringify({ code }),
     });
-    document.querySelector('[style*="position:fixed"][style*="z-index:9999"]')?.remove();
-    window._2faResolve?.({ ...window._2faData, token: result.token || tempToken });
+    document.getElementById('kodex-2fa-modal')?.remove();
+    const finalData = { ...window._kodex2faData, token: result.token || tempToken };
+    window._kodex2faResolve?.(finalData);
   } catch(e) {
-    if (errEl) { errEl.textContent = e.message || 'Invalid code'; errEl.style.display = 'block'; }
+    if (errEl) errEl.textContent = e.message || 'Invalid code — please try again';
+    if (btn) { btn.textContent = 'Verify'; btn.disabled = false; }
+    input?.focus();
+    input?.select();
   }
 }
+window._kodex2faVerify = _kodex2faVerify;
 
 
 // ── Branding: Preview login page ─────────────────────────────────────────────
