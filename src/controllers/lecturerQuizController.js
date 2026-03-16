@@ -81,7 +81,25 @@ exports.createQuiz = async (req, res) => {
 exports.listQuizzes = async (req, res) => {
   try {
     const { courseId } = req.query;
-    const filter = { company: req.user.company, createdBy: req.user._id };
+
+    // HOD sees all quizzes in their department; lecturer sees only their own
+    let filter;
+    if (req.user.role === 'hod') {
+      filter = { company: req.user.company };
+      if (req.user.department) {
+        // Find lecturers in this department then filter by them
+        const User = require('../models/User');
+        const deptLecturers = await User.find({
+          company: req.user.company,
+          role: 'lecturer',
+          department: req.user.department,
+        }).select('_id').lean();
+        const ids = deptLecturers.map(l => l._id);
+        filter.createdBy = { $in: ids };
+      }
+    } else {
+      filter = { company: req.user.company, createdBy: req.user._id };
+    }
 
     // Filter by source if provided (proctored = main portal, assignment = assignments page)
     // Legacy quizzes have no source field — treat them as proctored
