@@ -1489,10 +1489,8 @@ async function handleStudentRegister() {
     if (password.length < 8) return showStudentError('Password must be at least 8 characters.');
     if (password !== confirm) return showStudentError('Passwords do not match.');
     const phone = document.getElementById('student-reg-phone')?.value?.trim();
-    const department = document.getElementById('student-reg-dept')?.value?.trim();
-    const email = document.getElementById('student-reg-email')?.value?.trim();
     if (!department) return showStudentError('Please enter your department.');
-    const data = await api('/api/auth/register-student', { method: 'POST', body: JSON.stringify({ name, indexNumber, phone, email: email || undefined, password, institutionCode, department }) });
+    const data = await api('/api/auth/register-student', { method: 'POST', body: JSON.stringify({ name, indexNumber, phone, password, institutionCode, department }) });
     if (data.token) {
       token = data.token;
       localStorage.setItem('token', token);
@@ -7907,6 +7905,7 @@ async function renderProfile() {
         </div>
       </div>
 
+      ${!['student'].includes(u.role) ? `
       <div style="margin-bottom:20px;padding-top:20px;border-top:1px solid var(--border)">
         <h3 style="font-size:14px;font-weight:700;margin-bottom:12px;color:var(--text-primary)">Two-Factor Authentication</h3>
         <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;background:var(--bg);border-radius:10px;border:1.5px solid var(--border)">
@@ -7921,7 +7920,7 @@ async function renderProfile() {
             </span>
           </label>
         </div>
-      </div>
+      </div>` : ''}
       <button class="btn btn-primary" onclick="saveProfile()" style="width:100%">Save Changes</button>
     </div>
   `;
