@@ -2010,7 +2010,7 @@ function navigateTo(view) {
     case 'quizzes': renderQuizzes(); break;
     case 'quiz-history': renderStudentQuizHistory(); break;
     case 'lecturer-performance': renderLecturerPerformance(); break;
-    case 'timetable': renderStudentTimetable(); break;
+    case 'timetable': currentUser.role === 'student' ? renderStudentTimetable() : renderLecturerTimetable(); break;
     case 'question-bank': renderQuestionBank(); break;
     case 'my-attendance': renderMyAttendance(); break;
     case 'mark-attendance': renderMarkAttendance(); break;
@@ -8997,88 +8997,87 @@ async function exportAllAttendanceToExcel() {
 }
 
 
-// ── Student Timetable ─────────────────────────────────────────────────────────
-async function renderStudentTimetable() {
+// ── Timetable — Lecturer (editable) & Student (read-only) ─────────────────────
+
+const TIMETABLE_DAYS = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+const TIMETABLE_DAYS_SHORT = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+const TIMETABLE_COLORS = ['#6366f1','#0ea5e9','#10b981','#f59e0b','#ef4444','#8b5cf6','#ec4899','#14b8a6'];
+
+function _timetableGrid(slots, canEdit) {
+  // Show Mon-Sat (1-6) only — skip Sunday unless there are Sunday slots
+  const hasSunday = slots.some(s => s.dayOfWeek === 0);
+  const daysToShow = hasSunday ? [0,1,2,3,4,5,6] : [1,2,3,4,5,6];
+  const today = new Date().getDay();
+
+  return `
+    <div style="display:grid;grid-template-columns:${daysToShow.map(()=>'1fr').join(' ')};gap:8px;margin-bottom:20px;">
+      ${daysToShow.map(d => `
+        <div style="text-align:center;">
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;
+            color:${d===today?'var(--primary)':'var(--text-muted)'};
+            margin-bottom:8px;padding-bottom:6px;border-bottom:2px solid ${d===today?'var(--primary)':'var(--border)'}">
+            ${TIMETABLE_DAYS_SHORT[d]}
+          </div>
+          ${slots.filter(s=>s.dayOfWeek===d).sort((a,b)=>a.startTime.localeCompare(b.startTime)).map(s=>`
+            <div style="background:${s.color}18;border-left:3px solid ${s.color};border-radius:6px;
+              padding:8px 10px;margin-bottom:6px;text-align:left;position:relative;cursor:${canEdit?'pointer':'default'}"
+              ${canEdit ? `onclick="openEditSlotModal('${s._id}')"` : ''}>
+              <div style="font-size:12px;font-weight:700;color:${s.color};margin-bottom:2px;">
+                ${s.startTime} – ${s.endTime}
+              </div>
+              <div style="font-size:12px;font-weight:600;color:var(--text-primary);line-height:1.3;">
+                ${esc(s.title || s.course?.title || 'Class')}
+              </div>
+              ${s.course?.code ? `<div style="font-size:10px;color:var(--text-muted);">${esc(s.course.code)}</div>` : ''}
+              ${s.room ? `<div style="font-size:10px;color:var(--text-muted);">📍 ${esc(s.room)}</div>` : ''}
+              ${!canEdit && s.lecturer?.name ? `<div style="font-size:10px;color:var(--text-muted);">👤 ${esc(s.lecturer.name)}</div>` : ''}
+              ${canEdit ? `<button onclick="event.stopPropagation();deleteSlot('${s._id}')"
+                style="position:absolute;top:4px;right:4px;background:none;border:none;cursor:pointer;
+                color:var(--text-muted);font-size:14px;line-height:1;padding:2px;">×</button>` : ''}
+            </div>
+          `).join('')}
+          ${canEdit ? `
+            <button onclick="openAddSlotModal(${d})"
+              style="width:100%;padding:6px;background:transparent;border:1.5px dashed var(--border);
+              border-radius:6px;font-size:11px;color:var(--text-muted);cursor:pointer;margin-top:2px">
+              + Add
+            </button>` : ''}
+        </div>
+      `).join('')}
+    </div>`;
+}
+
+let _timetableSlots = [];
+let _timetableCourses = [];
+
+async function renderLecturerTimetable() {
   const content = document.getElementById('main-content');
   if (!content) return;
   content.innerHTML = '<div class="loading">Loading timetable…</div>';
   try {
-    const [sessionsData, meetingsData, quizzesData, assignmentsData] = await Promise.all([
-      api('/api/attendance-sessions?limit=50').catch(() => ({ sessions: [] })),
-      api('/api/zoom').catch(() => ({ meetings: [] })),
-      api('/api/student/quizzes').catch(() => ({ quizzes: [] })),
-      api('/api/assignments/student').catch(() => ({ assignments: [] })),
+    const [slotData, courseData] = await Promise.all([
+      api('/api/timetable'),
+      api('/api/courses'),
     ]);
-
-    const now = new Date();
-    const upcoming = [];
-
-    // Add upcoming sessions
-    (sessionsData.sessions || []).filter(s => s.status === 'active' || new Date(s.startedAt) > now).forEach(s => {
-      upcoming.push({ type: 'session', title: s.title || 'Attendance Session', date: new Date(s.startedAt), color: '#6366f1', icon: '📋', action: () => navigateTo('mark-attendance') });
-    });
-
-    // Add upcoming meetings
-    (meetingsData.meetings || []).filter(m => m.status === 'scheduled' && new Date(m.scheduledStart) > now).forEach(m => {
-      upcoming.push({ type: 'meeting', title: m.title, date: new Date(m.scheduledStart), color: '#0ea5e9', icon: '🎥', url: m.joinUrl });
-    });
-
-    // Add quiz deadlines
-    (quizzesData.quizzes || []).filter(q => !q.myAttempt && new Date(q.endTime) > now).forEach(q => {
-      upcoming.push({ type: 'quiz', title: q.title + ' (Quiz)', date: new Date(q.endTime), color: '#f59e0b', icon: '📝', action: () => navigateTo('quizzes') });
-    });
-
-    // Add assignment deadlines
-    (assignmentsData.assignments || []).filter(a => !a.mySubmission && new Date(a.dueDate) > now).forEach(a => {
-      upcoming.push({ type: 'assignment', title: a.title + ' (Due)', date: new Date(a.dueDate), color: '#ef4444', icon: '📌', action: () => location.href = '/assignments.html' });
-    });
-
-    // Sort by date
-    upcoming.sort((a, b) => a.date - b.date);
-
-    const days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
-    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-
-    const groupByDate = {};
-    upcoming.forEach(item => {
-      const key = item.date.toDateString();
-      if (!groupByDate[key]) groupByDate[key] = [];
-      groupByDate[key].push(item);
-    });
+    _timetableSlots   = slotData.slots   || [];
+    _timetableCourses = (courseData.courses || courseData || []);
 
     content.innerHTML = `
-      <div class="page-header">
-        <h2>My Schedule</h2>
-        <p>Upcoming sessions, quizzes, assignments and meetings</p>
-      </div>
-      ${Object.keys(groupByDate).length === 0 ? `
-        <div class="card" style="text-align:center;padding:40px">
-          <div style="font-size:48px">📅</div>
-          <p style="margin-top:12px;color:var(--text-muted)">No upcoming events. You're all caught up!</p>
+      <div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px">
+        <div>
+          <h2>My Schedule</h2>
+          <p>Your weekly class timetable — click any slot to edit, + to add a new class</p>
         </div>
-      ` : Object.entries(groupByDate).map(([dateStr, items]) => {
-        const d = new Date(dateStr);
-        const isToday = d.toDateString() === now.toDateString();
-        const isTomorrow = d.toDateString() === new Date(now.getTime() + 86400000).toDateString();
-        const label = isToday ? 'Today' : isTomorrow ? 'Tomorrow' : `${days[d.getDay()]}, ${d.getDate()} ${months[d.getMonth()]}`;
-        return `
-          <div style="margin-bottom:20px">
-            <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:${isToday?'var(--primary)':'var(--text-muted)'};margin-bottom:8px">${label}</div>
-            <div class="card" style="padding:0;overflow:hidden">
-              ${items.map((item, i) => `
-                <div style="display:flex;align-items:center;gap:12px;padding:14px 16px;${i>0?'border-top:1px solid var(--border)':''};cursor:pointer" onclick="${item.url ? `window.open('${item.url}','_blank')` : item.action ? `(${item.action.toString()})()` : ''}">
-                  <div style="width:40px;height:40px;border-radius:10px;background:${item.color}15;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">${item.icon}</div>
-                  <div style="flex:1">
-                    <div style="font-weight:600;font-size:14px">${esc(item.title)}</div>
-                    <div style="font-size:12px;color:var(--text-muted)">${item.date.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</div>
-                  </div>
-                  <span style="font-size:11px;padding:2px 10px;border-radius:20px;background:${item.color}15;color:${item.color};font-weight:700;text-transform:capitalize">${item.type}</span>
-                </div>
-              `).join('')}
-            </div>
-          </div>`;
-      }).join('')}
-    `;
+        <button class="btn btn-primary" onclick="openAddSlotModal()">+ Add Class</button>
+      </div>
+      ${_timetableSlots.length === 0
+        ? `<div class="card" style="text-align:center;padding:40px">
+            <div style="font-size:48px;margin-bottom:12px">📅</div>
+            <p style="color:var(--text-muted);margin-bottom:16px">No classes scheduled yet. Add your first class to get started.</p>
+            <button class="btn btn-primary" onclick="openAddSlotModal()">+ Add Your First Class</button>
+          </div>`
+        : `<div class="card" style="overflow-x:auto">${_timetableGrid(_timetableSlots, true)}</div>`
+      }`;
   } catch(e) {
     content.innerHTML = `<div class="card"><p style="color:var(--danger)">Error: ${e.message}</p></div>`;
   }
