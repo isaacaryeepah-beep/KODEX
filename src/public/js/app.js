@@ -7890,10 +7890,8 @@ async function renderProfile() {
         </div>
         ${['lecturer','hod','student'].includes(u.role) ? `
         <div class="form-group">
-          <label>Department ${u.role === 'student' || u.role === 'hod' ? '<span style="font-weight:400;font-size:11px;color:var(--text-muted)">(cannot be changed here — contact admin)</span>' : ''}</label>
-          ${u.role === 'student' || u.role === 'hod'
-            ? `<input type="text" value="${u.department || 'Not set'}" disabled style="background:var(--bg);color:var(--text-muted);">`
-            : `<input type="text" id="profile-dept" value="${u.department || ''}" placeholder="e.g. Computer Science">`}
+          <label>Department <span style="font-weight:400;font-size:11px;color:var(--text-muted)">(cannot be changed here — contact admin)</span></label>
+          <input type="text" value="${u.department || 'Not set'}" disabled style="background:var(--bg);color:var(--text-muted);">
         </div>` : ''}
       </div>
 
@@ -9057,7 +9055,7 @@ async function renderLecturerTimetable() {
   try {
     const [slotData, courseData] = await Promise.all([
       api('/api/timetable'),
-      api('/api/courses'),
+      api('/api/courses').catch(() => api('/api/lecturer/quizzes').then(d => ({ courses: [] })).catch(() => ({ courses: [] }))),
     ]);
     _timetableSlots   = slotData.slots   || [];
     _timetableCourses = (courseData.courses || courseData || []);
