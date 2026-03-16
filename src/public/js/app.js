@@ -2008,7 +2008,7 @@ function navigateTo(view) {
     case 'meetings': renderMeetings(); break;
     case 'courses': renderCourses(); break;
     case 'quizzes': renderQuizzes(); break;
-    case 'quiz-history': renderStudentQuizHistory(); break;
+    case 'quiz-history': currentUser.role === 'lecturer' || currentUser.role === 'hod' ? renderLecturerPerformance() : renderStudentQuizHistory(); break;
     case 'lecturer-performance': renderLecturerPerformance(); break;
     case 'timetable': currentUser.role === 'student' ? renderStudentTimetable() : renderLecturerTimetable(); break;
     case 'question-bank': renderQuestionBank(); break;
