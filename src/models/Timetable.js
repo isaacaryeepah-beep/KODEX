@@ -5,18 +5,13 @@ const timetableSchema = new mongoose.Schema({
   course:     { type: mongoose.Schema.Types.ObjectId, ref: 'Course', required: true },
   lecturer:   { type: mongoose.Schema.Types.ObjectId, ref: 'User',   required: true, index: true },
   department: { type: String, trim: true, default: null },
-
-  // When
-  dayOfWeek:  { type: Number, required: true, min: 0, max: 6 }, // 0=Sun, 1=Mon ... 6=Sat
-  startTime:  { type: String, required: true }, // "08:00"
-  endTime:    { type: String, required: true }, // "10:00"
-
-  // Details
-  title:      { type: String, trim: true, default: null }, // optional override of course name
+  dayOfWeek:  { type: Number, required: true, min: 0, max: 6 },
+  startTime:  { type: String, required: true },
+  endTime:    { type: String, required: true },
+  title:      { type: String, trim: true, default: null },
   room:       { type: String, trim: true, default: null },
   color:      { type: String, default: '#6366f1' },
   notes:      { type: String, trim: true, default: null },
-
   isActive:   { type: Boolean, default: true },
 }, { timestamps: true });
 
