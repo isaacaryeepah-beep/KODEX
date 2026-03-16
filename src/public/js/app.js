@@ -9077,8 +9077,31 @@ async function renderLecturerTimetable() {
   }
 }
 
-function openAddSlotModal(presetDay) { _openSlotModal(null, presetDay); }
+async function renderStudentTimetable() {
+  const content = document.getElementById('main-content');
+  if (!content) return;
+  content.innerHTML = '<div class="loading">Loading timetable…</div>';
+  try {
+    const slotData = await api('/api/timetable');
+    const slots = slotData.slots || [];
+    content.innerHTML = `
+      <div class="page-header">
+        <h2>My Schedule</h2>
+        <p>Your weekly class timetable based on your enrolled courses</p>
+      </div>
+      ${slots.length === 0
+        ? `<div class="card" style="text-align:center;padding:40px">
+            <div style="font-size:48px">📅</div>
+            <p style="margin-top:12px;color:var(--text-muted)">No classes scheduled yet. Your lecturers haven't added timetable slots yet.</p>
+          </div>`
+        : `<div class="card" style="overflow-x:auto">${_timetableGrid(slots, false)}</div>`
+      }`;
+  } catch(e) {
+    content.innerHTML = `<div class="card"><p style="color:var(--danger)">Error: ${e.message}</p></div>`;
+  }
+}
 
+function openAddSlotModal(presetDay) { _openSlotModal(null, presetDay); }
 async function openEditSlotModal(slotId) {
   const slot = _timetableSlots.find(s => s._id === slotId);
   if (!slot) return;
