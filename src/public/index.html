@@ -508,39 +508,40 @@
 
       <form id="student-register-form" class="hidden" onsubmit="event.preventDefault(); handleStudentRegister();">
         <div class="form-group">
-          <label>Full Name</label>
+          <label>Full Name <span style="color:red">*</span></label>
           <input type="text" id="student-reg-name" placeholder="Your full name">
         </div>
         <div class="form-group">
-          <label>Student ID</label>
-          <input type="text" id="student-reg-index" placeholder="Your student ID">
+          <label>Student ID / Index Number <span style="color:red">*</span></label>
+          <input type="text" id="student-reg-index" placeholder="e.g. UCC/CS/23/0001" style="text-transform:uppercase" autocomplete="off">
+          <p style="font-size:11px;color:#6b7280;margin-top:4px">Enter the exact index number given to you by your institution. This is unique to you and cannot be shared.</p>
         </div>
         <div class="form-group">
-          <label>Phone Number <span style="font-weight:400;color:var(--text-light)">(for SMS password reset)</span></label>
+          <label>Institution Code <span style="color:red">*</span></label>
+          <input type="text" id="student-reg-code" placeholder="e.g. ABC123" style="text-transform:uppercase">
+        </div>
+        <div class="form-group">
+          <label>Department <span style="color:red">*</span></label>
+          <input type="text" id="student-reg-dept" placeholder="e.g. Computer Science">
+        </div>
+        <div class="form-group">
+          <label>Password <span style="color:red">*</span></label>
+          <input type="password" id="student-reg-password" placeholder="Min 8 characters">
+        </div>
+        <div class="form-group">
+          <label>Confirm Password <span style="color:red">*</span></label>
+          <input type="password" id="student-reg-confirm" placeholder="Confirm your password">
+        </div>
+        <div class="form-group">
+          <label>Phone Number <span style="font-weight:400;color:var(--text-light)">(optional — for SMS password reset)</span></label>
           <input type="tel" id="student-reg-phone" placeholder="e.g. 0244123456">
         </div>
         <div class="form-group">
           <label>Email Address <span style="font-size:11px;color:#94a3b8;font-weight:400">(optional — used for password reset)</span></label>
           <input type="email" id="student-reg-email" placeholder="your@email.com" autocomplete="off">
         </div>
-        <div class="form-group">
-          <label>Institution Code</label>
-          <input type="text" id="student-reg-code" placeholder="e.g. ABC123" style="text-transform:uppercase">
-        </div>
-        <div class="form-group">
-          <label>Password</label>
-          <input type="password" id="student-reg-password" placeholder="Min 8 characters">
-        </div>
-        <div class="form-group">
-          <label>Confirm Password</label>
-          <input type="password" id="student-reg-confirm" placeholder="Confirm your password">
-        </div>
-        <div class="form-group">
-          <label>Department <span style="color:red">*</span></label>
-          <input type="text" id="student-reg-dept" placeholder="e.g. Computer Science">
-        </div>
         <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:12px;color:#1e40af">
-          <strong>Important:</strong> Your Student ID must be added to a class roster by your lecturer before you can register. If registration fails, contact your lecturer.
+          <strong>Important:</strong> Your Student ID must be added to a class roster by your lecturer before you can register. Each Student ID can only be used once. If registration fails, contact your lecturer.
         </div>
         <button type="submit" class="btn btn-student">Create Student Account</button>
         <div class="auth-toggle">
