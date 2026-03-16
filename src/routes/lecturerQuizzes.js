@@ -10,7 +10,15 @@ const router = express.Router();
 router.use(authenticate);
 router.use(requireMode("academic"));
 router.use(requireActiveSubscription);
-router.use(requireRole("lecturer", "superadmin"));
+router.use(requireRole("lecturer", "hod", "superadmin"));
+
+// HOD gets read-only access — block write operations
+router.use((req, res, next) => {
+  if (req.user.role === 'hod' && req.method !== 'GET') {
+    return res.status(403).json({ error: 'HODs have read-only access to quizzes.' });
+  }
+  next();
+});
 
 router.post("/", ctrl.createQuiz);
 router.get("/", ctrl.listQuizzes);
