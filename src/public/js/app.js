@@ -2425,7 +2425,7 @@ async function renderHodLecturers() {
                 <div style="display:flex;gap:6px;align-items:center;margin-top:4px;flex-wrap:wrap;">
                   <span class="tag ${u.isApproved ? 'tag-green' : 'tag-amber'}">${u.isApproved ? 'Active' : 'Pending'}</span>
                   ${u.department ? `<span style="font-size:10px;padding:2px 6px;border-radius:20px;background:#ecfeff;color:#0891b2;font-weight:600;">${u.department}</span>` : ''}
-                  <button class="btn btn-xs btn-secondary" onclick="hodEditLecturerDept('${u._id}','${u.name.replace(/'/g,"\\'")}','${u.department||''}')">Edit Dept</button>
+                  
                 </div>
               </div>
             </div>`).join('')}
