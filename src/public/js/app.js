@@ -4015,6 +4015,11 @@ function showCreateUserModal() {
           <label>Password</label>
           <input type="password" id="new-user-password" placeholder="Min 8 characters">
         </div>
+        <div class="form-group" id="new-user-dept-group" style="display:none">
+          <label>Department <span id="new-user-dept-req" style="color:red;display:none">*</span></label>
+          <input type="text" id="new-user-dept" placeholder="e.g. Computer Science">
+          <p id="new-user-dept-hint" style="font-size:12px;color:var(--text-light);margin-top:4px"></p>
+        </div>
         <div class="form-group">
           <label>Phone Number <span style="color:red">*</span></label>
           <input type="tel" id="new-user-phone" placeholder="e.g. 0241234567" required>
