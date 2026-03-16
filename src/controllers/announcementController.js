@@ -22,8 +22,11 @@ function visibilityFilter(user) {
   }
 
   if (user.role === "student") {
-    // Students see announcements aimed at "all" or "students"
-    return { ...base, audience: { $in: ["all", "students"] } };
+    // Students see announcements aimed at "all" or "students" (global or their enrolled courses)
+    return {
+      ...base,
+      audience: { $in: ["all", "students"] },
+    };
   }
 
   if (["admin", "superadmin", "manager"].includes(user.role)) {
@@ -65,7 +68,7 @@ exports.create = async (req, res) => {
       return res.status(403).json({ error: "You do not have permission to post announcements" });
     }
 
-    const { title, body, type, audience, pinned, expiresAt } = req.body;
+    const { title, body, type, audience, pinned, expiresAt, courseId } = req.body;
     if (!title?.trim() || !body?.trim()) {
       return res.status(400).json({ error: "Title and body are required" });
     }
@@ -82,6 +85,14 @@ exports.create = async (req, res) => {
       }
     }
 
+    // Validate courseId belongs to this company if provided
+    let resolvedCourse = null;
+    if (courseId) {
+      const Course = require('../models/Course');
+      const course = await Course.findOne({ _id: courseId, company: req.user.company });
+      if (course) resolvedCourse = course._id;
+    }
+
     const ann = await Announcement.create({
       company:   req.user.company,
       author:    req.user._id,
@@ -91,9 +102,10 @@ exports.create = async (req, res) => {
       audience:  resolvedAudience,
       pinned:    req.user.role === "lecturer" ? false : !!pinned,
       expiresAt: expiresAt ? new Date(expiresAt) : null,
+      course:    resolvedCourse,
     });
 
-    const populated = await ann.populate("author", "name role");
+    const populated = await ann.populate(["author", "course"]);
     res.status(201).json({ announcement: { ...populated.toObject(), isRead: false, readCount: 0 } });
   } catch (err) {
     res.status(500).json({ error: "Failed to create announcement" });
