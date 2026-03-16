@@ -150,6 +150,7 @@ app.use("/api/quizzes", quizRoutes);
 app.use("/api/lecturer/quizzes", lecturerQuizRoutes);
 app.use("/api/lecturer/question-bank", questionBankRoutes);
 app.use("/api/announcements",          announcementRoutes);
+app.use("/api/timetable",              require("./routes/timetable"));
 app.use("/api/webhooks",               webhookRoutes);      // public — Paystack webhook
 app.use("/api/gradebook",              gradeBookRoutes);
 app.use("/api/student/quizzes", studentQuizRoutes);
