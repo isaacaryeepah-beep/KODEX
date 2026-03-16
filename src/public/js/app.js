@@ -8398,7 +8398,7 @@ async function loadAnnBadge() {
 
 const ANN_COLORS = { info:'#6366f1', warning:'#f59e0b', success:'#22c55e', urgent:'#ef4444' };
 const ANN_ICONS  = { info:'ℹ️', warning:'⚠️', success:'✅', urgent:'🚨' };
-const ANN_CAN_POST = ['admin','superadmin','lecturer','manager'];
+const ANN_CAN_POST = ['admin','superadmin','lecturer','manager','hod'];
 
 async function renderAnnouncements() {
   const content = document.getElementById('main-content');
