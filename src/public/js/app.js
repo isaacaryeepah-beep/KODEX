@@ -1476,20 +1476,18 @@ async function handleStudentLogin() {
 
 async function handleStudentRegister() {
   try {
-    const name = document.getElementById('student-reg-name').value;
-    const indexNumber = document.getElementById('student-reg-index').value;
-    const institutionCode = document.getElementById('student-reg-code').value;
+    const name = document.getElementById('student-reg-name').value.trim();
+    const indexNumber = document.getElementById('student-reg-index').value.trim().toUpperCase();
+    const institutionCode = document.getElementById('student-reg-code').value.trim();
     const password = document.getElementById('student-reg-password').value;
     const confirm = document.getElementById('student-reg-confirm').value;
-    if (!name || !indexNumber || !institutionCode || !password) {
-      return showStudentError('Please fill in all fields');
-    }
-    if (password.length < 8) {
-      return showStudentError('Password must be at least 8 characters');
-    }
-    if (password !== confirm) {
-      return showStudentError('Passwords do not match');
-    }
+    if (!name) return showStudentError('Please enter your full name.');
+    if (!indexNumber) return showStudentError('Student ID / Index Number is required. Enter the ID given to you by your institution.');
+    if (indexNumber.length < 3) return showStudentError('Student ID looks too short. Please check and enter your full index number.');
+    if (!institutionCode) return showStudentError('Please enter your Institution Code.');
+    if (!password) return showStudentError('Please enter a password.');
+    if (password.length < 8) return showStudentError('Password must be at least 8 characters.');
+    if (password !== confirm) return showStudentError('Passwords do not match.');
     const phone = document.getElementById('student-reg-phone')?.value?.trim();
     const department = document.getElementById('student-reg-dept')?.value?.trim();
     const email = document.getElementById('student-reg-email')?.value?.trim();
@@ -4132,8 +4130,9 @@ function showCreateUserModal() {
           <input type="email" id="new-user-email" placeholder="user@company.com">
         </div>
         <div class="form-group ${defaultRole !== 'student' ? 'hidden' : ''}" id="new-user-index-group">
-          <label>Index Number</label>
-          <input type="text" id="new-user-index" placeholder="Student index number">
+          <label>Student ID / Index Number <span style="color:red">*</span></label>
+          <input type="text" id="new-user-index" placeholder="e.g. UCC/CS/23/0001" style="text-transform:uppercase" autocomplete="off">
+          <p style="font-size:11px;color:var(--text-light);margin-top:4px">Must be unique — each student has their own index number assigned by the institution.</p>
         </div>
         ${defaultRole === 'employee' ? '<p style="font-size:12px;color:var(--text-light);margin-bottom:12px">An Employee ID will be auto-generated.</p>' : ''}
         <div class="form-group">
@@ -4187,7 +4186,10 @@ async function createUser() {
       role,
     };
     if (role === 'student') {
-      body.indexNumber = document.getElementById('new-user-index').value;
+      const idx = document.getElementById('new-user-index').value.trim().toUpperCase();
+      if (!idx) { toastWarning('Student ID / Index Number is required.'); return; }
+      if (idx.length < 3) { toastWarning('Student ID looks too short. Please enter the full index number.'); return; }
+      body.indexNumber = idx;
     } else {
       body.email = document.getElementById('new-user-email').value;
     }
