@@ -6430,7 +6430,7 @@ async function showBulkImportModal() {
         <div style="padding:12px 14px;background:#f0f9ff;border:1px solid #bae6fd;border-radius:9px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
           <div>
             <div style="font-size:13px;font-weight:600;color:#0369a1;">CSV Format</div>
-            <div style="font-size:12px;color:#0284c7;margin-top:2px;">Required: <strong>name, indexNumber</strong> &nbsp;·&nbsp; Optional: email, phone, courseCode</div>
+            <div style="font-size:12px;color:#0284c7;margin-top:2px;">Required: <strong>name, indexNumber, programme, level, group, sessionType, semester</strong> &nbsp;·&nbsp; Optional: phone, courseCode, department</div>
           </div>
           <button class="btn btn-sm" style="background:#0ea5e9;color:#fff;white-space:nowrap;" onclick="downloadImportTemplate()">⬇ Template</button>
         </div>
@@ -6468,8 +6468,11 @@ async function showBulkImportModal() {
                 <tr style="background:var(--bg);">
                   <th style="padding:7px 10px;text-align:left;border-bottom:1px solid var(--border);font-weight:700;">Name</th>
                   <th style="padding:7px 10px;text-align:left;border-bottom:1px solid var(--border);font-weight:700;">Index No.</th>
-                  <th style="padding:7px 10px;text-align:left;border-bottom:1px solid var(--border);font-weight:700;">Email</th>
-                  <th style="padding:7px 10px;text-align:left;border-bottom:1px solid var(--border);font-weight:700;">Course</th>
+                  <th style="padding:7px 10px;text-align:left;border-bottom:1px solid var(--border);font-weight:700;">Programme</th>
+                  <th style="padding:7px 10px;text-align:left;border-bottom:1px solid var(--border);font-weight:700;">Level</th>
+                  <th style="padding:7px 10px;text-align:left;border-bottom:1px solid var(--border);font-weight:700;">Group</th>
+                  <th style="padding:7px 10px;text-align:left;border-bottom:1px solid var(--border);font-weight:700;">Session</th>
+                  <th style="padding:7px 10px;text-align:left;border-bottom:1px solid var(--border);font-weight:700;">Sem</th>
                 </tr>
               </thead>
               <tbody id="bi-preview-body"></tbody>
@@ -6503,11 +6506,16 @@ function biPreviewCSV(input) {
       if (lines.length < 2) { showBiErr('CSV must have a header row and at least one data row.'); return; }
 
       const headers = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/[^a-z]/g, ''));
-      const nameIdx  = headers.findIndex(h => h === 'name' || h === 'fullname' || h === 'studentname');
-      const idxIdx   = headers.findIndex(h => h === 'indexnumber' || h === 'studentid' || h === 'id' || h === 'index');
-      const emailIdx = headers.findIndex(h => h === 'email');
-      const courseIdx= headers.findIndex(h => h === 'coursecode' || h === 'course' || h === 'code');
-      const deptIdx  = headers.findIndex(h => h === 'department' || h === 'dept' || h === 'faculty');
+      const nameIdx        = headers.findIndex(h => h === 'name' || h === 'fullname' || h === 'studentname');
+      const idxIdx         = headers.findIndex(h => h === 'indexnumber' || h === 'studentid' || h === 'id' || h === 'index');
+      const phoneIdx       = headers.findIndex(h => h === 'phone' || h === 'phonenumber' || h === 'mobile');
+      const courseIdx      = headers.findIndex(h => h === 'coursecode' || h === 'course' || h === 'code');
+      const deptIdx        = headers.findIndex(h => h === 'department' || h === 'dept' || h === 'faculty');
+      const programmeIdx   = headers.findIndex(h => h === 'programme' || h === 'program');
+      const levelIdx       = headers.findIndex(h => h === 'level');
+      const groupIdx       = headers.findIndex(h => h === 'group');
+      const sessionTypeIdx = headers.findIndex(h => h === 'sessiontype' || h === 'session');
+      const semesterIdx    = headers.findIndex(h => h === 'semester' || h === 'sem');
 
       if (nameIdx === -1 || idxIdx === -1) {
         showBiErr("CSV must have 'name' and 'indexNumber' columns.");
@@ -6515,15 +6523,20 @@ function biPreviewCSV(input) {
       }
 
       _biRows = [];
-      for (let i = 1; i < lines.length && i <= 101; i++) {
+      for (let i = 1; i < lines.length && i <= 501; i++) {
         const cols = lines[i].split(',').map(c => c.trim().replace(/^"|"$/g, ''));
         if (!cols[nameIdx] && !cols[idxIdx]) continue;
         _biRows.push({
-          name:       cols[nameIdx] || '',
-          indexNumber:cols[idxIdx]  || '',
-          email:      emailIdx >= 0 ? (cols[emailIdx] || '') : '',
-          courseCode: courseIdx >= 0 ? (cols[courseIdx] || '') : '',
-          department: deptIdx  >= 0 ? (cols[deptIdx]  || '') : '',
+          name:        cols[nameIdx]        || '',
+          indexNumber: cols[idxIdx]         || '',
+          phone:       phoneIdx >= 0       ? (cols[phoneIdx]       || '') : '',
+          courseCode:  courseIdx >= 0      ? (cols[courseIdx]      || '') : '',
+          department:  deptIdx >= 0        ? (cols[deptIdx]        || '') : '',
+          programme:   programmeIdx >= 0   ? (cols[programmeIdx]   || '') : '',
+          studentLevel:levelIdx >= 0       ? (cols[levelIdx]       || '') : '',
+          studentGroup:groupIdx >= 0       ? (cols[groupIdx]       || '').toUpperCase() : '',
+          sessionType: sessionTypeIdx >= 0 ? (cols[sessionTypeIdx] || '') : '',
+          semester:    semesterIdx >= 0    ? (cols[semesterIdx]    || '') : '',
         });
       }
 
@@ -6535,11 +6548,13 @@ function biPreviewCSV(input) {
           <tr>
             <td style="padding:6px 10px;border-bottom:1px solid var(--border);">${r.name}</td>
             <td style="padding:6px 10px;border-bottom:1px solid var(--border);font-family:monospace;">${r.indexNumber}</td>
-            <td style="padding:6px 10px;border-bottom:1px solid var(--border);color:var(--text-muted);">${r.email || '—'}</td>
-            <td style="padding:6px 10px;border-bottom:1px solid var(--border);color:var(--text-muted);">${r.courseCode || '—'}</td>
-            <td style="padding:6px 10px;border-bottom:1px solid var(--border);color:#0891b2;font-size:12px;">${r.department || '—'}</td>
+            <td style="padding:6px 10px;border-bottom:1px solid var(--border);">${r.programme ? `<span style="background:#ede9fe;color:#7c3aed;padding:1px 6px;border-radius:20px;font-size:11px;font-weight:700">${r.programme}</span>` : '<span style="color:var(--text-muted)">—</span>'}</td>
+            <td style="padding:6px 10px;border-bottom:1px solid var(--border);">${r.studentLevel ? `<span style="background:#dbeafe;color:#1d4ed8;padding:1px 6px;border-radius:20px;font-size:11px;font-weight:700">L${r.studentLevel}</span>` : '<span style="color:var(--text-muted)">—</span>'}</td>
+            <td style="padding:6px 10px;border-bottom:1px solid var(--border);">${r.studentGroup ? `<span style="background:#ecfdf5;color:#059669;padding:1px 6px;border-radius:20px;font-size:11px;font-weight:700">Grp ${r.studentGroup}</span>` : '<span style="color:var(--text-muted)">—</span>'}</td>
+            <td style="padding:6px 10px;border-bottom:1px solid var(--border);">${r.sessionType ? `<span style="background:#fff7ed;color:#c2410c;padding:1px 6px;border-radius:20px;font-size:11px;font-weight:600">${r.sessionType}</span>` : '<span style="color:var(--text-muted)">—</span>'}</td>
+            <td style="padding:6px 10px;border-bottom:1px solid var(--border);color:var(--text-muted);">${r.semester || '—'}</td>
           </tr>`).join('') +
-          (_biRows.length > 5 ? `<tr><td colspan="4" style="padding:6px 10px;color:var(--text-muted);font-style:italic;">…and ${_biRows.length - 5} more</td></tr>` : '');
+          (_biRows.length > 5 ? `<tr><td colspan="7" style="padding:6px 10px;color:var(--text-muted);font-style:italic;">…and ${_biRows.length - 5} more</td></tr>` : '');
         if (countEl) countEl.textContent = _biRows.length + ' rows';
         previewDiv.style.display = 'block';
         document.getElementById('bi-err')?.style && (document.getElementById('bi-err').style.display = 'none');
@@ -6555,7 +6570,12 @@ function showBiErr(msg) {
 }
 
 function downloadImportTemplate() {
-  const csv = 'name,indexNumber,email,phone,courseCode\nJohn Mensah,CS/0001/23,john@example.com,0244123456,CS101\nAkosua Boateng,CS/0002/23,akosua@example.com,,CS101';
+  const csv = [
+    'name,indexNumber,phone,department,programme,level,group,sessionType,semester,courseCode',
+    'John Mensah,CS/0001/23,0244123456,Computer Science,BSc,100,A,Regular,1,CS101',
+    'Akosua Boateng,CS/0002/23,0244123457,Computer Science,HND,100,B,Evening,1,CS101',
+    'Kwame Asante,IT/0001/23,0244123458,Information Technology,Diploma,200,A,Weekend,2,',
+  ].join('\n');
   const blob = new Blob([csv], { type: 'text/csv' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
