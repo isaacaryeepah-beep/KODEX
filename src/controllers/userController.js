@@ -357,12 +357,17 @@ exports.bulkImportStudents = async (req, res) => {
         if (lines.length < 2) return res.status(400).json({ error: "CSV must have a header row and at least one data row" });
 
         const headers = lines[0].split(",").map(h => h.trim().toLowerCase().replace(/[^a-z]/g, ""));
-        const nameIdx    = headers.findIndex(h => h === "name" || h === "fullname" || h === "studentname");
-        const idxIdx     = headers.findIndex(h => h === "indexnumber" || h === "studentid" || h === "id" || h === "index");
-        const emailIdx   = headers.findIndex(h => h === "email");
-        const phoneIdx   = headers.findIndex(h => h === "phone" || h === "phonenumber" || h === "mobile");
-        const courseIdx  = headers.findIndex(h => h === "coursecode" || h === "course" || h === "code");
-        const deptIdx   = headers.findIndex(h => ["department","dept","faculty"].includes(h));
+        const nameIdx        = headers.findIndex(h => h === "name" || h === "fullname" || h === "studentname");
+        const idxIdx         = headers.findIndex(h => h === "indexnumber" || h === "studentid" || h === "id" || h === "index");
+        const emailIdx       = headers.findIndex(h => h === "email");
+        const phoneIdx       = headers.findIndex(h => h === "phone" || h === "phonenumber" || h === "mobile");
+        const courseIdx      = headers.findIndex(h => h === "coursecode" || h === "course" || h === "code");
+        const deptIdx        = headers.findIndex(h => ["department","dept","faculty"].includes(h));
+        const programmeIdx   = headers.findIndex(h => h === "programme" || h === "program");
+        const levelIdx       = headers.findIndex(h => h === "level");
+        const groupIdx       = headers.findIndex(h => h === "group");
+        const sessionTypeIdx = headers.findIndex(h => h === "sessiontype" || h === "session");
+        const semesterIdx    = headers.findIndex(h => h === "semester" || h === "sem");
 
         if (nameIdx === -1 || idxIdx === -1) {
           return res.status(400).json({ error: "CSV must have 'name' and 'indexNumber' columns" });
@@ -372,12 +377,17 @@ exports.bulkImportStudents = async (req, res) => {
           const cols = lines[i].split(",").map(c => c.trim().replace(/^"|"$/g, ""));
           if (!cols[nameIdx] && !cols[idxIdx]) continue; // skip blank rows
           rows.push({
-            name:        (cols[nameIdx] || "").trim(),
-            indexNumber: (cols[idxIdx]  || "").trim().toUpperCase(),
-            email:       emailIdx >= 0 ? (cols[emailIdx] || "").trim() : "",
-            phone:       phoneIdx >= 0 ? (cols[phoneIdx] || "").trim() : "",
-            courseCode:  courseIdx >= 0 ? (cols[courseIdx] || "").trim().toUpperCase() : "",
-            department:  deptIdx  >= 0 ? (cols[deptIdx]  || "").trim() : "",
+            name:        (cols[nameIdx]        || "").trim(),
+            indexNumber: (cols[idxIdx]         || "").trim().toUpperCase(),
+            email:       emailIdx >= 0       ? (cols[emailIdx]       || "").trim() : "",
+            phone:       phoneIdx >= 0       ? (cols[phoneIdx]       || "").trim() : "",
+            courseCode:  courseIdx >= 0      ? (cols[courseIdx]      || "").trim().toUpperCase() : "",
+            department:  deptIdx >= 0        ? (cols[deptIdx]        || "").trim() : "",
+            programme:   programmeIdx >= 0   ? (cols[programmeIdx]   || "").trim() : "",
+            studentLevel:levelIdx >= 0       ? (cols[levelIdx]       || "").trim() : "",
+            studentGroup:groupIdx >= 0       ? (cols[groupIdx]       || "").trim().toUpperCase() : "",
+            sessionType: sessionTypeIdx >= 0 ? (cols[sessionTypeIdx] || "").trim() : "",
+            semester:    semesterIdx >= 0    ? (cols[semesterIdx]    || "").trim() : "",
           });
         }
       } else if (req.body?.students) {
@@ -433,7 +443,12 @@ exports.bulkImportStudents = async (req, res) => {
         if (row.phone) {
           try { userData.phone = normalisePhone(row.phone); } catch (_) {}
         }
-        if (row.department) userData.department = row.department;
+        if (row.department)   userData.department   = row.department;
+        if (row.programme)    userData.programme    = row.programme;
+        if (row.studentLevel) userData.studentLevel = row.studentLevel;
+        if (row.studentGroup) userData.studentGroup = row.studentGroup.toUpperCase();
+        if (row.sessionType)  userData.sessionType  = row.sessionType;
+        if (row.semester)     userData.semester     = row.semester;
 
         try {
           const user = await User.create(userData);
