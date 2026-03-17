@@ -90,6 +90,32 @@ const userSchema = new mongoose.Schema(
       trim: true,
       default: null,
     },
+    // Student classification fields
+    programme: {
+      type: String,
+      trim: true,
+      default: null, // e.g. "BSc", "HND", "Diploma", "BTech", "Top-Up"
+    },
+    studentLevel: {
+      type: String,
+      trim: true,
+      default: null, // e.g. "100", "200", "300", "400"
+    },
+    studentGroup: {
+      type: String,
+      trim: true,
+      default: null, // e.g. "A", "B", "C"
+    },
+    sessionType: {
+      type: String,
+      trim: true,
+      default: null, // e.g. "Morning", "Afternoon", "Evening", "Weekend"
+    },
+    semester: {
+      type: String,
+      trim: true,
+      default: null, // e.g. "1", "2"
+    },
     branch: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Branch",
