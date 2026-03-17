@@ -55,7 +55,7 @@ exports.getUserStats = async (req, res) => {
 
 exports.createUser = async (req, res) => {
   try {
-    const { email, password, name, role, indexNumber, phone, department } = req.body;
+    const { email, password, name, role, indexNumber, phone, department, programme, studentLevel, studentGroup, sessionType, semester } = req.body;
     const targetRole = role || "employee";
 
     const company = await Company.findById(req.user.company);
@@ -117,6 +117,12 @@ exports.createUser = async (req, res) => {
         return res.status(400).json({ error: "Index number is required for students" });
       }
       userData.indexNumber = indexNumber;
+      // Save student classification
+      if (programme)    userData.programme    = programme.trim();
+      if (studentLevel) userData.studentLevel = studentLevel.trim();
+      if (studentGroup) userData.studentGroup = studentGroup.trim().toUpperCase();
+      if (sessionType)  userData.sessionType  = sessionType.trim();
+      if (semester)     userData.semester     = semester.trim();
     } else {
       if (!email) {
         return res.status(400).json({ error: "Email is required" });
