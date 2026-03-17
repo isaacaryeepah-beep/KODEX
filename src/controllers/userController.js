@@ -78,11 +78,33 @@ exports.createUser = async (req, res) => {
     }
 
     const { normalisePhone } = require('../services/smsService');
+    const normPhone = phone ? normalisePhone(phone) : null;
+
+    // Check for duplicate phone across the institution
+    if (normPhone) {
+      const phoneExists = await User.findOne({ phone: normPhone, company: req.user.company });
+      if (phoneExists) {
+        return res.status(400).json({
+          error: `This phone number is already registered to ${phoneExists.name} (${phoneExists.role}) at this institution.`
+        });
+      }
+    }
+
+    // Check for duplicate email across the institution (non-student roles)
+    if (email && targetRole !== 'student') {
+      const emailExists = await User.findOne({ email: email.toLowerCase().trim(), company: req.user.company });
+      if (emailExists) {
+        return res.status(400).json({
+          error: `This email is already registered to ${emailExists.name} (${emailExists.role}) at this institution.`
+        });
+      }
+    }
+
     const userData = {
       password,
       name,
       role: targetRole,
-      phone: phone ? normalisePhone(phone) : null,
+      phone: normPhone,
       company: req.user.company,
       department: department ? department.trim() : null,
     };
