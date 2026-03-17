@@ -2448,7 +2448,9 @@ async function renderHodStudents() {
             <tr style="border-bottom:2px solid var(--border);">
               <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Name</th>
               <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Index No.</th>
-              <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Email</th>
+              <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Programme</th>
+              <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Level / Group</th>
+              <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Session</th>
               <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Status</th>
               <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;"></th>
             </tr>
@@ -2459,9 +2461,18 @@ async function renderHodStudents() {
                 <tr class="hod-stu-row" data-name="${(u.name||'').toLowerCase()}" data-index="${(u.indexNumber||'').toLowerCase()}" style="border-bottom:1px solid var(--border);">
                   <td style="padding:10px 12px;font-weight:600;">${u.name}</td>
                   <td style="padding:10px 12px;color:var(--text-muted);font-family:monospace;">${u.indexNumber || '—'}</td>
-                  <td style="padding:10px 12px;color:var(--text-muted);">${u.email || '—'}</td>
+                  <td style="padding:10px 12px;">${u.programme ? `<span style="background:#ede9fe;color:#7c3aed;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700">${esc(u.programme)}</span>` : '—'}</td>
+                  <td style="padding:10px 12px;">
+                    ${u.studentLevel ? `<span style="background:#dbeafe;color:#1d4ed8;padding:2px 7px;border-radius:20px;font-size:11px;font-weight:700;margin-right:3px">L${esc(u.studentLevel)}</span>` : ''}
+                    ${u.studentGroup ? `<span style="background:#ecfdf5;color:#059669;padding:2px 7px;border-radius:20px;font-size:11px;font-weight:700">Grp ${esc(u.studentGroup)}</span>` : ''}
+                    ${!u.studentLevel && !u.studentGroup ? '—' : ''}
+                  </td>
+                  <td style="padding:10px 12px;">
+                    ${u.sessionType ? `<span style="background:#fff7ed;color:#c2410c;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600">${esc(u.sessionType)}</span>` : '—'}
+                    ${u.semester ? `<span style="font-size:11px;color:var(--text-muted);margin-left:4px">Sem ${esc(u.semester)}</span>` : ''}
+                  </td>
                   <td style="padding:10px 12px;"><span class="tag ${u.isApproved ? 'tag-green' : 'tag-amber'}">${u.isApproved ? 'Active' : 'Pending'}</span></td>
-                  <td style="padding:10px 12px;"><button class="btn btn-xs btn-secondary" onclick="hodViewStudentAttendance('${u._id}','${u.name.replace(/'/g,"\\'")}')" >Attendance</button></td>
+                  <td style="padding:10px 12px;"><button class="btn btn-xs btn-secondary" onclick="hodViewStudentAttendance('${u._id}','${u.name.replace(/'/g,"\\'")}')">Attendance</button></td>
                 </tr>`).join('')}
           </tbody>
         </table>
@@ -4125,7 +4136,7 @@ async function renderUsers(filterRole='', filterDept='', filterSearch='') {
           <table>
             <thead><tr>
               ${canManage ? '<th style="width:40px"><input type="checkbox" id="select-all-users" onchange="toggleSelectAllUsers()"></th>' : ''}
-              <th>Name</th>${mode === 'corporate' ? '<th>Employee ID</th>' : ''}<th>Email / Index</th><th>Role</th><th>Status</th>${canManage ? '<th>Actions</th>' : ''}
+              <th>Name</th>${mode === 'corporate' ? '<th>Employee ID</th>' : ''}<th>Email / Index</th><th>Role</th>${mode !== 'corporate' ? '<th>Classification</th>' : ''}<th>Status</th>${canManage ? '<th>Actions</th>' : ''}
             </tr></thead>
             <tbody>${otherUsers.map(u => `
               <tr id="user-row-${u._id}">
@@ -4134,14 +4145,24 @@ async function renderUsers(filterRole='', filterDept='', filterSearch='') {
                 ${mode === 'corporate' ? `<td>${u.employeeId || '-'}</td>` : ''}
                 <td>${u.email || u.indexNumber || 'N/A'}</td>
                 <td><span class="role-badge role-${u.role}">${u.role}</span>${u.department ? `<span style="font-size:10px;margin-left:5px;padding:2px 6px;border-radius:20px;background:#ecfeff;color:#0891b2;font-weight:600;">${u.department}</span>` : ''}</td>
+                ${mode !== 'corporate' ? `<td style="font-size:11px;white-space:nowrap">
+                  ${u.role === 'student' ? `
+                    ${u.programme ? `<span style="background:#ede9fe;color:#7c3aed;padding:1px 6px;border-radius:20px;font-weight:700;margin-right:2px">${esc(u.programme)}</span>` : ''}
+                    ${u.studentLevel ? `<span style="background:#dbeafe;color:#1d4ed8;padding:1px 6px;border-radius:20px;font-weight:700;margin-right:2px">L${esc(u.studentLevel)}</span>` : ''}
+                    ${u.studentGroup ? `<span style="background:#ecfdf5;color:#059669;padding:1px 6px;border-radius:20px;font-weight:700;margin-right:2px">Grp ${esc(u.studentGroup)}</span>` : ''}
+                    ${u.sessionType ? `<span style="background:#fff7ed;color:#c2410c;padding:1px 6px;border-radius:20px;font-weight:600;margin-right:2px">${esc(u.sessionType)}</span>` : ''}
+                    ${u.semester ? `<span style="color:var(--text-muted)">Sem ${esc(u.semester)}</span>` : ''}
+                    ${!u.programme && !u.studentLevel ? '<span style="color:var(--text-muted)">—</span>' : ''}
+                  ` : '<span style="color:var(--text-muted)">—</span>'}
+                </td>` : ''}
                 <td><span class="status-badge ${u.isActive ? 'status-active' : 'status-stopped'}">${u.isActive ? 'Active' : 'Inactive'}</span></td>
                 ${canManage ? `<td style="white-space:nowrap">
                   ${u.isActive
                     ? `<button class="btn btn-sm" style="background:#f59e0b;color:#fff;font-size:11px" onclick="deactivateUser('${u._id}')">Deactivate</button>`
                     : `<button class="btn btn-sm" style="background:#22c55e;color:#fff;font-size:11px" onclick="activateUser('${u._id}')">Activate</button>`}
-                  <button class="btn btn-sm" style="background:#6366f1;color:#fff;font-size:11px" onclick="adminResetStudentPassword('${u._id}', '${u.name.replace(/'/g, "\\'")}')" title="Generate temp password">🔑 Reset</button>
-                  ${u.role === 'student' && u.deviceId ? `<button class="btn btn-sm" style="background:#f97316;color:#fff;font-size:11px" onclick="clearStudentDeviceLock('${u._id}', '${u.name.replace(/'/g, "\\'")}')" title="Unlock device">🔓 Unlock</button>` : ''}
-                  <button class="btn btn-danger btn-sm" style="font-size:11px" onclick="deleteUserPermanently('${u._id}', '${u.name.replace(/'/g, "\\'")}')">Delete</button>
+                  <button class="btn btn-sm" style="background:#6366f1;color:#fff;font-size:11px" onclick="adminResetStudentPassword('${u._id}', '${u.name.replace(/'/g, "\\'")}'')" title="Generate temp password">🔑 Reset</button>
+                  ${u.role === 'student' && u.deviceId ? `<button class="btn btn-sm" style="background:#f97316;color:#fff;font-size:11px" onclick="clearStudentDeviceLock('${u._id}', '${u.name.replace(/'/g, "\\'")}'')" title="Unlock device">🔓 Unlock</button>` : ''}
+                  <button class="btn btn-danger btn-sm" style="font-size:11px" onclick="deleteUserPermanently('${u._id}', '${u.name.replace(/'/g, "\\'")}'')" >Delete</button>
                 </td>` : ''}
               </tr>
             `).join('')}</tbody>
@@ -4273,6 +4294,64 @@ async function showCreateUserModal() {
           ${deptField}
           <p id="new-user-dept-hint" style="font-size:12px;color:var(--text-light);margin-top:4px"></p>
         </div>
+
+        <!-- Student classification fields — shown only when role = student -->
+        <div id="new-user-student-fields" style="display:none">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+            <div class="form-group">
+              <label>Programme <span style="color:red">*</span></label>
+              <select id="new-user-programme" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
+                <option value="">— Select —</option>
+                <option value="BSc">BSc</option>
+                <option value="HND">HND</option>
+                <option value="Diploma">Diploma</option>
+                <option value="BTech">BTech</option>
+                <option value="Top-Up">Top-Up</option>
+                <option value="Masters">Masters</option>
+                <option value="PhD">PhD</option>
+                <option value="Certificate">Certificate</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Level <span style="color:red">*</span></label>
+              <select id="new-user-level" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
+                <option value="">— Select —</option>
+                <option value="100">Level 100</option>
+                <option value="200">Level 200</option>
+                <option value="300">Level 300</option>
+                <option value="400">Level 400</option>
+                <option value="500">Level 500</option>
+                <option value="600">Level 600</option>
+              </select>
+            </div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">
+            <div class="form-group">
+              <label>Group <span style="color:red">*</span></label>
+              <input type="text" id="new-user-group" placeholder="e.g. A, B, C"
+                style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;text-transform:uppercase"
+                oninput="this.value=this.value.toUpperCase()">
+            </div>
+            <div class="form-group">
+              <label>Session Type <span style="color:red">*</span></label>
+              <select id="new-user-session-type" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
+                <option value="">— Select —</option>
+                <option value="Morning">Morning</option>
+                <option value="Afternoon">Afternoon</option>
+                <option value="Evening">Evening</option>
+                <option value="Weekend">Weekend</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Semester <span style="color:red">*</span></label>
+              <select id="new-user-semester" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
+                <option value="">— Select —</option>
+                <option value="1">Semester 1</option>
+                <option value="2">Semester 2</option>
+              </select>
+            </div>
+          </div>
+        </div>
         <div class="form-group">
           <label>Phone Number <span style="color:red">*</span></label>
           <input type="tel" id="new-user-phone" placeholder="e.g. 0241234567" required>
@@ -4305,6 +4384,9 @@ function toggleUserFields() {
     else if (role === 'student')  deptHint.textContent = 'Student will be visible to the HOD of this department.';
     else                          deptHint.textContent = '';
   }
+  // Show/hide student classification fields
+  const studentFields = document.getElementById('new-user-student-fields');
+  if (studentFields) studentFields.style.display = role === 'student' ? 'block' : 'none';
 }
 
 async function createUser() {
@@ -4320,6 +4402,22 @@ async function createUser() {
       if (!idx) { toastWarning('Student ID / Index Number is required.'); return; }
       if (idx.length < 3) { toastWarning('Student ID looks too short. Please enter the full index number.'); return; }
       body.indexNumber = idx;
+      // Student classification — all mandatory
+      const programme   = document.getElementById('new-user-programme')?.value;
+      const studentLevel= document.getElementById('new-user-level')?.value;
+      const studentGroup= document.getElementById('new-user-group')?.value?.trim().toUpperCase();
+      const sessionType = document.getElementById('new-user-session-type')?.value;
+      const semester    = document.getElementById('new-user-semester')?.value;
+      if (!programme)    { toastWarning('Please select the student\'s programme (e.g. BSc, HND).'); return; }
+      if (!studentLevel) { toastWarning('Please select the student\'s level.'); return; }
+      if (!studentGroup) { toastWarning('Please enter the student\'s group (e.g. A, B, C).'); return; }
+      if (!sessionType)  { toastWarning('Please select the session type (Morning, Evening etc.).'); return; }
+      if (!semester)     { toastWarning('Please select the semester.'); return; }
+      body.programme    = programme;
+      body.studentLevel = studentLevel;
+      body.studentGroup = studentGroup;
+      body.sessionType  = sessionType;
+      body.semester     = semester;
     } else {
       body.email = document.getElementById('new-user-email').value;
     }
@@ -5075,11 +5173,18 @@ async function viewRoster(courseId, courseCode) {
         </div>
       </div>
       <table style="font-size:13px">
-        <thead><tr><th>Student ID</th><th>Name</th><th>Status</th>${canDelete ? '<th></th>' : ''}</tr></thead>
+        <thead><tr><th>Student ID</th><th>Name</th><th>Programme</th><th>Level / Grp</th><th>Session</th><th>Status</th>${canDelete ? '<th></th>' : ''}</tr></thead>
         <tbody>${data.roster.map(r => `
           <tr>
             <td style="font-family:monospace;font-weight:600">${r.studentId}</td>
             <td>${r.name || '-'}</td>
+            <td>${r.user?.programme ? `<span style="background:#ede9fe;color:#7c3aed;padding:1px 6px;border-radius:20px;font-size:11px;font-weight:700">${esc(r.user.programme)}</span>` : '—'}</td>
+            <td style="white-space:nowrap">
+              ${r.user?.studentLevel ? `<span style="background:#dbeafe;color:#1d4ed8;padding:1px 6px;border-radius:20px;font-size:11px;font-weight:700">L${esc(r.user.studentLevel)}</span>` : ''}
+              ${r.user?.studentGroup ? `<span style="background:#ecfdf5;color:#059669;padding:1px 6px;border-radius:20px;font-size:11px;font-weight:700">Grp ${esc(r.user.studentGroup)}</span>` : ''}
+              ${!r.user?.studentLevel && !r.user?.studentGroup ? '—' : ''}
+            </td>
+            <td>${r.user?.sessionType ? `<span style="background:#fff7ed;color:#c2410c;padding:1px 6px;border-radius:20px;font-size:11px;font-weight:600">${esc(r.user.sessionType)}</span>` : '—'}</td>
             <td><span class="status-badge ${r.registered ? 'status-active' : 'status-stopped'}">${r.registered ? 'Registered' : 'Pending'}</span></td>
             ${canDelete ? `<td><button class="btn btn-danger btn-sm" style="font-size:10px;padding:2px 8px" onclick="removeRosterEntry('${courseId}', '${r._id}', '${courseCode}')">Remove</button></td>` : ''}
           </tr>
