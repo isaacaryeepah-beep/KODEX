@@ -4204,7 +4204,7 @@ async function renderResetLogs() {
   }
 }
 
-function showCreateUserModal() {
+async function showCreateUserModal() {
   const mode = currentUser.company?.mode || 'corporate';
   const isManager = currentUser.role === 'manager';
 
@@ -4217,8 +4217,28 @@ function showCreateUserModal() {
     roles = '<option value="student">Student</option><option value="lecturer">Lecturer</option><option value="hod">Head of Department (HOD)</option>';
   }
 
+  // Fetch existing HODs to get their departments for the dropdown
+  let hodDepts = [];
+  try {
+    const usersData = await api('/api/users');
+    hodDepts = (usersData.users || [])
+      .filter(u => u.role === 'hod' && u.department)
+      .map(u => u.department);
+  } catch(e) { hodDepts = []; }
+
   const defaultRole = isManager ? 'employee' : (mode === 'corporate' ? 'employee' : 'student');
   const modalTitle = isManager ? 'Add Employee' : 'Add User';
+
+  const deptDropdownOptions = hodDepts.length
+    ? hodDepts.map(d => `<option value="${d}">${d}</option>`).join('')
+    : '';
+
+  const deptField = deptDropdownOptions
+    ? `<select id="new-user-dept" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
+        <option value="">— Select Department —</option>
+        ${deptDropdownOptions}
+       </select>`
+    : `<input type="text" id="new-user-dept" placeholder="e.g. Computer Science">`;
 
   const container = document.getElementById('modal-container');
   container.classList.remove('hidden');
@@ -4250,7 +4270,7 @@ function showCreateUserModal() {
         </div>
         <div class="form-group" id="new-user-dept-group" style="display:none">
           <label>Department <span id="new-user-dept-req" style="color:red;display:none">*</span></label>
-          <input type="text" id="new-user-dept" placeholder="e.g. Computer Science">
+          ${deptField}
           <p id="new-user-dept-hint" style="font-size:12px;color:var(--text-light);margin-top:4px"></p>
         </div>
         <div class="form-group">
@@ -4266,6 +4286,7 @@ function showCreateUserModal() {
   `;
   toggleUserFields();
 }
+
 
 function toggleUserFields() {
   const role = document.getElementById('new-user-role').value;
