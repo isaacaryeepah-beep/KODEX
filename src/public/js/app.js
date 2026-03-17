@@ -4336,8 +4336,7 @@ async function showCreateUserModal() {
               <label>Session Type <span style="color:red">*</span></label>
               <select id="new-user-session-type" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
                 <option value="">— Select —</option>
-                <option value="Morning">Morning</option>
-                <option value="Afternoon">Afternoon</option>
+                <option value="Regular">Regular</option>
                 <option value="Evening">Evening</option>
                 <option value="Weekend">Weekend</option>
               </select>
