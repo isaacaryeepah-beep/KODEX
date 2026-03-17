@@ -3734,15 +3734,16 @@ async function renderSessions() {
 
 function _renderSessionsHTML(content, sessions, isOffline) {
   const pendingCount = offlineQueueCount();
+  const canStart = ['lecturer', 'manager'].includes(currentUser.role);
   content.innerHTML = `
     <div class="page-header">
       <h2>Attendance Sessions</h2>
       <p>Manage attendance sessions${isOffline ? ' <span style="color:#f59e0b;font-weight:600">(Offline — showing cached data)</span>' : ''}</p>
     </div>
-    <div class="actions-bar">
+    ${canStart ? `<div class="actions-bar">
       <button class="btn btn-primary btn-sm" onclick="showStartSessionModal()">Start New Session</button>
       ${pendingCount > 0 ? `<span style="background:#fef3c7;color:#92400e;border:1px solid #fbbf24;border-radius:6px;padding:4px 12px;font-size:12px;font-weight:600">${pendingCount} action${pendingCount!==1?'s':''} pending sync</span>` : ''}
-    </div>
+    </div>` : ''}
     <div class="card">
       ${sessions.length ? `
         <table>
@@ -3753,10 +3754,12 @@ function _renderSessionsHTML(content, sessions, isOffline) {
               <td><span class="status-badge status-${s.status}">${s.status}</span></td>
               <td>${new Date(s.startedAt).toLocaleString()}</td>
               <td>${s.stoppedAt ? new Date(s.stoppedAt).toLocaleString() : '-'}</td>
-              <td>${s.status === 'active' ? `
+              <td>${s.status === 'active' && canStart ? `
                 <button class="btn btn-danger btn-sm" onclick="stopSession('${s._id}')">Stop</button>
                 ${!isOffline ? `<button class="btn btn-success btn-sm" onclick="generateQR('${s._id}')">QR Code</button>` : ''}
                 ${!isOffline ? `<button class="btn btn-sm" style="background:#7c3aed;color:#fff;font-size:11px" onclick="generateVerbalCode('${s._id}')">Verbal Code</button>` : ''}
+                <button class="btn btn-sm" style="font-size:11px;background:var(--bg);border:1px solid var(--border)" onclick="viewAttendees('${s._id}', '${(s.title||'Session').replace(/['"]/g,'')}')">Attendees</button>
+              ` : s.status === 'active' ? `
                 <button class="btn btn-sm" style="font-size:11px;background:var(--bg);border:1px solid var(--border)" onclick="viewAttendees('${s._id}', '${(s.title||'Session').replace(/['"]/g,'')}')">Attendees</button>
               ` : ''}</td>
             </tr>
