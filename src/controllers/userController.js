@@ -77,6 +77,11 @@ exports.createUser = async (req, res) => {
       return res.status(403).json({ error: "Cannot create user with equal or higher role" });
     }
 
+    // Only superadmin can create HODs
+    if (targetRole === "hod" && req.user.role !== "superadmin") {
+      return res.status(403).json({ error: "Only superadmins can create Head of Department accounts." });
+    }
+
     const { normalisePhone } = require('../services/smsService');
     const normPhone = phone ? normalisePhone(phone) : null;
 
