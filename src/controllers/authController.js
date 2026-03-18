@@ -584,8 +584,13 @@ exports.login = async (req, res) => {
     // ── Role-portal enforcement ──────────────────────────────────────────────
     // Each portal only accepts specific roles — prevents admins logging in as
     // lecturers, employees logging in as admins, etc.
+    // Superadmin is blocked from all institution portals — superadmin portal only
+    if (user.role === "superadmin" && loginRole !== "superadmin") {
+      return res.status(401).json({ error: "Invalid credentials" });
+    }
+
     const PORTAL_ALLOWED_ROLES = {
-      admin:    ["admin", "superadmin", "manager"],
+      admin:    ["admin", "manager"],
       lecturer: ["lecturer"],
       hod:      ["hod"],
       employee: ["employee"],
