@@ -1955,13 +1955,6 @@ function buildSidebar() {
       links.push({ id: 'superadmin-platform', label: 'Platform',   icon: svgIcon('<rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>') });
       links.push({ id: 'approvals',            label: 'Approvals',  icon: approvalsIcon() });
       links.push({ id: 'search',               label: 'Search',     icon: svgIcon('<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>') });
-      links.push({ id: 'sessions',             label: 'Sessions',   icon: sessionsIcon() });
-      links.push({ id: 'users',                label: 'Users',      icon: usersIcon() });
-      links.push({ id: 'meetings',             label: 'Meetings',   icon: meetingsIcon() });
-      links.push({ id: 'courses',              label: 'Courses',    icon: coursesIcon() });
-      links.push({ id: 'quizzes',              label: 'Quizzes',    icon: quizzesIcon() });
-      links.push({ id: 'reports',              label: 'Reports',    icon: reportsIcon() });
-      links.push({ id: 'subscription',         label: 'Subscription', icon: subscriptionIcon() });
       break;
   }
 
@@ -4238,7 +4231,7 @@ async function showCreateUserModal() {
   } else if (mode === 'corporate') {
     roles = '<option value="employee">Employee</option><option value="manager">Manager</option>';
   } else {
-    roles = '<option value="student">Student</option><option value="lecturer">Lecturer</option><option value="hod">Head of Department (HOD)</option>';
+    roles = `<option value="student">Student</option><option value="lecturer">Lecturer</option>${currentUser.role === 'superadmin' ? '<option value="hod">Head of Department (HOD)</option>' : ''}`;
   }
 
   // Fetch existing HODs to get their departments for the dropdown
