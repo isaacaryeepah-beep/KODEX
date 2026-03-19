@@ -16,7 +16,7 @@ const assignmentQuestionSchema = new mongoose.Schema({
     type: [String],
     default: [],
   },
-  // Indices of ALL correct options — supports "select all that apply"
+  // Indices of ALL correct options -- supports "select all that apply"
   correctAnswers: {
     type: [Number],
     default: [],
