@@ -3234,7 +3234,7 @@ content.innerHTML = `
 </div>
 
 
-${activeSession ? `
+<div id="student-active-session-banner" ${activeSession ? '' : 'style="display:none"'}>
   <div class="card" style="border-left:4px solid var(--success);background:linear-gradient(135deg,#f0fdf4,#ecfdf5);cursor:pointer" onclick="navigateTo('mark-attendance')">
     <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
       <div style="background:var(--success);color:white;border-radius:12px;padding:12px;display:flex;align-items:center;justify-content:center">
@@ -3242,13 +3242,13 @@ ${activeSession ? `
       </div>
       <div style="flex:1">
         <div style="font-size:12px;text-transform:uppercase;color:var(--success);font-weight:700;letter-spacing:0.5px">Active Session - Mark Now</div>
-        <div style="font-size:16px;font-weight:700;margin-top:2px">${activeSession.title || 'Untitled Session'}</div>
-        <div style="font-size:12px;color:var(--text-light)">Started ${new Date(activeSession.startedAt).toLocaleString()}</div>
+        <div class="session-banner-title" style="font-size:16px;font-weight:700;margin-top:2px">${activeSession?.title || 'Untitled Session'}</div>
+        <div class="session-banner-time" style="font-size:12px;color:var(--text-light)">Started ${activeSession ? new Date(activeSession.startedAt).toLocaleString() : ''}</div>
       </div>
       <span class="status-badge status-active" style="animation:pulse 2s infinite">LIVE</span>
     </div>
   </div>
-` : ''}
+</div>
 
 <div class="stats-grid">
   <div class="stat-card"><div class="stat-value">${totalCheckins}</div><div class="stat-label">Total Check-ins</div></div>
@@ -3298,6 +3298,26 @@ ${upcomingMeetings.length > 0 ? `
 </div>
 
 `;
+
+// Poll for active session every 10s so student sees it as soon as lecturer starts
+clearInterval(window._studentSessionPoll);
+window._studentSessionPoll = setInterval(async () => {
+  if (currentView !== 'dashboard') { clearInterval(window._studentSessionPoll); return; }
+  try {
+    const d = await api('/api/attendance-sessions/active');
+    const banner = document.getElementById('student-active-session-banner');
+    if (!banner) { clearInterval(window._studentSessionPoll); return; }
+    if (d.session) {
+      banner.style.display = '';
+      const titleEl = banner.querySelector('.session-banner-title');
+      const timeEl  = banner.querySelector('.session-banner-time');
+      if (titleEl) titleEl.textContent = d.session.title || 'Untitled Session';
+      if (timeEl)  timeEl.textContent  = 'Started ' + new Date(d.session.startedAt).toLocaleString();
+    } else {
+      banner.style.display = 'none';
+    }
+  } catch(e) {}
+}, 10000);
 }
 
 async function renderAdminDashboard(content) {
@@ -6808,8 +6828,13 @@ ${activeSession ? `
         <li>Open <strong>http://192.168.4.1</strong> in your browser</li>
         <li>Enter your index number and PIN</li>
       </ol>
-      <p style="font-size:12px;color:var(--text-muted)">Haven't set a PIN yet? Go to Profile → Set Attendance PIN first.</p>
+      <p style="font-size:12px;color:var(--text-muted)">Haven't set a PIN yet? Go to Profile &rarr; Set Attendance PIN first.</p>
+      <div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--border)">
+        <p style="font-size:12px;color:var(--text-muted);margin-bottom:10px">Can't connect to KODEX-CLASSROOM WiFi?</p>
+        <button class="btn btn-secondary btn-sm" onclick="checkEsp32FallbackMark('${activeSession._id}')">Try marking without classroom device</button>
+      </div>
     </div>
+    <div id="esp32-fallback-area"></div>
   ` : `
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;margin-bottom:16px">
       
@@ -6943,6 +6968,26 @@ toastSuccess('Attendance marked successfully!');
 navigateTo('mark-attendance');
 } catch (e) {
 toastError(e.message);
+}
+}
+
+async function checkEsp32FallbackMark(sessionId) {
+const btn = document.querySelector('#esp32-fallback-area')?.previousElementSibling?.querySelector('button');
+if (btn) { btn.disabled = true; btn.textContent = 'Checking device status...'; }
+try {
+  const data = await api('/api/esp32/status');
+  const area = document.getElementById('esp32-fallback-area');
+  if (!area) return;
+  if (data.online) {
+    area.innerHTML = '<div class="card" style="border-left:4px solid #f59e0b;margin-top:12px"><p style="font-size:13px;color:#92400e">The classroom device is still online. Please connect to <strong>KODEX-CLASSROOM</strong> WiFi and use <strong>http://192.168.4.1</strong> to mark your attendance.</p></div>';
+  } else {
+    area.innerHTML = '<div class="card" style="border-left:4px solid var(--success);margin-top:12px"><p style="font-size:13px;font-weight:700;margin-bottom:12px">Classroom device is offline — you can mark using the normal methods below.</p><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px"><div class="card mark-method-card" onclick="showCodeEntry()" style="cursor:pointer;text-align:center;padding:16px">Enter Code</div><div class="card mark-method-card" onclick="showQrEntry()" style="cursor:pointer;text-align:center;padding:16px">QR Code</div></div><div id="mark-input-area" style="margin-top:12px"></div></div>';
+  }
+} catch(e) {
+  const area = document.getElementById('esp32-fallback-area');
+  if (area) area.innerHTML = '<div class="card" style="border-left:4px solid var(--danger);margin-top:12px"><p style="font-size:13px;color:var(--danger)">Could not check device status. Please try again.</p></div>';
+} finally {
+  if (btn) { btn.disabled = false; btn.textContent = 'Try marking without classroom device'; }
 }
 }
 
