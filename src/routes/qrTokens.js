@@ -58,7 +58,9 @@ router.post(
       // Calculate expiry
       let expiresAt;
       if (codeType === "verbal") {
-        const mins = parseInt(expiryMinutes) || VERBAL_EXPIRY_MINUTES;
+        // Cap at 10 minutes maximum — prevents accidental long-lived codes
+        const requestedMins = parseInt(expiryMinutes) || VERBAL_EXPIRY_MINUTES;
+        const mins = Math.min(requestedMins, 10);
         expiresAt = new Date(Date.now() + mins * 60 * 1000);
       } else {
         const secs = parseInt(expirySeconds) || QR_EXPIRY_SECONDS;
