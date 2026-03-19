@@ -181,6 +181,58 @@ async function cleanStaleLocks() {
   }
 }
 
+// ── ESP32 Watchdog ─────────────────────────────────────────────────────────────
+// Runs every 20 seconds.
+// If an esp32Only session is active but the ESP32 hasn't polled in 15 seconds,
+// the device is offline -- auto-stop the session so students aren't left blocked.
+const AttendanceSession = require('../models/AttendanceSession');
+
+const ESP32_OFFLINE_MS = 6000; // matches esp32Controller threshold
+
+async function esp32Watchdog() {
+  try {
+    // Find all active esp32Only sessions
+    const sessions = await AttendanceSession.find({ status: 'active', esp32Only: true })
+      .select('_id company title')
+      .lean();
+
+    if (!sessions.length) return;
+
+    const companyIds = [...new Set(sessions.map(s => s.company.toString()))];
+
+    // Load company ESP32 heartbeat data
+    const companies = await Company.find({ _id: { $in: companyIds } })
+      .select('_id esp32Token esp32LastSeen')
+      .lean();
+
+    const companyMap = {};
+    for (const c of companies) companyMap[c._id.toString()] = c;
+
+    const now = Date.now();
+
+    for (const session of sessions) {
+      const company = companyMap[session.company.toString()];
+      if (!company) continue;
+
+      const esp32Online = company.esp32Token &&
+        company.esp32LastSeen &&
+        (now - new Date(company.esp32LastSeen).getTime() < ESP32_OFFLINE_MS);
+
+      if (!esp32Online) {
+        // ESP32 is offline -- stop the session
+        await AttendanceSession.findByIdAndUpdate(session._id, {
+          status: 'stopped',
+          stoppedAt: new Date(),
+          stoppedReason: 'esp32_offline',
+        });
+        console.log(`[ESP32 Watchdog] Auto-stopped session "${session.title}" (${session._id}) -- ESP32 went offline`);
+      }
+    }
+  } catch (err) {
+    console.error('[ESP32 Watchdog] Error:', err.message);
+  }
+}
+
 // ── Start the cron ─────────────────────────────────────────────────────────────
 function startScheduler() {
   // Daily email check at 08:00 Ghana time
@@ -193,8 +245,14 @@ function startScheduler() {
     cleanStaleLocks().catch(err => console.error('[LockCleanup] Unhandled error:', err));
   });
 
+  // ESP32 watchdog every 3 seconds — stops session immediately when ESP32 loses power
+  cron.schedule('*/3 * * * * *', () => {
+    esp32Watchdog().catch(err => console.error('[ESP32 Watchdog] Unhandled error:', err));
+  });
+
   console.log('[Scheduler] ✅ Email scheduler started -- runs daily at 08:00 Accra time');
   console.log('[Scheduler] ✅ Stale lock cleanup started -- runs every 5 minutes');
+  console.log('[Scheduler] ✅ ESP32 watchdog started -- checks every 3 seconds');
 }
 
-module.exports = { startScheduler, runDailyEmails, cleanStaleLocks };
+module.exports = { startScheduler, runDailyEmails, cleanStaleLocks, esp32Watchdog };
