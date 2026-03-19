@@ -2,7 +2,7 @@ const Company  = require('../models/Company');
 const crypto   = require('crypto');
 
 // ── How long before we consider the ESP32 offline ─────────
-const OFFLINE_THRESHOLD_MS = 15000; // 15 seconds
+const OFFLINE_THRESHOLD_MS = 6000; // 6 seconds (3 missed polls at 2s interval = definitely offline)
 
 // ── POST /api/esp32/register ───────────────────────────────
 // ESP32 calls this once on boot to register itself.
@@ -41,7 +41,7 @@ exports.register = async (req, res) => {
 };
 
 // ── GET /api/esp32/poll ────────────────────────────────────
-// ESP32 calls this every 5 seconds.
+// ESP32 calls this every 2 seconds.
 // Returns any pending command (start/stop) and clears it.
 exports.poll = async (req, res) => {
   try {
@@ -77,7 +77,7 @@ exports.status = async (req, res) => {
     const company = await Company.findById(req.user.company).select('esp32Online esp32LastSeen');
     if (!company) return res.status(404).json({ error: 'Company not found' });
 
-    // Consider offline if not seen in 15 seconds
+    // Consider offline if not seen in 6 seconds (ESP32 polls every 2s)
     const online = company.esp32Online &&
       company.esp32LastSeen &&
       (Date.now() - new Date(company.esp32LastSeen).getTime() < OFFLINE_THRESHOLD_MS);
