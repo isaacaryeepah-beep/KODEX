@@ -1,5 +1,5 @@
 // ─── KODEX Email Service ───────────────────────────────────────────────────
-// Uses MailerSend API — free tier = 3,000 emails/month
+// Uses MailerSend API -- free tier = 3,000 emails/month
 // Set MAILERSEND_API_KEY and EMAIL_FROM in Render environment variables
 // EMAIL_FROM example: "KODEX <no-reply@kodex.it.com>"
 // If MAILERSEND_API_KEY is not set, emails are logged to console only (dev mode)
@@ -189,14 +189,14 @@ async function sendViaMailerSend({ toEmail, toName, fromEmail, fromName, subject
   });
 }
 
-// ── Main send() — tries Gmail first, falls back to MailerSend ─────────────────
+// ── Main send() -- tries Gmail first, falls back to MailerSend ─────────────────
 async function send({ to, subject, html, textBody }) {
   const gmailUser = process.env.GMAIL_USER;
   const gmailPass = process.env.GMAIL_APP_PASSWORD;
   const mailerKey = process.env.MAILERSEND_API_KEY;
 
   if (!gmailUser && !mailerKey) {
-    console.log(`[EmailService] No credentials — would send to ${to}: "${subject}"`);
+    console.log(`[EmailService] No credentials -- would send to ${to}: "${subject}"`);
     return { ok: true, dev: true };
   }
 
@@ -262,7 +262,7 @@ async function sendWelcome({ email, name, institutionName, trialDays = 14, trial
   const endStr = trialEndDate ? new Date(trialEndDate).toDateString() : `${trialDays} days from now`;
   const html = wrap(`
     <h1>Welcome to KODEX 🎉</h1>
-    <p>Hi <span class="highlight">${name}</span>, your account for <strong>${institutionName}</strong> is ready. You're on a <strong>${trialDays}-day free trial</strong> — no card needed.</p>
+    <p>Hi <span class="highlight">${name}</span>, your account for <strong>${institutionName}</strong> is ready. You're on a <strong>${trialDays}-day free trial</strong> -- no card needed.</p>
 
     <div class="info-box">
       <p><span class="badge badge-green">TRIAL ACTIVE</span></p>
@@ -271,7 +271,7 @@ async function sendWelcome({ email, name, institutionName, trialDays = 14, trial
 
     <p><strong>Get started in 3 steps:</strong></p>
     <p>1️⃣ &nbsp;Create a course and invite your students<br/>
-       2️⃣ &nbsp;Start an attendance session — students scan or mark themselves in<br/>
+       2️⃣ &nbsp;Start an attendance session -- students scan or mark themselves in<br/>
        3️⃣ &nbsp;Create a quiz and let the AI generate your questions</p>
 
     <div style="text-align:center;margin:28px 0">
@@ -280,17 +280,17 @@ async function sendWelcome({ email, name, institutionName, trialDays = 14, trial
 
     <hr class="divider"/>
     <p style="font-size:13px">Your trial runs until <strong>${endStr}</strong>. After that, subscribe for <strong>GHS 200/month</strong> to keep all your data and features.</p>
-  `, `Welcome to KODEX — your ${trialDays}-day trial has started`);
+  `, `Welcome to KODEX -- your ${trialDays}-day trial has started`);
 
-  return send({ to: email, subject: 'Welcome to KODEX — your free trial has started 🚀', html });
+  return send({ to: email, subject: 'Welcome to KODEX -- your free trial has started 🚀', html });
 }
 
-// 2. Trial ending soon (day 10 — 4 days left)
+// 2. Trial ending soon (day 10 -- 4 days left)
 async function sendTrialEndingSoon({ email, name, daysLeft, trialEndDate }) {
   const endStr = trialEndDate ? new Date(trialEndDate).toDateString() : `in ${daysLeft} days`;
   const html = wrap(`
     <h1>Your trial ends in ${daysLeft} day${daysLeft !== 1 ? 's' : ''} ⏳</h1>
-    <p>Hi <span class="highlight">${name}</span>, just a heads-up — your KODEX free trial expires on <strong>${endStr}</strong>.</p>
+    <p>Hi <span class="highlight">${name}</span>, just a heads-up -- your KODEX free trial expires on <strong>${endStr}</strong>.</p>
 
     <div class="info-box">
       <p><span class="badge badge-orange">TRIAL ENDING SOON</span></p>
@@ -305,11 +305,11 @@ async function sendTrialEndingSoon({ email, name, daysLeft, trialEndDate }) {
        ✅ &nbsp;Live proctoring</p>
 
     <div style="text-align:center;margin:28px 0">
-      <a href="${BASE_URL}/#subscription" class="btn btn-primary">Subscribe Now — GHS 200/month →</a>
+      <a href="${BASE_URL}/#subscription" class="btn btn-primary">Subscribe Now -- GHS 200/month →</a>
     </div>
 
     <p style="font-size:13px">Prefer annual? Pay <strong>GHS 2,000/year</strong> and get 2 months free.</p>
-  `, `Your KODEX trial ends in ${daysLeft} days — subscribe to keep access`);
+  `, `Your KODEX trial ends in ${daysLeft} days -- subscribe to keep access`);
 
   return send({ to: email, subject: `⏳ Your KODEX trial ends in ${daysLeft} days`, html });
 }
@@ -322,25 +322,25 @@ async function sendTrialExpired({ email, name }) {
 
     <div class="info-box">
       <p><span class="badge badge-red">TRIAL EXPIRED</span></p>
-      <p style="margin-top:10px"><strong>Good news:</strong> All your data — sessions, quizzes, assignments, student records — is safely saved and waiting for you.</p>
+      <p style="margin-top:10px"><strong>Good news:</strong> All your data -- sessions, quizzes, assignments, student records -- is safely saved and waiting for you.</p>
     </div>
 
     <p>Subscribe now to reactivate your account instantly. No setup needed.</p>
 
     <div style="text-align:center;margin:28px 0">
-      <a href="${BASE_URL}/#subscription" class="btn btn-primary">Reactivate — GHS 200/month →</a>
+      <a href="${BASE_URL}/#subscription" class="btn btn-primary">Reactivate -- GHS 200/month →</a>
     </div>
 
-    <p style="font-size:13px">Annual plan: <strong>GHS 2,000/year</strong> (save GHS 400 — 2 months free)</p>
-  `, 'Your KODEX trial has expired — reactivate to keep your data');
+    <p style="font-size:13px">Annual plan: <strong>GHS 2,000/year</strong> (save GHS 400 -- 2 months free)</p>
+  `, 'Your KODEX trial has expired -- reactivate to keep your data');
 
-  return send({ to: email, subject: 'Your KODEX trial has ended — reactivate your account', html });
+  return send({ to: email, subject: 'Your KODEX trial has ended -- reactivate your account', html });
 }
 
-// 4. Grace period nudge (day 16 — 2 days after expiry)
+// 4. Grace period nudge (day 16 -- 2 days after expiry)
 async function sendGraceNudge({ email, name }) {
   const html = wrap(`
-    <h1>Last chance — your data is still here 🔒</h1>
+    <h1>Last chance -- your data is still here 🔒</h1>
     <p>Hi <span class="highlight">${name}</span>, your KODEX account has been paused for 2 days. We've kept all your data safe, but we wanted to check in one last time.</p>
 
     <div class="info-box">
@@ -353,9 +353,9 @@ async function sendGraceNudge({ email, name }) {
     </div>
 
     <p style="font-size:13px;text-align:center">GHS 200/month &nbsp;·&nbsp; GHS 2,000/year (2 months free)</p>
-  `, 'Last chance — your KODEX data is still waiting for you');
+  `, 'Last chance -- your KODEX data is still waiting for you');
 
-  return send({ to: email, subject: '🔒 Last chance — your KODEX data is still here', html });
+  return send({ to: email, subject: '🔒 Last chance -- your KODEX data is still here', html });
 }
 
 // 5. Subscription confirmed (after payment)
@@ -383,9 +383,9 @@ async function sendSubscriptionConfirmed({ email, name, plan, endDate, amountGhs
 
     <hr class="divider"/>
     <p style="font-size:13px">We'll remind you before your next renewal. Thank you for subscribing to KODEX.</p>
-  `, `KODEX subscription confirmed — active until ${endStr}`);
+  `, `KODEX subscription confirmed -- active until ${endStr}`);
 
-  return send({ to: email, subject: '✅ KODEX subscription confirmed — you\'re all set', html });
+  return send({ to: email, subject: '✅ KODEX subscription confirmed -- you\'re all set', html });
 }
 
 // 6. Renewal reminder (7 days before subscription end)
@@ -424,7 +424,7 @@ async function sendPasswordReset({ email, name, resetCode, role, institutionName
     </div>
 
     <p>Enter this code on the KODEX password reset page to set a new password.</p>
-    <p>If you did not request this reset, you can safely ignore this email — your password has not changed.</p>
+    <p>If you did not request this reset, you can safely ignore this email -- your password has not changed.</p>
 
     <hr class="divider"/>
     <p style="font-size:12px;color:#9ca3af">This code expires in 1 hour. If you need a new code, request another reset from the login page.</p>
@@ -451,7 +451,7 @@ async function sendAdminPasswordResetNotice({ adminEmail, adminName, targetUserN
     <div style="text-align:center;margin:28px 0">
       <a href="${BASE_URL}" class="btn btn-primary">Open KODEX →</a>
     </div>
-  `, `Password reset notification — ${targetUserName}`);
+  `, `Password reset notification -- ${targetUserName}`);
 
   return send({ to: adminEmail, subject: `🔔 KODEX: Password reset by ${targetUserName}`, html });
 }
@@ -474,9 +474,9 @@ async function sendPaymentFailed({ email, name, plan, institutionName }) {
     </div>
 
     <p>If you believe this is an error, please contact your bank or try a different card. If the issue persists, contact us at <a href="mailto:support@kodex.it.com">support@kodex.it.com</a>.</p>
-  `, `Payment failed — action required`);
+  `, `Payment failed -- action required`);
 
-  return send({ to: email, subject: `⚠️ KODEX: Payment failed — action required`, html });
+  return send({ to: email, subject: `⚠️ KODEX: Payment failed -- action required`, html });
 }
 
 
@@ -523,8 +523,8 @@ async function sendLecturerWelcome({ email, name, institutionName, department, i
 
     <hr class="divider"/>
     <p style="font-size:13px">Log in at <a href="${BASE_URL}">${BASE_URL}</a> using your email and the password you set during registration.</p>
-  `, `Welcome to KODEX — ${institutionName}`);
-  return send({ to: email, subject: `Welcome to KODEX — ${institutionName}`, html });
+  `, `Welcome to KODEX -- ${institutionName}`);
+  return send({ to: email, subject: `Welcome to KODEX -- ${institutionName}`, html });
 }
 
 // ── Student welcome email ─────────────────────────────────────────────────────
@@ -551,8 +551,8 @@ async function sendStudentWelcome({ email, name, institutionName, indexNumber })
 
     <hr class="divider"/>
     <p style="font-size:13px">Log in using your <strong>Student ID: ${indexNumber}</strong> and the password you set during registration.</p>
-  `, `Welcome to KODEX — ${institutionName}`);
-  return send({ to: email, subject: `Welcome to KODEX — ${institutionName}`, html });
+  `, `Welcome to KODEX -- ${institutionName}`);
+  return send({ to: email, subject: `Welcome to KODEX -- ${institutionName}`, html });
 }
 
 // ── Employee welcome email ────────────────────────────────────────────────────
@@ -575,8 +575,8 @@ async function sendEmployeeWelcome({ email, name, companyName, employeeId }) {
 
     <hr class="divider"/>
     <p style="font-size:13px">Log in at <a href="${BASE_URL}">${BASE_URL}</a> using your email and the password you set during registration.</p>
-  `, `Welcome to KODEX — ${companyName}`);
-  return send({ to: email, subject: `Welcome to KODEX — ${companyName}`, html });
+  `, `Welcome to KODEX -- ${companyName}`);
+  return send({ to: email, subject: `Welcome to KODEX -- ${companyName}`, html });
 }
 
 // ── HOD welcome email ─────────────────────────────────────────────────────────
@@ -599,8 +599,8 @@ async function sendHodWelcome({ email, name, institutionName, department }) {
 
     <hr class="divider"/>
     <p style="font-size:13px">Log in at <a href="${BASE_URL}">${BASE_URL}</a> using your email and the password you set.</p>
-  `, `Welcome to KODEX — ${institutionName}`);
-  return send({ to: email, subject: `Welcome to KODEX — ${institutionName}`, html });
+  `, `Welcome to KODEX -- ${institutionName}`);
+  return send({ to: email, subject: `Welcome to KODEX -- ${institutionName}`, html });
 }
 
 module.exports = {
