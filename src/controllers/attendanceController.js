@@ -380,7 +380,7 @@ if (isEsp32Only && attendanceMethod !== 'ble_mark') {
   const companyForEsp32 = await Company.findById(req.user.company).select('esp32LastSeen esp32Token');
   const esp32StillOnline = companyForEsp32?.esp32Token &&
     companyForEsp32?.esp32LastSeen &&
-    (Date.now() - new Date(companyForEsp32.esp32LastSeen).getTime() < 30000);
+    (Date.now() - new Date(companyForEsp32.esp32LastSeen).getTime() < 15000);
 
   console.log('[MARK] esp32Only:', isEsp32Only, 'esp32StillOnline:', esp32StillOnline, 'method:', attendanceMethod);
 
