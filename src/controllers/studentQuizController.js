@@ -270,7 +270,7 @@ exports.submitAttempt = async (req, res) => {
       return res.status(400).json({ error: "You must start the quiz first" });
     }
     // Allow submission if within the student's personal time window (startedAt + timeLimit)
-    // even if quiz.endTime has passed — prevents timer expiry causing a rejection
+    // even if quiz.endTime has passed -- prevents timer expiry causing a rejection
     const personalDeadline = new Date(attempt.startedAt.getTime() + quiz.timeLimit * 60 * 1000 + 30000); // +30s grace
     if (now > quiz.endTime && now > personalDeadline) {
       return res.status(400).json({ error: "Quiz has ended" });
