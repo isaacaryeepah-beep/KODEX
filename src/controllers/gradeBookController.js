@@ -2,12 +2,12 @@
  * gradeBookController.js
  *
  * Grade Book aggregates three components per student per course:
- *   1. Quizzes     — best/last score from Attempt model
- *   2. Attendance  — % of sessions attended for this course
- *   3. Manual      — lecturer-entered grades (midterm, lab, project, etc.)
+ *   1. Quizzes     -- best/last score from Attempt model
+ *   2. Attendance  -- % of sessions attended for this course
+ *   3. Manual      -- lecturer-entered grades (midterm, lab, project, etc.)
  *
  * Letter grade scale (Ghana/standard):
- *   A  80–100   B  70–79   C  60–69   D  50–59   F  0–49
+ *   A  80-100   B  70-79   C  60-69   D  50-59   F  0-49
  */
 
 const GradeBook         = require("../models/GradeBook");
@@ -33,7 +33,7 @@ function gradeColor(letter) {
   return { A: "#22c55e", B: "#84cc16", C: "#f59e0b", D: "#f97316", F: "#ef4444" }[letter] || "#6b7280";
 }
 
-// GET /api/gradebook/course/:courseId  — full class view (lecturer/admin)
+// GET /api/gradebook/course/:courseId  -- full class view (lecturer/admin)
 exports.getCourseGrades = async (req, res) => {
   try {
     const { courseId } = req.params;
@@ -170,7 +170,7 @@ exports.getCourseGrades = async (req, res) => {
         totalSessions,
         quizScores: quizIds.map(qid => ({
           quizId: qid,
-          title: quizzes.find(q => q._id.toString() === qid.toString())?.title || "—",
+          title: quizzes.find(q => q._id.toString() === qid.toString())?.title || "--",
           score: attemptMap[sid]?.[qid.toString()]?.score ?? null,
           maxScore: quizzes.find(q => q._id.toString() === qid.toString())?.totalMarks || 0,
         })),
@@ -199,7 +199,7 @@ exports.getCourseGrades = async (req, res) => {
   }
 };
 
-// GET /api/gradebook/my/:courseId  — student's own grades
+// GET /api/gradebook/my/:courseId  -- student's own grades
 exports.getMyGrades = async (req, res) => {
   try {
     const { courseId } = req.params;
@@ -290,7 +290,7 @@ exports.updateWeights = async (req, res) => {
 
     const vals = [quizzes, attendance, manual].map(Number);
     if (vals.some(isNaN) || vals.some(v => v < 0 || v > 100)) {
-      return res.status(400).json({ error: "Each weight must be 0–100" });
+      return res.status(400).json({ error: "Each weight must be 0-100" });
     }
 
     let gb = await GradeBook.findOne({ course: courseId, company });
@@ -378,7 +378,7 @@ exports.saveManualScores = async (req, res) => {
   }
 };
 
-// GET /api/gradebook/courses  — list courses with grade book for lecturer/admin
+// GET /api/gradebook/courses  -- list courses with grade book for lecturer/admin
 exports.listCourses = async (req, res) => {
   try {
     const company = req.user.company;
@@ -392,7 +392,7 @@ exports.listCourses = async (req, res) => {
   }
 };
 
-// GET /api/gradebook/my-courses  — courses + my grade summary for student
+// GET /api/gradebook/my-courses  -- courses + my grade summary for student
 exports.myCoursesGrades = async (req, res) => {
   try {
     const company   = req.user.company;
