@@ -55,9 +55,9 @@ function classifyEvent(eventType) {
   const warning = [
     "tab_switch",        // kept for legacy
     "app_background",    // sent by frontend when tab is hidden
-    "app_foreground",    // sent on return — duration checked separately
+    "app_foreground",    // sent on return -- duration checked separately
     "face_missing",
-    "face_off_center",   // was missing — now logged as warning
+    "face_off_center",   // was missing -- now logged as warning
     "rapid_switching",
     "copy_attempt",
     "screenshot_attempt",
@@ -280,7 +280,7 @@ exports.logEvent = async (req, res) => {
 
     // ── Violation enforcement ──────────────────────────────────────────────
 
-    // Background too long — terminate immediately regardless of violation level
+    // Background too long -- terminate immediately regardless of violation level
     const backgroundTooLong =
       (eventType === "app_foreground") && duration && duration > 10;
 
