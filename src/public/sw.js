@@ -1,5 +1,5 @@
 // ════════════════════════════════════════════════════════════════════
-//  KODEX Service Worker — Offline Support
+//  KODEX Service Worker -- Offline Support
 //  Caches the app shell so it loads offline
 //  API requests are NOT cached here (handled in app.js with localStorage)
 // ════════════════════════════════════════════════════════════════════
@@ -41,7 +41,7 @@ self.addEventListener('activate', event => {
 self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
 
-  // Always go to network for API calls — offline handled in app.js
+  // Always go to network for API calls -- offline handled in app.js
   if (url.pathname.startsWith('/api/')) {
     event.respondWith(
       fetch(event.request).catch(() =>
@@ -54,7 +54,7 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  // JS and CSS — network first, update cache, fall back to cache if offline
+  // JS and CSS -- network first, update cache, fall back to cache if offline
   // This ensures updated files are always served fresh when online
   if (url.pathname.endsWith('.js') || url.pathname.endsWith('.css')) {
     event.respondWith(
@@ -71,7 +71,7 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  // HTML navigation — network first, fall back to cached index
+  // HTML navigation -- network first, fall back to cached index
   if (event.request.mode === 'navigate') {
     event.respondWith(
       fetch(event.request)
@@ -85,7 +85,7 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  // Everything else — network first, cache as fallback
+  // Everything else -- network first, cache as fallback
   event.respondWith(
     fetch(event.request)
       .then(res => {
