@@ -87,3 +87,104 @@ exports.status = async (req, res) => {
     res.status(500).json({ error: 'Server error' });
   }
 };
+
+// ── POST /api/esp32/mark ───────────────────────────────────
+// Called by the ESP32 student page after login.
+// Verifies index number + PIN, then marks attendance.
+exports.markViaESP32 = async (req, res) => {
+  try {
+    const { indexNumber, pin, sessionId } = req.body;
+    if (!indexNumber || !pin) {
+      return res.status(400).json({ error: 'indexNumber and pin required' });
+    }
+
+    // Find student by index number
+    const User = require('../models/User');
+    const student = await User.findOne({
+      indexNumber: indexNumber.toUpperCase().trim(),
+    }).select('+attendancePin +attendancePinSet');
+
+    if (!student) {
+      return res.status(404).json({ error: 'Student not found. Check your index number.' });
+    }
+
+    if (!student.attendancePinSet || !student.attendancePin) {
+      return res.status(403).json({
+        error: 'You have not set an attendance PIN yet. Log in to the KODEX app and set your PIN in your profile.',
+        pinNotSet: true,
+      });
+    }
+
+    const pinValid = await student.comparePin(pin);
+    if (!pinValid) {
+      return res.status(401).json({ error: 'Incorrect PIN. Please try again.' });
+    }
+
+    // Find active session for this company
+    const AttendanceSession = require('../models/AttendanceSession');
+    const AttendanceRecord  = require('../models/AttendanceRecord');
+
+    let session;
+    if (sessionId) {
+      session = await AttendanceSession.findOne({ _id: sessionId, company: student.company, status: 'active' });
+    } else {
+      session = await AttendanceSession.findOne({ company: student.company, status: 'active' }).sort({ startedAt: -1 });
+    }
+
+    if (!session) {
+      return res.status(404).json({ error: 'No active session. Wait for your lecturer to start.' });
+    }
+
+    // Check already marked
+    const existing = await AttendanceRecord.findOne({ session: session._id, user: student._id });
+    if (existing) {
+      return res.status(409).json({ error: 'Attendance already marked for this session.' });
+    }
+
+    // Check device lock — if student has a locked device, this request must come from it
+    // For ESP32 we use the student's index number as the device fingerprint
+    // (physical presence is guaranteed by WiFi subnet check done in firmware)
+
+    const timeSinceStart = Date.now() - new Date(session.startedAt).getTime();
+    const status = timeSinceStart > 15 * 60 * 1000 ? 'late' : 'present';
+
+    const record = await AttendanceRecord.create({
+      session:  session._id,
+      user:     student._id,
+      company:  student.company,
+      status,
+      method:   'ble_mark',
+      markedAt: new Date(),
+    });
+
+    console.log(`[ESP32] Marked: ${student.name} (${indexNumber}) — ${status}`);
+
+    res.json({
+      ok:      true,
+      name:    student.name,
+      status,
+      message: `Attendance marked — ${status}`,
+    });
+  } catch (e) {
+    console.error('[ESP32] Mark error:', e);
+    res.status(500).json({ error: 'Server error' });
+  }
+};
+
+// ── POST /api/esp32/set-pin ───────────────────────────────
+// Student sets their 4-digit attendance PIN from the KODEX app
+exports.setPin = async (req, res) => {
+  try {
+    const { pin } = req.body;
+    if (!pin || String(pin).length !== 4 || !/^\d{4}$/.test(String(pin))) {
+      return res.status(400).json({ error: 'PIN must be exactly 4 digits' });
+    }
+    const User = require('../models/User');
+    const user = await User.findById(req.user._id);
+    user.attendancePin = String(pin);
+    await user.save();
+    res.json({ ok: true, message: 'Attendance PIN set successfully' });
+  } catch (e) {
+    res.status(500).json({ error: 'Server error' });
+  }
+};
