@@ -11,7 +11,7 @@ const mw = [authenticate, requireMode("corporate"), requireActiveSubscription];
 const canManage = requireRole("admin", "manager", "superadmin");
 
 // ─────────────────────────────────────────────────────────────
-// ADMIN / MANAGER — Module Management
+// ADMIN / MANAGER -- Module Management
 // ─────────────────────────────────────────────────────────────
 
 // GET all modules
@@ -170,7 +170,7 @@ router.get("/overview", ...mw, canManage, async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────
-// EMPLOYEE — Take Training
+// EMPLOYEE -- Take Training
 // ─────────────────────────────────────────────────────────────
 
 // GET my assigned modules
