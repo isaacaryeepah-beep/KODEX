@@ -3221,13 +3221,6 @@ const quizzesTaken = quizzesData.quizzes.length;
 const upcomingMeetings = meetingsData.meetings.filter(m => m.status === 'scheduled');
 const activeSession = activeSessionData.session;
 
-// DEBUG PANEL - remove after fixing
-// update debug panel after render
-setTimeout(() => {
-  const _raw = JSON.stringify(activeSessionData, null, 2);
-  const _debugContent = document.getElementById('student-debug-content');
-  if (_debugContent) _debugContent.innerHTML = '<pre style="font-size:11px;overflow:auto;max-height:140px;background:#1e1e1e;color:#d4d4d4;padding:8px;border-radius:6px;margin:0">' + _raw + '</pre>';
-}, 100);
 const attendanceRate = totalCheckins > 0 ? Math.round((attendance.records.filter(r => r.status === 'present').length / attendance.records.length) * 100) : 0;
 
 const methodLabel = (m) => {
@@ -3239,10 +3232,6 @@ content.innerHTML = `
 <div class="page-header">
 <h2>Welcome back, ${currentUser.name.split(' ')[0]}</h2>
 <p>${currentUser.company?.name || 'Your institution'}${currentUser.indexNumber ? ' \u2022 ' + currentUser.indexNumber : ''}</p>
-</div>
-<div id="student-debug-panel" style="margin-bottom:12px;padding:10px;background:#fef3c7;border:1px solid #fbbf24;border-radius:8px">
-  <div style="font-size:11px;font-weight:700;color:#92400e;margin-bottom:6px">DEBUG — Active session API response (remove after fix)</div>
-  <div id="student-debug-content" style="font-size:11px;color:#78350f">Loading...</div>
 </div>
 
 
@@ -3326,7 +3315,9 @@ window._studentSessionPoll = setInterval(async () => {
       if (titleEl) titleEl.textContent = d.session.title || 'Untitled Session';
       if (timeEl)  timeEl.textContent  = 'Started ' + new Date(d.session.startedAt).toLocaleString();
     } else {
+      const wasVisible = banner.style.display !== 'none';
       banner.style.display = 'none';
+      if (wasVisible) toastWarning('The attendance session has ended.');
     }
   } catch(e) {}
 }, 10000);
@@ -3719,7 +3710,7 @@ toastError(e.message);
 // QR auto-rotation state
 let _qrRotateTimer = null;
 let _qrCountdownTimer = null;
-const QR_EXPIRY_SECONDS = 15;
+const QR_EXPIRY_SECONDS = 60;
 
 function _stopQrTimers() {
 if (_qrRotateTimer)   { clearTimeout(_qrRotateTimer);  _qrRotateTimer = null; }
@@ -6793,12 +6784,16 @@ return;
 }
 
 let activeSession = null;
+let _activeSessionError = null;
 try {
 const data = await api('/api/attendance-sessions/active');
 activeSession = data.session;
-if (activeSession) offlineCache('activeSession', activeSession); // cache for offline
-} catch (e) {}
+if (activeSession) offlineCache('activeSession', activeSession);
+} catch (e) {
+_activeSessionError = e.message || 'Unknown error';
+}
 window._currentActiveSessionId = activeSession?._id || null;
+
 
 const alreadyMarked = activeSession ? await api('/api/attendance-sessions/my-attendance?limit=100')
 .then(d => d.records.some(r => r.session?._id === activeSession._id))
@@ -6882,7 +6877,7 @@ ${activeSession ? `
     <div style="margin-bottom:16px">${svgIcon('<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>', 48)}</div>
     <div style="font-size:18px;font-weight:700;margin-bottom:8px">No Active Session</div>
     <p style="font-size:14px;color:var(--text-light)">There are no active attendance sessions right now.</p>
-    <p style="font-size:13px;color:var(--text-light);margin-top:8px">Your lecturer will start a session when it's time to mark attendance.</p>
+    <p style="font-size:13px;color:var(--text-light);margin-top:8px">The session may have ended, or your lecturer hasn't started one yet.</p>
     <button class="btn btn-secondary btn-sm" style="margin-top:16px" onclick="navigateTo('mark-attendance')">Refresh</button>
   </div>
 `}
