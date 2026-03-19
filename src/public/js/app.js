@@ -440,6 +440,15 @@ async function isServerReachable() {
   }
 }
 
+async function isOnESP32Network() {
+  try {
+    const res = await fetch('http://192.168.4.1/status', { signal: AbortSignal.timeout(1500) });
+    return res.ok;
+  } catch (e) {
+    return false;
+  }
+}
+
 function offlineCache(key, data) {
 try {
 const store = JSON.parse(localStorage.getItem(OFFLINE_CACHE_KEY) || '{}');
@@ -1452,6 +1461,7 @@ if (!indexNumber) return showStudentError('Please enter your student ID');
 if (!institutionCode) return showStudentError('Please enter your institution code');
 if (!password) return showStudentError('Please enter your password');
 if (btn) { btn.textContent = 'Signing in-'; btn.disabled = true; }
+
 const credentials = { indexNumber, password, institutionCode, loginRole: 'student', deviceId: getDeviceFingerprint() };
 
 
@@ -6621,18 +6631,25 @@ if (!res.ok) throw new Error(data.error || 'ESP32 request failed');
 return data;
 }
 
-// Try to find ESP32 on local network by pinging common IPs
+// Try to find ESP32 — always check 192.168.4.1 first (KODEX-CLASSROOM hotspot default)
 async function discoverESP32() {
-// Try last known IP first
-if (esp32IP) {
+const candidates = ['192.168.4.1'];
+if (esp32IP && !candidates.includes(esp32IP)) candidates.push(esp32IP);
+for (const ip of candidates) {
 try {
-const status = await esp32Api('/status');
+const res = await fetch('http://' + ip + '/status', { signal: AbortSignal.timeout(1500) });
+if (res.ok) {
+const status = await res.json();
 if (status.device === 'KODEX-ESP32') {
+setEsp32IP(ip);
 bleDetected = true;
+console.log('[ESP32] Found at', ip);
 return true;
 }
-} catch(e) { /* try scan */ }
 }
+} catch(e) {}
+}
+bleDetected = false;
 return false;
 }
 
@@ -6687,15 +6704,18 @@ toastError(e.message);
 }
 }
 
-// Submit attendance to ESP32 locally
-async function submitToESP32(code) {
+// Submit attendance to ESP32 via /proxy-mark (verifies PIN locally on device)
+async function submitToESP32(code, pin) {
 const user = currentUser;
+if (!pin) throw new Error('PIN required for ESP32 attendance');
+const fp = [navigator.userAgent, screen.width + 'x' + screen.height, Intl.DateTimeFormat().resolvedOptions().timeZone].join('|');
 const body = {
-code,
-indexNumber: user.indexNumber || user.employeeId || user.email,
-userId: user.id
+  code,
+  pin,
+  indexNumber: user.indexNumber || user.employeeId || user.email,
+  deviceFingerprint: fp,
 };
-return await esp32Api('/mark', { method: 'POST', body: JSON.stringify(body) });
+return await esp32Api('/proxy-mark', { method: 'POST', body: JSON.stringify(body) });
 }
 
 // Configure ESP32 IP address
@@ -6838,19 +6858,21 @@ ${activeSession ? `
       <p style="font-size:13px;color:var(--text-light);margin-top:4px">You have already checked in for this session.</p>
     </div>
   ` : activeSession.esp32Only ? `
-    <div class="card" style="text-align:center;padding:32px 24px;border-left:4px solid #f59e0b">
-      <div style="font-size:48px;margin-bottom:12px">📡</div>
-      <div style="font-size:18px;font-weight:700;margin-bottom:8px">Classroom Device Required</div>
-      <p style="font-size:14px;color:var(--text-light);margin-bottom:20px">This session uses the classroom attendance device.</p>
-      <ol style="text-align:left;font-size:14px;line-height:2;color:var(--text);max-width:320px;margin:0 auto 20px;padding-left:20px">
-        <li>Connect your phone to <strong>KODEX-CLASSROOM</strong> WiFi</li>
-        <li>Open <strong>http://192.168.4.1</strong> in your browser</li>
-        <li>Enter your index number and PIN</li>
-      </ol>
-      <p style="font-size:12px;color:var(--text-muted)">Haven't set a PIN yet? Go to Profile &rarr; Set Attendance PIN first.</p>
-      <div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--border)">
-        <p style="font-size:12px;color:var(--text-muted);margin-bottom:10px">Can't connect to KODEX-CLASSROOM WiFi?</p>
-        <button class="btn btn-secondary btn-sm" onclick="checkEsp32FallbackMark('${activeSession._id}')">Try marking without classroom device</button>
+    <div class="card" style="border-left:4px solid #f59e0b">
+      <div style="font-size:12px;text-transform:uppercase;font-weight:700;color:#b45309;letter-spacing:.5px;margin-bottom:8px">Classroom Device Session</div>
+      <div style="font-size:16px;font-weight:700;margin-bottom:4px">${activeSession.title || 'Attendance Session'}</div>
+      <p style="font-size:13px;color:var(--text-light);margin-bottom:16px">Connect to <strong>KODEX-CLASSROOM</strong> WiFi then mark below.</p>
+      <div id="esp32-app-mark">
+        <div class="form-group">
+          <label>4-Digit Attendance PIN</label>
+          <input type="password" id="esp32-pin-input" inputmode="numeric" maxlength="4" placeholder="Enter your PIN" style="font-size:24px;text-align:center;letter-spacing:8px;font-weight:700">
+        </div>
+        <button class="btn btn-primary" style="width:100%" onclick="submitESP32AppMark('${activeSession._id}')">Mark Attendance via Classroom Device</button>
+        <div id="esp32-app-mark-msg" style="margin-top:10px;display:none"></div>
+      </div>
+      <div style="margin-top:16px;padding-top:12px;border-top:1px solid var(--border)">
+        <p style="font-size:12px;color:var(--text-muted);margin-bottom:8px">Not on KODEX-CLASSROOM WiFi?</p>
+        <button class="btn btn-secondary btn-sm" onclick="checkEsp32FallbackMark('${activeSession._id}')">Check if device is offline</button>
       </div>
     </div>
     <div id="esp32-fallback-area"></div>
@@ -6987,6 +7009,42 @@ toastSuccess('Attendance marked successfully!');
 navigateTo('mark-attendance');
 } catch (e) {
 toastError(e.message);
+}
+}
+
+async function submitESP32AppMark(sessionId) {
+const pin = document.getElementById('esp32-pin-input')?.value?.trim();
+const msgEl = document.getElementById('esp32-app-mark-msg');
+const btn = document.querySelector('#esp32-app-mark button');
+if (!pin || pin.length !== 4) {
+  if (msgEl) { msgEl.style.display='block'; msgEl.className=''; msgEl.style.cssText='margin-top:10px;padding:8px 12px;background:#fef2f2;border-radius:6px;font-size:13px;color:#dc2626'; msgEl.textContent='Please enter your 4-digit PIN.'; }
+  return;
+}
+if (btn) { btn.disabled=true; btn.textContent='Connecting to classroom device...'; }
+try {
+  // Discover ESP32 first
+  const found = await discoverESP32();
+  if (!found) {
+    if (btn) { btn.disabled=false; btn.textContent='Mark Attendance via Classroom Device'; }
+    if (msgEl) { msgEl.style.display='block'; msgEl.style.cssText='margin-top:10px;padding:8px 12px;background:#fef3c7;border-radius:6px;font-size:13px;color:#92400e'; msgEl.textContent='Classroom device not found. Make sure you are connected to KODEX-CLASSROOM WiFi.'; }
+    return;
+  }
+  // Get current code from ESP32
+  const codeData = await esp32Api('/code');
+  const code = codeData.code;
+  // Submit mark
+  if (btn) btn.textContent='Verifying...';
+  const result = await submitToESP32(code, pin);
+  if (result.ok) {
+    document.getElementById('esp32-app-mark').innerHTML = '<div style="text-align:center;padding:16px"><div style="font-size:36px;margin-bottom:8px">✓</div><div style="font-size:16px;font-weight:700;color:var(--success)">Attendance Marked!</div><p style="font-size:13px;color:var(--text-light);margin-top:4px">Welcome, ' + (result.name || currentUser.name) + '</p></div>';
+    toastSuccess('Attendance marked via classroom device!');
+  } else {
+    if (btn) { btn.disabled=false; btn.textContent='Mark Attendance via Classroom Device'; }
+    if (msgEl) { msgEl.style.display='block'; msgEl.style.cssText='margin-top:10px;padding:8px 12px;background:#fef2f2;border-radius:6px;font-size:13px;color:#dc2626'; msgEl.textContent=result.error||'Failed to mark attendance.'; }
+  }
+} catch(e) {
+  if (btn) { btn.disabled=false; btn.textContent='Mark Attendance via Classroom Device'; }
+  if (msgEl) { msgEl.style.display='block'; msgEl.style.cssText='margin-top:10px;padding:8px 12px;background:#fef2f2;border-radius:6px;font-size:13px;color:#dc2626'; msgEl.textContent=e.message||'Connection error. Stay on KODEX-CLASSROOM WiFi.'; }
 }
 }
 
