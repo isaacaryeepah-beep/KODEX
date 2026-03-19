@@ -6798,6 +6798,18 @@ ${activeSession ? `
       <div style="font-size:18px;font-weight:700;color:var(--success)">Attendance Already Marked</div>
       <p style="font-size:13px;color:var(--text-light);margin-top:4px">You have already checked in for this session.</p>
     </div>
+  ` : activeSession.esp32Only ? `
+    <div class="card" style="text-align:center;padding:32px 24px;border-left:4px solid #f59e0b">
+      <div style="font-size:48px;margin-bottom:12px">📡</div>
+      <div style="font-size:18px;font-weight:700;margin-bottom:8px">Classroom Device Required</div>
+      <p style="font-size:14px;color:var(--text-light);margin-bottom:20px">This session uses the classroom attendance device.</p>
+      <ol style="text-align:left;font-size:14px;line-height:2;color:var(--text);max-width:320px;margin:0 auto 20px;padding-left:20px">
+        <li>Connect your phone to <strong>KODEX-CLASSROOM</strong> WiFi</li>
+        <li>Open <strong>http://192.168.4.1</strong> in your browser</li>
+        <li>Enter your index number and PIN</li>
+      </ol>
+      <p style="font-size:12px;color:var(--text-muted)">Haven't set a PIN yet? Go to Profile → Set Attendance PIN first.</p>
+    </div>
   ` : `
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;margin-bottom:16px">
       
