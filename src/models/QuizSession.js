@@ -112,7 +112,7 @@ const quizSessionSchema = new mongoose.Schema(
       max: 1,
     },
 
-    // Integrity scoring (0–100)
+    // Integrity scoring (0-100)
     integrityScore: {
       type: Number,
       default: 100,
