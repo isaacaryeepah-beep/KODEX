@@ -428,6 +428,18 @@ const OFFLINE_BANNER_ID   = 'offline-banner';
 // - Helpers --------------------------------------------
 function isOnline() { return navigator.onLine; }
 
+// Checks actual server reachability, not just network connectivity.
+// Needed because ESP32 WiFi shows navigator.onLine=true but has no internet.
+async function isServerReachable() {
+  if (!navigator.onLine) return false;
+  try {
+    const res = await fetch('/api/health', { method: 'GET', cache: 'no-store', signal: AbortSignal.timeout(3000) });
+    return res.ok;
+  } catch (e) {
+    return false;
+  }
+}
+
 function offlineCache(key, data) {
 try {
 const store = JSON.parse(localStorage.getItem(OFFLINE_CACHE_KEY) || '{}');
@@ -1018,7 +1030,7 @@ const portalMode = selectedPortalType === 'admin-academic' ? 'academic' : 'corpo
 const credentials = { email, password, loginRole: 'admin', portalMode, deviceId: getDeviceFingerprint() };
 
 let data;
-if (!isOnline()) {
+if (!(await isServerReachable())) {
   showOfflineLoginNotice('admin-login-form');
   data = await attemptOfflineLogin(credentials);
 } else {
@@ -1089,7 +1101,7 @@ const credentials = { email, password, loginRole: 'lecturer', portalMode: 'acade
 
 
 let data;
-if (!isOnline()) {
+if (!(await isServerReachable())) {
   // -- OFFLINE PATH --
   showOfflineLoginNotice('lecturer-login-form');
   data = await attemptOfflineLogin(credentials);
@@ -1296,7 +1308,7 @@ if (btn) { btn.textContent = 'Signing in-'; btn.disabled = true; }
 
 const credentials = { email, password, loginRole: 'hod', portalMode: 'academic', deviceId: getDeviceFingerprint() };
 let data;
-if (!isOnline()) {
+if (!(await isServerReachable())) {
   showOfflineLoginNotice('hod-login-form');
   data = await attemptOfflineLogin(credentials);
 } else {
@@ -1373,7 +1385,7 @@ const credentials = { email, password, institutionCode, loginRole: 'employee', d
 
 
 let data;
-if (!isOnline()) {
+if (!(await isServerReachable())) {
   // -- OFFLINE PATH --
   showOfflineLoginNotice('employee-login-form');
   data = await attemptOfflineLogin(credentials);
@@ -1444,7 +1456,7 @@ const credentials = { indexNumber, password, institutionCode, loginRole: 'studen
 
 
 let data;
-if (!isOnline()) {
+if (!(await isServerReachable())) {
   // -- OFFLINE PATH --
   showOfflineLoginNotice('student-login-form');
   data = await attemptOfflineLogin(credentials);
