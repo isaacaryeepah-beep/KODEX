@@ -1,15 +1,15 @@
-const mongoose = require(“mongoose”);
-const User = require(”../models/User”);
-const AttendanceSession = require(”../models/AttendanceSession”);
-const AttendanceRecord = require(”../models/AttendanceRecord”);
-const QrToken = require(”../models/QrToken”);
-const Company = require(”../models/Company”);
+const mongoose = require("mongoose");
+const User = require("../models/User");
+const AttendanceSession = require("../models/AttendanceSession");
+const AttendanceRecord = require("../models/AttendanceRecord");
+const QrToken = require("../models/QrToken");
+const Company = require("../models/Company");
 
 exports.startSession = async (req, res) => {
 try {
 const companyId = req.user.company;
 
-```
+
 const company = await Company.findById(companyId);
 if (!company || !company.isActive) {
   return res.status(404).json({ error: "Company not found or inactive" });
@@ -95,15 +95,14 @@ const populated = await session.populate([
 ]);
 
 res.status(201).json({ session: populated });
-```
 
 } catch (error) {
-if (error.name === “ValidationError”) {
+if (error.name === "ValidationError") {
 const messages = Object.values(error.errors).map((e) => e.message);
-return res.status(400).json({ error: messages.join(”, “) });
+return res.status(400).json({ error: messages.join(", ") });
 }
-console.error(“Start session error:”, error);
-res.status(500).json({ error: “Failed to start attendance session” });
+console.error("Start session error:", error);
+res.status(500).json({ error: "Failed to start attendance session" });
 }
 };
 
@@ -111,7 +110,7 @@ exports.stopSession = async (req, res) => {
 try {
 const { id } = req.params;
 
-```
+
 if (!mongoose.Types.ObjectId.isValid(id)) {
   return res.status(400).json({ error: "Invalid session ID" });
 }
@@ -159,20 +158,19 @@ const populated = await session.populate([
 ]);
 
 res.json({ session: populated });
-```
 
 } catch (error) {
-console.error(“Stop session error:”, error);
-res.status(500).json({ error: “Failed to stop attendance session” });
+console.error("Stop session error:", error);
+res.status(500).json({ error: "Failed to stop attendance session" });
 }
 };
 
 exports.listSessions = async (req, res) => {
 try {
 const { status, page = 1, limit = 20 } = req.query;
-const filter = { …req.companyFilter };
+const filter = { ...req.companyFilter };
 
-```
+
 if (req.user.role === "lecturer") {
   filter.createdBy = req.user._id;
 }
@@ -214,32 +212,30 @@ res.json({
     pages: Math.ceil(total / parseInt(limit)),
   },
 });
-```
 
 } catch (error) {
-console.error(“List sessions error:”, error);
-res.status(500).json({ error: “Failed to fetch attendance sessions” });
+console.error("List sessions error:", error);
+res.status(500).json({ error: "Failed to fetch attendance sessions" });
 }
 };
 
 exports.getActiveSession = async (req, res) => {
 try {
-const activeFilter = { …req.companyFilter, status: “active” };
-if (req.user.role === “lecturer”) {
+const activeFilter = { ...req.companyFilter, status: "active" };
+if (req.user.role === "lecturer") {
 activeFilter.createdBy = req.user._id;
 }
 const session = await AttendanceSession.findOne(activeFilter)
-.populate(“company”, “name”)
-.populate(“createdBy”, “name email”)
-.populate(“course”, “title code”);
+.populate("company", "name")
+.populate("createdBy", "name email")
+.populate("course", "title code");
 
-```
+
 res.json({ session: session || null });
-```
 
 } catch (error) {
-console.error(“Active session error:”, error);
-res.status(500).json({ error: “Failed to fetch active session” });
+console.error("Active session error:", error);
+res.status(500).json({ error: "Failed to fetch active session" });
 }
 };
 
@@ -247,7 +243,7 @@ exports.getSession = async (req, res) => {
 try {
 const { id } = req.params;
 
-```
+
 if (!mongoose.Types.ObjectId.isValid(id)) {
   return res.status(400).json({ error: "Invalid session ID" });
 }
@@ -272,11 +268,10 @@ const records = await AttendanceRecord.find({ session: id })
   .sort({ checkInTime: 1 });
 
 res.json({ session, records });
-```
 
 } catch (error) {
-console.error(“Get session error:”, error);
-res.status(500).json({ error: “Failed to fetch attendance session” });
+console.error("Get session error:", error);
+res.status(500).json({ error: "Failed to fetch attendance session" });
 }
 };
 
@@ -284,10 +279,10 @@ exports.getSessionRecords = async (req, res) => {
 try {
 const { id } = req.params;
 if (!mongoose.Types.ObjectId.isValid(id)) {
-return res.status(400).json({ error: “Invalid session ID” });
+return res.status(400).json({ error: "Invalid session ID" });
 }
 
-```
+
 const sessionFilter = { _id: id, ...req.companyFilter };
 if (req.user.role === "lecturer") sessionFilter.createdBy = req.user._id;
 
@@ -305,18 +300,17 @@ const normalized = records.map(r => ({
 }));
 
 res.json({ session, records: normalized });
-```
 
 } catch (error) {
-console.error(“Get session records error:”, error);
-res.status(500).json({ error: “Failed to fetch attendance records” });
+console.error("Get session records error:", error);
+res.status(500).json({ error: "Failed to fetch attendance records" });
 }
 };
 exports.markAttendance = async (req, res) => {
 try {
 const { sessionId, qrToken, code, method, meetingId } = req.body;
 
-```
+
 const methodMap = {
   qr: "qr_mark",
   ble: "ble_mark",
@@ -466,14 +460,13 @@ const populated = await record.populate([
 ]);
 
 res.status(201).json({ record: populated });
-```
 
 } catch (error) {
 if (error.code === 11000) {
-return res.status(409).json({ error: “Attendance already marked for this session” });
+return res.status(409).json({ error: "Attendance already marked for this session" });
 }
-console.error(“Mark attendance error:”, error);
-res.status(500).json({ error: “Failed to mark attendance: “ + error.message });
+console.error("Mark attendance error:", error);
+res.status(500).json({ error: "Failed to mark attendance: " + error.message });
 }
 };
 
@@ -482,7 +475,7 @@ try {
 const { page = 1, limit = 20, userId } = req.query;
 const skip = (parseInt(page) - 1) * parseInt(limit);
 
-```
+
 // HOD can view any student's attendance in their company
 let targetUserId = req.user._id;
 if (userId && req.user.role === "hod") {
@@ -509,23 +502,22 @@ res.json({
     pages: Math.ceil(total / parseInt(limit)),
   },
 });
-```
 
 } catch (error) {
-console.error(“My attendance error:”, error);
-res.status(500).json({ error: “Failed to fetch attendance records” });
+console.error("My attendance error:", error);
+res.status(500).json({ error: "Failed to fetch attendance records" });
 }
 };
 
-// — Corporate Employee Sign In / Sign Out ———————––
+// -- Corporate Employee Sign In / Sign Out ----------------
 exports.employeeSignIn = async (req, res) => {
 try {
 const company = await Company.findById(req.user.company);
 if (!company || !company.isActive) {
-return res.status(404).json({ error: “Company not found or inactive” });
+return res.status(404).json({ error: "Company not found or inactive" });
 }
 
-```
+
 if (company.mode !== "corporate") {
   return res.status(403).json({ error: "Sign in/out is only available for corporate accounts" });
 }
@@ -586,14 +578,13 @@ res.status(201).json({
   signedIn: true,
   record: populated,
 });
-```
 
 } catch (error) {
 if (error.code === 11000) {
-return res.status(409).json({ error: “Already signed in for this session” });
+return res.status(409).json({ error: "Already signed in for this session" });
 }
-console.error(“Employee sign in error:”, error);
-res.status(500).json({ error: “Sign in failed” });
+console.error("Employee sign in error:", error);
+res.status(500).json({ error: "Sign in failed" });
 }
 };
 
@@ -601,10 +592,10 @@ exports.employeeSignOut = async (req, res) => {
 try {
 const company = await Company.findById(req.user.company);
 if (!company || !company.isActive) {
-return res.status(404).json({ error: “Company not found or inactive” });
+return res.status(404).json({ error: "Company not found or inactive" });
 }
 
-```
+
 if (company.mode !== "corporate") {
   return res.status(403).json({ error: "Sign in/out is only available for corporate accounts" });
 }
@@ -636,11 +627,10 @@ res.json({
   duration: `${Math.floor(duration / 60)}h ${duration % 60}m`,
   record: populated,
 });
-```
 
 } catch (error) {
-console.error(“Employee sign out error:”, error);
-res.status(500).json({ error: “Sign out failed” });
+console.error("Employee sign out error:", error);
+res.status(500).json({ error: "Sign out failed" });
 }
 };
 
@@ -653,31 +643,30 @@ company: req.user.company,
 checkOutTime: null,
 })
 .sort({ checkInTime: -1 })
-.populate(“session”, “title startedAt”);
+.populate("session", "title startedAt");
 
-```
+
 res.json({
   signedIn: !!record,
   record: record || null,
 });
-```
 
 } catch (error) {
-console.error(“Sign-in status error:”, error);
-res.status(500).json({ error: “Failed to get sign-in status” });
+console.error("Sign-in status error:", error);
+res.status(500).json({ error: "Failed to get sign-in status" });
 }
 };
 
-// – ESP32 offline sync endpoint ————————————————
+// - ESP32 offline sync endpoint --------------------------------
 exports.esp32Sync = async (req, res) => {
 try {
 // Validate ESP32 secret
-const secret = req.headers[‘x-esp32-secret’];
+const secret = req.headers['x-esp32-secret'];
 if (!secret || secret !== process.env.ESP32_SECRET) {
-return res.status(401).json({ error: ‘Unauthorized ESP32 request’ });
+return res.status(401).json({ error: 'Unauthorized ESP32 request' });
 }
 
-```
+
 const { records, offlineSession, institutionCode } = req.body;
 
 // Find company by institution code
@@ -779,10 +768,9 @@ for (const record of (records || [])) {
 
 console.log(`[ESP32 Sync] institution=${institutionCode} synced=${synced} skipped=${skipped} errors=${errors.length}`);
 res.json({ ok: true, synced, skipped, errors });
-```
 
 } catch (error) {
-console.error(’[ESP32 Sync] Error:’, error);
-res.status(500).json({ error: ’Sync failed: ’ + error.message });
+console.error('[ESP32 Sync] Error:', error);
+res.status(500).json({ error: 'Sync failed: ' + error.message });
 }
 };
