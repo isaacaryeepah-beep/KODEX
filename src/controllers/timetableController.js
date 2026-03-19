@@ -69,7 +69,7 @@ exports.create = async (req, res) => {
     if (clash) {
       const clashCourse = await Course.findById(clash.course).select('title').lean();
       return res.status(400).json({
-        error: `Time clash with "${clashCourse?.title || 'another class'}" on ${DAYS[dayOfWeek]} ${clash.startTime}–${clash.endTime}`
+        error: `Time clash with "${clashCourse?.title || 'another class'}" on ${DAYS[dayOfWeek]} ${clash.startTime}-${clash.endTime}`
       });
     }
 
