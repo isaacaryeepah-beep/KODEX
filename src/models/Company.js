@@ -94,6 +94,23 @@ const companySchema = new mongoose.Schema(
       type: String,
       default: null,
     },
+    // ── ESP32 Hub ─────────────────────────────────────────────
+    esp32Token: {
+      type: String,
+      default: null,         // set when ESP32 registers itself
+    },
+    esp32Online: {
+      type: Boolean,
+      default: false,        // true when ESP32 has polled recently
+    },
+    esp32LastSeen: {
+      type: Date,
+      default: null,
+    },
+    esp32PendingCommand: {
+      type: Object,
+      default: null,         // { action:'start'|'stop', sessionId, title, issuedAt }
+    },
     isActive: {
       type: Boolean,
       default: true,
