@@ -49,7 +49,7 @@ const attendanceSessionSchema = new mongoose.Schema(
       type: String,
       default: null,
     },
-    // When true, only ESP32 WiFi marks accepted — app/mobile data blocked
+    // When true, only ESP32 WiFi marks accepted -- app/mobile data blocked
     esp32Only: {
       type: Boolean,
       default: false,
