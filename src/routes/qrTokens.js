@@ -12,10 +12,10 @@ const router = express.Router();
 router.use(authenticate);
 router.use(requireActiveSubscription);
 
-const QR_EXPIRY_SECONDS   = 15;   // QR rotates every 15s — time-gated, multi-use
-const VERBAL_EXPIRY_MINUTES = 5;  // Verbal code valid for 5 minutes — multi-use
+const QR_EXPIRY_SECONDS   = 15;   // QR rotates every 15s - time-gated, multi-use
+const VERBAL_EXPIRY_MINUTES = 5;  // Verbal code valid for 5 minutes - multi-use
 
-// ── Generate a token (QR or verbal) ─────────────────────────────────────────
+// – Generate a token (QR or verbal) —————————————–
 router.post(
 “/generate”,
 requireRole(“admin”, “manager”, “lecturer”, “superadmin”),
@@ -59,7 +59,7 @@ const { sessionId, expiryMinutes, expirySeconds, codeType = “qr” } = req.bod
   // Calculate expiry
   let expiresAt;
   if (codeType === "verbal") {
-    // Hard-coded to exactly 5 minutes — not overridable by caller
+    // Hard-coded to exactly 5 minutes - not overridable by caller
     expiresAt = new Date(Date.now() + VERBAL_EXPIRY_MINUTES * 60 * 1000);
   } else {
     const secs = parseInt(expirySeconds) || QR_EXPIRY_SECONDS;
@@ -124,7 +124,7 @@ const { sessionId, expiryMinutes, expirySeconds, codeType = “qr” } = req.bod
 }
 );
 
-// ── Validate a token (used by student app before marking) ────────────────────
+// – Validate a token (used by student app before marking) ––––––––––
 router.post(”/validate”, validateDevice, enforceLogoutRestriction, async (req, res) => {
 try {
 const { token, code, sessionId } = req.body;
@@ -150,7 +150,7 @@ const qrToken = await QrToken.findOne(query).populate([
 if (!qrToken) return res.status(404).json({ valid: false, error: "Token not found" });
 if (qrToken.isExpired()) return res.status(410).json({ valid: false, error: "Token has expired" });
 
-// QR is time-gated — not single-use
+// QR is time-gated - not single-use
 res.json({
   valid: true,
   qrToken: {
@@ -170,7 +170,7 @@ res.status(500).json({ error: “Failed to validate token” });
 }
 });
 
-// ── List tokens for a session ────────────────────────────────────────────────
+// – List tokens for a session ————————————————
 router.get(
 “/session/:sessionId”,
 requireRole(“admin”, “manager”, “lecturer”, “superadmin”),
