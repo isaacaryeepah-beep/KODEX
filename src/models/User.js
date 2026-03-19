@@ -77,7 +77,7 @@ const userSchema = new mongoose.Schema(
     },
     mustChangePassword: { type: Boolean, default: false }, // set true after admin temp reset
     // 4-digit PIN for ESP32 classroom attendance marking
-    // Simpler than full password — set by student in their profile
+    // Simpler than full password -- set by student in their profile
     attendancePin:     { type: String, default: null, select: false },  // bcrypt hashed
     attendancePinSet:  { type: Boolean, default: false },
     resetPasswordToken: { type: String, default: null },
