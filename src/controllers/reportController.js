@@ -4,7 +4,7 @@ const AttendanceRecord = require("../models/AttendanceRecord");
 const User = require("../models/User");
 const Course = require("../models/Course");
 const Quiz = require("../models/Quiz");
-const QuizSubmission = require("../models/QuizSubmission"); // legacy — kept for reference
+const QuizSubmission = require("../models/QuizSubmission"); // legacy -- kept for reference
 const Attempt = require("../models/Attempt");
 const Company = require("../models/Company");
 
