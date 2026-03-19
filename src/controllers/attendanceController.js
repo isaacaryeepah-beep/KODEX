@@ -318,6 +318,8 @@ const methodMap = {
   zoom: "jitsi_join",
 };
 
+let attendanceMethod = method ? (methodMap[method] || method) : "manual";
+
 // sessionId is optional - auto-detect the active session if not supplied
 let session;
 let resolvedSessionId = sessionId;
@@ -368,8 +370,7 @@ if (existingRecord) {
   return res.status(409).json({ error: "Attendance already marked for this session" });
 }
 
-// Define attendanceMethod BEFORE the esp32Only check
-let attendanceMethod = method ? (methodMap[method] || method) : "manual";
+
 
 // -- ESP32-only mode: block app/mobile data marking ------
 // Only enforce if ESP32 is still online (polled within last 30s)
