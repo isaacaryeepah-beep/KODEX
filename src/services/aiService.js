@@ -1,7 +1,7 @@
 /**
  * aiService.js
  * Calls Anthropic Claude to generate quiz questions from text content.
- * Uses native https — no SDK needed.
+ * Uses native https -- no SDK needed.
  */
 
 const https = require("https");
@@ -28,7 +28,7 @@ async function generateQuestionsFromText(content, count = 5, types = ["single"],
   }).join("; ");
 
   const difficultyNote = difficulty === "mixed"
-    ? "Mix difficulty levels — some easy recall, some application, some analysis."
+    ? "Mix difficulty levels -- some easy recall, some application, some analysis."
     : `All questions should be ${difficulty} difficulty.`;
 
   const prompt = `You are an expert educational assessment creator. Based on the study material below, generate exactly ${count} quiz questions.
@@ -36,11 +36,11 @@ async function generateQuestionsFromText(content, count = 5, types = ["single"],
 RULES:
 - ${difficultyNote}
 - Question types to use: ${types.join(", ")}. Distribute evenly if multiple types requested.
-- For "single" and "multiple" questions: provide exactly 4 options (A-D). Options must be plausible — avoid obviously wrong distractors.
+- For "single" and "multiple" questions: provide exactly 4 options (A-D). Options must be plausible -- avoid obviously wrong distractors.
 - For "fill" questions: no options needed. The answer should be a specific term, number, or short phrase.
 - Do NOT copy sentences verbatim from the material. Paraphrase and test understanding.
 - Marks: 1 for easy/recall, 2 for application, 3 for analysis/evaluation.
-- Return ONLY valid JSON — no markdown, no explanation, no preamble.
+- Return ONLY valid JSON -- no markdown, no explanation, no preamble.
 
 JSON format (array of objects):
 [
@@ -124,7 +124,7 @@ Generate exactly ${count} questions now:`;
   } catch {
     // Try to extract JSON array from the response
     const match = clean.match(/\[[\s\S]*\]/);
-    if (!match) throw new Error("AI returned invalid JSON — please try again");
+    if (!match) throw new Error("AI returned invalid JSON -- please try again");
     questions = JSON.parse(match[0]);
   }
 
