@@ -93,7 +93,7 @@ exports.status = async (req, res) => {
 // Verifies index number + PIN, then marks attendance.
 exports.markViaESP32 = async (req, res) => {
   try {
-    const { indexNumber, pin, sessionId } = req.body;
+    const { indexNumber, pin, sessionId, deviceFingerprint } = req.body;
     if (!indexNumber || !pin) {
       return res.status(400).json({ error: 'indexNumber and pin required' });
     }
@@ -135,6 +135,21 @@ exports.markViaESP32 = async (req, res) => {
       return res.status(404).json({ error: 'No active session. Wait for your lecturer to start.' });
     }
 
+    // ── Device fingerprint check ─────────────────────────
+    // Block same device marking twice in same session
+    if (deviceFingerprint) {
+      const deviceUsed = await AttendanceRecord.findOne({
+        session:           session._id,
+        deviceFingerprint: deviceFingerprint,
+      });
+      if (deviceUsed) {
+        return res.status(409).json({
+          error: 'This device has already been used to mark attendance in this session. Each phone can only mark once.',
+        });
+      }
+    }
+    // ─────────────────────────────────────────────────────
+
     // Check already marked
     const existing = await AttendanceRecord.findOne({ session: session._id, user: student._id });
     if (existing) {
@@ -149,12 +164,13 @@ exports.markViaESP32 = async (req, res) => {
     const status = timeSinceStart > 15 * 60 * 1000 ? 'late' : 'present';
 
     const record = await AttendanceRecord.create({
-      session:  session._id,
-      user:     student._id,
-      company:  student.company,
+      session:           session._id,
+      user:              student._id,
+      company:           student.company,
       status,
-      method:   'ble_mark',
-      markedAt: new Date(),
+      method:            'ble_mark',
+      markedAt:          new Date(),
+      deviceFingerprint: deviceFingerprint || null,
     });
 
     console.log(`[ESP32] Marked: ${student.name} (${indexNumber}) — ${status}`);
