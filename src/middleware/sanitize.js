@@ -33,7 +33,7 @@ function stripXSS(value) {
     .trim();
 }
 
-// Fields that must never be sanitized — pass through exactly as typed
+// Fields that must never be sanitized -- pass through exactly as typed
 const SKIP_SANITIZE_KEYS = new Set(['password', 'newPassword', 'confirmPassword', 'token', 'resetCode', 'currentPassword']);
 
 // Recursively sanitize all string values in an object
@@ -45,7 +45,7 @@ function sanitizeObject(obj, depth = 0) {
 
   const result = {};
   for (const [key, value] of Object.entries(obj)) {
-    // Skip password/token fields — must arrive exactly as typed
+    // Skip password/token fields -- must arrive exactly as typed
     if (SKIP_SANITIZE_KEYS.has(key)) {
       result[key] = value;
     } else {
