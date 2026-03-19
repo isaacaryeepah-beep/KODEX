@@ -360,13 +360,25 @@ exports.markAttendance = async (req, res) => {
     let attendanceMethod = method ? (methodMap[method] || method) : "manual";
 
     // ── ESP32-only mode: block app/mobile data marking ──────
-    // Safe check — esp32Only may not exist on older sessions
+    // Only enforce if ESP32 is still online (polled within last 30s)
+    // If ESP32 goes offline, fall back to normal app marking
     const isEsp32Only = session.esp32Only === true;
-    console.log('[MARK] esp32Only:', isEsp32Only, 'method:', attendanceMethod, 'session:', session._id);
     if (isEsp32Only && attendanceMethod !== 'ble_mark') {
-      return res.status(403).json({
-        error: 'This session requires you to be physically present in the classroom. Connect to the KODEX-CLASSROOM WiFi and open http://192.168.4.1 to mark your attendance.',
-      });
+      const companyForEsp32 = await Company.findById(req.user.company).select('esp32LastSeen esp32Token');
+      const esp32StillOnline = companyForEsp32?.esp32Token &&
+        companyForEsp32?.esp32LastSeen &&
+        (Date.now() - new Date(companyForEsp32.esp32LastSeen).getTime() < 30000);
+
+      console.log('[MARK] esp32Only:', isEsp32Only, 'esp32StillOnline:', esp32StillOnline, 'method:', attendanceMethod);
+
+      if (esp32StillOnline) {
+        return res.status(403).json({
+          error: 'This session requires you to be physically present in the classroom. Connect to the KODEX-CLASSROOM WiFi and open http://192.168.4.1 to mark your attendance.',
+        });
+      } else {
+        // ESP32 went offline — allow app marking as fallback
+        console.log('[MARK] ESP32 offline — allowing app fallback');
+      }
     }
     // ─────────────────────────────────────────────────────
     let qrTokenRef = null;
