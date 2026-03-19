@@ -6,7 +6,7 @@ const requireActiveSubscription = async (req, res, next) => {
   }
 
   // Roles fully exempt from subscription checks
-  // Admin is exempt — they own the company, blocking them locks them out of their own account
+  // Admin is exempt -- they own the company, blocking them locks them out of their own account
   const alwaysExempt = ["superadmin", "admin", "employee", "student"];  // hod & manager follow subscription rules
   if (alwaysExempt.includes(req.user.role)) {
     return next();
@@ -19,7 +19,7 @@ const requireActiveSubscription = async (req, res, next) => {
       return res.status(404).json({ error: "Company not found" });
     }
 
-    // Lecturers must subscribe just like admins and managers — no free pass.
+    // Lecturers must subscribe just like admins and managers -- no free pass.
     if (company.subscriptionActive) {
       req.company = company;
       return next();
