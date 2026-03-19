@@ -1,13 +1,13 @@
 const API = ‘’;
 
-// ═══════════════════════════════════════════════════════
+// —————————————————––
 // TOAST NOTIFICATION SYSTEM
-// Usage: toast(‘Message’)           → info (default)
-//        toast(‘Message’, ‘success’) → green
-//        toast(‘Message’, ‘error’)   → red  
-//        toast(‘Message’, ‘warning’) → amber
-//        toastConfirm(‘Sure?’, onConfirm) → replaces confirm()
-// ═══════════════════════════════════════════════════════
+// Usage: toast(‘Message’)           - info (default)
+//        toast(‘Message’, ‘success’) - green
+//        toast(‘Message’, ‘error’)   - red  
+//        toast(‘Message’, ‘warning’) - amber
+//        toastConfirm(‘Sure?’, onConfirm) - replaces confirm()
+// —————————————————––
 
 (function() {
 // Inject toast CSS once
@@ -140,10 +140,10 @@ return container;
 }
 
 const ICONS = {
-success: ‘✓’,
-error:   ‘✕’,
-warning: ‘⚠’,
-info:    ‘ℹ’,
+success: ‘-’,
+error:   ‘-’,
+warning: ‘-’,
+info:    ‘-’,
 };
 
 const TITLES = {
@@ -174,7 +174,7 @@ el.innerHTML = `
   <div class="toast-body">
     <div class="toast-msg">${message}</div>
   </div>
-  <span class="toast-close">×</span>
+  <span class="toast-close">-</span>
   <div class="toast-progress" style="width:100%"></div>
 `;
 
@@ -225,12 +225,12 @@ window.toastError   = (msg, opts) => window.toast(msg, ‘error’,   opts);
 window.toastWarning = (msg, opts) => window.toast(msg, ‘warning’, opts);
 window.toastInfo    = (msg, opts) => window.toast(msg, ‘info’,    opts);
 
-// Replaces window.confirm() — returns a Promise
+// Replaces window.confirm() - returns a Promise
 window.toastConfirm = function(message, onConfirm, onCancel, opts = {}) {
 const c = getContainer();
 const el = document.createElement(‘div’);
 el.className = ‘toast toast-warning’;
-el.innerHTML = `<span class="toast-icon">⚠</span> <div class="toast-body"> <div class="toast-msg">${message}</div> <div class="toast-confirm-btns"> <button class="toast-confirm-no">${opts.cancelLabel || 'Cancel'}</button> <button class="toast-confirm-yes">${opts.confirmLabel || 'Confirm'}</button> </div> </div>`;
+el.innerHTML = `<span class="toast-icon">-</span> <div class="toast-body"> <div class="toast-msg">${message}</div> <div class="toast-confirm-btns"> <button class="toast-confirm-no">${opts.cancelLabel || 'Cancel'}</button> <button class="toast-confirm-yes">${opts.confirmLabel || 'Confirm'}</button> </div> </div>`;
 
 ```
 const dismiss = () => {
@@ -258,7 +258,7 @@ requestAnimationFrame(() => requestAnimationFrame(() => el.classList.add('toast-
 
 let token = localStorage.getItem(‘token’);
 
-// ── Device fingerprint for 6-hour cross-device logout lock ───────────────────
+// – Device fingerprint for 6-hour cross-device logout lock —————––
 function getDeviceFingerprint() {
 const nav = window.navigator;
 const raw = [
@@ -276,18 +276,18 @@ hash = ((hash << 5) - hash + raw.charCodeAt(i)) | 0;
 return ‘fp_’ + Math.abs(hash).toString(16);
 }
 
-// ══════════════════════════════════════════════════════════════════════════════
+// ——————————————————————————
 //  OFFLINE LOGIN MODULE
 //  - On successful online login, saves a secure profile to localStorage
 //  - On offline login attempt, verifies against the cached profile
 //  - Uses SHA-256 hashing (no plaintext passwords ever stored)
 //  - Supports all roles: admin, lecturer, employee, student
-// ══════════════════════════════════════════════════════════════════════════════
+// ——————————————————————————
 
 const OFFLINE_LOGIN_KEY = ‘kodex_offline_profiles’;  // stores cached user profiles
 const OFFLINE_LOGIN_MAX_AGE_DAYS = 30;               // cached profile expires after 30 days
 
-// ── Hash a password with SHA-256 (async, no library needed) ──────────────────
+// – Hash a password with SHA-256 (async, no library needed) ——————
 async function hashPassword(password) {
 const encoder = new TextEncoder();
 const data = encoder.encode(password + ‘KODEX_SALT_2025’); // salted hash
@@ -296,7 +296,7 @@ const hashArray = Array.from(new Uint8Array(hashBuffer));
 return hashArray.map(b => b.toString(16).padStart(2, ‘0’)).join(’’);
 }
 
-// ── Save user profile after successful online login ───────────────────────────
+// – Save user profile after successful online login —————————
 async function saveOfflineProfile(credentials, userData) {
 try {
 const profiles = JSON.parse(localStorage.getItem(OFFLINE_LOGIN_KEY) || ‘{}’);
@@ -333,7 +333,7 @@ console.warn(’[OfflineLogin] Failed to save profile:’, e);
 }
 }
 
-// ── Build a unique key per user identity ─────────────────────────────────────
+// – Build a unique key per user identity ———————————––
 function buildProfileKey(credentials) {
 if (credentials.indexNumber) {
 return `student::${credentials.indexNumber}::${(credentials.institutionCode || '').toUpperCase()}`;
@@ -345,7 +345,7 @@ const role = credentials.loginRole || ‘admin’;
 return `${role}::${(credentials.email || '').toLowerCase()}`;
 }
 
-// ── Attempt offline login ─────────────────────────────────────────────────────
+// – Attempt offline login —————————————————–
 async function attemptOfflineLogin(credentials) {
 try {
 const profiles = JSON.parse(localStorage.getItem(OFFLINE_LOGIN_KEY) || ‘{}’);
@@ -385,7 +385,7 @@ throw e;
 }
 }
 
-// ── Clear a specific offline profile (on logout) ──────────────────────────────
+// – Clear a specific offline profile (on logout) ——————————
 function clearOfflineProfile(userRole, email, indexNumber, institutionCode) {
 try {
 const profiles = JSON.parse(localStorage.getItem(OFFLINE_LOGIN_KEY) || ‘{}’);
@@ -397,7 +397,7 @@ console.warn(’[OfflineLogin] Could not clear profile:’, e);
 }
 }
 
-// ── Show offline login notice on the form ─────────────────────────────────────
+// – Show offline login notice on the form ———————————––
 function showOfflineLoginNotice(containerId) {
 const existing = document.getElementById(‘offline-login-notice’);
 if (existing) return;
@@ -408,7 +408,7 @@ notice.style.cssText = [
 ‘border-radius:8px’,‘padding:10px 14px’,‘font-size:12px’,
 ‘margin-bottom:12px’,‘display:flex’,‘align-items:center’,‘gap:8px’
 ].join(’;’);
-notice.innerHTML = `<span style="font-size:16px">📶</span> <span><strong>You're offline.</strong> Signing in with your saved credentials.</span>`;
+notice.innerHTML = `<span style="font-size:16px">-</span> <span><strong>You're offline.</strong> Signing in with your saved credentials.</span>`;
 const container = document.getElementById(containerId);
 if (container) container.prepend(notice);
 }
@@ -418,19 +418,19 @@ const n = document.getElementById(‘offline-login-notice’);
 if (n) n.remove();
 }
 
-// ══════════════════════════════════════════════════════════════════════════════
+// ——————————————————————————
 //  OFFLINE SUPPORT MODULE
 //  - Detects online/offline state and shows a banner
 //  - Caches read data (sessions, courses, attendance) in localStorage
 //  - Queues write actions (start/stop session, manual mark, student mark)
 //  - Auto-syncs the queue the moment connection is restored
-// ══════════════════════════════════════════════════════════════════════════════
+// ——————————————————————————
 
 const OFFLINE_CACHE_KEY   = ‘edu_offline_cache’;
 const OFFLINE_QUEUE_KEY   = ‘edu_offline_queue’;
 const OFFLINE_BANNER_ID   = ‘offline-banner’;
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
+// – Helpers ——————————————————————
 function isOnline() { return navigator.onLine; }
 
 function offlineCache(key, data) {
@@ -469,7 +469,7 @@ return JSON.parse(localStorage.getItem(OFFLINE_QUEUE_KEY) || ‘[]’).length;
 } catch(e) { return 0; }
 }
 
-// ── Banner ────────────────────────────────────────────────────────────────────
+// – Banner ––––––––––––––––––––––––––––––––––
 function showOfflineBanner(hasPending) {
 let banner = document.getElementById(OFFLINE_BANNER_ID);
 if (!banner) {
@@ -489,13 +489,13 @@ if (!isOnline()) {
 banner.style.background = ‘#fef3c7’;
 banner.style.color = ‘#92400e’;
 banner.style.borderBottom = ‘2px solid #fbbf24’;
-banner.innerHTML = `<span>📶</span> <span>You're offline — attendance changes will sync when you reconnect</span> ${count > 0 ?`<span style="background:#f59e0b;color:#fff;padding:2px 8px;border-radius:999px;font-size:11px">${count} pending</span>`: ''}`;
+banner.innerHTML = `<span>-</span> <span>You're offline - attendance changes will sync when you reconnect</span> ${count > 0 ?`<span style="background:#f59e0b;color:#fff;padding:2px 8px;border-radius:999px;font-size:11px">${count} pending</span>`: ''}`;
 banner.style.display = ‘flex’;
 } else if (count > 0) {
 banner.style.background = ‘#eff6ff’;
 banner.style.color = ‘#1e40af’;
 banner.style.borderBottom = ‘2px solid #93c5fd’;
-banner.innerHTML = `<span>🔄</span> <span>Back online — syncing ${count} pending action${count !== 1 ? 's' : ''}…</span>`;
+banner.innerHTML = `<span>-</span> <span>Back online - syncing ${count} pending action${count !== 1 ? 's' : ''}-</span>`;
 banner.style.display = ‘flex’;
 } else {
 banner.style.display = ‘none’;
@@ -507,14 +507,14 @@ const b = document.getElementById(OFFLINE_BANNER_ID);
 if (b) b.style.display = ‘none’;
 }
 
-// ── Auto-sync on reconnect ────────────────────────────────────────────────────
+// – Auto-sync on reconnect ––––––––––––––––––––––––––
 async function syncOfflineQueue() {
 const raw = localStorage.getItem(OFFLINE_QUEUE_KEY);
 if (!raw) return;
 const queue = JSON.parse(raw);
 if (!queue.length) return;
 
-console.log(`[Offline] Syncing ${queue.length} queued action(s)…`);
+console.log(`[Offline] Syncing ${queue.length} queued action(s)-`);
 showOfflineBanner(true);
 
 const remaining = [];
@@ -530,7 +530,7 @@ e.message.includes(‘400’) || e.message.includes(‘409’) || e.message.incl
 if (!is4xx) {
 remaining.push(action);
 } else {
-console.log(`[Offline] Dropping ${action.label || action.url} — rejected by server (${e.status || e.message})`);
+console.log(`[Offline] Dropping ${action.label || action.url} - rejected by server (${e.status || e.message})`);
 }
 }
 }
@@ -543,7 +543,7 @@ hideOfflineBanner();
 const active = document.querySelector(’.nav-item.active’)?.dataset?.view;
 if (active === ‘sessions’) renderSessions();
 else if (active === ‘mark-attendance’) renderMarkAttendance();
-showToastNotif(‘✅ All offline actions synced!’, ‘success’);
+showToastNotif(’- All offline actions synced!’, ‘success’);
 } else {
 showOfflineBanner(true);
 }
@@ -628,7 +628,7 @@ const res = await fetch(`${API}${path}`, { …options, headers: { …headers, �
 if (res.headers.get(‘content-type’)?.includes(‘application/json’)) {
 const data = await res.json();
 if (!res.ok) {
-// Subscription gate — redirect lecturer to subscription page automatically
+// Subscription gate - redirect lecturer to subscription page automatically
 if (res.status === 403 && data.subscriptionRequired) {
 showSubscriptionGate(data.message);
 throw new Error(data.error || ‘Subscription required’);
@@ -651,16 +651,16 @@ if (diff < 604800) return Math.floor(diff/86400) + ‘d ago’;
 return new Date(dateStr).toLocaleDateString();
 }
 
-// ── Date formatting helper ───────────────────────────────────────────────────
+// – Date formatting helper —————————————————
 function fmtDate(d) {
-if (!d) return ‘—’;
+if (!d) return ‘-’;
 return new Date(d).toLocaleString(‘en-GB’, {
 day: ‘numeric’, month: ‘short’, year: ‘numeric’,
 hour: ‘2-digit’, minute: ‘2-digit’
 });
 }
 
-// ── HTML escape helper ────────────────────────────────────────────────────────
+// – HTML escape helper ––––––––––––––––––––––––––––
 function esc(s) {
 return (s || ‘’).replace(/&/g, ‘&’).replace(/</g, ‘<’).replace(/>/g, ‘>’).replace(/”/g, ‘"’);
 }
@@ -674,7 +674,7 @@ setTimeout(() => el.style.display = ‘none’, 5000);
 
 let selectedPortalType = ‘admin-corporate’;
 
-// ── Mode selector (Corporate / Academic two-step flow) ────────────────────────
+// – Mode selector (Corporate / Academic two-step flow) ————————
 let _selectedMode = null;
 function selectMode(mode) {
 const tglCorp  = document.getElementById(‘mode-tgl-corp’);
@@ -796,7 +796,7 @@ adminForgotEmail = phone || ‘’; adminForgotEmailAddr = email || ‘’; admi
 document.getElementById(‘admin-reset-code-group’).classList.remove(‘hidden’);
 document.getElementById(‘admin-new-password-group’).classList.remove(‘hidden’);
 btn.textContent = ‘Reset Password’; btn.disabled = false;
-setAdminForgotMsg(‘📱 ’ + (data.message || ‘Reset code sent to your phone via SMS.’), true);
+setAdminForgotMsg(’- ’ + (data.message || ‘Reset code sent to your phone via SMS.’), true);
 } catch(e) { btn.textContent = ‘Request Reset Code’; btn.disabled = false; setAdminForgotMsg(e.message, false); }
 } else {
 const resetCode = document.getElementById(‘admin-reset-code’).value.trim();
@@ -808,7 +808,7 @@ btn.textContent = ‘Resetting…’; btn.disabled = true;
 try {
 await api(’/api/auth/reset-password-email’, { method: ‘POST’, body: JSON.stringify({ phone: adminForgotEmail || undefined, email: adminForgotEmailAddr || undefined, resetCode, newPassword }) });
 adminForgotStep = ‘request’;
-setAdminForgotMsg(‘✅ Password reset! Redirecting to sign in…’, true);
+setAdminForgotMsg(’- Password reset! Redirecting to sign in…’, true);
 setTimeout(() => { showAdminLogin(); }, 1800);
 } catch(e) { btn.textContent = ‘Reset Password’; btn.disabled = false; setAdminForgotMsg(e.message, false); }
 }
@@ -884,7 +884,7 @@ lecturerForgotEmail = phone || email || ‘’; lecturerForgotIsEmail = !phone &
 document.getElementById(‘lecturer-reset-code-group’).classList.remove(‘hidden’);
 document.getElementById(‘lecturer-new-password-group’).classList.remove(‘hidden’);
 btn.textContent = ‘Reset Password’; btn.disabled = false;
-setLecturerForgotMsg(‘✅ ’ + (data.message || ‘Reset code sent.’), true);
+setLecturerForgotMsg(’- ’ + (data.message || ‘Reset code sent.’), true);
 } catch(e) { btn.textContent = ‘Request Reset Code’; btn.disabled = false; setLecturerForgotMsg(e.message, false); }
 } else {
 const resetCode = document.getElementById(‘lecturer-reset-code’).value.trim();
@@ -896,7 +896,7 @@ btn.textContent = ‘Resetting…’; btn.disabled = true;
 try {
 await api(’/api/auth/reset-password-email’, { method: ‘POST’, body: JSON.stringify({ phone: lecturerForgotIsEmail ? undefined : lecturerForgotEmail, email: lecturerForgotIsEmail ? lecturerForgotEmail : undefined, resetCode, newPassword }) });
 lecturerForgotStep = ‘request’;
-setLecturerForgotMsg(‘✅ Password reset! Redirecting to sign in…’, true);
+setLecturerForgotMsg(’- Password reset! Redirecting to sign in…’, true);
 setTimeout(() => { showLecturerLogin(); }, 1800);
 } catch(e) { btn.textContent = ‘Reset Password’; btn.disabled = false; setLecturerForgotMsg(e.message, false); }
 }
@@ -999,7 +999,7 @@ const m = msg.toLowerCase();
 if (m.includes(‘invalid credentials’))         return ‘Wrong Email or Password.’;
 if (m.includes(‘institution not found’))        return ‘Institution code not found. Please check and try again.’;
 if (m.includes(‘company not found’))            return ‘Institution code not found. Please check and try again.’;
-if (m.includes(‘pending approval’))             return msg; // keep as-is — informative
+if (m.includes(‘pending approval’))             return msg; // keep as-is - informative
 if (m.includes(‘too many login’))               return ‘Too many failed attempts. Please wait 15 minutes.’;
 if (m.includes(‘too many requests’))            return ‘Too many requests. Please slow down and try again.’;
 if (m.includes(‘no offline profile’))           return ‘You're offline. Please connect to the internet to login for the first time.’;
@@ -1016,7 +1016,7 @@ const email = document.getElementById(‘admin-login-email’).value.trim();
 const password = document.getElementById(‘admin-login-password’).value;
 if (!email) return showAdminError(‘Please enter your email.’);
 if (!password) return showAdminError(‘Please enter your password.’);
-if (btn) { btn.textContent = ‘Signing in…’; btn.disabled = true; }
+if (btn) { btn.textContent = ‘Signing in-’; btn.disabled = true; }
 
 ```
 const portalMode = selectedPortalType === 'admin-academic' ? 'academic' : 'corporate';
@@ -1091,17 +1091,17 @@ const email = document.getElementById(‘lecturer-login-email’).value.trim();
 const password = document.getElementById(‘lecturer-login-password’).value;
 if (!email) return showLecturerError(‘Please enter your email’);
 if (!password) return showLecturerError(‘Please enter your password’);
-if (btn) { btn.textContent = ‘Signing in…’; btn.disabled = true; }
+if (btn) { btn.textContent = ‘Signing in-’; btn.disabled = true; }
 const credentials = { email, password, loginRole: ‘lecturer’, portalMode: ‘academic’, deviceId: getDeviceFingerprint() };
 
 ```
 let data;
 if (!isOnline()) {
-  // ── OFFLINE PATH ──
+  // -- OFFLINE PATH --
   showOfflineLoginNotice('lecturer-login-form');
   data = await attemptOfflineLogin(credentials);
 } else {
-  // ── ONLINE PATH ──
+  // -- ONLINE PATH --
   removeOfflineLoginNotice();
   data = await initiate2FA(credentials);
   if (data.user && !data.user.isApproved) {
@@ -1170,7 +1170,7 @@ if (regMode === 'create') {
 const data = await api('/api/auth/register-lecturer', { method: 'POST', body: JSON.stringify(body) });
 
 if (data.token) {
-  // Created own institution — log them in immediately
+  // Created own institution - log them in immediately
   token = data.token;
   localStorage.setItem('token', token);
   currentUser = data.user;
@@ -1258,7 +1258,7 @@ employeeForgotCode = institutionCode; employeeForgotStep = ‘reset’;
 document.getElementById(‘employee-reset-code-group’).classList.remove(‘hidden’);
 document.getElementById(‘employee-new-password-group’).classList.remove(‘hidden’);
 btn.textContent = ‘Reset Password’; btn.disabled = false;
-setMsg(‘📱 ’ + (data.message || ‘Reset code sent to your phone via SMS.’), true);
+setMsg(’- ’ + (data.message || ‘Reset code sent to your phone via SMS.’), true);
 } catch(e) { btn.textContent = ‘Request Reset Code’; btn.disabled = false; setMsg(e.message, false); }
 } else {
 const resetCode = document.getElementById(‘employee-reset-code’)?.value.trim();
@@ -1270,15 +1270,15 @@ btn.textContent = ‘Resetting…’; btn.disabled = true;
 try {
 await api(’/api/auth/reset-password-email’, { method: ‘POST’, body: JSON.stringify({ phone: employeeForgotEmailType === ‘phone’ ? employeeForgotEmail : undefined, email: employeeForgotEmailType === ‘email’ ? employeeForgotEmail : undefined, institutionCode: employeeForgotCode, resetCode, newPassword }) });
 employeeForgotStep = ‘request’;
-setMsg(‘✅ Password reset! Redirecting to sign in…’, true);
+setMsg(’- Password reset! Redirecting to sign in…’, true);
 setTimeout(() => { showEmployeeLogin(); }, 1800);
 } catch(e) { btn.textContent = ‘Reset Password’; btn.disabled = false; setMsg(e.message, false); }
 }
 }
 
-// ════════════════════════════════════════════════════════════════════════════
+// ––––––––––––––––––––––––––––––––––––––
 //  HOD AUTH
-// ════════════════════════════════════════════════════════════════════════════
+// ––––––––––––––––––––––––––––––––––––––
 function showHodLogin() {
 document.getElementById(‘hod-login-form’).classList.remove(‘hidden’);
 document.getElementById(‘hod-forgot-form’).classList.add(‘hidden’);
@@ -1300,7 +1300,7 @@ const email    = document.getElementById(‘hod-login-email’).value.trim();
 const password = document.getElementById(‘hod-login-password’).value;
 if (!email)    return showHodError(‘Please enter your email.’);
 if (!password) return showHodError(‘Please enter your password.’);
-if (btn) { btn.textContent = ‘Signing in…’; btn.disabled = true; }
+if (btn) { btn.textContent = ‘Signing in-’; btn.disabled = true; }
 
 ```
 const credentials = { email, password, loginRole: 'hod', portalMode: 'academic', deviceId: getDeviceFingerprint() };
@@ -1379,17 +1379,17 @@ const password = document.getElementById(‘employee-login-password’).value;
 if (!email) return showEmployeeError(‘Please enter your email’);
 if (!institutionCode) return showEmployeeError(‘Please enter your institution code’);
 if (!password) return showEmployeeError(‘Please enter your password’);
-if (btn) { btn.textContent = ‘Signing in…’; btn.disabled = true; }
+if (btn) { btn.textContent = ‘Signing in-’; btn.disabled = true; }
 const credentials = { email, password, institutionCode, loginRole: ‘employee’, deviceId: getDeviceFingerprint() };
 
 ```
 let data;
 if (!isOnline()) {
-  // ── OFFLINE PATH ──
+  // -- OFFLINE PATH --
   showOfflineLoginNotice('employee-login-form');
   data = await attemptOfflineLogin(credentials);
 } else {
-  // ── ONLINE PATH ──
+  // -- ONLINE PATH --
   removeOfflineLoginNotice();
   data = await initiate2FA(credentials);
   // Cache profile for future offline logins
@@ -1451,17 +1451,17 @@ const password = document.getElementById(‘student-login-password’).value;
 if (!indexNumber) return showStudentError(‘Please enter your student ID’);
 if (!institutionCode) return showStudentError(‘Please enter your institution code’);
 if (!password) return showStudentError(‘Please enter your password’);
-if (btn) { btn.textContent = ‘Signing in…’; btn.disabled = true; }
+if (btn) { btn.textContent = ‘Signing in-’; btn.disabled = true; }
 const credentials = { indexNumber, password, institutionCode, loginRole: ‘student’, deviceId: getDeviceFingerprint() };
 
 ```
 let data;
 if (!isOnline()) {
-  // ── OFFLINE PATH ──
+  // -- OFFLINE PATH --
   showOfflineLoginNotice('student-login-form');
   data = await attemptOfflineLogin(credentials);
 } else {
-  // ── ONLINE PATH ──
+  // -- ONLINE PATH --
   removeOfflineLoginNotice();
   data = await initiate2FA(credentials);
   // Cache profile for future offline logins
@@ -1551,7 +1551,7 @@ document.getElementById(‘student-reset-code-group’).classList.remove(‘hidd
 document.getElementById(‘student-new-password-group’).classList.remove(‘hidden’);
 document.getElementById(‘student-forgot-btn’).textContent = ‘Reset Password’;
 const el = document.getElementById(‘student-auth-error’);
-// If resetCode returned, show it (no email on account) — give to lecturer
+// If resetCode returned, show it (no email on account) - give to lecturer
 const codeHint = data.resetCode ? ’ Code: ’ + data.resetCode + ’ (give this to your lecturer to pass to you)’ : ‘’;
 el.textContent = (data.message || ‘Reset code generated.’) + codeHint;
 el.style.display = ‘block’;
@@ -1629,7 +1629,7 @@ window.history.replaceState({}, ‘’, ‘/’);
 const banner = document.createElement(‘div’);
 banner.id = ‘impersonate-banner’;
 banner.style.cssText = ‘position:fixed;top:0;left:0;right:0;z-index:9999;background:#7c3aed;color:#fff;text-align:center;padding:8px 16px;font-size:13px;font-weight:600;’;
-banner.innerHTML = ‘🔑 Superadmin Impersonation Mode · <span style="opacity:.8;font-weight:400;">1 hour session</span> · <button onclick="exitImpersonation()" style="margin-left:12px;background:rgba(255,255,255,.2);border:none;color:#fff;padding:3px 10px;border-radius:6px;cursor:pointer;font-weight:700;">Exit</button>’;
+banner.innerHTML = ‘- Superadmin Impersonation Mode - <span style="opacity:.8;font-weight:400;">1 hour session</span> - <button onclick="exitImpersonation()" style="margin-left:12px;background:rgba(255,255,255,.2);border:none;color:#fff;padding:3px 10px;border-radius:6px;cursor:pointer;font-weight:700;">Exit</button>’;
 document.body.prepend(banner);
 }
 
@@ -1665,7 +1665,7 @@ if (role === ‘superadmin’ || role === ‘admin’) return ‘admin’;
 return role;
 }
 
-// ── Apply company white-label branding ────────────────────────────────────────
+// – Apply company white-label branding ––––––––––––––––––––
 async function applyBranding() {
 try {
 const mode = currentUser?.company?.mode;
@@ -1713,12 +1713,12 @@ window._kodexBranding = branding;
 ```
 
 } catch (e) {
-// Branding is non-critical — fail silently
+// Branding is non-critical - fail silently
 console.warn(’[Branding] Could not apply branding:’, e.message);
 }
 }
 
-// ── Reset branding to defaults on logout ──────────────────────────────────────
+// – Reset branding to defaults on logout –––––––––––––––––––
 function resetBranding() {
 const root = document.documentElement;
 root.style.removeProperty(’–primary’);
@@ -1745,7 +1745,7 @@ if (topbarLeft) topbarLeft.innerHTML = `<h2 style="font-size:16px;font-weight:70
 if (mc) mc.innerHTML = `
 <div style="min-height:80vh;display:flex;align-items:center;justify-content:center;padding:24px">
 <div style="background:#fff;border-radius:20px;padding:40px 36px;max-width:420px;width:100%;box-shadow:0 8px 40px rgba(99,102,241,0.12);text-align:center;border:1.5px solid #ede9fe">
-<div style="width:64px;height:64px;background:linear-gradient(135deg,#6366f1,#8b5cf6);border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 20px;font-size:28px">🔐</div>
+<div style="width:64px;height:64px;background:linear-gradient(135deg,#6366f1,#8b5cf6);border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 20px;font-size:28px">-</div>
 <h2 style="font-size:22px;font-weight:800;margin-bottom:8px;color:#1e1b4b">Set Your New Password</h2>
 <p style="color:#6b7280;font-size:14px;margin-bottom:28px;line-height:1.6">Your account has been assigned a temporary password by your administrator.<br>Please set a new password to continue.</p>
 
@@ -1767,7 +1767,7 @@ if (mc) mc.innerHTML = `
 
     <button onclick="submitForceChangePassword()"
       style="width:100%;padding:13px;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer;letter-spacing:.3px">
-      Set New Password →
+      Set New Password -
     </button>
     <p style="font-size:12px;color:#9ca3af;margin-top:16px">You cannot access the portal until you set a new password.</p>
   </div>
@@ -1793,7 +1793,7 @@ if (newPassword !== confirmPassword) return showErr(‘Passwords do not match.�
 try {
 await api(’/api/users/change-password-after-reset’, { method: ‘POST’, body: JSON.stringify({ newPassword }) });
 currentUser.mustChangePassword = false;
-toast(‘✅ Password updated! Welcome to KODEX.’, ‘ok’);
+toast(’- Password updated! Welcome to KODEX.’, ‘ok’);
 // Re-fetch user data and show dashboard properly
 const data = await api(’/api/auth/me’);
 currentUser = data.user;
@@ -1832,7 +1832,7 @@ topbarLeft.innerHTML = `
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
   </button>
   <h2>${getPortalName(role)}</h2>
-  ${companyName ? `<span class="portal-company">— ${companyName}</span>` : ''}
+  ${companyName ? `<span class="portal-company">- ${companyName}</span>` : ''}
   ${role === 'hod' && currentUser.department ? `<span class="mode-badge" style="background:#ecfeff;color:#0891b2;border:1px solid #a5f3fc;">${currentUser.department}</span>` : `<span class="mode-badge">${mode}</span>`}
 `;
 if (!document.getElementById('sidebar-overlay')) {
@@ -1869,7 +1869,7 @@ buildSidebar();
 ```
 
 loadAnnBadge();
-applyBranding(); // async — applies colors/logo in background
+applyBranding(); // async - applies colors/logo in background
 // If student arrived via QR scan link, go straight to mark-attendance to auto-submit
 if (new URLSearchParams(window.location.search).get(‘qr_token’)) {
 navigateTo(‘mark-attendance’);
@@ -2136,7 +2136,7 @@ content.innerHTML = `
             <td style="font-weight:500">${u.name}</td>
             <td>${u.email || u.indexNumber || 'N/A'}</td>
             <td><span class="status-badge status-active">${u.role}</span></td>
-            ${!isHod ? `<td>${u.department ? `<span style="font-size:11px;padding:2px 7px;border-radius:20px;background:#ecfeff;color:#0891b2;font-weight:600;">${u.department}</span>` : '—'}</td>` : ''}
+            ${!isHod ? `<td>${u.department ? `<span style="font-size:11px;padding:2px 7px;border-radius:20px;background:#ecfeff;color:#0891b2;font-weight:600;">${u.department}</span>` : '-'}</td>` : ''}
             <td>${new Date(u.createdAt).toLocaleDateString()}</td>
             <td style="white-space:nowrap">
               <button class="btn btn-sm" style="background:#22c55e;color:#fff" onclick="approveUser('${u._id}')">Approve</button>
@@ -2187,7 +2187,7 @@ const action = currentlyActive ? ‘deactivate’ : ‘activate’;
 if (!confirm(‘Are you sure you want to ’ + action + ’ this institution?’)) return;
 try {
 await api(’/api/superadmin/companies/’ + id + ‘/toggle’, { method: ‘PATCH’ });
-toastSuccess(‘Institution ’ + (currentlyActive ? ‘deactivated’ : ‘activated’) + ’ ✓’);
+toastSuccess(‘Institution ’ + (currentlyActive ? ‘deactivated’ : ‘activated’) + ’ -’);
 renderSuperadminDashboard(document.getElementById(‘main-content’));
 } catch(e) { toastError(e.message); }
 }
@@ -2200,7 +2200,7 @@ const data = await api(’/api/superadmin/companies/’ + id + ‘/extend-trial�
 method: ‘PATCH’,
 body: JSON.stringify({ days: parseInt(days) })
 });
-toastSuccess(data.message || ‘Trial extended ✓’);
+toastSuccess(data.message || ‘Trial extended -’);
 renderSuperadminDashboard(document.getElementById(‘main-content’));
 } catch(e) { toastError(e.message); }
 }
@@ -2212,18 +2212,18 @@ const data = await api(’/api/superadmin/impersonate/’ + companyId, { method:
 // Open a new tab with the impersonation token
 const url = ‘/?impersonate=’ + encodeURIComponent(data.token) + ‘&company=’ + encodeURIComponent(name);
 window.open(url, ‘_blank’);
-toastSuccess(‘Impersonation tab opened · expires in 1 hour’);
+toastSuccess(‘Impersonation tab opened - expires in 1 hour’);
 } catch(e) { toastError(e.message); }
 }
 
 async function superadminShowPayments() {
 const content = document.getElementById(‘main-content’);
-content.innerHTML = ‘<div class="loading">Loading payment history…</div>’;
+content.innerHTML = ‘<div class="loading">Loading payment history-</div>’;
 try {
 const data = await api(’/api/superadmin/payments’);
 const payments = data.payments || [];
 const total = data.totalRevenue || 0;
-content.innerHTML = `<div class="page-header"> <div><h2>Payment History</h2><p>GHS ${total.toLocaleString()} total revenue · ${payments.length} payments</p></div> <button class="btn btn-secondary btn-sm" onclick="renderSuperadminDashboard(document.getElementById('main-content'))">← Back</button> </div> <div class="card"> ${payments.length === 0 ? '<div class="empty-state"><p>No payments recorded yet. Payments appear here after Paystack webhook fires.</p></div>' :`<div style="overflow-x:auto;">
+content.innerHTML = `<div class="page-header"> <div><h2>Payment History</h2><p>GHS ${total.toLocaleString()} total revenue - ${payments.length} payments</p></div> <button class="btn btn-secondary btn-sm" onclick="renderSuperadminDashboard(document.getElementById('main-content'))">- Back</button> </div> <div class="card"> ${payments.length === 0 ? '<div class="empty-state"><p>No payments recorded yet. Payments appear here after Paystack webhook fires.</p></div>' :`<div style="overflow-x:auto;">
 <table style="width:100%;border-collapse:collapse;font-size:13px;">
 <thead><tr style="border-bottom:2px solid var(--border);">
 <th style="text-align:left;padding:9px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Institution</th>
@@ -2233,7 +2233,7 @@ content.innerHTML = `<div class="page-header"> <div><h2>Payment History</h2><p>G
 <th style="text-align:left;padding:9px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Date</th>
 </tr></thead>
 <tbody>
-${payments.map(p => ` <tr style="border-bottom:1px solid var(--border);"> <td style="padding:10px 12px;font-weight:600;">${p.company?.name || '—'}<br><span style="font-size:11px;color:var(--text-muted);font-family:monospace;">${p.company?.institutionCode || ''}</span></td> <td style="padding:10px 12px;font-weight:700;color:#16a34a;">GHS ${(p.amount || 0).toLocaleString()}</td> <td style="padding:10px 12px;"><span class="tag ${p.plan === 'yearly' ? 'tag-blue' : 'tag-green'}">${p.plan || 'unknown'}</span></td> <td style="padding:10px 12px;font-size:11px;font-family:monospace;color:var(--text-muted);">${p.reference || '—'}</td> <td style="padding:10px 12px;color:var(--text-muted);font-size:12px;">${fmtDate(p.paidAt)}</td> </tr>`).join(’’)}
+${payments.map(p => ` <tr style="border-bottom:1px solid var(--border);"> <td style="padding:10px 12px;font-weight:600;">${p.company?.name || '-'}<br><span style="font-size:11px;color:var(--text-muted);font-family:monospace;">${p.company?.institutionCode || ''}</span></td> <td style="padding:10px 12px;font-weight:700;color:#16a34a;">GHS ${(p.amount || 0).toLocaleString()}</td> <td style="padding:10px 12px;"><span class="tag ${p.plan === 'yearly' ? 'tag-blue' : 'tag-green'}">${p.plan || 'unknown'}</span></td> <td style="padding:10px 12px;font-size:11px;font-family:monospace;color:var(--text-muted);">${p.reference || '-'}</td> <td style="padding:10px 12px;color:var(--text-muted);font-size:12px;">${fmtDate(p.paidAt)}</td> </tr>`).join(’’)}
 </tbody>
 </table>
 </div>`} </div>`;
@@ -2242,12 +2242,12 @@ content.innerHTML = ‘<div class="card"><p style="color:#ef4444;">’ + e.messa
 }
 }
 
-// ════════════════════════════════════════════════════════════════════════════
-//  HOD — DASHBOARD & VIEWS
-// ════════════════════════════════════════════════════════════════════════════
+// ––––––––––––––––––––––––––––––––––––––
+//  HOD - DASHBOARD & VIEWS
+// ––––––––––––––––––––––––––––––––––––––
 async function renderHodDashboard(content) {
 if (!content) content = document.getElementById(‘main-content’);
-content.innerHTML = ‘<div class="loading">Loading overview…</div>’;
+content.innerHTML = ‘<div class="loading">Loading overview-</div>’;
 
 // Warn if HOD has no department assigned
 if (!currentUser.department) {
@@ -2272,7 +2272,7 @@ content.innerHTML = `
   <div class="page-header">
     <div>
       <h2>Department Overview</h2>
-      <p>Welcome back, ${currentUser.name} · <strong style="color:#0891b2;">${currentUser.department || 'No Department Assigned'}</strong> — ${currentUser.company?.name || ''}</p>
+      <p>Welcome back, ${currentUser.name} - <strong style="color:#0891b2;">${currentUser.department || 'No Department Assigned'}</strong> - ${currentUser.company?.name || ''}</p>
     </div>
   </div>
   <div class="stats-grid" style="margin-bottom:20px;">
@@ -2302,12 +2302,12 @@ content.innerHTML = `
           <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border);">
             <div>
               <div style="font-size:13px;font-weight:600;">${s.title || s.courseName || 'Untitled'}</div>
-              <div style="font-size:11px;color:var(--text-muted);">${s.createdBy?.name || '—'} · ${timeAgo(s.createdAt)}</div>
+              <div style="font-size:11px;color:var(--text-muted);">${s.createdBy?.name || '-'} - ${timeAgo(s.createdAt)}</div>
             </div>
             <span class="tag ${s.active ? 'tag-green' : 'tag-gray'}">${s.active ? 'Live' : 'Ended'}</span>
           </div>`).join('')
       }
-      <button class="btn btn-secondary btn-sm" style="margin-top:12px;width:100%;" onclick="navigateTo('hod-sessions')">View All Sessions →</button>
+      <button class="btn btn-secondary btn-sm" style="margin-top:12px;width:100%;" onclick="navigateTo('hod-sessions')">View All Sessions -</button>
     </div>
 
     <div class="card">
@@ -2355,16 +2355,16 @@ content.innerHTML = `<div class="card"><p style="color:#ef4444;">Error loading d
 
 async function renderHodSessions() {
 const content = document.getElementById(‘main-content’);
-content.innerHTML = ‘<div class="loading">Loading sessions…</div>’;
+content.innerHTML = ‘<div class="loading">Loading sessions-</div>’;
 try {
 const dept = currentUser.department ? ‘&department=’ + encodeURIComponent(currentUser.department) : ‘’;
 const data = await api(’/api/attendance-sessions?limit=100’ + dept);
 const sessions = data.sessions || [];
-content.innerHTML = `<div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;"> <div><h2>All Sessions</h2><p>Department-wide attendance sessions — ${sessions.length} total</p></div> </div> <div style="overflow-x:auto;"> <table style="width:100%;border-collapse:collapse;font-size:13px;"> <thead> <tr style="border-bottom:2px solid var(--border);"> <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Session</th> <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Lecturer</th> <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Attendance</th> <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Date</th> <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Status</th> </tr> </thead> <tbody> ${sessions.length === 0 ? '<tr><td colspan="5" style="padding:24px;text-align:center;color:var(--text-muted);">No sessions yet.</td></tr>' : sessions.map(s =>`
+content.innerHTML = `<div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;"> <div><h2>All Sessions</h2><p>Department-wide attendance sessions - ${sessions.length} total</p></div> </div> <div style="overflow-x:auto;"> <table style="width:100%;border-collapse:collapse;font-size:13px;"> <thead> <tr style="border-bottom:2px solid var(--border);"> <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Session</th> <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Lecturer</th> <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Attendance</th> <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Date</th> <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Status</th> </tr> </thead> <tbody> ${sessions.length === 0 ? '<tr><td colspan="5" style="padding:24px;text-align:center;color:var(--text-muted);">No sessions yet.</td></tr>' : sessions.map(s =>`
 <tr style="border-bottom:1px solid var(--border);">
 <td style="padding:10px 12px;font-weight:600;">${s.title || s.courseName || ‘Session’}</td>
-<td style="padding:10px 12px;color:var(--text-muted);">${s.createdBy?.name || ‘—’}</td>
-<td style="padding:10px 12px;">${s.attendanceCount ?? s.records?.length ?? ‘—’}</td>
+<td style="padding:10px 12px;color:var(--text-muted);">${s.createdBy?.name || ‘-’}</td>
+<td style="padding:10px 12px;">${s.attendanceCount ?? s.records?.length ?? ‘-’}</td>
 <td style="padding:10px 12px;color:var(--text-muted);font-size:12px;">${fmtDate(s.createdAt)}</td>
 <td style="padding:10px 12px;"><span class="tag ${s.active ? 'tag-green' : 'tag-gray'}">${s.active ? ‘Live’ : ‘Ended’}</span></td>
 </tr>`).join('')} </tbody> </table> </div>`;
@@ -2375,7 +2375,7 @@ content.innerHTML = `<div class="card"><p style="color:#ef4444;">${e.message}</p
 
 async function renderHodLecturers() {
 const content = document.getElementById(‘main-content’);
-content.innerHTML = ‘<div class="loading">Loading lecturers…</div>’;
+content.innerHTML = ‘<div class="loading">Loading lecturers-</div>’;
 try {
 const dept = currentUser.department ? ‘&department=’ + encodeURIComponent(currentUser.department) : ‘’;
 const data = await api(’/api/users?role=lecturer&limit=200’ + dept);
@@ -2406,23 +2406,23 @@ content.innerHTML = `<div class="card"><p style="color:#ef4444;">${e.message}</p
 
 async function renderHodStudents() {
 const content = document.getElementById(‘main-content’);
-content.innerHTML = ‘<div class="loading">Loading students…</div>’;
+content.innerHTML = ‘<div class="loading">Loading students-</div>’;
 try {
 const dept = currentUser.department ? ‘&department=’ + encodeURIComponent(currentUser.department) : ‘’;
 const data = await api(’/api/users?role=student&limit=500’ + dept);
 const students = data.users || [];
-content.innerHTML = `<div class="page-header"> <div><h2>Students</h2><p>${students.length} student${students.length !== 1 ? 's' : ''} enrolled</p></div> <div style="display:flex;gap:8px;align-items:center;"> <button class="btn btn-secondary btn-sm" onclick="hodExportCSV('students')">Export CSV</button> <input id="hod-stu-search" placeholder="Search students…" oninput="hodFilterStudents()" style="padding:8px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;min-width:200px;"> </div> </div> <div id="hod-stu-list" style="overflow-x:auto;"> <table style="width:100%;border-collapse:collapse;font-size:13px;"> <thead> <tr style="border-bottom:2px solid var(--border);"> <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Name</th> <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Index No.</th> <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Programme</th> <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Level / Group</th> <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Session</th> <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Status</th> <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;"></th> </tr> </thead> <tbody id="hod-stu-tbody"> ${students.length === 0 ? '<tr><td colspan="4" style="padding:24px;text-align:center;color:var(--text-muted);">No students found.</td></tr>' : students.map(u =>`
+content.innerHTML = `<div class="page-header"> <div><h2>Students</h2><p>${students.length} student${students.length !== 1 ? 's' : ''} enrolled</p></div> <div style="display:flex;gap:8px;align-items:center;"> <button class="btn btn-secondary btn-sm" onclick="hodExportCSV('students')">Export CSV</button> <input id="hod-stu-search" placeholder="Search students-" oninput="hodFilterStudents()" style="padding:8px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;min-width:200px;"> </div> </div> <div id="hod-stu-list" style="overflow-x:auto;"> <table style="width:100%;border-collapse:collapse;font-size:13px;"> <thead> <tr style="border-bottom:2px solid var(--border);"> <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Name</th> <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Index No.</th> <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Programme</th> <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Level / Group</th> <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Session</th> <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Status</th> <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;"></th> </tr> </thead> <tbody id="hod-stu-tbody"> ${students.length === 0 ? '<tr><td colspan="4" style="padding:24px;text-align:center;color:var(--text-muted);">No students found.</td></tr>' : students.map(u =>`
 <tr class="hod-stu-row" data-name="${(u.name||'').toLowerCase()}" data-index="${(u.indexNumber||'').toLowerCase()}" style="border-bottom:1px solid var(--border);">
 <td style="padding:10px 12px;font-weight:600;">${u.name}</td>
-<td style="padding:10px 12px;color:var(--text-muted);font-family:monospace;">${u.indexNumber || ‘—’}</td>
-<td style="padding:10px 12px;">${u.programme ? `<span style="background:#ede9fe;color:#7c3aed;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700">${esc(u.programme)}</span>` : ‘—’}</td>
+<td style="padding:10px 12px;color:var(--text-muted);font-family:monospace;">${u.indexNumber || ‘-’}</td>
+<td style="padding:10px 12px;">${u.programme ? `<span style="background:#ede9fe;color:#7c3aed;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700">${esc(u.programme)}</span>` : ‘-’}</td>
 <td style="padding:10px 12px;">
 ${u.studentLevel ? `<span style="background:#dbeafe;color:#1d4ed8;padding:2px 7px;border-radius:20px;font-size:11px;font-weight:700;margin-right:3px">L${esc(u.studentLevel)}</span>` : ‘’}
 ${u.studentGroup ? `<span style="background:#ecfdf5;color:#059669;padding:2px 7px;border-radius:20px;font-size:11px;font-weight:700">Grp ${esc(u.studentGroup)}</span>` : ‘’}
-${!u.studentLevel && !u.studentGroup ? ‘—’ : ‘’}
+${!u.studentLevel && !u.studentGroup ? ‘-’ : ‘’}
 </td>
 <td style="padding:10px 12px;">
-${u.sessionType ? `<span style="background:#fff7ed;color:#c2410c;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600">${esc(u.sessionType)}</span>` : ‘—’}
+${u.sessionType ? `<span style="background:#fff7ed;color:#c2410c;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600">${esc(u.sessionType)}</span>` : ‘-’}
 ${u.semester ? `<span style="font-size:11px;color:var(--text-muted);margin-left:4px">Sem ${esc(u.semester)}</span>` : ‘’}
 </td>
 <td style="padding:10px 12px;"><span class="tag ${u.isApproved ? 'tag-green' : 'tag-amber'}">${u.isApproved ? ‘Active’ : ‘Pending’}</span></td>
@@ -2443,7 +2443,7 @@ row.style.display = match ? ‘’ : ‘none’;
 
 async function renderHodReports() {
 const content = document.getElementById(‘main-content’);
-content.innerHTML = ‘<div class="loading">Loading reports…</div>’;
+content.innerHTML = ‘<div class="loading">Loading reports-</div>’;
 try {
 const hodDept = currentUser.department ? ‘&department=’ + encodeURIComponent(currentUser.department) : ‘’;
 const [sessData, userStats] = await Promise.all([
@@ -2517,7 +2517,7 @@ content.innerHTML = `
                    <div style="height:4px;background:var(--border);border-radius:2px;margin-top:3px;width:80px;">
                      <div style="height:4px;background:${rateColor};border-radius:2px;width:${Math.min(rate,100)}%"></div>
                    </div>`
-                : '<span style="color:var(--text-muted)">—</span>'
+                : '<span style="color:var(--text-muted)">-</span>'
               }
             </td>
           </tr>`;
@@ -2555,7 +2555,7 @@ content.innerHTML = `
     <canvas id="hod-trend-chart" height="120"></canvas>
   </div>`;
 
-// Build trend chart — group sessions by date
+// Build trend chart - group sessions by date
 const trendMap = {};
 const now = Date.now();
 const days30 = 30 * 24 * 60 * 60 * 1000;
@@ -2612,7 +2612,7 @@ content.innerHTML = `<div class="card"><p style="color:#ef4444;">${e.message}</p
 }
 }
 
-// ── HOD: View student attendance record ────────────────────────────────────
+// – HOD: View student attendance record ————————————
 async function hodViewStudentAttendance(userId, name) {
 try {
 const data = await api(’/api/attendance-sessions/my-attendance?userId=’ + userId);
@@ -2622,7 +2622,7 @@ if (existing) existing.remove();
 const ol = document.createElement(‘div’);
 ol.id = ‘hod-att-overlay’;
 ol.style.cssText = ‘position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:400;display:flex;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(3px);’;
-ol.innerHTML = `<div style="background:var(--card);border-radius:14px;width:100%;max-width:560px;max-height:88vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.2);"> <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;background:var(--card);z-index:1;"> <div> <h3 style="font-size:15px;font-weight:700;margin:0;">Attendance — ${name}</h3> <div style="font-size:12px;color:var(--text-muted);margin-top:2px;">${records.length} session${records.length !== 1 ? 's' : ''} attended</div> </div> <button onclick="document.getElementById('hod-att-overlay').remove()" style="width:28px;height:28px;border-radius:6px;border:1px solid var(--border);background:var(--bg);cursor:pointer;font-size:14px;">✕</button> </div> <div style="padding:16px 20px;"> ${records.length === 0 ? '<div class="empty-state"><p>No attendance records found.</p></div>' : `<table style="width:100%;border-collapse:collapse;font-size:13px;">
+ol.innerHTML = `<div style="background:var(--card);border-radius:14px;width:100%;max-width:560px;max-height:88vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.2);"> <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;background:var(--card);z-index:1;"> <div> <h3 style="font-size:15px;font-weight:700;margin:0;">Attendance - ${name}</h3> <div style="font-size:12px;color:var(--text-muted);margin-top:2px;">${records.length} session${records.length !== 1 ? 's' : ''} attended</div> </div> <button onclick="document.getElementById('hod-att-overlay').remove()" style="width:28px;height:28px;border-radius:6px;border:1px solid var(--border);background:var(--bg);cursor:pointer;font-size:14px;">-</button> </div> <div style="padding:16px 20px;"> ${records.length === 0 ? '<div class="empty-state"><p>No attendance records found.</p></div>' : `<table style="width:100%;border-collapse:collapse;font-size:13px;">
 <thead><tr style="border-bottom:2px solid var(--border);">
 <th style="text-align:left;padding:8px 10px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Session</th>
 <th style="text-align:left;padding:8px 10px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Date</th>
@@ -2635,11 +2635,11 @@ document.body.appendChild(ol);
 } catch(e) { toastError(’Could not load attendance: ’ + e.message); }
 }
 
-// ── HOD: Department quizzes overview ───────────────────────────────────────
+// – HOD: Department quizzes overview —————————————
 async function renderHodQuizzes() {
 const content = document.getElementById(‘main-content’);
 if (!content) return;
-content.innerHTML = ‘<div class="loading">Loading quizzes…</div>’;
+content.innerHTML = ‘<div class="loading">Loading quizzes-</div>’;
 try {
 const dept = currentUser.department ? ‘?department=’ + encodeURIComponent(currentUser.department) : ‘’;
 const data = await api(’/api/lecturer/quizzes’ + dept);
@@ -2689,12 +2689,12 @@ content.innerHTML = `
                 : isUpcoming
                 ? '<span style="background:#dbeafe;color:#1e40af;font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;">UPCOMING</span>'
                 : '<span style="background:#f3f4f6;color:#6b7280;font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;">CLOSED</span>';
-              const duration = q.durationMinutes ? q.durationMinutes + ' min' : '—';
+              const duration = q.durationMinutes ? q.durationMinutes + ' min' : '-';
               return `<tr style="border-bottom:1px solid var(--border);">
                 <td style="padding:9px 12px;font-weight:600;">${q.title || 'Untitled'}</td>
-                <td style="padding:9px 12px;color:var(--text-muted);">${q.createdBy?.name || '—'}</td>
-                <td style="padding:9px 12px;color:var(--text-muted);">${q.course?.name || q.courseName || '—'}</td>
-                <td style="padding:9px 12px;">${q.questions?.length ?? q.questionCount ?? '—'}</td>
+                <td style="padding:9px 12px;color:var(--text-muted);">${q.createdBy?.name || '-'}</td>
+                <td style="padding:9px 12px;color:var(--text-muted);">${q.course?.name || q.courseName || '-'}</td>
+                <td style="padding:9px 12px;">${q.questions?.length ?? q.questionCount ?? '-'}</td>
                 <td style="padding:9px 12px;">${duration}</td>
                 <td style="padding:9px 12px;">${badge}</td>
                 <td style="padding:9px 12px;color:var(--text-muted);font-size:12px;">${start.toLocaleDateString()}</td>
@@ -2711,7 +2711,7 @@ content.innerHTML = `<div class="card"><p style="color:#ef4444;">Error loading q
 }
 }
 
-// ── HOD: Export department data to CSV ─────────────────────────────────────
+// – HOD: Export department data to CSV ———————————––
 async function hodExportCSV(type) {
 try {
 const dept = currentUser.department ? ‘&department=’ + encodeURIComponent(currentUser.department) : ‘’;
@@ -2741,29 +2741,29 @@ const blob = new Blob([csv], { type: 'text/csv' });
 const url = URL.createObjectURL(blob);
 const a = document.createElement('a'); a.href = url; a.download = filename; a.click();
 setTimeout(() => URL.revokeObjectURL(url), 1000);
-toastSuccess('CSV exported ✓');
+toastSuccess('CSV exported -');
 ```
 
 } catch(e) { toastError(’Export failed: ’ + e.message); }
 }
 
-// ── FEATURE 3: HOD — Courses view ──────────────────────────────────────────
+// – FEATURE 3: HOD - Courses view ——————————————
 async function renderHodCourses() {
 const content = document.getElementById(‘main-content’);
-content.innerHTML = ‘<div class="loading">Loading courses…</div>’;
+content.innerHTML = ‘<div class="loading">Loading courses-</div>’;
 try {
 const dept = currentUser.department ? ‘&department=’ + encodeURIComponent(currentUser.department) : ‘’;
 const data = await api(’/api/courses?limit=200’ + dept);
 const courses = data.courses || [];
 content.innerHTML = `<div class="page-header"> <div><h2>Courses</h2><p>${courses.length} course${courses.length !== 1 ? 's' : ''} in ${currentUser.department || 'your department'}</p></div> </div> ${courses.length === 0 ? '<div class="empty-state"><p>No courses found for this department.</p></div>' :`<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px;">
-${courses.map(c => `<div class="card" style="padding:16px 18px;"> <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:8px;"> <div> <div style="font-weight:700;font-size:14px;">${c.title}</div> <div style="font-size:11px;font-family:monospace;color:var(--text-muted);margin-top:2px;">${c.code}</div> </div> <span class="tag tag-blue">${c.enrolledStudents?.length || 0} students</span> </div> <div style="font-size:12px;color:var(--text-muted);margin-bottom:6px;"> 👨‍🏫 ${c.lecturer?.name || 'Unassigned'} </div> ${c.description ?`<div style="font-size:12px;color:var(--text-muted);line-height:1.5;">${c.description}</div>` : ''} </div>`).join(’’)}
+${courses.map(c => `<div class="card" style="padding:16px 18px;"> <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:8px;"> <div> <div style="font-weight:700;font-size:14px;">${c.title}</div> <div style="font-size:11px;font-family:monospace;color:var(--text-muted);margin-top:2px;">${c.code}</div> </div> <span class="tag tag-blue">${c.enrolledStudents?.length || 0} students</span> </div> <div style="font-size:12px;color:var(--text-muted);margin-bottom:6px;"> --- ${c.lecturer?.name || 'Unassigned'} </div> ${c.description ?`<div style="font-size:12px;color:var(--text-muted);line-height:1.5;">${c.description}</div>` : ''} </div>`).join(’’)}
 </div>`}`;
 } catch(e) {
 content.innerHTML = `<div class="card"><p style="color:#ef4444;">${e.message}</p></div>`;
 }
 }
 
-// ── FEATURE 4: HOD — Edit lecturer department ───────────────────────────────
+// – FEATURE 4: HOD - Edit lecturer department —————————––
 function hodEditLecturerDept(lecturerId, lecturerName, currentDept) {
 const newDept = prompt(`Change department for ${lecturerName}:
 
@@ -2779,12 +2779,12 @@ renderHodLecturers();
 }).catch(e => toastError(e.message || ‘Failed to update department’));
 }
 
-// ════════════════════════════════════════════════════════════════════════════
+// ––––––––––––––––––––––––––––––––––––––
 //  SUPERADMIN DASHBOARD
-// ════════════════════════════════════════════════════════════════════════════
+// ––––––––––––––––––––––––––––––––––––––
 async function renderSuperadminDashboard(content) {
 if (!content) content = document.getElementById(‘main-content’);
-content.innerHTML = ‘<div class="loading">Loading platform overview…</div>’;
+content.innerHTML = ‘<div class="loading">Loading platform overview-</div>’;
 try {
 const data = await api(’/api/superadmin/overview’).catch(() => null);
 const companies = data?.companies || [];
@@ -2800,9 +2800,9 @@ const totalPayments = data?.totalPayments || 0;
 ```
 content.innerHTML = `
   <div class="page-header">
-    <div><h2>Platform Overview</h2><p>KODEX Superadmin · All institutions</p></div>
+    <div><h2>Platform Overview</h2><p>KODEX Superadmin - All institutions</p></div>
     <div style="display:flex;gap:8px;">
-      <button class="btn btn-secondary btn-sm" onclick="superadminShowPayments()">💳 Payment History</button>
+      <button class="btn btn-secondary btn-sm" onclick="superadminShowPayments()">- Payment History</button>
     </div>
   </div>
 
@@ -2840,7 +2840,7 @@ content.innerHTML = `
             <tr style="border-bottom:1px solid var(--border);">
               <td style="padding:10px 12px;">
                 <div style="font-weight:700;">${c.name}</div>
-                <div style="font-size:11px;color:var(--text-muted);font-family:monospace;">${c.institutionCode || '—'}</div>
+                <div style="font-size:11px;color:var(--text-muted);font-family:monospace;">${c.institutionCode || '-'}</div>
               </td>
               <td style="padding:10px 12px;font-weight:600;">${c.userCount || 0}</td>
               <td style="padding:10px 12px;"><span class="tag ${c.mode === 'academic' ? 'tag-blue' : 'tag-green'}">${c.mode}</span></td>
@@ -2851,10 +2851,10 @@ content.innerHTML = `
                 </span>
               </td>
               <td style="padding:10px 12px;font-size:12px;font-weight:600;color:${c.revenue > 0 ? '#16a34a' : 'var(--text-muted)'};">
-                ${c.revenue > 0 ? 'GHS ' + c.revenue.toLocaleString() : '—'}
+                ${c.revenue > 0 ? 'GHS ' + c.revenue.toLocaleString() : '-'}
               </td>
               <td style="padding:10px 12px;white-space:nowrap;display:flex;gap:4px;flex-wrap:wrap;">
-                <button class="btn btn-xs" style="background:#6366f1;color:#fff;font-size:11px;" onclick="superadminImpersonate('${c._id}','${c.name.replace(/'/g,"\\'")}')" title="Login as admin">🔑 Login</button>
+                <button class="btn btn-xs" style="background:#6366f1;color:#fff;font-size:11px;" onclick="superadminImpersonate('${c._id}','${c.name.replace(/'/g,"\\'")}')" title="Login as admin">- Login</button>
                 <button class="btn btn-xs btn-secondary" style="font-size:11px;" onclick="superadminExtendTrial('${c._id}','${c.name.replace(/'/g,"\\'")}')">+Trial</button>
                 <button class="btn btn-xs" style="${c.isActive ? 'background:#f59e0b' : 'background:#22c55e'};color:#fff;font-size:11px;" onclick="superadminToggleCompany('${c._id}',${c.isActive})">
                   ${c.isActive ? 'Off' : 'On'}
@@ -2884,7 +2884,7 @@ const totalStudents = coursesData.courses.reduce((sum, c) => sum + (c.enrolledSt
 const activeCourses = coursesData.courses.length;
 const quizzesCreated = quizzesData.quizzes.length;
 
-content.innerHTML = `<div class="page-header"> <h2>Welcome back, ${currentUser.name.split(' ')[0]}</h2> <p>Here's an overview of your workspace at ${currentUser.company?.name || 'your institution'} ${currentUser.department ?` · <span style="display:inline-flex;align-items:center;gap:4px;padding:2px 8px;background:#fffbeb;border:1px solid #fde68a;border-radius:20px;font-size:12px;font-weight:700;color:#b45309;">${currentUser.department}</span>`: ''} </p> </div> <div class="stats-grid"> <div class="stat-card"><div class="stat-value">${totalStudents}</div><div class="stat-label">Students</div></div> <div class="stat-card"><div class="stat-value">${activeCourses}</div><div class="stat-label">Courses</div></div> <div class="stat-card"><div class="stat-value">${sessionsData.pagination.total}</div><div class="stat-label">Sessions</div></div> <div class="stat-card"><div class="stat-value">${quizzesCreated}</div><div class="stat-label">Quizzes</div></div> </div> <div class="quick-actions"> <button class="btn btn-primary btn-sm" onclick="navigateTo('sessions'); setTimeout(showStartSessionModal, 300)">${sessionsIcon()} Start Session</button> <button class="btn btn-secondary btn-sm" onclick="navigateTo('courses'); setTimeout(showCreateCourseModal, 300)">${coursesIcon()} Create Course</button> <button class="btn btn-secondary btn-sm" onclick="navigateTo('quizzes'); setTimeout(showCreateQuizModal, 300)">${quizzesIcon()} Create Quiz</button> </div> <div class="card"> <div class="card-title">Recent Sessions</div> ${sessionsData.sessions.length ?`
+content.innerHTML = `<div class="page-header"> <h2>Welcome back, ${currentUser.name.split(' ')[0]}</h2> <p>Here's an overview of your workspace at ${currentUser.company?.name || 'your institution'} ${currentUser.department ?` - <span style="display:inline-flex;align-items:center;gap:4px;padding:2px 8px;background:#fffbeb;border:1px solid #fde68a;border-radius:20px;font-size:12px;font-weight:700;color:#b45309;">${currentUser.department}</span>`: ''} </p> </div> <div class="stats-grid"> <div class="stat-card"><div class="stat-value">${totalStudents}</div><div class="stat-label">Students</div></div> <div class="stat-card"><div class="stat-value">${activeCourses}</div><div class="stat-label">Courses</div></div> <div class="stat-card"><div class="stat-value">${sessionsData.pagination.total}</div><div class="stat-label">Sessions</div></div> <div class="stat-card"><div class="stat-value">${quizzesCreated}</div><div class="stat-label">Quizzes</div></div> </div> <div class="quick-actions"> <button class="btn btn-primary btn-sm" onclick="navigateTo('sessions'); setTimeout(showStartSessionModal, 300)">${sessionsIcon()} Start Session</button> <button class="btn btn-secondary btn-sm" onclick="navigateTo('courses'); setTimeout(showCreateCourseModal, 300)">${coursesIcon()} Create Course</button> <button class="btn btn-secondary btn-sm" onclick="navigateTo('quizzes'); setTimeout(showCreateQuizModal, 300)">${quizzesIcon()} Create Quiz</button> </div> <div class="card"> <div class="card-title">Recent Sessions</div> ${sessionsData.sessions.length ?`
 <table>
 <thead><tr><th>Title</th><th>Status</th><th>Started</th><th>Created By</th></tr></thead>
 <tbody>${sessionsData.sessions.map(s => `<tr> <td style="font-weight:500;color:var(--text)">${s.title || 'Untitled'}</td> <td><span class="status-badge status-${s.status}">${s.status}</span></td> <td>${new Date(s.startedAt).toLocaleString()}</td> <td>${s.createdBy?.name || 'N/A'}</td> </tr>`).join(’’)}</tbody>
@@ -2914,7 +2914,7 @@ content.innerHTML = `<div class="page-header"> <h2>Welcome back, ${currentUser.n
   <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px">
     <div>
       <div style="font-size:12px;text-transform:uppercase;font-weight:700;letter-spacing:.5px;color:${signedIn ? 'var(--success)' : 'var(--primary)'}">
-        ${signedIn ? '● Currently Signed In' : '○ Not Signed In'}
+        ${signedIn ? '- Currently Signed In' : '- Not Signed In'}
       </div>
       <div style="font-size:18px;font-weight:700;margin-top:4px">${signedIn ? 'You are clocked in' : 'Ready to start your day?'}</div>
       ${signInTime ? `<div style="font-size:12px;color:var(--text-light);margin-top:2px">Since ${signInTime.toLocaleString()}</div>` : ''}
@@ -2947,9 +2947,9 @@ content.innerHTML = `<div class="page-header"> <h2>Welcome back, ${currentUser.n
         return `<tr>
           <td>${r.session?.title || 'N/A'}</td>
           <td><span class="status-badge status-${r.status}">${r.status}</span></td>
-          <td>${inTime ? inTime.toLocaleTimeString() : '—'}</td>
+          <td>${inTime ? inTime.toLocaleTimeString() : '-'}</td>
           <td>${outTime ? outTime.toLocaleTimeString() : '<span style="color:#f59e0b;font-weight:600">Active</span>'}</td>
-          <td>${dur !== null ? Math.floor(dur/60)+'h '+(dur%60)+'m' : '—'}</td>
+          <td>${dur !== null ? Math.floor(dur/60)+'h '+(dur%60)+'m' : '-'}</td>
         </tr>`;
       }).join('')}</tbody>
     </table>
@@ -3042,11 +3042,11 @@ content.innerHTML = `
 
   ${esp32IP ? `
   <div class="card" style="padding:10px 16px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between">
-    <span style="font-size:12px">${bleDetected ? '🟢 Office device detected — sign in/out gated to office' : '🔴 Office device not reachable — connecting...'}</span>
+    <span style="font-size:12px">${bleDetected ? '- Office device detected - sign in/out gated to office' : '- Office device not reachable - connecting...'}</span>
     <button class="btn btn-sm" style="font-size:10px;padding:3px 8px;background:var(--border)" onclick="configureESP32()">Configure</button>
   </div>` : `
   <div class="card" style="padding:10px 16px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between">
-    <span style="font-size:12px;color:var(--text-muted)">⚪ No office device configured — sign in/out works without proximity check</span>
+    <span style="font-size:12px;color:var(--text-muted)">- No office device configured - sign in/out works without proximity check</span>
     <button class="btn btn-sm" style="font-size:10px;padding:3px 8px;background:var(--border)" onclick="configureESP32()">Set up ESP32</button>
   </div>`}
   <div class="card" style="text-align:center;padding:40px 24px;border-left:4px solid ${signedIn ? 'var(--success)' : 'var(--primary)'}">
@@ -3085,9 +3085,9 @@ content.innerHTML = `
               <div style="font-size:11px;color:var(--text-muted)">${inTime ? inTime.toLocaleDateString() : ''}</div>
             </td>
             <td><span class="status-badge status-${r.status}">${r.status}</span></td>
-            <td style="font-size:13px">${inTime ? inTime.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : '—'}</td>
+            <td style="font-size:13px">${inTime ? inTime.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : '-'}</td>
             <td style="font-size:13px">${outTime ? outTime.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : '<span style="color:#f59e0b;font-weight:600;font-size:11px">Active</span>'}</td>
-            <td style="font-size:13px">${dur !== null ? Math.floor(dur/60)+'h '+(dur%60)+'m' : '—'}</td>
+            <td style="font-size:13px">${dur !== null ? Math.floor(dur/60)+'h '+(dur%60)+'m' : '-'}</td>
           </tr>`;
         }).join('')}</tbody>
       </table>
@@ -3101,11 +3101,11 @@ content.innerHTML = `<div class="card"><p>Error: ${e.message}</p></div>`;
 }
 }
 
-// ── Lecturer: Student Performance across all quizzes in a course ──────────────
+// – Lecturer: Student Performance across all quizzes in a course –––––––
 async function renderLecturerPerformance() {
 const content = document.getElementById(‘main-content’);
 if (!content) return;
-content.innerHTML = ‘<div class="loading">Loading performance data…</div>’;
+content.innerHTML = ‘<div class="loading">Loading performance data-</div>’;
 try {
 const [coursesData, quizzesData] = await Promise.all([
 api(’/api/courses’).catch(() => ({ courses: [] })),
@@ -3131,7 +3131,7 @@ content.innerHTML = `
         const color = avg >= 70 ? '#16a34a' : avg >= 50 ? '#d97706' : '#dc2626';
         return `<tr>
           <td><strong>${esc(q.title)}</strong></td>
-          <td style="font-size:12px;color:var(--text-muted)">${esc(q.course?.title || '—')}</td>
+          <td style="font-size:12px;color:var(--text-muted)">${esc(q.course?.title || '-')}</td>
           <td>${stats.totalAttempts || 0}</td>
           <td><strong style="color:${color}">${avg.toFixed(1)}%</strong></td>
           <td>
@@ -3142,8 +3142,8 @@ content.innerHTML = `
               <span style="font-size:12px;color:${color};font-weight:600">${passRate.toFixed(0)}%</span>
             </div>
           </td>
-          <td style="color:#16a34a;font-weight:600">${stats.highestScore?.toFixed(1) || '—'}%</td>
-          <td style="color:#dc2626;font-weight:600">${stats.lowestScore?.toFixed(1) || '—'}%</td>
+          <td style="color:#16a34a;font-weight:600">${stats.highestScore?.toFixed(1) || '-'}%</td>
+          <td style="color:#dc2626;font-weight:600">${stats.lowestScore?.toFixed(1) || '-'}%</td>
         </tr>`;
       }).join('')}</tbody>
     </table>
@@ -3156,11 +3156,11 @@ content.innerHTML = `<div class="card"><p style="color:var(--danger)">Error: ${e
 }
 }
 
-// ── Student Quiz Results History ─────────────────────────────────────────────
+// – Student Quiz Results History ———————————————
 async function renderStudentQuizHistory() {
 const content = document.getElementById(‘main-content’);
 if (!content) return;
-content.innerHTML = ‘<div class="loading">Loading quiz history…</div>’;
+content.innerHTML = ‘<div class="loading">Loading quiz history-</div>’;
 try {
 const data = await api(’/api/student/quizzes’);
 const quizzes = data.quizzes || [];
@@ -3187,7 +3187,7 @@ content.innerHTML = `
           const color = pct >= 70 ? '#16a34a' : pct >= 50 ? '#d97706' : '#dc2626';
           return `<tr>
             <td><strong>${q.title}</strong></td>
-            <td style="font-size:12px;color:var(--text-muted)">${q.course?.title || '—'}</td>
+            <td style="font-size:12px;color:var(--text-muted)">${q.course?.title || '-'}</td>
             <td><strong style="color:${color}">${q.myAttempt.score}/${q.myAttempt.totalMarks} (${pct}%)</strong></td>
             <td><span style="background:${color}20;color:${color};padding:2px 10px;border-radius:20px;font-size:12px;font-weight:700">${grade}</span></td>
             <td style="font-size:12px">${fmtDate(q.myAttempt.submittedAt)}</td>
@@ -3204,7 +3204,7 @@ content.innerHTML = `
         <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border)">
           <div>
             <div style="font-weight:600">${q.title}</div>
-            <div style="font-size:12px;color:var(--text-muted)">${q.course?.title || ''} · Due ${fmtDate(q.endTime)}</div>
+            <div style="font-size:12px;color:var(--text-muted)">${q.course?.title || ''} - Due ${fmtDate(q.endTime)}</div>
           </div>
           <span style="background:#fef3c7;color:#92400e;padding:2px 10px;border-radius:20px;font-size:11px;font-weight:700">Pending</span>
         </div>
@@ -3268,7 +3268,7 @@ ${activeSession ? `
         ${svgIcon('<polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>', 28)}
       </div>
       <div style="flex:1">
-        <div style="font-size:12px;text-transform:uppercase;color:var(--success);font-weight:700;letter-spacing:0.5px">Active Session — Mark Now</div>
+        <div style="font-size:12px;text-transform:uppercase;color:var(--success);font-weight:700;letter-spacing:0.5px">Active Session - Mark Now</div>
         <div style="font-size:16px;font-weight:700;margin-top:2px">${activeSession.title || 'Untitled Session'}</div>
         <div style="font-size:12px;color:var(--text-light)">Started ${new Date(activeSession.startedAt).toLocaleString()}</div>
       </div>
@@ -3289,7 +3289,7 @@ ${activeSession ? `
   <button class="btn btn-secondary btn-sm" onclick="navigateTo('my-attendance')">View History</button>
   <button class="btn btn-secondary btn-sm" onclick="navigateTo('courses')">My Courses</button>
   <button class="btn btn-secondary btn-sm" onclick="navigateTo('quizzes')">Quizzes</button>
-  <button class="btn btn-secondary btn-sm" onclick="generateAttendanceReportCard()">📋 Report Card</button>
+  <button class="btn btn-secondary btn-sm" onclick="generateAttendanceReportCard()">- Report Card</button>
 </div>
 
 ${upcomingMeetings.length > 0 ? `
@@ -3299,7 +3299,7 @@ ${upcomingMeetings.length > 0 ? `
       <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border)">
         <div>
           <div style="font-weight:600;font-size:14px">${m.title}</div>
-          <div style="font-size:12px;color:var(--text-light)">${new Date(m.scheduledStart).toLocaleString()} — ${m.duration} min</div>
+          <div style="font-size:12px;color:var(--text-light)">${new Date(m.scheduledStart).toLocaleString()} - ${m.duration} min</div>
         </div>
         ${m.joinUrl ? `<a href="${m.joinUrl}" target="_blank" class="btn btn-success btn-sm">Join</a>` : ''}
       </div>
@@ -3362,7 +3362,7 @@ return ` <div class="session-row"> <div class="session-indicator ${isLive ? 'liv
 
 const typeColors = { info: ‘#3b82f6’, warning: ‘#f59e0b’, success: ‘#10b981’, urgent: ‘#ef4444’ };
 const annRows = announcements.length
-? announcements.slice(0, 5).map(a => ` <div class="ann-row"> <div class="ann-dot" style="background:${typeColors[a.type] || '#94a3b8'}"></div> <div> <div class="ann-title">${a.title}</div> <div class="ann-meta">${a.audience === 'all' ? 'Everyone' : a.audience.charAt(0).toUpperCase()+a.audience.slice(1)} · ${timeAgo(a.createdAt)}</div> </div> </div>`).join(’’)
+? announcements.slice(0, 5).map(a => ` <div class="ann-row"> <div class="ann-dot" style="background:${typeColors[a.type] || '#94a3b8'}"></div> <div> <div class="ann-title">${a.title}</div> <div class="ann-meta">${a.audience === 'all' ? 'Everyone' : a.audience.charAt(0).toUpperCase()+a.audience.slice(1)} - ${timeAgo(a.createdAt)}</div> </div> </div>`).join(’’)
 : `<div class="empty-state"><p>No announcements yet</p></div>`;
 
 content.innerHTML = `
@@ -3372,7 +3372,7 @@ content.innerHTML = `
   <!-- Welcome row -->
   <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap">
     <div class="dashboard-welcome">
-      <h2>${greeting}, ${firstName} 👋</h2>
+      <h2>${greeting}, ${firstName} -</h2>
       <p>Here's what's happening at ${currentUser.company?.name || 'your institution'} today.</p>
     </div>
     <div class="inst-code-card">
@@ -3468,7 +3468,7 @@ content.innerHTML = `
     <div class="dashboard-panel">
       <div class="panel-header">
         <span class="panel-title">Recent sessions</span>
-        <span class="panel-link" onclick="navigateTo('sessions')">View all →</span>
+        <span class="panel-link" onclick="navigateTo('sessions')">View all -</span>
       </div>
       ${sessionRows}
     </div>
@@ -3519,7 +3519,7 @@ document.head.appendChild(s);
 }
 
 ```
-// Attendance trend — group all sessions by date over last 14 days
+// Attendance trend - group all sessions by date over last 14 days
 const allSessions = await api('/api/attendance-sessions?limit=200').catch(() => ({ sessions: [] }));
 const now = Date.now();
 const days14 = 14 * 86400000;
@@ -3606,7 +3606,7 @@ const data = await api(’/api/attendance-sessions’);
 offlineCache(‘sessions’, data); // cache for offline use
 _renderSessionsHTML(content, data.sessions || [], false);
 } catch (e) {
-// Network failed — fall back to cache
+// Network failed - fall back to cache
 const cached = offlineRead(‘sessions’);
 if (cached) {
 _renderSessionsHTML(content, cached.sessions || [], true);
@@ -3619,7 +3619,7 @@ content.innerHTML = `<div class="card"><p>Error: ${e.message}</p></div>`;
 function _renderSessionsHTML(content, sessions, isOffline) {
 const pendingCount = offlineQueueCount();
 const canStart = [‘lecturer’, ‘manager’].includes(currentUser.role);
-content.innerHTML = `<div class="page-header"> <h2>Attendance Sessions</h2> <p>Manage attendance sessions${isOffline ? ' <span style="color:#f59e0b;font-weight:600">(Offline — showing cached data)</span>' : ''}</p> </div> ${canStart ?`<div class="actions-bar">
+content.innerHTML = `<div class="page-header"> <h2>Attendance Sessions</h2> <p>Manage attendance sessions${isOffline ? ' <span style="color:#f59e0b;font-weight:600">(Offline - showing cached data)</span>' : ''}</p> </div> ${canStart ?`<div class="actions-bar">
 <button class="btn btn-primary btn-sm" onclick="showStartSessionModal()">Start New Session</button>
 ${pendingCount > 0 ? `<span style="background:#fef3c7;color:#92400e;border:1px solid #fbbf24;border-radius:6px;padding:4px 12px;font-size:12px;font-weight:600">${pendingCount} action${pendingCount!==1?'s':''} pending sync</span>` : ‘’}
 </div>`: ''} <div class="card"> ${sessions.length ?`
@@ -3640,7 +3640,7 @@ ${!isOffline ? `<button class="btn btn-sm" style="background:#7c3aed;color:#fff;
 async function showStartSessionModal() {
 const container = document.getElementById(‘modal-container’);
 container.classList.remove(‘hidden’);
-container.innerHTML = `<div class="modal-overlay"><div class="modal"><p style="color:var(--text-muted)">Loading courses…</p></div></div>`;
+container.innerHTML = `<div class="modal-overlay"><div class="modal"><p style="color:var(--text-muted)">Loading courses-</p></div></div>`;
 
 let courses = [];
 try {
@@ -3648,7 +3648,7 @@ const d = await api(’/api/courses’);
 courses = d.courses || d || [];
 } catch(e) { courses = []; }
 
-container.innerHTML = `<div class="modal-overlay" onclick="closeModal(event)"> <div class="modal" onclick="event.stopPropagation()"> <h3>Start New Session</h3> <div class="form-group"> <label>Course <span style="color:red">*</span></label> <select id="session-course" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px"> <option value="">— Select Course —</option> ${courses.map(c =>`<option value="${c._id}">${esc(c.title)}${c.level?’ · L’+c.level:’’}${c.group?’ · Grp ‘+c.group:’’}</option>`).join('')} </select> </div> <div class="form-group"> <label>Session Title <span style="font-weight:400;color:var(--text-muted);font-size:12px">(optional)</span></label> <input type="text" id="session-title" placeholder="e.g., Week 5 Lecture"> </div> <div class="modal-actions"> <button class="btn btn-secondary btn-sm" onclick="closeModal()">Cancel</button> <button class="btn btn-primary btn-sm" onclick="startSession()">Start Session</button> </div> </div> </div> `;
+container.innerHTML = `<div class="modal-overlay" onclick="closeModal(event)"> <div class="modal" onclick="event.stopPropagation()"> <h3>Start New Session</h3> <div class="form-group"> <label>Course <span style="color:red">*</span></label> <select id="session-course" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px"> <option value="">- Select Course -</option> ${courses.map(c =>`<option value="${c._id}">${esc(c.title)}${c.level?’ - L’+c.level:’’}${c.group?’ - Grp ‘+c.group:’’}</option>`).join('')} </select> </div> <div class="form-group"> <label>Session Title <span style="font-weight:400;color:var(--text-muted);font-size:12px">(optional)</span></label> <input type="text" id="session-title" placeholder="e.g., Week 5 Lecture"> </div> <div class="modal-actions"> <button class="btn btn-secondary btn-sm" onclick="closeModal()">Cancel</button> <button class="btn btn-primary btn-sm" onclick="startSession()">Start Session</button> </div> </div> </div> `;
 }
 
 async function startSession() {
@@ -3672,7 +3672,7 @@ status: ‘active’, startedAt: new Date().toISOString(), stoppedAt: null,
 _offlinePending: true
 });
 offlineCache(‘sessions’, cached);
-showToastNotif(‘📶 Session queued — will start when online’, ‘warn’);
+showToastNotif(’- Session queued - will start when online’, ‘warn’);
 renderSessions();
 return;
 }
@@ -3701,7 +3701,7 @@ const s = cached.sessions.find(s => s._id === id);
 if (s) { s.status = ‘stopped’; s.stoppedAt = new Date().toISOString(); s._offlinePending = true; }
 offlineCache(‘sessions’, cached);
 }
-showToastNotif(‘📶 Stop queued — will sync when online’, ‘warn’);
+showToastNotif(’- Stop queued - will sync when online’, ‘warn’);
 renderSessions();
 return;
 }
@@ -3736,8 +3736,8 @@ method: ‘POST’,
 body: JSON.stringify({ sessionId, expirySeconds: QR_EXPIRY_SECONDS })
 });
 const { code, token } = data.qrToken;
-// Encode the token into the QR so students scan → auto-submit
-// QR encodes a deep link — scanning opens browser → auto-marks attendance
+// Encode the token into the QR so students scan - auto-submit
+// QR encodes a deep link - scanning opens browser - auto-marks attendance
 const qrDeepLink = `${window.location.origin}${window.location.pathname}?qr_token=${token}&qr_code=${code}`;
 const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(qrDeepLink)}&bgcolor=ffffff&color=000000&margin=10`;
 
@@ -3747,7 +3747,7 @@ const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=240x240&dat
       <div class="modal" onclick="event.stopPropagation()" style="text-align:center;max-width:400px">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
           <h3 style="margin:0">Attendance QR Code</h3>
-          <button onclick="_stopQrTimers();closeModal()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--text-light)">×</button>
+          <button onclick="_stopQrTimers();closeModal()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--text-light)">-</button>
         </div>
         <p style="color:var(--text-light);font-size:12px;margin-bottom:16px">${currentUser.company?.mode === "corporate" ? "Employees" : "Students"} scan this with their phone camera to mark attendance</p>
 
@@ -3762,8 +3762,8 @@ const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=240x240&dat
           </div>
           <!-- Refresh overlay when expiring -->
           <div id="qr-overlay" style="display:none;position:absolute;inset:0;background:rgba(255,255,255,0.85);border-radius:12px;align-items:center;justify-content:center;flex-direction:column;gap:8px">
-            <div style="font-size:28px">🔄</div>
-            <div style="font-size:13px;font-weight:700;color:var(--primary)">Refreshing…</div>
+            <div style="font-size:28px">-</div>
+            <div style="font-size:13px;font-weight:700;color:var(--primary)">Refreshing-</div>
           </div>
         </div>
 
@@ -3789,7 +3789,7 @@ const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=240x240&dat
           </div>
           <div id="qr-status" style="display:inline-flex;align-items:center;gap:6px;background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.3);border-radius:999px;padding:5px 14px;font-size:12px;font-weight:600;color:#16a34a">
             <span style="width:7px;height:7px;border-radius:50%;background:#16a34a;display:inline-block;animation:pulse-green 1.5s infinite"></span>
-            Live · Auto-refreshes every ${QR_EXPIRY_SECONDS}s
+            Live - Auto-refreshes every ${QR_EXPIRY_SECONDS}s
           </div>
         </div>
 
@@ -3824,7 +3824,7 @@ const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=240x240&dat
       const overlay = document.getElementById('qr-overlay');
       if (overlay) overlay.style.display = 'flex';
       const statusEl = document.getElementById('qr-status');
-      if (statusEl) statusEl.innerHTML = '<span style="width:7px;height:7px;border-radius:50%;background:#f59e0b;display:inline-block"></span> Refreshing…';
+      if (statusEl) statusEl.innerHTML = '<span style="width:7px;height:7px;border-radius:50%;background:#f59e0b;display:inline-block"></span> Refreshing-';
     }
   }, 1000);
 
@@ -3870,13 +3870,13 @@ const totalSecs = Math.round((expiry - Date.now()) / 1000);
       <div class="modal" onclick="event.stopPropagation()" style="text-align:center;max-width:380px">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
           <h3 style="margin:0">Verbal Attendance Code</h3>
-          <button onclick="closeModal()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--text-light)">×</button>
+          <button onclick="closeModal()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--text-light)">-</button>
         </div>
         <p style="color:var(--text-light);font-size:12px;margin-bottom:16px">Read this code out loud. All ${currentUser.company?.mode === 'corporate' ? 'employees' : 'students'} can use it within the time window.</p>
         <div style="font-size:64px;font-weight:900;color:#7c3aed;letter-spacing:12px;margin-bottom:8px;font-family:monospace">${code}</div>
         <div style="display:inline-flex;align-items:center;gap:6px;background:rgba(124,58,237,0.1);border:1px solid rgba(124,58,237,0.3);border-radius:999px;padding:5px 14px;font-size:12px;font-weight:600;color:#7c3aed;margin-bottom:6px">
           <span style="width:7px;height:7px;border-radius:50%;background:#7c3aed;display:inline-block;animation:pulse-green 1.5s infinite"></span>
-          Multi-use · All ${currentUser.company?.mode === 'corporate' ? 'employees' : 'students'} can enter this code
+          Multi-use - All ${currentUser.company?.mode === 'corporate' ? 'employees' : 'students'} can enter this code
         </div>
         <p style="color:var(--text-light);font-size:12px;margin-bottom:4px">Expires in: <span id="verbal-countdown" style="font-weight:700;color:#7c3aed">${Math.floor(totalSecs/60)}m ${totalSecs%60}s</span></p>
         <p style="color:var(--text-muted);font-size:11px;margin-bottom:20px">Expires at ${expiry.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</p>
@@ -3901,7 +3901,7 @@ const totalSecs = Math.round((expiry - Date.now()) / 1000);
   const msg = e.message || 'Failed to generate code';
   const isSubError = msg.toLowerCase().includes('subscription') || msg.toLowerCase().includes('trial');
   container.innerHTML = `<div class="modal-overlay" onclick="closeModal(event)"><div class="modal" onclick="event.stopPropagation()" style="text-align:center;padding:24px">
-    <div style="font-size:36px;margin-bottom:12px">${isSubError ? '🔒' : '⚠️'}</div>
+    <div style="font-size:36px;margin-bottom:12px">${isSubError ? '-' : '--'}</div>
     <p style="color:red;font-weight:600;margin-bottom:8px">${msg}</p>
     ${isSubError ? '<p style="font-size:13px;color:var(--text-light)">Go to <b>Subscription</b> to activate your plan.</p>' : ''}
     <button class="btn btn-primary btn-sm" onclick="closeModal()" style="margin-top:12px">Close</button>
@@ -3948,13 +3948,13 @@ if (filterSearch) {
 const allDepts = [...new Set((data.users || []).map(u => u.department).filter(Boolean))].sort();
 
 content.innerHTML = `
-  <div class="page-header"><h2>${pageTitle}</h2><p>${pageDesc} · ${otherUsers.length} shown</p></div>
+  <div class="page-header"><h2>${pageTitle}</h2><p>${pageDesc} - ${otherUsers.length} shown</p></div>
   <div class="actions-bar" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px;">
     ${canManage ? `<button class="btn btn-primary btn-sm" onclick="showCreateUserModal()">${addLabel}</button>` : ''}
-    ${['admin','superadmin'].includes(currentUser.role) && mode === 'academic' ? `<button class="btn btn-sm btn-secondary" onclick="showBulkImportModal()">📥 Bulk Import Students</button>` : ''}
-    ${['admin','superadmin'].includes(currentUser.role) ? `<button class="btn btn-sm" style="background:#f59e0b;color:#fff" onclick="renderResetLogs()">🔐 Password Reset Log</button>` : ''}
+    ${['admin','superadmin'].includes(currentUser.role) && mode === 'academic' ? `<button class="btn btn-sm btn-secondary" onclick="showBulkImportModal()">- Bulk Import Students</button>` : ''}
+    ${['admin','superadmin'].includes(currentUser.role) ? `<button class="btn btn-sm" style="background:#f59e0b;color:#fff" onclick="renderResetLogs()">- Password Reset Log</button>` : ''}
     <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-left:auto;">
-      <input id="user-search-input" placeholder="Search name / email / ID…" value="${filterSearch}"
+      <input id="user-search-input" placeholder="Search name / email / ID-" value="${filterSearch}"
         oninput="renderUsers(document.getElementById('user-role-filter').value, document.getElementById('user-dept-filter').value, this.value)"
         style="padding:7px 11px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;min-width:180px;">
       <select id="user-role-filter" onchange="renderUsers(this.value, document.getElementById('user-dept-filter').value, document.getElementById('user-search-input').value)"
@@ -3975,7 +3975,7 @@ content.innerHTML = `
         <option value="" ${!filterDept?'selected':''}>All Departments</option>
         ${allDepts.map(d => `<option value="${d}" ${filterDept===d?'selected':''}>${d}</option>`).join('')}
       </select>` : `<select id="user-dept-filter" style="display:none;"></select>`}
-      ${filterRole || filterDept || filterSearch ? `<button class="btn btn-xs btn-secondary" onclick="renderUsers()">✕ Clear</button>` : ''}
+      ${filterRole || filterDept || filterSearch ? `<button class="btn btn-xs btn-secondary" onclick="renderUsers()">- Clear</button>` : ''}
     </div>
     ${canManage ? `
       <div id="bulk-actions" style="display:none;gap:8px;align-items:center;margin-left:auto">
@@ -4007,16 +4007,16 @@ content.innerHTML = `
                 ${u.studentGroup ? `<span style="background:#ecfdf5;color:#059669;padding:1px 6px;border-radius:20px;font-weight:700;margin-right:2px">Grp ${esc(u.studentGroup)}</span>` : ''}
                 ${u.sessionType ? `<span style="background:#fff7ed;color:#c2410c;padding:1px 6px;border-radius:20px;font-weight:600;margin-right:2px">${esc(u.sessionType)}</span>` : ''}
                 ${u.semester ? `<span style="color:var(--text-muted)">Sem ${esc(u.semester)}</span>` : ''}
-                ${!u.programme && !u.studentLevel ? '<span style="color:var(--text-muted)">—</span>' : ''}
-              ` : '<span style="color:var(--text-muted)">—</span>'}
+                ${!u.programme && !u.studentLevel ? '<span style="color:var(--text-muted)">-</span>' : ''}
+              ` : '<span style="color:var(--text-muted)">-</span>'}
             </td>` : ''}
             <td><span class="status-badge ${u.isActive ? 'status-active' : 'status-stopped'}">${u.isActive ? 'Active' : 'Inactive'}</span></td>
             ${canManage ? `<td style="white-space:nowrap">
               ${u.isActive
                 ? `<button class="btn btn-sm" style="background:#f59e0b;color:#fff;font-size:11px" onclick="deactivateUser('${u._id}')">Deactivate</button>`
                 : `<button class="btn btn-sm" style="background:#22c55e;color:#fff;font-size:11px" onclick="activateUser('${u._id}')">Activate</button>`}
-              <button class="btn btn-sm" style="background:#6366f1;color:#fff;font-size:11px" onclick="adminResetStudentPassword('${u._id}', '${u.name.replace(/'/g, "\\'")}'')" title="Generate temp password">🔑 Reset</button>
-              ${u.role === 'student' && u.deviceId ? `<button class="btn btn-sm" style="background:#f97316;color:#fff;font-size:11px" onclick="clearStudentDeviceLock('${u._id}', '${u.name.replace(/'/g, "\\'")}'')" title="Unlock device">🔓 Unlock</button>` : ''}
+              <button class="btn btn-sm" style="background:#6366f1;color:#fff;font-size:11px" onclick="adminResetStudentPassword('${u._id}', '${u.name.replace(/'/g, "\\'")}'')" title="Generate temp password">- Reset</button>
+              ${u.role === 'student' && u.deviceId ? `<button class="btn btn-sm" style="background:#f97316;color:#fff;font-size:11px" onclick="clearStudentDeviceLock('${u._id}', '${u.name.replace(/'/g, "\\'")}'')" title="Unlock device">- Unlock</button>` : ''}
               <button class="btn btn-danger btn-sm" style="font-size:11px" onclick="deleteUserPermanently('${u._id}', '${u.name.replace(/'/g, "\\'")}'')" >Delete</button>
             </td>` : ''}
           </tr>
@@ -4035,12 +4035,12 @@ content.innerHTML = `<div class="card"><p>Error: ${e.message}</p></div>`;
 async function renderResetLogs() {
 const content = document.getElementById(‘main-content’);
 if (!content) return;
-content.innerHTML = ‘<div class="loading">Loading reset logs…</div>’;
+content.innerHTML = ‘<div class="loading">Loading reset logs-</div>’;
 try {
 const { logs } = await api(’/api/users/reset-logs/all’);
-content.innerHTML = `<div class="page-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px"> <div><h2>🔐 Password Reset Log</h2><p>All password resets across your institution</p></div> <button class="btn btn-secondary btn-sm" onclick="renderUsers()">← Back to Users</button> </div> <div class="card" style="padding:0;overflow:hidden"> ${!logs.length ?`
+content.innerHTML = `<div class="page-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px"> <div><h2>- Password Reset Log</h2><p>All password resets across your institution</p></div> <button class="btn btn-secondary btn-sm" onclick="renderUsers()">- Back to Users</button> </div> <div class="card" style="padding:0;overflow:hidden"> ${!logs.length ?`
 <div style="text-align:center;padding:48px;color:#6b7280">
-<div style="font-size:36px;margin-bottom:10px">🔒</div>
+<div style="font-size:36px;margin-bottom:10px">-</div>
 <div style="font-weight:600">No password resets recorded yet</div>
 </div>
 `:`
@@ -4055,7 +4055,7 @@ content.innerHTML = `<div class="page-header" style="display:flex;justify-conten
 <th>Device</th>
 </tr></thead>
 <tbody>
-${logs.map(l => `<tr> <td style="font-weight:600">${l.userName}</td> <td><span class="role-badge role-${l.userRole}">${l.userRole}</span></td> <td style="font-size:12px;color:#6b7280">${l.userEmail}</td> <td style="font-size:12px;white-space:nowrap">${new Date(l.resetAt).toLocaleString()}</td> <td style="font-size:12px;font-family:monospace">${l.ipAddress || '—'}</td> <td><span style="padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600;background:${l.method === 'admin' ? '#fef3c7' : '#f0f9ff'};color:${l.method === 'admin' ? '#92400e' : '#0369a1'}">${l.method === 'admin' ? '👮 Admin' : '👤 Self'}</span></td> <td style="font-size:11px;color:#9ca3af;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${l.userAgent}">${l.userAgent ? l.userAgent.split(' ').slice(0,3).join(' ') : '—'}</td> </tr>`).join(’’)}
+${logs.map(l => `<tr> <td style="font-weight:600">${l.userName}</td> <td><span class="role-badge role-${l.userRole}">${l.userRole}</span></td> <td style="font-size:12px;color:#6b7280">${l.userEmail}</td> <td style="font-size:12px;white-space:nowrap">${new Date(l.resetAt).toLocaleString()}</td> <td style="font-size:12px;font-family:monospace">${l.ipAddress || '-'}</td> <td><span style="padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600;background:${l.method === 'admin' ? '#fef3c7' : '#f0f9ff'};color:${l.method === 'admin' ? '#92400e' : '#0369a1'}">${l.method === 'admin' ? '- Admin' : '- Self'}</span></td> <td style="font-size:11px;color:#9ca3af;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${l.userAgent}">${l.userAgent ? l.userAgent.split(' ').slice(0,3).join(' ') : '-'}</td> </tr>`).join(’’)}
 </tbody>
 </table>
 `} </div> `;
@@ -4094,7 +4094,7 @@ const deptDropdownOptions = hodDepts.length
 : ‘’;
 
 const deptField = deptDropdownOptions
-? `<select id="new-user-dept" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px"> <option value="">— Select Department —</option> ${deptDropdownOptions} </select>`
+? `<select id="new-user-dept" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px"> <option value="">- Select Department -</option> ${deptDropdownOptions} </select>`
 : `<input type="text" id="new-user-dept" placeholder="e.g. Computer Science">`;
 
 const container = document.getElementById(‘modal-container’);
@@ -4110,7 +4110,7 @@ container.innerHTML = `<div class="modal-overlay" onclick="closeModal(event)"> <
 <div class="form-group ${defaultRole !== 'student' ? 'hidden' : ''}" id="new-user-index-group">
 <label>Student ID / Index Number <span style="color:red">*</span></label>
 <input type="text" id="new-user-index" placeholder="e.g. UCC/CS/23/0001" style="text-transform:uppercase" autocomplete="off">
-<p style="font-size:11px;color:var(--text-light);margin-top:4px">Must be unique — each student has their own index number assigned by the institution.</p>
+<p style="font-size:11px;color:var(--text-light);margin-top:4px">Must be unique - each student has their own index number assigned by the institution.</p>
 </div>
 ${defaultRole === ‘employee’ ? ‘<p style="font-size:12px;color:var(--text-light);margin-bottom:12px">An Employee ID will be auto-generated.</p>’ : ‘’}
 <div class="form-group">
@@ -4124,13 +4124,13 @@ ${deptField}
 </div>
 
 ```
-    <!-- Student classification fields — shown only when role = student -->
+    <!-- Student classification fields - shown only when role = student -->
     <div id="new-user-student-fields" style="display:none">
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
         <div class="form-group">
           <label>Programme <span style="color:red">*</span></label>
           <select id="new-user-programme" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
-            <option value="">— Select —</option>
+            <option value="">- Select -</option>
             <option value="BSc">BSc</option>
             <option value="HND">HND</option>
             <option value="Diploma">Diploma</option>
@@ -4144,7 +4144,7 @@ ${deptField}
         <div class="form-group">
           <label>Level <span style="color:red">*</span></label>
           <select id="new-user-level" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
-            <option value="">— Select —</option>
+            <option value="">- Select -</option>
             <option value="100">Level 100</option>
             <option value="200">Level 200</option>
             <option value="300">Level 300</option>
@@ -4164,7 +4164,7 @@ ${deptField}
         <div class="form-group">
           <label>Session Type <span style="color:red">*</span></label>
           <select id="new-user-session-type" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
-            <option value="">— Select —</option>
+            <option value="">- Select -</option>
             <option value="Regular">Regular</option>
             <option value="Evening">Evening</option>
             <option value="Weekend">Weekend</option>
@@ -4173,7 +4173,7 @@ ${deptField}
         <div class="form-group">
           <label>Semester <span style="color:red">*</span></label>
           <select id="new-user-semester" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
-            <option value="">— Select —</option>
+            <option value="">- Select -</option>
             <option value="1">Semester 1</option>
             <option value="2">Semester 2</option>
           </select>
@@ -4231,7 +4231,7 @@ const idx = document.getElementById(‘new-user-index’).value.trim().toUpperCa
 if (!idx) { toastWarning(‘Student ID / Index Number is required.’); return; }
 if (idx.length < 3) { toastWarning(‘Student ID looks too short. Please enter the full index number.’); return; }
 body.indexNumber = idx;
-// Student classification — all mandatory
+// Student classification - all mandatory
 const programme   = document.getElementById(‘new-user-programme’)?.value;
 const studentLevel= document.getElementById(‘new-user-level’)?.value;
 const studentGroup= document.getElementById(‘new-user-group’)?.value?.trim().toUpperCase();
@@ -4306,10 +4306,10 @@ async function clearStudentDeviceLock(userId, userName) {
 if (!confirm(`Unlock device for ${userName}? They will be able to log in from a new device.`)) return;
 try {
 await api(`/api/users/${userId}/clear-device-lock`, { method: ‘POST’ });
-showToastNotif(`✅ Device unlocked for ${userName}`);
+showToastNotif(`- Device unlocked for ${userName}`);
 loadUsersSection();
 } catch(e) {
-showToastNotif(`❌ ${e.message || 'Failed to unlock device'}`, ‘error’);
+showToastNotif(`- ${e.message || 'Failed to unlock device'}`, ‘error’);
 }
 }
 
@@ -4320,7 +4320,7 @@ const data = await api(`/api/users/${userId}/admin-reset-password`, { method: �
 // Show styled modal with the temp password
 const overlay = document.createElement(‘div’);
 overlay.style.cssText = ‘position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px’;
-overlay.innerHTML = `<div style="background:#fff;border-radius:16px;padding:32px;max-width:420px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,0.3);text-align:center"> <div style="width:56px;height:56px;background:#ede9fe;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 16px;font-size:24px">🔑</div> <h3 style="font-size:18px;font-weight:800;margin-bottom:6px">Temporary Password Ready</h3> <p style="color:#6b7280;font-size:13px;margin-bottom:20px">Give this password to <strong>${data.userName}</strong>. They will be required to change it on first login.</p> <div style="background:#f5f3ff;border:2px dashed #8b5cf6;border-radius:10px;padding:16px;margin-bottom:20px"> <p style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#7c3aed;margin-bottom:8px">Temporary Password</p> <p id="temp-pw-display" style="font-size:24px;font-weight:800;font-family:monospace;letter-spacing:3px;color:#4f46e5;margin:0">${data.tempPassword}</p> </div> <div style="display:flex;gap:10px;justify-content:center"> <button onclick="navigator.clipboard.writeText('${data.tempPassword}').then(()=>this.textContent='✅ Copied!')"  style="padding:10px 20px;background:#6366f1;color:#fff;border:none;border-radius:8px;font-weight:600;cursor:pointer;font-size:14px"> 📋 Copy Password </button> <button onclick="this.closest('[style*=fixed]').remove()"  style="padding:10px 20px;background:#f3f4f6;color:#374151;border:none;border-radius:8px;font-weight:600;cursor:pointer;font-size:14px"> Done </button> </div> <p style="font-size:11px;color:#9ca3af;margin-top:16px">⚠️ This password will not be shown again</p> </div>`;
+overlay.innerHTML = `<div style="background:#fff;border-radius:16px;padding:32px;max-width:420px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,0.3);text-align:center"> <div style="width:56px;height:56px;background:#ede9fe;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 16px;font-size:24px">-</div> <h3 style="font-size:18px;font-weight:800;margin-bottom:6px">Temporary Password Ready</h3> <p style="color:#6b7280;font-size:13px;margin-bottom:20px">Give this password to <strong>${data.userName}</strong>. They will be required to change it on first login.</p> <div style="background:#f5f3ff;border:2px dashed #8b5cf6;border-radius:10px;padding:16px;margin-bottom:20px"> <p style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#7c3aed;margin-bottom:8px">Temporary Password</p> <p id="temp-pw-display" style="font-size:24px;font-weight:800;font-family:monospace;letter-spacing:3px;color:#4f46e5;margin:0">${data.tempPassword}</p> </div> <div style="display:flex;gap:10px;justify-content:center"> <button onclick="navigator.clipboard.writeText('${data.tempPassword}').then(()=>this.textContent='- Copied!')"  style="padding:10px 20px;background:#6366f1;color:#fff;border:none;border-radius:8px;font-weight:600;cursor:pointer;font-size:14px"> - Copy Password </button> <button onclick="this.closest('[style*=fixed]').remove()"  style="padding:10px 20px;background:#f3f4f6;color:#374151;border:none;border-radius:8px;font-weight:600;cursor:pointer;font-size:14px"> Done </button> </div> <p style="font-size:11px;color:#9ca3af;margin-top:16px">-- This password will not be shown again</p> </div>`;
 document.body.appendChild(overlay);
 overlay.addEventListener(‘click’, e => { if (e.target === overlay) overlay.remove(); });
 } catch(e) {
@@ -4384,7 +4384,7 @@ content.innerHTML = `
           const isAdmin = ['admin', 'superadmin'].includes(currentUser.role);
           const canControl = canManage && (isCreator || isAdmin);
           return `<tr>
-            <td><strong>${m.title}</strong>${m.course ? `<div style="font-size:0.85em;color:#7c3aed;font-weight:600;">${esc(m.course.title||'')}${m.course.level?' · L'+m.course.level:''}${m.course.group?' · Grp '+m.course.group:''}</div>` : ''}</td>
+            <td><strong>${m.title}</strong>${m.course ? `<div style="font-size:0.85em;color:#7c3aed;font-weight:600;">${esc(m.course.title||'')}${m.course.level?' - L'+m.course.level:''}${m.course.group?' - Grp '+m.course.group:''}</div>` : ''}</td>
             <td>${m.createdBy?.name || 'Unknown'}</td>
             <td style="font-size:0.85em;">${new Date(m.scheduledStart).toLocaleString()}<br><span style="color:#6b7280;">to ${new Date(m.scheduledEnd).toLocaleString()}</span></td>
             <td>${m.duration} min</td>
@@ -4392,9 +4392,9 @@ content.innerHTML = `
             <td><span class="status-badge" style="${statusStyle(m.status)}">${m.status.charAt(0).toUpperCase() + m.status.slice(1)}</span></td>
             <td style="white-space:nowrap;">
               ${m.status === 'active' || m.status === 'scheduled' ? `<button class="btn btn-success btn-sm" onclick="joinMeeting('${m._id}', '${m.joinUrl}')">Join</button>` : ''}
-              ${canControl && m.status === 'scheduled' ? `<button class="btn btn-primary btn-sm" onclick="startMeeting('${m._id}')" style="margin-left:4px;">▶ Start Now</button>` : ''}
-              ${canControl ? `<button class="btn btn-sm" style="margin-left:4px;background:#0ea5e9;color:#fff;font-size:11px" onclick="showInviteLinkForm('${m._id}', \`${m.inviteLink || ''}\`)">🔗 Invite Link</button>` : ''}
-              ${m.inviteLink ? `<a href="${m.inviteLink}" target="_blank" class="btn btn-sm" style="margin-left:4px;background:#f0fdf4;color:#16a34a;border:1px solid #86efac;font-size:11px">▶ Join via Link</a>` : ''}
+              ${canControl && m.status === 'scheduled' ? `<button class="btn btn-primary btn-sm" onclick="startMeeting('${m._id}')" style="margin-left:4px;">- Start Now</button>` : ''}
+              ${canControl ? `<button class="btn btn-sm" style="margin-left:4px;background:#0ea5e9;color:#fff;font-size:11px" onclick="showInviteLinkForm('${m._id}', \`${m.inviteLink || ''}\`)">- Invite Link</button>` : ''}
+              ${m.inviteLink ? `<a href="${m.inviteLink}" target="_blank" class="btn btn-sm" style="margin-left:4px;background:#f0fdf4;color:#16a34a;border:1px solid #86efac;font-size:11px">- Join via Link</a>` : ''}
               ${canControl && m.status === 'active' ? `<button class="btn btn-danger btn-sm" onclick="endMeeting('${m._id}')" style="margin-left:4px;">End</button>` : ''}
               ${canControl && (m.status === 'scheduled' || m.status === 'active') ? `<button class="btn btn-secondary btn-sm" onclick="cancelMeeting('${m._id}')" style="margin-left:4px;">Cancel</button>` : ''}
               <button class="btn btn-secondary btn-sm" onclick="viewMeetingDetail('${m._id}')" style="margin-left:4px;">Details</button>
@@ -4423,8 +4423,8 @@ const d = await api(’/api/courses’);
 courses = d.courses || d || [];
 } catch(e) { courses = []; }
 
-const courseOptions = `<option value="">— No specific course —</option>` +
-courses.map(c => `<option value="${c._id}">${esc(c.title)}${c.level?' · L'+c.level:''}${c.group?' · Grp '+c.group:''}</option>`).join(’’);
+const courseOptions = `<option value="">- No specific course -</option>` +
+courses.map(c => `<option value="${c._id}">${esc(c.title)}${c.level?' - L'+c.level:''}${c.group?' - Grp '+c.group:''}</option>`).join(’’);
 // default scheduled start = now+5min, end = now+65min
 const now = new Date();
 const pad = n => String(n).padStart(2,‘0’);
@@ -4500,7 +4500,7 @@ if (!start || !end) { errEl.textContent = ‘Please set a start and end time.’
 if (new Date(end) <= new Date(start)) { errEl.textContent = ‘End time must be after start time.’; errEl.style.display = ‘block’; return; }
 
 const schedBtn = document.querySelector(’.modal .btn-primary’);
-if (schedBtn) { schedBtn.textContent = ‘Scheduling…’; schedBtn.disabled = true; }
+if (schedBtn) { schedBtn.textContent = ‘Scheduling-’; schedBtn.disabled = true; }
 
 try {
 await api(’/api/zoom’, { method: ‘POST’, body: JSON.stringify({
@@ -4529,7 +4529,7 @@ errEl.textContent = ‘Please enter a meeting title.’;
 errEl.style.display = ‘block’;
 return;
 }
-if (btn) { btn.textContent = ‘Starting…’; btn.disabled = true; }
+if (btn) { btn.textContent = ‘Starting-’; btn.disabled = true; }
 const now = new Date();
 const end = new Date(now.getTime() + 60 * 60 * 1000);
 try {
@@ -4541,7 +4541,7 @@ scheduledEnd: end.toISOString().slice(0,16),
 closeModal();
 await startMeeting(data.meeting._id);
 } catch(e) {
-if (btn) { btn.textContent = ‘🎥 Start Meeting’; btn.disabled = false; }
+if (btn) { btn.textContent = ‘- Start Meeting’; btn.disabled = false; }
 errEl.textContent = e.message;
 errEl.style.display = ‘block’;
 }
@@ -4565,24 +4565,24 @@ container.classList.remove('hidden');
 container.innerHTML = `
   <div class="modal-overlay" onclick="closeModal(event)">
     <div class="modal" onclick="event.stopPropagation()" style="max-width:460px;text-align:center">
-      <div style="font-size:48px;margin-bottom:10px">🎥</div>
+      <div style="font-size:48px;margin-bottom:10px">-</div>
       <h3 style="margin:0 0 6px">Meeting is Live!</h3>
       <p style="font-size:13px;color:var(--text-light);margin-bottom:20px">
         Your meeting opened in a new tab. Share the link below so others can join.
       </p>
       <div style="background:#f0fdf4;border:1px solid #86efac;border-radius:10px;padding:14px;margin-bottom:20px;text-align:left">
-        <div style="font-size:11px;font-weight:700;color:#15803d;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">🔗 Invite Link</div>
+        <div style="font-size:11px;font-weight:700;color:#15803d;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">- Invite Link</div>
         <div style="font-size:13px;word-break:break-all;color:#1d4ed8;font-weight:600;margin-bottom:10px">${joinUrl}</div>
         <button class="btn btn-primary" style="width:100%;font-size:14px;padding:10px;" onclick="
           navigator.clipboard.writeText('${joinUrl}').then(() => {
-            this.textContent = '✅ Link Copied!';
+            this.textContent = '- Link Copied!';
             this.style.background = '#16a34a';
-            setTimeout(() => { this.textContent = '📋 Copy Link'; this.style.background = ''; }, 3000);
+            setTimeout(() => { this.textContent = '- Copy Link'; this.style.background = ''; }, 3000);
           }).catch(() => { prompt('Copy this link:', '${joinUrl}'); })
-        ">📋 Copy Link</button>
+        ">- Copy Link</button>
       </div>
       <div style="display:flex;gap:8px;justify-content:center;">
-        <button class="btn btn-success" onclick="window.open('${joinUrl}', '_blank')">🎥 Rejoin</button>
+        <button class="btn btn-success" onclick="window.open('${joinUrl}', '_blank')">- Rejoin</button>
         <button class="btn btn-secondary" onclick="closeModal();renderMeetings()">Done</button>
       </div>
     </div>
@@ -4662,8 +4662,8 @@ content.innerHTML = `
       <p><strong>Duration:</strong> ${m.duration} minutes</p>
       ${m.course ? `<p><strong>Course:</strong> ${m.course.code} - ${m.course.title}</p>` : ''}
       <p><strong>Join Link:</strong> <a href="${m.joinUrl}" target="_blank" style="color:#3b82f6;word-break:break-all;">${m.joinUrl}</a></p>
-      ${m.inviteLink ? `<p><strong>Invite Link:</strong> <a href="${m.inviteLink}" target="_blank" style="color:#16a34a;word-break:break-all;font-weight:600">▶ ${m.inviteLink}</a></p>` : ''}
-      ${canManage ? `<button class="btn btn-sm" style="background:#0ea5e9;color:#fff;margin-top:4px" onclick="showInviteLinkForm('${m._id}', \`${m.inviteLink || ''}\`)">🔗 ${m.inviteLink ? 'Update' : 'Add'} Invite Link</button>` : ''}
+      ${m.inviteLink ? `<p><strong>Invite Link:</strong> <a href="${m.inviteLink}" target="_blank" style="color:#16a34a;word-break:break-all;font-weight:600">- ${m.inviteLink}</a></p>` : ''}
+      ${canManage ? `<button class="btn btn-sm" style="background:#0ea5e9;color:#fff;margin-top:4px" onclick="showInviteLinkForm('${m._id}', \`${m.inviteLink || ''}\`)">- ${m.inviteLink ? 'Update' : 'Add'} Invite Link</button>` : ''}
       <div style="margin-top:12px;">
         ${m.status === 'active' || m.status === 'scheduled' ? `<button class="btn btn-success btn-sm" onclick="joinMeeting('${m._id}', '${m.joinUrl}')">Join Meeting</button>` : ''}
         ${canManage && m.status === 'active' ? `<button class="btn btn-danger btn-sm" style="margin-left:4px;" onclick="endMeeting('${m._id}')">End Meeting</button>` : ''}
@@ -4674,8 +4674,8 @@ content.innerHTML = `
         <div class="card-title" style="margin:0">Attendees (${m.attendees?.length || 0})</div>
         ${m.status === 'completed' && canManage ? `
           <div style="display:flex;gap:8px">
-            <button class="btn btn-sm" style="background:#22c55e;color:#fff" onclick="viewMeetingAttendance('${m._id}', '${m.title.replace(/'/g,"\\'")}')">📋 Full Report</button>
-            <button class="btn btn-sm" style="background:#7c3aed;color:#fff" onclick="printMeetingAttendance('${m._id}', '${m.title.replace(/'/g,"\\'")}')">🖨 PDF</button>
+            <button class="btn btn-sm" style="background:#22c55e;color:#fff" onclick="viewMeetingAttendance('${m._id}', '${m.title.replace(/'/g,"\\'")}')">- Full Report</button>
+            <button class="btn btn-sm" style="background:#7c3aed;color:#fff" onclick="printMeetingAttendance('${m._id}', '${m.title.replace(/'/g,"\\'")}')">- PDF</button>
           </div>` : ''}
       </div>
       ${m.attendees && m.attendees.length ? `
@@ -4684,9 +4684,9 @@ content.innerHTML = `
           <tbody>${m.attendees.map(a => `
             <tr>
               <td>${a.user?.name || 'Unknown'}</td>
-              <td>${a.user?.indexNumber || '—'}</td>
-              <td>${a.user?.role || '—'}</td>
-              <td style="font-size:0.85em;">${a.joinedAt ? new Date(a.joinedAt).toLocaleString() : '—'}</td>
+              <td>${a.user?.indexNumber || '-'}</td>
+              <td>${a.user?.role || '-'}</td>
+              <td style="font-size:0.85em;">${a.joinedAt ? new Date(a.joinedAt).toLocaleString() : '-'}</td>
               <td><span class="status-badge" style="${a.status === 'joined' ? 'background:#22c55e;color:#fff;' : a.status === 'late' ? 'background:#f59e0b;color:#fff;' : 'background:#ef4444;color:#fff;'}">${a.status}</span></td>
             </tr>
           `).join('')}</tbody>
@@ -4733,7 +4733,7 @@ const cached = offlineRead(‘courses’);
 if (cached) {
 _renderCoursesHTML(content, cached.courses || [], true);
 } else {
-content.innerHTML = ` <div class="page-header"><h2>My Courses</h2><p>Your enrolled courses</p></div> <div class="card" style="text-align:center;padding:40px"> <div style="font-size:48px;margin-bottom:12px">📡</div> <div style="font-size:18px;font-weight:700">Offline</div> <p style="color:var(--text-light);margin-top:8px">Connect once to cache your courses for offline viewing.</p> </div>`;
+content.innerHTML = ` <div class="page-header"><h2>My Courses</h2><p>Your enrolled courses</p></div> <div class="card" style="text-align:center;padding:40px"> <div style="font-size:48px;margin-bottom:12px">-</div> <div style="font-size:18px;font-weight:700">Offline</div> <p style="color:var(--text-light);margin-top:8px">Connect once to cache your courses for offline viewing.</p> </div>`;
 }
 return;
 }
@@ -4755,10 +4755,10 @@ content.innerHTML = `<div class="card"><p>Error: ${e.message}</p></div>`;
 function _renderCoursesHTML(content, courses, isOffline) {
 const canCreate = [‘lecturer’, ‘admin’, ‘superadmin’].includes(currentUser.role);
 const canManageRoster = [‘lecturer’, ‘admin’, ‘superadmin’].includes(currentUser.role);
-content.innerHTML = `<div class="page-header"> <h2>Courses</h2> <p>Manage academic courses${isOffline ? ' <span style="color:#f59e0b;font-weight:600">(Offline — cached)</span>' : ''}</p> </div> ${canCreate && !isOffline ? '<div class="actions-bar"><button class="btn btn-primary btn-sm" onclick="showCreateCourseModal()">Create Course</button></div>' : ''} <div class="card"> ${courses.length ?`
+content.innerHTML = `<div class="page-header"> <h2>Courses</h2> <p>Manage academic courses${isOffline ? ' <span style="color:#f59e0b;font-weight:600">(Offline - cached)</span>' : ''}</p> </div> ${canCreate && !isOffline ? '<div class="actions-bar"><button class="btn btn-primary btn-sm" onclick="showCreateCourseModal()">Create Course</button></div>' : ''} <div class="card"> ${courses.length ?`
 <table>
 <thead><tr><th>Code</th><th>Title</th><th>Level / Group</th><th>Lecturer</th><th>Roster</th><th>Enrolled</th>${canManageRoster && !isOffline ? ‘<th>Actions</th>’ : currentUser.role === ‘student’ ? ‘<th></th>’ : ‘’}</tr></thead>
-<tbody>${courses.map(course => `<tr> <td><strong>${course.code}</strong></td> <td>${course.title}</td> <td> ${course.level ?`<span style="font-size:11px;padding:2px 7px;border-radius:20px;background:#ede9fe;color:#7c3aed;font-weight:700;margin-right:4px">L${course.level}</span>`: ''} ${course.group ?`<span style="font-size:11px;padding:2px 7px;border-radius:20px;background:#ecfdf5;color:#059669;font-weight:600">${esc(course.group)}</span>`: ''} ${!course.level && !course.group ? '<span style="color:var(--text-muted);font-size:12px">—</span>' : ''} </td> <td>${course.lecturer?.name || 'N/A'}</td> <td>${!isOffline ?`<button class="btn btn-sm" style="font-size:11px;background:var(--bg);border:1px solid var(--border)" onclick="viewRoster('${course._id}', '${course.code}')">View Roster</button>`: '—'}</td> <td>${course.enrolledStudents?.length || 0}</td> ${canManageRoster && !isOffline ?`<td style="white-space:nowrap"><button class="btn btn-primary btn-sm" style="font-size:11px" onclick="showUploadRosterModal('${course._id}', '${course.code}')">Upload Students</button> <button class="btn btn-sm" style="font-size:11px;background:#6366f1;color:#fff" onclick="openBulkEmailModal('${course._id}', '${course.title}')">✉️ Email</button> <button class="btn btn-sm" style="font-size:11px;background:#10b981;color:#fff" onclick="openBulkSmsModal('${course._id}', '${course.title}')">💬 SMS</button></td>`: currentUser.role === 'student' ?`<td><button class="btn btn-sm" style="font-size:11px;background:#f0fdf4;color:#16a34a;border:1px solid #bbf7d0" onclick="generateCertificate('${course._id}','${course.title}')">🎓 Certificate</button></td>`: ''} </tr>`).join(’’)}</tbody>
+<tbody>${courses.map(course => `<tr> <td><strong>${course.code}</strong></td> <td>${course.title}</td> <td> ${course.level ?`<span style="font-size:11px;padding:2px 7px;border-radius:20px;background:#ede9fe;color:#7c3aed;font-weight:700;margin-right:4px">L${course.level}</span>`: ''} ${course.group ?`<span style="font-size:11px;padding:2px 7px;border-radius:20px;background:#ecfdf5;color:#059669;font-weight:600">${esc(course.group)}</span>`: ''} ${!course.level && !course.group ? '<span style="color:var(--text-muted);font-size:12px">-</span>' : ''} </td> <td>${course.lecturer?.name || 'N/A'}</td> <td>${!isOffline ?`<button class="btn btn-sm" style="font-size:11px;background:var(--bg);border:1px solid var(--border)" onclick="viewRoster('${course._id}', '${course.code}')">View Roster</button>`: '-'}</td> <td>${course.enrolledStudents?.length || 0}</td> ${canManageRoster && !isOffline ?`<td style="white-space:nowrap"><button class="btn btn-primary btn-sm" style="font-size:11px" onclick="showUploadRosterModal('${course._id}', '${course.code}')">Upload Students</button> <button class="btn btn-sm" style="font-size:11px;background:#6366f1;color:#fff" onclick="openBulkEmailModal('${course._id}', '${course.title}')">– Email</button> <button class="btn btn-sm" style="font-size:11px;background:#10b981;color:#fff" onclick="openBulkSmsModal('${course._id}', '${course.title}')">- SMS</button></td>`: currentUser.role === 'student' ?`<td><button class="btn btn-sm" style="font-size:11px;background:#f0fdf4;color:#16a34a;border:1px solid #bbf7d0" onclick="generateCertificate('${course._id}','${course.title}')">- Certificate</button></td>`: ''} </tr>`).join(’’)}</tbody>
 </table>
 `: '<div class="empty-state"><p>No courses found</p></div>'} </div>`;
 }
@@ -4766,7 +4766,7 @@ content.innerHTML = `<div class="page-header"> <h2>Courses</h2> <p>Manage academ
 function showCreateCourseModal() {
 const container = document.getElementById(‘modal-container’);
 container.classList.remove(‘hidden’);
-container.innerHTML = `<div class="modal-overlay" onclick="closeModal(event)"> <div class="modal" onclick="event.stopPropagation()"> <h3>Create Course</h3> <div class="form-group"> <label>Course Code <span style="color:red">*</span></label> <input type="text" id="course-code" placeholder="e.g., CS101" style="text-transform:uppercase"> </div> <div class="form-group"> <label>Course Title <span style="color:red">*</span></label> <input type="text" id="course-title" placeholder="Introduction to Computer Science"> </div> <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px"> <div class="form-group"> <label>Level <span style="color:red">*</span></label> <select id="course-level" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px"> <option value="">— Select Level —</option> <option value="100">Level 100</option> <option value="200">Level 200</option> <option value="300">Level 300</option> <option value="400">Level 400</option> <option value="500">Level 500 (Postgrad)</option> <option value="600">Level 600 (Postgrad)</option> </select> </div> <div class="form-group"> <label>Group <span style="color:red">*</span></label> <input type="text" id="course-group" placeholder="e.g. A, B, C" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;text-transform:uppercase" oninput="this.value=this.value.toUpperCase()"> <p style="font-size:11px;color:var(--text-muted);margin-top:3px">Use letters: A, B, C etc.</p> </div> </div> <div class="form-group"> <label>Description</label> <input type="text" id="course-desc" placeholder="Optional description"> </div> <div class="modal-actions"> <button class="btn btn-secondary btn-sm" onclick="closeModal()">Cancel</button> <button class="btn btn-primary btn-sm" onclick="createCourse()">Create</button> </div> </div> </div>`;
+container.innerHTML = `<div class="modal-overlay" onclick="closeModal(event)"> <div class="modal" onclick="event.stopPropagation()"> <h3>Create Course</h3> <div class="form-group"> <label>Course Code <span style="color:red">*</span></label> <input type="text" id="course-code" placeholder="e.g., CS101" style="text-transform:uppercase"> </div> <div class="form-group"> <label>Course Title <span style="color:red">*</span></label> <input type="text" id="course-title" placeholder="Introduction to Computer Science"> </div> <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px"> <div class="form-group"> <label>Level <span style="color:red">*</span></label> <select id="course-level" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px"> <option value="">- Select Level -</option> <option value="100">Level 100</option> <option value="200">Level 200</option> <option value="300">Level 300</option> <option value="400">Level 400</option> <option value="500">Level 500 (Postgrad)</option> <option value="600">Level 600 (Postgrad)</option> </select> </div> <div class="form-group"> <label>Group <span style="color:red">*</span></label> <input type="text" id="course-group" placeholder="e.g. A, B, C" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;text-transform:uppercase" oninput="this.value=this.value.toUpperCase()"> <p style="font-size:11px;color:var(--text-muted);margin-top:3px">Use letters: A, B, C etc.</p> </div> </div> <div class="form-group"> <label>Description</label> <input type="text" id="course-desc" placeholder="Optional description"> </div> <div class="modal-actions"> <button class="btn btn-secondary btn-sm" onclick="closeModal()">Cancel</button> <button class="btn btn-primary btn-sm" onclick="createCourse()">Create</button> </div> </div> </div>`;
 }
 
 async function createCourse() {
@@ -4804,7 +4804,7 @@ toastError(e.message);
 function showUploadRosterModal(courseId, courseCode) {
 const container = document.getElementById(‘modal-container’);
 container.classList.remove(‘hidden’);
-container.innerHTML = `<div class="modal-overlay" onclick="closeModal(event)"> <div class="modal" onclick="event.stopPropagation()" style="max-width:500px"> <h3>Upload Student List - ${courseCode}</h3> <p style="font-size:13px;color:var(--text-light);margin-bottom:16px">Add student IDs so students can register. Enter one student per line: <strong>StudentID, Full Name</strong></p> <div class="form-group"> <label>Student List</label> <textarea id="roster-text" rows="10" placeholder="STU001, John Doe&#10;STU002, Jane Smith&#10;STU003, Alex Johnson" style="width:100%;font-family:monospace;font-size:13px;resize:vertical"></textarea> </div> <p style="font-size:12px;color:var(--text-light);margin-bottom:12px">Each line should have: StudentID, Name (name is optional)</p> <div id="roster-upload-status" style="display:none;padding:10px;border-radius:8px;margin-bottom:12px;font-size:13px"></div> <div class="modal-actions"> <button class="btn btn-secondary btn-sm" onclick="closeModal()">Cancel</button> <button class="btn btn-primary btn-sm" id="roster-upload-btn" onclick="uploadRoster('${courseId}')">Upload Students</button> <button class="btn btn-secondary btn-sm" onclick="openExcelImportModal('${courseId}','${(courseCode||courseName||courseTitle||'Course')}')">📊 Import Excel</button> </div> </div> </div>`;
+container.innerHTML = `<div class="modal-overlay" onclick="closeModal(event)"> <div class="modal" onclick="event.stopPropagation()" style="max-width:500px"> <h3>Upload Student List - ${courseCode}</h3> <p style="font-size:13px;color:var(--text-light);margin-bottom:16px">Add student IDs so students can register. Enter one student per line: <strong>StudentID, Full Name</strong></p> <div class="form-group"> <label>Student List</label> <textarea id="roster-text" rows="10" placeholder="STU001, John Doe&#10;STU002, Jane Smith&#10;STU003, Alex Johnson" style="width:100%;font-family:monospace;font-size:13px;resize:vertical"></textarea> </div> <p style="font-size:12px;color:var(--text-light);margin-bottom:12px">Each line should have: StudentID, Name (name is optional)</p> <div id="roster-upload-status" style="display:none;padding:10px;border-radius:8px;margin-bottom:12px;font-size:13px"></div> <div class="modal-actions"> <button class="btn btn-secondary btn-sm" onclick="closeModal()">Cancel</button> <button class="btn btn-primary btn-sm" id="roster-upload-btn" onclick="uploadRoster('${courseId}')">Upload Students</button> <button class="btn btn-secondary btn-sm" onclick="openExcelImportModal('${courseId}','${(courseCode||courseName||courseTitle||'Course')}')">- Import Excel</button> </div> </div> </div>`;
 }
 
 async function uploadRoster(courseId) {
@@ -4880,13 +4880,13 @@ rosterEl.innerHTML = `
       <tr>
         <td style="font-family:monospace;font-weight:600">${r.studentId}</td>
         <td>${r.name || '-'}</td>
-        <td>${r.user?.programme ? `<span style="background:#ede9fe;color:#7c3aed;padding:1px 6px;border-radius:20px;font-size:11px;font-weight:700">${esc(r.user.programme)}</span>` : '—'}</td>
+        <td>${r.user?.programme ? `<span style="background:#ede9fe;color:#7c3aed;padding:1px 6px;border-radius:20px;font-size:11px;font-weight:700">${esc(r.user.programme)}</span>` : '-'}</td>
         <td style="white-space:nowrap">
           ${r.user?.studentLevel ? `<span style="background:#dbeafe;color:#1d4ed8;padding:1px 6px;border-radius:20px;font-size:11px;font-weight:700">L${esc(r.user.studentLevel)}</span>` : ''}
           ${r.user?.studentGroup ? `<span style="background:#ecfdf5;color:#059669;padding:1px 6px;border-radius:20px;font-size:11px;font-weight:700">Grp ${esc(r.user.studentGroup)}</span>` : ''}
-          ${!r.user?.studentLevel && !r.user?.studentGroup ? '—' : ''}
+          ${!r.user?.studentLevel && !r.user?.studentGroup ? '-' : ''}
         </td>
-        <td>${r.user?.sessionType ? `<span style="background:#fff7ed;color:#c2410c;padding:1px 6px;border-radius:20px;font-size:11px;font-weight:600">${esc(r.user.sessionType)}</span>` : '—'}</td>
+        <td>${r.user?.sessionType ? `<span style="background:#fff7ed;color:#c2410c;padding:1px 6px;border-radius:20px;font-size:11px;font-weight:600">${esc(r.user.sessionType)}</span>` : '-'}</td>
         <td><span class="status-badge ${r.registered ? 'status-active' : 'status-stopped'}">${r.registered ? 'Registered' : 'Pending'}</span></td>
         ${canDelete ? `<td><button class="btn btn-danger btn-sm" style="font-size:10px;padding:2px 8px" onclick="removeRosterEntry('${courseId}', '${r._id}', '${courseCode}')">Remove</button></td>` : ''}
       </tr>
@@ -4946,10 +4946,10 @@ async function renderLecturerQuizzes(content) {
 if (!isOnline()) {
 const cached = offlineRead(‘quizzes_lecturer’);
 if (cached) {
-content.innerHTML = ‘<div style="background:#fef3c7;color:#92400e;padding:10px 16px;border-radius:8px;font-size:13px;margin-bottom:16px">📡 Offline — showing cached quizzes</div>’ + (content.innerHTML || ‘’);
+content.innerHTML = ‘<div style="background:#fef3c7;color:#92400e;padding:10px 16px;border-radius:8px;font-size:13px;margin-bottom:16px">- Offline - showing cached quizzes</div>’ + (content.innerHTML || ‘’);
 _renderLecturerQuizzesHTML(content, cached);
 } else {
-content.innerHTML = ‘<div class="card" style="text-align:center;padding:32px"><div style="font-size:36px">📡</div><p style="margin-top:8px;color:var(--text-light)">No cached data. Connect once to view quizzes offline.</p></div>’;
+content.innerHTML = ‘<div class="card" style="text-align:center;padding:32px"><div style="font-size:36px">-</div><p style="margin-top:8px;color:var(--text-light)">No cached data. Connect once to view quizzes offline.</p></div>’;
 }
 return;
 }
@@ -4959,7 +4959,7 @@ offlineCache(‘quizzes_lecturer’, data);
 content.innerHTML = `<div class="page-header"><h2>Quizzes</h2><p>Manage your quizzes and assessments</p></div> <div class="actions-bar"><button class="btn btn-primary btn-sm" onclick="showCreateQuizModal()">Create Quiz</button></div> <div class="card"> ${data.quizzes.length ?`
 <table>
 <thead><tr><th>Title</th><th>Course</th><th>Questions</th><th>Submissions</th><th>Time Range</th><th>Status</th><th>Actions</th></tr></thead>
-<tbody>${data.quizzes.map(q => `<tr> <td><strong>${q.title}</strong></td> <td>${q.course?.code || 'N/A'}</td> <td>${q.questionCount || 0}</td> <td>${q.attemptCount || 0}</td> <td style="font-size:0.85em;">${new Date(q.startTime).toLocaleString()} — ${new Date(q.endTime).toLocaleString()}</td> <td>${quizStatusBadge(q)}</td> <td style="white-space:nowrap;"> <button class="btn btn-sm btn-secondary" onclick="viewLecturerQuizDetail('${q._id}')">Details</button> <button class="btn btn-sm btn-primary" onclick="showAddQuestionsView('${q._id}')">Questions</button> <button class="btn btn-sm btn-success" onclick="viewQuizResults('${q._id}')">Results</button> <button class="btn btn-sm" style="background:#dc2626;color:#fff;font-weight:700;" onclick="openLiveMonitor('${q._id}')" title="Open Live Proctor Monitor">🔴 Monitor</button> <button class="btn btn-sm" style="background:#0ea5e9;color:#fff;" onclick="copyQuizId('${q._id}')" title="Copy Quiz ID">📋 ID</button> <button class="btn btn-sm btn-danger" onclick="deleteLecturerQuiz('${q._id}')">Delete</button> </td> </tr>`).join(’’)}</tbody>
+<tbody>${data.quizzes.map(q => `<tr> <td><strong>${q.title}</strong></td> <td>${q.course?.code || 'N/A'}</td> <td>${q.questionCount || 0}</td> <td>${q.attemptCount || 0}</td> <td style="font-size:0.85em;">${new Date(q.startTime).toLocaleString()} - ${new Date(q.endTime).toLocaleString()}</td> <td>${quizStatusBadge(q)}</td> <td style="white-space:nowrap;"> <button class="btn btn-sm btn-secondary" onclick="viewLecturerQuizDetail('${q._id}')">Details</button> <button class="btn btn-sm btn-primary" onclick="showAddQuestionsView('${q._id}')">Questions</button> <button class="btn btn-sm btn-success" onclick="viewQuizResults('${q._id}')">Results</button> <button class="btn btn-sm" style="background:#dc2626;color:#fff;font-weight:700;" onclick="openLiveMonitor('${q._id}')" title="Open Live Proctor Monitor">- Monitor</button> <button class="btn btn-sm" style="background:#0ea5e9;color:#fff;" onclick="copyQuizId('${q._id}')" title="Copy Quiz ID">- ID</button> <button class="btn btn-sm btn-danger" onclick="deleteLecturerQuiz('${q._id}')">Delete</button> </td> </tr>`).join(’’)}</tbody>
 </table>
 `: '<div class="empty-state"><p>No quizzes found. Create your first quiz!</p></div>'} </div>`;
 } catch (e) {
@@ -4974,7 +4974,7 @@ mc.innerHTML = ‘<div class="modal-overlay"><div class="modal"><p>Loading cours
 try {
 const coursesData = await api(’/api/courses’);
 const courses = coursesData.courses || [];
-mc.innerHTML = `<div class="modal-overlay" onclick="if(event.target===this)closeQuizModal()"> <div class="modal" style="max-width:500px;"> <h3>Create Quiz</h3> <div class="form-group"><label>Title *</label><input type="text" id="cq-title" placeholder="Quiz title" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;"></div> <div class="form-group"><label>Description</label><textarea id="cq-desc" placeholder="Optional description" rows="2" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;"></textarea></div> <div class="form-group"><label>Course *</label><select id="cq-course" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;"> <option value="">Select a course</option> ${courses.map(c =>`<option value="${c._id}">${esc(c.title)}${c.level?’ · L’+c.level:’’}${c.group?’ · Grp ‘+c.group:’’}</option>`).join('')} </select></div> <div class="form-group"><label>Time Limit (minutes)</label><input type="number" id="cq-timelimit" value="30" min="1" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;"></div> <div class="form-group"><label>Start Time *</label><input type="datetime-local" id="cq-start" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;"></div> <div class="form-group"><label>End Time *</label><input type="datetime-local" id="cq-end" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;"></div> <div class="form-group"> <label>Max Attempts <span style="font-weight:400;color:#9ca3af;font-size:11px;">(0 = unlimited)</span></label> <input type="number" id="cq-max-attempts" value="1" min="0" max="10" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;"> </div> <div class="form-group"> <label>Score to Record</label> <select id="cq-score-policy" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;"> <option value="best">Best Score</option> <option value="last">Last Attempt Score</option> </select> </div> <div id="cq-error" style="color:#ef4444;margin:8px 0;display:none;"></div> <div class="modal-actions"> <button class="btn btn-secondary" onclick="closeQuizModal()">Cancel</button> <button class="btn btn-primary" onclick="submitCreateQuiz()">Create Quiz</button> </div> </div> </div> `;
+mc.innerHTML = `<div class="modal-overlay" onclick="if(event.target===this)closeQuizModal()"> <div class="modal" style="max-width:500px;"> <h3>Create Quiz</h3> <div class="form-group"><label>Title *</label><input type="text" id="cq-title" placeholder="Quiz title" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;"></div> <div class="form-group"><label>Description</label><textarea id="cq-desc" placeholder="Optional description" rows="2" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;"></textarea></div> <div class="form-group"><label>Course *</label><select id="cq-course" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;"> <option value="">Select a course</option> ${courses.map(c =>`<option value="${c._id}">${esc(c.title)}${c.level?’ - L’+c.level:’’}${c.group?’ - Grp ‘+c.group:’’}</option>`).join('')} </select></div> <div class="form-group"><label>Time Limit (minutes)</label><input type="number" id="cq-timelimit" value="30" min="1" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;"></div> <div class="form-group"><label>Start Time *</label><input type="datetime-local" id="cq-start" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;"></div> <div class="form-group"><label>End Time *</label><input type="datetime-local" id="cq-end" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;"></div> <div class="form-group"> <label>Max Attempts <span style="font-weight:400;color:#9ca3af;font-size:11px;">(0 = unlimited)</span></label> <input type="number" id="cq-max-attempts" value="1" min="0" max="10" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;"> </div> <div class="form-group"> <label>Score to Record</label> <select id="cq-score-policy" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;"> <option value="best">Best Score</option> <option value="last">Last Attempt Score</option> </select> </div> <div id="cq-error" style="color:#ef4444;margin:8px 0;display:none;"></div> <div class="modal-actions"> <button class="btn btn-secondary" onclick="closeQuizModal()">Cancel</button> <button class="btn btn-primary" onclick="submitCreateQuiz()">Create Quiz</button> </div> </div> </div> `;
 } catch (e) {
 mc.innerHTML = `<div class="modal-overlay" onclick="if(event.target===this)closeQuizModal()"><div class="modal"><p>Error loading courses: ${e.message}</p><div class="modal-actions"><button class="btn btn-secondary" onclick="closeQuizModal()">Close</button></div></div></div>`;
 }
@@ -4998,7 +4998,7 @@ return;
 }
 // Prevent double-submit
 const submitBtn = document.querySelector(’#create-quiz-modal .btn-primary, #quiz-modal .btn-primary’);
-if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = ‘Creating…’; }
+if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = ‘Creating-’; }
 try {
 const data = await api(’/api/lecturer/quizzes’, {
 method: ‘POST’,
@@ -5027,14 +5027,14 @@ const questions = quiz.questions || [];
 content.innerHTML = `
   <div class="page-header">
     <h2>Questions: ${quiz.title}</h2>
-    <p>${quiz.course?.code || ''} — ${quiz.course?.title || ''} | Total Marks: <span id="aq-total-marks">${quiz.totalMarks || 0}</span></p>
+    <p>${quiz.course?.code || ''} - ${quiz.course?.title || ''} | Total Marks: <span id="aq-total-marks">${quiz.totalMarks || 0}</span></p>
   </div>
   <div class="actions-bar" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-    <button class="btn btn-secondary btn-sm" onclick="renderQuizzes()">← Back to Quizzes</button>
-    <button class="btn btn-sm btn-secondary" onclick="openImportFromBankModal('${quizId}')">📚 Import from Bank</button>
+    <button class="btn btn-secondary btn-sm" onclick="renderQuizzes()">- Back to Quizzes</button>
+    <button class="btn btn-sm btn-secondary" onclick="openImportFromBankModal('${quizId}')">- Import from Bank</button>
     <button class="btn btn-sm" style="background:linear-gradient(135deg,#7c3aed,#4f46e5);color:#fff;font-weight:600;display:flex;align-items:center;gap:5px;border:none" onclick="openAIQuizPanel('${quizId}')">
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
-      ✨ AI Generate Questions
+      - AI Generate Questions
     </button>
   </div>
   <div class="card" style="margin-bottom:16px;">
@@ -5054,13 +5054,13 @@ content.innerHTML = `
           <input type="radio" name="aq-type" value="fill" onchange="aqToggleType('fill')" style="accent-color:var(--primary)"> Fill In
         </label>
       </div>
-      <p id="aq-type-hint" style="font-size:12px;color:#9ca3af;margin-top:5px;">One correct answer — student picks one option.</p>
+      <p id="aq-type-hint" style="font-size:12px;color:#9ca3af;margin-top:5px;">One correct answer - student picks one option.</p>
     </div>
 
     <div class="form-group">
       <label>Question Text *</label>
       ${getMathToolbar('aq-text')}
-      <textarea id="aq-text" rows="3" placeholder="Enter your question here…" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;" oninput="updateMathPreview('aq-text','aq-math-preview')"></textarea>
+      <textarea id="aq-text" rows="3" placeholder="Enter your question here-" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;" oninput="updateMathPreview('aq-text','aq-math-preview')"></textarea>
       <div id="aq-math-preview" style="display:none;margin-top:6px;padding:8px 12px;background:#f5f3ff;border:1px solid #e0e7ff;border-radius:6px;font-size:13px;color:#374151;min-height:32px"></div>
     </div>
 
@@ -5114,7 +5114,7 @@ content.innerHTML = `
       <input type="number" id="aq-marks" value="1" min="1" style="width:80px;padding:8px;border:1px solid #d1d5db;border-radius:6px;">
     </div>
     <div id="aq-error" style="color:#ef4444;margin:8px 0;display:none;font-size:13px;"></div>
-    <div style="margin-top:12px;"><button class="btn btn-primary" onclick="submitAddQuestion('${quizId}')">＋ Add Question</button></div>
+    <div style="margin-top:12px;"><button class="btn btn-primary" onclick="submitAddQuestion('${quizId}')">- Add Question</button></div>
   </div>
 
   <div class="card">
@@ -5133,12 +5133,12 @@ content.innerHTML = `
             <div style="flex:1;">
               <div class="math-content" style="margin-bottom:6px;"><strong>Q${i+1}.</strong>${typeLabel} ${q.questionText}</div>
               ${isFillQ
-                ? `<div style="font-size:13px;color:#166534;background:#f0fdf4;border:1px solid #bbf7d0;padding:4px 10px;border-radius:6px;display:inline-block;">✓ ${q.correctAnswerText}${q.acceptedAnswers?.length ? ` <span style="color:#6b7280;font-weight:400;">(also: ${q.acceptedAnswers.join(', ')})</span>` : ''}</div>`
-                : `<div style="display:flex;flex-wrap:wrap;gap:5px;font-size:13px;">${q.options.map((o,oi)=>`<span style="padding:3px 9px;border-radius:6px;${correctSet.has(oi)?'background:#f0fdf4;color:#166534;border:1px solid #bbf7d0;font-weight:700;':'background:#f9fafb;color:#6b7280;border:1px solid #e5e7eb;'}">${String.fromCharCode(65+oi)}) ${o}${correctSet.has(oi)?' ✓':''}</span>`).join('')}</div>`}
+                ? `<div style="font-size:13px;color:#166534;background:#f0fdf4;border:1px solid #bbf7d0;padding:4px 10px;border-radius:6px;display:inline-block;">- ${q.correctAnswerText}${q.acceptedAnswers?.length ? ` <span style="color:#6b7280;font-weight:400;">(also: ${q.acceptedAnswers.join(', ')})</span>` : ''}</div>`
+                : `<div style="display:flex;flex-wrap:wrap;gap:5px;font-size:13px;">${q.options.map((o,oi)=>`<span style="padding:3px 9px;border-radius:6px;${correctSet.has(oi)?'background:#f0fdf4;color:#166534;border:1px solid #bbf7d0;font-weight:700;':'background:#f9fafb;color:#6b7280;border:1px solid #e5e7eb;'}">${String.fromCharCode(65+oi)}) ${o}${correctSet.has(oi)?' -':''}</span>`).join('')}</div>`}
               <div style="font-size:12px;color:#9ca3af;margin-top:5px;">Marks: ${q.marks}</div>
             </div>
             <div style="display:flex;gap:5px;flex-shrink:0;">
-              <button class="btn btn-sm btn-secondary" title="Save to Question Bank" onclick="saveQuestionToBank('${quizId}','${q._id}')">💾 Save</button>
+              <button class="btn btn-sm btn-secondary" title="Save to Question Bank" onclick="saveQuestionToBank('${quizId}','${q._id}')">- Save</button>
               <button class="btn btn-sm btn-danger" onclick="deleteQuizQuestion('${quizId}','${q._id}')">Delete</button>
             </div>
           </div>
@@ -5161,14 +5161,14 @@ const isFill  = type === ‘fill’;
 document.getElementById(‘aq-single-wrap’).style.display = (!isMulti && !isFill) ? ‘block’ : ‘none’;
 document.getElementById(‘aq-multi-wrap’).style.display  = isMulti ? ‘block’ : ‘none’;
 document.getElementById(‘aq-fill-wrap’).style.display   = isFill  ? ‘block’ : ‘none’;
-// Options section — hide for fill-in
+// Options section - hide for fill-in
 const optsEl = document.getElementById(‘aq-options-section’);
 if (optsEl) optsEl.style.display = isFill ? ‘none’ : ‘block’;
 document.getElementById(‘aq-type-hint’).textContent = isMulti
-? ‘Multiple correct answers — student must select all correct options.’
+? ‘Multiple correct answers - student must select all correct options.’
 : isFill
-? ‘Fill in the blank — student types their answer.’
-: ‘One correct answer — student picks one option.’;
+? ‘Fill in the blank - student types their answer.’
+: ‘One correct answer - student picks one option.’;
 const primStyle = ‘display:flex;align-items:center;gap:6px;cursor:pointer;padding:8px 16px;border:2px solid var(–primary);border-radius:8px;background:var(–primary);color:#fff;font-size:13px;font-weight:600;’;
 const secStyle  = ‘display:flex;align-items:center;gap:6px;cursor:pointer;padding:8px 16px;border:2px solid #e5e7eb;border-radius:8px;background:#fff;color:#374151;font-size:13px;font-weight:600;’;
 document.getElementById(‘aq-lbl-single’).style.cssText = (!isMulti && !isFill) ? primStyle : secStyle;
@@ -5219,12 +5219,12 @@ body = { questionText, options, questionType: ‘single’, correctAnswer, marks
 }
 
 const addBtn = document.querySelector(`button[onclick="submitAddQuestion('${quizId}')"]`);
-if (addBtn) { addBtn.disabled = true; addBtn.textContent = ‘Adding…’; }
+if (addBtn) { addBtn.disabled = true; addBtn.textContent = ‘Adding-’; }
 try {
 await api(`/api/lecturer/quizzes/${quizId}/questions`, { method: ‘POST’, body: JSON.stringify(body) });
 showAddQuestionsView(quizId);
 } catch (e) {
-if (addBtn) { addBtn.disabled = false; addBtn.textContent = ‘＋ Add Question’; }
+if (addBtn) { addBtn.disabled = false; addBtn.textContent = ‘- Add Question’; }
 errEl.textContent = e.message;
 errEl.style.display = ‘block’;
 }
@@ -5249,7 +5249,7 @@ const data = await api(`/api/lecturer/quizzes/${quizId}`);
 const q = data.quiz;
 const questions = q.questions || [];
 const attempts = data.attempts || [];
-content.innerHTML = `<div class="page-header"><h2>${q.title}</h2><p>${q.description || 'No description'}</p></div> <div class="actions-bar"><button class="btn btn-secondary btn-sm" onclick="renderQuizzes()">← Back</button></div> <div class="card" style="margin-bottom:16px;background:linear-gradient(135deg,#0f172a,#1e293b);border:1px solid #334155;"> <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;"> <div> <div style="font-size:11px;text-transform:uppercase;font-weight:700;letter-spacing:1px;color:#38bdf8;margin-bottom:6px;">📋 Quiz ID — for Live Monitor</div> <div style="font-size:14px;font-family:monospace;color:#e2e8f0;background:#0f172a;padding:10px 14px;border-radius:8px;border:1px solid #334155;letter-spacing:1px;word-break:break-all;">${quizId}</div> <div style="font-size:12px;color:#64748b;margin-top:6px;">Click Monitor to open the live proctor view, or copy the ID to share</div> </div> <div style="display:flex;gap:8px;flex-direction:column;"> <button class="btn btn-sm" style="background:#dc2626;color:#fff;font-weight:700;white-space:nowrap;" onclick="openLiveMonitor('${quizId}')">🔴 Open Live Monitor</button> <button class="btn btn-sm" style="background:#0ea5e9;color:#fff;flex-shrink:0;" onclick="copyQuizId('${quizId}')">📋 Copy ID</button> </div> </div> </div> <div class="card" style="margin-bottom:16px;"> <h3>Quiz Details</h3> <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-top:8px;"> <div><strong>Course:</strong> ${q.course?.code || 'N/A'} — ${q.course?.title || ''}</div> <div><strong>Time Limit:</strong> ${q.timeLimit || 30} min</div> <div><strong>Total Marks:</strong> ${q.totalMarks || 0}</div> <div><strong>Questions:</strong> ${questions.length}</div> <div><strong>Submissions:</strong> ${attempts.length}</div> <div><strong>Max Attempts:</strong> ${q.maxAttempts === 0 ? 'Unlimited' : (q.maxAttempts || 1)}</div> <div><strong>Score Policy:</strong> ${q.scorePolicy === 'last' ? 'Last attempt' : 'Best score'}</div> <div><strong>Start:</strong> ${new Date(q.startTime).toLocaleString()}</div> <div><strong>End:</strong> ${new Date(q.endTime).toLocaleString()}</div> <div><strong>Status:</strong> ${quizStatusBadge(q)}</div> </div> </div> <div class="card"> <h3>Questions (${questions.length})</h3> ${questions.length ? questions.map((qn, i) =>`
+content.innerHTML = `<div class="page-header"><h2>${q.title}</h2><p>${q.description || 'No description'}</p></div> <div class="actions-bar"><button class="btn btn-secondary btn-sm" onclick="renderQuizzes()">- Back</button></div> <div class="card" style="margin-bottom:16px;background:linear-gradient(135deg,#0f172a,#1e293b);border:1px solid #334155;"> <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;"> <div> <div style="font-size:11px;text-transform:uppercase;font-weight:700;letter-spacing:1px;color:#38bdf8;margin-bottom:6px;">- Quiz ID - for Live Monitor</div> <div style="font-size:14px;font-family:monospace;color:#e2e8f0;background:#0f172a;padding:10px 14px;border-radius:8px;border:1px solid #334155;letter-spacing:1px;word-break:break-all;">${quizId}</div> <div style="font-size:12px;color:#64748b;margin-top:6px;">Click Monitor to open the live proctor view, or copy the ID to share</div> </div> <div style="display:flex;gap:8px;flex-direction:column;"> <button class="btn btn-sm" style="background:#dc2626;color:#fff;font-weight:700;white-space:nowrap;" onclick="openLiveMonitor('${quizId}')">- Open Live Monitor</button> <button class="btn btn-sm" style="background:#0ea5e9;color:#fff;flex-shrink:0;" onclick="copyQuizId('${quizId}')">- Copy ID</button> </div> </div> </div> <div class="card" style="margin-bottom:16px;"> <h3>Quiz Details</h3> <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-top:8px;"> <div><strong>Course:</strong> ${q.course?.code || 'N/A'} - ${q.course?.title || ''}</div> <div><strong>Time Limit:</strong> ${q.timeLimit || 30} min</div> <div><strong>Total Marks:</strong> ${q.totalMarks || 0}</div> <div><strong>Questions:</strong> ${questions.length}</div> <div><strong>Submissions:</strong> ${attempts.length}</div> <div><strong>Max Attempts:</strong> ${q.maxAttempts === 0 ? 'Unlimited' : (q.maxAttempts || 1)}</div> <div><strong>Score Policy:</strong> ${q.scorePolicy === 'last' ? 'Last attempt' : 'Best score'}</div> <div><strong>Start:</strong> ${new Date(q.startTime).toLocaleString()}</div> <div><strong>End:</strong> ${new Date(q.endTime).toLocaleString()}</div> <div><strong>Status:</strong> ${quizStatusBadge(q)}</div> </div> </div> <div class="card"> <h3>Questions (${questions.length})</h3> ${questions.length ? questions.map((qn, i) =>`
 <div style="padding:10px;border:1px solid #e5e7eb;border-radius:8px;margin-bottom:8px;">
 <strong>Q${i + 1}.</strong> <span class="math-content">${qn.questionText}</span> <span style="color:#9ca3af;">(${qn.marks} marks)</span>
 <div style="margin-top:4px;font-size:0.9em;">
@@ -5271,7 +5271,7 @@ function copyQuizId(id) {
 navigator.clipboard.writeText(id).then(() => {
 // Show a brief toast-style alert
 const el = document.createElement(‘div’);
-el.textContent = ‘✓ Quiz ID copied — paste it into Live Monitor’;
+el.textContent = ‘- Quiz ID copied - paste it into Live Monitor’;
 el.style.cssText = ‘position:fixed;bottom:24px;right:24px;background:#0ea5e9;color:#fff;padding:12px 18px;border-radius:10px;font-size:14px;font-weight:600;z-index:9999;box-shadow:0 4px 16px rgba(0,0,0,.2);animation:fadeIn .2s ease’;
 document.body.appendChild(el);
 setTimeout(() => el.remove(), 2800);
@@ -5293,18 +5293,18 @@ const qd = data.questionDifficulty || [];
 
 ```
 const pctColor = (p) => p >= 70 ? '#22c55e' : p >= 50 ? '#f59e0b' : '#ef4444';
-const diffLabel = (r) => r === null ? 'N/A' : r >= 70 ? '😊 Easy' : r >= 40 ? '😐 Medium' : '😰 Hard';
+const diffLabel = (r) => r === null ? 'N/A' : r >= 70 ? '- Easy' : r >= 40 ? '- Medium' : '- Hard';
 const diffColor = (r) => r === null ? '#9ca3af' : r >= 70 ? '#22c55e' : r >= 40 ? '#f59e0b' : '#ef4444';
 
 content.innerHTML = `
   <div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;">
     <div>
-      <h2>📊 Results: ${quiz.title}</h2>
-      <p>${quiz.course?.code || ''} — ${quiz.course?.title || ''} &nbsp;|&nbsp; ${quiz.totalMarks || 0} marks total</p>
+      <h2>- Results: ${quiz.title}</h2>
+      <p>${quiz.course?.code || ''} - ${quiz.course?.title || ''} &nbsp;|&nbsp; ${quiz.totalMarks || 0} marks total</p>
     </div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;">
-      <button class="btn btn-secondary btn-sm" onclick="viewLecturerQuizDetail('${quizId}')">← Back to Quiz</button>
-      <button class="btn btn-sm" style="background:#059669;color:#fff;" onclick="exportQuizResultsCSV('${quizId}')">⬇ Export CSV</button>
+      <button class="btn btn-secondary btn-sm" onclick="viewLecturerQuizDetail('${quizId}')">- Back to Quiz</button>
+      <button class="btn btn-sm" style="background:#059669;color:#fff;" onclick="exportQuizResultsCSV('${quizId}')">- Export CSV</button>
     </div>
   </div>
 
@@ -5324,7 +5324,7 @@ content.innerHTML = `
     </div>
     <div class="stat-card">
       <div class="stat-value" style="color:${pctColor(stats.passRate)};">${stats.passRate}%</div>
-      <div class="stat-label">Pass Rate (≥50%)</div>
+      <div class="stat-label">Pass Rate (-50%)</div>
     </div>
     <div class="stat-card">
       <div class="stat-value" style="color:#22c55e;">${stats.highestScore}</div>
@@ -5345,7 +5345,7 @@ content.innerHTML = `
       buckets[i]++;
     });
     const max = Math.max(...buckets, 1);
-    const labels = ['0–19%','20–39%','40–59%','60–79%','80–100%'];
+    const labels = ['0-19%','20-39%','40-59%','60-79%','80-100%'];
     const colors = ['#ef4444','#f97316','#f59e0b','#84cc16','#22c55e'];
     return `<div class="card" style="margin-bottom:16px;">
       <div class="card-title">Score Distribution</div>
@@ -5364,7 +5364,7 @@ content.innerHTML = `
   <div class="card" style="margin-bottom:16px;">
     <div class="card-title" style="justify-content:space-between;">
       <span>Student Submissions (${attempts.length})</span>
-      ${attempts.length ? `<input type="text" id="results-search" placeholder="Search student…"
+      ${attempts.length ? `<input type="text" id="results-search" placeholder="Search student-"
         oninput="filterResultsTable(this.value)"
         style="padding:5px 10px;border:1px solid #e5e7eb;border-radius:6px;font-size:12px;width:180px;">` : ''}
     </div>
@@ -5388,11 +5388,11 @@ content.innerHTML = `
             <tr data-name="${(a.student?.name||'').toLowerCase()}" data-id="${(a.student?.indexNumber||a.student?.email||'').toLowerCase()}">
               <td style="color:#9ca3af;">${i+1}</td>
               <td style="font-weight:500;">${a.student?.name || 'Unknown'}</td>
-              <td style="font-family:monospace;font-size:12px;">${a.student?.indexNumber || a.student?.email || '—'}</td>
+              <td style="font-family:monospace;font-size:12px;">${a.student?.indexNumber || a.student?.email || '-'}</td>
               <td><strong>${a.score}/${a.maxScore}</strong></td>
               <td><span style="font-weight:700;color:${pctColor(a.percentage)};">${a.percentage}%</span></td>
               <td><span class="status-badge ${a.percentage >= 50 ? 'status-present' : 'status-absent'}">${a.percentage >= 50 ? 'Pass' : 'Fail'}</span></td>
-              <td style="font-size:12px;color:#9ca3af;">${a.submittedAt ? new Date(a.submittedAt).toLocaleString() : '—'}</td>
+              <td style="font-size:12px;color:#9ca3af;">${a.submittedAt ? new Date(a.submittedAt).toLocaleString() : '-'}</td>
               <td><button class="btn btn-sm btn-secondary" onclick="viewStudentQuizAnswers('${quizId}','${a._id}','${a.student?.name||'Student'}')">View</button></td>
             </tr>`).join('')}
         </tbody>
@@ -5410,7 +5410,7 @@ content.innerHTML = `
         <div style="padding:10px 12px;border:1px solid #e5e7eb;border-radius:8px;">
           <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;">
             <div style="flex:1;min-width:200px;">
-              <span style="font-size:11px;font-weight:700;color:#9ca3af;text-transform:uppercase;">Q${i+1} · ${q.marks} mark${q.marks>1?'s':''}</span>
+              <span style="font-size:11px;font-weight:700;color:#9ca3af;text-transform:uppercase;">Q${i+1} - ${q.marks} mark${q.marks>1?'s':''}</span>
               <div class="math-content" style="font-size:13px;margin-top:2px;">${q.questionText}</div>
             </div>
             <div style="display:flex;align-items:center;gap:12px;flex-shrink:0;">
@@ -5448,7 +5448,7 @@ row.style.display = (!q || name.includes(q) || id.includes(q)) ? ‘’ : ‘non
 async function viewStudentQuizAnswers(quizId, attemptId, studentName) {
 const content = document.getElementById(‘main-content’);
 if (!content) return;
-content.innerHTML = ‘<div class="card"><p>Loading…</p></div>’;
+content.innerHTML = ‘<div class="card"><p>Loading-</p></div>’;
 try {
 const data = await api(`/api/lecturer/quizzes/${quizId}/results/${attemptId}`);
 const attempt = data.attempt;
@@ -5461,9 +5461,9 @@ content.innerHTML = `
     <div>
       <h2>${studentName}'s Answers</h2>
       <p>Score: <strong style="color:${pct>=50?'#22c55e':'#ef4444'};">${attempt.score}/${attempt.maxScore} (${pct}%)</strong>
-      &nbsp;·&nbsp; ${attempt.submittedAt ? new Date(attempt.submittedAt).toLocaleString() : ''}</p>
+      &nbsp;-&nbsp; ${attempt.submittedAt ? new Date(attempt.submittedAt).toLocaleString() : ''}</p>
     </div>
-    <button class="btn btn-secondary btn-sm" onclick="viewQuizResults('${quizId}')">← Back to Results</button>
+    <button class="btn btn-secondary btn-sm" onclick="viewQuizResults('${quizId}')">- Back to Results</button>
   </div>
   <div style="display:flex;flex-direction:column;gap:10px;">
     ${answers.map((a, i) => {
@@ -5474,17 +5474,17 @@ content.innerHTML = `
         <div class="card" style="border-left:4px solid ${a.isCorrect ? '#22c55e' : '#ef4444'};">
           <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;">
             <div>
-              <span style="font-size:11px;font-weight:700;color:#9ca3af;text-transform:uppercase;">Q${i+1} · ${q.marks} mark${q.marks>1?'s':''}</span>
+              <span style="font-size:11px;font-weight:700;color:#9ca3af;text-transform:uppercase;">Q${i+1} - ${q.marks} mark${q.marks>1?'s':''}</span>
               <div class="math-content" style="font-size:14px;font-weight:500;margin-top:2px;">${q.questionText}</div>
             </div>
-            <span class="status-badge ${a.isCorrect ? 'status-present' : 'status-absent'}" style="flex-shrink:0;">${a.isCorrect ? '✓ Correct' : '✗ Wrong'}</span>
+            <span class="status-badge ${a.isCorrect ? 'status-present' : 'status-absent'}" style="flex-shrink:0;">${a.isCorrect ? '- Correct' : '- Wrong'}</span>
           </div>
           ${isFill
             ? `<div style="display:flex;flex-direction:column;gap:6px;font-size:13px;">
                 <div style="padding:7px 12px;border-radius:6px;border:1px solid ${a.isCorrect?'#22c55e':'#ef4444'};background:${a.isCorrect?'#f0fdf4':'#fef2f2'};color:${a.isCorrect?'#15803d':'#dc2626'};">
-                  ${a.isCorrect?'✓':'✗'} Student wrote: <strong>${a.selectedAnswerText || '(no answer)'}</strong>
+                  ${a.isCorrect?'-':'-'} Student wrote: <strong>${a.selectedAnswerText || '(no answer)'}</strong>
                 </div>
-                ${!a.isCorrect ? `<div style="padding:7px 12px;border-radius:6px;border:1px solid #22c55e;background:#f0fdf4;color:#15803d;">✓ Correct: <strong>${q.correctAnswerText||''}</strong></div>` : ''}
+                ${!a.isCorrect ? `<div style="padding:7px 12px;border-radius:6px;border:1px solid #22c55e;background:#f0fdf4;color:#15803d;">- Correct: <strong>${q.correctAnswerText||''}</strong></div>` : ''}
               </div>`
             : `<div style="display:flex;flex-direction:column;gap:5px;font-size:13px;">
                 ${(q.options||[]).map((opt,oi) => {
@@ -5495,9 +5495,9 @@ content.innerHTML = `
                   if (isSelected && !a.isCorrect) { bg = '#fef2f2'; border = '#ef4444'; color = '#dc2626'; }
                   return `<div style="padding:7px 12px;border-radius:6px;border:1px solid ${border};background:${bg};color:${color};">
                     <strong>${String.fromCharCode(65+oi)}.</strong> ${opt}
-                    ${isSelected && a.isCorrect ? ' ✓ Correct answer' : ''}
-                    ${isSelected && !a.isCorrect ? ' ✗ Student chose this' : ''}
-                    ${!isSelected && isCorrect ? ' ← Correct answer' : ''}
+                    ${isSelected && a.isCorrect ? ' - Correct answer' : ''}
+                    ${isSelected && !a.isCorrect ? ' - Student chose this' : ''}
+                    ${!isSelected && isCorrect ? ' - Correct answer' : ''}
                   </div>`;
                 }).join('')}
               </div>`}
@@ -5570,7 +5570,7 @@ content.innerHTML = `<div class="page-header" style="display:flex;justify-conten
 <tbody>${quizzes.map(q => {
 const statusColors = { upcoming: ‘background:#6b7280;color:#fff;’, open: ‘background:#22c55e;color:#fff;’, closed: ‘background:#ef4444;color:#fff;’ };
 const statusLabel = q.status ? q.status.charAt(0).toUpperCase() + q.status.slice(1) : ‘Unknown’;
-return `<tr> <td><strong>${q.title}</strong>${q.description ? `<div style="font-size:0.85em;color:#6b7280;">${q.description}</div>`: ''}</td> <td>${q.course?.code || 'N/A'}</td> <td>${q.questionCount || 0}</td> <td>${q.timeLimit || 30} min</td> <td style="font-size:0.85em;">${new Date(q.startTime).toLocaleString()}</td> <td style="font-size:0.85em;">${new Date(q.endTime).toLocaleString()}</td> <td><span class="status-badge" style="${statusColors[q.status] || ''}">${statusLabel}</span></td> <td> ${q.isSubmitted ?`<strong style="color:#3b82f6;">${q.myScore}/${q.myMaxScore}</strong>${q.scorePolicy===‘best’&&q.attemptCount>1?’ <span style="font-size:10px;color:#9ca3af;">(best)</span>’:’’}`: '—'} ${q.maxAttempts !== 1 && q.isSubmitted ?`<br><span style="font-size:10px;color:#9ca3af;">${q.maxAttempts===0?‘Unlimited retakes’:q.attemptsLeft===0?‘No retakes left’:(q.attemptsLeft+’ retake’+(q.attemptsLeft!==1?‘s’:’’)+’ left’)}</span>`: ''} </td> <td style="white-space:nowrap;"> ${q.canContinue ?`<button class="btn btn-sm btn-primary" onclick="startStudentQuiz('${q._id}')">Continue</button>`: ''} ${q.canAttempt && !q.canContinue ?`<button class="btn btn-sm btn-primary" onclick="startStudentQuiz('${q._id}')">${q.attemptCount>0?‘Retake’:‘Take Quiz’}</button>`: ''} ${q.isSubmitted ?`<button class="btn btn-sm btn-secondary" onclick="viewStudentResult('${q._id}')">View Result</button>` : ''} </td> </tr>`;
+return `<tr> <td><strong>${q.title}</strong>${q.description ? `<div style="font-size:0.85em;color:#6b7280;">${q.description}</div>`: ''}</td> <td>${q.course?.code || 'N/A'}</td> <td>${q.questionCount || 0}</td> <td>${q.timeLimit || 30} min</td> <td style="font-size:0.85em;">${new Date(q.startTime).toLocaleString()}</td> <td style="font-size:0.85em;">${new Date(q.endTime).toLocaleString()}</td> <td><span class="status-badge" style="${statusColors[q.status] || ''}">${statusLabel}</span></td> <td> ${q.isSubmitted ?`<strong style="color:#3b82f6;">${q.myScore}/${q.myMaxScore}</strong>${q.scorePolicy===‘best’&&q.attemptCount>1?’ <span style="font-size:10px;color:#9ca3af;">(best)</span>’:’’}`: '-'} ${q.maxAttempts !== 1 && q.isSubmitted ?`<br><span style="font-size:10px;color:#9ca3af;">${q.maxAttempts===0?‘Unlimited retakes’:q.attemptsLeft===0?‘No retakes left’:(q.attemptsLeft+’ retake’+(q.attemptsLeft!==1?‘s’:’’)+’ left’)}</span>`: ''} </td> <td style="white-space:nowrap;"> ${q.canContinue ?`<button class="btn btn-sm btn-primary" onclick="startStudentQuiz('${q._id}')">Continue</button>`: ''} ${q.canAttempt && !q.canContinue ?`<button class="btn btn-sm btn-primary" onclick="startStudentQuiz('${q._id}')">${q.attemptCount>0?‘Retake’:‘Take Quiz’}</button>`: ''} ${q.isSubmitted ?`<button class="btn btn-sm btn-secondary" onclick="viewStudentResult('${q._id}')">View Result</button>` : ''} </td> </tr>`;
 }).join(’’)}</tbody>
 </table>
 `: '<div class="empty-state"><p>No quizzes available at the moment.</p></div>'} </div>`;
@@ -5596,7 +5596,7 @@ const endTime = new Date(startedAt.getTime() + timeLimit * 60 * 1000);
 ```
 content.innerHTML = `
   <div class="page-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;">
-    <div><h2>Quiz in Progress</h2><p>${questions.length} questions — ${timeLimit} minutes</p></div>
+    <div><h2>Quiz in Progress</h2><p>${questions.length} questions - ${timeLimit} minutes</p></div>
     <div id="quiz-timer" style="font-size:1.4em;font-weight:bold;color:#ef4444;background:#fef2f2;padding:8px 16px;border-radius:8px;"></div>
   </div>
   <div id="quiz-questions">
@@ -5606,10 +5606,10 @@ content.innerHTML = `
         <p class="math-content" style="margin:8px 0;">${q.questionText}</p>
         ${q.questionType === 'fill'
           ? `<div style="margin-top:6px;">
-              <input type="text" id="sq-fill-${q._id}" placeholder="Type your answer here…"
+              <input type="text" id="sq-fill-${q._id}" placeholder="Type your answer here-"
                 style="width:100%;padding:11px 14px;border:1.5px solid #d1d5db;border-radius:8px;font-size:14px;font-family:inherit;outline:none;transition:border-color .15s;"
                 onfocus="this.style.borderColor='#6366f1'" onblur="this.style.borderColor='#d1d5db'">
-              <p style="font-size:11px;color:#9ca3af;margin-top:5px;">Spelling counts — answer is not case-sensitive.</p>
+              <p style="font-size:11px;color:#9ca3af;margin-top:5px;">Spelling counts - answer is not case-sensitive.</p>
             </div>`
           : `<div style="display:flex;flex-direction:column;gap:8px;">
           ${q.options.map((opt, oi) => `
@@ -5659,7 +5659,7 @@ document.addEventListener('visibilitychange', window._quizTabHandler);
 ```
 
 } catch (e) {
-content.innerHTML = `<div class="card"><p>Error: ${e.message}</p><button class="btn btn-secondary" onclick="renderQuizzes()">← Back</button></div>`;
+content.innerHTML = `<div class="card"><p>Error: ${e.message}</p><button class="btn btn-secondary" onclick="renderQuizzes()">- Back</button></div>`;
 }
 }
 
@@ -5688,9 +5688,9 @@ method: ‘POST’,
 body: JSON.stringify({ answers })
 });
 const pct = data.percentage || 0;
-content.innerHTML = `<div style="max-width:500px;margin:40px auto;text-align:center;"> <div class="card"> <div style="font-size:3em;margin-bottom:8px;">${pct >= 50 ? '🎉' : '📝'}</div> <h2>Quiz Submitted!</h2> <div style="font-size:2.5em;font-weight:bold;color:${pct >= 50 ? '#22c55e' : '#ef4444'};margin:16px 0;">${pct}%</div> <p style="font-size:1.1em;color:#6b7280;">Score: ${data.score} / ${data.maxScore}</p> <div style="margin-top:20px;"> <button class="btn btn-primary" onclick="viewStudentResult('${quizId}')">View Detailed Result</button> <button class="btn btn-secondary" style="margin-left:8px;" onclick="renderQuizzes()">Back to Quizzes</button> </div> </div> </div>`;
+content.innerHTML = `<div style="max-width:500px;margin:40px auto;text-align:center;"> <div class="card"> <div style="font-size:3em;margin-bottom:8px;">${pct >= 50 ? '-' : '-'}</div> <h2>Quiz Submitted!</h2> <div style="font-size:2.5em;font-weight:bold;color:${pct >= 50 ? '#22c55e' : '#ef4444'};margin:16px 0;">${pct}%</div> <p style="font-size:1.1em;color:#6b7280;">Score: ${data.score} / ${data.maxScore}</p> <div style="margin-top:20px;"> <button class="btn btn-primary" onclick="viewStudentResult('${quizId}')">View Detailed Result</button> <button class="btn btn-secondary" style="margin-left:8px;" onclick="renderQuizzes()">Back to Quizzes</button> </div> </div> </div>`;
 } catch (e) {
-content.innerHTML = `<div class="card"><p>Error submitting quiz: ${e.message}</p><button class="btn btn-secondary" onclick="renderQuizzes()">← Back</button></div>`;
+content.innerHTML = `<div class="card"><p>Error submitting quiz: ${e.message}</p><button class="btn btn-secondary" onclick="renderQuizzes()">- Back</button></div>`;
 }
 }
 
@@ -5710,10 +5710,10 @@ content.innerHTML = `
     <div>
       <h2>Quiz Result: ${attempt.quiz?.title || 'Quiz'}</h2>
       <p>Score: <strong style="color:${pct >= 50 ? '#22c55e' : '#ef4444'};">${attempt.score}/${attempt.maxScore} (${pct}%)</strong>
-      ${attempt.attemptNumber > 1 ? ` &nbsp;·&nbsp; Attempt ${attempt.attemptNumber}` : ''}</p>
+      ${attempt.attemptNumber > 1 ? ` &nbsp;-&nbsp; Attempt ${attempt.attemptNumber}` : ''}</p>
     </div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;">
-      <button class="btn btn-secondary btn-sm" onclick="renderQuizzes()">← Back to Quizzes</button>
+      <button class="btn btn-secondary btn-sm" onclick="renderQuizzes()">- Back to Quizzes</button>
     </div>
   </div>
   <div id="result-questions">
@@ -5727,9 +5727,9 @@ content.innerHTML = `
           ${q.questionType === 'fill'
             ? `<div style="display:flex;flex-direction:column;gap:6px;font-size:13px;">
                 <div style="padding:8px 12px;border-radius:6px;border:1px solid ${a.isCorrect ? '#22c55e' : '#ef4444'};background:${a.isCorrect ? '#f0fdf4' : '#fef2f2'};color:${a.isCorrect ? '#15803d' : '#dc2626'};">
-                  ${a.isCorrect ? '✓' : '✗'} Your answer: <strong>${a.selectedAnswerText || '(no answer)'}</strong>
+                  ${a.isCorrect ? '-' : '-'} Your answer: <strong>${a.selectedAnswerText || '(no answer)'}</strong>
                 </div>
-                ${!a.isCorrect ? `<div style="padding:8px 12px;border-radius:6px;border:1px solid #22c55e;background:#f0fdf4;color:#15803d;">← Correct answer: <strong>${q.correctAnswerText || ''}</strong></div>` : ''}
+                ${!a.isCorrect ? `<div style="padding:8px 12px;border-radius:6px;border:1px solid #22c55e;background:#f0fdf4;color:#15803d;">- Correct answer: <strong>${q.correctAnswerText || ''}</strong></div>` : ''}
               </div>`
             : `<div style="display:flex;flex-direction:column;gap:6px;">
             ${q.options.map((opt, oi) => {
@@ -5738,9 +5738,9 @@ content.innerHTML = `
               if (oi === a.selectedAnswer && !a.isCorrect) style += 'background:#fef2f2;border-color:#ef4444;color:#dc2626;';
               return `<div style="${style}">
                 <strong>${String.fromCharCode(65 + oi)}.</strong> ${opt}
-                ${oi === q.correctAnswer ? ' ✓ Correct' : ''}
-                ${oi === a.selectedAnswer && oi !== q.correctAnswer ? ' ✗ Your answer' : ''}
-                ${oi === a.selectedAnswer && oi === q.correctAnswer ? ' ✓ Your answer' : ''}
+                ${oi === q.correctAnswer ? ' - Correct' : ''}
+                ${oi === a.selectedAnswer && oi !== q.correctAnswer ? ' - Your answer' : ''}
+                ${oi === a.selectedAnswer && oi === q.correctAnswer ? ' - Your answer' : ''}
               </div>`;
             }).join('')}
           </div>`}
@@ -5752,7 +5752,7 @@ content.innerHTML = `
 ```
 
 } catch (e) {
-content.innerHTML = `<div class="card"><p>Error: ${e.message}</p><button class="btn btn-secondary" onclick="renderQuizzes()">← Back</button></div>`;
+content.innerHTML = `<div class="card"><p>Error: ${e.message}</p><button class="btn btn-secondary" onclick="renderQuizzes()">- Back</button></div>`;
 }
 }
 
@@ -5768,7 +5768,7 @@ content.innerHTML = `
   <div class="card" style="margin-bottom:16px;border:2px solid #fde68a;background:#fffbeb">
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
       <div>
-        <div style="font-size:14px;font-weight:700;margin-bottom:2px">🔍 Duplicate Quiz Finder</div>
+        <div style="font-size:14px;font-weight:700;margin-bottom:2px">- Duplicate Quiz Finder</div>
         <div style="font-size:12px;color:#92400e">Find and remove quizzes with the same title</div>
       </div>
       <button class="btn btn-primary" style="background:#f59e0b;border-color:#f59e0b" onclick="findDuplicateQuizzes()">Scan for Duplicates</button>
@@ -5809,17 +5809,17 @@ content.innerHTML = `<div class="card"><p>Error: ${e.message}</p></div>`;
 async function findDuplicateQuizzes() {
 const el = document.getElementById(‘duplicates-result’);
 if (!el) return;
-el.innerHTML = ‘<p style="font-size:13px;color:#92400e">Scanning…</p>’;
+el.innerHTML = ‘<p style="font-size:13px;color:#92400e">Scanning-</p>’;
 try {
 const { duplicates } = await api(’/api/admin/quizzes/utils/duplicates’);
 if (!duplicates.length) {
-el.innerHTML = ‘<p style="font-size:13px;color:#16a34a;font-weight:600">✅ No duplicate quizzes found.</p>’;
+el.innerHTML = ‘<p style="font-size:13px;color:#16a34a;font-weight:600">- No duplicate quizzes found.</p>’;
 return;
 }
 el.innerHTML = `<div style="font-size:13px;font-weight:700;color:#92400e;margin-bottom:10px"> Found ${duplicates.length} group(s) of duplicates: </div> ${duplicates.map(group =>`
 <div style="border:1px solid #fde68a;border-radius:8px;padding:12px;margin-bottom:10px;background:#fff">
 <div style="font-weight:700;margin-bottom:8px">
-“${group._id.title}” — ${group.count} copies
+“${group._id.title}” - ${group.count} copies
 </div>
 <table style="width:100%;font-size:12px;border-collapse:collapse">
 <thead><tr style="color:#6b7280">
@@ -5830,7 +5830,7 @@ el.innerHTML = `<div style="font-size:13px;font-weight:700;color:#92400e;margin-
 <th style="padding:4px 8px">Action</th>
 </tr></thead>
 <tbody>
-${group.quizzes.map((q, i) => `<tr style="border-top:1px solid #f3f4f6;${i === 0 ? 'background:#f0fdf4' : ''}"> <td style="padding:6px 8px;font-weight:${i===0?'700':'400'}">${q.title} ${i===0 ? '<span style="font-size:10px;color:#16a34a;font-weight:600">(keep)</span>' : ''}</td> <td style="padding:6px 8px">${q.createdByName || '—'}</td> <td style="padding:6px 8px">${new Date(q.createdAt).toLocaleDateString()}</td> <td style="padding:6px 8px">${q.type || '—'}</td> <td style="padding:6px 8px;text-align:center"> ${i === 0 ? '<span style="color:#16a34a;font-size:11px">✓ Keep</span>' :`<button class=“btn btn-sm” style=“background:#fef2f2;color:#dc2626;border:1px solid #fecaca;font-size:11px” onclick=“adminDeleteQuiz(’${q.id}’,’${q.title.replace(/’/g,”\’”)}’, true)”>Delete</button>`} </td> </tr>`).join(’’)}
+${group.quizzes.map((q, i) => `<tr style="border-top:1px solid #f3f4f6;${i === 0 ? 'background:#f0fdf4' : ''}"> <td style="padding:6px 8px;font-weight:${i===0?'700':'400'}">${q.title} ${i===0 ? '<span style="font-size:10px;color:#16a34a;font-weight:600">(keep)</span>' : ''}</td> <td style="padding:6px 8px">${q.createdByName || '-'}</td> <td style="padding:6px 8px">${new Date(q.createdAt).toLocaleDateString()}</td> <td style="padding:6px 8px">${q.type || '-'}</td> <td style="padding:6px 8px;text-align:center"> ${i === 0 ? '<span style="color:#16a34a;font-size:11px">- Keep</span>' :`<button class=“btn btn-sm” style=“background:#fef2f2;color:#dc2626;border:1px solid #fecaca;font-size:11px” onclick=“adminDeleteQuiz(’${q.id}’,’${q.title.replace(/’/g,”\’”)}’, true)”>Delete</button>`} </td> </tr>`).join(’’)}
 </tbody>
 </table>
 </div>
@@ -5869,8 +5869,8 @@ const stats = data.stats || {};
 
 ```
 content.innerHTML = `
-  <div class="page-header"><h2>${quiz.title}</h2><p>${quiz.description || 'No description'} — by ${quiz.createdBy?.name || 'Unknown'}</p></div>
-  <div class="actions-bar"><button class="btn btn-secondary btn-sm" onclick="renderQuizzes()">← Back</button></div>
+  <div class="page-header"><h2>${quiz.title}</h2><p>${quiz.description || 'No description'} - by ${quiz.createdBy?.name || 'Unknown'}</p></div>
+  <div class="actions-bar"><button class="btn btn-secondary btn-sm" onclick="renderQuizzes()">- Back</button></div>
   <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:16px;">
     <div class="card" style="text-align:center;"><div style="font-size:1.8em;font-weight:bold;color:#3b82f6;">${stats.submitted || 0}</div><div style="color:#6b7280;font-size:0.9em;">Submitted</div></div>
     <div class="card" style="text-align:center;"><div style="font-size:1.8em;font-weight:bold;color:#22c55e;">${stats.averageScore || 0}</div><div style="color:#6b7280;font-size:0.9em;">Avg Score</div></div>
@@ -5880,7 +5880,7 @@ content.innerHTML = `
   <div class="card" style="margin-bottom:16px;">
     <h3>Quiz Info</h3>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin-top:8px;">
-      <div><strong>Course:</strong> ${quiz.course?.code || 'N/A'} — ${quiz.course?.title || ''}</div>
+      <div><strong>Course:</strong> ${quiz.course?.code || 'N/A'} - ${quiz.course?.title || ''}</div>
       <div><strong>Time Limit:</strong> ${quiz.timeLimit || 30} min</div>
       <div><strong>Total Marks:</strong> ${quiz.totalMarks || 0}</div>
       <div><strong>Start:</strong> ${new Date(quiz.startTime).toLocaleString()}</div>
@@ -5921,7 +5921,7 @@ content.innerHTML = `
 ```
 
 } catch (e) {
-content.innerHTML = `<div class="card"><p>Error: ${e.message}</p><button class="btn btn-secondary" onclick="renderQuizzes()">← Back</button></div>`;
+content.innerHTML = `<div class="card"><p>Error: ${e.message}</p><button class="btn btn-secondary" onclick="renderQuizzes()">- Back</button></div>`;
 }
 }
 
@@ -5931,10 +5931,10 @@ if (!content) return;
 if (!isOnline()) {
 const cached = offlineRead(‘my_attendance’);
 if (cached) {
-content.innerHTML = ‘<div style="background:#fef3c7;color:#92400e;padding:10px 16px;border-radius:8px;font-size:13px;margin-bottom:16px">📡 Offline — showing cached attendance</div>’;
+content.innerHTML = ‘<div style="background:#fef3c7;color:#92400e;padding:10px 16px;border-radius:8px;font-size:13px;margin-bottom:16px">- Offline - showing cached attendance</div>’;
 _renderMyAttendanceHTML(content, cached);
 } else {
-content.innerHTML = ‘<div class="card" style="text-align:center;padding:32px"><div style="font-size:36px">📡</div><p style="margin-top:8px;color:var(--text-light)">No cached data. Connect once to view attendance offline.</p></div>’;
+content.innerHTML = ‘<div class="card" style="text-align:center;padding:32px"><div style="font-size:36px">-</div><p style="margin-top:8px;color:var(--text-light)">No cached data. Connect once to view attendance offline.</p></div>’;
 }
 return;
 }
@@ -5952,9 +5952,9 @@ content.innerHTML = `<div class="card"><p>Error: ${e.message}</p></div>`;
 }
 }
 
-// ══════════════════════════════════════════════════════════════════════════════
+// ——————————————————————————
 // BULK STUDENT IMPORT
-// ══════════════════════════════════════════════════════════════════════════════
+// ——————————————————————————
 
 async function showBulkImportModal() {
 const existing = document.getElementById(‘bulk-import-overlay’);
@@ -5974,10 +5974,10 @@ ol.innerHTML = `
 <div style="background:var(--card);border-radius:14px;width:100%;max-width:560px;max-height:92vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.2);">
 <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;background:var(--card);z-index:1;border-radius:14px 14px 0 0;">
 <div>
-<h3 style="font-size:15px;font-weight:700;margin:0">📥 Bulk Import Students</h3>
+<h3 style="font-size:15px;font-weight:700;margin:0">- Bulk Import Students</h3>
 <p style="font-size:12px;color:var(--text-muted);margin:3px 0 0;">Upload a CSV file to create multiple student accounts at once</p>
 </div>
-<button onclick="document.getElementById('bulk-import-overlay').remove()" style="width:26px;height:26px;border-radius:6px;border:1px solid var(--border);background:var(--bg);cursor:pointer;font-size:13px;">✕</button>
+<button onclick="document.getElementById('bulk-import-overlay').remove()" style="width:26px;height:26px;border-radius:6px;border:1px solid var(--border);background:var(--bg);cursor:pointer;font-size:13px;">-</button>
 </div>
 <div style="padding:18px 20px;display:flex;flex-direction:column;gap:14px;">
 
@@ -5986,16 +5986,16 @@ ol.innerHTML = `
     <div style="padding:12px 14px;background:#f0f9ff;border:1px solid #bae6fd;border-radius:9px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
       <div>
         <div style="font-size:13px;font-weight:600;color:#0369a1;">CSV Format</div>
-        <div style="font-size:12px;color:#0284c7;margin-top:2px;">Required: <strong>name, indexNumber, programme, level, group, sessionType, semester</strong> &nbsp;·&nbsp; Optional: phone, courseCode, department</div>
+        <div style="font-size:12px;color:#0284c7;margin-top:2px;">Required: <strong>name, indexNumber, programme, level, group, sessionType, semester</strong> &nbsp;-&nbsp; Optional: phone, courseCode, department</div>
       </div>
-      <button class="btn btn-sm" style="background:#0ea5e9;color:#fff;white-space:nowrap;" onclick="downloadImportTemplate()">⬇ Template</button>
+      <button class="btn btn-sm" style="background:#0ea5e9;color:#fff;white-space:nowrap;" onclick="downloadImportTemplate()">- Template</button>
     </div>
 
     <!-- File upload -->
     <div>
       <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:6px;display:block;">CSV File *</label>
       <label for="bi-csv-file" id="bi-drop-label" style="display:flex;flex-direction:column;align-items:center;gap:6px;padding:18px;border:2px dashed var(--border);border-radius:9px;cursor:pointer;background:var(--bg);transition:border-color .2s" onmouseover="this.style.borderColor='#7c3aed'" onmouseout="this.style.borderColor='var(--border)'">
-        <span style="font-size:22px;">📄</span>
+        <span style="font-size:22px;">-</span>
         <span style="font-size:13px;font-weight:600;">Click to upload CSV</span>
         <span style="font-size:11px;color:var(--text-muted);">Max 2 MB</span>
         <input type="file" id="bi-csv-file" accept=".csv,text/csv" style="display:none;" onchange="biPreviewCSV(this)">
@@ -6007,7 +6007,7 @@ ol.innerHTML = `
     <div>
       <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:6px;display:block;">Enroll in Course <span style="font-weight:400;text-transform:none;">(optional)</span></label>
       <select id="bi-course" style="width:100%;padding:8px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;">
-        <option value="">— None (or use courseCode column in CSV) —</option>
+        <option value="">- None (or use courseCode column in CSV) -</option>
         ${courses.map(c => `<option value="${c._id}">${c.title} (${c.code})</option>`).join('')}
       </select>
     </div>
@@ -6054,7 +6054,7 @@ function biPreviewCSV(input) {
 const file = input.files?.[0];
 if (!file) return;
 const nameEl = document.getElementById(‘bi-file-name’);
-if (nameEl) { nameEl.textContent = ’📄 ’ + file.name; nameEl.style.display = ‘block’; }
+if (nameEl) { nameEl.textContent = ’- ’ + file.name; nameEl.style.display = ‘block’; }
 
 const reader = new FileReader();
 reader.onload = (e) => {
@@ -6107,13 +6107,13 @@ if (lines.length < 2) { showBiErr(‘CSV must have a header row and at least one
       <tr>
         <td style="padding:6px 10px;border-bottom:1px solid var(--border);">${r.name}</td>
         <td style="padding:6px 10px;border-bottom:1px solid var(--border);font-family:monospace;">${r.indexNumber}</td>
-        <td style="padding:6px 10px;border-bottom:1px solid var(--border);">${r.programme ? `<span style="background:#ede9fe;color:#7c3aed;padding:1px 6px;border-radius:20px;font-size:11px;font-weight:700">${r.programme}</span>` : '<span style="color:var(--text-muted)">—</span>'}</td>
-        <td style="padding:6px 10px;border-bottom:1px solid var(--border);">${r.studentLevel ? `<span style="background:#dbeafe;color:#1d4ed8;padding:1px 6px;border-radius:20px;font-size:11px;font-weight:700">L${r.studentLevel}</span>` : '<span style="color:var(--text-muted)">—</span>'}</td>
-        <td style="padding:6px 10px;border-bottom:1px solid var(--border);">${r.studentGroup ? `<span style="background:#ecfdf5;color:#059669;padding:1px 6px;border-radius:20px;font-size:11px;font-weight:700">Grp ${r.studentGroup}</span>` : '<span style="color:var(--text-muted)">—</span>'}</td>
-        <td style="padding:6px 10px;border-bottom:1px solid var(--border);">${r.sessionType ? `<span style="background:#fff7ed;color:#c2410c;padding:1px 6px;border-radius:20px;font-size:11px;font-weight:600">${r.sessionType}</span>` : '<span style="color:var(--text-muted)">—</span>'}</td>
-        <td style="padding:6px 10px;border-bottom:1px solid var(--border);color:var(--text-muted);">${r.semester || '—'}</td>
+        <td style="padding:6px 10px;border-bottom:1px solid var(--border);">${r.programme ? `<span style="background:#ede9fe;color:#7c3aed;padding:1px 6px;border-radius:20px;font-size:11px;font-weight:700">${r.programme}</span>` : '<span style="color:var(--text-muted)">-</span>'}</td>
+        <td style="padding:6px 10px;border-bottom:1px solid var(--border);">${r.studentLevel ? `<span style="background:#dbeafe;color:#1d4ed8;padding:1px 6px;border-radius:20px;font-size:11px;font-weight:700">L${r.studentLevel}</span>` : '<span style="color:var(--text-muted)">-</span>'}</td>
+        <td style="padding:6px 10px;border-bottom:1px solid var(--border);">${r.studentGroup ? `<span style="background:#ecfdf5;color:#059669;padding:1px 6px;border-radius:20px;font-size:11px;font-weight:700">Grp ${r.studentGroup}</span>` : '<span style="color:var(--text-muted)">-</span>'}</td>
+        <td style="padding:6px 10px;border-bottom:1px solid var(--border);">${r.sessionType ? `<span style="background:#fff7ed;color:#c2410c;padding:1px 6px;border-radius:20px;font-size:11px;font-weight:600">${r.sessionType}</span>` : '<span style="color:var(--text-muted)">-</span>'}</td>
+        <td style="padding:6px 10px;border-bottom:1px solid var(--border);color:var(--text-muted);">${r.semester || '-'}</td>
       </tr>`).join('') +
-      (_biRows.length > 5 ? `<tr><td colspan="7" style="padding:6px 10px;color:var(--text-muted);font-style:italic;">…and ${_biRows.length - 5} more</td></tr>` : '');
+      (_biRows.length > 5 ? `<tr><td colspan="7" style="padding:6px 10px;color:var(--text-muted);font-style:italic;">-and ${_biRows.length - 5} more</td></tr>` : '');
     if (countEl) countEl.textContent = _biRows.length + ' rows';
     previewDiv.style.display = 'block';
     document.getElementById('bi-err')?.style && (document.getElementById('bi-err').style.display = 'none');
@@ -6153,7 +6153,7 @@ const errEl = document.getElementById(‘bi-err’);
 if (!fileInput?.files?.[0]) { showBiErr(‘Please select a CSV file.’); return; }
 
 btn.disabled = true;
-btn.textContent = ‘Importing…’;
+btn.textContent = ‘Importing-’;
 if (errEl) errEl.style.display = ‘none’;
 
 try {
@@ -6196,9 +6196,9 @@ btn.textContent = ‘Import Students’;
 }
 }
 
-// ══════════════════════════════════════════════════════════════════════════════
+// ——————————————————————————
 // QUESTION BANK
-// ══════════════════════════════════════════════════════════════════════════════
+// ——————————————————————————
 
 let _bankQuestions = [];   // cache for import modal
 let _bankTopics    = [];
@@ -6206,7 +6206,7 @@ let _bankTopics    = [];
 async function renderQuestionBank() {
 const content = document.getElementById(‘main-content’);
 if (!content) return;
-content.innerHTML = ‘<div class="loading">Loading question bank…</div>’;
+content.innerHTML = ‘<div class="loading">Loading question bank-</div>’;
 try {
 const data = await api(’/api/lecturer/question-bank?limit=200’);
 _bankQuestions = data.questions || [];
@@ -6221,11 +6221,11 @@ content.innerHTML = `
   <div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;">
     <div>
       <h2>Question Bank</h2>
-      <p>Save and reuse questions across quizzes — ${data.total || 0} total</p>
+      <p>Save and reuse questions across quizzes - ${data.total || 0} total</p>
     </div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;">
-      <button class="btn btn-secondary" id="bank-pdf-btn" onclick="exportBankToPDF()" style="display:none;">⬇ Save PDF (<span id="bank-sel-count">0</span>)</button>
-      <button class="btn btn-primary" onclick="openAddToBankModal()">＋ Add Question</button>
+      <button class="btn btn-secondary" id="bank-pdf-btn" onclick="exportBankToPDF()" style="display:none;">- Save PDF (<span id="bank-sel-count">0</span>)</button>
+      <button class="btn btn-primary" onclick="openAddToBankModal()">- Add Question</button>
     </div>
   </div>
 
@@ -6234,7 +6234,7 @@ content.innerHTML = `
     <label style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;">
       <input type="checkbox" id="bank-select-all" onchange="bankSelectAll(this.checked)" style="accent-color:var(--primary);width:15px;height:15px;"> Select All
     </label>
-    <input id="bank-search" placeholder="Search questions…" oninput="filterBankList()"
+    <input id="bank-search" placeholder="Search questions-" oninput="filterBankList()"
       style="padding:8px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;flex:1;min-width:180px;">
     <select id="bank-topic-filter" onchange="filterBankList()"
       style="padding:8px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;">
@@ -6259,9 +6259,9 @@ content.innerHTML = `<div class="card"><p style="color:#ef4444;">Error: ${e.mess
 function bankQuestionCard(q, i, L, typeColors, typeBg) {
 const type = q.questionType || ‘single’;
 const isExplain = type === ‘explain’;
-return `<div id="bq-${q._id}" style="border:1.5px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:10px;background:var(--card);"> <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap;"> <label style="display:flex;align-items:flex-start;gap:10px;flex:1;min-width:0;cursor:pointer;"> <input type="checkbox" class="bank-q-check" data-id="${q._id}" onchange="bankSelectionChanged()" style="accent-color:var(--primary);width:16px;height:16px;margin-top:2px;flex-shrink:0;"> <div style="flex:1;min-width:0;"> <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap;"> <span style="font-size:11px;padding:2px 8px;border-radius:20px;font-weight:700;background:${(typeBg||{})[type]||'#f3f4f6'};color:${(typeColors||{})[type]||'#374151'}">${type.toUpperCase()}</span> ${q.topic ?`<span style="font-size:11px;padding:2px 8px;border-radius:20px;background:#fef3c7;color:#92400e;font-weight:600;">${q.topic}</span>`: ''} <span style="font-size:11px;color:var(--text-muted);">${q.marks} mark${q.marks !== 1 ? 's' : ''}</span> ${q.useCount > 0 ?`<span style="font-size:11px;color:#9ca3af;">Used ${q.useCount}×</span>`: ''} </div> <div class="math-content" style="font-size:13px;font-weight:600;margin-bottom:8px;line-height:1.5;">${q.questionText}</div> ${type === 'fill' ?`<div style="font-size:12px;color:#059669;padding:4px 10px;background:#f0fdf4;border-radius:6px;display:inline-block;">✓ ${q.correctAnswerText}${q.acceptedAnswers?.length ? ` (+${q.acceptedAnswers.length} alt)` : ‘’}</div>`: type === 'explain' ?`<div style="font-size:12px;color:#92400e;padding:6px 10px;background:#fffbeb;border-radius:6px;border:1px solid #fde68a;"><strong>Model Answer:</strong> ${q.modelAnswer || ‘<em>No model answer provided</em>’}</div>`:`<div style="display:flex;flex-wrap:wrap;gap:5px;">${(q.options||[]).map((o,oi) => {
+return `<div id="bq-${q._id}" style="border:1.5px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:10px;background:var(--card);"> <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap;"> <label style="display:flex;align-items:flex-start;gap:10px;flex:1;min-width:0;cursor:pointer;"> <input type="checkbox" class="bank-q-check" data-id="${q._id}" onchange="bankSelectionChanged()" style="accent-color:var(--primary);width:16px;height:16px;margin-top:2px;flex-shrink:0;"> <div style="flex:1;min-width:0;"> <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap;"> <span style="font-size:11px;padding:2px 8px;border-radius:20px;font-weight:700;background:${(typeBg||{})[type]||'#f3f4f6'};color:${(typeColors||{})[type]||'#374151'}">${type.toUpperCase()}</span> ${q.topic ?`<span style="font-size:11px;padding:2px 8px;border-radius:20px;background:#fef3c7;color:#92400e;font-weight:600;">${q.topic}</span>`: ''} <span style="font-size:11px;color:var(--text-muted);">${q.marks} mark${q.marks !== 1 ? 's' : ''}</span> ${q.useCount > 0 ?`<span style="font-size:11px;color:#9ca3af;">Used ${q.useCount}-</span>`: ''} </div> <div class="math-content" style="font-size:13px;font-weight:600;margin-bottom:8px;line-height:1.5;">${q.questionText}</div> ${type === 'fill' ?`<div style="font-size:12px;color:#059669;padding:4px 10px;background:#f0fdf4;border-radius:6px;display:inline-block;">- ${q.correctAnswerText}${q.acceptedAnswers?.length ? ` (+${q.acceptedAnswers.length} alt)` : ‘’}</div>`: type === 'explain' ?`<div style="font-size:12px;color:#92400e;padding:6px 10px;background:#fffbeb;border-radius:6px;border:1px solid #fde68a;"><strong>Model Answer:</strong> ${q.modelAnswer || ‘<em>No model answer provided</em>’}</div>`:`<div style="display:flex;flex-wrap:wrap;gap:5px;">${(q.options||[]).map((o,oi) => {
 const isCorrect = type === ‘multiple’ ? (q.correctAnswers||[]).includes(oi) : q.correctAnswer === oi;
-return `<span style="padding:3px 9px;border-radius:6px;font-size:12px;${isCorrect?'background:#f0fdf4;color:#166534;border:1px solid #bbf7d0;font-weight:600':'background:var(--bg);color:var(--text-light);border:1px solid var(--border)'}">${L[oi]}) ${o}${isCorrect?' ✓':''}</span>`;
+return `<span style="padding:3px 9px;border-radius:6px;font-size:12px;${isCorrect?'background:#f0fdf4;color:#166534;border:1px solid #bbf7d0;font-weight:600':'background:var(--bg);color:var(--text-light);border:1px solid var(--border)'}">${L[oi]}) ${o}${isCorrect?' -':''}</span>`;
 }).join(’’)}</div>`} </div> </div> </label> <div style="display:flex;gap:6px;flex-shrink:0;"> <button class="btn btn-sm btn-secondary" onclick="editBankQuestion('${q._id}')">Edit</button> <button class="btn btn-sm btn-danger" onclick="deleteBankQuestion('${q._id}')">Delete</button> </div> </div> </div>`;
 }
 
@@ -6283,7 +6283,7 @@ list.innerHTML = filtered.length === 0
 setTimeout(() => renderMath(list), 150);
 }
 
-// ── Add Question to Bank modal ───────────────────────────────────────────────
+// – Add Question to Bank modal ———————————————–
 function openAddToBankModal(prefill) {
 const existing = document.getElementById(‘add-bank-overlay’);
 if (existing) existing.remove();
@@ -6291,10 +6291,10 @@ const ol = document.createElement(‘div’);
 ol.id = ‘add-bank-overlay’;
 ol.style.cssText = ‘position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:400;display:flex;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(3px)’;
 const p = prefill || {};
-ol.innerHTML = `<div style="background:var(--card);border-radius:14px;width:100%;max-width:540px;max-height:92vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.2);"> <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;background:var(--card);z-index:1;"> <h3 style="font-size:15px;font-weight:700;margin:0">${p._id ? 'Edit' : 'Add'} Bank Question</h3> <button onclick="document.getElementById('add-bank-overlay').remove()" style="width:26px;height:26px;border-radius:6px;border:1px solid var(--border);background:var(--bg);cursor:pointer;font-size:13px;">✕</button> </div> <div style="padding:18px 20px;display:flex;flex-direction:column;gap:13px;"> <div> <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:5px;display:block;">Question Text *</label> ${getMathToolbar('bm-text')} <textarea id="bm-text" rows="3" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;resize:vertical;outline:none;">${p.questionText||''}</textarea> </div> <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;"> <div> <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:5px;display:block;">Type</label> <select id="bm-type" onchange="bmToggleType()" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;"> <option value="single" ${p.questionType==='single'?'selected':''}>Single</option> <option value="multiple" ${p.questionType==='multiple'?'selected':''}>Multiple</option> <option value="fill" ${p.questionType==='fill'?'selected':''}>Fill In</option> <option value="explain" ${p.questionType==='explain'?'selected':''}>Explain</option> </select> </div> <div> <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:5px;display:block;">Marks</label> <input id="bm-marks" type="number" value="${p.marks||1}" min="1" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;"> </div> <div> <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:5px;display:block;">Topic Tag</label> <input id="bm-topic" placeholder="e.g. Biology" value="${p.topic||''}" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;"> </div> </div> <!-- Options (MCQ) --> <div id="bm-options-wrap"> <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:6px;display:block;">Options & Correct Answer</label> ${[0,1,2,3].map(i => { const isCorrect = p.questionType === 'multiple' ? (p.correctAnswers||[]).includes(i) : (p.correctAnswer === i); return`<div style="display:flex;align-items:center;gap:8px;margin-bottom:7px;">
+ol.innerHTML = `<div style="background:var(--card);border-radius:14px;width:100%;max-width:540px;max-height:92vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.2);"> <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;background:var(--card);z-index:1;"> <h3 style="font-size:15px;font-weight:700;margin:0">${p._id ? 'Edit' : 'Add'} Bank Question</h3> <button onclick="document.getElementById('add-bank-overlay').remove()" style="width:26px;height:26px;border-radius:6px;border:1px solid var(--border);background:var(--bg);cursor:pointer;font-size:13px;">-</button> </div> <div style="padding:18px 20px;display:flex;flex-direction:column;gap:13px;"> <div> <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:5px;display:block;">Question Text *</label> ${getMathToolbar('bm-text')} <textarea id="bm-text" rows="3" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;resize:vertical;outline:none;">${p.questionText||''}</textarea> </div> <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;"> <div> <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:5px;display:block;">Type</label> <select id="bm-type" onchange="bmToggleType()" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;"> <option value="single" ${p.questionType==='single'?'selected':''}>Single</option> <option value="multiple" ${p.questionType==='multiple'?'selected':''}>Multiple</option> <option value="fill" ${p.questionType==='fill'?'selected':''}>Fill In</option> <option value="explain" ${p.questionType==='explain'?'selected':''}>Explain</option> </select> </div> <div> <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:5px;display:block;">Marks</label> <input id="bm-marks" type="number" value="${p.marks||1}" min="1" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;"> </div> <div> <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:5px;display:block;">Topic Tag</label> <input id="bm-topic" placeholder="e.g. Biology" value="${p.topic||''}" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;"> </div> </div> <!-- Options (MCQ) --> <div id="bm-options-wrap"> <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:6px;display:block;">Options & Correct Answer</label> ${[0,1,2,3].map(i => { const isCorrect = p.questionType === 'multiple' ? (p.correctAnswers||[]).includes(i) : (p.correctAnswer === i); return`<div style="display:flex;align-items:center;gap:8px;margin-bottom:7px;">
 <input type=”${p.questionType===‘multiple’?‘checkbox’:‘radio’}” name=“bm-correct” id=“bm-opt-check-${i}” value=”${i}” ${isCorrect?‘checked’:’’} style=“accent-color:var(–primary);width:16px;height:16px;flex-shrink:0;”>
 <input id="bm-opt-${i}" placeholder="Option ${String.fromCharCode(65+i)}" value="${(p.options||[])[i]||''}" style="flex:1;padding:7px 10px;border:1.5px solid var(--border);border-radius:7px;font-size:13px;font-family:inherit;outline:none;">
-</div>`; }).join('')} <p style="font-size:11px;color:var(--text-muted);margin:0;">Check the correct answer(s).</p> </div> <!-- Fill wrap --> <div id="bm-fill-wrap" style="display:none;"> <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:5px;display:block;">Correct Answer *</label> <input id="bm-fill-answer" placeholder="Primary correct answer" value="${p.correctAnswerText||''}" style="width:100%;padding:8px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;margin-bottom:6px;"> <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:5px;display:block;">Alternate Accepted Answers <span style="font-weight:400;text-transform:none;">(optional, one per line)</span></label> <textarea id="bm-fill-alts" rows="2" placeholder="alternative 1&#10;alternative 2" style="width:100%;padding:8px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;resize:vertical;outline:none;">${(p.acceptedAnswers||[]).join('\n')}</textarea> </div> <!-- Explain wrap --> <div id="bm-explain-wrap" style="display:none;"> <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:5px;display:block;">Model Answer <span style="font-weight:400;text-transform:none;">(for lecturer reference, not shown to students)</span></label> <textarea id="bm-model-answer" rows="4" placeholder="Write the expected/ideal answer here…" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;resize:vertical;outline:none;">${p.modelAnswer||''}</textarea> </div> <div id="bm-err" style="display:none;padding:8px 12px;background:#fef2f2;border:1px solid #fecaca;border-radius:7px;color:#dc2626;font-size:12px;font-weight:500;"></div> </div> <div style="padding:12px 20px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end;position:sticky;bottom:0;background:var(--card);border-radius:0 0 14px 14px;"> <button class="btn btn-secondary" onclick="document.getElementById('add-bank-overlay').remove()">Cancel</button> <button class="btn btn-primary" onclick="submitBankQuestion(${p._id ? `’${p._id}’` : 'null'})">${p._id ? 'Save Changes' : 'Add to Bank'}</button> </div> </div>`;
+</div>`; }).join('')} <p style="font-size:11px;color:var(--text-muted);margin:0;">Check the correct answer(s).</p> </div> <!-- Fill wrap --> <div id="bm-fill-wrap" style="display:none;"> <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:5px;display:block;">Correct Answer *</label> <input id="bm-fill-answer" placeholder="Primary correct answer" value="${p.correctAnswerText||''}" style="width:100%;padding:8px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;margin-bottom:6px;"> <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:5px;display:block;">Alternate Accepted Answers <span style="font-weight:400;text-transform:none;">(optional, one per line)</span></label> <textarea id="bm-fill-alts" rows="2" placeholder="alternative 1&#10;alternative 2" style="width:100%;padding:8px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;resize:vertical;outline:none;">${(p.acceptedAnswers||[]).join('\n')}</textarea> </div> <!-- Explain wrap --> <div id="bm-explain-wrap" style="display:none;"> <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:5px;display:block;">Model Answer <span style="font-weight:400;text-transform:none;">(for lecturer reference, not shown to students)</span></label> <textarea id="bm-model-answer" rows="4" placeholder="Write the expected/ideal answer here-" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;resize:vertical;outline:none;">${p.modelAnswer||''}</textarea> </div> <div id="bm-err" style="display:none;padding:8px 12px;background:#fef2f2;border:1px solid #fecaca;border-radius:7px;color:#dc2626;font-size:12px;font-weight:500;"></div> </div> <div style="padding:12px 20px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end;position:sticky;bottom:0;background:var(--card);border-radius:0 0 14px 14px;"> <button class="btn btn-secondary" onclick="document.getElementById('add-bank-overlay').remove()">Cancel</button> <button class="btn btn-primary" onclick="submitBankQuestion(${p._id ? `’${p._id}’` : 'null'})">${p._id ? 'Save Changes' : 'Add to Bank'}</button> </div> </div>`;
 document.body.appendChild(ol);
 if (p.questionType === ‘fill’ || p.questionType === ‘explain’) bmToggleType();
 }
@@ -6388,7 +6388,7 @@ toastSuccess(‘Deleted from bank’);
 });
 }
 
-// ── Selection & PDF Export ──────────────────────────────────────────────────
+// – Selection & PDF Export –––––––––––––––––––––––––
 function bankSelectionChanged() {
 const checks = document.querySelectorAll(’.bank-q-check:checked’);
 const count = checks.length;
@@ -6445,10 +6445,10 @@ doc.rect(0, 0, 210, 22, ‘F’);
 doc.setTextColor(255, 255, 255);
 doc.setFont(‘helvetica’, ‘bold’);
 doc.setFontSize(14);
-doc.text(‘KODEX — Question Bank Export’, margin, 14);
+doc.text(‘KODEX - Question Bank Export’, margin, 14);
 doc.setFontSize(9);
 doc.setFont(‘helvetica’, ‘normal’);
-doc.text(`${selected.length} question${selected.length !== 1 ? 's' : ''} · ${new Date().toLocaleDateString()}`, margin, 19);
+doc.text(`${selected.length} question${selected.length !== 1 ? 's' : ''} - ${new Date().toLocaleDateString()}`, margin, 19);
 y = 32;
 
 const L = [‘A’, ‘B’, ‘C’, ‘D’];
@@ -6500,7 +6500,7 @@ if (type === 'fill') {
   if (q.acceptedAnswers?.length) addText(`Also accepted: ${q.acceptedAnswers.join(', ')}`, 8.5, false, [100, 100, 100], 2);
 } else if (type === 'explain') {
   addText('Model Answer:', 9, true, [180, 83, 9], 2);
-  addText(q.modelAnswer || '—', 9, false, [60, 60, 60], 4);
+  addText(q.modelAnswer || '-', 9, false, [60, 60, 60], 4);
 } else {
   (q.options || []).forEach((opt, oi) => {
     if (!opt) return;
@@ -6515,7 +6515,7 @@ if (type === 'fill') {
     doc.setFont('helvetica', isCorrect ? 'bold' : 'normal');
     doc.setFontSize(10);
     optLines.forEach((line, li) => { doc.text(line, margin + 5, y + li * 5); });
-    if (isCorrect) { doc.setTextColor(22, 101, 52); doc.text('✓', pageW - margin - 6, y); }
+    if (isCorrect) { doc.setTextColor(22, 101, 52); doc.text('-', pageW - margin - 6, y); }
     y += boxH + 2;
   });
 }
@@ -6532,10 +6532,10 @@ if (idx < selected.length - 1) {
 });
 
 doc.save(`KODEX_QuestionBank_${new Date().toISOString().slice(0,10)}.pdf`);
-toastSuccess(`PDF saved with ${selected.length} question${selected.length !== 1 ? 's' : ''} ✓`);
+toastSuccess(`PDF saved with ${selected.length} question${selected.length !== 1 ? 's' : ''} -`);
 }
 
-// ── Save a quiz question to the bank ────────────────────────────────────────
+// – Save a quiz question to the bank ––––––––––––––––––––
 async function saveQuestionToBank(quizId, questionId) {
 const topic = window.prompt(‘Save this question to your bank.\n\nTopic tag (optional, e.g. “Biology”):’) ?? null;
 if (topic === null) return;
@@ -6544,11 +6544,11 @@ await api(’/api/lecturer/question-bank/save-from-quiz’, {
 method: ‘POST’,
 body: JSON.stringify({ questionIds: [questionId], topic: topic.trim() }),
 });
-toastSuccess(‘Question saved to bank ✓’);
+toastSuccess(‘Question saved to bank -’);
 } catch(e) { toastError(e.message || ‘Failed to save to bank’); }
 }
 
-// ── Import from Bank modal (inside showAddQuestionsView) ─────────────────────
+// – Import from Bank modal (inside showAddQuestionsView) ———————
 async function openImportFromBankModal(quizId) {
 const existing = document.getElementById(‘import-bank-overlay’);
 if (existing) existing.remove();
@@ -6568,7 +6568,7 @@ const L = [‘A’,‘B’,‘C’,‘D’];
 const ol = document.createElement(‘div’);
 ol.id = ‘import-bank-overlay’;
 ol.style.cssText = ‘position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:400;display:flex;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(3px)’;
-ol.innerHTML = `<div style="background:var(--card);border-radius:14px;width:100%;max-width:600px;max-height:92vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.2);"> <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;background:var(--card);z-index:1;border-radius:14px 14px 0 0;"> <div> <h3 style="font-size:15px;font-weight:700;margin:0">Import from Question Bank</h3> <p style="font-size:12px;color:var(--text-muted);margin:2px 0 0;">Select questions to add to this quiz</p> </div> <button onclick="document.getElementById('import-bank-overlay').remove()" style="width:26px;height:26px;border-radius:6px;border:1px solid var(--border);background:var(--bg);cursor:pointer;font-size:13px;">✕</button> </div> <!-- Search + filter --> <div style="padding:12px 20px;border-bottom:1px solid var(--border);display:flex;gap:8px;flex-wrap:wrap;"> <input id="ibm-search" placeholder="Search…" oninput="filterImportList()" style="flex:1;min-width:150px;padding:7px 11px;border:1.5px solid var(--border);border-radius:7px;font-size:13px;font-family:inherit;outline:none;"> <select id="ibm-topic" onchange="filterImportList()" style="padding:7px 11px;border:1.5px solid var(--border);border-radius:7px;font-size:13px;font-family:inherit;outline:none;"> <option value="">All Topics</option> ${_bankTopics.map(t =>`<option value="${t}">${t}</option>`).join('')} </select> <span id="ibm-sel-count" style="font-size:12px;color:var(--primary);font-weight:600;align-self:center;">0 selected</span> </div> <!-- List --> <div id="ibm-list" style="flex:1;overflow-y:auto;padding:12px 20px;display:flex;flex-direction:column;gap:8px;"> ${_bankQuestions.map(q => importBankCard(q, L)).join('')} </div> <!-- Footer --> <div style="padding:12px 20px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end;background:var(--card);border-radius:0 0 14px 14px;"> <button class="btn btn-secondary" onclick="document.getElementById('import-bank-overlay').remove()">Cancel</button> <button class="btn btn-primary" onclick="confirmImportFromBank('${quizId}')">Import Selected</button> </div> </div>`;
+ol.innerHTML = `<div style="background:var(--card);border-radius:14px;width:100%;max-width:600px;max-height:92vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.2);"> <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;background:var(--card);z-index:1;border-radius:14px 14px 0 0;"> <div> <h3 style="font-size:15px;font-weight:700;margin:0">Import from Question Bank</h3> <p style="font-size:12px;color:var(--text-muted);margin:2px 0 0;">Select questions to add to this quiz</p> </div> <button onclick="document.getElementById('import-bank-overlay').remove()" style="width:26px;height:26px;border-radius:6px;border:1px solid var(--border);background:var(--bg);cursor:pointer;font-size:13px;">-</button> </div> <!-- Search + filter --> <div style="padding:12px 20px;border-bottom:1px solid var(--border);display:flex;gap:8px;flex-wrap:wrap;"> <input id="ibm-search" placeholder="Search-" oninput="filterImportList()" style="flex:1;min-width:150px;padding:7px 11px;border:1.5px solid var(--border);border-radius:7px;font-size:13px;font-family:inherit;outline:none;"> <select id="ibm-topic" onchange="filterImportList()" style="padding:7px 11px;border:1.5px solid var(--border);border-radius:7px;font-size:13px;font-family:inherit;outline:none;"> <option value="">All Topics</option> ${_bankTopics.map(t =>`<option value="${t}">${t}</option>`).join('')} </select> <span id="ibm-sel-count" style="font-size:12px;color:var(--primary);font-weight:600;align-self:center;">0 selected</span> </div> <!-- List --> <div id="ibm-list" style="flex:1;overflow-y:auto;padding:12px 20px;display:flex;flex-direction:column;gap:8px;"> ${_bankQuestions.map(q => importBankCard(q, L)).join('')} </div> <!-- Footer --> <div style="padding:12px 20px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end;background:var(--card);border-radius:0 0 14px 14px;"> <button class="btn btn-secondary" onclick="document.getElementById('import-bank-overlay').remove()">Cancel</button> <button class="btn btn-primary" onclick="confirmImportFromBank('${quizId}')">Import Selected</button> </div> </div>`;
 document.body.appendChild(ol);
 }
 
@@ -6612,9 +6612,9 @@ await showAddQuestionsView(quizId);
 } catch(e) { toastError(e.message || ‘Import failed’); }
 }
 
-// ══════════════════════════════════════════════════════════════════════════════
+// ——————————————————————————
 // ESP32 BLE Integration
-// ══════════════════════════════════════════════════════════════════════════════
+// ——————————————————————————
 
 const ESP32_BLE_PREFIX   = ‘ATT_’;
 const ESP32_LOCAL_PORT   = 80;
@@ -6657,7 +6657,7 @@ return false;
 async function checkBLEPresence() {
 if (!navigator.bluetooth) return false;
 try {
-// We don’t need to connect — just check if device is advertising
+// We don’t need to connect - just check if device is advertising
 // Web Bluetooth requires user gesture for full scan, so we rely on ESP32 HTTP discovery
 return await discoverESP32();
 } catch(e) {
@@ -6674,7 +6674,7 @@ const data = await esp32Api(’/session/start’, {
 method: ‘POST’,
 body: JSON.stringify({ title })
 });
-showToastNotif(`✅ Session started! Verbal code: ${data.verbalCode}`);
+showToastNotif(`- Session started! Verbal code: ${data.verbalCode}`);
 renderSessions();
 } catch(e) {
 toastError(’Could not start session on ESP32: ’ + e.message);
@@ -6686,7 +6686,7 @@ async function stopOfflineSession() {
 if (!confirm(‘Stop the current ESP32 session?’)) return;
 try {
 await esp32Api(’/session/stop’, { method: ‘POST’ });
-showToastNotif(‘✅ Session stopped’);
+showToastNotif(’- Session stopped’);
 renderSessions();
 } catch(e) {
 toastError(e.message);
@@ -6720,7 +6720,7 @@ function configureESP32() {
 const ip = prompt(‘Enter ESP32 IP address (shown on ESP32 serial monitor):’, esp32IP || ‘192.168.1.100’);
 if (ip) {
 setEsp32IP(ip);
-showToastNotif(’✅ ESP32 IP saved: ’ + ip);
+showToastNotif(’- ESP32 IP saved: ’ + ip);
 renderMarkAttendance();
 }
 }
@@ -6736,7 +6736,7 @@ window.history.replaceState({}, ‘’, window.location.pathname);
 
 const content = document.getElementById(‘main-content’);
 if (content) {
-content.innerHTML = ` <div class="card" style="text-align:center;padding:48px 24px;max-width:400px;margin:40px auto"> <div style="font-size:48px;margin-bottom:16px">⏳</div> <div style="font-size:18px;font-weight:700">Marking your attendance…</div> <p style="color:var(--text-light);font-size:13px;margin-top:8px">Please wait</p> </div>`;
+content.innerHTML = ` <div class="card" style="text-align:center;padding:48px 24px;max-width:400px;margin:40px auto"> <div style="font-size:48px;margin-bottom:16px">-</div> <div style="font-size:18px;font-weight:700">Marking your attendance-</div> <p style="color:var(--text-light);font-size:13px;margin-top:8px">Please wait</p> </div>`;
 }
 
 try {
@@ -6745,12 +6745,12 @@ method: ‘POST’,
 body: JSON.stringify({ qrToken, method: ‘qr_mark’ }),
 });
 if (content) {
-content.innerHTML = ` <div class="card" style="text-align:center;padding:48px 24px;max-width:400px;margin:40px auto;border-left:4px solid var(--success)"> <div style="font-size:56px;margin-bottom:16px">✅</div> <div style="font-size:20px;font-weight:800;color:var(--success)">Attendance Marked!</div> <p style="color:var(--text-light);font-size:13px;margin-top:8px">You have been checked in successfully.</p> <button class="btn btn-primary" style="margin-top:20px" onclick="navigateTo('my-attendance')">View My Attendance</button> </div>`;
+content.innerHTML = ` <div class="card" style="text-align:center;padding:48px 24px;max-width:400px;margin:40px auto;border-left:4px solid var(--success)"> <div style="font-size:56px;margin-bottom:16px">-</div> <div style="font-size:20px;font-weight:800;color:var(--success)">Attendance Marked!</div> <p style="color:var(--text-light);font-size:13px;margin-top:8px">You have been checked in successfully.</p> <button class="btn btn-primary" style="margin-top:20px" onclick="navigateTo('my-attendance')">View My Attendance</button> </div>`;
 }
 } catch(e) {
 if (content) {
 const expired = e.message?.toLowerCase().includes(‘expired’);
-content.innerHTML = ` <div class="card" style="text-align:center;padding:48px 24px;max-width:400px;margin:40px auto;border-left:4px solid var(--danger)"> <div style="font-size:56px;margin-bottom:16px">${expired ? '⏰' : '❌'}</div> <div style="font-size:20px;font-weight:800;color:var(--danger)">${expired ? 'QR Code Expired' : 'Failed'}</div> <p style="color:var(--text-light);font-size:13px;margin-top:8px">${expired ? 'This QR code has expired. Ask your lecturer/manager for a fresh one.' : e.message}</p> <button class="btn btn-secondary" style="margin-top:20px" onclick="navigateTo('mark-attendance')">Go Back</button> </div>`;
+content.innerHTML = ` <div class="card" style="text-align:center;padding:48px 24px;max-width:400px;margin:40px auto;border-left:4px solid var(--danger)"> <div style="font-size:56px;margin-bottom:16px">${expired ? '-' : '-'}</div> <div style="font-size:20px;font-weight:800;color:var(--danger)">${expired ? 'QR Code Expired' : 'Failed'}</div> <p style="color:var(--text-light);font-size:13px;margin-top:8px">${expired ? 'This QR code has expired. Ask your lecturer/manager for a fresh one.' : e.message}</p> <button class="btn btn-secondary" style="margin-top:20px" onclick="navigateTo('mark-attendance')">Go Back</button> </div>`;
 }
 }
 return true;
@@ -6774,7 +6774,7 @@ content.innerHTML = `
   <div class="page-header"><h2>Mark Attendance</h2><p>Check in to active sessions</p></div>
   <div class="card" style="border-left:4px solid #f59e0b;background:#fffbeb;margin-bottom:16px">
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
-      <span style="font-size:20px">📶</span>
+      <span style="font-size:20px">-</span>
       <div>
         <div style="font-weight:700;color:#92400e">You're offline</div>
         <div style="font-size:12px;color:#b45309">Your attendance will be submitted when you reconnect</div>
@@ -6790,7 +6790,7 @@ content.innerHTML = `
     </div>
     ${pendingMark ? `
       <div class="card" style="text-align:center;border-left:4px solid var(--primary)">
-        <div style="font-size:36px;margin-bottom:8px">⏳</div>
+        <div style="font-size:36px;margin-bottom:8px">-</div>
         <div style="font-size:18px;font-weight:700;color:var(--primary)">Attendance Queued</div>
         <p style="font-size:13px;color:var(--text-light);margin-top:4px">Will be submitted when you go back online</p>
       </div>
@@ -6802,7 +6802,7 @@ content.innerHTML = `
     `}
   ` : `
     <div class="card" style="text-align:center;padding:40px 20px">
-      <div style="font-size:48px;margin-bottom:12px">📡</div>
+      <div style="font-size:48px;margin-bottom:12px">-</div>
       <div style="font-size:18px;font-weight:700;margin-bottom:8px">No Cached Session</div>
       <p style="font-size:14px;color:var(--text-light)">Go online at least once to load session data for offline use.</p>
     </div>
@@ -6819,7 +6819,6 @@ const data = await api(’/api/attendance-sessions/active’);
 activeSession = data.session;
 if (activeSession) offlineCache(‘activeSession’, activeSession); // cache for offline
 } catch (e) {}
-// Store globally so submitCodeMark() / submitQrMark() can include sessionId
 window._currentActiveSessionId = activeSession?._id || null;
 
 const alreadyMarked = activeSession ? await api(’/api/attendance-sessions/my-attendance?limit=100’)
@@ -6906,7 +6905,7 @@ document.getElementById(‘mark-code-input’)?.focus();
 function showQrEntry() {
 const area = document.getElementById(‘mark-input-area’);
 if (!area) return;
-area.innerHTML = `<div class="card" style="text-align:center;padding:32px 24px"> <div style="font-size:48px;margin-bottom:12px">📷</div> <div style="font-size:17px;font-weight:700;margin-bottom:8px">Scan the QR Code</div> <p style="font-size:13px;color:var(--text-light);margin-bottom:20px"> Point your phone camera at the QR code on the screen.<br> It will open a link — tap it to mark your attendance instantly. </p> <div style="background:#f8f9ff;border:1px solid var(--border);border-radius:10px;padding:16px;font-size:12px;color:var(--text-muted)"> No camera? Enter the 4-character code shown below the QR image instead. </div> </div>`;
+area.innerHTML = `<div class="card" style="text-align:center;padding:32px 24px"> <div style="font-size:48px;margin-bottom:12px">-</div> <div style="font-size:17px;font-weight:700;margin-bottom:8px">Scan the QR Code</div> <p style="font-size:13px;color:var(--text-light);margin-bottom:20px"> Point your phone camera at the QR code on the screen.<br> It will open a link - tap it to mark your attendance instantly. </p> <div style="background:#f8f9ff;border:1px solid var(--border);border-radius:10px;padding:16px;font-size:12px;color:var(--text-muted)"> No camera? Enter the 4-character code shown below the QR image instead. </div> </div>`;
 }
 
 async function submitCodeMark() {
@@ -6934,7 +6933,7 @@ url: ‘/api/attendance-sessions/mark’,
 options: { method: ‘POST’, body: JSON.stringify({ code, sessionId: window._currentActiveSessionId, method: ‘code_mark’ }) }
 });
 offlineCache(‘pendingMark’, { code, sessionId: window._currentActiveSessionId, method: ‘code_mark’, queuedAt: Date.now() });
-showToastNotif(‘📶 Attendance queued — will sync when online’, ‘warn’);
+showToastNotif(’- Attendance queued - will sync when online’, ‘warn’);
 navigateTo(‘mark-attendance’);
 return;
 }
@@ -6956,7 +6955,7 @@ toastError(e.message);
 function showCodeEntryOffline() {
 const area = document.getElementById(‘mark-input-area’);
 if (!area) return;
-area.innerHTML = `<div class="card"> <div class="card-title">Enter Attendance Code</div> <div style="font-size:12px;color:#92400e;background:#fef3c7;border:1px solid #fbbf24;border-radius:6px;padding:6px 12px;margin-bottom:12px"> 📶 Offline — code will be submitted automatically when you reconnect </div> <div class="form-group"> <label>4-Character Code</label> <input type="text" id="mark-code-input" placeholder="Enter code" maxlength="4" style="font-size:24px;text-align:center;letter-spacing:8px;font-weight:700" autofocus> </div> <button class="btn btn-primary" onclick="submitCodeMark()" style="width:100%">Queue Attendance</button> </div>`;
+area.innerHTML = `<div class="card"> <div class="card-title">Enter Attendance Code</div> <div style="font-size:12px;color:#92400e;background:#fef3c7;border:1px solid #fbbf24;border-radius:6px;padding:6px 12px;margin-bottom:12px"> - Offline - code will be submitted automatically when you reconnect </div> <div class="form-group"> <label>4-Character Code</label> <input type="text" id="mark-code-input" placeholder="Enter code" maxlength="4" style="font-size:24px;text-align:center;letter-spacing:8px;font-weight:700" autofocus> </div> <button class="btn btn-primary" onclick="submitCodeMark()" style="width:100%">Queue Attendance</button> </div>`;
 document.getElementById(‘mark-code-input’)?.focus();
 }
 
@@ -6971,7 +6970,7 @@ url: ‘/api/attendance-sessions/mark’,
 options: { method: ‘POST’, body: JSON.stringify({ qrToken, method: ‘qr_mark’ }) }
 });
 offlineCache(‘pendingMark’, { method: ‘qr_mark’, queuedAt: Date.now() });
-showToastNotif(‘📶 QR attendance queued — will sync when online’, ‘warn’);
+showToastNotif(’- QR attendance queued - will sync when online’, ‘warn’);
 navigateTo(‘mark-attendance’);
 return;
 }
@@ -7010,7 +7009,7 @@ try {
 const data = await api(’/api/zoom’);
 const available = data.meetings.filter(m => m.status === ‘scheduled’ || m.status === ‘active’);
 if (available.length > 0) {
-meetingsHtml = available.map(m => `<div style="display:flex;align-items:center;justify-content:space-between;padding:12px;border:1px solid var(--border);border-radius:8px;margin-bottom:8px"> <div> <div style="font-weight:600;font-size:14px">${m.title}</div> <div style="font-size:12px;color:var(--text-light)">${new Date(m.scheduledStart).toLocaleString()} — ${m.duration} min</div> <span class="status-badge" style="${m.status === 'active' ? 'background:#22c55e;color:#fff;' : 'background:#3b82f6;color:#fff;'}font-size:11px;margin-top:4px;">${m.status === 'active' ? 'Live' : 'Scheduled'}</span> </div> <button class="btn btn-success btn-sm" onclick="submitJitsiJoin('${m._id}', '${m.joinUrl || ''}')">Join & Mark</button> </div>`).join(’’);
+meetingsHtml = available.map(m => `<div style="display:flex;align-items:center;justify-content:space-between;padding:12px;border:1px solid var(--border);border-radius:8px;margin-bottom:8px"> <div> <div style="font-weight:600;font-size:14px">${m.title}</div> <div style="font-size:12px;color:var(--text-light)">${new Date(m.scheduledStart).toLocaleString()} - ${m.duration} min</div> <span class="status-badge" style="${m.status === 'active' ? 'background:#22c55e;color:#fff;' : 'background:#3b82f6;color:#fff;'}font-size:11px;margin-top:4px;">${m.status === 'active' ? 'Live' : 'Scheduled'}</span> </div> <button class="btn btn-success btn-sm" onclick="submitJitsiJoin('${m._id}', '${m.joinUrl || ''}')">Join & Mark</button> </div>`).join(’’);
 } else {
 meetingsHtml = ‘<p style="color:var(--text-light);font-size:13px">No available meetings found.</p>’;
 }
@@ -7122,7 +7121,7 @@ content.innerHTML = `
       <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;">
         <div style="padding:10px 14px;background:var(--bg);border-radius:8px;border:1px solid var(--border);">
           <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;margin-bottom:4px;">Plan</div>
-          <div style="font-weight:700;">${sub.plan || '—'}</div>
+          <div style="font-weight:700;">${sub.plan || '-'}</div>
         </div>
         <div style="padding:10px 14px;background:var(--bg);border-radius:8px;border:1px solid var(--border);">
           <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;margin-bottom:4px;">Status</div>
@@ -7135,8 +7134,8 @@ content.innerHTML = `
 
   ${currentUser.role === 'superadmin' ? `
     <div class="card" style="margin-top:16px;border:1px solid #e0e7ff;background:#f5f3ff;">
-      <div style="font-size:13px;font-weight:700;color:#4f46e5;margin-bottom:8px;">⚙️ Paystack Webhook Setup</div>
-      <p style="font-size:12px;color:#6b7280;margin-bottom:8px;">Add this URL in your Paystack Dashboard under <strong>Settings → API Keys & Webhooks</strong> to enable automatic renewals:</p>
+      <div style="font-size:13px;font-weight:700;color:#4f46e5;margin-bottom:8px;">-- Paystack Webhook Setup</div>
+      <p style="font-size:12px;color:#6b7280;margin-bottom:8px;">Add this URL in your Paystack Dashboard under <strong>Settings - API Keys & Webhooks</strong> to enable automatic renewals:</p>
       <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
         <code style="flex:1;padding:8px 12px;background:#fff;border:1px solid #c7d2fe;border-radius:7px;font-size:12px;color:#3730a3;word-break:break-all;">${window.location.origin}/api/webhooks/paystack</code>
         <button class="btn btn-sm" style="background:#4f46e5;color:#fff;" onclick="navigator.clipboard.writeText(window.location.origin+'/api/webhooks/paystack').then(()=>toastSuccess('Copied!'))">Copy</button>
@@ -7262,8 +7261,8 @@ if (users.length === 0) {
 
 var rows = users.map(function(u) {
   var idCol = mode === 'academic'
-    ? '<td>' + (u.indexNumber || u.email || '—') + '</td>'
-    : '<td>' + (u.email || '—') + '</td><td>' + (u.employeeId || '—') + '</td>';
+    ? '<td>' + (u.indexNumber || u.email || '-') + '</td>'
+    : '<td>' + (u.email || '-') + '</td><td>' + (u.employeeId || '-') + '</td>';
   var activeClass = u.isActive ? 'status-active' : 'status-stopped';
   var activeLabel = u.isActive ? 'Active' : 'Inactive';
   return '<tr><td style="font-weight:600">' + u.name + '</td>' + idCol +
@@ -7401,7 +7400,7 @@ isAcademic
 ‘students’, ‘admin/reports’
 );
 
-content.innerHTML = `<div class="page-header"> <h2>Admin Reports</h2> <p>Full institution analytics — click any report card to download as PDF</p> </div> <div class="reports-grid">${cards}</div>`;
+content.innerHTML = `<div class="page-header"> <h2>Admin Reports</h2> <p>Full institution analytics - click any report card to download as PDF</p> </div> <div class="reports-grid">${cards}</div>`;
 }
 
 async function downloadReport(type, apiBase = ‘reports’, e) {
@@ -7443,11 +7442,11 @@ if (card) card.style.pointerEvents = ‘’;
 }
 }
 
-// ── View who has marked attendance for a session (offline-aware) ──────────────
+// – View who has marked attendance for a session (offline-aware) –––––––
 async function viewAttendees(sessionId, sessionTitle) {
 const container = document.getElementById(‘modal-container’);
 container.classList.remove(‘hidden’);
-container.innerHTML = ` <div class="modal-overlay" onclick="closeModal(event)"> <div class="modal" onclick="event.stopPropagation()" style="max-width:600px;width:95%"> <h3>Attendees — ${sessionTitle}</h3> <div id="attendees-content"><div class="spinner" style="margin:20px auto"></div></div> <div class="modal-actions" style="justify-content:space-between"> <button class="btn btn-sm" style="background:#16a34a;color:#fff" onclick="exportSessionCSV('${sessionId}', '${sessionTitle}')">⬇ Export CSV</button> <button class="btn btn-sm" style="background:#16a34a;color:#fff" onclick="exportAttendanceToExcel('${sessionId}', '${sessionTitle}')">📊 Excel</button> <button class="btn btn-secondary btn-sm" onclick="closeModal()">Close</button> </div> </div> </div>`;
+container.innerHTML = ` <div class="modal-overlay" onclick="closeModal(event)"> <div class="modal" onclick="event.stopPropagation()" style="max-width:600px;width:95%"> <h3>Attendees - ${sessionTitle}</h3> <div id="attendees-content"><div class="spinner" style="margin:20px auto"></div></div> <div class="modal-actions" style="justify-content:space-between"> <button class="btn btn-sm" style="background:#16a34a;color:#fff" onclick="exportSessionCSV('${sessionId}', '${sessionTitle}')">- Export CSV</button> <button class="btn btn-sm" style="background:#16a34a;color:#fff" onclick="exportAttendanceToExcel('${sessionId}', '${sessionTitle}')">- Excel</button> <button class="btn btn-secondary btn-sm" onclick="closeModal()">Close</button> </div> </div> </div>`;
 
 const el = document.getElementById(‘attendees-content’);
 const cacheKey = ‘attendees_’ + sessionId;
@@ -7457,7 +7456,7 @@ const cached = offlineRead(cacheKey);
 if (cached) {
 _renderAttendeesHTML(el, cached, true);
 } else {
-el.innerHTML = `<div class="card" style="text-align:center;padding:24px"> <div style="font-size:36px">📡</div> <p style="margin-top:8px;color:var(--text-light)">No cached data. Connect once to view attendees offline.</p> </div>`;
+el.innerHTML = `<div class="card" style="text-align:center;padding:24px"> <div style="font-size:36px">-</div> <p style="margin-top:8px;color:var(--text-light)">No cached data. Connect once to view attendees offline.</p> </div>`;
 }
 return;
 }
@@ -7478,10 +7477,10 @@ el.innerHTML = `<p style="color:var(--danger)">Error: ${e.message}</p>`;
 
 function _renderAttendeesHTML(el, data, isOffline) {
 const records = data.records || [];
-el.innerHTML = `${isOffline ?`<div style="background:#fef3c7;border:1px solid #fbbf24;border-radius:6px;padding:8px 12px;font-size:12px;font-weight:600;color:#92400e;margin-bottom:12px">📶 Showing cached data</div>`: ''} <div style="font-size:13px;color:var(--text-light);margin-bottom:12px">${records.length} ${currentUser.company?.mode === 'corporate' ? 'employee' : 'student'}${records.length!==1?'s':''} checked in</div> ${records.length ?`
+el.innerHTML = `${isOffline ?`<div style="background:#fef3c7;border:1px solid #fbbf24;border-radius:6px;padding:8px 12px;font-size:12px;font-weight:600;color:#92400e;margin-bottom:12px">- Showing cached data</div>`: ''} <div style="font-size:13px;color:var(--text-light);margin-bottom:12px">${records.length} ${currentUser.company?.mode === 'corporate' ? 'employee' : 'student'}${records.length!==1?'s':''} checked in</div> ${records.length ?`
 <table>
 <thead><tr><th>Name</th><th>ID</th><th>Method</th><th>Time</th><th>Status</th></tr></thead>
-<tbody>${records.map(r => `<tr> <td>${r.student?.name || 'N/A'}</td> <td style="font-family:monospace;font-size:12px">${r.student?.indexNumber || r.student?.email || '—'}</td> <td><span style="background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:2px 6px;font-size:11px">${r.method || '—'}</span></td> <td style="font-size:12px">${r.checkInTime ? new Date(r.checkInTime).toLocaleTimeString() : '—'}</td> <td><span class="status-badge status-${r.status}">${r.status}</span></td> </tr>`).join(’’)}</tbody>
+<tbody>${records.map(r => `<tr> <td>${r.student?.name || 'N/A'}</td> <td style="font-family:monospace;font-size:12px">${r.student?.indexNumber || r.student?.email || '-'}</td> <td><span style="background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:2px 6px;font-size:11px">${r.method || '-'}</span></td> <td style="font-size:12px">${r.checkInTime ? new Date(r.checkInTime).toLocaleTimeString() : '-'}</td> <td><span class="status-badge status-${r.status}">${r.status}</span></td> </tr>`).join(’’)}</tbody>
 </table>
 `: '<div class="empty-state"><p>No one has checked in yet</p></div>'}`;
 }
@@ -7497,9 +7496,9 @@ if (token) {
 loadUserData();
 }
 
-// ══════════════════════════════════════════════════════════════════════════════
+// ——————————————————————————
 //  FEATURE: PROFILE PAGE
-// ══════════════════════════════════════════════════════════════════════════════
+// ——————————————————————————
 async function renderProfile() {
 const content = document.getElementById(‘main-content’);
 if (!content) return;
@@ -7529,7 +7528,7 @@ content.innerHTML = `<div class="page-header"><h2>My Profile</h2><p>Manage your 
     </div>
     ${['lecturer','hod','student'].includes(u.role) ? `
     <div class="form-group">
-      <label>Department <span style="font-weight:400;font-size:11px;color:var(--text-muted)">(cannot be changed here — contact admin)</span></label>
+      <label>Department <span style="font-weight:400;font-size:11px;color:var(--text-muted)">(cannot be changed here - contact admin)</span></label>
       <input type="text" value="${u.department || 'Not set'}" disabled style="background:var(--bg);color:var(--text-muted);">
     </div>` : ''}
   </div>
@@ -7631,7 +7630,7 @@ const dot = span.querySelector(‘span’);
 if (dot) dot.style.left = enable ? ‘23px’ : ‘3px’;
 }
 if (cb) cb.checked = enable;
-showToastNotif(enable ? ‘2FA enabled — you will get a code by email each login’ : ‘2FA disabled’, enable ? ‘success’ : ‘warn’);
+showToastNotif(enable ? ‘2FA enabled - you will get a code by email each login’ : ‘2FA disabled’, enable ? ‘success’ : ‘warn’);
 } catch(e) {
 showToastNotif(’Failed to update 2FA: ’ + e.message, ‘warn’);
 // Revert toggle
@@ -7665,7 +7664,7 @@ try {
 const data = await api(’/api/auth/profile’, { method: ‘PUT’, body: JSON.stringify(body) });
 if (data.user?.name) { currentUser.name = data.user.name; document.getElementById(‘user-name’).textContent = data.user.name; }
 if (data.user?.department !== undefined) { currentUser.department = data.user.department; }
-msg.textContent = ‘✅ Profile updated successfully!’; msg.style.background = ‘#f0fdf4’; msg.style.color = ‘#15803d’; msg.style.display = ‘block’;
+msg.textContent = ‘- Profile updated successfully!’; msg.style.background = ‘#f0fdf4’; msg.style.color = ‘#15803d’; msg.style.display = ‘block’;
 document.getElementById(‘profile-current-pw’).value = ‘’;
 document.getElementById(‘profile-new-pw’).value = ‘’;
 document.getElementById(‘profile-confirm-pw’).value = ‘’;
@@ -7675,9 +7674,9 @@ msg.textContent = e.message; msg.style.background = ‘#fef2f2’; msg.style.col
 }
 }
 
-// ══════════════════════════════════════════════════════════════════════════════
+// ——————————————————————————
 //  FEATURE: CONTACT / SUPPORT PAGE
-// ══════════════════════════════════════════════════════════════════════════════
+// ——————————————————————————
 function renderContact() {
 const content = document.getElementById(‘main-content’);
 if (!content) return;
@@ -7687,14 +7686,14 @@ content.innerHTML = `
 
 ```
   <div class="card" style="text-align:center">
-    <div style="font-size:36px;margin-bottom:12px">📧</div>
+    <div style="font-size:36px;margin-bottom:12px">-</div>
     <div style="font-size:16px;font-weight:700;margin-bottom:6px">Email</div>
     <p style="font-size:13px;color:var(--text-light);margin-bottom:12px">Send us an email anytime</p>
     <a href="mailto:nelsonkel78@gmail.com" class="btn btn-primary btn-sm" style="display:inline-block;text-decoration:none">nelsonkel78@gmail.com</a>
   </div>
 
   <div class="card" style="text-align:center">
-    <div style="font-size:36px;margin-bottom:12px">📞</div>
+    <div style="font-size:36px;margin-bottom:12px">-</div>
     <div style="font-size:16px;font-weight:700;margin-bottom:6px">Phone</div>
     <p style="font-size:13px;color:var(--text-light);margin-bottom:12px">Call us during business hours</p>
     <div style="display:flex;flex-direction:column;gap:6px">
@@ -7705,7 +7704,7 @@ content.innerHTML = `
   </div>
 
   <div class="card" style="text-align:center">
-    <div style="font-size:36px;margin-bottom:12px">💬</div>
+    <div style="font-size:36px;margin-bottom:12px">-</div>
     <div style="font-size:16px;font-weight:700;margin-bottom:6px">WhatsApp</div>
     <p style="font-size:13px;color:var(--text-light);margin-bottom:12px">Chat with us on WhatsApp</p>
     <div style="display:flex;flex-direction:column;gap:6px">
@@ -7722,11 +7721,11 @@ content.innerHTML = `
     ["How do I reset a student's password?", 'Go to Users, find the student, and use the Reset Password action. The student will receive a reset code.'],
     ["Why can't a student mark attendance?", 'Ensure there is an active session running and the student is enrolled in the correct course roster.'],
     ['How do I add students to a course?', 'Go to Courses, select the course, and use the Upload Students button to add students via CSV or manually.'],
-    ['What happens when the subscription expires?', 'Access is suspended after the trial/subscription period. You can renew anytime from the Subscription page in your dashboard — payments are processed instantly via Paystack.'],
-    ['Can students use the system offline?', 'Yes — students can mark attendance offline using a code. It will sync automatically when they reconnect.'],
+    ['What happens when the subscription expires?', 'Access is suspended after the trial/subscription period. You can renew anytime from the Subscription page in your dashboard - payments are processed instantly via Paystack.'],
+    ['Can students use the system offline?', 'Yes - students can mark attendance offline using a code. It will sync automatically when they reconnect.'],
   ].map(([q, a]) => `
     <div style="padding:14px 0;border-bottom:1px solid var(--border)">
-      <div style="font-weight:600;font-size:14px;margin-bottom:4px">❓ ${q}</div>
+      <div style="font-weight:600;font-size:14px;margin-bottom:4px">- ${q}</div>
       <div style="font-size:13px;color:var(--text-light)">${a}</div>
     </div>
   `).join('')}
@@ -7736,13 +7735,13 @@ content.innerHTML = `
 `;
 }
 
-// ══════════════════════════════════════════════════════════════════════════════
+// ——————————————————————————
 //  FEATURE: ANNOUNCEMENTS / NOTIFICATIONS
-// ══════════════════════════════════════════════════════════════════════════════
+// ——————————————————————————
 // Stored in localStorage per company (simple in-app announcements)
-// ══════════════════════════════════════════════════════════════════════════════
+// ——————————————————————————
 //  GRADE BOOK
-// ══════════════════════════════════════════════════════════════════════════════
+// ——————————————————————————
 
 async function renderGradeBook() {
 const content = document.getElementById(‘main-content’);
@@ -7755,15 +7754,15 @@ await renderLecturerGradeBook(content);
 }
 }
 
-// ── STUDENT VIEW ─────────────────────────────────────────────────────────────
+// – STUDENT VIEW ———————————————————––
 
 async function renderStudentGradeBook(content) {
-content.innerHTML = ‘<div class="loading">Loading your grades…</div>’;
+content.innerHTML = ‘<div class="loading">Loading your grades-</div>’;
 try {
 const data = await api(’/api/gradebook/my-courses’);
 const courses = data.courses || [];
 content.innerHTML = `<div class="page-header"><h2>My Grades</h2><p>Your academic performance across all courses</p></div> ${courses.length === 0 ? '<div class="card"><div class="empty-state"><p>You are not enrolled in any courses yet.</p></div></div>' :`<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;">
-${courses.map(c => ` <div class="card" style="cursor:pointer;transition:transform .15s;border:1.5px solid var(--border);" onmouseenter="this.style.transform='translateY(-2px)'" onmouseleave="this.style.transform=''" onclick="renderStudentCourseGrades('${c._id}','${c.title} (${c.code})')"> <div style="font-weight:700;font-size:15px;margin-bottom:4px;">${c.title}</div> <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">${c.code} · ${c.lecturer?.name || 'N/A'}</div> <div style="display:flex;justify-content:space-between;align-items:center;"> <span style="font-size:12px;color:var(--text-light);">${c.enrolledStudents?.length || 0} students</span> <span class="btn btn-sm btn-primary" style="pointer-events:none;">View Grades →</span> </div> </div>`).join(’’)}
+${courses.map(c => ` <div class="card" style="cursor:pointer;transition:transform .15s;border:1.5px solid var(--border);" onmouseenter="this.style.transform='translateY(-2px)'" onmouseleave="this.style.transform=''" onclick="renderStudentCourseGrades('${c._id}','${c.title} (${c.code})')"> <div style="font-weight:700;font-size:15px;margin-bottom:4px;">${c.title}</div> <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">${c.code} - ${c.lecturer?.name || 'N/A'}</div> <div style="display:flex;justify-content:space-between;align-items:center;"> <span style="font-size:12px;color:var(--text-light);">${c.enrolledStudents?.length || 0} students</span> <span class="btn btn-sm btn-primary" style="pointer-events:none;">View Grades -</span> </div> </div>`).join(’’)}
 </div>` }`;
 } catch(e) {
 content.innerHTML = `<div class="card"><p style="color:#ef4444;">${e.message}</p></div>`;
@@ -7772,7 +7771,7 @@ content.innerHTML = `<div class="card"><p style="color:#ef4444;">${e.message}</p
 
 async function renderStudentCourseGrades(courseId, courseTitle) {
 const content = document.getElementById(‘main-content’);
-content.innerHTML = ‘<div class="loading">Loading grades…</div>’;
+content.innerHTML = ‘<div class="loading">Loading grades-</div>’;
 try {
 const d = await api(’/api/gradebook/my/’ + courseId);
 const bar = (pct, color) => ` <div style="background:var(--border);border-radius:4px;height:8px;flex:1;"> <div style="width:${Math.min(pct,100)}%;background:${color};height:8px;border-radius:4px;transition:width .4s;"></div> </div>`;
@@ -7780,7 +7779,7 @@ const bar = (pct, color) => ` <div style="background:var(--border);border-radius
 ```
 content.innerHTML = `
   <div style="display:flex;align-items:center;gap:10px;margin-bottom:18px;flex-wrap:wrap;">
-    <button class="btn btn-secondary btn-sm" onclick="renderStudentGradeBook(document.getElementById('main-content'))">← Back</button>
+    <button class="btn btn-secondary btn-sm" onclick="renderStudentGradeBook(document.getElementById('main-content'))">- Back</button>
     <div class="page-header" style="margin:0;padding:0;border:none;"><h2 style="margin:0;">${courseTitle}</h2></div>
   </div>
 
@@ -7851,15 +7850,15 @@ content.innerHTML = `<div class="card"><p style="color:#ef4444;">${e.message}</p
 }
 }
 
-// ── LECTURER VIEW ─────────────────────────────────────────────────────────────
+// – LECTURER VIEW ———————————————————––
 
 async function renderLecturerGradeBook(content) {
-content.innerHTML = ‘<div class="loading">Loading courses…</div>’;
+content.innerHTML = ‘<div class="loading">Loading courses-</div>’;
 try {
 const data = await api(’/api/gradebook/courses’);
 const courses = data.courses || [];
 content.innerHTML = `<div class="page-header"><h2>Grade Book</h2><p>Manage grades across your courses</p></div> ${courses.length === 0 ? '<div class="card"><div class="empty-state"><p>No courses found.</p></div></div>' :`<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;">
-${courses.map(c => ` <div class="card" style="cursor:pointer;transition:transform .15s;" onmouseenter="this.style.transform='translateY(-2px)'" onmouseleave="this.style.transform=''" onclick="renderLecturerCourseGrades('${c._id}','${c.title} (${c.code})')"> <div style="font-weight:700;font-size:15px;margin-bottom:4px;">${c.title}</div> <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">${c.code} · ${c.lecturer?.name || 'N/A'}</div> <div style="display:flex;justify-content:space-between;align-items:center;"> <span style="font-size:12px;color:var(--text-light);">${c.enrolledStudents?.length || 0} students</span> <span class="btn btn-sm btn-primary" style="pointer-events:none;">Open →</span> </div> </div>`).join(’’)}
+${courses.map(c => ` <div class="card" style="cursor:pointer;transition:transform .15s;" onmouseenter="this.style.transform='translateY(-2px)'" onmouseleave="this.style.transform=''" onclick="renderLecturerCourseGrades('${c._id}','${c.title} (${c.code})')"> <div style="font-weight:700;font-size:15px;margin-bottom:4px;">${c.title}</div> <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">${c.code} - ${c.lecturer?.name || 'N/A'}</div> <div style="display:flex;justify-content:space-between;align-items:center;"> <span style="font-size:12px;color:var(--text-light);">${c.enrolledStudents?.length || 0} students</span> <span class="btn btn-sm btn-primary" style="pointer-events:none;">Open -</span> </div> </div>`).join(’’)}
 </div>` }`;
 } catch(e) {
 content.innerHTML = `<div class="card"><p style="color:#ef4444;">${e.message}</p></div>`;
@@ -7868,7 +7867,7 @@ content.innerHTML = `<div class="card"><p style="color:#ef4444;">${e.message}</p
 
 async function renderLecturerCourseGrades(courseId, courseTitle) {
 const content = document.getElementById(‘main-content’);
-content.innerHTML = ‘<div class="loading">Loading grade book…</div>’;
+content.innerHTML = ‘<div class="loading">Loading grade book-</div>’;
 try {
 const d = await api(’/api/gradebook/course/’ + courseId);
 const { grades, gradeBook, quizzes, totalSessions } = d;
@@ -7883,11 +7882,11 @@ const avg = grades.length ? (grades.reduce((s,g) => s+g.finalPct, 0) / grades.le
 
 content.innerHTML = `
   <div style="display:flex;align-items:center;gap:10px;margin-bottom:18px;flex-wrap:wrap;">
-    <button class="btn btn-secondary btn-sm" onclick="renderLecturerGradeBook(document.getElementById('main-content'))">← Back</button>
+    <button class="btn btn-secondary btn-sm" onclick="renderLecturerGradeBook(document.getElementById('main-content'))">- Back</button>
     <div style="flex:1;"><h2 style="margin:0;font-size:18px;">${courseTitle}</h2></div>
-    <button class="btn btn-sm" style="background:#4f46e5;color:#fff;" onclick="openWeightsModal('${courseId}',${w.quizzes},${w.attendance},${w.manual})">⚖️ Weights</button>
-    <button class="btn btn-sm btn-secondary" onclick="openAddManualEntryModal('${courseId}')">＋ Grade Column</button>
-    <button class="btn btn-sm btn-secondary" onclick="exportGradeBookCSV('${courseId}','${courseTitle}')">⬇ CSV</button>
+    <button class="btn btn-sm" style="background:#4f46e5;color:#fff;" onclick="openWeightsModal('${courseId}',${w.quizzes},${w.attendance},${w.manual})">-- Weights</button>
+    <button class="btn btn-sm btn-secondary" onclick="openAddManualEntryModal('${courseId}')">- Grade Column</button>
+    <button class="btn btn-sm btn-secondary" onclick="exportGradeBookCSV('${courseId}','${courseTitle}')">- CSV</button>
   </div>
 
   <!-- Summary Stats -->
@@ -7902,9 +7901,9 @@ content.innerHTML = `
   <!-- Weights display -->
   <div class="card" style="margin-bottom:16px;display:flex;gap:16px;flex-wrap:wrap;align-items:center;">
     <span style="font-size:12px;color:var(--text-muted);font-weight:700;text-transform:uppercase;">Weights:</span>
-    <span style="font-size:13px;">📝 Quizzes <strong>${w.quizzes}%</strong></span>
-    <span style="font-size:13px;">📅 Attendance <strong>${w.attendance}%</strong></span>
-    <span style="font-size:13px;">✏️ Manual <strong>${w.manual}%</strong></span>
+    <span style="font-size:13px;">- Quizzes <strong>${w.quizzes}%</strong></span>
+    <span style="font-size:13px;">- Attendance <strong>${w.attendance}%</strong></span>
+    <span style="font-size:13px;">-- Manual <strong>${w.manual}%</strong></span>
   </div>
 
   <!-- Grade Table -->
@@ -7919,8 +7918,8 @@ content.innerHTML = `
               <th style="padding:10px 8px;text-align:center;font-size:11px;text-transform:uppercase;color:var(--text-muted);">Attendance</th>
               ${gb.manualEntries.map(e => `<th style="padding:10px 8px;text-align:center;font-size:11px;text-transform:uppercase;color:var(--text-muted);" title="Max: ${e.maxScore}">
                 ${e.label}
-                <button onclick="openEditManualScores('${courseId}','${e._id}','${e.label}',${e.maxScore})" style="background:none;border:none;cursor:pointer;color:#6366f1;font-size:11px;margin-left:3px;" title="Enter scores">✏️</button>
-                <button onclick="confirmDeleteManualEntry('${courseId}','${e._id}')" style="background:none;border:none;cursor:pointer;color:#ef4444;font-size:11px;" title="Delete column">×</button>
+                <button onclick="openEditManualScores('${courseId}','${e._id}','${e.label}',${e.maxScore})" style="background:none;border:none;cursor:pointer;color:#6366f1;font-size:11px;margin-left:3px;" title="Enter scores">--</button>
+                <button onclick="confirmDeleteManualEntry('${courseId}','${e._id}')" style="background:none;border:none;cursor:pointer;color:#ef4444;font-size:11px;" title="Delete column">-</button>
               </th>`).join('')}
               <th style="padding:10px 8px;text-align:center;font-size:11px;text-transform:uppercase;color:var(--text-muted);">Final %</th>
               <th style="padding:10px 8px;text-align:center;font-size:11px;text-transform:uppercase;color:var(--text-muted);">Grade</th>
@@ -7937,7 +7936,7 @@ content.innerHTML = `
                 <td style="padding:10px 8px;text-align:center;">${g.attPct}% <span style="font-size:10px;color:var(--text-muted);">(${g.attendedSessions}/${g.totalSessions})</span></td>
                 ${gb.manualEntries.map(e => {
                   const ms = g.manualScores.find(m => m.entryId.toString() === e._id.toString());
-                  return `<td style="padding:10px 8px;text-align:center;">${ms?.score !== null && ms?.score !== undefined ? ms.score + '/' + e.maxScore : '<span style="color:var(--text-muted);">—</span>'}</td>`;
+                  return `<td style="padding:10px 8px;text-align:center;">${ms?.score !== null && ms?.score !== undefined ? ms.score + '/' + e.maxScore : '<span style="color:var(--text-muted);">-</span>'}</td>`;
                 }).join('')}
                 <td style="padding:10px 8px;text-align:center;font-weight:700;">${g.finalPct}%</td>
                 <td style="padding:10px 8px;text-align:center;">
@@ -7960,12 +7959,12 @@ content.innerHTML = `<div class="card"><p style="color:#ef4444;">${e.message}</p
 }
 }
 
-// ── Weights Modal ──────────────────────────────────────────────────────────────
+// – Weights Modal –––––––––––––––––––––––––––––––
 function openWeightsModal(courseId, qW, aW, mW) {
 const ol = document.createElement(‘div’);
 ol.id = ‘gb-weights-overlay’;
 ol.style.cssText = ‘position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:400;display:flex;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(3px)’;
-ol.innerHTML = `<div style="background:var(--card);border-radius:14px;width:100%;max-width:380px;box-shadow:0 20px 60px rgba(0,0,0,.2);"> <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;"> <h3 style="font-size:15px;font-weight:700;margin:0;">⚖️ Grade Weights</h3> <button onclick="document.getElementById('gb-weights-overlay').remove()" style="width:26px;height:26px;border-radius:6px;border:1px solid var(--border);background:var(--bg);cursor:pointer;">✕</button> </div> <div style="padding:18px 20px;display:flex;flex-direction:column;gap:12px;"> <p style="font-size:12px;color:var(--text-muted);margin:0;">Weights determine how each component contributes to the final grade. They don't need to sum to 100 — they're proportional.</p> ${[['Quizzes','gb-w-quiz',qW],['Attendance','gb-w-att',aW],['Manual Grades','gb-w-man',mW]].map(([label, id, val]) =>`
+ol.innerHTML = `<div style="background:var(--card);border-radius:14px;width:100%;max-width:380px;box-shadow:0 20px 60px rgba(0,0,0,.2);"> <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;"> <h3 style="font-size:15px;font-weight:700;margin:0;">-- Grade Weights</h3> <button onclick="document.getElementById('gb-weights-overlay').remove()" style="width:26px;height:26px;border-radius:6px;border:1px solid var(--border);background:var(--bg);cursor:pointer;">-</button> </div> <div style="padding:18px 20px;display:flex;flex-direction:column;gap:12px;"> <p style="font-size:12px;color:var(--text-muted);margin:0;">Weights determine how each component contributes to the final grade. They don't need to sum to 100 - they're proportional.</p> ${[['Quizzes','gb-w-quiz',qW],['Attendance','gb-w-att',aW],['Manual Grades','gb-w-man',mW]].map(([label, id, val]) =>`
 <div>
 <label style="font-size:12px;font-weight:700;margin-bottom:4px;display:block;">${label}</label>
 <div style="display:flex;align-items:center;gap:8px;">
@@ -7986,7 +7985,7 @@ method: ‘PATCH’,
 body: JSON.stringify({ quizzes, attendance, manual }),
 });
 document.getElementById(‘gb-weights-overlay’).remove();
-toastSuccess(‘Weights updated ✓’);
+toastSuccess(‘Weights updated -’);
 renderLecturerCourseGrades(courseId, ‘’);
 } catch(e) {
 const err = document.getElementById(‘gb-weights-err’);
@@ -7994,12 +7993,12 @@ if (err) { err.textContent = e.message; err.style.display = ‘block’; }
 }
 }
 
-// ── Add Manual Entry Modal ────────────────────────────────────────────────────
+// – Add Manual Entry Modal ––––––––––––––––––––––––––
 function openAddManualEntryModal(courseId) {
 const ol = document.createElement(‘div’);
 ol.id = ‘gb-entry-overlay’;
 ol.style.cssText = ‘position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:400;display:flex;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(3px)’;
-ol.innerHTML = ` <div style="background:var(--card);border-radius:14px;width:100%;max-width:380px;box-shadow:0 20px 60px rgba(0,0,0,.2);"> <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;"> <h3 style="font-size:15px;font-weight:700;margin:0;">＋ Add Grade Column</h3> <button onclick="document.getElementById('gb-entry-overlay').remove()" style="width:26px;height:26px;border-radius:6px;border:1px solid var(--border);background:var(--bg);cursor:pointer;">✕</button> </div> <div style="padding:18px 20px;display:flex;flex-direction:column;gap:12px;"> <div> <label style="font-size:12px;font-weight:700;margin-bottom:4px;display:block;">Column Label</label> <input id="gb-entry-label" placeholder="e.g. Midterm Exam, Lab Report 1" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;"> </div> <div> <label style="font-size:12px;font-weight:700;margin-bottom:4px;display:block;">Maximum Score</label> <input id="gb-entry-max" type="number" min="1" placeholder="e.g. 100" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;"> </div> <div id="gb-entry-err" style="display:none;color:#ef4444;font-size:12px;"></div> </div> <div style="padding:12px 20px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end;"> <button class="btn btn-secondary" onclick="document.getElementById('gb-entry-overlay').remove()">Cancel</button> <button class="btn btn-primary" onclick="saveManualEntry('${courseId}')">Add Column</button> </div> </div>`;
+ol.innerHTML = ` <div style="background:var(--card);border-radius:14px;width:100%;max-width:380px;box-shadow:0 20px 60px rgba(0,0,0,.2);"> <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;"> <h3 style="font-size:15px;font-weight:700;margin:0;">- Add Grade Column</h3> <button onclick="document.getElementById('gb-entry-overlay').remove()" style="width:26px;height:26px;border-radius:6px;border:1px solid var(--border);background:var(--bg);cursor:pointer;">-</button> </div> <div style="padding:18px 20px;display:flex;flex-direction:column;gap:12px;"> <div> <label style="font-size:12px;font-weight:700;margin-bottom:4px;display:block;">Column Label</label> <input id="gb-entry-label" placeholder="e.g. Midterm Exam, Lab Report 1" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;"> </div> <div> <label style="font-size:12px;font-weight:700;margin-bottom:4px;display:block;">Maximum Score</label> <input id="gb-entry-max" type="number" min="1" placeholder="e.g. 100" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;"> </div> <div id="gb-entry-err" style="display:none;color:#ef4444;font-size:12px;"></div> </div> <div style="padding:12px 20px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end;"> <button class="btn btn-secondary" onclick="document.getElementById('gb-entry-overlay').remove()">Cancel</button> <button class="btn btn-primary" onclick="saveManualEntry('${courseId}')">Add Column</button> </div> </div>`;
 document.body.appendChild(ol);
 }
 
@@ -8017,14 +8016,14 @@ method: ‘POST’,
 body: JSON.stringify({ label, maxScore }),
 });
 document.getElementById(‘gb-entry-overlay’).remove();
-toastSuccess(‘Grade column added ✓’);
+toastSuccess(‘Grade column added -’);
 renderLecturerCourseGrades(courseId, document.querySelector(‘h2’)?.textContent || ‘’);
 } catch(e) {
 if (errEl) { errEl.textContent = e.message; errEl.style.display = ‘block’; }
 }
 }
 
-// ── Enter Manual Scores Modal ─────────────────────────────────────────────────
+// – Enter Manual Scores Modal ———————————————––
 function openEditManualScores(courseId, entryId, label, maxScore) {
 const gbData = window._gbData;
 if (!gbData) { toastError(‘Grade data not loaded’); return; }
@@ -8038,7 +8037,7 @@ const existing = g.manualScores.find(m => m.entryId.toString() === entryId);
 return ` <tr> <td style="padding:8px 10px;font-size:13px;">${g.student.name}</td> <td style="padding:8px 10px;"> <input type="number" min="0" max="${maxScore}" step="0.5" data-student="${g.student._id}" value="${existing?.score !== null && existing?.score !== undefined ? existing.score : ''}" placeholder="/ ${maxScore}" style="width:80px;padding:5px 8px;border:1.5px solid var(--border);border-radius:6px;font-size:13px;text-align:center;outline:none;"> </td> </tr>`;
 }).join(’’);
 
-ol.innerHTML = ` <div style="background:var(--card);border-radius:14px;width:100%;max-width:480px;max-height:88vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.2);"> <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;background:var(--card);z-index:1;border-radius:14px 14px 0 0;"> <h3 style="font-size:15px;font-weight:700;margin:0;">✏️ ${label} <span style="font-weight:400;color:var(--text-muted);">(max ${maxScore})</span></h3> <button onclick="document.getElementById('gb-scores-overlay').remove()" style="width:26px;height:26px;border-radius:6px;border:1px solid var(--border);background:var(--bg);cursor:pointer;">✕</button> </div> <div style="padding:8px 20px;"> <table style="width:100%;border-collapse:collapse;"> <thead><tr> <th style="padding:8px 10px;text-align:left;font-size:11px;text-transform:uppercase;color:var(--text-muted);">Student</th> <th style="padding:8px 10px;text-align:left;font-size:11px;text-transform:uppercase;color:var(--text-muted);">Score</th> </tr></thead> <tbody>${rows}</tbody> </table> </div> <div style="padding:12px 20px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end;position:sticky;bottom:0;background:var(--card);border-radius:0 0 14px 14px;"> <button class="btn btn-secondary" onclick="document.getElementById('gb-scores-overlay').remove()">Cancel</button> <button class="btn btn-primary" onclick="submitManualScores('${courseId}','${entryId}')">Save Scores</button> </div> </div>`;
+ol.innerHTML = ` <div style="background:var(--card);border-radius:14px;width:100%;max-width:480px;max-height:88vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.2);"> <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;background:var(--card);z-index:1;border-radius:14px 14px 0 0;"> <h3 style="font-size:15px;font-weight:700;margin:0;">-- ${label} <span style="font-weight:400;color:var(--text-muted);">(max ${maxScore})</span></h3> <button onclick="document.getElementById('gb-scores-overlay').remove()" style="width:26px;height:26px;border-radius:6px;border:1px solid var(--border);background:var(--bg);cursor:pointer;">-</button> </div> <div style="padding:8px 20px;"> <table style="width:100%;border-collapse:collapse;"> <thead><tr> <th style="padding:8px 10px;text-align:left;font-size:11px;text-transform:uppercase;color:var(--text-muted);">Student</th> <th style="padding:8px 10px;text-align:left;font-size:11px;text-transform:uppercase;color:var(--text-muted);">Score</th> </tr></thead> <tbody>${rows}</tbody> </table> </div> <div style="padding:12px 20px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end;position:sticky;bottom:0;background:var(--card);border-radius:0 0 14px 14px;"> <button class="btn btn-secondary" onclick="document.getElementById('gb-scores-overlay').remove()">Cancel</button> <button class="btn btn-primary" onclick="submitManualScores('${courseId}','${entryId}')">Save Scores</button> </div> </div>`;
 document.body.appendChild(ol);
 }
 
@@ -8055,7 +8054,7 @@ method: ‘PUT’,
 body: JSON.stringify({ scores }),
 });
 document.getElementById(‘gb-scores-overlay’).remove();
-toastSuccess(‘Scores saved ✓’);
+toastSuccess(‘Scores saved -’);
 renderLecturerCourseGrades(courseId, document.querySelector(‘h2’)?.textContent || ‘’);
 } catch(e) {
 toastError(e.message);
@@ -8072,7 +8071,7 @@ renderLecturerCourseGrades(courseId, document.querySelector(‘h2’)?.textConte
 });
 }
 
-// ── CSV Export ────────────────────────────────────────────────────────────────
+// – CSV Export ––––––––––––––––––––––––––––––––
 function exportGradeBookCSV(courseId, courseTitle) {
 const d = window._gbData;
 if (!d || !d.grades.length) { toastWarning(‘No grades to export’); return; }
@@ -8096,7 +8095,7 @@ a.href = url; a.download = courseTitle.replace(/[^a-z0-9]/gi,’_’) + ‘_grad
 a.click(); URL.revokeObjectURL(url);
 }
 
-// ── Announcements (server-backed) ───────────────────────────────────────────
+// – Announcements (server-backed) —————————————––
 
 async function loadAnnBadge() {
 try {
@@ -8115,7 +8114,7 @@ badge.style.display = ‘none’;
 }
 
 const ANN_COLORS = { info:’#6366f1’, warning:’#f59e0b’, success:’#22c55e’, urgent:’#ef4444’ };
-const ANN_ICONS  = { info:‘ℹ️’, warning:‘⚠️’, success:‘✅’, urgent:‘🚨’ };
+const ANN_ICONS  = { info:’–’, warning:’–’, success:’-’, urgent:’-’ };
 const ANN_CAN_POST = [‘admin’,‘superadmin’,‘lecturer’,‘manager’,‘hod’];
 
 async function renderAnnouncements() {
@@ -8124,14 +8123,14 @@ if (!content) return;
 if (!isOnline()) {
 const cached = offlineRead(‘announcements’);
 if (cached) {
-content.innerHTML = ‘<div style="background:#fef3c7;color:#92400e;padding:10px 16px;border-radius:8px;font-size:13px;margin-bottom:16px">📡 Offline — showing cached announcements</div>’;
+content.innerHTML = ‘<div style="background:#fef3c7;color:#92400e;padding:10px 16px;border-radius:8px;font-size:13px;margin-bottom:16px">- Offline - showing cached announcements</div>’;
 _renderAnnouncementsHTML(content, cached);
 } else {
-content.innerHTML = ‘<div class="card" style="text-align:center;padding:32px"><div style="font-size:36px">📡</div><p style="margin-top:8px;color:var(--text-light)">No cached data. Connect once to view announcements offline.</p></div>’;
+content.innerHTML = ‘<div class="card" style="text-align:center;padding:32px"><div style="font-size:36px">-</div><p style="margin-top:8px;color:var(--text-light)">No cached data. Connect once to view announcements offline.</p></div>’;
 }
 return;
 }
-content.innerHTML = ‘<div class="loading">Loading announcements…</div>’;
+content.innerHTML = ‘<div class="loading">Loading announcements-</div>’;
 try {
 const data = await api(’/api/announcements’);
 offlineCache(‘announcements’, data);
@@ -8146,7 +8145,7 @@ content.innerHTML = `
       <h2>Announcements</h2>
       <p>Institution-wide notices and updates</p>
     </div>
-    ${canPost ? `<button class="btn btn-primary" onclick="openPostAnnouncementModal()">＋ Post Announcement</button>` : ''}
+    ${canPost ? `<button class="btn btn-primary" onclick="openPostAnnouncementModal()">- Post Announcement</button>` : ''}
   </div>
   <div id="ann-list">
     ${anns.length === 0
@@ -8167,10 +8166,10 @@ content.innerHTML = `<div class="card"><p style="color:#ef4444;">Error: ${e.mess
 
 function annCard(a, canPost, isAdmin) {
 const color = ANN_COLORS[a.type] || ‘#6366f1’;
-const icon  = ANN_ICONS[a.type]  || ‘ℹ️’;
+const icon  = ANN_ICONS[a.type]  || ‘–’;
 const canDelete = isAdmin || (canPost && a.author?._id === (currentUser._id || currentUser.id));
 const audienceLabel = { all:‘Everyone’, students:‘Students’, employees:‘Employees’ }[a.audience] || ‘Everyone’;
-return `<div class="card" style="margin-bottom:12px;border-left:4px solid ${color};position:relative;${a.pinned?'background:linear-gradient(135deg,var(--card),#fefce8);':''}" id="ann-${a._id}"> ${a.pinned ? '<div style="position:absolute;top:10px;right:12px;font-size:11px;color:#92400e;font-weight:700;background:#fef3c7;padding:2px 7px;border-radius:20px;">📌 Pinned</div>' : ''} <div style="display:flex;align-items:flex-start;gap:12px;"> <div style="font-size:22px;flex-shrink:0;margin-top:2px;">${icon}</div> <div style="flex:1;min-width:0;"> <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;flex-wrap:wrap;"> <span style="font-weight:700;font-size:15px;">${a.title}</span> ${!a.isRead ? '<span style="background:#6366f1;color:#fff;font-size:10px;padding:1px 7px;border-radius:20px;font-weight:700;">NEW</span>' : ''} </div> <div style="font-size:13px;color:var(--text-light);margin-bottom:10px;white-space:pre-wrap;line-height:1.6;">${a.body}</div> <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:11px;color:var(--text-muted);"> <span>👤 ${a.author?.name || 'Unknown'}</span> <span>📢 ${audienceLabel}</span> ${a.course ?`<span style="background:#ede9fe;color:#7c3aed;padding:1px 7px;border-radius:20px;font-weight:700;">📚 ${esc(a.course.title||’’)}${a.course.level?’ · L’+a.course.level:’’}${a.course.group?’ · Grp ‘+a.course.group:’’}</span>`: ''} <span>🕐 ${new Date(a.createdAt).toLocaleString()}</span> ${a.readCount > 0 ?`<span>👁 ${a.readCount} read</span>`: ''} </div> </div> <div style="display:flex;gap:5px;flex-shrink:0;flex-direction:column;align-items:flex-end;"> ${isAdmin ?`<button class="btn btn-sm btn-secondary" style="font-size:11px;padding:3px 8px;" onclick="annTogglePin('${a._id}')">${a.pinned?‘Unpin’:‘📌 Pin’}</button>`: ''} ${canDelete ?`<button style="background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:16px;padding:2px 4px;" onclick="annDelete('${a._id}')" title="Delete">×</button>` : ''} </div> </div> </div>`;
+return `<div class="card" style="margin-bottom:12px;border-left:4px solid ${color};position:relative;${a.pinned?'background:linear-gradient(135deg,var(--card),#fefce8);':''}" id="ann-${a._id}"> ${a.pinned ? '<div style="position:absolute;top:10px;right:12px;font-size:11px;color:#92400e;font-weight:700;background:#fef3c7;padding:2px 7px;border-radius:20px;">- Pinned</div>' : ''} <div style="display:flex;align-items:flex-start;gap:12px;"> <div style="font-size:22px;flex-shrink:0;margin-top:2px;">${icon}</div> <div style="flex:1;min-width:0;"> <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;flex-wrap:wrap;"> <span style="font-weight:700;font-size:15px;">${a.title}</span> ${!a.isRead ? '<span style="background:#6366f1;color:#fff;font-size:10px;padding:1px 7px;border-radius:20px;font-weight:700;">NEW</span>' : ''} </div> <div style="font-size:13px;color:var(--text-light);margin-bottom:10px;white-space:pre-wrap;line-height:1.6;">${a.body}</div> <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:11px;color:var(--text-muted);"> <span>- ${a.author?.name || 'Unknown'}</span> <span>- ${audienceLabel}</span> ${a.course ?`<span style="background:#ede9fe;color:#7c3aed;padding:1px 7px;border-radius:20px;font-weight:700;">- ${esc(a.course.title||’’)}${a.course.level?’ - L’+a.course.level:’’}${a.course.group?’ - Grp ‘+a.course.group:’’}</span>`: ''} <span>- ${new Date(a.createdAt).toLocaleString()}</span> ${a.readCount > 0 ?`<span>- ${a.readCount} read</span>`: ''} </div> </div> <div style="display:flex;gap:5px;flex-shrink:0;flex-direction:column;align-items:flex-end;"> ${isAdmin ?`<button class="btn btn-sm btn-secondary" style="font-size:11px;padding:3px 8px;" onclick="annTogglePin('${a._id}')">${a.pinned?‘Unpin’:’- Pin’}</button>`: ''} ${canDelete ?`<button style="background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:16px;padding:2px 4px;" onclick="annDelete('${a._id}')" title="Delete">-</button>` : ''} </div> </div> </div>`;
 }
 
 async function openPostAnnouncementModal() {
@@ -8186,14 +8185,14 @@ const d = await api(’/api/courses’);
 courses = d.courses || d || [];
 } catch(e) { courses = []; }
 }
-const courseOptions = `<option value="">— All my students —</option>` +
-courses.map(c => `<option value="${c._id}">${esc(c.title)}${c.level?' · L'+c.level:''}${c.group?' · Grp '+c.group:''}</option>`).join(’’);
+const courseOptions = `<option value="">- All my students -</option>` +
+courses.map(c => `<option value="${c._id}">${esc(c.title)}${c.level?' - L'+c.level:''}${c.group?' - Grp '+c.group:''}</option>`).join(’’);
 
 const ol = document.createElement(‘div’);
 ol.id = ‘ann-post-overlay’;
 ol.style.cssText = ‘position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:400;display:flex;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(3px)’;
-ol.innerHTML = `<div style="background:var(--card);border-radius:14px;width:100%;max-width:520px;max-height:92vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.2);"> <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;background:var(--card);z-index:1;border-radius:14px 14px 0 0;"> <h3 style="font-size:15px;font-weight:700;margin:0">📢 Post Announcement</h3> <button onclick="document.getElementById('ann-post-overlay').remove()" style="width:26px;height:26px;border-radius:6px;border:1px solid var(--border);background:var(--bg);cursor:pointer;font-size:13px;">✕</button> </div> <div style="padding:18px 20px;display:flex;flex-direction:column;gap:13px;"> <div> <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:5px;display:block;">Title *</label> <input id="ann-title" placeholder="e.g. Class cancelled tomorrow" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;font-family:inherit;outline:none;"> </div> <div> <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:5px;display:block;">Message *</label> <textarea id="ann-body" rows="4" placeholder="Enter your announcement…" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;resize:vertical;outline:none;"></textarea> </div> <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;"> <div> <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:5px;display:block;">Type</label> <select id="ann-type" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;"> <option value="info">ℹ️ Info</option> <option value="warning">⚠️ Warning</option> <option value="success">✅ Good News</option> <option value="urgent">🚨 Urgent</option> </select> </div> <div> <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:5px;display:block;">Audience</label> ${currentUser.role === 'lecturer' ?`<input type="hidden" id="ann-audience" value="students">
-<div style="padding:8px 12px;background:var(--bg);border:1.5px solid var(--border);border-radius:8px;font-size:13px;color:var(--text-light);">📚 My Students only</div>`: currentUser.role === 'hod' ?`<select id="ann-audience" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;">
+ol.innerHTML = `<div style="background:var(--card);border-radius:14px;width:100%;max-width:520px;max-height:92vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.2);"> <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;background:var(--card);z-index:1;border-radius:14px 14px 0 0;"> <h3 style="font-size:15px;font-weight:700;margin:0">- Post Announcement</h3> <button onclick="document.getElementById('ann-post-overlay').remove()" style="width:26px;height:26px;border-radius:6px;border:1px solid var(--border);background:var(--bg);cursor:pointer;font-size:13px;">-</button> </div> <div style="padding:18px 20px;display:flex;flex-direction:column;gap:13px;"> <div> <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:5px;display:block;">Title *</label> <input id="ann-title" placeholder="e.g. Class cancelled tomorrow" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;font-family:inherit;outline:none;"> </div> <div> <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:5px;display:block;">Message *</label> <textarea id="ann-body" rows="4" placeholder="Enter your announcement-" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;resize:vertical;outline:none;"></textarea> </div> <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;"> <div> <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:5px;display:block;">Type</label> <select id="ann-type" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;"> <option value="info">-- Info</option> <option value="warning">-- Warning</option> <option value="success">- Good News</option> <option value="urgent">- Urgent</option> </select> </div> <div> <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:5px;display:block;">Audience</label> ${currentUser.role === 'lecturer' ?`<input type="hidden" id="ann-audience" value="students">
+<div style="padding:8px 12px;background:var(--bg);border:1.5px solid var(--border);border-radius:8px;font-size:13px;color:var(--text-light);">- My Students only</div>`: currentUser.role === 'hod' ?`<select id="ann-audience" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;">
 <option value="all">Everyone</option>
 <option value="students">Students only</option>
 <option value="lecturers">Lecturers only</option>
@@ -8214,8 +8213,8 @@ ${courseOptions}
 </div>`: '<input type="hidden" id="ann-course" value="">'} <div> <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:5px;display:block;">Expires At <span style="font-weight:400;text-transform:none;">(optional)</span></label> <input id="ann-expires" type="datetime-local" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;"> </div> ${isAdmin ?`
 <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;font-weight:500;">
 <input type="checkbox" id="ann-pinned" style="accent-color:var(--primary);width:15px;height:15px;">
-📌 Pin this announcement to the top
-</label>` : ''} <div id="ann-post-err" style="display:none;padding:8px 12px;background:#fef2f2;border:1px solid #fecaca;border-radius:7px;color:#dc2626;font-size:12px;font-weight:500;"></div> </div> <div style="padding:12px 20px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end;position:sticky;bottom:0;background:var(--card);border-radius:0 0 14px 14px;"> <button class="btn btn-secondary" onclick="document.getElementById('ann-post-overlay').remove()">Cancel</button> <button class="btn btn-primary" onclick="submitAnnouncement()">📢 Post</button> </div> </div>`;
+- Pin this announcement to the top
+</label>` : ''} <div id="ann-post-err" style="display:none;padding:8px 12px;background:#fef2f2;border:1px solid #fecaca;border-radius:7px;color:#dc2626;font-size:12px;font-weight:500;"></div> </div> <div style="padding:12px 20px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end;position:sticky;bottom:0;background:var(--card);border-radius:0 0 14px 14px;"> <button class="btn btn-secondary" onclick="document.getElementById('ann-post-overlay').remove()">Cancel</button> <button class="btn btn-primary" onclick="submitAnnouncement()">- Post</button> </div> </div>`;
 document.body.appendChild(ol);
 }
 
@@ -8239,7 +8238,7 @@ method: ‘POST’,
 body: JSON.stringify({ title, body, type, audience, pinned, expiresAt: expiresAt ? new Date(expiresAt).toISOString() : null, courseId: courseId || undefined }),
 });
 document.getElementById(‘ann-post-overlay’)?.remove();
-toastSuccess(‘Announcement posted ✓’);
+toastSuccess(‘Announcement posted -’);
 renderAnnouncements();
 } catch(e) {
 if (errEl) { errEl.textContent = e.message || ‘Failed to post’; errEl.style.display = ‘block’; }
@@ -8259,14 +8258,14 @@ toastSuccess(‘Announcement deleted’);
 async function annTogglePin(id) {
 try {
 const data = await api(’/api/announcements/’ + id + ‘/pin’, { method: ‘PATCH’ });
-toastSuccess(data.pinned ? ‘Pinned ✓’ : ‘Unpinned’);
+toastSuccess(data.pinned ? ‘Pinned -’ : ‘Unpinned’);
 renderAnnouncements();
 } catch(e) { toastError(‘Failed to update pin’); }
 }
 
-// ══════════════════════════════════════════════════════════════════════════════
+// ——————————————————————————
 //  FEATURE: SESSION ATTENDANCE CSV EXPORT
-// ══════════════════════════════════════════════════════════════════════════════
+// ——————————————————————————
 async function exportSessionCSV(sessionId, sessionTitle) {
 try {
 const data = await api(’/api/attendance-sessions/’ + sessionId + ‘/records’);
@@ -8298,9 +8297,9 @@ URL.revokeObjectURL(url);
 } catch(e) { toastError(’Export failed: ’ + e.message); }
 }
 
-// ══════════════════════════════════════════════════════════════════════════════
+// ——————————————————————————
 //  FEATURE: ABOUT / VERSION PAGE
-// ══════════════════════════════════════════════════════════════════════════════
+// ——————————————————————————
 function renderAbout() {
 const content = document.getElementById(‘main-content’);
 if (!content) return;
@@ -8317,12 +8316,12 @@ content.innerHTML = `
 ```
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:28px;text-align:left">
     ${[
-      ['🎓', 'Academic Mode', 'Courses, lecturers, students & proctored quizzes'],
-      ['🏢', 'Corporate Mode', 'Employee attendance, sign-in/out & reporting'],
-      ['📶', 'Offline Support', 'Mark & manage attendance without internet'],
-      ['🔒', 'Secure Proctoring', 'AI-powered face detection & integrity scoring'],
-      ['📊', 'Live Monitoring', 'Real-time attendance dashboard & CSV export'],
-      ['🔔', 'Announcements', 'Broadcast messages to your institution'],
+      ['-', 'Academic Mode', 'Courses, lecturers, students & proctored quizzes'],
+      ['-', 'Corporate Mode', 'Employee attendance, sign-in/out & reporting'],
+      ['-', 'Offline Support', 'Mark & manage attendance without internet'],
+      ['-', 'Secure Proctoring', 'AI-powered face detection & integrity scoring'],
+      ['-', 'Live Monitoring', 'Real-time attendance dashboard & CSV export'],
+      ['-', 'Announcements', 'Broadcast messages to your institution'],
     ].map(([icon, title, desc]) => `
       <div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:12px">
         <div style="font-size:20px;margin-bottom:4px">${icon}</div>
@@ -8333,7 +8332,7 @@ content.innerHTML = `
   </div>
 
   <div style="font-size:13px;color:var(--text-light);padding-top:20px;border-top:1px solid var(--border)">
-    Built by <strong style="color:var(--text-primary)">KODEX</strong> &nbsp;·&nbsp;
+    Built by <strong style="color:var(--text-primary)">KODEX</strong> &nbsp;-&nbsp;
     <a href="mailto:nelsonkel78@gmail.com" style="color:var(--primary)">nelsonkel78@gmail.com</a><br>
     <span style="font-size:12px">&copy; 2026 KODEX. All rights reserved.</span>
   </div>
@@ -8343,7 +8342,7 @@ content.innerHTML = `
 `;
 }
 
-// ── Dark Mode ──────────────────────────────────────────────────────────────────
+// – Dark Mode ——————————————————————
 function initDarkMode() {
 const saved = localStorage.getItem(‘kodex_theme’);
 if (saved === ‘dark’) document.documentElement.setAttribute(‘data-theme’, ‘dark’);
@@ -8360,13 +8359,13 @@ localStorage.setItem(‘kodex_theme’, ‘dark’);
 }
 // Update toggle button icon if present
 const btn = document.getElementById(‘dark-mode-btn’);
-if (btn) btn.textContent = isDark ? ‘🌙’ : ‘☀️’;
+if (btn) btn.textContent = isDark ? ‘-’ : ‘–’;
 }
 
 // Call on load
 initDarkMode();
 
-// ── Profile Photo Upload ───────────────────────────────────────────────────────
+// – Profile Photo Upload —————————————————––
 async function uploadProfilePhoto(input) {
 const file = input.files[0];
 if (!file) return;
@@ -8388,7 +8387,7 @@ showToastNotif(‘Profile photo updated!’, ‘success’);
 reader.readAsDataURL(file);
 }
 
-// ── Push Notifications ─────────────────────────────────────────────────────────
+// – Push Notifications ———————————————————
 async function requestPushPermission() {
 if (!(‘Notification’ in window) || !(‘serviceWorker’ in navigator)) return false;
 const permission = await Notification.requestPermission();
@@ -8409,7 +8408,7 @@ new Notification(title, { body });
 }
 }
 
-// ── Bulk Email to Course Students ──────────────────────────────────────────────
+// – Bulk Email to Course Students –––––––––––––––––––––––
 function openBulkEmailModal(courseId, courseName) {
 const existing = document.getElementById(‘bulk-email-modal’);
 if (existing) existing.remove();
@@ -8417,7 +8416,7 @@ if (existing) existing.remove();
 const modal = document.createElement(‘div’);
 modal.id = ‘bulk-email-modal’;
 modal.style.cssText = ‘position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;display:flex;align-items:center;justify-content:center;padding:20px’;
-modal.innerHTML = ` <div style="background:var(--card);border-radius:16px;padding:28px;width:100%;max-width:500px;box-shadow:0 20px 60px rgba(0,0,0,.3)"> <h3 style="font-size:16px;font-weight:700;margin-bottom:4px">📧 Email Students</h3> <p style="font-size:13px;color:var(--text-muted);margin-bottom:20px">${courseName}</p> <div class="form-group"> <label>Subject</label> <input type="text" id="bulk-email-subject" placeholder="e.g. Assignment reminder"> </div> <div class="form-group"> <label>Message</label> <textarea id="bulk-email-body" rows="5" placeholder="Your message to all students in this course…" style="width:100%;padding:10px 14px;border:1.5px solid var(--border);border-radius:9px;font-size:14px;font-family:inherit;resize:vertical"></textarea> </div> <div id="bulk-email-status" style="display:none;padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:12px"></div> <div style="display:flex;gap:10px;justify-content:flex-end"> <button class="btn btn-secondary" onclick="document.getElementById('bulk-email-modal').remove()">Cancel</button> <button class="btn btn-primary" onclick="sendBulkEmail('${courseId}')">Send to All Students</button> </div> </div>`;
+modal.innerHTML = ` <div style="background:var(--card);border-radius:16px;padding:28px;width:100%;max-width:500px;box-shadow:0 20px 60px rgba(0,0,0,.3)"> <h3 style="font-size:16px;font-weight:700;margin-bottom:4px">- Email Students</h3> <p style="font-size:13px;color:var(--text-muted);margin-bottom:20px">${courseName}</p> <div class="form-group"> <label>Subject</label> <input type="text" id="bulk-email-subject" placeholder="e.g. Assignment reminder"> </div> <div class="form-group"> <label>Message</label> <textarea id="bulk-email-body" rows="5" placeholder="Your message to all students in this course-" style="width:100%;padding:10px 14px;border:1.5px solid var(--border);border-radius:9px;font-size:14px;font-family:inherit;resize:vertical"></textarea> </div> <div id="bulk-email-status" style="display:none;padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:12px"></div> <div style="display:flex;gap:10px;justify-content:flex-end"> <button class="btn btn-secondary" onclick="document.getElementById('bulk-email-modal').remove()">Cancel</button> <button class="btn btn-primary" onclick="sendBulkEmail('${courseId}')">Send to All Students</button> </div> </div>`;
 document.body.appendChild(modal);
 }
 
@@ -8432,7 +8431,7 @@ return;
 }
 try {
 const data = await api(`/api/courses/${courseId}/email-students`, { method: ‘POST’, body: JSON.stringify({ subject, message }) });
-status.textContent = `✓ Email sent to ${data.sentCount} student(s)`;
+status.textContent = `- Email sent to ${data.sentCount} student(s)`;
 status.style.cssText = ‘display:block;background:#f0fdf4;color:#15803d;padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:12px’;
 setTimeout(() => document.getElementById(‘bulk-email-modal’)?.remove(), 2000);
 } catch(e) {
@@ -8441,7 +8440,7 @@ status.style.cssText = ‘display:block;background:#fef2f2;color:#dc2626;padding
 }
 }
 
-// ── Bulk SMS to students ──────────────────────────────────────────────────────
+// – Bulk SMS to students ——————————————————
 function openBulkSmsModal(courseId, courseName) {
 const existing = document.getElementById(‘bulk-sms-modal’);
 if (existing) existing.remove();
@@ -8449,7 +8448,7 @@ if (existing) existing.remove();
 const modal = document.createElement(‘div’);
 modal.id = ‘bulk-sms-modal’;
 modal.style.cssText = ‘position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;display:flex;align-items:center;justify-content:center;padding:20px’;
-modal.innerHTML = ` <div style="background:var(--card);border-radius:16px;padding:28px;width:100%;max-width:500px;box-shadow:0 20px 60px rgba(0,0,0,.3)"> <h3 style="font-size:16px;font-weight:700;margin-bottom:4px">💬 SMS Students</h3> <p style="font-size:13px;color:var(--text-muted);margin-bottom:20px">${courseName} — students with phone numbers only</p> <div class="form-group"> <label>Message <span style="font-weight:400;color:var(--text-muted);font-size:12px">(max 160 characters)</span></label> <textarea id="bulk-sms-body" rows="4" maxlength="160" placeholder="e.g. Class cancelled today. See you next week." style="width:100%;padding:10px 14px;border:1.5px solid var(--border);border-radius:9px;font-size:14px;font-family:inherit;resize:vertical" oninput="document.getElementById('sms-char-count').textContent=(160-this.value.length)+' remaining'"></textarea> <div id="sms-char-count" style="font-size:11px;color:var(--text-muted);text-align:right;margin-top:3px">160 remaining</div> </div> <div id="bulk-sms-status" style="display:none;padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:12px"></div> <div style="display:flex;gap:10px;justify-content:flex-end"> <button class="btn btn-secondary" onclick="document.getElementById('bulk-sms-modal').remove()">Cancel</button> <button class="btn btn-primary" style="background:#10b981;border-color:#10b981" onclick="sendBulkSms('${courseId}')">Send SMS to All Students</button> </div> </div>`;
+modal.innerHTML = ` <div style="background:var(--card);border-radius:16px;padding:28px;width:100%;max-width:500px;box-shadow:0 20px 60px rgba(0,0,0,.3)"> <h3 style="font-size:16px;font-weight:700;margin-bottom:4px">- SMS Students</h3> <p style="font-size:13px;color:var(--text-muted);margin-bottom:20px">${courseName} - students with phone numbers only</p> <div class="form-group"> <label>Message <span style="font-weight:400;color:var(--text-muted);font-size:12px">(max 160 characters)</span></label> <textarea id="bulk-sms-body" rows="4" maxlength="160" placeholder="e.g. Class cancelled today. See you next week." style="width:100%;padding:10px 14px;border:1.5px solid var(--border);border-radius:9px;font-size:14px;font-family:inherit;resize:vertical" oninput="document.getElementById('sms-char-count').textContent=(160-this.value.length)+' remaining'"></textarea> <div id="sms-char-count" style="font-size:11px;color:var(--text-muted);text-align:right;margin-top:3px">160 remaining</div> </div> <div id="bulk-sms-status" style="display:none;padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:12px"></div> <div style="display:flex;gap:10px;justify-content:flex-end"> <button class="btn btn-secondary" onclick="document.getElementById('bulk-sms-modal').remove()">Cancel</button> <button class="btn btn-primary" style="background:#10b981;border-color:#10b981" onclick="sendBulkSms('${courseId}')">Send SMS to All Students</button> </div> </div>`;
 document.body.appendChild(modal);
 }
 
@@ -8462,13 +8461,13 @@ status.style.cssText = ‘display:block;background:#fef2f2;color:#dc2626;padding
 return;
 }
 if (message.length > 160) {
-status.textContent = ‘Message too long — max 160 characters.’;
+status.textContent = ‘Message too long - max 160 characters.’;
 status.style.cssText = ‘display:block;background:#fef2f2;color:#dc2626;padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:12px’;
 return;
 }
 try {
 const data = await api(`/api/courses/${courseId}/sms-students`, { method: ‘POST’, body: JSON.stringify({ message }) });
-status.textContent = `✓ SMS sent to ${data.sentCount} student(s)`;
+status.textContent = `- SMS sent to ${data.sentCount} student(s)`;
 status.style.cssText = ‘display:block;background:#f0fdf4;color:#15803d;padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:12px’;
 setTimeout(() => document.getElementById(‘bulk-sms-modal’)?.remove(), 2000);
 } catch(e) {
@@ -8477,10 +8476,10 @@ status.style.cssText = ‘display:block;background:#fef2f2;color:#dc2626;padding
 }
 }
 
-// ── Export to Excel (uses SheetJS via CDN) ────────────────────────────────────
+// – Export to Excel (uses SheetJS via CDN) ————————————
 async function exportAttendanceToExcel(sessionId, sessionTitle) {
 try {
-showToastNotif(‘Preparing Excel file…’, ‘info’);
+showToastNotif(‘Preparing Excel file-’, ‘info’);
 const data = await api(`/api/attendance-sessions/${sessionId}/records`);
 const records = data.records || [];
 
@@ -8498,12 +8497,12 @@ if (!window.XLSX) {
 const rows = [['Student Name', 'Student ID', 'Status', 'Method', 'Check-in Time', 'Course']];
 records.forEach(r => {
   rows.push([
-    r.student?.name || '—',
-    r.student?.indexNumber || r.student?.employeeId || '—',
+    r.student?.name || '-',
+    r.student?.indexNumber || r.student?.employeeId || '-',
     r.status,
     r.method,
-    r.checkInTime ? new Date(r.checkInTime).toLocaleString() : '—',
-    r.session?.course?.title || '—',
+    r.checkInTime ? new Date(r.checkInTime).toLocaleString() : '-',
+    r.session?.course?.title || '-',
   ]);
 });
 
@@ -8531,7 +8530,7 @@ showToastNotif(’Export failed: ’ + e.message, ‘error’);
 
 async function exportAllAttendanceToExcel() {
 try {
-showToastNotif(‘Preparing Excel file…’, ‘info’);
+showToastNotif(‘Preparing Excel file-’, ‘info’);
 const data = await api(’/api/attendance-sessions/my-attendance?limit=500’);
 const records = data.records || [];
 
@@ -8548,8 +8547,8 @@ if (!window.XLSX) {
 const rows = [['Session', 'Date', 'Status', 'Method']];
 records.forEach(r => {
   rows.push([
-    r.session?.title || '—',
-    r.checkInTime ? new Date(r.checkInTime).toLocaleDateString() : '—',
+    r.session?.title || '-',
+    r.checkInTime ? new Date(r.checkInTime).toLocaleDateString() : '-',
     r.status,
     r.method,
   ]);
@@ -8568,14 +8567,14 @@ showToastNotif(’Export failed: ’ + e.message, ‘error’);
 }
 }
 
-// ── Timetable — Lecturer (editable) & Student (read-only) ─────────────────────
+// – Timetable - Lecturer (editable) & Student (read-only) ———————
 
 const TIMETABLE_DAYS = [‘Sunday’,‘Monday’,‘Tuesday’,‘Wednesday’,‘Thursday’,‘Friday’,‘Saturday’];
 const TIMETABLE_DAYS_SHORT = [‘Sun’,‘Mon’,‘Tue’,‘Wed’,‘Thu’,‘Fri’,‘Sat’];
 const TIMETABLE_COLORS = [’#6366f1’,’#0ea5e9’,’#10b981’,’#f59e0b’,’#ef4444’,’#8b5cf6’,’#ec4899’,’#14b8a6’];
 
 function _timetableGrid(slots, canEdit) {
-// Show Mon-Sat (1-6) only — skip Sunday unless there are Sunday slots
+// Show Mon-Sat (1-6) only - skip Sunday unless there are Sunday slots
 const hasSunday = slots.some(s => s.dayOfWeek === 0);
 const daysToShow = hasSunday ? [0,1,2,3,4,5,6] : [1,2,3,4,5,6];
 const today = new Date().getDay();
@@ -8587,9 +8586,9 @@ color:${d===today?'var(--primary)':'var(--text-muted)'};
 margin-bottom:8px;padding-bottom:6px;border-bottom:2px solid ${d===today?'var(--primary)':'var(--border)'}">
 ${TIMETABLE_DAYS_SHORT[d]}
 </div>
-${slots.filter(s=>s.dayOfWeek===d).sort((a,b)=>a.startTime.localeCompare(b.startTime)).map(s=>`<div style="background:${s.color}18;border-left:3px solid ${s.color};border-radius:6px; padding:8px 10px;margin-bottom:6px;text-align:left;position:relative;cursor:${canEdit?'pointer':'default'}" ${canEdit ?`onclick=“openEditSlotModal(’${s._id}’)”`: ''}> <div style="font-size:12px;font-weight:700;color:${s.color};margin-bottom:2px;"> ${s.startTime} – ${s.endTime} </div> <div style="font-size:12px;font-weight:600;color:var(--text-primary);line-height:1.3;"> ${esc(s.title || s.course?.title || 'Class')} </div> ${s.course?.code ?`<div style="font-size:10px;color:var(--text-muted);">${esc(s.course.code)}</div>`: ''} ${s.room ?`<div style="font-size:10px;color:var(--text-muted);">📍 ${esc(s.room)}</div>`: ''} ${!canEdit && s.lecturer?.name ?`<div style="font-size:10px;color:var(--text-muted);">👤 ${esc(s.lecturer.name)}</div>`: ''} ${canEdit ?`<button onclick="event.stopPropagation();deleteSlot('${s._id}')"
+${slots.filter(s=>s.dayOfWeek===d).sort((a,b)=>a.startTime.localeCompare(b.startTime)).map(s=>`<div style="background:${s.color}18;border-left:3px solid ${s.color};border-radius:6px; padding:8px 10px;margin-bottom:6px;text-align:left;position:relative;cursor:${canEdit?'pointer':'default'}" ${canEdit ?`onclick=“openEditSlotModal(’${s._id}’)”`: ''}> <div style="font-size:12px;font-weight:700;color:${s.color};margin-bottom:2px;"> ${s.startTime} - ${s.endTime} </div> <div style="font-size:12px;font-weight:600;color:var(--text-primary);line-height:1.3;"> ${esc(s.title || s.course?.title || 'Class')} </div> ${s.course?.code ?`<div style="font-size:10px;color:var(--text-muted);">${esc(s.course.code)}</div>`: ''} ${s.room ?`<div style="font-size:10px;color:var(--text-muted);">- ${esc(s.room)}</div>`: ''} ${!canEdit && s.lecturer?.name ?`<div style="font-size:10px;color:var(--text-muted);">- ${esc(s.lecturer.name)}</div>`: ''} ${canEdit ?`<button onclick="event.stopPropagation();deleteSlot('${s._id}')"
 style="position:absolute;top:4px;right:4px;background:none;border:none;cursor:pointer;
-color:var(--text-muted);font-size:14px;line-height:1;padding:2px;">×</button>`: ''} </div>`).join(’’)}
+color:var(--text-muted);font-size:14px;line-height:1;padding:2px;">-</button>`: ''} </div>`).join(’’)}
 ${canEdit ? ` <button onclick="openAddSlotModal(${d})" style="width:100%;padding:6px;background:transparent;border:1.5px dashed var(--border); border-radius:6px;font-size:11px;color:var(--text-muted);cursor:pointer;margin-top:2px"> + Add </button>` : ‘’}
 </div>
 `).join('')} </div>`;
@@ -8601,7 +8600,7 @@ let _timetableCourses = [];
 async function renderLecturerTimetable() {
 const content = document.getElementById(‘main-content’);
 if (!content) return;
-content.innerHTML = ‘<div class="loading">Loading timetable…</div>’;
+content.innerHTML = ‘<div class="loading">Loading timetable-</div>’;
 try {
 const [slotData, courseData] = await Promise.all([
 api(’/api/timetable’),
@@ -8615,13 +8614,13 @@ content.innerHTML = `
   <div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px">
     <div>
       <h2>My Schedule</h2>
-      <p>Your weekly class timetable — click any slot to edit, + to add a new class</p>
+      <p>Your weekly class timetable - click any slot to edit, + to add a new class</p>
     </div>
     <button class="btn btn-primary" onclick="openAddSlotModal()">+ Add Class</button>
   </div>
   ${_timetableSlots.length === 0
     ? `<div class="card" style="text-align:center;padding:40px">
-        <div style="font-size:48px;margin-bottom:12px">📅</div>
+        <div style="font-size:48px;margin-bottom:12px">-</div>
         <p style="color:var(--text-muted);margin-bottom:16px">No classes scheduled yet. Add your first class to get started.</p>
         <button class="btn btn-primary" onclick="openAddSlotModal()">+ Add Your First Class</button>
       </div>`
@@ -8637,12 +8636,12 @@ content.innerHTML = `<div class="card"><p style="color:var(--danger)">Error: ${e
 async function renderStudentTimetable() {
 const content = document.getElementById(‘main-content’);
 if (!content) return;
-content.innerHTML = ‘<div class="loading">Loading timetable…</div>’;
+content.innerHTML = ‘<div class="loading">Loading timetable-</div>’;
 try {
 const slotData = await api(’/api/timetable’);
 const slots = slotData.slots || [];
 content.innerHTML = `<div class="page-header"> <h2>My Schedule</h2> <p>Your weekly class timetable based on your enrolled courses</p> </div> ${slots.length === 0 ?`<div class="card" style="text-align:center;padding:40px">
-<div style="font-size:48px">📅</div>
+<div style="font-size:48px">-</div>
 <p style="margin-top:12px;color:var(--text-muted)">No classes scheduled yet. Your lecturers haven’t added timetable slots yet.</p>
 </div>`:`<div class="card" style="overflow-x:auto">${_timetableGrid(slots, false)}</div>` }`;
 } catch(e) {
@@ -8674,8 +8673,8 @@ container.innerHTML = `
     <div class="form-group">
       <label>Course <span style="color:red">*</span></label>
       <select id="slot-course" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
-        <option value="">Select a course…</option>
-        ${_timetableCourses.map(c=>`<option value="${c._id}" ${slot?.course?._id===c._id||slot?.course===c._id?'selected':''}>${esc(c.title)}${c.code?' ('+c.code+')':''}${c.level?' · L'+c.level:''}${c.group?' · '+c.group:''}</option>`).join('')}
+        <option value="">Select a course-</option>
+        ${_timetableCourses.map(c=>`<option value="${c._id}" ${slot?.course?._id===c._id||slot?.course===c._id?'selected':''}>${esc(c.title)}${c.code?' ('+c.code+')':''}${c.level?' - L'+c.level:''}${c.group?' - '+c.group:''}</option>`).join('')}
       </select>
     </div>
 
@@ -8762,8 +8761,8 @@ toastError(e.message);
 }
 }
 
-// ── Two-Factor Authentication (2FA) via Email ────────────────────────────────
-// Simple email-based 2FA — sends a 6-digit code after password verification
+// – Two-Factor Authentication (2FA) via Email ––––––––––––––––
+// Simple email-based 2FA - sends a 6-digit code after password verification
 // Stored in sessionStorage so it clears when browser closes
 
 async function initiate2FA(credentials) {
@@ -8771,10 +8770,10 @@ async function initiate2FA(credentials) {
 const data = await api(’/api/auth/login’, { method: ‘POST’, body: JSON.stringify(credentials) });
 if (!data.token) throw new Error(‘Login failed’);
 
-// If 2FA not enabled, return immediately — normal login
+// If 2FA not enabled, return immediately - normal login
 if (!data.user?.twoFactorEnabled) return data;
 
-// 2FA required — send code (non-fatal if email is slow)
+// 2FA required - send code (non-fatal if email is slow)
 try {
 await api(’/api/auth/2fa/send’, { method: ‘POST’, headers: { Authorization: ’Bearer ’ + data.token } });
 } catch(e) {
@@ -8782,7 +8781,7 @@ console.error(‘2FA send failed:’, e.message);
 throw new Error(‘Failed to send 2FA code. Please try again.’);
 }
 
-// Block everything behind modal — resolve only after successful verify
+// Block everything behind modal - resolve only after successful verify
 return new Promise((resolve, reject) => {
 // Remove any existing 2FA modal
 document.getElementById(‘kodex-2fa-modal’)?.remove();
@@ -8793,7 +8792,7 @@ modal.id = 'kodex-2fa-modal';
 modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px';
 modal.innerHTML = `
   <div style="background:#fff;border-radius:16px;padding:32px;width:100%;max-width:360px;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,.3)">
-    <div style="font-size:44px;margin-bottom:12px">🔐</div>
+    <div style="font-size:44px;margin-bottom:12px">-</div>
     <h3 style="font-size:17px;font-weight:700;margin-bottom:8px;color:#111">Two-Factor Authentication</h3>
     <p style="font-size:13px;color:#6b7280;margin-bottom:20px">A 6-digit code was sent to<br><strong style="color:#111">${data.user.email}</strong></p>
     <input type="text" id="kodex-2fa-input" placeholder="Enter 6-digit code" maxlength="6" inputmode="numeric"
@@ -8834,7 +8833,7 @@ if (errEl) errEl.textContent = ‘Please enter the 6-digit code’;
 return;
 }
 
-if (btn) { btn.textContent = ‘Verifying…’; btn.disabled = true; }
+if (btn) { btn.textContent = ‘Verifying-’; btn.disabled = true; }
 if (errEl) errEl.textContent = ‘’;
 
 try {
@@ -8847,7 +8846,7 @@ document.getElementById(‘kodex-2fa-modal’)?.remove();
 const finalData = { …window._kodex2faData, token: result.token || tempToken };
 window._kodex2faResolve?.(finalData);
 } catch(e) {
-if (errEl) errEl.textContent = e.message || ‘Invalid code — please try again’;
+if (errEl) errEl.textContent = e.message || ‘Invalid code - please try again’;
 if (btn) { btn.textContent = ‘Verify’; btn.disabled = false; }
 input?.focus();
 input?.select();
@@ -8855,21 +8854,21 @@ input?.select();
 }
 window._kodex2faVerify = _kodex2faVerify;
 
-// ── Branding: Preview login page ─────────────────────────────────────────────
+// – Branding: Preview login page ———————————————
 function previewLoginPage() {
 const logo  = document.getElementById(‘bd-logo’)?.value || ‘’;
 const color = document.getElementById(‘bd-color’)?.value || ‘#6366f1’;
 const tag   = document.getElementById(‘bd-tagline’)?.value || ‘Powered by KODEX’;
 const name  = currentUser.company?.name || ‘Your Institution’;
-const code  = currentUser.company?.institutionCode || ‘——’;
+const code  = currentUser.company?.institutionCode || ‘–’;
 
 const modal = document.getElementById(‘modal-container’);
 if (!modal) return;
 modal.classList.remove(‘hidden’);
-modal.innerHTML = `<div class="modal-overlay" onclick="closeModal(event)"> <div class="modal" onclick="event.stopPropagation()" style="max-width:480px;padding:0;overflow:hidden;border-radius:16px"> <!-- Preview header --> <div style="background:#f8fafc;padding:12px 16px;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between"> <span style="font-size:12px;font-weight:700;color:#64748b">LOGIN PAGE PREVIEW</span> <button onclick="closeModal()" style="background:none;border:none;cursor:pointer;color:#64748b;font-size:18px;line-height:1">×</button> </div> <!-- Simulated login page --> <div style="background:#0d1117;padding:32px;display:flex;align-items:center;justify-content:center;min-height:400px"> <div style="background:#fff;border-radius:14px;padding:28px;width:100%;max-width:340px;box-shadow:0 20px 60px rgba(0,0,0,.4)"> <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px"> ${logo ?`<img src="${logo}" style="height:40px;width:auto;border-radius:8px" onerror="this.style.display='none'">`:`<div style="width:40px;height:40px;border-radius:10px;background:${color};display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:18px">${name[0]}</div>`} <div> <div style="font-size:16px;font-weight:800;color:#0d1117">${esc(name)}</div> <div style="font-size:11px;color:#6b7280">${esc(tag)}</div> </div> </div> <div style="font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Email</div> <div style="padding:10px 12px;border:1.5px solid #e5e7eb;border-radius:8px;font-size:13px;color:#9ca3af;margin-bottom:12px">admin@example.com</div> <div style="font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Password</div> <div style="padding:10px 12px;border:1.5px solid #e5e7eb;border-radius:8px;font-size:13px;color:#9ca3af;margin-bottom:16px">••••••••</div> <div style="padding:12px;background:${color};color:#fff;border-radius:8px;text-align:center;font-size:14px;font-weight:700">Sign In</div> <div style="text-align:center;margin-top:12px;font-size:11px;color:#9ca3af">Institution Code: <span style="font-family:monospace;font-weight:700;color:#374151">${code}</span></div> </div> </div> </div> </div>`;
+modal.innerHTML = `<div class="modal-overlay" onclick="closeModal(event)"> <div class="modal" onclick="event.stopPropagation()" style="max-width:480px;padding:0;overflow:hidden;border-radius:16px"> <!-- Preview header --> <div style="background:#f8fafc;padding:12px 16px;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between"> <span style="font-size:12px;font-weight:700;color:#64748b">LOGIN PAGE PREVIEW</span> <button onclick="closeModal()" style="background:none;border:none;cursor:pointer;color:#64748b;font-size:18px;line-height:1">-</button> </div> <!-- Simulated login page --> <div style="background:#0d1117;padding:32px;display:flex;align-items:center;justify-content:center;min-height:400px"> <div style="background:#fff;border-radius:14px;padding:28px;width:100%;max-width:340px;box-shadow:0 20px 60px rgba(0,0,0,.4)"> <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px"> ${logo ?`<img src="${logo}" style="height:40px;width:auto;border-radius:8px" onerror="this.style.display='none'">`:`<div style="width:40px;height:40px;border-radius:10px;background:${color};display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:18px">${name[0]}</div>`} <div> <div style="font-size:16px;font-weight:800;color:#0d1117">${esc(name)}</div> <div style="font-size:11px;color:#6b7280">${esc(tag)}</div> </div> </div> <div style="font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Email</div> <div style="padding:10px 12px;border:1.5px solid #e5e7eb;border-radius:8px;font-size:13px;color:#9ca3af;margin-bottom:12px">admin@example.com</div> <div style="font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Password</div> <div style="padding:10px 12px;border:1.5px solid #e5e7eb;border-radius:8px;font-size:13px;color:#9ca3af;margin-bottom:16px">--------</div> <div style="padding:12px;background:${color};color:#fff;border-radius:8px;text-align:center;font-size:14px;font-weight:700">Sign In</div> <div style="text-align:center;margin-top:12px;font-size:11px;color:#9ca3af">Institution Code: <span style="font-family:monospace;font-weight:700;color:#374151">${code}</span></div> </div> </div> </div> </div>`;
 }
 
-// ── Math rendering helper (MathJax already loaded in index.html) ─────────────
+// – Math rendering helper (MathJax already loaded in index.html) ———––
 function renderMath(container) {
 if (!window.MathJax) return;
 try {
@@ -8896,7 +8895,7 @@ preview.innerHTML = ‘<span style="font-size:10px;color:#6b7280;font-weight:600
 renderMath(preview);
 }
 
-// ── Math Symbol Toolbar ───────────────────────────────────────────────────────
+// – Math Symbol Toolbar —————————————————––
 function insertMathSymbol(targetId, sym) {
 const el = document.getElementById(targetId);
 if (!el) return;
@@ -8926,30 +8925,30 @@ el.focus();
 function getMathToolbar(targetId) {
 const syms = [
 { label: ‘\( \)’, tip: ‘Wrap in math’, action: `wrapMath('${targetId}')` },
-{ label: ‘x²’, tip: ‘Superscript’, sym: ‘^{2}’ },
-{ label: ‘xₙ’, tip: ‘Subscript’, sym: ‘*{n}’ },
-{ label: ‘√’, tip: ‘Square root’, sym: ‘\sqrt{}’ },
-{ label: ‘∛’, tip: ‘Cube root’, sym: ‘\sqrt[3]{}’ },
+{ label: ‘x-’, tip: ‘Superscript’, sym: ‘^{2}’ },
+{ label: ‘x-’, tip: ‘Subscript’, sym: ‘*{n}’ },
+{ label: ‘-’, tip: ‘Square root’, sym: ‘\sqrt{}’ },
+{ label: ‘-’, tip: ‘Cube root’, sym: ‘\sqrt[3]{}’ },
 { label: ‘a/b’, tip: ‘Fraction’, sym: ‘\frac{}{}’ },
-{ label: ‘∑’, tip: ‘Summation’, sym: ’\sum*{}^{}’ },
-{ label: ‘∫’, tip: ‘Integral’, sym: ‘\int_{}^{}’ },
-{ label: ‘π’, tip: ‘Pi’, sym: ‘\pi’ },
-{ label: ‘∞’, tip: ‘Infinity’, sym: ‘\infty’ },
-{ label: ‘±’, tip: ‘Plus-minus’, sym: ‘\pm’ },
-{ label: ‘≤’, tip: ‘Less or equal’, sym: ‘\leq’ },
-{ label: ‘≥’, tip: ‘Greater or equal’, sym: ‘\geq’ },
-{ label: ‘≠’, tip: ‘Not equal’, sym: ‘\neq’ },
-{ label: ‘α’, tip: ‘Alpha’, sym: ‘\alpha’ },
-{ label: ‘β’, tip: ‘Beta’, sym: ‘\beta’ },
-{ label: ‘θ’, tip: ‘Theta’, sym: ‘\theta’ },
-{ label: ‘Δ’, tip: ‘Delta’, sym: ‘\Delta’ },
-{ label: ‘×’, tip: ‘Multiply’, sym: ‘\times’ },
-{ label: ‘÷’, tip: ‘Divide’, sym: ‘\div’ },
+{ label: ‘-’, tip: ‘Summation’, sym: ’\sum*{}^{}’ },
+{ label: ‘-’, tip: ‘Integral’, sym: ‘\int_{}^{}’ },
+{ label: ‘-’, tip: ‘Pi’, sym: ‘\pi’ },
+{ label: ‘-’, tip: ‘Infinity’, sym: ‘\infty’ },
+{ label: ‘-’, tip: ‘Plus-minus’, sym: ‘\pm’ },
+{ label: ‘-’, tip: ‘Less or equal’, sym: ‘\leq’ },
+{ label: ‘-’, tip: ‘Greater or equal’, sym: ‘\geq’ },
+{ label: ‘-’, tip: ‘Not equal’, sym: ‘\neq’ },
+{ label: ‘-’, tip: ‘Alpha’, sym: ‘\alpha’ },
+{ label: ‘-’, tip: ‘Beta’, sym: ‘\beta’ },
+{ label: ‘-’, tip: ‘Theta’, sym: ‘\theta’ },
+{ label: ‘-’, tip: ‘Delta’, sym: ‘\Delta’ },
+{ label: ‘-’, tip: ‘Multiply’, sym: ‘\times’ },
+{ label: ‘-’, tip: ‘Divide’, sym: ‘\div’ },
 ];
-return `<div style="margin-bottom:8px"> <div style="font-size:11px;color:#6b7280;margin-bottom:4px;font-weight:600">MATH SYMBOLS — click to insert</div> <div style="display:flex;flex-wrap:wrap;gap:4px"> ${syms.map(s => s.action ?`<button type="button" title="${s.tip}" onclick="${s.action}" style="padding:3px 8px;border:1px solid #d1d5db;border-radius:5px;background:#f9fafb;font-size:12px;cursor:pointer;font-family:inherit">${s.label}</button>`:`<button type="button" title="${s.tip}" onclick="insertMathSymbol('${targetId}','${s.sym}')" style="padding:3px 8px;border:1px solid #d1d5db;border-radius:5px;background:#f9fafb;font-size:12px;cursor:pointer;font-family:inherit">${s.label}</button>` ).join('')} </div> </div>`;
+return `<div style="margin-bottom:8px"> <div style="font-size:11px;color:#6b7280;margin-bottom:4px;font-weight:600">MATH SYMBOLS - click to insert</div> <div style="display:flex;flex-wrap:wrap;gap:4px"> ${syms.map(s => s.action ?`<button type="button" title="${s.tip}" onclick="${s.action}" style="padding:3px 8px;border:1px solid #d1d5db;border-radius:5px;background:#f9fafb;font-size:12px;cursor:pointer;font-family:inherit">${s.label}</button>`:`<button type="button" title="${s.tip}" onclick="insertMathSymbol('${targetId}','${s.sym}')" style="padding:3px 8px;border:1px solid #d1d5db;border-radius:5px;background:#f9fafb;font-size:12px;cursor:pointer;font-family:inherit">${s.label}</button>` ).join('')} </div> </div>`;
 }
 
-// ── Bulk Excel Student Import ─────────────────────────────────────────────────
+// – Bulk Excel Student Import ———————————————––
 function openExcelImportModal(courseId, courseName) {
 const existing = document.getElementById(‘excel-import-modal’);
 if (existing) existing.remove();
@@ -8957,19 +8956,19 @@ const modal = document.createElement(‘div’);
 modal.id = ‘excel-import-modal’;
 modal.style.cssText = ‘position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;display:flex;align-items:center;justify-content:center;padding:20px’;
 modal.innerHTML = ‘<div style="background:var(--card);border-radius:16px;padding:28px;width:100%;max-width:520px;box-shadow:0 20px 60px rgba(0,0,0,.3)">’ +
-‘<h3 style="font-size:16px;font-weight:700;margin-bottom:4px">📊 Import Students from Excel</h3>’ +
+‘<h3 style="font-size:16px;font-weight:700;margin-bottom:4px">- Import Students from Excel</h3>’ +
 ‘<p style="font-size:13px;color:var(--text-muted);margin-bottom:16px">’ + courseName + ‘</p>’ +
 ‘<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:12px 14px;margin-bottom:16px;font-size:12px;color:#15803d">’ +
 ‘<strong>Excel format required:</strong><br>’ +
 ‘Column A = Student ID  |  Column B = Full Name  |  Column C = Email (optional)<br>’ +
-‘First row can be a header — it will be skipped automatically.’ +
+‘First row can be a header - it will be skipped automatically.’ +
 ‘</div>’ +
 ‘<div id=“excel-drop-zone” style=“border:2px dashed var(–border);border-radius:10px;padding:32px;text-align:center;cursor:pointer;margin-bottom:16px”’ +
 ’ onclick=“document.getElementById('excel-file-input').click()”’ +
 ’ ondragover=“event.preventDefault();this.style.borderColor='var(–primary)'”’ +
 ’ ondragleave=“this.style.borderColor='var(–border)'”’ +
 ’ ondrop=“handleExcelDrop(event,'’ + courseId + ‘')”>’ +
-‘<div style="font-size:32px;margin-bottom:8px">📂</div>’ +
+‘<div style="font-size:32px;margin-bottom:8px">-</div>’ +
 ‘<div style="font-weight:600;font-size:14px">Drop Excel file here or click to browse</div>’ +
 ‘<div style="font-size:12px;color:var(--text-muted);margin-top:4px">.xlsx or .xls files only</div>’ +
 ‘</div>’ +
@@ -9036,12 +9035,12 @@ _excelStudents.slice(0,5).forEach(s => {
 rows_html += ‘<tr>’ +
 ‘<td style="padding:6px 8px;border:1px solid var(--border)">’ + esc(s.studentId) + ‘</td>’ +
 ‘<td style="padding:6px 8px;border:1px solid var(--border)">’ + esc(s.name) + ‘</td>’ +
-‘<td style="padding:6px 8px;border:1px solid var(--border)">’ + esc(s.email || ‘—’) + ‘</td>’ +
+‘<td style="padding:6px 8px;border:1px solid var(--border)">’ + esc(s.email || ‘-’) + ‘</td>’ +
 ‘</tr>’;
 });
 rows_html += ‘</tbody></table>’;
 table.innerHTML = rows_html;
-countEl.textContent = ‘✅ ’ + _excelStudents.length + ’ student’ + (_excelStudents.length !== 1 ? ‘s’ : ‘’) + ’ found in file’;
+countEl.textContent = ‘- ’ + _excelStudents.length + ’ student’ + (_excelStudents.length !== 1 ? ‘s’ : ‘’) + ’ found in file’;
 const btn = document.getElementById(‘excel-import-btn’);
 btn.disabled = false; btn.style.opacity = ‘1’;
 } catch(err) { showExcelMsg(’Could not read file: ’ + err.message, false); }
@@ -9060,10 +9059,10 @@ el.style.color = ok ? ‘#15803d’ : ‘#dc2626’;
 async function uploadExcelStudents(courseId) {
 if (!_excelStudents.length) return;
 const btn = document.getElementById(‘excel-import-btn’);
-btn.textContent = ‘Importing…’; btn.disabled = true;
+btn.textContent = ‘Importing-’; btn.disabled = true;
 try {
 const data = await api(’/api/roster/’ + courseId + ‘/upload’, { method: ‘POST’, body: JSON.stringify({ students: _excelStudents }) });
-showExcelMsg(’✅ ’ + data.message, true);
+showExcelMsg(’- ’ + data.message, true);
 btn.textContent = ‘Done!’;
 setTimeout(() => { document.getElementById(‘excel-import-modal’)?.remove(); _excelStudents = []; }, 2000);
 } catch(e) {
@@ -9072,10 +9071,10 @@ btn.textContent = ‘Import Students’; btn.disabled = false;
 }
 }
 
-// ── Attendance Report Card PDF ────────────────────────────────────────────────
+// – Attendance Report Card PDF ————————————————
 async function generateAttendanceReportCard() {
 try {
-showToastNotif(‘Generating report card…’, ‘info’);
+showToastNotif(‘Generating report card-’, ‘info’);
 if (!window.jspdf) {
 await new Promise((resolve, reject) => {
 const s = document.createElement(‘script’);
@@ -9165,7 +9164,7 @@ doc.text('Overall Attendance Rate', M + 3, y + 8);
 doc.text(overall + '%  (' + totalPresent + ' of ' + records.length + ' sessions)', 128, y + 8);
 
 doc.setFontSize(8); doc.setTextColor(150,150,150); doc.setFont('helvetica','normal');
-doc.text('Generated automatically by KODEX — kodex.it.com', M, 285);
+doc.text('Generated automatically by KODEX - kodex.it.com', M, 285);
 doc.save('KODEX_Report_Card_' + (currentUser.indexNumber||'student') + '_' + new Date().toISOString().slice(0,10) + '.pdf');
 showToastNotif('Report card downloaded!', 'success');
 ```
@@ -9173,10 +9172,10 @@ showToastNotif('Report card downloaded!', 'success');
 } catch(e) { showToastNotif(’Failed: ’ + e.message, ‘error’); }
 }
 
-// ── Course Completion Certificate ─────────────────────────────────────────────
+// – Course Completion Certificate ———————————————
 async function generateCertificate(courseId, courseTitle) {
 try {
-showToastNotif(‘Generating certificate…’, ‘info’);
+showToastNotif(‘Generating certificate-’, ‘info’);
 if (!window.jspdf) {
 await new Promise((resolve, reject) => {
 const s = document.createElement(‘script’);
@@ -9249,9 +9248,9 @@ showToastNotif('Certificate downloaded!', 'success');
 } catch(e) { showToastNotif(’Failed: ’ + e.message, ‘error’); }
 }
 
-// ── Push Notification Triggers ────────────────────────────────────────────────
+// – Push Notification Triggers ————————————————
 async function notifySessionStarted(sessionTitle) {
-await showLocalNotification(‘Attendance Session Live!’, sessionTitle + ’ — Mark your attendance now’, ‘/?view=mark-attendance’);
+await showLocalNotification(‘Attendance Session Live!’, sessionTitle + ’ - Mark your attendance now’, ‘/?view=mark-attendance’);
 }
 async function notifyQuizAvailable(quizTitle, endTime) {
 const mins = Math.round((new Date(endTime) - Date.now()) / 60000);
@@ -9262,7 +9261,7 @@ const hours = Math.round((new Date(dueDate) - Date.now()) / 3600000);
 await showLocalNotification(’Assignment Due Soon: ’ + assignmentTitle, ‘Due in ’ + hours + ’ hour’ + (hours !== 1 ? ‘s’ : ‘’), ‘/assignments.html’);
 }
 
-// ── Service Worker Registration ───────────────────────────────────────────────
+// – Service Worker Registration ———————————————–
 if (‘serviceWorker’ in navigator) {
 window.addEventListener(‘load’, () => {
 navigator.serviceWorker.register(’/sw.js’)
@@ -9271,11 +9270,11 @@ navigator.serviceWorker.register(’/sw.js’)
 });
 }
 
-// ══════════════════════════════════════════════════════════════════════════════
+// ——————————————————————————
 //  MOBILE UI MODULE
 //  - Hamburger sidebar drawer (tablet)
 //  - Bottom navigation bar (phone)
-// ══════════════════════════════════════════════════════════════════════════════
+// ——————————————————————————
 
 function toggleMobileSidebar() {
 const sidebar = document.querySelector(’.sidebar’);
@@ -9328,7 +9327,7 @@ function buildBottomNav(role) {
 const existing = document.getElementById(‘bottom-nav’);
 if (existing) existing.remove();
 
-// Priority items per role — most-used actions shown directly in bottom bar
+// Priority items per role - most-used actions shown directly in bottom bar
 // Everything else is accessible via the sidebar (More button)
 const PRIORITY = {
 admin: currentUser?.company?.mode === ‘academic’
@@ -9396,7 +9395,7 @@ closeMobileSidebar();
 nav.appendChild(btn);
 });
 
-// More button — opens full sidebar for everything else
+// More button - opens full sidebar for everything else
 const moreBtn = document.createElement(‘button’);
 moreBtn.className = ‘bottom-nav-item’;
 moreBtn.id = ‘bottom-nav-more’;
@@ -9422,7 +9421,7 @@ const dashBtn = nav.querySelector(’[data-nav-id=“dashboard”]’);
 if (dashBtn) dashBtn.classList.add(‘active’);
 }
 
-// Robust JSON extractor — handles LaTeX backslashes and MATHSTART/MATHEND placeholders
+// Robust JSON extractor - handles LaTeX backslashes and MATHSTART/MATHEND placeholders
 function restoreMathPlaceholders(obj) {
 if (typeof obj === ‘string’) {
 return obj.replace(/MATHSTART/g, ‘\(’).replace(/MATHEND/g, ‘\)’)
@@ -9463,11 +9462,11 @@ throw new Error(‘Could not parse AI response. Please try again.’);
 }
 }
 
-// ══════════════════════════════════════════════════════════════════════════════
-//  AI QUESTION GENERATION — app.js (main dashboard / mobile)
+// ——————————————————————————
+//  AI QUESTION GENERATION - app.js (main dashboard / mobile)
 //  Mirrors the same modal in assignments.html but lives here for the
-//  main-app quiz flow (showAddQuestionsView → openAIQuizPanel)
-// ══════════════════════════════════════════════════════════════════════════════
+//  main-app quiz flow (showAddQuestionsView - openAIQuizPanel)
+// ——————————————————————————
 
 let _aiQuizQuestions = [];
 
@@ -9479,7 +9478,7 @@ const overlay = document.createElement(‘div’);
 overlay.id = ‘ai-quiz-overlay’;
 overlay.dataset.quizId = quizId;
 overlay.style.cssText = ‘position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:400;display:flex;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(4px)’;
-overlay.innerHTML = `<div style="background:var(--card);border-radius:16px;width:100%;max-width:520px;max-height:92vh;overflow-y:auto;box-shadow:0 25px 80px rgba(0,0,0,.25);animation:slideIn .25s cubic-bezier(.16,1,.3,1)"> <div style="padding:18px 22px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:var(--card);z-index:1"> <div style="display:flex;align-items:center;gap:10px"> <div style="width:32px;height:32px;border-radius:8px;background:linear-gradient(135deg,#7c3aed,#4f46e5);display:flex;align-items:center;justify-content:center"> <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg> </div> <div> <h3 style="font-size:16px;font-weight:700;margin:0">AI Question Generator</h3> <p style="font-size:12px;color:var(--text-muted);margin:0">Powered by Claude AI</p> </div> </div> <button onclick="document.getElementById('ai-quiz-overlay').remove()" style="width:28px;height:28px;border-radius:7px;border:1px solid var(--border);background:var(--bg);cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center">✕</button> </div> <div style="padding:18px 22px;display:flex;flex-direction:column;gap:14px"> <!-- Source tabs --> <div> <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:8px;display:block">Content Source</label> <div style="display:flex;gap:1px;background:var(--border);border-radius:9px;overflow:hidden;margin-bottom:12px;"> <button id="aiq-tab-topic" onclick="aiqSwitchTab('topic')" style="flex:1;padding:8px;border:none;cursor:pointer;font-size:12px;font-weight:600;background:var(--primary);color:#fff;font-family:inherit;">📝 Topic</button> <button id="aiq-tab-notes" onclick="aiqSwitchTab('notes')" style="flex:1;padding:8px;border:none;cursor:pointer;font-size:12px;font-weight:600;background:var(--card);color:var(--text-light);font-family:inherit;">📋 Paste Notes</button> <button id="aiq-tab-pdf" onclick="aiqSwitchTab('pdf')" style="flex:1;padding:8px;border:none;cursor:pointer;font-size:12px;font-weight:600;background:var(--card);color:var(--text-light);font-family:inherit;">📄 Upload PDF</button> </div> <!-- Topic input --> <div id="aiq-src-topic"> <input id="aiq-topic" placeholder="e.g. Photosynthesis, Newton's laws, Python loops…" style="width:100%;padding:10px 13px;border:1.5px solid var(--border);border-radius:9px;font-size:14px;font-family:inherit;outline:none" onfocus="this.style.borderColor='#7c3aed'" onblur="this.style.borderColor='var(--border)'"/> </div> <!-- Paste notes --> <div id="aiq-src-notes" style="display:none;"> <textarea id="aiq-notes" rows="5" placeholder="Paste your lecture notes, textbook content, or any study material here…" style="width:100%;padding:10px 13px;border:1.5px solid var(--border);border-radius:9px;font-size:13px;font-family:inherit;resize:vertical;outline:none;" onfocus="this.style.borderColor='#7c3aed'" onblur="this.style.borderColor='var(--border)'"></textarea> <p style="font-size:11px;color:var(--text-muted);margin-top:4px;">Questions will be generated directly from this material.</p> </div> <!-- PDF upload --> <div id="aiq-src-pdf" style="display:none;"> <label for="aiq-pdf-file" style="display:flex;flex-direction:column;align-items:center;gap:8px;padding:20px;border:2px dashed var(--border);border-radius:10px;cursor:pointer;background:var(--bg);transition:border-color .2s;" onmouseover="this.style.borderColor='#7c3aed'" onmouseout="this.style.borderColor='var(--border)'"> <span style="font-size:28px;">📄</span> <span style="font-size:13px;font-weight:600;color:var(--text);">Click to upload a PDF</span> <span style="font-size:11px;color:var(--text-muted);">Max 10 MB · Text-based PDFs only</span> <input type="file" id="aiq-pdf-file" accept=".pdf" style="display:none;" onchange="aiqShowPdfName(this)"> </label> <div id="aiq-pdf-name" style="display:none;margin-top:8px;padding:7px 12px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:7px;font-size:12px;color:#166534;font-weight:500;"></div> </div> </div> <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px"> <div> <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:6px;display:block">Questions</label> <select id="aiq-count" style="width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:9px;font-size:14px;font-family:inherit;outline:none"> <option value="3">3</option><option value="5" selected>5</option><option value="8">8</option><option value="10">10</option><option value="15">15</option> </select> </div> <div> <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:6px;display:block">Difficulty</label> <select id="aiq-difficulty" style="width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:9px;font-size:14px;font-family:inherit;outline:none"> <option value="easy">Easy</option><option value="medium" selected>Medium</option><option value="hard">Hard</option><option value="mixed">Mixed</option> </select> </div> </div> <div> <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:8px;display:block">Question Type</label> <div style="display:flex;gap:8px;flex-wrap:wrap"> <label style="display:flex;align-items:center;gap:5px;cursor:pointer;padding:7px 13px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-weight:500"><input type="radio" name="aiq-qtype" value="single" checked style="accent-color:var(--primary)"/> Single Answer</label> <label style="display:flex;align-items:center;gap:5px;cursor:pointer;padding:7px 13px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-weight:500"><input type="radio" name="aiq-qtype" value="multiple" style="accent-color:var(--primary)"/> Multiple Answers</label> <label style="display:flex;align-items:center;gap:5px;cursor:pointer;padding:7px 13px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-weight:500"><input type="radio" name="aiq-qtype" value="mixed" style="accent-color:var(--primary)"/> Mixed</label> </div> </div> <div style="display:grid;grid-template-columns:90px 1fr;gap:12px;align-items:start"> <div> <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:6px;display:block">Marks/Q</label> <input id="aiq-marks" type="number" value="1" min="1" style="width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:9px;font-size:14px;font-family:inherit;outline:none"/> </div> <div> <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:6px;display:block">Additional Context <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-muted)">(optional)</span></label> <textarea id="aiq-context" rows="2" placeholder="e.g. Year 10 level, focus on cellular respiration…" style="width:100%;padding:10px 13px;border:1.5px solid var(--border);border-radius:9px;font-size:14px;font-family:inherit;resize:vertical;outline:none" onfocus="this.style.borderColor='#7c3aed'" onblur="this.style.borderColor='var(--border)'"></textarea> </div> </div> <!-- Subject toggle --> <div> <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:8px;display:block">Subject Area</label> <div style="display:flex;gap:8px;flex-wrap:wrap"> <label id="aiq-subj-gen" style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:7px 14px;border:1.5px solid var(--primary);border-radius:8px;background:var(--primary);color:#fff;font-size:13px;font-weight:600"> <input type="radio" name="aiq-subject" value="general" checked onchange="aiqToggleSubject('general')" style="accent-color:#fff"/> 📚 General </label> <label id="aiq-subj-math" style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:7px 14px;border:1.5px solid var(--border);border-radius:8px;background:var(--card);color:var(--text-light);font-size:13px;font-weight:600"> <input type="radio" name="aiq-subject" value="math" onchange="aiqToggleSubject('math')" style="accent-color:var(--primary)"/> 🧮 Mathematics </label> </div> </div> <!-- Math options --> <div id="aiq-math-opts" style="display:none;flex-direction:column;gap:12px;background:#f5f3ff;border:1.5px solid #e0e7ff;border-radius:10px;padding:14px 16px"> <div style="font-size:12px;color:#4f46e5;font-weight:600">🧮 Questions will use LaTeX math notation</div> <div> <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:6px;display:block">Math Branch</label> <select id="aiq-math-branch" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;outline:none;background:#fff;font-family:inherit"> <option value="">Any / Mixed</option> <optgroup label="── Pure Mathematics ──"> <option value="arithmetic">Arithmetic &amp; Number Theory</option> <option value="algebra">Algebra</option> <option value="advanced algebra">Advanced Algebra</option> <option value="calculus">Calculus (Differential &amp; Integral)</option> <option value="multivariable calculus">Multivariable Calculus</option> <option value="geometry">Geometry (Euclidean)</option> <option value="analytic geometry">Analytic Geometry &amp; Coordinate Geometry</option> <option value="trigonometry">Trigonometry</option> <option value="linear algebra">Linear Algebra &amp; Matrices</option> <option value="abstract algebra">Abstract Algebra (Groups, Rings, Fields)</option> <option value="real analysis">Real Analysis</option> <option value="complex analysis">Complex Analysis</option> <option value="topology">Topology</option> <option value="number theory">Number Theory</option> <option value="combinatorics">Combinatorics</option> <option value="graph theory">Graph Theory</option> <option value="discrete math">Discrete Mathematics</option> <option value="set theory">Set Theory &amp; Logic</option> <option value="mathematical logic">Mathematical Logic &amp; Proof Writing</option> </optgroup> <optgroup label="── Applied Mathematics ──"> <option value="statistics">Statistics &amp; Probability</option> <option value="differential equations">Differential Equations (ODEs)</option> <option value="partial differential equations">Partial Differential Equations (PDEs)</option> <option value="numerical methods">Numerical Methods &amp; Analysis</option> <option value="operations research">Operations Research &amp; Optimisation</option> <option value="mathematical modelling">Mathematical Modelling</option> <option value="game theory">Game Theory</option> <option value="information theory">Information Theory</option> </optgroup> <optgroup label="── Engineering &amp; Physics Math ──"> <option value="vector calculus">Vector Calculus</option> <option value="fourier analysis">Fourier Analysis &amp; Transforms</option> <option value="laplace transforms">Laplace Transforms</option> <option value="complex numbers">Complex Numbers</option> <option value="Boolean algebra">Boolean Algebra &amp; Logic Gates</option> <option value="financial mathematics">Financial Mathematics</option> </optgroup> <optgroup label="── School Level ──"> <option value="primary mathematics">Primary School Mathematics</option> <option value="junior high mathematics">Junior High Mathematics (JHS)</option> <option value="core mathematics">Core Mathematics (SHS)</option> <option value="elective mathematics">Elective Mathematics (SHS)</option> </optgroup> </select> </div> <div style="display:flex;gap:8px;flex-wrap:wrap"> <label style="display:flex;align-items:center;gap:5px;cursor:pointer;padding:6px 12px;border:1.5px solid var(--border);border-radius:7px;font-size:12px;background:#fff"><input type="radio" name="aiq-math-style" value="solve" checked style="accent-color:var(--primary)"/> Solve problems</label> <label style="display:flex;align-items:center;gap:5px;cursor:pointer;padding:6px 12px;border:1.5px solid var(--border);border-radius:7px;font-size:12px;background:#fff"><input type="radio" name="aiq-math-style" value="conceptual" style="accent-color:var(--primary)"/> Conceptual</label> <label style="display:flex;align-items:center;gap:5px;cursor:pointer;padding:6px 12px;border:1.5px solid var(--border);border-radius:7px;font-size:12px;background:#fff"><input type="radio" name="aiq-math-style" value="mixed" style="accent-color:var(--primary)"/> Mixed</label> </div> </div> <div id="aiq-error" style="display:none;padding:10px 13px;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;color:#dc2626;font-size:13px;font-weight:500"></div> <div id="aiq-preview" style="display:none"> <div style="font-size:13px;font-weight:700;margin-bottom:10px;display:flex;align-items:center;gap:8px"> Preview <span id="aiq-preview-count" style="background:#ede9fe;color:#7c3aed;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600"></span> </div> <div id="aiq-preview-list" style="display:flex;flex-direction:column;gap:9px;max-height:280px;overflow-y:auto;padding-right:3px"></div> </div> </div> <div style="padding:14px 22px;border-top:1px solid var(--border);display:flex;gap:9px;justify-content:flex-end;position:sticky;bottom:0;background:var(--card);border-radius:0 0 16px 16px"> <button class="btn btn-secondary" onclick="document.getElementById('ai-quiz-overlay').remove()">Cancel</button> <button id="aiq-gen-btn" class="btn" style="background:linear-gradient(135deg,#7c3aed,#4f46e5);color:#fff;font-weight:600;display:flex;align-items:center;gap:7px" onclick="runAIQuizGenerate(document.getElementById('ai-quiz-overlay').dataset.quizId)"> <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg> Generate Questions </button> <button id="aiq-add-btn" class="btn btn-primary" style="display:none" onclick="addAIQuizQuestions(document.getElementById('ai-quiz-overlay').dataset.quizId)"> <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Add All to Quiz </button> </div> </div>`;
+overlay.innerHTML = `<div style="background:var(--card);border-radius:16px;width:100%;max-width:520px;max-height:92vh;overflow-y:auto;box-shadow:0 25px 80px rgba(0,0,0,.25);animation:slideIn .25s cubic-bezier(.16,1,.3,1)"> <div style="padding:18px 22px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:var(--card);z-index:1"> <div style="display:flex;align-items:center;gap:10px"> <div style="width:32px;height:32px;border-radius:8px;background:linear-gradient(135deg,#7c3aed,#4f46e5);display:flex;align-items:center;justify-content:center"> <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg> </div> <div> <h3 style="font-size:16px;font-weight:700;margin:0">AI Question Generator</h3> <p style="font-size:12px;color:var(--text-muted);margin:0">Powered by Claude AI</p> </div> </div> <button onclick="document.getElementById('ai-quiz-overlay').remove()" style="width:28px;height:28px;border-radius:7px;border:1px solid var(--border);background:var(--bg);cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center">-</button> </div> <div style="padding:18px 22px;display:flex;flex-direction:column;gap:14px"> <!-- Source tabs --> <div> <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:8px;display:block">Content Source</label> <div style="display:flex;gap:1px;background:var(--border);border-radius:9px;overflow:hidden;margin-bottom:12px;"> <button id="aiq-tab-topic" onclick="aiqSwitchTab('topic')" style="flex:1;padding:8px;border:none;cursor:pointer;font-size:12px;font-weight:600;background:var(--primary);color:#fff;font-family:inherit;">- Topic</button> <button id="aiq-tab-notes" onclick="aiqSwitchTab('notes')" style="flex:1;padding:8px;border:none;cursor:pointer;font-size:12px;font-weight:600;background:var(--card);color:var(--text-light);font-family:inherit;">- Paste Notes</button> <button id="aiq-tab-pdf" onclick="aiqSwitchTab('pdf')" style="flex:1;padding:8px;border:none;cursor:pointer;font-size:12px;font-weight:600;background:var(--card);color:var(--text-light);font-family:inherit;">- Upload PDF</button> </div> <!-- Topic input --> <div id="aiq-src-topic"> <input id="aiq-topic" placeholder="e.g. Photosynthesis, Newton's laws, Python loops-" style="width:100%;padding:10px 13px;border:1.5px solid var(--border);border-radius:9px;font-size:14px;font-family:inherit;outline:none" onfocus="this.style.borderColor='#7c3aed'" onblur="this.style.borderColor='var(--border)'"/> </div> <!-- Paste notes --> <div id="aiq-src-notes" style="display:none;"> <textarea id="aiq-notes" rows="5" placeholder="Paste your lecture notes, textbook content, or any study material here-" style="width:100%;padding:10px 13px;border:1.5px solid var(--border);border-radius:9px;font-size:13px;font-family:inherit;resize:vertical;outline:none;" onfocus="this.style.borderColor='#7c3aed'" onblur="this.style.borderColor='var(--border)'"></textarea> <p style="font-size:11px;color:var(--text-muted);margin-top:4px;">Questions will be generated directly from this material.</p> </div> <!-- PDF upload --> <div id="aiq-src-pdf" style="display:none;"> <label for="aiq-pdf-file" style="display:flex;flex-direction:column;align-items:center;gap:8px;padding:20px;border:2px dashed var(--border);border-radius:10px;cursor:pointer;background:var(--bg);transition:border-color .2s;" onmouseover="this.style.borderColor='#7c3aed'" onmouseout="this.style.borderColor='var(--border)'"> <span style="font-size:28px;">-</span> <span style="font-size:13px;font-weight:600;color:var(--text);">Click to upload a PDF</span> <span style="font-size:11px;color:var(--text-muted);">Max 10 MB - Text-based PDFs only</span> <input type="file" id="aiq-pdf-file" accept=".pdf" style="display:none;" onchange="aiqShowPdfName(this)"> </label> <div id="aiq-pdf-name" style="display:none;margin-top:8px;padding:7px 12px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:7px;font-size:12px;color:#166534;font-weight:500;"></div> </div> </div> <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px"> <div> <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:6px;display:block">Questions</label> <select id="aiq-count" style="width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:9px;font-size:14px;font-family:inherit;outline:none"> <option value="3">3</option><option value="5" selected>5</option><option value="8">8</option><option value="10">10</option><option value="15">15</option> </select> </div> <div> <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:6px;display:block">Difficulty</label> <select id="aiq-difficulty" style="width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:9px;font-size:14px;font-family:inherit;outline:none"> <option value="easy">Easy</option><option value="medium" selected>Medium</option><option value="hard">Hard</option><option value="mixed">Mixed</option> </select> </div> </div> <div> <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:8px;display:block">Question Type</label> <div style="display:flex;gap:8px;flex-wrap:wrap"> <label style="display:flex;align-items:center;gap:5px;cursor:pointer;padding:7px 13px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-weight:500"><input type="radio" name="aiq-qtype" value="single" checked style="accent-color:var(--primary)"/> Single Answer</label> <label style="display:flex;align-items:center;gap:5px;cursor:pointer;padding:7px 13px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-weight:500"><input type="radio" name="aiq-qtype" value="multiple" style="accent-color:var(--primary)"/> Multiple Answers</label> <label style="display:flex;align-items:center;gap:5px;cursor:pointer;padding:7px 13px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-weight:500"><input type="radio" name="aiq-qtype" value="mixed" style="accent-color:var(--primary)"/> Mixed</label> </div> </div> <div style="display:grid;grid-template-columns:90px 1fr;gap:12px;align-items:start"> <div> <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:6px;display:block">Marks/Q</label> <input id="aiq-marks" type="number" value="1" min="1" style="width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:9px;font-size:14px;font-family:inherit;outline:none"/> </div> <div> <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:6px;display:block">Additional Context <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-muted)">(optional)</span></label> <textarea id="aiq-context" rows="2" placeholder="e.g. Year 10 level, focus on cellular respiration-" style="width:100%;padding:10px 13px;border:1.5px solid var(--border);border-radius:9px;font-size:14px;font-family:inherit;resize:vertical;outline:none" onfocus="this.style.borderColor='#7c3aed'" onblur="this.style.borderColor='var(--border)'"></textarea> </div> </div> <!-- Subject toggle --> <div> <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:8px;display:block">Subject Area</label> <div style="display:flex;gap:8px;flex-wrap:wrap"> <label id="aiq-subj-gen" style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:7px 14px;border:1.5px solid var(--primary);border-radius:8px;background:var(--primary);color:#fff;font-size:13px;font-weight:600"> <input type="radio" name="aiq-subject" value="general" checked onchange="aiqToggleSubject('general')" style="accent-color:#fff"/> - General </label> <label id="aiq-subj-math" style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:7px 14px;border:1.5px solid var(--border);border-radius:8px;background:var(--card);color:var(--text-light);font-size:13px;font-weight:600"> <input type="radio" name="aiq-subject" value="math" onchange="aiqToggleSubject('math')" style="accent-color:var(--primary)"/> - Mathematics </label> </div> </div> <!-- Math options --> <div id="aiq-math-opts" style="display:none;flex-direction:column;gap:12px;background:#f5f3ff;border:1.5px solid #e0e7ff;border-radius:10px;padding:14px 16px"> <div style="font-size:12px;color:#4f46e5;font-weight:600">- Questions will use LaTeX math notation</div> <div> <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:6px;display:block">Math Branch</label> <select id="aiq-math-branch" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;outline:none;background:#fff;font-family:inherit"> <option value="">Any / Mixed</option> <optgroup label="-- Pure Mathematics --"> <option value="arithmetic">Arithmetic &amp; Number Theory</option> <option value="algebra">Algebra</option> <option value="advanced algebra">Advanced Algebra</option> <option value="calculus">Calculus (Differential &amp; Integral)</option> <option value="multivariable calculus">Multivariable Calculus</option> <option value="geometry">Geometry (Euclidean)</option> <option value="analytic geometry">Analytic Geometry &amp; Coordinate Geometry</option> <option value="trigonometry">Trigonometry</option> <option value="linear algebra">Linear Algebra &amp; Matrices</option> <option value="abstract algebra">Abstract Algebra (Groups, Rings, Fields)</option> <option value="real analysis">Real Analysis</option> <option value="complex analysis">Complex Analysis</option> <option value="topology">Topology</option> <option value="number theory">Number Theory</option> <option value="combinatorics">Combinatorics</option> <option value="graph theory">Graph Theory</option> <option value="discrete math">Discrete Mathematics</option> <option value="set theory">Set Theory &amp; Logic</option> <option value="mathematical logic">Mathematical Logic &amp; Proof Writing</option> </optgroup> <optgroup label="-- Applied Mathematics --"> <option value="statistics">Statistics &amp; Probability</option> <option value="differential equations">Differential Equations (ODEs)</option> <option value="partial differential equations">Partial Differential Equations (PDEs)</option> <option value="numerical methods">Numerical Methods &amp; Analysis</option> <option value="operations research">Operations Research &amp; Optimisation</option> <option value="mathematical modelling">Mathematical Modelling</option> <option value="game theory">Game Theory</option> <option value="information theory">Information Theory</option> </optgroup> <optgroup label="-- Engineering &amp; Physics Math --"> <option value="vector calculus">Vector Calculus</option> <option value="fourier analysis">Fourier Analysis &amp; Transforms</option> <option value="laplace transforms">Laplace Transforms</option> <option value="complex numbers">Complex Numbers</option> <option value="Boolean algebra">Boolean Algebra &amp; Logic Gates</option> <option value="financial mathematics">Financial Mathematics</option> </optgroup> <optgroup label="-- School Level --"> <option value="primary mathematics">Primary School Mathematics</option> <option value="junior high mathematics">Junior High Mathematics (JHS)</option> <option value="core mathematics">Core Mathematics (SHS)</option> <option value="elective mathematics">Elective Mathematics (SHS)</option> </optgroup> </select> </div> <div style="display:flex;gap:8px;flex-wrap:wrap"> <label style="display:flex;align-items:center;gap:5px;cursor:pointer;padding:6px 12px;border:1.5px solid var(--border);border-radius:7px;font-size:12px;background:#fff"><input type="radio" name="aiq-math-style" value="solve" checked style="accent-color:var(--primary)"/> Solve problems</label> <label style="display:flex;align-items:center;gap:5px;cursor:pointer;padding:6px 12px;border:1.5px solid var(--border);border-radius:7px;font-size:12px;background:#fff"><input type="radio" name="aiq-math-style" value="conceptual" style="accent-color:var(--primary)"/> Conceptual</label> <label style="display:flex;align-items:center;gap:5px;cursor:pointer;padding:6px 12px;border:1.5px solid var(--border);border-radius:7px;font-size:12px;background:#fff"><input type="radio" name="aiq-math-style" value="mixed" style="accent-color:var(--primary)"/> Mixed</label> </div> </div> <div id="aiq-error" style="display:none;padding:10px 13px;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;color:#dc2626;font-size:13px;font-weight:500"></div> <div id="aiq-preview" style="display:none"> <div style="font-size:13px;font-weight:700;margin-bottom:10px;display:flex;align-items:center;gap:8px"> Preview <span id="aiq-preview-count" style="background:#ede9fe;color:#7c3aed;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600"></span> </div> <div id="aiq-preview-list" style="display:flex;flex-direction:column;gap:9px;max-height:280px;overflow-y:auto;padding-right:3px"></div> </div> </div> <div style="padding:14px 22px;border-top:1px solid var(--border);display:flex;gap:9px;justify-content:flex-end;position:sticky;bottom:0;background:var(--card);border-radius:0 0 16px 16px"> <button class="btn btn-secondary" onclick="document.getElementById('ai-quiz-overlay').remove()">Cancel</button> <button id="aiq-gen-btn" class="btn" style="background:linear-gradient(135deg,#7c3aed,#4f46e5);color:#fff;font-weight:600;display:flex;align-items:center;gap:7px" onclick="runAIQuizGenerate(document.getElementById('ai-quiz-overlay').dataset.quizId)"> <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg> Generate Questions </button> <button id="aiq-add-btn" class="btn btn-primary" style="display:none" onclick="addAIQuizQuestions(document.getElementById('ai-quiz-overlay').dataset.quizId)"> <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Add All to Quiz </button> </div> </div>`;
 document.body.appendChild(overlay);
 }
 
@@ -9513,7 +9512,7 @@ function aiqShowPdfName(input) {
 const nameEl = document.getElementById(‘aiq-pdf-name’);
 if (!nameEl) return;
 if (input.files?.[0]) {
-nameEl.textContent = ’📄 ’ + input.files[0].name;
+nameEl.textContent = ’- ’ + input.files[0].name;
 nameEl.style.display = ‘block’;
 } else {
 nameEl.style.display = ‘none’;
@@ -9540,7 +9539,7 @@ const btn        = document.getElementById(‘aiq-gen-btn’);
 const previewDiv = document.getElementById(‘aiq-preview’);
 const addBtn     = document.getElementById(‘aiq-add-btn’);
 
-// ── If PDF or Notes tab → use backend ai-generate endpoint ──
+// – If PDF or Notes tab - use backend ai-generate endpoint –
 if (activeTab === ‘pdf’ || activeTab === ‘notes’) {
 errEl.style.display = ‘none’;
 previewDiv.style.display = ‘none’;
@@ -9549,7 +9548,7 @@ _aiQuizQuestions = [];
 
 ```
 btn.disabled = true;
-btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="animation:spin 1s linear infinite"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> Generating…';
+btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="animation:spin 1s linear infinite"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> Generating-';
 
 try {
   const types = qtype === 'mixed' ? 'single,multiple' : qtype === 'fill' ? 'fill' : qtype;
@@ -9560,11 +9559,11 @@ try {
 
   if (activeTab === 'pdf') {
     const pdfFile = document.getElementById('aiq-pdf-file')?.files?.[0];
-    if (!pdfFile) { errEl.textContent = 'Please select a PDF file.'; errEl.style.display = 'block'; btn.disabled = false; btn.innerHTML = '✨ Generate Questions'; return; }
+    if (!pdfFile) { errEl.textContent = 'Please select a PDF file.'; errEl.style.display = 'block'; btn.disabled = false; btn.innerHTML = '- Generate Questions'; return; }
     formData.append('pdf', pdfFile);
   } else {
     const notes = document.getElementById('aiq-notes')?.value?.trim();
-    if (!notes) { errEl.textContent = 'Please paste your notes.'; errEl.style.display = 'block'; btn.disabled = false; btn.innerHTML = '✨ Generate Questions'; return; }
+    if (!notes) { errEl.textContent = 'Please paste your notes.'; errEl.style.display = 'block'; btn.disabled = false; btn.innerHTML = '- Generate Questions'; return; }
     formData.append('notes', notes);
   }
 
@@ -9577,7 +9576,7 @@ try {
   const data = await resp.json();
   if (!resp.ok) throw new Error(data.error || 'Generation failed');
 
-  // Questions already saved to DB — refresh the view
+  // Questions already saved to DB - refresh the view
   document.getElementById('ai-quiz-overlay')?.remove();
   toastSuccess(`${data.questions.length} questions generated and added!`);
   await showAddQuestionsView(quizId);
@@ -9586,14 +9585,14 @@ try {
   errEl.textContent = e.message;
   errEl.style.display = 'block';
   btn.disabled = false;
-  btn.innerHTML = '✨ Regenerate';
+  btn.innerHTML = '- Regenerate';
   return;
 }
 ```
 
 }
 
-// ── Topic tab → existing AI proxy flow ──
+// – Topic tab - existing AI proxy flow –
 if (!topic) { errEl.textContent = ‘Please enter a topic.’; errEl.style.display = ‘block’; return; }
 errEl.style.display = ‘none’;
 previewDiv.style.display = ‘none’;
@@ -9601,7 +9600,7 @@ addBtn.style.display = ‘none’;
 _aiQuizQuestions = [];
 
 btn.disabled = true;
-btn.innerHTML = ‘<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="animation:spin 1s linear infinite"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> Generating…’;
+btn.innerHTML = ‘<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="animation:spin 1s linear infinite"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> Generating-’;
 
 const qtypeDesc = qtype === ‘single’ ? ‘single correct answer (MCQ)’ : qtype === ‘multiple’ ? ‘multiple correct answers’ : ‘a mix of single and multiple correct answer’;
 
@@ -9651,9 +9650,9 @@ document.getElementById('aiq-preview-list').innerHTML = _aiQuizQuestions.map((q,
     </div>
     <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:6px">
       ${q.options.map((o, oi) => `<span style="padding:4px 9px;border-radius:6px;font-size:12px;font-weight:500;${q.correctAnswers.includes(oi)?'background:#f0fdf4;color:#166534;border:1px solid #bbf7d0':'background:#fff;color:var(--text-light);border:1px solid var(--border)'}">
-        ${L[oi]}) ${o}${q.correctAnswers.includes(oi)?' ✓':''}</span>`).join('')}
+        ${L[oi]}) ${o}${q.correctAnswers.includes(oi)?' -':''}</span>`).join('')}
     </div>
-    ${q.explanation ? `<div style="font-size:11px;color:var(--text-muted);padding:5px 9px;background:#fff;border-radius:6px;border-left:3px solid #7c3aed">💡 ${q.explanation}</div>` : ''}
+    ${q.explanation ? `<div style="font-size:11px;color:var(--text-muted);padding:5px 9px;background:#fff;border-radius:6px;border-left:3px solid #7c3aed">- ${q.explanation}</div>` : ''}
   </div>
 `).join('');
 
@@ -9678,7 +9677,7 @@ btn.innerHTML = ‘<svg width="14" height="14" viewBox="0 0 24 24" fill="none" s
 async function addAIQuizQuestions(quizId) {
 const btn = document.getElementById(‘aiq-add-btn’);
 if (!_aiQuizQuestions.length) return;
-btn.disabled = true; btn.textContent = ‘Adding…’;
+btn.disabled = true; btn.textContent = ‘Adding-’;
 let added = 0, failed = 0;
 for (const q of _aiQuizQuestions) {
 try {
@@ -9701,15 +9700,15 @@ if (added > 0) toastSuccess(msg); else toastError(msg);
 await showAddQuestionsView(quizId);
 }
 
-// ══════════════════════════════════════════════════════════════════════════
-//  CORPORATE PHASE 1 — SHIFTS & LEAVE
-// ══════════════════════════════════════════════════════════════════════════
+// –––––––––––––––––––––––––––––––––––––
+//  CORPORATE PHASE 1 - SHIFTS & LEAVE
+// –––––––––––––––––––––––––––––––––––––
 
-// ── SHIFTS (Admin/Manager) ─────────────────────────────────────────────────
+// – SHIFTS (Admin/Manager) ———————————————––
 async function renderShifts() {
 const content = document.getElementById(‘main-content’);
 if (!content) return;
-content.innerHTML = ‘<div class="loading">Loading shifts…</div>’;
+content.innerHTML = ‘<div class="loading">Loading shifts-</div>’;
 try {
 const [shiftsData, assignmentsData, usersData] = await Promise.all([
 api(’/api/shifts’),
@@ -9770,7 +9769,7 @@ content.innerHTML = `
           <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border:1px solid #e5e7eb;border-radius:8px;flex-wrap:wrap;gap:8px">
             <div>
               <div style="font-weight:700;font-size:14px">${s.name}</div>
-              <div style="font-size:12px;color:#6b7280">${s.startTime} – ${s.endTime} · Grace: ${s.gracePeriodMinutes}min · ${(s.days||[]).join(', ')}</div>
+              <div style="font-size:12px;color:#6b7280">${s.startTime} - ${s.endTime} - Grace: ${s.gracePeriodMinutes}min - ${(s.days||[]).join(', ')}</div>
             </div>
             <button class="btn btn-sm" style="background:#fef2f2;color:#dc2626;border:1px solid #fecaca" onclick="deleteShift('${s._id}')">Delete</button>
           </div>`).join('')}
@@ -9784,15 +9783,15 @@ content.innerHTML = `
       <div>
         <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:4px">Employee *</label>
         <select id="sh-emp" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
-          <option value="">Select employee…</option>
-          ${users.map(u => `<option value="${u._id}">${u.name}${u.department ? ' · '+u.department : ''}</option>`).join('')}
+          <option value="">Select employee-</option>
+          ${users.map(u => `<option value="${u._id}">${u.name}${u.department ? ' - '+u.department : ''}</option>`).join('')}
         </select>
       </div>
       <div>
         <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:4px">Shift *</label>
         <select id="sh-shift" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
-          <option value="">Select shift…</option>
-          ${shifts.map(s => `<option value="${s._id}">${s.name} (${s.startTime}–${s.endTime})</option>`).join('')}
+          <option value="">Select shift-</option>
+          ${shifts.map(s => `<option value="${s._id}">${s.name} (${s.startTime}-${s.endTime})</option>`).join('')}
         </select>
       </div>
       <div>
@@ -9827,9 +9826,9 @@ content.innerHTML = `
           ${assignments.map(a => `
             <tr style="border-bottom:1px solid #f3f4f6">
               <td style="padding:10px;font-weight:600">${a.employee?.name || 'Unknown'}</td>
-              <td style="padding:10px;color:#6b7280">${a.employee?.department || '—'}</td>
-              <td style="padding:10px">${a.shift?.name || '—'}</td>
-              <td style="padding:10px;color:#6b7280">${a.shift?.startTime || ''}–${a.shift?.endTime || ''}</td>
+              <td style="padding:10px;color:#6b7280">${a.employee?.department || '-'}</td>
+              <td style="padding:10px">${a.shift?.name || '-'}</td>
+              <td style="padding:10px;color:#6b7280">${a.shift?.startTime || ''}-${a.shift?.endTime || ''}</td>
               <td style="padding:10px;color:#6b7280">${new Date(a.startDate).toLocaleDateString()}</td>
               <td style="padding:10px">
                 <button class="btn btn-sm" style="background:#fef2f2;color:#dc2626;border:1px solid #fecaca" onclick="removeShiftAssignment('${a._id}')">Remove</button>
@@ -9856,7 +9855,7 @@ const errEl = document.getElementById(‘sh-error’);
 errEl.style.display = ‘none’;
 if (!name || !startTime || !endTime) { errEl.textContent = ‘Name, start and end time are required.’; errEl.style.display = ‘block’; return; }
 if (!days.length) { errEl.textContent = ‘Select at least one working day.’; errEl.style.display = ‘block’; return; }
-const btn = event.target; btn.disabled = true; btn.textContent = ‘Creating…’;
+const btn = event.target; btn.disabled = true; btn.textContent = ‘Creating-’;
 try {
 await api(’/api/shifts’, { method: ‘POST’, body: JSON.stringify({ name, startTime, endTime, gracePeriodMinutes, days }) });
 toast(‘Shift created!’, ‘ok’);
@@ -9884,7 +9883,7 @@ const endDate = document.getElementById(‘sh-asgn-end’).value;
 const errEl = document.getElementById(‘sh-asgn-error’);
 errEl.style.display = ‘none’;
 if (!employeeId || !shiftId || !startDate) { errEl.textContent = ‘Employee, shift and start date are required.’; errEl.style.display = ‘block’; return; }
-const btn = event.target; btn.disabled = true; btn.textContent = ‘Assigning…’;
+const btn = event.target; btn.disabled = true; btn.textContent = ‘Assigning-’;
 try {
 await api(’/api/shifts/assign’, { method: ‘POST’, body: JSON.stringify({ employeeId, shiftId, startDate, endDate: endDate || null }) });
 toast(‘Shift assigned!’, ‘ok’);
@@ -9904,25 +9903,25 @@ renderShifts();
 } catch(e) { toast(e.message, ‘err’); }
 }
 
-// ── MY SHIFT (Employee) ────────────────────────────────────────────────────
+// – MY SHIFT (Employee) ––––––––––––––––––––––––––
 async function renderMyShift() {
 const content = document.getElementById(‘main-content’);
 if (!content) return;
-content.innerHTML = ‘<div class="loading">Loading your shift…</div>’;
+content.innerHTML = ‘<div class="loading">Loading your shift-</div>’;
 try {
 const { assignment } = await api(’/api/shifts/my-shift’);
 const s = assignment?.shift;
 content.innerHTML = `<div class="page-header"><h2>My Shift</h2><p>Your assigned working hours</p></div> ${assignment && s ?`
 <div class="card" style="text-align:center;padding:40px 24px;border-left:4px solid var(--primary)">
-<div style="font-size:48px;margin-bottom:12px">🕐</div>
+<div style="font-size:48px;margin-bottom:12px">-</div>
 <div style="font-size:22px;font-weight:800;margin-bottom:6px">${s.name}</div>
-<div style="font-size:32px;font-weight:700;color:var(--primary);margin-bottom:8px">${s.startTime} – ${s.endTime}</div>
+<div style="font-size:32px;font-weight:700;color:var(--primary);margin-bottom:8px">${s.startTime} - ${s.endTime}</div>
 <div style="font-size:14px;color:#6b7280;margin-bottom:4px">Working days: <strong>${(s.days||[]).join(’, ’)}</strong></div>
-<div style="font-size:13px;color:#9ca3af">Grace period: ${s.gracePeriodMinutes} minutes · Assigned since ${new Date(assignment.startDate).toLocaleDateString()}</div>
-${assignment.endDate ? `<div style="font-size:13px;color:#f59e0b;margin-top:8px">⚠️ This assignment ends on ${new Date(assignment.endDate).toLocaleDateString()}</div>` : ‘’}
+<div style="font-size:13px;color:#9ca3af">Grace period: ${s.gracePeriodMinutes} minutes - Assigned since ${new Date(assignment.startDate).toLocaleDateString()}</div>
+${assignment.endDate ? `<div style="font-size:13px;color:#f59e0b;margin-top:8px">-- This assignment ends on ${new Date(assignment.endDate).toLocaleDateString()}</div>` : ‘’}
 </div>`:`
 <div class="card" style="text-align:center;padding:60px 24px">
-<div style="font-size:48px;opacity:.3;margin-bottom:16px">📅</div>
+<div style="font-size:48px;opacity:.3;margin-bottom:16px">-</div>
 <div style="font-size:16px;font-weight:600;margin-bottom:6px">No shift assigned</div>
 <p style="color:#9ca3af;font-size:13px">Contact your manager to get a shift assigned to you.</p>
 </div>`} `;
@@ -9931,11 +9930,11 @@ content.innerHTML = `<div class="card"><p style="color:#ef4444">Error: ${e.messa
 }
 }
 
-// ── LEAVE REQUESTS (Admin/Manager) ────────────────────────────────────────
+// – LEAVE REQUESTS (Admin/Manager) ––––––––––––––––––––
 async function renderLeaveRequests() {
 const content = document.getElementById(‘main-content’);
 if (!content) return;
-content.innerHTML = ‘<div class="loading">Loading leave requests…</div>’;
+content.innerHTML = ‘<div class="loading">Loading leave requests-</div>’;
 try {
 const [pendingData, allData] = await Promise.all([
 api(’/api/leaves/pending’),
@@ -9959,19 +9958,19 @@ content.innerHTML = `
 
   <!-- Pending -->
   <div class="card" style="margin-bottom:20px">
-    <h3 style="margin-bottom:14px;font-size:15px;font-weight:700">⏳ Pending Approval (${pending.length})</h3>
+    <h3 style="margin-bottom:14px;font-size:15px;font-weight:700">- Pending Approval (${pending.length})</h3>
     ${pending.length ? pending.map(l => `
       <div style="padding:14px;border:1px solid #fed7aa;border-radius:8px;background:#fffbeb;margin-bottom:10px">
         <div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:8px">
           <div>
             <div style="font-weight:700;font-size:14px">${l.employee?.name || 'Unknown'} ${leaveTypeBadge(l.type)}</div>
-            <div style="font-size:12px;color:#6b7280;margin-top:3px">${l.employee?.department || 'No dept'} · ${new Date(l.startDate).toLocaleDateString()} → ${new Date(l.endDate).toLocaleDateString()} · <strong>${l.days} day${l.days!==1?'s':''}</strong></div>
+            <div style="font-size:12px;color:#6b7280;margin-top:3px">${l.employee?.department || 'No dept'} - ${new Date(l.startDate).toLocaleDateString()} - ${new Date(l.endDate).toLocaleDateString()} - <strong>${l.days} day${l.days!==1?'s':''}</strong></div>
             ${l.reason ? `<div style="font-size:12px;color:#374151;margin-top:4px;font-style:italic">"${l.reason}"</div>` : ''}
           </div>
           <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
             <input id="note-${l._id}" placeholder="Note (optional)" style="padding:6px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:12px;width:160px">
-            <button class="btn btn-sm" style="background:#f0fdf4;color:#16a34a;border:1px solid #bbf7d0;font-weight:600" onclick="reviewLeave('${l._id}','approved')">✓ Approve</button>
-            <button class="btn btn-sm" style="background:#fef2f2;color:#dc2626;border:1px solid #fecaca;font-weight:600" onclick="reviewLeave('${l._id}','rejected')">✗ Reject</button>
+            <button class="btn btn-sm" style="background:#f0fdf4;color:#16a34a;border:1px solid #bbf7d0;font-weight:600" onclick="reviewLeave('${l._id}','approved')">- Approve</button>
+            <button class="btn btn-sm" style="background:#fef2f2;color:#dc2626;border:1px solid #fecaca;font-weight:600" onclick="reviewLeave('${l._id}','rejected')">- Reject</button>
           </div>
         </div>
       </div>`).join('') : '<p style="color:#9ca3af;font-size:13px">No pending requests.</p>'}
@@ -9979,7 +9978,7 @@ content.innerHTML = `
 
   <!-- Recent Approved -->
   <div class="card">
-    <h3 style="margin-bottom:14px;font-size:15px;font-weight:700">✅ Recently Approved</h3>
+    <h3 style="margin-bottom:14px;font-size:15px;font-weight:700">- Recently Approved</h3>
     ${approved.length ? `
       <table style="width:100%;border-collapse:collapse;font-size:13px">
         <thead>
@@ -9995,7 +9994,7 @@ content.innerHTML = `
             <tr style="border-bottom:1px solid #f3f4f6">
               <td style="padding:10px;font-weight:600">${l.employee?.name || 'Unknown'}</td>
               <td style="padding:10px">${leaveTypeBadge(l.type)}</td>
-              <td style="padding:10px;color:#6b7280;font-size:12px">${new Date(l.startDate).toLocaleDateString()} → ${new Date(l.endDate).toLocaleDateString()}</td>
+              <td style="padding:10px;color:#6b7280;font-size:12px">${new Date(l.startDate).toLocaleDateString()} - ${new Date(l.endDate).toLocaleDateString()}</td>
               <td style="padding:10px">${l.days}</td>
             </tr>`).join('')}
         </tbody>
@@ -10014,7 +10013,7 @@ const note = document.getElementById(`note-${id}`)?.value || ‘’;
 const btn = event.target; btn.disabled = true;
 try {
 await api(`/api/leaves/${id}/review`, { method: ‘PATCH’, body: JSON.stringify({ action, note }) });
-toast(action === ‘approved’ ? ‘Leave approved ✓’ : ‘Leave rejected’, action === ‘approved’ ? ‘ok’ : ‘err’);
+toast(action === ‘approved’ ? ‘Leave approved -’ : ‘Leave rejected’, action === ‘approved’ ? ‘ok’ : ‘err’);
 renderLeaveRequests();
 } catch(e) {
 toast(e.message, ‘err’);
@@ -10022,11 +10021,11 @@ btn.disabled = false;
 }
 }
 
-// ── MY LEAVES (Employee) ──────────────────────────────────────────────────
+// – MY LEAVES (Employee) –––––––––––––––––––––––––
 async function renderMyLeaves() {
 const content = document.getElementById(‘main-content’);
 if (!content) return;
-content.innerHTML = ‘<div class="loading">Loading…</div>’;
+content.innerHTML = ‘<div class="loading">Loading-</div>’;
 try {
 const { leaves } = await api(’/api/leaves/my’);
 
@@ -10067,7 +10066,7 @@ content.innerHTML = `
     </div>
     <div style="margin-bottom:10px">
       <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:4px">Reason (optional)</label>
-      <textarea id="lv-reason" rows="2" placeholder="Brief reason for leave…" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;resize:vertical"></textarea>
+      <textarea id="lv-reason" rows="2" placeholder="Brief reason for leave-" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;resize:vertical"></textarea>
     </div>
     <div id="lv-error" style="color:#ef4444;font-size:13px;margin-bottom:8px;display:none"></div>
     <button class="btn btn-primary" onclick="submitLeaveRequest()">Submit Request</button>
@@ -10079,8 +10078,8 @@ content.innerHTML = `
     ${leaves.length ? leaves.map(l => `
       <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border:1px solid #e5e7eb;border-radius:8px;margin-bottom:8px;flex-wrap:wrap;gap:8px">
         <div>
-          <div style="font-size:13px;font-weight:600">${l.type.charAt(0).toUpperCase()+l.type.slice(1)} Leave · ${l.days} day${l.days!==1?'s':''}</div>
-          <div style="font-size:12px;color:#6b7280">${new Date(l.startDate).toLocaleDateString()} → ${new Date(l.endDate).toLocaleDateString()}</div>
+          <div style="font-size:13px;font-weight:600">${l.type.charAt(0).toUpperCase()+l.type.slice(1)} Leave - ${l.days} day${l.days!==1?'s':''}</div>
+          <div style="font-size:12px;color:#6b7280">${new Date(l.startDate).toLocaleDateString()} - ${new Date(l.endDate).toLocaleDateString()}</div>
           ${l.reviewNote ? `<div style="font-size:11px;color:#9ca3af;margin-top:2px">Note: ${l.reviewNote}</div>` : ''}
         </div>
         <div style="display:flex;align-items:center;gap:8px">
@@ -10106,7 +10105,7 @@ const errEl = document.getElementById(‘lv-error’);
 errEl.style.display = ‘none’;
 if (!startDate || !endDate) { errEl.textContent = ‘Start and end dates are required.’; errEl.style.display = ‘block’; return; }
 if (new Date(endDate) < new Date(startDate)) { errEl.textContent = ‘End date must be after start date.’; errEl.style.display = ‘block’; return; }
-const btn = event.target; btn.disabled = true; btn.textContent = ‘Submitting…’;
+const btn = event.target; btn.disabled = true; btn.textContent = ‘Submitting-’;
 try {
 await api(’/api/leaves’, { method: ‘POST’, body: JSON.stringify({ type, startDate, endDate, reason }) });
 toast(‘Leave request submitted!’, ‘ok’);
@@ -10126,11 +10125,11 @@ renderMyLeaves();
 } catch(e) { toast(e.message, ‘err’); }
 }
 
-// ══════════════════════════════════════════════════════════════════════════════
-//  CORPORATE PHASE 2 — TRAINING & ASSESSMENTS
-// ══════════════════════════════════════════════════════════════════════════════
+// ——————————————————————————
+//  CORPORATE PHASE 2 - TRAINING & ASSESSMENTS
+// ——————————————————————————
 
-// ── SIDEBAR: add training nav items ──────────────────────────────────────────
+// – SIDEBAR: add training nav items ——————————————
 // Patch buildSidebar to inject training links for corporate mode
 const _origBuildSidebar = buildSidebar;
 buildSidebar = function() {
@@ -10166,7 +10165,7 @@ myLeaveLink.insertAdjacentElement(‘afterend’, a);
 }
 };
 
-// ── Patch navigateTo to handle training routes ────────────────────────────────
+// – Patch navigateTo to handle training routes ––––––––––––––––
 const _origNavigateTo = navigateTo;
 navigateTo = function(view) {
 if (view === ‘training’)    { currentView = view; _setNavActive(view); renderTraining(); return; }
@@ -10182,7 +10181,7 @@ const content = document.getElementById(‘main-content’);
 if (content) content.innerHTML = ‘<div class="loading">Loading…</div>’;
 }
 
-// ── ADMIN/MANAGER: Training Hub ───────────────────────────────────────────────
+// – ADMIN/MANAGER: Training Hub ———————————————–
 async function renderTraining() {
 const content = document.getElementById(‘main-content’);
 if (!content) return;
@@ -10278,11 +10277,11 @@ content.innerHTML = `
               <span style="font-weight:700;font-size:15px">${m.title}</span>
               ${typeBadge(m.type)}
             </div>
-            <div style="font-size:12px;color:#6b7280;margin-bottom:8px">${m.description || 'No description'} · Pass: ${m.passingScore}% · Due in ${m.dueInDays}d${m.timeLimitMinutes ? ` · ⏱ ${m.timeLimitMinutes}min` : ''} · ${m.questions.length} question${m.questions.length !== 1 ? 's' : ''}</div>
+            <div style="font-size:12px;color:#6b7280;margin-bottom:8px">${m.description || 'No description'} - Pass: ${m.passingScore}% - Due in ${m.dueInDays}d${m.timeLimitMinutes ? ` - - ${m.timeLimitMinutes}min` : ''} - ${m.questions.length} question${m.questions.length !== 1 ? 's' : ''}</div>
             <div style="display:flex;gap:12px;font-size:12px">
-              <span style="color:#6b7280">👥 ${m.stats.total} assigned</span>
-              <span style="color:#16a34a">✅ ${m.stats.completed} completed</span>
-              <span style="color:#2563eb">🏆 ${m.stats.passed} passed</span>
+              <span style="color:#6b7280">- ${m.stats.total} assigned</span>
+              <span style="color:#16a34a">- ${m.stats.completed} completed</span>
+              <span style="color:#2563eb">- ${m.stats.passed} passed</span>
             </div>
           </div>
           <div style="display:flex;gap:6px;flex-wrap:wrap">
@@ -10332,7 +10331,7 @@ errEl.style.display = ‘none’;
 
 if (!title) { errEl.textContent = ‘Title is required.’; errEl.style.display = ‘block’; return; }
 
-const btn = event.target; btn.disabled = true; btn.textContent = ‘Creating…’;
+const btn = event.target; btn.disabled = true; btn.textContent = ‘Creating-’;
 try {
 const timeLimitMinutes = parseInt(document.getElementById(‘tm-time’)?.value) || null;
 await api(’/api/training/modules’, {
@@ -10348,7 +10347,7 @@ btn.disabled = false; btn.textContent = ‘+ Create Module’;
 }
 
 async function assignModule(moduleId) {
-const btn = event.target; btn.disabled = true; btn.textContent = ‘Assigning…’;
+const btn = event.target; btn.disabled = true; btn.textContent = ‘Assigning-’;
 try {
 const data = await api(`/api/training/modules/${moduleId}/assign`, { method: ‘POST’ });
 toast(data.message || ‘Assigned!’, ‘ok’);
@@ -10371,7 +10370,7 @@ renderTraining();
 function showAddTrainingQuestion(moduleId) {
 const container = document.getElementById(‘modal-container’);
 container.classList.remove(‘hidden’);
-container.innerHTML = `<div class="modal-overlay" onclick="if(event.target===this)closeModal()"> <div class="modal" onclick="event.stopPropagation()" style="max-width:500px"> <h3>Add Question</h3> <div class="form-group"> <label>Question *</label> <textarea id="tq-text" rows="2" placeholder="Enter question…" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px"></textarea> </div> ${['A','B','C','D'].map((l,i) =>`
+container.innerHTML = `<div class="modal-overlay" onclick="if(event.target===this)closeModal()"> <div class="modal" onclick="event.stopPropagation()" style="max-width:500px"> <h3>Add Question</h3> <div class="form-group"> <label>Question *</label> <textarea id="tq-text" rows="2" placeholder="Enter question-" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px"></textarea> </div> ${['A','B','C','D'].map((l,i) =>`
 <div class="form-group">
 <label>Option ${l}${i<2?’ *’:’’}</label>
 <input type="text" id="tq-opt-${i}" placeholder="Option ${l}" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
@@ -10407,7 +10406,7 @@ errEl.textContent = e.message; errEl.style.display = ‘block’;
 async function viewModuleProgress(moduleId, title) {
 const container = document.getElementById(‘modal-container’);
 container.classList.remove(‘hidden’);
-container.innerHTML = `<div class="modal-overlay" onclick="closeModal(event)"> <div class="modal" onclick="event.stopPropagation()" style="max-width:650px;width:95%"> <h3>Progress — ${title}</h3> <div id="mp-content"><p>Loading…</p></div> <div class="modal-actions"><button class="btn btn-secondary" onclick="closeModal()">Close</button></div> </div> </div>`;
+container.innerHTML = `<div class="modal-overlay" onclick="closeModal(event)"> <div class="modal" onclick="event.stopPropagation()" style="max-width:650px;width:95%"> <h3>Progress - ${title}</h3> <div id="mp-content"><p>Loading-</p></div> <div class="modal-actions"><button class="btn btn-secondary" onclick="closeModal()">Close</button></div> </div> </div>`;
 try {
 const { progress } = await api(`/api/training/modules/${moduleId}/progress`);
 const el = document.getElementById(‘mp-content’);
@@ -10437,9 +10436,9 @@ el.innerHTML = `
         <tr style="border-bottom:1px solid #f3f4f6">
           <td style="padding:10px;font-weight:600">${p.employee?.name || 'Unknown'}<div style="font-size:11px;color:#9ca3af">${p.employee?.department || ''}</div></td>
           <td style="padding:10px">${statusBadge(p.status)}</td>
-          <td style="padding:10px">${p.percentage != null ? `<strong style="color:${p.passed ? '#16a34a' : '#dc2626'}">${p.percentage}%</strong> (${p.score}/${p.maxScore})` : '—'}</td>
-          <td style="padding:10px;font-size:12px;color:#6b7280">${p.dueDate ? new Date(p.dueDate).toLocaleDateString() : '—'}</td>
-          <td style="padding:10px;font-size:12px;color:#6b7280">${p.completedAt ? new Date(p.completedAt).toLocaleDateString() : '—'}</td>
+          <td style="padding:10px">${p.percentage != null ? `<strong style="color:${p.passed ? '#16a34a' : '#dc2626'}">${p.percentage}%</strong> (${p.score}/${p.maxScore})` : '-'}</td>
+          <td style="padding:10px;font-size:12px;color:#6b7280">${p.dueDate ? new Date(p.dueDate).toLocaleDateString() : '-'}</td>
+          <td style="padding:10px;font-size:12px;color:#6b7280">${p.completedAt ? new Date(p.completedAt).toLocaleDateString() : '-'}</td>
         </tr>
       `).join('')}
     </tbody>
@@ -10452,7 +10451,7 @@ document.getElementById(‘mp-content’).innerHTML = `<p style="color:#ef4444">
 }
 }
 
-// ── EMPLOYEE: My Training ─────────────────────────────────────────────────────
+// – EMPLOYEE: My Training —————————————————–
 async function renderMyTraining() {
 const content = document.getElementById(‘main-content’);
 if (!content) return;
@@ -10468,7 +10467,7 @@ const statusStyle = s => ({
   overdue:     'background:#fffbeb;color:#d97706',
 }[s] || '');
 
-const typeIcon = t => ({ onboarding:'🚀', mandatory:'⚠️', certification:'🏆', policy:'📄' }[t] || '📚');
+const typeIcon = t => ({ onboarding:'-', mandatory:'--', certification:'-', policy:'-' }[t] || '-');
 
 const total = progress.length;
 const completed = progress.filter(p => p.status === 'completed').length;
@@ -10500,19 +10499,19 @@ content.innerHTML = `
             <span style="font-weight:700;font-size:15px">${m.title}</span>
             <span style="padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600;${statusStyle(p.status)}">${p.status.replace('_',' ')}</span>
           </div>
-          <div style="font-size:12px;color:#6b7280;margin-bottom:6px">${m.description || ''} · ${m.questions.length} question${m.questions.length !== 1 ? 's' : ''} · Pass: ${m.passingScore}%${m.timeLimitMinutes ? ` · ⏱ ${m.timeLimitMinutes} min` : ''}</div>
+          <div style="font-size:12px;color:#6b7280;margin-bottom:6px">${m.description || ''} - ${m.questions.length} question${m.questions.length !== 1 ? 's' : ''} - Pass: ${m.passingScore}%${m.timeLimitMinutes ? ` - - ${m.timeLimitMinutes} min` : ''}</div>
           ${p.dueDate ? `<div style="font-size:12px;color:${new Date(p.dueDate) < new Date() && p.status !== 'completed' ? '#f59e0b' : '#6b7280'}">Due: ${new Date(p.dueDate).toLocaleDateString()}</div>` : ''}
-          ${p.percentage != null ? `<div style="font-size:13px;margin-top:4px;font-weight:600;color:${p.passed ? '#16a34a' : '#dc2626'}">Score: ${p.percentage}% — ${p.passed ? '✅ Passed' : '❌ Failed'}</div>` : ''}
+          ${p.percentage != null ? `<div style="font-size:13px;margin-top:4px;font-weight:600;color:${p.passed ? '#16a34a' : '#dc2626'}">Score: ${p.percentage}% - ${p.passed ? '- Passed' : '- Failed'}</div>` : ''}
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           ${isActionable ? `<button class="btn btn-primary btn-sm" onclick="startTrainingModule('${p._id}', '${m._id}')">Start</button>` : ''}
           ${canRetry ? `<button class="btn btn-sm" style="background:#fef3c7;color:#d97706;border:1px solid #fde68a" onclick="retryTrainingModule('${p._id}')">Retry</button>` : ''}
-          ${p.status === 'completed' ? `<span style="color:#16a34a;font-size:13px;font-weight:600">✓ Complete</span>` : ''}
+          ${p.status === 'completed' ? `<span style="color:#16a34a;font-size:13px;font-weight:600">- Complete</span>` : ''}
         </div>
       </div>
     </div>`;
   }).join('') : `<div class="card" style="text-align:center;padding:60px 24px">
-    <div style="font-size:48px;opacity:.3;margin-bottom:16px">📚</div>
+    <div style="font-size:48px;opacity:.3;margin-bottom:16px">-</div>
     <div style="font-size:16px;font-weight:600;margin-bottom:6px">No training assigned</div>
     <p style="color:#9ca3af;font-size:13px">Your manager will assign training modules when required.</p>
   </div>`}
@@ -10527,7 +10526,7 @@ content.innerHTML = `<div class="card"><p style="color:#ef4444">Error: ${e.messa
 async function startTrainingModule(progressId, moduleId) {
 const content = document.getElementById(‘main-content’);
 if (!content) return;
-content.innerHTML = ‘<div class="loading">Loading module…</div>’;
+content.innerHTML = ‘<div class="loading">Loading module-</div>’;
 
 try {
 await api(`/api/training/my/${progressId}/start`, { method: ‘POST’ });
@@ -10540,7 +10539,7 @@ const m = p.module;
 content.innerHTML = `
   <div class="page-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
     <div><h2>${m.title}</h2><p>${m.description || ''}</p></div>
-    <button class="btn btn-secondary btn-sm" onclick="renderMyTraining()">← Back</button>
+    <button class="btn btn-secondary btn-sm" onclick="renderMyTraining()">- Back</button>
   </div>
 
   ${m.videoUrl ? `
@@ -10561,10 +10560,10 @@ content.innerHTML = `
   ${m.questions.length ? `
   <div class="card">
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:12px">
-      <div class="card-title" style="margin:0">Assessment — ${m.questions.length} Question${m.questions.length !== 1 ? 's' : ''}</div>
-      ${m.timeLimitMinutes ? `<div id="training-timer" style="font-size:14px;font-weight:700;color:#ef4444;background:#fef2f2;padding:6px 14px;border-radius:20px;border:1px solid #fecaca">⏱ <span id="training-timer-display">${m.timeLimitMinutes}:00</span></div>` : ''}
+      <div class="card-title" style="margin:0">Assessment - ${m.questions.length} Question${m.questions.length !== 1 ? 's' : ''}</div>
+      ${m.timeLimitMinutes ? `<div id="training-timer" style="font-size:14px;font-weight:700;color:#ef4444;background:#fef2f2;padding:6px 14px;border-radius:20px;border:1px solid #fecaca">- <span id="training-timer-display">${m.timeLimitMinutes}:00</span></div>` : ''}
     </div>
-    <p style="font-size:13px;color:#6b7280;margin-bottom:16px">Passing score: ${m.passingScore}%${m.timeLimitMinutes ? ` · Time limit: ${m.timeLimitMinutes} minutes` : ''}. Answer all questions then click Submit.</p>
+    <p style="font-size:13px;color:#6b7280;margin-bottom:16px">Passing score: ${m.passingScore}%${m.timeLimitMinutes ? ` - Time limit: ${m.timeLimitMinutes} minutes` : ''}. Answer all questions then click Submit.</p>
     ${m.questions.map((q, i) => `
       <div style="padding:14px;border:1px solid #e5e7eb;border-radius:8px;margin-bottom:10px">
         <div class="math-content" style="font-weight:600;margin-bottom:10px;font-size:14px">Q${i+1}. ${q.questionText} <span style="color:#9ca3af;font-weight:400;font-size:12px">(${q.marks} mark${q.marks !== 1 ? 's' : ''})</span></div>
@@ -10584,7 +10583,7 @@ content.innerHTML = `
   </div>
   ` : `
   <div class="card" style="text-align:center;padding:40px">
-    <div style="font-size:36px;margin-bottom:12px">✅</div>
+    <div style="font-size:36px;margin-bottom:12px">-</div>
     <div style="font-size:18px;font-weight:700">No Assessment Required</div>
     <p style="color:#6b7280;margin:8px 0 16px">This module has no quiz. Mark as read to complete.</p>
     <button class="btn btn-primary" onclick="markTrainingRead('${progressId}')">Mark as Completed</button>
@@ -10606,7 +10605,7 @@ if (m.timeLimitMinutes && m.questions.length) {
       }
       if (secsLeft <= 0) {
         clearInterval(window._trainingTimerInterval);
-        toast('⏱ Time is up! Auto-submitting…', 'warn');
+        toast('- Time is up! Auto-submitting-', 'warn');
         submitTrainingAssessment(progressId, m.questions.length);
       }
     }, 1000);
@@ -10627,7 +10626,7 @@ const selected = document.querySelector(`input[name="tma-${i}"]:checked`);
 answers.push({ questionIndex: i, selectedAnswer: selected ? parseInt(selected.value) : -1 });
 }
 
-const btn = event.target; btn.disabled = true; btn.textContent = ‘Submitting…’;
+const btn = event.target; btn.disabled = true; btn.textContent = ‘Submitting-’;
 try {
 const data = await api(`/api/training/my/${progressId}/submit`, {
 method: ‘POST’,
@@ -10640,10 +10639,10 @@ const passed = data.passed;
 content.innerHTML = `
   <div style="max-width:480px;margin:60px auto;text-align:center">
     <div class="card">
-      <div style="font-size:56px;margin-bottom:12px">${passed ? '🏆' : '📝'}</div>
+      <div style="font-size:56px;margin-bottom:12px">${passed ? '-' : '-'}</div>
       <h2 style="margin-bottom:8px">${passed ? 'Congratulations!' : 'Not Quite There'}</h2>
       <div style="font-size:2.5em;font-weight:800;color:${passed ? '#22c55e' : '#ef4444'};margin:16px 0">${data.percentage}%</div>
-      <p style="color:#6b7280">Score: ${data.score} / ${data.maxScore} · Pass mark: ${data.passingScore}%</p>
+      <p style="color:#6b7280">Score: ${data.score} / ${data.maxScore} - Pass mark: ${data.passingScore}%</p>
       <div style="margin-top:24px;display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
         ${!passed ? `<button class="btn btn-sm" style="background:#fef3c7;color:#d97706;border:1px solid #fde68a" onclick="renderMyTraining()">Try Again Later</button>` : ''}
         <button class="btn btn-primary" onclick="renderMyTraining()">Back to Training</button>
@@ -10660,13 +10659,13 @@ toast(e.message, ‘err’);
 }
 
 async function markTrainingRead(progressId) {
-const btn = event.target; btn.disabled = true; btn.textContent = ‘Saving…’;
+const btn = event.target; btn.disabled = true; btn.textContent = ‘Saving-’;
 try {
 await api(`/api/training/my/${progressId}/submit`, {
 method: ‘POST’,
 body: JSON.stringify({ answers: [] }),
 });
-toast(‘Module completed! ✅’, ‘ok’);
+toast(‘Module completed! -’, ‘ok’);
 renderMyTraining();
 } catch(e) {
 toast(e.message, ‘err’);
@@ -10681,11 +10680,11 @@ startTrainingModule(progressId, data.progress.module._id || data.progress.module
 } catch(e) { toast(e.message, ‘err’); }
 }
 
-// ══════════════════════════════════════════════════════════════════════════════
-//  CORPORATE PHASE 3 — PERFORMANCE MANAGEMENT
-// ══════════════════════════════════════════════════════════════════════════════
+// ——————————————————————————
+//  CORPORATE PHASE 3 - PERFORMANCE MANAGEMENT
+// ——————————————————————————
 
-// ── Patch buildSidebar for Phase 3 nav ───────────────────────────────────────
+// – Patch buildSidebar for Phase 3 nav —————————————
 const _p2BuildSidebar = buildSidebar;
 buildSidebar = function() {
 _p2BuildSidebar();
@@ -10719,7 +10718,7 @@ myTrainingLink.insertAdjacentElement(‘afterend’, a);
 }
 };
 
-// ── Patch navigateTo for Phase 3 ─────────────────────────────────────────────
+// – Patch navigateTo for Phase 3 ———————————————
 const _p2NavigateTo = navigateTo;
 navigateTo = function(view) {
 if (view === ‘performance’)    { currentView = view; _setNavActive(view); renderPerformance(); return; }
@@ -10727,12 +10726,12 @@ if (view === ‘my-performance’) { currentView = view; _setNavActive(view); re
 _p2NavigateTo(view);
 };
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+// – Helpers —————————————————————––
 function *starRating(score, max=5) {
 if (!score) return ‘<span style="color:#d1d5db">No rating</span>’;
 const full = Math.round(score);
 return Array.from({length:max}, (*,i) =>
-`<span style="color:${i < full ? '#f59e0b' : '#d1d5db'};font-size:16px">★</span>`
+`<span style="color:${i < full ? '#f59e0b' : '#d1d5db'};font-size:16px">-</span>`
 ).join(’’) + ` <span style="font-size:12px;color:#6b7280">(${score}/5)</span>`;
 }
 
@@ -10753,11 +10752,11 @@ learning: ‘<span style="background:#fef3c7;color:#d97706;padding:2px 8px;borde
 }[c] || c);
 }
 
-// ── MANAGER: Performance Hub ──────────────────────────────────────────────────
+// – MANAGER: Performance Hub –––––––––––––––––––––––––
 async function renderPerformance() {
 const content = document.getElementById(‘main-content’);
 if (!content) return;
-content.innerHTML = ‘<div class="loading">Loading…</div>’;
+content.innerHTML = ‘<div class="loading">Loading-</div>’;
 
 try {
 const { overview } = await api(’/api/performance/team-overview’);
@@ -10790,7 +10789,7 @@ content.innerHTML = `
           ${overview.map(o => `
             <tr style="border-bottom:1px solid #f3f4f6;cursor:pointer" onclick="viewScorecard('${o.employee._id}', '${(o.employee.name||'').replace(/'/g,"\\'")}')">
               <td style="padding:10px;font-weight:600">${o.employee.name}</td>
-              <td style="padding:10px;color:#6b7280">${o.employee.department || '—'}</td>
+              <td style="padding:10px;color:#6b7280">${o.employee.department || '-'}</td>
               <td style="padding:10px;text-align:center">
                 <span style="font-weight:700">${o.completedGoals}</span><span style="color:#9ca3af">/${o.totalGoals}</span>
               </td>
@@ -10862,7 +10861,7 @@ content.innerHTML = `<div class="card"><p style="color:#ef4444">Error: ${e.messa
 
 async function viewScorecard(employeeId, name) {
 const content = document.getElementById(‘main-content’);
-content.innerHTML = ‘<div class="loading">Loading scorecard…</div>’;
+content.innerHTML = ‘<div class="loading">Loading scorecard-</div>’;
 
 try {
 const data = await api(`/api/performance/scorecard/${employeeId}`);
@@ -10873,8 +10872,8 @@ const statusColor = s => ({active:'#3b82f6',completed:'#22c55e',cancelled:'#9ca3
 
 content.innerHTML = `
   <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:20px">
-    <div class="page-header" style="margin:0"><h2>Scorecard — ${employee.name}</h2><p>${employee.department || ''} · ${employee.employeeId || ''}</p></div>
-    <button class="btn btn-secondary btn-sm" onclick="renderPerformance()">← Back</button>
+    <div class="page-header" style="margin:0"><h2>Scorecard - ${employee.name}</h2><p>${employee.department || ''} - ${employee.employeeId || ''}</p></div>
+    <button class="btn btn-secondary btn-sm" onclick="renderPerformance()">- Back</button>
   </div>
 
   <!-- Stats -->
@@ -10882,7 +10881,7 @@ content.innerHTML = `
     <div class="stat-card"><div class="stat-value">${stats.totalGoals}</div><div class="stat-label">Total Goals</div></div>
     <div class="stat-card"><div class="stat-value" style="color:#22c55e">${stats.completedGoals}</div><div class="stat-label">Completed</div></div>
     <div class="stat-card"><div class="stat-value">${stats.avgProgress}%</div><div class="stat-label">Avg Progress</div></div>
-    <div class="stat-card"><div class="stat-value">${stats.avgReviewScore ? `${stats.avgReviewScore}/5` : '—'}</div><div class="stat-label">Avg Review</div></div>
+    <div class="stat-card"><div class="stat-value">${stats.avgReviewScore ? `${stats.avgReviewScore}/5` : '-'}</div><div class="stat-label">Avg Review</div></div>
   </div>
 
   <!-- Goals -->
@@ -10936,8 +10935,8 @@ content.innerHTML = `
           <div>${_starRating(r.overallScore)}</div>
         </div>
         ${r.summary ? `<p style="font-size:13px;color:#374151;margin:4px 0">${r.summary}</p>` : ''}
-        ${r.strengths ? `<p style="font-size:12px;color:#16a34a;margin:2px 0">💪 ${r.strengths}</p>` : ''}
-        ${r.improvements ? `<p style="font-size:12px;color:#d97706;margin:2px 0">📈 ${r.improvements}</p>` : ''}
+        ${r.strengths ? `<p style="font-size:12px;color:#16a34a;margin:2px 0">- ${r.strengths}</p>` : ''}
+        ${r.improvements ? `<p style="font-size:12px;color:#d97706;margin:2px 0">- ${r.improvements}</p>` : ''}
         ${r.status === 'draft' ? `<button class="btn btn-sm" style="margin-top:8px;font-size:11px" onclick="submitReview('${r._id}','${employeeId}','${name.replace(/'/g,"\\'")}')">Submit Review</button>` : ''}
       </div>
     `).join('') : '<p style="color:#9ca3af;font-size:13px">No reviews yet.</p>'}
@@ -10970,7 +10969,7 @@ if (target) body.targetValue = parseFloat(target);
 if (unit) body.unit = unit;
 if (due) body.dueDate = due;
 
-const btn = event.target; btn.disabled = true; btn.textContent = ‘Saving…’;
+const btn = event.target; btn.disabled = true; btn.textContent = ‘Saving-’;
 try {
 await api(’/api/performance/goals’, { method: ‘POST’, body: JSON.stringify(body) });
 toast(‘Goal created!’, ‘ok’);
@@ -11012,7 +11011,7 @@ if (target) body.targetValue = parseFloat(target);
 if (unit) body.unit = unit;
 if (due) body.dueDate = due;
 
-const btn = event.target; btn.disabled = true; btn.textContent = ‘Saving…’;
+const btn = event.target; btn.disabled = true; btn.textContent = ‘Saving-’;
 try {
 await api(’/api/performance/goals’, { method: ‘POST’, body: JSON.stringify(body) });
 toast(‘Goal added!’, ‘ok’);
@@ -11027,7 +11026,7 @@ btn.disabled = false; btn.textContent = ‘+ Add Goal’;
 function showUpdateGoalProgress(goalId, title, current, target, unit) {
 const container = document.getElementById(‘modal-container’);
 container.classList.remove(‘hidden’);
-container.innerHTML = ` <div class="modal-overlay" onclick="closeModal(event)"> <div class="modal" onclick="event.stopPropagation()" style="max-width:380px"> <h3>Update: ${title}</h3> <p style="font-size:13px;color:#6b7280;margin-bottom:14px">Target: ${target || '—'} ${unit}</p> <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:4px">Current Value *</label> <input id="up-val" type="number" value="${current}" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:14px;margin-bottom:12px"> <div id="up-error" style="color:#ef4444;font-size:13px;margin-bottom:8px;display:none"></div> <div class="modal-actions"> <button class="btn btn-secondary" onclick="closeModal()">Cancel</button> <button class="btn btn-primary" onclick="updateGoalProgress('${goalId}')">Save Progress</button> </div> </div> </div>`;
+container.innerHTML = ` <div class="modal-overlay" onclick="closeModal(event)"> <div class="modal" onclick="event.stopPropagation()" style="max-width:380px"> <h3>Update: ${title}</h3> <p style="font-size:13px;color:#6b7280;margin-bottom:14px">Target: ${target || '-'} ${unit}</p> <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:4px">Current Value *</label> <input id="up-val" type="number" value="${current}" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:14px;margin-bottom:12px"> <div id="up-error" style="color:#ef4444;font-size:13px;margin-bottom:8px;display:none"></div> <div class="modal-actions"> <button class="btn btn-secondary" onclick="closeModal()">Cancel</button> <button class="btn btn-primary" onclick="updateGoalProgress('${goalId}')">Save Progress</button> </div> </div> </div>`;
 }
 
 async function updateGoalProgress(goalId) {
@@ -11042,7 +11041,7 @@ closeModal();
 // Refresh current scorecard view
 const h2 = document.querySelector(’.page-header h2’);
 if (h2 && h2.textContent.includes(‘Scorecard’)) {
-const match = h2.textContent.match(/Scorecard — (.+)/);
+const match = h2.textContent.match(/Scorecard - (.+)/);
 if (match) {
 const empRow = document.querySelector(`button[onclick*="viewScorecard"]`);
 if (empRow) empRow.click();
@@ -11069,14 +11068,14 @@ container.innerHTML = ` <div class="modal-overlay" onclick="closeModal(event)"> 
 function showCreateReviewForEmployee(employeeId, name) {
 const container = document.getElementById(‘modal-container’);
 container.classList.remove(‘hidden’);
-container.innerHTML = ` <div class="modal-overlay" onclick="closeModal(event)"> <div class="modal" onclick="event.stopPropagation()" style="max-width:500px"> <h3>Review — ${name}</h3> ${_reviewFormFields('er', employeeId)} <div id="er-error" style="color:#ef4444;font-size:13px;margin-bottom:8px;display:none"></div> <div class="modal-actions"> <button class="btn btn-secondary" onclick="closeModal()">Cancel</button> <button class="btn btn-primary" onclick="submitCreateReview('er','${employeeId}','${name.replace(/'/g,"\\'")}')">Create Review</button> </div> </div> </div>`;
+container.innerHTML = ` <div class="modal-overlay" onclick="closeModal(event)"> <div class="modal" onclick="event.stopPropagation()" style="max-width:500px"> <h3>Review - ${name}</h3> ${_reviewFormFields('er', employeeId)} <div id="er-error" style="color:#ef4444;font-size:13px;margin-bottom:8px;display:none"></div> <div class="modal-actions"> <button class="btn btn-secondary" onclick="closeModal()">Cancel</button> <button class="btn btn-primary" onclick="submitCreateReview('er','${employeeId}','${name.replace(/'/g,"\\'")}')">Create Review</button> </div> </div> </div>`;
 }
 
 function _reviewFormFields(prefix, employeeId) {
 return `<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px"> ${!employeeId ?`<div style="grid-column:1/-1">
 <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:4px">Employee ID *</label>
 <input id="${prefix}-emp" placeholder="Paste employee _id" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
-</div>` : ''} <div> <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:4px">Period *</label> <input id="${prefix}-period" placeholder="e.g. Q1 2026" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px"> </div> <div> <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:4px">Type</label> <select id="${prefix}-type" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px"> <option value="manager">Manager Review</option> <option value="peer">Peer Review</option> <option value="self">Self Review</option> </select> </div> <div> <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:4px">Overall Score (1–5)</label> <input id="${prefix}-score" type="number" min="1" max="5" step="0.5" placeholder="e.g. 4.0" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px"> </div> </div> <div style="margin-bottom:10px"> <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:4px">Summary</label> <textarea id="${prefix}-summary" rows="2" placeholder="Overall performance summary…" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;resize:vertical"></textarea> </div> <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px"> <div> <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:4px">Strengths</label> <textarea id="${prefix}-strengths" rows="2" placeholder="Key strengths…" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;resize:vertical"></textarea> </div> <div> <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:4px">Areas to Improve</label> <textarea id="${prefix}-improve" rows="2" placeholder="Growth areas…" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;resize:vertical"></textarea> </div> </div>`;
+</div>` : ''} <div> <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:4px">Period *</label> <input id="${prefix}-period" placeholder="e.g. Q1 2026" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px"> </div> <div> <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:4px">Type</label> <select id="${prefix}-type" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px"> <option value="manager">Manager Review</option> <option value="peer">Peer Review</option> <option value="self">Self Review</option> </select> </div> <div> <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:4px">Overall Score (1-5)</label> <input id="${prefix}-score" type="number" min="1" max="5" step="0.5" placeholder="e.g. 4.0" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px"> </div> </div> <div style="margin-bottom:10px"> <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:4px">Summary</label> <textarea id="${prefix}-summary" rows="2" placeholder="Overall performance summary-" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;resize:vertical"></textarea> </div> <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px"> <div> <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:4px">Strengths</label> <textarea id="${prefix}-strengths" rows="2" placeholder="Key strengths-" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;resize:vertical"></textarea> </div> <div> <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:4px">Areas to Improve</label> <textarea id="${prefix}-improve" rows="2" placeholder="Growth areas-" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;resize:vertical"></textarea> </div> </div>`;
 }
 
 async function submitCreateReview(prefix, employeeId, name) {
@@ -11093,7 +11092,7 @@ errEl.style.display = ‘none’;
 if (!empId) { errEl.textContent = ‘Employee ID is required.’; errEl.style.display = ‘block’; return; }
 if (!period) { errEl.textContent = ‘Period is required.’; errEl.style.display = ‘block’; return; }
 
-const btn = event.target; btn.disabled = true; btn.textContent = ‘Saving…’;
+const btn = event.target; btn.disabled = true; btn.textContent = ‘Saving-’;
 try {
 await api(’/api/performance/reviews’, {
 method: ‘POST’,
@@ -11122,11 +11121,11 @@ viewScorecard(employeeId, name);
 } catch(e) { toast(e.message, ‘err’); }
 }
 
-// ── EMPLOYEE: My Performance ──────────────────────────────────────────────────
+// – EMPLOYEE: My Performance –––––––––––––––––––––––––
 async function renderMyPerformance() {
 const content = document.getElementById(‘main-content’);
 if (!content) return;
-content.innerHTML = ‘<div class="loading">Loading…</div>’;
+content.innerHTML = ‘<div class="loading">Loading-</div>’;
 
 try {
 const [goalsData, reviewsData] = await Promise.all([
@@ -11150,7 +11149,7 @@ content.innerHTML = `
     <div class="stat-card"><div class="stat-value" style="color:#22c55e">${completedGoals}</div><div class="stat-label">Completed</div></div>
     <div class="stat-card"><div class="stat-value">${reviews.length}</div><div class="stat-label">Reviews</div></div>
     <div class="stat-card">
-      <div class="stat-value">${reviews.length && reviews[0].overallScore ? `${reviews[0].overallScore}/5` : '—'}</div>
+      <div class="stat-value">${reviews.length && reviews[0].overallScore ? `${reviews[0].overallScore}/5` : '-'}</div>
       <div class="stat-label">Latest Score</div>
     </div>
   </div>
@@ -11177,11 +11176,11 @@ content.innerHTML = `
             <div style="flex:1">${_progressBar(pct)}</div>
             <span style="font-size:12px;font-weight:700;min-width:36px">${pct}%</span>
           </div>
-          <div style="font-size:12px;color:#6b7280">${g.currentValue} / ${g.targetValue} ${g.unit} · Due ${g.dueDate ? new Date(g.dueDate).toLocaleDateString() : '—'}</div>
+          <div style="font-size:12px;color:#6b7280">${g.currentValue} / ${g.targetValue} ${g.unit} - Due ${g.dueDate ? new Date(g.dueDate).toLocaleDateString() : '-'}</div>
         ` : ''}
       </div>`;
     }).join('') : '<p style="color:#9ca3af;font-size:13px">No active goals. Add your own or wait for your manager to assign goals.</p>'}
-    ${completedGoals > 0 ? `<p style="font-size:12px;color:#16a34a;margin-top:8px">✅ ${completedGoals} goal${completedGoals>1?'s':''} completed</p>` : ''}
+    ${completedGoals > 0 ? `<p style="font-size:12px;color:#16a34a;margin-top:8px">- ${completedGoals} goal${completedGoals>1?'s':''} completed</p>` : ''}
   </div>
 
   <!-- Reviews -->
@@ -11192,7 +11191,7 @@ content.innerHTML = `
         <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;margin-bottom:8px">
           <div>
             <span style="font-weight:700;font-size:15px">${r.period}</span>
-            <span style="font-size:12px;color:#6b7280;margin-left:8px">${r.type} review · ${r.reviewer?.name||'Manager'}</span>
+            <span style="font-size:12px;color:#6b7280;margin-left:8px">${r.type} review - ${r.reviewer?.name||'Manager'}</span>
           </div>
           <div>${_starRating(r.overallScore)}</div>
         </div>
@@ -11234,7 +11233,7 @@ if (target) body.targetValue = parseFloat(target);
 if (unit) body.unit = unit;
 if (due) body.dueDate = due;
 
-const btn = event.target; btn.disabled = true; btn.textContent = ‘Saving…’;
+const btn = event.target; btn.disabled = true; btn.textContent = ‘Saving-’;
 try {
 await api(’/api/performance/goals’, { method: ‘POST’, body: JSON.stringify(body) });
 toast(‘Goal added!’, ‘ok’);
@@ -11250,11 +11249,11 @@ function showSelfUpdateGoal(goalId, title, current, target, unit) {
 showUpdateGoalProgress(goalId, title, current, target, unit);
 }
 
-// ══════════════════════════════════════════════════════════════════════════════
-//  CORPORATE PHASE 4 — OPERATIONS (Timesheets, Expenses, Assets)
-// ══════════════════════════════════════════════════════════════════════════════
+// ——————————————————————————
+//  CORPORATE PHASE 4 - OPERATIONS (Timesheets, Expenses, Assets)
+// ——————————————————————————
 
-// ── Patch buildSidebar for Phase 4 ───────────────────────────────────────────
+// – Patch buildSidebar for Phase 4 —————————————––
 const _p4BuildSidebar = buildSidebar;
 buildSidebar = function() {
 _p4BuildSidebar();
@@ -11318,7 +11317,7 @@ document.getElementById(‘nav-my-expenses’).insertAdjacentElement(‘afterend
 }
 };
 
-// ── Patch navigateTo for Phase 4 ─────────────────────────────────────────────
+// – Patch navigateTo for Phase 4 ———————————————
 const _p4NavigateTo = navigateTo;
 navigateTo = function(view) {
 if (view === ‘timesheets’)   { currentView = view; _setNavActive(view); renderTimesheets(); return; }
@@ -11330,7 +11329,7 @@ if (view === ‘my-assets’)    { currentView = view; _setNavActive(‘my-asset
 _p4NavigateTo(view);
 };
 
-// ── Shared helpers ────────────────────────────────────────────────────────────
+// – Shared helpers ————————————————————
 function _statusPill(s) {
 return ({
 draft:     ‘background:#f1f5f9;color:#475569’,
@@ -11344,12 +11343,12 @@ function _pill(label, status) {
 return `<span style="${_statusPill(status)};padding:2px 10px;border-radius:12px;font-size:11px;font-weight:700;text-transform:uppercase">${label}</span>`;
 }
 
-// ══════════════════════════════════════════════════════════════
-// MANAGER — TIMESHEETS
-// ══════════════════════════════════════════════════════════════
+// –––––––––––––––––––––––––––––––
+// MANAGER - TIMESHEETS
+// –––––––––––––––––––––––––––––––
 async function renderTimesheets() {
 const content = document.getElementById(‘main-content’);
-content.innerHTML = ‘<div class="loading">Loading…</div>’;
+content.innerHTML = ‘<div class="loading">Loading-</div>’;
 
 const period = new Date().toISOString().slice(0, 7);
 
@@ -11390,7 +11389,7 @@ content.innerHTML = `
         <tbody>
           ${timesheets.map(t => `
             <tr style="border-bottom:1px solid #f3f4f6">
-              <td style="padding:10px;font-weight:600">${t.employee?.name||'—'}<div style="font-size:11px;color:#9ca3af">${t.employee?.department||''}</div></td>
+              <td style="padding:10px;font-weight:600">${t.employee?.name||'-'}<div style="font-size:11px;color:#9ca3af">${t.employee?.department||''}</div></td>
               <td style="padding:10px;color:#6b7280">${t.period}</td>
               <td style="padding:10px;text-align:center;font-weight:700">${t.totalHours}</td>
               <td style="padding:10px;text-align:center">${_pill(t.status, t.status)}</td>
@@ -11398,10 +11397,10 @@ content.innerHTML = `
                 <div style="display:flex;gap:6px;justify-content:center;flex-wrap:wrap">
                   <button class="btn btn-sm" style="font-size:11px" onclick="viewTimesheetDetail('${t._id}','${(t.employee?.name||'').replace(/'/g,"\\'")}','${t.period}')">View</button>
                   ${t.status === 'submitted' ? `
-                    <button class="btn btn-sm" style="background:#f0fdf4;color:#16a34a;border:1px solid #bbf7d0;font-size:11px" onclick="reviewTimesheet('${t._id}','approved')">✓ Approve</button>
-                    <button class="btn btn-sm" style="background:#fef2f2;color:#dc2626;border:1px solid #fecaca;font-size:11px" onclick="reviewTimesheet('${t._id}','rejected')">✗ Reject</button>
+                    <button class="btn btn-sm" style="background:#f0fdf4;color:#16a34a;border:1px solid #bbf7d0;font-size:11px" onclick="reviewTimesheet('${t._id}','approved')">- Approve</button>
+                    <button class="btn btn-sm" style="background:#fef2f2;color:#dc2626;border:1px solid #fecaca;font-size:11px" onclick="reviewTimesheet('${t._id}','rejected')">- Reject</button>
                   ` : ''}
-                  ${t.status === 'approved' ? `<button class="btn btn-sm" style="background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe;font-size:11px" onclick="exportTimesheet('${t._id}')">⬇ CSV</button>` : ''}
+                  ${t.status === 'approved' ? `<button class="btn btn-sm" style="background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe;font-size:11px" onclick="exportTimesheet('${t._id}')">- CSV</button>` : ''}
                 </div>
               </td>
             </tr>
@@ -11423,7 +11422,7 @@ async function filterTimesheets() {
 const period = document.getElementById(‘ts-period-filter’)?.value;
 if (!period) return;
 const content = document.getElementById(‘main-content’);
-content.innerHTML = ‘<div class="loading">Loading…</div>’;
+content.innerHTML = ‘<div class="loading">Loading-</div>’;
 try {
 const { timesheets } = await api(`/api/operations/timesheets?period=${period}`);
 renderTimesheets._cached = timesheets;
@@ -11434,7 +11433,7 @@ renderTimesheets();
 async function viewTimesheetDetail(id, name, period) {
 const container = document.getElementById(‘modal-container’);
 container.classList.remove(‘hidden’);
-container.innerHTML = ` <div class="modal-overlay" onclick="closeModal(event)"> <div class="modal" onclick="event.stopPropagation()" style="max-width:560px;width:95%"> <h3>Timesheet — ${name} (${period})</h3> <div id="tsd-content"><p>Loading…</p></div> <div class="modal-actions"><button class="btn btn-secondary" onclick="closeModal()">Close</button></div> </div> </div>`;
+container.innerHTML = ` <div class="modal-overlay" onclick="closeModal(event)"> <div class="modal" onclick="event.stopPropagation()" style="max-width:560px;width:95%"> <h3>Timesheet - ${name} (${period})</h3> <div id="tsd-content"><p>Loading-</p></div> <div class="modal-actions"><button class="btn btn-secondary" onclick="closeModal()">Close</button></div> </div> </div>`;
 try {
 const { timesheets } = await api(`/api/operations/timesheets?period=${period}`);
 const ts = timesheets.find(t => t._id === id);
@@ -11444,7 +11443,7 @@ el.innerHTML = ` <table style="width:100%;border-collapse:collapse;font-size:13p
 <tr style="border-bottom:1px solid #f3f4f6">
 <td style="padding:8px">${new Date(e.date).toLocaleDateString()}</td>
 <td style="padding:8px;text-align:center;font-weight:600">${e.hoursWorked}</td>
-<td style="padding:8px;color:#6b7280;font-size:12px">${e.notes||’—’}</td>
+<td style="padding:8px;color:#6b7280;font-size:12px">${e.notes||’-’}</td>
 </tr>
 `).join('')} <tr style="background:#f9fafb;font-weight:700"> <td style="padding:8px">TOTAL</td> <td style="padding:8px;text-align:center">${ts.totalHours}</td> <td></td> </tr> </tbody> </table> ${ts.reviewNote ? `<p style="font-size:12px;color:#6b7280">Note: ${ts.reviewNote}</p>`: ''}`;
 } catch(e) {
@@ -11466,12 +11465,12 @@ const token = localStorage.getItem(‘kodex_token’) || localStorage.getItem(�
 window.open(`/api/operations/timesheets/${id}/export?token=${token}`, ‘_blank’);
 }
 
-// ══════════════════════════════════════════════════════════════
-// MANAGER — EXPENSES
-// ══════════════════════════════════════════════════════════════
+// –––––––––––––––––––––––––––––––
+// MANAGER - EXPENSES
+// –––––––––––––––––––––––––––––––
 async function renderExpensesMgr() {
 const content = document.getElementById(‘main-content’);
-content.innerHTML = ‘<div class="loading">Loading…</div>’;
+content.innerHTML = ‘<div class="loading">Loading-</div>’;
 try {
 const { expenses } = await api(’/api/operations/expenses’);
 const pending  = expenses.filter(e => e.status === ‘pending’);
@@ -11480,7 +11479,7 @@ const totalPending  = pending.reduce((s,e)=>s+e.amount,0);
 const totalApproved = approved.reduce((s,e)=>s+e.amount,0);
 
 ```
-const catIcon = c => ({travel:'✈️',meals:'🍽️',equipment:'🖥️',software:'💿',training:'📚',other:'📎'}[c]||'📎');
+const catIcon = c => ({travel:'--',meals:'--',equipment:'--',software:'-',training:'-',other:'-'}[c]||'-');
 
 content.innerHTML = `
   <div class="page-header"><h2>Expense Claims</h2><p>Review and approve employee expense claims</p></div>
@@ -11503,12 +11502,12 @@ content.innerHTML = `
               <span style="font-size:16px">${catIcon(e.category)}</span>
               <span style="font-weight:700">${e.title}</span>
             </div>
-            <div style="font-size:12px;color:#6b7280">${e.employee?.name||'—'} · ${new Date(e.date).toLocaleDateString()} · ${e.currency} <strong>${e.amount.toFixed(2)}</strong></div>
+            <div style="font-size:12px;color:#6b7280">${e.employee?.name||'-'} - ${new Date(e.date).toLocaleDateString()} - ${e.currency} <strong>${e.amount.toFixed(2)}</strong></div>
             ${e.notes ? `<div style="font-size:12px;color:#9ca3af;margin-top:4px">${e.notes}</div>` : ''}
           </div>
           <div style="display:flex;gap:6px">
-            <button class="btn btn-sm" style="background:#f0fdf4;color:#16a34a;border:1px solid #bbf7d0" onclick="reviewExpense('${e._id}','approved')">✓ Approve</button>
-            <button class="btn btn-sm" style="background:#fef2f2;color:#dc2626;border:1px solid #fecaca" onclick="reviewExpense('${e._id}','rejected')">✗ Reject</button>
+            <button class="btn btn-sm" style="background:#f0fdf4;color:#16a34a;border:1px solid #bbf7d0" onclick="reviewExpense('${e._id}','approved')">- Approve</button>
+            <button class="btn btn-sm" style="background:#fef2f2;color:#dc2626;border:1px solid #fecaca" onclick="reviewExpense('${e._id}','rejected')">- Reject</button>
           </div>
         </div>
       </div>
@@ -11531,7 +11530,7 @@ content.innerHTML = `
         <tbody>
           ${expenses.map(e=>`
             <tr style="border-bottom:1px solid #f3f4f6">
-              <td style="padding:10px;font-weight:600">${e.employee?.name||'—'}</td>
+              <td style="padding:10px;font-weight:600">${e.employee?.name||'-'}</td>
               <td style="padding:10px">${e.title}</td>
               <td style="padding:10px">${catIcon(e.category)} ${e.category}</td>
               <td style="padding:10px;text-align:right;font-weight:700">${e.currency} ${e.amount.toFixed(2)}</td>
@@ -11561,19 +11560,19 @@ renderExpensesMgr();
 } catch(e) { toast(e.message, ‘err’); }
 }
 
-// ══════════════════════════════════════════════════════════════
-// MANAGER — ASSETS
-// ══════════════════════════════════════════════════════════════
+// –––––––––––––––––––––––––––––––
+// MANAGER - ASSETS
+// –––––––––––––––––––––––––––––––
 async function renderAssets() {
 const content = document.getElementById(‘main-content’);
-content.innerHTML = ‘<div class="loading">Loading…</div>’;
+content.innerHTML = ‘<div class="loading">Loading-</div>’;
 try {
 const { assets } = await api(’/api/operations/assets’);
 const assigned   = assets.filter(a => a.assignedTo);
 const unassigned = assets.filter(a => !a.assignedTo);
 
 ```
-const catIcon = c => ({laptop:'💻',phone:'📱',vehicle:'🚗',furniture:'🪑',equipment:'⚙️',other:'📦'}[c]||'📦');
+const catIcon = c => ({laptop:'-',phone:'-',vehicle:'-',furniture:'-',equipment:'--',other:'-'}[c]||'-');
 const condColor = c => ({new:'#16a34a',good:'#3b82f6',fair:'#f59e0b',poor:'#ef4444'}[c]||'#6b7280');
 
 content.innerHTML = `
@@ -11634,8 +11633,8 @@ content.innerHTML = `
               <span style="width:8px;height:8px;border-radius:50%;background:${condColor(a.condition)};display:inline-block" title="${a.condition}"></span>
             </div>
             <div style="font-size:12px;color:#6b7280">
-              ${a.serialNumber ? `S/N: ${a.serialNumber} · ` : ''}
-              ${a.purchaseValue ? `GHS ${a.purchaseValue.toLocaleString()} · ` : ''}
+              ${a.serialNumber ? `S/N: ${a.serialNumber} - ` : ''}
+              ${a.purchaseValue ? `GHS ${a.purchaseValue.toLocaleString()} - ` : ''}
               ${a.assignedTo ? `<span style="color:#16a34a;font-weight:600">Assigned: ${a.assignedTo.name}</span>` : '<span style="color:#f59e0b">Unassigned</span>'}
             </div>
           </div>
@@ -11671,7 +11670,7 @@ category: document.getElementById(‘as-cat’).value,
 condition: document.getElementById(‘as-cond’).value,
 purchaseValue: document.getElementById(‘as-val’).value || null,
 };
-const btn = event.target; btn.disabled = true; btn.textContent = ‘Saving…’;
+const btn = event.target; btn.disabled = true; btn.textContent = ‘Saving-’;
 try {
 await api(’/api/operations/assets’, { method: ‘POST’, body: JSON.stringify(body) });
 toast(‘Asset added!’, ‘ok’);
@@ -11719,12 +11718,12 @@ renderAssets();
 } catch(e) { toast(e.message, ‘err’); }
 }
 
-// ══════════════════════════════════════════════════════════════
-// EMPLOYEE — TIMESHEET
-// ══════════════════════════════════════════════════════════════
+// –––––––––––––––––––––––––––––––
+// EMPLOYEE - TIMESHEET
+// –––––––––––––––––––––––––––––––
 async function renderMyTimesheet() {
 const content = document.getElementById(‘main-content’);
-content.innerHTML = ‘<div class="loading">Loading…</div>’;
+content.innerHTML = ‘<div class="loading">Loading-</div>’;
 const period = new Date().toISOString().slice(0, 7);
 
 try {
@@ -11795,7 +11794,7 @@ content.innerHTML = `
           <tr style="border-bottom:1px solid #f3f4f6">
             <td style="padding:8px">${new Date(e.date).toLocaleDateString()}</td>
             <td style="padding:8px;text-align:center;font-weight:600">${e.hoursWorked}</td>
-            <td style="padding:8px;color:#6b7280;font-size:12px">${e.notes||'—'}</td>
+            <td style="padding:8px;color:#6b7280;font-size:12px">${e.notes||'-'}</td>
           </tr>
         `).join('')}
         <tr style="background:#f9fafb;font-weight:700">
@@ -11818,7 +11817,7 @@ content.innerHTML = `<div class="card"><p style="color:#ef4444">Error: ${e.messa
 async function reloadMyTimesheet() {
 const period = document.getElementById(‘mts-period’)?.value;
 const content = document.getElementById(‘main-content’);
-content.innerHTML = ‘<div class="loading">Loading…</div>’;
+content.innerHTML = ‘<div class="loading">Loading-</div>’;
 try {
 const { timesheet } = await api(`/api/operations/timesheets/my?period=${period}`);
 renderMyTimesheet._ts = timesheet;
@@ -11831,7 +11830,7 @@ const date  = document.getElementById(‘log-date’).value;
 const hours = parseFloat(document.getElementById(‘log-hours’).value);
 const notes = document.getElementById(‘log-notes’).value.trim();
 if (!date || isNaN(hours)) { toast(‘Date and hours required’, ‘err’); return; }
-const btn = event.target; btn.disabled = true; btn.textContent = ‘Saving…’;
+const btn = event.target; btn.disabled = true; btn.textContent = ‘Saving-’;
 try {
 await api(’/api/operations/timesheets/my/entry’, {
 method: ‘POST’,
@@ -11854,12 +11853,12 @@ renderMyTimesheet();
 } catch(e) { toast(e.message, ‘err’); }
 }
 
-// ══════════════════════════════════════════════════════════════
-// EMPLOYEE — EXPENSES
-// ══════════════════════════════════════════════════════════════
+// –––––––––––––––––––––––––––––––
+// EMPLOYEE - EXPENSES
+// –––––––––––––––––––––––––––––––
 async function renderMyExpenses() {
 const content = document.getElementById(‘main-content’);
-content.innerHTML = ‘<div class="loading">Loading…</div>’;
+content.innerHTML = ‘<div class="loading">Loading-</div>’;
 try {
 const { expenses } = await api(’/api/operations/expenses/my’);
 const total    = expenses.reduce((s,e)=>s+e.amount, 0);
@@ -11867,7 +11866,7 @@ const approved = expenses.filter(e=>e.status===‘approved’).reduce((s,e)=>s+e
 const pending  = expenses.filter(e=>e.status===‘pending’).length;
 
 ```
-const catIcon = c => ({travel:'✈️',meals:'🍽️',equipment:'🖥️',software:'💿',training:'📚',other:'📎'}[c]||'📎');
+const catIcon = c => ({travel:'--',meals:'--',equipment:'--',software:'-',training:'-',other:'-'}[c]||'-');
 
 content.innerHTML = `
   <div class="page-header"><h2>My Expenses</h2><p>Submit and track expense claims</p></div>
@@ -11946,7 +11945,7 @@ const notes  = document.getElementById(‘exp-notes’).value.trim();
 const errEl  = document.getElementById(‘exp-error’);
 errEl.style.display = ‘none’;
 if (!title || !amount || !date) { errEl.textContent = ‘Title, amount and date are required.’; errEl.style.display = ‘block’; return; }
-const btn = event.target; btn.disabled = true; btn.textContent = ‘Submitting…’;
+const btn = event.target; btn.disabled = true; btn.textContent = ‘Submitting-’;
 try {
 await api(’/api/operations/expenses’, { method: ‘POST’, body: JSON.stringify({ title, category: cat, amount, date, notes }) });
 toast(‘Expense claim submitted!’, ‘ok’);
@@ -11957,15 +11956,15 @@ btn.disabled = false; btn.textContent = ‘Submit Claim’;
 }
 }
 
-// ══════════════════════════════════════════════════════════════
-// EMPLOYEE — MY ASSETS
-// ══════════════════════════════════════════════════════════════
+// –––––––––––––––––––––––––––––––
+// EMPLOYEE - MY ASSETS
+// –––––––––––––––––––––––––––––––
 async function renderMyAssets() {
 const content = document.getElementById(‘main-content’);
-content.innerHTML = ‘<div class="loading">Loading…</div>’;
+content.innerHTML = ‘<div class="loading">Loading-</div>’;
 try {
 const { assets } = await api(’/api/operations/assets/my’);
-const catIcon = c => ({laptop:‘💻’,phone:‘📱’,vehicle:‘🚗’,furniture:‘🪑’,equipment:‘⚙️’,other:‘📦’}[c]||‘📦’);
+const catIcon = c => ({laptop:’-’,phone:’-’,vehicle:’-’,furniture:’-’,equipment:’–’,other:’-’}[c]||’-’);
 
 ```
 content.innerHTML = `
@@ -11977,18 +11976,18 @@ content.innerHTML = `
         <div style="flex:1">
           <div style="font-weight:700;font-size:16px;margin-bottom:2px">${a.name}</div>
           <div style="font-size:12px;color:#6b7280">
-            ${a.assetTag ? `Tag: ${a.assetTag} · ` : ''}
-            ${a.serialNumber ? `S/N: ${a.serialNumber} · ` : ''}
+            ${a.assetTag ? `Tag: ${a.assetTag} - ` : ''}
+            ${a.serialNumber ? `S/N: ${a.serialNumber} - ` : ''}
             Condition: <span style="font-weight:600;text-transform:capitalize">${a.condition}</span>
           </div>
           ${a.description ? `<div style="font-size:12px;color:#9ca3af;margin-top:4px">${a.description}</div>` : ''}
-          <div style="font-size:11px;color:#9ca3af;margin-top:4px">Assigned ${a.assignedAt ? new Date(a.assignedAt).toLocaleDateString() : '—'}</div>
+          <div style="font-size:11px;color:#9ca3af;margin-top:4px">Assigned ${a.assignedAt ? new Date(a.assignedAt).toLocaleDateString() : '-'}</div>
         </div>
       </div>
     </div>
   `).join('') : `
     <div class="card" style="text-align:center;padding:60px 24px">
-      <div style="font-size:48px;opacity:.3;margin-bottom:16px">📦</div>
+      <div style="font-size:48px;opacity:.3;margin-bottom:16px">-</div>
       <div style="font-size:16px;font-weight:600;margin-bottom:6px">No assets assigned</div>
       <p style="color:#9ca3af;font-size:13px">Your manager will assign company assets to you when needed.</p>
     </div>
@@ -12001,11 +12000,11 @@ content.innerHTML = `<div class="card"><p style="color:#ef4444">Error: ${e.messa
 }
 }
 
-// ══════════════════════════════════════════════════════════════════════════════
-//  CORPORATE PHASE 5 — ADVANCED (Multi-branch, Branding, Payroll, Analytics)
-// ══════════════════════════════════════════════════════════════════════════════
+// ——————————————————————————
+//  CORPORATE PHASE 5 - ADVANCED (Multi-branch, Branding, Payroll, Analytics)
+// ——————————————————————————
 
-// ── Patch buildSidebar for Phase 5 ───────────────────────────────────────────
+// – Patch buildSidebar for Phase 5 —————————————––
 const _p5BuildSidebar = buildSidebar;
 buildSidebar = function() {
 _p5BuildSidebar();
@@ -12040,7 +12039,7 @@ anchor.insertAdjacentElement(‘afterend’, a);
 });
 };
 
-// ── Patch navigateTo for Phase 5 ─────────────────────────────────────────────
+// – Patch navigateTo for Phase 5 ———————————————
 const _p5NavigateTo = navigateTo;
 navigateTo = function(view) {
 if (view === ‘analytics’)     { currentView = view; _setNavActive(view); renderAnalytics(); return; }
@@ -12050,23 +12049,23 @@ if (view === ‘payroll-export’){ currentView = view; _setNavActive(‘payroll
 _p5NavigateTo(view);
 };
 
-// ── Mini chart helper (pure CSS bar chart) ────────────────────────────────────
+// – Mini chart helper (pure CSS bar chart) ————————————
 function _miniBarChart(data, labelKey, valueKey, colorFn) {
 if (!data || !data.length) return ‘<p style="color:#9ca3af;font-size:12px">No data</p>’;
 const max = Math.max(…data.map(d => d[valueKey]));
 return data.map(d => {
 const pct = max > 0 ? Math.round((d[valueKey] / max) * 100) : 0;
 const color = colorFn ? colorFn(d) : ‘var(–primary)’;
-return ` <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"> <div style="font-size:12px;color:#6b7280;min-width:80px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${d[labelKey] || '—'}</div> <div style="flex:1;background:#f3f4f6;border-radius:4px;height:14px"> <div style="background:${color};height:14px;border-radius:4px;width:${pct}%;transition:width .4s"></div> </div> <div style="font-size:12px;font-weight:700;min-width:30px;text-align:right">${d[valueKey]}</div> </div>`;
+return ` <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"> <div style="font-size:12px;color:#6b7280;min-width:80px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${d[labelKey] || '-'}</div> <div style="flex:1;background:#f3f4f6;border-radius:4px;height:14px"> <div style="background:${color};height:14px;border-radius:4px;width:${pct}%;transition:width .4s"></div> </div> <div style="font-size:12px;font-weight:700;min-width:30px;text-align:right">${d[valueKey]}</div> </div>`;
 }).join(’’);
 }
 
-// ══════════════════════════════════════════════════════════════
+// –––––––––––––––––––––––––––––––
 // ANALYTICS DASHBOARD
-// ══════════════════════════════════════════════════════════════
+// –––––––––––––––––––––––––––––––
 async function renderAnalytics() {
 const content = document.getElementById(‘main-content’);
-content.innerHTML = ‘<div class="loading">Loading analytics…</div>’;
+content.innerHTML = ‘<div class="loading">Loading analytics-</div>’;
 try {
 const data = await api(’/api/advanced/analytics’);
 const { headcount, leave, training, performance, expenses, timesheets } = data;
@@ -12084,7 +12083,7 @@ content.innerHTML = `
     <div class="stat-card"><div class="stat-value">${headcount.total}</div><div class="stat-label">Total Employees</div></div>
     <div class="stat-card"><div class="stat-value">${training.rate}%</div><div class="stat-label">Training Completion</div></div>
     <div class="stat-card"><div class="stat-value">${performance.goalRate}%</div><div class="stat-label">Goal Completion</div></div>
-    <div class="stat-card"><div class="stat-value">${performance.avgReview ? `${performance.avgReview}/5` : '—'}</div><div class="stat-label">Avg Review Score</div></div>
+    <div class="stat-card"><div class="stat-value">${performance.avgReview ? `${performance.avgReview}/5` : '-'}</div><div class="stat-label">Avg Review Score</div></div>
     <div class="stat-card"><div class="stat-value">${timesheets.totalHours}</div><div class="stat-label">Hours This Month</div></div>
     <div class="stat-card"><div class="stat-value">${expTotal.toFixed(0)}</div><div class="stat-label">Expenses This Month</div></div>
   </div>
@@ -12093,7 +12092,7 @@ content.innerHTML = `
 
     <!-- Headcount by Department -->
     <div class="card">
-      <div style="font-size:14px;font-weight:700;margin-bottom:14px">👥 Headcount by Department</div>
+      <div style="font-size:14px;font-weight:700;margin-bottom:14px">- Headcount by Department</div>
       ${_miniBarChart(headcount.byDepartment, '_id', 'count', () => 'var(--primary)')}
       ${headcount.byBranch.length > 1 ? `
         <div style="border-top:1px solid #f3f4f6;margin-top:12px;padding-top:12px">
@@ -12105,7 +12104,7 @@ content.innerHTML = `
 
     <!-- Leave Overview -->
     <div class="card">
-      <div style="font-size:14px;font-weight:700;margin-bottom:14px">🏖️ Leave (Last 90 Days)</div>
+      <div style="font-size:14px;font-weight:700;margin-bottom:14px">-- Leave (Last 90 Days)</div>
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px">
         ${[['pending','#f59e0b'],['approved','#22c55e'],['rejected','#ef4444']].map(([s,c]) => `
           <div style="text-align:center;padding:10px;border-radius:8px;background:#f9fafb">
@@ -12122,7 +12121,7 @@ content.innerHTML = `
 
     <!-- Training -->
     <div class="card">
-      <div style="font-size:14px;font-weight:700;margin-bottom:14px">📚 Training Status</div>
+      <div style="font-size:14px;font-weight:700;margin-bottom:14px">- Training Status</div>
       <div style="text-align:center;padding:20px 0">
         <div style="position:relative;display:inline-block">
           <svg width="120" height="120" style="transform:rotate(-90deg)">
@@ -12151,10 +12150,10 @@ content.innerHTML = `
 
     <!-- Performance -->
     <div class="card">
-      <div style="font-size:14px;font-weight:700;margin-bottom:14px">🎯 Performance</div>
+      <div style="font-size:14px;font-weight:700;margin-bottom:14px">- Performance</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
         <div style="background:#f5f3ff;padding:14px;border-radius:10px;text-align:center">
-          <div style="font-size:28px;font-weight:800;color:#5b21b6">${performance.avgReview || '—'}</div>
+          <div style="font-size:28px;font-weight:800;color:#5b21b6">${performance.avgReview || '-'}</div>
           <div style="font-size:11px;color:#7c3aed">Avg Review /5</div>
           <div style="font-size:11px;color:#9ca3af">${performance.totalReviews} reviews</div>
         </div>
@@ -12168,7 +12167,7 @@ content.innerHTML = `
 
     <!-- Expenses breakdown -->
     <div class="card">
-      <div style="font-size:14px;font-weight:700;margin-bottom:14px">💳 Expense Breakdown (${expenses.period})</div>
+      <div style="font-size:14px;font-weight:700;margin-bottom:14px">- Expense Breakdown (${expenses.period})</div>
       ${expenses.byCategory.length ? `
         <div style="margin-bottom:10px">
           ${_miniBarChart(expenses.byCategory.map(e => ({...e, label: e._id})), 'label', 'total',
@@ -12182,7 +12181,7 @@ content.innerHTML = `
 
     <!-- Timesheets -->
     <div class="card">
-      <div style="font-size:14px;font-weight:700;margin-bottom:14px">⏱️ Timesheets (${timesheets.period})</div>
+      <div style="font-size:14px;font-weight:700;margin-bottom:14px">-- Timesheets (${timesheets.period})</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
         <div style="background:#eff6ff;padding:14px;border-radius:10px;text-align:center">
           <div style="font-size:28px;font-weight:800;color:#1d4ed8">${timesheets.totalHours}</div>
@@ -12204,12 +12203,12 @@ content.innerHTML = `<div class="card"><p style="color:#ef4444">Error: ${e.messa
 }
 }
 
-// ══════════════════════════════════════════════════════════════
+// –––––––––––––––––––––––––––––––
 // BRANCHES
-// ══════════════════════════════════════════════════════════════
+// –––––––––––––––––––––––––––––––
 async function renderBranches() {
 const content = document.getElementById(‘main-content’);
-content.innerHTML = ‘<div class="loading">Loading…</div>’;
+content.innerHTML = ‘<div class="loading">Loading-</div>’;
 try {
 const { branches } = await api(’/api/advanced/branches’);
 
@@ -12250,14 +12249,14 @@ content.innerHTML = `
         <div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:10px">
           <div style="flex:1">
             <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;flex-wrap:wrap">
-              <span style="font-weight:700;font-size:15px">🏢 ${b.name}</span>
+              <span style="font-weight:700;font-size:15px">- ${b.name}</span>
               ${b.code ? `<span style="font-size:11px;background:#f3f4f6;color:#6b7280;padding:2px 8px;border-radius:4px;font-weight:600">${b.code}</span>` : ''}
               <span style="font-size:12px;color:#6b7280">${b.headcount} employee${b.headcount !== 1 ? 's' : ''}</span>
             </div>
             <div style="font-size:12px;color:#9ca3af">
               ${[b.address, b.city, b.country].filter(Boolean).join(', ') || 'No address set'}
-              ${b.phone ? ` · ${b.phone}` : ''}
-              ${b.manager ? ` · Manager: <strong>${b.manager.name}</strong>` : ''}
+              ${b.phone ? ` - ${b.phone}` : ''}
+              ${b.manager ? ` - Manager: <strong>${b.manager.name}</strong>` : ''}
             </div>
           </div>
           <div style="display:flex;gap:6px">
@@ -12289,7 +12288,7 @@ country: document.getElementById(‘br-country’).value.trim(),
 phone:   document.getElementById(‘br-phone’).value.trim(),
 address: document.getElementById(‘br-addr’).value.trim(),
 };
-const btn = event.target; btn.disabled = true; btn.textContent = ‘Saving…’;
+const btn = event.target; btn.disabled = true; btn.textContent = ‘Saving-’;
 try {
 await api(’/api/advanced/branches’, { method: ‘POST’, body: JSON.stringify(body) });
 toast(‘Branch added!’, ‘ok’);
@@ -12309,12 +12308,12 @@ renderBranches();
 } catch(e) { toast(e.message, ‘err’); }
 }
 
-// ══════════════════════════════════════════════════════════════
+// –––––––––––––––––––––––––––––––
 // WHITE-LABEL BRANDING
-// ══════════════════════════════════════════════════════════════
+// –––––––––––––––––––––––––––––––
 async function renderBranding() {
 const content = document.getElementById(‘main-content’);
-content.innerHTML = ‘<div class="loading">Loading…</div>’;
+content.innerHTML = ‘<div class="loading">Loading-</div>’;
 try {
 const { branding, companyName } = await api(’/api/advanced/branding’);
 const payrollData = await api(’/api/advanced/analytics’).catch(() => null);
@@ -12341,7 +12340,7 @@ content.innerHTML = `
     <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;margin-bottom:14px">
       <div>
         <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:4px">Logo URL</label>
-        <input id="bd-logo" value="${branding.logoUrl||''}" placeholder="https://…" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px" oninput="updateBrandPreview()">
+        <input id="bd-logo" value="${branding.logoUrl||''}" placeholder="https://-" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px" oninput="updateBrandPreview()">
       </div>
       <div>
         <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:4px">Primary Color</label>
@@ -12366,7 +12365,7 @@ content.innerHTML = `
     <div id="bd-error" style="color:#ef4444;font-size:13px;margin-bottom:8px;display:none"></div>
     <div style="display:flex;gap:10px;flex-wrap:wrap">
       <button class="btn btn-primary" onclick="saveBranding()">Save Branding</button>
-      <button class="btn btn-secondary" onclick="previewLoginPage()">👁 Preview Login Page</button>
+      <button class="btn btn-secondary" onclick="previewLoginPage()">- Preview Login Page</button>
     </div>
   </div>
 
@@ -12393,7 +12392,7 @@ content.innerHTML = `
         <input id="pr-hours" type="number" value="160" min="1" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
       </div>
       <div>
-        <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:4px">Overtime Rate (×)</label>
+        <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:4px">Overtime Rate (-)</label>
         <input id="pr-ot" type="number" value="1.5" step="0.1" min="1" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
       </div>
     </div>
@@ -12434,7 +12433,7 @@ website:        document.getElementById(‘bd-web’).value.trim(),
 };
 const errEl = document.getElementById(‘bd-error’);
 errEl.style.display = ‘none’;
-const btn = event.target; btn.disabled = true; btn.textContent = ‘Saving…’;
+const btn = event.target; btn.disabled = true; btn.textContent = ‘Saving-’;
 try {
 await api(’/api/advanced/branding’, { method: ‘PATCH’, body: JSON.stringify(body) });
 toast(‘Branding saved!’, ‘ok’);
@@ -12454,7 +12453,7 @@ overtimeRate:  parseFloat(document.getElementById(‘pr-ot’).value),
 };
 const errEl = document.getElementById(‘pr-error’);
 errEl.style.display = ‘none’;
-const btn = event.target; btn.disabled = true; btn.textContent = ‘Saving…’;
+const btn = event.target; btn.disabled = true; btn.textContent = ‘Saving-’;
 try {
 await api(’/api/advanced/payroll-settings’, { method: ‘PATCH’, body: JSON.stringify(body) });
 toast(‘Payroll settings saved!’, ‘ok’);
@@ -12465,9 +12464,9 @@ btn.disabled = false; btn.textContent = ‘Save Payroll Settings’;
 }
 }
 
-// ══════════════════════════════════════════════════════════════
+// –––––––––––––––––––––––––––––––
 // PAYROLL EXPORT
-// ══════════════════════════════════════════════════════════════
+// –––––––––––––––––––––––––––––––
 async function renderPayrollExport() {
 const content = document.getElementById(‘main-content’);
 const period = new Date().toISOString().slice(0, 7);
@@ -12498,11 +12497,11 @@ content.innerHTML = `
   </div>
 
   <div style="background:#fef3c7;border:1px solid #fde68a;border-radius:10px;padding:12px;margin-bottom:20px">
-    <div style="font-size:12px;color:#92400e">⚠️ Only <strong>approved</strong> timesheets and expenses are included. Make sure to review all submissions before exporting.</div>
+    <div style="font-size:12px;color:#92400e">-- Only <strong>approved</strong> timesheets and expenses are included. Make sure to review all submissions before exporting.</div>
   </div>
 
   <button class="btn btn-primary" style="padding:12px 28px;font-size:14px" onclick="downloadPayrollExport()">
-    ⬇ Download CSV
+    - Download CSV
   </button>
 </div>
 ```
@@ -12513,17 +12512,17 @@ content.innerHTML = `
 function downloadPayrollExport() {
 const period = document.getElementById(‘pe-period’)?.value || new Date().toISOString().slice(0, 7);
 const token  = localStorage.getItem(‘kodex_token’) || localStorage.getItem(‘token’) || ‘’;
-const btn = event.target; btn.disabled = true; btn.textContent = ‘Generating…’;
-setTimeout(() => { btn.disabled = false; btn.textContent = ‘⬇ Download CSV’; }, 3000);
+const btn = event.target; btn.disabled = true; btn.textContent = ‘Generating-’;
+setTimeout(() => { btn.disabled = false; btn.textContent = ‘- Download CSV’; }, 3000);
 window.open(`/api/advanced/payroll-export?period=${period}&token=${token}`, ‘_blank’);
-toast(‘Payroll CSV downloading…’, ‘ok’);
+toast(‘Payroll CSV downloading-’, ‘ok’);
 }
 
-// ── Meeting Attendance Modal ──────────────────────────────────────────────────
+// – Meeting Attendance Modal –––––––––––––––––––––––––
 async function viewMeetingAttendance(meetingId, title) {
 const container = document.getElementById(‘modal-container’);
 container.classList.remove(‘hidden’);
-container.innerHTML = ‘<div class="modal-overlay" onclick="closeModal(event)"><div class="modal" onclick="event.stopPropagation()" style="max-width:700px;width:95%"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px"><h3 style="margin:0">Meeting Attendance</h3><button onclick="closeModal()" style="background:none;border:none;font-size:20px;cursor:pointer">×</button></div><div id="meeting-attendance-body"><div class="loading">Loading…</div></div></div></div>’;
+container.innerHTML = ‘<div class="modal-overlay" onclick="closeModal(event)"><div class="modal" onclick="event.stopPropagation()" style="max-width:700px;width:95%"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px"><h3 style="margin:0">Meeting Attendance</h3><button onclick="closeModal()" style="background:none;border:none;font-size:20px;cursor:pointer">-</button></div><div id="meeting-attendance-body"><div class="loading">Loading…</div></div></div></div>’;
 
 try {
 const data = await api(’/api/zoom/’ + meetingId + ‘/attendance’);
@@ -12534,11 +12533,11 @@ const statusColor = { present: ‘#22c55e’, partial: ‘#f59e0b’, absent: �
 ```
 let rows = '';
 for (const a of attendance) {
-  const joinStr = a.joinTime ? new Date(a.joinTime).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : '—';
+  const joinStr = a.joinTime ? new Date(a.joinTime).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : '-';
   const leaveStr = a.leaveTime ? new Date(a.leaveTime).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : '<span style="color:#f59e0b;font-size:11px">In meeting</span>';
-  const statusLabel = a.status ? a.status.charAt(0).toUpperCase() + a.status.slice(1) : '—';
-  rows += '<tr><td style="font-weight:600">' + (a.user && a.user.name ? a.user.name : '—') + '</td>'
-        + '<td style="font-size:12px;color:var(--text-muted)">' + (a.user && (a.user.email || a.user.indexNumber) ? (a.user.email || a.user.indexNumber) : '—') + '</td>'
+  const statusLabel = a.status ? a.status.charAt(0).toUpperCase() + a.status.slice(1) : '-';
+  rows += '<tr><td style="font-weight:600">' + (a.user && a.user.name ? a.user.name : '-') + '</td>'
+        + '<td style="font-size:12px;color:var(--text-muted)">' + (a.user && (a.user.email || a.user.indexNumber) ? (a.user.email || a.user.indexNumber) : '-') + '</td>'
         + '<td style="font-size:12px">' + joinStr + '</td>'
         + '<td style="font-size:12px">' + leaveStr + '</td>'
         + '<td style="font-size:12px">' + (a.durationMinutes || 0) + 'm</td>'
@@ -12556,8 +12555,8 @@ document.getElementById('meeting-attendance-body').innerHTML =
   '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">'
   + '<span style="font-size:13px;color:var(--text-light)">' + total + ' participant' + (total !== 1 ? 's' : '') + '</span>'
   + '<div style="display:flex;gap:8px">'
-  + '<a href="' + csvUrl + '" download style="text-decoration:none"><button class="btn btn-sm" style="background:#22c55e;color:#fff">⬇ Download CSV</button></a>'
-  + '<button class="btn btn-sm" style="background:#7c3aed;color:#fff" onclick="printMeetingAttendance(\'' + meetingId + '\', \'' + title.replace(/'/g, "\\'") + '\')">🖨 Print / PDF</button>'
+  + '<a href="' + csvUrl + '" download style="text-decoration:none"><button class="btn btn-sm" style="background:#22c55e;color:#fff">- Download CSV</button></a>'
+  + '<button class="btn btn-sm" style="background:#7c3aed;color:#fff" onclick="printMeetingAttendance(\'' + meetingId + '\', \'' + title.replace(/'/g, "\\'") + '\')">- Print / PDF</button>'
   + '</div></div>'
   + tableHtml;
 ```
@@ -12577,28 +12576,28 @@ const statusColor = { present: ‘#22c55e’, partial: ‘#f59e0b’, absent: �
 ```
 let rows = '';
 for (const a of attendance) {
-  const joinStr = a.joinTime ? new Date(a.joinTime).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : '—';
+  const joinStr = a.joinTime ? new Date(a.joinTime).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : '-';
   const leaveStr = a.leaveTime ? new Date(a.leaveTime).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : 'In meeting';
-  const statusLabel = a.status ? a.status.charAt(0).toUpperCase() + a.status.slice(1) : '—';
+  const statusLabel = a.status ? a.status.charAt(0).toUpperCase() + a.status.slice(1) : '-';
   const color = statusColor[a.status] || '#6b7280';
-  rows += '<tr><td>' + (a.user && a.user.name ? a.user.name : '—') + '</td>'
-        + '<td>' + (a.user && (a.user.email || a.user.indexNumber) ? (a.user.email || a.user.indexNumber) : '—') + '</td>'
+  rows += '<tr><td>' + (a.user && a.user.name ? a.user.name : '-') + '</td>'
+        + '<td>' + (a.user && (a.user.email || a.user.indexNumber) ? (a.user.email || a.user.indexNumber) : '-') + '</td>'
         + '<td>' + joinStr + '</td><td>' + leaveStr + '</td>'
         + '<td>' + (a.durationMinutes || 0) + 'm</td>'
         + '<td style="color:' + color + ';font-weight:600">' + statusLabel + '</td></tr>';
 }
 
 const win = window.open('', '_blank');
-win.document.write('<!DOCTYPE html><html><head><title>' + title + ' — Attendance</title>'
+win.document.write('<!DOCTYPE html><html><head><title>' + title + ' - Attendance</title>'
   + '<style>body{font-family:Arial,sans-serif;padding:24px}h2{margin-bottom:4px}p{color:#666;margin-bottom:16px}'
   + 'table{width:100%;border-collapse:collapse}th,td{border:1px solid #ddd;padding:8px;text-align:left;font-size:13px}'
   + 'th{background:#f3f4f6;font-weight:600}tr:nth-child(even){background:#f9fafb}'
   + '@media print{button{display:none}}</style></head><body>'
-  + '<h2>' + title + ' — Meeting Attendance</h2>'
+  + '<h2>' + title + ' - Meeting Attendance</h2>'
   + '<p>Generated: ' + new Date().toLocaleString() + '</p>'
   + '<table><thead><tr><th>Name</th><th>Email / Index</th><th>Joined</th><th>Left</th><th>Duration</th><th>Status</th></tr></thead>'
   + '<tbody>' + rows + '</tbody></table>'
-  + '<br><button onclick="window.print()">🖨 Print</button>'
+  + '<br><button onclick="window.print()">- Print</button>'
   + '</body></html>');
 win.document.close();
 win.focus();
@@ -12608,4 +12607,4 @@ setTimeout(function() { win.print(); }, 500);
 } catch(e) {
 toastError(’Failed to generate PDF: ’ + e.message);
 }
-} 
+}
