@@ -324,7 +324,7 @@ const methodMap = {
   zoom: "jitsi_join",
 };
 
-// sessionId is optional -- auto-detect the active session if not supplied
+// sessionId is optional - auto-detect the active session if not supplied
 let session;
 let resolvedSessionId = sessionId;
 
@@ -394,8 +394,8 @@ if (isEsp32Only && attendanceMethod !== 'ble_mark') {
       error: 'This session requires you to be physically present in the classroom. Connect to the KODEX-CLASSROOM WiFi and open http://192.168.4.1 to mark your attendance.',
     });
   } else {
-    // ESP32 went offline -- allow app marking as fallback
-    console.log('[MARK] ESP32 offline -- allowing app fallback');
+    // ESP32 went offline - allow app marking as fallback
+    console.log('[MARK] ESP32 offline - allowing app fallback');
   }
 }
 // -----------------------------------------------------
@@ -412,7 +412,7 @@ if (attendanceMethod === "qr_mark") {
   if (tokenDoc.isExpired()) {
     return res.status(410).json({ error: "QR code has expired. Please scan the latest QR code on screen." });
   }
-  // QR is time-gated (15s window) -- all students/employees can scan within the window
+  // QR is time-gated (15s window) - all students/employees can scan within the window
   qrTokenRef = tokenDoc._id;
 } else if (qrToken || code) {
   const query = {};
@@ -430,7 +430,7 @@ if (attendanceMethod === "qr_mark") {
   if (tokenDoc.isExpired()) {
     return res.status(410).json({ error: "Code has expired. Please ask your manager for the latest code." });
   }
-  // QR is time-gated (15s window) -- all students/employees can scan within the window
+  // QR is time-gated (15s window) - all students/employees can scan within the window
   if (!method) {
     attendanceMethod = tokenDoc.codeType === "verbal" ? "code_mark" : "code_mark";
   }
@@ -539,7 +539,7 @@ let session = await AttendanceSession.findOne({
 // If no session exists, create an automatic one for the day
 if (!session) {
   const today = new Date();
-  const dayTitle = `${today.toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric", year: "numeric" })} -- Auto Session`;
+  const dayTitle = `${today.toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric", year: "numeric" })} - Auto Session`;
   session = await AttendanceSession.create({
     company: req.user.company,
     createdBy: req.user._id,
