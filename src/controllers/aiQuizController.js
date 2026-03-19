@@ -10,7 +10,7 @@ const Quiz     = require("../models/Quiz");
 const mongoose = require("mongoose");
 const { generateQuestionsFromText } = require("../services/aiService");
 
-// Memory storage — PDF never written to disk
+// Memory storage -- PDF never written to disk
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 10 * 1024 * 1024 }, // 10 MB
@@ -23,11 +23,11 @@ const upload = multer({
 /**
  * POST /api/lecturer/quizzes/:id/ai-generate
  * Body (multipart/form-data OR application/json):
- *   - pdf        (file, optional)   — PDF to extract text from
- *   - notes      (string, optional) — Pasted text/notes
- *   - count      (number)           — How many questions (1-20, default 5)
- *   - types      (string)           — Comma-separated: "single,multiple,fill"
- *   - difficulty (string)           — "easy"|"medium"|"hard"|"mixed"
+ *   - pdf        (file, optional)   -- PDF to extract text from
+ *   - notes      (string, optional) -- Pasted text/notes
+ *   - count      (number)           -- How many questions (1-20, default 5)
+ *   - types      (string)           -- Comma-separated: "single,multiple,fill"
+ *   - difficulty (string)           -- "easy"|"medium"|"hard"|"mixed"
  */
 exports.generateQuestions = (req, res) => {
   upload(req, res, async (uploadErr) => {
