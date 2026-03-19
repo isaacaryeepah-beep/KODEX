@@ -30,7 +30,7 @@ function fullName(user) {
 
 // ── Daily email job ────────────────────────────────────────────────────────────
 async function runDailyEmails() {
-  console.log('[Scheduler] Running daily email check…');
+  console.log('[Scheduler] Running daily email check...');
   const now = new Date();
 
   try {
@@ -63,12 +63,12 @@ async function runDailyEmails() {
             await sendTrialEndingSoon({ email: user.email, name, daysLeft: 1, trialEndDate: trialEnd });
           }
 
-          // Day 14 — expired today
+          // Day 14 -- expired today
           if (daysGone === 0 && msLeft <= 0) {
             await sendTrialExpired({ email: user.email, name });
           }
 
-          // Day 16 — grace nudge (2 days after expiry)
+          // Day 16 -- grace nudge (2 days after expiry)
           if (daysGone === 2) {
             await sendGraceNudge({ email: user.email, name });
           }
@@ -78,7 +78,7 @@ async function runDailyEmails() {
       }
     }
 
-    // Renewal reminders — subscribed companies expiring in 7 days
+    // Renewal reminders -- subscribed companies expiring in 7 days
     const subCompanies = await Company.find({
       subscriptionActive: true,
       subscriptionEndDate: {
@@ -147,7 +147,7 @@ async function cleanStaleLocks() {
 
     for (const lock of activeLocks) {
       const session = lock.session;
-      // No session or already ended — release
+      // No session or already ended -- release
       if (!session || session.status !== 'active') {
         lockIdsToExpire.push(lock._id);
         continue;
@@ -193,8 +193,8 @@ function startScheduler() {
     cleanStaleLocks().catch(err => console.error('[LockCleanup] Unhandled error:', err));
   });
 
-  console.log('[Scheduler] ✅ Email scheduler started — runs daily at 08:00 Accra time');
-  console.log('[Scheduler] ✅ Stale lock cleanup started — runs every 5 minutes');
+  console.log('[Scheduler] ✅ Email scheduler started -- runs daily at 08:00 Accra time');
+  console.log('[Scheduler] ✅ Stale lock cleanup started -- runs every 5 minutes');
 }
 
 module.exports = { startScheduler, runDailyEmails, cleanStaleLocks };
