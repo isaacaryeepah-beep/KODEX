@@ -549,7 +549,7 @@ exports.login = async (req, res) => {
       }
       user = await User.findOne({ email, company: company._id, role: "employee" }).select("+password");
     } else if (email && loginRole === "lecturer") {
-      // Scope lecturer login to academic companies only — prevents cross-company email collision
+      // Scope lecturer login to academic companies only -- prevents cross-company email collision
       const CompanyModel = require("../models/Company");
       const academicIds = await CompanyModel.find({ mode: "academic" }, "_id").lean().then(cs => cs.map(c => c._id));
       user = await User.findOne({ email, company: { $in: academicIds }, role: "lecturer" }).select("+password");
@@ -577,14 +577,14 @@ exports.login = async (req, res) => {
     const company = await Company.findById(user.company);
 
     if (portalMode && company && company.mode !== portalMode && user.role !== "superadmin") {
-      // Don't reveal which portal is correct — generic error
+      // Don't reveal which portal is correct -- generic error
       return res.status(401).json({ error: "Invalid credentials" });
     }
 
     // ── Role-portal enforcement ──────────────────────────────────────────────
-    // Each portal only accepts specific roles — prevents admins logging in as
+    // Each portal only accepts specific roles -- prevents admins logging in as
     // lecturers, employees logging in as admins, etc.
-    // Superadmin is blocked from all institution portals — superadmin portal only
+    // Superadmin is blocked from all institution portals -- superadmin portal only
     if (user.role === "superadmin" && loginRole !== "superadmin") {
       return res.status(401).json({ error: "Invalid credentials" });
     }
@@ -598,7 +598,7 @@ exports.login = async (req, res) => {
     };
     if (loginRole && PORTAL_ALLOWED_ROLES[loginRole]) {
       const allowed = PORTAL_ALLOWED_ROLES[loginRole];
-      // Wrong portal — return same error as wrong password (don't reveal account exists)
+      // Wrong portal -- return same error as wrong password (don't reveal account exists)
       if (!allowed.includes(user.role)) {
         return res.status(401).json({ error: "Invalid credentials" });
       }
@@ -1171,7 +1171,7 @@ exports.send2FACode = async (req, res) => {
     user.twoFactorExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 min
     await user.save({ validateBeforeSave: false });
 
-    // Send email — non-fatal so modal always shows even if email is slow
+    // Send email -- non-fatal so modal always shows even if email is slow
     const { sendPasswordReset } = require("../services/emailService");
     sendPasswordReset({
       email: user.email,
@@ -1221,7 +1221,7 @@ exports.updateProfile = async (req, res) => {
 
     if (name && name.trim()) user.name = name.trim();
 
-    // Profile photo — store as base64 (max ~2MB)
+    // Profile photo -- store as base64 (max ~2MB)
     if (profilePhoto !== undefined) {
       if (profilePhoto && profilePhoto.length > 2 * 1024 * 1024 * 1.4) {
         return res.status(400).json({ error: "Profile photo must be under 2MB" });
@@ -1229,7 +1229,7 @@ exports.updateProfile = async (req, res) => {
       user.profilePhoto = profilePhoto || null;
     }
 
-    // Only lecturers can update their own department — HOD department is admin-controlled
+    // Only lecturers can update their own department -- HOD department is admin-controlled
     if (department !== undefined && user.role === 'lecturer') {
       user.department = department.trim() || null;
     }
