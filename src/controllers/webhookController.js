@@ -45,7 +45,7 @@ function verifySignature(rawBody, signature) {
 
 // ── Main webhook handler ──────────────────────────────────────────────────────
 exports.paystackWebhook = async (req, res) => {
-  // Acknowledge immediately — Paystack expects 200 fast
+  // Acknowledge immediately -- Paystack expects 200 fast
   res.sendStatus(200);
 
   try {
@@ -53,7 +53,7 @@ exports.paystackWebhook = async (req, res) => {
     const rawBody   = req.rawBody; // set by express raw body middleware (see server.js)
 
     if (!verifySignature(rawBody, signature)) {
-      console.warn("[webhook] Invalid Paystack signature — ignoring");
+      console.warn("[webhook] Invalid Paystack signature -- ignoring");
       return;
     }
 
@@ -96,10 +96,10 @@ async function handleChargeSuccess(data) {
     return;
   }
 
-  // Idempotency — don't process same reference twice
+  // Idempotency -- don't process same reference twice
   const existing = await Company.findOne({ lastPaymentReference: reference });
   if (existing) {
-    console.log(`[webhook] Reference ${reference} already processed — skipping`);
+    console.log(`[webhook] Reference ${reference} already processed -- skipping`);
     return;
   }
 
@@ -198,7 +198,7 @@ async function handleSubscriptionDisable(data) {
   }
 
   if (!company) {
-    console.warn("[webhook] subscription.disable — company not found for codes:", subscriptionCode, customerCode);
+    console.warn("[webhook] subscription.disable -- company not found for codes:", subscriptionCode, customerCode);
     return;
   }
 
@@ -223,10 +223,10 @@ async function handlePaymentFailed(data) {
   }
 
   if (company) {
-    // Mark as at-risk but don't deactivate yet — Paystack retries
+    // Mark as at-risk but don't deactivate yet -- Paystack retries
     company.subscriptionStatus = "past_due";
     await company.save();
-    console.warn(`[webhook] Payment failed for company ${company._id} — marked past_due`);
+    console.warn(`[webhook] Payment failed for company ${company._id} -- marked past_due`);
   }
 
   // Send payment failed email to admin
