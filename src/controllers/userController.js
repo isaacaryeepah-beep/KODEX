@@ -434,7 +434,7 @@ exports.bulkImportStudents = async (req, res) => {
         const numPart  = String(Math.floor(1000 + Math.random() * 9000));
         const tempPassword = namePart + idPart + numPart;
 
-        // Build user data — email optional for students
+        // Build user data -- email optional for students
         const userData = {
           name: row.name,
           indexNumber: row.indexNumber,
