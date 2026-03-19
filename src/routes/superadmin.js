@@ -11,7 +11,7 @@ const emailService = require("../services/emailService");
 
 const router = express.Router();
 
-// ── POST /api/superadmin/login (public — no auth needed) ─────────────────────
+// ── POST /api/superadmin/login (public -- no auth needed) ─────────────────────
 router.post("/login", async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -192,7 +192,7 @@ router.delete("/companies/:id", async (req, res) => {
 });
 
 // ── DELETE /api/superadmin/companies/by-name/:name ───────────────────────────
-// Emergency cleanup — delete any company stuck by name
+// Emergency cleanup -- delete any company stuck by name
 router.delete("/companies/by-name/:name", async (req, res) => {
   try {
     const name = decodeURIComponent(req.params.name);
