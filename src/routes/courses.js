@@ -18,7 +18,7 @@ router.patch("/:id", requireRole("lecturer", "admin", "superadmin"), companyIsol
 router.post("/:id/enroll", requireRole("lecturer", "admin", "superadmin"), companyIsolation, courseController.enrollStudents);
 router.delete("/:id/students/:studentId", requireRole("lecturer", "admin", "superadmin"), companyIsolation, courseController.removeStudent);
 
-// POST /:id/email-students — bulk email to enrolled students
+// POST /:id/email-students -- bulk email to enrolled students
 router.post("/:id/email-students", requireRole("lecturer", "admin", "superadmin"), companyIsolation, async (req, res) => {
   try {
     const { subject, message } = req.body;
