@@ -1,6 +1,6 @@
 /**
  * QuestionBank.js
- * Standalone question store — lecturer-scoped, reusable across quizzes.
+ * Standalone question store -- lecturer-scoped, reusable across quizzes.
  * Questions here are independent of any quiz until imported.
  */
 const mongoose = require("mongoose");
@@ -60,7 +60,7 @@ const questionBankSchema = new mongoose.Schema(
       default: 1,
       min: 0,
     },
-    // Tag for organising — e.g. "Biology", "Week 3", "Final Exam"
+    // Tag for organising -- e.g. "Biology", "Week 3", "Final Exam"
     topic: {
       type: String,
       trim: true,
