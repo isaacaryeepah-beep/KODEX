@@ -7,7 +7,11 @@ const authenticate = require('../middleware/auth');
 router.post('/register', ctrl.register);
 router.get('/poll',      ctrl.poll);
 
+// ESP32 student page mark (no user auth — uses index+PIN)
+router.post('/mark', ctrl.markViaESP32);
+
 // App routes (requires logged-in user)
-router.get('/status', authenticate, ctrl.status);
+router.get('/status',  authenticate, ctrl.status);
+router.post('/set-pin', authenticate, ctrl.setPin);
 
 module.exports = router;
