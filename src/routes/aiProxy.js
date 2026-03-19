@@ -4,7 +4,7 @@ const https   = require('https');
 const authenticate = require('../middleware/auth');
 
 // POST /api/ai/generate-questions
-// Proxies to Anthropic API — keeps API key server-side, never exposed to browser
+// Proxies to Anthropic API -- keeps API key server-side, never exposed to browser
 router.post('/generate-questions', authenticate, async (req, res) => {
   const { prompt, max_tokens } = req.body;
 
