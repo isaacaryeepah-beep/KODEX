@@ -84,7 +84,7 @@ exports.listMeetings = async (req, res) => {
 
     if (status) filter.status = status;
 
-    // Lecturers can only see meetings they created — no cross-lecturer visibility
+    // Lecturers can only see meetings they created -- no cross-lecturer visibility
     if (req.user.role === "lecturer") {
       filter.createdBy = req.user._id;
     }
