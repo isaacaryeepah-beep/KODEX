@@ -1,8 +1,8 @@
 // ─── KODEX SMS Service (Arkesel) ─────────────────────────────────────────────
 // Docs: https://developers.arkesel.com
 // Env vars needed in Render:
-//   ARKESEL_API_KEY  — your API key from arkesel.com dashboard
-//   SMS_SENDER_ID    — e.g. "KODEX" (max 11 chars, no spaces)
+//   ARKESEL_API_KEY  -- your API key from arkesel.com dashboard
+//   SMS_SENDER_ID    -- e.g. "KODEX" (max 11 chars, no spaces)
 // ─────────────────────────────────────────────────────────────────────────────
 
 const https = require('https');
@@ -23,7 +23,7 @@ async function sendSms({ to, message }) {
   const phone    = normalisePhone(to);
 
   if (!apiKey) {
-    console.log(`[SMS] DEV MODE — to:${phone} msg:"${message}"`);
+    console.log(`[SMS] DEV MODE -- to:${phone} msg:"${message}"`);
     return { ok: true, dev: true };
   }
   if (!phone) {
