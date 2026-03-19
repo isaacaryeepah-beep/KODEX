@@ -47,7 +47,7 @@ const announcementSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
-    // Optional expiry — auto-hide after this date
+    // Optional expiry -- auto-hide after this date
     expiresAt: {
       type: Date,
       default: null,
