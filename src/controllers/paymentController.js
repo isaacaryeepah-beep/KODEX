@@ -67,7 +67,7 @@ exports.getPlans = async (req, res) => {
   return res.json({
     plans: [
       { id: "monthly", name: "Monthly Plan",  stripe: { label: "Not available" }, paystack: { label: "GHS 200 / month" } },
-      { id: "yearly",  name: "Annual Plan",   stripe: { label: "Not available" }, paystack: { label: "GHS 2,000 / year (save GHS 400 — 2 months free)" } },
+      { id: "yearly",  name: "Annual Plan",   stripe: { label: "Not available" }, paystack: { label: "GHS 2,000 / year (save GHS 400 -- 2 months free)" } },
     ],
   });
 };
@@ -175,7 +175,7 @@ exports.verifyPaystackSubscription = async (req, res) => {
 
     // ── Subscription stacking ──────────────────────────────────────────────
     // If the company already has an active subscription, extend from the
-    // current end date rather than from today — so early renewals stack up.
+    // current end date rather than from today -- so early renewals stack up.
     const existingCompany = await Company.findById(companyId).lean();
     const baseDate =
       existingCompany?.subscriptionActive &&
