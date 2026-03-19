@@ -63,7 +63,7 @@ if (company.bleLocationId) {
 
 const session = await AttendanceSession.create(sessionData);
 
-// ── Notify ESP32 if it's registered for this company ──
+// -- Notify ESP32 if it's registered for this company --
 try {
   const companyDoc = await Company.findById(companyId).select('esp32Token esp32Online esp32LastSeen');
   const esp32Online = companyDoc?.esp32Token &&
@@ -86,7 +86,7 @@ try {
 } catch (e) {
   console.warn('[ESP32] Could not queue start command:', e.message);
 }
-// ─────────────────────────────────────────────────────
+// -----------------------------------------------------
 
 const populated = await session.populate([
   { path: "company", select: "name" },
@@ -136,7 +136,7 @@ session.stoppedAt = new Date();
 session.stoppedBy = req.user._id;
 await session.save();
 
-// ── Notify ESP32 to stop and sync ─────────────────────
+// -- Notify ESP32 to stop and sync ---------------------
 try {
   const companyDoc = await Company.findById(session.company).select('esp32Token esp32LastSeen');
   const esp32Online = companyDoc?.esp32Token &&
@@ -150,7 +150,7 @@ try {
 } catch (e) {
   console.warn('[ESP32] Could not queue stop command:', e.message);
 }
-// ─────────────────────────────────────────────────────
+// -----------------------------------------------------
 
 const populated = await session.populate([
   { path: "company", select: "name" },
@@ -324,7 +324,7 @@ const methodMap = {
   zoom: "jitsi_join",
 };
 
-// sessionId is optional — auto-detect the active session if not supplied
+// sessionId is optional -- auto-detect the active session if not supplied
 let session;
 let resolvedSessionId = sessionId;
 
@@ -377,7 +377,7 @@ if (existingRecord) {
 // Define attendanceMethod BEFORE the esp32Only check
 let attendanceMethod = method ? (methodMap[method] || method) : "manual";
 
-// ── ESP32-only mode: block app/mobile data marking ──────
+// -- ESP32-only mode: block app/mobile data marking ------
 // Only enforce if ESP32 is still online (polled within last 30s)
 // If ESP32 goes offline, fall back to normal app marking
 const isEsp32Only = session.esp32Only === true;
@@ -394,11 +394,11 @@ if (isEsp32Only && attendanceMethod !== 'ble_mark') {
       error: 'This session requires you to be physically present in the classroom. Connect to the KODEX-CLASSROOM WiFi and open http://192.168.4.1 to mark your attendance.',
     });
   } else {
-    // ESP32 went offline — allow app marking as fallback
-    console.log('[MARK] ESP32 offline — allowing app fallback');
+    // ESP32 went offline -- allow app marking as fallback
+    console.log('[MARK] ESP32 offline -- allowing app fallback');
   }
 }
-// ─────────────────────────────────────────────────────
+// -----------------------------------------------------
 let qrTokenRef = null;
 
 if (attendanceMethod === "qr_mark") {
@@ -412,7 +412,7 @@ if (attendanceMethod === "qr_mark") {
   if (tokenDoc.isExpired()) {
     return res.status(410).json({ error: "QR code has expired. Please scan the latest QR code on screen." });
   }
-  // QR is time-gated (15s window) — all students/employees can scan within the window
+  // QR is time-gated (15s window) -- all students/employees can scan within the window
   qrTokenRef = tokenDoc._id;
 } else if (qrToken || code) {
   const query = {};
@@ -430,7 +430,7 @@ if (attendanceMethod === "qr_mark") {
   if (tokenDoc.isExpired()) {
     return res.status(410).json({ error: "Code has expired. Please ask your manager for the latest code." });
   }
-  // QR is time-gated (15s window) — all students/employees can scan within the window
+  // QR is time-gated (15s window) -- all students/employees can scan within the window
   if (!method) {
     attendanceMethod = tokenDoc.codeType === "verbal" ? "code_mark" : "code_mark";
   }
@@ -517,7 +517,7 @@ res.status(500).json({ error: “Failed to fetch attendance records” });
 }
 };
 
-// ─── Corporate Employee Sign In / Sign Out ─────────────────────────
+// — Corporate Employee Sign In / Sign Out ———————––
 exports.employeeSignIn = async (req, res) => {
 try {
 const company = await Company.findById(req.user.company);
@@ -539,7 +539,7 @@ let session = await AttendanceSession.findOne({
 // If no session exists, create an automatic one for the day
 if (!session) {
   const today = new Date();
-  const dayTitle = `${today.toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric", year: "numeric" })} — Auto Session`;
+  const dayTitle = `${today.toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric", year: "numeric" })} -- Auto Session`;
   session = await AttendanceSession.create({
     company: req.user.company,
     createdBy: req.user._id,
@@ -668,7 +668,7 @@ res.status(500).json({ error: “Failed to get sign-in status” });
 }
 };
 
-// ── ESP32 offline sync endpoint ────────────────────────────────────────────────
+// – ESP32 offline sync endpoint ————————————————
 exports.esp32Sync = async (req, res) => {
 try {
 // Validate ESP32 secret
