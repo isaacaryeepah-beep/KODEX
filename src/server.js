@@ -179,6 +179,7 @@ app.use("/api/performance", performanceRoutes);
 app.use("/api/operations",  operationsRoutes);
 app.use("/api/advanced",    advancedRoutes);
 if (superadminRoutes) app.use("/api/superadmin",  superadminRoutes);
+app.use("/api/esp32", require("./routes/esp32"));
 
 app.use((req, res) => {
   const indexPath = path.join(__dirname, "public", "index.html");
