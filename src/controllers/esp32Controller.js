@@ -156,7 +156,7 @@ exports.markViaESP32 = async (req, res) => {
       return res.status(409).json({ error: 'Attendance already marked for this session.' });
     }
 
-    // Check device lock — if student has a locked device, this request must come from it
+    // Check device lock -- if student has a locked device, this request must come from it
     // For ESP32 we use the student's index number as the device fingerprint
     // (physical presence is guaranteed by WiFi subnet check done in firmware)
 
@@ -173,13 +173,13 @@ exports.markViaESP32 = async (req, res) => {
       deviceFingerprint: deviceFingerprint || null,
     });
 
-    console.log(`[ESP32] Marked: ${student.name} (${indexNumber}) — ${status}`);
+    console.log(`[ESP32] Marked: ${student.name} (${indexNumber}) -- ${status}`);
 
     res.json({
       ok:      true,
       name:    student.name,
       status,
-      message: `Attendance marked — ${status}`,
+      message: `Attendance marked -- ${status}`,
     });
   } catch (e) {
     console.error('[ESP32] Mark error:', e);
@@ -228,13 +228,13 @@ exports.studentList = async (req, res) => {
     }).select('+attendancePin').lean();
 
     // Convert bcrypt PINs to SHA256 for ESP32 local verification
-    // We store a SHA256(pin) alongside — computed once here, cached on SD
+    // We store a SHA256(pin) alongside -- computed once here, cached on SD
     const bcrypt = require('bcryptjs');
     const list = [];
 
     for (const u of users) {
       if (!u.attendancePin) continue;
-      // We can't reverse bcrypt — instead store a server-side SHA256
+      // We can't reverse bcrypt -- instead store a server-side SHA256
       // of the raw PIN. Since we can't get the raw PIN from bcrypt,
       // we use a HMAC of the bcrypt hash with the ESP32 token as key.
       // This means only this ESP32 can verify it.
