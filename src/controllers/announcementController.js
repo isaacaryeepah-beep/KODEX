@@ -3,7 +3,7 @@ const mongoose     = require("mongoose");
 
 const CAN_POST = ["admin", "superadmin", "lecturer", "manager", "hod"];
 
-// Helper — build the filter for what a given user can SEE
+// Helper -- build the filter for what a given user can SEE
 function visibilityFilter(user) {
   const now = new Date();
   const base = {
@@ -34,7 +34,7 @@ function visibilityFilter(user) {
     return base;
   }
 
-  // Any other role — nothing
+  // Any other role -- nothing
   return { ...base, _id: null };
 }
 
@@ -73,7 +73,7 @@ exports.create = async (req, res) => {
       return res.status(400).json({ error: "Title and body are required" });
     }
 
-    // Lecturers can only post to their own students — force audience to "students"
+    // Lecturers can only post to their own students -- force audience to "students"
     let resolvedAudience;
     if (req.user.role === "lecturer") {
       resolvedAudience = "students";
@@ -146,7 +146,7 @@ exports.remove = async (req, res) => {
   }
 };
 
-// PATCH /api/announcements/:id/pin — admin only
+// PATCH /api/announcements/:id/pin -- admin only
 exports.togglePin = async (req, res) => {
   try {
     if (!["admin", "superadmin"].includes(req.user.role)) {
