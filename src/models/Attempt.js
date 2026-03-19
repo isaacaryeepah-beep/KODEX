@@ -55,7 +55,7 @@ const attemptSchema = new mongoose.Schema(
   }
 );
 
-// No longer unique — students can have multiple attempts per quiz
+// No longer unique -- students can have multiple attempts per quiz
 attemptSchema.index({ quiz: 1, student: 1, attemptNumber: 1 }, { unique: true });
 attemptSchema.index({ quiz: 1, student: 1 });
 
