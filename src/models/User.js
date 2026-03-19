@@ -76,6 +76,10 @@ const userSchema = new mongoose.Schema(
       default: null,
     },
     mustChangePassword: { type: Boolean, default: false }, // set true after admin temp reset
+    // 4-digit PIN for ESP32 classroom attendance marking
+    // Simpler than full password — set by student in their profile
+    attendancePin:     { type: String, default: null, select: false },  // bcrypt hashed
+    attendancePinSet:  { type: Boolean, default: false },
     resetPasswordToken: { type: String, default: null },
     resetPasswordExpires: { type: Date, default: null },
     passwordResetLog: [{
@@ -154,6 +158,13 @@ userSchema.pre("validate", function () {
 });
 
 userSchema.pre("save", async function () {
+  // Hash attendance PIN if changed
+  if (this.isModified("attendancePin") && this.attendancePin) {
+    const salt = await bcrypt.genSalt(10);
+    this.attendancePin = await bcrypt.hash(String(this.attendancePin), salt);
+    this.attendancePinSet = true;
+  }
+
   if (!this.isModified("password")) return;
   const salt = await bcrypt.genSalt(12);
   this.password = await bcrypt.hash(this.password, salt);
@@ -161,6 +172,11 @@ userSchema.pre("save", async function () {
 
 userSchema.methods.comparePassword = async function (candidatePassword) {
   return bcrypt.compare(candidatePassword, this.password);
+};
+
+userSchema.methods.comparePin = async function(candidatePin) {
+  if (!this.attendancePin) return false;
+  return bcrypt.compare(String(candidatePin), this.attendancePin);
 };
 
 userSchema.methods.toJSON = function () {
