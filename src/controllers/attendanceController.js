@@ -49,6 +49,8 @@ exports.startSession = async (req, res) => {
       course: courseRef,
       status: "active",
       startedAt: new Date(),
+      // If ESP32 is online for this company, lock session to ESP32-only marking
+      esp32Only: false,
     };
 
     if (company.qrSeed) {
@@ -75,7 +77,10 @@ exports.startSession = async (req, res) => {
           issuedAt:  new Date(),
         };
         await companyDoc.save();
-        console.log('[ESP32] Start command queued for session:', session._id);
+        // Lock session to ESP32-only marking
+        session.esp32Only = true;
+        await session.save();
+        console.log('[ESP32] Start command queued. Session locked to ESP32-only marking.');
       }
     } catch (e) {
       console.warn('[ESP32] Could not queue start command:', e.message);
@@ -341,6 +346,17 @@ exports.markAttendance = async (req, res) => {
         });
       }
     }
+
+    // ── ESP32-only mode: block app/mobile data marking ──────
+    // If the session was started with ESP32, students must
+    // physically be in the classroom on the ESP32 WiFi.
+    // Only esp32Sync records (method=ble_mark) are allowed.
+    if (session.esp32Only && attendanceMethod !== 'ble_mark') {
+      return res.status(403).json({
+        error: 'This session requires you to be physically present in the classroom. Connect to the KODEX-CLASSROOM WiFi and open http://192.168.4.1 to mark your attendance.',
+      });
+    }
+    // ─────────────────────────────────────────────────────
 
     const existingRecord = await AttendanceRecord.findOne({
       session: resolvedSessionId,
