@@ -102,7 +102,7 @@ exports.listQuizzes = async (req, res) => {
     }
 
     // Filter by source if provided (proctored = main portal, assignment = assignments page)
-    // Legacy quizzes have no source field — treat them as proctored
+    // Legacy quizzes have no source field -- treat them as proctored
     if (req.query.source === 'assignment') {
       filter.source = 'assignment';
     } else if (req.query.source === 'proctored') {
