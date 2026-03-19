@@ -60,6 +60,28 @@ exports.startSession = async (req, res) => {
 
     const session = await AttendanceSession.create(sessionData);
 
+    // ── Notify ESP32 if it's registered for this company ──
+    try {
+      const companyDoc = await Company.findById(companyId).select('esp32Token esp32Online esp32LastSeen');
+      const esp32Online = companyDoc?.esp32Token &&
+        companyDoc.esp32LastSeen &&
+        (Date.now() - new Date(companyDoc.esp32LastSeen).getTime() < 15000);
+
+      if (esp32Online) {
+        companyDoc.esp32PendingCommand = {
+          action:    'start',
+          sessionId: session._id.toString(),
+          title:     session.title || 'Attendance Session',
+          issuedAt:  new Date(),
+        };
+        await companyDoc.save();
+        console.log('[ESP32] Start command queued for session:', session._id);
+      }
+    } catch (e) {
+      console.warn('[ESP32] Could not queue start command:', e.message);
+    }
+    // ─────────────────────────────────────────────────────
+
     const populated = await session.populate([
       { path: "company", select: "name" },
       { path: "createdBy", select: "name email" },
@@ -104,6 +126,22 @@ exports.stopSession = async (req, res) => {
     session.stoppedAt = new Date();
     session.stoppedBy = req.user._id;
     await session.save();
+
+    // ── Notify ESP32 to stop and sync ─────────────────────
+    try {
+      const companyDoc = await Company.findById(session.company).select('esp32Token esp32LastSeen');
+      const esp32Online = companyDoc?.esp32Token &&
+        companyDoc.esp32LastSeen &&
+        (Date.now() - new Date(companyDoc.esp32LastSeen).getTime() < 15000);
+      if (esp32Online) {
+        companyDoc.esp32PendingCommand = { action: 'stop', issuedAt: new Date() };
+        await companyDoc.save();
+        console.log('[ESP32] Stop command queued');
+      }
+    } catch (e) {
+      console.warn('[ESP32] Could not queue stop command:', e.message);
+    }
+    // ─────────────────────────────────────────────────────
 
     const populated = await session.populate([
       { path: "company", select: "name" },
