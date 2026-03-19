@@ -19,7 +19,7 @@ function gradeAnswers(questions, answers) {
     let marksAwarded = 0;
 
     if (type === "explain") {
-      // Explain questions need manual grading — award 0 for now, flag for review
+      // Explain questions need manual grading -- award 0 for now, flag for review
       const textAnswer = studentAns?.textAnswer || "";
       gradedAnswers.push({ questionIndex: qIdx, selectedAnswers: [], textAnswer, isCorrect: false, marksAwarded: 0, needsManualGrading: true });
       return;
@@ -71,7 +71,7 @@ function safeDeleteFile(filePath) {
 }
 
 // ══════════════════════════════════════════════════════════════════════════
-//  LECTURER — Create assignment
+//  LECTURER -- Create assignment
 // ══════════════════════════════════════════════════════════════════════════
 exports.createAssignment = async (req, res) => {
   try {
@@ -109,7 +109,7 @@ exports.createAssignment = async (req, res) => {
 };
 
 // ══════════════════════════════════════════════════════════════════════════
-//  LECTURER — Update assignment metadata
+//  LECTURER -- Update assignment metadata
 // ══════════════════════════════════════════════════════════════════════════
 exports.updateAssignment = async (req, res) => {
   try {
@@ -131,7 +131,7 @@ exports.updateAssignment = async (req, res) => {
 };
 
 // ══════════════════════════════════════════════════════════════════════════
-//  LECTURER — Delete assignment
+//  LECTURER -- Delete assignment
 // ══════════════════════════════════════════════════════════════════════════
 exports.deleteAssignment = async (req, res) => {
   try {
@@ -154,7 +154,7 @@ exports.deleteAssignment = async (req, res) => {
 };
 
 // ══════════════════════════════════════════════════════════════════════════
-//  LECTURER — List assignments
+//  LECTURER -- List assignments
 // ══════════════════════════════════════════════════════════════════════════
 exports.listAssignments = async (req, res) => {
   try {
@@ -194,7 +194,7 @@ exports.listAssignments = async (req, res) => {
 };
 
 // ══════════════════════════════════════════════════════════════════════════
-//  LECTURER — Get single assignment + submissions
+//  LECTURER -- Get single assignment + submissions
 // ══════════════════════════════════════════════════════════════════════════
 exports.getAssignment = async (req, res) => {
   try {
@@ -218,7 +218,7 @@ exports.getAssignment = async (req, res) => {
 };
 
 // ══════════════════════════════════════════════════════════════════════════
-//  LECTURER — Upload PDF brief (multipart form-data)
+//  LECTURER -- Upload PDF brief (multipart form-data)
 // ══════════════════════════════════════════════════════════════════════════
 exports.uploadPdf = (req, res) => {
   uploadBrief(req, res, async (err) => {
@@ -255,7 +255,7 @@ exports.uploadPdf = (req, res) => {
 };
 
 // ══════════════════════════════════════════════════════════════════════════
-//  SHARED — Download PDF brief (lecturer + student)
+//  SHARED -- Download PDF brief (lecturer + student)
 // ══════════════════════════════════════════════════════════════════════════
 exports.downloadPdf = async (req, res) => {
   try {
@@ -264,7 +264,7 @@ exports.downloadPdf = async (req, res) => {
     if (!assignment || !assignment.pdfBrief?.filePath)
       return res.status(404).json({ error: "No PDF found for this assignment" });
 
-    // Students must be enrolled — checked in route middleware (studentGetAssignment verifies enrollment)
+    // Students must be enrolled -- checked in route middleware (studentGetAssignment verifies enrollment)
     if (!fs.existsSync(assignment.pdfBrief.filePath))
       return res.status(404).json({ error: "File not found on server" });
 
@@ -278,7 +278,7 @@ exports.downloadPdf = async (req, res) => {
 };
 
 // ══════════════════════════════════════════════════════════════════════════
-//  LECTURER — Add question
+//  LECTURER -- Add question
 // ══════════════════════════════════════════════════════════════════════════
 exports.addQuestion = async (req, res) => {
   try {
@@ -327,7 +327,7 @@ exports.addQuestion = async (req, res) => {
 };
 
 // ══════════════════════════════════════════════════════════════════════════
-//  LECTURER — Update question
+//  LECTURER -- Update question
 // ══════════════════════════════════════════════════════════════════════════
 exports.updateQuestion = async (req, res) => {
   try {
@@ -371,7 +371,7 @@ exports.updateQuestion = async (req, res) => {
 };
 
 // ══════════════════════════════════════════════════════════════════════════
-//  LECTURER — Delete question
+//  LECTURER -- Delete question
 // ══════════════════════════════════════════════════════════════════════════
 exports.deleteQuestion = async (req, res) => {
   try {
@@ -389,10 +389,10 @@ exports.deleteQuestion = async (req, res) => {
 };
 
 // ══════════════════════════════════════════════════════════════════════════
-//  LECTURER — Grade submission
+//  LECTURER -- Grade submission
 // ══════════════════════════════════════════════════════════════════════════
 // ══════════════════════════════════════════════════════════════════════════
-//  LECTURER — Get single submission with questions + answers
+//  LECTURER -- Get single submission with questions + answers
 // ══════════════════════════════════════════════════════════════════════════
 exports.getSubmission = async (req, res) => {
   try {
@@ -444,7 +444,7 @@ exports.gradeSubmission = async (req, res) => {
 };
 
 // ══════════════════════════════════════════════════════════════════════════
-//  LECTURER — Download student submission file
+//  LECTURER -- Download student submission file
 // ══════════════════════════════════════════════════════════════════════════
 exports.downloadSubmissionFile = async (req, res) => {
   try {
@@ -466,7 +466,7 @@ exports.downloadSubmissionFile = async (req, res) => {
 };
 
 // ══════════════════════════════════════════════════════════════════════════
-//  STUDENT — List available assignments
+//  STUDENT -- List available assignments
 // ══════════════════════════════════════════════════════════════════════════
 exports.studentList = async (req, res) => {
   try {
@@ -511,7 +511,7 @@ exports.studentList = async (req, res) => {
 };
 
 // ══════════════════════════════════════════════════════════════════════════
-//  STUDENT — Get single assignment detail (questions, no correct answers)
+//  STUDENT -- Get single assignment detail (questions, no correct answers)
 // ══════════════════════════════════════════════════════════════════════════
 exports.studentGet = async (req, res) => {
   try {
@@ -544,7 +544,7 @@ exports.studentGet = async (req, res) => {
 };
 
 // ══════════════════════════════════════════════════════════════════════════
-//  STUDENT — Submit assignment (file + MCQ answers)
+//  STUDENT -- Submit assignment (file + MCQ answers)
 //  Uses multipart/form-data: file field + JSON answers field
 // ══════════════════════════════════════════════════════════════════════════
 exports.studentSubmit = (req, res) => {
@@ -605,7 +605,7 @@ exports.studentSubmit = (req, res) => {
       const existing = await AssignmentSubmission.findOne({ assignment: id, student: req.user._id });
       if (existing?.status === "graded") {
         safeDeleteFile(req.file?.path);
-        return res.status(409).json({ error: "Already graded — cannot resubmit" });
+        return res.status(409).json({ error: "Already graded -- cannot resubmit" });
       }
 
       // Delete old submission file if re-submitting
