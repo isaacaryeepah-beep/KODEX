@@ -1,12 +1,12 @@
-const express = require(“express”);
-const mongoose = require(“mongoose”);
-const QrToken = require(”../models/QrToken”);
-const AttendanceSession = require(”../models/AttendanceSession”);
-const authenticate = require(”../middleware/auth”);
-const { requireRole } = require(”../middleware/role”);
-const { companyIsolation } = require(”../middleware/companyIsolation”);
-const { validateDevice, enforceLogoutRestriction } = require(”../middleware/deviceValidation”);
-const { requireActiveSubscription } = require(”../middleware/subscription”);
+const express = require("express");
+const mongoose = require("mongoose");
+const QrToken = require("../models/QrToken");
+const AttendanceSession = require("../models/AttendanceSession");
+const authenticate = require("../middleware/auth");
+const { requireRole } = require("../middleware/role");
+const { companyIsolation } = require("../middleware/companyIsolation");
+const { validateDevice, enforceLogoutRestriction } = require("../middleware/deviceValidation");
+const { requireActiveSubscription } = require("../middleware/subscription");
 
 const router = express.Router();
 router.use(authenticate);
@@ -15,16 +15,16 @@ router.use(requireActiveSubscription);
 const QR_EXPIRY_SECONDS   = 15;   // QR rotates every 15s - time-gated, multi-use
 const VERBAL_EXPIRY_MINUTES = 5;  // Verbal code valid for 5 minutes - multi-use
 
-// – Generate a token (QR or verbal) —————————————–
+// - Generate a token (QR or verbal) ---------------------------
 router.post(
-“/generate”,
-requireRole(“admin”, “manager”, “lecturer”, “superadmin”),
+"/generate",
+requireRole("admin", "manager", "lecturer", "superadmin"),
 companyIsolation,
 async (req, res) => {
 try {
-const { sessionId, expiryMinutes, expirySeconds, codeType = “qr” } = req.body;
+const { sessionId, expiryMinutes, expirySeconds, codeType = "qr" } = req.body;
 
-```
+
   if (!sessionId || !mongoose.Types.ObjectId.isValid(sessionId)) {
     return res.status(400).json({ error: "Valid session ID is required" });
   }
@@ -119,18 +119,17 @@ const { sessionId, expiryMinutes, expirySeconds, codeType = “qr” } = req.bod
   }
   res.status(500).json({ error: error.message || "Failed to generate token" });
 }
-```
 
 }
 );
 
-// – Validate a token (used by student app before marking) ––––––––––
-router.post(”/validate”, validateDevice, enforceLogoutRestriction, async (req, res) => {
+// - Validate a token (used by student app before marking) ----------
+router.post("/validate", validateDevice, enforceLogoutRestriction, async (req, res) => {
 try {
 const { token, code, sessionId } = req.body;
-if (!token && !code) return res.status(400).json({ error: “Token or code is required” });
+if (!token && !code) return res.status(400).json({ error: "Token or code is required" });
 
-```
+
 const query = {};
 if (token) {
   query.token = token;
@@ -162,31 +161,30 @@ res.json({
     company: qrToken.company,
   },
 });
-```
 
 } catch (error) {
-console.error(“Validate QR token error:”, error);
-res.status(500).json({ error: “Failed to validate token” });
+console.error("Validate QR token error:", error);
+res.status(500).json({ error: "Failed to validate token" });
 }
 });
 
-// – List tokens for a session ————————————————
+// - List tokens for a session --------------------------------
 router.get(
-“/session/:sessionId”,
-requireRole(“admin”, “manager”, “lecturer”, “superadmin”),
+"/session/:sessionId",
+requireRole("admin", "manager", "lecturer", "superadmin"),
 companyIsolation,
 async (req, res) => {
 try {
 const { sessionId } = req.params;
 if (!mongoose.Types.ObjectId.isValid(sessionId)) {
-return res.status(400).json({ error: “Invalid session ID” });
+return res.status(400).json({ error: "Invalid session ID" });
 }
-const sessionFilter = { _id: sessionId, …req.companyFilter };
-if (req.user.role === “lecturer”) sessionFilter.createdBy = req.user._id;
+const sessionFilter = { _id: sessionId, ...req.companyFilter };
+if (req.user.role === "lecturer") sessionFilter.createdBy = req.user._id;
 const session = await AttendanceSession.findOne(sessionFilter);
-if (!session) return res.status(404).json({ error: “Attendance session not found or access denied” });
+if (!session) return res.status(404).json({ error: "Attendance session not found or access denied" });
 
-```
+
   const tokens = await QrToken.find({ session: sessionId })
     .sort({ createdAt: -1 })
     .populate("createdBy", "name email");
@@ -196,7 +194,6 @@ if (!session) return res.status(404).json({ error: “Attendance session not fou
   console.error("List session tokens error:", error);
   res.status(500).json({ error: "Failed to fetch tokens" });
 }
-```
 
 }
 );
