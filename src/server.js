@@ -30,7 +30,7 @@ const proctoredQuizRoutes = require("./routes/proctoredQuizzes");
 const assignmentRoutes  = require("./routes/assignments");
 const aiProxyRoutes     = require("./routes/aiProxy");
 let superadminRoutes = null;
-try { superadminRoutes = require("./routes/superadmin"); } catch(_) { console.warn('superadmin routes not found — skipping'); }
+try { superadminRoutes = require("./routes/superadmin"); } catch(_) { console.warn('superadmin routes not found -- skipping'); }
 
 // ── Security middleware ───────────────────────────────────────────────────────
 const { loginLimiter, registerLimiter, passwordResetLimiter, apiLimiter } = require("./middleware/rateLimiter");
@@ -41,7 +41,7 @@ const PORT = process.env.PORT || 5000;
 
 // ── Helmet: secure HTTP headers ───────────────────────────────────────────────
 app.use(helmet({
-  contentSecurityPolicy: false,      // keep off — your app uses inline scripts
+  contentSecurityPolicy: false,      // keep off -- your app uses inline scripts
   crossOriginEmbedderPolicy: false,  // needed for Jitsi/Zoom iframes
   referrerPolicy: { policy: "strict-origin-when-cross-origin" },
   hsts: { maxAge: 31536000, includeSubDomains: true }, // force HTTPS for 1 year
@@ -91,7 +91,7 @@ app.use((req, res, next) => {
   }
 });
 
-app.use(express.json({ limit: "10mb" })); // kept at 10mb — proctored quiz snapshots need it
+app.use(express.json({ limit: "10mb" })); // kept at 10mb -- proctored quiz snapshots need it
 
 // ── Global input sanitizer (NoSQL injection + XSS prevention) ────────────────
 app.use(sanitizeInputs);
@@ -102,7 +102,7 @@ app.use("/api/", (req, res, next) => {
   if (req.path.includes('/snapshot') || req.path.includes('/health')) return next();
   return apiLimiter(req, res, next);
 });
-// Superadmin portal — must be before static middleware so it takes priority
+// Superadmin portal -- must be before static middleware so it takes priority
 app.get("/superadmin", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "superadmin.html"));
 });
@@ -151,7 +151,7 @@ app.use("/api/lecturer/quizzes", lecturerQuizRoutes);
 app.use("/api/lecturer/question-bank", questionBankRoutes);
 app.use("/api/announcements",          announcementRoutes);
 app.use("/api/timetable",              require("./routes/timetable"));
-app.use("/api/webhooks",               webhookRoutes);      // public — Paystack webhook
+app.use("/api/webhooks",               webhookRoutes);      // public -- Paystack webhook
 app.use("/api/gradebook",              gradeBookRoutes);
 app.use("/api/student/quizzes", studentQuizRoutes);
 app.use("/api/admin/quizzes", adminQuizRoutes);
