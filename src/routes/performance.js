@@ -176,7 +176,7 @@ router.delete("/reviews/:id", ...mw, canManage, async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────
-// SCORECARD (manager dashboard — per employee overview)
+// SCORECARD (manager dashboard -- per employee overview)
 // ─────────────────────────────────────────────────────────────
 
 router.get("/scorecard/:employeeId", ...mw, canManage, async (req, res) => {
