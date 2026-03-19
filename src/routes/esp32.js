@@ -10,8 +10,12 @@ router.get('/poll',      ctrl.poll);
 // ESP32 student page mark (no user auth — uses index+PIN)
 router.post('/mark', ctrl.markViaESP32);
 
+// ESP32 device routes — student list + pin verify (uses ESP32 token)
+router.get('/student-list', ctrl.studentList);
+router.post('/verify-pin',  ctrl.verifyPin);
+
 // App routes (requires logged-in user)
-router.get('/status',  authenticate, ctrl.status);
+router.get('/status',   authenticate, ctrl.status);
 router.post('/set-pin', authenticate, ctrl.setPin);
 
 module.exports = router;
