@@ -8233,9 +8233,54 @@ async function renderProfile() {
           </label>
         </div>
       </div>` : ''}
+      ${u.role === 'student' ? `
+      <div style="margin-bottom:20px;padding-top:20px;border-top:1px solid var(--border)">
+        <h3 style="font-size:14px;font-weight:700;margin-bottom:4px;color:var(--text-primary)">Classroom Attendance PIN</h3>
+        <p style="font-size:12px;color:var(--text-muted);margin-bottom:12px">Used to mark attendance on the ESP32 classroom device. Set a memorable 4-digit number.</p>
+        <div class="form-group">
+          <label>New PIN (4 digits)</label>
+          <input type="password" id="attendance-pin" inputmode="numeric" maxlength="4" placeholder="e.g. 1234" style="letter-spacing:4px;font-size:20px;max-width:140px">
+        </div>
+        <div class="form-group">
+          <label>Confirm PIN</label>
+          <input type="password" id="attendance-pin-confirm" inputmode="numeric" maxlength="4" placeholder="e.g. 1234" style="letter-spacing:4px;font-size:20px;max-width:140px">
+        </div>
+        <button class="btn btn-secondary" onclick="saveAttendancePin()" style="width:auto;padding:8px 20px">Set PIN</button>
+        <div id="pin-msg" style="display:none;margin-top:10px;padding:8px 12px;border-radius:6px;font-size:12px"></div>
+      </div>` : ''}
       <button class="btn btn-primary" onclick="saveProfile()" style="width:100%">Save Changes</button>
     </div>
   `;
+}
+
+async function saveAttendancePin() {
+  const pin         = document.getElementById('attendance-pin')?.value?.trim();
+  const pinConfirm  = document.getElementById('attendance-pin-confirm')?.value?.trim();
+  const msgEl       = document.getElementById('pin-msg');
+
+  const showPinMsg = (text, ok) => {
+    msgEl.textContent = text;
+    msgEl.style.display = 'block';
+    msgEl.style.background = ok ? 'var(--success-light)' : 'var(--danger-light)';
+    msgEl.style.color = ok ? '#065f46' : '#991b1b';
+  };
+
+  if (!pin || pin.length !== 4 || !/^\d{4}$/.test(pin)) {
+    showPinMsg('PIN must be exactly 4 digits (numbers only)', false); return;
+  }
+  if (pin !== pinConfirm) {
+    showPinMsg('PINs do not match', false); return;
+  }
+
+  try {
+    await api('/api/esp32/set-pin', { method: 'POST', body: JSON.stringify({ pin }) });
+    showPinMsg('Attendance PIN set successfully!', true);
+    document.getElementById('attendance-pin').value = '';
+    document.getElementById('attendance-pin-confirm').value = '';
+    toastSuccess('Attendance PIN updated');
+  } catch (e) {
+    showPinMsg(e.message || 'Failed to set PIN', false);
+  }
 }
 
 async function toggle2FA(enable) {
