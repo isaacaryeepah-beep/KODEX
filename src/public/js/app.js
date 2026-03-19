@@ -3220,6 +3220,14 @@ const enrolledCourses = coursesData.courses.length;
 const quizzesTaken = quizzesData.quizzes.length;
 const upcomingMeetings = meetingsData.meetings.filter(m => m.status === 'scheduled');
 const activeSession = activeSessionData.session;
+
+// DEBUG PANEL - remove after fixing
+// update debug panel after render
+setTimeout(() => {
+  const _raw = JSON.stringify(activeSessionData, null, 2);
+  const _debugContent = document.getElementById('student-debug-content');
+  if (_debugContent) _debugContent.innerHTML = '<pre style="font-size:11px;overflow:auto;max-height:140px;background:#1e1e1e;color:#d4d4d4;padding:8px;border-radius:6px;margin:0">' + _raw + '</pre>';
+}, 100);
 const attendanceRate = totalCheckins > 0 ? Math.round((attendance.records.filter(r => r.status === 'present').length / attendance.records.length) * 100) : 0;
 
 const methodLabel = (m) => {
@@ -3231,6 +3239,10 @@ content.innerHTML = `
 <div class="page-header">
 <h2>Welcome back, ${currentUser.name.split(' ')[0]}</h2>
 <p>${currentUser.company?.name || 'Your institution'}${currentUser.indexNumber ? ' \u2022 ' + currentUser.indexNumber : ''}</p>
+</div>
+<div id="student-debug-panel" style="margin-bottom:12px;padding:10px;background:#fef3c7;border:1px solid #fbbf24;border-radius:8px">
+  <div style="font-size:11px;font-weight:700;color:#92400e;margin-bottom:6px">DEBUG — Active session API response (remove after fix)</div>
+  <div id="student-debug-content" style="font-size:11px;color:#78350f">Loading...</div>
 </div>
 
 
