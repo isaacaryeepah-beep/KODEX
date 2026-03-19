@@ -1,17 +1,17 @@
-const API = ‘’;
+const API = '';
 
-// —————————————————––
+// ------------------------------------
 // TOAST NOTIFICATION SYSTEM
-// Usage: toast(‘Message’)           - info (default)
-//        toast(‘Message’, ‘success’) - green
-//        toast(‘Message’, ‘error’)   - red  
-//        toast(‘Message’, ‘warning’) - amber
-//        toastConfirm(‘Sure?’, onConfirm) - replaces confirm()
-// —————————————————––
+// Usage: toast('Message')           - info (default)
+//        toast('Message', 'success') - green
+//        toast('Message', 'error')   - red  
+//        toast('Message', 'warning') - amber
+//        toastConfirm('Sure?', onConfirm) - replaces confirm()
+// ------------------------------------
 
 (function() {
 // Inject toast CSS once
-const style = document.createElement(‘style’);
+const style = document.createElement('style');
 style.textContent = `
 #toast-container {
 position: fixed;
@@ -30,7 +30,7 @@ align-items: flex-start;
 gap: 10px;
 padding: 12px 14px;
 border-radius: 10px;
-font-family: ‘Inter’, -apple-system, sans-serif;
+font-family: 'Inter', -apple-system, sans-serif;
 font-size: 13px;
 font-weight: 500;
 line-height: 1.45;
@@ -84,7 +84,7 @@ transition: width linear;
 }
 .toast { position: relative; overflow: hidden; }
 
-```
+
 /* Types */
 .toast-success { border-left: 3px solid #10b981; }
 .toast-success .toast-progress { background: #10b981; }
@@ -123,7 +123,6 @@ transition: width linear;
   .toast.toast-in { transform: translateY(0); }
   .toast.toast-out { transform: translateY(120%); }
 }
-```
 
 `;
 document.head.appendChild(style);
@@ -132,25 +131,25 @@ document.head.appendChild(style);
 let container;
 function getContainer() {
 if (!container || !document.body.contains(container)) {
-container = document.createElement(‘div’);
-container.id = ‘toast-container’;
+container = document.createElement('div');
+container.id = 'toast-container';
 document.body.appendChild(container);
 }
 return container;
 }
 
 const ICONS = {
-success: ‘-’,
-error:   ‘-’,
-warning: ‘-’,
-info:    ‘-’,
+success: '-',
+error:   '-',
+warning: '-',
+info:    '-',
 };
 
 const TITLES = {
-success: ‘Success’,
-error:   ‘Error’,
-warning: ‘Warning’,
-info:    ‘Info’,
+success: 'Success',
+error:   'Error',
+warning: 'Warning',
+info:    'Info',
 };
 
 const DURATIONS = {
@@ -160,13 +159,13 @@ warning: 4500,
 info:    3500,
 };
 
-window.toast = function(message, type = ‘info’, options = {}) {
+window.toast = function(message, type = 'info', options = {}) {
 if (!message) return;
 const c = getContainer();
 const duration = options.duration || DURATIONS[type] || 3500;
-const t = type in ICONS ? type : ‘info’;
+const t = type in ICONS ? type : 'info';
 
-```
+
 const el = document.createElement('div');
 el.className = `toast toast-${t}`;
 el.innerHTML = `
@@ -206,7 +205,6 @@ el.addEventListener('mouseleave', () => {
 });
 
 return el;
-```
 
 };
 
@@ -214,25 +212,25 @@ function dismiss(el) {
 if (!el || el._dismissed) return;
 el._dismissed = true;
 clearTimeout(el._toastTimer);
-el.classList.remove(‘toast-in’);
-el.classList.add(‘toast-out’);
+el.classList.remove('toast-in');
+el.classList.add('toast-out');
 setTimeout(() => el.remove(), 300);
 }
 
 // Convenience shorthands
-window.toastSuccess = (msg, opts) => window.toast(msg, ‘success’, opts);
-window.toastError   = (msg, opts) => window.toast(msg, ‘error’,   opts);
-window.toastWarning = (msg, opts) => window.toast(msg, ‘warning’, opts);
-window.toastInfo    = (msg, opts) => window.toast(msg, ‘info’,    opts);
+window.toastSuccess = (msg, opts) => window.toast(msg, 'success', opts);
+window.toastError   = (msg, opts) => window.toast(msg, 'error',   opts);
+window.toastWarning = (msg, opts) => window.toast(msg, 'warning', opts);
+window.toastInfo    = (msg, opts) => window.toast(msg, 'info',    opts);
 
 // Replaces window.confirm() - returns a Promise
 window.toastConfirm = function(message, onConfirm, onCancel, opts = {}) {
 const c = getContainer();
-const el = document.createElement(‘div’);
-el.className = ‘toast toast-warning’;
+const el = document.createElement('div');
+el.className = 'toast toast-warning';
 el.innerHTML = `<span class="toast-icon">-</span> <div class="toast-body"> <div class="toast-msg">${message}</div> <div class="toast-confirm-btns"> <button class="toast-confirm-no">${opts.cancelLabel || 'Cancel'}</button> <button class="toast-confirm-yes">${opts.confirmLabel || 'Confirm'}</button> </div> </div>`;
 
-```
+
 const dismiss = () => {
   el.classList.remove('toast-in');
   el.classList.add('toast-out');
@@ -250,60 +248,59 @@ el.querySelector('.toast-confirm-no').addEventListener('click', () => {
 
 c.appendChild(el);
 requestAnimationFrame(() => requestAnimationFrame(() => el.classList.add('toast-in')));
-```
 
 };
 
 })();
 
-let token = localStorage.getItem(‘token’);
+let token = localStorage.getItem('token');
 
-// – Device fingerprint for 6-hour cross-device logout lock —————––
+// - Device fingerprint for 6-hour cross-device logout lock ------------
 function getDeviceFingerprint() {
 const nav = window.navigator;
 const raw = [
 nav.userAgent,
 nav.language,
-nav.hardwareConcurrency || ‘’,
+nav.hardwareConcurrency || '',
 screen.width, screen.height, screen.colorDepth,
-nav.platform || ‘’,
+nav.platform || '',
 new Date().getTimezoneOffset(),
-].join(’|’);
+].join('|');
 let hash = 0;
 for (let i = 0; i < raw.length; i++) {
 hash = ((hash << 5) - hash + raw.charCodeAt(i)) | 0;
 }
-return ‘fp_’ + Math.abs(hash).toString(16);
+return 'fp_' + Math.abs(hash).toString(16);
 }
 
-// ——————————————————————————
+// ----------------------------------------------------
 //  OFFLINE LOGIN MODULE
 //  - On successful online login, saves a secure profile to localStorage
 //  - On offline login attempt, verifies against the cached profile
 //  - Uses SHA-256 hashing (no plaintext passwords ever stored)
 //  - Supports all roles: admin, lecturer, employee, student
-// ——————————————————————————
+// ----------------------------------------------------
 
-const OFFLINE_LOGIN_KEY = ‘kodex_offline_profiles’;  // stores cached user profiles
+const OFFLINE_LOGIN_KEY = 'kodex_offline_profiles';  // stores cached user profiles
 const OFFLINE_LOGIN_MAX_AGE_DAYS = 30;               // cached profile expires after 30 days
 
-// – Hash a password with SHA-256 (async, no library needed) ——————
+// - Hash a password with SHA-256 (async, no library needed) ------------
 async function hashPassword(password) {
 const encoder = new TextEncoder();
-const data = encoder.encode(password + ‘KODEX_SALT_2025’); // salted hash
-const hashBuffer = await crypto.subtle.digest(‘SHA-256’, data);
+const data = encoder.encode(password + 'KODEX_SALT_2025'); // salted hash
+const hashBuffer = await crypto.subtle.digest('SHA-256', data);
 const hashArray = Array.from(new Uint8Array(hashBuffer));
-return hashArray.map(b => b.toString(16).padStart(2, ‘0’)).join(’’);
+return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
-// – Save user profile after successful online login —————————
+// - Save user profile after successful online login ------------------
 async function saveOfflineProfile(credentials, userData) {
 try {
-const profiles = JSON.parse(localStorage.getItem(OFFLINE_LOGIN_KEY) || ‘{}’);
+const profiles = JSON.parse(localStorage.getItem(OFFLINE_LOGIN_KEY) || '{}');
 const profileKey = buildProfileKey(credentials);
 const passwordHash = await hashPassword(credentials.password);
 
-```
+
 profiles[profileKey] = {
   passwordHash,
   user: {
@@ -326,33 +323,32 @@ profiles[profileKey] = {
 
 localStorage.setItem(OFFLINE_LOGIN_KEY, JSON.stringify(profiles));
 console.log('[OfflineLogin] Profile cached for', credentials.email || credentials.indexNumber);
-```
 
 } catch (e) {
-console.warn(’[OfflineLogin] Failed to save profile:’, e);
+console.warn('[OfflineLogin] Failed to save profile:', e);
 }
 }
 
-// – Build a unique key per user identity ———————————––
+// - Build a unique key per user identity ------------------------
 function buildProfileKey(credentials) {
 if (credentials.indexNumber) {
 return `student::${credentials.indexNumber}::${(credentials.institutionCode || '').toUpperCase()}`;
 }
-if (credentials.employeeId || (credentials.loginRole === ‘employee’)) {
+if (credentials.employeeId || (credentials.loginRole === 'employee')) {
 return `employee::${(credentials.email || '').toLowerCase()}::${(credentials.institutionCode || '').toUpperCase()}`;
 }
-const role = credentials.loginRole || ‘admin’;
+const role = credentials.loginRole || 'admin';
 return `${role}::${(credentials.email || '').toLowerCase()}`;
 }
 
-// – Attempt offline login —————————————————–
+// - Attempt offline login -----------------------------------
 async function attemptOfflineLogin(credentials) {
 try {
-const profiles = JSON.parse(localStorage.getItem(OFFLINE_LOGIN_KEY) || ‘{}’);
+const profiles = JSON.parse(localStorage.getItem(OFFLINE_LOGIN_KEY) || '{}');
 const profileKey = buildProfileKey(credentials);
 const profile = profiles[profileKey];
 
-```
+
 if (!profile) {
   throw new Error('No offline profile found. Please login online at least once first.');
 }
@@ -378,136 +374,135 @@ return {
   trial: profile.trial,
   offlineMode: true,   // flag so app knows we're offline
 };
-```
 
 } catch (e) {
 throw e;
 }
 }
 
-// – Clear a specific offline profile (on logout) ——————————
+// - Clear a specific offline profile (on logout) --------------------
 function clearOfflineProfile(userRole, email, indexNumber, institutionCode) {
 try {
-const profiles = JSON.parse(localStorage.getItem(OFFLINE_LOGIN_KEY) || ‘{}’);
+const profiles = JSON.parse(localStorage.getItem(OFFLINE_LOGIN_KEY) || '{}');
 const key = buildProfileKey({ loginRole: userRole, email, indexNumber, institutionCode });
 delete profiles[key];
 localStorage.setItem(OFFLINE_LOGIN_KEY, JSON.stringify(profiles));
 } catch (e) {
-console.warn(’[OfflineLogin] Could not clear profile:’, e);
+console.warn('[OfflineLogin] Could not clear profile:', e);
 }
 }
 
-// – Show offline login notice on the form ———————————––
+// - Show offline login notice on the form ------------------------
 function showOfflineLoginNotice(containerId) {
-const existing = document.getElementById(‘offline-login-notice’);
+const existing = document.getElementById('offline-login-notice');
 if (existing) return;
-const notice = document.createElement(‘div’);
-notice.id = ‘offline-login-notice’;
+const notice = document.createElement('div');
+notice.id = 'offline-login-notice';
 notice.style.cssText = [
-‘background:#fef3c7’,‘color:#92400e’,‘border:1px solid #fbbf24’,
-‘border-radius:8px’,‘padding:10px 14px’,‘font-size:12px’,
-‘margin-bottom:12px’,‘display:flex’,‘align-items:center’,‘gap:8px’
-].join(’;’);
+'background:#fef3c7','color:#92400e','border:1px solid #fbbf24',
+'border-radius:8px','padding:10px 14px','font-size:12px',
+'margin-bottom:12px','display:flex','align-items:center','gap:8px'
+].join(';');
 notice.innerHTML = `<span style="font-size:16px">-</span> <span><strong>You're offline.</strong> Signing in with your saved credentials.</span>`;
 const container = document.getElementById(containerId);
 if (container) container.prepend(notice);
 }
 
 function removeOfflineLoginNotice() {
-const n = document.getElementById(‘offline-login-notice’);
+const n = document.getElementById('offline-login-notice');
 if (n) n.remove();
 }
 
-// ——————————————————————————
+// ----------------------------------------------------
 //  OFFLINE SUPPORT MODULE
 //  - Detects online/offline state and shows a banner
 //  - Caches read data (sessions, courses, attendance) in localStorage
 //  - Queues write actions (start/stop session, manual mark, student mark)
 //  - Auto-syncs the queue the moment connection is restored
-// ——————————————————————————
+// ----------------------------------------------------
 
-const OFFLINE_CACHE_KEY   = ‘edu_offline_cache’;
-const OFFLINE_QUEUE_KEY   = ‘edu_offline_queue’;
-const OFFLINE_BANNER_ID   = ‘offline-banner’;
+const OFFLINE_CACHE_KEY   = 'edu_offline_cache';
+const OFFLINE_QUEUE_KEY   = 'edu_offline_queue';
+const OFFLINE_BANNER_ID   = 'offline-banner';
 
-// – Helpers ——————————————————————
+// - Helpers --------------------------------------------
 function isOnline() { return navigator.onLine; }
 
 function offlineCache(key, data) {
 try {
-const store = JSON.parse(localStorage.getItem(OFFLINE_CACHE_KEY) || ‘{}’);
+const store = JSON.parse(localStorage.getItem(OFFLINE_CACHE_KEY) || '{}');
 // Prune old attendees_ entries if we have more than 20 (saves localStorage space)
-const attendeeKeys = Object.keys(store).filter(k => k.startsWith(‘attendees_’));
+const attendeeKeys = Object.keys(store).filter(k => k.startsWith('attendees_'));
 if (attendeeKeys.length > 20) {
 // Remove oldest 10
 attendeeKeys.slice(0, 10).forEach(k => delete store[k]);
 }
 store[key] = { data, ts: Date.now() };
 localStorage.setItem(OFFLINE_CACHE_KEY, JSON.stringify(store));
-} catch(e) { console.warn(’[Offline] Cache write failed’, e); }
+} catch(e) { console.warn('[Offline] Cache write failed', e); }
 }
 
 function offlineRead(key) {
 try {
-const store = JSON.parse(localStorage.getItem(OFFLINE_CACHE_KEY) || ‘{}’);
+const store = JSON.parse(localStorage.getItem(OFFLINE_CACHE_KEY) || '{}');
 return store[key]?.data ?? null;
 } catch(e) { return null; }
 }
 
 function offlineEnqueue(action) {
 try {
-const q = JSON.parse(localStorage.getItem(OFFLINE_QUEUE_KEY) || ‘[]’);
-q.push({ …action, queuedAt: Date.now(), id: Math.random().toString(36).slice(2) });
+const q = JSON.parse(localStorage.getItem(OFFLINE_QUEUE_KEY) || '[]');
+q.push({ ...action, queuedAt: Date.now(), id: Math.random().toString(36).slice(2) });
 localStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(q));
 showOfflineBanner(true);
-} catch(e) { console.warn(’[Offline] Queue write failed’, e); }
+} catch(e) { console.warn('[Offline] Queue write failed', e); }
 }
 
 function offlineQueueCount() {
 try {
-return JSON.parse(localStorage.getItem(OFFLINE_QUEUE_KEY) || ‘[]’).length;
+return JSON.parse(localStorage.getItem(OFFLINE_QUEUE_KEY) || '[]').length;
 } catch(e) { return 0; }
 }
 
-// – Banner ––––––––––––––––––––––––––––––––––
+// - Banner ----------------------------------
 function showOfflineBanner(hasPending) {
 let banner = document.getElementById(OFFLINE_BANNER_ID);
 if (!banner) {
-banner = document.createElement(‘div’);
+banner = document.createElement('div');
 banner.id = OFFLINE_BANNER_ID;
 banner.style.cssText = [
-‘position:fixed’,‘top:60px’,‘left:0’,‘right:0’,‘z-index:9998’,
-‘display:flex’,‘align-items:center’,‘justify-content:center’,‘gap:8px’,
-‘padding:7px 16px’,‘font-size:12px’,‘font-weight:600’,
-‘transition:all 0.3s ease’,‘box-shadow:0 2px 8px rgba(0,0,0,0.1)’
-].join(’;’);
+'position:fixed','top:60px','left:0','right:0','z-index:9998',
+'display:flex','align-items:center','justify-content:center','gap:8px',
+'padding:7px 16px','font-size:12px','font-weight:600',
+'transition:all 0.3s ease','box-shadow:0 2px 8px rgba(0,0,0,0.1)'
+].join(';');
 document.body.prepend(banner);
 }
 
 const count = offlineQueueCount();
 if (!isOnline()) {
-banner.style.background = ‘#fef3c7’;
-banner.style.color = ‘#92400e’;
-banner.style.borderBottom = ‘2px solid #fbbf24’;
+banner.style.background = '#fef3c7';
+banner.style.color = '#92400e';
+banner.style.borderBottom = '2px solid #fbbf24';
 banner.innerHTML = `<span>-</span> <span>You're offline - attendance changes will sync when you reconnect</span> ${count > 0 ?`<span style="background:#f59e0b;color:#fff;padding:2px 8px;border-radius:999px;font-size:11px">${count} pending</span>`: ''}`;
-banner.style.display = ‘flex’;
+banner.style.display = 'flex';
 } else if (count > 0) {
-banner.style.background = ‘#eff6ff’;
-banner.style.color = ‘#1e40af’;
-banner.style.borderBottom = ‘2px solid #93c5fd’;
+banner.style.background = '#eff6ff';
+banner.style.color = '#1e40af';
+banner.style.borderBottom = '2px solid #93c5fd';
 banner.innerHTML = `<span>-</span> <span>Back online - syncing ${count} pending action${count !== 1 ? 's' : ''}-</span>`;
-banner.style.display = ‘flex’;
+banner.style.display = 'flex';
 } else {
-banner.style.display = ‘none’;
+banner.style.display = 'none';
 }
 }
 
 function hideOfflineBanner() {
 const b = document.getElementById(OFFLINE_BANNER_ID);
-if (b) b.style.display = ‘none’;
+if (b) b.style.display = 'none';
 }
 
-// – Auto-sync on reconnect ––––––––––––––––––––––––––
+// - Auto-sync on reconnect --------------------------
 async function syncOfflineQueue() {
 const raw = localStorage.getItem(OFFLINE_QUEUE_KEY);
 if (!raw) return;
@@ -524,9 +519,9 @@ await api(action.url, action.options);
 console.log(`[Offline] Synced: ${action.label || action.url}`);
 } catch (e) {
 console.warn(`[Offline] Sync failed for ${action.url}:`, e.message);
-// Keep failed items if it’s a server error (not 4xx client error)
+// Keep failed items if it's a server error (not 4xx client error)
 const is4xx = e.status >= 400 && e.status < 500 ||
-e.message.includes(‘400’) || e.message.includes(‘409’) || e.message.includes(‘404’);
+e.message.includes('400') || e.message.includes('409') || e.message.includes('404');
 if (!is4xx) {
 remaining.push(action);
 } else {
@@ -540,24 +535,24 @@ localStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(remaining));
 if (remaining.length === 0) {
 hideOfflineBanner();
 // Refresh whichever attendance view is active
-const active = document.querySelector(’.nav-item.active’)?.dataset?.view;
-if (active === ‘sessions’) renderSessions();
-else if (active === ‘mark-attendance’) renderMarkAttendance();
-showToastNotif(’- All offline actions synced!’, ‘success’);
+const active = document.querySelector('.nav-item.active')?.dataset?.view;
+if (active === 'sessions') renderSessions();
+else if (active === 'mark-attendance') renderMarkAttendance();
+showToastNotif('- All offline actions synced!', 'success');
 } else {
 showOfflineBanner(true);
 }
 }
 
 function showToastNotif(msg, type) {
-const t = document.createElement(‘div’);
+const t = document.createElement('div');
 t.style.cssText = [
-‘position:fixed’,‘bottom:24px’,‘left:50%’,‘transform:translateX(-50%)’,
-‘padding:10px 20px’,‘border-radius:8px’,‘font-size:13px’,‘font-weight:600’,
-‘z-index:10000’,‘box-shadow:0 4px 16px rgba(0,0,0,0.15)’,
-type === ‘success’ ? ‘background:#dcfce7;color:#166534;border:1px solid #86efac’ :
-‘background:#fef3c7;color:#92400e;border:1px solid #fbbf24’
-].join(’;’);
+'position:fixed','bottom:24px','left:50%','transform:translateX(-50%)',
+'padding:10px 20px','border-radius:8px','font-size:13px','font-weight:600',
+'z-index:10000','box-shadow:0 4px 16px rgba(0,0,0,0.15)',
+type === 'success' ? 'background:#dcfce7;color:#166534;border:1px solid #86efac' :
+'background:#fef3c7;color:#92400e;border:1px solid #fbbf24'
+].join(';');
 t.textContent = msg;
 document.body.appendChild(t);
 setTimeout(() => t.remove(), 3500);
@@ -565,129 +560,129 @@ setTimeout(() => t.remove(), 3500);
 
 // Alias used by Corporate Phase 1 functions (shifts, leave)
 function toast(msg, type) {
-showToastNotif(msg, type === ‘ok’ ? ‘success’ : ‘warn’);
+showToastNotif(msg, type === 'ok' ? 'success' : 'warn');
 }
 
 // Listen for online/offline events
-window.addEventListener(‘offline’, () => showOfflineBanner(false));
-window.addEventListener(‘online’,  () => {
+window.addEventListener('offline', () => showOfflineBanner(false));
+window.addEventListener('online',  () => {
 showOfflineBanner(true);
 setTimeout(syncOfflineQueue, 800); // slight delay to ensure connection is stable
 });
 
 // Show banner on load if already offline or has queue
-window.addEventListener(‘DOMContentLoaded’, () => {
+window.addEventListener('DOMContentLoaded', () => {
 if (!isOnline() || offlineQueueCount() > 0) showOfflineBanner(!isOnline());
 });
 
 let currentUser = null;
-let currentView = ‘dashboard’;
+let currentView = 'dashboard';
 
 function svgIcon(path, size = 18) {
 return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${path}</svg>`;
 }
 function dashboardIcon() {
-return svgIcon(’<rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>’);
+return svgIcon('<rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>');
 }
 function sessionsIcon() {
-return svgIcon(’<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>’);
+return svgIcon('<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>');
 }
 function usersIcon() {
-return svgIcon(’<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>’);
+return svgIcon('<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>');
 }
 function meetingsIcon() {
-return svgIcon(’<path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>’);
+return svgIcon('<path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>');
 }
 function reportsIcon() {
-return svgIcon(’<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/>’);
+return svgIcon('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/>');
 }
 function coursesIcon() {
-return svgIcon(’<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>’);
+return svgIcon('<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>');
 }
 function quizzesIcon() {
-return svgIcon(’<path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/><path d="M9 14l2 2 4-4"/>’);
+return svgIcon('<path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/><path d="M9 14l2 2 4-4"/>');
 }
 function attendanceIcon() {
-return svgIcon(’<polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>’);
+return svgIcon('<polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>');
 }
 function subscriptionIcon() {
-return svgIcon(’<rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/>’);
+return svgIcon('<rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/>');
 }
 function approvalsIcon() {
-return svgIcon(’<path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><polyline points="17 11 19 13 23 9"/>’);
+return svgIcon('<path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><polyline points="17 11 19 13 23 9"/>');
 }
 
 function assignmentsIcon() {
-return svgIcon(’<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/>’);
+return svgIcon('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/>');
 }
 
 async function api(path, options = {}) {
-const headers = { ‘Content-Type’: ‘application/json’ };
-if (token) headers[‘Authorization’] = `Bearer ${token}`;
-const res = await fetch(`${API}${path}`, { …options, headers: { …headers, …options.headers } });
-if (res.headers.get(‘content-type’)?.includes(‘application/json’)) {
+const headers = { 'Content-Type': 'application/json' };
+if (token) headers['Authorization'] = `Bearer ${token}`;
+const res = await fetch(`${API}${path}`, { ...options, headers: { ...headers, ...options.headers } });
+if (res.headers.get('content-type')?.includes('application/json')) {
 const data = await res.json();
 if (!res.ok) {
 // Subscription gate - redirect lecturer to subscription page automatically
 if (res.status === 403 && data.subscriptionRequired) {
 showSubscriptionGate(data.message);
-throw new Error(data.error || ‘Subscription required’);
+throw new Error(data.error || 'Subscription required');
 }
-throw new Error(data.error || ‘Request failed’);
+throw new Error(data.error || 'Request failed');
 }
 return data;
 }
-if (!res.ok) throw new Error(‘Request failed’);
+if (!res.ok) throw new Error('Request failed');
 return res;
 }
 
 function timeAgo(dateStr) {
-if (!dateStr) return ‘’;
+if (!dateStr) return '';
 const diff = Math.floor((Date.now() - new Date(dateStr)) / 1000);
-if (diff < 60) return ‘just now’;
-if (diff < 3600) return Math.floor(diff/60) + ‘m ago’;
-if (diff < 86400) return Math.floor(diff/3600) + ‘h ago’;
-if (diff < 604800) return Math.floor(diff/86400) + ‘d ago’;
+if (diff < 60) return 'just now';
+if (diff < 3600) return Math.floor(diff/60) + 'm ago';
+if (diff < 86400) return Math.floor(diff/3600) + 'h ago';
+if (diff < 604800) return Math.floor(diff/86400) + 'd ago';
 return new Date(dateStr).toLocaleDateString();
 }
 
-// – Date formatting helper —————————————————
+// - Date formatting helper ----------------------------------
 function fmtDate(d) {
-if (!d) return ‘-’;
-return new Date(d).toLocaleString(‘en-GB’, {
-day: ‘numeric’, month: ‘short’, year: ‘numeric’,
-hour: ‘2-digit’, minute: ‘2-digit’
+if (!d) return '-';
+return new Date(d).toLocaleString('en-GB', {
+day: 'numeric', month: 'short', year: 'numeric',
+hour: '2-digit', minute: '2-digit'
 });
 }
 
-// – HTML escape helper ––––––––––––––––––––––––––––
+// - HTML escape helper ----------------------------
 function esc(s) {
-return (s || ‘’).replace(/&/g, ‘&’).replace(/</g, ‘<’).replace(/>/g, ‘>’).replace(/”/g, ‘"’);
+return (s || '').replace(/&/g, '&').replace(/</g, '<').replace(/>/g, '>').replace(/"/g, '"');
 }
 
 function showError(msg) {
-const el = document.getElementById(‘auth-error’);
+const el = document.getElementById('auth-error');
 el.textContent = msg;
-el.style.display = ‘block’;
-setTimeout(() => el.style.display = ‘none’, 5000);
+el.style.display = 'block';
+setTimeout(() => el.style.display = 'none', 5000);
 }
 
-let selectedPortalType = ‘admin-corporate’;
+let selectedPortalType = 'admin-corporate';
 
-// – Mode selector (Corporate / Academic two-step flow) ————————
+// - Mode selector (Corporate / Academic two-step flow) ----------------
 let _selectedMode = null;
 function selectMode(mode) {
-const tglCorp  = document.getElementById(‘mode-tgl-corp’);
-const tglAcad  = document.getElementById(‘mode-tgl-acad’);
-const cardsCorp = document.getElementById(‘portal-cards-corp’);
-const cardsAcad = document.getElementById(‘portal-cards-acad’);
+const tglCorp  = document.getElementById('mode-tgl-corp');
+const tglAcad  = document.getElementById('mode-tgl-acad');
+const cardsCorp = document.getElementById('portal-cards-corp');
+const cardsAcad = document.getElementById('portal-cards-acad');
 if (!tglCorp || !tglAcad) return;
 
 // Collapse both first
-if (cardsCorp) cardsCorp.classList.remove(‘visible’);
-if (cardsAcad) cardsAcad.classList.remove(‘visible’);
-tglCorp.classList.remove(‘active-corp’);
-tglAcad.classList.remove(‘active-acad’);
+if (cardsCorp) cardsCorp.classList.remove('visible');
+if (cardsAcad) cardsAcad.classList.remove('visible');
+tglCorp.classList.remove('active-corp');
+tglAcad.classList.remove('active-acad');
 
 // Toggle off if same mode tapped again
 if (_selectedMode === mode) { _selectedMode = null; return; }
@@ -696,46 +691,46 @@ const delay = _selectedMode !== null ? 120 : 0;
 _selectedMode = mode;
 
 setTimeout(() => {
-if (mode === ‘corp’) {
-tglCorp.classList.add(‘active-corp’);
-if (cardsCorp) cardsCorp.classList.add(‘visible’);
+if (mode === 'corp') {
+tglCorp.classList.add('active-corp');
+if (cardsCorp) cardsCorp.classList.add('visible');
 } else {
-tglAcad.classList.add(‘active-acad’);
-if (cardsAcad) cardsAcad.classList.add(‘visible’);
+tglAcad.classList.add('active-acad');
+if (cardsAcad) cardsAcad.classList.add('visible');
 }
 }, delay);
 }
 
 function selectPortal(type) {
 selectedPortalType = type;
-document.getElementById(‘portal-selector’).classList.add(‘hidden’);
-if (type === ‘admin-corporate’ || type === ‘admin-academic’) {
-const isAcademic = type === ‘admin-academic’;
-document.getElementById(‘admin-auth’).classList.remove(‘hidden’);
-document.getElementById(‘admin-portal-title’).textContent = isAcademic ? ‘Institution Admin’ : ‘Admin Portal’;
-document.getElementById(‘admin-portal-subtitle’).textContent = isAcademic ? ‘Academic Institution Admin’ : ‘Corporate Admin Access’;
-document.getElementById(‘admin-reg-company-label’).textContent = isAcademic ? ‘Institution Name’ : ‘Company Name’;
-document.getElementById(‘admin-reg-company’).placeholder = isAcademic ? ‘Your institution name’ : ‘Your company name’;
-} else if (type === ‘lecturer’) {
-document.getElementById(‘lecturer-auth’).classList.remove(‘hidden’);
-} else if (type === ‘hod’) {
-document.getElementById(‘hod-auth’).classList.remove(‘hidden’);
-} else if (type === ‘employee’) {
-document.getElementById(‘employee-auth’).classList.remove(‘hidden’);
+document.getElementById('portal-selector').classList.add('hidden');
+if (type === 'admin-corporate' || type === 'admin-academic') {
+const isAcademic = type === 'admin-academic';
+document.getElementById('admin-auth').classList.remove('hidden');
+document.getElementById('admin-portal-title').textContent = isAcademic ? 'Institution Admin' : 'Admin Portal';
+document.getElementById('admin-portal-subtitle').textContent = isAcademic ? 'Academic Institution Admin' : 'Corporate Admin Access';
+document.getElementById('admin-reg-company-label').textContent = isAcademic ? 'Institution Name' : 'Company Name';
+document.getElementById('admin-reg-company').placeholder = isAcademic ? 'Your institution name' : 'Your company name';
+} else if (type === 'lecturer') {
+document.getElementById('lecturer-auth').classList.remove('hidden');
+} else if (type === 'hod') {
+document.getElementById('hod-auth').classList.remove('hidden');
+} else if (type === 'employee') {
+document.getElementById('employee-auth').classList.remove('hidden');
 } else {
-document.getElementById(‘student-auth’).classList.remove(‘hidden’);
+document.getElementById('student-auth').classList.remove('hidden');
 }
 }
 
 function showPortalSelector() {
-document.getElementById(‘admin-auth’).classList.add(‘hidden’);
-document.getElementById(‘lecturer-auth’).classList.add(‘hidden’);
-document.getElementById(‘hod-auth’).classList.add(‘hidden’);
-document.getElementById(‘employee-auth’).classList.add(‘hidden’);
-document.getElementById(‘student-auth’).classList.add(‘hidden’);
-document.getElementById(‘portal-selector’).classList.remove(‘hidden’);
-document.querySelectorAll(’.auth-container input’).forEach(i => i.value = ‘’);
-document.querySelectorAll(’.error-msg’).forEach(e => e.style.display = ‘none’);
+document.getElementById('admin-auth').classList.add('hidden');
+document.getElementById('lecturer-auth').classList.add('hidden');
+document.getElementById('hod-auth').classList.add('hidden');
+document.getElementById('employee-auth').classList.add('hidden');
+document.getElementById('student-auth').classList.add('hidden');
+document.getElementById('portal-selector').classList.remove('hidden');
+document.querySelectorAll('.auth-container input').forEach(i => i.value = '');
+document.querySelectorAll('.error-msg').forEach(e => e.style.display = 'none');
 selectedPortalType = null;
 }
 
@@ -744,250 +739,250 @@ showPortalSelector();
 }
 
 function showAdminRegister() {
-document.getElementById(‘admin-login-form’).classList.add(‘hidden’);
-document.getElementById(‘admin-register-form’).classList.remove(‘hidden’);
-document.getElementById(‘admin-auth-error’).style.display = ‘none’;
+document.getElementById('admin-login-form').classList.add('hidden');
+document.getElementById('admin-register-form').classList.remove('hidden');
+document.getElementById('admin-auth-error').style.display = 'none';
 }
 
 function showAdminLogin() {
-document.getElementById(‘admin-register-form’).classList.add(‘hidden’);
-document.getElementById(‘admin-login-form’).classList.remove(‘hidden’);
-document.getElementById(‘admin-auth-error’).style.display = ‘none’;
-const f = document.getElementById(‘admin-forgot-form’); if(f) f.classList.add(‘hidden’);
+document.getElementById('admin-register-form').classList.add('hidden');
+document.getElementById('admin-login-form').classList.remove('hidden');
+document.getElementById('admin-auth-error').style.display = 'none';
+const f = document.getElementById('admin-forgot-form'); if(f) f.classList.add('hidden');
 }
 
 function showAdminForgot() {
-document.getElementById(‘admin-login-form’).classList.add(‘hidden’);
-document.getElementById(‘admin-register-form’).classList.add(‘hidden’);
-const f = document.getElementById(‘admin-forgot-form’); if(f) f.classList.remove(‘hidden’);
-const rc = document.getElementById(‘admin-reset-code-group’); if(rc) rc.classList.add(‘hidden’);
-const np = document.getElementById(‘admin-new-password-group’); if(np) np.classList.add(‘hidden’);
-const btn = document.getElementById(‘admin-forgot-btn’); if(btn) btn.textContent = ‘Request Reset Code’;
-adminForgotStep = ‘request’;
+document.getElementById('admin-login-form').classList.add('hidden');
+document.getElementById('admin-register-form').classList.add('hidden');
+const f = document.getElementById('admin-forgot-form'); if(f) f.classList.remove('hidden');
+const rc = document.getElementById('admin-reset-code-group'); if(rc) rc.classList.add('hidden');
+const np = document.getElementById('admin-new-password-group'); if(np) np.classList.add('hidden');
+const btn = document.getElementById('admin-forgot-btn'); if(btn) btn.textContent = 'Request Reset Code';
+adminForgotStep = 'request';
 }
 
-let adminForgotEmail = ‘’, adminForgotEmailAddr = ‘’, adminForgotStep = ‘request’;
+let adminForgotEmail = '', adminForgotEmailAddr = '', adminForgotStep = 'request';
 async function handleAdminForgotPassword() {
 function setAdminForgotMsg(msg, isSuccess) {
-let el = document.getElementById(‘admin-forgot-msg’);
+let el = document.getElementById('admin-forgot-msg');
 if (!el) {
-el = document.createElement(‘div’);
-el.id = ‘admin-forgot-msg’;
-el.style.cssText = ‘padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:12px;display:none’;
-const btn = document.getElementById(‘admin-forgot-btn’);
+el = document.createElement('div');
+el.id = 'admin-forgot-msg';
+el.style.cssText = 'padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:12px;display:none';
+const btn = document.getElementById('admin-forgot-btn');
 if (btn) btn.parentNode.insertBefore(el, btn);
 }
 el.textContent = msg;
-el.style.background = isSuccess ? ‘#f0fdf4’ : ‘#fef2f2’;
-el.style.color = isSuccess ? ‘#15803d’ : ‘#dc2626’;
-el.style.border = isSuccess ? ‘1px solid #86efac’ : ‘1px solid #fca5a5’;
-el.style.display = ‘block’;
+el.style.background = isSuccess ? '#f0fdf4' : '#fef2f2';
+el.style.color = isSuccess ? '#15803d' : '#dc2626';
+el.style.border = isSuccess ? '1px solid #86efac' : '1px solid #fca5a5';
+el.style.display = 'block';
 }
 
-if (adminForgotStep === ‘request’) {
-const phone = document.getElementById(‘admin-forgot-phone’).value.trim();
-const email = document.getElementById(‘admin-forgot-email’)?.value?.trim();
-if (!phone && !email) return setAdminForgotMsg(‘Please enter your phone number or email.’, false);
-const btn = document.getElementById(‘admin-forgot-btn’);
-btn.textContent = ‘Sending…’; btn.disabled = true;
+if (adminForgotStep === 'request') {
+const phone = document.getElementById('admin-forgot-phone').value.trim();
+const email = document.getElementById('admin-forgot-email')?.value?.trim();
+if (!phone && !email) return setAdminForgotMsg('Please enter your phone number or email.', false);
+const btn = document.getElementById('admin-forgot-btn');
+btn.textContent = 'Sending...'; btn.disabled = true;
 try {
-const data = await api(’/api/auth/forgot-password-admin’, { method: ‘POST’, body: JSON.stringify({ phone: phone || undefined, email: email || undefined }) });
-adminForgotEmail = phone || ‘’; adminForgotEmailAddr = email || ‘’; adminForgotStep = ‘reset’;
-document.getElementById(‘admin-reset-code-group’).classList.remove(‘hidden’);
-document.getElementById(‘admin-new-password-group’).classList.remove(‘hidden’);
-btn.textContent = ‘Reset Password’; btn.disabled = false;
-setAdminForgotMsg(’- ’ + (data.message || ‘Reset code sent to your phone via SMS.’), true);
-} catch(e) { btn.textContent = ‘Request Reset Code’; btn.disabled = false; setAdminForgotMsg(e.message, false); }
+const data = await api('/api/auth/forgot-password-admin', { method: 'POST', body: JSON.stringify({ phone: phone || undefined, email: email || undefined }) });
+adminForgotEmail = phone || ''; adminForgotEmailAddr = email || ''; adminForgotStep = 'reset';
+document.getElementById('admin-reset-code-group').classList.remove('hidden');
+document.getElementById('admin-new-password-group').classList.remove('hidden');
+btn.textContent = 'Reset Password'; btn.disabled = false;
+setAdminForgotMsg('- ' + (data.message || 'Reset code sent to your phone via SMS.'), true);
+} catch(e) { btn.textContent = 'Request Reset Code'; btn.disabled = false; setAdminForgotMsg(e.message, false); }
 } else {
-const resetCode = document.getElementById(‘admin-reset-code’).value.trim();
-const newPassword = document.getElementById(‘admin-new-password’).value;
-if (!resetCode || !newPassword) return setAdminForgotMsg(‘Please enter the reset code and new password’, false);
-if (newPassword.length < 8) return setAdminForgotMsg(‘Password must be at least 8 characters’, false);
-const btn = document.getElementById(‘admin-forgot-btn’);
-btn.textContent = ‘Resetting…’; btn.disabled = true;
+const resetCode = document.getElementById('admin-reset-code').value.trim();
+const newPassword = document.getElementById('admin-new-password').value;
+if (!resetCode || !newPassword) return setAdminForgotMsg('Please enter the reset code and new password', false);
+if (newPassword.length < 8) return setAdminForgotMsg('Password must be at least 8 characters', false);
+const btn = document.getElementById('admin-forgot-btn');
+btn.textContent = 'Resetting...'; btn.disabled = true;
 try {
-await api(’/api/auth/reset-password-email’, { method: ‘POST’, body: JSON.stringify({ phone: adminForgotEmail || undefined, email: adminForgotEmailAddr || undefined, resetCode, newPassword }) });
-adminForgotStep = ‘request’;
-setAdminForgotMsg(’- Password reset! Redirecting to sign in…’, true);
+await api('/api/auth/reset-password-email', { method: 'POST', body: JSON.stringify({ phone: adminForgotEmail || undefined, email: adminForgotEmailAddr || undefined, resetCode, newPassword }) });
+adminForgotStep = 'request';
+setAdminForgotMsg('- Password reset! Redirecting to sign in...', true);
 setTimeout(() => { showAdminLogin(); }, 1800);
-} catch(e) { btn.textContent = ‘Reset Password’; btn.disabled = false; setAdminForgotMsg(e.message, false); }
+} catch(e) { btn.textContent = 'Reset Password'; btn.disabled = false; setAdminForgotMsg(e.message, false); }
 }
 }
 
 function showAdminError(msg) {
-const el = document.getElementById(‘admin-auth-error’);
+const el = document.getElementById('admin-auth-error');
 if (!el) return;
 el.textContent = msg;
-el.style.display = ‘block’;
-el.style.background = ‘’;
-el.style.color = ‘’;
+el.style.display = 'block';
+el.style.background = '';
+el.style.color = '';
 // Shake + keep visible for 8 seconds
-el.classList.remove(‘shake’);
+el.classList.remove('shake');
 void el.offsetWidth; // force reflow to restart animation
-el.classList.add(‘shake’);
+el.classList.add('shake');
 clearTimeout(el._hideTimer);
-el._hideTimer = setTimeout(() => { el.style.display = ‘none’; el.classList.remove(‘shake’); }, 8000);
+el._hideTimer = setTimeout(() => { el.style.display = 'none'; el.classList.remove('shake'); }, 8000);
 }
 
 function showLecturerRegister() {
-document.getElementById(‘lecturer-login-form’).classList.add(‘hidden’);
-document.getElementById(‘lecturer-register-form’).classList.remove(‘hidden’);
-document.getElementById(‘lecturer-auth-error’).style.display = ‘none’;
+document.getElementById('lecturer-login-form').classList.add('hidden');
+document.getElementById('lecturer-register-form').classList.remove('hidden');
+document.getElementById('lecturer-auth-error').style.display = 'none';
 }
 
 function showLecturerLogin() {
-document.getElementById(‘lecturer-register-form’).classList.add(‘hidden’);
-document.getElementById(‘lecturer-login-form’).classList.remove(‘hidden’);
-document.getElementById(‘lecturer-auth-error’).style.display = ‘none’;
-const f = document.getElementById(‘lecturer-forgot-form’); if(f) f.classList.add(‘hidden’);
+document.getElementById('lecturer-register-form').classList.add('hidden');
+document.getElementById('lecturer-login-form').classList.remove('hidden');
+document.getElementById('lecturer-auth-error').style.display = 'none';
+const f = document.getElementById('lecturer-forgot-form'); if(f) f.classList.add('hidden');
 }
 
 function showLecturerForgot() {
-document.getElementById(‘lecturer-login-form’).classList.add(‘hidden’);
-document.getElementById(‘lecturer-register-form’).classList.add(‘hidden’);
-const f = document.getElementById(‘lecturer-forgot-form’); if(f) f.classList.remove(‘hidden’);
-const rc = document.getElementById(‘lecturer-reset-code-group’); if(rc) rc.classList.add(‘hidden’);
-const np = document.getElementById(‘lecturer-new-password-group’); if(np) np.classList.add(‘hidden’);
-const btn = document.getElementById(‘lecturer-forgot-btn’); if(btn) btn.textContent = ‘Request Reset Code’;
-lecturerForgotStep = ‘request’;
+document.getElementById('lecturer-login-form').classList.add('hidden');
+document.getElementById('lecturer-register-form').classList.add('hidden');
+const f = document.getElementById('lecturer-forgot-form'); if(f) f.classList.remove('hidden');
+const rc = document.getElementById('lecturer-reset-code-group'); if(rc) rc.classList.add('hidden');
+const np = document.getElementById('lecturer-new-password-group'); if(np) np.classList.add('hidden');
+const btn = document.getElementById('lecturer-forgot-btn'); if(btn) btn.textContent = 'Request Reset Code';
+lecturerForgotStep = 'request';
 }
 
-let lecturerForgotEmail = ‘’, lecturerForgotIsEmail = false, lecturerForgotStep = ‘request’;
+let lecturerForgotEmail = '', lecturerForgotIsEmail = false, lecturerForgotStep = 'request';
 async function handleLecturerForgotPassword() {
 function setLecturerForgotMsg(msg, isSuccess) {
-let el = document.getElementById(‘lecturer-forgot-msg’);
+let el = document.getElementById('lecturer-forgot-msg');
 if (!el) {
-el = document.createElement(‘div’);
-el.id = ‘lecturer-forgot-msg’;
-el.style.cssText = ‘padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:12px;display:none’;
-const btn = document.getElementById(‘lecturer-forgot-btn’);
+el = document.createElement('div');
+el.id = 'lecturer-forgot-msg';
+el.style.cssText = 'padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:12px;display:none';
+const btn = document.getElementById('lecturer-forgot-btn');
 if (btn) btn.parentNode.insertBefore(el, btn);
 }
 el.textContent = msg;
-el.style.background = isSuccess ? ‘#f0fdf4’ : ‘#fef2f2’;
-el.style.color = isSuccess ? ‘#15803d’ : ‘#dc2626’;
-el.style.border = isSuccess ? ‘1px solid #86efac’ : ‘1px solid #fca5a5’;
-el.style.display = ‘block’;
+el.style.background = isSuccess ? '#f0fdf4' : '#fef2f2';
+el.style.color = isSuccess ? '#15803d' : '#dc2626';
+el.style.border = isSuccess ? '1px solid #86efac' : '1px solid #fca5a5';
+el.style.display = 'block';
 }
 
-if (lecturerForgotStep === ‘request’) {
-const institutionCode = document.getElementById(‘lecturer-forgot-code’)?.value.trim().toUpperCase();
-const phone = document.getElementById(‘lecturer-forgot-phone’).value.trim();
-const email = document.getElementById(‘lecturer-forgot-email’)?.value?.trim();
-if (!institutionCode) return setLecturerForgotMsg(‘Please enter your institution code’, false);
-if (!phone && !email) return setLecturerForgotMsg(‘Please enter your phone number or email’, false);
-const btn = document.getElementById(‘lecturer-forgot-btn’);
-btn.textContent = ‘Sending…’; btn.disabled = true;
+if (lecturerForgotStep === 'request') {
+const institutionCode = document.getElementById('lecturer-forgot-code')?.value.trim().toUpperCase();
+const phone = document.getElementById('lecturer-forgot-phone').value.trim();
+const email = document.getElementById('lecturer-forgot-email')?.value?.trim();
+if (!institutionCode) return setLecturerForgotMsg('Please enter your institution code', false);
+if (!phone && !email) return setLecturerForgotMsg('Please enter your phone number or email', false);
+const btn = document.getElementById('lecturer-forgot-btn');
+btn.textContent = 'Sending...'; btn.disabled = true;
 try {
-const data = await api(’/api/auth/forgot-password-email’, { method: ‘POST’, body: JSON.stringify({ phone: phone || undefined, email: email || undefined, institutionCode }) });
-lecturerForgotEmail = phone || email || ‘’; lecturerForgotIsEmail = !phone && !!email; lecturerForgotStep = ‘reset’;
-document.getElementById(‘lecturer-reset-code-group’).classList.remove(‘hidden’);
-document.getElementById(‘lecturer-new-password-group’).classList.remove(‘hidden’);
-btn.textContent = ‘Reset Password’; btn.disabled = false;
-setLecturerForgotMsg(’- ’ + (data.message || ‘Reset code sent.’), true);
-} catch(e) { btn.textContent = ‘Request Reset Code’; btn.disabled = false; setLecturerForgotMsg(e.message, false); }
+const data = await api('/api/auth/forgot-password-email', { method: 'POST', body: JSON.stringify({ phone: phone || undefined, email: email || undefined, institutionCode }) });
+lecturerForgotEmail = phone || email || ''; lecturerForgotIsEmail = !phone && !!email; lecturerForgotStep = 'reset';
+document.getElementById('lecturer-reset-code-group').classList.remove('hidden');
+document.getElementById('lecturer-new-password-group').classList.remove('hidden');
+btn.textContent = 'Reset Password'; btn.disabled = false;
+setLecturerForgotMsg('- ' + (data.message || 'Reset code sent.'), true);
+} catch(e) { btn.textContent = 'Request Reset Code'; btn.disabled = false; setLecturerForgotMsg(e.message, false); }
 } else {
-const resetCode = document.getElementById(‘lecturer-reset-code’).value.trim();
-const newPassword = document.getElementById(‘lecturer-new-password’).value;
-if (!resetCode || !newPassword) return setLecturerForgotMsg(‘Please enter the reset code and new password’, false);
-if (newPassword.length < 8) return setLecturerForgotMsg(‘Password must be at least 8 characters’, false);
-const btn = document.getElementById(‘lecturer-forgot-btn’);
-btn.textContent = ‘Resetting…’; btn.disabled = true;
+const resetCode = document.getElementById('lecturer-reset-code').value.trim();
+const newPassword = document.getElementById('lecturer-new-password').value;
+if (!resetCode || !newPassword) return setLecturerForgotMsg('Please enter the reset code and new password', false);
+if (newPassword.length < 8) return setLecturerForgotMsg('Password must be at least 8 characters', false);
+const btn = document.getElementById('lecturer-forgot-btn');
+btn.textContent = 'Resetting...'; btn.disabled = true;
 try {
-await api(’/api/auth/reset-password-email’, { method: ‘POST’, body: JSON.stringify({ phone: lecturerForgotIsEmail ? undefined : lecturerForgotEmail, email: lecturerForgotIsEmail ? lecturerForgotEmail : undefined, resetCode, newPassword }) });
-lecturerForgotStep = ‘request’;
-setLecturerForgotMsg(’- Password reset! Redirecting to sign in…’, true);
+await api('/api/auth/reset-password-email', { method: 'POST', body: JSON.stringify({ phone: lecturerForgotIsEmail ? undefined : lecturerForgotEmail, email: lecturerForgotIsEmail ? lecturerForgotEmail : undefined, resetCode, newPassword }) });
+lecturerForgotStep = 'request';
+setLecturerForgotMsg('- Password reset! Redirecting to sign in...', true);
 setTimeout(() => { showLecturerLogin(); }, 1800);
-} catch(e) { btn.textContent = ‘Reset Password’; btn.disabled = false; setLecturerForgotMsg(e.message, false); }
+} catch(e) { btn.textContent = 'Reset Password'; btn.disabled = false; setLecturerForgotMsg(e.message, false); }
 }
 }
 
 function showLecturerError(msg) {
-const el = document.getElementById(‘lecturer-auth-error’);
+const el = document.getElementById('lecturer-auth-error');
 if (!el) return;
 el.textContent = msg;
-el.style.display = ‘block’;
-el.style.background = ‘’;
-el.style.color = ‘’;
+el.style.display = 'block';
+el.style.background = '';
+el.style.color = '';
 // Shake + keep visible for 8 seconds
-el.classList.remove(‘shake’);
+el.classList.remove('shake');
 void el.offsetWidth; // force reflow to restart animation
-el.classList.add(‘shake’);
+el.classList.add('shake');
 clearTimeout(el._hideTimer);
-el._hideTimer = setTimeout(() => { el.style.display = ‘none’; el.classList.remove(‘shake’); }, 8000);
+el._hideTimer = setTimeout(() => { el.style.display = 'none'; el.classList.remove('shake'); }, 8000);
 }
 
 function showEmployeeError(msg) {
-const el = document.getElementById(‘employee-auth-error’);
+const el = document.getElementById('employee-auth-error');
 if (!el) return;
 el.textContent = msg;
-el.style.display = ‘block’;
-el.style.background = ‘’;
-el.style.color = ‘’;
+el.style.display = 'block';
+el.style.background = '';
+el.style.color = '';
 // Shake + keep visible for 8 seconds
-el.classList.remove(‘shake’);
+el.classList.remove('shake');
 void el.offsetWidth; // force reflow to restart animation
-el.classList.add(‘shake’);
+el.classList.add('shake');
 clearTimeout(el._hideTimer);
-el._hideTimer = setTimeout(() => { el.style.display = ‘none’; el.classList.remove(‘shake’); }, 8000);
+el._hideTimer = setTimeout(() => { el.style.display = 'none'; el.classList.remove('shake'); }, 8000);
 }
 
 function showStudentRegister() {
-document.getElementById(‘student-login-form’).classList.add(‘hidden’);
-document.getElementById(‘student-forgot-form’).classList.add(‘hidden’);
-document.getElementById(‘student-register-form’).classList.remove(‘hidden’);
-document.getElementById(‘student-auth-error’).style.display = ‘none’;
+document.getElementById('student-login-form').classList.add('hidden');
+document.getElementById('student-forgot-form').classList.add('hidden');
+document.getElementById('student-register-form').classList.remove('hidden');
+document.getElementById('student-auth-error').style.display = 'none';
 }
 
 function showStudentLogin() {
-document.getElementById(‘student-register-form’).classList.add(‘hidden’);
-document.getElementById(‘student-forgot-form’).classList.add(‘hidden’);
-document.getElementById(‘student-login-form’).classList.remove(‘hidden’);
-document.getElementById(‘student-auth-error’).style.display = ‘none’;
-studentForgotStep = ‘request’;
+document.getElementById('student-register-form').classList.add('hidden');
+document.getElementById('student-forgot-form').classList.add('hidden');
+document.getElementById('student-login-form').classList.remove('hidden');
+document.getElementById('student-auth-error').style.display = 'none';
+studentForgotStep = 'request';
 }
 
 function showStudentForgot() {
-document.getElementById(‘student-login-form’).classList.add(‘hidden’);
-document.getElementById(‘student-register-form’).classList.add(‘hidden’);
-document.getElementById(‘student-forgot-form’).classList.remove(‘hidden’);
-document.getElementById(‘student-auth-error’).style.display = ‘none’;
-document.getElementById(‘student-reset-code-group’).classList.add(‘hidden’);
-document.getElementById(‘student-new-password-group’).classList.add(‘hidden’);
-document.getElementById(‘student-forgot-btn’).textContent = ‘Request Reset Code’;
-studentForgotStep = ‘request’;
+document.getElementById('student-login-form').classList.add('hidden');
+document.getElementById('student-register-form').classList.add('hidden');
+document.getElementById('student-forgot-form').classList.remove('hidden');
+document.getElementById('student-auth-error').style.display = 'none';
+document.getElementById('student-reset-code-group').classList.add('hidden');
+document.getElementById('student-new-password-group').classList.add('hidden');
+document.getElementById('student-forgot-btn').textContent = 'Request Reset Code';
+studentForgotStep = 'request';
 }
 
 function showStudentError(msg) {
-const el = document.getElementById(‘student-auth-error’);
+const el = document.getElementById('student-auth-error');
 if (!el) return;
 el.textContent = msg;
-el.style.display = ‘block’;
-el.style.background = ‘’;
-el.style.color = ‘’;
+el.style.display = 'block';
+el.style.background = '';
+el.style.color = '';
 // Shake + keep visible for 8 seconds
-el.classList.remove(‘shake’);
+el.classList.remove('shake');
 void el.offsetWidth; // force reflow to restart animation
-el.classList.add(‘shake’);
+el.classList.add('shake');
 clearTimeout(el._hideTimer);
-el._hideTimer = setTimeout(() => { el.style.display = ‘none’; el.classList.remove(‘shake’); }, 8000);
+el._hideTimer = setTimeout(() => { el.style.display = 'none'; el.classList.remove('shake'); }, 8000);
 }
 
 function showPendingApproval(message) {
-document.getElementById(‘auth-page’).style.display = ‘flex’;
-document.getElementById(‘dashboard-page’).classList.add(‘hidden’);
-document.getElementById(‘portal-selector’).classList.add(‘hidden’);
-const authMap = { lecturer: ‘lecturer-auth’, student: ‘student-auth’, employee: ‘employee-auth’ };
-const errorMap = { lecturer: ‘lecturer-auth-error’, student: ‘student-auth-error’, employee: ‘employee-auth-error’ };
-const authEl = authMap[selectedPortalType] || ‘lecturer-auth’;
-document.getElementById(authEl).classList.remove(‘hidden’);
-const errorEl = errorMap[selectedPortalType] || ‘lecturer-auth-error’;
+document.getElementById('auth-page').style.display = 'flex';
+document.getElementById('dashboard-page').classList.add('hidden');
+document.getElementById('portal-selector').classList.add('hidden');
+const authMap = { lecturer: 'lecturer-auth', student: 'student-auth', employee: 'employee-auth' };
+const errorMap = { lecturer: 'lecturer-auth-error', student: 'student-auth-error', employee: 'employee-auth-error' };
+const authEl = authMap[selectedPortalType] || 'lecturer-auth';
+document.getElementById(authEl).classList.remove('hidden');
+const errorEl = errorMap[selectedPortalType] || 'lecturer-auth-error';
 const el = document.getElementById(errorEl);
-el.textContent = message || ‘Your account is pending approval. Please contact your institution admin.’;
-el.style.display = ‘block’;
-el.style.background = ‘#fef3c7’;
-el.style.color = ‘#92400e’;
-localStorage.removeItem(‘token’);
+el.textContent = message || 'Your account is pending approval. Please contact your institution admin.';
+el.style.display = 'block';
+el.style.background = '#fef3c7';
+el.style.color = '#92400e';
+localStorage.removeItem('token');
 token = null;
 currentUser = null;
 }
@@ -996,29 +991,29 @@ currentUser = null;
 function friendlyError(msg) {
 if (!msg) return null;
 const m = msg.toLowerCase();
-if (m.includes(‘invalid credentials’))         return ‘Wrong Email or Password.’;
-if (m.includes(‘institution not found’))        return ‘Institution code not found. Please check and try again.’;
-if (m.includes(‘company not found’))            return ‘Institution code not found. Please check and try again.’;
-if (m.includes(‘pending approval’))             return msg; // keep as-is - informative
-if (m.includes(‘too many login’))               return ‘Too many failed attempts. Please wait 15 minutes.’;
-if (m.includes(‘too many requests’))            return ‘Too many requests. Please slow down and try again.’;
-if (m.includes(‘no offline profile’))           return ‘You're offline. Please connect to the internet to login for the first time.’;
-if (m.includes(‘offline session expired’))      return ‘Offline session expired. Please connect to login again.’;
-if (m.includes(‘incorrect password’))           return ‘Incorrect password. Please try again.’;
-if (m.includes(‘network’) || m.includes(‘fetch’)) return ‘Network error. Please check your connection.’;
+if (m.includes('invalid credentials'))         return 'Wrong Email or Password.';
+if (m.includes('institution not found'))        return 'Institution code not found. Please check and try again.';
+if (m.includes('company not found'))            return 'Institution code not found. Please check and try again.';
+if (m.includes('pending approval'))             return msg; // keep as-is - informative
+if (m.includes('too many login'))               return 'Too many failed attempts. Please wait 15 minutes.';
+if (m.includes('too many requests'))            return 'Too many requests. Please slow down and try again.';
+if (m.includes('no offline profile'))           return "You're offline. Please connect to the internet to login for the first time.";
+if (m.includes('offline session expired'))      return 'Offline session expired. Please connect to login again.';
+if (m.includes('incorrect password'))           return 'Incorrect password. Please try again.';
+if (m.includes('network') || m.includes('fetch')) return 'Network error. Please check your connection.';
 return msg; // fallback: show as-is
 }
 
 async function handleAdminLogin() {
-const btn = document.querySelector(’#admin-login-form button[type=“submit”]’);
+const btn = document.querySelector('#admin-login-form button[type="submit"]');
 try {
-const email = document.getElementById(‘admin-login-email’).value.trim();
-const password = document.getElementById(‘admin-login-password’).value;
-if (!email) return showAdminError(‘Please enter your email.’);
-if (!password) return showAdminError(‘Please enter your password.’);
-if (btn) { btn.textContent = ‘Signing in-’; btn.disabled = true; }
+const email = document.getElementById('admin-login-email').value.trim();
+const password = document.getElementById('admin-login-password').value;
+if (!email) return showAdminError('Please enter your email.');
+if (!password) return showAdminError('Please enter your password.');
+if (btn) { btn.textContent = 'Signing in-'; btn.disabled = true; }
 
-```
+
 const portalMode = selectedPortalType === 'admin-academic' ? 'academic' : 'corporate';
 const credentials = { email, password, loginRole: 'admin', portalMode, deviceId: getDeviceFingerprint() };
 
@@ -1037,14 +1032,13 @@ localStorage.setItem('token', token);
 currentUser = data.user;
 showDashboard(data);
 requestPushPermission().catch(() => {});
-```
 
 } catch (e) {
-if (btn) { btn.textContent = ‘Sign In’; btn.disabled = false; }
-const msg = e.message || ‘’;
+if (btn) { btn.textContent = 'Sign In'; btn.disabled = false; }
+const msg = e.message || '';
 const m = msg.toLowerCase();
 
-```
+
 if (m.includes('pending approval')) {
   showAdminError('Your account is pending approval. Please contact your institution admin.');
 } else if (m.includes('too many')) {
@@ -1054,47 +1048,46 @@ if (m.includes('pending approval')) {
 } else {
   showAdminError('Wrong Email or Password.');
 }
-```
 
 }
 }
 
 async function handleAdminRegister() {
 try {
-const name = document.getElementById(‘admin-reg-name’).value;
-const email = document.getElementById(‘admin-reg-email’).value;
-const phone = document.getElementById(‘admin-reg-phone’).value.trim();
-const password = document.getElementById(‘admin-reg-password’).value;
-const companyName = document.getElementById(‘admin-reg-company’).value;
-const mode = selectedPortalType === ‘admin-academic’ ? ‘academic’ : ‘corporate’;
+const name = document.getElementById('admin-reg-name').value;
+const email = document.getElementById('admin-reg-email').value;
+const phone = document.getElementById('admin-reg-phone').value.trim();
+const password = document.getElementById('admin-reg-password').value;
+const companyName = document.getElementById('admin-reg-company').value;
+const mode = selectedPortalType === 'admin-academic' ? 'academic' : 'corporate';
 if (!name || !email || !phone || !password || !companyName) {
-return showAdminError(‘Please fill in all fields’);
+return showAdminError('Please fill in all fields');
 }
 if (password.length < 8) {
-return showAdminError(‘Password must be at least 8 characters’);
+return showAdminError('Password must be at least 8 characters');
 }
 const body = { name, email, phone, password, companyName, mode };
-const data = await api(’/api/auth/register’, { method: ‘POST’, body: JSON.stringify(body) });
+const data = await api('/api/auth/register', { method: 'POST', body: JSON.stringify(body) });
 token = data.token;
-localStorage.setItem(‘token’, token);
+localStorage.setItem('token', token);
 currentUser = data.user;
 showDashboard(data);
 } catch (e) {
-showAdminError(e.message || ‘Registration failed’);
+showAdminError(e.message || 'Registration failed');
 }
 }
 
 async function handleLecturerLogin() {
-const btn = document.querySelector(’#lecturer-login-form button[type=“submit”]’);
+const btn = document.querySelector('#lecturer-login-form button[type="submit"]');
 try {
-const email = document.getElementById(‘lecturer-login-email’).value.trim();
-const password = document.getElementById(‘lecturer-login-password’).value;
-if (!email) return showLecturerError(‘Please enter your email’);
-if (!password) return showLecturerError(‘Please enter your password’);
-if (btn) { btn.textContent = ‘Signing in-’; btn.disabled = true; }
-const credentials = { email, password, loginRole: ‘lecturer’, portalMode: ‘academic’, deviceId: getDeviceFingerprint() };
+const email = document.getElementById('lecturer-login-email').value.trim();
+const password = document.getElementById('lecturer-login-password').value;
+if (!email) return showLecturerError('Please enter your email');
+if (!password) return showLecturerError('Please enter your password');
+if (btn) { btn.textContent = 'Signing in-'; btn.disabled = true; }
+const credentials = { email, password, loginRole: 'lecturer', portalMode: 'academic', deviceId: getDeviceFingerprint() };
 
-```
+
 let data;
 if (!isOnline()) {
   // -- OFFLINE PATH --
@@ -1116,32 +1109,31 @@ token = data.token;
 localStorage.setItem('token', token);
 currentUser = data.user;
 showDashboard(data);
-```
 
 } catch (e) {
-if (btn) { btn.textContent = ‘Sign In’; btn.disabled = false; }
-const msg = e.message || ‘’;
+if (btn) { btn.textContent = 'Sign In'; btn.disabled = false; }
+const msg = e.message || '';
 const m = msg.toLowerCase();
-if (m.includes(‘pending approval’)) {
-showLecturerError(‘Your account is pending approval. Please contact your institution admin.’);
-} else if (m.includes(‘too many’)) {
-showLecturerError(‘Too many failed attempts. Please wait 15 minutes and try again.’);
-} else if (m.includes(‘network’) || m.includes(‘fetch’)) {
-showLecturerError(‘Network error. Please check your connection and try again.’);
+if (m.includes('pending approval')) {
+showLecturerError('Your account is pending approval. Please contact your institution admin.');
+} else if (m.includes('too many')) {
+showLecturerError('Too many failed attempts. Please wait 15 minutes and try again.');
+} else if (m.includes('network') || m.includes('fetch')) {
+showLecturerError('Network error. Please check your connection and try again.');
 } else {
-showLecturerError(‘Wrong Email or Password.’);
+showLecturerError('Wrong Email or Password.');
 }
 }
 }
 
 async function handleLecturerRegister() {
 try {
-const name = document.getElementById(‘lecturer-reg-name’).value;
-const email = document.getElementById(‘lecturer-reg-email’).value;
-const password = document.getElementById(‘lecturer-reg-password’).value;
-const regMode = document.getElementById(‘lecturer-reg-mode’)?.value || ‘join’;
+const name = document.getElementById('lecturer-reg-name').value;
+const email = document.getElementById('lecturer-reg-email').value;
+const password = document.getElementById('lecturer-reg-password').value;
+const regMode = document.getElementById('lecturer-reg-mode')?.value || 'join';
 
-```
+
 if (!name || !email || !password) {
   return showLecturerError('Please fill in all fields');
 }
@@ -1184,125 +1176,124 @@ if (data.token) {
   showLecturerLogin();
   document.getElementById('lecturer-auth-error').style.display = 'block';
 }
-```
 
 } catch (e) {
-showLecturerError(e.message || ‘Registration failed’);
+showLecturerError(e.message || 'Registration failed');
 }
 }
 
 function toggleLecturerRegMode() {
-const mode = document.getElementById(‘lecturer-reg-mode’).value;
-const codeGroup = document.getElementById(‘lecturer-reg-code-group’);
-const instGroup = document.getElementById(‘lecturer-reg-inst-group’);
-const hint = document.getElementById(‘lecturer-reg-hint’);
-if (mode === ‘create’) {
-codeGroup.classList.add(‘hidden’);
-instGroup.classList.remove(‘hidden’);
-hint.textContent = ‘You will be the admin of your institution and can immediately start using the platform.’;
+const mode = document.getElementById('lecturer-reg-mode').value;
+const codeGroup = document.getElementById('lecturer-reg-code-group');
+const instGroup = document.getElementById('lecturer-reg-inst-group');
+const hint = document.getElementById('lecturer-reg-hint');
+if (mode === 'create') {
+codeGroup.classList.add('hidden');
+instGroup.classList.remove('hidden');
+hint.textContent = 'You will be the admin of your institution and can immediately start using the platform.';
 } else {
-codeGroup.classList.remove(‘hidden’);
-instGroup.classList.add(‘hidden’);
-hint.textContent = ‘Your account will need admin approval before you can access the system.’;
+codeGroup.classList.remove('hidden');
+instGroup.classList.add('hidden');
+hint.textContent = 'Your account will need admin approval before you can access the system.';
 }
 }
 
 function showEmployeeRegister() {
-document.getElementById(‘employee-login-form’).classList.add(‘hidden’);
-document.getElementById(‘employee-register-form’).classList.remove(‘hidden’);
+document.getElementById('employee-login-form').classList.add('hidden');
+document.getElementById('employee-register-form').classList.remove('hidden');
 }
 
 function showEmployeeForgot() {
-document.getElementById(‘employee-login-form’).classList.add(‘hidden’);
-document.getElementById(‘employee-register-form’).classList.add(‘hidden’);
-const f = document.getElementById(‘employee-forgot-form’);
-if (f) f.classList.remove(‘hidden’);
-document.getElementById(‘employee-auth-error’).textContent = ‘’;
-employeeForgotStep = ‘request’;
-const btn = document.getElementById(‘employee-forgot-btn’);
-if (btn) btn.textContent = ‘Request Reset Code’;
+document.getElementById('employee-login-form').classList.add('hidden');
+document.getElementById('employee-register-form').classList.add('hidden');
+const f = document.getElementById('employee-forgot-form');
+if (f) f.classList.remove('hidden');
+document.getElementById('employee-auth-error').textContent = '';
+employeeForgotStep = 'request';
+const btn = document.getElementById('employee-forgot-btn');
+if (btn) btn.textContent = 'Request Reset Code';
 }
 
 function showEmployeeLogin() {
-const f = document.getElementById(‘employee-forgot-form’);
-if (f) f.classList.add(‘hidden’);
-document.getElementById(‘employee-register-form’).classList.add(‘hidden’);
-document.getElementById(‘employee-login-form’).classList.remove(‘hidden’);
+const f = document.getElementById('employee-forgot-form');
+if (f) f.classList.add('hidden');
+document.getElementById('employee-register-form').classList.add('hidden');
+document.getElementById('employee-login-form').classList.remove('hidden');
 }
 
-let employeeForgotStep = ‘request’;
-let employeeForgotEmail = ‘’;
-let employeeForgotEmailType = ‘phone’;
-let employeeForgotCode = ‘’;
+let employeeForgotStep = 'request';
+let employeeForgotEmail = '';
+let employeeForgotEmailType = 'phone';
+let employeeForgotCode = '';
 
 async function handleEmployeeForgotPassword() {
-const errEl = document.getElementById(‘employee-auth-error’);
+const errEl = document.getElementById('employee-auth-error');
 function setMsg(msg, ok) {
 errEl.textContent = msg;
-errEl.style.display = ‘block’;
-errEl.style.background = ok ? ‘#f0fdf4’ : ‘#fef2f2’;
-errEl.style.color = ok ? ‘#15803d’ : ‘#dc2626’;
+errEl.style.display = 'block';
+errEl.style.background = ok ? '#f0fdf4' : '#fef2f2';
+errEl.style.color = ok ? '#15803d' : '#dc2626';
 }
-if (employeeForgotStep === ‘request’) {
-const institutionCode = document.getElementById(‘employee-forgot-code’)?.value.trim().toUpperCase();
-const phone = document.getElementById(‘employee-forgot-phone’)?.value.trim();
-const email = document.getElementById(‘employee-forgot-email’)?.value?.trim();
-if (!institutionCode) return setMsg(‘Please enter your institution code’, false);
-if (!phone && !email) return setMsg(‘Please enter your phone number or email’, false);
-const btn = document.getElementById(‘employee-forgot-btn’);
-btn.textContent = ‘Sending…’; btn.disabled = true;
+if (employeeForgotStep === 'request') {
+const institutionCode = document.getElementById('employee-forgot-code')?.value.trim().toUpperCase();
+const phone = document.getElementById('employee-forgot-phone')?.value.trim();
+const email = document.getElementById('employee-forgot-email')?.value?.trim();
+if (!institutionCode) return setMsg('Please enter your institution code', false);
+if (!phone && !email) return setMsg('Please enter your phone number or email', false);
+const btn = document.getElementById('employee-forgot-btn');
+btn.textContent = 'Sending...'; btn.disabled = true;
 try {
-const data = await api(’/api/auth/forgot-password-email’, { method: ‘POST’, body: JSON.stringify({ phone: phone || undefined, email: email || undefined, institutionCode }) });
-employeeForgotEmail = phone || email || ‘’; employeeForgotEmailType = phone ? ‘phone’ : ‘email’;
-employeeForgotCode = institutionCode; employeeForgotStep = ‘reset’;
-document.getElementById(‘employee-reset-code-group’).classList.remove(‘hidden’);
-document.getElementById(‘employee-new-password-group’).classList.remove(‘hidden’);
-btn.textContent = ‘Reset Password’; btn.disabled = false;
-setMsg(’- ’ + (data.message || ‘Reset code sent to your phone via SMS.’), true);
-} catch(e) { btn.textContent = ‘Request Reset Code’; btn.disabled = false; setMsg(e.message, false); }
+const data = await api('/api/auth/forgot-password-email', { method: 'POST', body: JSON.stringify({ phone: phone || undefined, email: email || undefined, institutionCode }) });
+employeeForgotEmail = phone || email || ''; employeeForgotEmailType = phone ? 'phone' : 'email';
+employeeForgotCode = institutionCode; employeeForgotStep = 'reset';
+document.getElementById('employee-reset-code-group').classList.remove('hidden');
+document.getElementById('employee-new-password-group').classList.remove('hidden');
+btn.textContent = 'Reset Password'; btn.disabled = false;
+setMsg('- ' + (data.message || 'Reset code sent to your phone via SMS.'), true);
+} catch(e) { btn.textContent = 'Request Reset Code'; btn.disabled = false; setMsg(e.message, false); }
 } else {
-const resetCode = document.getElementById(‘employee-reset-code’)?.value.trim();
-const newPassword = document.getElementById(‘employee-new-password’)?.value;
-if (!resetCode || !newPassword) return setMsg(‘Please enter the reset code and new password’, false);
-if (newPassword.length < 8) return setMsg(‘Password must be at least 8 characters’, false);
-const btn = document.getElementById(‘employee-forgot-btn’);
-btn.textContent = ‘Resetting…’; btn.disabled = true;
+const resetCode = document.getElementById('employee-reset-code')?.value.trim();
+const newPassword = document.getElementById('employee-new-password')?.value;
+if (!resetCode || !newPassword) return setMsg('Please enter the reset code and new password', false);
+if (newPassword.length < 8) return setMsg('Password must be at least 8 characters', false);
+const btn = document.getElementById('employee-forgot-btn');
+btn.textContent = 'Resetting...'; btn.disabled = true;
 try {
-await api(’/api/auth/reset-password-email’, { method: ‘POST’, body: JSON.stringify({ phone: employeeForgotEmailType === ‘phone’ ? employeeForgotEmail : undefined, email: employeeForgotEmailType === ‘email’ ? employeeForgotEmail : undefined, institutionCode: employeeForgotCode, resetCode, newPassword }) });
-employeeForgotStep = ‘request’;
-setMsg(’- Password reset! Redirecting to sign in…’, true);
+await api('/api/auth/reset-password-email', { method: 'POST', body: JSON.stringify({ phone: employeeForgotEmailType === 'phone' ? employeeForgotEmail : undefined, email: employeeForgotEmailType === 'email' ? employeeForgotEmail : undefined, institutionCode: employeeForgotCode, resetCode, newPassword }) });
+employeeForgotStep = 'request';
+setMsg('- Password reset! Redirecting to sign in...', true);
 setTimeout(() => { showEmployeeLogin(); }, 1800);
-} catch(e) { btn.textContent = ‘Reset Password’; btn.disabled = false; setMsg(e.message, false); }
+} catch(e) { btn.textContent = 'Reset Password'; btn.disabled = false; setMsg(e.message, false); }
 }
 }
 
-// ––––––––––––––––––––––––––––––––––––––
+// --------------------------------------
 //  HOD AUTH
-// ––––––––––––––––––––––––––––––––––––––
+// --------------------------------------
 function showHodLogin() {
-document.getElementById(‘hod-login-form’).classList.remove(‘hidden’);
-document.getElementById(‘hod-forgot-form’).classList.add(‘hidden’);
+document.getElementById('hod-login-form').classList.remove('hidden');
+document.getElementById('hod-forgot-form').classList.add('hidden');
 }
 function showHodForgot() {
-document.getElementById(‘hod-login-form’).classList.add(‘hidden’);
-document.getElementById(‘hod-forgot-form’).classList.remove(‘hidden’);
+document.getElementById('hod-login-form').classList.add('hidden');
+document.getElementById('hod-forgot-form').classList.remove('hidden');
 }
 function showHodError(msg) {
-const el = document.getElementById(‘hod-auth-error’);
+const el = document.getElementById('hod-auth-error');
 if (!el) return;
-el.textContent = msg; el.style.display = ‘block’;
+el.textContent = msg; el.style.display = 'block';
 }
 
 async function handleHodLogin() {
-const btn = document.querySelector(’#hod-login-form button[type=“submit”]’);
+const btn = document.querySelector('#hod-login-form button[type="submit"]');
 try {
-const email    = document.getElementById(‘hod-login-email’).value.trim();
-const password = document.getElementById(‘hod-login-password’).value;
-if (!email)    return showHodError(‘Please enter your email.’);
-if (!password) return showHodError(‘Please enter your password.’);
-if (btn) { btn.textContent = ‘Signing in-’; btn.disabled = true; }
+const email    = document.getElementById('hod-login-email').value.trim();
+const password = document.getElementById('hod-login-password').value;
+if (!email)    return showHodError('Please enter your email.');
+if (!password) return showHodError('Please enter your password.');
+if (btn) { btn.textContent = 'Signing in-'; btn.disabled = true; }
 
-```
+
 const credentials = { email, password, loginRole: 'hod', portalMode: 'academic', deviceId: getDeviceFingerprint() };
 let data;
 if (!isOnline()) {
@@ -1317,35 +1308,34 @@ token = data.token;
 localStorage.setItem('token', token);
 currentUser = data.user;
 showDashboard(data);
-```
 
 } catch (e) {
-if (btn) { btn.textContent = ‘Sign In’; btn.disabled = false; }
-showHodError(friendlyError(e.message) || ‘Wrong Email or Password.’);
+if (btn) { btn.textContent = 'Sign In'; btn.disabled = false; }
+showHodError(friendlyError(e.message) || 'Wrong Email or Password.');
 }
 }
 
-let hodForgotPhone = ‘’;
-let hodForgotCode  = ‘’;
+let hodForgotPhone = '';
+let hodForgotCode  = '';
 async function handleHodForgotPassword() {
-const btn = document.getElementById(‘hod-forgot-btn’);
-const codeGroup = document.getElementById(‘hod-reset-code-group’);
-const pwGroup   = document.getElementById(‘hod-new-password-group’);
+const btn = document.getElementById('hod-forgot-btn');
+const codeGroup = document.getElementById('hod-reset-code-group');
+const pwGroup   = document.getElementById('hod-new-password-group');
 const setMsg = (msg, ok) => {
-const el = document.getElementById(‘hod-auth-error’);
-el.textContent = msg; el.style.display = ‘block’;
-el.style.background = ok ? ‘#f0fdf4’ : ‘#fef2f2’;
-el.style.color = ok ? ‘#15803d’ : ‘#991b1b’;
+const el = document.getElementById('hod-auth-error');
+el.textContent = msg; el.style.display = 'block';
+el.style.background = ok ? '#f0fdf4' : '#fef2f2';
+el.style.color = ok ? '#15803d' : '#991b1b';
 };
 try {
 btn.disabled = true;
-const phone = document.getElementById(‘hod-forgot-phone’).value.trim();
-const email = document.getElementById(‘hod-forgot-email’)?.value?.trim();
-const institutionCode = document.getElementById(‘hod-forgot-code’).value.trim().toUpperCase();
-const resetCode = document.getElementById(‘hod-reset-code’).value.trim();
-const newPassword = document.getElementById(‘hod-new-password’).value;
+const phone = document.getElementById('hod-forgot-phone').value.trim();
+const email = document.getElementById('hod-forgot-email')?.value?.trim();
+const institutionCode = document.getElementById('hod-forgot-code').value.trim().toUpperCase();
+const resetCode = document.getElementById('hod-reset-code').value.trim();
+const newPassword = document.getElementById('hod-new-password').value;
 
-```
+
 if (!codeGroup.classList.contains('hidden') && !pwGroup.classList.contains('hidden')) {
   const hodIsEmail = hodForgotPhone.includes('@');
   await api('/api/auth/reset-password-email', { method: 'POST', body: JSON.stringify({ phone: hodIsEmail ? undefined : hodForgotPhone, email: hodIsEmail ? hodForgotPhone : undefined, resetCode, newPassword, institutionCode: hodForgotCode }) });
@@ -1364,25 +1354,24 @@ if (!codeGroup.classList.contains('hidden') && !pwGroup.classList.contains('hidd
   btn.textContent = 'Continue';
   setMsg((data.message || 'Reset code sent.'), true);
 }
-```
 
-} catch(e) { btn.textContent = ‘Request Reset Code’; setMsg(e.message, false); }
+} catch(e) { btn.textContent = 'Request Reset Code'; setMsg(e.message, false); }
 finally { btn.disabled = false; }
 }
 
 async function handleEmployeeLogin() {
-const btn = document.querySelector(’#employee-login-form button[type=“submit”]’);
+const btn = document.querySelector('#employee-login-form button[type="submit"]');
 try {
-const email = document.getElementById(‘employee-login-email’).value.trim();
-const institutionCode = document.getElementById(‘employee-login-code’).value.trim().toUpperCase();
-const password = document.getElementById(‘employee-login-password’).value;
-if (!email) return showEmployeeError(‘Please enter your email’);
-if (!institutionCode) return showEmployeeError(‘Please enter your institution code’);
-if (!password) return showEmployeeError(‘Please enter your password’);
-if (btn) { btn.textContent = ‘Signing in-’; btn.disabled = true; }
-const credentials = { email, password, institutionCode, loginRole: ‘employee’, deviceId: getDeviceFingerprint() };
+const email = document.getElementById('employee-login-email').value.trim();
+const institutionCode = document.getElementById('employee-login-code').value.trim().toUpperCase();
+const password = document.getElementById('employee-login-password').value;
+if (!email) return showEmployeeError('Please enter your email');
+if (!institutionCode) return showEmployeeError('Please enter your institution code');
+if (!password) return showEmployeeError('Please enter your password');
+if (btn) { btn.textContent = 'Signing in-'; btn.disabled = true; }
+const credentials = { email, password, institutionCode, loginRole: 'employee', deviceId: getDeviceFingerprint() };
 
-```
+
 let data;
 if (!isOnline()) {
   // -- OFFLINE PATH --
@@ -1400,61 +1389,60 @@ token = data.token;
 localStorage.setItem('token', token);
 currentUser = data.user;
 showDashboard(data);
-```
 
 } catch (e) {
-if (btn) { btn.textContent = ‘Sign In’; btn.disabled = false; }
-const msg2 = e.message || ‘’;
+if (btn) { btn.textContent = 'Sign In'; btn.disabled = false; }
+const msg2 = e.message || '';
 const m2 = msg2.toLowerCase();
-if (m2.includes(‘too many’)) {
-showEmployeeError(‘Too many failed attempts. Please wait 15 minutes and try again.’);
-} else if (m2.includes(‘network’) || m2.includes(‘fetch’)) {
-showEmployeeError(‘Network error. Please check your connection and try again.’);
+if (m2.includes('too many')) {
+showEmployeeError('Too many failed attempts. Please wait 15 minutes and try again.');
+} else if (m2.includes('network') || m2.includes('fetch')) {
+showEmployeeError('Network error. Please check your connection and try again.');
 } else {
-showEmployeeError(‘Wrong Email or Password.’);
+showEmployeeError('Wrong Email or Password.');
 }
 }
 }
 
 async function handleEmployeeRegister() {
 try {
-const name = document.getElementById(‘employee-reg-name’).value;
-const email = document.getElementById(‘employee-reg-email’).value;
-const institutionCode = document.getElementById(‘employee-reg-code’).value;
-const password = document.getElementById(‘employee-reg-password’).value;
+const name = document.getElementById('employee-reg-name').value;
+const email = document.getElementById('employee-reg-email').value;
+const institutionCode = document.getElementById('employee-reg-code').value;
+const password = document.getElementById('employee-reg-password').value;
 if (!name || !email || !institutionCode || !password) {
-return showEmployeeError(‘Please fill in all fields’);
+return showEmployeeError('Please fill in all fields');
 }
 if (password.length < 8) {
-return showEmployeeError(‘Password must be at least 8 characters’);
+return showEmployeeError('Password must be at least 8 characters');
 }
-const phone = document.getElementById(‘employee-reg-phone’)?.value?.trim();
-const data = await api(’/api/auth/register-employee’, { method: ‘POST’, body: JSON.stringify({ name, email, phone, password, institutionCode }) });
-const el = document.getElementById(‘employee-auth-error’);
-el.textContent = data.message || ‘Registration successful! Your account is pending admin approval.’;
-el.style.display = ‘block’;
-el.style.background = ‘#f0fdf4’;
-el.style.color = ‘#15803d’;
+const phone = document.getElementById('employee-reg-phone')?.value?.trim();
+const data = await api('/api/auth/register-employee', { method: 'POST', body: JSON.stringify({ name, email, phone, password, institutionCode }) });
+const el = document.getElementById('employee-auth-error');
+el.textContent = data.message || 'Registration successful! Your account is pending admin approval.';
+el.style.display = 'block';
+el.style.background = '#f0fdf4';
+el.style.color = '#15803d';
 showEmployeeLogin();
-document.getElementById(‘employee-auth-error’).style.display = ‘block’;
+document.getElementById('employee-auth-error').style.display = 'block';
 } catch (e) {
-showEmployeeError(e.message || ‘Registration failed’);
+showEmployeeError(e.message || 'Registration failed');
 }
 }
 
 async function handleStudentLogin() {
-const btn = document.querySelector(’#student-login-form button[type=“submit”]’);
+const btn = document.querySelector('#student-login-form button[type="submit"]');
 try {
-const indexNumber = document.getElementById(‘student-login-index’).value.trim();
-const institutionCode = document.getElementById(‘student-login-code’).value.trim().toUpperCase();
-const password = document.getElementById(‘student-login-password’).value;
-if (!indexNumber) return showStudentError(‘Please enter your student ID’);
-if (!institutionCode) return showStudentError(‘Please enter your institution code’);
-if (!password) return showStudentError(‘Please enter your password’);
-if (btn) { btn.textContent = ‘Signing in-’; btn.disabled = true; }
-const credentials = { indexNumber, password, institutionCode, loginRole: ‘student’, deviceId: getDeviceFingerprint() };
+const indexNumber = document.getElementById('student-login-index').value.trim();
+const institutionCode = document.getElementById('student-login-code').value.trim().toUpperCase();
+const password = document.getElementById('student-login-password').value;
+if (!indexNumber) return showStudentError('Please enter your student ID');
+if (!institutionCode) return showStudentError('Please enter your institution code');
+if (!password) return showStudentError('Please enter your password');
+if (btn) { btn.textContent = 'Signing in-'; btn.disabled = true; }
+const credentials = { indexNumber, password, institutionCode, loginRole: 'student', deviceId: getDeviceFingerprint() };
 
-```
+
 let data;
 if (!isOnline()) {
   // -- OFFLINE PATH --
@@ -1472,108 +1460,107 @@ token = data.token;
 localStorage.setItem('token', token);
 currentUser = data.user;
 showDashboard(data);
-```
 
 } catch (e) {
-if (btn) { btn.textContent = ‘Sign In’; btn.disabled = false; }
-const msg3 = e.message || ‘’;
+if (btn) { btn.textContent = 'Sign In'; btn.disabled = false; }
+const msg3 = e.message || '';
 const m3 = msg3.toLowerCase();
-if (m3.includes(‘too many’)) {
-showStudentError(‘Too many failed attempts. Please wait 15 minutes and try again.’);
-} else if (m3.includes(‘device’) || m3.includes(‘another device’)) {
-showStudentError(‘This account is active on another device. Contact your admin to unlock it.’);
-} else if (m3.includes(‘network’) || m3.includes(‘fetch’)) {
-showStudentError(‘Network error. Please check your connection and try again.’);
+if (m3.includes('too many')) {
+showStudentError('Too many failed attempts. Please wait 15 minutes and try again.');
+} else if (m3.includes('device') || m3.includes('another device')) {
+showStudentError('This account is active on another device. Contact your admin to unlock it.');
+} else if (m3.includes('network') || m3.includes('fetch')) {
+showStudentError('Network error. Please check your connection and try again.');
 } else {
-showStudentError(‘Wrong Student ID or Password.’);
+showStudentError('Wrong Student ID or Password.');
 }
 }
 }
 
 async function handleStudentRegister() {
 try {
-const name = document.getElementById(‘student-reg-name’).value.trim();
-const indexNumber = document.getElementById(‘student-reg-index’).value.trim().toUpperCase();
-const institutionCode = document.getElementById(‘student-reg-code’).value.trim();
-const password = document.getElementById(‘student-reg-password’).value;
-const confirm = document.getElementById(‘student-reg-confirm’).value;
-if (!name) return showStudentError(‘Please enter your full name.’);
-if (!indexNumber) return showStudentError(‘Student ID / Index Number is required. Enter the ID given to you by your institution.’);
-if (indexNumber.length < 3) return showStudentError(‘Student ID looks too short. Please check and enter your full index number.’);
-if (!institutionCode) return showStudentError(‘Please enter your Institution Code.’);
-if (!password) return showStudentError(‘Please enter a password.’);
-if (password.length < 8) return showStudentError(‘Password must be at least 8 characters.’);
-if (password !== confirm) return showStudentError(‘Passwords do not match.’);
-const phone = document.getElementById(‘student-reg-phone’)?.value?.trim();
-if (!department) return showStudentError(‘Please enter your department.’);
-const data = await api(’/api/auth/register-student’, { method: ‘POST’, body: JSON.stringify({ name, indexNumber, phone, password, institutionCode, department }) });
+const name = document.getElementById('student-reg-name').value.trim();
+const indexNumber = document.getElementById('student-reg-index').value.trim().toUpperCase();
+const institutionCode = document.getElementById('student-reg-code').value.trim();
+const password = document.getElementById('student-reg-password').value;
+const confirm = document.getElementById('student-reg-confirm').value;
+if (!name) return showStudentError('Please enter your full name.');
+if (!indexNumber) return showStudentError('Student ID / Index Number is required. Enter the ID given to you by your institution.');
+if (indexNumber.length < 3) return showStudentError('Student ID looks too short. Please check and enter your full index number.');
+if (!institutionCode) return showStudentError('Please enter your Institution Code.');
+if (!password) return showStudentError('Please enter a password.');
+if (password.length < 8) return showStudentError('Password must be at least 8 characters.');
+if (password !== confirm) return showStudentError('Passwords do not match.');
+const phone = document.getElementById('student-reg-phone')?.value?.trim();
+if (!department) return showStudentError('Please enter your department.');
+const data = await api('/api/auth/register-student', { method: 'POST', body: JSON.stringify({ name, indexNumber, phone, password, institutionCode, department }) });
 if (data.token) {
 token = data.token;
-localStorage.setItem(‘token’, token);
+localStorage.setItem('token', token);
 currentUser = data.user;
 showDashboard(data);
 if (data.departmentNote) toastWarning(data.departmentNote);
 } else {
-const el = document.getElementById(‘student-auth-error’);
-el.textContent = data.message || ‘Registration successful!’;
-el.style.display = ‘block’;
-el.style.background = ‘#f0fdf4’;
-el.style.color = ‘#15803d’;
+const el = document.getElementById('student-auth-error');
+el.textContent = data.message || 'Registration successful!';
+el.style.display = 'block';
+el.style.background = '#f0fdf4';
+el.style.color = '#15803d';
 showStudentLogin();
-document.getElementById(‘student-auth-error’).style.display = ‘block’;
+document.getElementById('student-auth-error').style.display = 'block';
 if (data.departmentNote) {
-const warn = document.createElement(‘div’);
-warn.style.cssText = ‘margin-top:8px;padding:10px 14px;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;font-size:12px;color:#92400e;’;
+const warn = document.createElement('div');
+warn.style.cssText = 'margin-top:8px;padding:10px 14px;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;font-size:12px;color:#92400e;';
 warn.textContent = data.departmentNote;
 el.after(warn);
 }
 }
 } catch (e) {
-showStudentError(e.message || ‘Registration failed’);
+showStudentError(e.message || 'Registration failed');
 }
 }
 
-let studentForgotStep = ‘request’;
-let studentForgotIndex = ‘’;
-let studentForgotCode = ‘’;
+let studentForgotStep = 'request';
+let studentForgotIndex = '';
+let studentForgotCode = '';
 
 async function handleStudentForgotPassword() {
-if (studentForgotStep === ‘request’) {
-const indexNumber = document.getElementById(‘student-forgot-index’).value;
-const institutionCode = document.getElementById(‘student-forgot-code’).value;
-if (!indexNumber || !institutionCode) return showStudentError(‘Please fill in all fields’);
+if (studentForgotStep === 'request') {
+const indexNumber = document.getElementById('student-forgot-index').value;
+const institutionCode = document.getElementById('student-forgot-code').value;
+if (!indexNumber || !institutionCode) return showStudentError('Please fill in all fields');
 try {
-const data = await api(’/api/auth/forgot-password’, { method: ‘POST’, body: JSON.stringify({ indexNumber, institutionCode }) });
+const data = await api('/api/auth/forgot-password', { method: 'POST', body: JSON.stringify({ indexNumber, institutionCode }) });
 studentForgotIndex = indexNumber;
 studentForgotCode = institutionCode;
-studentForgotStep = ‘reset’;
-document.getElementById(‘student-reset-code-group’).classList.remove(‘hidden’);
-document.getElementById(‘student-new-password-group’).classList.remove(‘hidden’);
-document.getElementById(‘student-forgot-btn’).textContent = ‘Reset Password’;
-const el = document.getElementById(‘student-auth-error’);
+studentForgotStep = 'reset';
+document.getElementById('student-reset-code-group').classList.remove('hidden');
+document.getElementById('student-new-password-group').classList.remove('hidden');
+document.getElementById('student-forgot-btn').textContent = 'Reset Password';
+const el = document.getElementById('student-auth-error');
 // If resetCode returned, show it (no email on account) - give to lecturer
-const codeHint = data.resetCode ? ’ Code: ’ + data.resetCode + ’ (give this to your lecturer to pass to you)’ : ‘’;
-el.textContent = (data.message || ‘Reset code generated.’) + codeHint;
-el.style.display = ‘block’;
-el.style.background = ‘#f0fdf4’;
-el.style.color = ‘#15803d’;
+const codeHint = data.resetCode ? ' Code: ' + data.resetCode + ' (give this to your lecturer to pass to you)' : '';
+el.textContent = (data.message || 'Reset code generated.') + codeHint;
+el.style.display = 'block';
+el.style.background = '#f0fdf4';
+el.style.color = '#15803d';
 } catch (e) {
 showStudentError(e.message);
 }
 } else {
-const resetCode = document.getElementById(‘student-reset-code’).value;
-const newPassword = document.getElementById(‘student-new-password’).value;
-if (!resetCode || !newPassword) return showStudentError(‘Please enter the reset code and new password’);
-if (newPassword.length < 8) return showStudentError(‘Password must be at least 8 characters’);
+const resetCode = document.getElementById('student-reset-code').value;
+const newPassword = document.getElementById('student-new-password').value;
+if (!resetCode || !newPassword) return showStudentError('Please enter the reset code and new password');
+if (newPassword.length < 8) return showStudentError('Password must be at least 8 characters');
 try {
-await api(’/api/auth/reset-password’, { method: ‘POST’, body: JSON.stringify({ indexNumber: studentForgotIndex, resetCode, newPassword, institutionCode: studentForgotCode }) });
-studentForgotStep = ‘request’;
+await api('/api/auth/reset-password', { method: 'POST', body: JSON.stringify({ indexNumber: studentForgotIndex, resetCode, newPassword, institutionCode: studentForgotCode }) });
+studentForgotStep = 'request';
 showStudentLogin();
-const el = document.getElementById(‘student-auth-error’);
-el.textContent = ‘Password reset successful! You can now sign in.’;
-el.style.display = ‘block’;
-el.style.background = ‘#f0fdf4’;
-el.style.color = ‘#15803d’;
+const el = document.getElementById('student-auth-error');
+el.textContent = 'Password reset successful! You can now sign in.';
+el.style.display = 'block';
+el.style.background = '#f0fdf4';
+el.style.color = '#15803d';
 } catch (e) {
 showStudentError(e.message);
 }
@@ -1582,35 +1569,35 @@ showStudentError(e.message);
 
 async function handleLogout() {
 try {
-if (isOnline()) await api(’/api/auth/logout’, { method: ‘POST’ });
+if (isOnline()) await api('/api/auth/logout', { method: 'POST' });
 } catch (e) {}
 resetBranding();
 token = null;
 currentUser = null;
-localStorage.removeItem(‘token’);
-document.getElementById(‘main-content’).innerHTML = ‘’;
-document.getElementById(‘sidebar-nav’).innerHTML = ‘’;
-document.getElementById(‘user-name’).textContent = ‘’;
-document.getElementById(‘user-role’).textContent = ‘’;
-document.getElementById(‘trial-banner’).style.display = ‘none’;
-document.getElementById(‘trial-expired-banner’).style.display = ‘none’;
-const topbarLeft = document.querySelector(’.topbar-left’);
-if (topbarLeft) topbarLeft.innerHTML = ‘’;
-document.getElementById(‘dashboard-page’).classList.add(‘hidden’);
-document.getElementById(‘dashboard-page’).removeAttribute(‘data-portal’);
-document.getElementById(‘auth-page’).style.display = ‘flex’;
+localStorage.removeItem('token');
+document.getElementById('main-content').innerHTML = '';
+document.getElementById('sidebar-nav').innerHTML = '';
+document.getElementById('user-name').textContent = '';
+document.getElementById('user-role').textContent = '';
+document.getElementById('trial-banner').style.display = 'none';
+document.getElementById('trial-expired-banner').style.display = 'none';
+const topbarLeft = document.querySelector('.topbar-left');
+if (topbarLeft) topbarLeft.innerHTML = '';
+document.getElementById('dashboard-page').classList.add('hidden');
+document.getElementById('dashboard-page').removeAttribute('data-portal');
+document.getElementById('auth-page').style.display = 'flex';
 
 // Clean up mobile UI elements
-const bottomNav = document.getElementById(‘bottom-nav’);
+const bottomNav = document.getElementById('bottom-nav');
 if (bottomNav) bottomNav.remove();
-const overlay = document.getElementById(‘sidebar-overlay’);
+const overlay = document.getElementById('sidebar-overlay');
 if (overlay) overlay.remove();
-document.body.style.overflow = ‘’;
+document.body.style.overflow = '';
 document.body.style.cssText = document.body.style.cssText; // flush
 
 // If loaded from superadmin.html, redirect back to it
 if (window.__superadminMode) {
-window.location.href = ‘/superadmin’;
+window.location.href = '/superadmin';
 return;
 }
 showPortalSelector();
@@ -1619,59 +1606,59 @@ showPortalSelector();
 async function loadUserData() {
 // Check for superadmin impersonation token in URL
 const urlParams = new URLSearchParams(window.location.search);
-const impToken = urlParams.get(‘impersonate’);
+const impToken = urlParams.get('impersonate');
 if (impToken) {
-localStorage.setItem(‘token’, impToken);
+localStorage.setItem('token', impToken);
 token = impToken;
 // Clean URL without reload
-window.history.replaceState({}, ‘’, ‘/’);
+window.history.replaceState({}, '', '/');
 // Show impersonation banner
-const banner = document.createElement(‘div’);
-banner.id = ‘impersonate-banner’;
-banner.style.cssText = ‘position:fixed;top:0;left:0;right:0;z-index:9999;background:#7c3aed;color:#fff;text-align:center;padding:8px 16px;font-size:13px;font-weight:600;’;
-banner.innerHTML = ‘- Superadmin Impersonation Mode - <span style="opacity:.8;font-weight:400;">1 hour session</span> - <button onclick="exitImpersonation()" style="margin-left:12px;background:rgba(255,255,255,.2);border:none;color:#fff;padding:3px 10px;border-radius:6px;cursor:pointer;font-weight:700;">Exit</button>’;
+const banner = document.createElement('div');
+banner.id = 'impersonate-banner';
+banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:9999;background:#7c3aed;color:#fff;text-align:center;padding:8px 16px;font-size:13px;font-weight:600;';
+banner.innerHTML = '- Superadmin Impersonation Mode - <span style="opacity:.8;font-weight:400;">1 hour session</span> - <button onclick="exitImpersonation()" style="margin-left:12px;background:rgba(255,255,255,.2);border:none;color:#fff;padding:3px 10px;border-radius:6px;cursor:pointer;font-weight:700;">Exit</button>';
 document.body.prepend(banner);
 }
 
 try {
-const data = await api(’/api/auth/me’);
+const data = await api('/api/auth/me');
 currentUser = data.user;
-if (!currentUser) throw new Error(‘No user data’);
+if (!currentUser) throw new Error('No user data');
 showDashboard(data);
 } catch (e) {
-localStorage.removeItem(‘token’);
+localStorage.removeItem('token');
 token = null;
 currentUser = null;
-document.getElementById(‘auth-page’).style.display = ‘flex’;
-document.getElementById(‘dashboard-page’).classList.add(‘hidden’);
+document.getElementById('auth-page').style.display = 'flex';
+document.getElementById('dashboard-page').classList.add('hidden');
 }
 }
 
 function getPortalName(role) {
 const names = {
-manager: ‘Manager Portal’,
-lecturer: ‘Lecturer Portal’,
-hod: ‘HOD Portal’,
-employee: ‘Employee Portal’,
-student: ‘Student Portal’,
-admin: ‘Admin Portal’,
-superadmin: ‘Admin Portal’
+manager: 'Manager Portal',
+lecturer: 'Lecturer Portal',
+hod: 'HOD Portal',
+employee: 'Employee Portal',
+student: 'Student Portal',
+admin: 'Admin Portal',
+superadmin: 'Admin Portal'
 };
-return names[role] || ‘KODEX’;
+return names[role] || 'KODEX';
 }
 
 function getPortalAttr(role) {
-if (role === ‘superadmin’ || role === ‘admin’) return ‘admin’;
+if (role === 'superadmin' || role === 'admin') return 'admin';
 return role;
 }
 
-// – Apply company white-label branding ––––––––––––––––––––
+// - Apply company white-label branding --------------------
 async function applyBranding() {
 try {
 const mode = currentUser?.company?.mode;
-if (mode !== ‘corporate’) return; // academic portals use default branding
+if (mode !== 'corporate') return; // academic portals use default branding
 
-```
+
 const { branding, companyName } = await api('/api/advanced/branding');
 if (!branding) return;
 
@@ -1710,36 +1697,35 @@ if (companyName) {
 
 // Store branding for re-use (e.g. preview in settings)
 window._kodexBranding = branding;
-```
 
 } catch (e) {
 // Branding is non-critical - fail silently
-console.warn(’[Branding] Could not apply branding:’, e.message);
+console.warn('[Branding] Could not apply branding:', e.message);
 }
 }
 
-// – Reset branding to defaults on logout –––––––––––––––––––
+// - Reset branding to defaults on logout -------------------
 function resetBranding() {
 const root = document.documentElement;
-root.style.removeProperty(’–primary’);
-root.style.removeProperty(’–primary-dark’);
-root.style.removeProperty(’–primary-light’);
-document.getElementById(‘brand-logo’)?.remove();
-document.title = ‘KODEX’;
+root.style.removeProperty('-primary');
+root.style.removeProperty('-primary-dark');
+root.style.removeProperty('-primary-light');
+document.getElementById('brand-logo')?.remove();
+document.title = 'KODEX';
 window._kodexBranding = null;
 }
 
 function showForceChangePassword() {
 // Hide auth, show a full-screen forced change overlay
-document.getElementById(‘auth-page’).style.display = ‘none’;
-const dashPage = document.getElementById(‘dashboard-page’);
-dashPage.classList.remove(‘hidden’);
+document.getElementById('auth-page').style.display = 'none';
+const dashPage = document.getElementById('dashboard-page');
+dashPage.classList.remove('hidden');
 
 // Build a minimal locked UI
-const mc = document.getElementById(‘main-content’);
-const sidebar = document.getElementById(‘sidebar-nav’);
-if (sidebar) sidebar.innerHTML = ‘’;
-const topbarLeft = document.querySelector(’.topbar-left’);
+const mc = document.getElementById('main-content');
+const sidebar = document.getElementById('sidebar-nav');
+if (sidebar) sidebar.innerHTML = '';
+const topbarLeft = document.querySelector('.topbar-left');
 if (topbarLeft) topbarLeft.innerHTML = `<h2 style="font-size:16px;font-weight:700">KODEX</h2>`;
 
 if (mc) mc.innerHTML = `
@@ -1749,7 +1735,7 @@ if (mc) mc.innerHTML = `
 <h2 style="font-size:22px;font-weight:800;margin-bottom:8px;color:#1e1b4b">Set Your New Password</h2>
 <p style="color:#6b7280;font-size:14px;margin-bottom:28px;line-height:1.6">Your account has been assigned a temporary password by your administrator.<br>Please set a new password to continue.</p>
 
-```
+
     <div id="force-change-error" style="display:none;background:#fef2f2;border:1px solid #fecaca;color:#dc2626;padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:16px"></div>
 
     <div style="text-align:left;margin-bottom:14px">
@@ -1772,34 +1758,33 @@ if (mc) mc.innerHTML = `
     <p style="font-size:12px;color:#9ca3af;margin-top:16px">You cannot access the portal until you set a new password.</p>
   </div>
 </div>
-```
 
 `;
 }
 
 async function submitForceChangePassword() {
-const newPassword = document.getElementById(‘force-new-password’)?.value;
-const confirmPassword = document.getElementById(‘force-confirm-password’)?.value;
-const errEl = document.getElementById(‘force-change-error’);
+const newPassword = document.getElementById('force-new-password')?.value;
+const confirmPassword = document.getElementById('force-confirm-password')?.value;
+const errEl = document.getElementById('force-change-error');
 
 function showErr(msg) {
-errEl.textContent = msg; errEl.style.display = ‘block’;
+errEl.textContent = msg; errEl.style.display = 'block';
 }
 
-if (!newPassword || !confirmPassword) return showErr(‘Please fill in both fields.’);
-if (newPassword.length < 8) return showErr(‘Password must be at least 8 characters.’);
-if (newPassword !== confirmPassword) return showErr(‘Passwords do not match.’);
+if (!newPassword || !confirmPassword) return showErr('Please fill in both fields.');
+if (newPassword.length < 8) return showErr('Password must be at least 8 characters.');
+if (newPassword !== confirmPassword) return showErr('Passwords do not match.');
 
 try {
-await api(’/api/users/change-password-after-reset’, { method: ‘POST’, body: JSON.stringify({ newPassword }) });
+await api('/api/users/change-password-after-reset', { method: 'POST', body: JSON.stringify({ newPassword }) });
 currentUser.mustChangePassword = false;
-toast(’- Password updated! Welcome to KODEX.’, ‘ok’);
+toast('- Password updated! Welcome to KODEX.', 'ok');
 // Re-fetch user data and show dashboard properly
-const data = await api(’/api/auth/me’);
+const data = await api('/api/auth/me');
 currentUser = data.user;
 showDashboard(data);
 } catch(e) {
-showErr(e.message || ‘Failed to update password. Please try again.’);
+showErr(e.message || 'Failed to update password. Please try again.');
 }
 }
 
@@ -1810,11 +1795,11 @@ showForceChangePassword();
 return;
 }
 try {
-document.getElementById(‘auth-page’).style.display = ‘none’;
-const dashPage = document.getElementById(‘dashboard-page’);
-dashPage.classList.remove(‘hidden’);
+document.getElementById('auth-page').style.display = 'none';
+const dashPage = document.getElementById('dashboard-page');
+dashPage.classList.remove('hidden');
 
-```
+
 const role = currentUser.role;
 const portalAttr = getPortalAttr(role);
 dashPage.setAttribute('data-portal', portalAttr);
@@ -1866,204 +1851,203 @@ if (isSubRole) {
 }
 
 buildSidebar();
-```
 
 loadAnnBadge();
 applyBranding(); // async - applies colors/logo in background
 // If student arrived via QR scan link, go straight to mark-attendance to auto-submit
-if (new URLSearchParams(window.location.search).get(‘qr_token’)) {
-navigateTo(‘mark-attendance’);
+if (new URLSearchParams(window.location.search).get('qr_token')) {
+navigateTo('mark-attendance');
 } else {
-navigateTo(‘dashboard’);
+navigateTo('dashboard');
 }
 } catch (e) {
-console.error(‘Dashboard error:’, e);
-document.getElementById(‘auth-page’).style.display = ‘flex’;
-document.getElementById(‘dashboard-page’).classList.add(‘hidden’);
-localStorage.removeItem(‘token’);
+console.error('Dashboard error:', e);
+document.getElementById('auth-page').style.display = 'flex';
+document.getElementById('dashboard-page').classList.add('hidden');
+localStorage.removeItem('token');
 token = null;
 currentUser = null;
-showError(‘Something went wrong. Please sign in again.’);
+showError('Something went wrong. Please sign in again.');
 }
 }
 
 function buildSidebar() {
-const nav = document.getElementById(‘sidebar-nav’);
+const nav = document.getElementById('sidebar-nav');
 const role = currentUser.role;
 
 let links = [
-{ id: ‘dashboard’, label: ‘Dashboard’, icon: dashboardIcon() },
+{ id: 'dashboard', label: 'Dashboard', icon: dashboardIcon() },
 ];
 
 switch (role) {
-case ‘admin’:
-links.push({ id: ‘approvals’, label: ‘Approvals’, icon: approvalsIcon() });
-links.push({ id: ‘search’, label: ‘Search’, icon: svgIcon(’<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>’) });
-links.push({ id: ‘users’, label: ‘Users’, icon: usersIcon() });
-links.push({ id: ‘sessions’, label: ‘Sessions’, icon: sessionsIcon() });
-if (currentUser.company?.mode === ‘academic’) {
-links.push({ id: ‘courses’, label: ‘Courses’, icon: coursesIcon() });
-links.push({ id: ‘quizzes’, label: ‘Quizzes’, icon: quizzesIcon() });
-links.push({ id: ‘gradebook’, label: ‘Grade Book’, icon: svgIcon(’<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>’) });
-links.push({ id: ‘announcements’, label: ‘Announcements’, icon: svgIcon(’<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>’) });
+case 'admin':
+links.push({ id: 'approvals', label: 'Approvals', icon: approvalsIcon() });
+links.push({ id: 'search', label: 'Search', icon: svgIcon('<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>') });
+links.push({ id: 'users', label: 'Users', icon: usersIcon() });
+links.push({ id: 'sessions', label: 'Sessions', icon: sessionsIcon() });
+if (currentUser.company?.mode === 'academic') {
+links.push({ id: 'courses', label: 'Courses', icon: coursesIcon() });
+links.push({ id: 'quizzes', label: 'Quizzes', icon: quizzesIcon() });
+links.push({ id: 'gradebook', label: 'Grade Book', icon: svgIcon('<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>') });
+links.push({ id: 'announcements', label: 'Announcements', icon: svgIcon('<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>') });
 }
-if (currentUser.company?.mode === ‘corporate’) {
-links.push({ id: ‘sign-in-out’, label: ‘Sign In / Out’, icon: attendanceIcon() });
-links.push({ id: ‘shifts’, label: ‘Shifts’, icon: svgIcon(’<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>’) });
-links.push({ id: ‘leave-requests’, label: ‘Leave Requests’, icon: svgIcon(’<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>’) });
+if (currentUser.company?.mode === 'corporate') {
+links.push({ id: 'sign-in-out', label: 'Sign In / Out', icon: attendanceIcon() });
+links.push({ id: 'shifts', label: 'Shifts', icon: svgIcon('<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>') });
+links.push({ id: 'leave-requests', label: 'Leave Requests', icon: svgIcon('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>') });
 }
-links.push({ id: ‘meetings’, label: ‘Meetings’, icon: meetingsIcon() });
-links.push({ id: ‘reports’, label: ‘Reports’, icon: reportsIcon() });
-links.push({ id: ‘subscription’, label: ‘Subscription’, icon: subscriptionIcon() });
+links.push({ id: 'meetings', label: 'Meetings', icon: meetingsIcon() });
+links.push({ id: 'reports', label: 'Reports', icon: reportsIcon() });
+links.push({ id: 'subscription', label: 'Subscription', icon: subscriptionIcon() });
 break;
-case ‘manager’:
-links.push({ id: ‘approvals’, label: ‘Approvals’, icon: approvalsIcon() });
-links.push({ id: ‘sessions’, label: ‘Sessions’, icon: sessionsIcon() });
-links.push({ id: ‘users’, label: ‘Users’, icon: usersIcon() });
-if (currentUser.company?.mode === ‘corporate’) {
-links.push({ id: ‘sign-in-out’, label: ‘Sign In / Out’, icon: attendanceIcon() });
-links.push({ id: ‘shifts’, label: ‘Shifts’, icon: svgIcon(’<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>’) });
-links.push({ id: ‘leave-requests’, label: ‘Leave Requests’, icon: svgIcon(’<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>’) });
+case 'manager':
+links.push({ id: 'approvals', label: 'Approvals', icon: approvalsIcon() });
+links.push({ id: 'sessions', label: 'Sessions', icon: sessionsIcon() });
+links.push({ id: 'users', label: 'Users', icon: usersIcon() });
+if (currentUser.company?.mode === 'corporate') {
+links.push({ id: 'sign-in-out', label: 'Sign In / Out', icon: attendanceIcon() });
+links.push({ id: 'shifts', label: 'Shifts', icon: svgIcon('<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>') });
+links.push({ id: 'leave-requests', label: 'Leave Requests', icon: svgIcon('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>') });
 }
-links.push({ id: ‘meetings’, label: ‘Meetings’, icon: meetingsIcon() });
-links.push({ id: ‘reports’, label: ‘Reports’, icon: reportsIcon() });
+links.push({ id: 'meetings', label: 'Meetings', icon: meetingsIcon() });
+links.push({ id: 'reports', label: 'Reports', icon: reportsIcon() });
 break;
-case ‘hod’:
-links.push({ id: ‘hod-overview’,     label: ‘Overview’,       icon: svgIcon(’<rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>’) });
-links.push({ id: ‘hod-sessions’,     label: ‘Sessions’,       icon: sessionsIcon() });
-links.push({ id: ‘hod-courses’,      label: ‘Courses’,        icon: coursesIcon() });
-links.push({ id: ‘hod-lecturers’,    label: ‘Lecturers’,      icon: svgIcon(’<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>’) });
-links.push({ id: ‘hod-students’,     label: ‘Students’,       icon: usersIcon() });
-links.push({ id: ‘hod-quizzes’,      label: ‘Quizzes’,        icon: quizzesIcon() });
-links.push({ id: ‘meetings’,         label: ‘Meetings’,       icon: meetingsIcon() });
-links.push({ id: ‘hod-reports’,      label: ‘Reports’,        icon: reportsIcon() });
-links.push({ id: ‘approvals’,        label: ‘Approvals’,      icon: approvalsIcon() });
-links.push({ id: ‘announcements’,    label: ‘Announcements’,  icon: svgIcon(’<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>’) });
+case 'hod':
+links.push({ id: 'hod-overview',     label: 'Overview',       icon: svgIcon('<rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>') });
+links.push({ id: 'hod-sessions',     label: 'Sessions',       icon: sessionsIcon() });
+links.push({ id: 'hod-courses',      label: 'Courses',        icon: coursesIcon() });
+links.push({ id: 'hod-lecturers',    label: 'Lecturers',      icon: svgIcon('<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>') });
+links.push({ id: 'hod-students',     label: 'Students',       icon: usersIcon() });
+links.push({ id: 'hod-quizzes',      label: 'Quizzes',        icon: quizzesIcon() });
+links.push({ id: 'meetings',         label: 'Meetings',       icon: meetingsIcon() });
+links.push({ id: 'hod-reports',      label: 'Reports',        icon: reportsIcon() });
+links.push({ id: 'approvals',        label: 'Approvals',      icon: approvalsIcon() });
+links.push({ id: 'announcements',    label: 'Announcements',  icon: svgIcon('<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>') });
 break;
-case ‘lecturer’:
-links.push({ id: ‘sessions’, label: ‘Sessions’, icon: sessionsIcon() });
-links.push({ id: ‘search’, label: ‘Search’, icon: svgIcon(’<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>’) });
-links.push({ id: ‘courses’, label: ‘Courses’, icon: coursesIcon() });
-links.push({ id: ‘quizzes’, label: ‘Quizzes’, icon: quizzesIcon() });
-links.push({ id: ‘timetable’, label: ‘Schedule’, icon: svgIcon(’<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>’) });
-links.push({ id: ‘question-bank’, label: ‘Question Bank’, icon: svgIcon(’<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>’) });
-links.push({ id: ‘assignments’, label: ‘Assignments / Quiz’, icon: assignmentsIcon() });
-links.push({ id: ‘gradebook’, label: ‘Grade Book’, icon: svgIcon(’<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>’) });
-links.push({ id: ‘meetings’, label: ‘Meetings’, icon: meetingsIcon() });
-links.push({ id: ‘lecturer-performance’, label: ‘Performance’, icon: svgIcon(’<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>’) });
-links.push({ id: ‘reports’, label: ‘Reports’, icon: reportsIcon() });
-links.push({ id: ‘announcements’, label: ‘Announcements’, icon: svgIcon(’<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>’) });
-links.push({ id: ‘subscription’, label: ‘Subscription’, icon: subscriptionIcon() });
+case 'lecturer':
+links.push({ id: 'sessions', label: 'Sessions', icon: sessionsIcon() });
+links.push({ id: 'search', label: 'Search', icon: svgIcon('<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>') });
+links.push({ id: 'courses', label: 'Courses', icon: coursesIcon() });
+links.push({ id: 'quizzes', label: 'Quizzes', icon: quizzesIcon() });
+links.push({ id: 'timetable', label: 'Schedule', icon: svgIcon('<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>') });
+links.push({ id: 'question-bank', label: 'Question Bank', icon: svgIcon('<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>') });
+links.push({ id: 'assignments', label: 'Assignments / Quiz', icon: assignmentsIcon() });
+links.push({ id: 'gradebook', label: 'Grade Book', icon: svgIcon('<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>') });
+links.push({ id: 'meetings', label: 'Meetings', icon: meetingsIcon() });
+links.push({ id: 'lecturer-performance', label: 'Performance', icon: svgIcon('<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>') });
+links.push({ id: 'reports', label: 'Reports', icon: reportsIcon() });
+links.push({ id: 'announcements', label: 'Announcements', icon: svgIcon('<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>') });
+links.push({ id: 'subscription', label: 'Subscription', icon: subscriptionIcon() });
 break;
-case ‘employee’:
-links.push({ id: ‘sign-in-out’, label: ‘Sign In / Out’, icon: attendanceIcon() });
-links.push({ id: ‘my-attendance’, label: ‘My Attendance’, icon: sessionsIcon() });
-links.push({ id: ‘my-shift’, label: ‘My Shift’, icon: svgIcon(’<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>’) });
-links.push({ id: ‘my-leaves’, label: ‘Leave’, icon: svgIcon(’<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>’) });
-links.push({ id: ‘meetings’, label: ‘Meetings’, icon: meetingsIcon() });
-links.push({ id: ‘reports’, label: ‘Reports’, icon: reportsIcon() });
+case 'employee':
+links.push({ id: 'sign-in-out', label: 'Sign In / Out', icon: attendanceIcon() });
+links.push({ id: 'my-attendance', label: 'My Attendance', icon: sessionsIcon() });
+links.push({ id: 'my-shift', label: 'My Shift', icon: svgIcon('<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>') });
+links.push({ id: 'my-leaves', label: 'Leave', icon: svgIcon('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>') });
+links.push({ id: 'meetings', label: 'Meetings', icon: meetingsIcon() });
+links.push({ id: 'reports', label: 'Reports', icon: reportsIcon() });
 break;
-case ‘student’:
-links.push({ id: ‘mark-attendance’, label: ‘Mark Attendance’, icon: attendanceIcon() });
-links.push({ id: ‘my-attendance’, label: ‘My Attendance’, icon: sessionsIcon() });
-links.push({ id: ‘courses’, label: ‘My Courses’, icon: coursesIcon() });
-links.push({ id: ‘quizzes’, label: ‘Quizzes’, icon: quizzesIcon() });
-links.push({ id: ‘timetable’, label: ‘Schedule’, icon: svgIcon(’<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>’) });
-links.push({ id: ‘quiz-history’, label: ‘My Results’, icon: svgIcon(’<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/>’) });
-links.push({ id: ‘assignments’, label: ‘Assignments / Quiz’, icon: assignmentsIcon() });
-links.push({ id: ‘gradebook’, label: ‘My Grades’, icon: svgIcon(’<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>’) });
-links.push({ id: ‘meetings’, label: ‘Meetings’, icon: meetingsIcon() });
-links.push({ id: ‘announcements’, label: ‘Announcements’, icon: svgIcon(’<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>’) });
+case 'student':
+links.push({ id: 'mark-attendance', label: 'Mark Attendance', icon: attendanceIcon() });
+links.push({ id: 'my-attendance', label: 'My Attendance', icon: sessionsIcon() });
+links.push({ id: 'courses', label: 'My Courses', icon: coursesIcon() });
+links.push({ id: 'quizzes', label: 'Quizzes', icon: quizzesIcon() });
+links.push({ id: 'timetable', label: 'Schedule', icon: svgIcon('<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>') });
+links.push({ id: 'quiz-history', label: 'My Results', icon: svgIcon('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/>') });
+links.push({ id: 'assignments', label: 'Assignments / Quiz', icon: assignmentsIcon() });
+links.push({ id: 'gradebook', label: 'My Grades', icon: svgIcon('<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>') });
+links.push({ id: 'meetings', label: 'Meetings', icon: meetingsIcon() });
+links.push({ id: 'announcements', label: 'Announcements', icon: svgIcon('<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>') });
 break;
-case ‘superadmin’:
-links.push({ id: ‘superadmin-platform’, label: ‘Platform’,   icon: svgIcon(’<rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>’) });
-links.push({ id: ‘approvals’,            label: ‘Approvals’,  icon: approvalsIcon() });
-links.push({ id: ‘search’,               label: ‘Search’,     icon: svgIcon(’<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>’) });
+case 'superadmin':
+links.push({ id: 'superadmin-platform', label: 'Platform',   icon: svgIcon('<rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>') });
+links.push({ id: 'approvals',            label: 'Approvals',  icon: approvalsIcon() });
+links.push({ id: 'search',               label: 'Search',     icon: svgIcon('<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>') });
 break;
 }
 
 // Universal links shown for all roles
 const universalLinks = [
-{ id: ‘profile’,  label: ‘My Profile’,  icon: svgIcon(’<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>’) },
-{ id: ‘contact’,  label: ‘Contact Us’,  icon: svgIcon(’<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.15 13a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.06 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 21 17z"/>’) },
-{ id: ‘about’,    label: ‘About’,       icon: svgIcon(’<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>’) },
+{ id: 'profile',  label: 'My Profile',  icon: svgIcon('<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>') },
+{ id: 'contact',  label: 'Contact Us',  icon: svgIcon('<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.15 13a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.06 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 21 17z"/>') },
+{ id: 'about',    label: 'About',       icon: svgIcon('<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>') },
 ];
 
 // Inject divider below logo if not already present
-const sidebar = document.querySelector(’.sidebar’);
-if (sidebar && !sidebar.querySelector(’.sidebar-divider-line’)) {
-const divider = document.createElement(‘div’);
-divider.className = ‘sidebar-divider-line’;
-const logo = sidebar.querySelector(’.sidebar-logo’);
+const sidebar = document.querySelector('.sidebar');
+if (sidebar && !sidebar.querySelector('.sidebar-divider-line')) {
+const divider = document.createElement('div');
+divider.className = 'sidebar-divider-line';
+const logo = sidebar.querySelector('.sidebar-logo');
 if (logo) logo.after(divider);
 }
 
 nav.innerHTML =
-[…links, …universalLinks].map(l => `<a onclick="navigateTo('${l.id}')" id="nav-${l.id}" data-tooltip="${l.label}">${l.id==='announcements'?'<div class="ann-line"></div>':''} ${l.icon}<span>${l.label}</span>${l.id==='announcements'?'<span id="ann-badge" style="display:none;position:absolute;top:4px;right:4px;background:#ef4444;color:#fff;font-size:9px;font-weight:700;padding:1px 5px;border-radius:20px;min-width:14px;text-align:center;line-height:14px;"></span>':''}</a>`).join(’’);
+[...links, ...universalLinks].map(l => `<a onclick="navigateTo('${l.id}')" id="nav-${l.id}" data-tooltip="${l.label}">${l.id==='announcements'?'<div class="ann-line"></div>':''} ${l.icon}<span>${l.label}</span>${l.id==='announcements'?'<span id="ann-badge" style="display:none;position:absolute;top:4px;right:4px;background:#ef4444;color:#fff;font-size:9px;font-weight:700;padding:1px 5px;border-radius:20px;min-width:14px;text-align:center;line-height:14px;"></span>':''}</a>`).join('');
 }
 
 function navigateTo(view) {
 currentView = view;
-document.querySelectorAll(’.sidebar-nav a’).forEach(a => a.classList.remove(‘active’));
+document.querySelectorAll('.sidebar-nav a').forEach(a => a.classList.remove('active'));
 const navEl = document.getElementById(`nav-${view}`);
-if (navEl) navEl.classList.add(‘active’);
+if (navEl) navEl.classList.add('active');
 
-const content = document.getElementById(‘main-content’);
+const content = document.getElementById('main-content');
 if (!content) return;
-content.innerHTML = ‘<div class="loading">Loading…</div>’;
+content.innerHTML = '<div class="loading">Loading...</div>';
 
 switch (view) {
-case ‘dashboard’: renderDashboard(); break;
-case ‘sessions’: renderSessions(); break;
-case ‘users’: renderUsers(); break;
-case ‘meetings’: renderMeetings(); break;
-case ‘courses’: renderCourses(); break;
-case ‘quizzes’: renderQuizzes(); break;
-case ‘quiz-history’: renderStudentQuizHistory(); break;
-case ‘lecturer-performance’: renderLecturerPerformance(); break;
-case ‘timetable’: currentUser.role === ‘student’ ? renderStudentTimetable() : renderLecturerTimetable(); break;
-case ‘question-bank’: renderQuestionBank(); break;
-case ‘my-attendance’: renderMyAttendance(); break;
-case ‘mark-attendance’: renderMarkAttendance(); break;
-case ‘sign-in-out’: renderSignInOut(); break;
-case ‘subscription’: renderSubscription(); break;
-case ‘reports’: renderReports(); break;
-case ‘shifts’: renderShifts(); break;
-case ‘leave-requests’: renderLeaveRequests(); break;
-case ‘my-shift’: renderMyShift(); break;
-case ‘my-leaves’: renderMyLeaves(); break;
-case ‘approvals’: renderApprovals(); break;
-case ‘search’: renderSearch(); break;
-case ‘assignments’: location.href=’/assignments.html’; return;
-case ‘profile’:     renderProfile(); break;
-case ‘contact’:     renderContact(); break;
-case ‘about’:       renderAbout(); break;
-case ‘superadmin-platform’: renderSuperadminDashboard(document.getElementById(‘main-content’)); break;
-case ‘hod-overview’:  renderHodDashboard(document.getElementById(‘main-content’)); break;
-case ‘hod-courses’:   renderHodCourses(); break;
-case ‘hod-sessions’:  renderHodSessions(); break;
-case ‘hod-lecturers’: renderHodLecturers(); break;
-case ‘hod-students’:  renderHodStudents(); break;
-case ‘hod-reports’:   renderHodReports(); break;
-case ‘hod-quizzes’:   renderHodQuizzes(); break;
-case ‘announcements’: renderAnnouncements(); break;
-case ‘gradebook’: renderGradeBook(); break;
-case ‘training’:       renderTraining(); break;
-case ‘my-training’:    renderMyTraining(); break;
-case ‘performance’:    renderPerformance(); break;
-case ‘my-performance’: renderPerformance(); break;
-case ‘timesheets’:     renderTimesheets(); break;
-case ‘my-timesheet’:   renderMyTimesheet(); break;
-case ‘expenses-mgr’:   renderExpensesMgr(); break;
-case ‘my-expenses’:    renderMyExpenses(); break;
-case ‘assets’:         renderAssets(); break;
-case ‘my-assets’:      renderMyAssets(); break;
+case 'dashboard': renderDashboard(); break;
+case 'sessions': renderSessions(); break;
+case 'users': renderUsers(); break;
+case 'meetings': renderMeetings(); break;
+case 'courses': renderCourses(); break;
+case 'quizzes': renderQuizzes(); break;
+case 'quiz-history': renderStudentQuizHistory(); break;
+case 'lecturer-performance': renderLecturerPerformance(); break;
+case 'timetable': currentUser.role === 'student' ? renderStudentTimetable() : renderLecturerTimetable(); break;
+case 'question-bank': renderQuestionBank(); break;
+case 'my-attendance': renderMyAttendance(); break;
+case 'mark-attendance': renderMarkAttendance(); break;
+case 'sign-in-out': renderSignInOut(); break;
+case 'subscription': renderSubscription(); break;
+case 'reports': renderReports(); break;
+case 'shifts': renderShifts(); break;
+case 'leave-requests': renderLeaveRequests(); break;
+case 'my-shift': renderMyShift(); break;
+case 'my-leaves': renderMyLeaves(); break;
+case 'approvals': renderApprovals(); break;
+case 'search': renderSearch(); break;
+case 'assignments': location.href='/assignments.html'; return;
+case 'profile':     renderProfile(); break;
+case 'contact':     renderContact(); break;
+case 'about':       renderAbout(); break;
+case 'superadmin-platform': renderSuperadminDashboard(document.getElementById('main-content')); break;
+case 'hod-overview':  renderHodDashboard(document.getElementById('main-content')); break;
+case 'hod-courses':   renderHodCourses(); break;
+case 'hod-sessions':  renderHodSessions(); break;
+case 'hod-lecturers': renderHodLecturers(); break;
+case 'hod-students':  renderHodStudents(); break;
+case 'hod-reports':   renderHodReports(); break;
+case 'hod-quizzes':   renderHodQuizzes(); break;
+case 'announcements': renderAnnouncements(); break;
+case 'gradebook': renderGradeBook(); break;
+case 'training':       renderTraining(); break;
+case 'my-training':    renderMyTraining(); break;
+case 'performance':    renderPerformance(); break;
+case 'my-performance': renderPerformance(); break;
+case 'timesheets':     renderTimesheets(); break;
+case 'my-timesheet':   renderMyTimesheet(); break;
+case 'expenses-mgr':   renderExpensesMgr(); break;
+case 'my-expenses':    renderMyExpenses(); break;
+case 'assets':         renderAssets(); break;
+case 'my-assets':      renderMyAssets(); break;
 default: renderDashboard();
 }
 }
 
 async function renderDashboard() {
-const content = document.getElementById(‘main-content’);
+const content = document.getElementById('main-content');
 if (!content) return;
 const role = currentUser.role;
 
@@ -2082,25 +2066,25 @@ content.innerHTML = `<div class="dashboard-skeleton">
 
 try {
 switch (role) {
-case ‘admin’:
+case 'admin':
 await renderAdminDashboard(content);
 break;
-case ‘manager’:
+case 'manager':
 await renderAdminDashboard(content);
 break;
-case ‘lecturer’:
+case 'lecturer':
 await renderLecturerDashboard(content);
 break;
-case ‘hod’:
+case 'hod':
 await renderHodDashboard(content);
 break;
-case ‘employee’:
+case 'employee':
 await renderEmployeeDashboard(content);
 break;
-case ‘student’:
+case 'student':
 await renderStudentDashboard(content);
 break;
-case ‘superadmin’:
+case 'superadmin':
 await renderSuperadminDashboard(content);
 break;
 default:
@@ -2112,14 +2096,14 @@ content.innerHTML = `<div class="card"><p>Welcome to ${getPortalName(role)}!</p>
 }
 
 async function renderApprovals() {
-const content = document.getElementById(‘main-content’);
+const content = document.getElementById('main-content');
 if (!content) return;
 try {
-const data = await api(’/api/approvals/pending’);
+const data = await api('/api/approvals/pending');
 const pending = data.pending || [];
-const isHod = currentUser.role === ‘hod’;
+const isHod = currentUser.role === 'hod';
 
-```
+
 content.innerHTML = `
   <div class="page-header">
     <div>
@@ -2148,7 +2132,6 @@ content.innerHTML = `
     ` : '<div class="empty-state"><p>No pending approval requests</p></div>'}
   </div>
 `;
-```
 
 } catch (e) {
 content.innerHTML = `<div class="card"><p>Failed to load approvals: ${e.message}</p></div>`;
@@ -2156,9 +2139,9 @@ content.innerHTML = `<div class="card"><p>Failed to load approvals: ${e.message}
 }
 
 async function approveUser(userId) {
-if (!confirm(‘Approve this user?’)) return;
+if (!confirm('Approve this user?')) return;
 try {
-await api(`/api/approvals/${userId}/approve`, { method: ‘PATCH’ });
+await api(`/api/approvals/${userId}/approve`, { method: 'PATCH' });
 renderApprovals();
 } catch (e) {
 toastError(e.message);
@@ -2166,9 +2149,9 @@ toastError(e.message);
 }
 
 async function rejectUser(userId) {
-if (!confirm(‘Reject and remove this user? This cannot be undone.’)) return;
+if (!confirm('Reject and remove this user? This cannot be undone.')) return;
 try {
-await api(`/api/approvals/${userId}/reject`, { method: ‘DELETE’ });
+await api(`/api/approvals/${userId}/reject`, { method: 'DELETE' });
 renderApprovals();
 } catch (e) {
 toastError(e.message);
@@ -2176,51 +2159,51 @@ toastError(e.message);
 }
 
 function exitImpersonation() {
-localStorage.removeItem(‘token’);
+localStorage.removeItem('token');
 token = null;
 currentUser = null;
-window.location.href = ‘/superadmin’;
+window.location.href = '/superadmin';
 }
 
 async function superadminToggleCompany(id, currentlyActive) {
-const action = currentlyActive ? ‘deactivate’ : ‘activate’;
-if (!confirm(‘Are you sure you want to ’ + action + ’ this institution?’)) return;
+const action = currentlyActive ? 'deactivate' : 'activate';
+if (!confirm('Are you sure you want to ' + action + ' this institution?')) return;
 try {
-await api(’/api/superadmin/companies/’ + id + ‘/toggle’, { method: ‘PATCH’ });
-toastSuccess(‘Institution ’ + (currentlyActive ? ‘deactivated’ : ‘activated’) + ’ -’);
-renderSuperadminDashboard(document.getElementById(‘main-content’));
+await api('/api/superadmin/companies/' + id + '/toggle', { method: 'PATCH' });
+toastSuccess('Institution ' + (currentlyActive ? 'deactivated' : 'activated') + ' -');
+renderSuperadminDashboard(document.getElementById('main-content'));
 } catch(e) { toastError(e.message); }
 }
 
 async function superadminExtendTrial(id, name) {
-const days = prompt(‘Extend trial for “’ + name + ‘”\nHow many days to add?’, ‘14’);
+const days = prompt('Extend trial for "' + name + '"\nHow many days to add?', '14');
 if (!days || isNaN(days) || parseInt(days) < 1) return;
 try {
-const data = await api(’/api/superadmin/companies/’ + id + ‘/extend-trial’, {
-method: ‘PATCH’,
+const data = await api('/api/superadmin/companies/' + id + '/extend-trial', {
+method: 'PATCH',
 body: JSON.stringify({ days: parseInt(days) })
 });
-toastSuccess(data.message || ‘Trial extended -’);
-renderSuperadminDashboard(document.getElementById(‘main-content’));
+toastSuccess(data.message || 'Trial extended -');
+renderSuperadminDashboard(document.getElementById('main-content'));
 } catch(e) { toastError(e.message); }
 }
 
 async function superadminImpersonate(companyId, name) {
-if (!confirm(‘Login as admin of “’ + name + ‘”?\n\nThis gives you full admin access for 1 hour. A separate tab will open.’)) return;
+if (!confirm('Login as admin of "' + name + '"?\n\nThis gives you full admin access for 1 hour. A separate tab will open.')) return;
 try {
-const data = await api(’/api/superadmin/impersonate/’ + companyId, { method: ‘POST’ });
+const data = await api('/api/superadmin/impersonate/' + companyId, { method: 'POST' });
 // Open a new tab with the impersonation token
-const url = ‘/?impersonate=’ + encodeURIComponent(data.token) + ‘&company=’ + encodeURIComponent(name);
-window.open(url, ‘_blank’);
-toastSuccess(‘Impersonation tab opened - expires in 1 hour’);
+const url = '/?impersonate=' + encodeURIComponent(data.token) + '&company=' + encodeURIComponent(name);
+window.open(url, '_blank');
+toastSuccess('Impersonation tab opened - expires in 1 hour');
 } catch(e) { toastError(e.message); }
 }
 
 async function superadminShowPayments() {
-const content = document.getElementById(‘main-content’);
-content.innerHTML = ‘<div class="loading">Loading payment history-</div>’;
+const content = document.getElementById('main-content');
+content.innerHTML = '<div class="loading">Loading payment history-</div>';
 try {
-const data = await api(’/api/superadmin/payments’);
+const data = await api('/api/superadmin/payments');
 const payments = data.payments || [];
 const total = data.totalRevenue || 0;
 content.innerHTML = `<div class="page-header"> <div><h2>Payment History</h2><p>GHS ${total.toLocaleString()} total revenue - ${payments.length} payments</p></div> <button class="btn btn-secondary btn-sm" onclick="renderSuperadminDashboard(document.getElementById('main-content'))">- Back</button> </div> <div class="card"> ${payments.length === 0 ? '<div class="empty-state"><p>No payments recorded yet. Payments appear here after Paystack webhook fires.</p></div>' :`<div style="overflow-x:auto;">
@@ -2233,21 +2216,21 @@ content.innerHTML = `<div class="page-header"> <div><h2>Payment History</h2><p>G
 <th style="text-align:left;padding:9px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Date</th>
 </tr></thead>
 <tbody>
-${payments.map(p => ` <tr style="border-bottom:1px solid var(--border);"> <td style="padding:10px 12px;font-weight:600;">${p.company?.name || '-'}<br><span style="font-size:11px;color:var(--text-muted);font-family:monospace;">${p.company?.institutionCode || ''}</span></td> <td style="padding:10px 12px;font-weight:700;color:#16a34a;">GHS ${(p.amount || 0).toLocaleString()}</td> <td style="padding:10px 12px;"><span class="tag ${p.plan === 'yearly' ? 'tag-blue' : 'tag-green'}">${p.plan || 'unknown'}</span></td> <td style="padding:10px 12px;font-size:11px;font-family:monospace;color:var(--text-muted);">${p.reference || '-'}</td> <td style="padding:10px 12px;color:var(--text-muted);font-size:12px;">${fmtDate(p.paidAt)}</td> </tr>`).join(’’)}
+${payments.map(p => ` <tr style="border-bottom:1px solid var(--border);"> <td style="padding:10px 12px;font-weight:600;">${p.company?.name || '-'}<br><span style="font-size:11px;color:var(--text-muted);font-family:monospace;">${p.company?.institutionCode || ''}</span></td> <td style="padding:10px 12px;font-weight:700;color:#16a34a;">GHS ${(p.amount || 0).toLocaleString()}</td> <td style="padding:10px 12px;"><span class="tag ${p.plan === 'yearly' ? 'tag-blue' : 'tag-green'}">${p.plan || 'unknown'}</span></td> <td style="padding:10px 12px;font-size:11px;font-family:monospace;color:var(--text-muted);">${p.reference || '-'}</td> <td style="padding:10px 12px;color:var(--text-muted);font-size:12px;">${fmtDate(p.paidAt)}</td> </tr>`).join('')}
 </tbody>
 </table>
 </div>`} </div>`;
 } catch(e) {
-content.innerHTML = ‘<div class="card"><p style="color:#ef4444;">’ + e.message + ‘</p></div>’;
+content.innerHTML = '<div class="card"><p style="color:#ef4444;">' + e.message + '</p></div>';
 }
 }
 
-// ––––––––––––––––––––––––––––––––––––––
+// --------------------------------------
 //  HOD - DASHBOARD & VIEWS
-// ––––––––––––––––––––––––––––––––––––––
+// --------------------------------------
 async function renderHodDashboard(content) {
-if (!content) content = document.getElementById(‘main-content’);
-content.innerHTML = ‘<div class="loading">Loading overview-</div>’;
+if (!content) content = document.getElementById('main-content');
+content.innerHTML = '<div class="loading">Loading overview-</div>';
 
 // Warn if HOD has no department assigned
 if (!currentUser.department) {
@@ -2257,8 +2240,8 @@ content.innerHTML = ` <div class="page-header"><div><h2>Department Overview</h2>
 
 try {
 const [sessData, userStats] = await Promise.all([
-api(’/api/attendance-sessions?limit=5’),
-api(’/api/users/stats’)
+api('/api/attendance-sessions?limit=5'),
+api('/api/users/stats')
 ]);
 const sessions   = sessData.sessions   || [];
 const stats      = userStats           || {};
@@ -2267,7 +2250,7 @@ const students   = stats.students      || 0;
 const hods       = stats.hods          || 0;
 const activeSess = sessions.filter(s => s.active).length;
 
-```
+
 content.innerHTML = `
   <div class="page-header">
     <div>
@@ -2346,7 +2329,6 @@ api('/api/approvals/pending').then(d => {
   const btn = document.getElementById('hod-approvals-btn');
   if (btn && count > 0) btn.innerHTML += ' <span style="background:#ef4444;color:#fff;font-size:10px;font-weight:700;padding:1px 6px;border-radius:20px;margin-left:4px;">' + count + '</span>';
 }).catch(() => {});
-```
 
 } catch(e) {
 content.innerHTML = `<div class="card"><p style="color:#ef4444;">Error loading dashboard: ${e.message}</p></div>`;
@@ -2354,19 +2336,19 @@ content.innerHTML = `<div class="card"><p style="color:#ef4444;">Error loading d
 }
 
 async function renderHodSessions() {
-const content = document.getElementById(‘main-content’);
-content.innerHTML = ‘<div class="loading">Loading sessions-</div>’;
+const content = document.getElementById('main-content');
+content.innerHTML = '<div class="loading">Loading sessions-</div>';
 try {
-const dept = currentUser.department ? ‘&department=’ + encodeURIComponent(currentUser.department) : ‘’;
-const data = await api(’/api/attendance-sessions?limit=100’ + dept);
+const dept = currentUser.department ? '&department=' + encodeURIComponent(currentUser.department) : '';
+const data = await api('/api/attendance-sessions?limit=100' + dept);
 const sessions = data.sessions || [];
 content.innerHTML = `<div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;"> <div><h2>All Sessions</h2><p>Department-wide attendance sessions - ${sessions.length} total</p></div> </div> <div style="overflow-x:auto;"> <table style="width:100%;border-collapse:collapse;font-size:13px;"> <thead> <tr style="border-bottom:2px solid var(--border);"> <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Session</th> <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Lecturer</th> <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Attendance</th> <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Date</th> <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Status</th> </tr> </thead> <tbody> ${sessions.length === 0 ? '<tr><td colspan="5" style="padding:24px;text-align:center;color:var(--text-muted);">No sessions yet.</td></tr>' : sessions.map(s =>`
 <tr style="border-bottom:1px solid var(--border);">
-<td style="padding:10px 12px;font-weight:600;">${s.title || s.courseName || ‘Session’}</td>
-<td style="padding:10px 12px;color:var(--text-muted);">${s.createdBy?.name || ‘-’}</td>
-<td style="padding:10px 12px;">${s.attendanceCount ?? s.records?.length ?? ‘-’}</td>
+<td style="padding:10px 12px;font-weight:600;">${s.title || s.courseName || 'Session'}</td>
+<td style="padding:10px 12px;color:var(--text-muted);">${s.createdBy?.name || '-'}</td>
+<td style="padding:10px 12px;">${s.attendanceCount ?? s.records?.length ?? '-'}</td>
 <td style="padding:10px 12px;color:var(--text-muted);font-size:12px;">${fmtDate(s.createdAt)}</td>
-<td style="padding:10px 12px;"><span class="tag ${s.active ? 'tag-green' : 'tag-gray'}">${s.active ? ‘Live’ : ‘Ended’}</span></td>
+<td style="padding:10px 12px;"><span class="tag ${s.active ? 'tag-green' : 'tag-gray'}">${s.active ? 'Live' : 'Ended'}</span></td>
 </tr>`).join('')} </tbody> </table> </div>`;
 } catch(e) {
 content.innerHTML = `<div class="card"><p style="color:#ef4444;">${e.message}</p></div>`;
@@ -2374,30 +2356,29 @@ content.innerHTML = `<div class="card"><p style="color:#ef4444;">${e.message}</p
 }
 
 async function renderHodLecturers() {
-const content = document.getElementById(‘main-content’);
-content.innerHTML = ‘<div class="loading">Loading lecturers-</div>’;
+const content = document.getElementById('main-content');
+content.innerHTML = '<div class="loading">Loading lecturers-</div>';
 try {
-const dept = currentUser.department ? ‘&department=’ + encodeURIComponent(currentUser.department) : ‘’;
-const data = await api(’/api/users?role=lecturer&limit=200’ + dept);
+const dept = currentUser.department ? '&department=' + encodeURIComponent(currentUser.department) : '';
+const data = await api('/api/users?role=lecturer&limit=200' + dept);
 const lecturers = data.users || [];
 content.innerHTML = `<div class="page-header"> <div><h2>Lecturers</h2><p>${lecturers.length} lecturer${lecturers.length !== 1 ? 's' : ''} in your institution</p></div> <button class="btn btn-secondary btn-sm" onclick="hodExportCSV('lecturers')">Export CSV</button> </div> <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;"> ${lecturers.length === 0 ? '<div class="empty-state"><p>No lecturers found.</p></div>' : lecturers.map(u =>`
 <div class="card" style="display:flex;align-items:center;gap:12px;padding:14px 16px;">
 <div style="width:38px;height:38px;border-radius:50%;background:#ecfeff;color:#0891b2;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px;flex-shrink:0;">
-${(u.name||’?’)[0].toUpperCase()}
+${(u.name||'?')[0].toUpperCase()}
 </div>
 <div style="min-width:0;flex:1;">
 <div style="font-weight:700;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${u.name}</div>
 <div style="font-size:11px;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${u.email}</div>
 <div style="display:flex;gap:6px;align-items:center;margin-top:4px;flex-wrap:wrap;">
-<span class="tag ${u.isApproved ? 'tag-green' : 'tag-amber'}">${u.isApproved ? ‘Active’ : ‘Pending’}</span>
-${u.department ? `<span style="font-size:10px;padding:2px 6px;border-radius:20px;background:#ecfeff;color:#0891b2;font-weight:600;">${u.department}</span>` : ‘’}
+<span class="tag ${u.isApproved ? 'tag-green' : 'tag-amber'}">${u.isApproved ? 'Active' : 'Pending'}</span>
+${u.department ? `<span style="font-size:10px;padding:2px 6px;border-radius:20px;background:#ecfeff;color:#0891b2;font-weight:600;">${u.department}</span>` : ''}
 
-```
+
             </div>
           </div>
         </div>`).join('')}
   </div>`;
-```
 
 } catch(e) {
 content.innerHTML = `<div class="card"><p style="color:#ef4444;">${e.message}</p></div>`;
@@ -2405,28 +2386,28 @@ content.innerHTML = `<div class="card"><p style="color:#ef4444;">${e.message}</p
 }
 
 async function renderHodStudents() {
-const content = document.getElementById(‘main-content’);
-content.innerHTML = ‘<div class="loading">Loading students-</div>’;
+const content = document.getElementById('main-content');
+content.innerHTML = '<div class="loading">Loading students-</div>';
 try {
-const dept = currentUser.department ? ‘&department=’ + encodeURIComponent(currentUser.department) : ‘’;
-const data = await api(’/api/users?role=student&limit=500’ + dept);
+const dept = currentUser.department ? '&department=' + encodeURIComponent(currentUser.department) : '';
+const data = await api('/api/users?role=student&limit=500' + dept);
 const students = data.users || [];
 content.innerHTML = `<div class="page-header"> <div><h2>Students</h2><p>${students.length} student${students.length !== 1 ? 's' : ''} enrolled</p></div> <div style="display:flex;gap:8px;align-items:center;"> <button class="btn btn-secondary btn-sm" onclick="hodExportCSV('students')">Export CSV</button> <input id="hod-stu-search" placeholder="Search students-" oninput="hodFilterStudents()" style="padding:8px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;min-width:200px;"> </div> </div> <div id="hod-stu-list" style="overflow-x:auto;"> <table style="width:100%;border-collapse:collapse;font-size:13px;"> <thead> <tr style="border-bottom:2px solid var(--border);"> <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Name</th> <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Index No.</th> <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Programme</th> <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Level / Group</th> <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Session</th> <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Status</th> <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;"></th> </tr> </thead> <tbody id="hod-stu-tbody"> ${students.length === 0 ? '<tr><td colspan="4" style="padding:24px;text-align:center;color:var(--text-muted);">No students found.</td></tr>' : students.map(u =>`
 <tr class="hod-stu-row" data-name="${(u.name||'').toLowerCase()}" data-index="${(u.indexNumber||'').toLowerCase()}" style="border-bottom:1px solid var(--border);">
 <td style="padding:10px 12px;font-weight:600;">${u.name}</td>
-<td style="padding:10px 12px;color:var(--text-muted);font-family:monospace;">${u.indexNumber || ‘-’}</td>
-<td style="padding:10px 12px;">${u.programme ? `<span style="background:#ede9fe;color:#7c3aed;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700">${esc(u.programme)}</span>` : ‘-’}</td>
+<td style="padding:10px 12px;color:var(--text-muted);font-family:monospace;">${u.indexNumber || '-'}</td>
+<td style="padding:10px 12px;">${u.programme ? `<span style="background:#ede9fe;color:#7c3aed;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700">${esc(u.programme)}</span>` : '-'}</td>
 <td style="padding:10px 12px;">
-${u.studentLevel ? `<span style="background:#dbeafe;color:#1d4ed8;padding:2px 7px;border-radius:20px;font-size:11px;font-weight:700;margin-right:3px">L${esc(u.studentLevel)}</span>` : ‘’}
-${u.studentGroup ? `<span style="background:#ecfdf5;color:#059669;padding:2px 7px;border-radius:20px;font-size:11px;font-weight:700">Grp ${esc(u.studentGroup)}</span>` : ‘’}
-${!u.studentLevel && !u.studentGroup ? ‘-’ : ‘’}
+${u.studentLevel ? `<span style="background:#dbeafe;color:#1d4ed8;padding:2px 7px;border-radius:20px;font-size:11px;font-weight:700;margin-right:3px">L${esc(u.studentLevel)}</span>` : ''}
+${u.studentGroup ? `<span style="background:#ecfdf5;color:#059669;padding:2px 7px;border-radius:20px;font-size:11px;font-weight:700">Grp ${esc(u.studentGroup)}</span>` : ''}
+${!u.studentLevel && !u.studentGroup ? '-' : ''}
 </td>
 <td style="padding:10px 12px;">
-${u.sessionType ? `<span style="background:#fff7ed;color:#c2410c;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600">${esc(u.sessionType)}</span>` : ‘-’}
-${u.semester ? `<span style="font-size:11px;color:var(--text-muted);margin-left:4px">Sem ${esc(u.semester)}</span>` : ‘’}
+${u.sessionType ? `<span style="background:#fff7ed;color:#c2410c;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600">${esc(u.sessionType)}</span>` : '-'}
+${u.semester ? `<span style="font-size:11px;color:var(--text-muted);margin-left:4px">Sem ${esc(u.semester)}</span>` : ''}
 </td>
-<td style="padding:10px 12px;"><span class="tag ${u.isApproved ? 'tag-green' : 'tag-amber'}">${u.isApproved ? ‘Active’ : ‘Pending’}</span></td>
-<td style="padding:10px 12px;"><button class=“btn btn-xs btn-secondary” onclick=“hodViewStudentAttendance(’${u._id}’,’${u.name.replace(/’/g,”\’”)}’)”>Attendance</button></td>
+<td style="padding:10px 12px;"><span class="tag ${u.isApproved ? 'tag-green' : 'tag-amber'}">${u.isApproved ? 'Active' : 'Pending'}</span></td>
+<td style="padding:10px 12px;"><button class="btn btn-xs btn-secondary" onclick="hodViewStudentAttendance('${u._id}','${u.name.replace(/'/g,"\'")}')">Attendance</button></td>
 </tr>`).join('')} </tbody> </table> </div>`;
 } catch(e) {
 content.innerHTML = `<div class="card"><p style="color:#ef4444;">${e.message}</p></div>`;
@@ -2434,21 +2415,21 @@ content.innerHTML = `<div class="card"><p style="color:#ef4444;">${e.message}</p
 }
 
 function hodFilterStudents() {
-const q = (document.getElementById(‘hod-stu-search’)?.value || ‘’).toLowerCase();
-document.querySelectorAll(’.hod-stu-row’).forEach(row => {
+const q = (document.getElementById('hod-stu-search')?.value || '').toLowerCase();
+document.querySelectorAll('.hod-stu-row').forEach(row => {
 const match = row.dataset.name.includes(q) || row.dataset.index.includes(q);
-row.style.display = match ? ‘’ : ‘none’;
+row.style.display = match ? '' : 'none';
 });
 }
 
 async function renderHodReports() {
-const content = document.getElementById(‘main-content’);
-content.innerHTML = ‘<div class="loading">Loading reports-</div>’;
+const content = document.getElementById('main-content');
+content.innerHTML = '<div class="loading">Loading reports-</div>';
 try {
-const hodDept = currentUser.department ? ‘&department=’ + encodeURIComponent(currentUser.department) : ‘’;
+const hodDept = currentUser.department ? '&department=' + encodeURIComponent(currentUser.department) : '';
 const [sessData, userStats] = await Promise.all([
-api(’/api/attendance-sessions?limit=200’ + hodDept),
-api(’/api/users/stats’ + (currentUser.department ? ‘?department=’ + encodeURIComponent(currentUser.department) : ‘’))
+api('/api/attendance-sessions?limit=200' + hodDept),
+api('/api/users/stats' + (currentUser.department ? '?department=' + encodeURIComponent(currentUser.department) : ''))
 ]);
 const sessions  = sessData.sessions || [];
 const stats     = userStats || {};
@@ -2456,7 +2437,7 @@ const ended     = sessions.filter(s => !s.active);
 const totalAtt  = ended.reduce((sum, s) => sum + (s.attendanceCount ?? s.records?.length ?? 0), 0);
 const avgAtt    = ended.length ? Math.round(totalAtt / ended.length) : 0;
 
-```
+
 // Group sessions by lecturer
 const byLecturer = {};
 sessions.forEach(s => {
@@ -2605,47 +2586,46 @@ if (trendLabels.length > 0) {
   };
   setTimeout(loadChart, 50);
 }
-```
 
 } catch(e) {
 content.innerHTML = `<div class="card"><p style="color:#ef4444;">${e.message}</p></div>`;
 }
 }
 
-// – HOD: View student attendance record ————————————
+// - HOD: View student attendance record ------------------------
 async function hodViewStudentAttendance(userId, name) {
 try {
-const data = await api(’/api/attendance-sessions/my-attendance?userId=’ + userId);
+const data = await api('/api/attendance-sessions/my-attendance?userId=' + userId);
 const records = data.records || [];
-const existing = document.getElementById(‘hod-att-overlay’);
+const existing = document.getElementById('hod-att-overlay');
 if (existing) existing.remove();
-const ol = document.createElement(‘div’);
-ol.id = ‘hod-att-overlay’;
-ol.style.cssText = ‘position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:400;display:flex;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(3px);’;
+const ol = document.createElement('div');
+ol.id = 'hod-att-overlay';
+ol.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:400;display:flex;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(3px);';
 ol.innerHTML = `<div style="background:var(--card);border-radius:14px;width:100%;max-width:560px;max-height:88vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.2);"> <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;background:var(--card);z-index:1;"> <div> <h3 style="font-size:15px;font-weight:700;margin:0;">Attendance - ${name}</h3> <div style="font-size:12px;color:var(--text-muted);margin-top:2px;">${records.length} session${records.length !== 1 ? 's' : ''} attended</div> </div> <button onclick="document.getElementById('hod-att-overlay').remove()" style="width:28px;height:28px;border-radius:6px;border:1px solid var(--border);background:var(--bg);cursor:pointer;font-size:14px;">-</button> </div> <div style="padding:16px 20px;"> ${records.length === 0 ? '<div class="empty-state"><p>No attendance records found.</p></div>' : `<table style="width:100%;border-collapse:collapse;font-size:13px;">
 <thead><tr style="border-bottom:2px solid var(--border);">
 <th style="text-align:left;padding:8px 10px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Session</th>
 <th style="text-align:left;padding:8px 10px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Date</th>
 <th style="text-align:left;padding:8px 10px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Status</th>
 </tr></thead>
-<tbody>${records.map(r => ` <tr style="border-bottom:1px solid var(--border);"> <td style="padding:9px 10px;font-weight:500;">${r.session?.title || r.session?.courseName || 'Session'}</td> <td style="padding:9px 10px;color:var(--text-muted);font-size:12px;">${fmtDate(r.markedAt || r.createdAt)}</td> <td style="padding:9px 10px;"><span class="tag ${r.status === 'present' || r.status === 'joined' ? 'tag-green' : r.status === 'late' ? 'tag-amber' : 'tag-gray'}">${r.status || 'present'}</span></td> </tr>`).join(’’)}
+<tbody>${records.map(r => ` <tr style="border-bottom:1px solid var(--border);"> <td style="padding:9px 10px;font-weight:500;">${r.session?.title || r.session?.courseName || 'Session'}</td> <td style="padding:9px 10px;color:var(--text-muted);font-size:12px;">${fmtDate(r.markedAt || r.createdAt)}</td> <td style="padding:9px 10px;"><span class="tag ${r.status === 'present' || r.status === 'joined' ? 'tag-green' : r.status === 'late' ? 'tag-amber' : 'tag-gray'}">${r.status || 'present'}</span></td> </tr>`).join('')}
 </tbody>
 </table>`} </div> </div>`;
 document.body.appendChild(ol);
-} catch(e) { toastError(’Could not load attendance: ’ + e.message); }
+} catch(e) { toastError('Could not load attendance: ' + e.message); }
 }
 
-// – HOD: Department quizzes overview —————————————
+// - HOD: Department quizzes overview --------------------------
 async function renderHodQuizzes() {
-const content = document.getElementById(‘main-content’);
+const content = document.getElementById('main-content');
 if (!content) return;
-content.innerHTML = ‘<div class="loading">Loading quizzes-</div>’;
+content.innerHTML = '<div class="loading">Loading quizzes-</div>';
 try {
-const dept = currentUser.department ? ‘?department=’ + encodeURIComponent(currentUser.department) : ‘’;
-const data = await api(’/api/lecturer/quizzes’ + dept);
+const dept = currentUser.department ? '?department=' + encodeURIComponent(currentUser.department) : '';
+const data = await api('/api/lecturer/quizzes' + dept);
 const quizzes = data.quizzes || [];
 
-```
+
 const now = new Date();
 const live     = quizzes.filter(q => new Date(q.startTime) <= now && new Date(q.endTime) >= now);
 const upcoming = quizzes.filter(q => new Date(q.startTime) > now);
@@ -2704,20 +2684,19 @@ content.innerHTML = `
         </table>
       </div>`
   }`;
-```
 
 } catch(e) {
 content.innerHTML = `<div class="card"><p style="color:#ef4444;">Error loading quizzes: ${e.message}</p></div>`;
 }
 }
 
-// – HOD: Export department data to CSV ———————————––
+// - HOD: Export department data to CSV ------------------------
 async function hodExportCSV(type) {
 try {
-const dept = currentUser.department ? ‘&department=’ + encodeURIComponent(currentUser.department) : ‘’;
-let rows = [], headers = [], filename = ‘’;
+const dept = currentUser.department ? '&department=' + encodeURIComponent(currentUser.department) : '';
+let rows = [], headers = [], filename = '';
 
-```
+
 if (type === 'students') {
   const d = await api('/api/users?role=student&limit=500' + dept);
   headers = ['Name', 'Index Number', 'Email', 'Department', 'Status'];
@@ -2742,62 +2721,61 @@ const url = URL.createObjectURL(blob);
 const a = document.createElement('a'); a.href = url; a.download = filename; a.click();
 setTimeout(() => URL.revokeObjectURL(url), 1000);
 toastSuccess('CSV exported -');
-```
 
-} catch(e) { toastError(’Export failed: ’ + e.message); }
+} catch(e) { toastError('Export failed: ' + e.message); }
 }
 
-// – FEATURE 3: HOD - Courses view ——————————————
+// - FEATURE 3: HOD - Courses view ----------------------------
 async function renderHodCourses() {
-const content = document.getElementById(‘main-content’);
-content.innerHTML = ‘<div class="loading">Loading courses-</div>’;
+const content = document.getElementById('main-content');
+content.innerHTML = '<div class="loading">Loading courses-</div>';
 try {
-const dept = currentUser.department ? ‘&department=’ + encodeURIComponent(currentUser.department) : ‘’;
-const data = await api(’/api/courses?limit=200’ + dept);
+const dept = currentUser.department ? '&department=' + encodeURIComponent(currentUser.department) : '';
+const data = await api('/api/courses?limit=200' + dept);
 const courses = data.courses || [];
 content.innerHTML = `<div class="page-header"> <div><h2>Courses</h2><p>${courses.length} course${courses.length !== 1 ? 's' : ''} in ${currentUser.department || 'your department'}</p></div> </div> ${courses.length === 0 ? '<div class="empty-state"><p>No courses found for this department.</p></div>' :`<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px;">
-${courses.map(c => `<div class="card" style="padding:16px 18px;"> <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:8px;"> <div> <div style="font-weight:700;font-size:14px;">${c.title}</div> <div style="font-size:11px;font-family:monospace;color:var(--text-muted);margin-top:2px;">${c.code}</div> </div> <span class="tag tag-blue">${c.enrolledStudents?.length || 0} students</span> </div> <div style="font-size:12px;color:var(--text-muted);margin-bottom:6px;"> --- ${c.lecturer?.name || 'Unassigned'} </div> ${c.description ?`<div style="font-size:12px;color:var(--text-muted);line-height:1.5;">${c.description}</div>` : ''} </div>`).join(’’)}
+${courses.map(c => `<div class="card" style="padding:16px 18px;"> <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:8px;"> <div> <div style="font-weight:700;font-size:14px;">${c.title}</div> <div style="font-size:11px;font-family:monospace;color:var(--text-muted);margin-top:2px;">${c.code}</div> </div> <span class="tag tag-blue">${c.enrolledStudents?.length || 0} students</span> </div> <div style="font-size:12px;color:var(--text-muted);margin-bottom:6px;"> --- ${c.lecturer?.name || 'Unassigned'} </div> ${c.description ?`<div style="font-size:12px;color:var(--text-muted);line-height:1.5;">${c.description}</div>` : ''} </div>`).join('')}
 </div>`}`;
 } catch(e) {
 content.innerHTML = `<div class="card"><p style="color:#ef4444;">${e.message}</p></div>`;
 }
 }
 
-// – FEATURE 4: HOD - Edit lecturer department —————————––
+// - FEATURE 4: HOD - Edit lecturer department --------------------
 function hodEditLecturerDept(lecturerId, lecturerName, currentDept) {
 const newDept = prompt(`Change department for ${lecturerName}:
 
-Current: ${currentDept || ‘None’}`, currentDept || ‘’);
+Current: ${currentDept || 'None'}`, currentDept || '');
 if (newDept === null) return;
-if (!newDept.trim()) { toastWarning(‘Department cannot be empty.’); return; }
-api(’/api/users/’ + lecturerId, {
-method: ‘PATCH’,
+if (!newDept.trim()) { toastWarning('Department cannot be empty.'); return; }
+api('/api/users/' + lecturerId, {
+method: 'PATCH',
 body: JSON.stringify({ department: newDept.trim() })
 }).then(() => {
-toastSuccess(‘Department updated to “’ + newDept.trim() + ‘”’);
+toastSuccess('Department updated to "' + newDept.trim() + '"');
 renderHodLecturers();
-}).catch(e => toastError(e.message || ‘Failed to update department’));
+}).catch(e => toastError(e.message || 'Failed to update department'));
 }
 
-// ––––––––––––––––––––––––––––––––––––––
+// --------------------------------------
 //  SUPERADMIN DASHBOARD
-// ––––––––––––––––––––––––––––––––––––––
+// --------------------------------------
 async function renderSuperadminDashboard(content) {
-if (!content) content = document.getElementById(‘main-content’);
-content.innerHTML = ‘<div class="loading">Loading platform overview-</div>’;
+if (!content) content = document.getElementById('main-content');
+content.innerHTML = '<div class="loading">Loading platform overview-</div>';
 try {
-const data = await api(’/api/superadmin/overview’).catch(() => null);
+const data = await api('/api/superadmin/overview').catch(() => null);
 const companies = data?.companies || [];
 const totalCompanies = companies.length;
-const academic   = companies.filter(c => c.mode === ‘academic’).length;
-const corporate  = companies.filter(c => c.mode === ‘corporate’).length;
+const academic   = companies.filter(c => c.mode === 'academic').length;
+const corporate  = companies.filter(c => c.mode === 'corporate').length;
 const active     = companies.filter(c => c.isActive).length;
 const onTrial    = companies.filter(c => c.isTrialActive).length;
-const subscribed = companies.filter(c => c.subscriptionStatus === ‘active’).length;
+const subscribed = companies.filter(c => c.subscriptionStatus === 'active').length;
 const totalRevenue = data?.totalRevenue || 0;
 const totalPayments = data?.totalPayments || 0;
 
-```
+
 content.innerHTML = `
   <div class="page-header">
     <div><h2>Platform Overview</h2><p>KODEX Superadmin - All institutions</p></div>
@@ -2865,7 +2843,6 @@ content.innerHTML = `
       </table>
     </div>
   </div>`;
-```
 
 } catch(e) {
 await renderAdminDashboard(content);
@@ -2874,12 +2851,12 @@ await renderAdminDashboard(content);
 
 async function renderLecturerDashboard(content) {
 const [sessionsData, coursesData, quizzesData] = await Promise.all([
-api(’/api/attendance-sessions?limit=5’).catch(() => ({ sessions: [], pagination: { total: 0 } })),
-api(’/api/courses’).catch(() => ({ courses: [] })),
-api(’/api/lecturer/quizzes’).catch(() => ({ quizzes: [] })),
+api('/api/attendance-sessions?limit=5').catch(() => ({ sessions: [], pagination: { total: 0 } })),
+api('/api/courses').catch(() => ({ courses: [] })),
+api('/api/lecturer/quizzes').catch(() => ({ quizzes: [] })),
 ]);
 
-// Count students enrolled across lecturer’s courses only
+// Count students enrolled across lecturer's courses only
 const totalStudents = coursesData.courses.reduce((sum, c) => sum + (c.enrolledStudents?.length || 0), 0);
 const activeCourses = coursesData.courses.length;
 const quizzesCreated = quizzesData.quizzes.length;
@@ -2887,29 +2864,29 @@ const quizzesCreated = quizzesData.quizzes.length;
 content.innerHTML = `<div class="page-header"> <h2>Welcome back, ${currentUser.name.split(' ')[0]}</h2> <p>Here's an overview of your workspace at ${currentUser.company?.name || 'your institution'} ${currentUser.department ?` - <span style="display:inline-flex;align-items:center;gap:4px;padding:2px 8px;background:#fffbeb;border:1px solid #fde68a;border-radius:20px;font-size:12px;font-weight:700;color:#b45309;">${currentUser.department}</span>`: ''} </p> </div> <div class="stats-grid"> <div class="stat-card"><div class="stat-value">${totalStudents}</div><div class="stat-label">Students</div></div> <div class="stat-card"><div class="stat-value">${activeCourses}</div><div class="stat-label">Courses</div></div> <div class="stat-card"><div class="stat-value">${sessionsData.pagination.total}</div><div class="stat-label">Sessions</div></div> <div class="stat-card"><div class="stat-value">${quizzesCreated}</div><div class="stat-label">Quizzes</div></div> </div> <div class="quick-actions"> <button class="btn btn-primary btn-sm" onclick="navigateTo('sessions'); setTimeout(showStartSessionModal, 300)">${sessionsIcon()} Start Session</button> <button class="btn btn-secondary btn-sm" onclick="navigateTo('courses'); setTimeout(showCreateCourseModal, 300)">${coursesIcon()} Create Course</button> <button class="btn btn-secondary btn-sm" onclick="navigateTo('quizzes'); setTimeout(showCreateQuizModal, 300)">${quizzesIcon()} Create Quiz</button> </div> <div class="card"> <div class="card-title">Recent Sessions</div> ${sessionsData.sessions.length ?`
 <table>
 <thead><tr><th>Title</th><th>Status</th><th>Started</th><th>Created By</th></tr></thead>
-<tbody>${sessionsData.sessions.map(s => `<tr> <td style="font-weight:500;color:var(--text)">${s.title || 'Untitled'}</td> <td><span class="status-badge status-${s.status}">${s.status}</span></td> <td>${new Date(s.startedAt).toLocaleString()}</td> <td>${s.createdBy?.name || 'N/A'}</td> </tr>`).join(’’)}</tbody>
+<tbody>${sessionsData.sessions.map(s => `<tr> <td style="font-weight:500;color:var(--text)">${s.title || 'Untitled'}</td> <td><span class="status-badge status-${s.status}">${s.status}</span></td> <td>${new Date(s.startedAt).toLocaleString()}</td> <td>${s.createdBy?.name || 'N/A'}</td> </tr>`).join('')}</tbody>
 </table>
 `: '<div class="empty-state"><p>No sessions yet. Start your first attendance session!</p></div>'} </div>`;
 }
 
 async function renderEmployeeDashboard(content) {
 const [attendance, meetingsData, signInStatus] = await Promise.all([
-api(’/api/attendance-sessions/my-attendance?limit=5’).catch(() => ({ records: [], pagination: { total: 0 } })),
-api(’/api/zoom’).catch(() => ({ meetings: [] })),
-api(’/api/attendance-sessions/sign-in-status’).catch(() => ({ signedIn: false, record: null })),
+api('/api/attendance-sessions/my-attendance?limit=5').catch(() => ({ records: [], pagination: { total: 0 } })),
+api('/api/zoom').catch(() => ({ meetings: [] })),
+api('/api/attendance-sessions/sign-in-status').catch(() => ({ signedIn: false, record: null })),
 ]);
 
-const upcomingMeetings = meetingsData.meetings.filter(m => m.status === ‘scheduled’);
+const upcomingMeetings = meetingsData.meetings.filter(m => m.status === 'scheduled');
 const totalCheckins = attendance.pagination.total;
-const attendanceRate = totalCheckins > 0 ? Math.round((attendance.records.filter(r => r.status === ‘present’).length / attendance.records.length) * 100) : 0;
+const attendanceRate = totalCheckins > 0 ? Math.round((attendance.records.filter(r => r.status === 'present').length / attendance.records.length) * 100) : 0;
 const signedIn = signInStatus.signedIn;
 const signInRecord = signInStatus.record;
 const signInTime = signInRecord?.checkInTime ? new Date(signInRecord.checkInTime) : null;
 
-content.innerHTML = `<div class="page-header"> <h2>Welcome back, ${currentUser.name.split(' ')[0]}</h2> <p>${currentUser.company?.name || 'Your company'}${currentUser.employeeId ?` \u2022 ID: ${currentUser.employeeId}` : ‘’}</p>
+content.innerHTML = `<div class="page-header"> <h2>Welcome back, ${currentUser.name.split(' ')[0]}</h2> <p>${currentUser.company?.name || 'Your company'}${currentUser.employeeId ?` \u2022 ID: ${currentUser.employeeId}` : ''}</p>
 </div>
 
-```
+
 <div class="card" style="border-left:4px solid ${signedIn ? 'var(--success)' : 'var(--primary)'};background:${signedIn ? 'linear-gradient(135deg,#f0fdf4,#ecfdf5)' : 'linear-gradient(135deg,#eef2ff,#e0e7ff)'}">
   <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px">
     <div>
@@ -2955,7 +2932,6 @@ content.innerHTML = `<div class="page-header"> <h2>Welcome back, ${currentUser.n
     </table>
   ` : '<div class="empty-state"><p>No attendance records yet. Sign in to start tracking.</p></div>'}
 </div>
-```
 
 `;
 }
@@ -2965,71 +2941,71 @@ async function employeeSignIn() {
 if (esp32IP) {
 const detected = await discoverESP32();
 if (!detected) {
-toastWarning(‘You must be at the office to sign in. BLE device not detected.’);
+toastWarning('You must be at the office to sign in. BLE device not detected.');
 return;
 }
 // Record sign-in on ESP32 locally
 try {
-await esp32Api(’/sign-in’, {
-method: ‘POST’,
+await esp32Api('/sign-in', {
+method: 'POST',
 body: JSON.stringify({ userId: currentUser.id, name: currentUser.name })
 });
-toastSuccess(‘Signed in successfully!’);
+toastSuccess('Signed in successfully!');
 renderSignInOut();
 return;
 } catch(e) {
-console.warn(’[ESP32] Sign in failed, trying server:’, e.message);
+console.warn('[ESP32] Sign in failed, trying server:', e.message);
 }
 }
 try {
-const data = await api(’/api/attendance-sessions/sign-in’, { method: ‘POST’ });
-toastSuccess(data.message || ‘Signed in successfully!’);
-navigateTo(‘dashboard’);
+const data = await api('/api/attendance-sessions/sign-in', { method: 'POST' });
+toastSuccess(data.message || 'Signed in successfully!');
+navigateTo('dashboard');
 } catch (e) {
-toastError(e.message || ‘Sign in failed’);
+toastError(e.message || 'Sign in failed');
 }
 }
 
 async function employeeSignOut() {
-if (!confirm(‘Are you sure you want to sign out?’)) return;
+if (!confirm('Are you sure you want to sign out?')) return;
 // If ESP32 configured, check BLE presence first
 if (esp32IP) {
 const detected = await discoverESP32();
 if (!detected) {
-toastWarning(‘You must be at the office to sign out. BLE device not detected.’);
+toastWarning('You must be at the office to sign out. BLE device not detected.');
 return;
 }
 try {
-await esp32Api(’/sign-out’, {
-method: ‘POST’,
+await esp32Api('/sign-out', {
+method: 'POST',
 body: JSON.stringify({ userId: currentUser.id, name: currentUser.name })
 });
-toastSuccess(‘Signed out successfully!’);
+toastSuccess('Signed out successfully!');
 renderSignInOut();
 return;
 } catch(e) {
-console.warn(’[ESP32] Sign out failed, trying server:’, e.message);
+console.warn('[ESP32] Sign out failed, trying server:', e.message);
 }
 }
 try {
-const data = await api(’/api/attendance-sessions/sign-out’, { method: ‘POST’ });
-toastSuccess(data.message ? data.message + (data.duration ? ’ Duration: ’ + data.duration : ‘’) : ‘Signed out successfully!’);
-navigateTo(‘dashboard’);
+const data = await api('/api/attendance-sessions/sign-out', { method: 'POST' });
+toastSuccess(data.message ? data.message + (data.duration ? ' Duration: ' + data.duration : '') : 'Signed out successfully!');
+navigateTo('dashboard');
 } catch (e) {
-toastError(e.message || ‘Sign out failed’);
+toastError(e.message || 'Sign out failed');
 }
 }
 
 async function renderSignInOut() {
-const content = document.getElementById(‘main-content’);
+const content = document.getElementById('main-content');
 if (!content) return;
 try {
 const [statusData, attendanceData] = await Promise.all([
-api(’/api/attendance-sessions/sign-in-status’).catch(() => ({ signedIn: false, record: null })),
-api(’/api/attendance-sessions/my-attendance?limit=30’).catch(() => ({ records: [] })),
+api('/api/attendance-sessions/sign-in-status').catch(() => ({ signedIn: false, record: null })),
+api('/api/attendance-sessions/my-attendance?limit=30').catch(() => ({ records: [] })),
 ]);
 
-```
+
 const signedIn = statusData.signedIn;
 const record = statusData.record;
 const signInTime = record?.checkInTime ? new Date(record.checkInTime) : null;
@@ -3094,27 +3070,26 @@ content.innerHTML = `
     ` : '<div class="empty-state"><p>No attendance records yet. Click Sign In to start.</p></div>'}
   </div>
 `;
-```
 
 } catch (e) {
 content.innerHTML = `<div class="card"><p>Error: ${e.message}</p></div>`;
 }
 }
 
-// – Lecturer: Student Performance across all quizzes in a course –––––––
+// - Lecturer: Student Performance across all quizzes in a course -------
 async function renderLecturerPerformance() {
-const content = document.getElementById(‘main-content’);
+const content = document.getElementById('main-content');
 if (!content) return;
-content.innerHTML = ‘<div class="loading">Loading performance data-</div>’;
+content.innerHTML = '<div class="loading">Loading performance data-</div>';
 try {
 const [coursesData, quizzesData] = await Promise.all([
-api(’/api/courses’).catch(() => ({ courses: [] })),
-api(’/api/lecturer/quizzes’).catch(() => ({ quizzes: [] })),
+api('/api/courses').catch(() => ({ courses: [] })),
+api('/api/lecturer/quizzes').catch(() => ({ quizzes: [] })),
 ]);
 const courses = coursesData.courses || [];
 const quizzes = quizzesData.quizzes || [];
 
-```
+
 content.innerHTML = `
   <div class="page-header">
     <h2>Student Performance</h2>
@@ -3149,27 +3124,26 @@ content.innerHTML = `
     </table>
   </div>`}
 `;
-```
 
 } catch(e) {
 content.innerHTML = `<div class="card"><p style="color:var(--danger)">Error: ${e.message}</p></div>`;
 }
 }
 
-// – Student Quiz Results History ———————————————
+// - Student Quiz Results History ------------------------------
 async function renderStudentQuizHistory() {
-const content = document.getElementById(‘main-content’);
+const content = document.getElementById('main-content');
 if (!content) return;
-content.innerHTML = ‘<div class="loading">Loading quiz history-</div>’;
+content.innerHTML = '<div class="loading">Loading quiz history-</div>';
 try {
-const data = await api(’/api/student/quizzes’);
+const data = await api('/api/student/quizzes');
 const quizzes = data.quizzes || [];
 const attempted = quizzes.filter(q => q.myAttempt);
 const avgScore = attempted.length
 ? Math.round(attempted.reduce((s, q) => s + (q.myAttempt?.percentageScore || 0), 0) / attempted.length)
 : 0;
 
-```
+
 content.innerHTML = `
   <div class="page-header"><h2>My Quiz Results</h2><p>Your performance across all quizzes</p></div>
   <div class="stats-grid" style="margin-bottom:20px">
@@ -3212,7 +3186,6 @@ content.innerHTML = `
     </div>
   ` : ''}
 `;
-```
 
 } catch(e) {
 content.innerHTML = `<div class="card"><p style="color:var(--danger)">Error: ${e.message}</p></div>`;
@@ -3222,45 +3195,45 @@ content.innerHTML = `<div class="card"><p style="color:var(--danger)">Error: ${e
 async function viewStudentQuizResult(quizId) {
 try {
 const data = await api(`/api/student/quizzes/${quizId}/result`);
-navigateTo(‘quizzes’);
+navigateTo('quizzes');
 // Show result in modal
-const modal = document.getElementById(‘modal-container’);
+const modal = document.getElementById('modal-container');
 if (!modal) return;
-modal.classList.remove(‘hidden’);
+modal.classList.remove('hidden');
 const pct = data.attempt?.percentageScore || 0;
-const color = pct >= 70 ? ‘#16a34a’ : pct >= 50 ? ‘#d97706’ : ‘#dc2626’;
+const color = pct >= 70 ? '#16a34a' : pct >= 50 ? '#d97706' : '#dc2626';
 modal.innerHTML = `<div class="modal-overlay" onclick="closeModal(event)"> <div class="modal" onclick="event.stopPropagation()" style="max-width:600px;max-height:80vh;overflow-y:auto"> <h3>${data.quiz?.title || 'Quiz Result'}</h3> <div style="text-align:center;margin:20px 0;padding:20px;background:${color}10;border-radius:12px"> <div style="font-size:48px;font-weight:800;color:${color}">${pct}%</div> <div style="color:var(--text-muted);margin-top:4px">${data.attempt?.score}/${data.attempt?.totalMarks} marks</div> </div> ${data.feedback ?`<div style="padding:12px 16px;background:#f5f3ff;border-radius:8px;margin-bottom:16px;font-size:13px"><strong>Feedback:</strong> ${esc(data.feedback)}</div>` : ''} <div class="modal-actions"><button class="btn btn-secondary btn-sm" onclick="closeModal()">Close</button></div> </div> </div>`;
-} catch(e) { showToastNotif(’Could not load result: ’ + e.message, ‘error’); }
+} catch(e) { showToastNotif('Could not load result: ' + e.message, 'error'); }
 }
 
 async function renderStudentDashboard(content) {
 const [attendance, coursesData, quizzesData, meetingsData, activeSessionData] = await Promise.all([
-api(’/api/attendance-sessions/my-attendance?limit=5’).catch(() => ({ records: [], pagination: { total: 0 } })),
-api(’/api/courses’).catch(() => ({ courses: [] })),
-api(’/api/student/quizzes’).catch(() => ({ quizzes: [] })),
-api(’/api/zoom’).catch(() => ({ meetings: [] })),
-api(’/api/attendance-sessions/active’).catch(() => ({ session: null })),
+api('/api/attendance-sessions/my-attendance?limit=5').catch(() => ({ records: [], pagination: { total: 0 } })),
+api('/api/courses').catch(() => ({ courses: [] })),
+api('/api/student/quizzes').catch(() => ({ quizzes: [] })),
+api('/api/zoom').catch(() => ({ meetings: [] })),
+api('/api/attendance-sessions/active').catch(() => ({ session: null })),
 ]);
 
 const totalCheckins = attendance.pagination.total;
 const enrolledCourses = coursesData.courses.length;
 const quizzesTaken = quizzesData.quizzes.length;
-const upcomingMeetings = meetingsData.meetings.filter(m => m.status === ‘scheduled’);
+const upcomingMeetings = meetingsData.meetings.filter(m => m.status === 'scheduled');
 const activeSession = activeSessionData.session;
-const attendanceRate = totalCheckins > 0 ? Math.round((attendance.records.filter(r => r.status === ‘present’).length / attendance.records.length) * 100) : 0;
+const attendanceRate = totalCheckins > 0 ? Math.round((attendance.records.filter(r => r.status === 'present').length / attendance.records.length) * 100) : 0;
 
 const methodLabel = (m) => {
-const labels = { qr_mark: ‘QR Code’, code_mark: ‘Code Entry’, ble_mark: ‘BLE Proximity’, jitsi_join: ‘Meeting Join’, manual: ‘Manual’, qr: ‘QR Code’, ble: ‘BLE’, zoom: ‘Meeting’ };
+const labels = { qr_mark: 'QR Code', code_mark: 'Code Entry', ble_mark: 'BLE Proximity', jitsi_join: 'Meeting Join', manual: 'Manual', qr: 'QR Code', ble: 'BLE', zoom: 'Meeting' };
 return labels[m] || m;
 };
 
 content.innerHTML = `
 <div class="page-header">
-<h2>Welcome back, ${currentUser.name.split(’ ’)[0]}</h2>
-<p>${currentUser.company?.name || ‘Your institution’}${currentUser.indexNumber ? ’ \u2022 ’ + currentUser.indexNumber : ‘’}</p>
+<h2>Welcome back, ${currentUser.name.split(' ')[0]}</h2>
+<p>${currentUser.company?.name || 'Your institution'}${currentUser.indexNumber ? ' \u2022 ' + currentUser.indexNumber : ''}</p>
 </div>
 
-```
+
 ${activeSession ? `
   <div class="card" style="border-left:4px solid var(--success);background:linear-gradient(135deg,#f0fdf4,#ecfdf5);cursor:pointer" onclick="navigateTo('mark-attendance')">
     <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
@@ -3323,52 +3296,51 @@ ${upcomingMeetings.length > 0 ? `
     </table>
   ` : '<div class="empty-state"><p>No attendance records yet. Mark attendance when a session is active.</p></div>'}
 </div>
-```
 
 `;
 }
 
 async function renderAdminDashboard(content) {
 const [sessionsData, usersData, pendingData, announcementsData] = await Promise.all([
-api(’/api/attendance-sessions?limit=5’).catch(() => ({ sessions: [], pagination: { total: 0 } })),
-api(’/api/users’).catch(() => ({ users: [] })),
-api(’/api/approvals/pending’).catch(() => ({ pending: [] })),
-api(’/api/announcements’).catch(() => ({ announcements: [] })),
+api('/api/attendance-sessions?limit=5').catch(() => ({ sessions: [], pagination: { total: 0 } })),
+api('/api/users').catch(() => ({ users: [] })),
+api('/api/approvals/pending').catch(() => ({ pending: [] })),
+api('/api/announcements').catch(() => ({ announcements: [] })),
 ]);
 
-const activeSessions = sessionsData.sessions.filter(s => s.status === ‘active’).length;
+const activeSessions = sessionsData.sessions.filter(s => s.status === 'active').length;
 // Auto-refresh every 30s if there are active sessions
 if (activeSessions > 0) {
 clearTimeout(window._dashRefreshTimer);
-window._dashRefreshTimer = setTimeout(() => { if (currentView === ‘dashboard’) renderDashboard(); }, 30000);
+window._dashRefreshTimer = setTimeout(() => { if (currentView === 'dashboard') renderDashboard(); }, 30000);
 }
 const totalUsers     = usersData.users.length;
 const pendingCount   = pendingData.pending.length;
 const announcements  = announcementsData.announcements || [];
-const instCode       = currentUser.company?.institutionCode || currentUser.company?.code || ‘N/A’;
-const mode           = currentUser.company?.mode || currentUser.mode || (document.getElementById(‘dashboard-page’)?.dataset?.mode) || ‘corporate’;
-const isAcademic     = mode === ‘academic’;
-const firstName      = currentUser.name.split(’ ’)[0];
+const instCode       = currentUser.company?.institutionCode || currentUser.company?.code || 'N/A';
+const mode           = currentUser.company?.mode || currentUser.mode || (document.getElementById('dashboard-page')?.dataset?.mode) || 'corporate';
+const isAcademic     = mode === 'academic';
+const firstName      = currentUser.name.split(' ')[0];
 
 const hour = new Date().getHours();
-const greeting = hour < 12 ? ‘Good morning’ : hour < 17 ? ‘Good afternoon’ : ‘Good evening’;
+const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
 
 const sessionRows = sessionsData.sessions.length
 ? sessionsData.sessions.map(s => {
-const isLive = s.status === ‘active’;
+const isLive = s.status === 'active';
 return ` <div class="session-row"> <div class="session-indicator ${isLive ? 'live' : 'ended'}"></div> <div class="session-row-info"> <div class="session-row-title">${s.title || 'Untitled'}</div> <div class="session-row-sub">${s.createdBy?.name || ''}</div> </div> <span class="session-row-time ${isLive ? 'live' : 'ended'}">${isLive ? 'Live' : timeAgo(s.startedAt)}</span> </div>`;
-}).join(’’)
+}).join('')
 : `<div class="empty-state"><p>No sessions yet</p></div>`;
 
-const typeColors = { info: ‘#3b82f6’, warning: ‘#f59e0b’, success: ‘#10b981’, urgent: ‘#ef4444’ };
+const typeColors = { info: '#3b82f6', warning: '#f59e0b', success: '#10b981', urgent: '#ef4444' };
 const annRows = announcements.length
-? announcements.slice(0, 5).map(a => ` <div class="ann-row"> <div class="ann-dot" style="background:${typeColors[a.type] || '#94a3b8'}"></div> <div> <div class="ann-title">${a.title}</div> <div class="ann-meta">${a.audience === 'all' ? 'Everyone' : a.audience.charAt(0).toUpperCase()+a.audience.slice(1)} - ${timeAgo(a.createdAt)}</div> </div> </div>`).join(’’)
+? announcements.slice(0, 5).map(a => ` <div class="ann-row"> <div class="ann-dot" style="background:${typeColors[a.type] || '#94a3b8'}"></div> <div> <div class="ann-title">${a.title}</div> <div class="ann-meta">${a.audience === 'all' ? 'Everyone' : a.audience.charAt(0).toUpperCase()+a.audience.slice(1)} - ${timeAgo(a.createdAt)}</div> </div> </div>`).join('')
 : `<div class="empty-state"><p>No announcements yet</p></div>`;
 
 content.innerHTML = `
 <div style="display:flex;flex-direction:column;gap:14px">
 
-```
+
   <!-- Welcome row -->
   <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap">
     <div class="dashboard-welcome">
@@ -3499,7 +3471,6 @@ content.innerHTML = `
   </div>
 
 </div>
-```
 
 `;
 
@@ -3511,14 +3482,14 @@ async function _renderAdminCharts(sessionsData, usersData) {
 try {
 if (!window.Chart) {
 await new Promise((res, rej) => {
-const s = document.createElement(‘script’);
-s.src = ‘https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js’;
+const s = document.createElement('script');
+s.src = 'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js';
 s.onload = res; s.onerror = rej;
 document.head.appendChild(s);
 });
 }
 
-```
+
 // Attendance trend - group all sessions by date over last 14 days
 const allSessions = await api('/api/attendance-sessions?limit=200').catch(() => ({ sessions: [] }));
 const now = Date.now();
@@ -3583,31 +3554,30 @@ if (roleCtx && roleLabels.length > 0) {
     }
   });
 }
-```
 
 } catch(e) {
-console.error(‘Admin charts error:’, e.message);
+console.error('Admin charts error:', e.message);
 }
 }
 
 async function renderSessions() {
-const content = document.getElementById(‘main-content’);
+const content = document.getElementById('main-content');
 if (!content) return;
 
 // Offline: render from cache immediately
 if (!isOnline()) {
-const cached = offlineRead(‘sessions’);
+const cached = offlineRead('sessions');
 _renderSessionsHTML(content, cached?.sessions || [], true);
 return;
 }
 
 try {
-const data = await api(’/api/attendance-sessions’);
-offlineCache(‘sessions’, data); // cache for offline use
+const data = await api('/api/attendance-sessions');
+offlineCache('sessions', data); // cache for offline use
 _renderSessionsHTML(content, data.sessions || [], false);
 } catch (e) {
 // Network failed - fall back to cache
-const cached = offlineRead(‘sessions’);
+const cached = offlineRead('sessions');
 if (cached) {
 _renderSessionsHTML(content, cached.sessions || [], true);
 } else {
@@ -3618,67 +3588,67 @@ content.innerHTML = `<div class="card"><p>Error: ${e.message}</p></div>`;
 
 function _renderSessionsHTML(content, sessions, isOffline) {
 const pendingCount = offlineQueueCount();
-const canStart = [‘lecturer’, ‘manager’].includes(currentUser.role);
+const canStart = ['lecturer', 'manager'].includes(currentUser.role);
 content.innerHTML = `<div class="page-header"> <h2>Attendance Sessions</h2> <p>Manage attendance sessions${isOffline ? ' <span style="color:#f59e0b;font-weight:600">(Offline - showing cached data)</span>' : ''}</p> </div> ${canStart ?`<div class="actions-bar">
 <button class="btn btn-primary btn-sm" onclick="showStartSessionModal()">Start New Session</button>
-${pendingCount > 0 ? `<span style="background:#fef3c7;color:#92400e;border:1px solid #fbbf24;border-radius:6px;padding:4px 12px;font-size:12px;font-weight:600">${pendingCount} action${pendingCount!==1?'s':''} pending sync</span>` : ‘’}
+${pendingCount > 0 ? `<span style="background:#fef3c7;color:#92400e;border:1px solid #fbbf24;border-radius:6px;padding:4px 12px;font-size:12px;font-weight:600">${pendingCount} action${pendingCount!==1?'s':''} pending sync</span>` : ''}
 </div>`: ''} <div class="card"> ${sessions.length ?`
 <table>
 <thead><tr><th>Title</th><th>Status</th><th>Started</th><th>Stopped</th><th>Actions</th></tr></thead>
 <tbody>${sessions.map(s => `<tr> <td>${s.title || 'Untitled'}</td> <td><span class="status-badge status-${s.status}">${s.status}</span></td> <td>${new Date(s.startedAt).toLocaleString()}</td> <td>${s.stoppedAt ? new Date(s.stoppedAt).toLocaleString() : '-'}</td> <td>${s.status === 'active' && canStart ?`
 <button class="btn btn-danger btn-sm" onclick="stopSession('${s._id}')">Stop</button>
-${!isOffline ? `<button class="btn btn-success btn-sm" onclick="generateQR('${s._id}')">QR Code</button>` : ‘’}
-${!isOffline ? `<button class="btn btn-sm" style="background:#7c3aed;color:#fff;font-size:11px" onclick="generateVerbalCode('${s._id}')">Verbal Code</button>` : ‘’}
-<button class=“btn btn-sm” style=“font-size:11px;background:var(–bg);border:1px solid var(–border)” onclick=“viewAttendees(’${s._id}’, ‘${(s.title||‘Session’).replace(/[’”]/g,’’)}’)”>Attendees</button>
+${!isOffline ? `<button class="btn btn-success btn-sm" onclick="generateQR('${s._id}')">QR Code</button>` : ''}
+${!isOffline ? `<button class="btn btn-sm" style="background:#7c3aed;color:#fff;font-size:11px" onclick="generateVerbalCode('${s._id}')">Verbal Code</button>` : ''}
+<button class="btn btn-sm" style="font-size:11px;background:var(-bg);border:1px solid var(-border)" onclick="viewAttendees('${s._id}', '${(s.title||'Session').replace(/['"]/g,'')}')">Attendees</button>
 `: s.status === 'active' ?`
-<button class=“btn btn-sm” style=“font-size:11px;background:var(–bg);border:1px solid var(–border)” onclick=“viewAttendees(’${s._id}’, ‘${(s.title||‘Session’).replace(/[’”]/g,’’)}’)”>Attendees</button>
-`: ''}</td> </tr>`).join(’’)}</tbody>
+<button class="btn btn-sm" style="font-size:11px;background:var(-bg);border:1px solid var(-border)" onclick="viewAttendees('${s._id}', '${(s.title||'Session').replace(/['"]/g,'')}')">Attendees</button>
+`: ''}</td> </tr>`).join('')}</tbody>
 </table>
 `: '<div class="empty-state"><p>No sessions found</p></div>'} </div>`;
 }
 
 async function showStartSessionModal() {
-const container = document.getElementById(‘modal-container’);
-container.classList.remove(‘hidden’);
+const container = document.getElementById('modal-container');
+container.classList.remove('hidden');
 container.innerHTML = `<div class="modal-overlay"><div class="modal"><p style="color:var(--text-muted)">Loading courses-</p></div></div>`;
 
 let courses = [];
 try {
-const d = await api(’/api/courses’);
+const d = await api('/api/courses');
 courses = d.courses || d || [];
 } catch(e) { courses = []; }
 
-container.innerHTML = `<div class="modal-overlay" onclick="closeModal(event)"> <div class="modal" onclick="event.stopPropagation()"> <h3>Start New Session</h3> <div class="form-group"> <label>Course <span style="color:red">*</span></label> <select id="session-course" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px"> <option value="">- Select Course -</option> ${courses.map(c =>`<option value="${c._id}">${esc(c.title)}${c.level?’ - L’+c.level:’’}${c.group?’ - Grp ‘+c.group:’’}</option>`).join('')} </select> </div> <div class="form-group"> <label>Session Title <span style="font-weight:400;color:var(--text-muted);font-size:12px">(optional)</span></label> <input type="text" id="session-title" placeholder="e.g., Week 5 Lecture"> </div> <div class="modal-actions"> <button class="btn btn-secondary btn-sm" onclick="closeModal()">Cancel</button> <button class="btn btn-primary btn-sm" onclick="startSession()">Start Session</button> </div> </div> </div> `;
+container.innerHTML = `<div class="modal-overlay" onclick="closeModal(event)"> <div class="modal" onclick="event.stopPropagation()"> <h3>Start New Session</h3> <div class="form-group"> <label>Course <span style="color:red">*</span></label> <select id="session-course" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px"> <option value="">- Select Course -</option> ${courses.map(c =>`<option value="${c._id}">${esc(c.title)}${c.level?' - L'+c.level:''}${c.group?' - Grp '+c.group:''}</option>`).join('')} </select> </div> <div class="form-group"> <label>Session Title <span style="font-weight:400;color:var(--text-muted);font-size:12px">(optional)</span></label> <input type="text" id="session-title" placeholder="e.g., Week 5 Lecture"> </div> <div class="modal-actions"> <button class="btn btn-secondary btn-sm" onclick="closeModal()">Cancel</button> <button class="btn btn-primary btn-sm" onclick="startSession()">Start Session</button> </div> </div> </div> `;
 }
 
 async function startSession() {
-const title    = document.getElementById(‘session-title’)?.value?.trim();
-const courseId = document.getElementById(‘session-course’)?.value;
+const title    = document.getElementById('session-title')?.value?.trim();
+const courseId = document.getElementById('session-course')?.value;
 
-if (!courseId) { toastWarning(‘Please select a course.’); return; }
+if (!courseId) { toastWarning('Please select a course.'); return; }
 closeModal();
 
 if (!isOnline()) {
-const tempId = ‘offline_’ + Date.now();
+const tempId = 'offline_' + Date.now();
 offlineEnqueue({
 label: `Start session: ${title || 'Untitled'}`,
-url: ‘/api/attendance-sessions/start’,
-options: { method: ‘POST’, body: JSON.stringify({ title, courseId }) }
+url: '/api/attendance-sessions/start',
+options: { method: 'POST', body: JSON.stringify({ title, courseId }) }
 });
-const cached = offlineRead(‘sessions’) || { sessions: [] };
+const cached = offlineRead('sessions') || { sessions: [] };
 cached.sessions.unshift({
-_id: tempId, title: title || ‘Untitled’,
-status: ‘active’, startedAt: new Date().toISOString(), stoppedAt: null,
+_id: tempId, title: title || 'Untitled',
+status: 'active', startedAt: new Date().toISOString(), stoppedAt: null,
 _offlinePending: true
 });
-offlineCache(‘sessions’, cached);
-showToastNotif(’- Session queued - will start when online’, ‘warn’);
+offlineCache('sessions', cached);
+showToastNotif('- Session queued - will start when online', 'warn');
 renderSessions();
 return;
 }
 
 try {
-await api(’/api/attendance-sessions/start’, { method: ‘POST’, body: JSON.stringify({ title, courseId }) });
+await api('/api/attendance-sessions/start', { method: 'POST', body: JSON.stringify({ title, courseId }) });
 renderSessions();
 } catch (e) {
 toastError(e.message);
@@ -3686,28 +3656,28 @@ toastError(e.message);
 }
 
 async function stopSession(id) {
-if (!confirm(‘Stop this session?’)) return;
+if (!confirm('Stop this session?')) return;
 
 if (!isOnline()) {
 offlineEnqueue({
 label: `Stop session ${id}`,
 url: `/api/attendance-sessions/${id}/stop`,
-options: { method: ‘POST’ }
+options: { method: 'POST' }
 });
 // Optimistically update cache
-const cached = offlineRead(‘sessions’);
+const cached = offlineRead('sessions');
 if (cached) {
 const s = cached.sessions.find(s => s._id === id);
-if (s) { s.status = ‘stopped’; s.stoppedAt = new Date().toISOString(); s._offlinePending = true; }
-offlineCache(‘sessions’, cached);
+if (s) { s.status = 'stopped'; s.stoppedAt = new Date().toISOString(); s._offlinePending = true; }
+offlineCache('sessions', cached);
 }
-showToastNotif(’- Stop queued - will sync when online’, ‘warn’);
+showToastNotif('- Stop queued - will sync when online', 'warn');
 renderSessions();
 return;
 }
 
 try {
-await api(`/api/attendance-sessions/${id}/stop`, { method: ‘POST’ });
+await api(`/api/attendance-sessions/${id}/stop`, { method: 'POST' });
 renderSessions();
 } catch (e) {
 toastError(e.message);
@@ -3726,13 +3696,13 @@ if (_qrCountdownTimer){ clearInterval(_qrCountdownTimer); _qrCountdownTimer = nu
 
 async function generateQR(sessionId) {
 _stopQrTimers();
-const container = document.getElementById(‘modal-container’);
-container.classList.remove(‘hidden’);
+const container = document.getElementById('modal-container');
+container.classList.remove('hidden');
 
 async function _fetchAndShow() {
 try {
-const data = await api(’/api/qr-tokens/generate’, {
-method: ‘POST’,
+const data = await api('/api/qr-tokens/generate', {
+method: 'POST',
 body: JSON.stringify({ sessionId, expirySeconds: QR_EXPIRY_SECONDS })
 });
 const { code, token } = data.qrToken;
@@ -3741,7 +3711,7 @@ const { code, token } = data.qrToken;
 const qrDeepLink = `${window.location.origin}${window.location.pathname}?qr_token=${token}&qr_code=${code}`;
 const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(qrDeepLink)}&bgcolor=ffffff&color=000000&margin=10`;
 
-```
+
   container.innerHTML = `
     <div class="modal-overlay" onclick="_stopQrTimers();closeModal(event)">
       <div class="modal" onclick="event.stopPropagation()" style="text-align:center;max-width:400px">
@@ -3843,7 +3813,6 @@ const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=240x240&dat
       </div>
     </div>`;
 }
-```
 
 }
 
@@ -3851,20 +3820,20 @@ await _fetchAndShow();
 }
 
 async function generateVerbalCode(sessionId) {
-const container = document.getElementById(‘modal-container’);
-container.classList.remove(‘hidden’);
+const container = document.getElementById('modal-container');
+container.classList.remove('hidden');
 
 async function _fetchAndShow() {
 try {
-const data = await api(’/api/qr-tokens/generate’, {
-method: ‘POST’,
-body: JSON.stringify({ sessionId, codeType: ‘verbal’, expiryMinutes: 5 })
+const data = await api('/api/qr-tokens/generate', {
+method: 'POST',
+body: JSON.stringify({ sessionId, codeType: 'verbal', expiryMinutes: 5 })
 });
 const { code, expiresAt } = data.qrToken;
 const expiry = new Date(expiresAt);
 const totalSecs = Math.round((expiry - Date.now()) / 1000);
 
-```
+
   container.innerHTML = `
     <div class="modal-overlay" onclick="closeModal(event)">
       <div class="modal" onclick="event.stopPropagation()" style="text-align:center;max-width:380px">
@@ -3907,24 +3876,23 @@ const totalSecs = Math.round((expiry - Date.now()) / 1000);
     <button class="btn btn-primary btn-sm" onclick="closeModal()" style="margin-top:12px">Close</button>
   </div></div>`;
 }
-```
 
 }
 
 await _fetchAndShow();
 }
 
-async function renderUsers(filterRole=’’, filterDept=’’, filterSearch=’’) {
-const content = document.getElementById(‘main-content’);
+async function renderUsers(filterRole='', filterDept='', filterSearch='') {
+const content = document.getElementById('main-content');
 if (!content) return;
 try {
-let url = ‘/api/users’;
+let url = '/api/users';
 const params = [];
-if (filterRole) params.push(‘role=’ + encodeURIComponent(filterRole));
-if (filterDept) params.push(‘department=’ + encodeURIComponent(filterDept));
-if (params.length) url += ‘?’ + params.join(’&’);
+if (filterRole) params.push('role=' + encodeURIComponent(filterRole));
+if (filterDept) params.push('department=' + encodeURIComponent(filterDept));
+if (params.length) url += '?' + params.join('&');
 
-```
+
 const data = await api(url);
 const mode = currentUser.company?.mode || 'corporate';
 const isManager = currentUser.role === 'manager';
@@ -4025,7 +3993,6 @@ content.innerHTML = `
     ` : '<div class="empty-state"><p>No users found</p></div>'}
   </div>
 `;
-```
 
 } catch (e) {
 content.innerHTML = `<div class="card"><p>Error: ${e.message}</p></div>`;
@@ -4033,11 +4000,11 @@ content.innerHTML = `<div class="card"><p>Error: ${e.message}</p></div>`;
 }
 
 async function renderResetLogs() {
-const content = document.getElementById(‘main-content’);
+const content = document.getElementById('main-content');
 if (!content) return;
-content.innerHTML = ‘<div class="loading">Loading reset logs-</div>’;
+content.innerHTML = '<div class="loading">Loading reset logs-</div>';
 try {
-const { logs } = await api(’/api/users/reset-logs/all’);
+const { logs } = await api('/api/users/reset-logs/all');
 content.innerHTML = `<div class="page-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px"> <div><h2>- Password Reset Log</h2><p>All password resets across your institution</p></div> <button class="btn btn-secondary btn-sm" onclick="renderUsers()">- Back to Users</button> </div> <div class="card" style="padding:0;overflow:hidden"> ${!logs.length ?`
 <div style="text-align:center;padding:48px;color:#6b7280">
 <div style="font-size:36px;margin-bottom:10px">-</div>
@@ -4055,7 +4022,7 @@ content.innerHTML = `<div class="page-header" style="display:flex;justify-conten
 <th>Device</th>
 </tr></thead>
 <tbody>
-${logs.map(l => `<tr> <td style="font-weight:600">${l.userName}</td> <td><span class="role-badge role-${l.userRole}">${l.userRole}</span></td> <td style="font-size:12px;color:#6b7280">${l.userEmail}</td> <td style="font-size:12px;white-space:nowrap">${new Date(l.resetAt).toLocaleString()}</td> <td style="font-size:12px;font-family:monospace">${l.ipAddress || '-'}</td> <td><span style="padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600;background:${l.method === 'admin' ? '#fef3c7' : '#f0f9ff'};color:${l.method === 'admin' ? '#92400e' : '#0369a1'}">${l.method === 'admin' ? '- Admin' : '- Self'}</span></td> <td style="font-size:11px;color:#9ca3af;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${l.userAgent}">${l.userAgent ? l.userAgent.split(' ').slice(0,3).join(' ') : '-'}</td> </tr>`).join(’’)}
+${logs.map(l => `<tr> <td style="font-weight:600">${l.userName}</td> <td><span class="role-badge role-${l.userRole}">${l.userRole}</span></td> <td style="font-size:12px;color:#6b7280">${l.userEmail}</td> <td style="font-size:12px;white-space:nowrap">${new Date(l.resetAt).toLocaleString()}</td> <td style="font-size:12px;font-family:monospace">${l.ipAddress || '-'}</td> <td><span style="padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600;background:${l.method === 'admin' ? '#fef3c7' : '#f0f9ff'};color:${l.method === 'admin' ? '#92400e' : '#0369a1'}">${l.method === 'admin' ? '- Admin' : '- Self'}</span></td> <td style="font-size:11px;color:#9ca3af;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${l.userAgent}">${l.userAgent ? l.userAgent.split(' ').slice(0,3).join(' ') : '-'}</td> </tr>`).join('')}
 </tbody>
 </table>
 `} </div> `;
@@ -4065,14 +4032,14 @@ content.innerHTML = `<div class="card"><p style="color:#ef4444">Error: ${e.messa
 }
 
 async function showCreateUserModal() {
-const mode = currentUser.company?.mode || ‘corporate’;
-const isManager = currentUser.role === ‘manager’;
+const mode = currentUser.company?.mode || 'corporate';
+const isManager = currentUser.role === 'manager';
 
 let roles;
 if (isManager) {
-roles = ‘<option value="employee">Employee</option>’;
-} else if (mode === ‘corporate’) {
-roles = ‘<option value="employee">Employee</option><option value="manager">Manager</option>’;
+roles = '<option value="employee">Employee</option>';
+} else if (mode === 'corporate') {
+roles = '<option value="employee">Employee</option><option value="manager">Manager</option>';
 } else {
 roles = `<option value="student">Student</option><option value="lecturer">Lecturer</option>${currentUser.role === 'superadmin' ? '<option value="hod">Head of Department (HOD)</option>' : ''}`;
 }
@@ -4080,30 +4047,30 @@ roles = `<option value="student">Student</option><option value="lecturer">Lectur
 // Fetch existing HODs to get their departments for the dropdown
 let hodDepts = [];
 try {
-const usersData = await api(’/api/users’);
+const usersData = await api('/api/users');
 hodDepts = (usersData.users || [])
-.filter(u => u.role === ‘hod’ && u.department)
+.filter(u => u.role === 'hod' && u.department)
 .map(u => u.department);
 } catch(e) { hodDepts = []; }
 
-const defaultRole = isManager ? ‘employee’ : (mode === ‘corporate’ ? ‘employee’ : ‘student’);
-const modalTitle = isManager ? ‘Add Employee’ : ‘Add User’;
+const defaultRole = isManager ? 'employee' : (mode === 'corporate' ? 'employee' : 'student');
+const modalTitle = isManager ? 'Add Employee' : 'Add User';
 
 const deptDropdownOptions = hodDepts.length
-? hodDepts.map(d => `<option value="${d}">${d}</option>`).join(’’)
-: ‘’;
+? hodDepts.map(d => `<option value="${d}">${d}</option>`).join('')
+: '';
 
 const deptField = deptDropdownOptions
 ? `<select id="new-user-dept" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px"> <option value="">- Select Department -</option> ${deptDropdownOptions} </select>`
 : `<input type="text" id="new-user-dept" placeholder="e.g. Computer Science">`;
 
-const container = document.getElementById(‘modal-container’);
-container.classList.remove(‘hidden’);
+const container = document.getElementById('modal-container');
+container.classList.remove('hidden');
 container.innerHTML = `<div class="modal-overlay" onclick="closeModal(event)"> <div class="modal" onclick="event.stopPropagation()"> <h3>${modalTitle}</h3> <div class="form-group"> <label>Full Name</label> <input type="text" id="new-user-name" placeholder="Full name"> </div> ${!isManager ?`<div class="form-group">
 <label>Role</label>
 <select id="new-user-role" onchange="toggleUserFields()">${roles}</select>
 </div>`:`<input type="hidden" id="new-user-role" value="${defaultRole}">`}
-<div class=“form-group” id=“new-user-email-group” ${defaultRole === ‘student’ ? ‘class=“hidden”’ : ‘’}>
+<div class="form-group" id="new-user-email-group" ${defaultRole === 'student' ? 'class="hidden"' : ''}>
 <label>Email</label>
 <input type="email" id="new-user-email" placeholder="user@company.com">
 </div>
@@ -4112,7 +4079,7 @@ container.innerHTML = `<div class="modal-overlay" onclick="closeModal(event)"> <
 <input type="text" id="new-user-index" placeholder="e.g. UCC/CS/23/0001" style="text-transform:uppercase" autocomplete="off">
 <p style="font-size:11px;color:var(--text-light);margin-top:4px">Must be unique - each student has their own index number assigned by the institution.</p>
 </div>
-${defaultRole === ‘employee’ ? ‘<p style="font-size:12px;color:var(--text-light);margin-bottom:12px">An Employee ID will be auto-generated.</p>’ : ‘’}
+${defaultRole === 'employee' ? '<p style="font-size:12px;color:var(--text-light);margin-bottom:12px">An Employee ID will be auto-generated.</p>' : ''}
 <div class="form-group">
 <label>Password</label>
 <input type="password" id="new-user-password" placeholder="Min 8 characters">
@@ -4123,7 +4090,7 @@ ${deptField}
 <p id="new-user-dept-hint" style="font-size:12px;color:var(--text-light);margin-top:4px"></p>
 </div>
 
-```
+
     <!-- Student classification fields - shown only when role = student -->
     <div id="new-user-student-fields" style="display:none">
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
@@ -4190,77 +4157,76 @@ ${deptField}
     </div>
   </div>
 </div>
-```
 
 `;
 toggleUserFields();
 }
 
 function toggleUserFields() {
-const role = document.getElementById(‘new-user-role’).value;
-document.getElementById(‘new-user-email-group’).classList.toggle(‘hidden’, role === ‘student’);
-document.getElementById(‘new-user-index-group’).classList.toggle(‘hidden’, role !== ‘student’);
-const deptGroup  = document.getElementById(‘new-user-dept-group’);
-const deptReq    = document.getElementById(‘new-user-dept-req’);
-const deptHint   = document.getElementById(‘new-user-dept-hint’);
+const role = document.getElementById('new-user-role').value;
+document.getElementById('new-user-email-group').classList.toggle('hidden', role === 'student');
+document.getElementById('new-user-index-group').classList.toggle('hidden', role !== 'student');
+const deptGroup  = document.getElementById('new-user-dept-group');
+const deptReq    = document.getElementById('new-user-dept-req');
+const deptHint   = document.getElementById('new-user-dept-hint');
 if (!deptGroup) return;
-const showDept = [‘lecturer’,‘hod’,‘student’].includes(role);
-deptGroup.style.display = showDept ? ‘block’ : ‘none’;
-if (deptReq)  deptReq.style.display  = [‘lecturer’,‘hod’,‘student’].includes(role) ? ‘inline’ : ‘none’;
+const showDept = ['lecturer','hod','student'].includes(role);
+deptGroup.style.display = showDept ? 'block' : 'none';
+if (deptReq)  deptReq.style.display  = ['lecturer','hod','student'].includes(role) ? 'inline' : 'none';
 if (deptHint) {
-if (role === ‘hod’)           deptHint.textContent = ‘Each department can only have one HOD.’;
-else if (role === ‘lecturer’) deptHint.textContent = ‘Lecturer will only be visible to the HOD of this department.’;
-else if (role === ‘student’)  deptHint.textContent = ‘Student will be visible to the HOD of this department.’;
-else                          deptHint.textContent = ‘’;
+if (role === 'hod')           deptHint.textContent = 'Each department can only have one HOD.';
+else if (role === 'lecturer') deptHint.textContent = 'Lecturer will only be visible to the HOD of this department.';
+else if (role === 'student')  deptHint.textContent = 'Student will be visible to the HOD of this department.';
+else                          deptHint.textContent = '';
 }
 // Show/hide student classification fields
-const studentFields = document.getElementById(‘new-user-student-fields’);
-if (studentFields) studentFields.style.display = role === ‘student’ ? ‘block’ : ‘none’;
+const studentFields = document.getElementById('new-user-student-fields');
+if (studentFields) studentFields.style.display = role === 'student' ? 'block' : 'none';
 }
 
 async function createUser() {
 try {
-const role = document.getElementById(‘new-user-role’).value;
+const role = document.getElementById('new-user-role').value;
 const body = {
-name: document.getElementById(‘new-user-name’).value,
-password: document.getElementById(‘new-user-password’).value,
+name: document.getElementById('new-user-name').value,
+password: document.getElementById('new-user-password').value,
 role,
 };
-if (role === ‘student’) {
-const idx = document.getElementById(‘new-user-index’).value.trim().toUpperCase();
-if (!idx) { toastWarning(‘Student ID / Index Number is required.’); return; }
-if (idx.length < 3) { toastWarning(‘Student ID looks too short. Please enter the full index number.’); return; }
+if (role === 'student') {
+const idx = document.getElementById('new-user-index').value.trim().toUpperCase();
+if (!idx) { toastWarning('Student ID / Index Number is required.'); return; }
+if (idx.length < 3) { toastWarning('Student ID looks too short. Please enter the full index number.'); return; }
 body.indexNumber = idx;
 // Student classification - all mandatory
-const programme   = document.getElementById(‘new-user-programme’)?.value;
-const studentLevel= document.getElementById(‘new-user-level’)?.value;
-const studentGroup= document.getElementById(‘new-user-group’)?.value?.trim().toUpperCase();
-const sessionType = document.getElementById(‘new-user-session-type’)?.value;
-const semester    = document.getElementById(‘new-user-semester’)?.value;
-if (!programme)    { toastWarning(‘Please select the student's programme (e.g. BSc, HND).’); return; }
-if (!studentLevel) { toastWarning(‘Please select the student's level.’); return; }
-if (!studentGroup) { toastWarning(‘Please enter the student's group (e.g. A, B, C).’); return; }
-if (!sessionType)  { toastWarning(‘Please select the session type (Morning, Evening etc.).’); return; }
-if (!semester)     { toastWarning(‘Please select the semester.’); return; }
+const programme   = document.getElementById('new-user-programme')?.value;
+const studentLevel= document.getElementById('new-user-level')?.value;
+const studentGroup= document.getElementById('new-user-group')?.value?.trim().toUpperCase();
+const sessionType = document.getElementById('new-user-session-type')?.value;
+const semester    = document.getElementById('new-user-semester')?.value;
+if (!programme)    { toastWarning("Please select the student's programme (e.g. BSc, HND)."); return; }
+if (!studentLevel) { toastWarning("Please select the student's level."); return; }
+if (!studentGroup) { toastWarning("Please enter the student's group (e.g. A, B, C)."); return; }
+if (!sessionType)  { toastWarning('Please select the session type (Morning, Evening etc.).'); return; }
+if (!semester)     { toastWarning('Please select the semester.'); return; }
 body.programme    = programme;
 body.studentLevel = studentLevel;
 body.studentGroup = studentGroup;
 body.sessionType  = sessionType;
 body.semester     = semester;
 } else {
-body.email = document.getElementById(‘new-user-email’).value;
+body.email = document.getElementById('new-user-email').value;
 }
-const phone = document.getElementById(‘new-user-phone’).value.trim();
-if (!phone) { toastWarning(‘Phone number is required.’); return; }
+const phone = document.getElementById('new-user-phone').value.trim();
+if (!phone) { toastWarning('Phone number is required.'); return; }
 body.phone = phone;
-const dept = document.getElementById(‘new-user-dept’)?.value?.trim();
-if ([‘lecturer’,‘hod’,‘student’].includes(role) && !dept) {
-const label = role === ‘hod’ ? ‘HOD’ : role === ‘lecturer’ ? ‘Lecturer’ : ‘Student’;
-toastWarning(‘Department is required for ’ + label + ‘.’);
+const dept = document.getElementById('new-user-dept')?.value?.trim();
+if (['lecturer','hod','student'].includes(role) && !dept) {
+const label = role === 'hod' ? 'HOD' : role === 'lecturer' ? 'Lecturer' : 'Student';
+toastWarning('Department is required for ' + label + '.');
 return;
 }
 if (dept) body.department = dept;
-await api(’/api/users’, { method: ‘POST’, body: JSON.stringify(body) });
+await api('/api/users', { method: 'POST', body: JSON.stringify(body) });
 closeModal();
 renderUsers();
 } catch (e) {
@@ -4269,32 +4235,32 @@ toastError(e.message);
 }
 
 function toggleSelectAllUsers() {
-const selectAll = document.getElementById(‘select-all-users’);
-document.querySelectorAll(’.user-checkbox’).forEach(cb => cb.checked = selectAll.checked);
+const selectAll = document.getElementById('select-all-users');
+document.querySelectorAll('.user-checkbox').forEach(cb => cb.checked = selectAll.checked);
 updateBulkActions();
 }
 
 function updateBulkActions() {
-const checked = document.querySelectorAll(’.user-checkbox:checked’);
-const bulkEl = document.getElementById(‘bulk-actions’);
-const countEl = document.getElementById(‘selected-count’);
+const checked = document.querySelectorAll('.user-checkbox:checked');
+const bulkEl = document.getElementById('bulk-actions');
+const countEl = document.getElementById('selected-count');
 if (bulkEl) {
-bulkEl.style.display = checked.length > 0 ? ‘flex’ : ‘none’;
+bulkEl.style.display = checked.length > 0 ? 'flex' : 'none';
 if (countEl) countEl.textContent = `${checked.length} selected`;
 }
 }
 
 function getSelectedUserIds() {
-return Array.from(document.querySelectorAll(’.user-checkbox:checked’)).map(cb => cb.value);
+return Array.from(document.querySelectorAll('.user-checkbox:checked')).map(cb => cb.value);
 }
 
 async function bulkUserAction(action) {
 const ids = getSelectedUserIds();
 if (ids.length === 0) return;
-const labels = { activate: ‘activate’, deactivate: ‘deactivate’, delete: ‘permanently delete’ };
+const labels = { activate: 'activate', deactivate: 'deactivate', delete: 'permanently delete' };
 if (!confirm(`Are you sure you want to ${labels[action]} ${ids.length} user(s)?${action === 'delete' ? ' This cannot be undone!' : ''}`)) return;
 try {
-const result = await api(’/api/users/bulk’, { method: ‘POST’, body: JSON.stringify({ userIds: ids, action }) });
+const result = await api('/api/users/bulk', { method: 'POST', body: JSON.stringify({ userIds: ids, action }) });
 toastSuccess(result.message);
 renderUsers();
 } catch (e) {
@@ -4305,33 +4271,33 @@ toastError(e.message);
 async function clearStudentDeviceLock(userId, userName) {
 if (!confirm(`Unlock device for ${userName}? They will be able to log in from a new device.`)) return;
 try {
-await api(`/api/users/${userId}/clear-device-lock`, { method: ‘POST’ });
+await api(`/api/users/${userId}/clear-device-lock`, { method: 'POST' });
 showToastNotif(`- Device unlocked for ${userName}`);
 loadUsersSection();
 } catch(e) {
-showToastNotif(`- ${e.message || 'Failed to unlock device'}`, ‘error’);
+showToastNotif(`- ${e.message || 'Failed to unlock device'}`, 'error');
 }
 }
 
 async function adminResetStudentPassword(userId, userName) {
 if (!confirm(`Reset password for ${userName}?\n\nThis will generate a temporary password that they must change on next login.`)) return;
 try {
-const data = await api(`/api/users/${userId}/admin-reset-password`, { method: ‘POST’ });
+const data = await api(`/api/users/${userId}/admin-reset-password`, { method: 'POST' });
 // Show styled modal with the temp password
-const overlay = document.createElement(‘div’);
-overlay.style.cssText = ‘position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px’;
+const overlay = document.createElement('div');
+overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px';
 overlay.innerHTML = `<div style="background:#fff;border-radius:16px;padding:32px;max-width:420px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,0.3);text-align:center"> <div style="width:56px;height:56px;background:#ede9fe;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 16px;font-size:24px">-</div> <h3 style="font-size:18px;font-weight:800;margin-bottom:6px">Temporary Password Ready</h3> <p style="color:#6b7280;font-size:13px;margin-bottom:20px">Give this password to <strong>${data.userName}</strong>. They will be required to change it on first login.</p> <div style="background:#f5f3ff;border:2px dashed #8b5cf6;border-radius:10px;padding:16px;margin-bottom:20px"> <p style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#7c3aed;margin-bottom:8px">Temporary Password</p> <p id="temp-pw-display" style="font-size:24px;font-weight:800;font-family:monospace;letter-spacing:3px;color:#4f46e5;margin:0">${data.tempPassword}</p> </div> <div style="display:flex;gap:10px;justify-content:center"> <button onclick="navigator.clipboard.writeText('${data.tempPassword}').then(()=>this.textContent='- Copied!')"  style="padding:10px 20px;background:#6366f1;color:#fff;border:none;border-radius:8px;font-weight:600;cursor:pointer;font-size:14px"> - Copy Password </button> <button onclick="this.closest('[style*=fixed]').remove()"  style="padding:10px 20px;background:#f3f4f6;color:#374151;border:none;border-radius:8px;font-weight:600;cursor:pointer;font-size:14px"> Done </button> </div> <p style="font-size:11px;color:#9ca3af;margin-top:16px">-- This password will not be shown again</p> </div>`;
 document.body.appendChild(overlay);
-overlay.addEventListener(‘click’, e => { if (e.target === overlay) overlay.remove(); });
+overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
 } catch(e) {
-toast(’Failed to reset password: ’ + e.message, ‘err’);
+toast('Failed to reset password: ' + e.message, 'err');
 }
 }
 
 async function deactivateUser(id) {
-if (!confirm(‘Deactivate this user?’)) return;
+if (!confirm('Deactivate this user?')) return;
 try {
-await api(`/api/users/${id}`, { method: ‘DELETE’ });
+await api(`/api/users/${id}`, { method: 'DELETE' });
 renderUsers();
 } catch (e) {
 toastError(e.message);
@@ -4339,9 +4305,9 @@ toastError(e.message);
 }
 
 async function activateUser(id) {
-if (!confirm(‘Reactivate this user?’)) return;
+if (!confirm('Reactivate this user?')) return;
 try {
-await api(`/api/users/${id}/activate`, { method: ‘PATCH’ });
+await api(`/api/users/${id}/activate`, { method: 'PATCH' });
 renderUsers();
 } catch (e) {
 toastError(e.message);
@@ -4351,7 +4317,7 @@ toastError(e.message);
 async function deleteUserPermanently(id, name) {
 if (!confirm(`Permanently delete "${name}"? This cannot be undone!`)) return;
 try {
-await api(`/api/users/${id}/permanent`, { method: ‘DELETE’ });
+await api(`/api/users/${id}/permanent`, { method: 'DELETE' });
 renderUsers();
 } catch (e) {
 toastError(e.message);
@@ -4359,14 +4325,14 @@ toastError(e.message);
 }
 
 async function renderMeetings() {
-const content = document.getElementById(‘main-content’);
+const content = document.getElementById('main-content');
 if (!content) return;
 try {
-const data = await api(’/api/zoom’);
-const canCreate = [‘manager’, ‘lecturer’, ‘admin’, ‘superadmin’, ‘hod’].includes(currentUser.role);
+const data = await api('/api/zoom');
+const canCreate = ['manager', 'lecturer', 'admin', 'superadmin', 'hod'].includes(currentUser.role);
 const canManage = canCreate;
 
-```
+
 const statusStyle = (s) => {
   const map = { scheduled: 'background:#3b82f6;color:#fff;', active: 'background:#22c55e;color:#fff;', completed: 'background:#6b7280;color:#fff;', cancelled: 'background:#ef4444;color:#fff;' };
   return map[s] || '';
@@ -4406,7 +4372,6 @@ content.innerHTML = `
     ` : '<div class="empty-state"><p>No meetings scheduled yet.</p></div>'}
   </div>
 `;
-```
 
 } catch (e) {
 content.innerHTML = `<div class="card"><p>Error: ${e.message}</p></div>`;
@@ -4414,20 +4379,20 @@ content.innerHTML = `<div class="card"><p>Error: ${e.message}</p></div>`;
 }
 
 async function showCreateMeetingModal() {
-const container = document.getElementById(‘modal-container’);
-container.classList.remove(‘hidden’);
+const container = document.getElementById('modal-container');
+container.classList.remove('hidden');
 
 let courses = [];
 try {
-const d = await api(’/api/courses’);
+const d = await api('/api/courses');
 courses = d.courses || d || [];
 } catch(e) { courses = []; }
 
 const courseOptions = `<option value="">- No specific course -</option>` +
-courses.map(c => `<option value="${c._id}">${esc(c.title)}${c.level?' - L'+c.level:''}${c.group?' - Grp '+c.group:''}</option>`).join(’’);
+courses.map(c => `<option value="${c._id}">${esc(c.title)}${c.level?' - L'+c.level:''}${c.group?' - Grp '+c.group:''}</option>`).join('');
 // default scheduled start = now+5min, end = now+65min
 const now = new Date();
-const pad = n => String(n).padStart(2,‘0’);
+const pad = n => String(n).padStart(2,'0');
 const fmt = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 const defStart = fmt(new Date(now.getTime() + 5*60000));
 const defEnd   = fmt(new Date(now.getTime() + 65*60000));
@@ -4438,7 +4403,7 @@ container.innerHTML = `
 <h3 style="margin:0 0 4px;">Schedule a Meeting</h3>
 <p style="font-size:13px;color:var(--text-muted);margin-bottom:18px;">Fill in the details below. Start Now skips the schedule and opens immediately.</p>
 
-```
+
     <div class="form-group">
       <label>Meeting Title *</label>
       <input type="text" id="meeting-title" placeholder="e.g. Week 5 Lecture" autofocus>
@@ -4482,28 +4447,27 @@ container.innerHTML = `
     </div>
   </div>
 </div>
-```
 
 `;
 }
 
 async function createMeeting() {
-const title = document.getElementById(‘meeting-title’)?.value.trim();
-const start = document.getElementById(‘meeting-start’)?.value;
-const end   = document.getElementById(‘meeting-end’)?.value;
-const desc  = document.getElementById(‘meeting-desc’)?.value.trim();
-const courseId = document.getElementById(‘meeting-course’)?.value || undefined;
-const errEl = document.getElementById(‘meeting-error’);
+const title = document.getElementById('meeting-title')?.value.trim();
+const start = document.getElementById('meeting-start')?.value;
+const end   = document.getElementById('meeting-end')?.value;
+const desc  = document.getElementById('meeting-desc')?.value.trim();
+const courseId = document.getElementById('meeting-course')?.value || undefined;
+const errEl = document.getElementById('meeting-error');
 
-if (!title) { errEl.textContent = ‘Please enter a meeting title.’; errEl.style.display = ‘block’; return; }
-if (!start || !end) { errEl.textContent = ‘Please set a start and end time.’; errEl.style.display = ‘block’; return; }
-if (new Date(end) <= new Date(start)) { errEl.textContent = ‘End time must be after start time.’; errEl.style.display = ‘block’; return; }
+if (!title) { errEl.textContent = 'Please enter a meeting title.'; errEl.style.display = 'block'; return; }
+if (!start || !end) { errEl.textContent = 'Please set a start and end time.'; errEl.style.display = 'block'; return; }
+if (new Date(end) <= new Date(start)) { errEl.textContent = 'End time must be after start time.'; errEl.style.display = 'block'; return; }
 
-const schedBtn = document.querySelector(’.modal .btn-primary’);
-if (schedBtn) { schedBtn.textContent = ‘Scheduling-’; schedBtn.disabled = true; }
+const schedBtn = document.querySelector('.modal .btn-primary');
+if (schedBtn) { schedBtn.textContent = 'Scheduling-'; schedBtn.disabled = true; }
 
 try {
-await api(’/api/zoom’, { method: ‘POST’, body: JSON.stringify({
+await api('/api/zoom', { method: 'POST', body: JSON.stringify({
 title,
 scheduledStart: start,
 scheduledEnd: end,
@@ -4512,28 +4476,28 @@ courseId: courseId || undefined,
 }) });
 closeModal();
 renderMeetings();
-toastSuccess(‘Meeting scheduled!’);
+toastSuccess('Meeting scheduled!');
 } catch (e) {
-if (schedBtn) { schedBtn.textContent = ‘Schedule’; schedBtn.disabled = false; }
+if (schedBtn) { schedBtn.textContent = 'Schedule'; schedBtn.disabled = false; }
 errEl.textContent = e.message;
-errEl.style.display = ‘block’;
+errEl.style.display = 'block';
 }
 }
 
 async function createAndStartMeeting() {
-const title = document.getElementById(‘meeting-title’).value.trim();
-const errEl = document.getElementById(‘meeting-error’);
-const btn   = document.getElementById(‘start-meeting-btn’);
+const title = document.getElementById('meeting-title').value.trim();
+const errEl = document.getElementById('meeting-error');
+const btn   = document.getElementById('start-meeting-btn');
 if (!title) {
-errEl.textContent = ‘Please enter a meeting title.’;
-errEl.style.display = ‘block’;
+errEl.textContent = 'Please enter a meeting title.';
+errEl.style.display = 'block';
 return;
 }
-if (btn) { btn.textContent = ‘Starting-’; btn.disabled = true; }
+if (btn) { btn.textContent = 'Starting-'; btn.disabled = true; }
 const now = new Date();
 const end = new Date(now.getTime() + 60 * 60 * 1000);
 try {
-const data = await api(’/api/zoom’, { method: ‘POST’, body: JSON.stringify({
+const data = await api('/api/zoom', { method: 'POST', body: JSON.stringify({
 title,
 scheduledStart: now.toISOString().slice(0,16),
 scheduledEnd: end.toISOString().slice(0,16),
@@ -4541,18 +4505,18 @@ scheduledEnd: end.toISOString().slice(0,16),
 closeModal();
 await startMeeting(data.meeting._id);
 } catch(e) {
-if (btn) { btn.textContent = ‘- Start Meeting’; btn.disabled = false; }
+if (btn) { btn.textContent = '- Start Meeting'; btn.disabled = false; }
 errEl.textContent = e.message;
-errEl.style.display = ‘block’;
+errEl.style.display = 'block';
 }
 }
 
 async function startMeeting(id) {
 try {
-const data = await api(`/api/zoom/${id}/start`, { method: ‘POST’ });
+const data = await api(`/api/zoom/${id}/start`, { method: 'POST' });
 const joinUrl = data.joinUrl;
 
-```
+
 // Record host as an attendee
 await api(`/api/zoom/${id}/join`, { method: 'POST' }).catch(() => {});
 
@@ -4590,7 +4554,6 @@ container.innerHTML = `
 `;
 
 renderMeetings();
-```
 
 } catch (e) {
 toastError(e.message);
@@ -4598,21 +4561,21 @@ toastError(e.message);
 }
 
 function joinMeeting(id, joinUrl) {
-const w = window.open(’’, ‘_blank’);
-api(`/api/zoom/${id}/join`, { method: ‘POST’ }).then((data) => {
+const w = window.open('', '_blank');
+api(`/api/zoom/${id}/join`, { method: 'POST' }).then((data) => {
 const url = data.joinUrl || joinUrl;
 w.location.href = url;
 setTimeout(() => renderMeetings(), 1000);
 }).catch((e) => {
 w.close();
-toastError(e.message || ‘Failed to join meeting’);
+toastError(e.message || 'Failed to join meeting');
 });
 }
 
 async function endMeeting(id) {
-if (!confirm(‘End this meeting? All participants will be marked as left.’)) return;
+if (!confirm('End this meeting? All participants will be marked as left.')) return;
 try {
-await api(`/api/zoom/${id}/end`, { method: ‘POST’ });
+await api(`/api/zoom/${id}/end`, { method: 'POST' });
 renderMeetings();
 } catch (e) {
 toastError(e.message);
@@ -4620,9 +4583,9 @@ toastError(e.message);
 }
 
 async function cancelMeeting(id) {
-if (!confirm(‘Cancel this meeting?’)) return;
+if (!confirm('Cancel this meeting?')) return;
 try {
-await api(`/api/zoom/${id}/cancel`, { method: ‘POST’ });
+await api(`/api/zoom/${id}/cancel`, { method: 'POST' });
 renderMeetings();
 } catch (e) {
 toastError(e.message);
@@ -4630,17 +4593,17 @@ toastError(e.message);
 }
 
 async function viewMeetingDetail(id) {
-const content = document.getElementById(‘main-content’);
+const content = document.getElementById('main-content');
 if (!content) return;
-content.innerHTML = ‘<div class="card"><p>Loading meeting details…</p></div>’;
+content.innerHTML = '<div class="card"><p>Loading meeting details...</p></div>';
 try {
 const data = await api(`/api/zoom/${id}`);
 const m = data.meeting;
 const isCreator = m.createdBy?._id === currentUser._id;
-const isAdmin = [‘admin’, ‘superadmin’].includes(currentUser.role);
-const canManage = [‘manager’, ‘lecturer’, ‘admin’, ‘superadmin’].includes(currentUser.role) && (isCreator || isAdmin);
+const isAdmin = ['admin', 'superadmin'].includes(currentUser.role);
+const canManage = ['manager', 'lecturer', 'admin', 'superadmin'].includes(currentUser.role) && (isCreator || isAdmin);
 
-```
+
 const statusStyle = (s) => {
   const map = { scheduled: 'background:#3b82f6;color:#fff;', active: 'background:#22c55e;color:#fff;', completed: 'background:#6b7280;color:#fff;', cancelled: 'background:#ef4444;color:#fff;' };
   return map[s] || '';
@@ -4695,7 +4658,6 @@ content.innerHTML = `
     </div>
   </div>
 `;
-```
 
 } catch (e) {
 content.innerHTML = `<div class="card"><p>Error: ${e.message}</p><button class="btn btn-secondary" onclick="renderMeetings()">Back</button></div>`;
@@ -4703,33 +4665,33 @@ content.innerHTML = `<div class="card"><p>Error: ${e.message}</p><button class="
 }
 
 function showInviteLinkForm(meetingId, currentLink) {
-const container = document.getElementById(‘modal-container’);
-container.classList.remove(‘hidden’);
+const container = document.getElementById('modal-container');
+container.classList.remove('hidden');
 container.innerHTML = `<div class="modal-overlay" onclick="closeModal(event)"> <div class="modal" onclick="event.stopPropagation()" style="max-width:480px"> <h3 style="margin:0 0 6px">Meeting Invite Link</h3> <p style="font-size:13px;color:var(--text-light);margin-bottom:16px"> Paste an external meeting link (Google Meet, Zoom, Teams, etc).  Students/employees will see a tap-to-join button in their Meetings page. </p> <div class="form-group"> <label>Invite Link</label> <input type="url" id="invite-link-input" placeholder="https://meet.google.com/abc-defg-hij" value="${currentLink}" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;font-size:14px"> </div> <div id="invite-link-error" style="color:#ef4444;font-size:13px;margin-bottom:8px;display:none"></div> <div class="modal-actions"> <button class="btn btn-secondary" onclick="closeModal()">Cancel</button> ${currentLink ?`<button class="btn btn-danger btn-sm" onclick="saveInviteLink('${meetingId}', '')">Remove</button>`: ''} <button class="btn btn-primary" onclick="saveInviteLink('${meetingId}', document.getElementById('invite-link-input').value)">Save Link</button> </div> </div> </div>`;
-setTimeout(() => document.getElementById(‘invite-link-input’)?.focus(), 100);
+setTimeout(() => document.getElementById('invite-link-input')?.focus(), 100);
 }
 
 async function saveInviteLink(meetingId, link) {
-const errEl = document.getElementById(‘invite-link-error’);
+const errEl = document.getElementById('invite-link-error');
 try {
-await api(’/api/zoom/’ + meetingId + ‘/invite-link’, {
-method: ‘PATCH’,
+await api('/api/zoom/' + meetingId + '/invite-link', {
+method: 'PATCH',
 body: JSON.stringify({ inviteLink: link.trim() })
 });
 closeModal();
 renderMeetings();
 } catch(e) {
-if (errEl) { errEl.textContent = e.message; errEl.style.display = ‘block’; }
+if (errEl) { errEl.textContent = e.message; errEl.style.display = 'block'; }
 else toastError(e.message);
 }
 }
 
 async function renderCourses() {
-const content = document.getElementById(‘main-content’);
+const content = document.getElementById('main-content');
 if (!content) return;
 
 if (!isOnline()) {
-const cached = offlineRead(‘courses’);
+const cached = offlineRead('courses');
 if (cached) {
 _renderCoursesHTML(content, cached.courses || [], true);
 } else {
@@ -4739,11 +4701,11 @@ return;
 }
 
 try {
-const data = await api(’/api/courses’);
-offlineCache(‘courses’, data);
+const data = await api('/api/courses');
+offlineCache('courses', data);
 _renderCoursesHTML(content, data.courses || [], false);
 } catch (e) {
-const cached = offlineRead(‘courses’);
+const cached = offlineRead('courses');
 if (cached) {
 _renderCoursesHTML(content, cached.courses || [], true);
 } else {
@@ -4753,31 +4715,31 @@ content.innerHTML = `<div class="card"><p>Error: ${e.message}</p></div>`;
 }
 
 function _renderCoursesHTML(content, courses, isOffline) {
-const canCreate = [‘lecturer’, ‘admin’, ‘superadmin’].includes(currentUser.role);
-const canManageRoster = [‘lecturer’, ‘admin’, ‘superadmin’].includes(currentUser.role);
+const canCreate = ['lecturer', 'admin', 'superadmin'].includes(currentUser.role);
+const canManageRoster = ['lecturer', 'admin', 'superadmin'].includes(currentUser.role);
 content.innerHTML = `<div class="page-header"> <h2>Courses</h2> <p>Manage academic courses${isOffline ? ' <span style="color:#f59e0b;font-weight:600">(Offline - cached)</span>' : ''}</p> </div> ${canCreate && !isOffline ? '<div class="actions-bar"><button class="btn btn-primary btn-sm" onclick="showCreateCourseModal()">Create Course</button></div>' : ''} <div class="card"> ${courses.length ?`
 <table>
-<thead><tr><th>Code</th><th>Title</th><th>Level / Group</th><th>Lecturer</th><th>Roster</th><th>Enrolled</th>${canManageRoster && !isOffline ? ‘<th>Actions</th>’ : currentUser.role === ‘student’ ? ‘<th></th>’ : ‘’}</tr></thead>
-<tbody>${courses.map(course => `<tr> <td><strong>${course.code}</strong></td> <td>${course.title}</td> <td> ${course.level ?`<span style="font-size:11px;padding:2px 7px;border-radius:20px;background:#ede9fe;color:#7c3aed;font-weight:700;margin-right:4px">L${course.level}</span>`: ''} ${course.group ?`<span style="font-size:11px;padding:2px 7px;border-radius:20px;background:#ecfdf5;color:#059669;font-weight:600">${esc(course.group)}</span>`: ''} ${!course.level && !course.group ? '<span style="color:var(--text-muted);font-size:12px">-</span>' : ''} </td> <td>${course.lecturer?.name || 'N/A'}</td> <td>${!isOffline ?`<button class="btn btn-sm" style="font-size:11px;background:var(--bg);border:1px solid var(--border)" onclick="viewRoster('${course._id}', '${course.code}')">View Roster</button>`: '-'}</td> <td>${course.enrolledStudents?.length || 0}</td> ${canManageRoster && !isOffline ?`<td style="white-space:nowrap"><button class="btn btn-primary btn-sm" style="font-size:11px" onclick="showUploadRosterModal('${course._id}', '${course.code}')">Upload Students</button> <button class="btn btn-sm" style="font-size:11px;background:#6366f1;color:#fff" onclick="openBulkEmailModal('${course._id}', '${course.title}')">– Email</button> <button class="btn btn-sm" style="font-size:11px;background:#10b981;color:#fff" onclick="openBulkSmsModal('${course._id}', '${course.title}')">- SMS</button></td>`: currentUser.role === 'student' ?`<td><button class="btn btn-sm" style="font-size:11px;background:#f0fdf4;color:#16a34a;border:1px solid #bbf7d0" onclick="generateCertificate('${course._id}','${course.title}')">- Certificate</button></td>`: ''} </tr>`).join(’’)}</tbody>
+<thead><tr><th>Code</th><th>Title</th><th>Level / Group</th><th>Lecturer</th><th>Roster</th><th>Enrolled</th>${canManageRoster && !isOffline ? '<th>Actions</th>' : currentUser.role === 'student' ? '<th></th>' : ''}</tr></thead>
+<tbody>${courses.map(course => `<tr> <td><strong>${course.code}</strong></td> <td>${course.title}</td> <td> ${course.level ?`<span style="font-size:11px;padding:2px 7px;border-radius:20px;background:#ede9fe;color:#7c3aed;font-weight:700;margin-right:4px">L${course.level}</span>`: ''} ${course.group ?`<span style="font-size:11px;padding:2px 7px;border-radius:20px;background:#ecfdf5;color:#059669;font-weight:600">${esc(course.group)}</span>`: ''} ${!course.level && !course.group ? '<span style="color:var(--text-muted);font-size:12px">-</span>' : ''} </td> <td>${course.lecturer?.name || 'N/A'}</td> <td>${!isOffline ?`<button class="btn btn-sm" style="font-size:11px;background:var(--bg);border:1px solid var(--border)" onclick="viewRoster('${course._id}', '${course.code}')">View Roster</button>`: '-'}</td> <td>${course.enrolledStudents?.length || 0}</td> ${canManageRoster && !isOffline ?`<td style="white-space:nowrap"><button class="btn btn-primary btn-sm" style="font-size:11px" onclick="showUploadRosterModal('${course._id}', '${course.code}')">Upload Students</button> <button class="btn btn-sm" style="font-size:11px;background:#6366f1;color:#fff" onclick="openBulkEmailModal('${course._id}', '${course.title}')">- Email</button> <button class="btn btn-sm" style="font-size:11px;background:#10b981;color:#fff" onclick="openBulkSmsModal('${course._id}', '${course.title}')">- SMS</button></td>`: currentUser.role === 'student' ?`<td><button class="btn btn-sm" style="font-size:11px;background:#f0fdf4;color:#16a34a;border:1px solid #bbf7d0" onclick="generateCertificate('${course._id}','${course.title}')">- Certificate</button></td>`: ''} </tr>`).join('')}</tbody>
 </table>
 `: '<div class="empty-state"><p>No courses found</p></div>'} </div>`;
 }
 
 function showCreateCourseModal() {
-const container = document.getElementById(‘modal-container’);
-container.classList.remove(‘hidden’);
+const container = document.getElementById('modal-container');
+container.classList.remove('hidden');
 container.innerHTML = `<div class="modal-overlay" onclick="closeModal(event)"> <div class="modal" onclick="event.stopPropagation()"> <h3>Create Course</h3> <div class="form-group"> <label>Course Code <span style="color:red">*</span></label> <input type="text" id="course-code" placeholder="e.g., CS101" style="text-transform:uppercase"> </div> <div class="form-group"> <label>Course Title <span style="color:red">*</span></label> <input type="text" id="course-title" placeholder="Introduction to Computer Science"> </div> <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px"> <div class="form-group"> <label>Level <span style="color:red">*</span></label> <select id="course-level" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px"> <option value="">- Select Level -</option> <option value="100">Level 100</option> <option value="200">Level 200</option> <option value="300">Level 300</option> <option value="400">Level 400</option> <option value="500">Level 500 (Postgrad)</option> <option value="600">Level 600 (Postgrad)</option> </select> </div> <div class="form-group"> <label>Group <span style="color:red">*</span></label> <input type="text" id="course-group" placeholder="e.g. A, B, C" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;text-transform:uppercase" oninput="this.value=this.value.toUpperCase()"> <p style="font-size:11px;color:var(--text-muted);margin-top:3px">Use letters: A, B, C etc.</p> </div> </div> <div class="form-group"> <label>Description</label> <input type="text" id="course-desc" placeholder="Optional description"> </div> <div class="modal-actions"> <button class="btn btn-secondary btn-sm" onclick="closeModal()">Cancel</button> <button class="btn btn-primary btn-sm" onclick="createCourse()">Create</button> </div> </div> </div>`;
 }
 
 async function createCourse() {
 try {
-const code  = document.getElementById(‘course-code’).value.trim().toUpperCase();
-const title = document.getElementById(‘course-title’).value.trim();
-const desc  = document.getElementById(‘course-desc’).value.trim();
-const level = document.getElementById(‘course-level’).value.trim();
-const group = document.getElementById(‘course-group’).value.trim();
+const code  = document.getElementById('course-code').value.trim().toUpperCase();
+const title = document.getElementById('course-title').value.trim();
+const desc  = document.getElementById('course-desc').value.trim();
+const level = document.getElementById('course-level').value.trim();
+const group = document.getElementById('course-group').value.trim();
 
-```
+
 if (!code || !title) { toastWarning('Course code and title are required.'); return; }
 if (!level) { toastWarning('Please select a level.'); return; }
 if (!group) { toastWarning('Please enter a group (e.g. A, B, C).'); return; }
@@ -4794,7 +4756,6 @@ await api('/api/courses', {
 });
 closeModal();
 renderCourses();
-```
 
 } catch (e) {
 toastError(e.message);
@@ -4802,59 +4763,59 @@ toastError(e.message);
 }
 
 function showUploadRosterModal(courseId, courseCode) {
-const container = document.getElementById(‘modal-container’);
-container.classList.remove(‘hidden’);
+const container = document.getElementById('modal-container');
+container.classList.remove('hidden');
 container.innerHTML = `<div class="modal-overlay" onclick="closeModal(event)"> <div class="modal" onclick="event.stopPropagation()" style="max-width:500px"> <h3>Upload Student List - ${courseCode}</h3> <p style="font-size:13px;color:var(--text-light);margin-bottom:16px">Add student IDs so students can register. Enter one student per line: <strong>StudentID, Full Name</strong></p> <div class="form-group"> <label>Student List</label> <textarea id="roster-text" rows="10" placeholder="STU001, John Doe&#10;STU002, Jane Smith&#10;STU003, Alex Johnson" style="width:100%;font-family:monospace;font-size:13px;resize:vertical"></textarea> </div> <p style="font-size:12px;color:var(--text-light);margin-bottom:12px">Each line should have: StudentID, Name (name is optional)</p> <div id="roster-upload-status" style="display:none;padding:10px;border-radius:8px;margin-bottom:12px;font-size:13px"></div> <div class="modal-actions"> <button class="btn btn-secondary btn-sm" onclick="closeModal()">Cancel</button> <button class="btn btn-primary btn-sm" id="roster-upload-btn" onclick="uploadRoster('${courseId}')">Upload Students</button> <button class="btn btn-secondary btn-sm" onclick="openExcelImportModal('${courseId}','${(courseCode||courseName||courseTitle||'Course')}')">- Import Excel</button> </div> </div> </div>`;
 }
 
 async function uploadRoster(courseId) {
-const text = document.getElementById(‘roster-text’).value.trim();
-if (!text) { toastWarning(‘Please enter at least one student’); return; };
+const text = document.getElementById('roster-text').value.trim();
+if (!text) { toastWarning('Please enter at least one student'); return; };
 
 const lines = text.split(/\r?\n/).filter(l => l.trim());
 const students = lines.map(line => {
-const parts = line.split(’,’).map(p => p.trim());
-return { studentId: parts[0], name: parts[1] || ‘’ };
+const parts = line.split(',').map(p => p.trim());
+return { studentId: parts[0], name: parts[1] || '' };
 });
 
 const invalid = students.filter(s => !s.studentId);
-if (invalid.length > 0) { toastWarning(‘Some lines are missing a Student ID’); return; };
+if (invalid.length > 0) { toastWarning('Some lines are missing a Student ID'); return; };
 
-const btn = document.getElementById(‘roster-upload-btn’);
+const btn = document.getElementById('roster-upload-btn');
 btn.disabled = true;
-btn.textContent = ‘Uploading…’;
+btn.textContent = 'Uploading...';
 
 try {
 const data = await api(`/api/roster/${courseId}/upload`, {
-method: ‘POST’,
+method: 'POST',
 body: JSON.stringify({ students }),
 });
-const statusEl = document.getElementById(‘roster-upload-status’);
-statusEl.style.display = ‘block’;
-statusEl.style.background = ‘#f0fdf4’;
-statusEl.style.color = ‘#15803d’;
+const statusEl = document.getElementById('roster-upload-status');
+statusEl.style.display = 'block';
+statusEl.style.background = '#f0fdf4';
+statusEl.style.color = '#15803d';
 statusEl.textContent = data.message;
-btn.textContent = ‘Upload Students’;
+btn.textContent = 'Upload Students';
 btn.disabled = false;
-document.getElementById(‘roster-text’).value = ‘’;
+document.getElementById('roster-text').value = '';
 } catch (e) {
 toastError(e.message);
-btn.textContent = ‘Upload Students’;
+btn.textContent = 'Upload Students';
 btn.disabled = false;
 }
 }
 
 async function viewRoster(courseId, courseCode) {
-const container = document.getElementById(‘modal-container’);
-container.classList.remove(‘hidden’);
+const container = document.getElementById('modal-container');
+container.classList.remove('hidden');
 container.innerHTML = `<div class="modal-overlay" onclick="closeModal(event)"> <div class="modal" onclick="event.stopPropagation()" style="max-width:600px"> <h3>Student Roster - ${courseCode}</h3> <div id="roster-content" style="text-align:center;padding:20px"><p>Loading...</p></div> <div class="modal-actions"> <button class="btn btn-secondary btn-sm" onclick="closeModal()">Close</button> </div> </div> </div>`;
 
 try {
 const data = await api(`/api/roster/${courseId}`);
-const rosterEl = document.getElementById(‘roster-content’);
-const canDelete = [‘lecturer’, ‘admin’, ‘superadmin’].includes(currentUser.role);
+const rosterEl = document.getElementById('roster-content');
+const canDelete = ['lecturer', 'admin', 'superadmin'].includes(currentUser.role);
 
-```
+
 if (data.roster.length === 0) {
   rosterEl.innerHTML = '<div class="empty-state"><p>No students in roster yet. Upload a student list first.</p></div>';
   return;
@@ -4893,17 +4854,16 @@ rosterEl.innerHTML = `
     `).join('')}</tbody>
   </table>
 `;
-```
 
 } catch (e) {
-document.getElementById(‘roster-content’).innerHTML = `<p style="color:var(--danger)">Error: ${e.message}</p>`;
+document.getElementById('roster-content').innerHTML = `<p style="color:var(--danger)">Error: ${e.message}</p>`;
 }
 }
 
 async function removeRosterEntry(courseId, rosterId, courseCode) {
-toastConfirm(‘Remove this student from the roster?’, async () => {
+toastConfirm('Remove this student from the roster?', async () => {
 try {
-await api(`/api/roster/${courseId}/entries/${rosterId}`, { method: ‘DELETE’ });
+await api(`/api/roster/${courseId}/entries/${rosterId}`, { method: 'DELETE' });
 viewRoster(courseId, courseCode);
 } catch (e) {
 toastError(e.message);
@@ -4914,17 +4874,17 @@ toastError(e.message);
 let quizTimerInterval = null;
 
 async function renderQuizzes() {
-const content = document.getElementById(‘main-content’);
+const content = document.getElementById('main-content');
 if (!content) return;
 const role = currentUser.role;
-if (role === ‘lecturer’) {
+if (role === 'lecturer') {
 await renderLecturerQuizzes(content);
-} else if (role === ‘student’) {
+} else if (role === 'student') {
 await renderStudentQuizzes(content);
-} else if (role === ‘admin’ || role === ‘superadmin’) {
+} else if (role === 'admin' || role === 'superadmin') {
 await renderAdminQuizzes(content);
 } else {
-content.innerHTML = ‘<div class="card"><p>Quizzes are not available for your role.</p></div>’;
+content.innerHTML = '<div class="card"><p>Quizzes are not available for your role.</p></div>';
 }
 }
 
@@ -4932,34 +4892,34 @@ function quizStatusBadge(q) {
 const now = new Date();
 const start = new Date(q.startTime);
 const end = new Date(q.endTime);
-if (now < start) return ‘<span class="status-badge" style="background:#6b7280;color:#fff;">Upcoming</span>’;
-if (now > end) return ‘<span class="status-badge" style="background:#ef4444;color:#fff;">Closed</span>’;
-return ‘<span class="status-badge" style="background:#22c55e;color:#fff;">Open</span>’;
+if (now < start) return '<span class="status-badge" style="background:#6b7280;color:#fff;">Upcoming</span>';
+if (now > end) return '<span class="status-badge" style="background:#ef4444;color:#fff;">Closed</span>';
+return '<span class="status-badge" style="background:#22c55e;color:#fff;">Open</span>';
 }
 
 function closeQuizModal() {
-const mc = document.getElementById(‘modal-container’);
-if (mc) { mc.classList.add(‘hidden’); mc.innerHTML = ‘’; }
+const mc = document.getElementById('modal-container');
+if (mc) { mc.classList.add('hidden'); mc.innerHTML = ''; }
 }
 
 async function renderLecturerQuizzes(content) {
 if (!isOnline()) {
-const cached = offlineRead(‘quizzes_lecturer’);
+const cached = offlineRead('quizzes_lecturer');
 if (cached) {
-content.innerHTML = ‘<div style="background:#fef3c7;color:#92400e;padding:10px 16px;border-radius:8px;font-size:13px;margin-bottom:16px">- Offline - showing cached quizzes</div>’ + (content.innerHTML || ‘’);
+content.innerHTML = '<div style="background:#fef3c7;color:#92400e;padding:10px 16px;border-radius:8px;font-size:13px;margin-bottom:16px">- Offline - showing cached quizzes</div>' + (content.innerHTML || '');
 _renderLecturerQuizzesHTML(content, cached);
 } else {
-content.innerHTML = ‘<div class="card" style="text-align:center;padding:32px"><div style="font-size:36px">-</div><p style="margin-top:8px;color:var(--text-light)">No cached data. Connect once to view quizzes offline.</p></div>’;
+content.innerHTML = '<div class="card" style="text-align:center;padding:32px"><div style="font-size:36px">-</div><p style="margin-top:8px;color:var(--text-light)">No cached data. Connect once to view quizzes offline.</p></div>';
 }
 return;
 }
 try {
-const data = await api(’/api/lecturer/quizzes’);
-offlineCache(‘quizzes_lecturer’, data);
+const data = await api('/api/lecturer/quizzes');
+offlineCache('quizzes_lecturer', data);
 content.innerHTML = `<div class="page-header"><h2>Quizzes</h2><p>Manage your quizzes and assessments</p></div> <div class="actions-bar"><button class="btn btn-primary btn-sm" onclick="showCreateQuizModal()">Create Quiz</button></div> <div class="card"> ${data.quizzes.length ?`
 <table>
 <thead><tr><th>Title</th><th>Course</th><th>Questions</th><th>Submissions</th><th>Time Range</th><th>Status</th><th>Actions</th></tr></thead>
-<tbody>${data.quizzes.map(q => `<tr> <td><strong>${q.title}</strong></td> <td>${q.course?.code || 'N/A'}</td> <td>${q.questionCount || 0}</td> <td>${q.attemptCount || 0}</td> <td style="font-size:0.85em;">${new Date(q.startTime).toLocaleString()} - ${new Date(q.endTime).toLocaleString()}</td> <td>${quizStatusBadge(q)}</td> <td style="white-space:nowrap;"> <button class="btn btn-sm btn-secondary" onclick="viewLecturerQuizDetail('${q._id}')">Details</button> <button class="btn btn-sm btn-primary" onclick="showAddQuestionsView('${q._id}')">Questions</button> <button class="btn btn-sm btn-success" onclick="viewQuizResults('${q._id}')">Results</button> <button class="btn btn-sm" style="background:#dc2626;color:#fff;font-weight:700;" onclick="openLiveMonitor('${q._id}')" title="Open Live Proctor Monitor">- Monitor</button> <button class="btn btn-sm" style="background:#0ea5e9;color:#fff;" onclick="copyQuizId('${q._id}')" title="Copy Quiz ID">- ID</button> <button class="btn btn-sm btn-danger" onclick="deleteLecturerQuiz('${q._id}')">Delete</button> </td> </tr>`).join(’’)}</tbody>
+<tbody>${data.quizzes.map(q => `<tr> <td><strong>${q.title}</strong></td> <td>${q.course?.code || 'N/A'}</td> <td>${q.questionCount || 0}</td> <td>${q.attemptCount || 0}</td> <td style="font-size:0.85em;">${new Date(q.startTime).toLocaleString()} - ${new Date(q.endTime).toLocaleString()}</td> <td>${quizStatusBadge(q)}</td> <td style="white-space:nowrap;"> <button class="btn btn-sm btn-secondary" onclick="viewLecturerQuizDetail('${q._id}')">Details</button> <button class="btn btn-sm btn-primary" onclick="showAddQuestionsView('${q._id}')">Questions</button> <button class="btn btn-sm btn-success" onclick="viewQuizResults('${q._id}')">Results</button> <button class="btn btn-sm" style="background:#dc2626;color:#fff;font-weight:700;" onclick="openLiveMonitor('${q._id}')" title="Open Live Proctor Monitor">- Monitor</button> <button class="btn btn-sm" style="background:#0ea5e9;color:#fff;" onclick="copyQuizId('${q._id}')" title="Copy Quiz ID">- ID</button> <button class="btn btn-sm btn-danger" onclick="deleteLecturerQuiz('${q._id}')">Delete</button> </td> </tr>`).join('')}</tbody>
 </table>
 `: '<div class="empty-state"><p>No quizzes found. Create your first quiz!</p></div>'} </div>`;
 } catch (e) {
@@ -4968,62 +4928,62 @@ content.innerHTML = `<div class="card"><p>Error: ${e.message}</p></div>`;
 }
 
 async function showCreateQuizModal() {
-const mc = document.getElementById(‘modal-container’);
-mc.classList.remove(‘hidden’);
-mc.innerHTML = ‘<div class="modal-overlay"><div class="modal"><p>Loading courses…</p></div></div>’;
+const mc = document.getElementById('modal-container');
+mc.classList.remove('hidden');
+mc.innerHTML = '<div class="modal-overlay"><div class="modal"><p>Loading courses...</p></div></div>';
 try {
-const coursesData = await api(’/api/courses’);
+const coursesData = await api('/api/courses');
 const courses = coursesData.courses || [];
-mc.innerHTML = `<div class="modal-overlay" onclick="if(event.target===this)closeQuizModal()"> <div class="modal" style="max-width:500px;"> <h3>Create Quiz</h3> <div class="form-group"><label>Title *</label><input type="text" id="cq-title" placeholder="Quiz title" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;"></div> <div class="form-group"><label>Description</label><textarea id="cq-desc" placeholder="Optional description" rows="2" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;"></textarea></div> <div class="form-group"><label>Course *</label><select id="cq-course" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;"> <option value="">Select a course</option> ${courses.map(c =>`<option value="${c._id}">${esc(c.title)}${c.level?’ - L’+c.level:’’}${c.group?’ - Grp ‘+c.group:’’}</option>`).join('')} </select></div> <div class="form-group"><label>Time Limit (minutes)</label><input type="number" id="cq-timelimit" value="30" min="1" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;"></div> <div class="form-group"><label>Start Time *</label><input type="datetime-local" id="cq-start" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;"></div> <div class="form-group"><label>End Time *</label><input type="datetime-local" id="cq-end" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;"></div> <div class="form-group"> <label>Max Attempts <span style="font-weight:400;color:#9ca3af;font-size:11px;">(0 = unlimited)</span></label> <input type="number" id="cq-max-attempts" value="1" min="0" max="10" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;"> </div> <div class="form-group"> <label>Score to Record</label> <select id="cq-score-policy" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;"> <option value="best">Best Score</option> <option value="last">Last Attempt Score</option> </select> </div> <div id="cq-error" style="color:#ef4444;margin:8px 0;display:none;"></div> <div class="modal-actions"> <button class="btn btn-secondary" onclick="closeQuizModal()">Cancel</button> <button class="btn btn-primary" onclick="submitCreateQuiz()">Create Quiz</button> </div> </div> </div> `;
+mc.innerHTML = `<div class="modal-overlay" onclick="if(event.target===this)closeQuizModal()"> <div class="modal" style="max-width:500px;"> <h3>Create Quiz</h3> <div class="form-group"><label>Title *</label><input type="text" id="cq-title" placeholder="Quiz title" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;"></div> <div class="form-group"><label>Description</label><textarea id="cq-desc" placeholder="Optional description" rows="2" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;"></textarea></div> <div class="form-group"><label>Course *</label><select id="cq-course" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;"> <option value="">Select a course</option> ${courses.map(c =>`<option value="${c._id}">${esc(c.title)}${c.level?' - L'+c.level:''}${c.group?' - Grp '+c.group:''}</option>`).join('')} </select></div> <div class="form-group"><label>Time Limit (minutes)</label><input type="number" id="cq-timelimit" value="30" min="1" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;"></div> <div class="form-group"><label>Start Time *</label><input type="datetime-local" id="cq-start" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;"></div> <div class="form-group"><label>End Time *</label><input type="datetime-local" id="cq-end" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;"></div> <div class="form-group"> <label>Max Attempts <span style="font-weight:400;color:#9ca3af;font-size:11px;">(0 = unlimited)</span></label> <input type="number" id="cq-max-attempts" value="1" min="0" max="10" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;"> </div> <div class="form-group"> <label>Score to Record</label> <select id="cq-score-policy" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;"> <option value="best">Best Score</option> <option value="last">Last Attempt Score</option> </select> </div> <div id="cq-error" style="color:#ef4444;margin:8px 0;display:none;"></div> <div class="modal-actions"> <button class="btn btn-secondary" onclick="closeQuizModal()">Cancel</button> <button class="btn btn-primary" onclick="submitCreateQuiz()">Create Quiz</button> </div> </div> </div> `;
 } catch (e) {
 mc.innerHTML = `<div class="modal-overlay" onclick="if(event.target===this)closeQuizModal()"><div class="modal"><p>Error loading courses: ${e.message}</p><div class="modal-actions"><button class="btn btn-secondary" onclick="closeQuizModal()">Close</button></div></div></div>`;
 }
 }
 
 async function submitCreateQuiz() {
-const title = document.getElementById(‘cq-title’).value.trim();
-const description = document.getElementById(‘cq-desc’).value.trim();
-const courseId = document.getElementById(‘cq-course’).value;
-const timeLimit = parseInt(document.getElementById(‘cq-timelimit’).value) || 30;
-const startTime = document.getElementById(‘cq-start’).value;
-const endTime = document.getElementById(‘cq-end’).value;
-const maxAttempts = parseInt(document.getElementById(‘cq-max-attempts’)?.value ?? ‘1’);
-const scorePolicy = document.getElementById(‘cq-score-policy’)?.value || ‘best’;
-const errEl = document.getElementById(‘cq-error’);
+const title = document.getElementById('cq-title').value.trim();
+const description = document.getElementById('cq-desc').value.trim();
+const courseId = document.getElementById('cq-course').value;
+const timeLimit = parseInt(document.getElementById('cq-timelimit').value) || 30;
+const startTime = document.getElementById('cq-start').value;
+const endTime = document.getElementById('cq-end').value;
+const maxAttempts = parseInt(document.getElementById('cq-max-attempts')?.value ?? '1');
+const scorePolicy = document.getElementById('cq-score-policy')?.value || 'best';
+const errEl = document.getElementById('cq-error');
 
 if (!title || !courseId || !startTime || !endTime) {
-errEl.textContent = ‘Please fill in all required fields.’;
-errEl.style.display = ‘block’;
+errEl.textContent = 'Please fill in all required fields.';
+errEl.style.display = 'block';
 return;
 }
 // Prevent double-submit
-const submitBtn = document.querySelector(’#create-quiz-modal .btn-primary, #quiz-modal .btn-primary’);
-if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = ‘Creating-’; }
+const submitBtn = document.querySelector('#create-quiz-modal .btn-primary, #quiz-modal .btn-primary');
+if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Creating-'; }
 try {
-const data = await api(’/api/lecturer/quizzes’, {
-method: ‘POST’,
+const data = await api('/api/lecturer/quizzes', {
+method: 'POST',
 body: JSON.stringify({ title, description, courseId, timeLimit, startTime: new Date(startTime).toISOString(), endTime: new Date(endTime).toISOString(), maxAttempts: isNaN(maxAttempts) ? 1 : maxAttempts, scorePolicy })
 });
 closeQuizModal();
 showAddQuestionsView(data.quiz._id);
 } catch (e) {
-if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = ‘Create Quiz’; }
+if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Create Quiz'; }
 errEl.textContent = e.message;
-errEl.style.display = ‘block’;
+errEl.style.display = 'block';
 }
 }
 
 async function showAddQuestionsView(quizId) {
-const content = document.getElementById(‘main-content’);
+const content = document.getElementById('main-content');
 if (!content) return;
-if (!content) { console.error(‘showAddQuestionsView: main-content element not found’); return; }
-content.innerHTML = ‘<div class="card"><p>Loading quiz…</p></div>’;
+if (!content) { console.error('showAddQuestionsView: main-content element not found'); return; }
+content.innerHTML = '<div class="card"><p>Loading quiz...</p></div>';
 try {
 const data = await api(`/api/lecturer/quizzes/${quizId}`);
 const quiz = data.quiz;
 const questions = quiz.questions || [];
 
-```
+
 content.innerHTML = `
   <div class="page-header">
     <h2>Questions: ${quiz.title}</h2>
@@ -5148,7 +5108,6 @@ content.innerHTML = `
   </div>
 `;
 setTimeout(() => renderMath(content), 150);
-```
 
 } catch (e) {
 content.innerHTML = `<div class="card"><p>Error: ${e.message}</p></div>`;
@@ -5156,84 +5115,84 @@ content.innerHTML = `<div class="card"><p>Error: ${e.message}</p></div>`;
 }
 
 function aqToggleType(type) {
-const isMulti = type === ‘multiple’;
-const isFill  = type === ‘fill’;
-document.getElementById(‘aq-single-wrap’).style.display = (!isMulti && !isFill) ? ‘block’ : ‘none’;
-document.getElementById(‘aq-multi-wrap’).style.display  = isMulti ? ‘block’ : ‘none’;
-document.getElementById(‘aq-fill-wrap’).style.display   = isFill  ? ‘block’ : ‘none’;
+const isMulti = type === 'multiple';
+const isFill  = type === 'fill';
+document.getElementById('aq-single-wrap').style.display = (!isMulti && !isFill) ? 'block' : 'none';
+document.getElementById('aq-multi-wrap').style.display  = isMulti ? 'block' : 'none';
+document.getElementById('aq-fill-wrap').style.display   = isFill  ? 'block' : 'none';
 // Options section - hide for fill-in
-const optsEl = document.getElementById(‘aq-options-section’);
-if (optsEl) optsEl.style.display = isFill ? ‘none’ : ‘block’;
-document.getElementById(‘aq-type-hint’).textContent = isMulti
-? ‘Multiple correct answers - student must select all correct options.’
+const optsEl = document.getElementById('aq-options-section');
+if (optsEl) optsEl.style.display = isFill ? 'none' : 'block';
+document.getElementById('aq-type-hint').textContent = isMulti
+? 'Multiple correct answers - student must select all correct options.'
 : isFill
-? ‘Fill in the blank - student types their answer.’
-: ‘One correct answer - student picks one option.’;
-const primStyle = ‘display:flex;align-items:center;gap:6px;cursor:pointer;padding:8px 16px;border:2px solid var(–primary);border-radius:8px;background:var(–primary);color:#fff;font-size:13px;font-weight:600;’;
-const secStyle  = ‘display:flex;align-items:center;gap:6px;cursor:pointer;padding:8px 16px;border:2px solid #e5e7eb;border-radius:8px;background:#fff;color:#374151;font-size:13px;font-weight:600;’;
-document.getElementById(‘aq-lbl-single’).style.cssText = (!isMulti && !isFill) ? primStyle : secStyle;
-document.getElementById(‘aq-lbl-multi’).style.cssText  = isMulti ? primStyle : secStyle;
-document.getElementById(‘aq-lbl-fill’).style.cssText   = isFill  ? primStyle : secStyle;
+? 'Fill in the blank - student types their answer.'
+: 'One correct answer - student picks one option.';
+const primStyle = 'display:flex;align-items:center;gap:6px;cursor:pointer;padding:8px 16px;border:2px solid var(-primary);border-radius:8px;background:var(-primary);color:#fff;font-size:13px;font-weight:600;';
+const secStyle  = 'display:flex;align-items:center;gap:6px;cursor:pointer;padding:8px 16px;border:2px solid #e5e7eb;border-radius:8px;background:#fff;color:#374151;font-size:13px;font-weight:600;';
+document.getElementById('aq-lbl-single').style.cssText = (!isMulti && !isFill) ? primStyle : secStyle;
+document.getElementById('aq-lbl-multi').style.cssText  = isMulti ? primStyle : secStyle;
+document.getElementById('aq-lbl-fill').style.cssText   = isFill  ? primStyle : secStyle;
 }
 
 function aqCbChange(i) {
 const cb  = document.getElementById(`aq-cb-${i}`);
 const lbl = document.getElementById(`aq-cblbl-${i}`);
-lbl.style.borderColor = cb.checked ? ‘var(–primary)’ : ‘#e5e7eb’;
-lbl.style.background  = cb.checked ? ‘#ede9fe’ : ‘#fff’;
-lbl.style.color       = cb.checked ? ‘#7c3aed’ : ‘#374151’;
+lbl.style.borderColor = cb.checked ? 'var(-primary)' : '#e5e7eb';
+lbl.style.background  = cb.checked ? '#ede9fe' : '#fff';
+lbl.style.color       = cb.checked ? '#7c3aed' : '#374151';
 }
 
 async function submitAddQuestion(quizId) {
-const questionText = document.getElementById(‘aq-text’).value.trim();
-const marks   = parseInt(document.getElementById(‘aq-marks’).value) || 1;
-const errEl   = document.getElementById(‘aq-error’);
-const qType   = document.querySelector(‘input[name=“aq-type”]:checked’)?.value || ‘single’;
-const isMulti = qType === ‘multiple’;
-const isFill  = qType === ‘fill’;
+const questionText = document.getElementById('aq-text').value.trim();
+const marks   = parseInt(document.getElementById('aq-marks').value) || 1;
+const errEl   = document.getElementById('aq-error');
+const qType   = document.querySelector('input[name="aq-type"]:checked')?.value || 'single';
+const isMulti = qType === 'multiple';
+const isFill  = qType === 'fill';
 
-errEl.style.display = ‘none’;
-if (!questionText) { errEl.textContent = ‘Question text is required.’; errEl.style.display = ‘block’; return; }
+errEl.style.display = 'none';
+if (!questionText) { errEl.textContent = 'Question text is required.'; errEl.style.display = 'block'; return; }
 
 let body;
 if (isFill) {
-const correctAnswerText = document.getElementById(‘aq-fill-answer’).value.trim();
-if (!correctAnswerText) { errEl.textContent = ‘Please enter the correct answer.’; errEl.style.display = ‘block’; return; }
-const altsRaw = document.getElementById(‘aq-fill-alts’).value.trim();
-const acceptedAnswers = altsRaw ? altsRaw.split(’\n’).map(s => s.trim()).filter(Boolean) : [];
-body = { questionText, questionType: ‘fill’, correctAnswerText, acceptedAnswers, marks };
+const correctAnswerText = document.getElementById('aq-fill-answer').value.trim();
+if (!correctAnswerText) { errEl.textContent = 'Please enter the correct answer.'; errEl.style.display = 'block'; return; }
+const altsRaw = document.getElementById('aq-fill-alts').value.trim();
+const acceptedAnswers = altsRaw ? altsRaw.split('\n').map(s => s.trim()).filter(Boolean) : [];
+body = { questionText, questionType: 'fill', correctAnswerText, acceptedAnswers, marks };
 } else {
 const options = [0,1,2,3].map(i => document.getElementById(`aq-opt-${i}`).value.trim()).filter(o => o);
-if (options.length < 2) { errEl.textContent = ‘At least 2 options are required.’; errEl.style.display = ‘block’; return; }
+if (options.length < 2) { errEl.textContent = 'At least 2 options are required.'; errEl.style.display = 'block'; return; }
 if (isMulti) {
-const correctAnswers = […document.querySelectorAll(‘input[name=“aq-multi-correct”]:checked’)].map(c => parseInt(c.value)).filter(i => i < options.length);
-if (correctAnswers.length === 0) { errEl.textContent = ‘Select at least one correct answer.’; errEl.style.display = ‘block’; return; }
-body = { questionText, options, questionType: ‘multiple’, correctAnswers, marks };
+const correctAnswers = [...document.querySelectorAll('input[name="aq-multi-correct"]:checked')].map(c => parseInt(c.value)).filter(i => i < options.length);
+if (correctAnswers.length === 0) { errEl.textContent = 'Select at least one correct answer.'; errEl.style.display = 'block'; return; }
+body = { questionText, options, questionType: 'multiple', correctAnswers, marks };
 } else {
-const radio = document.querySelector(‘input[name=“aq-correct”]:checked’);
-if (!radio) { errEl.textContent = ‘Please select the correct answer.’; errEl.style.display = ‘block’; return; }
+const radio = document.querySelector('input[name="aq-correct"]:checked');
+if (!radio) { errEl.textContent = 'Please select the correct answer.'; errEl.style.display = 'block'; return; }
 const correctAnswer = parseInt(radio.value);
-if (correctAnswer >= options.length) { errEl.textContent = ‘Correct answer must match a filled option.’; errEl.style.display = ‘block’; return; }
-body = { questionText, options, questionType: ‘single’, correctAnswer, marks };
+if (correctAnswer >= options.length) { errEl.textContent = 'Correct answer must match a filled option.'; errEl.style.display = 'block'; return; }
+body = { questionText, options, questionType: 'single', correctAnswer, marks };
 }
 }
 
 const addBtn = document.querySelector(`button[onclick="submitAddQuestion('${quizId}')"]`);
-if (addBtn) { addBtn.disabled = true; addBtn.textContent = ‘Adding-’; }
+if (addBtn) { addBtn.disabled = true; addBtn.textContent = 'Adding-'; }
 try {
-await api(`/api/lecturer/quizzes/${quizId}/questions`, { method: ‘POST’, body: JSON.stringify(body) });
+await api(`/api/lecturer/quizzes/${quizId}/questions`, { method: 'POST', body: JSON.stringify(body) });
 showAddQuestionsView(quizId);
 } catch (e) {
-if (addBtn) { addBtn.disabled = false; addBtn.textContent = ‘- Add Question’; }
+if (addBtn) { addBtn.disabled = false; addBtn.textContent = '- Add Question'; }
 errEl.textContent = e.message;
-errEl.style.display = ‘block’;
+errEl.style.display = 'block';
 }
 }
 
 async function deleteQuizQuestion(quizId, questionId) {
-if (!confirm(‘Delete this question?’)) return;
+if (!confirm('Delete this question?')) return;
 try {
-await api(`/api/lecturer/quizzes/${quizId}/questions/${questionId}`, { method: ‘DELETE’ });
+await api(`/api/lecturer/quizzes/${quizId}/questions/${questionId}`, { method: 'DELETE' });
 showAddQuestionsView(quizId);
 } catch (e) {
 toastError(e.message);
@@ -5241,9 +5200,9 @@ toastError(e.message);
 }
 
 async function viewLecturerQuizDetail(quizId) {
-const content = document.getElementById(‘main-content’);
+const content = document.getElementById('main-content');
 if (!content) return;
-content.innerHTML = ‘<div class="card"><p>Loading…</p></div>’;
+content.innerHTML = '<div class="card"><p>Loading...</p></div>';
 try {
 const data = await api(`/api/lecturer/quizzes/${quizId}`);
 const q = data.quiz;
@@ -5253,7 +5212,7 @@ content.innerHTML = `<div class="page-header"><h2>${q.title}</h2><p>${q.descript
 <div style="padding:10px;border:1px solid #e5e7eb;border-radius:8px;margin-bottom:8px;">
 <strong>Q${i + 1}.</strong> <span class="math-content">${qn.questionText}</span> <span style="color:#9ca3af;">(${qn.marks} marks)</span>
 <div style="margin-top:4px;font-size:0.9em;">
-${qn.options.map((o, oi) => `<span class="math-content" style="margin-right:10px;${oi === qn.correctAnswer ? 'color:#22c55e;font-weight:bold;' : ''}">${String.fromCharCode(65 + oi)}) ${o}</span>`).join(’’)}
+${qn.options.map((o, oi) => `<span class="math-content" style="margin-right:10px;${oi === qn.correctAnswer ? 'color:#22c55e;font-weight:bold;' : ''}">${String.fromCharCode(65 + oi)}) ${o}</span>`).join('')}
 </div>
 </div>
 `).join('') : '<p style="color:#9ca3af;">No questions.</p>'} </div> `;
@@ -5264,26 +5223,26 @@ content.innerHTML = `<div class="card"><p>Error: ${e.message}</p></div>`;
 }
 
 function openLiveMonitor(quizId) {
-window.open(’/proctor-dashboard.html?quizId=’ + quizId, ‘_blank’);
+window.open('/proctor-dashboard.html?quizId=' + quizId, '_blank');
 }
 
 function copyQuizId(id) {
 navigator.clipboard.writeText(id).then(() => {
 // Show a brief toast-style alert
-const el = document.createElement(‘div’);
-el.textContent = ‘- Quiz ID copied - paste it into Live Monitor’;
-el.style.cssText = ‘position:fixed;bottom:24px;right:24px;background:#0ea5e9;color:#fff;padding:12px 18px;border-radius:10px;font-size:14px;font-weight:600;z-index:9999;box-shadow:0 4px 16px rgba(0,0,0,.2);animation:fadeIn .2s ease’;
+const el = document.createElement('div');
+el.textContent = '- Quiz ID copied - paste it into Live Monitor';
+el.style.cssText = 'position:fixed;bottom:24px;right:24px;background:#0ea5e9;color:#fff;padding:12px 18px;border-radius:10px;font-size:14px;font-weight:600;z-index:9999;box-shadow:0 4px 16px rgba(0,0,0,.2);animation:fadeIn .2s ease';
 document.body.appendChild(el);
 setTimeout(() => el.remove(), 2800);
 }).catch(() => {
-prompt(‘Copy this Quiz ID:’, id);
+prompt('Copy this Quiz ID:', id);
 });
 }
 
 async function viewQuizResults(quizId) {
-const content = document.getElementById(‘main-content’);
+const content = document.getElementById('main-content');
 if (!content) return;
-content.innerHTML = ‘<div class="card"><p>Loading results…</p></div>’;
+content.innerHTML = '<div class="card"><p>Loading results...</p></div>';
 try {
 const data = await api(`/api/lecturer/quizzes/${quizId}/results`);
 const quiz = data.quiz;
@@ -5291,7 +5250,7 @@ const stats = data.stats;
 const attempts = data.attempts || [];
 const qd = data.questionDifficulty || [];
 
-```
+
 const pctColor = (p) => p >= 70 ? '#22c55e' : p >= 50 ? '#f59e0b' : '#ef4444';
 const diffLabel = (r) => r === null ? 'N/A' : r >= 70 ? '- Easy' : r >= 40 ? '- Medium' : '- Hard';
 const diffColor = (r) => r === null ? '#9ca3af' : r >= 70 ? '#22c55e' : r >= 40 ? '#f59e0b' : '#ef4444';
@@ -5429,7 +5388,6 @@ content.innerHTML = `
 // Store data for CSV export and search
 window._quizResultsData = { quiz, stats, attempts, quizId };
 setTimeout(() => renderMath(content), 150);
-```
 
 } catch (e) {
 content.innerHTML = `<div class="card"><p>Error: ${e.message}</p></div>`;
@@ -5438,24 +5396,24 @@ content.innerHTML = `<div class="card"><p>Error: ${e.message}</p></div>`;
 
 function filterResultsTable(query) {
 const q = query.toLowerCase();
-document.querySelectorAll(’#results-table tbody tr’).forEach(row => {
-const name = row.dataset.name || ‘’;
-const id   = row.dataset.id   || ‘’;
-row.style.display = (!q || name.includes(q) || id.includes(q)) ? ‘’ : ‘none’;
+document.querySelectorAll('#results-table tbody tr').forEach(row => {
+const name = row.dataset.name || '';
+const id   = row.dataset.id   || '';
+row.style.display = (!q || name.includes(q) || id.includes(q)) ? '' : 'none';
 });
 }
 
 async function viewStudentQuizAnswers(quizId, attemptId, studentName) {
-const content = document.getElementById(‘main-content’);
+const content = document.getElementById('main-content');
 if (!content) return;
-content.innerHTML = ‘<div class="card"><p>Loading-</p></div>’;
+content.innerHTML = '<div class="card"><p>Loading-</p></div>';
 try {
 const data = await api(`/api/lecturer/quizzes/${quizId}/results/${attemptId}`);
 const attempt = data.attempt;
 const answers = data.answers || [];
 const pct = attempt.percentage;
 
-```
+
 content.innerHTML = `
   <div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;">
     <div>
@@ -5505,7 +5463,6 @@ content.innerHTML = `
     }).join('')}
   </div>
 `;
-```
 
 } catch (e) {
 content.innerHTML = `<div class="card"><p>Error: ${e.message}</p></div>`;
@@ -5514,37 +5471,37 @@ content.innerHTML = `<div class="card"><p>Error: ${e.message}</p></div>`;
 
 function exportQuizResultsCSV(quizId) {
 const d = window._quizResultsData;
-if (!d || d.quizId !== quizId) { toastWarning(‘Load the results first.’); return; }
-const rows = [[’#’,‘Name’,‘Index/ID’,‘Score’,‘Max Score’,‘Percentage’,‘Status’,‘Submitted At’]];
+if (!d || d.quizId !== quizId) { toastWarning('Load the results first.'); return; }
+const rows = [['#','Name','Index/ID','Score','Max Score','Percentage','Status','Submitted At']];
 d.attempts.forEach((a,i) => {
 rows.push([
 i+1,
-a.student?.name || ‘Unknown’,
-a.student?.indexNumber || a.student?.email || ‘’,
+a.student?.name || 'Unknown',
+a.student?.indexNumber || a.student?.email || '',
 a.score,
 a.maxScore,
-a.percentage + ‘%’,
-a.percentage >= 50 ? ‘Pass’ : ‘Fail’,
-a.submittedAt ? new Date(a.submittedAt).toLocaleString() : ‘’,
+a.percentage + '%',
+a.percentage >= 50 ? 'Pass' : 'Fail',
+a.submittedAt ? new Date(a.submittedAt).toLocaleString() : '',
 ]);
 });
-const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(’,’)).join(’\n’);
-const blob = new Blob([csv], { type: ‘text/csv’ });
+const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+const blob = new Blob([csv], { type: 'text/csv' });
 const url = URL.createObjectURL(blob);
-const a = document.createElement(‘a’);
+const a = document.createElement('a');
 a.href = url;
 a.download = `${d.quiz.title.replace(/[^a-zA-Z0-9]/g,'_')}_results.csv`;
 a.click();
 URL.revokeObjectURL(url);
-toastSuccess(‘CSV downloaded!’);
+toastSuccess('CSV downloaded!');
 }
 
 async function deleteLecturerQuiz(quizId) {
-toastConfirm(‘Delete this quiz? All questions and submissions will be removed.’, async () => {
+toastConfirm('Delete this quiz? All questions and submissions will be removed.', async () => {
 try {
-await api(`/api/lecturer/quizzes/${quizId}`, { method: ‘DELETE’ });
+await api(`/api/lecturer/quizzes/${quizId}`, { method: 'DELETE' });
 renderQuizzes();
-toastSuccess(‘Quiz deleted.’);
+toastSuccess('Quiz deleted.');
 } catch (e) {
 toastError(e.message);
 }
@@ -5553,13 +5510,13 @@ toastError(e.message);
 
 async function renderStudentQuizzes(content, showAll) {
 try {
-const url = showAll ? ‘/api/student/quizzes?showAll=true’ : ‘/api/student/quizzes’;
+const url = showAll ? '/api/student/quizzes?showAll=true' : '/api/student/quizzes';
 const data = await api(url);
 // Deduplicate: same title + startTime => keep the one with most questions
 const raw = data.quizzes || [];
 const seen = new Map();
 raw.forEach(q => {
-const key = q.title + ‘_’ + new Date(q.startTime).getTime();
+const key = q.title + '_' + new Date(q.startTime).getTime();
 const existing = seen.get(key);
 if (!existing || (q.questionCount||0) > (existing.questionCount||0)) seen.set(key, q);
 });
@@ -5568,10 +5525,10 @@ content.innerHTML = `<div class="page-header" style="display:flex;justify-conten
 <table>
 <thead><tr><th>Title</th><th>Course</th><th>Questions</th><th>Time Limit</th><th>Start Time</th><th>End Time</th><th>Status</th><th>Score</th><th>Actions</th></tr></thead>
 <tbody>${quizzes.map(q => {
-const statusColors = { upcoming: ‘background:#6b7280;color:#fff;’, open: ‘background:#22c55e;color:#fff;’, closed: ‘background:#ef4444;color:#fff;’ };
-const statusLabel = q.status ? q.status.charAt(0).toUpperCase() + q.status.slice(1) : ‘Unknown’;
-return `<tr> <td><strong>${q.title}</strong>${q.description ? `<div style="font-size:0.85em;color:#6b7280;">${q.description}</div>`: ''}</td> <td>${q.course?.code || 'N/A'}</td> <td>${q.questionCount || 0}</td> <td>${q.timeLimit || 30} min</td> <td style="font-size:0.85em;">${new Date(q.startTime).toLocaleString()}</td> <td style="font-size:0.85em;">${new Date(q.endTime).toLocaleString()}</td> <td><span class="status-badge" style="${statusColors[q.status] || ''}">${statusLabel}</span></td> <td> ${q.isSubmitted ?`<strong style="color:#3b82f6;">${q.myScore}/${q.myMaxScore}</strong>${q.scorePolicy===‘best’&&q.attemptCount>1?’ <span style="font-size:10px;color:#9ca3af;">(best)</span>’:’’}`: '-'} ${q.maxAttempts !== 1 && q.isSubmitted ?`<br><span style="font-size:10px;color:#9ca3af;">${q.maxAttempts===0?‘Unlimited retakes’:q.attemptsLeft===0?‘No retakes left’:(q.attemptsLeft+’ retake’+(q.attemptsLeft!==1?‘s’:’’)+’ left’)}</span>`: ''} </td> <td style="white-space:nowrap;"> ${q.canContinue ?`<button class="btn btn-sm btn-primary" onclick="startStudentQuiz('${q._id}')">Continue</button>`: ''} ${q.canAttempt && !q.canContinue ?`<button class="btn btn-sm btn-primary" onclick="startStudentQuiz('${q._id}')">${q.attemptCount>0?‘Retake’:‘Take Quiz’}</button>`: ''} ${q.isSubmitted ?`<button class="btn btn-sm btn-secondary" onclick="viewStudentResult('${q._id}')">View Result</button>` : ''} </td> </tr>`;
-}).join(’’)}</tbody>
+const statusColors = { upcoming: 'background:#6b7280;color:#fff;', open: 'background:#22c55e;color:#fff;', closed: 'background:#ef4444;color:#fff;' };
+const statusLabel = q.status ? q.status.charAt(0).toUpperCase() + q.status.slice(1) : 'Unknown';
+return `<tr> <td><strong>${q.title}</strong>${q.description ? `<div style="font-size:0.85em;color:#6b7280;">${q.description}</div>`: ''}</td> <td>${q.course?.code || 'N/A'}</td> <td>${q.questionCount || 0}</td> <td>${q.timeLimit || 30} min</td> <td style="font-size:0.85em;">${new Date(q.startTime).toLocaleString()}</td> <td style="font-size:0.85em;">${new Date(q.endTime).toLocaleString()}</td> <td><span class="status-badge" style="${statusColors[q.status] || ''}">${statusLabel}</span></td> <td> ${q.isSubmitted ?`<strong style="color:#3b82f6;">${q.myScore}/${q.myMaxScore}</strong>${q.scorePolicy==='best'&&q.attemptCount>1?' <span style="font-size:10px;color:#9ca3af;">(best)</span>':''}`: '-'} ${q.maxAttempts !== 1 && q.isSubmitted ?`<br><span style="font-size:10px;color:#9ca3af;">${q.maxAttempts===0?'Unlimited retakes':q.attemptsLeft===0?'No retakes left':(q.attemptsLeft+' retake'+(q.attemptsLeft!==1?'s':'')+' left')}</span>`: ''} </td> <td style="white-space:nowrap;"> ${q.canContinue ?`<button class="btn btn-sm btn-primary" onclick="startStudentQuiz('${q._id}')">Continue</button>`: ''} ${q.canAttempt && !q.canContinue ?`<button class="btn btn-sm btn-primary" onclick="startStudentQuiz('${q._id}')">${q.attemptCount>0?'Retake':'Take Quiz'}</button>`: ''} ${q.isSubmitted ?`<button class="btn btn-sm btn-secondary" onclick="viewStudentResult('${q._id}')">View Result</button>` : ''} </td> </tr>`;
+}).join('')}</tbody>
 </table>
 `: '<div class="empty-state"><p>No quizzes available at the moment.</p></div>'} </div>`;
 } catch (e) {
@@ -5580,20 +5537,20 @@ content.innerHTML = `<div class="card"><p>Error: ${e.message}</p></div>`;
 }
 
 async function startStudentQuiz(quizId) {
-const content = document.getElementById(‘main-content’);
+const content = document.getElementById('main-content');
 if (!content) return;
-content.innerHTML = ‘<div class="card"><p>Loading quiz…</p></div>’;
+content.innerHTML = '<div class="card"><p>Loading quiz...</p></div>';
 if (quizTimerInterval) { clearInterval(quizTimerInterval); quizTimerInterval = null; }
 
 try {
-const data = await api(`/api/student/quizzes/${quizId}/start`, { method: ‘POST’ });
+const data = await api(`/api/student/quizzes/${quizId}/start`, { method: 'POST' });
 const questions = data.questions || [];
 const timeLimit = data.timeLimit || 30;
 const attempt = data.attempt;
 const startedAt = new Date(attempt.startedAt);
 const endTime = new Date(startedAt.getTime() + timeLimit * 60 * 1000);
 
-```
+
 content.innerHTML = `
   <div class="page-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;">
     <div><h2>Quiz in Progress</h2><p>${questions.length} questions - ${timeLimit} minutes</p></div>
@@ -5656,7 +5613,6 @@ window._quizTabHandler = function() {
   }
 };
 document.addEventListener('visibilitychange', window._quizTabHandler);
-```
 
 } catch (e) {
 content.innerHTML = `<div class="card"><p>Error: ${e.message}</p><button class="btn btn-secondary" onclick="renderQuizzes()">- Back</button></div>`;
@@ -5665,26 +5621,26 @@ content.innerHTML = `<div class="card"><p>Error: ${e.message}</p><button class="
 
 async function submitStudentQuiz(quizId) {
 if (window._quizTabHandler) {
-document.removeEventListener(‘visibilitychange’, window._quizTabHandler);
+document.removeEventListener('visibilitychange', window._quizTabHandler);
 window._quizTabHandler = null;
 }
 window._quizSubmitting = false;
 if (quizTimerInterval) { clearInterval(quizTimerInterval); quizTimerInterval = null; }
 const questions = window._quizQuestions || [];
 const answers = questions.map(q => {
-if (q.questionType === ‘fill’) {
+if (q.questionType === 'fill') {
 const input = document.getElementById(`sq-fill-${q._id}`);
-return { questionId: q._id, selectedAnswer: null, selectedAnswerText: input ? input.value.trim() : ‘’ };
+return { questionId: q._id, selectedAnswer: null, selectedAnswerText: input ? input.value.trim() : '' };
 }
 const selected = document.querySelector(`input[name="sq-${q._id}"]:checked`);
 return { questionId: q._id, selectedAnswer: selected ? parseInt(selected.value) : -1, selectedAnswerText: null };
 });
 
-const content = document.getElementById(‘main-content’);
+const content = document.getElementById('main-content');
 if (!content) return;
 try {
 const data = await api(`/api/student/quizzes/${quizId}/submit`, {
-method: ‘POST’,
+method: 'POST',
 body: JSON.stringify({ answers })
 });
 const pct = data.percentage || 0;
@@ -5695,16 +5651,16 @@ content.innerHTML = `<div class="card"><p>Error submitting quiz: ${e.message}</p
 }
 
 async function viewStudentResult(quizId) {
-const content = document.getElementById(‘main-content’);
+const content = document.getElementById('main-content');
 if (!content) return;
-content.innerHTML = ‘<div class="card"><p>Loading result…</p></div>’;
+content.innerHTML = '<div class="card"><p>Loading result...</p></div>';
 try {
 const data = await api(`/api/student/quizzes/${quizId}/result`);
 const attempt = data.attempt;
 const answers = data.answers || [];
 const pct = attempt.maxScore > 0 ? Math.round((attempt.score / attempt.maxScore) * 100) : 0;
 
-```
+
 content.innerHTML = `
   <div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;">
     <div>
@@ -5749,7 +5705,6 @@ content.innerHTML = `
     }).join('')}
   </div>
 `;
-```
 
 } catch (e) {
 content.innerHTML = `<div class="card"><p>Error: ${e.message}</p><button class="btn btn-secondary" onclick="renderQuizzes()">- Back</button></div>`;
@@ -5758,12 +5713,12 @@ content.innerHTML = `<div class="card"><p>Error: ${e.message}</p><button class="
 
 async function renderAdminQuizzes(content) {
 try {
-const data = await api(’/api/admin/quizzes’);
+const data = await api('/api/admin/quizzes');
 const quizzes = data.quizzes || [];
 content.innerHTML = `
 <div class="page-header"><h2>All Quizzes</h2><p>Overview of quizzes across all lecturers</p></div>
 
-```
+
   <!-- Duplicate finder tool -->
   <div class="card" style="margin-bottom:16px;border:2px solid #fde68a;background:#fffbeb">
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
@@ -5799,7 +5754,6 @@ content.innerHTML = `
     ` : '<div class="empty-state"><p>No quizzes found.</p></div>'}
   </div>
 `;
-```
 
 } catch (e) {
 content.innerHTML = `<div class="card"><p>Error: ${e.message}</p></div>`;
@@ -5807,19 +5761,19 @@ content.innerHTML = `<div class="card"><p>Error: ${e.message}</p></div>`;
 }
 
 async function findDuplicateQuizzes() {
-const el = document.getElementById(‘duplicates-result’);
+const el = document.getElementById('duplicates-result');
 if (!el) return;
-el.innerHTML = ‘<p style="font-size:13px;color:#92400e">Scanning-</p>’;
+el.innerHTML = '<p style="font-size:13px;color:#92400e">Scanning-</p>';
 try {
-const { duplicates } = await api(’/api/admin/quizzes/utils/duplicates’);
+const { duplicates } = await api('/api/admin/quizzes/utils/duplicates');
 if (!duplicates.length) {
-el.innerHTML = ‘<p style="font-size:13px;color:#16a34a;font-weight:600">- No duplicate quizzes found.</p>’;
+el.innerHTML = '<p style="font-size:13px;color:#16a34a;font-weight:600">- No duplicate quizzes found.</p>';
 return;
 }
 el.innerHTML = `<div style="font-size:13px;font-weight:700;color:#92400e;margin-bottom:10px"> Found ${duplicates.length} group(s) of duplicates: </div> ${duplicates.map(group =>`
 <div style="border:1px solid #fde68a;border-radius:8px;padding:12px;margin-bottom:10px;background:#fff">
 <div style="font-weight:700;margin-bottom:8px">
-“${group._id.title}” - ${group.count} copies
+"${group._id.title}" - ${group.count} copies
 </div>
 <table style="width:100%;font-size:12px;border-collapse:collapse">
 <thead><tr style="color:#6b7280">
@@ -5830,7 +5784,7 @@ el.innerHTML = `<div style="font-size:13px;font-weight:700;color:#92400e;margin-
 <th style="padding:4px 8px">Action</th>
 </tr></thead>
 <tbody>
-${group.quizzes.map((q, i) => `<tr style="border-top:1px solid #f3f4f6;${i === 0 ? 'background:#f0fdf4' : ''}"> <td style="padding:6px 8px;font-weight:${i===0?'700':'400'}">${q.title} ${i===0 ? '<span style="font-size:10px;color:#16a34a;font-weight:600">(keep)</span>' : ''}</td> <td style="padding:6px 8px">${q.createdByName || '-'}</td> <td style="padding:6px 8px">${new Date(q.createdAt).toLocaleDateString()}</td> <td style="padding:6px 8px">${q.type || '-'}</td> <td style="padding:6px 8px;text-align:center"> ${i === 0 ? '<span style="color:#16a34a;font-size:11px">- Keep</span>' :`<button class=“btn btn-sm” style=“background:#fef2f2;color:#dc2626;border:1px solid #fecaca;font-size:11px” onclick=“adminDeleteQuiz(’${q.id}’,’${q.title.replace(/’/g,”\’”)}’, true)”>Delete</button>`} </td> </tr>`).join(’’)}
+${group.quizzes.map((q, i) => `<tr style="border-top:1px solid #f3f4f6;${i === 0 ? 'background:#f0fdf4' : ''}"> <td style="padding:6px 8px;font-weight:${i===0?'700':'400'}">${q.title} ${i===0 ? '<span style="font-size:10px;color:#16a34a;font-weight:600">(keep)</span>' : ''}</td> <td style="padding:6px 8px">${q.createdByName || '-'}</td> <td style="padding:6px 8px">${new Date(q.createdAt).toLocaleDateString()}</td> <td style="padding:6px 8px">${q.type || '-'}</td> <td style="padding:6px 8px;text-align:center"> ${i === 0 ? '<span style="color:#16a34a;font-size:11px">- Keep</span>' :`<button class="btn btn-sm" style="background:#fef2f2;color:#dc2626;border:1px solid #fecaca;font-size:11px" onclick="adminDeleteQuiz('${q.id}','${q.title.replace(/'/g,"\'")}', true)">Delete</button>`} </td> </tr>`).join('')}
 </tbody>
 </table>
 </div>
@@ -5843,23 +5797,23 @@ el.innerHTML = `<p style="color:#ef4444;font-size:13px">Error: ${e.message}</p>`
 async function adminDeleteQuiz(id, title, fromDuplicates = false) {
 if (!confirm(`Delete quiz "${title}"?\n\nThis will permanently remove all questions and submissions.`)) return;
 try {
-await api(`/api/admin/quizzes/${id}`, { method: ‘DELETE’ });
-toast(`Quiz "${title}" deleted`, ‘ok’);
+await api(`/api/admin/quizzes/${id}`, { method: 'DELETE' });
+toast(`Quiz "${title}" deleted`, 'ok');
 if (fromDuplicates) {
 findDuplicateQuizzes(); // re-scan
 } else {
-const content = document.getElementById(‘main-content’);
+const content = document.getElementById('main-content');
 if (content) await renderAdminQuizzes(content);
 }
 } catch(e) {
-toast(e.message || ‘Failed to delete quiz’, ‘err’);
+toast(e.message || 'Failed to delete quiz', 'err');
 }
 }
 
 async function viewAdminQuizDetail(quizId) {
-const content = document.getElementById(‘main-content’);
+const content = document.getElementById('main-content');
 if (!content) return;
-content.innerHTML = ‘<div class="card"><p>Loading…</p></div>’;
+content.innerHTML = '<div class="card"><p>Loading...</p></div>';
 try {
 const data = await api(`/api/admin/quizzes/${quizId}`);
 const quiz = data.quiz;
@@ -5867,7 +5821,7 @@ const questions = data.questions || [];
 const attempts = data.attempts || [];
 const stats = data.stats || {};
 
-```
+
 content.innerHTML = `
   <div class="page-header"><h2>${quiz.title}</h2><p>${quiz.description || 'No description'} - by ${quiz.createdBy?.name || 'Unknown'}</p></div>
   <div class="actions-bar"><button class="btn btn-secondary btn-sm" onclick="renderQuizzes()">- Back</button></div>
@@ -5918,7 +5872,6 @@ content.innerHTML = `
     ` : '<div class="empty-state"><p>No submissions yet.</p></div>'}
   </div>
 `;
-```
 
 } catch (e) {
 content.innerHTML = `<div class="card"><p>Error: ${e.message}</p><button class="btn btn-secondary" onclick="renderQuizzes()">- Back</button></div>`;
@@ -5926,25 +5879,25 @@ content.innerHTML = `<div class="card"><p>Error: ${e.message}</p><button class="
 }
 
 async function renderMyAttendance() {
-const content = document.getElementById(‘main-content’);
+const content = document.getElementById('main-content');
 if (!content) return;
 if (!isOnline()) {
-const cached = offlineRead(‘my_attendance’);
+const cached = offlineRead('my_attendance');
 if (cached) {
-content.innerHTML = ‘<div style="background:#fef3c7;color:#92400e;padding:10px 16px;border-radius:8px;font-size:13px;margin-bottom:16px">- Offline - showing cached attendance</div>’;
+content.innerHTML = '<div style="background:#fef3c7;color:#92400e;padding:10px 16px;border-radius:8px;font-size:13px;margin-bottom:16px">- Offline - showing cached attendance</div>';
 _renderMyAttendanceHTML(content, cached);
 } else {
-content.innerHTML = ‘<div class="card" style="text-align:center;padding:32px"><div style="font-size:36px">-</div><p style="margin-top:8px;color:var(--text-light)">No cached data. Connect once to view attendance offline.</p></div>’;
+content.innerHTML = '<div class="card" style="text-align:center;padding:32px"><div style="font-size:36px">-</div><p style="margin-top:8px;color:var(--text-light)">No cached data. Connect once to view attendance offline.</p></div>';
 }
 return;
 }
 try {
-const data = await api(’/api/attendance-sessions/my-attendance’);
-offlineCache(‘my_attendance’, data);
+const data = await api('/api/attendance-sessions/my-attendance');
+offlineCache('my_attendance', data);
 content.innerHTML = `<div class="page-header"><h2>My Attendance</h2><p>Your attendance history</p></div> <div class="actions-bar"> <button class="btn btn-primary btn-sm" onclick="showMarkAttendanceModal()">Mark Attendance</button> </div> <div class="card"> ${data.records.length ?`
 <table>
 <thead><tr><th>Session</th><th>Status</th><th>Method</th><th>Check-in Time</th></tr></thead>
-<tbody>${data.records.map(r => `<tr> <td>${r.session?.title || 'N/A'}</td> <td><span class="status-badge status-${r.status}">${r.status}</span></td> <td>${r.method}</td> <td>${new Date(r.checkInTime).toLocaleString()}</td> </tr>`).join(’’)}</tbody>
+<tbody>${data.records.map(r => `<tr> <td>${r.session?.title || 'N/A'}</td> <td><span class="status-badge status-${r.status}">${r.status}</span></td> <td>${r.method}</td> <td>${new Date(r.checkInTime).toLocaleString()}</td> </tr>`).join('')}</tbody>
 </table>
 `: '<div class="empty-state"><p>No attendance records yet</p></div>'} </div>`;
 } catch (e) {
@@ -5952,24 +5905,24 @@ content.innerHTML = `<div class="card"><p>Error: ${e.message}</p></div>`;
 }
 }
 
-// ——————————————————————————
+// ----------------------------------------------------
 // BULK STUDENT IMPORT
-// ——————————————————————————
+// ----------------------------------------------------
 
 async function showBulkImportModal() {
-const existing = document.getElementById(‘bulk-import-overlay’);
+const existing = document.getElementById('bulk-import-overlay');
 if (existing) existing.remove();
 
 // Load courses for the optional enroll-in dropdown
 let courses = [];
 try {
-const data = await api(’/api/courses’);
+const data = await api('/api/courses');
 courses = (data.courses || []).filter(c => c.isActive);
 } catch(_) {}
 
-const ol = document.createElement(‘div’);
-ol.id = ‘bulk-import-overlay’;
-ol.style.cssText = ‘position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:400;display:flex;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(3px)’;
+const ol = document.createElement('div');
+ol.id = 'bulk-import-overlay';
+ol.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:400;display:flex;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(3px)';
 ol.innerHTML = `
 <div style="background:var(--card);border-radius:14px;width:100%;max-width:560px;max-height:92vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.2);">
 <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;background:var(--card);z-index:1;border-radius:14px 14px 0 0;">
@@ -5981,7 +5934,7 @@ ol.innerHTML = `
 </div>
 <div style="padding:18px 20px;display:flex;flex-direction:column;gap:14px;">
 
-```
+
     <!-- Template download -->
     <div style="padding:12px 14px;background:#f0f9ff;border:1px solid #bae6fd;border-radius:9px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
       <div>
@@ -6043,7 +5996,6 @@ ol.innerHTML = `
     <button id="bi-import-btn" class="btn btn-primary" onclick="runBulkImport()">Import Students</button>
   </div>
 </div>`;
-```
 
 document.body.appendChild(ol);
 }
@@ -6053,17 +6005,17 @@ let _biRows = [];
 function biPreviewCSV(input) {
 const file = input.files?.[0];
 if (!file) return;
-const nameEl = document.getElementById(‘bi-file-name’);
-if (nameEl) { nameEl.textContent = ’- ’ + file.name; nameEl.style.display = ‘block’; }
+const nameEl = document.getElementById('bi-file-name');
+if (nameEl) { nameEl.textContent = '- ' + file.name; nameEl.style.display = 'block'; }
 
 const reader = new FileReader();
 reader.onload = (e) => {
 try {
 const text = e.target.result;
 const lines = text.split(/\r?\n/).filter(l => l.trim());
-if (lines.length < 2) { showBiErr(‘CSV must have a header row and at least one data row.’); return; }
+if (lines.length < 2) { showBiErr('CSV must have a header row and at least one data row.'); return; }
 
-```
+
   const headers = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/[^a-z]/g, ''));
   const nameIdx        = headers.findIndex(h => h === 'name' || h === 'fullname' || h === 'studentname');
   const idxIdx         = headers.findIndex(h => h === 'indexnumber' || h === 'studentid' || h === 'id' || h === 'index');
@@ -6119,49 +6071,48 @@ if (lines.length < 2) { showBiErr(‘CSV must have a header row and at least one
     document.getElementById('bi-err')?.style && (document.getElementById('bi-err').style.display = 'none');
   }
 } catch(e) { showBiErr('Could not parse CSV: ' + e.message); }
-```
 
 };
 reader.readAsText(file);
 }
 
 function showBiErr(msg) {
-const el = document.getElementById(‘bi-err’);
-if (el) { el.textContent = msg; el.style.display = ‘block’; }
+const el = document.getElementById('bi-err');
+if (el) { el.textContent = msg; el.style.display = 'block'; }
 }
 
 function downloadImportTemplate() {
 const csv = [
-‘name,indexNumber,phone,department,programme,level,group,sessionType,semester,courseCode’,
-‘John Mensah,CS/0001/23,0244123456,Computer Science,BSc,100,A,Regular,1,CS101’,
-‘Akosua Boateng,CS/0002/23,0244123457,Computer Science,HND,100,B,Evening,1,CS101’,
-‘Kwame Asante,IT/0001/23,0244123458,Information Technology,Diploma,200,A,Weekend,2,’,
-].join(’\n’);
-const blob = new Blob([csv], { type: ‘text/csv’ });
-const a = document.createElement(‘a’);
+'name,indexNumber,phone,department,programme,level,group,sessionType,semester,courseCode',
+'John Mensah,CS/0001/23,0244123456,Computer Science,BSc,100,A,Regular,1,CS101',
+'Akosua Boateng,CS/0002/23,0244123457,Computer Science,HND,100,B,Evening,1,CS101',
+'Kwame Asante,IT/0001/23,0244123458,Information Technology,Diploma,200,A,Weekend,2,',
+].join('\n');
+const blob = new Blob([csv], { type: 'text/csv' });
+const a = document.createElement('a');
 a.href = URL.createObjectURL(blob);
-a.download = ‘kodex_student_import_template.csv’;
+a.download = 'kodex_student_import_template.csv';
 a.click();
 }
 
 async function runBulkImport() {
-const fileInput = document.getElementById(‘bi-csv-file’);
-const courseId  = document.getElementById(‘bi-course’)?.value || ‘’;
-const btn = document.getElementById(‘bi-import-btn’);
-const errEl = document.getElementById(‘bi-err’);
+const fileInput = document.getElementById('bi-csv-file');
+const courseId  = document.getElementById('bi-course')?.value || '';
+const btn = document.getElementById('bi-import-btn');
+const errEl = document.getElementById('bi-err');
 
-if (!fileInput?.files?.[0]) { showBiErr(‘Please select a CSV file.’); return; }
+if (!fileInput?.files?.[0]) { showBiErr('Please select a CSV file.'); return; }
 
 btn.disabled = true;
-btn.textContent = ‘Importing-’;
-if (errEl) errEl.style.display = ‘none’;
+btn.textContent = 'Importing-';
+if (errEl) errEl.style.display = 'none';
 
 try {
 const formData = new FormData();
-formData.append(‘csv’, fileInput.files[0]);
-if (courseId) formData.append(‘courseId’, courseId);
+formData.append('csv', fileInput.files[0]);
+if (courseId) formData.append('courseId', courseId);
 
-```
+
 const token = localStorage.getItem('token') || '';
 const resp = await fetch('/api/users/bulk-import', {
   method: 'POST',
@@ -6187,32 +6138,31 @@ if (data.students?.length) {
 }
 
 renderUsers();
-```
 
 } catch(e) {
-showBiErr(e.message || ‘Import failed’);
+showBiErr(e.message || 'Import failed');
 btn.disabled = false;
-btn.textContent = ‘Import Students’;
+btn.textContent = 'Import Students';
 }
 }
 
-// ——————————————————————————
+// ----------------------------------------------------
 // QUESTION BANK
-// ——————————————————————————
+// ----------------------------------------------------
 
 let _bankQuestions = [];   // cache for import modal
 let _bankTopics    = [];
 
 async function renderQuestionBank() {
-const content = document.getElementById(‘main-content’);
+const content = document.getElementById('main-content');
 if (!content) return;
-content.innerHTML = ‘<div class="loading">Loading question bank-</div>’;
+content.innerHTML = '<div class="loading">Loading question bank-</div>';
 try {
-const data = await api(’/api/lecturer/question-bank?limit=200’);
+const data = await api('/api/lecturer/question-bank?limit=200');
 _bankQuestions = data.questions || [];
 _bankTopics    = data.topics || [];
 
-```
+
 const L = ['A','B','C','D'];
 const typeColors = { single:'#0369a1', multiple:'#7c3aed', fill:'#059669', explain:'#b45309' };
 const typeBg    = { single:'#f0f9ff', multiple:'#f5f3ff', fill:'#f0fdf4', explain:'#fffbeb' };
@@ -6249,7 +6199,6 @@ content.innerHTML = `
       : _bankQuestions.map((q, i) => bankQuestionCard(q, i, L, typeColors, typeBg)).join('')}
   </div>
 `;
-```
 
 } catch(e) {
 content.innerHTML = `<div class="card"><p style="color:#ef4444;">Error: ${e.message}</p></div>`;
@@ -6257,112 +6206,112 @@ content.innerHTML = `<div class="card"><p style="color:#ef4444;">Error: ${e.mess
 }
 
 function bankQuestionCard(q, i, L, typeColors, typeBg) {
-const type = q.questionType || ‘single’;
-const isExplain = type === ‘explain’;
-return `<div id="bq-${q._id}" style="border:1.5px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:10px;background:var(--card);"> <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap;"> <label style="display:flex;align-items:flex-start;gap:10px;flex:1;min-width:0;cursor:pointer;"> <input type="checkbox" class="bank-q-check" data-id="${q._id}" onchange="bankSelectionChanged()" style="accent-color:var(--primary);width:16px;height:16px;margin-top:2px;flex-shrink:0;"> <div style="flex:1;min-width:0;"> <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap;"> <span style="font-size:11px;padding:2px 8px;border-radius:20px;font-weight:700;background:${(typeBg||{})[type]||'#f3f4f6'};color:${(typeColors||{})[type]||'#374151'}">${type.toUpperCase()}</span> ${q.topic ?`<span style="font-size:11px;padding:2px 8px;border-radius:20px;background:#fef3c7;color:#92400e;font-weight:600;">${q.topic}</span>`: ''} <span style="font-size:11px;color:var(--text-muted);">${q.marks} mark${q.marks !== 1 ? 's' : ''}</span> ${q.useCount > 0 ?`<span style="font-size:11px;color:#9ca3af;">Used ${q.useCount}-</span>`: ''} </div> <div class="math-content" style="font-size:13px;font-weight:600;margin-bottom:8px;line-height:1.5;">${q.questionText}</div> ${type === 'fill' ?`<div style="font-size:12px;color:#059669;padding:4px 10px;background:#f0fdf4;border-radius:6px;display:inline-block;">- ${q.correctAnswerText}${q.acceptedAnswers?.length ? ` (+${q.acceptedAnswers.length} alt)` : ‘’}</div>`: type === 'explain' ?`<div style="font-size:12px;color:#92400e;padding:6px 10px;background:#fffbeb;border-radius:6px;border:1px solid #fde68a;"><strong>Model Answer:</strong> ${q.modelAnswer || ‘<em>No model answer provided</em>’}</div>`:`<div style="display:flex;flex-wrap:wrap;gap:5px;">${(q.options||[]).map((o,oi) => {
-const isCorrect = type === ‘multiple’ ? (q.correctAnswers||[]).includes(oi) : q.correctAnswer === oi;
+const type = q.questionType || 'single';
+const isExplain = type === 'explain';
+return `<div id="bq-${q._id}" style="border:1.5px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:10px;background:var(--card);"> <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap;"> <label style="display:flex;align-items:flex-start;gap:10px;flex:1;min-width:0;cursor:pointer;"> <input type="checkbox" class="bank-q-check" data-id="${q._id}" onchange="bankSelectionChanged()" style="accent-color:var(--primary);width:16px;height:16px;margin-top:2px;flex-shrink:0;"> <div style="flex:1;min-width:0;"> <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap;"> <span style="font-size:11px;padding:2px 8px;border-radius:20px;font-weight:700;background:${(typeBg||{})[type]||'#f3f4f6'};color:${(typeColors||{})[type]||'#374151'}">${type.toUpperCase()}</span> ${q.topic ?`<span style="font-size:11px;padding:2px 8px;border-radius:20px;background:#fef3c7;color:#92400e;font-weight:600;">${q.topic}</span>`: ''} <span style="font-size:11px;color:var(--text-muted);">${q.marks} mark${q.marks !== 1 ? 's' : ''}</span> ${q.useCount > 0 ?`<span style="font-size:11px;color:#9ca3af;">Used ${q.useCount}-</span>`: ''} </div> <div class="math-content" style="font-size:13px;font-weight:600;margin-bottom:8px;line-height:1.5;">${q.questionText}</div> ${type === 'fill' ?`<div style="font-size:12px;color:#059669;padding:4px 10px;background:#f0fdf4;border-radius:6px;display:inline-block;">- ${q.correctAnswerText}${q.acceptedAnswers?.length ? ` (+${q.acceptedAnswers.length} alt)` : ''}</div>`: type === 'explain' ?`<div style="font-size:12px;color:#92400e;padding:6px 10px;background:#fffbeb;border-radius:6px;border:1px solid #fde68a;"><strong>Model Answer:</strong> ${q.modelAnswer || '<em>No model answer provided</em>'}</div>`:`<div style="display:flex;flex-wrap:wrap;gap:5px;">${(q.options||[]).map((o,oi) => {
+const isCorrect = type === 'multiple' ? (q.correctAnswers||[]).includes(oi) : q.correctAnswer === oi;
 return `<span style="padding:3px 9px;border-radius:6px;font-size:12px;${isCorrect?'background:#f0fdf4;color:#166534;border:1px solid #bbf7d0;font-weight:600':'background:var(--bg);color:var(--text-light);border:1px solid var(--border)'}">${L[oi]}) ${o}${isCorrect?' -':''}</span>`;
-}).join(’’)}</div>`} </div> </div> </label> <div style="display:flex;gap:6px;flex-shrink:0;"> <button class="btn btn-sm btn-secondary" onclick="editBankQuestion('${q._id}')">Edit</button> <button class="btn btn-sm btn-danger" onclick="deleteBankQuestion('${q._id}')">Delete</button> </div> </div> </div>`;
+}).join('')}</div>`} </div> </div> </label> <div style="display:flex;gap:6px;flex-shrink:0;"> <button class="btn btn-sm btn-secondary" onclick="editBankQuestion('${q._id}')">Edit</button> <button class="btn btn-sm btn-danger" onclick="deleteBankQuestion('${q._id}')">Delete</button> </div> </div> </div>`;
 }
 
 function filterBankList() {
-const search = document.getElementById(‘bank-search’)?.value?.toLowerCase() || ‘’;
-const topic  = document.getElementById(‘bank-topic-filter’)?.value || ‘’;
-const L = [‘A’,‘B’,‘C’,‘D’];
-const typeColors = { single:’#0369a1’, multiple:’#7c3aed’, fill:’#059669’, explain:’#b45309’ };
-const typeBg    = { single:’#f0f9ff’, multiple:’#f5f3ff’, fill:’#f0fdf4’, explain:’#fffbeb’ };
+const search = document.getElementById('bank-search')?.value?.toLowerCase() || '';
+const topic  = document.getElementById('bank-topic-filter')?.value || '';
+const L = ['A','B','C','D'];
+const typeColors = { single:'#0369a1', multiple:'#7c3aed', fill:'#059669', explain:'#b45309' };
+const typeBg    = { single:'#f0f9ff', multiple:'#f5f3ff', fill:'#f0fdf4', explain:'#fffbeb' };
 const filtered = _bankQuestions.filter(q =>
 (!search || q.questionText.toLowerCase().includes(search)) &&
 (!topic  || q.topic === topic)
 );
-const list = document.getElementById(‘bank-list’);
+const list = document.getElementById('bank-list');
 if (!list) return;
 list.innerHTML = filtered.length === 0
-? ‘<div class="empty-state"><p>No questions match your filters.</p></div>’
-: filtered.map((q, i) => bankQuestionCard(q, i, L, typeColors, typeBg)).join(’’);
+? '<div class="empty-state"><p>No questions match your filters.</p></div>'
+: filtered.map((q, i) => bankQuestionCard(q, i, L, typeColors, typeBg)).join('');
 setTimeout(() => renderMath(list), 150);
 }
 
-// – Add Question to Bank modal ———————————————–
+// - Add Question to Bank modal -------------------------------
 function openAddToBankModal(prefill) {
-const existing = document.getElementById(‘add-bank-overlay’);
+const existing = document.getElementById('add-bank-overlay');
 if (existing) existing.remove();
-const ol = document.createElement(‘div’);
-ol.id = ‘add-bank-overlay’;
-ol.style.cssText = ‘position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:400;display:flex;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(3px)’;
+const ol = document.createElement('div');
+ol.id = 'add-bank-overlay';
+ol.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:400;display:flex;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(3px)';
 const p = prefill || {};
 ol.innerHTML = `<div style="background:var(--card);border-radius:14px;width:100%;max-width:540px;max-height:92vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.2);"> <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;background:var(--card);z-index:1;"> <h3 style="font-size:15px;font-weight:700;margin:0">${p._id ? 'Edit' : 'Add'} Bank Question</h3> <button onclick="document.getElementById('add-bank-overlay').remove()" style="width:26px;height:26px;border-radius:6px;border:1px solid var(--border);background:var(--bg);cursor:pointer;font-size:13px;">-</button> </div> <div style="padding:18px 20px;display:flex;flex-direction:column;gap:13px;"> <div> <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:5px;display:block;">Question Text *</label> ${getMathToolbar('bm-text')} <textarea id="bm-text" rows="3" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;resize:vertical;outline:none;">${p.questionText||''}</textarea> </div> <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;"> <div> <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:5px;display:block;">Type</label> <select id="bm-type" onchange="bmToggleType()" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;"> <option value="single" ${p.questionType==='single'?'selected':''}>Single</option> <option value="multiple" ${p.questionType==='multiple'?'selected':''}>Multiple</option> <option value="fill" ${p.questionType==='fill'?'selected':''}>Fill In</option> <option value="explain" ${p.questionType==='explain'?'selected':''}>Explain</option> </select> </div> <div> <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:5px;display:block;">Marks</label> <input id="bm-marks" type="number" value="${p.marks||1}" min="1" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;"> </div> <div> <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:5px;display:block;">Topic Tag</label> <input id="bm-topic" placeholder="e.g. Biology" value="${p.topic||''}" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;"> </div> </div> <!-- Options (MCQ) --> <div id="bm-options-wrap"> <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:6px;display:block;">Options & Correct Answer</label> ${[0,1,2,3].map(i => { const isCorrect = p.questionType === 'multiple' ? (p.correctAnswers||[]).includes(i) : (p.correctAnswer === i); return`<div style="display:flex;align-items:center;gap:8px;margin-bottom:7px;">
-<input type=”${p.questionType===‘multiple’?‘checkbox’:‘radio’}” name=“bm-correct” id=“bm-opt-check-${i}” value=”${i}” ${isCorrect?‘checked’:’’} style=“accent-color:var(–primary);width:16px;height:16px;flex-shrink:0;”>
+<input type="${p.questionType==='multiple'?'checkbox':'radio'}" name="bm-correct" id="bm-opt-check-${i}" value="${i}" ${isCorrect?'checked':''} style="accent-color:var(-primary);width:16px;height:16px;flex-shrink:0;">
 <input id="bm-opt-${i}" placeholder="Option ${String.fromCharCode(65+i)}" value="${(p.options||[])[i]||''}" style="flex:1;padding:7px 10px;border:1.5px solid var(--border);border-radius:7px;font-size:13px;font-family:inherit;outline:none;">
-</div>`; }).join('')} <p style="font-size:11px;color:var(--text-muted);margin:0;">Check the correct answer(s).</p> </div> <!-- Fill wrap --> <div id="bm-fill-wrap" style="display:none;"> <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:5px;display:block;">Correct Answer *</label> <input id="bm-fill-answer" placeholder="Primary correct answer" value="${p.correctAnswerText||''}" style="width:100%;padding:8px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;margin-bottom:6px;"> <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:5px;display:block;">Alternate Accepted Answers <span style="font-weight:400;text-transform:none;">(optional, one per line)</span></label> <textarea id="bm-fill-alts" rows="2" placeholder="alternative 1&#10;alternative 2" style="width:100%;padding:8px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;resize:vertical;outline:none;">${(p.acceptedAnswers||[]).join('\n')}</textarea> </div> <!-- Explain wrap --> <div id="bm-explain-wrap" style="display:none;"> <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:5px;display:block;">Model Answer <span style="font-weight:400;text-transform:none;">(for lecturer reference, not shown to students)</span></label> <textarea id="bm-model-answer" rows="4" placeholder="Write the expected/ideal answer here-" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;resize:vertical;outline:none;">${p.modelAnswer||''}</textarea> </div> <div id="bm-err" style="display:none;padding:8px 12px;background:#fef2f2;border:1px solid #fecaca;border-radius:7px;color:#dc2626;font-size:12px;font-weight:500;"></div> </div> <div style="padding:12px 20px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end;position:sticky;bottom:0;background:var(--card);border-radius:0 0 14px 14px;"> <button class="btn btn-secondary" onclick="document.getElementById('add-bank-overlay').remove()">Cancel</button> <button class="btn btn-primary" onclick="submitBankQuestion(${p._id ? `’${p._id}’` : 'null'})">${p._id ? 'Save Changes' : 'Add to Bank'}</button> </div> </div>`;
+</div>`; }).join('')} <p style="font-size:11px;color:var(--text-muted);margin:0;">Check the correct answer(s).</p> </div> <!-- Fill wrap --> <div id="bm-fill-wrap" style="display:none;"> <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:5px;display:block;">Correct Answer *</label> <input id="bm-fill-answer" placeholder="Primary correct answer" value="${p.correctAnswerText||''}" style="width:100%;padding:8px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;margin-bottom:6px;"> <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:5px;display:block;">Alternate Accepted Answers <span style="font-weight:400;text-transform:none;">(optional, one per line)</span></label> <textarea id="bm-fill-alts" rows="2" placeholder="alternative 1&#10;alternative 2" style="width:100%;padding:8px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;resize:vertical;outline:none;">${(p.acceptedAnswers||[]).join('\n')}</textarea> </div> <!-- Explain wrap --> <div id="bm-explain-wrap" style="display:none;"> <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:5px;display:block;">Model Answer <span style="font-weight:400;text-transform:none;">(for lecturer reference, not shown to students)</span></label> <textarea id="bm-model-answer" rows="4" placeholder="Write the expected/ideal answer here-" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;resize:vertical;outline:none;">${p.modelAnswer||''}</textarea> </div> <div id="bm-err" style="display:none;padding:8px 12px;background:#fef2f2;border:1px solid #fecaca;border-radius:7px;color:#dc2626;font-size:12px;font-weight:500;"></div> </div> <div style="padding:12px 20px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end;position:sticky;bottom:0;background:var(--card);border-radius:0 0 14px 14px;"> <button class="btn btn-secondary" onclick="document.getElementById('add-bank-overlay').remove()">Cancel</button> <button class="btn btn-primary" onclick="submitBankQuestion(${p._id ? `'${p._id}'` : 'null'})">${p._id ? 'Save Changes' : 'Add to Bank'}</button> </div> </div>`;
 document.body.appendChild(ol);
-if (p.questionType === ‘fill’ || p.questionType === ‘explain’) bmToggleType();
+if (p.questionType === 'fill' || p.questionType === 'explain') bmToggleType();
 }
 
 function bmToggleType() {
-const type = document.getElementById(‘bm-type’)?.value;
-const optWrap     = document.getElementById(‘bm-options-wrap’);
-const fillWrap    = document.getElementById(‘bm-fill-wrap’);
-const explainWrap = document.getElementById(‘bm-explain-wrap’);
+const type = document.getElementById('bm-type')?.value;
+const optWrap     = document.getElementById('bm-options-wrap');
+const fillWrap    = document.getElementById('bm-fill-wrap');
+const explainWrap = document.getElementById('bm-explain-wrap');
 if (!optWrap || !fillWrap) return;
-optWrap.style.display     = ‘none’;
-fillWrap.style.display    = ‘none’;
-if (explainWrap) explainWrap.style.display = ‘none’;
-if (type === ‘fill’) {
-fillWrap.style.display = ‘block’;
-} else if (type === ‘explain’) {
-if (explainWrap) explainWrap.style.display = ‘block’;
+optWrap.style.display     = 'none';
+fillWrap.style.display    = 'none';
+if (explainWrap) explainWrap.style.display = 'none';
+if (type === 'fill') {
+fillWrap.style.display = 'block';
+} else if (type === 'explain') {
+if (explainWrap) explainWrap.style.display = 'block';
 } else {
-optWrap.style.display = ‘block’;
-document.querySelectorAll(‘input[name=“bm-correct”]’).forEach(el => {
-el.type = type === ‘multiple’ ? ‘checkbox’ : ‘radio’;
+optWrap.style.display = 'block';
+document.querySelectorAll('input[name="bm-correct"]').forEach(el => {
+el.type = type === 'multiple' ? 'checkbox' : 'radio';
 });
 }
 }
 
 async function submitBankQuestion(existingId) {
-const type  = document.getElementById(‘bm-type’)?.value || ‘single’;
-const text  = document.getElementById(‘bm-text’)?.value?.trim();
-const marks = parseInt(document.getElementById(‘bm-marks’)?.value) || 1;
-const topic = document.getElementById(‘bm-topic’)?.value?.trim() || ‘’;
-const errEl = document.getElementById(‘bm-err’);
+const type  = document.getElementById('bm-type')?.value || 'single';
+const text  = document.getElementById('bm-text')?.value?.trim();
+const marks = parseInt(document.getElementById('bm-marks')?.value) || 1;
+const topic = document.getElementById('bm-topic')?.value?.trim() || '';
+const errEl = document.getElementById('bm-err');
 
-if (!text) { errEl.textContent = ‘Question text is required.’; errEl.style.display = ‘block’; return; }
+if (!text) { errEl.textContent = 'Question text is required.'; errEl.style.display = 'block'; return; }
 
 let body = { questionText: text, questionType: type, marks, topic };
 
-if (type === ‘fill’) {
-const ans = document.getElementById(‘bm-fill-answer’)?.value?.trim();
-if (!ans) { errEl.textContent = ‘Correct answer is required for fill-in questions.’; errEl.style.display = ‘block’; return; }
+if (type === 'fill') {
+const ans = document.getElementById('bm-fill-answer')?.value?.trim();
+if (!ans) { errEl.textContent = 'Correct answer is required for fill-in questions.'; errEl.style.display = 'block'; return; }
 body.correctAnswerText = ans;
-body.acceptedAnswers = (document.getElementById(‘bm-fill-alts’)?.value || ‘’).split(’\n’).map(s=>s.trim()).filter(Boolean);
+body.acceptedAnswers = (document.getElementById('bm-fill-alts')?.value || '').split('\n').map(s=>s.trim()).filter(Boolean);
 body.options = [];
-} else if (type === ‘explain’) {
-body.modelAnswer = document.getElementById(‘bm-model-answer’)?.value?.trim() || ‘’;
+} else if (type === 'explain') {
+body.modelAnswer = document.getElementById('bm-model-answer')?.value?.trim() || '';
 body.options = [];
 } else {
-const opts = [0,1,2,3].map(i => document.getElementById(‘bm-opt-’+i)?.value?.trim() || ‘’);
-if (opts.filter(Boolean).length < 2) { errEl.textContent = ‘At least 2 options required.’; errEl.style.display = ‘block’; return; }
-const checked = […document.querySelectorAll(‘input[name=“bm-correct”]:checked’)].map(el => parseInt(el.value));
-if (!checked.length) { errEl.textContent = ‘Please mark the correct answer(s).’; errEl.style.display = ‘block’; return; }
+const opts = [0,1,2,3].map(i => document.getElementById('bm-opt-'+i)?.value?.trim() || '');
+if (opts.filter(Boolean).length < 2) { errEl.textContent = 'At least 2 options required.'; errEl.style.display = 'block'; return; }
+const checked = [...document.querySelectorAll('input[name="bm-correct"]:checked')].map(el => parseInt(el.value));
+if (!checked.length) { errEl.textContent = 'Please mark the correct answer(s).'; errEl.style.display = 'block'; return; }
 body.options = opts;
-if (type === ‘multiple’) { body.correctAnswers = checked; }
+if (type === 'multiple') { body.correctAnswers = checked; }
 else { body.correctAnswer = checked[0]; }
 }
 
 try {
 if (existingId) {
-await api(’/api/lecturer/question-bank/’ + existingId, { method: ‘PUT’, body: JSON.stringify(body) });
-toastSuccess(‘Question updated’);
+await api('/api/lecturer/question-bank/' + existingId, { method: 'PUT', body: JSON.stringify(body) });
+toastSuccess('Question updated');
 } else {
-await api(’/api/lecturer/question-bank’, { method: ‘POST’, body: JSON.stringify(body) });
-toastSuccess(‘Question added to bank’);
+await api('/api/lecturer/question-bank', { method: 'POST', body: JSON.stringify(body) });
+toastSuccess('Question added to bank');
 }
-document.getElementById(‘add-bank-overlay’)?.remove();
+document.getElementById('add-bank-overlay')?.remove();
 renderQuestionBank();
 } catch(e) {
-errEl.textContent = e.message || ‘Failed to save question’;
-errEl.style.display = ‘block’;
+errEl.textContent = e.message || 'Failed to save question';
+errEl.style.display = 'block';
 }
 }
 
@@ -6371,66 +6320,66 @@ const q = _bankQuestions.find(q => q._id === id);
 if (q) { openAddToBankModal(q); return; }
 // Fallback: fetch from server
 try {
-const data = await api(’/api/lecturer/question-bank?limit=1’);
+const data = await api('/api/lecturer/question-bank?limit=1');
 const found = (data.questions || []).find(q => q._id === id);
 if (found) openAddToBankModal(found);
-} catch(e) { toastError(‘Could not load question’); }
+} catch(e) { toastError('Could not load question'); }
 }
 
 async function deleteBankQuestion(id) {
-toastConfirm(‘Delete this question from the bank?’, async () => {
+toastConfirm('Delete this question from the bank?', async () => {
 try {
-await api(’/api/lecturer/question-bank/’ + id, { method: ‘DELETE’ });
+await api('/api/lecturer/question-bank/' + id, { method: 'DELETE' });
 _bankQuestions = _bankQuestions.filter(q => q._id !== id);
-document.getElementById(‘bq-’+id)?.remove();
-toastSuccess(‘Deleted from bank’);
-} catch(e) { toastError(‘Delete failed’); }
+document.getElementById('bq-'+id)?.remove();
+toastSuccess('Deleted from bank');
+} catch(e) { toastError('Delete failed'); }
 });
 }
 
-// – Selection & PDF Export –––––––––––––––––––––––––
+// - Selection & PDF Export -------------------------
 function bankSelectionChanged() {
-const checks = document.querySelectorAll(’.bank-q-check:checked’);
+const checks = document.querySelectorAll('.bank-q-check:checked');
 const count = checks.length;
-const btn = document.getElementById(‘bank-pdf-btn’);
-const countEl = document.getElementById(‘bank-sel-count’);
-if (btn) btn.style.display = count > 0 ? ‘inline-flex’ : ‘none’;
+const btn = document.getElementById('bank-pdf-btn');
+const countEl = document.getElementById('bank-sel-count');
+if (btn) btn.style.display = count > 0 ? 'inline-flex' : 'none';
 if (countEl) countEl.textContent = count;
 }
 
 function bankSelectAll(checked) {
-document.querySelectorAll(’.bank-q-check’).forEach(cb => {
+document.querySelectorAll('.bank-q-check').forEach(cb => {
 cb.checked = checked;
 });
 bankSelectionChanged();
 }
 
 async function exportBankToPDF() {
-const checks = […document.querySelectorAll(’.bank-q-check:checked’)];
-if (!checks.length) { toastError(‘Select at least one question’); return; }
+const checks = [...document.querySelectorAll('.bank-q-check:checked')];
+if (!checks.length) { toastError('Select at least one question'); return; }
 const ids = checks.map(c => c.dataset.id);
 const selected = _bankQuestions.filter(q => ids.includes(q._id));
 
 // Load jsPDF if not already loaded
 if (!window.jspdf) {
 await new Promise((res, rej) => {
-const s = document.createElement(‘script’);
-s.src = ‘https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js’;
+const s = document.createElement('script');
+s.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
 s.onload = res; s.onerror = rej;
 document.head.appendChild(s);
 });
 }
 
 const { jsPDF } = window.jspdf;
-const doc = new jsPDF({ unit: ‘mm’, format: ‘a4’ });
+const doc = new jsPDF({ unit: 'mm', format: 'a4' });
 const pageW = 210, margin = 18, lineW = pageW - margin * 2;
 let y = margin;
 
 const addText = (text, fontSize, bold, color, indent) => {
 doc.setFontSize(fontSize);
-doc.setFont(‘helvetica’, bold ? ‘bold’ : ‘normal’);
-if (color) doc.setTextColor(…color); else doc.setTextColor(30, 30, 30);
-const lines = doc.splitTextToSize(String(text || ‘’), lineW - (indent||0));
+doc.setFont('helvetica', bold ? 'bold' : 'normal');
+if (color) doc.setTextColor(...color); else doc.setTextColor(30, 30, 30);
+const lines = doc.splitTextToSize(String(text || ''), lineW - (indent||0));
 lines.forEach(line => {
 if (y > 275) { doc.addPage(); y = margin; }
 doc.text(line, margin + (indent||0), y);
@@ -6441,25 +6390,25 @@ y += 1.5;
 
 // Title
 doc.setFillColor(13, 17, 23);
-doc.rect(0, 0, 210, 22, ‘F’);
+doc.rect(0, 0, 210, 22, 'F');
 doc.setTextColor(255, 255, 255);
-doc.setFont(‘helvetica’, ‘bold’);
+doc.setFont('helvetica', 'bold');
 doc.setFontSize(14);
-doc.text(‘KODEX - Question Bank Export’, margin, 14);
+doc.text('KODEX - Question Bank Export', margin, 14);
 doc.setFontSize(9);
-doc.setFont(‘helvetica’, ‘normal’);
+doc.setFont('helvetica', 'normal');
 doc.text(`${selected.length} question${selected.length !== 1 ? 's' : ''} - ${new Date().toLocaleDateString()}`, margin, 19);
 y = 32;
 
-const L = [‘A’, ‘B’, ‘C’, ‘D’];
-const typeLabel = { single: ‘MCQ (Single)’, multiple: ‘MCQ (Multiple)’, fill: ‘Fill In’, explain: ‘Explain’ };
+const L = ['A', 'B', 'C', 'D'];
+const typeLabel = { single: 'MCQ (Single)', multiple: 'MCQ (Multiple)', fill: 'Fill In', explain: 'Explain' };
 const typeColor = { single: [3, 105, 161], multiple: [124, 58, 237], fill: [5, 150, 105], explain: [180, 83, 9] };
 
 selected.forEach((q, idx) => {
-const type = q.questionType || ‘single’;
+const type = q.questionType || 'single';
 if (y > 260) { doc.addPage(); y = margin; }
 
-```
+
 // Question number + type badge
 const col = typeColor[type] || [60, 60, 60];
 doc.setFillColor(...col);
@@ -6527,7 +6476,6 @@ if (idx < selected.length - 1) {
   doc.line(margin, y, pageW - margin, y);
   y += 6;
 }
-```
 
 });
 
@@ -6535,106 +6483,106 @@ doc.save(`KODEX_QuestionBank_${new Date().toISOString().slice(0,10)}.pdf`);
 toastSuccess(`PDF saved with ${selected.length} question${selected.length !== 1 ? 's' : ''} -`);
 }
 
-// – Save a quiz question to the bank ––––––––––––––––––––
+// - Save a quiz question to the bank --------------------
 async function saveQuestionToBank(quizId, questionId) {
-const topic = window.prompt(‘Save this question to your bank.\n\nTopic tag (optional, e.g. “Biology”):’) ?? null;
+const topic = window.prompt('Save this question to your bank.\n\nTopic tag (optional, e.g. "Biology"):') ?? null;
 if (topic === null) return;
 try {
-await api(’/api/lecturer/question-bank/save-from-quiz’, {
-method: ‘POST’,
+await api('/api/lecturer/question-bank/save-from-quiz', {
+method: 'POST',
 body: JSON.stringify({ questionIds: [questionId], topic: topic.trim() }),
 });
-toastSuccess(‘Question saved to bank -’);
-} catch(e) { toastError(e.message || ‘Failed to save to bank’); }
+toastSuccess('Question saved to bank -');
+} catch(e) { toastError(e.message || 'Failed to save to bank'); }
 }
 
-// – Import from Bank modal (inside showAddQuestionsView) ———————
+// - Import from Bank modal (inside showAddQuestionsView) --------------
 async function openImportFromBankModal(quizId) {
-const existing = document.getElementById(‘import-bank-overlay’);
+const existing = document.getElementById('import-bank-overlay');
 if (existing) existing.remove();
 
 try {
-const data = await api(’/api/lecturer/question-bank?limit=200’);
+const data = await api('/api/lecturer/question-bank?limit=200');
 _bankQuestions = data.questions || [];
 _bankTopics    = data.topics || [];
-} catch(e) { toastError(‘Failed to load question bank’); return; }
+} catch(e) { toastError('Failed to load question bank'); return; }
 
 if (!_bankQuestions.length) {
-toastInfo(‘Your question bank is empty. Add questions from the Question Bank page or save questions from quizzes.’);
+toastInfo('Your question bank is empty. Add questions from the Question Bank page or save questions from quizzes.');
 return;
 }
 
-const L = [‘A’,‘B’,‘C’,‘D’];
-const ol = document.createElement(‘div’);
-ol.id = ‘import-bank-overlay’;
-ol.style.cssText = ‘position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:400;display:flex;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(3px)’;
+const L = ['A','B','C','D'];
+const ol = document.createElement('div');
+ol.id = 'import-bank-overlay';
+ol.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:400;display:flex;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(3px)';
 ol.innerHTML = `<div style="background:var(--card);border-radius:14px;width:100%;max-width:600px;max-height:92vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.2);"> <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;background:var(--card);z-index:1;border-radius:14px 14px 0 0;"> <div> <h3 style="font-size:15px;font-weight:700;margin:0">Import from Question Bank</h3> <p style="font-size:12px;color:var(--text-muted);margin:2px 0 0;">Select questions to add to this quiz</p> </div> <button onclick="document.getElementById('import-bank-overlay').remove()" style="width:26px;height:26px;border-radius:6px;border:1px solid var(--border);background:var(--bg);cursor:pointer;font-size:13px;">-</button> </div> <!-- Search + filter --> <div style="padding:12px 20px;border-bottom:1px solid var(--border);display:flex;gap:8px;flex-wrap:wrap;"> <input id="ibm-search" placeholder="Search-" oninput="filterImportList()" style="flex:1;min-width:150px;padding:7px 11px;border:1.5px solid var(--border);border-radius:7px;font-size:13px;font-family:inherit;outline:none;"> <select id="ibm-topic" onchange="filterImportList()" style="padding:7px 11px;border:1.5px solid var(--border);border-radius:7px;font-size:13px;font-family:inherit;outline:none;"> <option value="">All Topics</option> ${_bankTopics.map(t =>`<option value="${t}">${t}</option>`).join('')} </select> <span id="ibm-sel-count" style="font-size:12px;color:var(--primary);font-weight:600;align-self:center;">0 selected</span> </div> <!-- List --> <div id="ibm-list" style="flex:1;overflow-y:auto;padding:12px 20px;display:flex;flex-direction:column;gap:8px;"> ${_bankQuestions.map(q => importBankCard(q, L)).join('')} </div> <!-- Footer --> <div style="padding:12px 20px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end;background:var(--card);border-radius:0 0 14px 14px;"> <button class="btn btn-secondary" onclick="document.getElementById('import-bank-overlay').remove()">Cancel</button> <button class="btn btn-primary" onclick="confirmImportFromBank('${quizId}')">Import Selected</button> </div> </div>`;
 document.body.appendChild(ol);
 }
 
 function importBankCard(q, L) {
-const type = q.questionType || ‘single’;
-const typeColors = { single:’#0369a1’, multiple:’#7c3aed’, fill:’#059669’ };
-const typeBg    = { single:’#f0f9ff’, multiple:’#f5f3ff’, fill:’#f0fdf4’ };
+const type = q.questionType || 'single';
+const typeColors = { single:'#0369a1', multiple:'#7c3aed', fill:'#059669' };
+const typeBg    = { single:'#f0f9ff', multiple:'#f5f3ff', fill:'#f0fdf4' };
 return `<label style="display:flex;gap:10px;padding:11px 13px;border:1.5px solid var(--border);border-radius:9px;cursor:pointer;background:var(--bg);" onclick="updateImportCount()"> <input type="checkbox" class="ibm-check" value="${q._id}" style="accent-color:var(--primary);width:16px;height:16px;flex-shrink:0;margin-top:2px;"> <div style="flex:1;min-width:0;"> <div style="display:flex;align-items:center;gap:6px;margin-bottom:5px;flex-wrap:wrap;"> <span style="font-size:10px;padding:1px 7px;border-radius:20px;font-weight:700;background:${typeBg[type]||'#f3f4f6'};color:${typeColors[type]||'#374151'}">${type.toUpperCase()}</span> ${q.topic ?`<span style="font-size:10px;padding:1px 7px;border-radius:20px;background:#fef3c7;color:#92400e;font-weight:600;">${q.topic}</span>` : ''} <span style="font-size:10px;color:var(--text-muted);">${q.marks} mark${q.marks!==1?'s':''}</span> </div> <div class="math-content" style="font-size:13px;font-weight:500;line-height:1.4;">${q.questionText}</div> </div> </label>`;
 }
 
 function filterImportList() {
-const search = document.getElementById(‘ibm-search’)?.value?.toLowerCase() || ‘’;
-const topic  = document.getElementById(‘ibm-topic’)?.value || ‘’;
-const L = [‘A’,‘B’,‘C’,‘D’];
+const search = document.getElementById('ibm-search')?.value?.toLowerCase() || '';
+const topic  = document.getElementById('ibm-topic')?.value || '';
+const L = ['A','B','C','D'];
 const filtered = _bankQuestions.filter(q =>
 (!search || q.questionText.toLowerCase().includes(search)) &&
 (!topic  || q.topic === topic)
 );
-const list = document.getElementById(‘ibm-list’);
-if (list) list.innerHTML = filtered.map(q => importBankCard(q, L)).join(’’);
+const list = document.getElementById('ibm-list');
+if (list) list.innerHTML = filtered.map(q => importBankCard(q, L)).join('');
 updateImportCount();
 }
 
 function updateImportCount() {
-const count = document.querySelectorAll(’.ibm-check:checked’).length;
-const el = document.getElementById(‘ibm-sel-count’);
-if (el) el.textContent = count + ’ selected’;
+const count = document.querySelectorAll('.ibm-check:checked').length;
+const el = document.getElementById('ibm-sel-count');
+if (el) el.textContent = count + ' selected';
 }
 
 async function confirmImportFromBank(quizId) {
-const checked = […document.querySelectorAll(’.ibm-check:checked’)].map(el => el.value);
-if (!checked.length) { toastWarning(‘No questions selected.’); return; }
+const checked = [...document.querySelectorAll('.ibm-check:checked')].map(el => el.value);
+if (!checked.length) { toastWarning('No questions selected.'); return; }
 try {
-const data = await api(’/api/lecturer/question-bank/import-to-quiz’, {
-method: ‘POST’,
+const data = await api('/api/lecturer/question-bank/import-to-quiz', {
+method: 'POST',
 body: JSON.stringify({ bankQuestionIds: checked, quizId }),
 });
-document.getElementById(‘import-bank-overlay’)?.remove();
-toastSuccess(data.message || checked.length + ’ question(s) imported’);
+document.getElementById('import-bank-overlay')?.remove();
+toastSuccess(data.message || checked.length + ' question(s) imported');
 await showAddQuestionsView(quizId);
-} catch(e) { toastError(e.message || ‘Import failed’); }
+} catch(e) { toastError(e.message || 'Import failed'); }
 }
 
-// ——————————————————————————
+// ----------------------------------------------------
 // ESP32 BLE Integration
-// ——————————————————————————
+// ----------------------------------------------------
 
-const ESP32_BLE_PREFIX   = ‘ATT_’;
+const ESP32_BLE_PREFIX   = 'ATT_';
 const ESP32_LOCAL_PORT   = 80;
-let   esp32IP            = localStorage.getItem(‘kodex_esp32_ip’) || null;
+let   esp32IP            = localStorage.getItem('kodex_esp32_ip') || null;
 let   bleDetected        = false;
 let   bleScanInterval    = null;
 
 // Save ESP32 IP when found
 function setEsp32IP(ip) {
 esp32IP = ip;
-localStorage.setItem(‘kodex_esp32_ip’, ip);
+localStorage.setItem('kodex_esp32_ip', ip);
 }
 
 // Call ESP32 local HTTP API
 async function esp32Api(path, options = {}) {
-if (!esp32IP) throw new Error(‘ESP32 not found. Make sure you are connected to the same network as the classroom device.’);
+if (!esp32IP) throw new Error('ESP32 not found. Make sure you are connected to the same network as the classroom device.');
 const url = `http://${esp32IP}${path}`;
-const res = await fetch(url, { …options, headers: { ‘Content-Type’: ‘application/json’, …(options.headers || {}) } });
+const res = await fetch(url, { ...options, headers: { 'Content-Type': 'application/json', ...(options.headers || {}) } });
 const data = await res.json();
-if (!res.ok) throw new Error(data.error || ‘ESP32 request failed’);
+if (!res.ok) throw new Error(data.error || 'ESP32 request failed');
 return data;
 }
 
@@ -6643,8 +6591,8 @@ async function discoverESP32() {
 // Try last known IP first
 if (esp32IP) {
 try {
-const status = await esp32Api(’/status’);
-if (status.device === ‘KODEX-ESP32’) {
+const status = await esp32Api('/status');
+if (status.device === 'KODEX-ESP32') {
 bleDetected = true;
 return true;
 }
@@ -6657,7 +6605,7 @@ return false;
 async function checkBLEPresence() {
 if (!navigator.bluetooth) return false;
 try {
-// We don’t need to connect - just check if device is advertising
+// We don't need to connect - just check if device is advertising
 // Web Bluetooth requires user gesture for full scan, so we rely on ESP32 HTTP discovery
 return await discoverESP32();
 } catch(e) {
@@ -6667,26 +6615,26 @@ return false;
 
 // Start session on ESP32 (offline)
 async function startOfflineSession() {
-const title = prompt(‘Session title:’, ‘Attendance Session’);
+const title = prompt('Session title:', 'Attendance Session');
 if (!title) return;
 try {
-const data = await esp32Api(’/session/start’, {
-method: ‘POST’,
+const data = await esp32Api('/session/start', {
+method: 'POST',
 body: JSON.stringify({ title })
 });
 showToastNotif(`- Session started! Verbal code: ${data.verbalCode}`);
 renderSessions();
 } catch(e) {
-toastError(’Could not start session on ESP32: ’ + e.message);
+toastError('Could not start session on ESP32: ' + e.message);
 }
 }
 
 // Stop session on ESP32
 async function stopOfflineSession() {
-if (!confirm(‘Stop the current ESP32 session?’)) return;
+if (!confirm('Stop the current ESP32 session?')) return;
 try {
-await esp32Api(’/session/stop’, { method: ‘POST’ });
-showToastNotif(’- Session stopped’);
+await esp32Api('/session/stop', { method: 'POST' });
+showToastNotif('- Session stopped');
 renderSessions();
 } catch(e) {
 toastError(e.message);
@@ -6696,7 +6644,7 @@ toastError(e.message);
 // Generate new verbal code on ESP32
 async function esp32NewCode() {
 try {
-const data = await esp32Api(’/session/new-code’, { method: ‘POST’ });
+const data = await esp32Api('/session/new-code', { method: 'POST' });
 showToastNotif(`New code: ${data.verbalCode}`);
 renderMarkAttendance();
 } catch(e) {
@@ -6712,15 +6660,15 @@ code,
 indexNumber: user.indexNumber || user.employeeId || user.email,
 userId: user.id
 };
-return await esp32Api(’/mark’, { method: ‘POST’, body: JSON.stringify(body) });
+return await esp32Api('/mark', { method: 'POST', body: JSON.stringify(body) });
 }
 
 // Configure ESP32 IP address
 function configureESP32() {
-const ip = prompt(‘Enter ESP32 IP address (shown on ESP32 serial monitor):’, esp32IP || ‘192.168.1.100’);
+const ip = prompt('Enter ESP32 IP address (shown on ESP32 serial monitor):', esp32IP || '192.168.1.100');
 if (ip) {
 setEsp32IP(ip);
-showToastNotif(’- ESP32 IP saved: ’ + ip);
+showToastNotif('- ESP32 IP saved: ' + ip);
 renderMarkAttendance();
 }
 }
@@ -6728,28 +6676,28 @@ renderMarkAttendance();
 // Auto-submit attendance when student scans QR code (URL contains ?qr_token=)
 async function handleQrScan() {
 const params = new URLSearchParams(window.location.search);
-const qrToken = params.get(‘qr_token’);
+const qrToken = params.get('qr_token');
 if (!qrToken) return false;
 
 // Clean URL immediately
-window.history.replaceState({}, ‘’, window.location.pathname);
+window.history.replaceState({}, '', window.location.pathname);
 
-const content = document.getElementById(‘main-content’);
+const content = document.getElementById('main-content');
 if (content) {
 content.innerHTML = ` <div class="card" style="text-align:center;padding:48px 24px;max-width:400px;margin:40px auto"> <div style="font-size:48px;margin-bottom:16px">-</div> <div style="font-size:18px;font-weight:700">Marking your attendance-</div> <p style="color:var(--text-light);font-size:13px;margin-top:8px">Please wait</p> </div>`;
 }
 
 try {
-await api(’/api/attendance-sessions/mark’, {
-method: ‘POST’,
-body: JSON.stringify({ qrToken, method: ‘qr_mark’ }),
+await api('/api/attendance-sessions/mark', {
+method: 'POST',
+body: JSON.stringify({ qrToken, method: 'qr_mark' }),
 });
 if (content) {
 content.innerHTML = ` <div class="card" style="text-align:center;padding:48px 24px;max-width:400px;margin:40px auto;border-left:4px solid var(--success)"> <div style="font-size:56px;margin-bottom:16px">-</div> <div style="font-size:20px;font-weight:800;color:var(--success)">Attendance Marked!</div> <p style="color:var(--text-light);font-size:13px;margin-top:8px">You have been checked in successfully.</p> <button class="btn btn-primary" style="margin-top:20px" onclick="navigateTo('my-attendance')">View My Attendance</button> </div>`;
 }
 } catch(e) {
 if (content) {
-const expired = e.message?.toLowerCase().includes(‘expired’);
+const expired = e.message?.toLowerCase().includes('expired');
 content.innerHTML = ` <div class="card" style="text-align:center;padding:48px 24px;max-width:400px;margin:40px auto;border-left:4px solid var(--danger)"> <div style="font-size:56px;margin-bottom:16px">${expired ? '-' : '-'}</div> <div style="font-size:20px;font-weight:800;color:var(--danger)">${expired ? 'QR Code Expired' : 'Failed'}</div> <p style="color:var(--text-light);font-size:13px;margin-top:8px">${expired ? 'This QR code has expired. Ask your lecturer/manager for a fresh one.' : e.message}</p> <button class="btn btn-secondary" style="margin-top:20px" onclick="navigateTo('mark-attendance')">Go Back</button> </div>`;
 }
 }
@@ -6757,7 +6705,7 @@ return true;
 }
 
 async function renderMarkAttendance() {
-const content = document.getElementById(‘main-content’);
+const content = document.getElementById('main-content');
 if (!content) return;
 
 // Check if arriving via QR scan deep link
@@ -6765,11 +6713,11 @@ if (await handleQrScan()) return;
 
 // Offline: show queued state and cached session info
 if (!isOnline()) {
-const cachedSession = offlineRead(‘activeSession’);
-const pendingMark = offlineRead(‘pendingMark’);
+const cachedSession = offlineRead('activeSession');
+const pendingMark = offlineRead('pendingMark');
 const pendingCount = offlineQueueCount();
 
-```
+
 content.innerHTML = `
   <div class="page-header"><h2>Mark Attendance</h2><p>Check in to active sessions</p></div>
   <div class="card" style="border-left:4px solid #f59e0b;background:#fffbeb;margin-bottom:16px">
@@ -6809,19 +6757,18 @@ content.innerHTML = `
   `}
 `;
 return;
-```
 
 }
 
 let activeSession = null;
 try {
-const data = await api(’/api/attendance-sessions/active’);
+const data = await api('/api/attendance-sessions/active');
 activeSession = data.session;
-if (activeSession) offlineCache(‘activeSession’, activeSession); // cache for offline
+if (activeSession) offlineCache('activeSession', activeSession); // cache for offline
 } catch (e) {}
 window._currentActiveSessionId = activeSession?._id || null;
 
-const alreadyMarked = activeSession ? await api(’/api/attendance-sessions/my-attendance?limit=100’)
+const alreadyMarked = activeSession ? await api('/api/attendance-sessions/my-attendance?limit=100')
 .then(d => d.records.some(r => r.session?._id === activeSession._id))
 .catch(() => false) : false;
 
@@ -6831,7 +6778,7 @@ content.innerHTML = `
 <p>Check in to active sessions</p>
 </div>
 
-```
+
 ${activeSession ? `
   <div class="card" style="border-left: 4px solid var(--success); background: #f0fdf4">
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
@@ -6890,62 +6837,61 @@ ${activeSession ? `
     <button class="btn btn-secondary btn-sm" style="margin-top:16px" onclick="navigateTo('mark-attendance')">Refresh</button>
   </div>
 `}
-```
 
 `;
 }
 
 function showCodeEntry() {
-const area = document.getElementById(‘mark-input-area’);
+const area = document.getElementById('mark-input-area');
 if (!area) return;
 area.innerHTML = `<div class="card"> <div class="card-title">Enter Attendance Code</div> <div class="form-group"> <label>4-Character Code</label> <input type="text" id="mark-code-input" placeholder="Enter code" maxlength="4" style="font-size:24px;text-align:center;letter-spacing:8px;font-weight:700;text-transform:uppercase" autofocus> </div> <button class="btn btn-primary" onclick="submitCodeMark()" style="width:100%">Submit Code</button> </div>`;
-document.getElementById(‘mark-code-input’)?.focus();
+document.getElementById('mark-code-input')?.focus();
 }
 
 function showQrEntry() {
-const area = document.getElementById(‘mark-input-area’);
+const area = document.getElementById('mark-input-area');
 if (!area) return;
 area.innerHTML = `<div class="card" style="text-align:center;padding:32px 24px"> <div style="font-size:48px;margin-bottom:12px">-</div> <div style="font-size:17px;font-weight:700;margin-bottom:8px">Scan the QR Code</div> <p style="font-size:13px;color:var(--text-light);margin-bottom:20px"> Point your phone camera at the QR code on the screen.<br> It will open a link - tap it to mark your attendance instantly. </p> <div style="background:#f8f9ff;border:1px solid var(--border);border-radius:10px;padding:16px;font-size:12px;color:var(--text-muted)"> No camera? Enter the 4-character code shown below the QR image instead. </div> </div>`;
 }
 
 async function submitCodeMark() {
-const code = document.getElementById(‘mark-code-input’)?.value?.toUpperCase().trim();
-if (!code || code.length !== 4) { toastWarning(‘Please enter the 4-character code.’); return; }
+const code = document.getElementById('mark-code-input')?.value?.toUpperCase().trim();
+if (!code || code.length !== 4) { toastWarning('Please enter the 4-character code.'); return; }
 
 // If ESP32 is detected, submit locally (works offline)
 if (bleDetected && esp32IP) {
 try {
 await submitToESP32(code);
-offlineCache(‘pendingMark’, null);
-toastSuccess(‘Attendance marked successfully!’);
-navigateTo(‘mark-attendance’);
+offlineCache('pendingMark', null);
+toastSuccess('Attendance marked successfully!');
+navigateTo('mark-attendance');
 return;
 } catch(e) {
 // Fall through to server if ESP32 submission fails
-console.warn(’[BLE] ESP32 submission failed, trying server:’, e.message);
+console.warn('[BLE] ESP32 submission failed, trying server:', e.message);
 }
 }
 
 if (!isOnline()) {
 offlineEnqueue({
 label: `Mark attendance (code: ${code})`,
-url: ‘/api/attendance-sessions/mark’,
-options: { method: ‘POST’, body: JSON.stringify({ code, sessionId: window._currentActiveSessionId, method: ‘code_mark’ }) }
+url: '/api/attendance-sessions/mark',
+options: { method: 'POST', body: JSON.stringify({ code, sessionId: window._currentActiveSessionId, method: 'code_mark' }) }
 });
-offlineCache(‘pendingMark’, { code, sessionId: window._currentActiveSessionId, method: ‘code_mark’, queuedAt: Date.now() });
-showToastNotif(’- Attendance queued - will sync when online’, ‘warn’);
-navigateTo(‘mark-attendance’);
+offlineCache('pendingMark', { code, sessionId: window._currentActiveSessionId, method: 'code_mark', queuedAt: Date.now() });
+showToastNotif('- Attendance queued - will sync when online', 'warn');
+navigateTo('mark-attendance');
 return;
 }
 
 try {
-await api(’/api/attendance-sessions/mark’, {
-method: ‘POST’,
-body: JSON.stringify({ code, sessionId: window._currentActiveSessionId, method: ‘code_mark’ }),
+await api('/api/attendance-sessions/mark', {
+method: 'POST',
+body: JSON.stringify({ code, sessionId: window._currentActiveSessionId, method: 'code_mark' }),
 });
-offlineCache(‘pendingMark’, null);
-toastSuccess(‘Attendance marked successfully!’);
-navigateTo(‘mark-attendance’);
+offlineCache('pendingMark', null);
+toastSuccess('Attendance marked successfully!');
+navigateTo('mark-attendance');
 } catch (e) {
 toastError(e.message);
 }
@@ -6953,36 +6899,36 @@ toastError(e.message);
 
 // Offline code entry (same as online but available when offline)
 function showCodeEntryOffline() {
-const area = document.getElementById(‘mark-input-area’);
+const area = document.getElementById('mark-input-area');
 if (!area) return;
 area.innerHTML = `<div class="card"> <div class="card-title">Enter Attendance Code</div> <div style="font-size:12px;color:#92400e;background:#fef3c7;border:1px solid #fbbf24;border-radius:6px;padding:6px 12px;margin-bottom:12px"> - Offline - code will be submitted automatically when you reconnect </div> <div class="form-group"> <label>4-Character Code</label> <input type="text" id="mark-code-input" placeholder="Enter code" maxlength="4" style="font-size:24px;text-align:center;letter-spacing:8px;font-weight:700" autofocus> </div> <button class="btn btn-primary" onclick="submitCodeMark()" style="width:100%">Queue Attendance</button> </div>`;
-document.getElementById(‘mark-code-input’)?.focus();
+document.getElementById('mark-code-input')?.focus();
 }
 
 async function submitQrMark() {
-const qrToken = document.getElementById(‘mark-qr-input’)?.value;
-if (!qrToken) { toastWarning(‘Please enter the QR token’); return; };
+const qrToken = document.getElementById('mark-qr-input')?.value;
+if (!qrToken) { toastWarning('Please enter the QR token'); return; };
 
 if (!isOnline()) {
 offlineEnqueue({
-label: ‘Mark attendance (QR)’,
-url: ‘/api/attendance-sessions/mark’,
-options: { method: ‘POST’, body: JSON.stringify({ qrToken, method: ‘qr_mark’ }) }
+label: 'Mark attendance (QR)',
+url: '/api/attendance-sessions/mark',
+options: { method: 'POST', body: JSON.stringify({ qrToken, method: 'qr_mark' }) }
 });
-offlineCache(‘pendingMark’, { method: ‘qr_mark’, queuedAt: Date.now() });
-showToastNotif(’- QR attendance queued - will sync when online’, ‘warn’);
-navigateTo(‘mark-attendance’);
+offlineCache('pendingMark', { method: 'qr_mark', queuedAt: Date.now() });
+showToastNotif('- QR attendance queued - will sync when online', 'warn');
+navigateTo('mark-attendance');
 return;
 }
 
 try {
-await api(’/api/attendance-sessions/mark’, {
-method: ‘POST’,
-body: JSON.stringify({ qrToken, method: ‘qr_mark’ }),
+await api('/api/attendance-sessions/mark', {
+method: 'POST',
+body: JSON.stringify({ qrToken, method: 'qr_mark' }),
 });
-offlineCache(‘pendingMark’, null);
-toastSuccess(‘Attendance marked successfully!’);
-navigateTo(‘mark-attendance’);
+offlineCache('pendingMark', null);
+toastSuccess('Attendance marked successfully!');
+navigateTo('mark-attendance');
 } catch (e) {
 toastError(e.message);
 }
@@ -6990,63 +6936,63 @@ toastError(e.message);
 
 async function markBLE() {
 try {
-await api(’/api/attendance-sessions/mark’, {
-method: ‘POST’,
-body: JSON.stringify({ method: ‘ble_mark’ }),
+await api('/api/attendance-sessions/mark', {
+method: 'POST',
+body: JSON.stringify({ method: 'ble_mark' }),
 });
-toastSuccess(‘Attendance marked via BLE!’);
-navigateTo(‘mark-attendance’);
+toastSuccess('Attendance marked via BLE!');
+navigateTo('mark-attendance');
 } catch (e) {
 toastError(e.message);
 }
 }
 
 async function showJitsiJoin() {
-const area = document.getElementById(‘mark-input-area’);
+const area = document.getElementById('mark-input-area');
 if (!area) return;
-let meetingsHtml = ‘<p style="color:var(--text-light);font-size:13px">Loading meetings…</p>’;
+let meetingsHtml = '<p style="color:var(--text-light);font-size:13px">Loading meetings...</p>';
 try {
-const data = await api(’/api/zoom’);
-const available = data.meetings.filter(m => m.status === ‘scheduled’ || m.status === ‘active’);
+const data = await api('/api/zoom');
+const available = data.meetings.filter(m => m.status === 'scheduled' || m.status === 'active');
 if (available.length > 0) {
-meetingsHtml = available.map(m => `<div style="display:flex;align-items:center;justify-content:space-between;padding:12px;border:1px solid var(--border);border-radius:8px;margin-bottom:8px"> <div> <div style="font-weight:600;font-size:14px">${m.title}</div> <div style="font-size:12px;color:var(--text-light)">${new Date(m.scheduledStart).toLocaleString()} - ${m.duration} min</div> <span class="status-badge" style="${m.status === 'active' ? 'background:#22c55e;color:#fff;' : 'background:#3b82f6;color:#fff;'}font-size:11px;margin-top:4px;">${m.status === 'active' ? 'Live' : 'Scheduled'}</span> </div> <button class="btn btn-success btn-sm" onclick="submitJitsiJoin('${m._id}', '${m.joinUrl || ''}')">Join & Mark</button> </div>`).join(’’);
+meetingsHtml = available.map(m => `<div style="display:flex;align-items:center;justify-content:space-between;padding:12px;border:1px solid var(--border);border-radius:8px;margin-bottom:8px"> <div> <div style="font-weight:600;font-size:14px">${m.title}</div> <div style="font-size:12px;color:var(--text-light)">${new Date(m.scheduledStart).toLocaleString()} - ${m.duration} min</div> <span class="status-badge" style="${m.status === 'active' ? 'background:#22c55e;color:#fff;' : 'background:#3b82f6;color:#fff;'}font-size:11px;margin-top:4px;">${m.status === 'active' ? 'Live' : 'Scheduled'}</span> </div> <button class="btn btn-success btn-sm" onclick="submitJitsiJoin('${m._id}', '${m.joinUrl || ''}')">Join & Mark</button> </div>`).join('');
 } else {
-meetingsHtml = ‘<p style="color:var(--text-light);font-size:13px">No available meetings found.</p>’;
+meetingsHtml = '<p style="color:var(--text-light);font-size:13px">No available meetings found.</p>';
 }
 } catch (e) {
-meetingsHtml = ‘<p style="color:var(--text-light);font-size:13px">Could not load meetings.</p>’;
+meetingsHtml = '<p style="color:var(--text-light);font-size:13px">Could not load meetings.</p>';
 }
 area.innerHTML = `<div class="card"> <div class="card-title">Join Meeting to Mark Attendance</div> ${meetingsHtml} </div>`;
 }
 
 async function submitJitsiJoin(meetingId, joinUrl) {
 try {
-await api(`/api/zoom/${meetingId}/join`, { method: ‘POST’ });
-if (joinUrl) window.open(joinUrl, ‘_blank’);
-toastSuccess(‘Attendance marked via meeting join!’);
-navigateTo(‘mark-attendance’);
+await api(`/api/zoom/${meetingId}/join`, { method: 'POST' });
+if (joinUrl) window.open(joinUrl, '_blank');
+toastSuccess('Attendance marked via meeting join!');
+navigateTo('mark-attendance');
 } catch (e) {
 toastError(e.message);
 }
 }
 
 function showMarkAttendanceModal() {
-const container = document.getElementById(‘modal-container’);
-container.classList.remove(‘hidden’);
+const container = document.getElementById('modal-container');
+container.classList.remove('hidden');
 container.innerHTML = `<div class="modal-overlay" onclick="closeModal(event)"> <div class="modal" onclick="event.stopPropagation()"> <h3>Mark Attendance</h3> <p style="font-size:13px;color:var(--text-light);margin-bottom:16px">Enter the 4-character code shown by your lecturer or manager.</p> <div class="form-group"> <label>Attendance Code</label> <input type="text" id="attend-code" placeholder="Enter code" maxlength="4" style="font-size:22px;text-align:center;letter-spacing:8px;font-weight:700;text-transform:uppercase" autofocus> </div> <div class="modal-actions"> <button class="btn btn-secondary btn-sm" onclick="closeModal()">Cancel</button> <button class="btn btn-primary btn-sm" onclick="markAttendance()">Submit</button> </div> </div> </div>`;
-document.getElementById(‘attend-code’)?.focus();
+document.getElementById('attend-code')?.focus();
 }
 
 async function markAttendance() {
 try {
-const code = document.getElementById(‘attend-code’).value;
-if (!code || code.length !== 4) { toastWarning(‘Please enter the 4-character code.’); return; }
-await api(’/api/attendance-sessions/mark’, {
-method: ‘POST’,
-body: JSON.stringify({ code, sessionId: window._currentActiveSessionId, method: ‘code_mark’ }),
+const code = document.getElementById('attend-code').value;
+if (!code || code.length !== 4) { toastWarning('Please enter the 4-character code.'); return; }
+await api('/api/attendance-sessions/mark', {
+method: 'POST',
+body: JSON.stringify({ code, sessionId: window._currentActiveSessionId, method: 'code_mark' }),
 });
 closeModal();
-toastSuccess(‘Attendance marked successfully!’);
+toastSuccess('Attendance marked successfully!');
 renderMyAttendance();
 } catch (e) {
 toastError(e.message);
@@ -7054,15 +7000,15 @@ toastError(e.message);
 }
 
 async function renderSubscription() {
-const content = document.getElementById(‘main-content’);
+const content = document.getElementById('main-content');
 if (!content) return;
 try {
 const [statusData, plansData] = await Promise.all([
-api(’/api/payments/status’),
-api(’/api/payments/plans’),
+api('/api/payments/status'),
+api('/api/payments/plans'),
 ]);
 
-```
+
 const sub = statusData.subscription || {};
 const trial = statusData.trial || {};
 const trialTimeRemaining = trial.timeRemaining || { days: 0, hours: 0, minutes: 0 };
@@ -7144,7 +7090,6 @@ content.innerHTML = `
     </div>
   ` : ''}
 `;
-```
 
 } catch (e) {
 content.innerHTML = `<div class="card"><p>Error: ${e.message}</p></div>`;
@@ -7152,80 +7097,80 @@ content.innerHTML = `<div class="card"><p>Error: ${e.message}</p></div>`;
 }
 
 async function subscribePlan(plan, provider) {
-if (provider === ‘paystack’) {
+if (provider === 'paystack') {
 try {
-const data = await api(’/api/payments/paystack/initialize’, {
-method: ‘POST’,
+const data = await api('/api/payments/paystack/initialize', {
+method: 'POST',
 body: JSON.stringify({ plan }),
 });
 if (data.authorization_url) {
 window.location.href = data.authorization_url;
 } else {
-toastError(‘Could not get payment URL. Please try again.’);
+toastError('Could not get payment URL. Please try again.');
 }
 } catch (e) {
 toastError(e.message);
 }
 } else {
-toastWarning(‘Please use Paystack (GHS) to subscribe.’);
+toastWarning('Please use Paystack (GHS) to subscribe.');
 }
 }
 
 async function renderSearch() {
-const content = document.getElementById(‘main-content’);
+const content = document.getElementById('main-content');
 if (!content) return;
-const mode = currentUser.company?.mode || ‘corporate’;
-const isAcademic = mode === ‘academic’;
+const mode = currentUser.company?.mode || 'corporate';
+const isAcademic = mode === 'academic';
 const role = currentUser.role;
-const canSeeAdmins = (role === ‘admin’ || role === ‘superadmin’);
+const canSeeAdmins = (role === 'admin' || role === 'superadmin');
 
 // inject filter button styles once
-if (!document.getElementById(‘search-filter-styles’)) {
-const style = document.createElement(‘style’);
-style.id = ‘search-filter-styles’;
-style.textContent = ‘.search-filter-btn{padding:6px 14px;border-radius:20px;border:1px solid var(–border);background:var(–bg);color:var(–text-light);font-size:12px;cursor:pointer;transition:all .15s}.search-filter-btn.active,.search-filter-btn:hover{background:var(–primary);color:#fff;border-color:var(–primary)}’;
+if (!document.getElementById('search-filter-styles')) {
+const style = document.createElement('style');
+style.id = 'search-filter-styles';
+style.textContent = '.search-filter-btn{padding:6px 14px;border-radius:20px;border:1px solid var(-border);background:var(-bg);color:var(-text-light);font-size:12px;cursor:pointer;transition:all .15s}.search-filter-btn.active,.search-filter-btn:hover{background:var(-primary);color:#fff;border-color:var(-primary)}';
 document.head.appendChild(style);
 }
 
-let filterBtns = ‘<button class="search-filter-btn active" onclick="setSearchFilter(\'all\', this)">All</button>’;
+let filterBtns = '<button class="search-filter-btn active" onclick="setSearchFilter(\'all\', this)">All</button>';
 if (isAcademic) {
-filterBtns += ‘<button class="search-filter-btn" onclick="setSearchFilter(\'student\', this)">Students</button>’;
-filterBtns += ‘<button class="search-filter-btn" onclick="setSearchFilter(\'lecturer\', this)">Lecturers</button>’;
+filterBtns += '<button class="search-filter-btn" onclick="setSearchFilter(\'student\', this)">Students</button>';
+filterBtns += '<button class="search-filter-btn" onclick="setSearchFilter(\'lecturer\', this)">Lecturers</button>';
 } else {
-filterBtns += ‘<button class="search-filter-btn" onclick="setSearchFilter(\'employee\', this)">Employees</button>’;
-filterBtns += ‘<button class="search-filter-btn" onclick="setSearchFilter(\'manager\', this)">Managers</button>’;
+filterBtns += '<button class="search-filter-btn" onclick="setSearchFilter(\'employee\', this)">Employees</button>';
+filterBtns += '<button class="search-filter-btn" onclick="setSearchFilter(\'manager\', this)">Managers</button>';
 }
 if (canSeeAdmins) {
-filterBtns += ‘<button class="search-filter-btn" onclick="setSearchFilter(\'admin\', this)">Admins</button>’;
+filterBtns += '<button class="search-filter-btn" onclick="setSearchFilter(\'admin\', this)">Admins</button>';
 }
 
 const placeholder = isAcademic
-? ‘Search by name, email, index number…’
-: ‘Search by name, email, employee ID…’;
+? 'Search by name, email, index number...'
+: 'Search by name, email, employee ID...';
 
 content.innerHTML =
-‘<div class="page-header"><h2>Search</h2><p>Find ’ + (isAcademic ? ‘students, lecturers, or staff’ : ‘employees or staff’) + ’ quickly</p></div>’ +
-‘<div class="card" style="margin-bottom:16px">’ +
-‘<div style="display:flex;gap:10px;align-items:center">’ +
-‘<input type="text" id="search-input" placeholder="' + placeholder + '" style="flex:1;padding:12px 16px;border:1px solid var(--border);border-radius:8px;font-size:14px;outline:none" oninput="debounceSearch()" onkeydown="if(event.key===\'Enter\')doSearch()">’ +
-‘<button class="btn btn-primary" onclick="doSearch()" style="padding:12px 20px">Search</button>’ +
-‘</div>’ +
-‘<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap" id="search-filters">’ + filterBtns + ‘</div>’ +
-‘</div>’ +
-‘<div id="search-results">’ +
-‘<div class="empty-state" style="padding:40px 20px;text-align:center;color:var(--text-light)">’ +
-‘<p>Enter a name, email’ + (isAcademic ? ‘, or index number’ : ‘, or employee ID’) + ’ to search</p>’ +
-‘</div>’ +
-‘</div>’;
+'<div class="page-header"><h2>Search</h2><p>Find ' + (isAcademic ? 'students, lecturers, or staff' : 'employees or staff') + ' quickly</p></div>' +
+'<div class="card" style="margin-bottom:16px">' +
+'<div style="display:flex;gap:10px;align-items:center">' +
+'<input type="text" id="search-input" placeholder="' + placeholder + '" style="flex:1;padding:12px 16px;border:1px solid var(--border);border-radius:8px;font-size:14px;outline:none" oninput="debounceSearch()" onkeydown="if(event.key===\'Enter\')doSearch()">' +
+'<button class="btn btn-primary" onclick="doSearch()" style="padding:12px 20px">Search</button>' +
+'</div>' +
+'<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap" id="search-filters">' + filterBtns + '</div>' +
+'</div>' +
+'<div id="search-results">' +
+'<div class="empty-state" style="padding:40px 20px;text-align:center;color:var(--text-light)">' +
+'<p>Enter a name, email' + (isAcademic ? ', or index number' : ', or employee ID') + ' to search</p>' +
+'</div>' +
+'</div>';
 }
 
-let searchFilter = ‘all’;
+let searchFilter = 'all';
 let searchDebounceTimer = null;
 
 function setSearchFilter(filter, btn) {
 searchFilter = filter;
-document.querySelectorAll(’.search-filter-btn’).forEach(function(b) { b.classList.remove(‘active’); });
-btn.classList.add(‘active’);
+document.querySelectorAll('.search-filter-btn').forEach(function(b) { b.classList.remove('active'); });
+btn.classList.add('active');
 doSearch();
 }
 
@@ -7235,25 +7180,25 @@ searchDebounceTimer = setTimeout(doSearch, 350);
 }
 
 async function doSearch() {
-var query = document.getElementById(‘search-input’) ? document.getElementById(‘search-input’).value.trim() : ‘’;
-var resultsEl = document.getElementById(‘search-results’);
+var query = document.getElementById('search-input') ? document.getElementById('search-input').value.trim() : '';
+var resultsEl = document.getElementById('search-results');
 if (!resultsEl) return;
 
 if (!query || query.length < 2) {
-resultsEl.innerHTML = ‘<div class="card"><div class="empty-state"><p>Enter at least 2 characters to search</p></div></div>’;
+resultsEl.innerHTML = '<div class="card"><div class="empty-state"><p>Enter at least 2 characters to search</p></div></div>';
 return;
 }
 
-resultsEl.innerHTML = ‘<div class="card"><p>Searching…</p></div>’;
+resultsEl.innerHTML = '<div class="card"><p>Searching...</p></div>';
 
 try {
 var params = new URLSearchParams({ q: query });
-if (searchFilter !== ‘all’) params.append(‘role’, searchFilter);
-var data = await api(’/api/search?’ + params.toString());
+if (searchFilter !== 'all') params.append('role', searchFilter);
+var data = await api('/api/search?' + params.toString());
 var users = data.users || [];
-var mode = currentUser.company ? currentUser.company.mode || ‘corporate’ : ‘corporate’;
+var mode = currentUser.company ? currentUser.company.mode || 'corporate' : 'corporate';
 
-```
+
 if (users.length === 0) {
   resultsEl.innerHTML = '<div class="card"><div class="empty-state"><p>No users found for "' + query + '"</p></div></div>';
   return;
@@ -7281,54 +7226,53 @@ resultsEl.innerHTML =
     '<table><thead><tr><th>Name</th>' + headerCols + '<th>Role</th><th>Status</th><th>Joined</th></tr></thead>' +
     '<tbody>' + rows + '</tbody></table>' +
   '</div>';
-```
 
 } catch (e) {
-resultsEl.innerHTML = ’<div class="card"><p style="color:var(--danger)">Search failed: ’ + e.message + ‘</p></div>’;
+resultsEl.innerHTML = '<div class="card"><p style="color:var(--danger)">Search failed: ' + e.message + '</p></div>';
 }
 }
 
 function renderReports() {
-const content = document.getElementById(‘main-content’);
+const content = document.getElementById('main-content');
 if (!content) return;
 const role = currentUser.role;
-const mode = currentUser.company?.mode || ‘corporate’;
-const isAcademic = mode === ‘academic’;
-const isAdmin = [‘admin’, ‘superadmin’].includes(role);
+const mode = currentUser.company?.mode || 'corporate';
+const isAcademic = mode === 'academic';
+const isAdmin = ['admin', 'superadmin'].includes(role);
 
 if (isAdmin) {
 renderAdminReports(content, isAcademic);
 return;
 }
 
-let cards = ‘’;
-const isStaff = [‘manager’, ‘lecturer’].includes(role);
+let cards = '';
+const isStaff = ['manager', 'lecturer'].includes(role);
 
 cards += reportCard(
-‘#6366f1’, ‘#8b5cf6’,
-‘<polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>’,
-‘Attendance Report’,
-isStaff ? ‘All attendance records across your sessions’ : ‘Your personal attendance history’,
-‘attendance’, ‘reports’
+'#6366f1', '#8b5cf6',
+'<polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>',
+'Attendance Report',
+isStaff ? 'All attendance records across your sessions' : 'Your personal attendance history',
+'attendance', 'reports'
 );
 
 if (isStaff) {
 cards += reportCard(
-‘#0ea5e9’, ‘#06b6d4’,
-‘<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>’,
-‘Sessions Report’,
-role === ‘lecturer’ ? ‘Summary of your attendance sessions’ : ‘All sessions in your institution’,
-‘sessions’, ‘reports’
+'#0ea5e9', '#06b6d4',
+'<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
+'Sessions Report',
+role === 'lecturer' ? 'Summary of your attendance sessions' : 'All sessions in your institution',
+'sessions', 'reports'
 );
 }
 
-if (isAcademic && (role === ‘lecturer’ || role === ‘student’)) {
+if (isAcademic && (role === 'lecturer' || role === 'student')) {
 cards += reportCard(
-‘#f59e0b’, ‘#f97316’,
-‘<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>’,
-‘Performance Report’,
-role === ‘student’ ? ‘Your quiz scores and performance’ : ‘Quiz scores and student performance’,
-‘performance’, ‘reports’
+'#f59e0b', '#f97316',
+'<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>',
+'Performance Report',
+role === 'student' ? 'Your quiz scores and performance' : 'Quiz scores and student performance',
+'performance', 'reports'
 );
 }
 
@@ -7336,47 +7280,47 @@ content.innerHTML = `<div class="page-header"><h2>Reports</h2><p>Download report
 }
 
 function reportCard(c1, c2, iconPath, title, desc, type, apiBase) {
-const downloadIcon = ‘<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>’;
+const downloadIcon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>';
 return ` <div class="report-card" style="--report-gradient:linear-gradient(135deg,${c1},${c2});--report-shadow:${c1}33" onclick="downloadReport('${type}','${apiBase}', event)"> <div class="report-card-icon"> ${svgIcon(iconPath, 28)} </div> <div class="report-card-title">${title}</div> <div class="report-card-desc">${desc}</div> <button class="report-card-btn" onclick="event.stopPropagation(); downloadReport('${type}','${apiBase}', event)"> ${downloadIcon} Download PDF </button> </div>`;
 }
 
 function renderAdminReports(content, isAcademic) {
-let cards = ‘’;
+let cards = '';
 
 cards += reportCard(
-‘#4f46e5’, ‘#6366f1’,
-‘<path d="M3 3h18v18H3z"/><path d="M3 9h18"/><path d="M9 21V9"/>’,
-‘Institution Summary’,
-‘Complete overview: users, attendance, subscription, and academic data’,
-‘summary’, ‘admin/reports’
+'#4f46e5', '#6366f1',
+'<path d="M3 3h18v18H3z"/><path d="M3 9h18"/><path d="M9 21V9"/>',
+'Institution Summary',
+'Complete overview: users, attendance, subscription, and academic data',
+'summary', 'admin/reports'
 );
 
 cards += reportCard(
-‘#6366f1’, ‘#8b5cf6’,
-‘<polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>’,
-‘Attendance Overview’,
-‘Institution-wide attendance with per-session breakdown and individual records’,
-‘attendance’, ‘admin/reports’
+'#6366f1', '#8b5cf6',
+'<polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>',
+'Attendance Overview',
+'Institution-wide attendance with per-session breakdown and individual records',
+'attendance', 'admin/reports'
 );
 
 cards += reportCard(
-‘#0ea5e9’, ‘#06b6d4’,
-‘<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>’,
-‘Session Report’,
-‘Duration tracking, attendee counts, and suspicious session flagging’,
-‘sessions’, ‘admin/reports’
+'#0ea5e9', '#06b6d4',
+'<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
+'Session Report',
+'Duration tracking, attendee counts, and suspicious session flagging',
+'sessions', 'admin/reports'
 );
 
 if (isAcademic) {
 cards += reportCard(
-‘#8b5cf6’, ‘#a78bfa’,
-‘<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>’,
-‘Performance Report’,
-‘Quiz analytics: per-course scores, pass rates, and all submissions’,
-‘performance’, ‘admin/reports’
+'#8b5cf6', '#a78bfa',
+'<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>',
+'Performance Report',
+'Quiz analytics: per-course scores, pass rates, and all submissions',
+'performance', 'admin/reports'
 );
 
-```
+
 cards += reportCard(
   '#10b981', '#059669',
   '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
@@ -7384,46 +7328,45 @@ cards += reportCard(
   'Compare lecturers: sessions, courses, student engagement, and records',
   'lecturers', 'admin/reports'
 );
-```
 
 }
 
 cards += reportCard(
-‘#f59e0b’, ‘#f97316’,
+'#f59e0b', '#f97316',
 isAcademic
-? ‘<path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c0 2 4 3 6 3s6-1 6-3v-5"/>’
-: ‘<path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>’,
-isAcademic ? ‘Student Analytics’ : ‘Employee Analytics’,
+? '<path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c0 2 4 3 6 3s6-1 6-3v-5"/>'
+: '<path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>',
+isAcademic ? 'Student Analytics' : 'Employee Analytics',
 isAcademic
-? ‘Attendance rates, course enrollments, and quiz score averages’
-: ‘Attendance rates and participation metrics per employee’,
-‘students’, ‘admin/reports’
+? 'Attendance rates, course enrollments, and quiz score averages'
+: 'Attendance rates and participation metrics per employee',
+'students', 'admin/reports'
 );
 
 content.innerHTML = `<div class="page-header"> <h2>Admin Reports</h2> <p>Full institution analytics - click any report card to download as PDF</p> </div> <div class="reports-grid">${cards}</div>`;
 }
 
-async function downloadReport(type, apiBase = ‘reports’, e) {
-const btn = e ? e.target.closest(’.report-card-btn’) || e.target.closest(’.btn’) : null;
-const card = btn ? btn.closest(’.report-card’) : null;
-const originalHTML = btn ? btn.innerHTML : ‘’;
+async function downloadReport(type, apiBase = 'reports', e) {
+const btn = e ? e.target.closest('.report-card-btn') || e.target.closest('.btn') : null;
+const card = btn ? btn.closest('.report-card') : null;
+const originalHTML = btn ? btn.innerHTML : '';
 if (btn) {
-btn.innerHTML = ‘Generating…’;
+btn.innerHTML = 'Generating...';
 btn.disabled = true;
-btn.style.opacity = ‘0.7’;
+btn.style.opacity = '0.7';
 }
-if (card) card.style.pointerEvents = ‘none’;
+if (card) card.style.pointerEvents = 'none';
 try {
-const headers = { ‘Authorization’: `Bearer ${token}` };
+const headers = { 'Authorization': `Bearer ${token}` };
 const res = await fetch(`${API}/api/${apiBase}/${type}`, { headers });
 if (!res.ok) {
-let errMsg = ‘Failed to generate report’;
+let errMsg = 'Failed to generate report';
 try { const err = await res.json(); errMsg = err.error; } catch(e) {}
 throw new Error(errMsg);
 }
 const blob = await res.blob();
 const url = URL.createObjectURL(blob);
-const a = document.createElement(‘a’);
+const a = document.createElement('a');
 a.href = url;
 a.download = `${type}-report.pdf`;
 document.body.appendChild(a);
@@ -7436,20 +7379,20 @@ toastError(err.message);
 if (btn) {
 btn.innerHTML = originalHTML;
 btn.disabled = false;
-btn.style.opacity = ‘’;
+btn.style.opacity = '';
 }
-if (card) card.style.pointerEvents = ‘’;
+if (card) card.style.pointerEvents = '';
 }
 }
 
-// – View who has marked attendance for a session (offline-aware) –––––––
+// - View who has marked attendance for a session (offline-aware) -------
 async function viewAttendees(sessionId, sessionTitle) {
-const container = document.getElementById(‘modal-container’);
-container.classList.remove(‘hidden’);
+const container = document.getElementById('modal-container');
+container.classList.remove('hidden');
 container.innerHTML = ` <div class="modal-overlay" onclick="closeModal(event)"> <div class="modal" onclick="event.stopPropagation()" style="max-width:600px;width:95%"> <h3>Attendees - ${sessionTitle}</h3> <div id="attendees-content"><div class="spinner" style="margin:20px auto"></div></div> <div class="modal-actions" style="justify-content:space-between"> <button class="btn btn-sm" style="background:#16a34a;color:#fff" onclick="exportSessionCSV('${sessionId}', '${sessionTitle}')">- Export CSV</button> <button class="btn btn-sm" style="background:#16a34a;color:#fff" onclick="exportAttendanceToExcel('${sessionId}', '${sessionTitle}')">- Excel</button> <button class="btn btn-secondary btn-sm" onclick="closeModal()">Close</button> </div> </div> </div>`;
 
-const el = document.getElementById(‘attendees-content’);
-const cacheKey = ‘attendees_’ + sessionId;
+const el = document.getElementById('attendees-content');
+const cacheKey = 'attendees_' + sessionId;
 
 if (!isOnline()) {
 const cached = offlineRead(cacheKey);
@@ -7480,7 +7423,7 @@ const records = data.records || [];
 el.innerHTML = `${isOffline ?`<div style="background:#fef3c7;border:1px solid #fbbf24;border-radius:6px;padding:8px 12px;font-size:12px;font-weight:600;color:#92400e;margin-bottom:12px">- Showing cached data</div>`: ''} <div style="font-size:13px;color:var(--text-light);margin-bottom:12px">${records.length} ${currentUser.company?.mode === 'corporate' ? 'employee' : 'student'}${records.length!==1?'s':''} checked in</div> ${records.length ?`
 <table>
 <thead><tr><th>Name</th><th>ID</th><th>Method</th><th>Time</th><th>Status</th></tr></thead>
-<tbody>${records.map(r => `<tr> <td>${r.student?.name || 'N/A'}</td> <td style="font-family:monospace;font-size:12px">${r.student?.indexNumber || r.student?.email || '-'}</td> <td><span style="background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:2px 6px;font-size:11px">${r.method || '-'}</span></td> <td style="font-size:12px">${r.checkInTime ? new Date(r.checkInTime).toLocaleTimeString() : '-'}</td> <td><span class="status-badge status-${r.status}">${r.status}</span></td> </tr>`).join(’’)}</tbody>
+<tbody>${records.map(r => `<tr> <td>${r.student?.name || 'N/A'}</td> <td style="font-family:monospace;font-size:12px">${r.student?.indexNumber || r.student?.email || '-'}</td> <td><span style="background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:2px 6px;font-size:11px">${r.method || '-'}</span></td> <td style="font-size:12px">${r.checkInTime ? new Date(r.checkInTime).toLocaleTimeString() : '-'}</td> <td><span class="status-badge status-${r.status}">${r.status}</span></td> </tr>`).join('')}</tbody>
 </table>
 `: '<div class="empty-state"><p>No one has checked in yet</p></div>'}`;
 }
@@ -7488,22 +7431,22 @@ el.innerHTML = `${isOffline ?`<div style="background:#fef3c7;border:1px solid #f
 function closeModal(event) {
 if (event && event.target !== event.currentTarget) return;
 _stopQrTimers(); // always clean up QR rotation if active
-document.getElementById(‘modal-container’).classList.add(‘hidden’);
-document.getElementById(‘modal-container’).innerHTML = ‘’;
+document.getElementById('modal-container').classList.add('hidden');
+document.getElementById('modal-container').innerHTML = '';
 }
 
 if (token) {
 loadUserData();
 }
 
-// ——————————————————————————
+// ----------------------------------------------------
 //  FEATURE: PROFILE PAGE
-// ——————————————————————————
+// ----------------------------------------------------
 async function renderProfile() {
-const content = document.getElementById(‘main-content’);
+const content = document.getElementById('main-content');
 if (!content) return;
 const u = currentUser;
-content.innerHTML = `<div class="page-header"><h2>My Profile</h2><p>Manage your account details</p></div> <div class="card" style="max-width:520px"> <div style="display:flex;align-items:center;gap:16px;margin-bottom:24px;padding-bottom:20px;border-bottom:1px solid var(--border)"> <div style="position:relative;flex-shrink:0"> <div id="profile-avatar" style="width:72px;height:72px;border-radius:50%;background:linear-gradient(135deg,var(--primary),#6366f1);display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:700;color:#fff;overflow:hidden;cursor:pointer" onclick="document.getElementById('photo-upload').click()" title="Click to change photo"> ${u.profilePhoto ?`<img src="${u.profilePhoto}" style="width:100%;height:100%;object-fit:cover">` : (u.name||’?’)[0].toUpperCase()}
+content.innerHTML = `<div class="page-header"><h2>My Profile</h2><p>Manage your account details</p></div> <div class="card" style="max-width:520px"> <div style="display:flex;align-items:center;gap:16px;margin-bottom:24px;padding-bottom:20px;border-bottom:1px solid var(--border)"> <div style="position:relative;flex-shrink:0"> <div id="profile-avatar" style="width:72px;height:72px;border-radius:50%;background:linear-gradient(135deg,var(--primary),#6366f1);display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:700;color:#fff;overflow:hidden;cursor:pointer" onclick="document.getElementById('photo-upload').click()" title="Click to change photo"> ${u.profilePhoto ?`<img src="${u.profilePhoto}" style="width:100%;height:100%;object-fit:cover">` : (u.name||'?')[0].toUpperCase()}
 </div>
 <div style="position:absolute;bottom:0;right:0;width:22px;height:22px;border-radius:50%;background:var(--primary);display:flex;align-items:center;justify-content:center;cursor:pointer;border:2px solid #fff" onclick="document.getElementById('photo-upload').click()">
 <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
@@ -7511,13 +7454,13 @@ content.innerHTML = `<div class="page-header"><h2>My Profile</h2><p>Manage your 
 <input type="file" id="photo-upload" accept="image/*" style="display:none" onchange="uploadProfilePhoto(this)">
 </div>
 <div>
-<div style="font-size:18px;font-weight:700">${u.name || ‘N/A’}</div>
-<div style="font-size:13px;color:var(--text-light)">${u.email || u.indexNumber || ‘’}</div>
+<div style="font-size:18px;font-weight:700">${u.name || 'N/A'}</div>
+<div style="font-size:13px;color:var(--text-light)">${u.email || u.indexNumber || ''}</div>
 <span class="role-badge role-${u.role}" style="margin-top:4px;display:inline-block">${u.role}</span>
 </div>
 </div>
 
-```
+
   <div id="profile-msg" style="display:none;padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:16px"></div>
 
   <div style="margin-bottom:20px">
@@ -7582,109 +7525,108 @@ content.innerHTML = `<div class="page-header"><h2>My Profile</h2><p>Manage your 
   </div>` : ''}
   <button class="btn btn-primary" onclick="saveProfile()" style="width:100%">Save Changes</button>
 </div>
-```
 
 `;
 }
 
 async function saveAttendancePin() {
-const pin         = document.getElementById(‘attendance-pin’)?.value?.trim();
-const pinConfirm  = document.getElementById(‘attendance-pin-confirm’)?.value?.trim();
-const msgEl       = document.getElementById(‘pin-msg’);
+const pin         = document.getElementById('attendance-pin')?.value?.trim();
+const pinConfirm  = document.getElementById('attendance-pin-confirm')?.value?.trim();
+const msgEl       = document.getElementById('pin-msg');
 
 const showPinMsg = (text, ok) => {
 msgEl.textContent = text;
-msgEl.style.display = ‘block’;
-msgEl.style.background = ok ? ‘var(–success-light)’ : ‘var(–danger-light)’;
-msgEl.style.color = ok ? ‘#065f46’ : ‘#991b1b’;
+msgEl.style.display = 'block';
+msgEl.style.background = ok ? 'var(-success-light)' : 'var(-danger-light)';
+msgEl.style.color = ok ? '#065f46' : '#991b1b';
 };
 
 if (!pin || pin.length !== 4 || !/^\d{4}$/.test(pin)) {
-showPinMsg(‘PIN must be exactly 4 digits (numbers only)’, false); return;
+showPinMsg('PIN must be exactly 4 digits (numbers only)', false); return;
 }
 if (pin !== pinConfirm) {
-showPinMsg(‘PINs do not match’, false); return;
+showPinMsg('PINs do not match', false); return;
 }
 
 try {
-await api(’/api/esp32/set-pin’, { method: ‘POST’, body: JSON.stringify({ pin }) });
-showPinMsg(‘Attendance PIN set successfully!’, true);
-document.getElementById(‘attendance-pin’).value = ‘’;
-document.getElementById(‘attendance-pin-confirm’).value = ‘’;
-toastSuccess(‘Attendance PIN updated’);
+await api('/api/esp32/set-pin', { method: 'POST', body: JSON.stringify({ pin }) });
+showPinMsg('Attendance PIN set successfully!', true);
+document.getElementById('attendance-pin').value = '';
+document.getElementById('attendance-pin-confirm').value = '';
+toastSuccess('Attendance PIN updated');
 } catch (e) {
-showPinMsg(e.message || ‘Failed to set PIN’, false);
+showPinMsg(e.message || 'Failed to set PIN', false);
 }
 }
 
 async function toggle2FA(enable) {
-const cb = document.getElementById(‘twofa-toggle’);
+const cb = document.getElementById('twofa-toggle');
 try {
-await api(’/api/auth/2fa/toggle’, { method: ‘POST’, body: JSON.stringify({ enable }) });
+await api('/api/auth/2fa/toggle', { method: 'POST', body: JSON.stringify({ enable }) });
 currentUser.twoFactorEnabled = enable;
 // Update toggle visual immediately
-const span = document.querySelector(’#twofa-toggle + span’);
+const span = document.querySelector('#twofa-toggle + span');
 if (span) {
-span.style.background = enable ? ‘var(–primary)’ : ‘#d1d5db’;
-const dot = span.querySelector(‘span’);
-if (dot) dot.style.left = enable ? ‘23px’ : ‘3px’;
+span.style.background = enable ? 'var(-primary)' : '#d1d5db';
+const dot = span.querySelector('span');
+if (dot) dot.style.left = enable ? '23px' : '3px';
 }
 if (cb) cb.checked = enable;
-showToastNotif(enable ? ‘2FA enabled - you will get a code by email each login’ : ‘2FA disabled’, enable ? ‘success’ : ‘warn’);
+showToastNotif(enable ? '2FA enabled - you will get a code by email each login' : '2FA disabled', enable ? 'success' : 'warn');
 } catch(e) {
-showToastNotif(’Failed to update 2FA: ’ + e.message, ‘warn’);
+showToastNotif('Failed to update 2FA: ' + e.message, 'warn');
 // Revert toggle
 if (cb) cb.checked = !enable;
 }
 }
 
 async function saveProfile() {
-const name = document.getElementById(‘profile-name’).value.trim();
-const dept = document.getElementById(‘profile-dept’)?.value?.trim();
-const currentPassword = document.getElementById(‘profile-current-pw’).value;
-const newPassword = document.getElementById(‘profile-new-pw’).value;
-const confirmPw = document.getElementById(‘profile-confirm-pw’).value;
-const msg = document.getElementById(‘profile-msg’);
+const name = document.getElementById('profile-name').value.trim();
+const dept = document.getElementById('profile-dept')?.value?.trim();
+const currentPassword = document.getElementById('profile-current-pw').value;
+const newPassword = document.getElementById('profile-new-pw').value;
+const confirmPw = document.getElementById('profile-confirm-pw').value;
+const msg = document.getElementById('profile-msg');
 
 if (newPassword && newPassword !== confirmPw) {
-msg.textContent = ‘New passwords do not match’; msg.style.background = ‘#fef2f2’; msg.style.color = ‘#dc2626’; msg.style.display = ‘block’; return;
+msg.textContent = 'New passwords do not match'; msg.style.background = '#fef2f2'; msg.style.color = '#dc2626'; msg.style.display = 'block'; return;
 }
 if (newPassword && newPassword.length < 8) {
-msg.textContent = ‘Password must be at least 8 characters’; msg.style.background = ‘#fef2f2’; msg.style.color = ‘#dc2626’; msg.style.display = ‘block’; return;
+msg.textContent = 'Password must be at least 8 characters'; msg.style.background = '#fef2f2'; msg.style.color = '#dc2626'; msg.style.display = 'block'; return;
 }
 
 const body = {};
 if (name) body.name = name;
-if (dept !== undefined && [‘lecturer’,‘hod’].includes(currentUser.role)) {
+if (dept !== undefined && ['lecturer','hod'].includes(currentUser.role)) {
 body.department = dept;
 }
 if (newPassword) { body.currentPassword = currentPassword; body.newPassword = newPassword; }
 
 try {
-const data = await api(’/api/auth/profile’, { method: ‘PUT’, body: JSON.stringify(body) });
-if (data.user?.name) { currentUser.name = data.user.name; document.getElementById(‘user-name’).textContent = data.user.name; }
+const data = await api('/api/auth/profile', { method: 'PUT', body: JSON.stringify(body) });
+if (data.user?.name) { currentUser.name = data.user.name; document.getElementById('user-name').textContent = data.user.name; }
 if (data.user?.department !== undefined) { currentUser.department = data.user.department; }
-msg.textContent = ‘- Profile updated successfully!’; msg.style.background = ‘#f0fdf4’; msg.style.color = ‘#15803d’; msg.style.display = ‘block’;
-document.getElementById(‘profile-current-pw’).value = ‘’;
-document.getElementById(‘profile-new-pw’).value = ‘’;
-document.getElementById(‘profile-confirm-pw’).value = ‘’;
-setTimeout(() => { msg.style.display = ‘none’; }, 4000);
+msg.textContent = '- Profile updated successfully!'; msg.style.background = '#f0fdf4'; msg.style.color = '#15803d'; msg.style.display = 'block';
+document.getElementById('profile-current-pw').value = '';
+document.getElementById('profile-new-pw').value = '';
+document.getElementById('profile-confirm-pw').value = '';
+setTimeout(() => { msg.style.display = 'none'; }, 4000);
 } catch(e) {
-msg.textContent = e.message; msg.style.background = ‘#fef2f2’; msg.style.color = ‘#dc2626’; msg.style.display = ‘block’;
+msg.textContent = e.message; msg.style.background = '#fef2f2'; msg.style.color = '#dc2626'; msg.style.display = 'block';
 }
 }
 
-// ——————————————————————————
+// ----------------------------------------------------
 //  FEATURE: CONTACT / SUPPORT PAGE
-// ——————————————————————————
+// ----------------------------------------------------
 function renderContact() {
-const content = document.getElementById(‘main-content’);
+const content = document.getElementById('main-content');
 if (!content) return;
 content.innerHTML = `
 <div class="page-header"><h2>Contact Us</h2><p>Get in touch with KODEX support</p></div>
 <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;margin-bottom:24px">
 
-```
+
   <div class="card" style="text-align:center">
     <div style="font-size:36px;margin-bottom:12px">-</div>
     <div style="font-size:16px;font-weight:700;margin-bottom:6px">Email</div>
@@ -7719,7 +7661,7 @@ content.innerHTML = `
   <h3 style="margin-bottom:16px">Frequently Asked Questions</h3>
   ${[
     ["How do I reset a student's password?", 'Go to Users, find the student, and use the Reset Password action. The student will receive a reset code.'],
-    ["Why can't a student mark attendance?", 'Ensure there is an active session running and the student is enrolled in the correct course roster.'],
+    ["Why can't a student mark attendance?", "Ensure there is an active session running and the student is enrolled in the correct course roster."],
     ['How do I add students to a course?', 'Go to Courses, select the course, and use the Upload Students button to add students via CSV or manually.'],
     ['What happens when the subscription expires?', 'Access is suspended after the trial/subscription period. You can renew anytime from the Subscription page in your dashboard - payments are processed instantly via Paystack.'],
     ['Can students use the system offline?', 'Yes - students can mark attendance offline using a code. It will sync automatically when they reconnect.'],
@@ -7730,23 +7672,22 @@ content.innerHTML = `
     </div>
   `).join('')}
 </div>
-```
 
 `;
 }
 
-// ——————————————————————————
+// ----------------------------------------------------
 //  FEATURE: ANNOUNCEMENTS / NOTIFICATIONS
-// ——————————————————————————
+// ----------------------------------------------------
 // Stored in localStorage per company (simple in-app announcements)
-// ——————————————————————————
+// ----------------------------------------------------
 //  GRADE BOOK
-// ——————————————————————————
+// ----------------------------------------------------
 
 async function renderGradeBook() {
-const content = document.getElementById(‘main-content’);
+const content = document.getElementById('main-content');
 if (!content) return;
-const isStudent = currentUser.role === ‘student’;
+const isStudent = currentUser.role === 'student';
 if (isStudent) {
 await renderStudentGradeBook(content);
 } else {
@@ -7754,15 +7695,15 @@ await renderLecturerGradeBook(content);
 }
 }
 
-// – STUDENT VIEW ———————————————————––
+// - STUDENT VIEW ----------------------------------------
 
 async function renderStudentGradeBook(content) {
-content.innerHTML = ‘<div class="loading">Loading your grades-</div>’;
+content.innerHTML = '<div class="loading">Loading your grades-</div>';
 try {
-const data = await api(’/api/gradebook/my-courses’);
+const data = await api('/api/gradebook/my-courses');
 const courses = data.courses || [];
 content.innerHTML = `<div class="page-header"><h2>My Grades</h2><p>Your academic performance across all courses</p></div> ${courses.length === 0 ? '<div class="card"><div class="empty-state"><p>You are not enrolled in any courses yet.</p></div></div>' :`<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;">
-${courses.map(c => ` <div class="card" style="cursor:pointer;transition:transform .15s;border:1.5px solid var(--border);" onmouseenter="this.style.transform='translateY(-2px)'" onmouseleave="this.style.transform=''" onclick="renderStudentCourseGrades('${c._id}','${c.title} (${c.code})')"> <div style="font-weight:700;font-size:15px;margin-bottom:4px;">${c.title}</div> <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">${c.code} - ${c.lecturer?.name || 'N/A'}</div> <div style="display:flex;justify-content:space-between;align-items:center;"> <span style="font-size:12px;color:var(--text-light);">${c.enrolledStudents?.length || 0} students</span> <span class="btn btn-sm btn-primary" style="pointer-events:none;">View Grades -</span> </div> </div>`).join(’’)}
+${courses.map(c => ` <div class="card" style="cursor:pointer;transition:transform .15s;border:1.5px solid var(--border);" onmouseenter="this.style.transform='translateY(-2px)'" onmouseleave="this.style.transform=''" onclick="renderStudentCourseGrades('${c._id}','${c.title} (${c.code})')"> <div style="font-weight:700;font-size:15px;margin-bottom:4px;">${c.title}</div> <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">${c.code} - ${c.lecturer?.name || 'N/A'}</div> <div style="display:flex;justify-content:space-between;align-items:center;"> <span style="font-size:12px;color:var(--text-light);">${c.enrolledStudents?.length || 0} students</span> <span class="btn btn-sm btn-primary" style="pointer-events:none;">View Grades -</span> </div> </div>`).join('')}
 </div>` }`;
 } catch(e) {
 content.innerHTML = `<div class="card"><p style="color:#ef4444;">${e.message}</p></div>`;
@@ -7770,13 +7711,13 @@ content.innerHTML = `<div class="card"><p style="color:#ef4444;">${e.message}</p
 }
 
 async function renderStudentCourseGrades(courseId, courseTitle) {
-const content = document.getElementById(‘main-content’);
-content.innerHTML = ‘<div class="loading">Loading grades-</div>’;
+const content = document.getElementById('main-content');
+content.innerHTML = '<div class="loading">Loading grades-</div>';
 try {
-const d = await api(’/api/gradebook/my/’ + courseId);
+const d = await api('/api/gradebook/my/' + courseId);
 const bar = (pct, color) => ` <div style="background:var(--border);border-radius:4px;height:8px;flex:1;"> <div style="width:${Math.min(pct,100)}%;background:${color};height:8px;border-radius:4px;transition:width .4s;"></div> </div>`;
 
-```
+
 content.innerHTML = `
   <div style="display:flex;align-items:center;gap:10px;margin-bottom:18px;flex-wrap:wrap;">
     <button class="btn btn-secondary btn-sm" onclick="renderStudentGradeBook(document.getElementById('main-content'))">- Back</button>
@@ -7843,22 +7784,21 @@ content.innerHTML = `
       </div>`).join('')}
   </div>` : ''}
 `;
-```
 
 } catch(e) {
 content.innerHTML = `<div class="card"><p style="color:#ef4444;">${e.message}</p></div>`;
 }
 }
 
-// – LECTURER VIEW ———————————————————––
+// - LECTURER VIEW ----------------------------------------
 
 async function renderLecturerGradeBook(content) {
-content.innerHTML = ‘<div class="loading">Loading courses-</div>’;
+content.innerHTML = '<div class="loading">Loading courses-</div>';
 try {
-const data = await api(’/api/gradebook/courses’);
+const data = await api('/api/gradebook/courses');
 const courses = data.courses || [];
 content.innerHTML = `<div class="page-header"><h2>Grade Book</h2><p>Manage grades across your courses</p></div> ${courses.length === 0 ? '<div class="card"><div class="empty-state"><p>No courses found.</p></div></div>' :`<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;">
-${courses.map(c => ` <div class="card" style="cursor:pointer;transition:transform .15s;" onmouseenter="this.style.transform='translateY(-2px)'" onmouseleave="this.style.transform=''" onclick="renderLecturerCourseGrades('${c._id}','${c.title} (${c.code})')"> <div style="font-weight:700;font-size:15px;margin-bottom:4px;">${c.title}</div> <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">${c.code} - ${c.lecturer?.name || 'N/A'}</div> <div style="display:flex;justify-content:space-between;align-items:center;"> <span style="font-size:12px;color:var(--text-light);">${c.enrolledStudents?.length || 0} students</span> <span class="btn btn-sm btn-primary" style="pointer-events:none;">Open -</span> </div> </div>`).join(’’)}
+${courses.map(c => ` <div class="card" style="cursor:pointer;transition:transform .15s;" onmouseenter="this.style.transform='translateY(-2px)'" onmouseleave="this.style.transform=''" onclick="renderLecturerCourseGrades('${c._id}','${c.title} (${c.code})')"> <div style="font-weight:700;font-size:15px;margin-bottom:4px;">${c.title}</div> <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">${c.code} - ${c.lecturer?.name || 'N/A'}</div> <div style="display:flex;justify-content:space-between;align-items:center;"> <span style="font-size:12px;color:var(--text-light);">${c.enrolledStudents?.length || 0} students</span> <span class="btn btn-sm btn-primary" style="pointer-events:none;">Open -</span> </div> </div>`).join('')}
 </div>` }`;
 } catch(e) {
 content.innerHTML = `<div class="card"><p style="color:#ef4444;">${e.message}</p></div>`;
@@ -7866,15 +7806,15 @@ content.innerHTML = `<div class="card"><p style="color:#ef4444;">${e.message}</p
 }
 
 async function renderLecturerCourseGrades(courseId, courseTitle) {
-const content = document.getElementById(‘main-content’);
-content.innerHTML = ‘<div class="loading">Loading grade book-</div>’;
+const content = document.getElementById('main-content');
+content.innerHTML = '<div class="loading">Loading grade book-</div>';
 try {
-const d = await api(’/api/gradebook/course/’ + courseId);
+const d = await api('/api/gradebook/course/' + courseId);
 const { grades, gradeBook, quizzes, totalSessions } = d;
 const gb = gradeBook;
 const w  = gb.weights;
 
-```
+
 // Grade distribution summary
 const dist = { A:0, B:0, C:0, D:0, F:0 };
 grades.forEach(g => { dist[g.letter] = (dist[g.letter]||0)+1; });
@@ -7952,19 +7892,18 @@ content.innerHTML = `
 // Store current data globally for CSV export
 window._gbData = d;
 window._gbCourseId = courseId;
-```
 
 } catch(e) {
 content.innerHTML = `<div class="card"><p style="color:#ef4444;">${e.message}</p></div>`;
 }
 }
 
-// – Weights Modal –––––––––––––––––––––––––––––––
+// - Weights Modal -------------------------------
 function openWeightsModal(courseId, qW, aW, mW) {
-const ol = document.createElement(‘div’);
-ol.id = ‘gb-weights-overlay’;
-ol.style.cssText = ‘position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:400;display:flex;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(3px)’;
-ol.innerHTML = `<div style="background:var(--card);border-radius:14px;width:100%;max-width:380px;box-shadow:0 20px 60px rgba(0,0,0,.2);"> <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;"> <h3 style="font-size:15px;font-weight:700;margin:0;">-- Grade Weights</h3> <button onclick="document.getElementById('gb-weights-overlay').remove()" style="width:26px;height:26px;border-radius:6px;border:1px solid var(--border);background:var(--bg);cursor:pointer;">-</button> </div> <div style="padding:18px 20px;display:flex;flex-direction:column;gap:12px;"> <p style="font-size:12px;color:var(--text-muted);margin:0;">Weights determine how each component contributes to the final grade. They don't need to sum to 100 - they're proportional.</p> ${[['Quizzes','gb-w-quiz',qW],['Attendance','gb-w-att',aW],['Manual Grades','gb-w-man',mW]].map(([label, id, val]) =>`
+const ol = document.createElement('div');
+ol.id = 'gb-weights-overlay';
+ol.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:400;display:flex;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(3px)';
+ol.innerHTML = `<div style="background:var(--card);border-radius:14px;width:100%;max-width:380px;box-shadow:0 20px 60px rgba(0,0,0,.2);"> <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;"> <h3 style="font-size:15px;font-weight:700;margin:0;">-- Grade Weights</h3> <button onclick="document.getElementById('gb-weights-overlay").remove()" style="width:26px;height:26px;border-radius:6px;border:1px solid var(--border);background:var(--bg);cursor:pointer;">-</button> </div> <div style="padding:18px 20px;display:flex;flex-direction:column;gap:12px;"> <p style="font-size:12px;color:var(--text-muted);margin:0;">Weights determine how each component contributes to the final grade. They don't need to sum to 100 - they"re proportional.</p> ${[['Quizzes','gb-w-quiz',qW],['Attendance','gb-w-att',aW],['Manual Grades','gb-w-man',mW]].map(([label, id, val]) =>`
 <div>
 <label style="font-size:12px;font-weight:700;margin-bottom:4px;display:block;">${label}</label>
 <div style="display:flex;align-items:center;gap:8px;">
@@ -7976,169 +7915,169 @@ document.body.appendChild(ol);
 }
 
 async function saveWeights(courseId) {
-const quizzes    = +document.getElementById(‘gb-w-quiz’).value;
-const attendance = +document.getElementById(‘gb-w-att’).value;
-const manual     = +document.getElementById(‘gb-w-man’).value;
+const quizzes    = +document.getElementById('gb-w-quiz').value;
+const attendance = +document.getElementById('gb-w-att').value;
+const manual     = +document.getElementById('gb-w-man').value;
 try {
-await api(’/api/gradebook/course/’ + courseId + ‘/weights’, {
-method: ‘PATCH’,
+await api('/api/gradebook/course/' + courseId + '/weights', {
+method: 'PATCH',
 body: JSON.stringify({ quizzes, attendance, manual }),
 });
-document.getElementById(‘gb-weights-overlay’).remove();
-toastSuccess(‘Weights updated -’);
-renderLecturerCourseGrades(courseId, ‘’);
+document.getElementById('gb-weights-overlay').remove();
+toastSuccess('Weights updated -');
+renderLecturerCourseGrades(courseId, '');
 } catch(e) {
-const err = document.getElementById(‘gb-weights-err’);
-if (err) { err.textContent = e.message; err.style.display = ‘block’; }
+const err = document.getElementById('gb-weights-err');
+if (err) { err.textContent = e.message; err.style.display = 'block'; }
 }
 }
 
-// – Add Manual Entry Modal ––––––––––––––––––––––––––
+// - Add Manual Entry Modal --------------------------
 function openAddManualEntryModal(courseId) {
-const ol = document.createElement(‘div’);
-ol.id = ‘gb-entry-overlay’;
-ol.style.cssText = ‘position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:400;display:flex;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(3px)’;
+const ol = document.createElement('div');
+ol.id = 'gb-entry-overlay';
+ol.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:400;display:flex;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(3px)';
 ol.innerHTML = ` <div style="background:var(--card);border-radius:14px;width:100%;max-width:380px;box-shadow:0 20px 60px rgba(0,0,0,.2);"> <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;"> <h3 style="font-size:15px;font-weight:700;margin:0;">- Add Grade Column</h3> <button onclick="document.getElementById('gb-entry-overlay').remove()" style="width:26px;height:26px;border-radius:6px;border:1px solid var(--border);background:var(--bg);cursor:pointer;">-</button> </div> <div style="padding:18px 20px;display:flex;flex-direction:column;gap:12px;"> <div> <label style="font-size:12px;font-weight:700;margin-bottom:4px;display:block;">Column Label</label> <input id="gb-entry-label" placeholder="e.g. Midterm Exam, Lab Report 1" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;"> </div> <div> <label style="font-size:12px;font-weight:700;margin-bottom:4px;display:block;">Maximum Score</label> <input id="gb-entry-max" type="number" min="1" placeholder="e.g. 100" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;"> </div> <div id="gb-entry-err" style="display:none;color:#ef4444;font-size:12px;"></div> </div> <div style="padding:12px 20px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end;"> <button class="btn btn-secondary" onclick="document.getElementById('gb-entry-overlay').remove()">Cancel</button> <button class="btn btn-primary" onclick="saveManualEntry('${courseId}')">Add Column</button> </div> </div>`;
 document.body.appendChild(ol);
 }
 
 async function saveManualEntry(courseId) {
-const label    = document.getElementById(‘gb-entry-label’).value.trim();
-const maxScore = document.getElementById(‘gb-entry-max’).value;
-const errEl    = document.getElementById(‘gb-entry-err’);
+const label    = document.getElementById('gb-entry-label').value.trim();
+const maxScore = document.getElementById('gb-entry-max').value;
+const errEl    = document.getElementById('gb-entry-err');
 if (!label || !maxScore) {
-if (errEl) { errEl.textContent = ‘Both fields are required.’; errEl.style.display = ‘block’; }
+if (errEl) { errEl.textContent = 'Both fields are required.'; errEl.style.display = 'block'; }
 return;
 }
 try {
-await api(’/api/gradebook/course/’ + courseId + ‘/manual-entry’, {
-method: ‘POST’,
+await api('/api/gradebook/course/' + courseId + '/manual-entry', {
+method: 'POST',
 body: JSON.stringify({ label, maxScore }),
 });
-document.getElementById(‘gb-entry-overlay’).remove();
-toastSuccess(‘Grade column added -’);
-renderLecturerCourseGrades(courseId, document.querySelector(‘h2’)?.textContent || ‘’);
+document.getElementById('gb-entry-overlay').remove();
+toastSuccess('Grade column added -');
+renderLecturerCourseGrades(courseId, document.querySelector('h2')?.textContent || '');
 } catch(e) {
-if (errEl) { errEl.textContent = e.message; errEl.style.display = ‘block’; }
+if (errEl) { errEl.textContent = e.message; errEl.style.display = 'block'; }
 }
 }
 
-// – Enter Manual Scores Modal ———————————————––
+// - Enter Manual Scores Modal --------------------------------
 function openEditManualScores(courseId, entryId, label, maxScore) {
 const gbData = window._gbData;
-if (!gbData) { toastError(‘Grade data not loaded’); return; }
+if (!gbData) { toastError('Grade data not loaded'); return; }
 
-const ol = document.createElement(‘div’);
-ol.id = ‘gb-scores-overlay’;
-ol.style.cssText = ‘position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:400;display:flex;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(3px)’;
+const ol = document.createElement('div');
+ol.id = 'gb-scores-overlay';
+ol.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:400;display:flex;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(3px)';
 
 const rows = gbData.grades.map(g => {
 const existing = g.manualScores.find(m => m.entryId.toString() === entryId);
 return ` <tr> <td style="padding:8px 10px;font-size:13px;">${g.student.name}</td> <td style="padding:8px 10px;"> <input type="number" min="0" max="${maxScore}" step="0.5" data-student="${g.student._id}" value="${existing?.score !== null && existing?.score !== undefined ? existing.score : ''}" placeholder="/ ${maxScore}" style="width:80px;padding:5px 8px;border:1.5px solid var(--border);border-radius:6px;font-size:13px;text-align:center;outline:none;"> </td> </tr>`;
-}).join(’’);
+}).join('');
 
 ol.innerHTML = ` <div style="background:var(--card);border-radius:14px;width:100%;max-width:480px;max-height:88vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.2);"> <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;background:var(--card);z-index:1;border-radius:14px 14px 0 0;"> <h3 style="font-size:15px;font-weight:700;margin:0;">-- ${label} <span style="font-weight:400;color:var(--text-muted);">(max ${maxScore})</span></h3> <button onclick="document.getElementById('gb-scores-overlay').remove()" style="width:26px;height:26px;border-radius:6px;border:1px solid var(--border);background:var(--bg);cursor:pointer;">-</button> </div> <div style="padding:8px 20px;"> <table style="width:100%;border-collapse:collapse;"> <thead><tr> <th style="padding:8px 10px;text-align:left;font-size:11px;text-transform:uppercase;color:var(--text-muted);">Student</th> <th style="padding:8px 10px;text-align:left;font-size:11px;text-transform:uppercase;color:var(--text-muted);">Score</th> </tr></thead> <tbody>${rows}</tbody> </table> </div> <div style="padding:12px 20px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end;position:sticky;bottom:0;background:var(--card);border-radius:0 0 14px 14px;"> <button class="btn btn-secondary" onclick="document.getElementById('gb-scores-overlay').remove()">Cancel</button> <button class="btn btn-primary" onclick="submitManualScores('${courseId}','${entryId}')">Save Scores</button> </div> </div>`;
 document.body.appendChild(ol);
 }
 
 async function submitManualScores(courseId, entryId) {
-const inputs = document.querySelectorAll(’#gb-scores-overlay input[data-student]’);
+const inputs = document.querySelectorAll('#gb-scores-overlay input[data-student]');
 const scores = Array.from(inputs).map(inp => ({
 studentId: inp.dataset.student,
-score: inp.value !== ‘’ ? inp.value : null,
+score: inp.value !== '' ? inp.value : null,
 })).filter(s => s.score !== null);
 
 try {
-await api(’/api/gradebook/course/’ + courseId + ‘/manual-entry/’ + entryId + ‘/scores’, {
-method: ‘PUT’,
+await api('/api/gradebook/course/' + courseId + '/manual-entry/' + entryId + '/scores', {
+method: 'PUT',
 body: JSON.stringify({ scores }),
 });
-document.getElementById(‘gb-scores-overlay’).remove();
-toastSuccess(‘Scores saved -’);
-renderLecturerCourseGrades(courseId, document.querySelector(‘h2’)?.textContent || ‘’);
+document.getElementById('gb-scores-overlay').remove();
+toastSuccess('Scores saved -');
+renderLecturerCourseGrades(courseId, document.querySelector('h2')?.textContent || '');
 } catch(e) {
 toastError(e.message);
 }
 }
 
 function confirmDeleteManualEntry(courseId, entryId) {
-toastConfirm(‘Delete this grade column? All scores will be lost.’, async () => {
+toastConfirm('Delete this grade column? All scores will be lost.', async () => {
 try {
-await api(’/api/gradebook/course/’ + courseId + ‘/manual-entry/’ + entryId, { method: ‘DELETE’ });
-toastSuccess(‘Column deleted’);
-renderLecturerCourseGrades(courseId, document.querySelector(‘h2’)?.textContent || ‘’);
+await api('/api/gradebook/course/' + courseId + '/manual-entry/' + entryId, { method: 'DELETE' });
+toastSuccess('Column deleted');
+renderLecturerCourseGrades(courseId, document.querySelector('h2')?.textContent || '');
 } catch(e) { toastError(e.message); }
 });
 }
 
-// – CSV Export ––––––––––––––––––––––––––––––––
+// - CSV Export --------------------------------
 function exportGradeBookCSV(courseId, courseTitle) {
 const d = window._gbData;
-if (!d || !d.grades.length) { toastWarning(‘No grades to export’); return; }
+if (!d || !d.grades.length) { toastWarning('No grades to export'); return; }
 
 const manualCols = d.gradeBook.manualEntries.map(e => e.label);
-const header = [‘Student Name’, ‘Student ID’, ‘Quiz %’, ‘Attendance %’, …manualCols, ‘Final %’, ‘Grade’];
+const header = ['Student Name', 'Student ID', 'Quiz %', 'Attendance %', ...manualCols, 'Final %', 'Grade'];
 
 const rows = d.grades.map(g => {
 const manual = d.gradeBook.manualEntries.map(e => {
 const ms = g.manualScores.find(m => m.entryId.toString() === e._id.toString());
-return ms?.score !== null && ms?.score !== undefined ? ms.score + ‘/’ + e.maxScore : ‘’;
+return ms?.score !== null && ms?.score !== undefined ? ms.score + '/' + e.maxScore : '';
 });
-return [g.student.name, g.student.studentId || g.student.email, g.quizPct+’%’, g.attPct+’%’, …manual, g.finalPct+’%’, g.letter];
+return [g.student.name, g.student.studentId || g.student.email, g.quizPct+'%', g.attPct+'%', ...manual, g.finalPct+'%', g.letter];
 });
 
-const csv = [header, …rows].map(r => r.map(c => ‘”’ + String(c).replace(/”/g,’””’) + ‘”’).join(’,’)).join(’\n’);
-const blob = new Blob([csv], { type: ‘text/csv’ });
+const csv = [header, ...rows].map(r => r.map(c => '"' + String(c).replace(/"/g,'""') + '"').join(',')).join('\n');
+const blob = new Blob([csv], { type: 'text/csv' });
 const url  = URL.createObjectURL(blob);
-const a    = document.createElement(‘a’);
-a.href = url; a.download = courseTitle.replace(/[^a-z0-9]/gi,’_’) + ‘_grades.csv’;
+const a    = document.createElement('a');
+a.href = url; a.download = courseTitle.replace(/[^a-z0-9]/gi,'_') + '_grades.csv';
 a.click(); URL.revokeObjectURL(url);
 }
 
-// – Announcements (server-backed) —————————————––
+// - Announcements (server-backed) ----------------------------
 
 async function loadAnnBadge() {
 try {
-if (currentUser?.role === ‘employee’) return;
-if (![‘admin’,‘superadmin’,‘manager’,‘lecturer’,‘hod’,‘student’].includes(currentUser?.role)) return;
-const data = await api(’/api/announcements/unread-count’);
-const badge = document.getElementById(‘ann-badge’);
+if (currentUser?.role === 'employee') return;
+if (!['admin','superadmin','manager','lecturer','hod','student'].includes(currentUser?.role)) return;
+const data = await api('/api/announcements/unread-count');
+const badge = document.getElementById('ann-badge');
 if (!badge) return;
 if (data.count > 0) {
-badge.textContent = data.count > 99 ? ‘99+’ : data.count;
-badge.style.display = ‘inline-block’;
+badge.textContent = data.count > 99 ? '99+' : data.count;
+badge.style.display = 'inline-block';
 } else {
-badge.style.display = ‘none’;
+badge.style.display = 'none';
 }
 } catch(_) {}
 }
 
-const ANN_COLORS = { info:’#6366f1’, warning:’#f59e0b’, success:’#22c55e’, urgent:’#ef4444’ };
-const ANN_ICONS  = { info:’–’, warning:’–’, success:’-’, urgent:’-’ };
-const ANN_CAN_POST = [‘admin’,‘superadmin’,‘lecturer’,‘manager’,‘hod’];
+const ANN_COLORS = { info:'#6366f1', warning:'#f59e0b', success:'#22c55e', urgent:'#ef4444' };
+const ANN_ICONS  = { info:'-', warning:'-', success:'-', urgent:'-' };
+const ANN_CAN_POST = ['admin','superadmin','lecturer','manager','hod'];
 
 async function renderAnnouncements() {
-const content = document.getElementById(‘main-content’);
+const content = document.getElementById('main-content');
 if (!content) return;
 if (!isOnline()) {
-const cached = offlineRead(‘announcements’);
+const cached = offlineRead('announcements');
 if (cached) {
-content.innerHTML = ‘<div style="background:#fef3c7;color:#92400e;padding:10px 16px;border-radius:8px;font-size:13px;margin-bottom:16px">- Offline - showing cached announcements</div>’;
+content.innerHTML = '<div style="background:#fef3c7;color:#92400e;padding:10px 16px;border-radius:8px;font-size:13px;margin-bottom:16px">- Offline - showing cached announcements</div>';
 _renderAnnouncementsHTML(content, cached);
 } else {
-content.innerHTML = ‘<div class="card" style="text-align:center;padding:32px"><div style="font-size:36px">-</div><p style="margin-top:8px;color:var(--text-light)">No cached data. Connect once to view announcements offline.</p></div>’;
+content.innerHTML = '<div class="card" style="text-align:center;padding:32px"><div style="font-size:36px">-</div><p style="margin-top:8px;color:var(--text-light)">No cached data. Connect once to view announcements offline.</p></div>';
 }
 return;
 }
-content.innerHTML = ‘<div class="loading">Loading announcements-</div>’;
+content.innerHTML = '<div class="loading">Loading announcements-</div>';
 try {
-const data = await api(’/api/announcements’);
-offlineCache(‘announcements’, data);
+const data = await api('/api/announcements');
+offlineCache('announcements', data);
 const anns = data.announcements || [];
 const canPost = ANN_CAN_POST.includes(currentUser.role);
-const isAdmin = [‘admin’,‘superadmin’].includes(currentUser.role);
+const isAdmin = ['admin','superadmin'].includes(currentUser.role);
 
-```
+
 content.innerHTML = `
   <div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;">
     <div>
@@ -8157,7 +8096,6 @@ content.innerHTML = `
 anns.filter(a => !a.isRead).forEach(a => {
   api('/api/announcements/' + a._id + '/read', { method: 'PATCH' }).catch(()=>{});
 });
-```
 
 } catch(e) {
 content.innerHTML = `<div class="card"><p style="color:#ef4444;">Error: ${e.message}</p></div>`;
@@ -8165,32 +8103,32 @@ content.innerHTML = `<div class="card"><p style="color:#ef4444;">Error: ${e.mess
 }
 
 function annCard(a, canPost, isAdmin) {
-const color = ANN_COLORS[a.type] || ‘#6366f1’;
-const icon  = ANN_ICONS[a.type]  || ‘–’;
+const color = ANN_COLORS[a.type] || '#6366f1';
+const icon  = ANN_ICONS[a.type]  || '-';
 const canDelete = isAdmin || (canPost && a.author?._id === (currentUser._id || currentUser.id));
-const audienceLabel = { all:‘Everyone’, students:‘Students’, employees:‘Employees’ }[a.audience] || ‘Everyone’;
-return `<div class="card" style="margin-bottom:12px;border-left:4px solid ${color};position:relative;${a.pinned?'background:linear-gradient(135deg,var(--card),#fefce8);':''}" id="ann-${a._id}"> ${a.pinned ? '<div style="position:absolute;top:10px;right:12px;font-size:11px;color:#92400e;font-weight:700;background:#fef3c7;padding:2px 7px;border-radius:20px;">- Pinned</div>' : ''} <div style="display:flex;align-items:flex-start;gap:12px;"> <div style="font-size:22px;flex-shrink:0;margin-top:2px;">${icon}</div> <div style="flex:1;min-width:0;"> <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;flex-wrap:wrap;"> <span style="font-weight:700;font-size:15px;">${a.title}</span> ${!a.isRead ? '<span style="background:#6366f1;color:#fff;font-size:10px;padding:1px 7px;border-radius:20px;font-weight:700;">NEW</span>' : ''} </div> <div style="font-size:13px;color:var(--text-light);margin-bottom:10px;white-space:pre-wrap;line-height:1.6;">${a.body}</div> <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:11px;color:var(--text-muted);"> <span>- ${a.author?.name || 'Unknown'}</span> <span>- ${audienceLabel}</span> ${a.course ?`<span style="background:#ede9fe;color:#7c3aed;padding:1px 7px;border-radius:20px;font-weight:700;">- ${esc(a.course.title||’’)}${a.course.level?’ - L’+a.course.level:’’}${a.course.group?’ - Grp ‘+a.course.group:’’}</span>`: ''} <span>- ${new Date(a.createdAt).toLocaleString()}</span> ${a.readCount > 0 ?`<span>- ${a.readCount} read</span>`: ''} </div> </div> <div style="display:flex;gap:5px;flex-shrink:0;flex-direction:column;align-items:flex-end;"> ${isAdmin ?`<button class="btn btn-sm btn-secondary" style="font-size:11px;padding:3px 8px;" onclick="annTogglePin('${a._id}')">${a.pinned?‘Unpin’:’- Pin’}</button>`: ''} ${canDelete ?`<button style="background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:16px;padding:2px 4px;" onclick="annDelete('${a._id}')" title="Delete">-</button>` : ''} </div> </div> </div>`;
+const audienceLabel = { all:'Everyone', students:'Students', employees:'Employees' }[a.audience] || 'Everyone';
+return `<div class="card" style="margin-bottom:12px;border-left:4px solid ${color};position:relative;${a.pinned?'background:linear-gradient(135deg,var(--card),#fefce8);':''}" id="ann-${a._id}"> ${a.pinned ? '<div style="position:absolute;top:10px;right:12px;font-size:11px;color:#92400e;font-weight:700;background:#fef3c7;padding:2px 7px;border-radius:20px;">- Pinned</div>' : ''} <div style="display:flex;align-items:flex-start;gap:12px;"> <div style="font-size:22px;flex-shrink:0;margin-top:2px;">${icon}</div> <div style="flex:1;min-width:0;"> <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;flex-wrap:wrap;"> <span style="font-weight:700;font-size:15px;">${a.title}</span> ${!a.isRead ? '<span style="background:#6366f1;color:#fff;font-size:10px;padding:1px 7px;border-radius:20px;font-weight:700;">NEW</span>' : ''} </div> <div style="font-size:13px;color:var(--text-light);margin-bottom:10px;white-space:pre-wrap;line-height:1.6;">${a.body}</div> <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:11px;color:var(--text-muted);"> <span>- ${a.author?.name || 'Unknown'}</span> <span>- ${audienceLabel}</span> ${a.course ?`<span style="background:#ede9fe;color:#7c3aed;padding:1px 7px;border-radius:20px;font-weight:700;">- ${esc(a.course.title||'')}${a.course.level?' - L'+a.course.level:''}${a.course.group?' - Grp '+a.course.group:''}</span>`: ''} <span>- ${new Date(a.createdAt).toLocaleString()}</span> ${a.readCount > 0 ?`<span>- ${a.readCount} read</span>`: ''} </div> </div> <div style="display:flex;gap:5px;flex-shrink:0;flex-direction:column;align-items:flex-end;"> ${isAdmin ?`<button class="btn btn-sm btn-secondary" style="font-size:11px;padding:3px 8px;" onclick="annTogglePin('${a._id}')">${a.pinned?'Unpin':'- Pin'}</button>`: ''} ${canDelete ?`<button style="background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:16px;padding:2px 4px;" onclick="annDelete('${a._id}')" title="Delete">-</button>` : ''} </div> </div> </div>`;
 }
 
 async function openPostAnnouncementModal() {
-const existing = document.getElementById(‘ann-post-overlay’);
+const existing = document.getElementById('ann-post-overlay');
 if (existing) existing.remove();
-const isAdmin = [‘admin’,‘superadmin’].includes(currentUser.role);
+const isAdmin = ['admin','superadmin'].includes(currentUser.role);
 
 // Pre-fetch courses for lecturer/hod course selector
 let courses = [];
-if (currentUser.role === ‘lecturer’ || currentUser.role === ‘hod’) {
+if (currentUser.role === 'lecturer' || currentUser.role === 'hod') {
 try {
-const d = await api(’/api/courses’);
+const d = await api('/api/courses');
 courses = d.courses || d || [];
 } catch(e) { courses = []; }
 }
 const courseOptions = `<option value="">- All my students -</option>` +
-courses.map(c => `<option value="${c._id}">${esc(c.title)}${c.level?' - L'+c.level:''}${c.group?' - Grp '+c.group:''}</option>`).join(’’);
+courses.map(c => `<option value="${c._id}">${esc(c.title)}${c.level?' - L'+c.level:''}${c.group?' - Grp '+c.group:''}</option>`).join('');
 
-const ol = document.createElement(‘div’);
-ol.id = ‘ann-post-overlay’;
-ol.style.cssText = ‘position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:400;display:flex;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(3px)’;
+const ol = document.createElement('div');
+ol.id = 'ann-post-overlay';
+ol.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:400;display:flex;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(3px)';
 ol.innerHTML = `<div style="background:var(--card);border-radius:14px;width:100%;max-width:520px;max-height:92vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.2);"> <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;background:var(--card);z-index:1;border-radius:14px 14px 0 0;"> <h3 style="font-size:15px;font-weight:700;margin:0">- Post Announcement</h3> <button onclick="document.getElementById('ann-post-overlay').remove()" style="width:26px;height:26px;border-radius:6px;border:1px solid var(--border);background:var(--bg);cursor:pointer;font-size:13px;">-</button> </div> <div style="padding:18px 20px;display:flex;flex-direction:column;gap:13px;"> <div> <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:5px;display:block;">Title *</label> <input id="ann-title" placeholder="e.g. Class cancelled tomorrow" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;font-family:inherit;outline:none;"> </div> <div> <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:5px;display:block;">Message *</label> <textarea id="ann-body" rows="4" placeholder="Enter your announcement-" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;resize:vertical;outline:none;"></textarea> </div> <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;"> <div> <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:5px;display:block;">Type</label> <select id="ann-type" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;"> <option value="info">-- Info</option> <option value="warning">-- Warning</option> <option value="success">- Good News</option> <option value="urgent">- Urgent</option> </select> </div> <div> <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:5px;display:block;">Audience</label> ${currentUser.role === 'lecturer' ?`<input type="hidden" id="ann-audience" value="students">
 <div style="padding:8px 12px;background:var(--bg);border:1.5px solid var(--border);border-radius:8px;font-size:13px;color:var(--text-light);">- My Students only</div>`: currentUser.role === 'hod' ?`<select id="ann-audience" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;">
 <option value="all">Everyone</option>
@@ -8199,9 +8137,9 @@ ol.innerHTML = `<div style="background:var(--card);border-radius:14px;width:100%
 </select>`:`<select id="ann-audience" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;">
 <option value="all">Everyone</option>
 <option value="students">Students only</option>
-${currentUser?.company?.mode === ‘academic’
-? ‘<option value="lecturers">Lecturers only</option>’
-: ‘<option value="employees">Employees only</option>’
+${currentUser?.company?.mode === 'academic'
+? '<option value="lecturers">Lecturers only</option>'
+: '<option value="employees">Employees only</option>'
 }
 </select>`} </div> </div> ${currentUser.role === 'lecturer' ?`
 <div>
@@ -8219,60 +8157,60 @@ document.body.appendChild(ol);
 }
 
 async function submitAnnouncement() {
-const title    = document.getElementById(‘ann-title’)?.value?.trim();
-const body     = document.getElementById(‘ann-body’)?.value?.trim();
-const type     = document.getElementById(‘ann-type’)?.value || ‘info’;
-const audience = document.getElementById(‘ann-audience’)?.value || ‘all’;
-const expiresAt= document.getElementById(‘ann-expires’)?.value || null;
-const pinned   = document.getElementById(‘ann-pinned’)?.checked || false;
-const courseId = document.getElementById(‘ann-course’)?.value || null;
-const errEl    = document.getElementById(‘ann-post-err’);
+const title    = document.getElementById('ann-title')?.value?.trim();
+const body     = document.getElementById('ann-body')?.value?.trim();
+const type     = document.getElementById('ann-type')?.value || 'info';
+const audience = document.getElementById('ann-audience')?.value || 'all';
+const expiresAt= document.getElementById('ann-expires')?.value || null;
+const pinned   = document.getElementById('ann-pinned')?.checked || false;
+const courseId = document.getElementById('ann-course')?.value || null;
+const errEl    = document.getElementById('ann-post-err');
 
 if (!title || !body) {
-if (errEl) { errEl.textContent = ‘Title and message are required.’; errEl.style.display = ‘block’; }
+if (errEl) { errEl.textContent = 'Title and message are required.'; errEl.style.display = 'block'; }
 return;
 }
 try {
-await api(’/api/announcements’, {
-method: ‘POST’,
+await api('/api/announcements', {
+method: 'POST',
 body: JSON.stringify({ title, body, type, audience, pinned, expiresAt: expiresAt ? new Date(expiresAt).toISOString() : null, courseId: courseId || undefined }),
 });
-document.getElementById(‘ann-post-overlay’)?.remove();
-toastSuccess(‘Announcement posted -’);
+document.getElementById('ann-post-overlay')?.remove();
+toastSuccess('Announcement posted -');
 renderAnnouncements();
 } catch(e) {
-if (errEl) { errEl.textContent = e.message || ‘Failed to post’; errEl.style.display = ‘block’; }
+if (errEl) { errEl.textContent = e.message || 'Failed to post'; errEl.style.display = 'block'; }
 }
 }
 
 async function annDelete(id) {
-toastConfirm(‘Delete this announcement?’, async () => {
+toastConfirm('Delete this announcement?', async () => {
 try {
-await api(’/api/announcements/’ + id, { method: ‘DELETE’ });
-document.getElementById(‘ann-’ + id)?.remove();
-toastSuccess(‘Announcement deleted’);
-} catch(e) { toastError(‘Delete failed’); }
+await api('/api/announcements/' + id, { method: 'DELETE' });
+document.getElementById('ann-' + id)?.remove();
+toastSuccess('Announcement deleted');
+} catch(e) { toastError('Delete failed'); }
 });
 }
 
 async function annTogglePin(id) {
 try {
-const data = await api(’/api/announcements/’ + id + ‘/pin’, { method: ‘PATCH’ });
-toastSuccess(data.pinned ? ‘Pinned -’ : ‘Unpinned’);
+const data = await api('/api/announcements/' + id + '/pin', { method: 'PATCH' });
+toastSuccess(data.pinned ? 'Pinned -' : 'Unpinned');
 renderAnnouncements();
-} catch(e) { toastError(‘Failed to update pin’); }
+} catch(e) { toastError('Failed to update pin'); }
 }
 
-// ——————————————————————————
+// ----------------------------------------------------
 //  FEATURE: SESSION ATTENDANCE CSV EXPORT
-// ——————————————————————————
+// ----------------------------------------------------
 async function exportSessionCSV(sessionId, sessionTitle) {
 try {
-const data = await api(’/api/attendance-sessions/’ + sessionId + ‘/records’);
+const data = await api('/api/attendance-sessions/' + sessionId + '/records');
 const records = data.records || [];
-if (!records.length) { toastWarning(‘No attendance records to export’); return; }
+if (!records.length) { toastWarning('No attendance records to export'); return; }
 
-```
+
 const rows = [
   ['Name', 'Student ID / Email', 'Method', 'Check-in Time', 'Status'],
   ...records.map(r => [
@@ -8292,16 +8230,15 @@ a.href = url;
 a.download = (sessionTitle || 'attendance') + '_' + new Date().toISOString().slice(0,10) + '.csv';
 document.body.appendChild(a); a.click(); document.body.removeChild(a);
 URL.revokeObjectURL(url);
-```
 
-} catch(e) { toastError(’Export failed: ’ + e.message); }
+} catch(e) { toastError('Export failed: ' + e.message); }
 }
 
-// ——————————————————————————
+// ----------------------------------------------------
 //  FEATURE: ABOUT / VERSION PAGE
-// ——————————————————————————
+// ----------------------------------------------------
 function renderAbout() {
-const content = document.getElementById(‘main-content’);
+const content = document.getElementById('main-content');
 if (!content) return;
 content.innerHTML = `
 <div class="page-header"><h2>About</h2><p>KODEX Platform</p></div>
@@ -8313,7 +8250,7 @@ content.innerHTML = `
 <div style="font-size:14px;color:var(--text-light);margin-bottom:4px">KODEX Platform</div>
 <div style="display:inline-block;background:var(--bg);border:1px solid var(--border);border-radius:999px;padding:4px 14px;font-size:12px;font-weight:600;color:var(--text-light);margin-bottom:28px">Version 1.0.0</div>
 
-```
+
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:28px;text-align:left">
     ${[
       ['-', 'Academic Mode', 'Courses, lecturers, students & proctored quizzes'],
@@ -8337,153 +8274,152 @@ content.innerHTML = `
     <span style="font-size:12px">&copy; 2026 KODEX. All rights reserved.</span>
   </div>
 </div>
-```
 
 `;
 }
 
-// – Dark Mode ——————————————————————
+// - Dark Mode --------------------------------------------
 function initDarkMode() {
-const saved = localStorage.getItem(‘kodex_theme’);
-if (saved === ‘dark’) document.documentElement.setAttribute(‘data-theme’, ‘dark’);
+const saved = localStorage.getItem('kodex_theme');
+if (saved === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
 }
 
 function toggleDarkMode() {
-const isDark = document.documentElement.getAttribute(‘data-theme’) === ‘dark’;
+const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
 if (isDark) {
-document.documentElement.removeAttribute(‘data-theme’);
-localStorage.setItem(‘kodex_theme’, ‘light’);
+document.documentElement.removeAttribute('data-theme');
+localStorage.setItem('kodex_theme', 'light');
 } else {
-document.documentElement.setAttribute(‘data-theme’, ‘dark’);
-localStorage.setItem(‘kodex_theme’, ‘dark’);
+document.documentElement.setAttribute('data-theme', 'dark');
+localStorage.setItem('kodex_theme', 'dark');
 }
 // Update toggle button icon if present
-const btn = document.getElementById(‘dark-mode-btn’);
-if (btn) btn.textContent = isDark ? ‘-’ : ‘–’;
+const btn = document.getElementById('dark-mode-btn');
+if (btn) btn.textContent = isDark ? '-' : '-';
 }
 
 // Call on load
 initDarkMode();
 
-// – Profile Photo Upload —————————————————––
+// - Profile Photo Upload ------------------------------------
 async function uploadProfilePhoto(input) {
 const file = input.files[0];
 if (!file) return;
-if (file.size > 2 * 1024 * 1024) { showToastNotif(‘Image must be under 2MB’, ‘error’); return; }
+if (file.size > 2 * 1024 * 1024) { showToastNotif('Image must be under 2MB', 'error'); return; }
 
 // Convert to base64
 const reader = new FileReader();
 reader.onload = async (e) => {
 const base64 = e.target.result;
 try {
-const data = await api(’/api/auth/profile’, { method: ‘PUT’, body: JSON.stringify({ profilePhoto: base64 }) });
+const data = await api('/api/auth/profile', { method: 'PUT', body: JSON.stringify({ profilePhoto: base64 }) });
 currentUser.profilePhoto = base64;
 // Update avatar display
-const avatar = document.getElementById(‘profile-avatar’);
+const avatar = document.getElementById('profile-avatar');
 if (avatar) avatar.innerHTML = `<img src="${base64}" style="width:100%;height:100%;object-fit:cover">`;
-showToastNotif(‘Profile photo updated!’, ‘success’);
-} catch(e) { showToastNotif(’Failed to upload photo: ’ + e.message, ‘error’); }
+showToastNotif('Profile photo updated!', 'success');
+} catch(e) { showToastNotif('Failed to upload photo: ' + e.message, 'error'); }
 };
 reader.readAsDataURL(file);
 }
 
-// – Push Notifications ———————————————————
+// - Push Notifications --------------------------------------
 async function requestPushPermission() {
-if (!(‘Notification’ in window) || !(‘serviceWorker’ in navigator)) return false;
+if (!('Notification' in window) || !('serviceWorker' in navigator)) return false;
 const permission = await Notification.requestPermission();
-return permission === ‘granted’;
+return permission === 'granted';
 }
 
 async function showLocalNotification(title, body, url) {
-if (!(‘Notification’ in window)) return;
-if (Notification.permission !== ‘granted’) {
+if (!('Notification' in window)) return;
+if (Notification.permission !== 'granted') {
 const granted = await requestPushPermission();
 if (!granted) return;
 }
 const reg = await navigator.serviceWorker.ready.catch(() => null);
 if (reg) {
-reg.showNotification(title, { body, icon: ‘/icons/icon-192.png’, data: { url: url || ‘/’ } });
+reg.showNotification(title, { body, icon: '/icons/icon-192.png', data: { url: url || '/' } });
 } else {
 new Notification(title, { body });
 }
 }
 
-// – Bulk Email to Course Students –––––––––––––––––––––––
+// - Bulk Email to Course Students -----------------------
 function openBulkEmailModal(courseId, courseName) {
-const existing = document.getElementById(‘bulk-email-modal’);
+const existing = document.getElementById('bulk-email-modal');
 if (existing) existing.remove();
 
-const modal = document.createElement(‘div’);
-modal.id = ‘bulk-email-modal’;
-modal.style.cssText = ‘position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;display:flex;align-items:center;justify-content:center;padding:20px’;
+const modal = document.createElement('div');
+modal.id = 'bulk-email-modal';
+modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;display:flex;align-items:center;justify-content:center;padding:20px';
 modal.innerHTML = ` <div style="background:var(--card);border-radius:16px;padding:28px;width:100%;max-width:500px;box-shadow:0 20px 60px rgba(0,0,0,.3)"> <h3 style="font-size:16px;font-weight:700;margin-bottom:4px">- Email Students</h3> <p style="font-size:13px;color:var(--text-muted);margin-bottom:20px">${courseName}</p> <div class="form-group"> <label>Subject</label> <input type="text" id="bulk-email-subject" placeholder="e.g. Assignment reminder"> </div> <div class="form-group"> <label>Message</label> <textarea id="bulk-email-body" rows="5" placeholder="Your message to all students in this course-" style="width:100%;padding:10px 14px;border:1.5px solid var(--border);border-radius:9px;font-size:14px;font-family:inherit;resize:vertical"></textarea> </div> <div id="bulk-email-status" style="display:none;padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:12px"></div> <div style="display:flex;gap:10px;justify-content:flex-end"> <button class="btn btn-secondary" onclick="document.getElementById('bulk-email-modal').remove()">Cancel</button> <button class="btn btn-primary" onclick="sendBulkEmail('${courseId}')">Send to All Students</button> </div> </div>`;
 document.body.appendChild(modal);
 }
 
 async function sendBulkEmail(courseId) {
-const subject = document.getElementById(‘bulk-email-subject’)?.value?.trim();
-const message = document.getElementById(‘bulk-email-body’)?.value?.trim();
-const status = document.getElementById(‘bulk-email-status’);
+const subject = document.getElementById('bulk-email-subject')?.value?.trim();
+const message = document.getElementById('bulk-email-body')?.value?.trim();
+const status = document.getElementById('bulk-email-status');
 if (!subject || !message) {
-status.textContent = ‘Please enter subject and message.’;
-status.style.cssText = ‘display:block;background:#fef2f2;color:#dc2626;padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:12px’;
+status.textContent = 'Please enter subject and message.';
+status.style.cssText = 'display:block;background:#fef2f2;color:#dc2626;padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:12px';
 return;
 }
 try {
-const data = await api(`/api/courses/${courseId}/email-students`, { method: ‘POST’, body: JSON.stringify({ subject, message }) });
+const data = await api(`/api/courses/${courseId}/email-students`, { method: 'POST', body: JSON.stringify({ subject, message }) });
 status.textContent = `- Email sent to ${data.sentCount} student(s)`;
-status.style.cssText = ‘display:block;background:#f0fdf4;color:#15803d;padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:12px’;
-setTimeout(() => document.getElementById(‘bulk-email-modal’)?.remove(), 2000);
+status.style.cssText = 'display:block;background:#f0fdf4;color:#15803d;padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:12px';
+setTimeout(() => document.getElementById('bulk-email-modal')?.remove(), 2000);
 } catch(e) {
-status.textContent = ’Failed: ’ + e.message;
-status.style.cssText = ‘display:block;background:#fef2f2;color:#dc2626;padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:12px’;
+status.textContent = 'Failed: ' + e.message;
+status.style.cssText = 'display:block;background:#fef2f2;color:#dc2626;padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:12px';
 }
 }
 
-// – Bulk SMS to students ——————————————————
+// - Bulk SMS to students ------------------------------------
 function openBulkSmsModal(courseId, courseName) {
-const existing = document.getElementById(‘bulk-sms-modal’);
+const existing = document.getElementById('bulk-sms-modal');
 if (existing) existing.remove();
 
-const modal = document.createElement(‘div’);
-modal.id = ‘bulk-sms-modal’;
-modal.style.cssText = ‘position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;display:flex;align-items:center;justify-content:center;padding:20px’;
+const modal = document.createElement('div');
+modal.id = 'bulk-sms-modal';
+modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;display:flex;align-items:center;justify-content:center;padding:20px';
 modal.innerHTML = ` <div style="background:var(--card);border-radius:16px;padding:28px;width:100%;max-width:500px;box-shadow:0 20px 60px rgba(0,0,0,.3)"> <h3 style="font-size:16px;font-weight:700;margin-bottom:4px">- SMS Students</h3> <p style="font-size:13px;color:var(--text-muted);margin-bottom:20px">${courseName} - students with phone numbers only</p> <div class="form-group"> <label>Message <span style="font-weight:400;color:var(--text-muted);font-size:12px">(max 160 characters)</span></label> <textarea id="bulk-sms-body" rows="4" maxlength="160" placeholder="e.g. Class cancelled today. See you next week." style="width:100%;padding:10px 14px;border:1.5px solid var(--border);border-radius:9px;font-size:14px;font-family:inherit;resize:vertical" oninput="document.getElementById('sms-char-count').textContent=(160-this.value.length)+' remaining'"></textarea> <div id="sms-char-count" style="font-size:11px;color:var(--text-muted);text-align:right;margin-top:3px">160 remaining</div> </div> <div id="bulk-sms-status" style="display:none;padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:12px"></div> <div style="display:flex;gap:10px;justify-content:flex-end"> <button class="btn btn-secondary" onclick="document.getElementById('bulk-sms-modal').remove()">Cancel</button> <button class="btn btn-primary" style="background:#10b981;border-color:#10b981" onclick="sendBulkSms('${courseId}')">Send SMS to All Students</button> </div> </div>`;
 document.body.appendChild(modal);
 }
 
 async function sendBulkSms(courseId) {
-const message = document.getElementById(‘bulk-sms-body’)?.value?.trim();
-const status  = document.getElementById(‘bulk-sms-status’);
+const message = document.getElementById('bulk-sms-body')?.value?.trim();
+const status  = document.getElementById('bulk-sms-status');
 if (!message) {
-status.textContent = ‘Please enter a message.’;
-status.style.cssText = ‘display:block;background:#fef2f2;color:#dc2626;padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:12px’;
+status.textContent = 'Please enter a message.';
+status.style.cssText = 'display:block;background:#fef2f2;color:#dc2626;padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:12px';
 return;
 }
 if (message.length > 160) {
-status.textContent = ‘Message too long - max 160 characters.’;
-status.style.cssText = ‘display:block;background:#fef2f2;color:#dc2626;padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:12px’;
+status.textContent = 'Message too long - max 160 characters.';
+status.style.cssText = 'display:block;background:#fef2f2;color:#dc2626;padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:12px';
 return;
 }
 try {
-const data = await api(`/api/courses/${courseId}/sms-students`, { method: ‘POST’, body: JSON.stringify({ message }) });
+const data = await api(`/api/courses/${courseId}/sms-students`, { method: 'POST', body: JSON.stringify({ message }) });
 status.textContent = `- SMS sent to ${data.sentCount} student(s)`;
-status.style.cssText = ‘display:block;background:#f0fdf4;color:#15803d;padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:12px’;
-setTimeout(() => document.getElementById(‘bulk-sms-modal’)?.remove(), 2000);
+status.style.cssText = 'display:block;background:#f0fdf4;color:#15803d;padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:12px';
+setTimeout(() => document.getElementById('bulk-sms-modal')?.remove(), 2000);
 } catch(e) {
-status.textContent = ’Failed: ’ + e.message;
-status.style.cssText = ‘display:block;background:#fef2f2;color:#dc2626;padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:12px’;
+status.textContent = 'Failed: ' + e.message;
+status.style.cssText = 'display:block;background:#fef2f2;color:#dc2626;padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:12px';
 }
 }
 
-// – Export to Excel (uses SheetJS via CDN) ————————————
+// - Export to Excel (uses SheetJS via CDN) ------------------------
 async function exportAttendanceToExcel(sessionId, sessionTitle) {
 try {
-showToastNotif(‘Preparing Excel file-’, ‘info’);
+showToastNotif('Preparing Excel file-', 'info');
 const data = await api(`/api/attendance-sessions/${sessionId}/records`);
 const records = data.records || [];
 
-```
+
 // Load SheetJS dynamically
 if (!window.XLSX) {
   await new Promise((resolve, reject) => {
@@ -8521,20 +8457,19 @@ ws['!cols'] = [{ wch: 25 }, { wch: 15 }, { wch: 12 }, { wch: 15 }, { wch: 22 }, 
 const filename = `Attendance_${(sessionTitle || 'session').replace(/[^a-z0-9]/gi, '_')}_${new Date().toISOString().slice(0,10)}.xlsx`;
 window.XLSX.writeFile(wb, filename);
 showToastNotif('Excel file downloaded!', 'success');
-```
 
 } catch(e) {
-showToastNotif(’Export failed: ’ + e.message, ‘error’);
+showToastNotif('Export failed: ' + e.message, 'error');
 }
 }
 
 async function exportAllAttendanceToExcel() {
 try {
-showToastNotif(‘Preparing Excel file-’, ‘info’);
-const data = await api(’/api/attendance-sessions/my-attendance?limit=500’);
+showToastNotif('Preparing Excel file-', 'info');
+const data = await api('/api/attendance-sessions/my-attendance?limit=500');
 const records = data.records || [];
 
-```
+
 if (!window.XLSX) {
   await new Promise((resolve, reject) => {
     const s = document.createElement('script');
@@ -8560,18 +8495,17 @@ window.XLSX.utils.book_append_sheet(wb, ws, 'My Attendance');
 ws['!cols'] = [{ wch: 30 }, { wch: 15 }, { wch: 12 }, { wch: 15 }];
 window.XLSX.writeFile(wb, `My_Attendance_${new Date().toISOString().slice(0,10)}.xlsx`);
 showToastNotif('Excel file downloaded!', 'success');
-```
 
 } catch(e) {
-showToastNotif(’Export failed: ’ + e.message, ‘error’);
+showToastNotif('Export failed: ' + e.message, 'error');
 }
 }
 
-// – Timetable - Lecturer (editable) & Student (read-only) ———————
+// - Timetable - Lecturer (editable) & Student (read-only) --------------
 
-const TIMETABLE_DAYS = [‘Sunday’,‘Monday’,‘Tuesday’,‘Wednesday’,‘Thursday’,‘Friday’,‘Saturday’];
-const TIMETABLE_DAYS_SHORT = [‘Sun’,‘Mon’,‘Tue’,‘Wed’,‘Thu’,‘Fri’,‘Sat’];
-const TIMETABLE_COLORS = [’#6366f1’,’#0ea5e9’,’#10b981’,’#f59e0b’,’#ef4444’,’#8b5cf6’,’#ec4899’,’#14b8a6’];
+const TIMETABLE_DAYS = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+const TIMETABLE_DAYS_SHORT = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+const TIMETABLE_COLORS = ['#6366f1','#0ea5e9','#10b981','#f59e0b','#ef4444','#8b5cf6','#ec4899','#14b8a6'];
 
 function _timetableGrid(slots, canEdit) {
 // Show Mon-Sat (1-6) only - skip Sunday unless there are Sunday slots
@@ -8586,10 +8520,10 @@ color:${d===today?'var(--primary)':'var(--text-muted)'};
 margin-bottom:8px;padding-bottom:6px;border-bottom:2px solid ${d===today?'var(--primary)':'var(--border)'}">
 ${TIMETABLE_DAYS_SHORT[d]}
 </div>
-${slots.filter(s=>s.dayOfWeek===d).sort((a,b)=>a.startTime.localeCompare(b.startTime)).map(s=>`<div style="background:${s.color}18;border-left:3px solid ${s.color};border-radius:6px; padding:8px 10px;margin-bottom:6px;text-align:left;position:relative;cursor:${canEdit?'pointer':'default'}" ${canEdit ?`onclick=“openEditSlotModal(’${s._id}’)”`: ''}> <div style="font-size:12px;font-weight:700;color:${s.color};margin-bottom:2px;"> ${s.startTime} - ${s.endTime} </div> <div style="font-size:12px;font-weight:600;color:var(--text-primary);line-height:1.3;"> ${esc(s.title || s.course?.title || 'Class')} </div> ${s.course?.code ?`<div style="font-size:10px;color:var(--text-muted);">${esc(s.course.code)}</div>`: ''} ${s.room ?`<div style="font-size:10px;color:var(--text-muted);">- ${esc(s.room)}</div>`: ''} ${!canEdit && s.lecturer?.name ?`<div style="font-size:10px;color:var(--text-muted);">- ${esc(s.lecturer.name)}</div>`: ''} ${canEdit ?`<button onclick="event.stopPropagation();deleteSlot('${s._id}')"
+${slots.filter(s=>s.dayOfWeek===d).sort((a,b)=>a.startTime.localeCompare(b.startTime)).map(s=>`<div style="background:${s.color}18;border-left:3px solid ${s.color};border-radius:6px; padding:8px 10px;margin-bottom:6px;text-align:left;position:relative;cursor:${canEdit?'pointer':'default'}" ${canEdit ?`onclick="openEditSlotModal('${s._id}')"`: ''}> <div style="font-size:12px;font-weight:700;color:${s.color};margin-bottom:2px;"> ${s.startTime} - ${s.endTime} </div> <div style="font-size:12px;font-weight:600;color:var(--text-primary);line-height:1.3;"> ${esc(s.title || s.course?.title || 'Class')} </div> ${s.course?.code ?`<div style="font-size:10px;color:var(--text-muted);">${esc(s.course.code)}</div>`: ''} ${s.room ?`<div style="font-size:10px;color:var(--text-muted);">- ${esc(s.room)}</div>`: ''} ${!canEdit && s.lecturer?.name ?`<div style="font-size:10px;color:var(--text-muted);">- ${esc(s.lecturer.name)}</div>`: ''} ${canEdit ?`<button onclick="event.stopPropagation();deleteSlot('${s._id}')"
 style="position:absolute;top:4px;right:4px;background:none;border:none;cursor:pointer;
-color:var(--text-muted);font-size:14px;line-height:1;padding:2px;">-</button>`: ''} </div>`).join(’’)}
-${canEdit ? ` <button onclick="openAddSlotModal(${d})" style="width:100%;padding:6px;background:transparent;border:1.5px dashed var(--border); border-radius:6px;font-size:11px;color:var(--text-muted);cursor:pointer;margin-top:2px"> + Add </button>` : ‘’}
+color:var(--text-muted);font-size:14px;line-height:1;padding:2px;">-</button>`: ''} </div>`).join('')}
+${canEdit ? ` <button onclick="openAddSlotModal(${d})" style="width:100%;padding:6px;background:transparent;border:1.5px dashed var(--border); border-radius:6px;font-size:11px;color:var(--text-muted);cursor:pointer;margin-top:2px"> + Add </button>` : ''}
 </div>
 `).join('')} </div>`;
 }
@@ -8598,18 +8532,18 @@ let _timetableSlots = [];
 let _timetableCourses = [];
 
 async function renderLecturerTimetable() {
-const content = document.getElementById(‘main-content’);
+const content = document.getElementById('main-content');
 if (!content) return;
-content.innerHTML = ‘<div class="loading">Loading timetable-</div>’;
+content.innerHTML = '<div class="loading">Loading timetable-</div>';
 try {
 const [slotData, courseData] = await Promise.all([
-api(’/api/timetable’),
-api(’/api/courses’).catch(() => api(’/api/lecturer/quizzes’).then(d => ({ courses: [] })).catch(() => ({ courses: [] }))),
+api('/api/timetable'),
+api('/api/courses').catch(() => api('/api/lecturer/quizzes').then(d => ({ courses: [] })).catch(() => ({ courses: [] }))),
 ]);
 _timetableSlots   = slotData.slots   || [];
 _timetableCourses = (courseData.courses || courseData || []);
 
-```
+
 content.innerHTML = `
   <div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px">
     <div>
@@ -8626,7 +8560,6 @@ content.innerHTML = `
       </div>`
     : `<div class="card" style="overflow-x:auto">${_timetableGrid(_timetableSlots, true)}</div>`
   }`;
-```
 
 } catch(e) {
 content.innerHTML = `<div class="card"><p style="color:var(--danger)">Error: ${e.message}</p></div>`;
@@ -8634,15 +8567,15 @@ content.innerHTML = `<div class="card"><p style="color:var(--danger)">Error: ${e
 }
 
 async function renderStudentTimetable() {
-const content = document.getElementById(‘main-content’);
+const content = document.getElementById('main-content');
 if (!content) return;
-content.innerHTML = ‘<div class="loading">Loading timetable-</div>’;
+content.innerHTML = '<div class="loading">Loading timetable-</div>';
 try {
-const slotData = await api(’/api/timetable’);
+const slotData = await api('/api/timetable');
 const slots = slotData.slots || [];
 content.innerHTML = `<div class="page-header"> <h2>My Schedule</h2> <p>Your weekly class timetable based on your enrolled courses</p> </div> ${slots.length === 0 ?`<div class="card" style="text-align:center;padding:40px">
 <div style="font-size:48px">-</div>
-<p style="margin-top:12px;color:var(--text-muted)">No classes scheduled yet. Your lecturers haven’t added timetable slots yet.</p>
+<p style="margin-top:12px;color:var(--text-muted)">No classes scheduled yet. Your lecturers haven't added timetable slots yet.</p>
 </div>`:`<div class="card" style="overflow-x:auto">${_timetableGrid(slots, false)}</div>` }`;
 } catch(e) {
 content.innerHTML = `<div class="card"><p style="color:var(--danger)">Error: ${e.message}</p></div>`;
@@ -8657,19 +8590,19 @@ _openSlotModal(slot);
 }
 
 function _openSlotModal(slot, presetDay) {
-const container = document.getElementById(‘modal-container’);
-container.classList.remove(‘hidden’);
+const container = document.getElementById('modal-container');
+container.classList.remove('hidden');
 const isEdit = !!slot;
 const colorOptions = TIMETABLE_COLORS.map(c =>
 `<span onclick="document.getElementById('slot-color').value='${c}';document.querySelectorAll('.color-dot').forEach(d=>d.style.outline='none');this.style.outline='3px solid ${c}';this.style.outlineOffset='2px'" class="color-dot" style="display:inline-block;width:22px;height:22px;border-radius:50%;background:${c};cursor:pointer;margin:2px; ${slot?.color===c||(!slot&&c==='#6366f1')?'outline:3px solid '+c+';outline-offset:2px':''}"></span>`
-).join(’’);
+).join('');
 
 container.innerHTML = `
 <div class="modal-overlay" onclick="closeModal(event)">
 <div class="modal" onclick="event.stopPropagation()" style="max-width:420px">
-<h3 style="margin:0 0 16px">${isEdit ? ‘Edit Class Slot’ : ‘Add Class to Timetable’}</h3>
+<h3 style="margin:0 0 16px">${isEdit ? 'Edit Class Slot' : 'Add Class to Timetable'}</h3>
 
-```
+
     <div class="form-group">
       <label>Course <span style="color:red">*</span></label>
       <select id="slot-course" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
@@ -8717,30 +8650,29 @@ container.innerHTML = `
     </div>
   </div>
 </div>`;
-```
 
 }
 
 async function saveSlot(slotId) {
-const courseId  = document.getElementById(‘slot-course’).value;
-const dayOfWeek = document.getElementById(‘slot-day’).value;
-const startTime = document.getElementById(‘slot-start’).value;
-const endTime   = document.getElementById(‘slot-end’).value;
-const room      = document.getElementById(‘slot-room’).value.trim();
-const color     = document.getElementById(‘slot-color’).value;
+const courseId  = document.getElementById('slot-course').value;
+const dayOfWeek = document.getElementById('slot-day').value;
+const startTime = document.getElementById('slot-start').value;
+const endTime   = document.getElementById('slot-end').value;
+const room      = document.getElementById('slot-room').value.trim();
+const color     = document.getElementById('slot-color').value;
 
-if (!courseId) { toastWarning(‘Please select a course’); return; }
-if (!startTime || !endTime) { toastWarning(‘Please set start and end time’); return; }
-if (startTime >= endTime) { toastWarning(‘End time must be after start time’); return; }
+if (!courseId) { toastWarning('Please select a course'); return; }
+if (!startTime || !endTime) { toastWarning('Please set start and end time'); return; }
+if (startTime >= endTime) { toastWarning('End time must be after start time'); return; }
 
 try {
 const body = { courseId, dayOfWeek: Number(dayOfWeek), startTime, endTime, room, color };
 if (slotId) {
-await api(`/api/timetable/${slotId}`, { method: ‘PUT’, body: JSON.stringify(body) });
-showToastNotif(‘Class updated’, ‘success’);
+await api(`/api/timetable/${slotId}`, { method: 'PUT', body: JSON.stringify(body) });
+showToastNotif('Class updated', 'success');
 } else {
-await api(’/api/timetable’, { method: ‘POST’, body: JSON.stringify(body) });
-showToastNotif(‘Class added to timetable’, ‘success’);
+await api('/api/timetable', { method: 'POST', body: JSON.stringify(body) });
+showToastNotif('Class added to timetable', 'success');
 }
 closeModal();
 renderLecturerTimetable();
@@ -8750,10 +8682,10 @@ toastError(e.message);
 }
 
 async function deleteSlot(slotId) {
-if (!confirm(‘Remove this class from your timetable?’)) return;
+if (!confirm('Remove this class from your timetable?')) return;
 try {
-await api(`/api/timetable/${slotId}`, { method: ‘DELETE’ });
-showToastNotif(‘Class removed’, ‘success’);
+await api(`/api/timetable/${slotId}`, { method: 'DELETE' });
+showToastNotif('Class removed', 'success');
 closeModal();
 renderLecturerTimetable();
 } catch(e) {
@@ -8761,32 +8693,32 @@ toastError(e.message);
 }
 }
 
-// – Two-Factor Authentication (2FA) via Email ––––––––––––––––
+// - Two-Factor Authentication (2FA) via Email ----------------
 // Simple email-based 2FA - sends a 6-digit code after password verification
 // Stored in sessionStorage so it clears when browser closes
 
 async function initiate2FA(credentials) {
 // Login with password first
-const data = await api(’/api/auth/login’, { method: ‘POST’, body: JSON.stringify(credentials) });
-if (!data.token) throw new Error(‘Login failed’);
+const data = await api('/api/auth/login', { method: 'POST', body: JSON.stringify(credentials) });
+if (!data.token) throw new Error('Login failed');
 
 // If 2FA not enabled, return immediately - normal login
 if (!data.user?.twoFactorEnabled) return data;
 
 // 2FA required - send code (non-fatal if email is slow)
 try {
-await api(’/api/auth/2fa/send’, { method: ‘POST’, headers: { Authorization: ’Bearer ’ + data.token } });
+await api('/api/auth/2fa/send', { method: 'POST', headers: { Authorization: 'Bearer ' + data.token } });
 } catch(e) {
-console.error(‘2FA send failed:’, e.message);
-throw new Error(‘Failed to send 2FA code. Please try again.’);
+console.error('2FA send failed:', e.message);
+throw new Error('Failed to send 2FA code. Please try again.');
 }
 
 // Block everything behind modal - resolve only after successful verify
 return new Promise((resolve, reject) => {
 // Remove any existing 2FA modal
-document.getElementById(‘kodex-2fa-modal’)?.remove();
+document.getElementById('kodex-2fa-modal')?.remove();
 
-```
+
 const modal = document.createElement('div');
 modal.id = 'kodex-2fa-modal';
 modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px';
@@ -8816,67 +8748,66 @@ window._kodex2faData    = data;
 const input = document.getElementById('kodex-2fa-input');
 input.focus();
 input.addEventListener('keydown', e => { if (e.key === 'Enter') window._kodex2faVerify(data.token); });
-```
 
 });
 }
 
 async function _kodex2faVerify(tempToken) {
 window._kodex2faVerify = _kodex2faVerify; // make global
-const input = document.getElementById(‘kodex-2fa-input’);
-const errEl = document.getElementById(‘kodex-2fa-err’);
-const btn   = document.getElementById(‘kodex-2fa-btn’);
+const input = document.getElementById('kodex-2fa-input');
+const errEl = document.getElementById('kodex-2fa-err');
+const btn   = document.getElementById('kodex-2fa-btn');
 const code  = input?.value?.trim();
 
 if (!code || code.length !== 6) {
-if (errEl) errEl.textContent = ‘Please enter the 6-digit code’;
+if (errEl) errEl.textContent = 'Please enter the 6-digit code';
 return;
 }
 
-if (btn) { btn.textContent = ‘Verifying-’; btn.disabled = true; }
-if (errEl) errEl.textContent = ‘’;
+if (btn) { btn.textContent = 'Verifying-'; btn.disabled = true; }
+if (errEl) errEl.textContent = '';
 
 try {
-const result = await api(’/api/auth/2fa/verify’, {
-method: ‘POST’,
-headers: { Authorization: ’Bearer ’ + tempToken },
+const result = await api('/api/auth/2fa/verify', {
+method: 'POST',
+headers: { Authorization: 'Bearer ' + tempToken },
 body: JSON.stringify({ code }),
 });
-document.getElementById(‘kodex-2fa-modal’)?.remove();
-const finalData = { …window._kodex2faData, token: result.token || tempToken };
+document.getElementById('kodex-2fa-modal')?.remove();
+const finalData = { ...window._kodex2faData, token: result.token || tempToken };
 window._kodex2faResolve?.(finalData);
 } catch(e) {
-if (errEl) errEl.textContent = e.message || ‘Invalid code - please try again’;
-if (btn) { btn.textContent = ‘Verify’; btn.disabled = false; }
+if (errEl) errEl.textContent = e.message || 'Invalid code - please try again';
+if (btn) { btn.textContent = 'Verify'; btn.disabled = false; }
 input?.focus();
 input?.select();
 }
 }
 window._kodex2faVerify = _kodex2faVerify;
 
-// – Branding: Preview login page ———————————————
+// - Branding: Preview login page ------------------------------
 function previewLoginPage() {
-const logo  = document.getElementById(‘bd-logo’)?.value || ‘’;
-const color = document.getElementById(‘bd-color’)?.value || ‘#6366f1’;
-const tag   = document.getElementById(‘bd-tagline’)?.value || ‘Powered by KODEX’;
-const name  = currentUser.company?.name || ‘Your Institution’;
-const code  = currentUser.company?.institutionCode || ‘–’;
+const logo  = document.getElementById('bd-logo')?.value || '';
+const color = document.getElementById('bd-color')?.value || '#6366f1';
+const tag   = document.getElementById('bd-tagline')?.value || 'Powered by KODEX';
+const name  = currentUser.company?.name || 'Your Institution';
+const code  = currentUser.company?.institutionCode || '-';
 
-const modal = document.getElementById(‘modal-container’);
+const modal = document.getElementById('modal-container');
 if (!modal) return;
-modal.classList.remove(‘hidden’);
+modal.classList.remove('hidden');
 modal.innerHTML = `<div class="modal-overlay" onclick="closeModal(event)"> <div class="modal" onclick="event.stopPropagation()" style="max-width:480px;padding:0;overflow:hidden;border-radius:16px"> <!-- Preview header --> <div style="background:#f8fafc;padding:12px 16px;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between"> <span style="font-size:12px;font-weight:700;color:#64748b">LOGIN PAGE PREVIEW</span> <button onclick="closeModal()" style="background:none;border:none;cursor:pointer;color:#64748b;font-size:18px;line-height:1">-</button> </div> <!-- Simulated login page --> <div style="background:#0d1117;padding:32px;display:flex;align-items:center;justify-content:center;min-height:400px"> <div style="background:#fff;border-radius:14px;padding:28px;width:100%;max-width:340px;box-shadow:0 20px 60px rgba(0,0,0,.4)"> <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px"> ${logo ?`<img src="${logo}" style="height:40px;width:auto;border-radius:8px" onerror="this.style.display='none'">`:`<div style="width:40px;height:40px;border-radius:10px;background:${color};display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:18px">${name[0]}</div>`} <div> <div style="font-size:16px;font-weight:800;color:#0d1117">${esc(name)}</div> <div style="font-size:11px;color:#6b7280">${esc(tag)}</div> </div> </div> <div style="font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Email</div> <div style="padding:10px 12px;border:1.5px solid #e5e7eb;border-radius:8px;font-size:13px;color:#9ca3af;margin-bottom:12px">admin@example.com</div> <div style="font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Password</div> <div style="padding:10px 12px;border:1.5px solid #e5e7eb;border-radius:8px;font-size:13px;color:#9ca3af;margin-bottom:16px">--------</div> <div style="padding:12px;background:${color};color:#fff;border-radius:8px;text-align:center;font-size:14px;font-weight:700">Sign In</div> <div style="text-align:center;margin-top:12px;font-size:11px;color:#9ca3af">Institution Code: <span style="font-family:monospace;font-weight:700;color:#374151">${code}</span></div> </div> </div> </div> </div>`;
 }
 
-// – Math rendering helper (MathJax already loaded in index.html) ———––
+// - Math rendering helper (MathJax already loaded in index.html) --------
 function renderMath(container) {
 if (!window.MathJax) return;
 try {
-const el = container || document.getElementById(‘main-content’) || document.body;
+const el = container || document.getElementById('main-content') || document.body;
 if (MathJax.typesetPromise) {
 MathJax.typesetPromise([el]).catch(() => {});
 } else if (MathJax.Hub) {
-MathJax.Hub.Queue([‘Typeset’, MathJax.Hub, el]);
+MathJax.Hub.Queue(['Typeset', MathJax.Hub, el]);
 }
 } catch(e) {}
 }
@@ -8886,23 +8817,23 @@ const input = document.getElementById(inputId);
 const preview = document.getElementById(previewId);
 if (!input || !preview) return;
 const val = input.value.trim();
-if (!val || (!val.includes(’\(’) && !val.includes(’\[’) && !val.includes(’$’))) {
-preview.style.display = ‘none’;
+if (!val || (!val.includes('\(') && !val.includes('\[') && !val.includes('$'))) {
+preview.style.display = 'none';
 return;
 }
-preview.style.display = ‘block’;
-preview.innerHTML = ‘<span style="font-size:10px;color:#6b7280;font-weight:600">PREVIEW: </span>’ + val;
+preview.style.display = 'block';
+preview.innerHTML = '<span style="font-size:10px;color:#6b7280;font-weight:600">PREVIEW: </span>' + val;
 renderMath(preview);
 }
 
-// – Math Symbol Toolbar —————————————————––
+// - Math Symbol Toolbar ------------------------------------
 function insertMathSymbol(targetId, sym) {
 const el = document.getElementById(targetId);
 if (!el) return;
 const start = el.selectionStart;
 const end   = el.selectionEnd;
 const val   = el.value;
-// Wrap selection in ( … ) if no math delimiters around cursor
+// Wrap selection in ( ... ) if no math delimiters around cursor
 let insert = sym;
 el.value = val.slice(0, start) + insert + val.slice(end);
 el.selectionStart = el.selectionEnd = start + insert.length;
@@ -8915,7 +8846,7 @@ if (!el) return;
 const start = el.selectionStart;
 const end   = el.selectionEnd;
 const sel   = el.value.slice(start, end);
-const wrap  = sel ? ‘\(’ + sel + ‘\)’ : ‘\(  \)’;
+const wrap  = sel ? '\(' + sel + '\)' : '\(  \)';
 el.value = el.value.slice(0, start) + wrap + el.value.slice(end);
 const pos = sel ? start + wrap.length : start + 3;
 el.selectionStart = el.selectionEnd = pos;
@@ -8924,65 +8855,65 @@ el.focus();
 
 function getMathToolbar(targetId) {
 const syms = [
-{ label: ‘\( \)’, tip: ‘Wrap in math’, action: `wrapMath('${targetId}')` },
-{ label: ‘x-’, tip: ‘Superscript’, sym: ‘^{2}’ },
-{ label: ‘x-’, tip: ‘Subscript’, sym: ‘*{n}’ },
-{ label: ‘-’, tip: ‘Square root’, sym: ‘\sqrt{}’ },
-{ label: ‘-’, tip: ‘Cube root’, sym: ‘\sqrt[3]{}’ },
-{ label: ‘a/b’, tip: ‘Fraction’, sym: ‘\frac{}{}’ },
-{ label: ‘-’, tip: ‘Summation’, sym: ’\sum*{}^{}’ },
-{ label: ‘-’, tip: ‘Integral’, sym: ‘\int_{}^{}’ },
-{ label: ‘-’, tip: ‘Pi’, sym: ‘\pi’ },
-{ label: ‘-’, tip: ‘Infinity’, sym: ‘\infty’ },
-{ label: ‘-’, tip: ‘Plus-minus’, sym: ‘\pm’ },
-{ label: ‘-’, tip: ‘Less or equal’, sym: ‘\leq’ },
-{ label: ‘-’, tip: ‘Greater or equal’, sym: ‘\geq’ },
-{ label: ‘-’, tip: ‘Not equal’, sym: ‘\neq’ },
-{ label: ‘-’, tip: ‘Alpha’, sym: ‘\alpha’ },
-{ label: ‘-’, tip: ‘Beta’, sym: ‘\beta’ },
-{ label: ‘-’, tip: ‘Theta’, sym: ‘\theta’ },
-{ label: ‘-’, tip: ‘Delta’, sym: ‘\Delta’ },
-{ label: ‘-’, tip: ‘Multiply’, sym: ‘\times’ },
-{ label: ‘-’, tip: ‘Divide’, sym: ‘\div’ },
+{ label: '\( \)', tip: 'Wrap in math', action: `wrapMath('${targetId}')` },
+{ label: 'x-', tip: 'Superscript', sym: '^{2}' },
+{ label: 'x-', tip: 'Subscript', sym: '*{n}' },
+{ label: '-', tip: 'Square root', sym: '\sqrt{}' },
+{ label: '-', tip: 'Cube root', sym: '\sqrt[3]{}' },
+{ label: 'a/b', tip: 'Fraction', sym: '\frac{}{}' },
+{ label: '-', tip: 'Summation', sym: '\sum*{}^{}' },
+{ label: '-', tip: 'Integral', sym: '\int_{}^{}' },
+{ label: '-', tip: 'Pi', sym: '\pi' },
+{ label: '-', tip: 'Infinity', sym: '\infty' },
+{ label: '-', tip: 'Plus-minus', sym: '\pm' },
+{ label: '-', tip: 'Less or equal', sym: '\leq' },
+{ label: '-', tip: 'Greater or equal', sym: '\geq' },
+{ label: '-', tip: 'Not equal', sym: '\neq' },
+{ label: '-', tip: 'Alpha', sym: '\alpha' },
+{ label: '-', tip: 'Beta', sym: '\beta' },
+{ label: '-', tip: 'Theta', sym: '\theta' },
+{ label: '-', tip: 'Delta', sym: '\Delta' },
+{ label: '-', tip: 'Multiply', sym: '\times' },
+{ label: '-', tip: 'Divide', sym: '\div' },
 ];
 return `<div style="margin-bottom:8px"> <div style="font-size:11px;color:#6b7280;margin-bottom:4px;font-weight:600">MATH SYMBOLS - click to insert</div> <div style="display:flex;flex-wrap:wrap;gap:4px"> ${syms.map(s => s.action ?`<button type="button" title="${s.tip}" onclick="${s.action}" style="padding:3px 8px;border:1px solid #d1d5db;border-radius:5px;background:#f9fafb;font-size:12px;cursor:pointer;font-family:inherit">${s.label}</button>`:`<button type="button" title="${s.tip}" onclick="insertMathSymbol('${targetId}','${s.sym}')" style="padding:3px 8px;border:1px solid #d1d5db;border-radius:5px;background:#f9fafb;font-size:12px;cursor:pointer;font-family:inherit">${s.label}</button>` ).join('')} </div> </div>`;
 }
 
-// – Bulk Excel Student Import ———————————————––
+// - Bulk Excel Student Import --------------------------------
 function openExcelImportModal(courseId, courseName) {
-const existing = document.getElementById(‘excel-import-modal’);
+const existing = document.getElementById('excel-import-modal');
 if (existing) existing.remove();
-const modal = document.createElement(‘div’);
-modal.id = ‘excel-import-modal’;
-modal.style.cssText = ‘position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;display:flex;align-items:center;justify-content:center;padding:20px’;
-modal.innerHTML = ‘<div style="background:var(--card);border-radius:16px;padding:28px;width:100%;max-width:520px;box-shadow:0 20px 60px rgba(0,0,0,.3)">’ +
-‘<h3 style="font-size:16px;font-weight:700;margin-bottom:4px">- Import Students from Excel</h3>’ +
-‘<p style="font-size:13px;color:var(--text-muted);margin-bottom:16px">’ + courseName + ‘</p>’ +
-‘<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:12px 14px;margin-bottom:16px;font-size:12px;color:#15803d">’ +
-‘<strong>Excel format required:</strong><br>’ +
-‘Column A = Student ID  |  Column B = Full Name  |  Column C = Email (optional)<br>’ +
-‘First row can be a header - it will be skipped automatically.’ +
-‘</div>’ +
-‘<div id=“excel-drop-zone” style=“border:2px dashed var(–border);border-radius:10px;padding:32px;text-align:center;cursor:pointer;margin-bottom:16px”’ +
-’ onclick=“document.getElementById('excel-file-input').click()”’ +
-’ ondragover=“event.preventDefault();this.style.borderColor='var(–primary)'”’ +
-’ ondragleave=“this.style.borderColor='var(–border)'”’ +
-’ ondrop=“handleExcelDrop(event,'’ + courseId + ‘')”>’ +
-‘<div style="font-size:32px;margin-bottom:8px">-</div>’ +
-‘<div style="font-weight:600;font-size:14px">Drop Excel file here or click to browse</div>’ +
-‘<div style="font-size:12px;color:var(--text-muted);margin-top:4px">.xlsx or .xls files only</div>’ +
-‘</div>’ +
-‘<input type="file" id="excel-file-input" accept=".xlsx,.xls" style="display:none" onchange="processExcelFile(this.files[0],\'' + courseId + '\')">’ +
-‘<div id="excel-preview" style="display:none;margin-bottom:16px">’ +
-‘<div style="font-size:12px;font-weight:700;color:var(--text-muted);margin-bottom:8px">PREVIEW (first 5 students)</div>’ +
-‘<div id="excel-preview-table"></div>’ +
-‘<div id="excel-count" style="font-size:13px;color:var(--primary);font-weight:600;margin-top:8px"></div>’ +
-‘</div>’ +
-‘<div id="excel-msg" style="display:none;margin-bottom:12px;padding:10px 14px;border-radius:8px;font-size:13px"></div>’ +
-‘<div style="display:flex;gap:8px">’ +
-‘<button onclick="document.getElementById(\'excel-import-modal\').remove()" style="flex:1;padding:10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;background:transparent;color:var(--text)">Cancel</button>’ +
-‘<button id="excel-import-btn" onclick="uploadExcelStudents(\'' + courseId + '\')" disabled style="flex:2;padding:10px;background:var(--primary);color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;opacity:.5">Import Students</button>’ +
-‘</div></div>’;
+const modal = document.createElement('div');
+modal.id = 'excel-import-modal';
+modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;display:flex;align-items:center;justify-content:center;padding:20px';
+modal.innerHTML = '<div style="background:var(--card);border-radius:16px;padding:28px;width:100%;max-width:520px;box-shadow:0 20px 60px rgba(0,0,0,.3)">' +
+'<h3 style="font-size:16px;font-weight:700;margin-bottom:4px">- Import Students from Excel</h3>' +
+'<p style="font-size:13px;color:var(--text-muted);margin-bottom:16px">' + courseName + '</p>' +
+'<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:12px 14px;margin-bottom:16px;font-size:12px;color:#15803d">' +
+'<strong>Excel format required:</strong><br>' +
+'Column A = Student ID  |  Column B = Full Name  |  Column C = Email (optional)<br>' +
+'First row can be a header - it will be skipped automatically.' +
+'</div>' +
+'<div id="excel-drop-zone" style="border:2px dashed var(-border);border-radius:10px;padding:32px;text-align:center;cursor:pointer;margin-bottom:16px"' +
+' onclick="document.getElementById(\'excel-file-input\').click()"' +
+' ondragover="event.preventDefault();this.style.borderColor=\'var(-primary)\'"' +
+' ondragleave="this.style.borderColor=\'var(-border)\'"' +
+' ondrop="handleExcelDrop(event,\'' + courseId + '\')">' +
+'<div style="font-size:32px;margin-bottom:8px">-</div>' +
+'<div style="font-weight:600;font-size:14px">Drop Excel file here or click to browse</div>' +
+'<div style="font-size:12px;color:var(--text-muted);margin-top:4px">.xlsx or .xls files only</div>' +
+'</div>' +
+'<input type="file" id="excel-file-input" accept=".xlsx,.xls" style="display:none" onchange="processExcelFile(this.files[0],\'' + courseId + '\')">' +
+'<div id="excel-preview" style="display:none;margin-bottom:16px">' +
+'<div style="font-size:12px;font-weight:700;color:var(--text-muted);margin-bottom:8px">PREVIEW (first 5 students)</div>' +
+'<div id="excel-preview-table"></div>' +
+'<div id="excel-count" style="font-size:13px;color:var(--primary);font-weight:600;margin-top:8px"></div>' +
+'</div>' +
+'<div id="excel-msg" style="display:none;margin-bottom:12px;padding:10px 14px;border-radius:8px;font-size:13px"></div>' +
+'<div style="display:flex;gap:8px">' +
+'<button onclick="document.getElementById(\'excel-import-modal\').remove()" style="flex:1;padding:10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;background:transparent;color:var(--text)">Cancel</button>' +
+'<button id="excel-import-btn" onclick="uploadExcelStudents(\'' + courseId + '\')" disabled style="flex:2;padding:10px;background:var(--primary);color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;opacity:.5">Import Students</button>' +
+'</div></div>';
 document.body.appendChild(modal);
 }
 
@@ -8990,18 +8921,18 @@ let _excelStudents = [];
 
 function handleExcelDrop(e, courseId) {
 e.preventDefault();
-document.getElementById(‘excel-drop-zone’).style.borderColor = ‘var(–border)’;
+document.getElementById('excel-drop-zone').style.borderColor = 'var(-border)';
 const file = e.dataTransfer.files[0];
 if (file) processExcelFile(file, courseId);
 }
 
 async function processExcelFile(file, courseId) {
 if (!file) return;
-if (!file.name.match(/.xlsx?$/i)) { showExcelMsg(‘Please upload an Excel file (.xlsx or .xls)’, false); return; }
+if (!file.name.match(/.xlsx?$/i)) { showExcelMsg('Please upload an Excel file (.xlsx or .xls)', false); return; }
 if (!window.XLSX) {
 await new Promise((resolve, reject) => {
-const s = document.createElement(‘script’);
-s.src = ‘https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js’;
+const s = document.createElement('script');
+s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
 s.onload = resolve; s.onerror = reject;
 document.head.appendChild(s);
 });
@@ -9009,87 +8940,87 @@ document.head.appendChild(s);
 const reader = new FileReader();
 reader.onload = (ev) => {
 try {
-const wb = window.XLSX.read(ev.target.result, { type: ‘array’ });
+const wb = window.XLSX.read(ev.target.result, { type: 'array' });
 const ws = wb.Sheets[wb.SheetNames[0]];
 const rows = window.XLSX.utils.sheet_to_json(ws, { header: 1 });
 _excelStudents = [];
 for (let i = 0; i < rows.length; i++) {
 const row = rows[i];
-const id = String(row[0] || ‘’).trim();
-const name = String(row[1] || ‘’).trim();
-if (i === 0 && (id.toLowerCase().includes(‘id’) || id.toLowerCase().includes(‘student’))) continue;
+const id = String(row[0] || '').trim();
+const name = String(row[1] || '').trim();
+if (i === 0 && (id.toLowerCase().includes('id') || id.toLowerCase().includes('student'))) continue;
 if (!id) continue;
-_excelStudents.push({ studentId: id, name, email: String(row[2] || ‘’).trim() });
+_excelStudents.push({ studentId: id, name, email: String(row[2] || '').trim() });
 }
-if (_excelStudents.length === 0) { showExcelMsg(‘No valid students found. Check the format.’, false); return; }
-const preview = document.getElementById(‘excel-preview’);
-const table = document.getElementById(‘excel-preview-table’);
-const countEl = document.getElementById(‘excel-count’);
-preview.style.display = ‘block’;
-let rows_html = ‘<table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr style="background:var(--bg)">’ +
-‘<th style="padding:6px 8px;text-align:left;border:1px solid var(--border)">Student ID</th>’ +
-‘<th style="padding:6px 8px;text-align:left;border:1px solid var(--border)">Name</th>’ +
-‘<th style="padding:6px 8px;text-align:left;border:1px solid var(--border)">Email</th>’ +
-‘</tr></thead><tbody>’;
+if (_excelStudents.length === 0) { showExcelMsg('No valid students found. Check the format.', false); return; }
+const preview = document.getElementById('excel-preview');
+const table = document.getElementById('excel-preview-table');
+const countEl = document.getElementById('excel-count');
+preview.style.display = 'block';
+let rows_html = '<table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr style="background:var(--bg)">' +
+'<th style="padding:6px 8px;text-align:left;border:1px solid var(--border)">Student ID</th>' +
+'<th style="padding:6px 8px;text-align:left;border:1px solid var(--border)">Name</th>' +
+'<th style="padding:6px 8px;text-align:left;border:1px solid var(--border)">Email</th>' +
+'</tr></thead><tbody>';
 _excelStudents.slice(0,5).forEach(s => {
-rows_html += ‘<tr>’ +
-‘<td style="padding:6px 8px;border:1px solid var(--border)">’ + esc(s.studentId) + ‘</td>’ +
-‘<td style="padding:6px 8px;border:1px solid var(--border)">’ + esc(s.name) + ‘</td>’ +
-‘<td style="padding:6px 8px;border:1px solid var(--border)">’ + esc(s.email || ‘-’) + ‘</td>’ +
-‘</tr>’;
+rows_html += '<tr>' +
+'<td style="padding:6px 8px;border:1px solid var(--border)">' + esc(s.studentId) + '</td>' +
+'<td style="padding:6px 8px;border:1px solid var(--border)">' + esc(s.name) + '</td>' +
+'<td style="padding:6px 8px;border:1px solid var(--border)">' + esc(s.email || '-') + '</td>' +
+'</tr>';
 });
-rows_html += ‘</tbody></table>’;
+rows_html += '</tbody></table>';
 table.innerHTML = rows_html;
-countEl.textContent = ‘- ’ + _excelStudents.length + ’ student’ + (_excelStudents.length !== 1 ? ‘s’ : ‘’) + ’ found in file’;
-const btn = document.getElementById(‘excel-import-btn’);
-btn.disabled = false; btn.style.opacity = ‘1’;
-} catch(err) { showExcelMsg(’Could not read file: ’ + err.message, false); }
+countEl.textContent = '- ' + _excelStudents.length + ' student' + (_excelStudents.length !== 1 ? 's' : '') + ' found in file';
+const btn = document.getElementById('excel-import-btn');
+btn.disabled = false; btn.style.opacity = '1';
+} catch(err) { showExcelMsg('Could not read file: ' + err.message, false); }
 };
 reader.readAsArrayBuffer(file);
 }
 
 function showExcelMsg(msg, ok) {
-const el = document.getElementById(‘excel-msg’);
+const el = document.getElementById('excel-msg');
 if (!el) return;
-el.textContent = msg; el.style.display = ‘block’;
-el.style.background = ok ? ‘#f0fdf4’ : ‘#fef2f2’;
-el.style.color = ok ? ‘#15803d’ : ‘#dc2626’;
+el.textContent = msg; el.style.display = 'block';
+el.style.background = ok ? '#f0fdf4' : '#fef2f2';
+el.style.color = ok ? '#15803d' : '#dc2626';
 }
 
 async function uploadExcelStudents(courseId) {
 if (!_excelStudents.length) return;
-const btn = document.getElementById(‘excel-import-btn’);
-btn.textContent = ‘Importing-’; btn.disabled = true;
+const btn = document.getElementById('excel-import-btn');
+btn.textContent = 'Importing-'; btn.disabled = true;
 try {
-const data = await api(’/api/roster/’ + courseId + ‘/upload’, { method: ‘POST’, body: JSON.stringify({ students: _excelStudents }) });
-showExcelMsg(’- ’ + data.message, true);
-btn.textContent = ‘Done!’;
-setTimeout(() => { document.getElementById(‘excel-import-modal’)?.remove(); _excelStudents = []; }, 2000);
+const data = await api('/api/roster/' + courseId + '/upload', { method: 'POST', body: JSON.stringify({ students: _excelStudents }) });
+showExcelMsg('- ' + data.message, true);
+btn.textContent = 'Done!';
+setTimeout(() => { document.getElementById('excel-import-modal')?.remove(); _excelStudents = []; }, 2000);
 } catch(e) {
-showExcelMsg(’Import failed: ’ + e.message, false);
-btn.textContent = ‘Import Students’; btn.disabled = false;
+showExcelMsg('Import failed: ' + e.message, false);
+btn.textContent = 'Import Students'; btn.disabled = false;
 }
 }
 
-// – Attendance Report Card PDF ————————————————
+// - Attendance Report Card PDF --------------------------------
 async function generateAttendanceReportCard() {
 try {
-showToastNotif(‘Generating report card-’, ‘info’);
+showToastNotif('Generating report card-', 'info');
 if (!window.jspdf) {
 await new Promise((resolve, reject) => {
-const s = document.createElement(‘script’);
-s.src = ‘https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js’;
+const s = document.createElement('script');
+s.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
 s.onload = resolve; s.onerror = reject;
 document.head.appendChild(s);
 });
 }
-const attendanceData = await api(’/api/attendance-sessions/my-attendance?limit=500’).catch(() => ({ records: [] }));
+const attendanceData = await api('/api/attendance-sessions/my-attendance?limit=500').catch(() => ({ records: [] }));
 const records = attendanceData.records || [];
 const { jsPDF } = window.jspdf;
-const doc = new jsPDF({ unit: ‘mm’, format: ‘a4’ });
+const doc = new jsPDF({ unit: 'mm', format: 'a4' });
 const W = 210, M = 20;
 
-```
+
 // Header bar
 doc.setFillColor(79, 70, 229);
 doc.rect(0, 0, W, 40, 'F');
@@ -9167,28 +9098,27 @@ doc.setFontSize(8); doc.setTextColor(150,150,150); doc.setFont('helvetica','norm
 doc.text('Generated automatically by KODEX - kodex.it.com', M, 285);
 doc.save('KODEX_Report_Card_' + (currentUser.indexNumber||'student') + '_' + new Date().toISOString().slice(0,10) + '.pdf');
 showToastNotif('Report card downloaded!', 'success');
-```
 
-} catch(e) { showToastNotif(’Failed: ’ + e.message, ‘error’); }
+} catch(e) { showToastNotif('Failed: ' + e.message, 'error'); }
 }
 
-// – Course Completion Certificate ———————————————
+// - Course Completion Certificate ------------------------------
 async function generateCertificate(courseId, courseTitle) {
 try {
-showToastNotif(‘Generating certificate-’, ‘info’);
+showToastNotif('Generating certificate-', 'info');
 if (!window.jspdf) {
 await new Promise((resolve, reject) => {
-const s = document.createElement(‘script’);
-s.src = ‘https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js’;
+const s = document.createElement('script');
+s.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
 s.onload = resolve; s.onerror = reject;
 document.head.appendChild(s);
 });
 }
 const { jsPDF } = window.jspdf;
-const doc = new jsPDF({ orientation: ‘landscape’, unit: ‘mm’, format: ‘a4’ });
+const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
 const W = 297, H = 210;
 
-```
+
 doc.setDrawColor(79,70,229); doc.setLineWidth(3);
 doc.rect(8, 8, W-16, H-16);
 doc.setDrawColor(199,210,254); doc.setLineWidth(1);
@@ -9243,151 +9173,150 @@ doc.text('kodex.it.com', W/2, H-16, { align: 'center' });
 
 doc.save('KODEX_Certificate_' + (courseTitle||'course').replace(/[^a-z0-9]/gi,'_') + '.pdf');
 showToastNotif('Certificate downloaded!', 'success');
-```
 
-} catch(e) { showToastNotif(’Failed: ’ + e.message, ‘error’); }
+} catch(e) { showToastNotif('Failed: ' + e.message, 'error'); }
 }
 
-// – Push Notification Triggers ————————————————
+// - Push Notification Triggers --------------------------------
 async function notifySessionStarted(sessionTitle) {
-await showLocalNotification(‘Attendance Session Live!’, sessionTitle + ’ - Mark your attendance now’, ‘/?view=mark-attendance’);
+await showLocalNotification('Attendance Session Live!', sessionTitle + ' - Mark your attendance now', '/?view=mark-attendance');
 }
 async function notifyQuizAvailable(quizTitle, endTime) {
 const mins = Math.round((new Date(endTime) - Date.now()) / 60000);
-await showLocalNotification(’Quiz Available: ’ + quizTitle, ‘You have ’ + mins + ’ minutes to complete this quiz’, ‘/?view=quizzes’);
+await showLocalNotification('Quiz Available: ' + quizTitle, 'You have ' + mins + ' minutes to complete this quiz', '/?view=quizzes');
 }
 async function notifyAssignmentDue(assignmentTitle, dueDate) {
 const hours = Math.round((new Date(dueDate) - Date.now()) / 3600000);
-await showLocalNotification(’Assignment Due Soon: ’ + assignmentTitle, ‘Due in ’ + hours + ’ hour’ + (hours !== 1 ? ‘s’ : ‘’), ‘/assignments.html’);
+await showLocalNotification('Assignment Due Soon: ' + assignmentTitle, 'Due in ' + hours + ' hour' + (hours !== 1 ? 's' : ''), '/assignments.html');
 }
 
-// – Service Worker Registration ———————————————–
-if (‘serviceWorker’ in navigator) {
-window.addEventListener(‘load’, () => {
-navigator.serviceWorker.register(’/sw.js’)
-.then(reg => console.log(’[SW] Registered:’, reg.scope))
-.catch(err => console.warn(’[SW] Registration failed:’, err));
+// - Service Worker Registration -------------------------------
+if ('serviceWorker' in navigator) {
+window.addEventListener('load', () => {
+navigator.serviceWorker.register('/sw.js')
+.then(reg => console.log('[SW] Registered:', reg.scope))
+.catch(err => console.warn('[SW] Registration failed:', err));
 });
 }
 
-// ——————————————————————————
+// ----------------------------------------------------
 //  MOBILE UI MODULE
 //  - Hamburger sidebar drawer (tablet)
 //  - Bottom navigation bar (phone)
-// ——————————————————————————
+// ----------------------------------------------------
 
 function toggleMobileSidebar() {
-const sidebar = document.querySelector(’.sidebar’);
-const overlay = document.getElementById(‘sidebar-overlay’);
+const sidebar = document.querySelector('.sidebar');
+const overlay = document.getElementById('sidebar-overlay');
 if (!sidebar || !overlay) return;
-const isOpen = sidebar.classList.contains(‘open’);
+const isOpen = sidebar.classList.contains('open');
 if (isOpen) {
 closeMobileSidebar();
 } else {
-// ‘sidebar-force-open’ class beats display:none !important via specificity
-sidebar.classList.add(‘sidebar-force-open’);
+// 'sidebar-force-open' class beats display:none !important via specificity
+sidebar.classList.add('sidebar-force-open');
 requestAnimationFrame(() => {
-sidebar.classList.add(‘open’);
-overlay.classList.add(‘active’);
-document.body.style.overflow = ‘hidden’;
+sidebar.classList.add('open');
+overlay.classList.add('active');
+document.body.style.overflow = 'hidden';
 });
 }
 }
 
 function closeMobileSidebar() {
-const sidebar = document.querySelector(’.sidebar’);
-const overlay = document.getElementById(‘sidebar-overlay’);
+const sidebar = document.querySelector('.sidebar');
+const overlay = document.getElementById('sidebar-overlay');
 if (sidebar) {
-sidebar.classList.remove(‘open’);
+sidebar.classList.remove('open');
 // Remove force-show class after transition completes
 setTimeout(() => {
-if (!sidebar.classList.contains(‘open’)) {
-sidebar.classList.remove(‘sidebar-force-open’);
+if (!sidebar.classList.contains('open')) {
+sidebar.classList.remove('sidebar-force-open');
 }
 }, 300);
 }
-if (overlay) overlay.classList.remove(‘active’);
-document.body.style.overflow = ‘’;
+if (overlay) overlay.classList.remove('active');
+document.body.style.overflow = '';
 }
 
 // Close sidebar when a nav item is tapped on mobile
-document.addEventListener(‘click’, (e) => {
-const navLink = e.target.closest(’.sidebar-nav a’);
+document.addEventListener('click', (e) => {
+const navLink = e.target.closest('.sidebar-nav a');
 if (navLink && window.innerWidth <= 768) {
 closeMobileSidebar();
 }
 });
 
 // Close sidebar on resize if screen becomes large
-window.addEventListener(‘resize’, () => {
+window.addEventListener('resize', () => {
 if (window.innerWidth > 768) closeMobileSidebar();
 });
 
 function buildBottomNav(role) {
-const existing = document.getElementById(‘bottom-nav’);
+const existing = document.getElementById('bottom-nav');
 if (existing) existing.remove();
 
 // Priority items per role - most-used actions shown directly in bottom bar
 // Everything else is accessible via the sidebar (More button)
 const PRIORITY = {
-admin: currentUser?.company?.mode === ‘academic’
-? [‘dashboard’, ‘sessions’, ‘quizzes’, ‘reports’]
-: [‘dashboard’, ‘sessions’, ‘users’, ‘reports’],
-manager:    [‘dashboard’, ‘sessions’, ‘reports’, ‘users’],
-lecturer:   [‘dashboard’, ‘sessions’, ‘quizzes’, ‘assignments’],
-hod:        [‘hod-overview’, ‘hod-courses’, ‘hod-lecturers’, ‘hod-reports’, ‘hod-quizzes’, ‘meetings’],
-employee:   [‘dashboard’, ‘sign-in-out’, ‘my-attendance’, ‘reports’],
-student:    [‘dashboard’, ‘mark-attendance’, ‘quizzes’, ‘assignments’],
-superadmin: currentUser?.company?.mode === ‘academic’
-? [‘dashboard’, ‘sessions’, ‘quizzes’, ‘reports’]
-: [‘dashboard’, ‘sessions’, ‘users’, ‘reports’],
+admin: currentUser?.company?.mode === 'academic'
+? ['dashboard', 'sessions', 'quizzes', 'reports']
+: ['dashboard', 'sessions', 'users', 'reports'],
+manager:    ['dashboard', 'sessions', 'reports', 'users'],
+lecturer:   ['dashboard', 'sessions', 'quizzes', 'assignments'],
+hod:        ['hod-overview', 'hod-courses', 'hod-lecturers', 'hod-reports', 'hod-quizzes', 'meetings'],
+employee:   ['dashboard', 'sign-in-out', 'my-attendance', 'reports'],
+student:    ['dashboard', 'mark-attendance', 'quizzes', 'assignments'],
+superadmin: currentUser?.company?.mode === 'academic'
+? ['dashboard', 'sessions', 'quizzes', 'reports']
+: ['dashboard', 'sessions', 'users', 'reports'],
 };
 
 const ICONS = {
-dashboard:       ‘<rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>’,
-sessions:        ‘<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>’,
-quizzes:         ‘<path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M9 14l2 2 4-4"/>’,
-reports:         ‘<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>’,
-subscription:    ‘<rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/>’,
-users:           ‘<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>’,
-‘sign-in-out’:   ‘<polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>’,
-‘my-attendance’: ‘<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>’,
-‘mark-attendance’:’<polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>’,
-courses:         ‘<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>’,
-approvals:       ‘<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>’,
-meetings:        ‘<path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2"/>’,
-assignments:     ‘<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>’,
-announcements:   ‘<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>’,
-search:          ‘<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>’,
-profile:         ‘<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>’,
+dashboard:       '<rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>',
+sessions:        '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
+quizzes:         '<path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M9 14l2 2 4-4"/>',
+reports:         '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>',
+subscription:    '<rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/>',
+users:           '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
+'sign-in-out':   '<polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>',
+'my-attendance': '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
+'mark-attendance':'<polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>',
+courses:         '<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>',
+approvals:       '<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>',
+meetings:        '<path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2"/>',
+assignments:     '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>',
+announcements:   '<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>',
+search:          '<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>',
+profile:         '<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
 };
 
 const LABELS = {
-‘hod-overview’: ‘Overview’, ‘hod-sessions’: ‘Sessions’, ‘hod-courses’: ‘Courses’, ‘hod-lecturers’: ‘Lecturers’,
-‘hod-students’: ‘Students’, ‘hod-reports’: ‘Reports’,
-‘sign-in-out’: ‘Sign In/Out’, ‘my-attendance’: ‘Attendance’,
-‘mark-attendance’: ‘Attendance’, subscription: ‘Subscribe’,
-announcements: ‘Notices’, assignments: ‘Assignments’,
+'hod-overview': 'Overview', 'hod-sessions': 'Sessions', 'hod-courses': 'Courses', 'hod-lecturers': 'Lecturers',
+'hod-students': 'Students', 'hod-reports': 'Reports',
+'sign-in-out': 'Sign In/Out', 'my-attendance': 'Attendance',
+'mark-attendance': 'Attendance', subscription: 'Subscribe',
+announcements: 'Notices', assignments: 'Assignments',
 };
 
-const priority = PRIORITY[role] || [‘dashboard’, ‘sessions’, ‘reports’];
+const priority = PRIORITY[role] || ['dashboard', 'sessions', 'reports'];
 
-const nav = document.createElement(‘div’);
-nav.id = ‘bottom-nav’;
-nav.className = ‘bottom-nav’;
+const nav = document.createElement('div');
+nav.id = 'bottom-nav';
+nav.className = 'bottom-nav';
 
 priority.forEach(id => {
 const icon = ICONS[id] || ICONS.dashboard;
 const label = LABELS[id] || (id.charAt(0).toUpperCase() + id.slice(1));
-const btn = document.createElement(‘button’);
-btn.className = ‘bottom-nav-item’;
+const btn = document.createElement('button');
+btn.className = 'bottom-nav-item';
 btn.dataset.navId = id;
 btn.innerHTML = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${icon}</svg><span class="nav-label">${label}</span>`;
 btn.onclick = () => {
-document.querySelectorAll(’.bottom-nav-item’).forEach(b => b.classList.remove(‘active’));
-btn.classList.add(‘active’);
+document.querySelectorAll('.bottom-nav-item').forEach(b => b.classList.remove('active'));
+btn.classList.add('active');
 // Trigger the matching sidebar link
-const sidebarLink = document.getElementById(‘nav-’ + id);
+const sidebarLink = document.getElementById('nav-' + id);
 if (sidebarLink) sidebarLink.click();
 else navigateTo(id);
 closeMobileSidebar();
@@ -9396,9 +9325,9 @@ nav.appendChild(btn);
 });
 
 // More button - opens full sidebar for everything else
-const moreBtn = document.createElement(‘button’);
-moreBtn.className = ‘bottom-nav-item’;
-moreBtn.id = ‘bottom-nav-more’;
+const moreBtn = document.createElement('button');
+moreBtn.className = 'bottom-nav-item';
+moreBtn.id = 'bottom-nav-more';
 moreBtn.innerHTML = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg><span class="nav-label">More</span>`;
 moreBtn.onclick = () => toggleMobileSidebar();
 nav.appendChild(moreBtn);
@@ -9407,28 +9336,28 @@ document.body.appendChild(nav);
 
 // Sync active state when navigation changes
 const observer = new MutationObserver(() => {
-const activeLink = document.querySelector(’.sidebar-nav a.active’);
+const activeLink = document.querySelector('.sidebar-nav a.active');
 if (!activeLink) return;
-const activeId = activeLink.id?.replace(‘nav-’, ‘’);
-document.querySelectorAll(’.bottom-nav-item’).forEach(b => {
-b.classList.toggle(‘active’, b.dataset.navId === activeId);
+const activeId = activeLink.id?.replace('nav-', '');
+document.querySelectorAll('.bottom-nav-item').forEach(b => {
+b.classList.toggle('active', b.dataset.navId === activeId);
 });
 });
-const sidebarNav = document.getElementById(‘sidebar-nav’);
-if (sidebarNav) observer.observe(sidebarNav, { attributes: true, subtree: true, attributeFilter: [‘class’] });
+const sidebarNav = document.getElementById('sidebar-nav');
+if (sidebarNav) observer.observe(sidebarNav, { attributes: true, subtree: true, attributeFilter: ['class'] });
 // Mark dashboard active by default
-const dashBtn = nav.querySelector(’[data-nav-id=“dashboard”]’);
-if (dashBtn) dashBtn.classList.add(‘active’);
+const dashBtn = nav.querySelector('[data-nav-id="dashboard"]');
+if (dashBtn) dashBtn.classList.add('active');
 }
 
 // Robust JSON extractor - handles LaTeX backslashes and MATHSTART/MATHEND placeholders
 function restoreMathPlaceholders(obj) {
-if (typeof obj === ‘string’) {
-return obj.replace(/MATHSTART/g, ‘\(’).replace(/MATHEND/g, ‘\)’)
-.replace(/DISPSTART/g, ‘\[’).replace(/DISPEND/g, ‘\]’);
+if (typeof obj === 'string') {
+return obj.replace(/MATHSTART/g, '\(').replace(/MATHEND/g, '\)')
+.replace(/DISPSTART/g, '\[').replace(/DISPEND/g, '\]');
 }
 if (Array.isArray(obj)) return obj.map(restoreMathPlaceholders);
-if (obj && typeof obj === ‘object’) {
+if (obj && typeof obj === 'object') {
 const out = {};
 for (const k in obj) out[k] = restoreMathPlaceholders(obj[k]);
 return out;
@@ -9438,115 +9367,115 @@ return obj;
 
 function extractAIJson(raw) {
 // Strip markdown fences
-let text = raw.replace(/`json/g, '').replace(/`/g, ‘’).trim();
+let text = raw.replace(/`json/g, '').replace(/`/g, '').trim();
 // Find the JSON array boundaries
-const start = text.indexOf(’[’);
-const end   = text.lastIndexOf(’]’);
-if (start === -1 || end === -1) throw new Error(‘No JSON array found in AI response. Try again.’);
+const start = text.indexOf('[');
+const end   = text.lastIndexOf(']');
+if (start === -1 || end === -1) throw new Error('No JSON array found in AI response. Try again.');
 text = text.slice(start, end + 1);
 // Try direct parse first
 try { return restoreMathPlaceholders(JSON.parse(text)); } catch(e1) {
 // Fix unescaped backslashes that LaTeX produces
 try {
-const fixed = text.replace(/\(?![”\/bfnrtu])/g, ‘\\’);
+const fixed = text.replace(/\\(?!["\/bfnrtu])/g, '\\');
 return restoreMathPlaceholders(JSON.parse(fixed));
 } catch(e2) {
 // Last resort: use Function constructor to evaluate as JS
 try {
 // eslint-disable-next-line no-new-func
-return restoreMathPlaceholders(Function(’return ’ + text)());
+return restoreMathPlaceholders(Function('return ' + text)());
 } catch(e3) {
-throw new Error(‘Could not parse AI response. Please try again.’);
+throw new Error('Could not parse AI response. Please try again.');
 }
 }
 }
 }
 
-// ——————————————————————————
+// ----------------------------------------------------
 //  AI QUESTION GENERATION - app.js (main dashboard / mobile)
 //  Mirrors the same modal in assignments.html but lives here for the
 //  main-app quiz flow (showAddQuestionsView - openAIQuizPanel)
-// ——————————————————————————
+// ----------------------------------------------------
 
 let _aiQuizQuestions = [];
 
 function openAIQuizPanel(quizId) {
-const existing = document.getElementById(‘ai-quiz-overlay’);
+const existing = document.getElementById('ai-quiz-overlay');
 if (existing) existing.remove();
 
-const overlay = document.createElement(‘div’);
-overlay.id = ‘ai-quiz-overlay’;
+const overlay = document.createElement('div');
+overlay.id = 'ai-quiz-overlay';
 overlay.dataset.quizId = quizId;
-overlay.style.cssText = ‘position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:400;display:flex;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(4px)’;
+overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:400;display:flex;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(4px)';
 overlay.innerHTML = `<div style="background:var(--card);border-radius:16px;width:100%;max-width:520px;max-height:92vh;overflow-y:auto;box-shadow:0 25px 80px rgba(0,0,0,.25);animation:slideIn .25s cubic-bezier(.16,1,.3,1)"> <div style="padding:18px 22px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:var(--card);z-index:1"> <div style="display:flex;align-items:center;gap:10px"> <div style="width:32px;height:32px;border-radius:8px;background:linear-gradient(135deg,#7c3aed,#4f46e5);display:flex;align-items:center;justify-content:center"> <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg> </div> <div> <h3 style="font-size:16px;font-weight:700;margin:0">AI Question Generator</h3> <p style="font-size:12px;color:var(--text-muted);margin:0">Powered by Claude AI</p> </div> </div> <button onclick="document.getElementById('ai-quiz-overlay').remove()" style="width:28px;height:28px;border-radius:7px;border:1px solid var(--border);background:var(--bg);cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center">-</button> </div> <div style="padding:18px 22px;display:flex;flex-direction:column;gap:14px"> <!-- Source tabs --> <div> <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:8px;display:block">Content Source</label> <div style="display:flex;gap:1px;background:var(--border);border-radius:9px;overflow:hidden;margin-bottom:12px;"> <button id="aiq-tab-topic" onclick="aiqSwitchTab('topic')" style="flex:1;padding:8px;border:none;cursor:pointer;font-size:12px;font-weight:600;background:var(--primary);color:#fff;font-family:inherit;">- Topic</button> <button id="aiq-tab-notes" onclick="aiqSwitchTab('notes')" style="flex:1;padding:8px;border:none;cursor:pointer;font-size:12px;font-weight:600;background:var(--card);color:var(--text-light);font-family:inherit;">- Paste Notes</button> <button id="aiq-tab-pdf" onclick="aiqSwitchTab('pdf')" style="flex:1;padding:8px;border:none;cursor:pointer;font-size:12px;font-weight:600;background:var(--card);color:var(--text-light);font-family:inherit;">- Upload PDF</button> </div> <!-- Topic input --> <div id="aiq-src-topic"> <input id="aiq-topic" placeholder="e.g. Photosynthesis, Newton's laws, Python loops-" style="width:100%;padding:10px 13px;border:1.5px solid var(--border);border-radius:9px;font-size:14px;font-family:inherit;outline:none" onfocus="this.style.borderColor='#7c3aed'" onblur="this.style.borderColor='var(--border)'"/> </div> <!-- Paste notes --> <div id="aiq-src-notes" style="display:none;"> <textarea id="aiq-notes" rows="5" placeholder="Paste your lecture notes, textbook content, or any study material here-" style="width:100%;padding:10px 13px;border:1.5px solid var(--border);border-radius:9px;font-size:13px;font-family:inherit;resize:vertical;outline:none;" onfocus="this.style.borderColor='#7c3aed'" onblur="this.style.borderColor='var(--border)'"></textarea> <p style="font-size:11px;color:var(--text-muted);margin-top:4px;">Questions will be generated directly from this material.</p> </div> <!-- PDF upload --> <div id="aiq-src-pdf" style="display:none;"> <label for="aiq-pdf-file" style="display:flex;flex-direction:column;align-items:center;gap:8px;padding:20px;border:2px dashed var(--border);border-radius:10px;cursor:pointer;background:var(--bg);transition:border-color .2s;" onmouseover="this.style.borderColor='#7c3aed'" onmouseout="this.style.borderColor='var(--border)'"> <span style="font-size:28px;">-</span> <span style="font-size:13px;font-weight:600;color:var(--text);">Click to upload a PDF</span> <span style="font-size:11px;color:var(--text-muted);">Max 10 MB - Text-based PDFs only</span> <input type="file" id="aiq-pdf-file" accept=".pdf" style="display:none;" onchange="aiqShowPdfName(this)"> </label> <div id="aiq-pdf-name" style="display:none;margin-top:8px;padding:7px 12px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:7px;font-size:12px;color:#166534;font-weight:500;"></div> </div> </div> <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px"> <div> <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:6px;display:block">Questions</label> <select id="aiq-count" style="width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:9px;font-size:14px;font-family:inherit;outline:none"> <option value="3">3</option><option value="5" selected>5</option><option value="8">8</option><option value="10">10</option><option value="15">15</option> </select> </div> <div> <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:6px;display:block">Difficulty</label> <select id="aiq-difficulty" style="width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:9px;font-size:14px;font-family:inherit;outline:none"> <option value="easy">Easy</option><option value="medium" selected>Medium</option><option value="hard">Hard</option><option value="mixed">Mixed</option> </select> </div> </div> <div> <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:8px;display:block">Question Type</label> <div style="display:flex;gap:8px;flex-wrap:wrap"> <label style="display:flex;align-items:center;gap:5px;cursor:pointer;padding:7px 13px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-weight:500"><input type="radio" name="aiq-qtype" value="single" checked style="accent-color:var(--primary)"/> Single Answer</label> <label style="display:flex;align-items:center;gap:5px;cursor:pointer;padding:7px 13px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-weight:500"><input type="radio" name="aiq-qtype" value="multiple" style="accent-color:var(--primary)"/> Multiple Answers</label> <label style="display:flex;align-items:center;gap:5px;cursor:pointer;padding:7px 13px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-weight:500"><input type="radio" name="aiq-qtype" value="mixed" style="accent-color:var(--primary)"/> Mixed</label> </div> </div> <div style="display:grid;grid-template-columns:90px 1fr;gap:12px;align-items:start"> <div> <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:6px;display:block">Marks/Q</label> <input id="aiq-marks" type="number" value="1" min="1" style="width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:9px;font-size:14px;font-family:inherit;outline:none"/> </div> <div> <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:6px;display:block">Additional Context <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-muted)">(optional)</span></label> <textarea id="aiq-context" rows="2" placeholder="e.g. Year 10 level, focus on cellular respiration-" style="width:100%;padding:10px 13px;border:1.5px solid var(--border);border-radius:9px;font-size:14px;font-family:inherit;resize:vertical;outline:none" onfocus="this.style.borderColor='#7c3aed'" onblur="this.style.borderColor='var(--border)'"></textarea> </div> </div> <!-- Subject toggle --> <div> <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:8px;display:block">Subject Area</label> <div style="display:flex;gap:8px;flex-wrap:wrap"> <label id="aiq-subj-gen" style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:7px 14px;border:1.5px solid var(--primary);border-radius:8px;background:var(--primary);color:#fff;font-size:13px;font-weight:600"> <input type="radio" name="aiq-subject" value="general" checked onchange="aiqToggleSubject('general')" style="accent-color:#fff"/> - General </label> <label id="aiq-subj-math" style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:7px 14px;border:1.5px solid var(--border);border-radius:8px;background:var(--card);color:var(--text-light);font-size:13px;font-weight:600"> <input type="radio" name="aiq-subject" value="math" onchange="aiqToggleSubject('math')" style="accent-color:var(--primary)"/> - Mathematics </label> </div> </div> <!-- Math options --> <div id="aiq-math-opts" style="display:none;flex-direction:column;gap:12px;background:#f5f3ff;border:1.5px solid #e0e7ff;border-radius:10px;padding:14px 16px"> <div style="font-size:12px;color:#4f46e5;font-weight:600">- Questions will use LaTeX math notation</div> <div> <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:6px;display:block">Math Branch</label> <select id="aiq-math-branch" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;outline:none;background:#fff;font-family:inherit"> <option value="">Any / Mixed</option> <optgroup label="-- Pure Mathematics --"> <option value="arithmetic">Arithmetic &amp; Number Theory</option> <option value="algebra">Algebra</option> <option value="advanced algebra">Advanced Algebra</option> <option value="calculus">Calculus (Differential &amp; Integral)</option> <option value="multivariable calculus">Multivariable Calculus</option> <option value="geometry">Geometry (Euclidean)</option> <option value="analytic geometry">Analytic Geometry &amp; Coordinate Geometry</option> <option value="trigonometry">Trigonometry</option> <option value="linear algebra">Linear Algebra &amp; Matrices</option> <option value="abstract algebra">Abstract Algebra (Groups, Rings, Fields)</option> <option value="real analysis">Real Analysis</option> <option value="complex analysis">Complex Analysis</option> <option value="topology">Topology</option> <option value="number theory">Number Theory</option> <option value="combinatorics">Combinatorics</option> <option value="graph theory">Graph Theory</option> <option value="discrete math">Discrete Mathematics</option> <option value="set theory">Set Theory &amp; Logic</option> <option value="mathematical logic">Mathematical Logic &amp; Proof Writing</option> </optgroup> <optgroup label="-- Applied Mathematics --"> <option value="statistics">Statistics &amp; Probability</option> <option value="differential equations">Differential Equations (ODEs)</option> <option value="partial differential equations">Partial Differential Equations (PDEs)</option> <option value="numerical methods">Numerical Methods &amp; Analysis</option> <option value="operations research">Operations Research &amp; Optimisation</option> <option value="mathematical modelling">Mathematical Modelling</option> <option value="game theory">Game Theory</option> <option value="information theory">Information Theory</option> </optgroup> <optgroup label="-- Engineering &amp; Physics Math --"> <option value="vector calculus">Vector Calculus</option> <option value="fourier analysis">Fourier Analysis &amp; Transforms</option> <option value="laplace transforms">Laplace Transforms</option> <option value="complex numbers">Complex Numbers</option> <option value="Boolean algebra">Boolean Algebra &amp; Logic Gates</option> <option value="financial mathematics">Financial Mathematics</option> </optgroup> <optgroup label="-- School Level --"> <option value="primary mathematics">Primary School Mathematics</option> <option value="junior high mathematics">Junior High Mathematics (JHS)</option> <option value="core mathematics">Core Mathematics (SHS)</option> <option value="elective mathematics">Elective Mathematics (SHS)</option> </optgroup> </select> </div> <div style="display:flex;gap:8px;flex-wrap:wrap"> <label style="display:flex;align-items:center;gap:5px;cursor:pointer;padding:6px 12px;border:1.5px solid var(--border);border-radius:7px;font-size:12px;background:#fff"><input type="radio" name="aiq-math-style" value="solve" checked style="accent-color:var(--primary)"/> Solve problems</label> <label style="display:flex;align-items:center;gap:5px;cursor:pointer;padding:6px 12px;border:1.5px solid var(--border);border-radius:7px;font-size:12px;background:#fff"><input type="radio" name="aiq-math-style" value="conceptual" style="accent-color:var(--primary)"/> Conceptual</label> <label style="display:flex;align-items:center;gap:5px;cursor:pointer;padding:6px 12px;border:1.5px solid var(--border);border-radius:7px;font-size:12px;background:#fff"><input type="radio" name="aiq-math-style" value="mixed" style="accent-color:var(--primary)"/> Mixed</label> </div> </div> <div id="aiq-error" style="display:none;padding:10px 13px;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;color:#dc2626;font-size:13px;font-weight:500"></div> <div id="aiq-preview" style="display:none"> <div style="font-size:13px;font-weight:700;margin-bottom:10px;display:flex;align-items:center;gap:8px"> Preview <span id="aiq-preview-count" style="background:#ede9fe;color:#7c3aed;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600"></span> </div> <div id="aiq-preview-list" style="display:flex;flex-direction:column;gap:9px;max-height:280px;overflow-y:auto;padding-right:3px"></div> </div> </div> <div style="padding:14px 22px;border-top:1px solid var(--border);display:flex;gap:9px;justify-content:flex-end;position:sticky;bottom:0;background:var(--card);border-radius:0 0 16px 16px"> <button class="btn btn-secondary" onclick="document.getElementById('ai-quiz-overlay').remove()">Cancel</button> <button id="aiq-gen-btn" class="btn" style="background:linear-gradient(135deg,#7c3aed,#4f46e5);color:#fff;font-weight:600;display:flex;align-items:center;gap:7px" onclick="runAIQuizGenerate(document.getElementById('ai-quiz-overlay').dataset.quizId)"> <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg> Generate Questions </button> <button id="aiq-add-btn" class="btn btn-primary" style="display:none" onclick="addAIQuizQuestions(document.getElementById('ai-quiz-overlay').dataset.quizId)"> <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Add All to Quiz </button> </div> </div>`;
 document.body.appendChild(overlay);
 }
 
 function aiqToggleSubject(subj) {
-const opts  = document.getElementById(‘aiq-math-opts’);
-const gen   = document.getElementById(‘aiq-subj-gen’);
-const math  = document.getElementById(‘aiq-subj-math’);
+const opts  = document.getElementById('aiq-math-opts');
+const gen   = document.getElementById('aiq-subj-gen');
+const math  = document.getElementById('aiq-subj-math');
 if (!opts) return;
-const isMath = subj === ‘math’;
-opts.style.display = isMath ? ‘flex’ : ‘none’;
-const active   = ‘display:flex;align-items:center;gap:6px;cursor:pointer;padding:7px 14px;border:1.5px solid var(–primary);border-radius:8px;background:var(–primary);color:#fff;font-size:13px;font-weight:600’;
-const inactive = ‘display:flex;align-items:center;gap:6px;cursor:pointer;padding:7px 14px;border:1.5px solid var(–border);border-radius:8px;background:var(–card);color:var(–text-light);font-size:13px;font-weight:600’;
+const isMath = subj === 'math';
+opts.style.display = isMath ? 'flex' : 'none';
+const active   = 'display:flex;align-items:center;gap:6px;cursor:pointer;padding:7px 14px;border:1.5px solid var(-primary);border-radius:8px;background:var(-primary);color:#fff;font-size:13px;font-weight:600';
+const inactive = 'display:flex;align-items:center;gap:6px;cursor:pointer;padding:7px 14px;border:1.5px solid var(-border);border-radius:8px;background:var(-card);color:var(-text-light);font-size:13px;font-weight:600';
 if (gen)  gen.style.cssText  = isMath ? inactive : active;
 if (math) math.style.cssText = isMath ? active   : inactive;
 }
 
 // Tab switching for AI panel source
 function aiqSwitchTab(tab) {
-[‘topic’,‘notes’,‘pdf’].forEach(t => {
-const src = document.getElementById(‘aiq-src-’ + t);
-const btn = document.getElementById(‘aiq-tab-’ + t);
+['topic','notes','pdf'].forEach(t => {
+const src = document.getElementById('aiq-src-' + t);
+const btn = document.getElementById('aiq-tab-' + t);
 if (!src || !btn) return;
 const active = t === tab;
-src.style.display = active ? ‘block’ : ‘none’;
-btn.style.background = active ? ‘var(–primary)’ : ‘var(–card)’;
-btn.style.color = active ? ‘#fff’ : ‘var(–text-light)’;
+src.style.display = active ? 'block' : 'none';
+btn.style.background = active ? 'var(-primary)' : 'var(-card)';
+btn.style.color = active ? '#fff' : 'var(-text-light)';
 });
 }
 
 function aiqShowPdfName(input) {
-const nameEl = document.getElementById(‘aiq-pdf-name’);
+const nameEl = document.getElementById('aiq-pdf-name');
 if (!nameEl) return;
 if (input.files?.[0]) {
-nameEl.textContent = ’- ’ + input.files[0].name;
-nameEl.style.display = ‘block’;
+nameEl.textContent = '- ' + input.files[0].name;
+nameEl.style.display = 'block';
 } else {
-nameEl.style.display = ‘none’;
+nameEl.style.display = 'none';
 }
 }
 
 async function runAIQuizGenerate(quizId) {
-const activeTab  = document.getElementById(‘aiq-src-notes’)?.style.display !== ‘none’ ? ‘notes’
-: document.getElementById(‘aiq-src-pdf’)?.style.display !== ‘none’ ? ‘pdf’
-: ‘topic’;
-const topic      = document.getElementById(‘aiq-topic’)?.value?.trim();
-const count      = document.getElementById(‘aiq-count’)?.value || ‘5’;
-const difficulty = document.getElementById(‘aiq-difficulty’)?.value || ‘medium’;
-const qtype      = document.querySelector(‘input[name=“aiq-qtype”]:checked’)?.value || ‘single’;
-const marks      = parseInt(document.getElementById(‘aiq-marks’)?.value) || 1;
-const context    = document.getElementById(‘aiq-context’)?.value?.trim() || ‘’;
-const subject    = document.querySelector(‘input[name=“aiq-subject”]:checked’)?.value || ‘general’;
-const mathBranch = document.getElementById(‘aiq-math-branch’)?.value || ‘’;
-const mathStyle  = document.querySelector(‘input[name=“aiq-math-style”]:checked’)?.value || ‘solve’;
-const isMath     = subject === ‘math’;
+const activeTab  = document.getElementById('aiq-src-notes')?.style.display !== 'none' ? 'notes'
+: document.getElementById('aiq-src-pdf')?.style.display !== 'none' ? 'pdf'
+: 'topic';
+const topic      = document.getElementById('aiq-topic')?.value?.trim();
+const count      = document.getElementById('aiq-count')?.value || '5';
+const difficulty = document.getElementById('aiq-difficulty')?.value || 'medium';
+const qtype      = document.querySelector('input[name="aiq-qtype"]:checked')?.value || 'single';
+const marks      = parseInt(document.getElementById('aiq-marks')?.value) || 1;
+const context    = document.getElementById('aiq-context')?.value?.trim() || '';
+const subject    = document.querySelector('input[name="aiq-subject"]:checked')?.value || 'general';
+const mathBranch = document.getElementById('aiq-math-branch')?.value || '';
+const mathStyle  = document.querySelector('input[name="aiq-math-style"]:checked')?.value || 'solve';
+const isMath     = subject === 'math';
 
-const errEl      = document.getElementById(‘aiq-error’);
-const btn        = document.getElementById(‘aiq-gen-btn’);
-const previewDiv = document.getElementById(‘aiq-preview’);
-const addBtn     = document.getElementById(‘aiq-add-btn’);
+const errEl      = document.getElementById('aiq-error');
+const btn        = document.getElementById('aiq-gen-btn');
+const previewDiv = document.getElementById('aiq-preview');
+const addBtn     = document.getElementById('aiq-add-btn');
 
-// – If PDF or Notes tab - use backend ai-generate endpoint –
-if (activeTab === ‘pdf’ || activeTab === ‘notes’) {
-errEl.style.display = ‘none’;
-previewDiv.style.display = ‘none’;
-addBtn.style.display = ‘none’;
+// - If PDF or Notes tab - use backend ai-generate endpoint -
+if (activeTab === 'pdf' || activeTab === 'notes') {
+errEl.style.display = 'none';
+previewDiv.style.display = 'none';
+addBtn.style.display = 'none';
 _aiQuizQuestions = [];
 
-```
+
 btn.disabled = true;
 btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="animation:spin 1s linear infinite"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> Generating-';
 
@@ -9588,50 +9517,49 @@ try {
   btn.innerHTML = '- Regenerate';
   return;
 }
-```
 
 }
 
-// – Topic tab - existing AI proxy flow –
-if (!topic) { errEl.textContent = ‘Please enter a topic.’; errEl.style.display = ‘block’; return; }
-errEl.style.display = ‘none’;
-previewDiv.style.display = ‘none’;
-addBtn.style.display = ‘none’;
+// - Topic tab - existing AI proxy flow -
+if (!topic) { errEl.textContent = 'Please enter a topic.'; errEl.style.display = 'block'; return; }
+errEl.style.display = 'none';
+previewDiv.style.display = 'none';
+addBtn.style.display = 'none';
 _aiQuizQuestions = [];
 
 btn.disabled = true;
-btn.innerHTML = ‘<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="animation:spin 1s linear infinite"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> Generating-’;
+btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="animation:spin 1s linear infinite"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> Generating-';
 
-const qtypeDesc = qtype === ‘single’ ? ‘single correct answer (MCQ)’ : qtype === ‘multiple’ ? ‘multiple correct answers’ : ‘a mix of single and multiple correct answer’;
+const qtypeDesc = qtype === 'single' ? 'single correct answer (MCQ)' : qtype === 'multiple' ? 'multiple correct answers' : 'a mix of single and multiple correct answer';
 
 let prompt;
 if (isMath) {
-const branch = mathBranch ? ’Branch: ’ + mathBranch + ‘.’ : ‘Any math branch relevant to the topic.’;
-const styleDesc = mathStyle === ‘solve’ ? ‘calculation/problem-solving questions’
-: mathStyle === ‘conceptual’ ? ‘conceptual/theory questions about mathematical properties’
-: ‘a mix of calculation problems and conceptual questions’;
-prompt = ‘You are an expert mathematics educator creating quiz questions for KODEX.\n\nGenerate exactly ’ + count + ’ ’ + difficulty + ’ difficulty math MCQ questions about: “’ + topic + ’”. ’ + branch + ‘\n’ + (context ? ’Context: ’ + context : ‘’) + ’\n\nStyle: ’ + styleDesc + ’. Question type: ’ + qtypeDesc + ‘. Each question has exactly 4 options.\n\nUse LaTeX \( … \) for ALL inline math. Use \[ … \] for display equations.\n\nReturn ONLY a valid JSON array:\n[\n  {\n    “questionText”: “Find \( x \) if \( x^2 - 5x + 6 = 0 \).”,\n    “options”: [”\( x = 2, 3 \)”, “\( x = -2, -3 \)”, “\( x = 1, 6 \)”, “\( x = 5, -1 \)”],\n    “correctAnswers”: [0],\n    “questionType”: “single”,\n    “explanation”: “Factorising: \( (x-2)(x-3)=0 \).”\n  }\n]’;
+const branch = mathBranch ? 'Branch: ' + mathBranch + '.' : 'Any math branch relevant to the topic.';
+const styleDesc = mathStyle === 'solve' ? 'calculation/problem-solving questions'
+: mathStyle === 'conceptual' ? 'conceptual/theory questions about mathematical properties'
+: 'a mix of calculation problems and conceptual questions';
+prompt = 'You are an expert mathematics educator creating quiz questions for KODEX.\n\nGenerate exactly ' + count + ' ' + difficulty + ' difficulty math MCQ questions about: "' + topic + '". ' + branch + '\n' + (context ? 'Context: ' + context : '') + '\n\nStyle: ' + styleDesc + '. Question type: ' + qtypeDesc + '. Each question has exactly 4 options.\n\nUse LaTeX \( ... \) for ALL inline math. Use \[ ... \] for display equations.\n\nReturn ONLY a valid JSON array:\n[\n  {\n    "questionText": "Find \( x \) if \( x^2 - 5x + 6 = 0 \).",\n    "options": ["\( x = 2, 3 \)", "\( x = -2, -3 \)", "\( x = 1, 6 \)", "\( x = 5, -1 \)"],\n    "correctAnswers": [0],\n    "questionType": "single",\n    "explanation": "Factorising: \( (x-2)(x-3)=0 \)."\n  }\n]';
 } else {
-prompt = ‘You are an expert educator creating quiz questions for KODEX.\n\nGenerate exactly ’ + count + ’ ’ + difficulty + ’ difficulty MCQ questions about: “’ + topic + ‘”.\n’ + (context ? ’Context: ’ + context : ‘’) + ’\nQuestion type: ’ + qtypeDesc + ‘. Each question has exactly 4 options.\n\nReturn ONLY a valid JSON array:\n[\n  {\n    “questionText”: “Question here?”,\n    “options”: [“Option A”, “Option B”, “Option C”, “Option D”],\n    “correctAnswers”: [0],\n    “questionType”: “single”,\n    “explanation”: “Why this is correct”\n  }\n]\n\ncorrectAnswers = 0-based indices. questionType = “single” or “multiple”. No extra text.’;
+prompt = 'You are an expert educator creating quiz questions for KODEX.\n\nGenerate exactly ' + count + ' ' + difficulty + ' difficulty MCQ questions about: "' + topic + '".\n' + (context ? 'Context: ' + context : '') + '\nQuestion type: ' + qtypeDesc + '. Each question has exactly 4 options.\n\nReturn ONLY a valid JSON array:\n[\n  {\n    "questionText": "Question here?",\n    "options": ["Option A", "Option B", "Option C", "Option D"],\n    "correctAnswers": [0],\n    "questionType": "single",\n    "explanation": "Why this is correct"\n  }\n]\n\ncorrectAnswers = 0-based indices. questionType = "single" or "multiple". No extra text.';
 }
 
 try {
-const token = localStorage.getItem(‘token’) || ‘’;
-const response = await fetch(’/api/ai/generate-questions’, {
-method: ‘POST’,
-headers: { ‘Content-Type’: ‘application/json’, ‘Authorization’: ’Bearer ’ + token },
+const token = localStorage.getItem('token') || '';
+const response = await fetch('/api/ai/generate-questions', {
+method: 'POST',
+headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
 body: JSON.stringify({ prompt, max_tokens: 4000 })
 });
 if (!response.ok) {
 const err = await response.json().catch(() => ({}));
-throw new Error(err.error || ’Server error ’ + response.status);
+throw new Error(err.error || 'Server error ' + response.status);
 }
 const data = await response.json();
-const raw   = data.content?.find(c => c.type === ‘text’)?.text || ‘’;
+const raw   = data.content?.find(c => c.type === 'text')?.text || '';
 const questions = extractAIJson(raw);
-if (!Array.isArray(questions) || !questions.length) throw new Error(‘No questions generated. Try a different topic.’);
+if (!Array.isArray(questions) || !questions.length) throw new Error('No questions generated. Try a different topic.');
 
-```
+
 _aiQuizQuestions = questions.map(q => ({
   ...q,
   marks,
@@ -9663,21 +9591,20 @@ addBtn.style.display = 'flex';
 if (window.MathJax && MathJax.typesetPromise) {
   MathJax.typesetPromise([document.getElementById('aiq-preview-list')]).catch(() => {});
 }
-```
 
 } catch(e) {
-errEl.textContent = ’Generation failed: ’ + e.message;
-errEl.style.display = ‘block’;
+errEl.textContent = 'Generation failed: ' + e.message;
+errEl.style.display = 'block';
 } finally {
 btn.disabled = false;
-btn.innerHTML = ‘<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg> Regenerate’;
+btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg> Regenerate';
 }
 }
 
 async function addAIQuizQuestions(quizId) {
-const btn = document.getElementById(‘aiq-add-btn’);
+const btn = document.getElementById('aiq-add-btn');
 if (!_aiQuizQuestions.length) return;
-btn.disabled = true; btn.textContent = ‘Adding-’;
+btn.disabled = true; btn.textContent = 'Adding-';
 let added = 0, failed = 0;
 for (const q of _aiQuizQuestions) {
 try {
@@ -9688,38 +9615,38 @@ questionType: q.questionType,
 marks: q.marks || 1,
 explanation: q.explanation || null,
 };
-if (q.questionType === ‘multiple’) { body.correctAnswers = q.correctAnswers; }
+if (q.questionType === 'multiple') { body.correctAnswers = q.correctAnswers; }
 else { body.correctAnswer = q.correctAnswers[0]; }
-await api(’/api/lecturer/quizzes/’ + quizId + ‘/questions’, { method: ‘POST’, body: JSON.stringify(body) });
+await api('/api/lecturer/quizzes/' + quizId + '/questions', { method: 'POST', body: JSON.stringify(body) });
 added++;
 } catch(e) { failed++; }
 }
-document.getElementById(‘ai-quiz-overlay’)?.remove();
-const msg = added + ’ question’ + (added !== 1 ? ‘s’ : ‘’) + ’ added!’ + (failed ? ’ (’ + failed + ’ failed)’ : ‘’);
+document.getElementById('ai-quiz-overlay')?.remove();
+const msg = added + ' question' + (added !== 1 ? 's' : '') + ' added!' + (failed ? ' (' + failed + ' failed)' : '');
 if (added > 0) toastSuccess(msg); else toastError(msg);
 await showAddQuestionsView(quizId);
 }
 
-// –––––––––––––––––––––––––––––––––––––
+// -------------------------------------
 //  CORPORATE PHASE 1 - SHIFTS & LEAVE
-// –––––––––––––––––––––––––––––––––––––
+// -------------------------------------
 
-// – SHIFTS (Admin/Manager) ———————————————––
+// - SHIFTS (Admin/Manager) --------------------------------
 async function renderShifts() {
-const content = document.getElementById(‘main-content’);
+const content = document.getElementById('main-content');
 if (!content) return;
-content.innerHTML = ‘<div class="loading">Loading shifts-</div>’;
+content.innerHTML = '<div class="loading">Loading shifts-</div>';
 try {
 const [shiftsData, assignmentsData, usersData] = await Promise.all([
-api(’/api/shifts’),
-api(’/api/shifts/assignments’),
-api(’/api/users’).catch(() => ({ users: [] })),
+api('/api/shifts'),
+api('/api/shifts/assignments'),
+api('/api/users').catch(() => ({ users: [] })),
 ]);
 const shifts = shiftsData.shifts || [];
 const assignments = assignmentsData.assignments || [];
-const users = (usersData.users || []).filter(u => u.role === ‘employee’ || u.role === ‘manager’);
+const users = (usersData.users || []).filter(u => u.role === 'employee' || u.role === 'manager');
 
-```
+
 content.innerHTML = `
   <div class="page-header">
     <h2>Shift Management</h2>
@@ -9838,7 +9765,6 @@ content.innerHTML = `
       </table>` : '<p style="color:#9ca3af;font-size:13px">No assignments yet.</p>'}
   </div>
 `;
-```
 
 } catch(e) {
 content.innerHTML = `<div class="card"><p style="color:#ef4444">Error: ${e.message}</p></div>`;
@@ -9846,79 +9772,79 @@ content.innerHTML = `<div class="card"><p style="color:#ef4444">Error: ${e.messa
 }
 
 async function submitCreateShift() {
-const name = document.getElementById(‘sh-name’).value.trim();
-const startTime = document.getElementById(‘sh-start’).value;
-const endTime = document.getElementById(‘sh-end’).value;
-const gracePeriodMinutes = parseInt(document.getElementById(‘sh-grace’).value) || 15;
-const days = […document.querySelectorAll(’#sh-days input:checked’)].map(c => c.value);
-const errEl = document.getElementById(‘sh-error’);
-errEl.style.display = ‘none’;
-if (!name || !startTime || !endTime) { errEl.textContent = ‘Name, start and end time are required.’; errEl.style.display = ‘block’; return; }
-if (!days.length) { errEl.textContent = ‘Select at least one working day.’; errEl.style.display = ‘block’; return; }
-const btn = event.target; btn.disabled = true; btn.textContent = ‘Creating-’;
+const name = document.getElementById('sh-name').value.trim();
+const startTime = document.getElementById('sh-start').value;
+const endTime = document.getElementById('sh-end').value;
+const gracePeriodMinutes = parseInt(document.getElementById('sh-grace').value) || 15;
+const days = [...document.querySelectorAll('#sh-days input:checked')].map(c => c.value);
+const errEl = document.getElementById('sh-error');
+errEl.style.display = 'none';
+if (!name || !startTime || !endTime) { errEl.textContent = 'Name, start and end time are required.'; errEl.style.display = 'block'; return; }
+if (!days.length) { errEl.textContent = 'Select at least one working day.'; errEl.style.display = 'block'; return; }
+const btn = event.target; btn.disabled = true; btn.textContent = 'Creating-';
 try {
-await api(’/api/shifts’, { method: ‘POST’, body: JSON.stringify({ name, startTime, endTime, gracePeriodMinutes, days }) });
-toast(‘Shift created!’, ‘ok’);
+await api('/api/shifts', { method: 'POST', body: JSON.stringify({ name, startTime, endTime, gracePeriodMinutes, days }) });
+toast('Shift created!', 'ok');
 renderShifts();
 } catch(e) {
-errEl.textContent = e.message; errEl.style.display = ‘block’;
-btn.disabled = false; btn.textContent = ‘+ Create Shift’;
+errEl.textContent = e.message; errEl.style.display = 'block';
+btn.disabled = false; btn.textContent = '+ Create Shift';
 }
 }
 
 async function deleteShift(id) {
-if (!confirm(‘Delete this shift? Employees assigned to it will need a new shift.’)) return;
+if (!confirm('Delete this shift? Employees assigned to it will need a new shift.')) return;
 try {
-await api(`/api/shifts/${id}`, { method: ‘DELETE’ });
-toast(‘Shift deleted’, ‘ok’);
+await api(`/api/shifts/${id}`, { method: 'DELETE' });
+toast('Shift deleted', 'ok');
 renderShifts();
-} catch(e) { toast(e.message, ‘err’); }
+} catch(e) { toast(e.message, 'err'); }
 }
 
 async function submitAssignShift() {
-const employeeId = document.getElementById(‘sh-emp’).value;
-const shiftId = document.getElementById(‘sh-shift’).value;
-const startDate = document.getElementById(‘sh-asgn-start’).value;
-const endDate = document.getElementById(‘sh-asgn-end’).value;
-const errEl = document.getElementById(‘sh-asgn-error’);
-errEl.style.display = ‘none’;
-if (!employeeId || !shiftId || !startDate) { errEl.textContent = ‘Employee, shift and start date are required.’; errEl.style.display = ‘block’; return; }
-const btn = event.target; btn.disabled = true; btn.textContent = ‘Assigning-’;
+const employeeId = document.getElementById('sh-emp').value;
+const shiftId = document.getElementById('sh-shift').value;
+const startDate = document.getElementById('sh-asgn-start').value;
+const endDate = document.getElementById('sh-asgn-end').value;
+const errEl = document.getElementById('sh-asgn-error');
+errEl.style.display = 'none';
+if (!employeeId || !shiftId || !startDate) { errEl.textContent = 'Employee, shift and start date are required.'; errEl.style.display = 'block'; return; }
+const btn = event.target; btn.disabled = true; btn.textContent = 'Assigning-';
 try {
-await api(’/api/shifts/assign’, { method: ‘POST’, body: JSON.stringify({ employeeId, shiftId, startDate, endDate: endDate || null }) });
-toast(‘Shift assigned!’, ‘ok’);
+await api('/api/shifts/assign', { method: 'POST', body: JSON.stringify({ employeeId, shiftId, startDate, endDate: endDate || null }) });
+toast('Shift assigned!', 'ok');
 renderShifts();
 } catch(e) {
-errEl.textContent = e.message; errEl.style.display = ‘block’;
-btn.disabled = false; btn.textContent = ‘Assign Shift’;
+errEl.textContent = e.message; errEl.style.display = 'block';
+btn.disabled = false; btn.textContent = 'Assign Shift';
 }
 }
 
 async function removeShiftAssignment(id) {
-if (!confirm(‘Remove this shift assignment?’)) return;
+if (!confirm('Remove this shift assignment?')) return;
 try {
-await api(`/api/shifts/assignments/${id}`, { method: ‘DELETE’ });
-toast(‘Assignment removed’, ‘ok’);
+await api(`/api/shifts/assignments/${id}`, { method: 'DELETE' });
+toast('Assignment removed', 'ok');
 renderShifts();
-} catch(e) { toast(e.message, ‘err’); }
+} catch(e) { toast(e.message, 'err'); }
 }
 
-// – MY SHIFT (Employee) ––––––––––––––––––––––––––
+// - MY SHIFT (Employee) --------------------------
 async function renderMyShift() {
-const content = document.getElementById(‘main-content’);
+const content = document.getElementById('main-content');
 if (!content) return;
-content.innerHTML = ‘<div class="loading">Loading your shift-</div>’;
+content.innerHTML = '<div class="loading">Loading your shift-</div>';
 try {
-const { assignment } = await api(’/api/shifts/my-shift’);
+const { assignment } = await api('/api/shifts/my-shift');
 const s = assignment?.shift;
 content.innerHTML = `<div class="page-header"><h2>My Shift</h2><p>Your assigned working hours</p></div> ${assignment && s ?`
 <div class="card" style="text-align:center;padding:40px 24px;border-left:4px solid var(--primary)">
 <div style="font-size:48px;margin-bottom:12px">-</div>
 <div style="font-size:22px;font-weight:800;margin-bottom:6px">${s.name}</div>
 <div style="font-size:32px;font-weight:700;color:var(--primary);margin-bottom:8px">${s.startTime} - ${s.endTime}</div>
-<div style="font-size:14px;color:#6b7280;margin-bottom:4px">Working days: <strong>${(s.days||[]).join(’, ’)}</strong></div>
+<div style="font-size:14px;color:#6b7280;margin-bottom:4px">Working days: <strong>${(s.days||[]).join(', ')}</strong></div>
 <div style="font-size:13px;color:#9ca3af">Grace period: ${s.gracePeriodMinutes} minutes - Assigned since ${new Date(assignment.startDate).toLocaleDateString()}</div>
-${assignment.endDate ? `<div style="font-size:13px;color:#f59e0b;margin-top:8px">-- This assignment ends on ${new Date(assignment.endDate).toLocaleDateString()}</div>` : ‘’}
+${assignment.endDate ? `<div style="font-size:13px;color:#f59e0b;margin-top:8px">-- This assignment ends on ${new Date(assignment.endDate).toLocaleDateString()}</div>` : ''}
 </div>`:`
 <div class="card" style="text-align:center;padding:60px 24px">
 <div style="font-size:48px;opacity:.3;margin-bottom:16px">-</div>
@@ -9930,20 +9856,20 @@ content.innerHTML = `<div class="card"><p style="color:#ef4444">Error: ${e.messa
 }
 }
 
-// – LEAVE REQUESTS (Admin/Manager) ––––––––––––––––––––
+// - LEAVE REQUESTS (Admin/Manager) --------------------
 async function renderLeaveRequests() {
-const content = document.getElementById(‘main-content’);
+const content = document.getElementById('main-content');
 if (!content) return;
-content.innerHTML = ‘<div class="loading">Loading leave requests-</div>’;
+content.innerHTML = '<div class="loading">Loading leave requests-</div>';
 try {
 const [pendingData, allData] = await Promise.all([
-api(’/api/leaves/pending’),
-api(’/api/leaves?status=approved’),
+api('/api/leaves/pending'),
+api('/api/leaves?status=approved'),
 ]);
 const pending = pendingData.leaves || [];
 const approved = allData.leaves || [];
 
-```
+
 const leaveTypeBadge = t => ({
   annual: '<span style="background:#eff6ff;color:#1d4ed8;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600">Annual</span>',
   sick:   '<span style="background:#fef2f2;color:#dc2626;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600">Sick</span>',
@@ -10001,7 +9927,6 @@ content.innerHTML = `
       </table>` : '<p style="color:#9ca3af;font-size:13px">No approved leaves yet.</p>'}
   </div>
 `;
-```
 
 } catch(e) {
 content.innerHTML = `<div class="card"><p style="color:#ef4444">Error: ${e.message}</p></div>`;
@@ -10009,27 +9934,27 @@ content.innerHTML = `<div class="card"><p style="color:#ef4444">Error: ${e.messa
 }
 
 async function reviewLeave(id, action) {
-const note = document.getElementById(`note-${id}`)?.value || ‘’;
+const note = document.getElementById(`note-${id}`)?.value || '';
 const btn = event.target; btn.disabled = true;
 try {
-await api(`/api/leaves/${id}/review`, { method: ‘PATCH’, body: JSON.stringify({ action, note }) });
-toast(action === ‘approved’ ? ‘Leave approved -’ : ‘Leave rejected’, action === ‘approved’ ? ‘ok’ : ‘err’);
+await api(`/api/leaves/${id}/review`, { method: 'PATCH', body: JSON.stringify({ action, note }) });
+toast(action === 'approved' ? 'Leave approved -' : 'Leave rejected', action === 'approved' ? 'ok' : 'err');
 renderLeaveRequests();
 } catch(e) {
-toast(e.message, ‘err’);
+toast(e.message, 'err');
 btn.disabled = false;
 }
 }
 
-// – MY LEAVES (Employee) –––––––––––––––––––––––––
+// - MY LEAVES (Employee) -------------------------
 async function renderMyLeaves() {
-const content = document.getElementById(‘main-content’);
+const content = document.getElementById('main-content');
 if (!content) return;
-content.innerHTML = ‘<div class="loading">Loading-</div>’;
+content.innerHTML = '<div class="loading">Loading-</div>';
 try {
-const { leaves } = await api(’/api/leaves/my’);
+const { leaves } = await api('/api/leaves/my');
 
-```
+
 const statusBadge = s => ({
   pending:   '<span style="background:#fffbeb;color:#d97706;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600">Pending</span>',
   approved:  '<span style="background:#f0fdf4;color:#16a34a;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600">Approved</span>',
@@ -10089,7 +10014,6 @@ content.innerHTML = `
       </div>`).join('') : '<p style="color:#9ca3af;font-size:13px">No leave requests yet.</p>'}
   </div>
 `;
-```
 
 } catch(e) {
 content.innerHTML = `<div class="card"><p style="color:#ef4444">Error: ${e.message}</p></div>`;
@@ -10097,102 +10021,102 @@ content.innerHTML = `<div class="card"><p style="color:#ef4444">Error: ${e.messa
 }
 
 async function submitLeaveRequest() {
-const type = document.getElementById(‘lv-type’).value;
-const startDate = document.getElementById(‘lv-start’).value;
-const endDate = document.getElementById(‘lv-end’).value;
-const reason = document.getElementById(‘lv-reason’).value.trim();
-const errEl = document.getElementById(‘lv-error’);
-errEl.style.display = ‘none’;
-if (!startDate || !endDate) { errEl.textContent = ‘Start and end dates are required.’; errEl.style.display = ‘block’; return; }
-if (new Date(endDate) < new Date(startDate)) { errEl.textContent = ‘End date must be after start date.’; errEl.style.display = ‘block’; return; }
-const btn = event.target; btn.disabled = true; btn.textContent = ‘Submitting-’;
+const type = document.getElementById('lv-type').value;
+const startDate = document.getElementById('lv-start').value;
+const endDate = document.getElementById('lv-end').value;
+const reason = document.getElementById('lv-reason').value.trim();
+const errEl = document.getElementById('lv-error');
+errEl.style.display = 'none';
+if (!startDate || !endDate) { errEl.textContent = 'Start and end dates are required.'; errEl.style.display = 'block'; return; }
+if (new Date(endDate) < new Date(startDate)) { errEl.textContent = 'End date must be after start date.'; errEl.style.display = 'block'; return; }
+const btn = event.target; btn.disabled = true; btn.textContent = 'Submitting-';
 try {
-await api(’/api/leaves’, { method: ‘POST’, body: JSON.stringify({ type, startDate, endDate, reason }) });
-toast(‘Leave request submitted!’, ‘ok’);
+await api('/api/leaves', { method: 'POST', body: JSON.stringify({ type, startDate, endDate, reason }) });
+toast('Leave request submitted!', 'ok');
 renderMyLeaves();
 } catch(e) {
-errEl.textContent = e.message; errEl.style.display = ‘block’;
-btn.disabled = false; btn.textContent = ‘Submit Request’;
+errEl.textContent = e.message; errEl.style.display = 'block';
+btn.disabled = false; btn.textContent = 'Submit Request';
 }
 }
 
 async function cancelLeave(id) {
-if (!confirm(‘Cancel this leave request?’)) return;
+if (!confirm('Cancel this leave request?')) return;
 try {
-await api(`/api/leaves/${id}/cancel`, { method: ‘PATCH’ });
-toast(‘Leave request cancelled’, ‘ok’);
+await api(`/api/leaves/${id}/cancel`, { method: 'PATCH' });
+toast('Leave request cancelled', 'ok');
 renderMyLeaves();
-} catch(e) { toast(e.message, ‘err’); }
+} catch(e) { toast(e.message, 'err'); }
 }
 
-// ——————————————————————————
+// ----------------------------------------------------
 //  CORPORATE PHASE 2 - TRAINING & ASSESSMENTS
-// ——————————————————————————
+// ----------------------------------------------------
 
-// – SIDEBAR: add training nav items ——————————————
+// - SIDEBAR: add training nav items ----------------------------
 // Patch buildSidebar to inject training links for corporate mode
 const _origBuildSidebar = buildSidebar;
 buildSidebar = function() {
 _origBuildSidebar();
 const role = currentUser?.role;
 const mode = currentUser?.company?.mode;
-if (mode !== ‘corporate’) return;
+if (mode !== 'corporate') return;
 
-const nav = document.getElementById(‘sidebar-nav’);
+const nav = document.getElementById('sidebar-nav');
 if (!nav) return;
 
 const trainingIcon = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>`;
 
-if ([‘admin’,‘manager’,‘superadmin’].includes(role)) {
+if (['admin','manager','superadmin'].includes(role)) {
 // Insert after leave-requests link
-const leaveLink = document.getElementById(‘nav-leave-requests’);
-if (leaveLink && !document.getElementById(‘nav-training’)) {
-const a = document.createElement(‘a’);
-a.id = ‘nav-training’;
-a.innerHTML = `${trainingIcon}<span>Training & Assessments</span>`; a.dataset.tooltip = “Training & Assessments”;
-a.onclick = () => navigateTo(‘training’);
-leaveLink.insertAdjacentElement(‘afterend’, a);
+const leaveLink = document.getElementById('nav-leave-requests');
+if (leaveLink && !document.getElementById('nav-training')) {
+const a = document.createElement('a');
+a.id = 'nav-training';
+a.innerHTML = `${trainingIcon}<span>Training & Assessments</span>`; a.dataset.tooltip = "Training & Assessments";
+a.onclick = () => navigateTo('training');
+leaveLink.insertAdjacentElement('afterend', a);
 }
-} else if (role === ‘employee’) {
-const myLeaveLink = document.getElementById(‘nav-my-leaves’);
-if (myLeaveLink && !document.getElementById(‘nav-my-training’)) {
-const a = document.createElement(‘a’);
-a.id = ‘nav-my-training’;
-a.innerHTML = `${trainingIcon}<span>My Assessments</span>`; a.dataset.tooltip = “My Assessments”;
-a.onclick = () => navigateTo(‘my-training’);
-myLeaveLink.insertAdjacentElement(‘afterend’, a);
+} else if (role === 'employee') {
+const myLeaveLink = document.getElementById('nav-my-leaves');
+if (myLeaveLink && !document.getElementById('nav-my-training')) {
+const a = document.createElement('a');
+a.id = 'nav-my-training';
+a.innerHTML = `${trainingIcon}<span>My Assessments</span>`; a.dataset.tooltip = "My Assessments";
+a.onclick = () => navigateTo('my-training');
+myLeaveLink.insertAdjacentElement('afterend', a);
 }
 }
 };
 
-// – Patch navigateTo to handle training routes ––––––––––––––––
+// - Patch navigateTo to handle training routes ----------------
 const _origNavigateTo = navigateTo;
 navigateTo = function(view) {
-if (view === ‘training’)    { currentView = view; _setNavActive(view); renderTraining(); return; }
-if (view === ‘my-training’) { currentView = view; _setNavActive(view); renderMyTraining(); return; }
+if (view === 'training')    { currentView = view; _setNavActive(view); renderTraining(); return; }
+if (view === 'my-training') { currentView = view; _setNavActive(view); renderMyTraining(); return; }
 _origNavigateTo(view);
 };
 
 function _setNavActive(view) {
-document.querySelectorAll(’.sidebar-nav a’).forEach(a => a.classList.remove(‘active’));
+document.querySelectorAll('.sidebar-nav a').forEach(a => a.classList.remove('active'));
 const el = document.getElementById(`nav-${view}`);
-if (el) el.classList.add(‘active’);
-const content = document.getElementById(‘main-content’);
-if (content) content.innerHTML = ‘<div class="loading">Loading…</div>’;
+if (el) el.classList.add('active');
+const content = document.getElementById('main-content');
+if (content) content.innerHTML = '<div class="loading">Loading...</div>';
 }
 
-// – ADMIN/MANAGER: Training Hub ———————————————–
+// - ADMIN/MANAGER: Training Hub -------------------------------
 async function renderTraining() {
-const content = document.getElementById(‘main-content’);
+const content = document.getElementById('main-content');
 if (!content) return;
 
 try {
 const [overviewData, modulesData] = await Promise.all([
-api(’/api/training/overview’),
-api(’/api/training/modules’),
+api('/api/training/overview'),
+api('/api/training/modules'),
 ]);
 
-```
+
 const { stats, recent } = overviewData;
 const modules = modulesData.modules || [];
 
@@ -10311,7 +10235,6 @@ content.innerHTML = `
   </div>
   ` : ''}
 `;
-```
 
 } catch(e) {
 content.innerHTML = `<div class="card"><p style="color:#ef4444">Error: ${e.message}</p></div>`;
@@ -10319,99 +10242,99 @@ content.innerHTML = `<div class="card"><p style="color:#ef4444">Error: ${e.messa
 }
 
 async function submitCreateModule() {
-const title = document.getElementById(‘tm-title’).value.trim();
-const type = document.getElementById(‘tm-type’).value;
-const passingScore = parseInt(document.getElementById(‘tm-pass’).value) || 70;
-const dueInDays = parseInt(document.getElementById(‘tm-due’).value) || 7;
-const description = document.getElementById(‘tm-desc’).value.trim();
-const content = document.getElementById(‘tm-content’).value.trim();
-const videoUrl = document.getElementById(‘tm-video’).value.trim();
-const errEl = document.getElementById(‘tm-error’);
-errEl.style.display = ‘none’;
+const title = document.getElementById('tm-title').value.trim();
+const type = document.getElementById('tm-type').value;
+const passingScore = parseInt(document.getElementById('tm-pass').value) || 70;
+const dueInDays = parseInt(document.getElementById('tm-due').value) || 7;
+const description = document.getElementById('tm-desc').value.trim();
+const content = document.getElementById('tm-content').value.trim();
+const videoUrl = document.getElementById('tm-video').value.trim();
+const errEl = document.getElementById('tm-error');
+errEl.style.display = 'none';
 
-if (!title) { errEl.textContent = ‘Title is required.’; errEl.style.display = ‘block’; return; }
+if (!title) { errEl.textContent = 'Title is required.'; errEl.style.display = 'block'; return; }
 
-const btn = event.target; btn.disabled = true; btn.textContent = ‘Creating-’;
+const btn = event.target; btn.disabled = true; btn.textContent = 'Creating-';
 try {
-const timeLimitMinutes = parseInt(document.getElementById(‘tm-time’)?.value) || null;
-await api(’/api/training/modules’, {
-method: ‘POST’,
+const timeLimitMinutes = parseInt(document.getElementById('tm-time')?.value) || null;
+await api('/api/training/modules', {
+method: 'POST',
 body: JSON.stringify({ title, type, description, content, videoUrl, passingScore, dueInDays, timeLimitMinutes }),
 });
-toast(‘Module created!’, ‘ok’);
+toast('Module created!', 'ok');
 renderTraining();
 } catch(e) {
-errEl.textContent = e.message; errEl.style.display = ‘block’;
-btn.disabled = false; btn.textContent = ‘+ Create Module’;
+errEl.textContent = e.message; errEl.style.display = 'block';
+btn.disabled = false; btn.textContent = '+ Create Module';
 }
 }
 
 async function assignModule(moduleId) {
-const btn = event.target; btn.disabled = true; btn.textContent = ‘Assigning-’;
+const btn = event.target; btn.disabled = true; btn.textContent = 'Assigning-';
 try {
-const data = await api(`/api/training/modules/${moduleId}/assign`, { method: ‘POST’ });
-toast(data.message || ‘Assigned!’, ‘ok’);
+const data = await api(`/api/training/modules/${moduleId}/assign`, { method: 'POST' });
+toast(data.message || 'Assigned!', 'ok');
 renderTraining();
 } catch(e) {
-toast(e.message, ‘err’);
-btn.disabled = false; btn.textContent = ‘Assign All’;
+toast(e.message, 'err');
+btn.disabled = false; btn.textContent = 'Assign All';
 }
 }
 
 async function deleteModule(id) {
-if (!confirm(‘Delete this training module?’)) return;
+if (!confirm('Delete this training module?')) return;
 try {
-await api(`/api/training/modules/${id}`, { method: ‘DELETE’ });
-toast(‘Module deleted’, ‘ok’);
+await api(`/api/training/modules/${id}`, { method: 'DELETE' });
+toast('Module deleted', 'ok');
 renderTraining();
-} catch(e) { toast(e.message, ‘err’); }
+} catch(e) { toast(e.message, 'err'); }
 }
 
 function showAddTrainingQuestion(moduleId) {
-const container = document.getElementById(‘modal-container’);
-container.classList.remove(‘hidden’);
+const container = document.getElementById('modal-container');
+container.classList.remove('hidden');
 container.innerHTML = `<div class="modal-overlay" onclick="if(event.target===this)closeModal()"> <div class="modal" onclick="event.stopPropagation()" style="max-width:500px"> <h3>Add Question</h3> <div class="form-group"> <label>Question *</label> <textarea id="tq-text" rows="2" placeholder="Enter question-" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px"></textarea> </div> ${['A','B','C','D'].map((l,i) =>`
 <div class="form-group">
-<label>Option ${l}${i<2?’ *’:’’}</label>
+<label>Option ${l}${i<2?' *':''}</label>
 <input type="text" id="tq-opt-${i}" placeholder="Option ${l}" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
 </div>`).join('')} <div class="form-group"> <label>Correct Answer *</label> <div style="display:flex;gap:12px;margin-top:4px"> ${['A','B','C','D'].map((l,i) => `<label style="display:flex;align-items:center;gap:4px;cursor:pointer"><input type="radio" name="tq-correct" value="${i}"> ${l}</label>`).join('')} </div> </div> <div class="form-group"> <label>Marks</label> <input type="number" id="tq-marks" value="1" min="1" style="width:80px;padding:8px;border:1px solid #d1d5db;border-radius:6px"> </div> <div id="tq-error" style="color:#ef4444;font-size:13px;margin-bottom:8px;display:none"></div> <div class="modal-actions"> <button class="btn btn-secondary" onclick="closeModal()">Cancel</button> <button class="btn btn-primary" onclick="submitTrainingQuestion('${moduleId}')">Add Question</button> </div> </div> </div> `;
 }
 
 async function submitTrainingQuestion(moduleId) {
-const questionText = document.getElementById(‘tq-text’).value.trim();
+const questionText = document.getElementById('tq-text').value.trim();
 const options = [0,1,2,3].map(i => document.getElementById(`tq-opt-${i}`).value.trim()).filter(o => o);
-const correctRadio = document.querySelector(‘input[name=“tq-correct”]:checked’);
-const marks = parseInt(document.getElementById(‘tq-marks’).value) || 1;
-const errEl = document.getElementById(‘tq-error’);
-errEl.style.display = ‘none’;
+const correctRadio = document.querySelector('input[name="tq-correct"]:checked');
+const marks = parseInt(document.getElementById('tq-marks').value) || 1;
+const errEl = document.getElementById('tq-error');
+errEl.style.display = 'none';
 
-if (!questionText) { errEl.textContent = ‘Question text is required.’; errEl.style.display = ‘block’; return; }
-if (options.length < 2) { errEl.textContent = ‘At least 2 options required.’; errEl.style.display = ‘block’; return; }
-if (!correctRadio) { errEl.textContent = ‘Select the correct answer.’; errEl.style.display = ‘block’; return; }
+if (!questionText) { errEl.textContent = 'Question text is required.'; errEl.style.display = 'block'; return; }
+if (options.length < 2) { errEl.textContent = 'At least 2 options required.'; errEl.style.display = 'block'; return; }
+if (!correctRadio) { errEl.textContent = 'Select the correct answer.'; errEl.style.display = 'block'; return; }
 
 const correctAnswer = parseInt(correctRadio.value);
 try {
 await api(`/api/training/modules/${moduleId}/questions`, {
-method: ‘POST’,
+method: 'POST',
 body: JSON.stringify({ questionText, options, correctAnswer, marks }),
 });
 closeModal();
-toast(‘Question added!’, ‘ok’);
+toast('Question added!', 'ok');
 renderTraining();
 } catch(e) {
-errEl.textContent = e.message; errEl.style.display = ‘block’;
+errEl.textContent = e.message; errEl.style.display = 'block';
 }
 }
 
 async function viewModuleProgress(moduleId, title) {
-const container = document.getElementById(‘modal-container’);
-container.classList.remove(‘hidden’);
+const container = document.getElementById('modal-container');
+container.classList.remove('hidden');
 container.innerHTML = `<div class="modal-overlay" onclick="closeModal(event)"> <div class="modal" onclick="event.stopPropagation()" style="max-width:650px;width:95%"> <h3>Progress - ${title}</h3> <div id="mp-content"><p>Loading-</p></div> <div class="modal-actions"><button class="btn btn-secondary" onclick="closeModal()">Close</button></div> </div> </div>`;
 try {
 const { progress } = await api(`/api/training/modules/${moduleId}/progress`);
-const el = document.getElementById(‘mp-content’);
+const el = document.getElementById('mp-content');
 
-```
+
 const statusBadge = s => ({
   assigned:    '<span style="background:#f1f5f9;color:#475569;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600">Assigned</span>',
   in_progress: '<span style="background:#eff6ff;color:#1d4ed8;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600">In Progress</span>',
@@ -10444,21 +10367,20 @@ el.innerHTML = `
     </tbody>
   </table>
 `;
-```
 
 } catch(e) {
-document.getElementById(‘mp-content’).innerHTML = `<p style="color:#ef4444">Error: ${e.message}</p>`;
+document.getElementById('mp-content').innerHTML = `<p style="color:#ef4444">Error: ${e.message}</p>`;
 }
 }
 
-// – EMPLOYEE: My Training —————————————————–
+// - EMPLOYEE: My Training -----------------------------------
 async function renderMyTraining() {
-const content = document.getElementById(‘main-content’);
+const content = document.getElementById('main-content');
 if (!content) return;
 try {
-const { progress } = await api(’/api/training/my’);
+const { progress } = await api('/api/training/my');
 
-```
+
 const statusStyle = s => ({
   assigned:    'background:#f1f5f9;color:#475569',
   in_progress: 'background:#eff6ff;color:#1d4ed8',
@@ -10516,7 +10438,6 @@ content.innerHTML = `
     <p style="color:#9ca3af;font-size:13px">Your manager will assign training modules when required.</p>
   </div>`}
 `;
-```
 
 } catch(e) {
 content.innerHTML = `<div class="card"><p style="color:#ef4444">Error: ${e.message}</p></div>`;
@@ -10524,18 +10445,18 @@ content.innerHTML = `<div class="card"><p style="color:#ef4444">Error: ${e.messa
 }
 
 async function startTrainingModule(progressId, moduleId) {
-const content = document.getElementById(‘main-content’);
+const content = document.getElementById('main-content');
 if (!content) return;
-content.innerHTML = ‘<div class="loading">Loading module-</div>’;
+content.innerHTML = '<div class="loading">Loading module-</div>';
 
 try {
-await api(`/api/training/my/${progressId}/start`, { method: ‘POST’ });
-const { progress } = await api(’/api/training/my’);
+await api(`/api/training/my/${progressId}/start`, { method: 'POST' });
+const { progress } = await api('/api/training/my');
 const p = progress.find(x => x._id === progressId);
 if (!p) { renderMyTraining(); return; }
 const m = p.module;
 
-```
+
 content.innerHTML = `
   <div class="page-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
     <div><h2>${m.title}</h2><p>${m.description || ''}</p></div>
@@ -10611,7 +10532,6 @@ if (m.timeLimitMinutes && m.questions.length) {
     }, 1000);
   }
 }
-```
 
 } catch(e) {
 content.innerHTML = `<div class="card"><p style="color:#ef4444">Error: ${e.message}</p></div>`;
@@ -10626,14 +10546,14 @@ const selected = document.querySelector(`input[name="tma-${i}"]:checked`);
 answers.push({ questionIndex: i, selectedAnswer: selected ? parseInt(selected.value) : -1 });
 }
 
-const btn = event.target; btn.disabled = true; btn.textContent = ‘Submitting-’;
+const btn = event.target; btn.disabled = true; btn.textContent = 'Submitting-';
 try {
 const data = await api(`/api/training/my/${progressId}/submit`, {
-method: ‘POST’,
+method: 'POST',
 body: JSON.stringify({ answers }),
 });
 
-```
+
 const content = document.getElementById('main-content');
 const passed = data.passed;
 content.innerHTML = `
@@ -10650,93 +10570,92 @@ content.innerHTML = `
     </div>
   </div>
 `;
-```
 
 } catch(e) {
-btn.disabled = false; btn.textContent = ‘Submit Assessment’;
-toast(e.message, ‘err’);
+btn.disabled = false; btn.textContent = 'Submit Assessment';
+toast(e.message, 'err');
 }
 }
 
 async function markTrainingRead(progressId) {
-const btn = event.target; btn.disabled = true; btn.textContent = ‘Saving-’;
+const btn = event.target; btn.disabled = true; btn.textContent = 'Saving-';
 try {
 await api(`/api/training/my/${progressId}/submit`, {
-method: ‘POST’,
+method: 'POST',
 body: JSON.stringify({ answers: [] }),
 });
-toast(‘Module completed! -’, ‘ok’);
+toast('Module completed! -', 'ok');
 renderMyTraining();
 } catch(e) {
-toast(e.message, ‘err’);
-btn.disabled = false; btn.textContent = ‘Mark as Completed’;
+toast(e.message, 'err');
+btn.disabled = false; btn.textContent = 'Mark as Completed';
 }
 }
 
 async function retryTrainingModule(progressId) {
 try {
-const data = await api(`/api/training/my/${progressId}/retry`, { method: ‘POST’ });
+const data = await api(`/api/training/my/${progressId}/retry`, { method: 'POST' });
 startTrainingModule(progressId, data.progress.module._id || data.progress.module);
-} catch(e) { toast(e.message, ‘err’); }
+} catch(e) { toast(e.message, 'err'); }
 }
 
-// ——————————————————————————
+// ----------------------------------------------------
 //  CORPORATE PHASE 3 - PERFORMANCE MANAGEMENT
-// ——————————————————————————
+// ----------------------------------------------------
 
-// – Patch buildSidebar for Phase 3 nav —————————————
+// - Patch buildSidebar for Phase 3 nav --------------------------
 const _p2BuildSidebar = buildSidebar;
 buildSidebar = function() {
 _p2BuildSidebar();
 const role = currentUser?.role;
 const mode = currentUser?.company?.mode;
-if (mode !== ‘corporate’) return;
+if (mode !== 'corporate') return;
 
-const nav = document.getElementById(‘sidebar-nav’);
+const nav = document.getElementById('sidebar-nav');
 if (!nav) return;
 
 const perfIcon = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>`;
 
-if ([‘admin’,‘manager’,‘superadmin’].includes(role)) {
-const trainingLink = document.getElementById(‘nav-training’);
-if (trainingLink && !document.getElementById(‘nav-performance’)) {
-const a = document.createElement(‘a’);
-a.id = ‘nav-performance’;
-a.innerHTML = `${perfIcon}<span>Performance</span>`; a.dataset.tooltip = “Performance”;
-a.onclick = () => navigateTo(‘performance’);
-trainingLink.insertAdjacentElement(‘afterend’, a);
+if (['admin','manager','superadmin'].includes(role)) {
+const trainingLink = document.getElementById('nav-training');
+if (trainingLink && !document.getElementById('nav-performance')) {
+const a = document.createElement('a');
+a.id = 'nav-performance';
+a.innerHTML = `${perfIcon}<span>Performance</span>`; a.dataset.tooltip = "Performance";
+a.onclick = () => navigateTo('performance');
+trainingLink.insertAdjacentElement('afterend', a);
 }
-} else if (role === ‘employee’) {
-const myTrainingLink = document.getElementById(‘nav-my-training’);
-if (myTrainingLink && !document.getElementById(‘nav-my-performance’)) {
-const a = document.createElement(‘a’);
-a.id = ‘nav-my-performance’;
-a.innerHTML = `${perfIcon}<span>My Performance</span>`; a.dataset.tooltip = “My Performance”;
-a.onclick = () => navigateTo(‘my-performance’);
-myTrainingLink.insertAdjacentElement(‘afterend’, a);
+} else if (role === 'employee') {
+const myTrainingLink = document.getElementById('nav-my-training');
+if (myTrainingLink && !document.getElementById('nav-my-performance')) {
+const a = document.createElement('a');
+a.id = 'nav-my-performance';
+a.innerHTML = `${perfIcon}<span>My Performance</span>`; a.dataset.tooltip = "My Performance";
+a.onclick = () => navigateTo('my-performance');
+myTrainingLink.insertAdjacentElement('afterend', a);
 }
 }
 };
 
-// – Patch navigateTo for Phase 3 ———————————————
+// - Patch navigateTo for Phase 3 ------------------------------
 const _p2NavigateTo = navigateTo;
 navigateTo = function(view) {
-if (view === ‘performance’)    { currentView = view; _setNavActive(view); renderPerformance(); return; }
-if (view === ‘my-performance’) { currentView = view; _setNavActive(view); renderMyPerformance(); return; }
+if (view === 'performance')    { currentView = view; _setNavActive(view); renderPerformance(); return; }
+if (view === 'my-performance') { currentView = view; _setNavActive(view); renderMyPerformance(); return; }
 _p2NavigateTo(view);
 };
 
-// – Helpers —————————————————————––
-function *starRating(score, max=5) {
-if (!score) return ‘<span style="color:#d1d5db">No rating</span>’;
+// - Helpers --------------------------------------------
+function starRating(score, max=5) {
+if (!score) return '<span style="color:#d1d5db">No rating</span>';
 const full = Math.round(score);
-return Array.from({length:max}, (*,i) =>
+return Array.from({length:max}, (_,i) =>
 `<span style="color:${i < full ? '#f59e0b' : '#d1d5db'};font-size:16px">-</span>`
-).join(’’) + ` <span style="font-size:12px;color:#6b7280">(${score}/5)</span>`;
+).join('') + ` <span style="font-size:12px;color:#6b7280">(${score}/5)</span>`;
 }
 
 function _progressBar(pct) {
-const color = pct >= 100 ? ‘#22c55e’ : pct >= 60 ? ‘#3b82f6’ : pct >= 30 ? ‘#f59e0b’ : ‘#ef4444’;
+const color = pct >= 100 ? '#22c55e' : pct >= 60 ? '#3b82f6' : pct >= 30 ? '#f59e0b' : '#ef4444';
 return `<div style="background:#f3f4f6;border-radius:6px;height:8px;width:100%">
 <div style="background:${color};height:8px;border-radius:6px;width:${Math.min(pct,100)}%;transition:width .3s"></div>
 
@@ -10745,23 +10664,23 @@ return `<div style="background:#f3f4f6;border-radius:6px;height:8px;width:100%">
 
 function _catBadge(c) {
 return ({
-kpi:      ‘<span style="background:#dbeafe;color:#1d4ed8;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600">KPI</span>’,
-personal: ‘<span style="background:#ede9fe;color:#5b21b6;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600">Personal</span>’,
-team:     ‘<span style="background:#d1fae5;color:#065f46;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600">Team</span>’,
-learning: ‘<span style="background:#fef3c7;color:#d97706;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600">Learning</span>’,
+kpi:      '<span style="background:#dbeafe;color:#1d4ed8;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600">KPI</span>',
+personal: '<span style="background:#ede9fe;color:#5b21b6;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600">Personal</span>',
+team:     '<span style="background:#d1fae5;color:#065f46;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600">Team</span>',
+learning: '<span style="background:#fef3c7;color:#d97706;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600">Learning</span>',
 }[c] || c);
 }
 
-// – MANAGER: Performance Hub –––––––––––––––––––––––––
+// - MANAGER: Performance Hub -------------------------
 async function renderPerformance() {
-const content = document.getElementById(‘main-content’);
+const content = document.getElementById('main-content');
 if (!content) return;
-content.innerHTML = ‘<div class="loading">Loading-</div>’;
+content.innerHTML = '<div class="loading">Loading-</div>';
 
 try {
-const { overview } = await api(’/api/performance/team-overview’);
+const { overview } = await api('/api/performance/team-overview');
 
-```
+
 content.innerHTML = `
   <div class="page-header">
     <h2>Performance Management</h2>
@@ -10852,7 +10771,6 @@ content.innerHTML = `
     <button class="btn btn-primary" onclick="submitCreateGoal(false)">+ Set Goal</button>
   </div>
 `;
-```
 
 } catch(e) {
 content.innerHTML = `<div class="card"><p style="color:#ef4444">Error: ${e.message}</p></div>`;
@@ -10860,14 +10778,14 @@ content.innerHTML = `<div class="card"><p style="color:#ef4444">Error: ${e.messa
 }
 
 async function viewScorecard(employeeId, name) {
-const content = document.getElementById(‘main-content’);
-content.innerHTML = ‘<div class="loading">Loading scorecard-</div>’;
+const content = document.getElementById('main-content');
+content.innerHTML = '<div class="loading">Loading scorecard-</div>';
 
 try {
 const data = await api(`/api/performance/scorecard/${employeeId}`);
 const { employee, goals, reviews, stats } = data;
 
-```
+
 const statusColor = s => ({active:'#3b82f6',completed:'#22c55e',cancelled:'#9ca3af',overdue:'#f59e0b'}[s]||'#6b7280');
 
 content.innerHTML = `
@@ -10942,7 +10860,6 @@ content.innerHTML = `
     `).join('') : '<p style="color:#9ca3af;font-size:13px">No reviews yet.</p>'}
   </div>
 `;
-```
 
 } catch(e) {
 content.innerHTML = `<div class="card"><p style="color:#ef4444">Error: ${e.message}</p></div>`;
@@ -10950,18 +10867,18 @@ content.innerHTML = `<div class="card"><p style="color:#ef4444">Error: ${e.messa
 }
 
 async function submitCreateGoal(isSelf, employeeId, employeeName) {
-const prefix = isSelf ? ‘myg’ : ‘pg’;
+const prefix = isSelf ? 'myg' : 'pg';
 const title   = document.getElementById(`${prefix}-title`).value.trim();
 const cat     = document.getElementById(`${prefix}-cat`).value;
 const target  = document.getElementById(`${prefix}-target`)?.value;
-const unit    = document.getElementById(`${prefix}-unit`)?.value.trim() || ‘’;
+const unit    = document.getElementById(`${prefix}-unit`)?.value.trim() || '';
 const period  = document.getElementById(`${prefix}-period`).value;
 const due     = document.getElementById(`${prefix}-due`)?.value;
 const empId   = isSelf ? null : (document.getElementById(`${prefix}-emp`)?.value.trim() || employeeId);
 const errEl   = document.getElementById(`${prefix}-error`);
-if (errEl) errEl.style.display = ‘none’;
+if (errEl) errEl.style.display = 'none';
 
-if (!title) { if (errEl) { errEl.textContent = ‘Title is required.’; errEl.style.display = ‘block’; } return; }
+if (!title) { if (errEl) { errEl.textContent = 'Title is required.'; errEl.style.display = 'block'; } return; }
 
 const body = { title, category: cat, period };
 if (empId) body.employeeId = empId;
@@ -10969,24 +10886,24 @@ if (target) body.targetValue = parseFloat(target);
 if (unit) body.unit = unit;
 if (due) body.dueDate = due;
 
-const btn = event.target; btn.disabled = true; btn.textContent = ‘Saving-’;
+const btn = event.target; btn.disabled = true; btn.textContent = 'Saving-';
 try {
-await api(’/api/performance/goals’, { method: ‘POST’, body: JSON.stringify(body) });
-toast(‘Goal created!’, ‘ok’);
+await api('/api/performance/goals', { method: 'POST', body: JSON.stringify(body) });
+toast('Goal created!', 'ok');
 closeModal();
 if (isSelf) renderMyPerformance();
 else if (employeeId) viewScorecard(employeeId, employeeName);
 else renderPerformance();
 } catch(e) {
-if (errEl) { errEl.textContent = e.message; errEl.style.display = ‘block’; }
-else toast(e.message, ‘err’);
-btn.disabled = false; btn.textContent = ‘+ Set Goal’;
+if (errEl) { errEl.textContent = e.message; errEl.style.display = 'block'; }
+else toast(e.message, 'err');
+btn.disabled = false; btn.textContent = '+ Set Goal';
 }
 }
 
 function showAddGoalForEmployee(employeeId, name) {
-const container = document.getElementById(‘modal-container’);
-container.classList.remove(‘hidden’);
+const container = document.getElementById('modal-container');
+container.classList.remove('hidden');
 container.innerHTML = ` <div class="modal-overlay" onclick="closeModal(event)"> <div class="modal" onclick="event.stopPropagation()" style="max-width:480px"> <h3>Add Goal for ${name}</h3> ${_goalFormFields('mg')} <div id="mg-error" style="color:#ef4444;font-size:13px;margin-bottom:8px;display:none"></div> <div class="modal-actions"> <button class="btn btn-secondary" onclick="closeModal()">Cancel</button> <button class="btn btn-primary" onclick="submitGoalFromModal('${employeeId}','${name.replace(/'/g,"\\'")}')">+ Add Goal</button> </div> </div> </div>`;
 }
 
@@ -10995,79 +10912,79 @@ return ` <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-
 }
 
 async function submitGoalFromModal(employeeId, name) {
-const title   = document.getElementById(‘mg-title’).value.trim();
-const cat     = document.getElementById(‘mg-cat’).value;
-const target  = document.getElementById(‘mg-target’).value;
-const unit    = document.getElementById(‘mg-unit’).value.trim();
-const period  = document.getElementById(‘mg-period’).value;
-const due     = document.getElementById(‘mg-due’).value;
-const errEl   = document.getElementById(‘mg-error’);
-errEl.style.display = ‘none’;
+const title   = document.getElementById('mg-title').value.trim();
+const cat     = document.getElementById('mg-cat').value;
+const target  = document.getElementById('mg-target').value;
+const unit    = document.getElementById('mg-unit').value.trim();
+const period  = document.getElementById('mg-period').value;
+const due     = document.getElementById('mg-due').value;
+const errEl   = document.getElementById('mg-error');
+errEl.style.display = 'none';
 
-if (!title) { errEl.textContent = ‘Title is required.’; errEl.style.display = ‘block’; return; }
+if (!title) { errEl.textContent = 'Title is required.'; errEl.style.display = 'block'; return; }
 
 const body = { title, category: cat, period, employeeId };
 if (target) body.targetValue = parseFloat(target);
 if (unit) body.unit = unit;
 if (due) body.dueDate = due;
 
-const btn = event.target; btn.disabled = true; btn.textContent = ‘Saving-’;
+const btn = event.target; btn.disabled = true; btn.textContent = 'Saving-';
 try {
-await api(’/api/performance/goals’, { method: ‘POST’, body: JSON.stringify(body) });
-toast(‘Goal added!’, ‘ok’);
+await api('/api/performance/goals', { method: 'POST', body: JSON.stringify(body) });
+toast('Goal added!', 'ok');
 closeModal();
 viewScorecard(employeeId, name);
 } catch(e) {
-errEl.textContent = e.message; errEl.style.display = ‘block’;
-btn.disabled = false; btn.textContent = ‘+ Add Goal’;
+errEl.textContent = e.message; errEl.style.display = 'block';
+btn.disabled = false; btn.textContent = '+ Add Goal';
 }
 }
 
 function showUpdateGoalProgress(goalId, title, current, target, unit) {
-const container = document.getElementById(‘modal-container’);
-container.classList.remove(‘hidden’);
+const container = document.getElementById('modal-container');
+container.classList.remove('hidden');
 container.innerHTML = ` <div class="modal-overlay" onclick="closeModal(event)"> <div class="modal" onclick="event.stopPropagation()" style="max-width:380px"> <h3>Update: ${title}</h3> <p style="font-size:13px;color:#6b7280;margin-bottom:14px">Target: ${target || '-'} ${unit}</p> <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:4px">Current Value *</label> <input id="up-val" type="number" value="${current}" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:14px;margin-bottom:12px"> <div id="up-error" style="color:#ef4444;font-size:13px;margin-bottom:8px;display:none"></div> <div class="modal-actions"> <button class="btn btn-secondary" onclick="closeModal()">Cancel</button> <button class="btn btn-primary" onclick="updateGoalProgress('${goalId}')">Save Progress</button> </div> </div> </div>`;
 }
 
 async function updateGoalProgress(goalId) {
-const val = parseFloat(document.getElementById(‘up-val’).value);
-const errEl = document.getElementById(‘up-error’);
-if (isNaN(val)) { errEl.textContent = ‘Enter a valid number.’; errEl.style.display = ‘block’; return; }
+const val = parseFloat(document.getElementById('up-val').value);
+const errEl = document.getElementById('up-error');
+if (isNaN(val)) { errEl.textContent = 'Enter a valid number.'; errEl.style.display = 'block'; return; }
 const btn = event.target; btn.disabled = true;
 try {
-await api(`/api/performance/goals/${goalId}`, { method: ‘PATCH’, body: JSON.stringify({ currentValue: val }) });
-toast(‘Progress updated!’, ‘ok’);
+await api(`/api/performance/goals/${goalId}`, { method: 'PATCH', body: JSON.stringify({ currentValue: val }) });
+toast('Progress updated!', 'ok');
 closeModal();
 // Refresh current scorecard view
-const h2 = document.querySelector(’.page-header h2’);
-if (h2 && h2.textContent.includes(‘Scorecard’)) {
+const h2 = document.querySelector('.page-header h2');
+if (h2 && h2.textContent.includes('Scorecard')) {
 const match = h2.textContent.match(/Scorecard - (.+)/);
 if (match) {
 const empRow = document.querySelector(`button[onclick*="viewScorecard"]`);
 if (empRow) empRow.click();
 }
 }
-} catch(e) { errEl.textContent = e.message; errEl.style.display = ‘block’; btn.disabled = false; }
+} catch(e) { errEl.textContent = e.message; errEl.style.display = 'block'; btn.disabled = false; }
 }
 
 async function deleteGoal(goalId, employeeId, name) {
-if (!confirm(‘Delete this goal?’)) return;
+if (!confirm('Delete this goal?')) return;
 try {
-await api(`/api/performance/goals/${goalId}`, { method: ‘DELETE’ });
-toast(‘Goal deleted’, ‘ok’);
+await api(`/api/performance/goals/${goalId}`, { method: 'DELETE' });
+toast('Goal deleted', 'ok');
 viewScorecard(employeeId, name);
-} catch(e) { toast(e.message, ‘err’); }
+} catch(e) { toast(e.message, 'err'); }
 }
 
 function showCreateReviewModal() {
-const container = document.getElementById(‘modal-container’);
-container.classList.remove(‘hidden’);
+const container = document.getElementById('modal-container');
+container.classList.remove('hidden');
 container.innerHTML = ` <div class="modal-overlay" onclick="closeModal(event)"> <div class="modal" onclick="event.stopPropagation()" style="max-width:500px"> <h3>New Performance Review</h3> ${_reviewFormFields('nr')} <div id="nr-error" style="color:#ef4444;font-size:13px;margin-bottom:8px;display:none"></div> <div class="modal-actions"> <button class="btn btn-secondary" onclick="closeModal()">Cancel</button> <button class="btn btn-primary" onclick="submitCreateReview('nr', null, null)">Create Review</button> </div> </div> </div>`;
 }
 
 function showCreateReviewForEmployee(employeeId, name) {
-const container = document.getElementById(‘modal-container’);
-container.classList.remove(‘hidden’);
+const container = document.getElementById('modal-container');
+container.classList.remove('hidden');
 container.innerHTML = ` <div class="modal-overlay" onclick="closeModal(event)"> <div class="modal" onclick="event.stopPropagation()" style="max-width:500px"> <h3>Review - ${name}</h3> ${_reviewFormFields('er', employeeId)} <div id="er-error" style="color:#ef4444;font-size:13px;margin-bottom:8px;display:none"></div> <div class="modal-actions"> <button class="btn btn-secondary" onclick="closeModal()">Cancel</button> <button class="btn btn-primary" onclick="submitCreateReview('er','${employeeId}','${name.replace(/'/g,"\\'")}')">Create Review</button> </div> </div> </div>`;
 }
 
@@ -11087,53 +11004,53 @@ const summary = document.getElementById(`${prefix}-summary`).value.trim();
 const strengths = document.getElementById(`${prefix}-strengths`).value.trim();
 const improvements = document.getElementById(`${prefix}-improve`).value.trim();
 const errEl   = document.getElementById(`${prefix}-error`);
-errEl.style.display = ‘none’;
+errEl.style.display = 'none';
 
-if (!empId) { errEl.textContent = ‘Employee ID is required.’; errEl.style.display = ‘block’; return; }
-if (!period) { errEl.textContent = ‘Period is required.’; errEl.style.display = ‘block’; return; }
+if (!empId) { errEl.textContent = 'Employee ID is required.'; errEl.style.display = 'block'; return; }
+if (!period) { errEl.textContent = 'Period is required.'; errEl.style.display = 'block'; return; }
 
-const btn = event.target; btn.disabled = true; btn.textContent = ‘Saving-’;
+const btn = event.target; btn.disabled = true; btn.textContent = 'Saving-';
 try {
-await api(’/api/performance/reviews’, {
-method: ‘POST’,
+await api('/api/performance/reviews', {
+method: 'POST',
 body: JSON.stringify({
 employeeId: empId, period, type,
 overallScore: score ? parseFloat(score) : null,
 summary, strengths, improvements,
 }),
 });
-toast(‘Review created!’, ‘ok’);
+toast('Review created!', 'ok');
 closeModal();
 if (name) viewScorecard(empId, name);
 else renderPerformance();
 } catch(e) {
-errEl.textContent = e.message; errEl.style.display = ‘block’;
-btn.disabled = false; btn.textContent = ‘Create Review’;
+errEl.textContent = e.message; errEl.style.display = 'block';
+btn.disabled = false; btn.textContent = 'Create Review';
 }
 }
 
 async function submitReview(reviewId, employeeId, name) {
-if (!confirm(‘Submit this review? It cannot be edited after submission.’)) return;
+if (!confirm('Submit this review? It cannot be edited after submission.')) return;
 try {
-await api(`/api/performance/reviews/${reviewId}`, { method: ‘PATCH’, body: JSON.stringify({ submit: true }) });
-toast(‘Review submitted!’, ‘ok’);
+await api(`/api/performance/reviews/${reviewId}`, { method: 'PATCH', body: JSON.stringify({ submit: true }) });
+toast('Review submitted!', 'ok');
 viewScorecard(employeeId, name);
-} catch(e) { toast(e.message, ‘err’); }
+} catch(e) { toast(e.message, 'err'); }
 }
 
-// – EMPLOYEE: My Performance –––––––––––––––––––––––––
+// - EMPLOYEE: My Performance -------------------------
 async function renderMyPerformance() {
-const content = document.getElementById(‘main-content’);
+const content = document.getElementById('main-content');
 if (!content) return;
-content.innerHTML = ‘<div class="loading">Loading-</div>’;
+content.innerHTML = '<div class="loading">Loading-</div>';
 
 try {
 const [goalsData, reviewsData] = await Promise.all([
-api(’/api/performance/goals’),
-api(’/api/performance/reviews’),
+api('/api/performance/goals'),
+api('/api/performance/reviews'),
 ]);
 
-```
+
 const goals   = goalsData.goals || [];
 const reviews = reviewsData.reviews.filter(r => r.status === 'submitted') || [];
 
@@ -11204,7 +11121,6 @@ content.innerHTML = `
     `).join('') : `<p style="color:#9ca3af;font-size:13px">No reviews submitted yet.</p>`}
   </div>
 `;
-```
 
 } catch(e) {
 content.innerHTML = `<div class="card"><p style="color:#ef4444">Error: ${e.message}</p></div>`;
@@ -11212,36 +11128,36 @@ content.innerHTML = `<div class="card"><p style="color:#ef4444">Error: ${e.messa
 }
 
 function showMyGoalModal() {
-const container = document.getElementById(‘modal-container’);
-container.classList.remove(‘hidden’);
+const container = document.getElementById('modal-container');
+container.classList.remove('hidden');
 container.innerHTML = ` <div class="modal-overlay" onclick="closeModal(event)"> <div class="modal" onclick="event.stopPropagation()" style="max-width:440px"> <h3>Add Personal Goal</h3> ${_goalFormFields('myg')} <div id="myg-error" style="color:#ef4444;font-size:13px;margin-bottom:8px;display:none"></div> <div class="modal-actions"> <button class="btn btn-secondary" onclick="closeModal()">Cancel</button> <button class="btn btn-primary" onclick="submitSelfGoal()">Add Goal</button> </div> </div> </div>`;
 }
 
 async function submitSelfGoal() {
-const title  = document.getElementById(‘myg-title’).value.trim();
-const cat    = document.getElementById(‘myg-cat’).value;
-const target = document.getElementById(‘myg-target’).value;
-const unit   = document.getElementById(‘myg-unit’).value.trim();
-const period = document.getElementById(‘myg-period’).value;
-const due    = document.getElementById(‘myg-due’).value;
-const errEl  = document.getElementById(‘myg-error’);
-errEl.style.display = ‘none’;
-if (!title) { errEl.textContent = ‘Title is required.’; errEl.style.display = ‘block’; return; }
+const title  = document.getElementById('myg-title').value.trim();
+const cat    = document.getElementById('myg-cat').value;
+const target = document.getElementById('myg-target').value;
+const unit   = document.getElementById('myg-unit').value.trim();
+const period = document.getElementById('myg-period').value;
+const due    = document.getElementById('myg-due').value;
+const errEl  = document.getElementById('myg-error');
+errEl.style.display = 'none';
+if (!title) { errEl.textContent = 'Title is required.'; errEl.style.display = 'block'; return; }
 
 const body = { title, category: cat, period };
 if (target) body.targetValue = parseFloat(target);
 if (unit) body.unit = unit;
 if (due) body.dueDate = due;
 
-const btn = event.target; btn.disabled = true; btn.textContent = ‘Saving-’;
+const btn = event.target; btn.disabled = true; btn.textContent = 'Saving-';
 try {
-await api(’/api/performance/goals’, { method: ‘POST’, body: JSON.stringify(body) });
-toast(‘Goal added!’, ‘ok’);
+await api('/api/performance/goals', { method: 'POST', body: JSON.stringify(body) });
+toast('Goal added!', 'ok');
 closeModal();
 renderMyPerformance();
 } catch(e) {
-errEl.textContent = e.message; errEl.style.display = ‘block’;
-btn.disabled = false; btn.textContent = ‘Add Goal’;
+errEl.textContent = e.message; errEl.style.display = 'block';
+btn.disabled = false; btn.textContent = 'Add Goal';
 }
 }
 
@@ -11249,113 +11165,113 @@ function showSelfUpdateGoal(goalId, title, current, target, unit) {
 showUpdateGoalProgress(goalId, title, current, target, unit);
 }
 
-// ——————————————————————————
+// ----------------------------------------------------
 //  CORPORATE PHASE 4 - OPERATIONS (Timesheets, Expenses, Assets)
-// ——————————————————————————
+// ----------------------------------------------------
 
-// – Patch buildSidebar for Phase 4 —————————————––
+// - Patch buildSidebar for Phase 4 ----------------------------
 const _p4BuildSidebar = buildSidebar;
 buildSidebar = function() {
 _p4BuildSidebar();
 const role = currentUser?.role;
 const mode = currentUser?.company?.mode;
-if (mode !== ‘corporate’) return;
+if (mode !== 'corporate') return;
 
 const opsIcon  = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>`;
 const assetIcon= `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>`;
 
-if ([‘admin’,‘manager’,‘superadmin’].includes(role)) {
-const perfLink = document.getElementById(‘nav-performance’);
+if (['admin','manager','superadmin'].includes(role)) {
+const perfLink = document.getElementById('nav-performance');
 if (perfLink) {
-if (!document.getElementById(‘nav-timesheets’)) {
-const a = document.createElement(‘a’);
-a.id = ‘nav-timesheets’;
-a.innerHTML = `${opsIcon}<span>Timesheets</span>`; a.dataset.tooltip = “Timesheets”;
-a.onclick = () => navigateTo(‘timesheets’);
-perfLink.insertAdjacentElement(‘afterend’, a);
+if (!document.getElementById('nav-timesheets')) {
+const a = document.createElement('a');
+a.id = 'nav-timesheets';
+a.innerHTML = `${opsIcon}<span>Timesheets</span>`; a.dataset.tooltip = "Timesheets";
+a.onclick = () => navigateTo('timesheets');
+perfLink.insertAdjacentElement('afterend', a);
 }
-if (!document.getElementById(‘nav-expenses-mgr’)) {
-const a = document.createElement(‘a’);
-a.id = ‘nav-expenses-mgr’;
-a.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg><span>Expenses</span>`; a.dataset.tooltip = “Expenses”;
-a.onclick = () => navigateTo(‘expenses-mgr’);
-document.getElementById(‘nav-timesheets’).insertAdjacentElement(‘afterend’, a);
+if (!document.getElementById('nav-expenses-mgr')) {
+const a = document.createElement('a');
+a.id = 'nav-expenses-mgr';
+a.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg><span>Expenses</span>`; a.dataset.tooltip = "Expenses";
+a.onclick = () => navigateTo('expenses-mgr');
+document.getElementById('nav-timesheets').insertAdjacentElement('afterend', a);
 }
-if (!document.getElementById(‘nav-assets’)) {
-const a = document.createElement(‘a’);
-a.id = ‘nav-assets’;
-a.innerHTML = `${assetIcon}<span>Assets</span>`; a.dataset.tooltip = “Assets”;
-a.onclick = () => navigateTo(‘assets’);
-document.getElementById(‘nav-expenses-mgr’).insertAdjacentElement(‘afterend’, a);
+if (!document.getElementById('nav-assets')) {
+const a = document.createElement('a');
+a.id = 'nav-assets';
+a.innerHTML = `${assetIcon}<span>Assets</span>`; a.dataset.tooltip = "Assets";
+a.onclick = () => navigateTo('assets');
+document.getElementById('nav-expenses-mgr').insertAdjacentElement('afterend', a);
 }
 }
-} else if (role === ‘employee’) {
-const myPerfLink = document.getElementById(‘nav-my-performance’);
+} else if (role === 'employee') {
+const myPerfLink = document.getElementById('nav-my-performance');
 if (myPerfLink) {
-if (!document.getElementById(‘nav-my-timesheet’)) {
-const a = document.createElement(‘a’);
-a.id = ‘nav-my-timesheet’;
-a.innerHTML = `${opsIcon}<span>Timesheet</span>`; a.dataset.tooltip = “Timesheet”;
-a.onclick = () => navigateTo(‘my-timesheet’);
-myPerfLink.insertAdjacentElement(‘afterend’, a);
+if (!document.getElementById('nav-my-timesheet')) {
+const a = document.createElement('a');
+a.id = 'nav-my-timesheet';
+a.innerHTML = `${opsIcon}<span>Timesheet</span>`; a.dataset.tooltip = "Timesheet";
+a.onclick = () => navigateTo('my-timesheet');
+myPerfLink.insertAdjacentElement('afterend', a);
 }
-if (!document.getElementById(‘nav-my-expenses’)) {
-const a = document.createElement(‘a’);
-a.id = ‘nav-my-expenses’;
-a.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg><span>Expenses</span>`; a.dataset.tooltip = “Expenses”;
-a.onclick = () => navigateTo(‘my-expenses’);
-document.getElementById(‘nav-my-timesheet’).insertAdjacentElement(‘afterend’, a);
+if (!document.getElementById('nav-my-expenses')) {
+const a = document.createElement('a');
+a.id = 'nav-my-expenses';
+a.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg><span>Expenses</span>`; a.dataset.tooltip = "Expenses";
+a.onclick = () => navigateTo('my-expenses');
+document.getElementById('nav-my-timesheet').insertAdjacentElement('afterend', a);
 }
-if (!document.getElementById(‘nav-my-assets’)) {
-const a = document.createElement(‘a’);
-a.id = ‘nav-my-assets’;
-a.innerHTML = `${assetIcon}<span>My Assets</span>`; a.dataset.tooltip = “My Assets”;
-a.onclick = () => navigateTo(‘my-assets’);
-document.getElementById(‘nav-my-expenses’).insertAdjacentElement(‘afterend’, a);
+if (!document.getElementById('nav-my-assets')) {
+const a = document.createElement('a');
+a.id = 'nav-my-assets';
+a.innerHTML = `${assetIcon}<span>My Assets</span>`; a.dataset.tooltip = "My Assets";
+a.onclick = () => navigateTo('my-assets');
+document.getElementById('nav-my-expenses').insertAdjacentElement('afterend', a);
 }
 }
 }
 };
 
-// – Patch navigateTo for Phase 4 ———————————————
+// - Patch navigateTo for Phase 4 ------------------------------
 const _p4NavigateTo = navigateTo;
 navigateTo = function(view) {
-if (view === ‘timesheets’)   { currentView = view; _setNavActive(view); renderTimesheets(); return; }
-if (view === ‘expenses-mgr’) { currentView = view; _setNavActive(‘expenses-mgr’); renderExpensesMgr(); return; }
-if (view === ‘assets’)       { currentView = view; _setNavActive(view); renderAssets(); return; }
-if (view === ‘my-timesheet’) { currentView = view; _setNavActive(‘my-timesheet’); renderMyTimesheet(); return; }
-if (view === ‘my-expenses’)  { currentView = view; _setNavActive(‘my-expenses’); renderMyExpenses(); return; }
-if (view === ‘my-assets’)    { currentView = view; _setNavActive(‘my-assets’); renderMyAssets(); return; }
+if (view === 'timesheets')   { currentView = view; _setNavActive(view); renderTimesheets(); return; }
+if (view === 'expenses-mgr') { currentView = view; _setNavActive('expenses-mgr'); renderExpensesMgr(); return; }
+if (view === 'assets')       { currentView = view; _setNavActive(view); renderAssets(); return; }
+if (view === 'my-timesheet') { currentView = view; _setNavActive('my-timesheet'); renderMyTimesheet(); return; }
+if (view === 'my-expenses')  { currentView = view; _setNavActive('my-expenses'); renderMyExpenses(); return; }
+if (view === 'my-assets')    { currentView = view; _setNavActive('my-assets'); renderMyAssets(); return; }
 _p4NavigateTo(view);
 };
 
-// – Shared helpers ————————————————————
+// - Shared helpers ----------------------------------------
 function _statusPill(s) {
 return ({
-draft:     ‘background:#f1f5f9;color:#475569’,
-submitted: ‘background:#eff6ff;color:#1d4ed8’,
-approved:  ‘background:#f0fdf4;color:#16a34a’,
-rejected:  ‘background:#fef2f2;color:#dc2626’,
-pending:   ‘background:#fef3c7;color:#d97706’,
-}[s] || ‘background:#f3f4f6;color:#6b7280’);
+draft:     'background:#f1f5f9;color:#475569',
+submitted: 'background:#eff6ff;color:#1d4ed8',
+approved:  'background:#f0fdf4;color:#16a34a',
+rejected:  'background:#fef2f2;color:#dc2626',
+pending:   'background:#fef3c7;color:#d97706',
+}[s] || 'background:#f3f4f6;color:#6b7280');
 }
 function _pill(label, status) {
 return `<span style="${_statusPill(status)};padding:2px 10px;border-radius:12px;font-size:11px;font-weight:700;text-transform:uppercase">${label}</span>`;
 }
 
-// –––––––––––––––––––––––––––––––
+// -------------------------------
 // MANAGER - TIMESHEETS
-// –––––––––––––––––––––––––––––––
+// -------------------------------
 async function renderTimesheets() {
-const content = document.getElementById(‘main-content’);
-content.innerHTML = ‘<div class="loading">Loading-</div>’;
+const content = document.getElementById('main-content');
+content.innerHTML = '<div class="loading">Loading-</div>';
 
 const period = new Date().toISOString().slice(0, 7);
 
 try {
 const { timesheets } = await api(`/api/operations/timesheets?period=${period}`);
 
-```
+
 const summary = { total: timesheets.length, submitted: 0, approved: 0, rejected: 0, totalHours: 0 };
 timesheets.forEach(t => { summary[t.status] = (summary[t.status]||0)+1; summary.totalHours += t.totalHours||0; });
 
@@ -11411,7 +11327,6 @@ content.innerHTML = `
     ` : '<p style="color:#9ca3af;font-size:13px">No timesheets for this period.</p>'}
   </div>
 `;
-```
 
 } catch(e) {
 content.innerHTML = `<div class="card"><p style="color:#ef4444">Error: ${e.message}</p></div>`;
@@ -11419,10 +11334,10 @@ content.innerHTML = `<div class="card"><p style="color:#ef4444">Error: ${e.messa
 }
 
 async function filterTimesheets() {
-const period = document.getElementById(‘ts-period-filter’)?.value;
+const period = document.getElementById('ts-period-filter')?.value;
 if (!period) return;
-const content = document.getElementById(‘main-content’);
-content.innerHTML = ‘<div class="loading">Loading-</div>’;
+const content = document.getElementById('main-content');
+content.innerHTML = '<div class="loading">Loading-</div>';
 try {
 const { timesheets } = await api(`/api/operations/timesheets?period=${period}`);
 renderTimesheets._cached = timesheets;
@@ -11431,54 +11346,54 @@ renderTimesheets();
 }
 
 async function viewTimesheetDetail(id, name, period) {
-const container = document.getElementById(‘modal-container’);
-container.classList.remove(‘hidden’);
+const container = document.getElementById('modal-container');
+container.classList.remove('hidden');
 container.innerHTML = ` <div class="modal-overlay" onclick="closeModal(event)"> <div class="modal" onclick="event.stopPropagation()" style="max-width:560px;width:95%"> <h3>Timesheet - ${name} (${period})</h3> <div id="tsd-content"><p>Loading-</p></div> <div class="modal-actions"><button class="btn btn-secondary" onclick="closeModal()">Close</button></div> </div> </div>`;
 try {
 const { timesheets } = await api(`/api/operations/timesheets?period=${period}`);
 const ts = timesheets.find(t => t._id === id);
-const el = document.getElementById(‘tsd-content’);
-if (!ts || !ts.entries.length) { el.innerHTML = ‘<p style="color:#9ca3af">No entries.</p>’; return; }
+const el = document.getElementById('tsd-content');
+if (!ts || !ts.entries.length) { el.innerHTML = '<p style="color:#9ca3af">No entries.</p>'; return; }
 el.innerHTML = ` <table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:12px"> <thead><tr style="background:#f9fafb"> <th style="padding:8px;text-align:left;border-bottom:1px solid #e5e7eb">Date</th> <th style="padding:8px;text-align:center;border-bottom:1px solid #e5e7eb">Hours</th> <th style="padding:8px;text-align:left;border-bottom:1px solid #e5e7eb">Notes</th> </tr></thead> <tbody> ${ts.entries.sort((a,b)=>new Date(a.date)-new Date(b.date)).map(e=>`
 <tr style="border-bottom:1px solid #f3f4f6">
 <td style="padding:8px">${new Date(e.date).toLocaleDateString()}</td>
 <td style="padding:8px;text-align:center;font-weight:600">${e.hoursWorked}</td>
-<td style="padding:8px;color:#6b7280;font-size:12px">${e.notes||’-’}</td>
+<td style="padding:8px;color:#6b7280;font-size:12px">${e.notes||'-'}</td>
 </tr>
 `).join('')} <tr style="background:#f9fafb;font-weight:700"> <td style="padding:8px">TOTAL</td> <td style="padding:8px;text-align:center">${ts.totalHours}</td> <td></td> </tr> </tbody> </table> ${ts.reviewNote ? `<p style="font-size:12px;color:#6b7280">Note: ${ts.reviewNote}</p>`: ''}`;
 } catch(e) {
-document.getElementById(‘tsd-content’).innerHTML = `<p style="color:#ef4444">${e.message}</p>`;
+document.getElementById('tsd-content').innerHTML = `<p style="color:#ef4444">${e.message}</p>`;
 }
 }
 
 async function reviewTimesheet(id, action) {
-const note = action === ‘rejected’ ? prompt(‘Reason for rejection (optional):’) || ‘’ : ‘’;
+const note = action === 'rejected' ? prompt('Reason for rejection (optional):') || '' : '';
 try {
-await api(`/api/operations/timesheets/${id}/review`, { method: ‘PATCH’, body: JSON.stringify({ action, note }) });
-toast(`Timesheet ${action}!`, ‘ok’);
+await api(`/api/operations/timesheets/${id}/review`, { method: 'PATCH', body: JSON.stringify({ action, note }) });
+toast(`Timesheet ${action}!`, 'ok');
 renderTimesheets();
-} catch(e) { toast(e.message, ‘err’); }
+} catch(e) { toast(e.message, 'err'); }
 }
 
 function exportTimesheet(id) {
-const token = localStorage.getItem(‘kodex_token’) || localStorage.getItem(‘token’);
-window.open(`/api/operations/timesheets/${id}/export?token=${token}`, ‘_blank’);
+const token = localStorage.getItem('kodex_token') || localStorage.getItem('token');
+window.open(`/api/operations/timesheets/${id}/export?token=${token}`, '_blank');
 }
 
-// –––––––––––––––––––––––––––––––
+// -------------------------------
 // MANAGER - EXPENSES
-// –––––––––––––––––––––––––––––––
+// -------------------------------
 async function renderExpensesMgr() {
-const content = document.getElementById(‘main-content’);
-content.innerHTML = ‘<div class="loading">Loading-</div>’;
+const content = document.getElementById('main-content');
+content.innerHTML = '<div class="loading">Loading-</div>';
 try {
-const { expenses } = await api(’/api/operations/expenses’);
-const pending  = expenses.filter(e => e.status === ‘pending’);
-const approved = expenses.filter(e => e.status === ‘approved’);
+const { expenses } = await api('/api/operations/expenses');
+const pending  = expenses.filter(e => e.status === 'pending');
+const approved = expenses.filter(e => e.status === 'approved');
 const totalPending  = pending.reduce((s,e)=>s+e.amount,0);
 const totalApproved = approved.reduce((s,e)=>s+e.amount,0);
 
-```
+
 const catIcon = c => ({travel:'--',meals:'--',equipment:'--',software:'-',training:'-',other:'-'}[c]||'-');
 
 content.innerHTML = `
@@ -11544,7 +11459,6 @@ content.innerHTML = `
     ` : '<p style="color:#9ca3af;font-size:13px">No expense claims yet.</p>'}
   </div>
 `;
-```
 
 } catch(e) {
 content.innerHTML = `<div class="card"><p style="color:#ef4444">Error: ${e.message}</p></div>`;
@@ -11552,26 +11466,26 @@ content.innerHTML = `<div class="card"><p style="color:#ef4444">Error: ${e.messa
 }
 
 async function reviewExpense(id, action) {
-const note = action === ‘rejected’ ? prompt(‘Reason for rejection (optional):’) || ‘’ : ‘’;
+const note = action === 'rejected' ? prompt('Reason for rejection (optional):') || '' : '';
 try {
-await api(`/api/operations/expenses/${id}/review`, { method: ‘PATCH’, body: JSON.stringify({ action, note }) });
-toast(`Expense ${action}!`, ‘ok’);
+await api(`/api/operations/expenses/${id}/review`, { method: 'PATCH', body: JSON.stringify({ action, note }) });
+toast(`Expense ${action}!`, 'ok');
 renderExpensesMgr();
-} catch(e) { toast(e.message, ‘err’); }
+} catch(e) { toast(e.message, 'err'); }
 }
 
-// –––––––––––––––––––––––––––––––
+// -------------------------------
 // MANAGER - ASSETS
-// –––––––––––––––––––––––––––––––
+// -------------------------------
 async function renderAssets() {
-const content = document.getElementById(‘main-content’);
-content.innerHTML = ‘<div class="loading">Loading-</div>’;
+const content = document.getElementById('main-content');
+content.innerHTML = '<div class="loading">Loading-</div>';
 try {
-const { assets } = await api(’/api/operations/assets’);
+const { assets } = await api('/api/operations/assets');
 const assigned   = assets.filter(a => a.assignedTo);
 const unassigned = assets.filter(a => !a.assignedTo);
 
-```
+
 const catIcon = c => ({laptop:'-',phone:'-',vehicle:'-',furniture:'-',equipment:'--',other:'-'}[c]||'-');
 const condColor = c => ({new:'#16a34a',good:'#3b82f6',fair:'#f59e0b',poor:'#ef4444'}[c]||'#6b7280');
 
@@ -11650,7 +11564,6 @@ content.innerHTML = `
     `).join('') : '<p style="color:#9ca3af;font-size:13px">No assets yet. Add one above.</p>'}
   </div>
 `;
-```
 
 } catch(e) {
 content.innerHTML = `<div class="card"><p style="color:#ef4444">Error: ${e.message}</p></div>`;
@@ -11658,79 +11571,79 @@ content.innerHTML = `<div class="card"><p style="color:#ef4444">Error: ${e.messa
 }
 
 async function submitCreateAsset() {
-const name = document.getElementById(‘as-name’).value.trim();
-const errEl = document.getElementById(‘as-error’);
-errEl.style.display = ‘none’;
-if (!name) { errEl.textContent = ‘Name is required.’; errEl.style.display = ‘block’; return; }
+const name = document.getElementById('as-name').value.trim();
+const errEl = document.getElementById('as-error');
+errEl.style.display = 'none';
+if (!name) { errEl.textContent = 'Name is required.'; errEl.style.display = 'block'; return; }
 const body = {
 name,
-assetTag: document.getElementById(‘as-tag’).value.trim(),
-serialNumber: document.getElementById(‘as-serial’).value.trim(),
-category: document.getElementById(‘as-cat’).value,
-condition: document.getElementById(‘as-cond’).value,
-purchaseValue: document.getElementById(‘as-val’).value || null,
+assetTag: document.getElementById('as-tag').value.trim(),
+serialNumber: document.getElementById('as-serial').value.trim(),
+category: document.getElementById('as-cat').value,
+condition: document.getElementById('as-cond').value,
+purchaseValue: document.getElementById('as-val').value || null,
 };
-const btn = event.target; btn.disabled = true; btn.textContent = ‘Saving-’;
+const btn = event.target; btn.disabled = true; btn.textContent = 'Saving-';
 try {
-await api(’/api/operations/assets’, { method: ‘POST’, body: JSON.stringify(body) });
-toast(‘Asset added!’, ‘ok’);
+await api('/api/operations/assets', { method: 'POST', body: JSON.stringify(body) });
+toast('Asset added!', 'ok');
 renderAssets();
 } catch(e) {
-errEl.textContent = e.message; errEl.style.display = ‘block’;
-btn.disabled = false; btn.textContent = ‘+ Add Asset’;
+errEl.textContent = e.message; errEl.style.display = 'block';
+btn.disabled = false; btn.textContent = '+ Add Asset';
 }
 }
 
 function showAssignAsset(assetId, name) {
-const container = document.getElementById(‘modal-container’);
-container.classList.remove(‘hidden’);
+const container = document.getElementById('modal-container');
+container.classList.remove('hidden');
 container.innerHTML = ` <div class="modal-overlay" onclick="closeModal(event)"> <div class="modal" onclick="event.stopPropagation()" style="max-width:380px"> <h3>Assign: ${name}</h3> <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:4px">Employee ID</label> <input id="assign-emp" placeholder="Paste employee _id" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;margin-bottom:12px"> <div id="assign-error" style="color:#ef4444;font-size:13px;margin-bottom:8px;display:none"></div> <div class="modal-actions"> <button class="btn btn-secondary" onclick="closeModal()">Cancel</button> <button class="btn btn-primary" onclick="confirmAssignAsset('${assetId}')">Assign</button> </div> </div> </div>`;
 }
 
 async function confirmAssignAsset(assetId) {
-const employeeId = document.getElementById(‘assign-emp’).value.trim();
-const errEl = document.getElementById(‘assign-error’);
-if (!employeeId) { errEl.textContent = ‘Employee ID required.’; errEl.style.display = ‘block’; return; }
+const employeeId = document.getElementById('assign-emp').value.trim();
+const errEl = document.getElementById('assign-error');
+if (!employeeId) { errEl.textContent = 'Employee ID required.'; errEl.style.display = 'block'; return; }
 const btn = event.target; btn.disabled = true;
 try {
-await api(`/api/operations/assets/${assetId}/assign`, { method: ‘PATCH’, body: JSON.stringify({ employeeId }) });
-toast(‘Asset assigned!’, ‘ok’);
+await api(`/api/operations/assets/${assetId}/assign`, { method: 'PATCH', body: JSON.stringify({ employeeId }) });
+toast('Asset assigned!', 'ok');
 closeModal();
 renderAssets();
-} catch(e) { errEl.textContent = e.message; errEl.style.display = ‘block’; btn.disabled = false; }
+} catch(e) { errEl.textContent = e.message; errEl.style.display = 'block'; btn.disabled = false; }
 }
 
 async function unassignAsset(assetId) {
-if (!confirm(‘Remove assignment for this asset?’)) return;
+if (!confirm('Remove assignment for this asset?')) return;
 try {
-await api(`/api/operations/assets/${assetId}/assign`, { method: ‘PATCH’, body: JSON.stringify({ employeeId: null }) });
-toast(‘Asset unassigned’, ‘ok’);
+await api(`/api/operations/assets/${assetId}/assign`, { method: 'PATCH', body: JSON.stringify({ employeeId: null }) });
+toast('Asset unassigned', 'ok');
 renderAssets();
-} catch(e) { toast(e.message, ‘err’); }
+} catch(e) { toast(e.message, 'err'); }
 }
 
 async function deleteAsset(id) {
-if (!confirm(‘Remove this asset from tracking?’)) return;
+if (!confirm('Remove this asset from tracking?')) return;
 try {
-await api(`/api/operations/assets/${id}`, { method: ‘DELETE’ });
-toast(‘Asset removed’, ‘ok’);
+await api(`/api/operations/assets/${id}`, { method: 'DELETE' });
+toast('Asset removed', 'ok');
 renderAssets();
-} catch(e) { toast(e.message, ‘err’); }
+} catch(e) { toast(e.message, 'err'); }
 }
 
-// –––––––––––––––––––––––––––––––
+// -------------------------------
 // EMPLOYEE - TIMESHEET
-// –––––––––––––––––––––––––––––––
+// -------------------------------
 async function renderMyTimesheet() {
-const content = document.getElementById(‘main-content’);
-content.innerHTML = ‘<div class="loading">Loading-</div>’;
+const content = document.getElementById('main-content');
+content.innerHTML = '<div class="loading">Loading-</div>';
 const period = new Date().toISOString().slice(0, 7);
 
 try {
 const { timesheet } = await api(`/api/operations/timesheets/my?period=${period}`);
-const editable = timesheet.status === ‘draft’;
+const editable = timesheet.status === 'draft';
 
-```
+
 // Build calendar grid for the month
 const [yr, mo] = period.split('-').map(Number);
 const daysInMonth = new Date(yr, mo, 0).getDate();
@@ -11807,7 +11720,6 @@ content.innerHTML = `
     ` : '<p style="color:#9ca3af;font-size:13px">No hours logged yet.</p>'}
   </div>
 `;
-```
 
 } catch(e) {
 content.innerHTML = `<div class="card"><p style="color:#ef4444">Error: ${e.message}</p></div>`;
@@ -11815,9 +11727,9 @@ content.innerHTML = `<div class="card"><p style="color:#ef4444">Error: ${e.messa
 }
 
 async function reloadMyTimesheet() {
-const period = document.getElementById(‘mts-period’)?.value;
-const content = document.getElementById(‘main-content’);
-content.innerHTML = ‘<div class="loading">Loading-</div>’;
+const period = document.getElementById('mts-period')?.value;
+const content = document.getElementById('main-content');
+content.innerHTML = '<div class="loading">Loading-</div>';
 try {
 const { timesheet } = await api(`/api/operations/timesheets/my?period=${period}`);
 renderMyTimesheet._ts = timesheet;
@@ -11826,46 +11738,46 @@ renderMyTimesheet();
 }
 
 async function logHours(period) {
-const date  = document.getElementById(‘log-date’).value;
-const hours = parseFloat(document.getElementById(‘log-hours’).value);
-const notes = document.getElementById(‘log-notes’).value.trim();
-if (!date || isNaN(hours)) { toast(‘Date and hours required’, ‘err’); return; }
-const btn = event.target; btn.disabled = true; btn.textContent = ‘Saving-’;
+const date  = document.getElementById('log-date').value;
+const hours = parseFloat(document.getElementById('log-hours').value);
+const notes = document.getElementById('log-notes').value.trim();
+if (!date || isNaN(hours)) { toast('Date and hours required', 'err'); return; }
+const btn = event.target; btn.disabled = true; btn.textContent = 'Saving-';
 try {
-await api(’/api/operations/timesheets/my/entry’, {
-method: ‘POST’,
+await api('/api/operations/timesheets/my/entry', {
+method: 'POST',
 body: JSON.stringify({ period, date, hoursWorked: hours, notes }),
 });
-toast(‘Hours logged!’, ‘ok’);
+toast('Hours logged!', 'ok');
 renderMyTimesheet();
 } catch(e) {
-toast(e.message, ‘err’);
-btn.disabled = false; btn.textContent = ‘Log’;
+toast(e.message, 'err');
+btn.disabled = false; btn.textContent = 'Log';
 }
 }
 
 async function submitMyTimesheet(period) {
-if (!confirm(‘Submit timesheet for approval? You cannot edit it after submission.’)) return;
+if (!confirm('Submit timesheet for approval? You cannot edit it after submission.')) return;
 try {
-await api(’/api/operations/timesheets/my/submit’, { method: ‘POST’, body: JSON.stringify({ period }) });
-toast(‘Timesheet submitted!’, ‘ok’);
+await api('/api/operations/timesheets/my/submit', { method: 'POST', body: JSON.stringify({ period }) });
+toast('Timesheet submitted!', 'ok');
 renderMyTimesheet();
-} catch(e) { toast(e.message, ‘err’); }
+} catch(e) { toast(e.message, 'err'); }
 }
 
-// –––––––––––––––––––––––––––––––
+// -------------------------------
 // EMPLOYEE - EXPENSES
-// –––––––––––––––––––––––––––––––
+// -------------------------------
 async function renderMyExpenses() {
-const content = document.getElementById(‘main-content’);
-content.innerHTML = ‘<div class="loading">Loading-</div>’;
+const content = document.getElementById('main-content');
+content.innerHTML = '<div class="loading">Loading-</div>';
 try {
-const { expenses } = await api(’/api/operations/expenses/my’);
+const { expenses } = await api('/api/operations/expenses/my');
 const total    = expenses.reduce((s,e)=>s+e.amount, 0);
-const approved = expenses.filter(e=>e.status===‘approved’).reduce((s,e)=>s+e.amount,0);
-const pending  = expenses.filter(e=>e.status===‘pending’).length;
+const approved = expenses.filter(e=>e.status==='approved').reduce((s,e)=>s+e.amount,0);
+const pending  = expenses.filter(e=>e.status==='pending').length;
 
-```
+
 const catIcon = c => ({travel:'--',meals:'--',equipment:'--',software:'-',training:'-',other:'-'}[c]||'-');
 
 content.innerHTML = `
@@ -11929,7 +11841,6 @@ content.innerHTML = `
     `).join('') : '<p style="color:#9ca3af;font-size:13px">No claims yet.</p>'}
   </div>
 `;
-```
 
 } catch(e) {
 content.innerHTML = `<div class="card"><p style="color:#ef4444">Error: ${e.message}</p></div>`;
@@ -11937,36 +11848,36 @@ content.innerHTML = `<div class="card"><p style="color:#ef4444">Error: ${e.messa
 }
 
 async function submitExpense() {
-const title  = document.getElementById(‘exp-title’).value.trim();
-const amount = document.getElementById(‘exp-amount’).value;
-const date   = document.getElementById(‘exp-date’).value;
-const cat    = document.getElementById(‘exp-cat’).value;
-const notes  = document.getElementById(‘exp-notes’).value.trim();
-const errEl  = document.getElementById(‘exp-error’);
-errEl.style.display = ‘none’;
-if (!title || !amount || !date) { errEl.textContent = ‘Title, amount and date are required.’; errEl.style.display = ‘block’; return; }
-const btn = event.target; btn.disabled = true; btn.textContent = ‘Submitting-’;
+const title  = document.getElementById('exp-title').value.trim();
+const amount = document.getElementById('exp-amount').value;
+const date   = document.getElementById('exp-date').value;
+const cat    = document.getElementById('exp-cat').value;
+const notes  = document.getElementById('exp-notes').value.trim();
+const errEl  = document.getElementById('exp-error');
+errEl.style.display = 'none';
+if (!title || !amount || !date) { errEl.textContent = 'Title, amount and date are required.'; errEl.style.display = 'block'; return; }
+const btn = event.target; btn.disabled = true; btn.textContent = 'Submitting-';
 try {
-await api(’/api/operations/expenses’, { method: ‘POST’, body: JSON.stringify({ title, category: cat, amount, date, notes }) });
-toast(‘Expense claim submitted!’, ‘ok’);
+await api('/api/operations/expenses', { method: 'POST', body: JSON.stringify({ title, category: cat, amount, date, notes }) });
+toast('Expense claim submitted!', 'ok');
 renderMyExpenses();
 } catch(e) {
-errEl.textContent = e.message; errEl.style.display = ‘block’;
-btn.disabled = false; btn.textContent = ‘Submit Claim’;
+errEl.textContent = e.message; errEl.style.display = 'block';
+btn.disabled = false; btn.textContent = 'Submit Claim';
 }
 }
 
-// –––––––––––––––––––––––––––––––
+// -------------------------------
 // EMPLOYEE - MY ASSETS
-// –––––––––––––––––––––––––––––––
+// -------------------------------
 async function renderMyAssets() {
-const content = document.getElementById(‘main-content’);
-content.innerHTML = ‘<div class="loading">Loading-</div>’;
+const content = document.getElementById('main-content');
+content.innerHTML = '<div class="loading">Loading-</div>';
 try {
-const { assets } = await api(’/api/operations/assets/my’);
-const catIcon = c => ({laptop:’-’,phone:’-’,vehicle:’-’,furniture:’-’,equipment:’–’,other:’-’}[c]||’-’);
+const { assets } = await api('/api/operations/assets/my');
+const catIcon = c => ({laptop:'-',phone:'-',vehicle:'-',furniture:'-',equipment:'-',other:'-'}[c]||'-');
 
-```
+
 content.innerHTML = `
   <div class="page-header"><h2>My Assets</h2><p>Assets assigned to you by your company</p></div>
   ${assets.length ? assets.map(a => `
@@ -11993,24 +11904,23 @@ content.innerHTML = `
     </div>
   `}
 `;
-```
 
 } catch(e) {
 content.innerHTML = `<div class="card"><p style="color:#ef4444">Error: ${e.message}</p></div>`;
 }
 }
 
-// ——————————————————————————
+// ----------------------------------------------------
 //  CORPORATE PHASE 5 - ADVANCED (Multi-branch, Branding, Payroll, Analytics)
-// ——————————————————————————
+// ----------------------------------------------------
 
-// – Patch buildSidebar for Phase 5 —————————————––
+// - Patch buildSidebar for Phase 5 ----------------------------
 const _p5BuildSidebar = buildSidebar;
 buildSidebar = function() {
 _p5BuildSidebar();
 const role = currentUser?.role;
 const mode = currentUser?.company?.mode;
-if (mode !== ‘corporate’ || ![‘admin’,‘superadmin’].includes(role)) return;
+if (mode !== 'corporate' || !['admin','superadmin'].includes(role)) return;
 
 const icons = {
 analytics: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="18" y="3" width="4" height="18"/><rect x="10" y="8" width="4" height="13"/><rect x="2" y="13" width="4" height="8"/></svg>`,
@@ -12019,58 +11929,58 @@ branding:  `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="
 payroll:   `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>`,
 };
 
-const assetLink = document.getElementById(‘nav-assets’);
-const anchor = assetLink || document.querySelector(’.sidebar-nav a:last-child’);
+const assetLink = document.getElementById('nav-assets');
+const anchor = assetLink || document.querySelector('.sidebar-nav a:last-child');
 if (!anchor) return;
 
 [
-[‘nav-analytics’,  icons.analytics, ‘Analytics’,   ‘analytics’],
-[‘nav-branches’,   icons.branches,  ‘Branches’,    ‘branches’],
-[‘nav-branding’,   icons.branding,  ‘Branding’,    ‘branding’],
-[‘nav-payroll-exp’,icons.payroll,   ‘Payroll Export’,‘payroll-export’],
+['nav-analytics',  icons.analytics, 'Analytics',   'analytics'],
+['nav-branches',   icons.branches,  'Branches',    'branches'],
+['nav-branding',   icons.branding,  'Branding',    'branding'],
+['nav-payroll-exp',icons.payroll,   'Payroll Export','payroll-export'],
 ].forEach(([id, icon, label, view]) => {
 if (!document.getElementById(id)) {
-const a = document.createElement(‘a’);
+const a = document.createElement('a');
 a.id = id;
 a.innerHTML = `${icon}<span>${label}</span>`; a.dataset.tooltip = label;
 a.onclick = () => navigateTo(view);
-anchor.insertAdjacentElement(‘afterend’, a);
+anchor.insertAdjacentElement('afterend', a);
 }
 });
 };
 
-// – Patch navigateTo for Phase 5 ———————————————
+// - Patch navigateTo for Phase 5 ------------------------------
 const _p5NavigateTo = navigateTo;
 navigateTo = function(view) {
-if (view === ‘analytics’)     { currentView = view; _setNavActive(view); renderAnalytics(); return; }
-if (view === ‘branches’)      { currentView = view; _setNavActive(view); renderBranches(); return; }
-if (view === ‘branding’)      { currentView = view; _setNavActive(view); renderBranding(); return; }
-if (view === ‘payroll-export’){ currentView = view; _setNavActive(‘payroll-exp’); renderPayrollExport(); return; }
+if (view === 'analytics')     { currentView = view; _setNavActive(view); renderAnalytics(); return; }
+if (view === 'branches')      { currentView = view; _setNavActive(view); renderBranches(); return; }
+if (view === 'branding')      { currentView = view; _setNavActive(view); renderBranding(); return; }
+if (view === 'payroll-export'){ currentView = view; _setNavActive('payroll-exp'); renderPayrollExport(); return; }
 _p5NavigateTo(view);
 };
 
-// – Mini chart helper (pure CSS bar chart) ————————————
+// - Mini chart helper (pure CSS bar chart) ------------------------
 function _miniBarChart(data, labelKey, valueKey, colorFn) {
-if (!data || !data.length) return ‘<p style="color:#9ca3af;font-size:12px">No data</p>’;
-const max = Math.max(…data.map(d => d[valueKey]));
+if (!data || !data.length) return '<p style="color:#9ca3af;font-size:12px">No data</p>';
+const max = Math.max(...data.map(d => d[valueKey]));
 return data.map(d => {
 const pct = max > 0 ? Math.round((d[valueKey] / max) * 100) : 0;
-const color = colorFn ? colorFn(d) : ‘var(–primary)’;
+const color = colorFn ? colorFn(d) : 'var(-primary)';
 return ` <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"> <div style="font-size:12px;color:#6b7280;min-width:80px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${d[labelKey] || '-'}</div> <div style="flex:1;background:#f3f4f6;border-radius:4px;height:14px"> <div style="background:${color};height:14px;border-radius:4px;width:${pct}%;transition:width .4s"></div> </div> <div style="font-size:12px;font-weight:700;min-width:30px;text-align:right">${d[valueKey]}</div> </div>`;
-}).join(’’);
+}).join('');
 }
 
-// –––––––––––––––––––––––––––––––
+// -------------------------------
 // ANALYTICS DASHBOARD
-// –––––––––––––––––––––––––––––––
+// -------------------------------
 async function renderAnalytics() {
-const content = document.getElementById(‘main-content’);
-content.innerHTML = ‘<div class="loading">Loading analytics-</div>’;
+const content = document.getElementById('main-content');
+content.innerHTML = '<div class="loading">Loading analytics-</div>';
 try {
-const data = await api(’/api/advanced/analytics’);
+const data = await api('/api/advanced/analytics');
 const { headcount, leave, training, performance, expenses, timesheets } = data;
 
-```
+
 const leaveMap = {};
 (leave.byStatus || []).forEach(l => leaveMap[l._id] = l.count);
 const expTotal = (expenses.byCategory || []).reduce((s,e) => s + e.total, 0);
@@ -12196,23 +12106,22 @@ content.innerHTML = `
 
   </div>
 `;
-```
 
 } catch(e) {
 content.innerHTML = `<div class="card"><p style="color:#ef4444">Error: ${e.message}</p></div>`;
 }
 }
 
-// –––––––––––––––––––––––––––––––
+// -------------------------------
 // BRANCHES
-// –––––––––––––––––––––––––––––––
+// -------------------------------
 async function renderBranches() {
-const content = document.getElementById(‘main-content’);
-content.innerHTML = ‘<div class="loading">Loading-</div>’;
+const content = document.getElementById('main-content');
+content.innerHTML = '<div class="loading">Loading-</div>';
 try {
-const { branches } = await api(’/api/advanced/branches’);
+const { branches } = await api('/api/advanced/branches');
 
-```
+
 content.innerHTML = `
   <div class="page-header"><h2>Branch Management</h2><p>Manage your company locations</p></div>
 
@@ -12267,7 +12176,6 @@ content.innerHTML = `
     `).join('') : '<p style="color:#9ca3af;font-size:13px">No branches yet. Add your first location above.</p>'}
   </div>
 `;
-```
 
 } catch(e) {
 content.innerHTML = `<div class="card"><p style="color:#ef4444">Error: ${e.message}</p></div>`;
@@ -12275,50 +12183,50 @@ content.innerHTML = `<div class="card"><p style="color:#ef4444">Error: ${e.messa
 }
 
 async function submitCreateBranch() {
-const name = document.getElementById(‘br-name’).value.trim();
-const errEl = document.getElementById(‘br-error’);
-errEl.style.display = ‘none’;
-if (!name) { errEl.textContent = ‘Branch name is required.’; errEl.style.display = ‘block’; return; }
+const name = document.getElementById('br-name').value.trim();
+const errEl = document.getElementById('br-error');
+errEl.style.display = 'none';
+if (!name) { errEl.textContent = 'Branch name is required.'; errEl.style.display = 'block'; return; }
 
 const body = {
 name,
-code:    document.getElementById(‘br-code’).value.trim(),
-city:    document.getElementById(‘br-city’).value.trim(),
-country: document.getElementById(‘br-country’).value.trim(),
-phone:   document.getElementById(‘br-phone’).value.trim(),
-address: document.getElementById(‘br-addr’).value.trim(),
+code:    document.getElementById('br-code').value.trim(),
+city:    document.getElementById('br-city').value.trim(),
+country: document.getElementById('br-country').value.trim(),
+phone:   document.getElementById('br-phone').value.trim(),
+address: document.getElementById('br-addr').value.trim(),
 };
-const btn = event.target; btn.disabled = true; btn.textContent = ‘Saving-’;
+const btn = event.target; btn.disabled = true; btn.textContent = 'Saving-';
 try {
-await api(’/api/advanced/branches’, { method: ‘POST’, body: JSON.stringify(body) });
-toast(‘Branch added!’, ‘ok’);
+await api('/api/advanced/branches', { method: 'POST', body: JSON.stringify(body) });
+toast('Branch added!', 'ok');
 renderBranches();
 } catch(e) {
-errEl.textContent = e.message; errEl.style.display = ‘block’;
-btn.disabled = false; btn.textContent = ‘+ Add Branch’;
+errEl.textContent = e.message; errEl.style.display = 'block';
+btn.disabled = false; btn.textContent = '+ Add Branch';
 }
 }
 
 async function deleteBranch(id) {
-if (!confirm(‘Remove this branch? Employees in this branch will be unassigned.’)) return;
+if (!confirm('Remove this branch? Employees in this branch will be unassigned.')) return;
 try {
-await api(`/api/advanced/branches/${id}`, { method: ‘DELETE’ });
-toast(‘Branch removed’, ‘ok’);
+await api(`/api/advanced/branches/${id}`, { method: 'DELETE' });
+toast('Branch removed', 'ok');
 renderBranches();
-} catch(e) { toast(e.message, ‘err’); }
+} catch(e) { toast(e.message, 'err'); }
 }
 
-// –––––––––––––––––––––––––––––––
+// -------------------------------
 // WHITE-LABEL BRANDING
-// –––––––––––––––––––––––––––––––
+// -------------------------------
 async function renderBranding() {
-const content = document.getElementById(‘main-content’);
-content.innerHTML = ‘<div class="loading">Loading-</div>’;
+const content = document.getElementById('main-content');
+content.innerHTML = '<div class="loading">Loading-</div>';
 try {
-const { branding, companyName } = await api(’/api/advanced/branding’);
-const payrollData = await api(’/api/advanced/analytics’).catch(() => null);
+const { branding, companyName } = await api('/api/advanced/branding');
+const payrollData = await api('/api/advanced/analytics').catch(() => null);
 
-```
+
 content.innerHTML = `
   <div class="page-header"><h2>Branding & Settings</h2><p>Customize your portal appearance and payroll configuration</p></div>
 
@@ -12400,7 +12308,6 @@ content.innerHTML = `
     <button class="btn btn-primary" onclick="savePayrollSettings()">Save Payroll Settings</button>
   </div>
 `;
-```
 
 } catch(e) {
 content.innerHTML = `<div class="card"><p style="color:#ef4444">Error: ${e.message}</p></div>`;
@@ -12408,72 +12315,72 @@ content.innerHTML = `<div class="card"><p style="color:#ef4444">Error: ${e.messa
 }
 
 function updateBrandPreview() {
-const logo  = document.getElementById(‘bd-logo’)?.value;
-const color = document.getElementById(‘bd-color’)?.value || ‘#6366f1’;
-const tag   = document.getElementById(‘bd-tagline’)?.value || ‘Powered by KODEX’;
-const preview = document.getElementById(‘brand-preview’);
+const logo  = document.getElementById('bd-logo')?.value;
+const color = document.getElementById('bd-color')?.value || '#6366f1';
+const tag   = document.getElementById('bd-tagline')?.value || 'Powered by KODEX';
+const preview = document.getElementById('brand-preview');
 if (!preview) return;
 preview.style.background = `${color}20`;
 preview.style.borderColor = `${color}40`;
-const img = preview.querySelector(‘img’);
-const box = preview.querySelector(‘div > div’);
-if (logo && img) { img.src = logo; img.style.display = ‘’; }
+const img = preview.querySelector('img');
+const box = preview.querySelector('div > div');
+if (logo && img) { img.src = logo; img.style.display = ''; }
 else if (box) box.style.background = color;
-const tagEl = preview.querySelector(‘div:last-child div:last-child’);
+const tagEl = preview.querySelector('div:last-child div:last-child');
 if (tagEl) tagEl.textContent = tag;
 }
 
 async function saveBranding() {
 const body = {
-logoUrl:        document.getElementById(‘bd-logo’).value.trim(),
-primaryColor:   document.getElementById(‘bd-color’).value,
-companyTagline: document.getElementById(‘bd-tagline’).value.trim(),
-supportEmail:   document.getElementById(‘bd-email’).value.trim(),
-website:        document.getElementById(‘bd-web’).value.trim(),
+logoUrl:        document.getElementById('bd-logo').value.trim(),
+primaryColor:   document.getElementById('bd-color').value,
+companyTagline: document.getElementById('bd-tagline').value.trim(),
+supportEmail:   document.getElementById('bd-email').value.trim(),
+website:        document.getElementById('bd-web').value.trim(),
 };
-const errEl = document.getElementById(‘bd-error’);
-errEl.style.display = ‘none’;
-const btn = event.target; btn.disabled = true; btn.textContent = ‘Saving-’;
+const errEl = document.getElementById('bd-error');
+errEl.style.display = 'none';
+const btn = event.target; btn.disabled = true; btn.textContent = 'Saving-';
 try {
-await api(’/api/advanced/branding’, { method: ‘PATCH’, body: JSON.stringify(body) });
-toast(‘Branding saved!’, ‘ok’);
-btn.disabled = false; btn.textContent = ‘Save Branding’;
+await api('/api/advanced/branding', { method: 'PATCH', body: JSON.stringify(body) });
+toast('Branding saved!', 'ok');
+btn.disabled = false; btn.textContent = 'Save Branding';
 } catch(e) {
-errEl.textContent = e.message; errEl.style.display = ‘block’;
-btn.disabled = false; btn.textContent = ‘Save Branding’;
+errEl.textContent = e.message; errEl.style.display = 'block';
+btn.disabled = false; btn.textContent = 'Save Branding';
 }
 }
 
 async function savePayrollSettings() {
 const body = {
-currency:      document.getElementById(‘pr-currency’).value,
-payPeriod:     document.getElementById(‘pr-period’).value,
-standardHours: parseFloat(document.getElementById(‘pr-hours’).value),
-overtimeRate:  parseFloat(document.getElementById(‘pr-ot’).value),
+currency:      document.getElementById('pr-currency').value,
+payPeriod:     document.getElementById('pr-period').value,
+standardHours: parseFloat(document.getElementById('pr-hours').value),
+overtimeRate:  parseFloat(document.getElementById('pr-ot').value),
 };
-const errEl = document.getElementById(‘pr-error’);
-errEl.style.display = ‘none’;
-const btn = event.target; btn.disabled = true; btn.textContent = ‘Saving-’;
+const errEl = document.getElementById('pr-error');
+errEl.style.display = 'none';
+const btn = event.target; btn.disabled = true; btn.textContent = 'Saving-';
 try {
-await api(’/api/advanced/payroll-settings’, { method: ‘PATCH’, body: JSON.stringify(body) });
-toast(‘Payroll settings saved!’, ‘ok’);
-btn.disabled = false; btn.textContent = ‘Save Payroll Settings’;
+await api('/api/advanced/payroll-settings', { method: 'PATCH', body: JSON.stringify(body) });
+toast('Payroll settings saved!', 'ok');
+btn.disabled = false; btn.textContent = 'Save Payroll Settings';
 } catch(e) {
-errEl.textContent = e.message; errEl.style.display = ‘block’;
-btn.disabled = false; btn.textContent = ‘Save Payroll Settings’;
+errEl.textContent = e.message; errEl.style.display = 'block';
+btn.disabled = false; btn.textContent = 'Save Payroll Settings';
 }
 }
 
-// –––––––––––––––––––––––––––––––
+// -------------------------------
 // PAYROLL EXPORT
-// –––––––––––––––––––––––––––––––
+// -------------------------------
 async function renderPayrollExport() {
-const content = document.getElementById(‘main-content’);
+const content = document.getElementById('main-content');
 const period = new Date().toISOString().slice(0, 7);
 content.innerHTML = `
 <div class="page-header"><h2>Payroll Export</h2><p>Generate payroll-ready CSV for your finance team</p></div>
 
-```
+
 <div class="card" style="max-width:540px">
   <h3 style="font-size:15px;font-weight:700;margin-bottom:14px">Generate Payroll Report</h3>
   <p style="font-size:13px;color:#6b7280;margin-bottom:16px;line-height:1.6">
@@ -12504,33 +12411,32 @@ content.innerHTML = `
     - Download CSV
   </button>
 </div>
-```
 
 `;
 }
 
 function downloadPayrollExport() {
-const period = document.getElementById(‘pe-period’)?.value || new Date().toISOString().slice(0, 7);
-const token  = localStorage.getItem(‘kodex_token’) || localStorage.getItem(‘token’) || ‘’;
-const btn = event.target; btn.disabled = true; btn.textContent = ‘Generating-’;
-setTimeout(() => { btn.disabled = false; btn.textContent = ‘- Download CSV’; }, 3000);
-window.open(`/api/advanced/payroll-export?period=${period}&token=${token}`, ‘_blank’);
-toast(‘Payroll CSV downloading-’, ‘ok’);
+const period = document.getElementById('pe-period')?.value || new Date().toISOString().slice(0, 7);
+const token  = localStorage.getItem('kodex_token') || localStorage.getItem('token') || '';
+const btn = event.target; btn.disabled = true; btn.textContent = 'Generating-';
+setTimeout(() => { btn.disabled = false; btn.textContent = '- Download CSV'; }, 3000);
+window.open(`/api/advanced/payroll-export?period=${period}&token=${token}`, '_blank');
+toast('Payroll CSV downloading-', 'ok');
 }
 
-// – Meeting Attendance Modal –––––––––––––––––––––––––
+// - Meeting Attendance Modal -------------------------
 async function viewMeetingAttendance(meetingId, title) {
-const container = document.getElementById(‘modal-container’);
-container.classList.remove(‘hidden’);
-container.innerHTML = ‘<div class="modal-overlay" onclick="closeModal(event)"><div class="modal" onclick="event.stopPropagation()" style="max-width:700px;width:95%"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px"><h3 style="margin:0">Meeting Attendance</h3><button onclick="closeModal()" style="background:none;border:none;font-size:20px;cursor:pointer">-</button></div><div id="meeting-attendance-body"><div class="loading">Loading…</div></div></div></div>’;
+const container = document.getElementById('modal-container');
+container.classList.remove('hidden');
+container.innerHTML = '<div class="modal-overlay" onclick="closeModal(event)"><div class="modal" onclick="event.stopPropagation()" style="max-width:700px;width:95%"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px"><h3 style="margin:0">Meeting Attendance</h3><button onclick="closeModal()" style="background:none;border:none;font-size:20px;cursor:pointer">-</button></div><div id="meeting-attendance-body"><div class="loading">Loading...</div></div></div></div>';
 
 try {
-const data = await api(’/api/zoom/’ + meetingId + ‘/attendance’);
+const data = await api('/api/zoom/' + meetingId + '/attendance');
 const attendance = data.attendance || [];
 const total = data.total || 0;
-const statusColor = { present: ‘#22c55e’, partial: ‘#f59e0b’, absent: ‘#ef4444’ };
+const statusColor = { present: '#22c55e', partial: '#f59e0b', absent: '#ef4444' };
 
-```
+
 let rows = '';
 for (const a of attendance) {
   const joinStr = a.joinTime ? new Date(a.joinTime).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : '-';
@@ -12559,21 +12465,20 @@ document.getElementById('meeting-attendance-body').innerHTML =
   + '<button class="btn btn-sm" style="background:#7c3aed;color:#fff" onclick="printMeetingAttendance(\'' + meetingId + '\', \'' + title.replace(/'/g, "\\'") + '\')">- Print / PDF</button>'
   + '</div></div>'
   + tableHtml;
-```
 
 } catch(e) {
-const el = document.getElementById(‘meeting-attendance-body’);
-if (el) el.innerHTML = ‘<p style="color:red">’ + e.message + ‘</p>’;
+const el = document.getElementById('meeting-attendance-body');
+if (el) el.innerHTML = '<p style="color:red">' + e.message + '</p>';
 }
 }
 
 async function printMeetingAttendance(meetingId, title) {
 try {
-const data = await api(’/api/zoom/’ + meetingId + ‘/attendance’);
+const data = await api('/api/zoom/' + meetingId + '/attendance');
 const attendance = data.attendance || [];
-const statusColor = { present: ‘#22c55e’, partial: ‘#f59e0b’, absent: ‘#ef4444’ };
+const statusColor = { present: '#22c55e', partial: '#f59e0b', absent: '#ef4444' };
 
-```
+
 let rows = '';
 for (const a of attendance) {
   const joinStr = a.joinTime ? new Date(a.joinTime).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : '-';
@@ -12602,9 +12507,8 @@ win.document.write('<!DOCTYPE html><html><head><title>' + title + ' - Attendance
 win.document.close();
 win.focus();
 setTimeout(function() { win.print(); }, 500);
-```
 
 } catch(e) {
-toastError(’Failed to generate PDF: ’ + e.message);
+toastError('Failed to generate PDF: ' + e.message);
 }
 }
