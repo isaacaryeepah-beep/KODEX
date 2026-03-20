@@ -198,25 +198,25 @@ app.use((err, req, res, next) => {
 const start = async () => {
   await connectDB();
 
-  try {
-    const mongoose = require("mongoose");
-    const db = mongoose.connection.db;
-    const usersCollection = db.collection("users");
-    const indexes = await usersCollection.indexes();
-    const oldIndex = indexes.find(
-      (idx) =>
-        idx.key &&
-        idx.key.indexNumber === 1 &&
-        idx.key.company === 1 &&
-        idx.sparse === true
-    );
-    if (oldIndex) {
-      await usersCollection.dropIndex(oldIndex.name);
-      console.log("Dropped old sparse indexNumber_1_company_1 index");
-    }
-  } catch (e) {
-    if (e.codeName !== "IndexNotFound") {
-      console.log("Index cleanup note:", e.message);
+  // ── One-time index migration: drop any old sparse single-field indexes ────────
+  const _staleIndexes = [
+    // old indexNumber sparse index (replaced by compound partial index)
+    (idx) => idx.key && idx.key.indexNumber === 1 && !idx.key.company && idx.sparse === true,
+    // old email sparse compound index (replaced by partial filter expression)
+    (idx) => idx.key && idx.key.email === 1 && idx.key.company === 1 && idx.sparse === true && !idx.partialFilterExpression,
+  ];
+  for (const matcher of _staleIndexes) {
+    try {
+      const mongoose = require("mongoose");
+      const usersCollection = mongoose.connection.db.collection("users");
+      const indexes = await usersCollection.indexes();
+      const stale = indexes.find(matcher);
+      if (stale) {
+        await usersCollection.dropIndex(stale.name);
+        console.log("Dropped stale index:", stale.name);
+      }
+    } catch (e) {
+      if (e.codeName !== "IndexNotFound") console.log("Index cleanup note:", e.message);
     }
   }
 
