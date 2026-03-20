@@ -13,7 +13,6 @@ const userSchema = new mongoose.Schema(
     indexNumber: {
       type: String,
       trim: true,
-      sparse: true,
     },
     employeeId: {
       type: String,
