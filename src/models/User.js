@@ -127,7 +127,10 @@ const userSchema = new mongoose.Schema(
   }
 );
 
-userSchema.index({ email: 1, company: 1 }, { unique: true, sparse: true });
+userSchema.index(
+  { email: 1, company: 1 },
+  { unique: true, partialFilterExpression: { email: { $type: "string" } } }
+);
 userSchema.index(
   { phone: 1, company: 1 },
   { unique: true, sparse: true, partialFilterExpression: { phone: { $type: "string" } } }
