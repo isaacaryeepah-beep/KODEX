@@ -10,7 +10,7 @@ const userSchema = new mongoose.Schema(
       sparse: true,
       match: [/^\S+@\S+\.\S+$/, "Please provide a valid email"],
     },
-    indexNumber: {
+    IndexNumber: {
       type: String,
       trim: true,
       sparse: true,
@@ -127,17 +127,14 @@ const userSchema = new mongoose.Schema(
   }
 );
 
-userSchema.index(
-  { email: 1, company: 1 },
-  { unique: true, partialFilterExpression: { email: { $type: "string" } } }
-);
+userSchema.index({ email: 1, company: 1 }, { unique: true, sparse: true });
 userSchema.index(
   { phone: 1, company: 1 },
   { unique: true, sparse: true, partialFilterExpression: { phone: { $type: "string" } } }
 );
 userSchema.index(
-  { indexNumber: 1, company: 1 },
-  { unique: true, partialFilterExpression: { indexNumber: { $type: "string" } } }
+  { IndexNumber: 1, company: 1 },
+  { unique: true, partialFilterExpression: { IndexNumber: { $type: "string" } } }
 );
 userSchema.index(
   { employeeId: 1, company: 1 },
@@ -145,11 +142,15 @@ userSchema.index(
 );
 
 userSchema.pre("validate", function () {
-  if (this.role !== "student") {
-      if (!this.email) {
-        this.invalidate("email", "Email is required");
-      }
+  if (this.role === "student") {
+    if (!this.IndexNumber) {
+      this.invalidate("IndexNumber", "Index number is required for students");
     }
+  } else {
+    if (!this.email) {
+      this.invalidate("email", "Email is required");
+    }
+  }
 });
 
 userSchema.pre("save", async function () {
