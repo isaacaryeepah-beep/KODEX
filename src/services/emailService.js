@@ -528,7 +528,7 @@ async function sendLecturerWelcome({ email, name, institutionName, department, i
 }
 
 // ── Student welcome email ─────────────────────────────────────────────────────
-async function sendStudentWelcome({ email, name, institutionName, indexNumber }) {
+async function sendStudentWelcome({ email, name, institutionName, IndexNumber }) {
   if (!email) return; // students may not have email
   const html = wrap(`
     <h1>Welcome to KODEX 🎓</h1>
@@ -536,7 +536,7 @@ async function sendStudentWelcome({ email, name, institutionName, indexNumber })
 
     <div class="info-box">
       <p><strong>Institution:</strong> ${institutionName}</p>
-      <p><strong>Student ID:</strong> <span class="highlight">${indexNumber}</span></p>
+      <p><strong>Student ID:</strong> <span class="highlight">${IndexNumber}</span></p>
     </div>
 
     <p><strong>What you can do on KODEX:</strong></p>
@@ -550,7 +550,7 @@ async function sendStudentWelcome({ email, name, institutionName, indexNumber })
     </div>
 
     <hr class="divider"/>
-    <p style="font-size:13px">Log in using your <strong>Student ID: ${indexNumber}</strong> and the password you set during registration.</p>
+    <p style="font-size:13px">Log in using your <strong>Student ID: ${IndexNumber}</strong> and the password you set during registration.</p>
   `, `Welcome to KODEX -- ${institutionName}`);
   return send({ to: email, subject: `Welcome to KODEX -- ${institutionName}`, html });
 }
