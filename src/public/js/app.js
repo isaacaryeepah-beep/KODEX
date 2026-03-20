@@ -4970,20 +4970,27 @@ function _renderCoursesHTML(content, courses, isOffline) {
     <div class="card">
       ${courses.length ? `
         <table>
-          <thead><tr><th>Code</th><th>Title</th><th>Level / Group</th><th>Lecturer</th><th>Roster</th><th>Enrolled</th>${canManageRoster && !isOffline ? '<th>Actions</th>' : currentUser.role === 'student' ? '<th></th>' : ''}</tr></thead>
+          <thead><tr><th>Code</th><th>Title</th><th>Level / Year / Session</th><th>Lecturer</th><th>Roster</th><th>Enrolled</th>${canManageRoster && !isOffline ? '<th>Actions</th>' : currentUser.role === 'student' ? '<th></th>' : ''}</tr></thead>
           <tbody>${courses.map(course => `
             <tr>
               <td><strong>${course.code}</strong></td>
               <td>${course.title}</td>
-              <td>
-                ${course.level ? `<span style="font-size:11px;padding:2px 7px;border-radius:20px;background:#ede9fe;color:#7c3aed;font-weight:700;margin-right:4px">L${course.level}</span>` : ''}
-                ${course.group ? `<span style="font-size:11px;padding:2px 7px;border-radius:20px;background:#ecfdf5;color:#059669;font-weight:600">${esc(course.group)}</span>` : ''}
-                ${!course.level && !course.group ? '<span style="color:var(--text-muted);font-size:12px">—</span>' : ''}
+              <td style="font-size:11px;white-space:nowrap">
+                ${course.level ? `<span style="padding:1px 7px;border-radius:20px;background:#ede9fe;color:#7c3aed;font-weight:700;margin-right:3px">L${course.level}</span>` : ''}
+                ${course.year  ? `<span style="padding:1px 7px;border-radius:20px;background:#dbeafe;color:#1d4ed8;font-weight:700;margin-right:3px">${esc(course.year)}</span>` : ''}
+                ${course.group ? `<span style="padding:1px 7px;border-radius:20px;background:#ecfdf5;color:#059669;font-weight:600;margin-right:3px">Grp ${esc(course.group)}</span>` : ''}
+                ${course.sessionType ? `<span style="padding:1px 7px;border-radius:20px;background:#fff7ed;color:#c2410c;font-weight:600">${esc(course.sessionType)}</span>` : ''}
+                ${!course.level && !course.year && !course.sessionType ? '<span style="color:var(--text-muted)">—</span>' : ''}
               </td>
               <td>${course.lecturer?.name || 'N/A'}</td>
               <td>${!isOffline ? `<button class="btn btn-sm" style="font-size:11px;background:var(--bg);border:1px solid var(--border)" onclick="viewRoster('${course._id}', '${course.code}')">View Roster</button>` : '—'}</td>
               <td>${course.enrolledStudents?.length || 0}</td>
-              ${canManageRoster && !isOffline ? `<td style="white-space:nowrap"><button class="btn btn-primary btn-sm" style="font-size:11px" onclick="showUploadRosterModal('${course._id}', '${course.code}')">Upload Students</button> <button class="btn btn-sm" style="font-size:11px;background:#6366f1;color:#fff" onclick="openBulkEmailModal('${course._id}', '${course.title}')">✉️ Email</button> <button class="btn btn-sm" style="font-size:11px;background:#10b981;color:#fff" onclick="openBulkSmsModal('${course._id}', '${course.title}')">💬 SMS</button></td>` : currentUser.role === 'student' ? `<td><button class="btn btn-sm" style="font-size:11px;background:#f0fdf4;color:#16a34a;border:1px solid #bbf7d0" onclick="generateCertificate('${course._id}','${course.title}')">🎓 Certificate</button></td>` : ''}
+              ${canManageRoster && !isOffline ? `<td style="white-space:nowrap">
+                <button class="btn btn-sm" style="font-size:11px;background:#6366f1;color:#fff" onclick="showEditCourseModal('${course._id}','${esc(course.code)}','${esc(course.title)}','${course.level||''}','${course.year||''}','${course.group||''}','${course.sessionType||''}','${esc(course.description||'')}')">✏️ Edit</button>
+                <button class="btn btn-primary btn-sm" style="font-size:11px" onclick="showUploadRosterModal('${course._id}', '${course.code}')">Upload Students</button>
+                <button class="btn btn-sm" style="font-size:11px;background:#6366f1;color:#fff" onclick="openBulkEmailModal('${course._id}', '${course.title}')">✉️ Email</button>
+                <button class="btn btn-sm" style="font-size:11px;background:#10b981;color:#fff" onclick="openBulkSmsModal('${course._id}', '${course.title}')">💬 SMS</button>
+              </td>` : currentUser.role === 'student' ? `<td><button class="btn btn-sm" style="font-size:11px;background:#f0fdf4;color:#16a34a;border:1px solid #bbf7d0" onclick="generateCertificate('${course._id}','${course.title}')">🎓 Certificate</button></td>` : ''}
             </tr>
           `).join('')}</tbody>
         </table>
@@ -5007,29 +5014,48 @@ function showCreateCourseModal() {
           <label>Course Title <span style="color:red">*</span></label>
           <input type="text" id="course-title" placeholder="Introduction to Computer Science">
         </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">
           <div class="form-group">
             <label>Level <span style="color:red">*</span></label>
             <select id="course-level" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
-              <option value="">— Select Level —</option>
+              <option value="">— Select —</option>
               <option value="100">Level 100</option>
               <option value="200">Level 200</option>
               <option value="300">Level 300</option>
               <option value="400">Level 400</option>
-              <option value="500">Level 500 (Postgrad)</option>
-              <option value="600">Level 600 (Postgrad)</option>
+              <option value="500">Level 500</option>
+              <option value="600">Level 600</option>
             </select>
           </div>
           <div class="form-group">
-            <label>Group <span style="color:red">*</span></label>
-            <input type="text" id="course-group" placeholder="e.g. A, B, C"
+            <label>Year <span style="color:red">*</span></label>
+            <select id="course-year" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
+              <option value="">— Select —</option>
+              <option value="Year 1">Year 1</option>
+              <option value="Year 2">Year 2</option>
+              <option value="Year 3">Year 3</option>
+              <option value="Year 4">Year 4</option>
+              <option value="Year 5">Year 5</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Group <span style="font-weight:400;font-size:11px">(optional)</span></label>
+            <input type="text" id="course-group" placeholder="e.g. A, B"
               style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;text-transform:uppercase"
               oninput="this.value=this.value.toUpperCase()">
-            <p style="font-size:11px;color:var(--text-muted);margin-top:3px">Use letters: A, B, C etc.</p>
           </div>
         </div>
         <div class="form-group">
-          <label>Description</label>
+          <label>Session Type <span style="color:red">*</span></label>
+          <select id="course-session" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
+            <option value="">— Select Session —</option>
+            <option value="Regular">Regular</option>
+            <option value="Evening">Evening</option>
+            <option value="Weekend">Weekend</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Description <span style="font-weight:400;font-size:11px">(optional)</span></label>
           <input type="text" id="course-desc" placeholder="Optional description">
         </div>
         <div class="modal-actions">
@@ -5043,29 +5069,106 @@ function showCreateCourseModal() {
 
 async function createCourse() {
   try {
-    const code  = document.getElementById('course-code').value.trim().toUpperCase();
-    const title = document.getElementById('course-title').value.trim();
-    const desc  = document.getElementById('course-desc').value.trim();
-    const level = document.getElementById('course-level').value.trim();
-    const group = document.getElementById('course-group').value.trim();
+    const code        = document.getElementById('course-code').value.trim().toUpperCase();
+    const title       = document.getElementById('course-title').value.trim();
+    const desc        = document.getElementById('course-desc').value.trim();
+    const level       = document.getElementById('course-level').value.trim();
+    const year        = document.getElementById('course-year').value.trim();
+    const group       = document.getElementById('course-group').value.trim();
+    const sessionType = document.getElementById('course-session').value.trim();
 
     if (!code || !title) { toastWarning('Course code and title are required.'); return; }
-    if (!level) { toastWarning('Please select a level.'); return; }
-    if (!group) { toastWarning('Please enter a group (e.g. A, B, C).'); return; }
+    if (!level)       { toastWarning('Please select a level.'); return; }
+    if (!year)        { toastWarning('Please select a year.'); return; }
+    if (!sessionType) { toastWarning('Please select a session type.'); return; }
 
     await api('/api/courses', {
       method: 'POST',
-      body: JSON.stringify({
-        code,
-        title,
-        description: desc,
-        level:  level || undefined,
-        group:  group || undefined,
-      }),
+      body: JSON.stringify({ code, title, description: desc, level, year, group: group || undefined, sessionType }),
     });
     closeModal();
     renderCourses();
   } catch (e) {
+    toastError(e.message);
+  }
+}
+
+
+function showEditCourseModal(id, code, title, level, year, group, sessionType, desc) {
+  const container = document.getElementById('modal-container');
+  container.classList.remove('hidden');
+  container.innerHTML = `
+    <div class="modal-overlay" onclick="closeModal(event)">
+      <div class="modal" onclick="event.stopPropagation()">
+        <h3>Edit Course — ${code}</h3>
+        <div class="form-group">
+          <label>Course Title <span style="color:red">*</span></label>
+          <input type="text" id="edit-course-title" value="${title}" placeholder="Course title">
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">
+          <div class="form-group">
+            <label>Level <span style="color:red">*</span></label>
+            <select id="edit-course-level" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
+              <option value="">— Select —</option>
+              ${['100','200','300','400','500','600'].map(l => `<option value="${l}" ${level===l?'selected':''}>${l}</option>`).join('')}
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Year <span style="color:red">*</span></label>
+            <select id="edit-course-year" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
+              <option value="">— Select —</option>
+              ${['Year 1','Year 2','Year 3','Year 4','Year 5'].map(y => `<option value="${y}" ${year===y?'selected':''}>${y}</option>`).join('')}
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Group <span style="font-weight:400;font-size:11px">(optional)</span></label>
+            <input type="text" id="edit-course-group" value="${group}" placeholder="e.g. A, B"
+              style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;text-transform:uppercase"
+              oninput="this.value=this.value.toUpperCase()">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Session Type <span style="color:red">*</span></label>
+          <select id="edit-course-session" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
+            <option value="">— Select —</option>
+            ${['Regular','Evening','Weekend'].map(s => `<option value="${s}" ${sessionType===s?'selected':''}>${s}</option>`).join('')}
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Description <span style="font-weight:400;font-size:11px">(optional)</span></label>
+          <input type="text" id="edit-course-desc" value="${desc}" placeholder="Optional description">
+        </div>
+        <div class="modal-actions">
+          <button class="btn btn-secondary btn-sm" onclick="closeModal()">Cancel</button>
+          <button class="btn btn-primary btn-sm" onclick="saveCourseEdit('${id}')">Save Changes</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+async function saveCourseEdit(id) {
+  try {
+    const title       = document.getElementById('edit-course-title').value.trim();
+    const level       = document.getElementById('edit-course-level').value;
+    const year        = document.getElementById('edit-course-year').value;
+    const group       = document.getElementById('edit-course-group').value.trim();
+    const sessionType = document.getElementById('edit-course-session').value;
+    const desc        = document.getElementById('edit-course-desc').value.trim();
+
+    if (!title)       { toastWarning('Course title is required.'); return; }
+    if (!level)       { toastWarning('Please select a level.'); return; }
+    if (!year)        { toastWarning('Please select a year.'); return; }
+    if (!sessionType) { toastWarning('Please select a session type.'); return; }
+
+    await api('/api/courses/' + id, {
+      method: 'PATCH',
+      body: JSON.stringify({ title, level, year, group: group || undefined, sessionType, description: desc }),
+    });
+    closeModal();
+    toastSuccess('Course updated ✓');
+    renderCourses();
+  } catch(e) {
     toastError(e.message);
   }
 }
