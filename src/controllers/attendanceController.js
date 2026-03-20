@@ -420,6 +420,32 @@ if (isEsp32Only) {
       esp32Required: true,
     });
   }
+
+  // PIN verification — student must also provide their attendance PIN
+  // This means sharing the code alone is not enough to cheat
+  const submittedPin = req.body.pin;
+  if (!submittedPin) {
+    return res.status(400).json({
+      error: 'Attendance PIN required.',
+      esp32Required: true,
+    });
+  }
+
+  const studentUser = await User.findById(req.user._id).select('+attendancePin +attendancePinSet');
+  if (!studentUser.attendancePinSet || !studentUser.attendancePin) {
+    return res.status(403).json({
+      error: 'You have not set an attendance PIN yet. Go to Profile and set your 4-digit PIN first.',
+      pinNotSet: true,
+    });
+  }
+
+  const pinValid = await studentUser.comparePin(submittedPin);
+  if (!pinValid) {
+    return res.status(401).json({
+      error: 'Incorrect PIN. Please try again.',
+      esp32Required: true,
+    });
+  }
 }
 // -------------------------------------------------------
 let qrTokenRef = null;
