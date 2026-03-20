@@ -549,6 +549,12 @@ exports.login = async (req, res) => {
       if (!user) {
         user = await User.findOne({ ...baseQuery, indexNumber: IndexNumber }).select("+password");
       }
+    } else if (email && institutionCode && loginRole === "manager") {
+      const company = await Company.findOne({ institutionCode: institutionCode.toUpperCase() });
+      if (!company) {
+        return res.status(401).json({ error: "Company not found" });
+      }
+      user = await User.findOne({ email, company: company._id, role: "manager" }).select("+password");
     } else if (email && institutionCode && loginRole === "employee") {
       const company = await Company.findOne({ institutionCode: institutionCode.toUpperCase() });
       if (!company) {
