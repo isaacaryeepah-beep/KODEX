@@ -184,7 +184,7 @@ exports.getMeetingAttendance = async (req, res) => {
     }
 
     const records = await JitsiAttendance.find({ meetingId })
-      .populate('userId', 'name email indexNumber role')
+      .populate('userId', 'name email IndexNumber role')
       .sort({ timestamp: 1 });
 
     // Build per-user summary: join time, leave time, duration
@@ -235,7 +235,7 @@ exports.getMeetingAttendanceCSV = async (req, res) => {
     }
 
     const records = await JitsiAttendance.find({ meetingId })
-      .populate('userId', 'name email indexNumber role')
+      .populate('userId', 'name email IndexNumber role')
       .sort({ timestamp: 1 });
 
     const userMap = {};
@@ -255,7 +255,7 @@ exports.getMeetingAttendanceCSV = async (req, res) => {
       const status = dur >= 30 ? 'Present' : dur > 0 ? 'Partial' : 'Absent';
       rows.push([
         u.user?.name || '',
-        u.user?.email || u.user?.indexNumber || '',
+        u.user?.email || u.user?.IndexNumber || '',
         u.user?.role || '',
         join ? new Date(join).toLocaleString() : '',
         u.leaveTime ? new Date(u.leaveTime).toLocaleString() : 'Still in meeting',
