@@ -4371,8 +4371,8 @@ body.semester     = semester;
 body.email = document.getElementById('new-user-email').value;
 }
 const phone = document.getElementById('new-user-phone').value.trim();
-if (!phone) { toastWarning('Phone number is required.'); return; }
-body.phone = phone;
+if (!phone && role !== 'student') { toastWarning('Phone number is required.'); return; }
+if (phone) body.phone = phone;
 const dept = document.getElementById('new-user-dept')?.value?.trim();
 if (['lecturer','hod','student'].includes(role) && !dept) {
 const label = role === 'hod' ? 'HOD' : role === 'lecturer' ? 'Lecturer' : 'Student';
