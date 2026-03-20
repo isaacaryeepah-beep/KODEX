@@ -4276,7 +4276,7 @@ async function showCreateUserModal() {
           <input type="email" id="new-user-email" placeholder="user@company.com">
         </div>
         <div class="form-group ${defaultRole !== 'student' ? 'hidden' : ''}" id="new-user-index-group">
-          <label>Student ID / Index Number <span style="color:red">*</span></label>
+          <label>Student ID / Index Number <span style="color:var(--text-muted);font-size:11px">(optional)</span></label>
           <input type="text" id="new-user-index" placeholder="e.g. UCC/CS/23/0001" style="text-transform:uppercase" autocomplete="off">
           <p style="font-size:11px;color:var(--text-light);margin-top:4px">Must be unique — each student has their own index number assigned by the institution.</p>
         </div>
@@ -4394,9 +4394,9 @@ async function createUser() {
     };
     if (role === 'student') {
       const idx = document.getElementById('new-user-index').value.trim().toUpperCase();
-      if (!idx) { toastWarning('Student ID / Index Number is required.'); return; }
-      if (idx.length < 3) { toastWarning('Student ID looks too short. Please enter the full index number.'); return; }
-      body.indexNumber = idx;
+      
+      if (idx && idx.length < 3) { toastWarning('Student ID looks too short. Please enter the full index number.'); return; }
+      if (idx) body.indexNumber = idx;
       // Student classification — all mandatory
       const programme   = document.getElementById('new-user-programme')?.value;
       const studentLevel= document.getElementById('new-user-level')?.value;
