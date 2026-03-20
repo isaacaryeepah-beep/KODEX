@@ -106,7 +106,7 @@ exports.attendanceReport = async (req, res) => {
 
     const [records, company] = await Promise.all([
       AttendanceRecord.find(filter)
-        .populate("user", "name email indexNumber role")
+        .populate("user", "name email IndexNumber role")
         .populate("session", "title startedAt stoppedAt")
         .sort({ checkInTime: -1 }),
       Company.findById(req.user.company).select("name"),
@@ -154,7 +154,7 @@ exports.attendanceReport = async (req, res) => {
       records.forEach((record) => {
         y = checkPage(doc, y);
         const userName = record.user ? record.user.name : "Unknown";
-        const identifier = record.user ? (record.user.indexNumber || record.user.email || "") : "";
+        const identifier = record.user ? (record.user.IndexNumber || record.user.email || "") : "";
         const sessionTitle = record.session ? record.session.title || "Untitled" : "N/A";
         const checkIn = record.checkInTime ? new Date(record.checkInTime).toLocaleDateString() : "N/A";
         const status = record.status || "N/A";
@@ -306,7 +306,7 @@ exports.performanceReport = async (req, res) => {
 
     const [submissions, company] = await Promise.all([
       Attempt.find({ ...filter, isSubmitted: true })
-        .populate("student", "name email indexNumber")
+        .populate("student", "name email IndexNumber")
         .populate("quiz", "title")
         .sort({ submittedAt: -1 }),
       Company.findById(req.user.company).select("name"),
@@ -350,7 +350,7 @@ exports.performanceReport = async (req, res) => {
       submissions.forEach((sub) => {
         y = checkPage(doc, y);
         const studentName = sub.student ? sub.student.name : "Unknown";
-        const identifier = sub.student ? (sub.student.indexNumber || sub.student.email || "") : "";
+        const identifier = sub.student ? (sub.student.IndexNumber || sub.student.email || "") : "";
         const quizTitle = sub.quiz ? sub.quiz.title : "N/A";
         const percentage = sub.maxScore > 0 ? ((sub.score / sub.maxScore) * 100).toFixed(1) : "0";
 
