@@ -11,7 +11,7 @@ router.use(authenticate);
 router.use(requireMode("academic"));
 router.use(requireActiveSubscription);
 
-router.post("/", requireRole("lecturer", "admin", "superadmin"), companyIsolation, courseController.createCourse);
+router.post("/", requireRole("lecturer", "superadmin"), companyIsolation, courseController.createCourse);
 router.get("/", companyIsolation, courseController.listCourses);
 router.get("/:id", companyIsolation, courseController.getCourse);
 router.patch("/:id", requireRole("lecturer", "admin", "superadmin"), companyIsolation, courseController.updateCourse);
