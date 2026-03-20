@@ -74,7 +74,7 @@ exports.getQuiz = async (req, res) => {
     const questions = await Question.find({ quiz: id }).sort({ createdAt: 1 });
 
     const attempts = await Attempt.find({ quiz: id, isSubmitted: true })
-      .populate("student", "name email indexNumber")
+      .populate("student", "name email IndexNumber")
       .sort({ score: -1 });
 
     const submitted = attempts.length;
@@ -168,7 +168,7 @@ exports.getAttemptDetail = async (req, res) => {
     }
 
     const attempt = await Attempt.findOne({ _id: attemptId, quiz: id })
-      .populate("student", "name email indexNumber");
+      .populate("student", "name email IndexNumber");
 
     if (!attempt) {
       return res.status(404).json({ error: "Attempt not found" });
