@@ -3668,11 +3668,41 @@ const container = document.getElementById('modal-container');
 container.classList.remove('hidden');
 container.innerHTML = '<div class="modal-overlay"><div class="modal"><p style="color:var(--text-muted)">Checking classroom device...</p></div></div>';
 
-// Require ESP32 to be online before allowing session start
-const esp32Online = await discoverESP32();
+// Check ESP32 via two paths:
+// 1. Direct (lecturer on KODEX-CLASSROOM hotspot) — ping 192.168.4.1
+// 2. Via server (lecturer on school WiFi) — /api/esp32/status
+let esp32Online = await discoverESP32();
 if (!esp32Online) {
-container.innerHTML = '<div class="modal-overlay" onclick="closeModal(event)"><div class="modal" onclick="event.stopPropagation()"><div style="text-align:center;padding:16px 0"><div style="font-size:40px;margin-bottom:12px">📡</div><h3 style="margin-bottom:8px">Classroom device required</h3><p style="font-size:13px;color:var(--text-light);margin-bottom:20px">The ESP32 classroom device must be online before you can start an attendance session.<br><br>Make sure the device is powered on and connected to the school WiFi, then try again.</p><div class="modal-actions"><button class="btn btn-secondary btn-sm" onclick="closeModal()">Cancel</button><button class="btn btn-primary btn-sm" onclick="closeModal();setTimeout(showStartSessionModal,500)">Try again</button></div></div></div></div>';
-return;
+  try {
+    const st = await api('/api/esp32/status');
+    esp32Online = st.online === true;
+  } catch(e) { esp32Online = false; }
+}
+
+if (!esp32Online) {
+  container.innerHTML = `<div class="modal-overlay" onclick="closeModal(event)"><div class="modal" onclick="event.stopPropagation()">
+    <div style="text-align:center;padding:16px 0">
+      <div style="width:56px;height:56px;background:#fef2f2;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 16px">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#dc2626" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+      </div>
+      <h3 style="margin-bottom:8px">Classroom device required</h3>
+      <p style="font-size:13px;color:var(--text-light);line-height:1.6;margin-bottom:20px">
+        The ESP32 classroom device must be online to start a session.<br>
+        Attendance can only be marked by students physically in the classroom.
+      </p>
+      <div style="background:#f8fafc;border-radius:8px;padding:12px;text-align:left;font-size:12px;color:var(--text-muted);margin-bottom:20px">
+        <strong style="display:block;margin-bottom:6px;color:var(--text)">Checklist:</strong>
+        <div>1. Power on the ESP32 device</div>
+        <div>2. Wait for KODEX-CLASSROOM WiFi to appear</div>
+        <div>3. Confirm the device is connected to school WiFi</div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-secondary btn-sm" onclick="closeModal()">Cancel</button>
+        <button class="btn btn-primary btn-sm" onclick="closeModal();setTimeout(showStartSessionModal,500)">Try again</button>
+      </div>
+    </div>
+  </div></div>`;
+  return;
 }
 
 let courses = [];
@@ -3681,7 +3711,7 @@ const d = await api('/api/courses');
 courses = d.courses || d || [];
 } catch(e) { courses = []; }
 
-container.innerHTML = `<div class="modal-overlay" onclick="closeModal(event)"> <div class="modal" onclick="event.stopPropagation()"> <h3>Start New Session</h3> <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:8px 12px;margin-bottom:14px;font-size:12px;color:#166534;display:flex;align-items:center;gap:8px"><span style="font-size:14px">✓</span> Classroom device online — session will be ESP32-only</div> <div class="form-group"> <label>Course <span style="color:red">*</span></label> <select id="session-course" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px"> <option value="">- Select Course -</option> ${courses.map(c =>`<option value="${c._id}">${esc(c.title)}${c.level?' - L'+c.level:''}${c.group?' - Grp '+c.group:''}</option>`).join('')} </select> </div> <div class="form-group"> <label>Session Title <span style="font-weight:400;color:var(--text-muted);font-size:12px">(optional)</span></label> <input type="text" id="session-title" placeholder="e.g., Week 5 Lecture"> </div> <div class="modal-actions"> <button class="btn btn-secondary btn-sm" onclick="closeModal()">Cancel</button> <button class="btn btn-primary btn-sm" onclick="startSession()">Start Session</button> </div> </div> </div> `;
+container.innerHTML = `<div class="modal-overlay" onclick="closeModal(event)"> <div class="modal" onclick="event.stopPropagation()"> <h3>Start New Session</h3> <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:8px 12px;margin-bottom:14px;font-size:12px;color:#166534;display:flex;align-items:center;gap:8px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#166534" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Classroom device online — students must be on KODEX-CLASSROOM WiFi to mark</div> <div class="form-group"> <label>Course <span style="color:red">*</span></label> <select id="session-course" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px"> <option value="">- Select Course -</option> ${courses.map(c =>`<option value="${c._id}">${esc(c.title)}${c.level?' - L'+c.level:''}${c.group?' - Grp '+c.group:''}</option>`).join('')} </select> </div> <div class="form-group"> <label>Session Title <span style="font-weight:400;color:var(--text-muted);font-size:12px">(optional)</span></label> <input type="text" id="session-title" placeholder="e.g., Week 5 Lecture"> </div> <div class="modal-actions"> <button class="btn btn-secondary btn-sm" onclick="closeModal()">Cancel</button> <button class="btn btn-primary btn-sm" onclick="startSession()">Start Session</button> </div> </div> </div> `;
 }
 
 async function startSession() {
@@ -3690,6 +3720,25 @@ const courseId = document.getElementById('session-course')?.value;
 
 if (!courseId) { toastWarning('Please select a course.'); return; }
 closeModal();
+
+const serverUp = await isServerReachable();
+
+if (!serverUp) {
+// On ESP32 hotspot with no internet — start session directly on ESP32
+const esp32Found = await discoverESP32();
+if (esp32Found) {
+try {
+await esp32Api('/session/start', { method: 'POST', body: JSON.stringify({ title }) });
+toastSuccess('Session started on classroom device!');
+renderSessions();
+} catch(e) {
+toastError('Could not start session on classroom device: ' + e.message);
+}
+} else {
+toastError('No internet and classroom device not found. Cannot start session.');
+}
+return;
+}
 
 try {
 await api('/api/attendance-sessions/start', { method: 'POST', body: JSON.stringify({ title, courseId }) });
@@ -6870,9 +6919,8 @@ ${activeSession ? `
         <button class="btn btn-primary" style="width:100%" onclick="submitESP32AppMark('${activeSession._id}')">Mark Attendance via Classroom Device</button>
         <div id="esp32-app-mark-msg" style="margin-top:10px;display:none"></div>
       </div>
-      <div style="margin-top:16px;padding-top:12px;border-top:1px solid var(--border)">
-        <p style="font-size:12px;color:var(--text-muted);margin-bottom:8px">Not on KODEX-CLASSROOM WiFi?</p>
-        <button class="btn btn-secondary btn-sm" onclick="checkEsp32FallbackMark('${activeSession._id}')">Check if device is offline</button>
+      <div style="margin-top:16px;padding-top:12px;border-top:1px solid var(--color-border-tertiary);font-size:12px;color:var(--color-text-secondary)">
+        Make sure you are connected to <strong>KODEX-CLASSROOM</strong> WiFi to mark attendance.
       </div>
     </div>
     <div id="esp32-fallback-area"></div>
@@ -7016,35 +7064,52 @@ async function submitESP32AppMark(sessionId) {
 const pin = document.getElementById('esp32-pin-input')?.value?.trim();
 const msgEl = document.getElementById('esp32-app-mark-msg');
 const btn = document.querySelector('#esp32-app-mark button');
-if (!pin || pin.length !== 4) {
-  if (msgEl) { msgEl.style.display='block'; msgEl.className=''; msgEl.style.cssText='margin-top:10px;padding:8px 12px;background:#fef2f2;border-radius:6px;font-size:13px;color:#dc2626'; msgEl.textContent='Please enter your 4-digit PIN.'; }
-  return;
-}
-if (btn) { btn.disabled=true; btn.textContent='Connecting to classroom device...'; }
+
+const showErr = (msg, warn) => {
+  if (!msgEl) return;
+  msgEl.style.display = 'block';
+  msgEl.style.cssText = 'margin-top:10px;padding:8px 12px;border-radius:6px;font-size:13px;color:' + (warn ? '#92400e' : '#dc2626') + ';background:' + (warn ? '#fef3c7' : '#fef2f2');
+  msgEl.textContent = msg;
+};
+
+if (!pin || pin.length !== 4) { showErr('Please enter your 4-digit PIN.'); return; }
+if (btn) { btn.disabled=true; btn.textContent='Getting code from classroom device...'; }
+
 try {
-  // Discover ESP32 first
+  // Get current code from ESP32 device (student must be on KODEX-CLASSROOM WiFi)
   const found = await discoverESP32();
   if (!found) {
-    if (btn) { btn.disabled=false; btn.textContent='Mark Attendance via Classroom Device'; }
-    if (msgEl) { msgEl.style.display='block'; msgEl.style.cssText='margin-top:10px;padding:8px 12px;background:#fef3c7;border-radius:6px;font-size:13px;color:#92400e'; msgEl.textContent='Classroom device not found. Make sure you are connected to KODEX-CLASSROOM WiFi.'; }
+    if (btn) { btn.disabled=false; btn.textContent='Mark Attendance'; }
+    showErr('Classroom device not found. Make sure you are connected to KODEX-CLASSROOM WiFi.', true);
     return;
   }
-  // Get current code from ESP32
   const codeData = await esp32Api('/code');
-  const code = codeData.code;
-  // Submit mark
-  if (btn) btn.textContent='Verifying...';
-  const result = await submitToESP32(code, pin);
-  if (result.ok) {
-    document.getElementById('esp32-app-mark').innerHTML = '<div style="text-align:center;padding:16px"><div style="font-size:36px;margin-bottom:8px">✓</div><div style="font-size:16px;font-weight:700;color:var(--success)">Attendance Marked!</div><p style="font-size:13px;color:var(--text-light);margin-top:4px">Welcome, ' + (result.name || currentUser.name) + '</p></div>';
-    toastSuccess('Attendance marked via classroom device!');
-  } else {
-    if (btn) { btn.disabled=false; btn.textContent='Mark Attendance via Classroom Device'; }
-    if (msgEl) { msgEl.style.display='block'; msgEl.style.cssText='margin-top:10px;padding:8px 12px;background:#fef2f2;border-radius:6px;font-size:13px;color:#dc2626'; msgEl.textContent=result.error||'Failed to mark attendance.'; }
-  }
+  const esp32Code = codeData.code;
+
+  if (btn) btn.textContent='Submitting...';
+
+  // Submit to KODEX server — server validates code against what ESP32 reported
+  await api('/api/attendance-sessions/mark', {
+    method: 'POST',
+    body: JSON.stringify({
+      sessionId,
+      esp32Code,
+      pin,
+      method: 'ble_mark',
+    }),
+  });
+
+  document.getElementById('esp32-app-mark').innerHTML =
+    '<div style="text-align:center;padding:16px">' +
+    '<div style="font-size:36px;margin-bottom:8px">✓</div>' +
+    '<div style="font-size:16px;font-weight:700;color:var(--color-text-success)">Attendance Marked!</div>' +
+    '<p style="font-size:13px;color:var(--color-text-secondary);margin-top:4px">Welcome, ' + currentUser.name + '</p>' +
+    '</div>';
+  toastSuccess('Attendance marked!');
+
 } catch(e) {
-  if (btn) { btn.disabled=false; btn.textContent='Mark Attendance via Classroom Device'; }
-  if (msgEl) { msgEl.style.display='block'; msgEl.style.cssText='margin-top:10px;padding:8px 12px;background:#fef2f2;border-radius:6px;font-size:13px;color:#dc2626'; msgEl.textContent=e.message||'Connection error. Stay on KODEX-CLASSROOM WiFi.'; }
+  if (btn) { btn.disabled=false; btn.textContent='Mark Attendance'; }
+  showErr(e.message || 'Failed. Make sure you are on KODEX-CLASSROOM WiFi.');
 }
 }
 
