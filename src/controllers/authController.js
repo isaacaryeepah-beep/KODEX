@@ -1233,8 +1233,8 @@ exports.verify2FACode = async (req, res) => {
 
 exports.updateProfile = async (req, res) => {
   try {
-    const { name, currentPassword, newPassword, department, profilePhoto } = req.body;
-    const user = await User.findById(req.user._id).select("+password");
+    const { name, currentPassword, newPassword, department, profilePhoto, attendancePin, clearAttendancePin } = req.body;
+    const user = await User.findById(req.user._id).select("+password +attendancePin");
     if (!user) return res.status(404).json({ error: "User not found" });
 
     if (name && name.trim()) user.name = name.trim();
