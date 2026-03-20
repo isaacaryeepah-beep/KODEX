@@ -52,6 +52,15 @@ const announcementSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+    // Optional PDF attachment
+    pdfData: {
+      type: String,   // base64-encoded PDF
+      default: null,
+    },
+    pdfName: {
+      type: String,
+      default: null,
+    },
     // Track who has read this (for unread badges)
     readBy: [
       {
