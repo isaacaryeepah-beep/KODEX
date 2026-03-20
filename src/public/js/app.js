@@ -4277,6 +4277,32 @@ async function _renderAdminCharts(sessionsData, usersData) {
 }
 
 
+
+// ── ESP32 command helpers ──────────────────────────────────────────────────────
+async function esp32StartSession() {
+  try {
+    const title = prompt('Session title for ESP32 device:', 'Classroom Session');
+    if (title === null) return;
+    await api('/api/esp32/command', { method: 'POST', body: JSON.stringify({ action: 'start', title: title || 'Classroom Session' }) });
+    toastSuccess('📟 Start command sent to ESP32 device!');
+  } catch(e) {
+    if (e.message.includes('No ESP32')) {
+      toastWarning('No ESP32 device registered. Set up the device first.');
+    } else {
+      toastError('Failed to send command: ' + e.message);
+    }
+  }
+}
+
+async function esp32StopSession() {
+  try {
+    await api('/api/esp32/command', { method: 'POST', body: JSON.stringify({ action: 'stop' }) });
+    toastSuccess('📟 Stop command sent to ESP32 device!');
+  } catch(e) {
+    toastError('Failed to send command: ' + e.message);
+  }
+}
+
 async function renderSessions() {
   const content = document.getElementById('main-content');
   if (!content) return;
@@ -4313,6 +4339,11 @@ function _renderSessionsHTML(content, sessions, isOffline) {
     </div>
     ${canStart ? `<div class="actions-bar">
       <button class="btn btn-primary btn-sm" onclick="showStartSessionModal()">Start New Session</button>
+      <button class="btn btn-sm" style="background:#1e293b;color:#fff;display:flex;align-items:center;gap:5px" onclick="esp32StartSession()" title="Send start command to ESP32 classroom device">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+        📟 ESP32 Start
+      </button>
+      <button class="btn btn-sm" style="background:#475569;color:#fff" onclick="esp32StopSession()" title="Send stop command to ESP32 device">📟 ESP32 Stop</button>
       ${pendingCount > 0 ? `<span style="background:#fef3c7;color:#92400e;border:1px solid #fbbf24;border-radius:6px;padding:4px 12px;font-size:12px;font-weight:600">${pendingCount} action${pendingCount!==1?'s':''} pending sync</span>` : ''}
     </div>` : ''}
     <div class="card">
@@ -4700,8 +4731,8 @@ async function renderUsers(filterRole='', filterDept='', filterSearch='') {
           <div id="bulk-actions" style="display:none;gap:8px;align-items:center;margin-left:auto">
             <span id="selected-count" style="font-size:13px;color:var(--text-light)">0 selected</span>
             <button class="btn btn-sm" style="background:#22c55e;color:#fff" onclick="bulkUserAction('activate')">Activate</button>
-            <button class="btn btn-sm" style="background:#f59e0b;color:#fff" onclick="bulkUserAction('deactivate')">Deactivate</button>
-            <button class="btn btn-danger btn-sm" onclick="bulkUserAction('delete')">Delete</button>
+            ${currentUser.role !== 'manager' ? `<button class="btn btn-sm" style="background:#f59e0b;color:#fff" onclick="bulkUserAction('deactivate')">Deactivate</button>` : ''}
+            ${currentUser.role !== 'manager' ? `<button class="btn btn-danger btn-sm" onclick="bulkUserAction('delete')">Delete</button>` : ''}
           </div>
         ` : ''}
       </div>
@@ -8933,9 +8964,25 @@ async function renderProfile() {
           </label>
         </div>
       </div>` : ''}
+      <!-- Attendance PIN for ESP32 device -->
+      ${['student'].includes(currentUser.role) ? `
+      <div style="padding-top:16px;border-top:1px solid var(--border);margin-top:4px">
+        <h3 style="font-size:14px;font-weight:700;margin-bottom:4px;color:var(--text-primary)">📟 Attendance PIN</h3>
+        <p style="font-size:12px;color:var(--text-muted);margin-bottom:12px">Used with the KODEX ESP32 classroom device. Set a 4-digit PIN to mark your attendance.</p>
+        <div class="form-group">
+          <label>New 4-Digit PIN</label>
+          <input type="password" id="profile-att-pin" inputmode="numeric" maxlength="4" placeholder="e.g. 1234" style="letter-spacing:6px;font-size:18px;text-align:center">
+        </div>
+        <div class="form-group">
+          <label>Confirm PIN</label>
+          <input type="password" id="profile-att-pin-confirm" inputmode="numeric" maxlength="4" placeholder="Repeat PIN" style="letter-spacing:6px;font-size:18px;text-align:center">
+        </div>
+        <p style="font-size:11px;color:var(--text-muted);margin-bottom:12px">Leave blank to keep your existing PIN.</p>
+      </div>` : ''}
+
       <button class="btn btn-primary" onclick="saveProfile()" style="width:100%">Save Changes</button>
     </div>
-  `;
+  \`;
 }
 
 async function toggle2FA(enable) {
@@ -8981,6 +9028,19 @@ async function saveProfile() {
   }
   if (newPassword) { body.currentPassword = currentPassword; body.newPassword = newPassword; }
 
+  // Attendance PIN for ESP32
+  const attPin        = document.getElementById('profile-att-pin')?.value?.trim();
+  const attPinConfirm = document.getElementById('profile-att-pin-confirm')?.value?.trim();
+  if (attPin) {
+    if (!/^\d{4}$/.test(attPin)) {
+      msg.textContent = 'Attendance PIN must be exactly 4 digits'; msg.style.background = '#fef2f2'; msg.style.color = '#dc2626'; msg.style.display = 'block'; return;
+    }
+    if (attPin !== attPinConfirm) {
+      msg.textContent = 'Attendance PINs do not match'; msg.style.background = '#fef2f2'; msg.style.color = '#dc2626'; msg.style.display = 'block'; return;
+    }
+    body.attendancePin = attPin;
+  }
+
   try {
     const data = await api('/api/auth/profile', { method: 'PUT', body: JSON.stringify(body) });
     if (data.user?.name) { currentUser.name = data.user.name; document.getElementById('user-name').textContent = data.user.name; }
@@ -8989,6 +9049,8 @@ async function saveProfile() {
     document.getElementById('profile-current-pw').value = '';
     document.getElementById('profile-new-pw').value = '';
     document.getElementById('profile-confirm-pw').value = '';
+    const pinEl = document.getElementById('profile-att-pin'); if (pinEl) pinEl.value = '';
+    const pinCEl = document.getElementById('profile-att-pin-confirm'); if (pinCEl) pinCEl.value = '';
     setTimeout(() => { msg.style.display = 'none'; }, 4000);
   } catch(e) {
     msg.textContent = e.message; msg.style.background = '#fef2f2'; msg.style.color = '#dc2626'; msg.style.display = 'block';
