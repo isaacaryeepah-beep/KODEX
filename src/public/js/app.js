@@ -8312,7 +8312,7 @@ function renderContact() {
         <div style="font-size:36px;margin-bottom:12px">📧</div>
         <div style="font-size:16px;font-weight:700;margin-bottom:6px">Email</div>
         <p style="font-size:13px;color:var(--text-light);margin-bottom:12px">Send us an email anytime</p>
-        <a href="mailto:nelsonkel78@gmail.com" class="btn btn-primary btn-sm" style="display:inline-block;text-decoration:none">nelsonkel78@gmail.com</a>
+        <a href="mailto:Kellywest251@gmail.com" class="btn btn-primary btn-sm" style="display:inline-block;text-decoration:none">Kellywest251@gmail.com</a>
       </div>
 
       <div class="card" style="text-align:center">
@@ -9166,7 +9166,7 @@ function renderAbout() {
 
       <div style="font-size:13px;color:var(--text-light);padding-top:20px;border-top:1px solid var(--border)">
         Built by <strong style="color:var(--text-primary)">KODEX</strong> &nbsp;·&nbsp;
-        <a href="mailto:nelsonkel78@gmail.com" style="color:var(--primary)">nelsonkel78@gmail.com</a><br>
+        <a href="mailto:Kellywest251@gmail.com" style="color:var(--primary)">Kellywest251@gmail.com</a><br>
         <span style="font-size:12px">&copy; 2026 KODEX. All rights reserved.</span>
       </div>
     </div>
