@@ -199,29 +199,6 @@ app.use((err, req, res, next) => {
 const start = async () => {
   await connectDB();
 
-  try {
-    const mongoose = require("mongoose");
-    const db = mongoose.connection.db;
-    const usersCollection = db.collection("users");
-    const indexes = await usersCollection.indexes();
-    // Drop the old single-field indexNumber_1 index (no company scope) if it still exists.
-    // The correct index is the compound indexNumber_1_company_1 with partialFilterExpression.
-    const oldIndex = indexes.find(
-      (idx) =>
-        idx.key &&
-        idx.key.indexNumber === 1 &&
-        !idx.key.company  // single-field only -- no company means it's the old bad one
-    );
-    if (oldIndex) {
-      await usersCollection.dropIndex(oldIndex.name);
-      console.log("Dropped old single-field indexNumber_1 index");
-    }
-  } catch (e) {
-    if (e.codeName !== "IndexNotFound") {
-      console.log("Index cleanup note:", e.message);
-    }
-  }
-
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on port ${PORT}`);
 
