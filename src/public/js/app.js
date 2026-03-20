@@ -4275,11 +4275,7 @@ async function showCreateUserModal() {
           <label>Email</label>
           <input type="email" id="new-user-email" placeholder="user@company.com">
         </div>
-        <div class="form-group ${defaultRole !== 'student' ? 'hidden' : ''}" id="new-user-index-group">
-          <label>Student ID / Index Number <span style="color:var(--text-muted);font-size:11px">(optional)</span></label>
-          <input type="text" id="new-user-index" placeholder="e.g. UCC/CS/23/0001" style="text-transform:uppercase" autocomplete="off">
-          <p style="font-size:11px;color:var(--text-light);margin-top:4px">Must be unique — each student has their own index number assigned by the institution.</p>
-        </div>
+
         ${defaultRole === 'employee' ? '<p style="font-size:12px;color:var(--text-light);margin-bottom:12px">An Employee ID will be auto-generated.</p>' : ''}
         <div class="form-group">
           <label>Password</label>
@@ -4365,7 +4361,6 @@ async function showCreateUserModal() {
 function toggleUserFields() {
   const role = document.getElementById('new-user-role').value;
   document.getElementById('new-user-email-group').classList.toggle('hidden', role === 'student');
-  document.getElementById('new-user-index-group').classList.toggle('hidden', role !== 'student');
   const deptGroup  = document.getElementById('new-user-dept-group');
   const deptReq    = document.getElementById('new-user-dept-req');
   const deptHint   = document.getElementById('new-user-dept-hint');
@@ -4393,10 +4388,7 @@ async function createUser() {
       role,
     };
     if (role === 'student') {
-      const idx = document.getElementById('new-user-index').value.trim().toUpperCase();
-      
-      if (idx && idx.length < 3) { toastWarning('Student ID looks too short. Please enter the full index number.'); return; }
-      if (idx) body.indexNumber = idx;
+
       // Student classification — all mandatory
       const programme   = document.getElementById('new-user-programme')?.value;
       const studentLevel= document.getElementById('new-user-level')?.value;
