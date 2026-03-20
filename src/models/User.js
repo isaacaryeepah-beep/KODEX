@@ -139,7 +139,7 @@ userSchema.index(
 );
 userSchema.index(
   { indexNumber: 1, company: 1 },
-  { unique: true, partialFilterExpression: { indexNumber: { $type: "string" } } }
+  { unique: true, sparse: true, partialFilterExpression: { indexNumber: { $type: "string" } } }
 );
 userSchema.index(
   { employeeId: 1, company: 1 },
