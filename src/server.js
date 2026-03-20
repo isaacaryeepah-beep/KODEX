@@ -204,16 +204,17 @@ const start = async () => {
     const db = mongoose.connection.db;
     const usersCollection = db.collection("users");
     const indexes = await usersCollection.indexes();
+    // Drop the old single-field indexNumber_1 index (no company scope) if it still exists.
+    // The correct index is the compound indexNumber_1_company_1 with partialFilterExpression.
     const oldIndex = indexes.find(
       (idx) =>
         idx.key &&
         idx.key.indexNumber === 1 &&
-        idx.key.company === 1 &&
-        idx.sparse === true
+        !idx.key.company  // single-field only -- no company means it's the old bad one
     );
     if (oldIndex) {
       await usersCollection.dropIndex(oldIndex.name);
-      console.log("Dropped old sparse indexNumber_1_company_1 index");
+      console.log("Dropped old single-field indexNumber_1 index");
     }
   } catch (e) {
     if (e.codeName !== "IndexNotFound") {
