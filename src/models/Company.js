@@ -111,6 +111,14 @@ const companySchema = new mongoose.Schema(
       type: Object,
       default: null,         // { action:'start'|'stop', sessionId, title, issuedAt }
     },
+    esp32CurrentCode: {
+      type: String,
+      default: null,         // current attendance code reported by ESP32 on each poll
+    },
+    esp32CodeSetAt: {
+      type: Date,
+      default: null,         // when the current code was last updated
+    },
     isActive: {
       type: Boolean,
       default: true,
