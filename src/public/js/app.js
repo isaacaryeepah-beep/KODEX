@@ -4287,6 +4287,11 @@ async function showCreateUserModal() {
           <p id="new-user-dept-hint" style="font-size:12px;color:var(--text-light);margin-top:4px"></p>
         </div>
 
+        <div class="form-group" id="new-user-school-id-group" style="display:none">
+          <label>School Based Student ID <span style="color:var(--text-muted);font-size:11px">(optional)</span></label>
+          <input type="text" id="new-user-school-id" placeholder="e.g. UCC/CS/23/0001" style="text-transform:uppercase" autocomplete="off">
+        </div>
+
         <!-- Student classification fields — shown only when role = student -->
         <div id="new-user-student-fields" style="display:none">
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
@@ -4377,6 +4382,9 @@ function toggleUserFields() {
   // Show/hide student classification fields
   const studentFields = document.getElementById('new-user-student-fields');
   if (studentFields) studentFields.style.display = role === 'student' ? 'block' : 'none';
+  // Show/hide school based student ID
+  const schoolIdGroup = document.getElementById('new-user-school-id-group');
+  if (schoolIdGroup) schoolIdGroup.style.display = role === 'student' ? 'block' : 'none';
 }
 
 async function createUser() {
@@ -4388,6 +4396,8 @@ async function createUser() {
       role,
     };
     if (role === 'student') {
+      const schoolId = document.getElementById('new-user-school-id')?.value?.trim().toUpperCase();
+      if (schoolId) body.indexNumber = schoolId;
 
       // Student classification — all mandatory
       const programme   = document.getElementById('new-user-programme')?.value;
