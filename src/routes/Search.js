@@ -40,7 +40,7 @@ router.get(
         $or: [
           { name: searchRegex },
           { email: searchRegex },
-          { indexNumber: searchRegex },
+          { IndexNumber: searchRegex },
           { employeeId: searchRegex },
         ],
       };
@@ -50,7 +50,7 @@ router.get(
       }
 
       const users = await User.find(filter)
-        .select("name email indexNumber employeeId role isActive createdAt department")
+        .select("name email IndexNumber employeeId role isActive createdAt department")
         .limit(50)
         .lean();
 
