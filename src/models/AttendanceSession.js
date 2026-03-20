@@ -41,6 +41,11 @@ const attendanceSessionSchema = new mongoose.Schema(
       ref: "User",
       default: null,
     },
+    stoppedReason: {
+      type: String,
+      enum: ['manual', 'esp32_offline', null],
+      default: null,
+    },
     qrSeed: {
       type: String,
       default: null,
