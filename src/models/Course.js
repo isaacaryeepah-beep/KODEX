@@ -35,6 +35,27 @@ const courseSchema = new mongoose.Schema(
         ref: "User",
       },
     ],
+    level: {
+      type: String,
+      trim: true,
+      default: null, // e.g. "100", "200", "300"
+    },
+    year: {
+      type: String,
+      trim: true,
+      default: null, // e.g. "Year 1", "Year 2"
+    },
+    group: {
+      type: String,
+      trim: true,
+      uppercase: true,
+      default: null, // e.g. "A", "B"
+    },
+    sessionType: {
+      type: String,
+      enum: ["Regular", "Evening", "Weekend", null],
+      default: null,
+    },
     isActive: {
       type: Boolean,
       default: true,
