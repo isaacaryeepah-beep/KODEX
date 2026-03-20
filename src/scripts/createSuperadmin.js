@@ -4,7 +4,7 @@ const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 
 const SA_NAME     = 'Isaac Aryeepah';
-const SA_EMAIL    = 'nelsonkel78@gmail.com';
+const SA_EMAIL    = 'Kellywest251@gmail.com';
 const SA_PASSWORD = process.env.SA_PASSWORD || 'ChangeMe123!';
 
 async function run() {
