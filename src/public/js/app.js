@@ -2108,7 +2108,7 @@ async function renderApprovals() {
             <tbody>${pending.map(u => `
               <tr>
                 <td style="font-weight:500">${u.name}</td>
-                <td>${u.email || u.indexNumber || 'N/A'}</td>
+                <td>${u.role === 'student' ? (u.IndexNumber || '<span style="color:var(--text-muted)">No ID</span>') : (u.email || 'N/A')}</td>
                 <td><span class="status-badge status-active">${u.role}</span></td>
                 ${!isHod ? `<td>${u.department ? `<span style="font-size:11px;padding:2px 7px;border-radius:20px;background:#ecfeff;color:#0891b2;font-weight:600;">${u.department}</span>` : '—'}</td>` : ''}
                 <td>${new Date(u.createdAt).toLocaleDateString()}</td>
@@ -4080,7 +4080,7 @@ async function renderUsers(filterRole='', filterDept='', filterSearch='') {
       otherUsers = otherUsers.filter(u =>
         u.name?.toLowerCase().includes(q) ||
         u.email?.toLowerCase().includes(q) ||
-        u.indexNumber?.toLowerCase().includes(q) ||
+        u.IndexNumber?.toLowerCase().includes(q) ||
         u.department?.toLowerCase().includes(q)
       );
     }
@@ -4132,14 +4132,14 @@ async function renderUsers(filterRole='', filterDept='', filterSearch='') {
           <table>
             <thead><tr>
               ${canManage ? '<th style="width:40px"><input type="checkbox" id="select-all-users" onchange="toggleSelectAllUsers()"></th>' : ''}
-              <th>Name</th>${mode === 'corporate' ? '<th>Employee ID</th>' : ''}<th>Email / Index</th><th>Role</th>${mode !== 'corporate' ? '<th>Classification</th>' : ''}<th>Status</th>${canManage ? '<th>Actions</th>' : ''}
+              <th>Name</th>${mode === 'corporate' ? '<th>Employee ID</th>' : ''}<th>Email / School ID</th><th>Role</th>${mode !== 'corporate' ? '<th>Classification</th>' : ''}<th>Status</th>${canManage ? '<th>Actions</th>' : ''}
             </tr></thead>
             <tbody>${otherUsers.map(u => `
               <tr id="user-row-${u._id}">
                 ${canManage ? `<td><input type="checkbox" class="user-checkbox" value="${u._id}" onchange="updateBulkActions()"></td>` : ''}
                 <td>${u.name}</td>
                 ${mode === 'corporate' ? `<td>${u.employeeId || '-'}</td>` : ''}
-                <td>${u.email || u.indexNumber || 'N/A'}</td>
+                <td>${u.role === 'student' ? (u.IndexNumber || '<span style="color:var(--text-muted)">No ID</span>') : (u.email || 'N/A')}</td>
                 <td><span class="role-badge role-${u.role}">${u.role}</span>${u.department ? `<span style="font-size:10px;margin-left:5px;padding:2px 6px;border-radius:20px;background:#ecfeff;color:#0891b2;font-weight:600;">${u.department}</span>` : ''}</td>
                 ${mode !== 'corporate' ? `<td style="font-size:11px;white-space:nowrap">
                   ${u.role === 'student' ? `
