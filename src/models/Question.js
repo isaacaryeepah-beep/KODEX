@@ -51,6 +51,12 @@ const questionSchema = new mongoose.Schema(
       type: [String],
       default: [],
     },
+    // Explain: model answer shown to lecturer when grading
+    modelAnswer: {
+      type: String,
+      default: "",
+      trim: true,
+    },
     marks: {
       type: Number,
       default: 1,
