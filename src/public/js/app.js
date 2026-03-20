@@ -3400,7 +3400,7 @@ async function renderStudentDashboard(content) {
           <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border)">
             <div>
               <div style="font-weight:600;font-size:14px">${m.title}</div>
-              <div style="font-size:12px;color:var(--text-light)">${new Date(m.scheduledStart).toLocaleString()} — ${m.duration} min</div>
+              <div style="font-size:12px;color:var(--text-light)">${m.scheduledStart && !isNaN(new Date(m.scheduledStart)) ? new Date(m.scheduledStart).toLocaleString() : "Time not set"} — ${m.duration} min</div>
             </div>
             ${m.joinUrl ? `<a href="${m.joinUrl}" target="_blank" class="btn btn-success btn-sm">Join</a>` : ''}
           </div>
@@ -4576,7 +4576,13 @@ async function renderMeetings() {
               return `<tr>
                 <td><strong>${m.title}</strong>${m.course ? `<div style="font-size:0.85em;color:#7c3aed;font-weight:600;">${esc(m.course.title||'')}${m.course.level?' · L'+m.course.level:''}${m.course.group?' · Grp '+m.course.group:''}</div>` : ''}</td>
                 <td>${m.createdBy?.name || 'Unknown'}</td>
-                <td style="font-size:0.85em;">${new Date(m.scheduledStart).toLocaleString()}<br><span style="color:#6b7280;">to ${new Date(m.scheduledEnd).toLocaleString()}</span></td>
+                <td style="font-size:0.85em;">
+                  ${m.scheduledStart && !isNaN(new Date(m.scheduledStart))
+                    ? `<span style="font-weight:600;">${new Date(m.scheduledStart).toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric',year:'numeric'})}</span><br>
+                       <span style="color:#3b82f6;">${new Date(m.scheduledStart).toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit'})}</span>
+                       <span style="color:#6b7280;"> → ${new Date(m.scheduledEnd).toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit'})}</span>`
+                    : '<span style="color:#ef4444;font-size:11px;">No date set</span>'}
+                </td>
                 <td>${m.duration} min</td>
                 <td>${m.attendees?.length || 0}</td>
                 <td><span class="status-badge" style="${statusStyle(m.status)}">${m.status.charAt(0).toUpperCase() + m.status.slice(1)}</span></td>
@@ -4648,7 +4654,7 @@ async function showCreateMeetingModal() {
         </div>
 
         <div class="form-group">
-          <label>Course <span style="color:var(--text-muted);font-weight:400;font-size:12px">(optional)</span></label>
+          <label>Course <span style="color:red">*</span></label>
           <select id="meeting-course" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
             ${courseOptions}
           </select>
@@ -4677,12 +4683,13 @@ async function createMeeting() {
   const start = document.getElementById('meeting-start')?.value;
   const end   = document.getElementById('meeting-end')?.value;
   const desc  = document.getElementById('meeting-desc')?.value.trim();
-  const courseId = document.getElementById('meeting-course')?.value || undefined;
+  const courseId = document.getElementById('meeting-course')?.value;
   const errEl = document.getElementById('meeting-error');
 
   if (!title) { errEl.textContent = 'Please enter a meeting title.'; errEl.style.display = 'block'; return; }
   if (!start || !end) { errEl.textContent = 'Please set a start and end time.'; errEl.style.display = 'block'; return; }
   if (new Date(end) <= new Date(start)) { errEl.textContent = 'End time must be after start time.'; errEl.style.display = 'block'; return; }
+  if (!courseId) { errEl.textContent = 'Please select a course for this meeting.'; errEl.style.display = 'block'; return; }
 
   const schedBtn = document.querySelector('.modal .btn-primary');
   if (schedBtn) { schedBtn.textContent = 'Scheduling…'; schedBtn.disabled = true; }
@@ -4838,8 +4845,9 @@ async function viewMeetingDetail(id) {
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;">
         <div class="card">
           <div class="card-title">Meeting Info</div>
-          <p><strong>Start:</strong> ${new Date(m.scheduledStart).toLocaleString()}</p>
-          <p><strong>End:</strong> ${new Date(m.scheduledEnd).toLocaleString()}</p>
+          <p><strong>Date:</strong> ${m.scheduledStart && !isNaN(new Date(m.scheduledStart)) ? new Date(m.scheduledStart).toLocaleDateString(undefined,{weekday:'long',year:'numeric',month:'long',day:'numeric'}) : 'Not set'}</p>
+          <p><strong>Start:</strong> ${m.scheduledStart && !isNaN(new Date(m.scheduledStart)) ? new Date(m.scheduledStart).toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit'}) : 'Not set'}</p>
+          <p><strong>End:</strong> ${m.scheduledEnd && !isNaN(new Date(m.scheduledEnd)) ? new Date(m.scheduledEnd).toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit'}) : 'Not set'}</p>
           <p><strong>Duration:</strong> ${m.duration} minutes</p>
           ${m.course ? `<p><strong>Course:</strong> ${m.course.code} - ${m.course.title}</p>` : ''}
           <p><strong>Join Link:</strong> <a href="${m.joinUrl}" target="_blank" style="color:#3b82f6;word-break:break-all;">${m.joinUrl}</a></p>
