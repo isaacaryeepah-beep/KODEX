@@ -533,15 +533,20 @@ exports.login = async (req, res) => {
 
     let user;
     if (IndexNumber) {
-      const query = { IndexNumber, role: "student" };
+      let companyId = null;
       if (institutionCode) {
         const company = await Company.findOne({ institutionCode: institutionCode.toUpperCase() });
         if (!company) {
           return res.status(401).json({ error: "Institution not found" });
         }
-        query.company = company._id;
+        companyId = company._id;
       }
-      user = await User.findOne(query).select("+password");
+      // Support both new (IndexNumber) and legacy (indexNumber) field names
+      const baseQuery = { role: "student", ...(companyId ? { company: companyId } : {}) };
+      user = await User.findOne({ ...baseQuery, IndexNumber }).select("+password");
+      if (!user) {
+        user = await User.findOne({ ...baseQuery, indexNumber: IndexNumber }).select("+password");
+      }
     } else if (email && institutionCode && loginRole === "employee") {
       const company = await Company.findOne({ institutionCode: institutionCode.toUpperCase() });
       if (!company) {
@@ -783,7 +788,10 @@ exports.forgotPassword = async (req, res) => {
       return res.status(404).json({ error: "Institution not found" });
     }
 
-    const user = await User.findOne({ IndexNumber, company: company._id, role: "student" });
+    let user = await User.findOne({ IndexNumber, company: company._id, role: "student" });
+    if (!user) {
+      user = await User.findOne({ indexNumber: IndexNumber, company: company._id, role: "student" });
+    }
     if (!user) {
       return res.status(404).json({ error: "Student not found" });
     }
