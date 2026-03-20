@@ -62,7 +62,7 @@ exports.getCourseGrades = async (req, res) => {
     }
 
     const students = await User.find({ _id: { $in: studentIds } })
-      .select("name email indexNumber").lean();
+      .select("name email IndexNumber").lean();
 
     // ── Quiz scores ──────────────────────────────────────────────────────────
     const quizzes = await Quiz.find({ course: courseId, company, isActive: true }).lean();
@@ -159,7 +159,7 @@ exports.getCourseGrades = async (req, res) => {
       const letter = letterGrade(finalPct);
 
       return {
-        student: { _id: student._id, name: student.name, email: student.email, studentId: student.indexNumber || student.email },
+        student: { _id: student._id, name: student.name, email: student.email, studentId: student.IndexNumber || student.email },
         quizPct:    Math.round(quizPct * 10) / 10,
         attPct:     Math.round(attPct * 10) / 10,
         manualPct:  Math.round(manualPct * 10) / 10,
