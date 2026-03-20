@@ -7,15 +7,18 @@ const userSchema = new mongoose.Schema(
       type: String,
       lowercase: true,
       trim: true,
+      sparse: true,
       match: [/^\S+@\S+\.\S+$/, "Please provide a valid email"],
     },
     indexNumber: {
       type: String,
       trim: true,
+      sparse: true,
     },
     employeeId: {
       type: String,
       trim: true,
+      sparse: true,
     },
     password: {
       type: String,
@@ -139,15 +142,11 @@ userSchema.index(
 );
 
 userSchema.pre("validate", function () {
-  if (this.role === "student") {
-    if (!this.indexNumber) {
-      this.invalidate("indexNumber", "Index number is required for students");
+  if (this.role !== "student") {
+      if (!this.email) {
+        this.invalidate("email", "Email is required");
+      }
     }
-  } else {
-    if (!this.email) {
-      this.invalidate("email", "Email is required");
-    }
-  }
 });
 
 userSchema.pre("save", async function () {
