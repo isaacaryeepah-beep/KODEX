@@ -146,7 +146,7 @@ exports.getQuiz = async (req, res) => {
         .sort({ submittedAt: -1 });
     } else {
       submissions = await QuizSubmission.find({ quiz: id })
-        .populate("student", "name indexNumber email")
+        .populate("student", "name IndexNumber email")
         .sort({ submittedAt: -1 });
     }
 
