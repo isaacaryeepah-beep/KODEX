@@ -200,8 +200,8 @@ const start = async () => {
 
   // ── One-time index migration: drop any old sparse single-field indexes ────────
   const _staleIndexes = [
-    // old indexNumber sparse index (replaced by compound partial index)
-    (idx) => idx.key && idx.key.indexNumber === 1 && !idx.key.company && idx.sparse === true,
+    // old IndexNumber sparse index (replaced by compound partial index)
+    (idx) => idx.key && idx.key.IndexNumber === 1 && !idx.key.company && idx.sparse === true,
     // old email sparse compound index (replaced by partial filter expression)
     (idx) => idx.key && idx.key.email === 1 && idx.key.company === 1 && idx.sparse === true && !idx.partialFilterExpression,
   ];
