@@ -313,7 +313,7 @@ async function saveOfflineProfile(credentials, userData) {
         email: userData.user.email,
         role: userData.user.role,
         isApproved: userData.user.isApproved,
-        indexNumber: userData.user.indexNumber || null,
+        IndexNumber: userData.user.IndexNumber || null,
         employeeId: userData.user.employeeId || null,
         company: userData.user.company,
         department: userData.user.department || null,
@@ -326,7 +326,7 @@ async function saveOfflineProfile(credentials, userData) {
     };
 
     localStorage.setItem(OFFLINE_LOGIN_KEY, JSON.stringify(profiles));
-    console.log('[OfflineLogin] Profile cached for', credentials.email || credentials.indexNumber);
+    console.log('[OfflineLogin] Profile cached for', credentials.email || credentials.IndexNumber);
   } catch (e) {
     console.warn('[OfflineLogin] Failed to save profile:', e);
   }
@@ -334,8 +334,8 @@ async function saveOfflineProfile(credentials, userData) {
 
 // ── Build a unique key per user identity ─────────────────────────────────────
 function buildProfileKey(credentials) {
-  if (credentials.indexNumber) {
-    return `student::${credentials.indexNumber}::${(credentials.institutionCode || '').toUpperCase()}`;
+  if (credentials.IndexNumber) {
+    return `student::${credentials.IndexNumber}::${(credentials.institutionCode || '').toUpperCase()}`;
   }
   if (credentials.employeeId || (credentials.loginRole === 'employee')) {
     return `employee::${(credentials.email || '').toLowerCase()}::${(credentials.institutionCode || '').toUpperCase()}`;
@@ -382,10 +382,10 @@ async function attemptOfflineLogin(credentials) {
 }
 
 // ── Clear a specific offline profile (on logout) ──────────────────────────────
-function clearOfflineProfile(userRole, email, indexNumber, institutionCode) {
+function clearOfflineProfile(userRole, email, IndexNumber, institutionCode) {
   try {
     const profiles = JSON.parse(localStorage.getItem(OFFLINE_LOGIN_KEY) || '{}');
-    const key = buildProfileKey({ loginRole: userRole, email, indexNumber, institutionCode });
+    const key = buildProfileKey({ loginRole: userRole, email, IndexNumber, institutionCode });
     delete profiles[key];
     localStorage.setItem(OFFLINE_LOGIN_KEY, JSON.stringify(profiles));
   } catch (e) {
@@ -1432,14 +1432,14 @@ async function handleEmployeeRegister() {
 async function handleStudentLogin() {
   const btn = document.querySelector('#student-login-form button[type="submit"]');
   try {
-    const indexNumber = document.getElementById('student-login-index').value.trim();
+    const IndexNumber = document.getElementById('student-login-index').value.trim();
     const institutionCode = document.getElementById('student-login-code').value.trim().toUpperCase();
     const password = document.getElementById('student-login-password').value;
-    if (!indexNumber) return showStudentError('Please enter your student ID');
+    if (!IndexNumber) return showStudentError('Please enter your student ID');
     if (!institutionCode) return showStudentError('Please enter your institution code');
     if (!password) return showStudentError('Please enter your password');
     if (btn) { btn.textContent = 'Signing in…'; btn.disabled = true; }
-    const credentials = { indexNumber, password, institutionCode, loginRole: 'student', deviceId: getDeviceFingerprint() };
+    const credentials = { IndexNumber, password, institutionCode, loginRole: 'student', deviceId: getDeviceFingerprint() };
 
     let data;
     if (!isOnline()) {
@@ -1477,20 +1477,20 @@ async function handleStudentLogin() {
 async function handleStudentRegister() {
   try {
     const name = document.getElementById('student-reg-name').value.trim();
-    const indexNumber = document.getElementById('student-reg-index').value.trim().toUpperCase();
+    const IndexNumber = document.getElementById('student-reg-index').value.trim().toUpperCase();
     const institutionCode = document.getElementById('student-reg-code').value.trim();
     const password = document.getElementById('student-reg-password').value;
     const confirm = document.getElementById('student-reg-confirm').value;
     if (!name) return showStudentError('Please enter your full name.');
-    if (!indexNumber) return showStudentError('Student ID / Index Number is required. Enter the ID given to you by your institution.');
-    if (indexNumber.length < 3) return showStudentError('Student ID looks too short. Please check and enter your full index number.');
+    if (!IndexNumber) return showStudentError('Student ID / Index Number is required. Enter the ID given to you by your institution.');
+    if (IndexNumber.length < 3) return showStudentError('Student ID looks too short. Please check and enter your full index number.');
     if (!institutionCode) return showStudentError('Please enter your Institution Code.');
     if (!password) return showStudentError('Please enter a password.');
     if (password.length < 8) return showStudentError('Password must be at least 8 characters.');
     if (password !== confirm) return showStudentError('Passwords do not match.');
     const phone = document.getElementById('student-reg-phone')?.value?.trim();
     if (!department) return showStudentError('Please enter your department.');
-    const data = await api('/api/auth/register-student', { method: 'POST', body: JSON.stringify({ name, indexNumber, phone, password, institutionCode, department }) });
+    const data = await api('/api/auth/register-student', { method: 'POST', body: JSON.stringify({ name, IndexNumber, phone, password, institutionCode, department }) });
     if (data.token) {
       token = data.token;
       localStorage.setItem('token', token);
@@ -1523,12 +1523,12 @@ let studentForgotCode = '';
 
 async function handleStudentForgotPassword() {
   if (studentForgotStep === 'request') {
-    const indexNumber = document.getElementById('student-forgot-index').value;
+    const IndexNumber = document.getElementById('student-forgot-index').value;
     const institutionCode = document.getElementById('student-forgot-code').value;
-    if (!indexNumber || !institutionCode) return showStudentError('Please fill in all fields');
+    if (!IndexNumber || !institutionCode) return showStudentError('Please fill in all fields');
     try {
-      const data = await api('/api/auth/forgot-password', { method: 'POST', body: JSON.stringify({ indexNumber, institutionCode }) });
-      studentForgotIndex = indexNumber;
+      const data = await api('/api/auth/forgot-password', { method: 'POST', body: JSON.stringify({ IndexNumber, institutionCode }) });
+      studentForgotIndex = IndexNumber;
       studentForgotCode = institutionCode;
       studentForgotStep = 'reset';
       document.getElementById('student-reset-code-group').classList.remove('hidden');
@@ -1550,7 +1550,7 @@ async function handleStudentForgotPassword() {
     if (!resetCode || !newPassword) return showStudentError('Please enter the reset code and new password');
     if (newPassword.length < 8) return showStudentError('Password must be at least 8 characters');
     try {
-      await api('/api/auth/reset-password', { method: 'POST', body: JSON.stringify({ indexNumber: studentForgotIndex, resetCode, newPassword, institutionCode: studentForgotCode }) });
+      await api('/api/auth/reset-password', { method: 'POST', body: JSON.stringify({ IndexNumber: studentForgotIndex, resetCode, newPassword, institutionCode: studentForgotCode }) });
       studentForgotStep = 'request';
       showStudentLogin();
       const el = document.getElementById('student-auth-error');
@@ -2108,7 +2108,7 @@ async function renderApprovals() {
             <tbody>${pending.map(u => `
               <tr>
                 <td style="font-weight:500">${u.name}</td>
-                <td>${u.email || u.indexNumber || 'N/A'}</td>
+                <td>${u.email || u.IndexNumber || 'N/A'}</td>
                 <td><span class="status-badge status-active">${u.role}</span></td>
                 ${!isHod ? `<td>${u.department ? `<span style="font-size:11px;padding:2px 7px;border-radius:20px;background:#ecfeff;color:#0891b2;font-weight:600;">${u.department}</span>` : '—'}</td>` : ''}
                 <td>${new Date(u.createdAt).toLocaleDateString()}</td>
@@ -2451,9 +2451,9 @@ async function renderHodStudents() {
           <tbody id="hod-stu-tbody">
             ${students.length === 0 ? '<tr><td colspan="4" style="padding:24px;text-align:center;color:var(--text-muted);">No students found.</td></tr>' :
               students.map(u => `
-                <tr class="hod-stu-row" data-name="${(u.name||'').toLowerCase()}" data-index="${(u.indexNumber||'').toLowerCase()}" style="border-bottom:1px solid var(--border);">
+                <tr class="hod-stu-row" data-name="${(u.name||'').toLowerCase()}" data-index="${(u.IndexNumber||'').toLowerCase()}" style="border-bottom:1px solid var(--border);">
                   <td style="padding:10px 12px;font-weight:600;">${u.name}</td>
-                  <td style="padding:10px 12px;color:var(--text-muted);font-family:monospace;">${u.indexNumber || '—'}</td>
+                  <td style="padding:10px 12px;color:var(--text-muted);font-family:monospace;">${u.IndexNumber || '—'}</td>
                   <td style="padding:10px 12px;">${u.programme ? `<span style="background:#ede9fe;color:#7c3aed;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700">${esc(u.programme)}</span>` : '—'}</td>
                   <td style="padding:10px 12px;">
                     ${u.studentLevel ? `<span style="background:#dbeafe;color:#1d4ed8;padding:2px 7px;border-radius:20px;font-size:11px;font-weight:700;margin-right:3px">L${esc(u.studentLevel)}</span>` : ''}
@@ -2775,7 +2775,7 @@ async function hodExportCSV(type) {
     if (type === 'students') {
       const d = await api('/api/users?role=student&limit=500' + dept);
       headers = ['Name', 'Index Number', 'Email', 'Department', 'Status'];
-      rows = (d.users || []).map(u => [u.name, u.indexNumber || '', u.email || '', u.department || '', u.isApproved ? 'Active' : 'Pending']);
+      rows = (d.users || []).map(u => [u.name, u.IndexNumber || '', u.email || '', u.department || '', u.isApproved ? 'Active' : 'Pending']);
       filename = 'KODEX_Students_' + (currentUser.department || 'All') + '.csv';
     } else if (type === 'lecturers') {
       const d = await api('/api/users?role=lecturer&limit=200' + dept);
@@ -3359,7 +3359,7 @@ async function renderStudentDashboard(content) {
   content.innerHTML = `
     <div class="page-header">
       <h2>Welcome back, ${currentUser.name.split(' ')[0]}</h2>
-      <p>${currentUser.company?.name || 'Your institution'}${currentUser.indexNumber ? ' \u2022 ' + currentUser.indexNumber : ''}</p>
+      <p>${currentUser.company?.name || 'Your institution'}${currentUser.IndexNumber ? ' \u2022 ' + currentUser.IndexNumber : ''}</p>
     </div>
     
     ${activeSession ? `
@@ -4080,7 +4080,7 @@ async function renderUsers(filterRole='', filterDept='', filterSearch='') {
       otherUsers = otherUsers.filter(u =>
         u.name?.toLowerCase().includes(q) ||
         u.email?.toLowerCase().includes(q) ||
-        u.indexNumber?.toLowerCase().includes(q) ||
+        u.IndexNumber?.toLowerCase().includes(q) ||
         u.department?.toLowerCase().includes(q)
       );
     }
@@ -4139,7 +4139,7 @@ async function renderUsers(filterRole='', filterDept='', filterSearch='') {
                 ${canManage ? `<td><input type="checkbox" class="user-checkbox" value="${u._id}" onchange="updateBulkActions()"></td>` : ''}
                 <td>${u.name}</td>
                 ${mode === 'corporate' ? `<td>${u.employeeId || '-'}</td>` : ''}
-                <td>${u.email || u.indexNumber || 'N/A'}</td>
+                <td>${u.email || u.IndexNumber || 'N/A'}</td>
                 <td><span class="role-badge role-${u.role}">${u.role}</span>${u.department ? `<span style="font-size:10px;margin-left:5px;padding:2px 6px;border-radius:20px;background:#ecfeff;color:#0891b2;font-weight:600;">${u.department}</span>` : ''}</td>
                 ${mode !== 'corporate' ? `<td style="font-size:11px;white-space:nowrap">
                   ${u.role === 'student' ? `
@@ -4397,7 +4397,7 @@ async function createUser() {
     };
     if (role === 'student') {
       const schoolId = document.getElementById('new-user-school-id')?.value?.trim().toUpperCase();
-      if (schoolId) body.indexNumber = schoolId;
+      if (schoolId) body.IndexNumber = schoolId;
 
       // Student classification — all mandatory
       const programme   = document.getElementById('new-user-programme')?.value;
@@ -4864,7 +4864,7 @@ async function viewMeetingDetail(id) {
               <tbody>${m.attendees.map(a => `
                 <tr>
                   <td>${a.user?.name || 'Unknown'}</td>
-                  <td>${a.user?.indexNumber || '—'}</td>
+                  <td>${a.user?.IndexNumber || '—'}</td>
                   <td>${a.user?.role || '—'}</td>
                   <td style="font-size:0.85em;">${a.joinedAt ? new Date(a.joinedAt).toLocaleString() : '—'}</td>
                   <td><span class="status-badge" style="${a.status === 'joined' ? 'background:#22c55e;color:#fff;' : a.status === 'late' ? 'background:#f59e0b;color:#fff;' : 'background:#ef4444;color:#fff;'}">${a.status}</span></td>
@@ -5763,10 +5763,10 @@ async function viewQuizResults(quizId) {
             </thead>
             <tbody>
               ${attempts.map((a, i) => `
-                <tr data-name="${(a.student?.name||'').toLowerCase()}" data-id="${(a.student?.indexNumber||a.student?.email||'').toLowerCase()}">
+                <tr data-name="${(a.student?.name||'').toLowerCase()}" data-id="${(a.student?.IndexNumber||a.student?.email||'').toLowerCase()}">
                   <td style="color:#9ca3af;">${i+1}</td>
                   <td style="font-weight:500;">${a.student?.name || 'Unknown'}</td>
-                  <td style="font-family:monospace;font-size:12px;">${a.student?.indexNumber || a.student?.email || '—'}</td>
+                  <td style="font-family:monospace;font-size:12px;">${a.student?.IndexNumber || a.student?.email || '—'}</td>
                   <td><strong>${a.score}/${a.maxScore}</strong></td>
                   <td><span style="font-weight:700;color:${pctColor(a.percentage)};">${a.percentage}%</span></td>
                   <td><span class="status-badge ${a.percentage >= 50 ? 'status-present' : 'status-absent'}">${a.percentage >= 50 ? 'Pass' : 'Fail'}</span></td>
@@ -5893,7 +5893,7 @@ function exportQuizResultsCSV(quizId) {
     rows.push([
       i+1,
       a.student?.name || 'Unknown',
-      a.student?.indexNumber || a.student?.email || '',
+      a.student?.IndexNumber || a.student?.email || '',
       a.score,
       a.maxScore,
       a.percentage + '%',
@@ -6335,7 +6335,7 @@ async function viewAdminQuizDetail(quizId) {
               const pct = a.maxScore > 0 ? Math.round((a.score / a.maxScore) * 100) : 0;
               return `<tr>
                 <td>${a.student?.name || 'Unknown'}</td>
-                <td>${a.student?.indexNumber || a.student?.email || 'N/A'}</td>
+                <td>${a.student?.IndexNumber || a.student?.email || 'N/A'}</td>
                 <td>${a.score}/${a.maxScore}</td>
                 <td><span style="color:${pct >= 50 ? '#22c55e' : '#ef4444'};font-weight:bold;">${pct}%</span></td>
                 <td>${a.submittedAt ? new Date(a.submittedAt).toLocaleString() : 'N/A'}</td>
@@ -6428,7 +6428,7 @@ async function showBulkImportModal() {
         <div style="padding:12px 14px;background:#f0f9ff;border:1px solid #bae6fd;border-radius:9px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
           <div>
             <div style="font-size:13px;font-weight:600;color:#0369a1;">CSV Format</div>
-            <div style="font-size:12px;color:#0284c7;margin-top:2px;">Required: <strong>name, indexNumber, programme, level, group, sessionType, semester</strong> &nbsp;·&nbsp; Optional: phone, courseCode, department</div>
+            <div style="font-size:12px;color:#0284c7;margin-top:2px;">Required: <strong>name, IndexNumber, programme, level, group, sessionType, semester</strong> &nbsp;·&nbsp; Optional: phone, courseCode, department</div>
           </div>
           <button class="btn btn-sm" style="background:#0ea5e9;color:#fff;white-space:nowrap;" onclick="downloadImportTemplate()">⬇ Template</button>
         </div>
@@ -6516,7 +6516,7 @@ function biPreviewCSV(input) {
       const semesterIdx    = headers.findIndex(h => h === 'semester' || h === 'sem');
 
       if (nameIdx === -1 || idxIdx === -1) {
-        showBiErr("CSV must have 'name' and 'indexNumber' columns.");
+        showBiErr("CSV must have 'name' and 'IndexNumber' columns.");
         return;
       }
 
@@ -6526,7 +6526,7 @@ function biPreviewCSV(input) {
         if (!cols[nameIdx] && !cols[idxIdx]) continue;
         _biRows.push({
           name:        cols[nameIdx]        || '',
-          indexNumber: cols[idxIdx]         || '',
+          IndexNumber: cols[idxIdx]         || '',
           phone:       phoneIdx >= 0       ? (cols[phoneIdx]       || '') : '',
           courseCode:  courseIdx >= 0      ? (cols[courseIdx]      || '') : '',
           department:  deptIdx >= 0        ? (cols[deptIdx]        || '') : '',
@@ -6545,7 +6545,7 @@ function biPreviewCSV(input) {
         tbody.innerHTML = _biRows.slice(0, 5).map(r => `
           <tr>
             <td style="padding:6px 10px;border-bottom:1px solid var(--border);">${r.name}</td>
-            <td style="padding:6px 10px;border-bottom:1px solid var(--border);font-family:monospace;">${r.indexNumber}</td>
+            <td style="padding:6px 10px;border-bottom:1px solid var(--border);font-family:monospace;">${r.IndexNumber}</td>
             <td style="padding:6px 10px;border-bottom:1px solid var(--border);">${r.programme ? `<span style="background:#ede9fe;color:#7c3aed;padding:1px 6px;border-radius:20px;font-size:11px;font-weight:700">${r.programme}</span>` : '<span style="color:var(--text-muted)">—</span>'}</td>
             <td style="padding:6px 10px;border-bottom:1px solid var(--border);">${r.studentLevel ? `<span style="background:#dbeafe;color:#1d4ed8;padding:1px 6px;border-radius:20px;font-size:11px;font-weight:700">L${r.studentLevel}</span>` : '<span style="color:var(--text-muted)">—</span>'}</td>
             <td style="padding:6px 10px;border-bottom:1px solid var(--border);">${r.studentGroup ? `<span style="background:#ecfdf5;color:#059669;padding:1px 6px;border-radius:20px;font-size:11px;font-weight:700">Grp ${r.studentGroup}</span>` : '<span style="color:var(--text-muted)">—</span>'}</td>
@@ -6569,7 +6569,7 @@ function showBiErr(msg) {
 
 function downloadImportTemplate() {
   const csv = [
-    'name,indexNumber,phone,department,programme,level,group,sessionType,semester,courseCode',
+    'name,IndexNumber,phone,department,programme,level,group,sessionType,semester,courseCode',
     'John Mensah,CS/0001/23,0244123456,Computer Science,BSc,100,A,Regular,1,CS101',
     'Akosua Boateng,CS/0002/23,0244123457,Computer Science,HND,100,B,Evening,1,CS101',
     'Kwame Asante,IT/0001/23,0244123458,Information Technology,Diploma,200,A,Weekend,2,',
@@ -6613,7 +6613,7 @@ async function runBulkImport() {
     // Download results CSV with generated passwords
     if (data.students?.length) {
       const rows = [['Name','Index Number','Email','Temp Password','Course','Status']];
-      data.students.forEach(s => rows.push([s.name, s.indexNumber, s.email, s.tempPassword, s.course, s.status]));
+      data.students.forEach(s => rows.push([s.name, s.IndexNumber, s.email, s.tempPassword, s.course, s.status]));
       const csvContent = rows.map(r => r.map(v => `"${(v||'').replace(/"/g,'""')}"`).join(',')).join('\n');
       const blob = new Blob([csvContent], { type: 'text/csv' });
       const a = document.createElement('a');
@@ -7261,7 +7261,7 @@ async function submitToESP32(code) {
   const user = currentUser;
   const body = {
     code,
-    indexNumber: user.indexNumber || user.employeeId || user.email,
+    IndexNumber: user.IndexNumber || user.employeeId || user.email,
     userId: user.id
   };
   return await esp32Api('/mark', { method: 'POST', body: JSON.stringify(body) });
@@ -7883,7 +7883,7 @@ async function doSearch() {
 
     var rows = users.map(function(u) {
       var idCol = mode === 'academic'
-        ? '<td>' + (u.indexNumber || u.email || '—') + '</td>'
+        ? '<td>' + (u.IndexNumber || u.email || '—') + '</td>'
         : '<td>' + (u.email || '—') + '</td><td>' + (u.employeeId || '—') + '</td>';
       var activeClass = u.isActive ? 'status-active' : 'status-stopped';
       var activeLabel = u.isActive ? 'Active' : 'Inactive';
@@ -8137,7 +8137,7 @@ function _renderAttendeesHTML(el, data, isOffline) {
         <tbody>${records.map(r => `
           <tr>
             <td>${r.student?.name || 'N/A'}</td>
-            <td style="font-family:monospace;font-size:12px">${r.student?.indexNumber || r.student?.email || '—'}</td>
+            <td style="font-family:monospace;font-size:12px">${r.student?.IndexNumber || r.student?.email || '—'}</td>
             <td><span style="background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:2px 6px;font-size:11px">${r.method || '—'}</span></td>
             <td style="font-size:12px">${r.checkInTime ? new Date(r.checkInTime).toLocaleTimeString() : '—'}</td>
             <td><span class="status-badge status-${r.status}">${r.status}</span></td>
@@ -8183,7 +8183,7 @@ async function renderProfile() {
         </div>
         <div>
           <div style="font-size:18px;font-weight:700">${u.name || 'N/A'}</div>
-          <div style="font-size:13px;color:var(--text-light)">${u.email || u.indexNumber || ''}</div>
+          <div style="font-size:13px;color:var(--text-light)">${u.email || u.IndexNumber || ''}</div>
           <span class="role-badge role-${u.role}" style="margin-top:4px;display:inline-block">${u.role}</span>
         </div>
       </div>
@@ -9061,7 +9061,7 @@ async function exportSessionCSV(sessionId, sessionTitle) {
       ['Name', 'Student ID / Email', 'Method', 'Check-in Time', 'Status'],
       ...records.map(r => [
         r.student?.name || 'N/A',
-        r.student?.indexNumber || r.student?.email || 'N/A',
+        r.student?.IndexNumber || r.student?.email || 'N/A',
         r.method || 'N/A',
         r.checkInTime ? new Date(r.checkInTime).toLocaleString() : 'N/A',
         r.status || 'N/A',
@@ -9313,7 +9313,7 @@ async function exportAttendanceToExcel(sessionId, sessionTitle) {
     records.forEach(r => {
       rows.push([
         r.student?.name || '—',
-        r.student?.indexNumber || r.student?.employeeId || '—',
+        r.student?.IndexNumber || r.student?.employeeId || '—',
         r.status,
         r.method,
         r.checkInTime ? new Date(r.checkInTime).toLocaleString() : '—',
@@ -9983,7 +9983,7 @@ async function generateAttendanceReportCard() {
     doc.text(currentUser.name || 'Student', M, 52);
     doc.setFontSize(10); doc.setFont('helvetica', 'normal');
     doc.setTextColor(100, 100, 100);
-    doc.text('Student ID: ' + (currentUser.indexNumber || 'N/A'), M, 59);
+    doc.text('Student ID: ' + (currentUser.IndexNumber || 'N/A'), M, 59);
     doc.text('Institution: ' + (currentUser.company?.name || 'N/A'), M, 65);
     doc.setDrawColor(199, 210, 254);
     doc.line(M, 70, W - M, 70);
@@ -10042,7 +10042,7 @@ async function generateAttendanceReportCard() {
 
     doc.setFontSize(8); doc.setTextColor(150,150,150); doc.setFont('helvetica','normal');
     doc.text('Generated automatically by KODEX — kodex.it.com', M, 285);
-    doc.save('KODEX_Report_Card_' + (currentUser.indexNumber||'student') + '_' + new Date().toISOString().slice(0,10) + '.pdf');
+    doc.save('KODEX_Report_Card_' + (currentUser.IndexNumber||'student') + '_' + new Date().toISOString().slice(0,10) + '.pdf');
     showToastNotif('Report card downloaded!', 'success');
   } catch(e) { showToastNotif('Failed: ' + e.message, 'error'); }
 }
@@ -13709,7 +13709,7 @@ async function viewMeetingAttendance(meetingId, title) {
       const leaveStr = a.leaveTime ? new Date(a.leaveTime).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : '<span style="color:#f59e0b;font-size:11px">In meeting</span>';
       const statusLabel = a.status ? a.status.charAt(0).toUpperCase() + a.status.slice(1) : '—';
       rows += '<tr><td style="font-weight:600">' + (a.user && a.user.name ? a.user.name : '—') + '</td>'
-            + '<td style="font-size:12px;color:var(--text-muted)">' + (a.user && (a.user.email || a.user.indexNumber) ? (a.user.email || a.user.indexNumber) : '—') + '</td>'
+            + '<td style="font-size:12px;color:var(--text-muted)">' + (a.user && (a.user.email || a.user.IndexNumber) ? (a.user.email || a.user.IndexNumber) : '—') + '</td>'
             + '<td style="font-size:12px">' + joinStr + '</td>'
             + '<td style="font-size:12px">' + leaveStr + '</td>'
             + '<td style="font-size:12px">' + (a.durationMinutes || 0) + 'm</td>'
@@ -13750,7 +13750,7 @@ async function printMeetingAttendance(meetingId, title) {
       const statusLabel = a.status ? a.status.charAt(0).toUpperCase() + a.status.slice(1) : '—';
       const color = statusColor[a.status] || '#6b7280';
       rows += '<tr><td>' + (a.user && a.user.name ? a.user.name : '—') + '</td>'
-            + '<td>' + (a.user && (a.user.email || a.user.indexNumber) ? (a.user.email || a.user.indexNumber) : '—') + '</td>'
+            + '<td>' + (a.user && (a.user.email || a.user.IndexNumber) ? (a.user.email || a.user.IndexNumber) : '—') + '</td>'
             + '<td>' + joinStr + '</td><td>' + leaveStr + '</td>'
             + '<td>' + (a.durationMinutes || 0) + 'm</td>'
             + '<td style="color:' + color + ';font-weight:600">' + statusLabel + '</td></tr>';
