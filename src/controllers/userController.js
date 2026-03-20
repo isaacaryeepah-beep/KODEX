@@ -109,10 +109,10 @@ exports.createUser = async (req, res) => {
       password,
       name,
       role: targetRole,
-      phone: normPhone,
       company: req.user.company,
       department: department ? department.trim() : null,
     };
+    if (normPhone) userData.phone = normPhone;
 
     // Department rules
     if (targetRole === "hod") {
