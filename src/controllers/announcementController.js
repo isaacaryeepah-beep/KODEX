@@ -49,11 +49,17 @@ exports.list = async (req, res) => {
       .limit(100);
 
     const userId = req.user._id.toString();
-    const mapped = announcements.map(a => ({
-      ...a.toObject(),
-      isRead: a.readBy.some(id => id.toString() === userId),
-      readCount: a.readBy.length,
-    }));
+    const mapped = announcements.map(a => {
+      const obj = a.toObject();
+      const hasPdf = !!obj.pdfData;
+      delete obj.pdfData; // don't send full base64 in list
+      return {
+        ...obj,
+        hasPdf,
+        isRead: a.readBy.some(id => id.toString() === userId),
+        readCount: a.readBy.length,
+      };
+    });
 
     res.json({ announcements: mapped });
   } catch (err) {
@@ -68,9 +74,14 @@ exports.create = async (req, res) => {
       return res.status(403).json({ error: "You do not have permission to post announcements" });
     }
 
-    const { title, body, type, audience, pinned, expiresAt, courseId } = req.body;
+    const { title, body, type, audience, pinned, expiresAt, courseId, pdfData, pdfName } = req.body;
     if (!title?.trim() || !body?.trim()) {
       return res.status(400).json({ error: "Title and body are required" });
+    }
+
+    // PDF size check — base64 of 10MB PDF ≈ 13.3MB string
+    if (pdfData && pdfData.length > 14 * 1024 * 1024) {
+      return res.status(400).json({ error: "PDF must be under 10MB" });
     }
 
     // Lecturers can only post to their own students — force audience to "students"
@@ -103,6 +114,8 @@ exports.create = async (req, res) => {
       pinned:    req.user.role === "lecturer" ? false : !!pinned,
       expiresAt: expiresAt ? new Date(expiresAt) : null,
       course:    resolvedCourse,
+      pdfData:   pdfData || null,
+      pdfName:   pdfName || null,
     });
 
     const populated = await ann.populate(["author", "course"]);
@@ -171,5 +184,23 @@ exports.unreadCount = async (req, res) => {
     res.json({ count });
   } catch (err) {
     res.json({ count: 0 });
+  }
+};
+
+// GET /api/announcements/:id/pdf
+exports.downloadPdf = async (req, res) => {
+  try {
+    const ann = await Announcement.findOne({ _id: req.params.id, company: req.user.company });
+    if (!ann || !ann.pdfData) return res.status(404).json({ error: "PDF not found" });
+
+    const base64 = ann.pdfData.replace(/^data:application\/pdf;base64,/, "");
+    const buffer = Buffer.from(base64, "base64");
+    const filename = ann.pdfName || "announcement.pdf";
+
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    res.send(buffer);
+  } catch (err) {
+    res.status(500).json({ error: "Failed to download PDF" });
   }
 };
