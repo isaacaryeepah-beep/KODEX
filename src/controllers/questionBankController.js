@@ -174,6 +174,7 @@ exports.importToQuiz = async (req, res) => {
         correctAnswers: bq.correctAnswers,
         correctAnswerText: bq.correctAnswerText,
         acceptedAnswers: bq.acceptedAnswers,
+        modelAnswer: bq.modelAnswer || "",
         marks: bq.marks,
       }))
     );
