@@ -1974,22 +1974,26 @@ function buildSidebar() {
         links.push({ id: 'sign-in-out', label: 'Sign In / Out', icon: attendanceIcon() });
         links.push({ id: 'shifts', label: 'Shifts', icon: svgIcon('<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>') });
         links.push({ id: 'leave-requests', label: 'Leave Requests', icon: svgIcon('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>') });
+        links.push({ id: 'live-attendance',  label: 'Live Attendance', icon: svgIcon('<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>') });
+        links.push({ id: 'payroll',          label: 'Payroll',         icon: svgIcon('<line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>') });
+        links.push({ id: 'branches',         label: 'Branches',        icon: svgIcon('<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>') });
       }
       links.push({ id: 'meetings', label: 'Meetings', icon: meetingsIcon() });
       links.push({ id: 'reports', label: 'Reports', icon: reportsIcon() });
       links.push({ id: 'subscription', label: 'Subscription', icon: subscriptionIcon() });
       break;
     case 'manager':
-      links.push({ id: 'approvals', label: 'Approvals', icon: approvalsIcon() });
-      links.push({ id: 'sessions', label: 'Sessions', icon: sessionsIcon() });
-      links.push({ id: 'users', label: 'Users', icon: usersIcon() });
-      if (currentUser.company?.mode === 'corporate') {
-        links.push({ id: 'sign-in-out', label: 'Sign In / Out', icon: attendanceIcon() });
-        links.push({ id: 'shifts', label: 'Shifts', icon: svgIcon('<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>') });
-        links.push({ id: 'leave-requests', label: 'Leave Requests', icon: svgIcon('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>') });
-      }
-      links.push({ id: 'meetings', label: 'Meetings', icon: meetingsIcon() });
-      links.push({ id: 'reports', label: 'Reports', icon: reportsIcon() });
+      links.push({ id: 'dashboard',        label: 'Dashboard',       icon: svgIcon('<rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>') });
+      links.push({ id: 'live-attendance',  label: 'Live Attendance', icon: svgIcon('<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>') });
+      links.push({ id: 'users',            label: 'Team',            icon: usersIcon() });
+      links.push({ id: 'shifts',           label: 'Shifts',          icon: svgIcon('<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>') });
+      links.push({ id: 'leave-requests',   label: 'Leave',           icon: svgIcon('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>') });
+      links.push({ id: 'approvals',        label: 'Approvals',       icon: approvalsIcon() });
+      links.push({ id: 'payroll',          label: 'Payroll',         icon: svgIcon('<line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>') });
+      links.push({ id: 'branches',         label: 'Branches',        icon: svgIcon('<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>') });
+      links.push({ id: 'meetings',         label: 'Meetings',        icon: meetingsIcon() });
+      links.push({ id: 'announcements',    label: 'Announcements',   icon: svgIcon('<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>') });
+      links.push({ id: 'reports',          label: 'Reports',         icon: reportsIcon() });
       break;
     case 'hod':
       links.push({ id: 'hod-overview',     label: 'Overview',       icon: svgIcon('<rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>') });
@@ -2093,6 +2097,9 @@ function navigateTo(view) {
     case 'reports': renderReports(); break;
     case 'shifts': renderShifts(); break;
     case 'leave-requests': renderLeaveRequests(); break;
+    case 'live-attendance': renderLiveAttendance(); break;
+    case 'payroll': renderPayroll(); break;
+    case 'branches': renderBranches(); break;
     case 'my-shift': renderMyShift(); break;
     case 'my-leaves': renderMyLeaves(); break;
     case 'approvals': renderApprovals(); break;
@@ -2148,7 +2155,7 @@ async function renderDashboard() {
         await renderAdminDashboard(content);
         break;
       case 'manager':
-        await renderAdminDashboard(content);
+        await renderManagerDashboard(content);
         break;
       case 'lecturer':
         await renderLecturerDashboard(content);
@@ -3512,6 +3519,491 @@ async function renderStudentDashboard(content) {
       ` : '<div class="empty-state"><p>No attendance records yet. Mark attendance when a session is active.</p></div>'}
     </div>
   `;
+}
+
+
+// ══════════════════════════════════════════════════════════════════════════════
+//  MANAGER DASHBOARD
+// ══════════════════════════════════════════════════════════════════════════════
+async function renderManagerDashboard(content) {
+  content.innerHTML = '<div class="loading">Loading dashboard…</div>';
+  try {
+    const [usersData, pendingData, sessionsData, leavesData] = await Promise.all([
+      api('/api/users').catch(() => ({ users: [] })),
+      api('/api/approvals/pending').catch(() => ({ pending: [] })),
+      api('/api/attendance-sessions?limit=5').catch(() => ({ sessions: [], pagination: { total: 0 } })),
+      api('/api/leaves?status=pending').catch(() => ({ leaves: [] })),
+    ]);
+
+    const users       = usersData.users || [];
+    const employees   = users.filter(u => u.role === 'employee');
+    const pending     = pendingData.pending || [];
+    const sessions    = sessionsData.sessions || [];
+    const leaves      = leavesData.leaves || [];
+    const activeSessions = sessions.filter(s => s.active).length;
+    const pendingLeaves  = leaves.length;
+    const hour = new Date().getHours();
+    const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+    const firstName = currentUser.name.split(' ')[0];
+    const instCode  = currentUser.company?.institutionCode || 'N/A';
+
+    // Attention items
+    const attentionItems = [];
+    if (pending.length > 0)     attentionItems.push({ icon: '📋', text: `${pending.length} pending approval${pending.length>1?'s':''}`, action: "navigateTo('approvals')", color: '#7c3aed' });
+    if (pendingLeaves > 0)      attentionItems.push({ icon: '🏖️', text: `${pendingLeaves} leave request${pendingLeaves>1?'s':''} awaiting review`, action: "navigateTo('leave-requests')", color: '#f59e0b' });
+    if (activeSessions > 0)     attentionItems.push({ icon: '🟢', text: `${activeSessions} active session${activeSessions>1?'s':''} running now`, action: "navigateTo('sessions')", color: '#10b981' });
+
+    content.innerHTML = `
+      <div style="display:flex;flex-direction:column;gap:16px">
+
+        <!-- Welcome & brief -->
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap">
+          <div class="dashboard-welcome">
+            <h2>${greeting}, ${firstName} 👋</h2>
+            <p>Manager Portal — ${currentUser.company?.name || 'Your Company'}</p>
+          </div>
+          <div class="inst-code-card">
+            <div class="inst-code-label">Company code</div>
+            <div class="inst-code-value">${instCode}</div>
+            <button class="btn btn-secondary btn-sm" onclick="navigator.clipboard.writeText('${instCode}').then(()=>toastSuccess('Copied!'))">Copy</button>
+          </div>
+        </div>
+
+        ${attentionItems.length ? `
+        <div class="card" style="border-left:4px solid #f59e0b;background:linear-gradient(135deg,var(--card),#fffbeb)">
+          <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#92400e;margin-bottom:10px">⚠️ Attention Needed</div>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            ${attentionItems.map(a => `
+              <div onclick="${a.action}" style="display:flex;align-items:center;gap:10px;cursor:pointer;padding:8px 10px;border-radius:8px;background:rgba(255,255,255,.7)">
+                <span style="font-size:18px">${a.icon}</span>
+                <span style="font-size:13px;font-weight:500;color:${a.color}">${a.text}</span>
+                <span style="margin-left:auto;color:${a.color};font-size:12px">→</span>
+              </div>`).join('')}
+          </div>
+        </div>` : ''}
+
+        <!-- KPI cards -->
+        <div class="stats-grid" style="margin:0">
+          <div class="stat-card-v2" onclick="navigateTo('users')">
+            <div class="stat-top-bar" style="background:#3b82f6"></div>
+            <div class="stat-header"><span class="stat-label">Total Employees</span>
+              <div class="stat-icon" style="background:#eff6ff"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
+            </div>
+            <div class="stat-value">${employees.length}</div>
+            <div class="stat-trend">Active workforce</div>
+          </div>
+          <div class="stat-card-v2" onclick="navigateTo('sessions')">
+            <div class="stat-top-bar" style="background:#10b981"></div>
+            <div class="stat-header"><span class="stat-label">Active Sessions</span>
+              <div class="stat-icon" style="background:#f0fdf4"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div>
+            </div>
+            <div class="stat-value">${activeSessions}</div>
+            <div class="stat-trend" style="color:${activeSessions>0?'#10b981':'var(--text-muted)'}">${activeSessions>0?'<span class="stat-live-dot"></span> Live now':'No active sessions'}</div>
+          </div>
+          <div class="stat-card-v2" onclick="navigateTo('approvals')">
+            <div class="stat-top-bar" style="background:#7c3aed"></div>
+            <div class="stat-header"><span class="stat-label">Pending Approvals</span>
+              <div class="stat-icon" style="background:#f5f3ff"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></div>
+            </div>
+            <div class="stat-value" style="color:${pending.length>0?'#7c3aed':'var(--text)'}">${pending.length}</div>
+            <div class="stat-trend" style="color:${pending.length>0?'#7c3aed':'var(--text-muted)'}">${pending.length>0?'Action needed':'All clear'}</div>
+          </div>
+          <div class="stat-card-v2" onclick="navigateTo('leave-requests')">
+            <div class="stat-top-bar" style="background:#f59e0b"></div>
+            <div class="stat-header"><span class="stat-label">Leave Requests</span>
+              <div class="stat-icon" style="background:#fffbeb"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div>
+            </div>
+            <div class="stat-value" style="color:${pendingLeaves>0?'#f59e0b':'var(--text)'}">${pendingLeaves}</div>
+            <div class="stat-trend">Pending review</div>
+          </div>
+        </div>
+
+        <!-- Quick actions -->
+        <div class="quick-actions-bar">
+          <div class="section-label">Quick actions</div>
+          <div class="actions-row">
+            <button class="action-chip blue" onclick="navigateTo('sessions')">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+              Start session
+            </button>
+            <button class="action-chip green" onclick="navigateTo('live-attendance')">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+              Live attendance
+            </button>
+            <button class="action-chip purple" onclick="navigateTo('users')">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
+              Add employee
+            </button>
+            <button class="action-chip amber" onclick="navigateTo('announcements')">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+              Post announcement
+            </button>
+            <button class="action-chip slate" onclick="navigateTo('payroll')">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+              Payroll
+            </button>
+          </div>
+        </div>
+
+        <!-- Bottom panels -->
+        <div class="dashboard-panels">
+          <div class="dashboard-panel">
+            <div class="panel-header">
+              <span class="panel-title">Recent Sessions</span>
+              <span class="panel-link" onclick="navigateTo('sessions')">View all →</span>
+            </div>
+            ${sessions.length ? sessions.map(s => `
+              <div class="session-row">
+                <div class="session-indicator ${s.active?'live':'ended'}"></div>
+                <div class="session-row-info">
+                  <div class="session-row-title">${s.title||'Untitled'}</div>
+                  <div class="session-row-sub">${s.createdBy?.name||''}</div>
+                </div>
+                <span class="session-row-time ${s.active?'live':'ended'}">${s.active?'Live':timeAgo(s.startedAt)}</span>
+              </div>`).join('') : '<div class="empty-state"><p>No sessions yet</p></div>'}
+          </div>
+          <div class="dashboard-panel">
+            <div class="panel-header">
+              <span class="panel-title">Team Overview</span>
+              <span class="panel-link" onclick="navigateTo('users')">Manage →</span>
+            </div>
+            ${employees.length ? employees.slice(0,8).map(u => `
+              <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">
+                <div style="width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#6366f1,#8b5cf6);display:flex;align-items:center;justify-content:center;color:#fff;font-size:12px;font-weight:700;flex-shrink:0">${(u.name||'?')[0].toUpperCase()}</div>
+                <div style="flex:1;min-width:0">
+                  <div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${u.name}</div>
+                  <div style="font-size:11px;color:var(--text-muted)">${u.department||u.employeeId||u.email||''}</div>
+                </div>
+                <span class="status-badge ${u.isActive?'status-active':'status-stopped'}" style="font-size:10px">${u.isActive?'Active':'Inactive'}</span>
+              </div>`).join('') : '<div class="empty-state"><p>No employees yet</p></div>'}
+          </div>
+        </div>
+      </div>`;
+  } catch(e) {
+    content.innerHTML = `<div class="card"><p style="color:#ef4444">Error: ${e.message}</p></div>`;
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+//  LIVE ATTENDANCE MONITOR
+// ══════════════════════════════════════════════════════════════════════════════
+async function renderLiveAttendance() {
+  const content = document.getElementById('main-content');
+  if (!content) return;
+  content.innerHTML = '<div class="loading">Loading live attendance…</div>';
+
+  const doRender = async () => {
+    try {
+      const [sessionsData, usersData] = await Promise.all([
+        api('/api/attendance-sessions?limit=50').catch(() => ({ sessions: [] })),
+        api('/api/users?role=employee').catch(() => ({ users: [] })),
+      ]);
+
+      const sessions  = sessionsData.sessions || [];
+      const employees = (usersData.users || []).filter(u => u.role === 'employee');
+      const active    = sessions.filter(s => s.active);
+
+      // Collect who is clocked in from active sessions
+      const presentIds = new Set();
+      active.forEach(s => (s.attendees||[]).forEach(a => presentIds.add((a.user?._id||a.user||'').toString())));
+
+      const present  = employees.filter(u => presentIds.has(u._id.toString()));
+      const absent   = employees.filter(u => !presentIds.has(u._id.toString()));
+
+      const statusBadge = (label, color, bg) =>
+        `<span style="padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700;background:${bg};color:${color}">${label}</span>`;
+
+      content.innerHTML = `
+        <div style="display:flex;flex-direction:column;gap:16px">
+          <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
+            <div>
+              <h2>Live Attendance</h2>
+              <p style="font-size:13px;color:var(--text-muted)">Real-time workforce status — auto-refreshes every 30s</p>
+            </div>
+            <button class="btn btn-secondary btn-sm" onclick="renderLiveAttendance()">↻ Refresh</button>
+          </div>
+
+          <!-- Summary pills -->
+          <div style="display:flex;gap:10px;flex-wrap:wrap">
+            <div class="card" style="flex:1;min-width:120px;text-align:center;padding:14px;border-top:3px solid #10b981">
+              <div style="font-size:28px;font-weight:800;color:#10b981">${present.length}</div>
+              <div style="font-size:11px;color:var(--text-muted);margin-top:2px">Present</div>
+            </div>
+            <div class="card" style="flex:1;min-width:120px;text-align:center;padding:14px;border-top:3px solid #ef4444">
+              <div style="font-size:28px;font-weight:800;color:#ef4444">${absent.length}</div>
+              <div style="font-size:11px;color:var(--text-muted);margin-top:2px">Absent</div>
+            </div>
+            <div class="card" style="flex:1;min-width:120px;text-align:center;padding:14px;border-top:3px solid #3b82f6">
+              <div style="font-size:28px;font-weight:800;color:#3b82f6">${employees.length ? Math.round((present.length/employees.length)*100) : 0}%</div>
+              <div style="font-size:11px;color:var(--text-muted);margin-top:2px">Attendance Rate</div>
+            </div>
+            <div class="card" style="flex:1;min-width:120px;text-align:center;padding:14px;border-top:3px solid #6366f1">
+              <div style="font-size:28px;font-weight:800;color:#6366f1">${active.length}</div>
+              <div style="font-size:11px;color:var(--text-muted);margin-top:2px">Active Sessions</div>
+            </div>
+          </div>
+
+          <!-- Employee status table -->
+          <div class="card" style="overflow-x:auto">
+            <div style="font-size:13px;font-weight:700;margin-bottom:12px">All Employees — Today</div>
+            <table style="width:100%;border-collapse:collapse;font-size:13px">
+              <thead>
+                <tr style="border-bottom:2px solid var(--border)">
+                  <th style="padding:8px 12px;text-align:left;font-size:11px;text-transform:uppercase;color:var(--text-muted)">Employee</th>
+                  <th style="padding:8px 12px;text-align:left;font-size:11px;text-transform:uppercase;color:var(--text-muted)">Department</th>
+                  <th style="padding:8px 12px;text-align:left;font-size:11px;text-transform:uppercase;color:var(--text-muted)">Employee ID</th>
+                  <th style="padding:8px 12px;text-align:center;font-size:11px;text-transform:uppercase;color:var(--text-muted)">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${employees.length ? employees.map((u, i) => {
+                  const isPresent = presentIds.has(u._id.toString());
+                  return `<tr style="border-bottom:1px solid var(--border);background:${i%2===0?'transparent':'var(--bg)'}">
+                    <td style="padding:10px 12px">
+                      <div style="display:flex;align-items:center;gap:8px">
+                        <div style="width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,${isPresent?'#10b981,#059669':'#94a3b8,#64748b'});display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;font-weight:700">${(u.name||'?')[0].toUpperCase()}</div>
+                        <span style="font-weight:600">${u.name}</span>
+                      </div>
+                    </td>
+                    <td style="padding:10px 12px;color:var(--text-muted)">${u.department||'—'}</td>
+                    <td style="padding:10px 12px;font-family:monospace;font-size:12px">${u.employeeId||'—'}</td>
+                    <td style="padding:10px 12px;text-align:center">${isPresent ? statusBadge('Present','#fff','#10b981') : statusBadge('Absent','#fff','#ef4444')}</td>
+                  </tr>`;
+                }).join('') : '<tr><td colspan="4" style="padding:20px;text-align:center;color:var(--text-muted)">No employees found</td></tr>'}
+              </tbody>
+            </table>
+          </div>
+        </div>`;
+
+      // Auto-refresh every 30s
+      clearTimeout(window._liveAttTimer);
+      window._liveAttTimer = setTimeout(() => { if (currentView === 'live-attendance') doRender(); }, 30000);
+    } catch(e) {
+      content.innerHTML = `<div class="card"><p style="color:#ef4444">Error: ${e.message}</p></div>`;
+    }
+  };
+
+  await doRender();
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+//  PAYROLL
+// ══════════════════════════════════════════════════════════════════════════════
+async function renderPayroll() {
+  const content = document.getElementById('main-content');
+  if (!content) return;
+  content.innerHTML = '<div class="loading">Loading payroll data…</div>';
+  try {
+    const now  = new Date();
+    const period = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+    const [usersData, timesheetsData] = await Promise.all([
+      api('/api/users?role=employee').catch(() => ({ users: [] })),
+      api(`/api/advanced/payroll-export?period=${period}`).catch(() => ({ rows: [] })),
+    ]);
+
+    const employees   = (usersData.users || []).filter(u => u.role === 'employee');
+    const rawRows = timesheetsData.rows || [];
+    // rawRows from payroll-export: { employee:{_id,name,...}, totalHours, overtime, status }
+    const tsMap = {};
+    rawRows.forEach(r => { if(r.employee?._id) tsMap[r.employee._id.toString()] = r; });
+
+    const STANDARD_HOURS = 160; // 40h/week × 4 weeks
+    const OT_MULTIPLIER  = 1.5;
+
+    const rows = employees.map(emp => {
+      const r = tsMap[emp._id.toString()];
+      const hoursWorked = r?.totalHours || 0;
+      const overtime    = r?.overtime ?? Math.max(0, hoursWorked - STANDARD_HOURS);
+      const regular     = hoursWorked - overtime;
+      return { emp, hoursWorked, regular, overtime, tsStatus: r?.status || 'not submitted' };
+    });
+
+    const totalHours = rows.reduce((s,r) => s + r.hoursWorked, 0);
+    const totalOT    = rows.reduce((s,r) => s + r.overtime, 0);
+
+    const exportPayroll = () => {
+      const csv = [['Name','Employee ID','Department','Hours Worked','Regular Hours','Overtime Hours','Timesheet Status']];
+      rows.forEach(r => csv.push([r.emp.name, r.emp.employeeId||'', r.emp.department||'', r.hoursWorked, r.regular, r.overtime, r.tsStatus]));
+      const blob = new Blob([csv.map(r=>r.map(v=>`"${v}"`).join(',')).join('\n')], {type:'text/csv'});
+      const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `payroll_${period}.csv`; a.click();
+    };
+    window._exportPayroll = exportPayroll;
+
+    content.innerHTML = `
+      <div style="display:flex;flex-direction:column;gap:16px">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
+          <div>
+            <h2>Payroll Summary</h2>
+            <p style="font-size:13px;color:var(--text-muted)">Period: ${period} · Based on submitted timesheets</p>
+          </div>
+          <button class="btn btn-primary btn-sm" onclick="window._exportPayroll()">⬇ Export CSV</button>
+        </div>
+
+        <div style="display:flex;gap:12px;flex-wrap:wrap">
+          <div class="card" style="flex:1;min-width:140px;text-align:center;padding:14px">
+            <div style="font-size:24px;font-weight:800;color:#3b82f6">${totalHours.toFixed(1)}</div>
+            <div style="font-size:11px;color:var(--text-muted)">Total Hours</div>
+          </div>
+          <div class="card" style="flex:1;min-width:140px;text-align:center;padding:14px">
+            <div style="font-size:24px;font-weight:800;color:#f59e0b">${totalOT.toFixed(1)}</div>
+            <div style="font-size:11px;color:var(--text-muted)">Overtime Hours</div>
+          </div>
+          <div class="card" style="flex:1;min-width:140px;text-align:center;padding:14px">
+            <div style="font-size:24px;font-weight:800;color:#10b981">${rows.filter(r=>r.tsStatus==='approved').length}</div>
+            <div style="font-size:11px;color:var(--text-muted)">Timesheets Approved</div>
+          </div>
+          <div class="card" style="flex:1;min-width:140px;text-align:center;padding:14px">
+            <div style="font-size:24px;font-weight:800;color:#6366f1">${employees.length}</div>
+            <div style="font-size:11px;color:var(--text-muted)">Employees</div>
+          </div>
+        </div>
+
+        <div class="card" style="overflow-x:auto">
+          <table style="width:100%;border-collapse:collapse;font-size:13px">
+            <thead>
+              <tr style="border-bottom:2px solid var(--border)">
+                <th style="padding:8px 12px;text-align:left;font-size:11px;text-transform:uppercase;color:var(--text-muted)">Employee</th>
+                <th style="padding:8px 12px;text-align:left;font-size:11px;text-transform:uppercase;color:var(--text-muted)">Dept</th>
+                <th style="padding:8px 8px;text-align:center;font-size:11px;text-transform:uppercase;color:var(--text-muted)">Hours</th>
+                <th style="padding:8px 8px;text-align:center;font-size:11px;text-transform:uppercase;color:var(--text-muted)">Regular</th>
+                <th style="padding:8px 8px;text-align:center;font-size:11px;text-transform:uppercase;color:var(--text-muted)">Overtime</th>
+                <th style="padding:8px 8px;text-align:center;font-size:11px;text-transform:uppercase;color:var(--text-muted)">Timesheet</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rows.length ? rows.map((r,i) => {
+                const statusColor = {approved:'#10b981',submitted:'#3b82f6',pending:'#f59e0b','not submitted':'#ef4444'}[r.tsStatus]||'#94a3b8';
+                return `<tr style="border-bottom:1px solid var(--border);background:${i%2===0?'transparent':'var(--bg)'}">
+                  <td style="padding:10px 12px;font-weight:600">${r.emp.name}</td>
+                  <td style="padding:10px 12px;color:var(--text-muted)">${r.emp.department||'—'}</td>
+                  <td style="padding:10px 8px;text-align:center;font-weight:700">${r.hoursWorked.toFixed(1)}</td>
+                  <td style="padding:10px 8px;text-align:center">${r.regular.toFixed(1)}</td>
+                  <td style="padding:10px 8px;text-align:center;color:${r.overtime>0?'#f59e0b':'var(--text-muted)'}">${r.overtime.toFixed(1)}</td>
+                  <td style="padding:10px 8px;text-align:center"><span style="padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700;background:${statusColor}22;color:${statusColor}">${r.tsStatus}</span></td>
+                </tr>`;
+              }).join('') : '<tr><td colspan="6" style="padding:20px;text-align:center;color:var(--text-muted)">No timesheet data for this period</td></tr>'}
+            </tbody>
+          </table>
+        </div>
+      </div>`;
+  } catch(e) {
+    content.innerHTML = `<div class="card"><p style="color:#ef4444">Error: ${e.message}</p></div>`;
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+//  BRANCHES
+// ══════════════════════════════════════════════════════════════════════════════
+async function renderBranches() {
+  const content = document.getElementById('main-content');
+  if (!content) return;
+  content.innerHTML = '<div class="loading">Loading branches…</div>';
+  try {
+    const data     = await api('/api/advanced/branches');
+    const branches = data.branches || [];
+    const canEdit  = ['admin','superadmin'].includes(currentUser.role);
+
+    content.innerHTML = `
+      <div style="display:flex;flex-direction:column;gap:16px">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
+          <div><h2>Branches</h2><p style="font-size:13px;color:var(--text-muted)">Manage company locations and branches</p></div>
+          ${canEdit ? `<button class="btn btn-primary btn-sm" onclick="showCreateBranchModal()">+ Add Branch</button>` : ''}
+        </div>
+        ${branches.length ? `
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px">
+          ${branches.map(b => `
+            <div class="card" style="position:relative">
+              <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px">
+                <div>
+                  <div style="font-size:15px;font-weight:700">${b.name}</div>
+                  ${b.code ? `<div style="font-size:11px;font-family:monospace;color:#6366f1;font-weight:700">${b.code}</div>` : ''}
+                </div>
+                <span style="padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700;background:${b.isActive?'#f0fdf4':'#f1f5f9'};color:${b.isActive?'#15803d':'#64748b'}">${b.isActive?'Active':'Inactive'}</span>
+              </div>
+              ${b.city||b.country ? `<div style="font-size:12px;color:var(--text-muted);margin-bottom:6px">📍 ${[b.city,b.country].filter(Boolean).join(', ')}</div>` : ''}
+              ${b.manager ? `<div style="font-size:12px;color:var(--text-muted);margin-bottom:6px">👤 Manager: ${b.manager.name||'—'}</div>` : ''}
+              <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">👥 ${b.headcount||0} employees</div>
+              ${canEdit ? `<div style="display:flex;gap:6px">
+                <button class="btn btn-sm btn-secondary" style="font-size:11px" onclick="showEditBranchModal('${b._id}','${esc(b.name)}','${b.code||''}','${b.city||''}','${b.country||''}')">✏️ Edit</button>
+              </div>` : ''}
+            </div>`).join('')}
+        </div>` : '<div class="card"><div class="empty-state"><p>No branches yet.</p></div></div>'}
+      </div>`;
+  } catch(e) {
+    content.innerHTML = `<div class="card"><p style="color:#ef4444">Error: ${e.message}</p></div>`;
+  }
+}
+
+function showCreateBranchModal() {
+  const container = document.getElementById('modal-container');
+  container.classList.remove('hidden');
+  container.innerHTML = `
+    <div class="modal-overlay" onclick="closeModal(event)">
+      <div class="modal" onclick="event.stopPropagation()" style="max-width:460px">
+        <h3>Add Branch</h3>
+        <div class="form-group"><label>Branch Name <span style="color:red">*</span></label><input type="text" id="branch-name" placeholder="e.g. Accra Head Office"></div>
+        <div class="form-group"><label>Branch Code <span style="font-size:11px;color:var(--text-muted)">(optional)</span></label><input type="text" id="branch-code" placeholder="e.g. ACC01" style="text-transform:uppercase"></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <div class="form-group"><label>City</label><input type="text" id="branch-city" placeholder="Accra"></div>
+          <div class="form-group"><label>Country</label><input type="text" id="branch-country" placeholder="Ghana"></div>
+        </div>
+        <div class="form-group"><label>Phone <span style="font-size:11px;color:var(--text-muted)">(optional)</span></label><input type="tel" id="branch-phone" placeholder="e.g. 0201234567"></div>
+        <div class="modal-actions">
+          <button class="btn btn-secondary btn-sm" onclick="closeModal()">Cancel</button>
+          <button class="btn btn-primary btn-sm" onclick="saveBranch()">Create Branch</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+async function saveBranch() {
+  const name    = document.getElementById('branch-name').value.trim();
+  const code    = document.getElementById('branch-code').value.trim().toUpperCase();
+  const city    = document.getElementById('branch-city').value.trim();
+  const country = document.getElementById('branch-country').value.trim();
+  const phone   = document.getElementById('branch-phone').value.trim();
+  if (!name) { toastWarning('Branch name is required'); return; }
+  try {
+    await api('/api/advanced/branches', { method:'POST', body: JSON.stringify({ name, code, city, country, phone }) });
+    closeModal();
+    toastSuccess('Branch created ✓');
+    renderBranches();
+  } catch(e) { toastError(e.message); }
+}
+
+function showEditBranchModal(id, name, code, city, country) {
+  const container = document.getElementById('modal-container');
+  container.classList.remove('hidden');
+  container.innerHTML = `
+    <div class="modal-overlay" onclick="closeModal(event)">
+      <div class="modal" onclick="event.stopPropagation()" style="max-width:460px">
+        <h3>Edit Branch</h3>
+        <div class="form-group"><label>Branch Name <span style="color:red">*</span></label><input type="text" id="edit-branch-name" value="${name}"></div>
+        <div class="form-group"><label>Branch Code</label><input type="text" id="edit-branch-code" value="${code}" style="text-transform:uppercase"></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <div class="form-group"><label>City</label><input type="text" id="edit-branch-city" value="${city}"></div>
+          <div class="form-group"><label>Country</label><input type="text" id="edit-branch-country" value="${country}"></div>
+        </div>
+        <div class="modal-actions">
+          <button class="btn btn-secondary btn-sm" onclick="closeModal()">Cancel</button>
+          <button class="btn btn-primary btn-sm" onclick="updateBranch('${id}')">Save</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+async function updateBranch(id) {
+  const name    = document.getElementById('edit-branch-name').value.trim();
+  const code    = document.getElementById('edit-branch-code').value.trim().toUpperCase();
+  const city    = document.getElementById('edit-branch-city').value.trim();
+  const country = document.getElementById('edit-branch-country').value.trim();
+  if (!name) { toastWarning('Branch name is required'); return; }
+  try {
+    await api(`/api/advanced/branches/${id}`, { method:'PATCH', body: JSON.stringify({ name, code, city, country }) });
+    closeModal();
+    toastSuccess('Branch updated ✓');
+    renderBranches();
+  } catch(e) { toastError(e.message); }
 }
 
 async function renderAdminDashboard(content) {
@@ -13481,8 +13973,10 @@ buildSidebar = function() {
 // ── Patch navigateTo for Phase 5 ─────────────────────────────────────────────
 const _p5NavigateTo = navigateTo;
 navigateTo = function(view) {
-  if (view === 'analytics')     { currentView = view; _setNavActive(view); renderAnalytics(); return; }
-  if (view === 'branches')      { currentView = view; _setNavActive(view); renderBranches(); return; }
+  if (view === 'analytics')       { currentView = view; _setNavActive(view); renderAnalytics(); return; }
+  if (view === 'branches')        { currentView = view; _setNavActive(view); renderBranches(); return; }
+  if (view === 'live-attendance') { currentView = view; _setNavActive(view); renderLiveAttendance(); return; }
+  if (view === 'payroll')         { currentView = view; _setNavActive(view); renderPayroll(); return; }
   if (view === 'branding')      { currentView = view; _setNavActive(view); renderBranding(); return; }
   if (view === 'payroll-export'){ currentView = view; _setNavActive('payroll-exp'); renderPayrollExport(); return; }
   _p5NavigateTo(view);
@@ -13648,106 +14142,6 @@ async function renderAnalytics() {
 
 // ══════════════════════════════════════════════════════════════
 // BRANCHES
-// ══════════════════════════════════════════════════════════════
-async function renderBranches() {
-  const content = document.getElementById('main-content');
-  content.innerHTML = '<div class="loading">Loading…</div>';
-  try {
-    const { branches } = await api('/api/advanced/branches');
-
-    content.innerHTML = `
-      <div class="page-header"><h2>Branch Management</h2><p>Manage your company locations</p></div>
-
-      <!-- Create Branch -->
-      <div class="card" style="margin-bottom:16px">
-        <h3 style="font-size:15px;font-weight:700;margin-bottom:12px">Add Branch</h3>
-        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin-bottom:10px">
-          ${[
-            ['br-name','Name *','text','e.g. Accra HQ'],
-            ['br-code','Code','text','e.g. ACC'],
-            ['br-city','City','text','e.g. Accra'],
-            ['br-country','Country','text','e.g. Ghana'],
-            ['br-phone','Phone','text','Optional'],
-          ].map(([id,label,type,ph]) => `
-            <div>
-              <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:4px">${label}</label>
-              <input id="${id}" type="${type}" placeholder="${ph}" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
-            </div>
-          `).join('')}
-          <div>
-            <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:4px">Address</label>
-            <input id="br-addr" placeholder="Street address" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
-          </div>
-        </div>
-        <div id="br-error" style="color:#ef4444;font-size:13px;margin-bottom:8px;display:none"></div>
-        <button class="btn btn-primary" onclick="submitCreateBranch()">+ Add Branch</button>
-      </div>
-
-      <!-- Branches list -->
-      <div class="card">
-        <h3 style="font-size:15px;font-weight:700;margin-bottom:14px">Branches (${branches.length})</h3>
-        ${branches.length ? branches.map(b => `
-          <div style="padding:16px;border:1px solid #e5e7eb;border-radius:10px;margin-bottom:12px">
-            <div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:10px">
-              <div style="flex:1">
-                <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;flex-wrap:wrap">
-                  <span style="font-weight:700;font-size:15px">🏢 ${b.name}</span>
-                  ${b.code ? `<span style="font-size:11px;background:#f3f4f6;color:#6b7280;padding:2px 8px;border-radius:4px;font-weight:600">${b.code}</span>` : ''}
-                  <span style="font-size:12px;color:#6b7280">${b.headcount} employee${b.headcount !== 1 ? 's' : ''}</span>
-                </div>
-                <div style="font-size:12px;color:#9ca3af">
-                  ${[b.address, b.city, b.country].filter(Boolean).join(', ') || 'No address set'}
-                  ${b.phone ? ` · ${b.phone}` : ''}
-                  ${b.manager ? ` · Manager: <strong>${b.manager.name}</strong>` : ''}
-                </div>
-              </div>
-              <div style="display:flex;gap:6px">
-                <button class="btn btn-sm" style="background:#fef2f2;color:#dc2626;border:1px solid #fecaca;font-size:11px" onclick="deleteBranch('${b._id}')">Remove</button>
-              </div>
-            </div>
-          </div>
-        `).join('') : '<p style="color:#9ca3af;font-size:13px">No branches yet. Add your first location above.</p>'}
-      </div>
-    `;
-  } catch(e) {
-    content.innerHTML = `<div class="card"><p style="color:#ef4444">Error: ${e.message}</p></div>`;
-  }
-}
-
-async function submitCreateBranch() {
-  const name = document.getElementById('br-name').value.trim();
-  const errEl = document.getElementById('br-error');
-  errEl.style.display = 'none';
-  if (!name) { errEl.textContent = 'Branch name is required.'; errEl.style.display = 'block'; return; }
-
-  const body = {
-    name,
-    code:    document.getElementById('br-code').value.trim(),
-    city:    document.getElementById('br-city').value.trim(),
-    country: document.getElementById('br-country').value.trim(),
-    phone:   document.getElementById('br-phone').value.trim(),
-    address: document.getElementById('br-addr').value.trim(),
-  };
-  const btn = event.target; btn.disabled = true; btn.textContent = 'Saving…';
-  try {
-    await api('/api/advanced/branches', { method: 'POST', body: JSON.stringify(body) });
-    toast('Branch added!', 'ok');
-    renderBranches();
-  } catch(e) {
-    errEl.textContent = e.message; errEl.style.display = 'block';
-    btn.disabled = false; btn.textContent = '+ Add Branch';
-  }
-}
-
-async function deleteBranch(id) {
-  if (!confirm('Remove this branch? Employees in this branch will be unassigned.')) return;
-  try {
-    await api(`/api/advanced/branches/${id}`, { method: 'DELETE' });
-    toast('Branch removed', 'ok');
-    renderBranches();
-  } catch(e) { toast(e.message, 'err'); }
-}
-
 // ══════════════════════════════════════════════════════════════
 // WHITE-LABEL BRANDING
 // ══════════════════════════════════════════════════════════════
