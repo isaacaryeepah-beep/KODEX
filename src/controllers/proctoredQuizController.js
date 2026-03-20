@@ -534,7 +534,7 @@ exports.liveMonitor = async (req, res) => {
     if (!quiz) return res.status(404).json({ error: "Quiz not found" });
 
     const sessions = await QuizSession.find({ quiz: quizId, company: req.user.company })
-      .populate("student", "name indexNumber")
+      .populate("student", "name IndexNumber")
       .populate("attempt", "score maxScore isSubmitted")
       .sort({ startedAt: -1 });
 
@@ -592,7 +592,7 @@ exports.sessionReport = async (req, res) => {
     }
 
     const session = await QuizSession.findById(sessionId)
-      .populate("student", "name indexNumber email")
+      .populate("student", "name IndexNumber email")
       .populate("attempt", "score maxScore isSubmitted submittedAt startedAt")
       .populate("quiz", "title timeLimit totalMarks");
 
