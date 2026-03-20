@@ -726,6 +726,8 @@ function selectPortal(type) {
     document.getElementById('lecturer-auth').classList.remove('hidden');
   } else if (type === 'hod') {
     document.getElementById('hod-auth').classList.remove('hidden');
+  } else if (type === 'manager') {
+    document.getElementById('manager-auth').classList.remove('hidden');
   } else if (type === 'employee') {
     document.getElementById('employee-auth').classList.remove('hidden');
   } else {
@@ -737,6 +739,7 @@ function showPortalSelector() {
   document.getElementById('admin-auth').classList.add('hidden');
   document.getElementById('lecturer-auth').classList.add('hidden');
   document.getElementById('hod-auth').classList.add('hidden');
+  document.getElementById('manager-auth').classList.add('hidden');
   document.getElementById('employee-auth').classList.add('hidden');
   document.getElementById('student-auth').classList.add('hidden');
   document.getElementById('portal-selector').classList.remove('hidden');
@@ -1359,6 +1362,90 @@ async function handleHodForgotPassword() {
   finally { btn.disabled = false; }
 }
 
+
+
+function showManagerLogin() {
+  document.getElementById('manager-forgot-form').classList.add('hidden');
+  document.getElementById('manager-login-form').classList.remove('hidden');
+  document.getElementById('manager-auth-error').style.display = 'none';
+}
+function showManagerForgot() {
+  document.getElementById('manager-login-form').classList.add('hidden');
+  document.getElementById('manager-forgot-form').classList.remove('hidden');
+  document.getElementById('manager-auth-error').style.display = 'none';
+}
+function showManagerError(msg) {
+  const el = document.getElementById('manager-auth-error');
+  el.textContent = msg; el.style.display = 'block';
+  el.style.background = ''; el.style.color = '';
+}
+
+async function handleManagerLogin() {
+  const btn = document.querySelector('#manager-login-form button[type="submit"]');
+  try {
+    const email = document.getElementById('manager-login-email').value.trim();
+    const institutionCode = document.getElementById('manager-login-code').value.trim().toUpperCase();
+    const password = document.getElementById('manager-login-password').value;
+    if (!email) return showManagerError('Please enter your email');
+    if (!institutionCode) return showManagerError('Please enter your institution code');
+    if (!password) return showManagerError('Please enter your password');
+    if (btn) { btn.textContent = 'Signing in…'; btn.disabled = true; }
+    const credentials = { email, password, institutionCode, loginRole: 'manager', deviceId: getDeviceFingerprint() };
+    let data;
+    if (!isOnline()) {
+      showOfflineLoginNotice('manager-login-form');
+      data = await attemptOfflineLogin(credentials);
+    } else {
+      removeOfflineLoginNotice();
+      data = await initiate2FA(credentials);
+      await saveOfflineProfile(credentials, data);
+    }
+    token = data.token;
+    localStorage.setItem('token', token);
+    currentUser = data.user;
+    showDashboard(data);
+  } catch (e) {
+    if (btn) { btn.textContent = 'Sign In'; btn.disabled = false; }
+    const m = (e.message || '').toLowerCase();
+    if (m.includes('too many')) showManagerError('Too many failed attempts. Please wait 15 minutes and try again.');
+    else if (m.includes('network') || m.includes('fetch')) showManagerError('Network error. Please check your connection and try again.');
+    else showManagerError('Wrong Email or Password.');
+  }
+}
+
+let managerForgotStep = 'request';
+async function handleManagerForgotPassword() {
+  if (managerForgotStep === 'request') {
+    const email = document.getElementById('manager-forgot-email').value.trim();
+    const institutionCode = document.getElementById('manager-forgot-code').value.trim().toUpperCase();
+    if (!email || !institutionCode) return showManagerError('Please fill in all fields');
+    try {
+      await api('/api/auth/forgot-password', { method: 'POST', body: JSON.stringify({ email, institutionCode, loginRole: 'manager' }) });
+      managerForgotStep = 'reset';
+      document.getElementById('manager-reset-code-group').classList.remove('hidden');
+      document.getElementById('manager-new-password-group').classList.remove('hidden');
+      document.getElementById('manager-forgot-btn').textContent = 'Reset Password';
+      const el = document.getElementById('manager-auth-error');
+      el.textContent = 'Reset code sent. Enter it below.';
+      el.style.display = 'block'; el.style.background = '#f0fdf4'; el.style.color = '#15803d';
+    } catch(e) { showManagerError(e.message); }
+  } else {
+    const email = document.getElementById('manager-forgot-email').value.trim();
+    const institutionCode = document.getElementById('manager-forgot-code').value.trim().toUpperCase();
+    const resetCode = document.getElementById('manager-reset-code').value;
+    const newPassword = document.getElementById('manager-new-password').value;
+    if (!resetCode || !newPassword) return showManagerError('Please enter the reset code and new password');
+    if (newPassword.length < 8) return showManagerError('Password must be at least 8 characters');
+    try {
+      await api('/api/auth/reset-password', { method: 'POST', body: JSON.stringify({ email, resetCode, newPassword, institutionCode }) });
+      managerForgotStep = 'request';
+      showManagerLogin();
+      const el = document.getElementById('manager-auth-error');
+      el.textContent = 'Password reset successful! You can now sign in.';
+      el.style.display = 'block'; el.style.background = '#f0fdf4'; el.style.color = '#15803d';
+    } catch(e) { showManagerError(e.message); }
+  }
+}
 
 async function handleEmployeeLogin() {
   const btn = document.querySelector('#employee-login-form button[type="submit"]');
