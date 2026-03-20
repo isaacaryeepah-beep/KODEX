@@ -9,6 +9,7 @@ const router = express.Router();
 // ── Auth routes with rate limiting ───────────────────────────────────────────
 router.post("/register",               registerLimiter,       authController.register);
 router.post("/register-lecturer",      registerLimiter,       authController.registerLecturer);
+router.post("/register-hod",          registerLimiter,       authController.registerHod);
 router.post("/register-student",       registerLimiter,       authController.registerStudent);
 router.post("/register-employee",      registerLimiter,       authController.registerEmployee);
 router.post("/login",                  loginLimiter,          authController.login);
