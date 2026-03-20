@@ -331,10 +331,9 @@ exports.submitAttempt = async (req, res) => {
     // Update isBestScore flags for this student+quiz
     const allSubmitted = await Attempt.find({ quiz: id, student: req.user._id, isSubmitted: true }).sort({ score: -1 });
     const bestScore = allSubmitted[0]?.score ?? 0;
-    await Promise.all(allSubmitted.map((a, i) => {
+    await Promise.all(allSubmitted.map(async (a, i) => {
       const shouldBeBest = i === 0; // first after sort by score desc = best
-      if (a.isBestScore !== shouldBeBest) { a.isBestScore = shouldBeBest; return a.save(); }
-      return Promise.resolve();
+      if (a.isBestScore !== shouldBeBest) { a.isBestScore = shouldBeBest; await a.save(); }
     }));
 
     const attemptsLeft = quiz.maxAttempts === 0 ? null : Math.max(0, (quiz.maxAttempts || 1) - allSubmitted.length);
