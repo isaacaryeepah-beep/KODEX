@@ -140,10 +140,7 @@ exports.createUser = async (req, res) => {
     }
 
     if (targetRole === "student") {
-      if (!indexNumber) {
-        return res.status(400).json({ error: "Index number is required for students" });
-      }
-      userData.indexNumber = indexNumber;
+      if (indexNumber) userData.indexNumber = indexNumber;
       // Save student classification
       if (programme)    userData.programme    = programme.trim();
       if (studentLevel) userData.studentLevel = studentLevel.trim();
