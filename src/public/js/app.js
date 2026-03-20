@@ -1310,10 +1310,70 @@ function showHodForgot() {
 document.getElementById('hod-login-form').classList.add('hidden');
 document.getElementById('hod-forgot-form').classList.remove('hidden');
 }
+
+function showHodRegister() {
+document.getElementById('hod-login-form').classList.add('hidden');
+const f = document.getElementById('hod-forgot-form'); if (f) f.classList.add('hidden');
+document.getElementById('hod-register-form').classList.remove('hidden');
+}
+
+function showHodLogin() {
+document.getElementById('hod-register-form')?.classList.add('hidden');
+document.getElementById('hod-forgot-form')?.classList.add('hidden');
+document.getElementById('hod-login-form').classList.remove('hidden');
+document.getElementById('hod-auth-error').style.display = 'none';
+}
 function showHodError(msg) {
 const el = document.getElementById('hod-auth-error');
 if (!el) return;
 el.textContent = msg; el.style.display = 'block';
+}
+
+async function handleHodRegister() {
+const btn = document.querySelector('#hod-register-form button[type="submit"]');
+try {
+const name     = document.getElementById('hod-reg-name').value.trim();
+const email    = document.getElementById('hod-reg-email').value.trim();
+const password = document.getElementById('hod-reg-password').value;
+const code     = document.getElementById('hod-reg-code').value.trim().toUpperCase();
+const dept     = document.getElementById('hod-reg-dept').value.trim();
+const phone    = document.getElementById('hod-reg-phone').value.trim();
+
+if (!name)     return showHodError('Please enter your full name.');
+if (!email)    return showHodError('Please enter your email.');
+if (!password) return showHodError('Please enter a password.');
+if (!code)     return showHodError('Please enter your institution code.');
+if (!dept)     return showHodError('Please enter your department.');
+if (btn) { btn.textContent = 'Registering...'; btn.disabled = true; }
+
+const data = await api('/api/auth/register-hod', {
+  method: 'POST',
+  body: JSON.stringify({ name, email, password, institutionCode: code, department: dept, phone: phone || undefined }),
+});
+
+if (btn) { btn.textContent = 'Register'; btn.disabled = false; }
+showHodError('');
+// Show success message and switch to login
+document.getElementById('hod-register-form').classList.add('hidden');
+document.getElementById('hod-login-form').classList.remove('hidden');
+const errEl = document.getElementById('hod-auth-error');
+if (errEl) {
+  errEl.style.display = 'block';
+  errEl.style.color = 'var(--success)';
+  errEl.textContent = 'Registration successful! Your account is pending admin approval.';
+}
+} catch (e) {
+if (btn) { btn.textContent = 'Register'; btn.disabled = false; }
+showHodError(e.message);
+}
+}
+
+function showHodError(msg) {
+const el = document.getElementById('hod-auth-error');
+if (!el) return;
+el.textContent = msg;
+el.style.display = msg ? 'block' : 'none';
+el.style.color = 'var(--danger)';
 }
 
 async function handleHodLogin() {
