@@ -2,7 +2,7 @@ const Company  = require('../models/Company');
 const crypto   = require('crypto');
 
 // ── How long before we consider the ESP32 offline ─────────
-const OFFLINE_THRESHOLD_MS = 6000; // 6 seconds (3 missed polls at 2s interval = definitely offline)
+const OFFLINE_THRESHOLD_MS = 20000; // 20 seconds (4 missed polls at 5s interval + latency buffer)
 
 // ── POST /api/esp32/register ───────────────────────────────
 // ESP32 calls this once on boot to register itself.
@@ -77,7 +77,7 @@ exports.status = async (req, res) => {
     const company = await Company.findById(req.user.company).select('esp32Online esp32LastSeen');
     if (!company) return res.status(404).json({ error: 'Company not found' });
 
-    // Consider offline if not seen in 6 seconds (ESP32 polls every 2s)
+    // Consider offline if not seen in 20 seconds (ESP32 polls every 5s, allow 4 misses + latency)
     const online = company.esp32Online &&
       company.esp32LastSeen &&
       (Date.now() - new Date(company.esp32LastSeen).getTime() < OFFLINE_THRESHOLD_MS);
@@ -192,15 +192,28 @@ exports.markViaESP32 = async (req, res) => {
 exports.setPin = async (req, res) => {
   try {
     const { pin } = req.body;
-    if (!pin || String(pin).length !== 4 || !/^\d{4}$/.test(String(pin))) {
+    if (!pin || String(pin).length !== 4 || /^\d{4}$/.test(String(pin)) === false) {
       return res.status(400).json({ error: 'PIN must be exactly 4 digits' });
     }
     const User = require('../models/User');
     const user = await User.findById(req.user._id);
-    user.attendancePin = String(pin);
+    const rawPin = String(pin);
+
+    // Store HMAC of raw PIN so ESP32 can verify offline.
+    // HMAC(esp32Token, rawPin) matches what firmware computes.
+    // Must be computed BEFORE bcrypt hashing (which destroys the raw PIN).
+    const company = await Company.findById(user.company).select('esp32Token');
+    if (company?.esp32Token) {
+      user.attendancePinHmac = crypto.createHmac('sha256', company.esp32Token)
+        .update(rawPin)
+        .digest('hex');
+    }
+
+    user.attendancePin = rawPin; // model pre-save hook will bcrypt this
     await user.save();
     res.json({ ok: true, message: 'Attendance PIN set successfully' });
   } catch (e) {
+    console.error('[ESP32] setPin error:', e);
     res.status(500).json({ error: 'Server error' });
   }
 };
@@ -225,26 +238,16 @@ exports.studentList = async (req, res) => {
       role:             { $in: ['student', 'employee'] },
       attendancePinSet: true,
       isActive:         true,
-    }).select('+attendancePin').lean();
+    }).select('+attendancePin +attendancePinHmac').lean();
 
-    // Convert bcrypt PINs to SHA256 for ESP32 local verification
-    // We store a SHA256(pin) alongside -- computed once here, cached on SD
-    const bcrypt = require('bcryptjs');
     const list = [];
 
     for (const u of users) {
-      if (!u.attendancePin) continue;
-      // We can't reverse bcrypt -- instead store a server-side SHA256
-      // of the raw PIN. Since we can't get the raw PIN from bcrypt,
-      // we use a HMAC of the bcrypt hash with the ESP32 token as key.
-      // This means only this ESP32 can verify it.
-      const hmac = crypto.createHmac('sha256', token)
-        .update(u.attendancePin)
-        .digest('hex');
+      if (!u.attendancePinHmac) continue; // skip students who haven't set PIN yet
       list.push({
         id:   u.indexNumber || u.employeeId || u._id.toString(),
         name: u.name,
-        hash: hmac,
+        hash: u.attendancePinHmac, // HMAC(esp32Token, rawPin) — matches firmware computation
       });
     }
 
@@ -277,7 +280,7 @@ exports.verifyPin = async (req, res) => {
     const student = await User.findOne({
       indexNumber: indexNumber.toUpperCase().trim(),
       company:     company._id,
-    }).select('+attendancePin +attendancePinSet');
+    }).select('+attendancePin +attendancePinSet +attendancePinHmac');
 
     if (!student) {
       return res.status(404).json({ ok: false, error: 'Student not found' });
@@ -291,15 +294,18 @@ exports.verifyPin = async (req, res) => {
       return res.status(401).json({ ok: false, error: 'Incorrect PIN' });
     }
 
-    // Return the HMAC so ESP32 can cache it for offline use
-    const hmac = crypto.createHmac('sha256', token)
-      .update(student.attendancePin)
-      .digest('hex');
+    // If HMAC not yet stored (student set PIN before this fix), compute and store it now
+    if (!student.attendancePinHmac) {
+      student.attendancePinHmac = crypto.createHmac('sha256', token)
+        .update(String(pin))
+        .digest('hex');
+      await student.save();
+    }
 
     res.json({
       ok:   true,
       name: student.name,
-      hash: hmac,
+      hash: student.attendancePinHmac,
       id:   student.indexNumber,
     });
   } catch (e) {
