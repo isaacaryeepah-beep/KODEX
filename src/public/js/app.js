@@ -1150,7 +1150,7 @@ async function handleLecturerRegister() {
     const phone = document.getElementById('lecturer-reg-phone')?.value?.trim();
     let body = { name, email, password };
     if (dept) body.department = dept;
-    if (phone) body.phone = phone;
+    if (phone) if (phone) body.phone = phone;
     if (regMode === 'join' && !dept) {
       return showLecturerError('Department is required when joining an institution.');
     }
@@ -4348,8 +4348,8 @@ async function showCreateUserModal() {
           </div>
         </div>
         <div class="form-group">
-          <label>Phone Number <span style="color:red">*</span></label>
-          <input type="tel" id="new-user-phone" placeholder="e.g. 0241234567" required>
+          <label>Phone Number <span style="color:var(--text-muted);font-size:11px">(optional)</span></label>
+          <input type="tel" id="new-user-phone" placeholder="e.g. 0241234567">
         </div>
         <div class="modal-actions">
           <button class="btn btn-secondary btn-sm" onclick="closeModal()">Cancel</button>
@@ -4417,8 +4417,8 @@ async function createUser() {
       body.email = document.getElementById('new-user-email').value;
     }
     const phone = document.getElementById('new-user-phone').value.trim();
-    if (!phone) { toastWarning('Phone number is required.'); return; }
-    body.phone = phone;
+    
+    if (phone) body.phone = phone;
     const dept = document.getElementById('new-user-dept')?.value?.trim();
     if (['lecturer','hod','student'].includes(role) && !dept) {
       const label = role === 'hod' ? 'HOD' : role === 'lecturer' ? 'Lecturer' : 'Student';
