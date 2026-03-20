@@ -75,7 +75,13 @@ const userSchema = new mongoose.Schema(
       trim: true,
       default: null,
     },
-    mustChangePassword: { type: Boolean, default: false }, // set true after admin temp reset
+    mustChangePassword: { type: Boolean, default: false },
+    // 4-digit attendance PIN for ESP32 device — stored as bcrypt hash
+    attendancePin: {
+      type: String,
+      default: null,
+      select: false,
+    }, // set true after admin temp reset
     resetPasswordToken: { type: String, default: null },
     resetPasswordExpires: { type: Date, default: null },
     passwordResetLog: [{
