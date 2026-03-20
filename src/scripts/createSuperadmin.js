@@ -1,10 +1,11 @@
+// WARNING: Set SA_PASSWORD env var before running this script
 require('dotenv').config();
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 
 const SA_NAME     = 'Isaac Aryeepah';
 const SA_EMAIL    = 'nelsonkel78@gmail.com';
-const SA_PASSWORD = 'Kelly1234e';
+const SA_PASSWORD = process.env.SA_PASSWORD || 'ChangeMe123!';
 
 async function run() {
   try {
