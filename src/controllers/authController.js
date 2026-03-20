@@ -310,7 +310,8 @@ exports.registerLecturer = async (req, res) => {
 
 exports.registerStudent = async (req, res) => {
   try {
-    const { name, IndexNumber, password, institutionCode, department, email } = req.body;
+    const { name, password, institutionCode, department, email } = req.body;
+    const IndexNumber = req.body.IndexNumber || req.body.indexNumber;
 
     if (!name || !IndexNumber || !password || !institutionCode) {
       return res.status(400).json({ error: "Name, student ID, password, and institution code are required" });
@@ -521,7 +522,8 @@ exports.registerEmployee = async (req, res) => {
 
 exports.login = async (req, res) => {
   try {
-    const { email, IndexNumber, password, deviceId, institutionCode, loginRole, portalMode } = req.body;
+    const { email, password, deviceId, institutionCode, loginRole, portalMode } = req.body;
+    const IndexNumber = req.body.IndexNumber || req.body.indexNumber;
 
     if (!password) {
       return res.status(400).json({ error: "Password is required" });
@@ -777,7 +779,8 @@ exports.migrateOrphanUsers = async (req, res) => {
 
 exports.forgotPassword = async (req, res) => {
   try {
-    const { IndexNumber, institutionCode } = req.body;
+    const IndexNumber = req.body.IndexNumber || req.body.indexNumber;
+    const { institutionCode } = req.body;
 
     if (!IndexNumber || !institutionCode) {
       return res.status(400).json({ error: "Student ID and institution code are required" });
@@ -833,7 +836,8 @@ exports.forgotPassword = async (req, res) => {
 
 exports.resetPassword = async (req, res) => {
   try {
-    const { IndexNumber, resetCode, newPassword, institutionCode } = req.body;
+    const IndexNumber = req.body.IndexNumber || req.body.indexNumber;
+    const { resetCode, newPassword, institutionCode } = req.body;
 
     if (!IndexNumber || !resetCode || !newPassword) {
       return res.status(400).json({ error: "Student ID, reset code, and new password are required" });
