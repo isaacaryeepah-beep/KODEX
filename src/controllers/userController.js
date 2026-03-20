@@ -85,8 +85,9 @@ exports.createUser = async (req, res) => {
     const { normalisePhone } = require('../services/smsService');
     const normPhone = phone ? normalisePhone(phone) : null;
 
-    // Check for duplicate phone across the institution
-    if (normPhone) {
+    // Check for duplicate phone across the institution (non-student roles only)
+    // Students may share a phone number (e.g. siblings) so we skip this check for them
+    if (normPhone && targetRole !== 'student') {
       const phoneExists = await User.findOne({ phone: normPhone, company: req.user.company });
       if (phoneExists) {
         return res.status(400).json({
