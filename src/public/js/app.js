@@ -4742,38 +4742,45 @@ async function createAndStartMeeting() {
 async function startMeeting(id) {
   try {
     const data = await api(`/api/zoom/${id}/start`, { method: 'POST' });
-    const joinUrl = data.joinUrl;
+    const joinUrl     = data.joinUrl;      // plain link for students
+    const moderatorUrl = data.moderatorUrl || joinUrl; // host link with moderator config
 
     // Record host as an attendee
     await api(`/api/zoom/${id}/join`, { method: 'POST' }).catch(() => {});
 
-    // Open Jitsi meeting immediately in new tab
-    window.open(joinUrl, '_blank');
+    // Open Jitsi meeting immediately with moderator URL
+    window.open(moderatorUrl, '_blank');
 
-    // Show share modal
+    // Show share modal with the plain student join link
     const container = document.getElementById('modal-container');
     container.classList.remove('hidden');
     container.innerHTML = `
       <div class="modal-overlay" onclick="closeModal(event)">
-        <div class="modal" onclick="event.stopPropagation()" style="max-width:460px;text-align:center">
+        <div class="modal" onclick="event.stopPropagation()" style="max-width:480px;text-align:center">
           <div style="font-size:48px;margin-bottom:10px">🎥</div>
           <h3 style="margin:0 0 6px">Meeting is Live!</h3>
-          <p style="font-size:13px;color:var(--text-light);margin-bottom:20px">
-            Your meeting opened in a new tab. Share the link below so others can join.
+          <p style="font-size:13px;color:var(--text-light);margin-bottom:16px">
+            You joined as <strong>Moderator</strong>. Share the invite link below with your students.
           </p>
-          <div style="background:#f0fdf4;border:1px solid #86efac;border-radius:10px;padding:14px;margin-bottom:20px;text-align:left">
-            <div style="font-size:11px;font-weight:700;color:#15803d;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">🔗 Invite Link</div>
-            <div style="font-size:13px;word-break:break-all;color:#1d4ed8;font-weight:600;margin-bottom:10px">${joinUrl}</div>
+
+          <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:14px;margin-bottom:12px;text-align:left">
+            <div style="font-size:11px;font-weight:700;color:#1d4ed8;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">🔗 Student Invite Link</div>
+            <div id="share-join-url" style="font-size:12px;word-break:break-all;color:#1d4ed8;font-weight:600;margin-bottom:10px;background:#fff;padding:8px 10px;border-radius:6px;border:1px solid #bfdbfe;">${joinUrl}</div>
             <button class="btn btn-primary" style="width:100%;font-size:14px;padding:10px;" onclick="
               navigator.clipboard.writeText('${joinUrl}').then(() => {
-                this.textContent = '✅ Link Copied!';
+                this.textContent = '✅ Copied!';
                 this.style.background = '#16a34a';
-                setTimeout(() => { this.textContent = '📋 Copy Link'; this.style.background = ''; }, 3000);
-              }).catch(() => { prompt('Copy this link:', '${joinUrl}'); })
-            ">📋 Copy Link</button>
+                setTimeout(() => { this.textContent = '📋 Copy Invite Link'; this.style.background = ''; }, 3000);
+              }).catch(() => { prompt('Copy this student link:', '${joinUrl}'); })
+            ">📋 Copy Invite Link</button>
           </div>
+
+          <div style="background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:10px;margin-bottom:16px;font-size:12px;color:#15803d;text-align:left;">
+            💡 <strong>Tip:</strong> You are the moderator. Students who click the invite link above will join as participants.
+          </div>
+
           <div style="display:flex;gap:8px;justify-content:center;">
-            <button class="btn btn-success" onclick="window.open('${joinUrl}', '_blank')">🎥 Rejoin</button>
+            <button class="btn btn-success" onclick="window.open('${moderatorUrl}', '_blank')">🎥 Rejoin as Moderator</button>
             <button class="btn btn-secondary" onclick="closeModal();renderMeetings()">Done</button>
           </div>
         </div>
