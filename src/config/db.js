@@ -15,10 +15,10 @@ const connectDB = async () => {
           console.log("Dropping stale unique email-only index:", idx.name);
           await usersCollection.dropIndex(idx.name);
         }
-        // Drop stale indexNumber index without partialFilterExpression
-        // Without it, null values conflict causing false duplicate errors on student creation
-        if (idx.key && idx.key.indexNumber && idx.key.company && idx.unique && !idx.partialFilterExpression) {
-          console.log("Dropping stale indexNumber index (no partialFilterExpression):", idx.name);
+        // Drop ANY indexNumber+company unique index and let Mongoose rebuild it correctly
+        // Fixes false duplicate errors caused by null indexNumber values conflicting
+        if (idx.key && idx.key.indexNumber && idx.key.company && idx.unique) {
+          console.log("Rebuilding indexNumber index:", idx.name);
           await usersCollection.dropIndex(idx.name);
         }
       }
