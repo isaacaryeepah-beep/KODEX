@@ -143,7 +143,17 @@ exports.createUser = async (req, res) => {
       if (!indexNumber) {
         return res.status(400).json({ error: "Index number is required for students" });
       }
-      userData.indexNumber = indexNumber;
+      // Explicit duplicate check with clear message before hitting the DB index
+      const existingStudent = await User.findOne({
+        indexNumber: indexNumber.toString().trim().toUpperCase(),
+        company: req.user.company,
+      });
+      if (existingStudent) {
+        return res.status(400).json({
+          error: `Index number ${indexNumber} is already registered to ${existingStudent.name} at this institution.`,
+        });
+      }
+      userData.indexNumber = indexNumber.toString().trim().toUpperCase();
       // Save student classification
       if (programme)    userData.programme    = programme.trim();
       if (studentLevel) userData.studentLevel = studentLevel.trim();
