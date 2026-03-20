@@ -4959,7 +4959,7 @@ async function renderCourses() {
 }
 
 function _renderCoursesHTML(content, courses, isOffline) {
-  const canCreate = ['lecturer', 'admin', 'superadmin'].includes(currentUser.role);
+  const canCreate = ['lecturer', 'superadmin'].includes(currentUser.role);
   const canManageRoster = ['lecturer', 'admin', 'superadmin'].includes(currentUser.role);
   content.innerHTML = `
     <div class="page-header">
