@@ -80,6 +80,7 @@ const userSchema = new mongoose.Schema(
     // Simpler than full password -- set by student in their profile
     attendancePin:     { type: String, default: null, select: false },  // bcrypt hashed
     attendancePinSet:  { type: Boolean, default: false },
+    attendancePinHmac: { type: String, default: null, select: false },  // HMAC(esp32token, rawPin) for offline ESP32 verify
     resetPasswordToken: { type: String, default: null },
     resetPasswordExpires: { type: Date, default: null },
     passwordResetLog: [{
