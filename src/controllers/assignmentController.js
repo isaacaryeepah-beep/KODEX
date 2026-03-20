@@ -208,7 +208,7 @@ exports.getAssignment = async (req, res) => {
 
     const submissions = await AssignmentSubmission.find({ assignment: id })
       .select("-submittedFile.filePath -answers.selectedAnswers")
-      .populate("student", "name indexNumber email");
+      .populate("student", "name IndexNumber email");
 
     res.json({ assignment, submissions });
   } catch (err) {
@@ -401,7 +401,7 @@ exports.getSubmission = async (req, res) => {
       return res.status(400).json({ error: "Invalid ID" });
 
     const sub = await AssignmentSubmission.findById(submissionId)
-      .populate("student", "name indexNumber email")
+      .populate("student", "name IndexNumber email")
       .populate("assignment", "company title questions totalMarks createdBy");
 
     if (!sub) return res.status(404).json({ error: "Submission not found" });
