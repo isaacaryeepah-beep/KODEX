@@ -22,5 +22,6 @@ router.post("/",            ctrl.create);
 router.patch("/:id/read",   ctrl.markRead);
 router.patch("/:id/pin",    ctrl.togglePin);
 router.delete("/:id",       ctrl.remove);
+router.get("/:id/pdf",      ctrl.downloadPdf);
 
 module.exports = router;
