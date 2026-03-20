@@ -51,8 +51,13 @@ exports.createQuiz = async (req, res) => {
       const questionDocs = questions.map((q) => ({
         quiz: quiz._id,
         questionText: q.questionText,
-        options: q.options,
-        correctAnswer: q.correctAnswer,
+        questionType: q.questionType || "single",
+        options: (q.questionType === "fill" || q.questionType === "explain") ? [] : (q.options || []),
+        correctAnswer: (q.questionType === "fill" || q.questionType === "explain") ? null : (q.correctAnswer ?? null),
+        correctAnswers: (q.questionType === "fill" || q.questionType === "explain") ? [] : (q.correctAnswers || []),
+        correctAnswerText: q.questionType === "fill" ? (q.correctAnswerText || "") : null,
+        acceptedAnswers: q.questionType === "fill" ? (q.acceptedAnswers || []) : [],
+        modelAnswer: q.questionType === "explain" ? (q.modelAnswer || "") : "",
         marks: q.marks || 1,
       }));
       const createdQuestions = await Question.insertMany(questionDocs);
@@ -258,20 +263,27 @@ exports.addQuestion = async (req, res) => {
       return res.status(404).json({ error: "Quiz not found" });
     }
 
-    if (!questionText || !options) {
-      return res.status(400).json({ error: "questionText and options are required" });
-    }
-    if (!Array.isArray(options) || options.length < 2) {
-      return res.status(400).json({ error: "At least 2 options are required" });
+    const isFill     = questionType === "fill";
+    const isExplain  = questionType === "explain";
+    const isMultiple = !isFill && !isExplain && (questionType === "multiple" || (Array.isArray(correctAnswers) && correctAnswers.length > 1));
+
+    if (!questionText) {
+      return res.status(400).json({ error: "questionText is required" });
     }
 
-    const isFill     = questionType === "fill";
-    const isMultiple = !isFill && (questionType === "multiple" || (Array.isArray(correctAnswers) && correctAnswers.length > 1));
+    // Options only required for MCQ types
+    if (!isFill && !isExplain) {
+      if (!options || !Array.isArray(options) || options.length < 2) {
+        return res.status(400).json({ error: "At least 2 options are required for MCQ questions" });
+      }
+    }
 
     if (isFill) {
       if (!correctAnswerText || !correctAnswerText.trim()) {
         return res.status(400).json({ error: "correctAnswerText is required for fill-in questions" });
       }
+    } else if (isExplain) {
+      // explain questions have no auto-grading -- just need questionText
     } else if (isMultiple) {
       if (!Array.isArray(correctAnswers) || correctAnswers.length === 0) {
         return res.status(400).json({ error: "At least one correct answer is required" });
@@ -285,17 +297,20 @@ exports.addQuestion = async (req, res) => {
       }
     }
 
+    const { modelAnswer } = req.body;
+
     const question = await Question.create({
       quiz: id,
       questionText,
-      options: isFill ? [] : options,
-      questionType: isFill ? "fill" : (isMultiple ? "multiple" : "single"),
-      correctAnswer: isFill ? null : (isMultiple ? (correctAnswers[0] ?? 0) : correctAnswer),
-      correctAnswers: isFill ? [] : (isMultiple ? correctAnswers : [correctAnswer]),
+      options: (isFill || isExplain) ? [] : options,
+      questionType: isFill ? "fill" : (isExplain ? "explain" : (isMultiple ? "multiple" : "single")),
+      correctAnswer: (isFill || isExplain) ? null : (isMultiple ? (correctAnswers[0] ?? 0) : correctAnswer),
+      correctAnswers: (isFill || isExplain) ? [] : (isMultiple ? correctAnswers : [correctAnswer]),
       correctAnswerText: isFill ? correctAnswerText.trim() : null,
       acceptedAnswers: isFill && Array.isArray(acceptedAnswers)
         ? acceptedAnswers.map(a => a.trim()).filter(Boolean)
         : [],
+      modelAnswer: isExplain ? (modelAnswer || "").trim() : "",
       marks: marks || 1,
     });
 
