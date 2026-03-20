@@ -11,7 +11,7 @@ async function renderManagerDashboard(content) {
   try {
     const [usersData, pendingData, sessionsData, leavesData, analyticsData] = await Promise.all([
       api('/api/users').catch(() => ({ users: [] })),
-      api('/api/approvals/pending').catch(() => ({ pending: [] })),
+      Promise.resolve({ pending: [] }),
       api('/api/attendance-sessions?limit=10').catch(() => ({ sessions: [], pagination: { total: 0 } })),
       api('/api/leaves/pending').catch(() => ({ leaves: [] })),
       api('/api/advanced/analytics').catch(() => null),
@@ -19,7 +19,7 @@ async function renderManagerDashboard(content) {
 
     const users       = usersData.users || [];
     const employees   = users.filter(u => u.role === 'employee');
-    const pending     = pendingData.pending || [];
+    const pending     = [];
     const sessions    = sessionsData.sessions || [];
     const leaves      = leavesData.leaves || [];
     const analytics   = analyticsData;
@@ -32,7 +32,6 @@ async function renderManagerDashboard(content) {
 
     // ── Attention Needed items ──────────────────────────────────────────────
     const attn = [];
-    if (pending.length)  attn.push({ icon:'📋', text:`${pending.length} approval${pending.length>1?'s':''} waiting`, nav:'approvals', color:'#7c3aed' });
     if (leaves.length)   attn.push({ icon:'🏖️', text:`${leaves.length} leave request${leaves.length>1?'s':''} to review`, nav:'leave-requests', color:'#f59e0b' });
     if (activeSessions)  attn.push({ icon:'🟢', text:`${activeSessions} active session${activeSessions>1?'s':''} running`, nav:'sessions', color:'#10b981' });
 
@@ -102,19 +101,6 @@ async function renderManagerDashboard(content) {
             </div>
           </div>
 
-          <div class="stat-card-v2" onclick="navigateTo('approvals')">
-            <div class="stat-top-bar" style="background:#7c3aed"></div>
-            <div class="stat-header">
-              <span class="stat-label">Pending Approvals</span>
-              <div class="stat-icon" style="background:#f5f3ff">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
-              </div>
-            </div>
-            <div class="stat-value" style="color:${pending.length>0?'#7c3aed':'var(--text)'}">${pending.length}</div>
-            <div class="stat-trend" style="color:${pending.length>0?'#7c3aed':'var(--text-muted)'}">
-              ${pending.length>0?'Action needed':'All clear'}
-            </div>
-          </div>
 
           <div class="stat-card-v2" onclick="navigateTo('payroll')">
             <div class="stat-top-bar" style="background:#f59e0b"></div>
@@ -695,7 +681,6 @@ buildSidebar = function() {
     { id: 'leave-requests',  label: 'Leave',           icon: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>' },
     { id: 'timesheets',      label: 'Timesheets',      icon: '<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="14" x2="16" y2="14"/>' },
     { id: 'expenses-mgr',    label: 'Expenses',        icon: '<line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>' },
-    { id: 'approvals',       label: 'Approvals',       icon: '<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>' },
     { id: 'performance',     label: 'Performance',     icon: '<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>' },
     { id: 'payroll',         label: 'Payroll',         icon: '<rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/>' },
     { id: 'branches',        label: 'Branches',        icon: '<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>' },
