@@ -310,9 +310,9 @@ exports.registerLecturer = async (req, res) => {
 
 exports.registerStudent = async (req, res) => {
   try {
-    const { name, indexNumber, password, institutionCode, department, email } = req.body;
+    const { name, IndexNumber, password, institutionCode, department, email } = req.body;
 
-    if (!name || !indexNumber || !password || !institutionCode) {
+    if (!name || !IndexNumber || !password || !institutionCode) {
       return res.status(400).json({ error: "Name, student ID, password, and institution code are required" });
     }
 
@@ -330,7 +330,7 @@ exports.registerStudent = async (req, res) => {
     }
 
     const rosterEntry = await StudentRoster.findOne({
-      studentId: indexNumber.trim().toUpperCase(),
+      studentId: IndexNumber.trim().toUpperCase(),
       company: company._id,
     });
 
@@ -340,7 +340,7 @@ exports.registerStudent = async (req, res) => {
       });
     }
 
-    const existingStudent = await User.findOne({ indexNumber: indexNumber.trim().toUpperCase(), company: company._id });
+    const existingStudent = await User.findOne({ IndexNumber: IndexNumber.trim().toUpperCase(), company: company._id });
     if (existingStudent) {
       return res.status(400).json({ error: "A student with this ID already exists at this institution" });
     }
@@ -353,7 +353,7 @@ exports.registerStudent = async (req, res) => {
 
     const user = await User.create({
       name,
-      indexNumber: indexNumber.trim().toUpperCase(),
+      IndexNumber: IndexNumber.trim().toUpperCase(),
       password,
       phone: req.body.phone ? normalisePhone(req.body.phone) : null,
       email: email ? email.trim().toLowerCase() : null,
@@ -364,13 +364,13 @@ exports.registerStudent = async (req, res) => {
     });
 
     await StudentRoster.updateMany(
-      { studentId: indexNumber.trim().toUpperCase(), company: company._id },
+      { studentId: IndexNumber.trim().toUpperCase(), company: company._id },
       { $set: { registered: true, registeredUser: user._id } }
     );
 
     const Course = require("../models/Course");
     const rosterEntries = await StudentRoster.find({
-      studentId: indexNumber.trim().toUpperCase(),
+      studentId: IndexNumber.trim().toUpperCase(),
       company: company._id,
     });
     const courseIds = rosterEntries.map((r) => r.course);
@@ -395,7 +395,7 @@ exports.registerStudent = async (req, res) => {
     res.status(201).json({
       user: {
         id: user._id,
-        indexNumber: user.indexNumber,
+        IndexNumber: user.IndexNumber,
         name: user.name,
         role: user.role,
         isApproved: user.isApproved,
@@ -413,7 +413,7 @@ exports.registerStudent = async (req, res) => {
         email: user.email,
         name: user.name,
         institutionName: company.name,
-        indexNumber: user.indexNumber,
+        IndexNumber: user.IndexNumber,
       }).catch(err => console.error('Student welcome email failed:', err.message));
     }
   } catch (error) {
@@ -521,19 +521,19 @@ exports.registerEmployee = async (req, res) => {
 
 exports.login = async (req, res) => {
   try {
-    const { email, indexNumber, password, deviceId, institutionCode, loginRole, portalMode } = req.body;
+    const { email, IndexNumber, password, deviceId, institutionCode, loginRole, portalMode } = req.body;
 
     if (!password) {
       return res.status(400).json({ error: "Password is required" });
     }
 
-    if (!email && !indexNumber) {
+    if (!email && !IndexNumber) {
       return res.status(400).json({ error: "Email or student ID is required" });
     }
 
     let user;
-    if (indexNumber) {
-      const query = { indexNumber, role: "student" };
+    if (IndexNumber) {
+      const query = { IndexNumber, role: "student" };
       if (institutionCode) {
         const company = await Company.findOne({ institutionCode: institutionCode.toUpperCase() });
         if (!company) {
@@ -648,7 +648,7 @@ exports.login = async (req, res) => {
       user: {
         id: user._id,
         email: user.email,
-        indexNumber: user.indexNumber,
+        IndexNumber: user.IndexNumber,
         employeeId: user.employeeId,
         name: user.name,
         role: user.role,
@@ -772,9 +772,9 @@ exports.migrateOrphanUsers = async (req, res) => {
 
 exports.forgotPassword = async (req, res) => {
   try {
-    const { indexNumber, institutionCode } = req.body;
+    const { IndexNumber, institutionCode } = req.body;
 
-    if (!indexNumber || !institutionCode) {
+    if (!IndexNumber || !institutionCode) {
       return res.status(400).json({ error: "Student ID and institution code are required" });
     }
 
@@ -783,7 +783,7 @@ exports.forgotPassword = async (req, res) => {
       return res.status(404).json({ error: "Institution not found" });
     }
 
-    const user = await User.findOne({ indexNumber, company: company._id, role: "student" });
+    const user = await User.findOne({ IndexNumber, company: company._id, role: "student" });
     if (!user) {
       return res.status(404).json({ error: "Student not found" });
     }
@@ -825,14 +825,14 @@ exports.forgotPassword = async (req, res) => {
 
 exports.resetPassword = async (req, res) => {
   try {
-    const { indexNumber, resetCode, newPassword, institutionCode } = req.body;
+    const { IndexNumber, resetCode, newPassword, institutionCode } = req.body;
 
-    if (!indexNumber || !resetCode || !newPassword) {
+    if (!IndexNumber || !resetCode || !newPassword) {
       return res.status(400).json({ error: "Student ID, reset code, and new password are required" });
     }
 
     const filter = {
-      indexNumber,
+      IndexNumber,
       resetPasswordExpires: { $gt: Date.now() },
     };
 
@@ -861,7 +861,7 @@ exports.resetPassword = async (req, res) => {
       ipAddress: req.ip || req.headers['x-forwarded-for'] || '',
       userAgent: req.headers['user-agent'] || '',
       method: 'self',
-      resetBy: user.name || user.indexNumber,
+      resetBy: user.name || user.IndexNumber,
     });
     await user.save();
 
@@ -878,9 +878,9 @@ exports.resetPassword = async (req, res) => {
         sendAdminPasswordResetNotice({
           adminEmail: admin.email,
           adminName: admin.name || 'Admin',
-          targetUserName: user.name || user.indexNumber,
+          targetUserName: user.name || user.IndexNumber,
           targetUserRole: user.role,
-          targetUserEmail: user.email || user.indexNumber,
+          targetUserEmail: user.email || user.IndexNumber,
           institutionName: company?.name || '',
         }).catch(() => {});
       }
@@ -1134,7 +1134,7 @@ exports.resetPasswordEmail = async (req, res) => {
           adminName: admin.name || 'Admin',
           targetUserName: user.name || user.email,
           targetUserRole: user.role,
-          targetUserEmail: user.email || user.indexNumber,
+          targetUserEmail: user.email || user.IndexNumber,
           institutionName: company?.name || '',
         }).catch(() => {});
       }
