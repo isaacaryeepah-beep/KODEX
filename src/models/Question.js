@@ -15,7 +15,7 @@ const questionSchema = new mongoose.Schema(
     },
     questionType: {
       type: String,
-      enum: ["single", "multiple", "fill"],
+      enum: ["single", "multiple", "fill", "explain"],
       default: "single",
     },
     options: {
@@ -23,8 +23,8 @@ const questionSchema = new mongoose.Schema(
       default: [],
       validate: {
         validator: function(v) {
-          // fill-in questions don't need options
-          if (this.questionType === "fill") return true;
+          // fill-in and explain questions don't need options
+          if (this.questionType === "fill" || this.questionType === "explain") return true;
           return Array.isArray(v) && v.length >= 2;
         },
         message: "At least 2 options are required for MCQ questions",
