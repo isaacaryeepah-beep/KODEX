@@ -3666,7 +3666,14 @@ ${!isOffline ? `<button class="btn btn-sm" style="background:#7c3aed;color:#fff;
 async function showStartSessionModal() {
 const container = document.getElementById('modal-container');
 container.classList.remove('hidden');
-container.innerHTML = `<div class="modal-overlay"><div class="modal"><p style="color:var(--text-muted)">Loading courses-</p></div></div>`;
+container.innerHTML = '<div class="modal-overlay"><div class="modal"><p style="color:var(--text-muted)">Checking classroom device...</p></div></div>';
+
+// Require ESP32 to be online before allowing session start
+const esp32Online = await discoverESP32();
+if (!esp32Online) {
+container.innerHTML = '<div class="modal-overlay" onclick="closeModal(event)"><div class="modal" onclick="event.stopPropagation()"><div style="text-align:center;padding:16px 0"><div style="font-size:40px;margin-bottom:12px">📡</div><h3 style="margin-bottom:8px">Classroom device required</h3><p style="font-size:13px;color:var(--text-light);margin-bottom:20px">The ESP32 classroom device must be online before you can start an attendance session.<br><br>Make sure the device is powered on and connected to the school WiFi, then try again.</p><div class="modal-actions"><button class="btn btn-secondary btn-sm" onclick="closeModal()">Cancel</button><button class="btn btn-primary btn-sm" onclick="closeModal();setTimeout(showStartSessionModal,500)">Try again</button></div></div></div></div>';
+return;
+}
 
 let courses = [];
 try {
@@ -3674,7 +3681,7 @@ const d = await api('/api/courses');
 courses = d.courses || d || [];
 } catch(e) { courses = []; }
 
-container.innerHTML = `<div class="modal-overlay" onclick="closeModal(event)"> <div class="modal" onclick="event.stopPropagation()"> <h3>Start New Session</h3> <div class="form-group"> <label>Course <span style="color:red">*</span></label> <select id="session-course" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px"> <option value="">- Select Course -</option> ${courses.map(c =>`<option value="${c._id}">${esc(c.title)}${c.level?' - L'+c.level:''}${c.group?' - Grp '+c.group:''}</option>`).join('')} </select> </div> <div class="form-group"> <label>Session Title <span style="font-weight:400;color:var(--text-muted);font-size:12px">(optional)</span></label> <input type="text" id="session-title" placeholder="e.g., Week 5 Lecture"> </div> <div class="modal-actions"> <button class="btn btn-secondary btn-sm" onclick="closeModal()">Cancel</button> <button class="btn btn-primary btn-sm" onclick="startSession()">Start Session</button> </div> </div> </div> `;
+container.innerHTML = `<div class="modal-overlay" onclick="closeModal(event)"> <div class="modal" onclick="event.stopPropagation()"> <h3>Start New Session</h3> <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:8px 12px;margin-bottom:14px;font-size:12px;color:#166534;display:flex;align-items:center;gap:8px"><span style="font-size:14px">✓</span> Classroom device online — session will be ESP32-only</div> <div class="form-group"> <label>Course <span style="color:red">*</span></label> <select id="session-course" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px"> <option value="">- Select Course -</option> ${courses.map(c =>`<option value="${c._id}">${esc(c.title)}${c.level?' - L'+c.level:''}${c.group?' - Grp '+c.group:''}</option>`).join('')} </select> </div> <div class="form-group"> <label>Session Title <span style="font-weight:400;color:var(--text-muted);font-size:12px">(optional)</span></label> <input type="text" id="session-title" placeholder="e.g., Week 5 Lecture"> </div> <div class="modal-actions"> <button class="btn btn-secondary btn-sm" onclick="closeModal()">Cancel</button> <button class="btn btn-primary btn-sm" onclick="startSession()">Start Session</button> </div> </div> </div> `;
 }
 
 async function startSession() {
@@ -3683,25 +3690,6 @@ const courseId = document.getElementById('session-course')?.value;
 
 if (!courseId) { toastWarning('Please select a course.'); return; }
 closeModal();
-
-if (!isOnline()) {
-const tempId = 'offline_' + Date.now();
-offlineEnqueue({
-label: `Start session: ${title || 'Untitled'}`,
-url: '/api/attendance-sessions/start',
-options: { method: 'POST', body: JSON.stringify({ title, courseId }) }
-});
-const cached = offlineRead('sessions') || { sessions: [] };
-cached.sessions.unshift({
-_id: tempId, title: title || 'Untitled',
-status: 'active', startedAt: new Date().toISOString(), stoppedAt: null,
-_offlinePending: true
-});
-offlineCache('sessions', cached);
-showToastNotif('- Session queued - will start when online', 'warn');
-renderSessions();
-return;
-}
 
 try {
 await api('/api/attendance-sessions/start', { method: 'POST', body: JSON.stringify({ title, courseId }) });
@@ -3714,20 +3702,21 @@ toastError(e.message);
 async function stopSession(id) {
 if (!confirm('Stop this session?')) return;
 
-if (!isOnline()) {
+const serverUp = await isServerReachable();
+
+if (!serverUp) {
 offlineEnqueue({
 label: `Stop session ${id}`,
 url: `/api/attendance-sessions/${id}/stop`,
 options: { method: 'POST' }
 });
-// Optimistically update cache
 const cached = offlineRead('sessions');
 if (cached) {
 const s = cached.sessions.find(s => s._id === id);
 if (s) { s.status = 'stopped'; s.stoppedAt = new Date().toISOString(); s._offlinePending = true; }
 offlineCache('sessions', cached);
 }
-showToastNotif('- Stop queued - will sync when online', 'warn');
+showToastNotif('- Stop queued - will sync when back online', 'warn');
 renderSessions();
 return;
 }
