@@ -187,7 +187,7 @@ async function cleanStaleLocks() {
 // the device is offline -- auto-stop the session so students aren't left blocked.
 const AttendanceSession = require('../models/AttendanceSession');
 
-const ESP32_OFFLINE_MS = 6000; // matches esp32Controller threshold
+const ESP32_OFFLINE_MS = 20000; // 20s: firmware polls every 5s, allow 4 misses + latency
 
 async function esp32Watchdog() {
   try {
