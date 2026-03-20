@@ -644,6 +644,17 @@ const res = await fetch(`${API}${path}`, { ...options, headers: { ...headers, ..
 if (res.headers.get('content-type')?.includes('application/json')) {
 const data = await res.json();
 if (!res.ok) {
+// Token expired or invalid — auto logout so user can re-authenticate
+if (res.status === 401) {
+  const msg = data.error || '';
+  if (msg.includes('expired') || msg.includes('invalid') || msg.includes('token')) {
+    token = null;
+    localStorage.removeItem('token');
+    toastError('Your session has expired. Please sign in again.');
+    setTimeout(() => { currentUser = null; showPortalSelector(); }, 1500);
+    throw new Error('Session expired');
+  }
+}
 // Subscription gate - redirect lecturer to subscription page automatically
 if (res.status === 403 && data.subscriptionRequired) {
 showSubscriptionGate(data.message);
