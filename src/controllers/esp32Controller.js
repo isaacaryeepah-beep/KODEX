@@ -55,6 +55,17 @@ exports.poll = async (req, res) => {
     company.esp32Online   = true;
     company.esp32LastSeen = new Date();
 
+    // Store current attendance code so server can validate student marks
+    const { code, sessionActive } = req.query;
+    if (code) {
+      company.esp32CurrentCode  = code;
+      company.esp32CodeSetAt    = new Date();
+    }
+    if (sessionActive === 'false' || sessionActive === '0') {
+      company.esp32CurrentCode = null;
+      company.esp32CodeSetAt   = null;
+    }
+
     // Pick up and clear any pending command
     const command = company.esp32PendingCommand || null;
     if (command) {
