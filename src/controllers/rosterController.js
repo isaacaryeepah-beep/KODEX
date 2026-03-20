@@ -44,7 +44,7 @@ exports.uploadRoster = async (req, res) => {
         results.added++;
 
         const existingUser = await User.findOne({
-          indexNumber: normalizedId,
+          IndexNumber: normalizedId,
           company: req.user.company,
           role: "student",
         });
@@ -99,7 +99,7 @@ exports.getRoster = async (req, res) => {
 
     const roster = await StudentRoster.find({ course: courseId, company: req.user.company })
       .populate("addedBy", "name email")
-      .populate("registeredUser", "name indexNumber")
+      .populate("registeredUser", "name IndexNumber")
       .sort({ studentId: 1 });
 
     res.json({ roster, course: { id: course._id, title: course.title, code: course.code } });
