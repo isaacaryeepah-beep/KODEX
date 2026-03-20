@@ -212,7 +212,7 @@ exports.getSession = async (req, res) => {
     }
 
     const records = await AttendanceRecord.find({ session: id })
-      .populate("user", "name email indexNumber role")
+      .populate("user", "name email IndexNumber role")
       .sort({ checkInTime: 1 });
 
     res.json({ session, records });
@@ -237,7 +237,7 @@ exports.getSessionRecords = async (req, res) => {
     if (!session) return res.status(404).json({ error: "Session not found" });
 
     const records = await AttendanceRecord.find({ session: id })
-      .populate("user", "name email indexNumber role")
+      .populate("user", "name email IndexNumber role")
       .sort({ checkInTime: 1 });
 
     // Normalize: expose as 'student' field for frontend compatibility
@@ -376,7 +376,7 @@ exports.markAttendance = async (req, res) => {
     });
 
     const populated = await record.populate([
-      { path: "user", select: "name email indexNumber role" },
+      { path: "user", select: "name email IndexNumber role" },
       { path: "session", select: "title startedAt" },
     ]);
 
@@ -630,11 +630,11 @@ exports.esp32Sync = async (req, res) => {
         if (record.userId) {
           user = await User.findOne({ _id: record.userId, company: company._id });
         }
-        if (!user && record.indexNumber) {
-          user = await User.findOne({ indexNumber: record.indexNumber.toUpperCase(), company: company._id });
+        if (!user && record.IndexNumber) {
+          user = await User.findOne({ IndexNumber: record.IndexNumber.toUpperCase(), company: company._id });
         }
         if (!user) {
-          errors.push({ ref: record.indexNumber || record.userId, error: 'User not found' });
+          errors.push({ ref: record.IndexNumber || record.userId, error: 'User not found' });
           continue;
         }
 
@@ -655,7 +655,7 @@ exports.esp32Sync = async (req, res) => {
         }
 
         // Academic attendance records
-        if (!session) { errors.push({ ref: record.indexNumber, error: 'No session' }); continue; }
+        if (!session) { errors.push({ ref: record.IndexNumber, error: 'No session' }); continue; }
         const existing = await AttendanceRecord.findOne({ session: session._id, user: user._id });
         if (existing) { skipped++; continue; }
 
@@ -673,7 +673,7 @@ exports.esp32Sync = async (req, res) => {
         });
         synced++;
       } catch (e) {
-        errors.push({ ref: record.indexNumber || record.userId, error: e.message });
+        errors.push({ ref: record.IndexNumber || record.userId, error: e.message });
       }
     }
 
