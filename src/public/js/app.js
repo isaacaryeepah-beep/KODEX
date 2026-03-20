@@ -4554,7 +4554,7 @@ async function renderMeetings() {
   if (!content) return;
   try {
     const data = await api('/api/zoom');
-    const canCreate = ['manager', 'lecturer', 'admin', 'superadmin', 'hod'].includes(currentUser.role);
+    const canCreate = ['manager', 'lecturer', 'superadmin', 'hod'].includes(currentUser.role);
     const canManage = canCreate;
 
     const statusStyle = (s) => {
