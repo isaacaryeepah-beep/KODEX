@@ -63,30 +63,37 @@ if (company.bleLocationId) {
 
 const session = await AttendanceSession.create(sessionData);
 
-// -- Notify ESP32 if it's registered for this company --
-try {
-  const companyDoc = await Company.findById(companyId).select('esp32Token esp32Online esp32LastSeen');
-  const esp32Online = companyDoc?.esp32Token &&
-    companyDoc.esp32LastSeen &&
-    (Date.now() - new Date(companyDoc.esp32LastSeen).getTime() < 20000);
+// -- Require ESP32 to be online before allowing session start --
+const companyDoc = await Company.findById(companyId).select('esp32Token esp32Online esp32LastSeen');
+const esp32Online = companyDoc?.esp32Token &&
+  companyDoc.esp32LastSeen &&
+  (Date.now() - new Date(companyDoc.esp32LastSeen).getTime() < 20000);
 
-  if (esp32Online) {
-    companyDoc.esp32PendingCommand = {
-      action:    'start',
-      sessionId: session._id.toString(),
-      title:     session.title || 'Attendance Session',
-      issuedAt:  new Date(),
-    };
-    await companyDoc.save();
-    // Lock session to ESP32-only marking
-    session.esp32Only = true;
-    await session.save();
-    console.log('[ESP32] Start command queued. Session locked to ESP32-only marking.');
-  }
+if (!esp32Online) {
+  // Delete the session we just created — ESP32 not online
+  await AttendanceSession.findByIdAndDelete(session._id);
+  return res.status(403).json({
+    error: 'Classroom device is not online. Power on the ESP32 and wait for it to connect before starting a session.',
+    esp32Required: true,
+  });
+}
+
+// ESP32 is online — lock session and queue start command
+try {
+  companyDoc.esp32PendingCommand = {
+    action:    'start',
+    sessionId: session._id.toString(),
+    title:     session.title || 'Attendance Session',
+    issuedAt:  new Date(),
+  };
+  await companyDoc.save();
+  session.esp32Only = true;
+  await session.save();
+  console.log('[ESP32] Start command queued. Session locked to ESP32-only marking.');
 } catch (e) {
   console.warn('[ESP32] Could not queue start command:', e.message);
 }
-// -----------------------------------------------------
+// -------------------------------------------------------
 
 const populated = await session.populate([
   { path: "company", select: "name" },
@@ -372,28 +379,49 @@ if (existingRecord) {
 
 
 
-// -- ESP32-only mode: block app/mobile data marking ------
-// Only enforce if ESP32 is still online (polled within last 30s)
-// If ESP32 goes offline, fall back to normal app marking
+// -- ESP32-only mode: validate code against server-stored ESP32 code --
 const isEsp32Only = session.esp32Only === true;
-if (isEsp32Only && attendanceMethod !== 'ble_mark') {
-  const companyForEsp32 = await Company.findById(req.user.company).select('esp32LastSeen esp32Token');
-  const esp32StillOnline = companyForEsp32?.esp32Token &&
-    companyForEsp32?.esp32LastSeen &&
-    (Date.now() - new Date(companyForEsp32.esp32LastSeen).getTime() < 20000);
-
-  console.log('[MARK] esp32Only:', isEsp32Only, 'esp32StillOnline:', esp32StillOnline, 'method:', attendanceMethod);
-
-  if (esp32StillOnline) {
-    return res.status(403).json({
-      error: 'This session requires you to be physically present in the classroom. Connect to the KODEX-CLASSROOM WiFi and open http://192.168.4.1 to mark your attendance.',
+if (isEsp32Only) {
+  // Student must submit the current ESP32 attendance code
+  const submittedCode = req.body.code || req.body.esp32Code;
+  if (!submittedCode) {
+    return res.status(400).json({
+      error: 'Attendance code required. Connect to KODEX-CLASSROOM WiFi and enter the code shown on the classroom device.',
+      esp32Required: true,
     });
-  } else {
-    // ESP32 went offline - allow app marking as fallback
-    console.log('[MARK] ESP32 offline - allowing app fallback');
+  }
+
+  // Fetch the current code the ESP32 last reported
+  const companyDoc = await Company.findById(req.user.company)
+    .select('esp32CurrentCode esp32CodeSetAt esp32LastSeen esp32Token');
+
+  const esp32Online = companyDoc?.esp32Token &&
+    companyDoc.esp32LastSeen &&
+    (Date.now() - new Date(companyDoc.esp32LastSeen).getTime() < 20000);
+
+  if (!esp32Online) {
+    return res.status(403).json({
+      error: 'Classroom device is offline. The session will end shortly.',
+      esp32Required: true,
+    });
+  }
+
+  // Code must match and be fresh (within 35s — one rotation window + buffer)
+  const CODE_VALID_MS = 35000;
+  const codeAge = companyDoc.esp32CodeSetAt
+    ? Date.now() - new Date(companyDoc.esp32CodeSetAt).getTime()
+    : Infinity;
+
+  if (!companyDoc.esp32CurrentCode ||
+      submittedCode.toString().trim() !== companyDoc.esp32CurrentCode.toString().trim() ||
+      codeAge > CODE_VALID_MS) {
+    return res.status(403).json({
+      error: 'Invalid or expired code. Please check the code on the classroom device and try again.',
+      esp32Required: true,
+    });
   }
 }
-// -----------------------------------------------------
+// -------------------------------------------------------
 let qrTokenRef = null;
 
 if (attendanceMethod === "qr_mark") {
