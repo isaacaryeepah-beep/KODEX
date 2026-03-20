@@ -407,7 +407,7 @@ if (isEsp32Only) {
   }
 
   // Code must match and be fresh (within 35s — one rotation window + buffer)
-  const CODE_VALID_MS = 35000;
+  const CODE_VALID_MS = 65000;
   const codeAge = companyDoc.esp32CodeSetAt
     ? Date.now() - new Date(companyDoc.esp32CodeSetAt).getTime()
     : Infinity;
@@ -741,8 +741,11 @@ if (offlineSession) {
         _id: offlineSession.id.startsWith('esp32_') ? undefined : offlineSession.id,
         title: offlineSession.title || 'Offline Session',
         company: company._id,
-        status: 'active',
+        status: 'stopped',
         startedAt: new Date(offlineSession.startedAt),
+        stoppedAt: new Date(offlineSession.stoppedAt || Date.now()),
+        stoppedReason: 'esp32_offline',
+        esp32Only: true,
         source: 'esp32_offline',
       });
       console.log('[ESP32 Sync] Created offline session:', session._id);
