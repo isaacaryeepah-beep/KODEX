@@ -7,7 +7,7 @@ const router = express.Router();
 
 router.use(authenticate);
 
-router.post("/create", requireRole("manager", "lecturer", "admin", "superadmin", "hod"), ctrl.createMeeting);
+router.post("/create", requireRole("manager", "lecturer", "superadmin", "hod"), ctrl.createMeeting);
 
 router.post("/end", ctrl.endMeeting);
 
