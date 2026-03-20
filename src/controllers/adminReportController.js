@@ -121,7 +121,7 @@ exports.attendanceOverview = async (req, res) => {
 
     const [records, allStudents] = await Promise.all([
       AttendanceRecord.find({ company: companyId, session: { $in: sessionIds } })
-        .populate("user", "name email indexNumber role")
+        .populate("user", "name email IndexNumber role")
         .populate("session", "title startedAt stoppedAt course createdBy"),
       User.find({
         company: companyId,
@@ -262,7 +262,7 @@ exports.attendanceOverview = async (req, res) => {
         y2 = checkPage(doc, y2, detailCols);
         y2 = drawTableRow(doc, [
           { text: r.user?.name || "Unknown", width: detailCols[0].width },
-          { text: r.user?.indexNumber || r.user?.email || "", width: detailCols[1].width },
+          { text: r.user?.IndexNumber || r.user?.email || "", width: detailCols[1].width },
           { text: r.session?.title || "Untitled", width: detailCols[2].width },
           { text: r.checkInTime ? new Date(r.checkInTime).toLocaleDateString() : "N/A", width: detailCols[3].width },
           { text: r.status || "N/A", width: detailCols[4].width },
@@ -492,7 +492,7 @@ exports.performanceReport = async (req, res) => {
     const [courses, company] = await Promise.all([
       Course.find(courseFilter)
         .populate("lecturer", "name email")
-        .populate("enrolledStudents", "name indexNumber email"),
+        .populate("enrolledStudents", "name IndexNumber email"),
       Company.findById(companyId).select("name mode"),
     ]);
 
@@ -510,7 +510,7 @@ exports.performanceReport = async (req, res) => {
     }
 
     const submissions = await Attempt.find({ ...submissionFilter, isSubmitted: true })
-      .populate("student", "name indexNumber email")
+      .populate("student", "name IndexNumber email")
       .populate("quiz", "title course");
 
     const courseQuizMap = {};
@@ -656,7 +656,7 @@ exports.performanceReport = async (req, res) => {
         const pct = sub.maxScore > 0 ? ((sub.score / sub.maxScore) * 100).toFixed(1) : "0";
         y2 = drawTableRow(doc, [
           { text: sub.student?.name || "Unknown", width: subCols[0].width },
-          { text: sub.student?.indexNumber || sub.student?.email || "", width: subCols[1].width },
+          { text: sub.student?.IndexNumber || sub.student?.email || "", width: subCols[1].width },
           { text: sub.quiz?.title || "N/A", width: subCols[2].width },
           { text: `${sub.score}/${sub.maxScore} (${pct}%)`, width: subCols[3].width },
           { text: new Date(sub.submittedAt).toLocaleDateString(), width: subCols[4].width },
@@ -790,7 +790,7 @@ exports.studentAnalytics = async (req, res) => {
     const studentRole = mode === "academic" ? "student" : "employee";
 
     const students = await User.find({ company: companyId, role: studentRole, isApproved: true })
-      .select("name email indexNumber employeeId");
+      .select("name email IndexNumber employeeId");
 
     const allRecords = await AttendanceRecord.find({ company: companyId })
       .select("user status session");
@@ -887,7 +887,7 @@ exports.studentAnalytics = async (req, res) => {
 
       const row = [
         { text: st.name, width: cols[0].width },
-        { text: isAcademic ? (st.indexNumber || "") : (st.email || ""), width: cols[1].width },
+        { text: isAcademic ? (st.IndexNumber || "") : (st.email || ""), width: cols[1].width },
         { text: String(rec.present), width: cols[2].width },
         { text: String(rec.late), width: cols[3].width },
         { text: String(rec.absent), width: cols[4].width },
