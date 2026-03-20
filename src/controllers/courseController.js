@@ -4,16 +4,23 @@ const User = require("../models/User");
 
 exports.createCourse = async (req, res) => {
   try {
-    const { title, code, description } = req.body;
+    const { title, code, description, level, year, group, sessionType } = req.body;
 
     if (!title || !code) {
       return res.status(400).json({ error: "Title and code are required" });
     }
+    if (!level) return res.status(400).json({ error: "Level is required" });
+    if (!year)  return res.status(400).json({ error: "Year is required" });
+    if (!sessionType) return res.status(400).json({ error: "Session type is required" });
 
     const course = await Course.create({
       title,
       code,
       description: description || "",
+      level:       level || null,
+      year:        year  || null,
+      group:       group ? group.trim().toUpperCase() : null,
+      sessionType: sessionType || null,
       company: req.user.company,
       lecturer: req.user._id,
     });
@@ -101,11 +108,15 @@ exports.getCourse = async (req, res) => {
 exports.updateCourse = async (req, res) => {
   try {
     const { id } = req.params;
-    const { title, description, isActive } = req.body;
+    const { title, description, isActive, level, year, group, sessionType } = req.body;
     const update = {};
     if (title) update.title = title;
     if (description !== undefined) update.description = description;
     if (typeof isActive === "boolean") update.isActive = isActive;
+    if (level)       update.level       = level;
+    if (year)        update.year        = year;
+    if (group)       update.group       = group.trim().toUpperCase();
+    if (sessionType) update.sessionType = sessionType;
 
     const updateFilter = { _id: id, ...req.companyFilter };
     if (req.user.role === "lecturer") {
