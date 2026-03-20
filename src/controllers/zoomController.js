@@ -62,7 +62,7 @@ exports.createMeeting = async (req, res) => {
     const populated = await meeting.populate([
       { path: "createdBy", select: "name email" },
       { path: "company", select: "name" },
-      { path: "participants", select: "name email indexNumber role" },
+      { path: "participants", select: "name email IndexNumber role" },
       { path: "course", select: "title code" },
     ]);
 
@@ -98,7 +98,7 @@ exports.listMeetings = async (req, res) => {
         .limit(parseInt(limit))
         .populate("createdBy", "name email")
         .populate("company", "name")
-        .populate("participants", "name email indexNumber role")
+        .populate("participants", "name email IndexNumber role")
         .populate("course", "title code"),
       ZoomMeeting.countDocuments(filter),
     ]);
@@ -134,9 +134,9 @@ exports.getMeeting = async (req, res) => {
     const meeting = await ZoomMeeting.findOne(meetingFilter)
       .populate("createdBy", "name email")
       .populate("company", "name")
-      .populate("participants", "name email indexNumber role")
+      .populate("participants", "name email IndexNumber role")
       .populate("course", "title code")
-      .populate("attendees.user", "name email indexNumber role");
+      .populate("attendees.user", "name email IndexNumber role");
 
     if (!meeting) {
       return res.status(404).json({ error: "Meeting not found" });
@@ -300,7 +300,7 @@ exports.endMeeting = async (req, res) => {
     await meeting.save();
 
     const populated = await ZoomMeeting.findById(meeting._id)
-      .populate("attendees.user", "name email indexNumber role")
+      .populate("attendees.user", "name email IndexNumber role")
       .populate("createdBy", "name email");
 
     res.json({
@@ -359,7 +359,7 @@ exports.getMeetingAttendees = async (req, res) => {
     }
 
     const meeting = await ZoomMeeting.findOne(attendeesFilter)
-      .populate('attendees.user', 'name email indexNumber role')
+      .populate('attendees.user', 'name email IndexNumber role')
       .select('title status attendees scheduledStart scheduledEnd');
 
     if (!meeting) {
@@ -410,7 +410,7 @@ exports.getMeetingAttendance = async (req, res) => {
     if (req.user.role === 'lecturer') filter.createdBy = req.user._id;
 
     const meeting = await ZoomMeeting.findOne(filter)
-      .populate('attendees.user', 'name email indexNumber role');
+      .populate('attendees.user', 'name email IndexNumber role');
     if (!meeting) return res.status(404).json({ error: 'Meeting not found' });
 
     const attendance = meeting.attendees.map(a => {
@@ -446,7 +446,7 @@ exports.getMeetingAttendanceCSV = async (req, res) => {
     if (req.user.role === 'lecturer') filter.createdBy = req.user._id;
 
     const meeting = await ZoomMeeting.findOne(filter)
-      .populate('attendees.user', 'name email indexNumber role');
+      .populate('attendees.user', 'name email IndexNumber role');
     if (!meeting) return res.status(404).json({ error: 'Meeting not found' });
 
     const rows = [['Name', 'Email / Index', 'Role', 'Join Time', 'Leave Time', 'Duration (mins)', 'Status']];
@@ -457,7 +457,7 @@ exports.getMeetingAttendanceCSV = async (req, res) => {
       const status = dur >= 30 ? 'Present' : dur > 0 ? 'Partial' : a.status === 'joined' ? 'Partial' : 'Absent';
       rows.push([
         a.user?.name || '',
-        a.user?.email || a.user?.indexNumber || '',
+        a.user?.email || a.user?.IndexNumber || '',
         a.user?.role || '',
         join ? new Date(join).toLocaleString() : '',
         leave ? new Date(leave).toLocaleString() : 'Still in meeting',
