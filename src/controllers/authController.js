@@ -308,6 +308,86 @@ exports.registerLecturer = async (req, res) => {
   }
 };
 
+
+exports.registerHod = async (req, res) => {
+  try {
+    const { name, email, password, institutionCode, department, phone } = req.body;
+
+    if (!name || !email || !password) {
+      return res.status(400).json({ error: 'Name, email, and password are required' });
+    }
+    if (password.length < 8) {
+      return res.status(400).json({ error: 'Password must be at least 8 characters' });
+    }
+    if (!institutionCode?.trim()) {
+      return res.status(400).json({ error: 'Institution code is required' });
+    }
+    if (!department?.trim()) {
+      return res.status(400).json({ error: 'Department is required' });
+    }
+
+    const company = await Company.findOne({ institutionCode: institutionCode.toUpperCase(), mode: 'academic' });
+    if (!company) {
+      return res.status(404).json({ error: 'Institution not found. Please check your institution code.' });
+    }
+    if (!company.isActive) {
+      return res.status(403).json({ error: 'This institution is currently inactive.' });
+    }
+
+    // Only one HOD per department
+    const existingHod = await User.findOne({ company: company._id, role: 'hod', department: department.trim() });
+    if (existingHod) {
+      return res.status(400).json({ error: `The ${department.trim()} department already has an HOD. Contact your admin.` });
+    }
+
+    const existingUser = await User.findOne({ email, company: company._id });
+    if (existingUser) {
+      return res.status(400).json({ error: 'A user with this email already exists at this institution' });
+    }
+
+    const normPhone = phone ? normalisePhone(phone) : null;
+    if (normPhone) {
+      const phoneExists = await User.findOne({ phone: normPhone, company: company._id });
+      if (phoneExists) return res.status(400).json({ error: 'Phone number is already in use' });
+    }
+
+    const user = await User.create({
+      name,
+      email,
+      password,
+      phone: normPhone,
+      company: company._id,
+      role: 'hod',
+      isApproved: false,
+      department: department.trim(),
+    });
+
+    res.status(201).json({
+      user: {
+        id: user._id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        isApproved: user.isApproved,
+        mustChangePassword: user.mustChangePassword || false,
+        company: { id: company._id, name: company.name, mode: company.mode },
+      },
+      message: 'Registration successful. Your account is pending admin approval.',
+    });
+  } catch (error) {
+    if (error.name === 'ValidationError') {
+      const messages = Object.values(error.errors).map((e) => e.message);
+      return res.status(400).json({ error: messages.join(', ') });
+    }
+    if (error.code === 11000) {
+      if (Object.keys(error.keyPattern || {}).includes('phone')) return res.status(400).json({ error: 'Phone number is already in use' });
+      return res.status(400).json({ error: 'This email is already registered at this institution' });
+    }
+    console.error('HOD register error:', error);
+    res.status(500).json({ error: 'HOD registration failed' });
+  }
+};
+
 exports.registerStudent = async (req, res) => {
   try {
     const { name, indexNumber, password, institutionCode, department, email } = req.body;
