@@ -4593,7 +4593,7 @@ async function renderMeetings() {
                   ${m.inviteLink ? `<a href="${m.inviteLink}" target="_blank" class="btn btn-sm" style="margin-left:4px;background:#f0fdf4;color:#16a34a;border:1px solid #86efac;font-size:11px">▶ Join via Link</a>` : ''}
                   ${canControl && m.status === 'active' ? `<button class="btn btn-danger btn-sm" onclick="endMeeting('${m._id}')" style="margin-left:4px;">End</button>` : ''}
                   ${canControl && (m.status === 'scheduled' || m.status === 'active') ? `<button class="btn btn-secondary btn-sm" onclick="cancelMeeting('${m._id}')" style="margin-left:4px;">Cancel</button>` : ''}
-                  <button class="btn btn-secondary btn-sm" onclick="viewMeetingDetail('${m._id}')" style="margin-left:4px;">Details</button>
+                  ${currentUser.role !== 'student' ? `<button class="btn btn-secondary btn-sm" onclick="viewMeetingDetail('${m._id}')" style="margin-left:4px;">Details</button>` : ''}
                   ${canControl && m.status === 'completed' ? `<button class="btn btn-sm" style="margin-left:4px;background:#7c3aed;color:#fff" onclick="viewMeetingAttendance('${m._id}', '${m.title}')">Attendance</button>` : ''}
                 </td>
               </tr>`;
@@ -4826,6 +4826,7 @@ async function cancelMeeting(id) {
 }
 
 async function viewMeetingDetail(id) {
+  if (currentUser.role === 'student') { toastWarning('Access denied.'); return; }
   const content = document.getElementById('main-content');
   if (!content) return;
   content.innerHTML = '<div class="card"><p>Loading meeting details...</p></div>';
