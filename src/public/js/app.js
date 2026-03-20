@@ -8895,6 +8895,7 @@ function annCard(a, canPost, isAdmin) {
             ${!a.isRead ? '<span style="background:#6366f1;color:#fff;font-size:10px;padding:1px 7px;border-radius:20px;font-weight:700;">NEW</span>' : ''}
           </div>
           <div style="font-size:13px;color:var(--text-light);margin-bottom:10px;white-space:pre-wrap;line-height:1.6;">${a.body}</div>
+          ${a.hasPdf ? `<a href="/api/announcements/${a._id}/pdf" target="_blank" download="${esc(a.pdfName||'attachment.pdf')}" style="display:inline-flex;align-items:center;gap:6px;padding:6px 12px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:7px;font-size:12px;font-weight:600;color:#15803d;text-decoration:none;margin-bottom:8px;">📄 ${esc(a.pdfName||'Download PDF')}</a>` : ''}
           <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:11px;color:var(--text-muted);">
             <span>👤 ${a.author?.name || 'Unknown'}</span>
             <span>📢 ${audienceLabel}</span>
@@ -8994,6 +8995,22 @@ async function openPostAnnouncementModal() {
           <input type="checkbox" id="ann-pinned" style="accent-color:var(--primary);width:15px;height:15px;">
           📌 Pin this announcement to the top
         </label>` : ''}
+        <div>
+          <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:5px;display:block;">Attach PDF <span style="font-weight:400;text-transform:none;">(optional, max 10MB)</span></label>
+          <label for="ann-pdf-input" style="display:flex;align-items:center;gap:10px;padding:10px 14px;border:1.5px dashed var(--border);border-radius:8px;cursor:pointer;background:var(--bg);transition:border-color .2s;" onmouseover="this.style.borderColor='var(--primary)'" onmouseout="this.style.borderColor='var(--border)'">
+            <span style="font-size:20px;">📎</span>
+            <div>
+              <div id="ann-pdf-label" style="font-size:13px;font-weight:600;color:var(--text);">Click to select a PDF</div>
+              <div style="font-size:11px;color:var(--text-muted);">Only PDF files accepted</div>
+            </div>
+            <input type="file" id="ann-pdf-input" accept="application/pdf" style="display:none" onchange="annHandlePdf(this)">
+          </label>
+          <div id="ann-pdf-preview" style="display:none;margin-top:6px;padding:8px 12px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:7px;display:none;align-items:center;gap:8px;font-size:12px;">
+            <span>📄</span>
+            <span id="ann-pdf-filename" style="flex:1;font-weight:600;color:#15803d;"></span>
+            <button onclick="annClearPdf()" style="background:none;border:none;cursor:pointer;color:#dc2626;font-size:14px;padding:0 4px;">✕</button>
+          </div>
+        </div>
         <div id="ann-post-err" style="display:none;padding:8px 12px;background:#fef2f2;border:1px solid #fecaca;border-radius:7px;color:#dc2626;font-size:12px;font-weight:500;"></div>
       </div>
       <div style="padding:12px 20px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end;position:sticky;bottom:0;background:var(--card);border-radius:0 0 14px 14px;">
@@ -9013,6 +9030,8 @@ async function submitAnnouncement() {
   const pinned   = document.getElementById('ann-pinned')?.checked || false;
   const courseId = document.getElementById('ann-course')?.value || null;
   const errEl    = document.getElementById('ann-post-err');
+  const pdfData  = window._annPdfData || null;
+  const pdfName  = window._annPdfName || null;
 
   if (!title || !body) {
     if (errEl) { errEl.textContent = 'Title and message are required.'; errEl.style.display = 'block'; }
@@ -9021,14 +9040,46 @@ async function submitAnnouncement() {
   try {
     await api('/api/announcements', {
       method: 'POST',
-      body: JSON.stringify({ title, body, type, audience, pinned, expiresAt: expiresAt ? new Date(expiresAt).toISOString() : null, courseId: courseId || undefined }),
+      body: JSON.stringify({ title, body, type, audience, pinned, expiresAt: expiresAt ? new Date(expiresAt).toISOString() : null, courseId: courseId || undefined, pdfData, pdfName }),
     });
     document.getElementById('ann-post-overlay')?.remove();
+    window._annPdfData = null;
+    window._annPdfName = null;
     toastSuccess('Announcement posted ✓');
     renderAnnouncements();
   } catch(e) {
     if (errEl) { errEl.textContent = e.message || 'Failed to post'; errEl.style.display = 'block'; }
   }
+}
+
+function annHandlePdf(input) {
+  const file = input.files[0];
+  if (!file) return;
+  if (file.type !== 'application/pdf') { toastWarning('Only PDF files are accepted.'); input.value = ''; return; }
+  if (file.size > 10 * 1024 * 1024) { toastWarning('PDF must be under 10MB.'); input.value = ''; return; }
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    window._annPdfData = e.target.result;
+    window._annPdfName = file.name;
+    const label   = document.getElementById('ann-pdf-label');
+    const preview = document.getElementById('ann-pdf-preview');
+    const fname   = document.getElementById('ann-pdf-filename');
+    if (label)   label.textContent = 'PDF selected';
+    if (fname)   fname.textContent = file.name;
+    if (preview) { preview.style.display = 'flex'; }
+  };
+  reader.readAsDataURL(file);
+}
+
+function annClearPdf() {
+  window._annPdfData = null;
+  window._annPdfName = null;
+  const input   = document.getElementById('ann-pdf-input');
+  const label   = document.getElementById('ann-pdf-label');
+  const preview = document.getElementById('ann-pdf-preview');
+  if (input)   input.value = '';
+  if (label)   label.textContent = 'Click to select a PDF';
+  if (preview) preview.style.display = 'none';
 }
 
 async function annDelete(id) {
