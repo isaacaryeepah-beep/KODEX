@@ -943,7 +943,7 @@ exports.forgotPasswordEmail = async (req, res) => {
       const smsResult = await sendOtp({ phone: normPhone, code, name: user.name });
       if (smsResult.ok || smsResult.dev) {
         smsSent = true;
-        console.log(`[ForgotPasswordEmail] OTP sent via SMS to ${normPhone}`);
+        console.log(`[ForgotPasswordEmail] OTP sent via SMS to ${normPhone.slice(0,6)}***`);
       } else {
         console.error('[ForgotPasswordEmail] SMS failed:', smsResult.error);
       }
@@ -1031,7 +1031,7 @@ exports.forgotPasswordAdmin = async (req, res) => {
       const smsResult = await sendOtp({ phone: normPhone, code, name: user.name });
       if (smsResult.ok || smsResult.dev) {
         smsSent = true;
-        console.log(`[ForgotPasswordAdmin] OTP sent via SMS to ${normPhone}`);
+        console.log(`[ForgotPasswordAdmin] OTP sent via SMS to ${normPhone.slice(0,6)}***`);
       } else {
         console.error('[ForgotPasswordAdmin] SMS failed:', smsResult.error);
       }
