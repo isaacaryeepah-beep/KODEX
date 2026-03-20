@@ -29,6 +29,11 @@ const answerSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    // True for "explain" type answers that need manual grading by the lecturer
+    pendingManualGrade: {
+      type: Boolean,
+      default: false,
+    },
   },
   {
     timestamps: true,
