@@ -55,7 +55,7 @@ exports.getUserStats = async (req, res) => {
 
 exports.createUser = async (req, res) => {
   try {
-    const { email, password, name, role, indexNumber, phone, department, programme, studentLevel, studentGroup, sessionType, semester } = req.body;
+    const { email, password, name, role, IndexNumber, phone, department, programme, studentLevel, studentGroup, sessionType, semester } = req.body;
     const targetRole = role || "employee";
 
     const company = await Company.findById(req.user.company);
@@ -109,10 +109,10 @@ exports.createUser = async (req, res) => {
       password,
       name,
       role: targetRole,
+      phone: normPhone,
       company: req.user.company,
       department: department ? department.trim() : null,
     };
-    if (normPhone) userData.phone = normPhone;
 
     // Department rules
     if (targetRole === "hod") {
@@ -140,7 +140,10 @@ exports.createUser = async (req, res) => {
     }
 
     if (targetRole === "student") {
-      if (indexNumber) userData.indexNumber = indexNumber;
+      if (!IndexNumber) {
+        return res.status(400).json({ error: "Index number is required for students" });
+      }
+      userData.IndexNumber = IndexNumber;
       // Save student classification
       if (programme)    userData.programme    = programme.trim();
       if (studentLevel) userData.studentLevel = studentLevel.trim();
@@ -336,7 +339,7 @@ exports.deleteUser = async (req, res) => {
 
 // ── Bulk CSV import ──────────────────────────────────────────────────────────
 // POST /api/users/bulk-import  (multipart/form-data)
-// CSV columns: name*, indexNumber*, email (optional), phone (optional), courseCode (optional), department (optional)
+// CSV columns: name*, IndexNumber*, email (optional), phone (optional), courseCode (optional), department (optional)
 // Generates a random password for each student; returns a downloadable results list.
 exports.bulkImportStudents = async (req, res) => {
   const multer = require("multer");
@@ -372,7 +375,7 @@ exports.bulkImportStudents = async (req, res) => {
         const semesterIdx    = headers.findIndex(h => h === "semester" || h === "sem");
 
         if (nameIdx === -1 || idxIdx === -1) {
-          return res.status(400).json({ error: "CSV must have 'name' and 'indexNumber' columns" });
+          return res.status(400).json({ error: "CSV must have 'name' and 'IndexNumber' columns" });
         }
 
         for (let i = 1; i < lines.length; i++) {
@@ -380,7 +383,7 @@ exports.bulkImportStudents = async (req, res) => {
           if (!cols[nameIdx] && !cols[idxIdx]) continue; // skip blank rows
           rows.push({
             name:        (cols[nameIdx]        || "").trim(),
-            indexNumber: (cols[idxIdx]         || "").trim().toUpperCase(),
+            IndexNumber: (cols[idxIdx]         || "").trim().toUpperCase(),
             email:       emailIdx >= 0       ? (cols[emailIdx]       || "").trim() : "",
             phone:       phoneIdx >= 0       ? (cols[phoneIdx]       || "").trim() : "",
             courseCode:  courseIdx >= 0      ? (cols[courseIdx]      || "").trim().toUpperCase() : "",
@@ -419,22 +422,22 @@ exports.bulkImportStudents = async (req, res) => {
       const createdStudents = [];
 
       for (const row of rows) {
-        if (!row.name || !row.indexNumber) {
-          results.errors.push({ row: row.indexNumber || "?", error: "Missing name or indexNumber" });
+        if (!row.name || !row.IndexNumber) {
+          results.errors.push({ row: row.IndexNumber || "?", error: "Missing name or IndexNumber" });
           results.skipped++;
           continue;
         }
 
-        // Generate a readable temp password: first 3 of name + last 3 of indexNumber + 4-digit random
+        // Generate a readable temp password: first 3 of name + last 3 of IndexNumber + 4-digit random
         const namePart = row.name.replace(/[^a-zA-Z]/g, "").slice(0, 3).toLowerCase();
-        const idPart   = row.indexNumber.replace(/[^a-zA-Z0-9]/g, "").slice(-3).toLowerCase();
+        const idPart   = row.IndexNumber.replace(/[^a-zA-Z0-9]/g, "").slice(-3).toLowerCase();
         const numPart  = String(Math.floor(1000 + Math.random() * 9000));
         const tempPassword = namePart + idPart + numPart;
 
         // Build user data — email optional for students
         const userData = {
           name: row.name,
-          indexNumber: row.indexNumber,
+          IndexNumber: row.IndexNumber,
           password: tempPassword,
           role: "student",
           company: req.user.company,
@@ -463,15 +466,15 @@ exports.bulkImportStudents = async (req, res) => {
             // Also add to StudentRoster if not already there
             const StudentRoster = require("../models/StudentRoster");
             await StudentRoster.findOneAndUpdate(
-              { studentId: row.indexNumber, course: course._id, company: req.user.company },
-              { $setOnInsert: { studentId: row.indexNumber, name: row.name, course: course._id, company: req.user.company, addedBy: req.user._id, registered: true, registeredUser: user._id } },
+              { studentId: row.IndexNumber, course: course._id, company: req.user.company },
+              { $setOnInsert: { studentId: row.IndexNumber, name: row.name, course: course._id, company: req.user.company, addedBy: req.user._id, registered: true, registeredUser: user._id } },
               { upsert: true, new: false }
             ).catch(() => {}); // ignore duplicate roster errors
           }
 
           createdStudents.push({
             name: user.name,
-            indexNumber: user.indexNumber,
+            IndexNumber: user.IndexNumber,
             email: user.email || "",
             tempPassword,
             course: course?.title || "",
@@ -480,11 +483,11 @@ exports.bulkImportStudents = async (req, res) => {
         } catch (err) {
           if (err.code === 11000) {
             results.skipped++;
-            results.errors.push({ row: row.indexNumber, error: "Already exists" });
-            createdStudents.push({ name: row.name, indexNumber: row.indexNumber, email: row.email || "", tempPassword: "(existing)", course: "", status: "skipped" });
+            results.errors.push({ row: row.IndexNumber, error: "Already exists" });
+            createdStudents.push({ name: row.name, IndexNumber: row.IndexNumber, email: row.email || "", tempPassword: "(existing)", course: "", status: "skipped" });
           } else {
             results.skipped++;
-            results.errors.push({ row: row.indexNumber, error: err.message });
+            results.errors.push({ row: row.IndexNumber, error: err.message });
           }
         }
       }
@@ -553,7 +556,7 @@ exports.getResetLogs = async (req, res) => {
     const users = await User.find({
       company: req.user.company,
       "passwordResetLog.0": { $exists: true },
-    }).select("name email indexNumber role passwordResetLog").lean();
+    }).select("name email IndexNumber role passwordResetLog").lean();
 
     // Flatten all logs into one list sorted by most recent
     const logs = [];
@@ -561,9 +564,9 @@ exports.getResetLogs = async (req, res) => {
       for (const log of (user.passwordResetLog || [])) {
         logs.push({
           userId:    user._id,
-          userName:  user.name || user.email || user.indexNumber,
+          userName:  user.name || user.email || user.IndexNumber,
           userRole:  user.role,
-          userEmail: user.email || user.indexNumber,
+          userEmail: user.email || user.IndexNumber,
           resetAt:   log.resetAt,
           ipAddress: log.ipAddress,
           userAgent: log.userAgent,
@@ -612,7 +615,7 @@ exports.adminResetStudentPassword = async (req, res) => {
       message: "Temporary password generated. Give this to the student.",
       tempPassword,
       userName: target.name,
-      userEmail: target.email || target.indexNumber,
+      userEmail: target.email || target.IndexNumber,
     });
   } catch (error) {
     console.error("Admin reset student password error:", error);
