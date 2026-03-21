@@ -33,6 +33,8 @@ exports.startSession = async (req, res) => {
   try {
     const companyId = req.user.company;
 
+    // Use company already loaded by subscription middleware if available,
+    // otherwise fetch fresh — always re-fetch to get latest esp32Devices state
     const company = await Company.findById(companyId);
     if (!company || !company.isActive) {
       return res.status(404).json({ error: "Company not found or inactive" });
@@ -41,8 +43,11 @@ exports.startSession = async (req, res) => {
     // ── ESP32 device online check ────────────────────────────────────────────
     // If the company has a registered ESP32 device, it MUST be actively sending
     // heartbeats (within the last 10s) before attendance can be started.
-    if (company.esp32Devices && company.esp32Devices.length > 0) {
-      const deviceStatus = await checkEsp32Online(company);
+    const esp32Devices = company.esp32Devices || company.get("esp32Devices") || [];
+    console.log(`[SESSION] esp32Devices for ${company.name}:`, esp32Devices.length, "device(s)");
+
+    if (esp32Devices.length > 0) {
+      const deviceStatus = await checkEsp32Online({ esp32Devices });
 
       if (!deviceStatus.online) {
         const lastSeenMsg = deviceStatus.lastSeenAt
