@@ -306,21 +306,60 @@ exports.markAttendance = async (req, res) => {
 
     // ════════════════════════════════════════════════════════════════════════════
     // ANTI-CHEAT SECURITY CHECKS
-    // Applies to students/employees marking via QR or code methods.
+    // Applies to students/employees marking via QR, BLE, or verbal code methods.
     // Skipped for manual/admin marks and jitsi/zoom joins.
     // ════════════════════════════════════════════════════════════════════════════
-    const isDeviceMethod = ['qr_mark','ble_mark','code_mark'].includes(attendanceMethod) ||
+
+    // Resolve the intended method BEFORE the security checks so that verbal/code
+    // submissions (which arrive as method=undefined but with a `code` body field)
+    // are correctly identified as device-bound methods and subjected to the IP check.
+    // Previously `attendanceMethod` was declared AFTER this block, so it was always
+    // undefined here and `isDeviceMethod` silently evaluated to false for verbal codes.
+    const earlyMethod = method ? (methodMap[method] || method) : (
+      qrToken ? 'qr_mark' :
+      code    ? 'code_mark' :
+      'manual'
+    );
+
+    const isDeviceMethod = ['qr_mark','ble_mark','code_mark'].includes(earlyMethod) ||
                            ['qr','ble'].includes(method);
 
     if (isDeviceMethod && ['student','employee'].includes(req.user.role)) {
+
+      // ── CHECK 1: IP range (must be on ESP32 hotspot 192.168.4.x) ────────────
+      // UNCONDITIONAL — applies to every device-bound method (BLE, QR, verbal
+      // code) regardless of whether an ESP32 is registered in the DB.
+      // BLE and QR signals only reach students who are physically in the room
+      // and connected to the KODEX-CLASSROOM hotspot. Without this check, anyone
+      // who sends method:'ble' or knows the verbal code can mark from anywhere.
+      // Offline-synced marks (offlineSync:true) are always exempt.
+      const isOfflineSync = req.body.offlineSync === true;
+      if (!isOfflineSync) {
+        const rawIP = req.headers['x-forwarded-for']?.split(',')[0]?.trim()
+                    || req.ip
+                    || req.connection?.remoteAddress
+                    || '';
+        const clientIP = rawIP.replace('::ffff:', '');
+        const isOnHotspot = clientIP.startsWith('192.168.4.');
+
+        if (!isOnHotspot) {
+          console.warn('[ANTI-CHEAT] Wrong network for', earlyMethod, '—', req.user.name, clientIP);
+          return res.status(403).json({
+            error: 'You are not in range of the classroom device. Move closer and try again.',
+            code: 'OUT_OF_RANGE',
+          });
+        }
+      }
+
+      // ── CHECK 2 & 3: App-source header + time drift (require registered device)
       const Company = require('../models/Company');
       const company = await Company.findById(req.user.company).select('esp32Devices');
       const hasDevice = company?.esp32Devices && company.esp32Devices.length > 0;
 
       if (hasDevice) {
 
-        // ── CHECK 1: App-source header ──────────────────────────────────────────
-        // Must come from the KODEX app, not a browser or postman.
+        // ── CHECK 2: App-source header ────────────────────────────────────────
+        // Must come from the KODEX app, not a browser or Postman.
         const appSource = req.headers['x-app-source'];
         if (appSource !== 'kodex-app') {
           console.warn('[ANTI-CHEAT] Non-app mark attempt:', req.user.name, req.ip);
@@ -330,37 +369,13 @@ exports.markAttendance = async (req, res) => {
           });
         }
 
-        // ── CHECK 2: IP range (must be on ESP32 hotspot 192.168.4.x) ──────────
-        // Never reveal the expected range to the client.
-        // Offline-synced marks are exempt — they were captured while on the hotspot
-        // and are being synced later. The app sets offlineSync:true for these.
-        const isOfflineSync = req.body.offlineSync === true;
-        if (!isOfflineSync) {
-          const rawIP = req.headers['x-forwarded-for']?.split(',')[0]?.trim()
-                      || req.ip
-                      || req.connection?.remoteAddress
-                      || '';
-          const clientIP = rawIP.replace('::ffff:', '');
-          const isOnHotspot = clientIP.startsWith('192.168.4.');
-
-          if (!isOnHotspot) {
-            console.warn('[ANTI-CHEAT] Wrong network:', req.user.name, clientIP);
-            return res.status(403).json({
-              error: 'You are not in range of the classroom device. Move closer and try again.',
-              code: 'OUT_OF_RANGE',
-            });
-          }
-        }
-
-        // ── CHECK 3: RTC anti-time-cheat ────────────────────────────────────────
-        // Compare client-submitted time with server time.
-        // If client time is > 60s off from server, reject.
+        // ── CHECK 3: RTC anti-time-cheat ──────────────────────────────────────
         // Prevents students setting their clock back to re-mark a past session.
         const clientTime = req.body.clientTime ? new Date(req.body.clientTime) : null;
         if (clientTime) {
           const serverNow = new Date();
           const driftMs = Math.abs(serverNow - clientTime);
-          if (driftMs > 60 * 1000) { // more than 60 seconds drift
+          if (driftMs > 60 * 1000) {
             console.warn('[ANTI-CHEAT] Time drift:', req.user.name,
               'drift=' + Math.round(driftMs/1000) + 's',
               'client=' + clientTime.toISOString(),
@@ -424,6 +439,29 @@ exports.markAttendance = async (req, res) => {
       if (!method) {
         attendanceMethod = tokenDoc.codeType === "verbal" ? "code_mark" : "code_mark";
       }
+
+      // ── VERBAL CODE EXTRA GUARD ─────────────────────────────────────────────
+      // Even if someone overhears the verbal code, they must be physically on
+      // the ESP32 hotspot (192.168.4.x) to use it. This is a server-side
+      // duplicate of the ESP32's own IP check, providing defence-in-depth.
+      // Offline-synced records (offlineSync:true) are always exempt.
+      if (tokenDoc.codeType === "verbal") {
+        const isOfflineSyncVerbal = req.body.offlineSync === true;
+        if (!isOfflineSyncVerbal) {
+          const rawIPVerbal = (req.headers['x-forwarded-for']?.split(',')[0]?.trim()
+                            || req.ip
+                            || req.connection?.remoteAddress
+                            || '').replace('::ffff:', '');
+          if (!rawIPVerbal.startsWith('192.168.4.')) {
+            console.warn('[ANTI-CHEAT] Verbal code from outside hotspot:', req.user.name, rawIPVerbal);
+            return res.status(403).json({
+              error: 'You must be physically present in the classroom and connected to the KODEX-CLASSROOM WiFi to use the verbal code.',
+              code: 'OUT_OF_RANGE',
+            });
+          }
+        }
+      }
+      // ── END VERBAL CODE EXTRA GUARD ────────────────────────────────────────
       qrTokenRef = tokenDoc._id;
     } else if (attendanceMethod === "jitsi_join") {
       if (!meetingId) {
