@@ -9350,7 +9350,7 @@ async function renderLecturerGradeBook(content) {
                 <div style="font-weight:700;font-size:15px;margin-bottom:4px;">${c.title}</div>
                 <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">${c.code} · ${c.lecturer?.name || 'N/A'}</div>
                 <div style="display:flex;justify-content:space-between;align-items:center;">
-                  <span style="font-size:12px;color:var(--text-light);">${c.enrolledStudents?.length || 0} students</span>
+                  <span style="font-size:12px;color:var(--text-light);">${c.totalStudents ?? c.enrolledStudents?.length ?? 0} students</span>
                   <span class="btn btn-sm btn-primary" style="pointer-events:none;">Open →</span>
                 </div>
               </div>`).join('')}
@@ -9389,10 +9389,11 @@ async function renderLecturerCourseGrades(courseId, courseTitle) {
 
       <!-- Summary Stats -->
       <div class="stats-grid" style="margin-bottom:16px;">
-        <div class="stat-card"><div class="stat-value">${grades.length}</div><div class="stat-label">Students</div></div>
+        <div class="stat-card"><div class="stat-value">${d.totalStudents ?? grades.length}</div><div class="stat-label">Students</div></div>
         <div class="stat-card"><div class="stat-value">${avg}%</div><div class="stat-label">Class Average</div></div>
         <div class="stat-card"><div class="stat-value">${quizzes.length}</div><div class="stat-label">Quizzes</div></div>
         <div class="stat-card"><div class="stat-value">${totalSessions}</div><div class="stat-label">Sessions</div></div>
+        ${d.pendingCount > 0 ? `<div class="stat-card"><div class="stat-value" style="color:#f59e0b">${d.pendingCount}</div><div class="stat-label">Not Registered</div></div>` : ''}
         ${Object.entries(dist).map(([l,n]) => `<div class="stat-card"><div class="stat-value" style="color:${{A:'#22c55e',B:'#84cc16',C:'#f59e0b',D:'#f97316',F:'#ef4444'}[l]}">${n}</div><div class="stat-label">Grade ${l}</div></div>`).join('')}
       </div>
 
@@ -9425,18 +9426,19 @@ async function renderLecturerCourseGrades(courseId, courseTitle) {
               </thead>
               <tbody>
                 ${grades.map((g, i) => `
-                  <tr style="border-bottom:1px solid var(--border);background:${i%2===0?'transparent':'var(--bg)'};">
+                  <tr style="border-bottom:1px solid var(--border);background:${g.pending ? '#fffbeb' : i%2===0?'transparent':'var(--bg)'};">
                     <td style="padding:10px 12px;">
                       <div style="font-weight:600;">${g.student.name}</div>
                       <div style="font-size:11px;color:var(--text-muted);">${g.student.studentId || g.student.email}</div>
+                      ${g.pending ? '<span style="font-size:10px;background:#fef3c7;color:#92400e;border-radius:4px;padding:1px 6px;font-weight:600;">Not registered</span>' : ''}
                     </td>
-                    <td style="padding:10px 8px;text-align:center;">${g.quizPct}%</td>
-                    <td style="padding:10px 8px;text-align:center;">${g.attPct}% <span style="font-size:10px;color:var(--text-muted);">(${g.attendedSessions}/${g.totalSessions})</span></td>
+                    <td style="padding:10px 8px;text-align:center;">${g.pending ? '<span style="color:var(--text-muted);">—</span>' : g.quizPct + '%'}</td>
+                    <td style="padding:10px 8px;text-align:center;">${g.pending ? '<span style="color:var(--text-muted);">—</span>' : g.attPct + '% <span style="font-size:10px;color:var(--text-muted);">(' + g.attendedSessions + '/' + g.totalSessions + ')</span>'}</td>
                     ${gb.manualEntries.map(e => {
                       const ms = g.manualScores.find(m => m.entryId.toString() === e._id.toString());
                       return `<td style="padding:10px 8px;text-align:center;">${ms?.score !== null && ms?.score !== undefined ? ms.score + '/' + e.maxScore : '<span style="color:var(--text-muted);">—</span>'}</td>`;
                     }).join('')}
-                    <td style="padding:10px 8px;text-align:center;font-weight:700;">${g.finalPct}%</td>
+                    <td style="padding:10px 8px;text-align:center;font-weight:700;">${g.pending ? '—' : g.finalPct + '%'}</td>
                     <td style="padding:10px 8px;text-align:center;">
                       <span style="font-weight:900;font-size:16px;color:${g.color};">${g.letter}</span>
                     </td>
