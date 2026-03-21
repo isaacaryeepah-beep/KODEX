@@ -4391,36 +4391,66 @@ async function showStartSessionModal() {
   container.innerHTML = `<div class="modal-overlay"><div class="modal"><p style="color:var(--text-muted)">Checking device…</p></div></div>`;
 
   // ── Check if ESP32 device is ON before allowing session start ──────────────
+  let deviceStatus = null;
+  let deviceCheckFailed = false;
+
   try {
-    const companyData = await api('/api/esp32/device-status').catch(() => null);
-    if (companyData && companyData.hasDevice) {
-      if (!companyData.deviceOnline) {
-        container.innerHTML = `
-          <div class="modal-overlay" onclick="closeModal(event)">
-            <div class="modal" onclick="event.stopPropagation()" style="text-align:center;max-width:400px">
-              <div style="font-size:48px;margin-bottom:12px">📟</div>
-              <h3 style="margin-bottom:8px">Device is Offline</h3>
-              <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px;line-height:1.6">
-                The <strong>KODEX classroom device</strong> is not responding.<br>
-                Please turn it on and wait a few seconds, then try again.
-              </p>
-              <div style="background:#fef3c7;border:1px solid #fde68a;border-radius:8px;padding:12px;font-size:12px;color:#92400e;margin-bottom:20px;text-align:left">
-                <strong>Last seen:</strong> ${companyData.lastSeenAt ? new Date(companyData.lastSeenAt).toLocaleString() : 'Never'}<br>
-                <strong>Status:</strong> Offline (no heartbeat in 10s)
-              </div>
-              <div style="display:flex;gap:8px;justify-content:center">
-                <button class="btn btn-secondary btn-sm" onclick="closeModal()">Cancel</button>
-                <button class="btn btn-primary btn-sm" onclick="showStartSessionModal()">↻ Retry</button>
-              </div>
-            </div>
-          </div>`;
-        return;
-      }
-    }
+    deviceStatus = await api('/api/esp32/device-status');
   } catch(e) {
-    // If device-status check fails (no device registered), proceed normally
+    // Only proceed without a device check if the error means no device is registered
+    // (404 = no company, which is fine). Any other error = block to be safe.
+    if (e.status !== 404) {
+      deviceCheckFailed = true;
+    }
   }
-  // ── Device is ON (or no device registered) — proceed ──────────────────────
+
+  // Device is registered but offline — block entirely
+  if (deviceStatus && deviceStatus.hasDevice && !deviceStatus.deviceOnline) {
+    const lastSeenText = deviceStatus.lastSeenAt
+      ? `Last seen: ${new Date(deviceStatus.lastSeenAt).toLocaleString()}`
+      : 'Last seen: Never';
+    container.innerHTML = `
+      <div class="modal-overlay" onclick="closeModal(event)">
+        <div class="modal" onclick="event.stopPropagation()" style="text-align:center;max-width:400px">
+          <div style="font-size:48px;margin-bottom:12px">📟</div>
+          <h3 style="margin-bottom:8px">Device is Offline</h3>
+          <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px;line-height:1.6">
+            The <strong>KODEX classroom device</strong> is not responding.<br>
+            Please turn it on and wait a few seconds, then try again.
+          </p>
+          <div style="background:#fef3c7;border:1px solid #fde68a;border-radius:8px;padding:12px;font-size:12px;color:#92400e;margin-bottom:20px;text-align:left">
+            <strong>${lastSeenText}</strong><br>
+            <strong>Status:</strong> Offline — no heartbeat in the last 10s
+          </div>
+          <div style="display:flex;gap:8px;justify-content:center">
+            <button class="btn btn-secondary btn-sm" onclick="closeModal()">Cancel</button>
+            <button class="btn btn-primary btn-sm" onclick="showStartSessionModal()">↻ Retry</button>
+          </div>
+        </div>
+      </div>`;
+    return;
+  }
+
+  // Device check itself failed with an unexpected error — block and show error
+  if (deviceCheckFailed) {
+    container.innerHTML = `
+      <div class="modal-overlay" onclick="closeModal(event)">
+        <div class="modal" onclick="event.stopPropagation()" style="text-align:center;max-width:400px">
+          <div style="font-size:48px;margin-bottom:12px">⚠️</div>
+          <h3 style="margin-bottom:8px">Device Check Failed</h3>
+          <p style="font-size:13px;color:var(--text-muted);margin-bottom:20px;line-height:1.6">
+            Could not verify the classroom device status.<br>
+            Please check your connection and try again.
+          </p>
+          <div style="display:flex;gap:8px;justify-content:center">
+            <button class="btn btn-secondary btn-sm" onclick="closeModal()">Cancel</button>
+            <button class="btn btn-primary btn-sm" onclick="showStartSessionModal()">↻ Retry</button>
+          </div>
+        </div>
+      </div>`;
+    return;
+  }
+  // ── Device is ON (or no device registered for this institution) — proceed ──
 
   let courses = [];
   try {
