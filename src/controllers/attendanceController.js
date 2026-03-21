@@ -41,12 +41,13 @@ exports.startSession = async (req, res) => {
     }
 
     // ── ESP32 device online check ────────────────────────────────────────────
-    // If the company has a registered ESP32 device, it MUST be actively sending
-    // heartbeats (within the last 10s) before attendance can be started.
-    const esp32Devices = company.esp32Devices || company.get("esp32Devices") || [];
-    console.log(`[SESSION] esp32Devices for ${company.name}:`, esp32Devices.length, "device(s)");
+    // Block if: company has esp32Required=true OR has registered devices.
+    // esp32Required is set to true the moment a device first registers.
+    const esp32Devices  = company.esp32Devices || company.get("esp32Devices") || [];
+    const esp32Required = !!company.esp32Required;
+    console.log(`[SESSION] company=${company.name} esp32Required=${esp32Required} devices=${esp32Devices.length}`);
 
-    if (esp32Devices.length > 0) {
+    if (esp32Required || esp32Devices.length > 0) {
       const deviceStatus = await checkEsp32Online({ esp32Devices });
 
       if (!deviceStatus.online) {
@@ -54,16 +55,14 @@ exports.startSession = async (req, res) => {
           ? `Last seen ${deviceStatus.secondsAgo}s ago.`
           : "Device has never sent a heartbeat.";
 
-        console.warn(
-          `[SESSION] Blocked — ESP32 offline for ${company.name}. ${lastSeenMsg}`
-        );
+        console.warn(`[SESSION] BLOCKED — ESP32 offline for ${company.name}. ${lastSeenMsg}`);
 
         return res.status(503).json({
           error: "ESP32 device is offline",
           message: `The KODEX attendance device is not responding. ${lastSeenMsg} Please ensure the device is powered on and connected, then try again.`,
           deviceStatus: {
-            online: false,
-            deviceId: deviceStatus.deviceId || null,
+            online:     false,
+            deviceId:   deviceStatus.deviceId || null,
             lastSeenAt: deviceStatus.lastSeenAt || null,
             secondsAgo: deviceStatus.secondsAgo || null,
           },
