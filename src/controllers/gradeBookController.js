@@ -17,6 +17,7 @@ const Attempt           = require("../models/Attempt");
 const AttendanceSession = require("../models/AttendanceSession");
 const AttendanceRecord  = require("../models/AttendanceRecord");
 const User              = require("../models/User");
+const StudentRoster     = require("../models/StudentRoster");
 const mongoose          = require("mongoose");
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -56,25 +57,73 @@ exports.getCourseGrades = async (req, res) => {
     }
 
     // ── Students enrolled ────────────────────────────────────────────────────
-    const studentIds = course.enrolledStudents || [];
-    if (!studentIds.length) {
+    // Bug fix: course.enrolledStudents only contains REGISTERED students (those
+    // who created an account). Students added via roster CSV but not yet
+    // registered are only in StudentRoster. We merge both sources so the grade
+    // book shows every student the lecturer added, not just registered ones.
+
+    const registeredStudentIds = course.enrolledStudents || [];
+
+    // Fetch all registered student documents
+    const registeredStudents = registeredStudentIds.length
+      ? await User.find({ _id: { $in: registeredStudentIds } })
+          .select("name email IndexNumber").lean()
+      : [];
+
+    // Fetch all roster entries for this course
+    const rosterEntries = await StudentRoster.find({ course: courseId, company }).lean();
+
+    // Build a set of registered student IndexNumbers (uppercase) so we can
+    // avoid double-counting students who appear in both sources
+    const registeredIndexSet = new Set(
+      registeredStudents.map(s => (s.IndexNumber || "").toUpperCase()).filter(Boolean)
+    );
+
+    // Unregistered roster students: in roster but no matching registered user
+    const unregisteredRoster = rosterEntries.filter(r => {
+      if (r.registered && r.registeredUser) return false; // already has an account
+      const id = (r.studentId || "").toUpperCase();
+      return id && !registeredIndexSet.has(id);
+    });
+
+    // Build a unified student list
+    // Registered students get full quiz/attendance data; unregistered get zeros
+    const registeredStudentList = registeredStudents.map(s => ({
+      _id: s._id,
+      name: s.name,
+      email: s.email,
+      studentId: s.IndexNumber || s.email,
+      isRegistered: true,
+    }));
+
+    const unregisteredStudentList = unregisteredRoster.map(r => ({
+      _id: null,            // no User document yet
+      rosterId: r._id,
+      name: r.name || r.studentId,
+      email: null,
+      studentId: r.studentId,
+      isRegistered: false,
+    }));
+
+    const allStudents = [...registeredStudentList, ...unregisteredStudentList];
+
+    if (!allStudents.length) {
       return res.json({ course, gradeBook: gb, grades: [], weights: gb.weights });
     }
 
-    const students = await User.find({ _id: { $in: studentIds } })
-      .select("name email IndexNumber").lean();
-
-    // ── Quiz scores ──────────────────────────────────────────────────────────
+    // ── Quiz scores (only for registered students who have attempts) ─────────
     const quizzes = await Quiz.find({ course: courseId, company, isActive: true }).lean();
     const quizIds = quizzes.map(q => q._id);
 
     // Get best attempts per student per quiz
-    const attempts = await Attempt.find({
-      quiz: { $in: quizIds },
-      student: { $in: studentIds },
-      isSubmitted: true,
-      isBestScore: true,
-    }).lean();
+    const attempts = registeredStudentIds.length && quizIds.length
+      ? await Attempt.find({
+          quiz: { $in: quizIds },
+          student: { $in: registeredStudentIds },
+          isSubmitted: true,
+          isBestScore: true,
+        }).lean()
+      : [];
 
     // Map: studentId → { quizId → { score, maxScore } }
     const attemptMap = {};
@@ -90,10 +139,10 @@ exports.getCourseGrades = async (req, res) => {
     const sessionIds = sessions.map(s => s._id);
     const totalSessions = sessionIds.length;
 
-    const attendanceRecords = totalSessions
+    const attendanceRecords = (totalSessions && registeredStudentIds.length)
       ? await AttendanceRecord.find({
           session: { $in: sessionIds },
-          user: { $in: studentIds },
+          user: { $in: registeredStudentIds },
           company,
         }).lean()
       : [];
@@ -121,8 +170,42 @@ exports.getCourseGrades = async (req, res) => {
     const activeWeightSum = w.quizzes + w.attendance + w.manual;
     const normalizer = activeWeightSum > 0 ? 100 / activeWeightSum : 1;
 
-    const grades = students.map(student => {
-      const sid = student._id.toString();
+    const grades = allStudents.map(student => {
+      const sid = student._id ? student._id.toString() : null;
+
+      // Unregistered students have no quiz/attendance data yet — show as pending
+      if (!student.isRegistered || !sid) {
+        return {
+          student: {
+            _id: student.rosterId || null,
+            name: student.name,
+            email: student.email || "—",
+            studentId: student.studentId,
+            isRegistered: false,
+          },
+          quizPct:    0,
+          attPct:     0,
+          manualPct:  0,
+          finalPct:   0,
+          letter:     "—",
+          color:      "#9ca3af",
+          attendedSessions: 0,
+          totalSessions,
+          pending: true,
+          quizScores: quizIds.map(qid => ({
+            quizId: qid,
+            title: quizzes.find(q => q._id.toString() === qid.toString())?.title || "—",
+            score: null,
+            maxScore: quizzes.find(q => q._id.toString() === qid.toString())?.totalMarks || 0,
+          })),
+          manualScores: gb.manualEntries.map(e => ({
+            entryId: e._id,
+            label: e.label,
+            score: manualMap[sid]?.[e._id.toString()]?.score ?? null,
+            maxScore: e.maxScore,
+          })),
+        };
+      }
 
       // Quiz component
       let quizPct = 0;
@@ -159,7 +242,13 @@ exports.getCourseGrades = async (req, res) => {
       const letter = letterGrade(finalPct);
 
       return {
-        student: { _id: student._id, name: student.name, email: student.email, studentId: student.IndexNumber || student.email },
+        student: {
+          _id: student._id,
+          name: student.name,
+          email: student.email,
+          studentId: student.studentId,
+          isRegistered: true,
+        },
         quizPct:    Math.round(quizPct * 10) / 10,
         attPct:     Math.round(attPct * 10) / 10,
         manualPct:  Math.round(manualPct * 10) / 10,
@@ -168,6 +257,7 @@ exports.getCourseGrades = async (req, res) => {
         color: gradeColor(letter),
         attendedSessions: attendedMap[sid] || 0,
         totalSessions,
+        pending: false,
         quizScores: quizIds.map(qid => ({
           quizId: qid,
           title: quizzes.find(q => q._id.toString() === qid.toString())?.title || "—",
@@ -183,14 +273,21 @@ exports.getCourseGrades = async (req, res) => {
       };
     });
 
-    // Sort by final percentage desc
-    grades.sort((a, b) => b.finalPct - a.finalPct);
+    // Sort: registered students by grade desc, then unregistered (pending) at bottom
+    grades.sort((a, b) => {
+      if (a.pending && !b.pending) return 1;
+      if (!a.pending && b.pending) return -1;
+      return b.finalPct - a.finalPct;
+    });
 
     res.json({
       course: { _id: course._id, title: course.title, code: course.code, lecturer: course.lecturer },
       gradeBook: { _id: gb._id, weights: gb.weights, manualEntries: gb.manualEntries.map(e => ({ _id: e._id, label: e.label, maxScore: e.maxScore })) },
       quizzes: quizzes.map(q => ({ _id: q._id, title: q.title, totalMarks: q.totalMarks })),
       totalSessions,
+      totalStudents: allStudents.length,
+      registeredCount: registeredStudentList.length,
+      pendingCount: unregisteredStudentList.length,
       grades,
     });
   } catch (err) {
@@ -386,7 +483,23 @@ exports.listCourses = async (req, res) => {
     if (req.user.role === "lecturer") filter.lecturer = req.user._id;
 
     const courses = await Course.find(filter).populate("lecturer", "name").lean();
-    res.json({ courses });
+
+    // For each course, get the real student count from StudentRoster
+    // (not just enrolledStudents which only counts registered users)
+    const courseIds = courses.map(c => c._id);
+    const rosterCounts = await StudentRoster.aggregate([
+      { $match: { course: { $in: courseIds }, company: company } },
+      { $group: { _id: "$course", count: { $sum: 1 } } },
+    ]);
+    const rosterCountMap = {};
+    for (const r of rosterCounts) rosterCountMap[r._id.toString()] = r.count;
+
+    const coursesWithCount = courses.map(c => ({
+      ...c,
+      totalStudents: rosterCountMap[c._id.toString()] || c.enrolledStudents?.length || 0,
+    }));
+
+    res.json({ courses: coursesWithCount });
   } catch (err) {
     res.status(500).json({ error: "Failed to list courses" });
   }
