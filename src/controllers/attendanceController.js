@@ -5,6 +5,31 @@ const AttendanceRecord = require("../models/AttendanceRecord");
 const QrToken = require("../models/QrToken");
 const Company = require("../models/Company");
 
+// ── Helper: check if ESP32 device is online ───────────────────────────────────
+// Strategy 1: ping the device's last-seen heartbeat (within 10s = online)
+// Strategy 2: fallback — if heartbeat missed but was seen within 30s, warn but allow
+async function checkEsp32Online(company) {
+  const devices = company.esp32Devices || [];
+  if (devices.length === 0) return { hasDevice: false, online: false };
+
+  const latest = devices
+    .filter((d) => d.lastSeenAt)
+    .sort((a, b) => new Date(b.lastSeenAt) - new Date(a.lastSeenAt))[0];
+
+  if (!latest) return { hasDevice: true, online: false, lastSeenAt: null };
+
+  const secondsAgo = (Date.now() - new Date(latest.lastSeenAt).getTime()) / 1000;
+
+  return {
+    hasDevice: true,
+    online: secondsAgo <= 10,        // Strategy 1: within last heartbeat window
+    recentlySeen: secondsAgo <= 30,  // Strategy 2: fallback — seen within 30s
+    secondsAgo: Math.round(secondsAgo),
+    deviceId: latest.deviceId,
+    lastSeenAt: latest.lastSeenAt,
+  };
+}
+
 exports.startSession = async (req, res) => {
   try {
     const companyId = req.user.company;
@@ -13,6 +38,45 @@ exports.startSession = async (req, res) => {
     if (!company || !company.isActive) {
       return res.status(404).json({ error: "Company not found or inactive" });
     }
+
+    // ── ESP32 device online check ────────────────────────────────────────────
+    // If the company has a registered ESP32 device, it MUST be online (sending
+    // heartbeats) before attendance can be started. This prevents ghost sessions
+    // when the device is powered off or disconnected.
+    if (company.esp32Devices && company.esp32Devices.length > 0) {
+      const deviceStatus = await checkEsp32Online(company);
+
+      if (!deviceStatus.online && !deviceStatus.recentlySeen) {
+        // Device is registered but clearly offline — block the session
+        const lastSeenMsg = deviceStatus.lastSeenAt
+          ? `Last seen ${deviceStatus.secondsAgo}s ago.`
+          : "Device has never sent a heartbeat.";
+
+        console.warn(
+          `[SESSION] Blocked start — ESP32 offline for company ${company.name}. ${lastSeenMsg}`
+        );
+
+        return res.status(503).json({
+          error: "ESP32 device is offline",
+          message: `The KODEX attendance device is not responding. ${lastSeenMsg} Please ensure the device is powered on and connected, then try again.`,
+          deviceStatus: {
+            online: false,
+            deviceId: deviceStatus.deviceId || null,
+            lastSeenAt: deviceStatus.lastSeenAt || null,
+            secondsAgo: deviceStatus.secondsAgo || null,
+          },
+        });
+      }
+
+      if (!deviceStatus.online && deviceStatus.recentlySeen) {
+        // Seen within 30s but missed the 10s heartbeat window — log a warning
+        // but allow the session to proceed (device may have brief WiFi hiccup)
+        console.warn(
+          `[SESSION] ESP32 heartbeat delayed (${deviceStatus.secondsAgo}s ago) for ${company.name} — allowing start`
+        );
+      }
+    }
+    // ── End device check ─────────────────────────────────────────────────────
 
     const activeFilter = { company: companyId, status: "active" };
     if (req.user.role === "lecturer") {
