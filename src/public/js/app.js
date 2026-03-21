@@ -9051,7 +9051,7 @@ async function renderProfile() {
 
       <button class="btn btn-primary" onclick="saveProfile()" style="width:100%">Save Changes</button>
     </div>
-  \`;
+  `;
 }
 
 async function toggle2FA(enable) {
