@@ -630,6 +630,8 @@ function assignmentsIcon() {
 async function api(path, options = {}) {
   const headers = { 'Content-Type': 'application/json' };
   if (token) headers['Authorization'] = `Bearer ${token}`;
+  // Security headers — identifies this as the KODEX native app, not a browser
+  headers['x-app-source'] = 'kodex-app';
   const res = await fetch(`${API}${path}`, { ...options, headers: { ...headers, ...options.headers } });
   if (res.headers.get('content-type')?.includes('application/json')) {
     const data = await res.json();
@@ -3152,59 +3154,67 @@ async function renderEmployeeDashboard(content) {
   `;
 }
 
+
+// ── ESP32 device offline prompt ───────────────────────────────────────────────
+function showESP32OfflinePrompt(action) {
+  const container = document.getElementById('modal-container');
+  container.classList.remove('hidden');
+  container.innerHTML = `
+    <div class="modal-overlay" onclick="closeModal(event)">
+      <div class="modal" onclick="event.stopPropagation()" style="text-align:center;max-width:380px">
+        <div style="font-size:48px;margin-bottom:12px">📟</div>
+        <h3 style="margin-bottom:8px">Device is Offline</h3>
+        <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px;line-height:1.6">
+          The <strong>KODEX classroom device</strong> must be ON for you to ${action}.<br>
+          Please turn it on, wait a few seconds, then try again.
+        </p>
+        <div style="background:#fef3c7;border:1px solid #fde68a;border-radius:8px;padding:10px 14px;font-size:12px;color:#92400e;margin-bottom:20px;text-align:left">
+          ⚠️ Attendance can only be marked when you are physically present at the device location.
+        </div>
+        <div style="display:flex;gap:8px;justify-content:center">
+          <button class="btn btn-secondary btn-sm" onclick="closeModal()">Cancel</button>
+          <button class="btn btn-primary btn-sm" onclick="closeModal();${action === 'sign in' ? 'employeeSignIn()' : action === 'sign out' ? 'employeeSignOut()' : 'showStartSessionModal()'}">↻ Retry</button>
+        </div>
+      </div>
+    </div>`;
+}
+
 async function employeeSignIn() {
-  // If ESP32 configured, check BLE presence first
-  if (esp32IP) {
-    const detected = await discoverESP32();
-    if (!detected) {
-      toastWarning('You must be at the office to sign in. BLE device not detected.');
-      return;
-    }
-    // Record sign-in on ESP32 locally
-    try {
-      await esp32Api('/sign-in', {
-        method: 'POST',
-        body: JSON.stringify({ userId: currentUser.id, name: currentUser.name })
-      });
-      toastSuccess('Signed in successfully!');
-      renderSignInOut();
-      return;
-    } catch(e) {
-      console.warn('[ESP32] Sign in failed, trying server:', e.message);
-    }
-  }
   try {
-    const data = await api('/api/attendance-sessions/sign-in', { method: 'POST' });
+    // Check if device is registered and online before allowing sign-in
+    const status = await api('/api/esp32/device-status').catch(() => null);
+    if (status?.hasDevice) {
+      if (!status.deviceOnline) {
+        showESP32OfflinePrompt('sign in');
+        return;
+      }
+    }
+    const data = await api('/api/attendance-sessions/sign-in', { method: 'POST', body: JSON.stringify({ clientTime: new Date().toISOString() }) });
     toastSuccess(data.message || 'Signed in successfully!');
-    navigateTo('dashboard');
+    renderSignInOut();
   } catch (e) {
-    toastError(e.message || 'Sign in failed');
+    if (e.message?.includes('range') || e.message?.includes('OUT_OF_RANGE')) {
+      toastWarning('📶 You are not in range of the office device. Move closer and try again.');
+    } else if (e.message?.includes('clock') || e.message?.includes('TIME_DRIFT')) {
+      toastWarning('🕐 Your device clock is out of sync. Check your date & time settings.');
+    } else {
+      toastError(e.message || 'Sign in failed');
+    }
   }
 }
 
 async function employeeSignOut() {
   if (!confirm('Are you sure you want to sign out?')) return;
-  // If ESP32 configured, check BLE presence first
-  if (esp32IP) {
-    const detected = await discoverESP32();
-    if (!detected) {
-      toastWarning('You must be at the office to sign out. BLE device not detected.');
-      return;
-    }
-    try {
-      await esp32Api('/sign-out', {
-        method: 'POST',
-        body: JSON.stringify({ userId: currentUser.id, name: currentUser.name })
-      });
-      toastSuccess('Signed out successfully!');
-      renderSignInOut();
-      return;
-    } catch(e) {
-      console.warn('[ESP32] Sign out failed, trying server:', e.message);
-    }
-  }
   try {
-    const data = await api('/api/attendance-sessions/sign-out', { method: 'POST' });
+    // Check if device is registered and online before allowing sign-out
+    const status = await api('/api/esp32/device-status').catch(() => null);
+    if (status?.hasDevice) {
+      if (!status.deviceOnline) {
+        showESP32OfflinePrompt('sign out');
+        return;
+      }
+    }
+    const data = await api('/api/attendance-sessions/sign-out', { method: 'POST', body: JSON.stringify({ clientTime: new Date().toISOString() }) });
     toastSuccess(data.message ? data.message + (data.duration ? ' Duration: ' + data.duration : '') : 'Signed out successfully!');
     navigateTo('dashboard');
   } catch (e) {
@@ -4375,7 +4385,39 @@ function _renderSessionsHTML(content, sessions, isOffline) {
 async function showStartSessionModal() {
   const container = document.getElementById('modal-container');
   container.classList.remove('hidden');
-  container.innerHTML = `<div class="modal-overlay"><div class="modal"><p style="color:var(--text-muted)">Loading courses…</p></div></div>`;
+  container.innerHTML = `<div class="modal-overlay"><div class="modal"><p style="color:var(--text-muted)">Checking device…</p></div></div>`;
+
+  // ── Check if ESP32 device is ON before allowing session start ──────────────
+  try {
+    const companyData = await api('/api/esp32/device-status').catch(() => null);
+    if (companyData && companyData.hasDevice) {
+      if (!companyData.deviceOnline) {
+        container.innerHTML = `
+          <div class="modal-overlay" onclick="closeModal(event)">
+            <div class="modal" onclick="event.stopPropagation()" style="text-align:center;max-width:400px">
+              <div style="font-size:48px;margin-bottom:12px">📟</div>
+              <h3 style="margin-bottom:8px">Device is Offline</h3>
+              <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px;line-height:1.6">
+                The <strong>KODEX classroom device</strong> is not responding.<br>
+                Please turn it on and wait a few seconds, then try again.
+              </p>
+              <div style="background:#fef3c7;border:1px solid #fde68a;border-radius:8px;padding:12px;font-size:12px;color:#92400e;margin-bottom:20px;text-align:left">
+                <strong>Last seen:</strong> ${companyData.lastSeenAt ? new Date(companyData.lastSeenAt).toLocaleString() : 'Never'}<br>
+                <strong>Status:</strong> Offline (no heartbeat in 10s)
+              </div>
+              <div style="display:flex;gap:8px;justify-content:center">
+                <button class="btn btn-secondary btn-sm" onclick="closeModal()">Cancel</button>
+                <button class="btn btn-primary btn-sm" onclick="showStartSessionModal()">↻ Retry</button>
+              </div>
+            </div>
+          </div>`;
+        return;
+      }
+    }
+  } catch(e) {
+    // If device-status check fails (no device registered), proceed normally
+  }
+  // ── Device is ON (or no device registered) — proceed ──────────────────────
 
   let courses = [];
   try {
@@ -8028,7 +8070,7 @@ async function handleQrScan() {
   try {
     await api('/api/attendance-sessions/mark', {
       method: 'POST',
-      body: JSON.stringify({ qrToken, method: 'qr_mark' }),
+      body: JSON.stringify({ qrToken, method: 'qr_mark', clientTime: new Date().toISOString() }),
     });
     if (content) {
       content.innerHTML = `
@@ -8041,12 +8083,29 @@ async function handleQrScan() {
     }
   } catch(e) {
     if (content) {
-      const expired = e.message?.toLowerCase().includes('expired');
+      const expired   = e.message?.toLowerCase().includes('expired');
+      const wrongWifi = e.message?.toLowerCase().includes('classroom wifi') || e.message?.toLowerCase().includes('kodex-classroom') || e.message?.includes('NOT_ON_CLASSROOM_WIFI');
       content.innerHTML = `
-        <div class="card" style="text-align:center;padding:48px 24px;max-width:400px;margin:40px auto;border-left:4px solid var(--danger)">
-          <div style="font-size:56px;margin-bottom:16px">${expired ? '⏰' : '❌'}</div>
-          <div style="font-size:20px;font-weight:800;color:var(--danger)">${expired ? 'QR Code Expired' : 'Failed'}</div>
-          <p style="color:var(--text-light);font-size:13px;margin-top:8px">${expired ? 'This QR code has expired. Ask your lecturer/manager for a fresh one.' : e.message}</p>
+        <div class="card" style="text-align:center;padding:48px 24px;max-width:400px;margin:40px auto;border-left:4px solid ${wrongWifi?'#f59e0b':'var(--danger)'}">
+          <div style="font-size:56px;margin-bottom:16px">${wrongWifi ? '📶' : expired ? '⏰' : '❌'}</div>
+          <div style="font-size:20px;font-weight:800;color:${wrongWifi?'#d97706':'var(--danger)'}">
+            ${wrongWifi ? 'Wrong WiFi Network' : expired ? 'QR Code Expired' : 'Failed'}
+          </div>
+          <p style="color:var(--text-light);font-size:13px;margin-top:8px;line-height:1.6">
+            ${wrongWifi
+              ? 'You must be connected to the <strong>KODEX-CLASSROOM</strong> WiFi to mark attendance.<br><br>📱 Turn off mobile data, then connect to <strong>KODEX-CLASSROOM</strong> and try again.'
+              : expired
+              ? 'This QR code has expired. Ask your lecturer/manager for a fresh one.'
+              : e.message}
+          </p>
+          ${wrongWifi ? `
+          <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:12px;margin-top:16px;font-size:12px;color:#92400e;text-align:left">
+            <strong>Steps:</strong><br>
+            1. Open your phone WiFi settings<br>
+            2. Turn OFF mobile data<br>
+            3. Connect to <strong>KODEX-CLASSROOM</strong><br>
+            4. Come back and scan again
+          </div>` : ''}
           <button class="btn btn-secondary" style="margin-top:20px" onclick="navigateTo('mark-attendance')">Go Back</button>
         </div>`;
     }
@@ -8253,13 +8312,18 @@ async function submitCodeMark() {
   try {
     await api('/api/attendance-sessions/mark', {
       method: 'POST',
-      body: JSON.stringify({ code, method: 'code_mark' }),
+      body: JSON.stringify({ code, method: 'code_mark', clientTime: new Date().toISOString() }),
     });
     offlineCache('pendingMark', null);
     toastSuccess('Attendance marked successfully!');
     navigateTo('mark-attendance');
   } catch (e) {
-    toastError(e.message);
+    const wrongWifi = e.message?.toLowerCase().includes('classroom wifi') || e.message?.toLowerCase().includes('kodex-classroom');
+    if (wrongWifi) {
+      toastWarning('📶 Connect to KODEX-CLASSROOM WiFi first, then try again.');
+    } else {
+      toastError(e.message);
+    }
   }
 }
 
@@ -8303,13 +8367,18 @@ async function submitQrMark() {
   try {
     await api('/api/attendance-sessions/mark', {
       method: 'POST',
-      body: JSON.stringify({ qrToken, method: 'qr_mark' }),
+      body: JSON.stringify({ qrToken, method: 'qr_mark', clientTime: new Date().toISOString() }),
     });
     offlineCache('pendingMark', null);
     toastSuccess('Attendance marked successfully!');
     navigateTo('mark-attendance');
   } catch (e) {
-    toastError(e.message);
+    const wrongWifi = e.message?.toLowerCase().includes('classroom wifi') || e.message?.toLowerCase().includes('kodex-classroom');
+    if (wrongWifi) {
+      toastWarning('📶 Connect to KODEX-CLASSROOM WiFi first, then try again.');
+    } else {
+      toastError(e.message);
+    }
   }
 }
 
@@ -8397,7 +8466,7 @@ async function markAttendance() {
     if (!code || code.length !== 4) { toastWarning('Please enter the 4-character code.'); return; }
     await api('/api/attendance-sessions/mark', {
       method: 'POST',
-      body: JSON.stringify({ code, method: 'code_mark' }),
+      body: JSON.stringify({ code, method: 'code_mark', clientTime: new Date().toISOString() }),
     });
     closeModal();
     toastSuccess('Attendance marked successfully!');
