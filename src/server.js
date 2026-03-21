@@ -230,6 +230,49 @@ const start = async () => {
     } catch (e) {
       console.error("Scheduler failed to start:", e.message);
     }
+  // ── ESP32 Watchdog ───────────────────────────────────────────────────────────
+  // Checks every 60s — if any ESP32 device hasn't sent a heartbeat in 90s,
+  // it means the device lost power. Auto-stop any active sessions for that company.
+  setInterval(async () => {
+    try {
+      const mongoose  = require("mongoose");
+      const Company   = require("./models/Company");
+      const AttendanceSession = require("./models/AttendanceSession");
+
+      const cutoff = new Date(Date.now() - 10 * 1000); // 10 seconds ago
+
+      // Find companies whose ESP32 device has gone silent
+      const companies = await Company.find({
+        "esp32Devices.0": { $exists: true },           // has at least one device
+        "esp32Devices.lastSeenAt": { $lt: cutoff },    // last seen > 10s ago
+      }).select("_id name esp32Devices");
+
+      for (const company of companies) {
+        // Check if any device is stale
+        const hasStaleDevice = company.esp32Devices.some(
+          (d) => d.lastSeenAt && new Date(d.lastSeenAt) < cutoff
+        );
+        if (!hasStaleDevice) continue;
+
+        // Stop any active sessions for this company
+        const stopped = await AttendanceSession.updateMany(
+          { company: company._id, status: "active" },
+          { status: "stopped", stoppedAt: new Date(), stoppedBy: null }
+        );
+
+        if (stopped.modifiedCount > 0) {
+          console.log(
+            `[ESP32 Watchdog] Power loss detected for ${company.name} — ` +
+            `stopped ${stopped.modifiedCount} active session(s)`
+          );
+        }
+      }
+    } catch (e) {
+      console.error("[ESP32 Watchdog] Error:", e.message);
+    }
+  }, 5 * 1000); // run every 5 seconds
+  // ── End ESP32 Watchdog ───────────────────────────────────────────────────────
+
   });
 };
 
