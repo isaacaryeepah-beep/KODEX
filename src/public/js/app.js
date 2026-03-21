@@ -641,7 +641,10 @@ async function api(path, options = {}) {
         showSubscriptionGate(data.message);
         throw new Error(data.error || 'Subscription required');
       }
-      throw new Error(data.error || 'Request failed');
+      const err = new Error(data.error || 'Request failed');
+      err.status = res.status;
+      err.data   = data;
+      throw err;
     }
     return data;
   }
@@ -4479,7 +4482,19 @@ async function startSession() {
     await api('/api/attendance-sessions/start', { method: 'POST', body: JSON.stringify({ title, courseId }) });
     renderSessions();
   } catch (e) {
-    toastError(e.message);
+    // ESP32 device offline — show a prominent, actionable error
+    if (e.status === 503 && e.data?.deviceStatus) {
+      const ds = e.data.deviceStatus;
+      const lastSeen = ds.lastSeenAt
+        ? `Last seen ${ds.secondsAgo}s ago.`
+        : 'Device has never connected.';
+      toastError(
+        `📡 Device offline — ${lastSeen} Power on the KODEX device and wait a few seconds, then try again.`,
+        { duration: 8000 }
+      );
+    } else {
+      toastError(e.message);
+    }
   }
 }
 
