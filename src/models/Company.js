@@ -94,6 +94,24 @@ const companySchema = new mongoose.Schema(
       type: String,
       default: null,
     },
+    // ── ESP32 Devices ─────────────────────────────────────────
+    esp32Devices: {
+      type: [
+        {
+          deviceId:     { type: String },
+          token:        { type: String },
+          registeredAt: { type: Date },
+          lastSeenAt:   { type: Date },
+        },
+      ],
+      default: [],
+    },
+    esp32PendingCommand: {
+      action:    { type: String, default: null },
+      sessionId: { type: String, default: null },
+      title:     { type: String, default: null },
+      issuedAt:  { type: Date,   default: null },
+    },
     isActive: {
       type: Boolean,
       default: true,
