@@ -59,6 +59,8 @@ exports.register = async (req, res) => {
       registeredAt: new Date(),
       lastSeenAt: new Date(),
     });
+    // Mark that this institution requires an ESP32 device to be online for attendance
+    company.esp32Required = true;
     await company.save();
 
     console.log("[ESP32] Device registered:", devId, "for", company.name);
@@ -466,12 +468,14 @@ exports.sendCommand = async (req, res) => {
 // Used by the frontend before allowing attendance to be started.
 exports.deviceStatus = async (req, res) => {
   try {
-    const company = await Company.findById(req.user.company).select("esp32Devices");
+    const company = await Company.findById(req.user.company).select("esp32Devices esp32Required");
     if (!company) return res.status(404).json({ error: "Company not found" });
 
-    const hasDevice = company.esp32Devices && company.esp32Devices.length > 0;
+    const hasDevice   = company.esp32Devices && company.esp32Devices.length > 0;
+    const esp32Required = !!company.esp32Required;
+
     if (!hasDevice) {
-      return res.json({ hasDevice: false, deviceOnline: false });
+      return res.json({ hasDevice: false, deviceOnline: false, esp32Required });
     }
 
     const latestDevice = company.esp32Devices
@@ -479,12 +483,12 @@ exports.deviceStatus = async (req, res) => {
       .sort((a, b) => new Date(b.lastSeenAt) - new Date(a.lastSeenAt))[0];
 
     const lastSeen = latestDevice?.lastSeenAt ? new Date(latestDevice.lastSeenAt) : null;
-    // 20s window accounts for 6s cycle + WiFi connect time + HTTP latency
     const isOnline = lastSeen && (Date.now() - lastSeen.getTime()) < 20000;
 
     res.json({
       hasDevice:            true,
       deviceOnline:         !!isOnline,
+      esp32Required,
       deviceId:             latestDevice?.deviceId || null,
       lastSeenAt:           lastSeen ? lastSeen.toISOString() : null,
       secondsSinceLastSeen: lastSeen ? Math.round((Date.now() - lastSeen.getTime()) / 1000) : null,
