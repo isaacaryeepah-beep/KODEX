@@ -112,6 +112,12 @@ const companySchema = new mongoose.Schema(
       title:     { type: String, default: null },
       issuedAt:  { type: Date,   default: null },
     },
+    // When true, attendance sessions cannot be started unless the ESP32 device
+    // is actively sending heartbeats. Set automatically on first device registration.
+    esp32Required: {
+      type:    Boolean,
+      default: false,
+    },
     isActive: {
       type: Boolean,
       default: true,
