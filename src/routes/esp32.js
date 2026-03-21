@@ -326,6 +326,47 @@ router.post("/scan", esp32Auth, async (req, res) => {
   }
 });
 
+
+// ── POST /api/esp32/heartbeat ─────────────────────────────────────────────────
+// Device sends this every 30s while powered on.
+// If the server stops receiving heartbeats, the watchdog stops the session.
+router.post("/heartbeat", esp32Auth, async (req, res) => {
+  try {
+    const token     = req.headers["x-esp32-token"];
+    const { sessionActive, sessionId, attendeeCount } = req.body;
+
+    if (!token) return res.status(401).json({ error: "x-esp32-token required" });
+
+    const company = await Company.findOne({ "esp32Devices.token": token });
+    if (!company) return res.status(401).json({ error: "Invalid device token" });
+
+    const device = (company.esp32Devices || []).find((d) => d.token === token);
+    if (device) {
+      device.lastSeenAt = new Date();
+      await company.save();
+    }
+
+    // RTC drift check — if device RTC is more than 60s off, tell it to resync
+    const serverNow = new Date();
+    let rtcDrift = null;
+    if (req.body.rtcTime) {
+      const deviceTime = new Date(req.body.rtcTime);
+      rtcDrift = Math.abs(serverNow - deviceTime);
+    }
+
+    res.json({
+      ok: true,
+      serverTime: serverNow.toISOString(),
+      deviceId: device?.deviceId,
+      rtcDriftMs: rtcDrift,
+      resyncRTC: rtcDrift !== null && rtcDrift > 60000, // tell device to resync if > 60s off
+    });
+  } catch (err) {
+    console.error("[ESP32 heartbeat]", err);
+    res.status(500).json({ error: "Heartbeat failed" });
+  }
+});
+
 // ── POST /api/esp32/command  (JWT-authenticated — web app side) ───────────────
 // Lecturer/admin uses this to push start/stop commands to the device.
 const authenticate = require("../middleware/auth");
@@ -349,6 +390,40 @@ router.post("/command", authenticate, requireRole("admin", "manager", "lecturer"
   } catch (err) {
     console.error("[ESP32 command]", err);
     res.status(500).json({ error: "Failed to send command" });
+  }
+});
+
+
+// ── GET /api/esp32/device-status  (JWT-authenticated — web app side) ─────────
+// Used by lecturers/managers to check if the device is ON before starting a session.
+router.get("/device-status", authenticate, async (req, res) => {
+  try {
+    const company = await Company.findById(req.user.company).select("esp32Devices");
+    if (!company) return res.status(404).json({ error: "Company not found" });
+
+    const hasDevice = company.esp32Devices && company.esp32Devices.length > 0;
+    if (!hasDevice) {
+      return res.json({ hasDevice: false, deviceOnline: false });
+    }
+
+    // Find the most recently seen device
+    const latestDevice = company.esp32Devices
+      .filter(d => d.lastSeenAt)
+      .sort((a, b) => new Date(b.lastSeenAt) - new Date(a.lastSeenAt))[0];
+
+    const lastSeen = latestDevice?.lastSeenAt ? new Date(latestDevice.lastSeenAt) : null;
+    const isOnline = lastSeen && (Date.now() - lastSeen.getTime()) < 10000; // within 10s
+
+    res.json({
+      hasDevice: true,
+      deviceOnline: !!isOnline,
+      deviceId: latestDevice?.deviceId || null,
+      lastSeenAt: lastSeen ? lastSeen.toISOString() : null,
+      secondsSinceLastSeen: lastSeen ? Math.round((Date.now() - lastSeen.getTime()) / 1000) : null,
+    });
+  } catch (err) {
+    console.error("[ESP32 device-status]", err);
+    res.status(500).json({ error: "Failed to check device status" });
   }
 });
 
