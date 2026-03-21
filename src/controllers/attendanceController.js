@@ -6,8 +6,8 @@ const QrToken = require("../models/QrToken");
 const Company = require("../models/Company");
 
 // ── Helper: check if ESP32 device is online ───────────────────────────────────
-// Device must have sent a heartbeat within the last 10s to be considered online.
-// No fallback window — if the device is registered, it must be actively on.
+// Device must have sent a heartbeat within the last 20s to be considered online.
+// 20s accounts for: 6s cycle + WiFi connect time (~5s) + HTTP latency + margin.
 async function checkEsp32Online(company) {
   const devices = company.esp32Devices || [];
   if (devices.length === 0) return { hasDevice: false, online: false };
@@ -22,7 +22,7 @@ async function checkEsp32Online(company) {
 
   return {
     hasDevice: true,
-    online: secondsAgo <= 10,
+    online: secondsAgo <= 20,
     secondsAgo: Math.round(secondsAgo),
     deviceId: latest.deviceId,
     lastSeenAt: latest.lastSeenAt,
