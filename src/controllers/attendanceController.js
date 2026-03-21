@@ -6,8 +6,8 @@ const QrToken = require("../models/QrToken");
 const Company = require("../models/Company");
 
 // ── Helper: check if ESP32 device is online ───────────────────────────────────
-// Strategy 1: ping the device's last-seen heartbeat (within 10s = online)
-// Strategy 2: fallback — if heartbeat missed but was seen within 30s, warn but allow
+// Device must have sent a heartbeat within the last 10s to be considered online.
+// No fallback window — if the device is registered, it must be actively on.
 async function checkEsp32Online(company) {
   const devices = company.esp32Devices || [];
   if (devices.length === 0) return { hasDevice: false, online: false };
@@ -22,8 +22,7 @@ async function checkEsp32Online(company) {
 
   return {
     hasDevice: true,
-    online: secondsAgo <= 10,        // Strategy 1: within last heartbeat window
-    recentlySeen: secondsAgo <= 30,  // Strategy 2: fallback — seen within 30s
+    online: secondsAgo <= 10,
     secondsAgo: Math.round(secondsAgo),
     deviceId: latest.deviceId,
     lastSeenAt: latest.lastSeenAt,
@@ -40,20 +39,18 @@ exports.startSession = async (req, res) => {
     }
 
     // ── ESP32 device online check ────────────────────────────────────────────
-    // If the company has a registered ESP32 device, it MUST be online (sending
-    // heartbeats) before attendance can be started. This prevents ghost sessions
-    // when the device is powered off or disconnected.
+    // If the company has a registered ESP32 device, it MUST be actively sending
+    // heartbeats (within the last 10s) before attendance can be started.
     if (company.esp32Devices && company.esp32Devices.length > 0) {
       const deviceStatus = await checkEsp32Online(company);
 
-      if (!deviceStatus.online && !deviceStatus.recentlySeen) {
-        // Device is registered but clearly offline — block the session
+      if (!deviceStatus.online) {
         const lastSeenMsg = deviceStatus.lastSeenAt
           ? `Last seen ${deviceStatus.secondsAgo}s ago.`
           : "Device has never sent a heartbeat.";
 
         console.warn(
-          `[SESSION] Blocked start — ESP32 offline for company ${company.name}. ${lastSeenMsg}`
+          `[SESSION] Blocked — ESP32 offline for ${company.name}. ${lastSeenMsg}`
         );
 
         return res.status(503).json({
@@ -68,13 +65,7 @@ exports.startSession = async (req, res) => {
         });
       }
 
-      if (!deviceStatus.online && deviceStatus.recentlySeen) {
-        // Seen within 30s but missed the 10s heartbeat window — log a warning
-        // but allow the session to proceed (device may have brief WiFi hiccup)
-        console.warn(
-          `[SESSION] ESP32 heartbeat delayed (${deviceStatus.secondsAgo}s ago) for ${company.name} — allowing start`
-        );
-      }
+      console.log(`[SESSION] ESP32 online (${deviceStatus.secondsAgo}s ago) — allowing start for ${company.name}`);
     }
     // ── End device check ─────────────────────────────────────────────────────
 
