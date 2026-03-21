@@ -4404,9 +4404,13 @@ async function showStartSessionModal() {
     }
   }
 
-  // Device is registered but offline — block entirely
-  if (deviceStatus && deviceStatus.hasDevice && !deviceStatus.deviceOnline) {
-    const lastSeenText = deviceStatus.lastSeenAt
+  // Device is required but offline — block entirely
+  // This covers: hasDevice=true + offline, OR esp32Required=true + no device registered yet
+  const deviceRequired = deviceStatus && (deviceStatus.esp32Required || deviceStatus.hasDevice);
+  const deviceOffline  = !deviceStatus?.deviceOnline;
+
+  if (deviceRequired && deviceOffline) {
+    const lastSeenText = deviceStatus?.lastSeenAt
       ? `Last seen: ${new Date(deviceStatus.lastSeenAt).toLocaleString()}`
       : 'Last seen: Never';
     container.innerHTML = `
