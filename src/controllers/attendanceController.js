@@ -212,7 +212,7 @@ exports.getSession = async (req, res) => {
     }
 
     const records = await AttendanceRecord.find({ session: id })
-      .populate("user", "name email IndexNumber role")
+      .populate("user", "name email indexNumber role")
       .sort({ checkInTime: 1 });
 
     res.json({ session, records });
@@ -237,7 +237,7 @@ exports.getSessionRecords = async (req, res) => {
     if (!session) return res.status(404).json({ error: "Session not found" });
 
     const records = await AttendanceRecord.find({ session: id })
-      .populate("user", "name email IndexNumber role")
+      .populate("user", "name email indexNumber role")
       .sort({ checkInTime: 1 });
 
     // Normalize: expose as 'student' field for frontend compatibility
@@ -303,6 +303,81 @@ exports.markAttendance = async (req, res) => {
         });
       }
     }
+
+    // ════════════════════════════════════════════════════════════════════════════
+    // ANTI-CHEAT SECURITY CHECKS
+    // Applies to students/employees marking via QR or code methods.
+    // Skipped for manual/admin marks and jitsi/zoom joins.
+    // ════════════════════════════════════════════════════════════════════════════
+    const isDeviceMethod = ['qr_mark','ble_mark','code_mark'].includes(attendanceMethod) ||
+                           ['qr','ble'].includes(method);
+
+    if (isDeviceMethod && ['student','employee'].includes(req.user.role)) {
+      const Company = require('../models/Company');
+      const company = await Company.findById(req.user.company).select('esp32Devices');
+      const hasDevice = company?.esp32Devices && company.esp32Devices.length > 0;
+
+      if (hasDevice) {
+
+        // ── CHECK 1: App-source header ──────────────────────────────────────────
+        // Must come from the KODEX app, not a browser or postman.
+        const appSource = req.headers['x-app-source'];
+        if (appSource !== 'kodex-app') {
+          console.warn('[ANTI-CHEAT] Non-app mark attempt:', req.user.name, req.ip);
+          return res.status(403).json({
+            error: 'Attendance can only be marked using the KODEX app.',
+            code: 'APP_ONLY',
+          });
+        }
+
+        // ── CHECK 2: IP range (must be on ESP32 hotspot 192.168.4.x) ──────────
+        // Never reveal the expected range to the client.
+        // Offline-synced marks are exempt — they were captured while on the hotspot
+        // and are being synced later. The app sets offlineSync:true for these.
+        const isOfflineSync = req.body.offlineSync === true;
+        if (!isOfflineSync) {
+          const rawIP = req.headers['x-forwarded-for']?.split(',')[0]?.trim()
+                      || req.ip
+                      || req.connection?.remoteAddress
+                      || '';
+          const clientIP = rawIP.replace('::ffff:', '');
+          const isOnHotspot = clientIP.startsWith('192.168.4.');
+
+          if (!isOnHotspot) {
+            console.warn('[ANTI-CHEAT] Wrong network:', req.user.name, clientIP);
+            return res.status(403).json({
+              error: 'You are not in range of the classroom device. Move closer and try again.',
+              code: 'OUT_OF_RANGE',
+            });
+          }
+        }
+
+        // ── CHECK 3: RTC anti-time-cheat ────────────────────────────────────────
+        // Compare client-submitted time with server time.
+        // If client time is > 60s off from server, reject.
+        // Prevents students setting their clock back to re-mark a past session.
+        const clientTime = req.body.clientTime ? new Date(req.body.clientTime) : null;
+        if (clientTime) {
+          const serverNow = new Date();
+          const driftMs = Math.abs(serverNow - clientTime);
+          if (driftMs > 60 * 1000) { // more than 60 seconds drift
+            console.warn('[ANTI-CHEAT] Time drift:', req.user.name,
+              'drift=' + Math.round(driftMs/1000) + 's',
+              'client=' + clientTime.toISOString(),
+              'server=' + serverNow.toISOString()
+            );
+            return res.status(403).json({
+              error: 'Your device clock is out of sync. Please check your date & time settings and try again.',
+              code: 'TIME_DRIFT',
+            });
+          }
+        }
+
+      } // end hasDevice
+    }
+    // ════════════════════════════════════════════════════════════════════════════
+    // END ANTI-CHEAT
+    // ════════════════════════════════════════════════════════════════════════════
 
     const existingRecord = await AttendanceRecord.findOne({
       session: resolvedSessionId,
@@ -376,7 +451,7 @@ exports.markAttendance = async (req, res) => {
     });
 
     const populated = await record.populate([
-      { path: "user", select: "name email IndexNumber role" },
+      { path: "user", select: "name email indexNumber role" },
       { path: "session", select: "title startedAt" },
     ]);
 
@@ -438,6 +513,26 @@ exports.employeeSignIn = async (req, res) => {
     if (company.mode !== "corporate") {
       return res.status(403).json({ error: "Sign in/out is only available for corporate accounts" });
     }
+
+    // ── Anti-cheat: same checks as academic attendance ──────────────────────
+    const hasDevice = company.esp32Devices && company.esp32Devices.length > 0;
+    if (hasDevice) {
+      // 1. App-only
+      if (req.headers['x-app-source'] !== 'kodex-app') {
+        return res.status(403).json({ error: 'Sign-in can only be done from the KODEX app.', code: 'APP_ONLY' });
+      }
+      // 2. Must be on ESP32 hotspot
+      const rawIP = (req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip || '').replace('::ffff:', '');
+      if (!rawIP.startsWith('192.168.4.')) {
+        return res.status(403).json({ error: 'You are not in range of the device. Move closer and try again.', code: 'OUT_OF_RANGE' });
+      }
+      // 3. Time drift check
+      const clientTime = req.body.clientTime ? new Date(req.body.clientTime) : null;
+      if (clientTime && Math.abs(new Date() - clientTime) > 60000) {
+        return res.status(403).json({ error: 'Your device clock is out of sync. Check your date & time settings.', code: 'TIME_DRIFT' });
+      }
+    }
+    // ── End anti-cheat ──────────────────────────────────────────────────────
 
     // Auto-detect the current active session for the company
     let session = await AttendanceSession.findOne({
@@ -514,6 +609,23 @@ exports.employeeSignOut = async (req, res) => {
     if (company.mode !== "corporate") {
       return res.status(403).json({ error: "Sign in/out is only available for corporate accounts" });
     }
+
+    // ── Anti-cheat (same as sign-in) ────────────────────────────────────────
+    const hasDeviceOut = company.esp32Devices && company.esp32Devices.length > 0;
+    if (hasDeviceOut) {
+      if (req.headers['x-app-source'] !== 'kodex-app') {
+        return res.status(403).json({ error: 'Sign-out can only be done from the KODEX app.', code: 'APP_ONLY' });
+      }
+      const rawIPOut = (req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip || '').replace('::ffff:', '');
+      if (!rawIPOut.startsWith('192.168.4.')) {
+        return res.status(403).json({ error: 'You are not in range of the device. Move closer and try again.', code: 'OUT_OF_RANGE' });
+      }
+      const clientTimeOut = req.body.clientTime ? new Date(req.body.clientTime) : null;
+      if (clientTimeOut && Math.abs(new Date() - clientTimeOut) > 60000) {
+        return res.status(403).json({ error: 'Your device clock is out of sync.', code: 'TIME_DRIFT' });
+      }
+    }
+    // ── End anti-cheat ──────────────────────────────────────────────────────
 
     // Find today's active sign-in record (no checkout yet)
     const record = await AttendanceRecord.findOne({
@@ -630,11 +742,11 @@ exports.esp32Sync = async (req, res) => {
         if (record.userId) {
           user = await User.findOne({ _id: record.userId, company: company._id });
         }
-        if (!user && record.IndexNumber) {
-          user = await User.findOne({ IndexNumber: record.IndexNumber.toUpperCase(), company: company._id });
+        if (!user && record.indexNumber) {
+          user = await User.findOne({ indexNumber: record.indexNumber.toUpperCase(), company: company._id });
         }
         if (!user) {
-          errors.push({ ref: record.IndexNumber || record.userId, error: 'User not found' });
+          errors.push({ ref: record.indexNumber || record.userId, error: 'User not found' });
           continue;
         }
 
@@ -655,7 +767,7 @@ exports.esp32Sync = async (req, res) => {
         }
 
         // Academic attendance records
-        if (!session) { errors.push({ ref: record.IndexNumber, error: 'No session' }); continue; }
+        if (!session) { errors.push({ ref: record.indexNumber, error: 'No session' }); continue; }
         const existing = await AttendanceRecord.findOne({ session: session._id, user: user._id });
         if (existing) { skipped++; continue; }
 
@@ -673,7 +785,7 @@ exports.esp32Sync = async (req, res) => {
         });
         synced++;
       } catch (e) {
-        errors.push({ ref: record.IndexNumber || record.userId, error: e.message });
+        errors.push({ ref: record.indexNumber || record.userId, error: e.message });
       }
     }
 
