@@ -412,7 +412,7 @@ router.get("/device-status", authenticate, async (req, res) => {
       .sort((a, b) => new Date(b.lastSeenAt) - new Date(a.lastSeenAt))[0];
 
     const lastSeen = latestDevice?.lastSeenAt ? new Date(latestDevice.lastSeenAt) : null;
-    const isOnline = lastSeen && (Date.now() - lastSeen.getTime()) < 10000; // within 10s
+    const isOnline = lastSeen && (Date.now() - lastSeen.getTime()) < 20000; // within 20s
 
     res.json({
       hasDevice: true,
