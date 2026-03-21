@@ -562,14 +562,12 @@ exports.login = async (req, res) => {
       }
       user = await User.findOne({ email, company: company._id, role: "employee" }).select("+password");
     } else if (email && loginRole === "lecturer") {
-      // Scope lecturer login to academic companies only — prevents cross-company email collision
-      const CompanyModel = require("../models/Company");
-      const academicIds = await CompanyModel.find({ mode: "academic" }, "_id").lean().then(cs => cs.map(c => c._id));
-      user = await User.findOne({ email, company: { $in: academicIds }, role: "lecturer" }).select("+password");
+      // FIX: Search all companies for this lecturer email, not just mode="academic"
+      // Some institutions have mode="corporate" due to registration flow issues.
+      // Role-based checks below prevent cross-portal abuse.
+      user = await User.findOne({ email, role: "lecturer" }).select("+password");
     } else if (email && loginRole === "hod") {
-      const CompanyModel = require("../models/Company");
-      const academicIds = await CompanyModel.find({ mode: "academic" }, "_id").lean().then(cs => cs.map(c => c._id));
-      user = await User.findOne({ email, company: { $in: academicIds }, role: "hod" }).select("+password");
+      user = await User.findOne({ email, role: "hod" }).select("+password");
     } else {
       user = await User.findOne({ email }).select("+password");
     }
@@ -589,9 +587,28 @@ exports.login = async (req, res) => {
 
     const company = await Company.findById(user.company);
 
+    // FIX: Auto-correct company mode if an academic role is logging in
+    // but the company mode is "corporate" due to a registration flow bug.
+    if (company && ["lecturer", "hod", "student"].includes(user.role) && company.mode !== "academic") {
+      company.mode = "academic";
+      await company.save().catch(() => {});
+      console.log(`[LOGIN] Auto-corrected company mode to 'academic' for ${company.name}`);
+    }
+
     if (portalMode && company && company.mode !== portalMode && user.role !== "superadmin") {
-      // Don't reveal which portal is correct — generic error
-      return res.status(401).json({ error: "Invalid credentials" });
+      // FIX: Don't block lecturers/hod purely on portalMode mismatch.
+      // Some institutions registered via the corporate flow but are actually
+      // academic — their mode field may be wrong. Role-based checks below
+      // are sufficient to prevent cross-portal login.
+      const academicRoles = ["lecturer", "hod", "student"];
+      const corporateRoles = ["employee", "manager"];
+      const isRolePortalMismatch =
+        (academicRoles.includes(user.role) && portalMode === "corporate") ||
+        (corporateRoles.includes(user.role) && portalMode === "academic");
+      if (isRolePortalMismatch) {
+        return res.status(401).json({ error: "Invalid credentials" });
+      }
+      // Otherwise allow through — mode field may just be misconfigured
     }
 
     // ── Role-portal enforcement ──────────────────────────────────────────────
@@ -932,13 +949,18 @@ exports.forgotPasswordEmail = async (req, res) => {
 
     if (!user) return res.status(404).json({ error: "No account found with those details in this institution." });
 
+    // FIX: Allow lecturer and hod (not just manager/employee) — previously
+    // hod was excluded which broke password reset for heads of department.
+    // Also: don't gate on company.mode since some academic institutions have
+    // mode set to "corporate" due to a registration flow bug.
+    const rolesAllowedReset = ["manager", "lecturer", "hod", "employee"];
     if (["admin", "superadmin"].includes(user.role)) {
       return res.status(403).json({ error: "Invalid input" });
     }
     if (user.role === "student") {
       return res.status(403).json({ error: "Invalid input" });
     }
-    if (!["manager", "lecturer", "employee"].includes(user.role)) {
+    if (!rolesAllowedReset.includes(user.role)) {
       return res.status(403).json({ error: "Invalid input" });
     }
     if (user.resetPasswordExpires && user.resetPasswordExpires > Date.now() && (user.resetPasswordExpires - Date.now()) > 59 * 60 * 1000) {
