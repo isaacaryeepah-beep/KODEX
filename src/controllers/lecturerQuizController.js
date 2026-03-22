@@ -130,16 +130,65 @@ exports.listQuizzes = async (req, res) => {
       { $group: { _id: "$quiz", count: { $sum: 1 } } },
     ]);
 
+    // Aggregate stats per quiz for the performance page
+    const statsAgg = await Attempt.aggregate([
+      { $match: { quiz: { $in: quizIds }, isSubmitted: true } },
+      { $group: {
+        _id: "$quiz",
+        totalAttempts: { $sum: 1 },
+        avgScore:      { $avg: "$percentageScore" },
+        highestScore:  { $max: "$percentageScore" },
+        lowestScore:   { $min: "$percentageScore" },
+      }},
+    ]);
+
     const qCountMap = {};
     questionCounts.forEach((q) => (qCountMap[q._id.toString()] = q.count));
     const aCountMap = {};
     attemptCounts.forEach((a) => (aCountMap[a._id.toString()] = a.count));
+    const statsMap = {};
+    statsAgg.forEach((s) => (statsMap[s._id.toString()] = s));
 
-    const result = quizzes.map((q) => ({
-      ...q.toObject(),
-      questionCount: qCountMap[q._id.toString()] || 0,
-      attemptCount: aCountMap[q._id.toString()] || 0,
-    }));
+    const result = quizzes.map((q) => {
+      const sid = q._id.toString();
+      const s = statsMap[sid];
+      const totalAttempts = s?.totalAttempts || 0;
+      const avgScore = s?.avgScore || 0;
+      const passThreshold = q.passingScore || 50;
+      return {
+        ...q.toObject(),
+        questionCount: qCountMap[sid] || 0,
+        attemptCount:  aCountMap[sid] || 0,
+        stats: {
+          totalAttempts,
+          averageScore:  Math.round(avgScore * 10) / 10,
+          highestScore:  s?.highestScore != null ? Math.round(s.highestScore * 10) / 10 : null,
+          lowestScore:   s?.lowestScore  != null ? Math.round(s.lowestScore  * 10) / 10 : null,
+          passRate: totalAttempts > 0
+            ? Math.round((statsAgg.find(x => x._id.toString() === sid)
+                ? 0 : 0) || 0) // calculated below
+            : 0,
+        },
+      };
+    });
+
+    // Calculate pass rates separately (needs per-attempt comparison)
+    const passAgg = await Attempt.aggregate([
+      { $match: { quiz: { $in: quizIds }, isSubmitted: true } },
+      { $lookup: { from: "quizzes", localField: "quiz", foreignField: "_id", as: "quizDoc" } },
+      { $unwind: { path: "$quizDoc", preserveNullAndEmpty: true } },
+      { $group: {
+        _id: "$quiz",
+        total: { $sum: 1 },
+        passed: { $sum: { $cond: [
+          { $gte: ["$percentageScore", { $ifNull: ["$quizDoc.passingScore", 50] }] },
+          1, 0
+        ]}},
+      }},
+    ]);
+    const passMap = {};
+    passAgg.forEach(p => (passMap[p._id.toString()] = p.total > 0 ? Math.round((p.passed / p.total) * 100) : 0));
+    result.forEach(q => { if (q.stats) q.stats.passRate = passMap[q._id.toString()] || 0; });
 
     res.json({ quizzes: result });
   } catch (error) {
