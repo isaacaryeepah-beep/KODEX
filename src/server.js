@@ -165,6 +165,7 @@ app.use("/api/admin", adminDashboardRoutes);
 app.use("/api/search", searchRoutes);
 app.use("/api/proctor", proctoredQuizRoutes);
 app.use("/api/assignments", assignmentRoutes);
+app.use("/api/ai",          aiProxyRoutes);
 const esp32Routes        = require("./routes/esp32");
 app.use("/api/esp32",     esp32Routes);
 const shiftRoutes        = require("./routes/shifts");
@@ -199,25 +200,25 @@ app.use((err, req, res, next) => {
 const start = async () => {
   await connectDB();
 
-  // ── One-time index migration: drop any old sparse single-field indexes ────────
-  const _staleIndexes = [
-    // old IndexNumber sparse index (replaced by compound partial index)
-    (idx) => idx.key && idx.key.IndexNumber === 1 && !idx.key.company && idx.sparse === true,
-    // old email sparse compound index (replaced by partial filter expression)
-    (idx) => idx.key && idx.key.email === 1 && idx.key.company === 1 && idx.sparse === true && !idx.partialFilterExpression,
-  ];
-  for (const matcher of _staleIndexes) {
-    try {
-      const mongoose = require("mongoose");
-      const usersCollection = mongoose.connection.db.collection("users");
-      const indexes = await usersCollection.indexes();
-      const stale = indexes.find(matcher);
-      if (stale) {
-        await usersCollection.dropIndex(stale.name);
-        console.log("Dropped stale index:", stale.name);
-      }
-    } catch (e) {
-      if (e.codeName !== "IndexNotFound") console.log("Index cleanup note:", e.message);
+  try {
+    const mongoose = require("mongoose");
+    const db = mongoose.connection.db;
+    const usersCollection = db.collection("users");
+    const indexes = await usersCollection.indexes();
+    const oldIndex = indexes.find(
+      (idx) =>
+        idx.key &&
+        idx.key.indexNumber === 1 &&
+        idx.key.company === 1 &&
+        idx.sparse === true
+    );
+    if (oldIndex) {
+      await usersCollection.dropIndex(oldIndex.name);
+      console.log("Dropped old sparse indexNumber_1_company_1 index");
+    }
+  } catch (e) {
+    if (e.codeName !== "IndexNotFound") {
+      console.log("Index cleanup note:", e.message);
     }
   }
 
@@ -231,49 +232,6 @@ const start = async () => {
     } catch (e) {
       console.error("Scheduler failed to start:", e.message);
     }
-  // ── ESP32 Watchdog ───────────────────────────────────────────────────────────
-  // Checks every 60s — if any ESP32 device hasn't sent a heartbeat in 90s,
-  // it means the device lost power. Auto-stop any active sessions for that company.
-  setInterval(async () => {
-    try {
-      const mongoose  = require("mongoose");
-      const Company   = require("./models/Company");
-      const AttendanceSession = require("./models/AttendanceSession");
-
-      const cutoff = new Date(Date.now() - 10 * 1000); // 10 seconds ago
-
-      // Find companies whose ESP32 device has gone silent
-      const companies = await Company.find({
-        "esp32Devices.0": { $exists: true },           // has at least one device
-        "esp32Devices.lastSeenAt": { $lt: cutoff },    // last seen > 10s ago
-      }).select("_id name esp32Devices");
-
-      for (const company of companies) {
-        // Check if any device is stale
-        const hasStaleDevice = company.esp32Devices.some(
-          (d) => d.lastSeenAt && new Date(d.lastSeenAt) < cutoff
-        );
-        if (!hasStaleDevice) continue;
-
-        // Stop any active sessions for this company
-        const stopped = await AttendanceSession.updateMany(
-          { company: company._id, status: "active" },
-          { status: "stopped", stoppedAt: new Date(), stoppedBy: null }
-        );
-
-        if (stopped.modifiedCount > 0) {
-          console.log(
-            `[ESP32 Watchdog] Power loss detected for ${company.name} — ` +
-            `stopped ${stopped.modifiedCount} active session(s)`
-          );
-        }
-      }
-    } catch (e) {
-      console.error("[ESP32 Watchdog] Error:", e.message);
-    }
-  }, 5 * 1000); // run every 5 seconds
-  // ── End ESP32 Watchdog ───────────────────────────────────────────────────────
-
   });
 };
 
