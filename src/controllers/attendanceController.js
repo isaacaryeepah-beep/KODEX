@@ -83,19 +83,22 @@ exports.startSession = async (req, res) => {
       });
     }
 
-    let courseRef = null;
-    if (req.body.courseId) {
-      const Course = require("../models/Course");
-      const courseQuery = { _id: req.body.courseId, company: companyId };
-      if (req.user.role === "lecturer") {
-        courseQuery.lecturer = req.user._id;
-      }
-      const course = await Course.findOne(courseQuery);
-      if (!course) {
-        return res.status(400).json({ error: "Course not found or you don't have access to it" });
-      }
-      courseRef = course._id;
+    // Course is required — every session must belong to a course
+    // This is what prevents cross-course session visibility
+    if (!req.body.courseId) {
+      return res.status(400).json({ error: "Please select a course to start attendance for" });
     }
+
+    const Course = require("../models/Course");
+    const courseQuery = { _id: req.body.courseId, company: companyId };
+    if (req.user.role === "lecturer") {
+      courseQuery.lecturer = req.user._id;
+    }
+    const course = await Course.findOne(courseQuery);
+    if (!course) {
+      return res.status(400).json({ error: "Course not found or you don't have access to it" });
+    }
+    const courseRef = course._id;
 
     const sessionData = {
       company: companyId,
@@ -175,7 +178,7 @@ exports.stopSession = async (req, res) => {
 
 exports.listSessions = async (req, res) => {
   try {
-    const { status, page = 1, limit = 20 } = req.query;
+    const { status, page = 1, limit = 20, courseId } = req.query;
     const filter = { ...req.companyFilter };
 
     if (req.user.role === "lecturer") {
@@ -190,6 +193,11 @@ exports.listSessions = async (req, res) => {
         "_id"
       ).lean();
       filter.createdBy = { $in: deptLecturers.map(u => u._id) };
+    }
+
+    // Filter by course — ensures each course only sees its own sessions
+    if (courseId && mongoose.Types.ObjectId.isValid(courseId)) {
+      filter.course = courseId;
     }
 
     if (status && ["active", "stopped"].includes(status)) {
