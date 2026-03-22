@@ -1,0 +1,9 @@
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /superadmin
+Disallow: /snap-quiz.html
+Disallow: /proctor-dashboard.html
+Disallow: /assignments.html
+
+Sitemap: https://kodex.it.com/sitemap.xml
