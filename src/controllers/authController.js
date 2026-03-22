@@ -133,7 +133,8 @@ exports.register = async (req, res) => {
 
 exports.registerLecturer = async (req, res) => {
   try {
-    const { name, email, password, institutionCode, institutionName, department } = req.body;
+    const { name, email: emailRaw, password, institutionCode, institutionName, department } = req.body;
+    const email = emailRaw ? emailRaw.trim().toLowerCase() : "";
 
     if (!name || !email || !password) {
       return res.status(400).json({ error: "Name, email, and password are required" });
@@ -310,7 +311,8 @@ exports.registerLecturer = async (req, res) => {
 
 exports.registerStudent = async (req, res) => {
   try {
-    const { name, password, institutionCode, department, email } = req.body;
+    const { name, password, institutionCode, department, email: emailRaw } = req.body;
+    const email = emailRaw ? emailRaw.trim().toLowerCase() : "";
     const IndexNumber = req.body.IndexNumber || req.body.indexNumber;
 
     if (!name || !IndexNumber || !password || !institutionCode) {
@@ -433,7 +435,8 @@ exports.registerStudent = async (req, res) => {
 
 exports.registerEmployee = async (req, res) => {
   try {
-    const { name, email, password, institutionCode } = req.body;
+    const { name, email: emailRaw, password, institutionCode } = req.body;
+    const email = emailRaw ? emailRaw.trim().toLowerCase() : "";
 
     if (!name || !email || !password || !institutionCode) {
       return res.status(400).json({ error: "Name, email, password, and institution code are required" });
@@ -522,7 +525,8 @@ exports.registerEmployee = async (req, res) => {
 
 exports.login = async (req, res) => {
   try {
-    const { email, password, deviceId, institutionCode, loginRole, portalMode } = req.body;
+    const { email: emailRaw, password, deviceId, institutionCode, loginRole, portalMode } = req.body;
+    const email = emailRaw ? emailRaw.trim().toLowerCase() : "";
     const IndexNumber = req.body.IndexNumber || req.body.indexNumber;
 
     if (!password) {
@@ -930,7 +934,8 @@ exports.resetPassword = async (req, res) => {
 
 exports.forgotPasswordEmail = async (req, res) => {
   try {
-    const { phone, email, institutionCode } = req.body;
+    const { phone, email: emailRaw, institutionCode } = req.body;
+    const email = emailRaw ? emailRaw.trim().toLowerCase() : null;
     if (!phone && !email) return res.status(400).json({ error: "Phone number or email is required" });
     if (!institutionCode) return res.status(400).json({ error: "Institution code is required" });
 
@@ -1029,7 +1034,8 @@ exports.forgotPasswordEmail = async (req, res) => {
 
 exports.forgotPasswordAdmin = async (req, res) => {
   try {
-    const { phone, email } = req.body;
+    const { phone, email: emailRaw } = req.body;
+    const email = emailRaw ? emailRaw.trim().toLowerCase() : null;
     if (!phone && !email) return res.status(400).json({ error: "Phone number or email is required" });
 
     let user = null;
@@ -1117,7 +1123,8 @@ exports.forgotPasswordAdmin = async (req, res) => {
 
 exports.resetPasswordEmail = async (req, res) => {
   try {
-    const { phone, email, resetCode, newPassword } = req.body;
+    const { phone, email: emailRaw, resetCode, newPassword } = req.body;
+    const email = emailRaw ? emailRaw.trim().toLowerCase() : null;
     if ((!phone && !email) || !resetCode || !newPassword) {
       return res.status(400).json({ error: "Phone or email, reset code, and new password are required" });
     }
