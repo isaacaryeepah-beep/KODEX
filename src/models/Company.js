@@ -94,16 +94,18 @@ const companySchema = new mongoose.Schema(
       type: String,
       default: null,
     },
-    // ── ESP32 Devices ─────────────────────────────────────────
+    isActive: {
+      type: Boolean,
+      default: true,
+    },
+    // ── ESP32 Classroom Device ────────────────────────────────
     esp32Devices: {
-      type: [
-        {
-          deviceId:     { type: String },
-          token:        { type: String },
-          registeredAt: { type: Date },
-          lastSeenAt:   { type: Date },
-        },
-      ],
+      type: [{
+        deviceId:     { type: String },
+        token:        { type: String },
+        registeredAt: { type: Date },
+        lastSeenAt:   { type: Date },
+      }],
       default: [],
     },
     esp32PendingCommand: {
@@ -112,16 +114,8 @@ const companySchema = new mongoose.Schema(
       title:     { type: String, default: null },
       issuedAt:  { type: Date,   default: null },
     },
-    // When true, attendance sessions cannot be started unless the ESP32 device
-    // is actively sending heartbeats. Set automatically on first device registration.
-    esp32Required: {
-      type:    Boolean,
-      default: false,
-    },
-    isActive: {
-      type: Boolean,
-      default: true,
-    },
+    // When true, sessions cannot start unless device is online
+    esp32Required: { type: Boolean, default: false },
     superadminNotes: {
       type: String,
       default: "",
