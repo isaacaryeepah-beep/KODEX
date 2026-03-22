@@ -3702,7 +3702,13 @@ async function _renderAdminCharts(sessionsData, usersData) {
 }
 
 
-async function renderSessions() {
+// Track selected course filter for sessions page
+let _sessionsFilterCourseId = '';
+let _sessionsFilterCourseTitle = '';
+
+async function renderSessions(courseId, courseTitle) {
+  // Allow passing a courseId to pre-filter (e.g. from course page)
+  if (courseId) { _sessionsFilterCourseId = courseId; _sessionsFilterCourseTitle = courseTitle || ''; }
   const content = document.getElementById('main-content');
   if (!content) return;
 
@@ -3714,11 +3720,11 @@ async function renderSessions() {
   }
 
   try {
-    const data = await api('/api/attendance-sessions');
-    offlineCache('sessions', data); // cache for offline use
+    const qs = _sessionsFilterCourseId ? `?courseId=${_sessionsFilterCourseId}` : '';
+    const data = await api('/api/attendance-sessions' + qs);
+    offlineCache('sessions', data);
     _renderSessionsHTML(content, data.sessions || [], false);
   } catch (e) {
-    // Network failed — fall back to cache
     const cached = offlineRead('sessions');
     if (cached) {
       _renderSessionsHTML(content, cached.sessions || [], true);
@@ -3731,22 +3737,37 @@ async function renderSessions() {
 function _renderSessionsHTML(content, sessions, isOffline) {
   const pendingCount = offlineQueueCount();
   const canStart = ['lecturer', 'manager'].includes(currentUser.role);
+  const isLecturer = currentUser.role === 'lecturer';
+
+  const filterPill = _sessionsFilterCourseId
+    ? `<div style="display:flex;align-items:center;gap:6px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:20px;padding:3px 10px 3px 8px;font-size:12px;color:#1e40af;font-weight:600;">
+        📚 ${esc(_sessionsFilterCourseTitle || 'Course filter')}
+        <button onclick="_sessionsFilterCourseId='';_sessionsFilterCourseTitle='';renderSessions()" style="background:none;border:none;cursor:pointer;color:#6b7280;font-size:15px;line-height:1;padding:0 0 0 2px;" title="Clear filter">×</button>
+      </div>`
+    : '';
+
   content.innerHTML = `
     <div class="page-header">
       <h2>Attendance Sessions</h2>
       <p>Manage attendance sessions${isOffline ? ' <span style="color:#f59e0b;font-weight:600">(Offline — showing cached data)</span>' : ''}</p>
     </div>
-    ${canStart ? `<div class="actions-bar">
-      <button class="btn btn-primary btn-sm" onclick="showStartSessionModal()">Start New Session</button>
+    <div class="actions-bar" style="margin-bottom:14px;">
+      ${canStart ? `<button class="btn btn-primary btn-sm" onclick="showStartSessionModal()">Start New Session</button>` : ''}
+      ${filterPill}
       ${pendingCount > 0 ? `<span style="background:#fef3c7;color:#92400e;border:1px solid #fbbf24;border-radius:6px;padding:4px 12px;font-size:12px;font-weight:600">${pendingCount} action${pendingCount!==1?'s':''} pending sync</span>` : ''}
-    </div>` : ''}
+    </div>
     <div class="card">
       ${sessions.length ? `
         <table>
-          <thead><tr><th>Title</th><th>Status</th><th>Started</th><th>Stopped</th><th>Actions</th></tr></thead>
-          <tbody>${sessions.map(s => `
+          <thead><tr>
+            <th>Title</th>
+            ${isLecturer ? '<th>Course</th>' : ''}
+            <th>Status</th><th>Started</th><th>Stopped</th><th>Actions</th>
+          </tr></thead>
+          <tbody>${sessions.map((s, i) => `
             <tr>
               <td>${s.title || 'Untitled'}</td>
+              ${isLecturer ? `<td><span style="font-size:11px;font-weight:600;color:#6366f1;">${s.course ? esc(s.course.code || s.course.title || '') : '—'}</span></td>` : ''}
               <td><span class="status-badge status-${s.status}">${s.status}</span></td>
               <td>${new Date(s.startedAt).toLocaleString()}</td>
               <td>${s.stoppedAt ? new Date(s.stoppedAt).toLocaleString() : '-'}</td>
@@ -3754,17 +3775,18 @@ function _renderSessionsHTML(content, sessions, isOffline) {
                 <button class="btn btn-danger btn-sm" onclick="stopSession('${s._id}')">Stop</button>
                 ${!isOffline ? `<button class="btn btn-success btn-sm" onclick="generateQR('${s._id}')">QR Code</button>` : ''}
                 ${!isOffline ? `<button class="btn btn-sm" style="background:#7c3aed;color:#fff;font-size:11px" onclick="generateVerbalCode('${s._id}')">Verbal Code</button>` : ''}
-                <button class="btn btn-sm" style="font-size:11px;background:var(--bg);border:1px solid var(--border)" onclick="viewAttendees('${s._id}', '${(s.title||'Session').replace(/['"]/g,'')}')">Attendees</button>
+                <button class="btn btn-sm" style="font-size:11px;background:var(--bg);border:1px solid var(--border)" onclick="viewAttendees('${s._id}', '${(s.title||'Session').replace(/['\''\'']/g,'')}')">Attendees</button>
               ` : s.status === 'active' ? `
-                <button class="btn btn-sm" style="font-size:11px;background:var(--bg);border:1px solid var(--border)" onclick="viewAttendees('${s._id}', '${(s.title||'Session').replace(/['"]/g,'')}')">Attendees</button>
+                <button class="btn btn-sm" style="font-size:11px;background:var(--bg);border:1px solid var(--border)" onclick="viewAttendees('${s._id}', '${(s.title||'Session').replace(/['\''\'']/g,'')}')">Attendees</button>
               ` : ''}</td>
             </tr>
           `).join('')}</tbody>
         </table>
-      ` : '<div class="empty-state"><p>No sessions found</p></div>'}
+      ` : `<div class="empty-state"><p>${_sessionsFilterCourseId ? 'No sessions for this course yet.' : 'No sessions found'}</p></div>`}
     </div>
   `;
 }
+
 
 async function showStartSessionModal() {
   const container = document.getElementById('modal-container');
