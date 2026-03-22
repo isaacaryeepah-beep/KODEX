@@ -2029,8 +2029,16 @@ function navigateTo(view) {
     case 'gradebook': renderGradeBook(); break;
     case 'training':       renderTraining(); break;
     case 'my-training':    renderMyTraining(); break;
-    case 'performance':    renderPerformance(); break;
-    case 'my-performance': renderPerformance(); break;
+    case 'performance':
+      if (currentUser.role === 'lecturer') renderLecturerPerformance();
+      else if (currentUser.role === 'student') renderStudentQuizHistory();
+      else renderPerformance();
+      break;
+    case 'my-performance':
+      if (currentUser.role === 'lecturer') renderLecturerPerformance();
+      else if (currentUser.role === 'student') renderStudentQuizHistory();
+      else renderPerformance();
+      break;
     case 'timesheets':     renderTimesheets(); break;
     case 'my-timesheet':   renderMyTimesheet(); break;
     case 'expenses-mgr':   renderExpensesMgr(); break;
@@ -11880,8 +11888,13 @@ buildSidebar = function() {
 // ── Patch navigateTo for Phase 3 ─────────────────────────────────────────────
 const _p2NavigateTo = navigateTo;
 navigateTo = function(view) {
-  if (view === 'performance')    { currentView = view; _setNavActive(view); renderPerformance(); return; }
-  if (view === 'my-performance') { currentView = view; _setNavActive(view); renderMyPerformance(); return; }
+  if (view === 'performance' || view === 'my-performance') {
+    currentView = view; _setNavActive(view);
+    if (currentUser?.role === 'lecturer') renderLecturerPerformance();
+    else if (currentUser?.role === 'student') renderStudentQuizHistory();
+    else renderPerformance();
+    return;
+  }
   _p2NavigateTo(view);
 };
 
