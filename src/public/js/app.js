@@ -8606,9 +8606,12 @@ async function renderLecturerCourseGrades(courseId, courseTitle) {
   content.innerHTML = '<div class="loading">Loading grade book…</div>';
   try {
     const d = await api('/api/gradebook/course/' + courseId);
-    const { grades, gradeBook, quizzes, totalSessions } = d;
+    const grades      = d.grades      || [];
+    const gradeBook   = d.gradeBook   || { weights: { quizzes: 40, attendance: 40, manual: 20 }, manualEntries: [] };
+    const quizzes     = d.quizzes     || [];
+    const totalSessions = d.totalSessions ?? 0;
     const gb = gradeBook;
-    const w  = gb.weights;
+    const w  = gb.weights || { quizzes: 40, attendance: 40, manual: 20 };
 
     // Grade distribution summary
     const dist = { A:0, B:0, C:0, D:0, F:0 };
