@@ -630,8 +630,6 @@ function assignmentsIcon() {
 async function api(path, options = {}) {
   const headers = { 'Content-Type': 'application/json' };
   if (token) headers['Authorization'] = `Bearer ${token}`;
-  // Security headers — identifies this as the KODEX native app, not a browser
-  headers['x-app-source'] = 'kodex-app';
   const res = await fetch(`${API}${path}`, { ...options, headers: { ...headers, ...options.headers } });
   if (res.headers.get('content-type')?.includes('application/json')) {
     const data = await res.json();
@@ -731,8 +729,6 @@ function selectPortal(type) {
     document.getElementById('lecturer-auth').classList.remove('hidden');
   } else if (type === 'hod') {
     document.getElementById('hod-auth').classList.remove('hidden');
-  } else if (type === 'manager') {
-    document.getElementById('manager-auth').classList.remove('hidden');
   } else if (type === 'employee') {
     document.getElementById('employee-auth').classList.remove('hidden');
   } else {
@@ -744,7 +740,6 @@ function showPortalSelector() {
   document.getElementById('admin-auth').classList.add('hidden');
   document.getElementById('lecturer-auth').classList.add('hidden');
   document.getElementById('hod-auth').classList.add('hidden');
-  document.getElementById('manager-auth').classList.add('hidden');
   document.getElementById('employee-auth').classList.add('hidden');
   document.getElementById('student-auth').classList.add('hidden');
   document.getElementById('portal-selector').classList.remove('hidden');
@@ -1158,7 +1153,7 @@ async function handleLecturerRegister() {
     const phone = document.getElementById('lecturer-reg-phone')?.value?.trim();
     let body = { name, email, password };
     if (dept) body.department = dept;
-    if (phone) if (phone) body.phone = phone;
+    if (phone) body.phone = phone;
     if (regMode === 'join' && !dept) {
       return showLecturerError('Department is required when joining an institution.');
     }
@@ -1367,90 +1362,6 @@ async function handleHodForgotPassword() {
   finally { btn.disabled = false; }
 }
 
-
-
-function showManagerLogin() {
-  document.getElementById('manager-forgot-form').classList.add('hidden');
-  document.getElementById('manager-login-form').classList.remove('hidden');
-  document.getElementById('manager-auth-error').style.display = 'none';
-}
-function showManagerForgot() {
-  document.getElementById('manager-login-form').classList.add('hidden');
-  document.getElementById('manager-forgot-form').classList.remove('hidden');
-  document.getElementById('manager-auth-error').style.display = 'none';
-}
-function showManagerError(msg) {
-  const el = document.getElementById('manager-auth-error');
-  el.textContent = msg; el.style.display = 'block';
-  el.style.background = ''; el.style.color = '';
-}
-
-async function handleManagerLogin() {
-  const btn = document.querySelector('#manager-login-form button[type="submit"]');
-  try {
-    const email = document.getElementById('manager-login-email').value.trim();
-    const institutionCode = document.getElementById('manager-login-code').value.trim().toUpperCase();
-    const password = document.getElementById('manager-login-password').value;
-    if (!email) return showManagerError('Please enter your email');
-    if (!institutionCode) return showManagerError('Please enter your institution code');
-    if (!password) return showManagerError('Please enter your password');
-    if (btn) { btn.textContent = 'Signing in…'; btn.disabled = true; }
-    const credentials = { email, password, institutionCode, loginRole: 'manager', deviceId: getDeviceFingerprint() };
-    let data;
-    if (!isOnline()) {
-      showOfflineLoginNotice('manager-login-form');
-      data = await attemptOfflineLogin(credentials);
-    } else {
-      removeOfflineLoginNotice();
-      data = await initiate2FA(credentials);
-      await saveOfflineProfile(credentials, data);
-    }
-    token = data.token;
-    localStorage.setItem('token', token);
-    currentUser = data.user;
-    showDashboard(data);
-  } catch (e) {
-    if (btn) { btn.textContent = 'Sign In'; btn.disabled = false; }
-    const m = (e.message || '').toLowerCase();
-    if (m.includes('too many')) showManagerError('Too many failed attempts. Please wait 15 minutes and try again.');
-    else if (m.includes('network') || m.includes('fetch')) showManagerError('Network error. Please check your connection and try again.');
-    else showManagerError('Wrong Email or Password.');
-  }
-}
-
-let managerForgotStep = 'request';
-async function handleManagerForgotPassword() {
-  if (managerForgotStep === 'request') {
-    const email = document.getElementById('manager-forgot-email').value.trim();
-    const institutionCode = document.getElementById('manager-forgot-code').value.trim().toUpperCase();
-    if (!email || !institutionCode) return showManagerError('Please fill in all fields');
-    try {
-      await api('/api/auth/forgot-password', { method: 'POST', body: JSON.stringify({ email, institutionCode, loginRole: 'manager' }) });
-      managerForgotStep = 'reset';
-      document.getElementById('manager-reset-code-group').classList.remove('hidden');
-      document.getElementById('manager-new-password-group').classList.remove('hidden');
-      document.getElementById('manager-forgot-btn').textContent = 'Reset Password';
-      const el = document.getElementById('manager-auth-error');
-      el.textContent = 'Reset code sent. Enter it below.';
-      el.style.display = 'block'; el.style.background = '#f0fdf4'; el.style.color = '#15803d';
-    } catch(e) { showManagerError(e.message); }
-  } else {
-    const email = document.getElementById('manager-forgot-email').value.trim();
-    const institutionCode = document.getElementById('manager-forgot-code').value.trim().toUpperCase();
-    const resetCode = document.getElementById('manager-reset-code').value;
-    const newPassword = document.getElementById('manager-new-password').value;
-    if (!resetCode || !newPassword) return showManagerError('Please enter the reset code and new password');
-    if (newPassword.length < 8) return showManagerError('Password must be at least 8 characters');
-    try {
-      await api('/api/auth/reset-password', { method: 'POST', body: JSON.stringify({ email, resetCode, newPassword, institutionCode }) });
-      managerForgotStep = 'request';
-      showManagerLogin();
-      const el = document.getElementById('manager-auth-error');
-      el.textContent = 'Password reset successful! You can now sign in.';
-      el.style.display = 'block'; el.style.background = '#f0fdf4'; el.style.color = '#15803d';
-    } catch(e) { showManagerError(e.message); }
-  }
-}
 
 async function handleEmployeeLogin() {
   const btn = document.querySelector('#employee-login-form button[type="submit"]');
@@ -1979,25 +1890,22 @@ function buildSidebar() {
         links.push({ id: 'sign-in-out', label: 'Sign In / Out', icon: attendanceIcon() });
         links.push({ id: 'shifts', label: 'Shifts', icon: svgIcon('<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>') });
         links.push({ id: 'leave-requests', label: 'Leave Requests', icon: svgIcon('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>') });
-        links.push({ id: 'live-attendance',  label: 'Live Attendance', icon: svgIcon('<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>') });
-        links.push({ id: 'payroll',          label: 'Payroll',         icon: svgIcon('<line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>') });
-        links.push({ id: 'branches',         label: 'Branches',        icon: svgIcon('<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>') });
       }
       links.push({ id: 'meetings', label: 'Meetings', icon: meetingsIcon() });
       links.push({ id: 'reports', label: 'Reports', icon: reportsIcon() });
       links.push({ id: 'subscription', label: 'Subscription', icon: subscriptionIcon() });
       break;
     case 'manager':
-      links.push({ id: 'live-attendance',  label: 'Live Attendance', icon: svgIcon('<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>') });
-      links.push({ id: 'users',            label: 'Team',            icon: usersIcon() });
-      links.push({ id: 'shifts',           label: 'Shifts',          icon: svgIcon('<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>') });
-      links.push({ id: 'leave-requests',   label: 'Leave',           icon: svgIcon('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>') });
-      links.push({ id: 'approvals',        label: 'Approvals',       icon: approvalsIcon() });
-      links.push({ id: 'payroll',          label: 'Payroll',         icon: svgIcon('<line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>') });
-      links.push({ id: 'branches',         label: 'Branches',        icon: svgIcon('<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>') });
-      links.push({ id: 'meetings',         label: 'Meetings',        icon: meetingsIcon() });
-      links.push({ id: 'announcements',    label: 'Announcements',   icon: svgIcon('<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>') });
-      links.push({ id: 'reports',          label: 'Reports',         icon: reportsIcon() });
+      links.push({ id: 'approvals', label: 'Approvals', icon: approvalsIcon() });
+      links.push({ id: 'sessions', label: 'Sessions', icon: sessionsIcon() });
+      links.push({ id: 'users', label: 'Users', icon: usersIcon() });
+      if (currentUser.company?.mode === 'corporate') {
+        links.push({ id: 'sign-in-out', label: 'Sign In / Out', icon: attendanceIcon() });
+        links.push({ id: 'shifts', label: 'Shifts', icon: svgIcon('<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>') });
+        links.push({ id: 'leave-requests', label: 'Leave Requests', icon: svgIcon('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>') });
+      }
+      links.push({ id: 'meetings', label: 'Meetings', icon: meetingsIcon() });
+      links.push({ id: 'reports', label: 'Reports', icon: reportsIcon() });
       break;
     case 'hod':
       links.push({ id: 'hod-overview',     label: 'Overview',       icon: svgIcon('<rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>') });
@@ -2101,9 +2009,6 @@ function navigateTo(view) {
     case 'reports': renderReports(); break;
     case 'shifts': renderShifts(); break;
     case 'leave-requests': renderLeaveRequests(); break;
-    case 'live-attendance': renderLiveAttendance(); break;
-    case 'payroll': renderPayroll(); break;
-    case 'branches': renderBranches(); break;
     case 'my-shift': renderMyShift(); break;
     case 'my-leaves': renderMyLeaves(); break;
     case 'approvals': renderApprovals(); break;
@@ -2159,7 +2064,7 @@ async function renderDashboard() {
         await renderAdminDashboard(content);
         break;
       case 'manager':
-        await renderManagerDashboard(content);
+        await renderAdminDashboard(content);
         break;
       case 'lecturer':
         await renderLecturerDashboard(content);
@@ -2206,7 +2111,7 @@ async function renderApprovals() {
             <tbody>${pending.map(u => `
               <tr>
                 <td style="font-weight:500">${u.name}</td>
-                <td>${u.role === 'student' ? (u.IndexNumber || '<span style="color:var(--text-muted)">No ID</span>') : (u.email || 'N/A')}</td>
+                <td>${u.email || u.indexNumber || 'N/A'}</td>
                 <td><span class="status-badge status-active">${u.role}</span></td>
                 ${!isHod ? `<td>${u.department ? `<span style="font-size:11px;padding:2px 7px;border-radius:20px;background:#ecfeff;color:#0891b2;font-weight:600;">${u.department}</span>` : '—'}</td>` : ''}
                 <td>${new Date(u.createdAt).toLocaleDateString()}</td>
@@ -3157,67 +3062,59 @@ async function renderEmployeeDashboard(content) {
   `;
 }
 
-
-// ── ESP32 device offline prompt ───────────────────────────────────────────────
-function showESP32OfflinePrompt(action) {
-  const container = document.getElementById('modal-container');
-  container.classList.remove('hidden');
-  container.innerHTML = `
-    <div class="modal-overlay" onclick="closeModal(event)">
-      <div class="modal" onclick="event.stopPropagation()" style="text-align:center;max-width:380px">
-        <div style="font-size:48px;margin-bottom:12px">📟</div>
-        <h3 style="margin-bottom:8px">Device is Offline</h3>
-        <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px;line-height:1.6">
-          The <strong>KODEX classroom device</strong> must be ON for you to ${action}.<br>
-          Please turn it on, wait a few seconds, then try again.
-        </p>
-        <div style="background:#fef3c7;border:1px solid #fde68a;border-radius:8px;padding:10px 14px;font-size:12px;color:#92400e;margin-bottom:20px;text-align:left">
-          ⚠️ Attendance can only be marked when you are physically present at the device location.
-        </div>
-        <div style="display:flex;gap:8px;justify-content:center">
-          <button class="btn btn-secondary btn-sm" onclick="closeModal()">Cancel</button>
-          <button class="btn btn-primary btn-sm" onclick="closeModal();${action === 'sign in' ? 'employeeSignIn()' : action === 'sign out' ? 'employeeSignOut()' : 'showStartSessionModal()'}">↻ Retry</button>
-        </div>
-      </div>
-    </div>`;
-}
-
 async function employeeSignIn() {
+  // If ESP32 configured, check BLE presence first
+  if (esp32IP) {
+    const detected = await discoverESP32();
+    if (!detected) {
+      toastWarning('You must be at the office to sign in. BLE device not detected.');
+      return;
+    }
+    // Record sign-in on ESP32 locally
+    try {
+      await esp32Api('/sign-in', {
+        method: 'POST',
+        body: JSON.stringify({ userId: currentUser.id, name: currentUser.name })
+      });
+      toastSuccess('Signed in successfully!');
+      renderSignInOut();
+      return;
+    } catch(e) {
+      console.warn('[ESP32] Sign in failed, trying server:', e.message);
+    }
+  }
   try {
-    // Check if device is registered and online before allowing sign-in
-    const status = await api('/api/esp32/device-status').catch(() => null);
-    if (status?.hasDevice) {
-      if (!status.deviceOnline) {
-        showESP32OfflinePrompt('sign in');
-        return;
-      }
-    }
-    const data = await api('/api/attendance-sessions/sign-in', { method: 'POST', body: JSON.stringify({ clientTime: new Date().toISOString() }) });
+    const data = await api('/api/attendance-sessions/sign-in', { method: 'POST' });
     toastSuccess(data.message || 'Signed in successfully!');
-    renderSignInOut();
+    navigateTo('dashboard');
   } catch (e) {
-    if (e.message?.includes('range') || e.message?.includes('OUT_OF_RANGE')) {
-      toastWarning('📶 You are not in range of the office device. Move closer and try again.');
-    } else if (e.message?.includes('clock') || e.message?.includes('TIME_DRIFT')) {
-      toastWarning('🕐 Your device clock is out of sync. Check your date & time settings.');
-    } else {
-      toastError(e.message || 'Sign in failed');
-    }
+    toastError(e.message || 'Sign in failed');
   }
 }
 
 async function employeeSignOut() {
   if (!confirm('Are you sure you want to sign out?')) return;
-  try {
-    // Check if device is registered and online before allowing sign-out
-    const status = await api('/api/esp32/device-status').catch(() => null);
-    if (status?.hasDevice) {
-      if (!status.deviceOnline) {
-        showESP32OfflinePrompt('sign out');
-        return;
-      }
+  // If ESP32 configured, check BLE presence first
+  if (esp32IP) {
+    const detected = await discoverESP32();
+    if (!detected) {
+      toastWarning('You must be at the office to sign out. BLE device not detected.');
+      return;
     }
-    const data = await api('/api/attendance-sessions/sign-out', { method: 'POST', body: JSON.stringify({ clientTime: new Date().toISOString() }) });
+    try {
+      await esp32Api('/sign-out', {
+        method: 'POST',
+        body: JSON.stringify({ userId: currentUser.id, name: currentUser.name })
+      });
+      toastSuccess('Signed out successfully!');
+      renderSignInOut();
+      return;
+    } catch(e) {
+      console.warn('[ESP32] Sign out failed, trying server:', e.message);
+    }
+  }
+  try {
+    const data = await api('/api/attendance-sessions/sign-out', { method: 'POST' });
     toastSuccess(data.message ? data.message + (data.duration ? ' Duration: ' + data.duration : '') : 'Signed out successfully!');
     navigateTo('dashboard');
   } catch (e) {
@@ -3506,7 +3403,7 @@ async function renderStudentDashboard(content) {
           <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border)">
             <div>
               <div style="font-weight:600;font-size:14px">${m.title}</div>
-              <div style="font-size:12px;color:var(--text-light)">${m.scheduledStart && !isNaN(new Date(m.scheduledStart)) ? new Date(m.scheduledStart).toLocaleString() : "Time not set"} — ${m.duration} min</div>
+              <div style="font-size:12px;color:var(--text-light)">${new Date(m.scheduledStart).toLocaleString()} — ${m.duration} min</div>
             </div>
             ${m.joinUrl ? `<a href="${m.joinUrl}" target="_blank" class="btn btn-success btn-sm">Join</a>` : ''}
           </div>
@@ -3531,491 +3428,6 @@ async function renderStudentDashboard(content) {
       ` : '<div class="empty-state"><p>No attendance records yet. Mark attendance when a session is active.</p></div>'}
     </div>
   `;
-}
-
-
-// ══════════════════════════════════════════════════════════════════════════════
-//  MANAGER DASHBOARD
-// ══════════════════════════════════════════════════════════════════════════════
-async function renderManagerDashboard(content) {
-  content.innerHTML = '<div class="loading">Loading dashboard…</div>';
-  try {
-    const [usersData, pendingData, sessionsData, leavesData] = await Promise.all([
-      api('/api/users').catch(() => ({ users: [] })),
-      api('/api/approvals/pending').catch(() => ({ pending: [] })),
-      api('/api/attendance-sessions?limit=5').catch(() => ({ sessions: [], pagination: { total: 0 } })),
-      api('/api/leaves?status=pending').catch(() => ({ leaves: [] })),
-    ]);
-
-    const users       = usersData.users || [];
-    const employees   = users.filter(u => u.role === 'employee');
-    const pending     = pendingData.pending || [];
-    const sessions    = sessionsData.sessions || [];
-    const leaves      = leavesData.leaves || [];
-    const activeSessions = sessions.filter(s => s.active).length;
-    const pendingLeaves  = leaves.length;
-    const hour = new Date().getHours();
-    const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
-    const firstName = currentUser.name.split(' ')[0];
-    const instCode  = currentUser.company?.institutionCode || 'N/A';
-
-    // Attention items
-    const attentionItems = [];
-    if (pending.length > 0)     attentionItems.push({ icon: '📋', text: `${pending.length} pending approval${pending.length>1?'s':''}`, action: "navigateTo('approvals')", color: '#7c3aed' });
-    if (pendingLeaves > 0)      attentionItems.push({ icon: '🏖️', text: `${pendingLeaves} leave request${pendingLeaves>1?'s':''} awaiting review`, action: "navigateTo('leave-requests')", color: '#f59e0b' });
-    if (activeSessions > 0)     attentionItems.push({ icon: '🟢', text: `${activeSessions} active session${activeSessions>1?'s':''} running now`, action: "navigateTo('sessions')", color: '#10b981' });
-
-    content.innerHTML = `
-      <div style="display:flex;flex-direction:column;gap:16px">
-
-        <!-- Welcome & brief -->
-        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap">
-          <div class="dashboard-welcome">
-            <h2>${greeting}, ${firstName} 👋</h2>
-            <p>Manager Portal — ${currentUser.company?.name || 'Your Company'}</p>
-          </div>
-          <div class="inst-code-card">
-            <div class="inst-code-label">Company code</div>
-            <div class="inst-code-value">${instCode}</div>
-            <button class="btn btn-secondary btn-sm" onclick="navigator.clipboard.writeText('${instCode}').then(()=>toastSuccess('Copied!'))">Copy</button>
-          </div>
-        </div>
-
-        ${attentionItems.length ? `
-        <div class="card" style="border-left:4px solid #f59e0b;background:linear-gradient(135deg,var(--card),#fffbeb)">
-          <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#92400e;margin-bottom:10px">⚠️ Attention Needed</div>
-          <div style="display:flex;flex-direction:column;gap:8px">
-            ${attentionItems.map(a => `
-              <div onclick="${a.action}" style="display:flex;align-items:center;gap:10px;cursor:pointer;padding:8px 10px;border-radius:8px;background:rgba(255,255,255,.7)">
-                <span style="font-size:18px">${a.icon}</span>
-                <span style="font-size:13px;font-weight:500;color:${a.color}">${a.text}</span>
-                <span style="margin-left:auto;color:${a.color};font-size:12px">→</span>
-              </div>`).join('')}
-          </div>
-        </div>` : ''}
-
-        <!-- KPI cards -->
-        <div class="stats-grid" style="margin:0">
-          <div class="stat-card-v2" onclick="navigateTo('users')">
-            <div class="stat-top-bar" style="background:#3b82f6"></div>
-            <div class="stat-header"><span class="stat-label">Total Employees</span>
-              <div class="stat-icon" style="background:#eff6ff"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
-            </div>
-            <div class="stat-value">${employees.length}</div>
-            <div class="stat-trend">Active workforce</div>
-          </div>
-          <div class="stat-card-v2" onclick="navigateTo('sessions')">
-            <div class="stat-top-bar" style="background:#10b981"></div>
-            <div class="stat-header"><span class="stat-label">Active Sessions</span>
-              <div class="stat-icon" style="background:#f0fdf4"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div>
-            </div>
-            <div class="stat-value">${activeSessions}</div>
-            <div class="stat-trend" style="color:${activeSessions>0?'#10b981':'var(--text-muted)'}">${activeSessions>0?'<span class="stat-live-dot"></span> Live now':'No active sessions'}</div>
-          </div>
-          <div class="stat-card-v2" onclick="navigateTo('approvals')">
-            <div class="stat-top-bar" style="background:#7c3aed"></div>
-            <div class="stat-header"><span class="stat-label">Pending Approvals</span>
-              <div class="stat-icon" style="background:#f5f3ff"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></div>
-            </div>
-            <div class="stat-value" style="color:${pending.length>0?'#7c3aed':'var(--text)'}">${pending.length}</div>
-            <div class="stat-trend" style="color:${pending.length>0?'#7c3aed':'var(--text-muted)'}">${pending.length>0?'Action needed':'All clear'}</div>
-          </div>
-          <div class="stat-card-v2" onclick="navigateTo('leave-requests')">
-            <div class="stat-top-bar" style="background:#f59e0b"></div>
-            <div class="stat-header"><span class="stat-label">Leave Requests</span>
-              <div class="stat-icon" style="background:#fffbeb"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div>
-            </div>
-            <div class="stat-value" style="color:${pendingLeaves>0?'#f59e0b':'var(--text)'}">${pendingLeaves}</div>
-            <div class="stat-trend">Pending review</div>
-          </div>
-        </div>
-
-        <!-- Quick actions -->
-        <div class="quick-actions-bar">
-          <div class="section-label">Quick actions</div>
-          <div class="actions-row">
-            <button class="action-chip blue" onclick="navigateTo('sessions')">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
-              Start session
-            </button>
-            <button class="action-chip green" onclick="navigateTo('live-attendance')">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-              Live attendance
-            </button>
-            <button class="action-chip purple" onclick="navigateTo('users')">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
-              Add employee
-            </button>
-            <button class="action-chip amber" onclick="navigateTo('announcements')">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
-              Post announcement
-            </button>
-            <button class="action-chip slate" onclick="navigateTo('payroll')">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
-              Payroll
-            </button>
-          </div>
-        </div>
-
-        <!-- Bottom panels -->
-        <div class="dashboard-panels">
-          <div class="dashboard-panel">
-            <div class="panel-header">
-              <span class="panel-title">Recent Sessions</span>
-              <span class="panel-link" onclick="navigateTo('sessions')">View all →</span>
-            </div>
-            ${sessions.length ? sessions.map(s => `
-              <div class="session-row">
-                <div class="session-indicator ${s.active?'live':'ended'}"></div>
-                <div class="session-row-info">
-                  <div class="session-row-title">${s.title||'Untitled'}</div>
-                  <div class="session-row-sub">${s.createdBy?.name||''}</div>
-                </div>
-                <span class="session-row-time ${s.active?'live':'ended'}">${s.active?'Live':timeAgo(s.startedAt)}</span>
-              </div>`).join('') : '<div class="empty-state"><p>No sessions yet</p></div>'}
-          </div>
-          <div class="dashboard-panel">
-            <div class="panel-header">
-              <span class="panel-title">Team Overview</span>
-              <span class="panel-link" onclick="navigateTo('users')">Manage →</span>
-            </div>
-            ${employees.length ? employees.slice(0,8).map(u => `
-              <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">
-                <div style="width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#6366f1,#8b5cf6);display:flex;align-items:center;justify-content:center;color:#fff;font-size:12px;font-weight:700;flex-shrink:0">${(u.name||'?')[0].toUpperCase()}</div>
-                <div style="flex:1;min-width:0">
-                  <div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${u.name}</div>
-                  <div style="font-size:11px;color:var(--text-muted)">${u.department||u.employeeId||u.email||''}</div>
-                </div>
-                <span class="status-badge ${u.isActive?'status-active':'status-stopped'}" style="font-size:10px">${u.isActive?'Active':'Inactive'}</span>
-              </div>`).join('') : '<div class="empty-state"><p>No employees yet</p></div>'}
-          </div>
-        </div>
-      </div>`;
-  } catch(e) {
-    content.innerHTML = `<div class="card"><p style="color:#ef4444">Error: ${e.message}</p></div>`;
-  }
-}
-
-// ══════════════════════════════════════════════════════════════════════════════
-//  LIVE ATTENDANCE MONITOR
-// ══════════════════════════════════════════════════════════════════════════════
-async function renderLiveAttendance() {
-  const content = document.getElementById('main-content');
-  if (!content) return;
-  content.innerHTML = '<div class="loading">Loading live attendance…</div>';
-
-  const doRender = async () => {
-    try {
-      const [sessionsData, usersData] = await Promise.all([
-        api('/api/attendance-sessions?limit=50').catch(() => ({ sessions: [] })),
-        api('/api/users?role=employee').catch(() => ({ users: [] })),
-      ]);
-
-      const sessions  = sessionsData.sessions || [];
-      const employees = (usersData.users || []).filter(u => u.role === 'employee');
-      const active    = sessions.filter(s => s.active);
-
-      // Collect who is clocked in from active sessions
-      const presentIds = new Set();
-      active.forEach(s => (s.attendees||[]).forEach(a => presentIds.add((a.user?._id||a.user||'').toString())));
-
-      const present  = employees.filter(u => presentIds.has(u._id.toString()));
-      const absent   = employees.filter(u => !presentIds.has(u._id.toString()));
-
-      const statusBadge = (label, color, bg) =>
-        `<span style="padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700;background:${bg};color:${color}">${label}</span>`;
-
-      content.innerHTML = `
-        <div style="display:flex;flex-direction:column;gap:16px">
-          <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
-            <div>
-              <h2>Live Attendance</h2>
-              <p style="font-size:13px;color:var(--text-muted)">Real-time workforce status — auto-refreshes every 30s</p>
-            </div>
-            <button class="btn btn-secondary btn-sm" onclick="renderLiveAttendance()">↻ Refresh</button>
-          </div>
-
-          <!-- Summary pills -->
-          <div style="display:flex;gap:10px;flex-wrap:wrap">
-            <div class="card" style="flex:1;min-width:120px;text-align:center;padding:14px;border-top:3px solid #10b981">
-              <div style="font-size:28px;font-weight:800;color:#10b981">${present.length}</div>
-              <div style="font-size:11px;color:var(--text-muted);margin-top:2px">Present</div>
-            </div>
-            <div class="card" style="flex:1;min-width:120px;text-align:center;padding:14px;border-top:3px solid #ef4444">
-              <div style="font-size:28px;font-weight:800;color:#ef4444">${absent.length}</div>
-              <div style="font-size:11px;color:var(--text-muted);margin-top:2px">Absent</div>
-            </div>
-            <div class="card" style="flex:1;min-width:120px;text-align:center;padding:14px;border-top:3px solid #3b82f6">
-              <div style="font-size:28px;font-weight:800;color:#3b82f6">${employees.length ? Math.round((present.length/employees.length)*100) : 0}%</div>
-              <div style="font-size:11px;color:var(--text-muted);margin-top:2px">Attendance Rate</div>
-            </div>
-            <div class="card" style="flex:1;min-width:120px;text-align:center;padding:14px;border-top:3px solid #6366f1">
-              <div style="font-size:28px;font-weight:800;color:#6366f1">${active.length}</div>
-              <div style="font-size:11px;color:var(--text-muted);margin-top:2px">Active Sessions</div>
-            </div>
-          </div>
-
-          <!-- Employee status table -->
-          <div class="card" style="overflow-x:auto">
-            <div style="font-size:13px;font-weight:700;margin-bottom:12px">All Employees — Today</div>
-            <table style="width:100%;border-collapse:collapse;font-size:13px">
-              <thead>
-                <tr style="border-bottom:2px solid var(--border)">
-                  <th style="padding:8px 12px;text-align:left;font-size:11px;text-transform:uppercase;color:var(--text-muted)">Employee</th>
-                  <th style="padding:8px 12px;text-align:left;font-size:11px;text-transform:uppercase;color:var(--text-muted)">Department</th>
-                  <th style="padding:8px 12px;text-align:left;font-size:11px;text-transform:uppercase;color:var(--text-muted)">Employee ID</th>
-                  <th style="padding:8px 12px;text-align:center;font-size:11px;text-transform:uppercase;color:var(--text-muted)">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${employees.length ? employees.map((u, i) => {
-                  const isPresent = presentIds.has(u._id.toString());
-                  return `<tr style="border-bottom:1px solid var(--border);background:${i%2===0?'transparent':'var(--bg)'}">
-                    <td style="padding:10px 12px">
-                      <div style="display:flex;align-items:center;gap:8px">
-                        <div style="width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,${isPresent?'#10b981,#059669':'#94a3b8,#64748b'});display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;font-weight:700">${(u.name||'?')[0].toUpperCase()}</div>
-                        <span style="font-weight:600">${u.name}</span>
-                      </div>
-                    </td>
-                    <td style="padding:10px 12px;color:var(--text-muted)">${u.department||'—'}</td>
-                    <td style="padding:10px 12px;font-family:monospace;font-size:12px">${u.employeeId||'—'}</td>
-                    <td style="padding:10px 12px;text-align:center">${isPresent ? statusBadge('Present','#fff','#10b981') : statusBadge('Absent','#fff','#ef4444')}</td>
-                  </tr>`;
-                }).join('') : '<tr><td colspan="4" style="padding:20px;text-align:center;color:var(--text-muted)">No employees found</td></tr>'}
-              </tbody>
-            </table>
-          </div>
-        </div>`;
-
-      // Auto-refresh every 30s
-      clearTimeout(window._liveAttTimer);
-      window._liveAttTimer = setTimeout(() => { if (currentView === 'live-attendance') doRender(); }, 30000);
-    } catch(e) {
-      content.innerHTML = `<div class="card"><p style="color:#ef4444">Error: ${e.message}</p></div>`;
-    }
-  };
-
-  await doRender();
-}
-
-// ══════════════════════════════════════════════════════════════════════════════
-//  PAYROLL
-// ══════════════════════════════════════════════════════════════════════════════
-async function renderPayroll() {
-  const content = document.getElementById('main-content');
-  if (!content) return;
-  content.innerHTML = '<div class="loading">Loading payroll data…</div>';
-  try {
-    const now  = new Date();
-    const period = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
-    const [usersData, timesheetsData] = await Promise.all([
-      api('/api/users?role=employee').catch(() => ({ users: [] })),
-      api(`/api/advanced/payroll-export?period=${period}`).catch(() => ({ rows: [] })),
-    ]);
-
-    const employees   = (usersData.users || []).filter(u => u.role === 'employee');
-    const rawRows = timesheetsData.rows || [];
-    // rawRows from payroll-export: { employee:{_id,name,...}, totalHours, overtime, status }
-    const tsMap = {};
-    rawRows.forEach(r => { if(r.employee?._id) tsMap[r.employee._id.toString()] = r; });
-
-    const STANDARD_HOURS = 160; // 40h/week × 4 weeks
-    const OT_MULTIPLIER  = 1.5;
-
-    const rows = employees.map(emp => {
-      const r = tsMap[emp._id.toString()];
-      const hoursWorked = r?.totalHours || 0;
-      const overtime    = r?.overtime ?? Math.max(0, hoursWorked - STANDARD_HOURS);
-      const regular     = hoursWorked - overtime;
-      return { emp, hoursWorked, regular, overtime, tsStatus: r?.status || 'not submitted' };
-    });
-
-    const totalHours = rows.reduce((s,r) => s + r.hoursWorked, 0);
-    const totalOT    = rows.reduce((s,r) => s + r.overtime, 0);
-
-    const exportPayroll = () => {
-      const csv = [['Name','Employee ID','Department','Hours Worked','Regular Hours','Overtime Hours','Timesheet Status']];
-      rows.forEach(r => csv.push([r.emp.name, r.emp.employeeId||'', r.emp.department||'', r.hoursWorked, r.regular, r.overtime, r.tsStatus]));
-      const blob = new Blob([csv.map(r=>r.map(v=>`"${v}"`).join(',')).join('\n')], {type:'text/csv'});
-      const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `payroll_${period}.csv`; a.click();
-    };
-    window._exportPayroll = exportPayroll;
-
-    content.innerHTML = `
-      <div style="display:flex;flex-direction:column;gap:16px">
-        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
-          <div>
-            <h2>Payroll Summary</h2>
-            <p style="font-size:13px;color:var(--text-muted)">Period: ${period} · Based on submitted timesheets</p>
-          </div>
-          <button class="btn btn-primary btn-sm" onclick="window._exportPayroll()">⬇ Export CSV</button>
-        </div>
-
-        <div style="display:flex;gap:12px;flex-wrap:wrap">
-          <div class="card" style="flex:1;min-width:140px;text-align:center;padding:14px">
-            <div style="font-size:24px;font-weight:800;color:#3b82f6">${totalHours.toFixed(1)}</div>
-            <div style="font-size:11px;color:var(--text-muted)">Total Hours</div>
-          </div>
-          <div class="card" style="flex:1;min-width:140px;text-align:center;padding:14px">
-            <div style="font-size:24px;font-weight:800;color:#f59e0b">${totalOT.toFixed(1)}</div>
-            <div style="font-size:11px;color:var(--text-muted)">Overtime Hours</div>
-          </div>
-          <div class="card" style="flex:1;min-width:140px;text-align:center;padding:14px">
-            <div style="font-size:24px;font-weight:800;color:#10b981">${rows.filter(r=>r.tsStatus==='approved').length}</div>
-            <div style="font-size:11px;color:var(--text-muted)">Timesheets Approved</div>
-          </div>
-          <div class="card" style="flex:1;min-width:140px;text-align:center;padding:14px">
-            <div style="font-size:24px;font-weight:800;color:#6366f1">${employees.length}</div>
-            <div style="font-size:11px;color:var(--text-muted)">Employees</div>
-          </div>
-        </div>
-
-        <div class="card" style="overflow-x:auto">
-          <table style="width:100%;border-collapse:collapse;font-size:13px">
-            <thead>
-              <tr style="border-bottom:2px solid var(--border)">
-                <th style="padding:8px 12px;text-align:left;font-size:11px;text-transform:uppercase;color:var(--text-muted)">Employee</th>
-                <th style="padding:8px 12px;text-align:left;font-size:11px;text-transform:uppercase;color:var(--text-muted)">Dept</th>
-                <th style="padding:8px 8px;text-align:center;font-size:11px;text-transform:uppercase;color:var(--text-muted)">Hours</th>
-                <th style="padding:8px 8px;text-align:center;font-size:11px;text-transform:uppercase;color:var(--text-muted)">Regular</th>
-                <th style="padding:8px 8px;text-align:center;font-size:11px;text-transform:uppercase;color:var(--text-muted)">Overtime</th>
-                <th style="padding:8px 8px;text-align:center;font-size:11px;text-transform:uppercase;color:var(--text-muted)">Timesheet</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${rows.length ? rows.map((r,i) => {
-                const statusColor = {approved:'#10b981',submitted:'#3b82f6',pending:'#f59e0b','not submitted':'#ef4444'}[r.tsStatus]||'#94a3b8';
-                return `<tr style="border-bottom:1px solid var(--border);background:${i%2===0?'transparent':'var(--bg)'}">
-                  <td style="padding:10px 12px;font-weight:600">${r.emp.name}</td>
-                  <td style="padding:10px 12px;color:var(--text-muted)">${r.emp.department||'—'}</td>
-                  <td style="padding:10px 8px;text-align:center;font-weight:700">${r.hoursWorked.toFixed(1)}</td>
-                  <td style="padding:10px 8px;text-align:center">${r.regular.toFixed(1)}</td>
-                  <td style="padding:10px 8px;text-align:center;color:${r.overtime>0?'#f59e0b':'var(--text-muted)'}">${r.overtime.toFixed(1)}</td>
-                  <td style="padding:10px 8px;text-align:center"><span style="padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700;background:${statusColor}22;color:${statusColor}">${r.tsStatus}</span></td>
-                </tr>`;
-              }).join('') : '<tr><td colspan="6" style="padding:20px;text-align:center;color:var(--text-muted)">No timesheet data for this period</td></tr>'}
-            </tbody>
-          </table>
-        </div>
-      </div>`;
-  } catch(e) {
-    content.innerHTML = `<div class="card"><p style="color:#ef4444">Error: ${e.message}</p></div>`;
-  }
-}
-
-// ══════════════════════════════════════════════════════════════════════════════
-//  BRANCHES
-// ══════════════════════════════════════════════════════════════════════════════
-async function renderBranches() {
-  const content = document.getElementById('main-content');
-  if (!content) return;
-  content.innerHTML = '<div class="loading">Loading branches…</div>';
-  try {
-    const data     = await api('/api/advanced/branches');
-    const branches = data.branches || [];
-    const canEdit  = ['admin','superadmin'].includes(currentUser.role);
-
-    content.innerHTML = `
-      <div style="display:flex;flex-direction:column;gap:16px">
-        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
-          <div><h2>Branches</h2><p style="font-size:13px;color:var(--text-muted)">Manage company locations and branches</p></div>
-          ${canEdit ? `<button class="btn btn-primary btn-sm" onclick="showCreateBranchModal()">+ Add Branch</button>` : ''}
-        </div>
-        ${branches.length ? `
-        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px">
-          ${branches.map(b => `
-            <div class="card" style="position:relative">
-              <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px">
-                <div>
-                  <div style="font-size:15px;font-weight:700">${b.name}</div>
-                  ${b.code ? `<div style="font-size:11px;font-family:monospace;color:#6366f1;font-weight:700">${b.code}</div>` : ''}
-                </div>
-                <span style="padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700;background:${b.isActive?'#f0fdf4':'#f1f5f9'};color:${b.isActive?'#15803d':'#64748b'}">${b.isActive?'Active':'Inactive'}</span>
-              </div>
-              ${b.city||b.country ? `<div style="font-size:12px;color:var(--text-muted);margin-bottom:6px">📍 ${[b.city,b.country].filter(Boolean).join(', ')}</div>` : ''}
-              ${b.manager ? `<div style="font-size:12px;color:var(--text-muted);margin-bottom:6px">👤 Manager: ${b.manager.name||'—'}</div>` : ''}
-              <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">👥 ${b.headcount||0} employees</div>
-              ${canEdit ? `<div style="display:flex;gap:6px">
-                <button class="btn btn-sm btn-secondary" style="font-size:11px" onclick="showEditBranchModal('${b._id}','${esc(b.name)}','${b.code||''}','${b.city||''}','${b.country||''}')">✏️ Edit</button>
-              </div>` : ''}
-            </div>`).join('')}
-        </div>` : '<div class="card"><div class="empty-state"><p>No branches yet.</p></div></div>'}
-      </div>`;
-  } catch(e) {
-    content.innerHTML = `<div class="card"><p style="color:#ef4444">Error: ${e.message}</p></div>`;
-  }
-}
-
-function showCreateBranchModal() {
-  const container = document.getElementById('modal-container');
-  container.classList.remove('hidden');
-  container.innerHTML = `
-    <div class="modal-overlay" onclick="closeModal(event)">
-      <div class="modal" onclick="event.stopPropagation()" style="max-width:460px">
-        <h3>Add Branch</h3>
-        <div class="form-group"><label>Branch Name <span style="color:red">*</span></label><input type="text" id="branch-name" placeholder="e.g. Accra Head Office"></div>
-        <div class="form-group"><label>Branch Code <span style="font-size:11px;color:var(--text-muted)">(optional)</span></label><input type="text" id="branch-code" placeholder="e.g. ACC01" style="text-transform:uppercase"></div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-          <div class="form-group"><label>City</label><input type="text" id="branch-city" placeholder="Accra"></div>
-          <div class="form-group"><label>Country</label><input type="text" id="branch-country" placeholder="Ghana"></div>
-        </div>
-        <div class="form-group"><label>Phone <span style="font-size:11px;color:var(--text-muted)">(optional)</span></label><input type="tel" id="branch-phone" placeholder="e.g. 0201234567"></div>
-        <div class="modal-actions">
-          <button class="btn btn-secondary btn-sm" onclick="closeModal()">Cancel</button>
-          <button class="btn btn-primary btn-sm" onclick="saveBranch()">Create Branch</button>
-        </div>
-      </div>
-    </div>`;
-}
-
-async function saveBranch() {
-  const name    = document.getElementById('branch-name').value.trim();
-  const code    = document.getElementById('branch-code').value.trim().toUpperCase();
-  const city    = document.getElementById('branch-city').value.trim();
-  const country = document.getElementById('branch-country').value.trim();
-  const phone   = document.getElementById('branch-phone').value.trim();
-  if (!name) { toastWarning('Branch name is required'); return; }
-  try {
-    await api('/api/advanced/branches', { method:'POST', body: JSON.stringify({ name, code, city, country, phone }) });
-    closeModal();
-    toastSuccess('Branch created ✓');
-    renderBranches();
-  } catch(e) { toastError(e.message); }
-}
-
-function showEditBranchModal(id, name, code, city, country) {
-  const container = document.getElementById('modal-container');
-  container.classList.remove('hidden');
-  container.innerHTML = `
-    <div class="modal-overlay" onclick="closeModal(event)">
-      <div class="modal" onclick="event.stopPropagation()" style="max-width:460px">
-        <h3>Edit Branch</h3>
-        <div class="form-group"><label>Branch Name <span style="color:red">*</span></label><input type="text" id="edit-branch-name" value="${name}"></div>
-        <div class="form-group"><label>Branch Code</label><input type="text" id="edit-branch-code" value="${code}" style="text-transform:uppercase"></div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-          <div class="form-group"><label>City</label><input type="text" id="edit-branch-city" value="${city}"></div>
-          <div class="form-group"><label>Country</label><input type="text" id="edit-branch-country" value="${country}"></div>
-        </div>
-        <div class="modal-actions">
-          <button class="btn btn-secondary btn-sm" onclick="closeModal()">Cancel</button>
-          <button class="btn btn-primary btn-sm" onclick="updateBranch('${id}')">Save</button>
-        </div>
-      </div>
-    </div>`;
-}
-
-async function updateBranch(id) {
-  const name    = document.getElementById('edit-branch-name').value.trim();
-  const code    = document.getElementById('edit-branch-code').value.trim().toUpperCase();
-  const city    = document.getElementById('edit-branch-city').value.trim();
-  const country = document.getElementById('edit-branch-country').value.trim();
-  if (!name) { toastWarning('Branch name is required'); return; }
-  try {
-    await api(`/api/advanced/branches/${id}`, { method:'PATCH', body: JSON.stringify({ name, code, city, country }) });
-    closeModal();
-    toastSuccess('Branch updated ✓');
-    renderBranches();
-  } catch(e) { toastError(e.message); }
 }
 
 async function renderAdminDashboard(content) {
@@ -4290,32 +3702,6 @@ async function _renderAdminCharts(sessionsData, usersData) {
 }
 
 
-
-// ── ESP32 command helpers ──────────────────────────────────────────────────────
-async function esp32StartSession() {
-  try {
-    const title = prompt('Session title for ESP32 device:', 'Classroom Session');
-    if (title === null) return;
-    await api('/api/esp32/command', { method: 'POST', body: JSON.stringify({ action: 'start', title: title || 'Classroom Session' }) });
-    toastSuccess('📟 Start command sent to ESP32 device!');
-  } catch(e) {
-    if (e.message.includes('No ESP32')) {
-      toastWarning('No ESP32 device registered. Set up the device first.');
-    } else {
-      toastError('Failed to send command: ' + e.message);
-    }
-  }
-}
-
-async function esp32StopSession() {
-  try {
-    await api('/api/esp32/command', { method: 'POST', body: JSON.stringify({ action: 'stop' }) });
-    toastSuccess('📟 Stop command sent to ESP32 device!');
-  } catch(e) {
-    toastError('Failed to send command: ' + e.message);
-  }
-}
-
 async function renderSessions() {
   const content = document.getElementById('main-content');
   if (!content) return;
@@ -4352,11 +3738,6 @@ function _renderSessionsHTML(content, sessions, isOffline) {
     </div>
     ${canStart ? `<div class="actions-bar">
       <button class="btn btn-primary btn-sm" onclick="showStartSessionModal()">Start New Session</button>
-      <button class="btn btn-sm" style="background:#1e293b;color:#fff;display:flex;align-items:center;gap:5px" onclick="esp32StartSession()" title="Send start command to ESP32 classroom device">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
-        📟 ESP32 Start
-      </button>
-      <button class="btn btn-sm" style="background:#475569;color:#fff" onclick="esp32StopSession()" title="Send stop command to ESP32 device">📟 ESP32 Stop</button>
       ${pendingCount > 0 ? `<span style="background:#fef3c7;color:#92400e;border:1px solid #fbbf24;border-radius:6px;padding:4px 12px;font-size:12px;font-weight:600">${pendingCount} action${pendingCount!==1?'s':''} pending sync</span>` : ''}
     </div>` : ''}
     <div class="card">
@@ -4388,43 +3769,55 @@ function _renderSessionsHTML(content, sessions, isOffline) {
 async function showStartSessionModal() {
   const container = document.getElementById('modal-container');
   container.classList.remove('hidden');
-  container.innerHTML = `<div class="modal-overlay"><div class="modal"><p style="color:var(--text-muted)">Checking device…</p></div></div>`;
+  container.innerHTML = `<div class="modal-overlay"><div class="modal"><p style="color:var(--text-muted);text-align:center;padding:8px 0">📡 Checking classroom device…</p></div></div>`;
 
-  // ── Check if ESP32 device is ON before allowing session start ──────────────
+  // ── STRICT device check — always required, no skip ────────
   let deviceStatus = null;
-  let deviceCheckFailed = false;
+  let checkError   = false;
 
   try {
     deviceStatus = await api('/api/esp32/device-status');
   } catch(e) {
-    // Only proceed without a device check if the error means no device is registered
-    // (404 = no company, which is fine). Any other error = block to be safe.
-    if (e.status !== 404) {
-      deviceCheckFailed = true;
-    }
+    checkError = true;
   }
 
-  // Device is required but offline — block entirely
-  // This covers: hasDevice=true + offline, OR esp32Required=true + no device registered yet
-  const deviceRequired = deviceStatus && (deviceStatus.esp32Required || deviceStatus.hasDevice);
-  const deviceOffline  = !deviceStatus?.deviceOnline;
+  // Device not registered yet
+  if (!checkError && deviceStatus && !deviceStatus.hasDevice) {
+    container.innerHTML = `
+      <div class="modal-overlay" onclick="closeModal(event)">
+        <div class="modal" onclick="event.stopPropagation()" style="text-align:center;max-width:400px">
+          <div style="font-size:40px;margin-bottom:12px">📟</div>
+          <h3 style="margin-bottom:8px">Device Not Set Up</h3>
+          <p style="font-size:13px;color:var(--text-muted);margin-bottom:20px;line-height:1.6">
+            No classroom device is registered for this institution.<br>
+            Power on the KODEX device and send <strong>REGISTER</strong> via serial monitor.
+          </p>
+          <div style="display:flex;gap:8px;justify-content:center">
+            <button class="btn btn-secondary btn-sm" onclick="closeModal()">Cancel</button>
+            <button class="btn btn-primary btn-sm" onclick="showStartSessionModal()">↻ Retry</button>
+          </div>
+        </div>
+      </div>`;
+    return;
+  }
 
-  if (deviceRequired && deviceOffline) {
-    const lastSeenText = deviceStatus?.lastSeenAt
+  // Device registered but offline
+  if (!checkError && deviceStatus && deviceStatus.hasDevice && !deviceStatus.deviceOnline) {
+    const lastSeen = deviceStatus.lastSeenAt
       ? `Last seen: ${new Date(deviceStatus.lastSeenAt).toLocaleString()}`
       : 'Last seen: Never';
     container.innerHTML = `
       <div class="modal-overlay" onclick="closeModal(event)">
         <div class="modal" onclick="event.stopPropagation()" style="text-align:center;max-width:400px">
-          <div style="font-size:48px;margin-bottom:12px">📟</div>
+          <div style="font-size:40px;margin-bottom:12px">📟</div>
           <h3 style="margin-bottom:8px">Device is Offline</h3>
           <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px;line-height:1.6">
             The <strong>KODEX classroom device</strong> is not responding.<br>
-            Please turn it on and wait a few seconds, then try again.
+            Power it on, wait a few seconds, then try again.
           </p>
-          <div style="background:#fef3c7;border:1px solid #fde68a;border-radius:8px;padding:12px;font-size:12px;color:#92400e;margin-bottom:20px;text-align:left">
-            <strong>${lastSeenText}</strong><br>
-            <strong>Status:</strong> Offline — no heartbeat in the last 10s
+          <div style="background:#fef3c7;border:1px solid #fde68a;border-radius:8px;padding:10px 14px;font-size:12px;color:#92400e;margin-bottom:20px;text-align:left">
+            <strong>${lastSeen}</strong><br>
+            Status: Offline — no heartbeat in last 20s
           </div>
           <div style="display:flex;gap:8px;justify-content:center">
             <button class="btn btn-secondary btn-sm" onclick="closeModal()">Cancel</button>
@@ -4435,16 +3828,16 @@ async function showStartSessionModal() {
     return;
   }
 
-  // Device check itself failed with an unexpected error — block and show error
-  if (deviceCheckFailed) {
+  // Device check itself failed (network error etc) — block, don't silently proceed
+  if (checkError) {
     container.innerHTML = `
       <div class="modal-overlay" onclick="closeModal(event)">
         <div class="modal" onclick="event.stopPropagation()" style="text-align:center;max-width:400px">
-          <div style="font-size:48px;margin-bottom:12px">⚠️</div>
+          <div style="font-size:40px;margin-bottom:12px">⚠️</div>
           <h3 style="margin-bottom:8px">Device Check Failed</h3>
           <p style="font-size:13px;color:var(--text-muted);margin-bottom:20px;line-height:1.6">
             Could not verify the classroom device status.<br>
-            Please check your connection and try again.
+            Check your connection and try again.
           </p>
           <div style="display:flex;gap:8px;justify-content:center">
             <button class="btn btn-secondary btn-sm" onclick="closeModal()">Cancel</button>
@@ -4454,7 +3847,7 @@ async function showStartSessionModal() {
       </div>`;
     return;
   }
-  // ── Device is ON (or no device registered for this institution) — proceed ──
+  // ── Device is confirmed online — show session form ────────
 
   let courses = [];
   try {
@@ -4516,16 +3909,9 @@ async function startSession() {
     await api('/api/attendance-sessions/start', { method: 'POST', body: JSON.stringify({ title, courseId }) });
     renderSessions();
   } catch (e) {
-    // ESP32 device offline — show a prominent, actionable error
-    if (e.status === 503 && e.data?.deviceStatus) {
-      const ds = e.data.deviceStatus;
-      const lastSeen = ds.lastSeenAt
-        ? `Last seen ${ds.secondsAgo}s ago.`
-        : 'Device has never connected.';
-      toastError(
-        `📡 Device offline — ${lastSeen} Power on the KODEX device and wait a few seconds, then try again.`,
-        { duration: 8000 }
-      );
+    // Device went offline between the check and the actual start attempt
+    if (e.status === 503) {
+      toastError('📟 Device went offline. Power it on and try again.', { duration: 7000 });
     } else {
       toastError(e.message);
     }
@@ -4780,7 +4166,7 @@ async function renderUsers(filterRole='', filterDept='', filterSearch='') {
       otherUsers = otherUsers.filter(u =>
         u.name?.toLowerCase().includes(q) ||
         u.email?.toLowerCase().includes(q) ||
-        u.IndexNumber?.toLowerCase().includes(q) ||
+        u.indexNumber?.toLowerCase().includes(q) ||
         u.department?.toLowerCase().includes(q)
       );
     }
@@ -4822,8 +4208,8 @@ async function renderUsers(filterRole='', filterDept='', filterSearch='') {
           <div id="bulk-actions" style="display:none;gap:8px;align-items:center;margin-left:auto">
             <span id="selected-count" style="font-size:13px;color:var(--text-light)">0 selected</span>
             <button class="btn btn-sm" style="background:#22c55e;color:#fff" onclick="bulkUserAction('activate')">Activate</button>
-            ${currentUser.role !== 'manager' ? `<button class="btn btn-sm" style="background:#f59e0b;color:#fff" onclick="bulkUserAction('deactivate')">Deactivate</button>` : ''}
-            ${currentUser.role !== 'manager' ? `<button class="btn btn-danger btn-sm" onclick="bulkUserAction('delete')">Delete</button>` : ''}
+            <button class="btn btn-sm" style="background:#f59e0b;color:#fff" onclick="bulkUserAction('deactivate')">Deactivate</button>
+            <button class="btn btn-danger btn-sm" onclick="bulkUserAction('delete')">Delete</button>
           </div>
         ` : ''}
       </div>
@@ -4832,14 +4218,14 @@ async function renderUsers(filterRole='', filterDept='', filterSearch='') {
           <table>
             <thead><tr>
               ${canManage ? '<th style="width:40px"><input type="checkbox" id="select-all-users" onchange="toggleSelectAllUsers()"></th>' : ''}
-              <th>Name</th>${mode === 'corporate' ? '<th>Employee ID</th>' : ''}<th>Email / School ID</th><th>Role</th>${mode !== 'corporate' ? '<th>Classification</th>' : ''}<th>Status</th>${canManage ? '<th>Actions</th>' : ''}
+              <th>Name</th>${mode === 'corporate' ? '<th>Employee ID</th>' : ''}<th>Email / Index</th><th>Role</th>${mode !== 'corporate' ? '<th>Classification</th>' : ''}<th>Status</th>${canManage ? '<th>Actions</th>' : ''}
             </tr></thead>
             <tbody>${otherUsers.map(u => `
               <tr id="user-row-${u._id}">
                 ${canManage ? `<td><input type="checkbox" class="user-checkbox" value="${u._id}" onchange="updateBulkActions()"></td>` : ''}
                 <td>${u.name}</td>
                 ${mode === 'corporate' ? `<td>${u.employeeId || '-'}</td>` : ''}
-                <td>${u.role === 'student' ? (u.IndexNumber || '<span style="color:var(--text-muted)">No ID</span>') : (u.email || 'N/A')}</td>
+                <td>${u.email || u.indexNumber || 'N/A'}</td>
                 <td><span class="role-badge role-${u.role}">${u.role}</span>${u.department ? `<span style="font-size:10px;margin-left:5px;padding:2px 6px;border-radius:20px;background:#ecfeff;color:#0891b2;font-weight:600;">${u.department}</span>` : ''}</td>
                 ${mode !== 'corporate' ? `<td style="font-size:11px;white-space:nowrap">
                   ${u.role === 'student' ? `
@@ -4853,12 +4239,12 @@ async function renderUsers(filterRole='', filterDept='', filterSearch='') {
                 </td>` : ''}
                 <td><span class="status-badge ${u.isActive ? 'status-active' : 'status-stopped'}">${u.isActive ? 'Active' : 'Inactive'}</span></td>
                 ${canManage ? `<td style="white-space:nowrap">
-                  ${currentUser.role !== 'manager' ? (u.isActive
+                  ${u.isActive
                     ? `<button class="btn btn-sm" style="background:#f59e0b;color:#fff;font-size:11px" onclick="deactivateUser('${u._id}')">Deactivate</button>`
-                    : `<button class="btn btn-sm" style="background:#22c55e;color:#fff;font-size:11px" onclick="activateUser('${u._id}')">Activate</button>`) : ''}
-                  <button class="btn btn-sm" style="background:#6366f1;color:#fff;font-size:11px" onclick="adminResetStudentPassword('${u._id}', '${u.name.replace(/'/g, "\\'")}')" title="Generate temp password">🔑 Reset</button>
-                  ${u.role === 'student' && u.deviceId ? `<button class="btn btn-sm" style="background:#f97316;color:#fff;font-size:11px" onclick="clearStudentDeviceLock('${u._id}', '${u.name.replace(/'/g, "\\'")}')" title="Unlock device">🔓 Unlock</button>` : ''}
-                  ${currentUser.role !== 'manager' ? `<button class="btn btn-danger btn-sm" style="font-size:11px" onclick="deleteUserPermanently('${u._id}', '${u.name.replace(/'/g, "\\'")}')" >Delete</button>` : ''}
+                    : `<button class="btn btn-sm" style="background:#22c55e;color:#fff;font-size:11px" onclick="activateUser('${u._id}')">Activate</button>`}
+                  <button class="btn btn-sm" style="background:#6366f1;color:#fff;font-size:11px" onclick="adminResetStudentPassword('${u._id}', '${u.name.replace(/'/g, "\\'")}'')" title="Generate temp password">🔑 Reset</button>
+                  ${u.role === 'student' && u.deviceId ? `<button class="btn btn-sm" style="background:#f97316;color:#fff;font-size:11px" onclick="clearStudentDeviceLock('${u._id}', '${u.name.replace(/'/g, "\\'")}'')" title="Unlock device">🔓 Unlock</button>` : ''}
+                  <button class="btn btn-danger btn-sm" style="font-size:11px" onclick="deleteUserPermanently('${u._id}', '${u.name.replace(/'/g, "\\'")}'')" >Delete</button>
                 </td>` : ''}
               </tr>
             `).join('')}</tbody>
@@ -4975,7 +4361,11 @@ async function showCreateUserModal() {
           <label>Email</label>
           <input type="email" id="new-user-email" placeholder="user@company.com">
         </div>
-
+        <div class="form-group ${defaultRole !== 'student' ? 'hidden' : ''}" id="new-user-index-group">
+          <label>Student ID / Index Number <span style="color:red">*</span></label>
+          <input type="text" id="new-user-index" placeholder="e.g. UCC/CS/23/0001" style="text-transform:uppercase" autocomplete="off">
+          <p style="font-size:11px;color:var(--text-light);margin-top:4px">Must be unique — each student has their own index number assigned by the institution.</p>
+        </div>
         ${defaultRole === 'employee' ? '<p style="font-size:12px;color:var(--text-light);margin-bottom:12px">An Employee ID will be auto-generated.</p>' : ''}
         <div class="form-group">
           <label>Password</label>
@@ -4985,11 +4375,6 @@ async function showCreateUserModal() {
           <label>Department <span id="new-user-dept-req" style="color:red;display:none">*</span></label>
           ${deptField}
           <p id="new-user-dept-hint" style="font-size:12px;color:var(--text-light);margin-top:4px"></p>
-        </div>
-
-        <div class="form-group" id="new-user-school-id-group" style="display:none">
-          <label>School Based Student ID <span style="color:red">*</span></label>
-          <input type="text" id="new-user-school-id" placeholder="e.g. UCC/CS/23/0001" style="text-transform:uppercase" autocomplete="off">
         </div>
 
         <!-- Student classification fields — shown only when role = student -->
@@ -5049,8 +4434,8 @@ async function showCreateUserModal() {
           </div>
         </div>
         <div class="form-group">
-          <label>Phone Number <span style="color:var(--text-muted);font-size:11px">(optional)</span></label>
-          <input type="tel" id="new-user-phone" placeholder="e.g. 0241234567">
+          <label>Phone Number <span style="color:red">*</span></label>
+          <input type="tel" id="new-user-phone" placeholder="e.g. 0241234567" required>
         </div>
         <div class="modal-actions">
           <button class="btn btn-secondary btn-sm" onclick="closeModal()">Cancel</button>
@@ -5066,6 +4451,7 @@ async function showCreateUserModal() {
 function toggleUserFields() {
   const role = document.getElementById('new-user-role').value;
   document.getElementById('new-user-email-group').classList.toggle('hidden', role === 'student');
+  document.getElementById('new-user-index-group').classList.toggle('hidden', role !== 'student');
   const deptGroup  = document.getElementById('new-user-dept-group');
   const deptReq    = document.getElementById('new-user-dept-req');
   const deptHint   = document.getElementById('new-user-dept-hint');
@@ -5082,9 +4468,6 @@ function toggleUserFields() {
   // Show/hide student classification fields
   const studentFields = document.getElementById('new-user-student-fields');
   if (studentFields) studentFields.style.display = role === 'student' ? 'block' : 'none';
-  // Show/hide school based student ID
-  const schoolIdGroup = document.getElementById('new-user-school-id-group');
-  if (schoolIdGroup) schoolIdGroup.style.display = role === 'student' ? 'block' : 'none';
 }
 
 async function createUser() {
@@ -5096,10 +4479,10 @@ async function createUser() {
       role,
     };
     if (role === 'student') {
-      const schoolId = document.getElementById('new-user-school-id')?.value?.trim().toUpperCase();
-      if (!schoolId) { toastWarning('School Based Student ID is required.'); return; }
-      body.IndexNumber = schoolId;
-
+      const idx = document.getElementById('new-user-index').value.trim().toUpperCase();
+      if (!idx) { toastWarning('Student ID / Index Number is required.'); return; }
+      if (idx.length < 3) { toastWarning('Student ID looks too short. Please enter the full index number.'); return; }
+      body.indexNumber = idx;
       // Student classification — all mandatory
       const programme   = document.getElementById('new-user-programme')?.value;
       const studentLevel= document.getElementById('new-user-level')?.value;
@@ -5120,8 +4503,8 @@ async function createUser() {
       body.email = document.getElementById('new-user-email').value;
     }
     const phone = document.getElementById('new-user-phone').value.trim();
-    
-    if (phone) body.phone = phone;
+    if (!phone) { toastWarning('Phone number is required.'); return; }
+    body.phone = phone;
     const dept = document.getElementById('new-user-dept')?.value?.trim();
     if (['lecturer','hod','student'].includes(role) && !dept) {
       const label = role === 'hod' ? 'HOD' : role === 'lecturer' ? 'Lecturer' : 'Student';
@@ -5254,7 +4637,7 @@ async function renderMeetings() {
   if (!content) return;
   try {
     const data = await api('/api/zoom');
-    const canCreate = ['manager', 'admin', 'lecturer', 'superadmin', 'hod'].includes(currentUser.role);
+    const canCreate = ['manager', 'lecturer', 'admin', 'superadmin', 'hod'].includes(currentUser.role);
     const canManage = canCreate;
 
     const statusStyle = (s) => {
@@ -5276,13 +4659,7 @@ async function renderMeetings() {
               return `<tr>
                 <td><strong>${m.title}</strong>${m.course ? `<div style="font-size:0.85em;color:#7c3aed;font-weight:600;">${esc(m.course.title||'')}${m.course.level?' · L'+m.course.level:''}${m.course.group?' · Grp '+m.course.group:''}</div>` : ''}</td>
                 <td>${m.createdBy?.name || 'Unknown'}</td>
-                <td style="font-size:0.85em;">
-                  ${m.scheduledStart && !isNaN(new Date(m.scheduledStart))
-                    ? `<span style="font-weight:600;">${new Date(m.scheduledStart).toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric',year:'numeric'})}</span><br>
-                       <span style="color:#3b82f6;">${new Date(m.scheduledStart).toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit'})}</span>
-                       <span style="color:#6b7280;"> → ${new Date(m.scheduledEnd).toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit'})}</span>`
-                    : '<span style="color:#ef4444;font-size:11px;">No date set</span>'}
-                </td>
+                <td style="font-size:0.85em;">${new Date(m.scheduledStart).toLocaleString()}<br><span style="color:#6b7280;">to ${new Date(m.scheduledEnd).toLocaleString()}</span></td>
                 <td>${m.duration} min</td>
                 <td>${m.attendees?.length || 0}</td>
                 <td><span class="status-badge" style="${statusStyle(m.status)}">${m.status.charAt(0).toUpperCase() + m.status.slice(1)}</span></td>
@@ -5293,7 +4670,7 @@ async function renderMeetings() {
                   ${m.inviteLink ? `<a href="${m.inviteLink}" target="_blank" class="btn btn-sm" style="margin-left:4px;background:#f0fdf4;color:#16a34a;border:1px solid #86efac;font-size:11px">▶ Join via Link</a>` : ''}
                   ${canControl && m.status === 'active' ? `<button class="btn btn-danger btn-sm" onclick="endMeeting('${m._id}')" style="margin-left:4px;">End</button>` : ''}
                   ${canControl && (m.status === 'scheduled' || m.status === 'active') ? `<button class="btn btn-secondary btn-sm" onclick="cancelMeeting('${m._id}')" style="margin-left:4px;">Cancel</button>` : ''}
-                  ${currentUser.role !== 'student' ? `<button class="btn btn-secondary btn-sm" onclick="viewMeetingDetail('${m._id}')" style="margin-left:4px;">Details</button>` : ''}
+                  <button class="btn btn-secondary btn-sm" onclick="viewMeetingDetail('${m._id}')" style="margin-left:4px;">Details</button>
                   ${canControl && m.status === 'completed' ? `<button class="btn btn-sm" style="margin-left:4px;background:#7c3aed;color:#fff" onclick="viewMeetingAttendance('${m._id}', '${m.title}')">Attendance</button>` : ''}
                 </td>
               </tr>`;
@@ -5354,7 +4731,7 @@ async function showCreateMeetingModal() {
         </div>
 
         <div class="form-group">
-          <label>Course <span style="color:red">*</span></label>
+          <label>Course <span style="color:var(--text-muted);font-weight:400;font-size:12px">(optional)</span></label>
           <select id="meeting-course" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
             ${courseOptions}
           </select>
@@ -5383,13 +4760,12 @@ async function createMeeting() {
   const start = document.getElementById('meeting-start')?.value;
   const end   = document.getElementById('meeting-end')?.value;
   const desc  = document.getElementById('meeting-desc')?.value.trim();
-  const courseId = document.getElementById('meeting-course')?.value;
+  const courseId = document.getElementById('meeting-course')?.value || undefined;
   const errEl = document.getElementById('meeting-error');
 
   if (!title) { errEl.textContent = 'Please enter a meeting title.'; errEl.style.display = 'block'; return; }
   if (!start || !end) { errEl.textContent = 'Please set a start and end time.'; errEl.style.display = 'block'; return; }
   if (new Date(end) <= new Date(start)) { errEl.textContent = 'End time must be after start time.'; errEl.style.display = 'block'; return; }
-  if (!courseId) { errEl.textContent = 'Please select a course for this meeting.'; errEl.style.display = 'block'; return; }
 
   const schedBtn = document.querySelector('.modal .btn-primary');
   if (schedBtn) { schedBtn.textContent = 'Scheduling…'; schedBtn.disabled = true; }
@@ -5442,45 +4818,38 @@ async function createAndStartMeeting() {
 async function startMeeting(id) {
   try {
     const data = await api(`/api/zoom/${id}/start`, { method: 'POST' });
-    const joinUrl     = data.joinUrl;      // plain link for students
-    const moderatorUrl = data.moderatorUrl || joinUrl; // host link with moderator config
+    const joinUrl = data.joinUrl;
 
     // Record host as an attendee
     await api(`/api/zoom/${id}/join`, { method: 'POST' }).catch(() => {});
 
-    // Open Jitsi meeting immediately with moderator URL
-    window.open(moderatorUrl, '_blank');
+    // Open Jitsi meeting immediately in new tab
+    window.open(joinUrl, '_blank');
 
-    // Show share modal with the plain student join link
+    // Show share modal
     const container = document.getElementById('modal-container');
     container.classList.remove('hidden');
     container.innerHTML = `
       <div class="modal-overlay" onclick="closeModal(event)">
-        <div class="modal" onclick="event.stopPropagation()" style="max-width:480px;text-align:center">
+        <div class="modal" onclick="event.stopPropagation()" style="max-width:460px;text-align:center">
           <div style="font-size:48px;margin-bottom:10px">🎥</div>
           <h3 style="margin:0 0 6px">Meeting is Live!</h3>
-          <p style="font-size:13px;color:var(--text-light);margin-bottom:16px">
-            You joined as <strong>Moderator</strong>. Share the invite link below with your students.
+          <p style="font-size:13px;color:var(--text-light);margin-bottom:20px">
+            Your meeting opened in a new tab. Share the link below so others can join.
           </p>
-
-          <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:14px;margin-bottom:12px;text-align:left">
-            <div style="font-size:11px;font-weight:700;color:#1d4ed8;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">🔗 Student Invite Link</div>
-            <div id="share-join-url" style="font-size:12px;word-break:break-all;color:#1d4ed8;font-weight:600;margin-bottom:10px;background:#fff;padding:8px 10px;border-radius:6px;border:1px solid #bfdbfe;">${joinUrl}</div>
+          <div style="background:#f0fdf4;border:1px solid #86efac;border-radius:10px;padding:14px;margin-bottom:20px;text-align:left">
+            <div style="font-size:11px;font-weight:700;color:#15803d;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">🔗 Invite Link</div>
+            <div style="font-size:13px;word-break:break-all;color:#1d4ed8;font-weight:600;margin-bottom:10px">${joinUrl}</div>
             <button class="btn btn-primary" style="width:100%;font-size:14px;padding:10px;" onclick="
               navigator.clipboard.writeText('${joinUrl}').then(() => {
-                this.textContent = '✅ Copied!';
+                this.textContent = '✅ Link Copied!';
                 this.style.background = '#16a34a';
-                setTimeout(() => { this.textContent = '📋 Copy Invite Link'; this.style.background = ''; }, 3000);
-              }).catch(() => { prompt('Copy this student link:', '${joinUrl}'); })
-            ">📋 Copy Invite Link</button>
+                setTimeout(() => { this.textContent = '📋 Copy Link'; this.style.background = ''; }, 3000);
+              }).catch(() => { prompt('Copy this link:', '${joinUrl}'); })
+            ">📋 Copy Link</button>
           </div>
-
-          <div style="background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:10px;margin-bottom:16px;font-size:12px;color:#15803d;text-align:left;">
-            💡 <strong>Tip:</strong> You are the moderator. Students who click the invite link above will join as participants.
-          </div>
-
           <div style="display:flex;gap:8px;justify-content:center;">
-            <button class="btn btn-success" onclick="window.open('${moderatorUrl}', '_blank')">🎥 Rejoin as Moderator</button>
+            <button class="btn btn-success" onclick="window.open('${joinUrl}', '_blank')">🎥 Rejoin</button>
             <button class="btn btn-secondary" onclick="closeModal();renderMeetings()">Done</button>
           </div>
         </div>
@@ -5526,7 +4895,6 @@ async function cancelMeeting(id) {
 }
 
 async function viewMeetingDetail(id) {
-  if (currentUser.role === 'student') { toastWarning('Access denied.'); return; }
   const content = document.getElementById('main-content');
   if (!content) return;
   content.innerHTML = '<div class="card"><p>Loading meeting details...</p></div>';
@@ -5553,9 +4921,8 @@ async function viewMeetingDetail(id) {
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;">
         <div class="card">
           <div class="card-title">Meeting Info</div>
-          <p><strong>Date:</strong> ${m.scheduledStart && !isNaN(new Date(m.scheduledStart)) ? new Date(m.scheduledStart).toLocaleDateString(undefined,{weekday:'long',year:'numeric',month:'long',day:'numeric'}) : 'Not set'}</p>
-          <p><strong>Start:</strong> ${m.scheduledStart && !isNaN(new Date(m.scheduledStart)) ? new Date(m.scheduledStart).toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit'}) : 'Not set'}</p>
-          <p><strong>End:</strong> ${m.scheduledEnd && !isNaN(new Date(m.scheduledEnd)) ? new Date(m.scheduledEnd).toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit'}) : 'Not set'}</p>
+          <p><strong>Start:</strong> ${new Date(m.scheduledStart).toLocaleString()}</p>
+          <p><strong>End:</strong> ${new Date(m.scheduledEnd).toLocaleString()}</p>
           <p><strong>Duration:</strong> ${m.duration} minutes</p>
           ${m.course ? `<p><strong>Course:</strong> ${m.course.code} - ${m.course.title}</p>` : ''}
           <p><strong>Join Link:</strong> <a href="${m.joinUrl}" target="_blank" style="color:#3b82f6;word-break:break-all;">${m.joinUrl}</a></p>
@@ -5675,7 +5042,7 @@ async function renderCourses() {
 }
 
 function _renderCoursesHTML(content, courses, isOffline) {
-  const canCreate = ['lecturer', 'superadmin'].includes(currentUser.role);
+  const canCreate = ['lecturer', 'admin', 'superadmin'].includes(currentUser.role);
   const canManageRoster = ['lecturer', 'admin', 'superadmin'].includes(currentUser.role);
   content.innerHTML = `
     <div class="page-header">
@@ -5686,27 +5053,20 @@ function _renderCoursesHTML(content, courses, isOffline) {
     <div class="card">
       ${courses.length ? `
         <table>
-          <thead><tr><th>Code</th><th>Title</th><th>Level / Year / Session</th><th>Lecturer</th><th>Roster</th><th>Enrolled</th>${canManageRoster && !isOffline ? '<th>Actions</th>' : currentUser.role === 'student' ? '<th></th>' : ''}</tr></thead>
+          <thead><tr><th>Code</th><th>Title</th><th>Level / Group</th><th>Lecturer</th><th>Roster</th><th>Enrolled</th>${canManageRoster && !isOffline ? '<th>Actions</th>' : currentUser.role === 'student' ? '<th></th>' : ''}</tr></thead>
           <tbody>${courses.map(course => `
             <tr>
               <td><strong>${course.code}</strong></td>
               <td>${course.title}</td>
-              <td style="font-size:11px;white-space:nowrap">
-                ${course.level ? `<span style="padding:1px 7px;border-radius:20px;background:#ede9fe;color:#7c3aed;font-weight:700;margin-right:3px">L${course.level}</span>` : ''}
-                ${course.year  ? `<span style="padding:1px 7px;border-radius:20px;background:#dbeafe;color:#1d4ed8;font-weight:700;margin-right:3px">${esc(course.year)}</span>` : ''}
-                ${course.group ? `<span style="padding:1px 7px;border-radius:20px;background:#ecfdf5;color:#059669;font-weight:600;margin-right:3px">Grp ${esc(course.group)}</span>` : ''}
-                ${course.sessionType ? `<span style="padding:1px 7px;border-radius:20px;background:#fff7ed;color:#c2410c;font-weight:600">${esc(course.sessionType)}</span>` : ''}
-                ${!course.level && !course.year && !course.sessionType ? '<span style="color:var(--text-muted)">—</span>' : ''}
+              <td>
+                ${course.level ? `<span style="font-size:11px;padding:2px 7px;border-radius:20px;background:#ede9fe;color:#7c3aed;font-weight:700;margin-right:4px">L${course.level}</span>` : ''}
+                ${course.group ? `<span style="font-size:11px;padding:2px 7px;border-radius:20px;background:#ecfdf5;color:#059669;font-weight:600">${esc(course.group)}</span>` : ''}
+                ${!course.level && !course.group ? '<span style="color:var(--text-muted);font-size:12px">—</span>' : ''}
               </td>
               <td>${course.lecturer?.name || 'N/A'}</td>
               <td>${!isOffline ? `<button class="btn btn-sm" style="font-size:11px;background:var(--bg);border:1px solid var(--border)" onclick="viewRoster('${course._id}', '${course.code}')">View Roster</button>` : '—'}</td>
               <td>${course.enrolledStudents?.length || 0}</td>
-              ${canManageRoster && !isOffline ? `<td style="white-space:nowrap">
-                <button class="btn btn-sm" style="font-size:11px;background:#6366f1;color:#fff" onclick="showEditCourseModal('${course._id}','${esc(course.code)}','${esc(course.title)}','${course.level||''}','${course.year||''}','${course.group||''}','${course.sessionType||''}','${esc(course.description||'')}')">✏️ Edit</button>
-                <button class="btn btn-primary btn-sm" style="font-size:11px" onclick="showUploadRosterModal('${course._id}', '${course.code}')">Upload Students</button>
-                <button class="btn btn-sm" style="font-size:11px;background:#6366f1;color:#fff" onclick="openBulkEmailModal('${course._id}', '${course.title}')">✉️ Email</button>
-                <button class="btn btn-sm" style="font-size:11px;background:#10b981;color:#fff" onclick="openBulkSmsModal('${course._id}', '${course.title}')">💬 SMS</button>
-              </td>` : currentUser.role === 'student' ? `<td><button class="btn btn-sm" style="font-size:11px;background:#f0fdf4;color:#16a34a;border:1px solid #bbf7d0" onclick="generateCertificate('${course._id}','${course.title}')">🎓 Certificate</button></td>` : ''}
+              ${canManageRoster && !isOffline ? `<td style="white-space:nowrap"><button class="btn btn-primary btn-sm" style="font-size:11px" onclick="showUploadRosterModal('${course._id}', '${course.code}')">Upload Students</button> <button class="btn btn-sm" style="font-size:11px;background:#6366f1;color:#fff" onclick="openBulkEmailModal('${course._id}', '${course.title}')">✉️ Email</button> <button class="btn btn-sm" style="font-size:11px;background:#10b981;color:#fff" onclick="openBulkSmsModal('${course._id}', '${course.title}')">💬 SMS</button></td>` : currentUser.role === 'student' ? `<td><button class="btn btn-sm" style="font-size:11px;background:#f0fdf4;color:#16a34a;border:1px solid #bbf7d0" onclick="generateCertificate('${course._id}','${course.title}')">🎓 Certificate</button></td>` : ''}
             </tr>
           `).join('')}</tbody>
         </table>
@@ -5730,48 +5090,29 @@ function showCreateCourseModal() {
           <label>Course Title <span style="color:red">*</span></label>
           <input type="text" id="course-title" placeholder="Introduction to Computer Science">
         </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
           <div class="form-group">
             <label>Level <span style="color:red">*</span></label>
             <select id="course-level" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
-              <option value="">— Select —</option>
+              <option value="">— Select Level —</option>
               <option value="100">Level 100</option>
               <option value="200">Level 200</option>
               <option value="300">Level 300</option>
               <option value="400">Level 400</option>
-              <option value="500">Level 500</option>
-              <option value="600">Level 600</option>
+              <option value="500">Level 500 (Postgrad)</option>
+              <option value="600">Level 600 (Postgrad)</option>
             </select>
           </div>
           <div class="form-group">
-            <label>Year <span style="color:red">*</span></label>
-            <select id="course-year" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
-              <option value="">— Select —</option>
-              <option value="Year 1">Year 1</option>
-              <option value="Year 2">Year 2</option>
-              <option value="Year 3">Year 3</option>
-              <option value="Year 4">Year 4</option>
-              <option value="Year 5">Year 5</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label>Group <span style="font-weight:400;font-size:11px">(optional)</span></label>
-            <input type="text" id="course-group" placeholder="e.g. A, B"
+            <label>Group <span style="color:red">*</span></label>
+            <input type="text" id="course-group" placeholder="e.g. A, B, C"
               style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;text-transform:uppercase"
               oninput="this.value=this.value.toUpperCase()">
+            <p style="font-size:11px;color:var(--text-muted);margin-top:3px">Use letters: A, B, C etc.</p>
           </div>
         </div>
         <div class="form-group">
-          <label>Session Type <span style="color:red">*</span></label>
-          <select id="course-session" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
-            <option value="">— Select Session —</option>
-            <option value="Regular">Regular</option>
-            <option value="Evening">Evening</option>
-            <option value="Weekend">Weekend</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label>Description <span style="font-weight:400;font-size:11px">(optional)</span></label>
+          <label>Description</label>
           <input type="text" id="course-desc" placeholder="Optional description">
         </div>
         <div class="modal-actions">
@@ -5785,106 +5126,29 @@ function showCreateCourseModal() {
 
 async function createCourse() {
   try {
-    const code        = document.getElementById('course-code').value.trim().toUpperCase();
-    const title       = document.getElementById('course-title').value.trim();
-    const desc        = document.getElementById('course-desc').value.trim();
-    const level       = document.getElementById('course-level').value.trim();
-    const year        = document.getElementById('course-year').value.trim();
-    const group       = document.getElementById('course-group').value.trim();
-    const sessionType = document.getElementById('course-session').value.trim();
+    const code  = document.getElementById('course-code').value.trim().toUpperCase();
+    const title = document.getElementById('course-title').value.trim();
+    const desc  = document.getElementById('course-desc').value.trim();
+    const level = document.getElementById('course-level').value.trim();
+    const group = document.getElementById('course-group').value.trim();
 
     if (!code || !title) { toastWarning('Course code and title are required.'); return; }
-    if (!level)       { toastWarning('Please select a level.'); return; }
-    if (!year)        { toastWarning('Please select a year.'); return; }
-    if (!sessionType) { toastWarning('Please select a session type.'); return; }
+    if (!level) { toastWarning('Please select a level.'); return; }
+    if (!group) { toastWarning('Please enter a group (e.g. A, B, C).'); return; }
 
     await api('/api/courses', {
       method: 'POST',
-      body: JSON.stringify({ code, title, description: desc, level, year, group: group || undefined, sessionType }),
+      body: JSON.stringify({
+        code,
+        title,
+        description: desc,
+        level:  level || undefined,
+        group:  group || undefined,
+      }),
     });
     closeModal();
     renderCourses();
   } catch (e) {
-    toastError(e.message);
-  }
-}
-
-
-function showEditCourseModal(id, code, title, level, year, group, sessionType, desc) {
-  const container = document.getElementById('modal-container');
-  container.classList.remove('hidden');
-  container.innerHTML = `
-    <div class="modal-overlay" onclick="closeModal(event)">
-      <div class="modal" onclick="event.stopPropagation()">
-        <h3>Edit Course — ${code}</h3>
-        <div class="form-group">
-          <label>Course Title <span style="color:red">*</span></label>
-          <input type="text" id="edit-course-title" value="${title}" placeholder="Course title">
-        </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">
-          <div class="form-group">
-            <label>Level <span style="color:red">*</span></label>
-            <select id="edit-course-level" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
-              <option value="">— Select —</option>
-              ${['100','200','300','400','500','600'].map(l => `<option value="${l}" ${level===l?'selected':''}>${l}</option>`).join('')}
-            </select>
-          </div>
-          <div class="form-group">
-            <label>Year <span style="color:red">*</span></label>
-            <select id="edit-course-year" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
-              <option value="">— Select —</option>
-              ${['Year 1','Year 2','Year 3','Year 4','Year 5'].map(y => `<option value="${y}" ${year===y?'selected':''}>${y}</option>`).join('')}
-            </select>
-          </div>
-          <div class="form-group">
-            <label>Group <span style="font-weight:400;font-size:11px">(optional)</span></label>
-            <input type="text" id="edit-course-group" value="${group}" placeholder="e.g. A, B"
-              style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;text-transform:uppercase"
-              oninput="this.value=this.value.toUpperCase()">
-          </div>
-        </div>
-        <div class="form-group">
-          <label>Session Type <span style="color:red">*</span></label>
-          <select id="edit-course-session" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
-            <option value="">— Select —</option>
-            ${['Regular','Evening','Weekend'].map(s => `<option value="${s}" ${sessionType===s?'selected':''}>${s}</option>`).join('')}
-          </select>
-        </div>
-        <div class="form-group">
-          <label>Description <span style="font-weight:400;font-size:11px">(optional)</span></label>
-          <input type="text" id="edit-course-desc" value="${desc}" placeholder="Optional description">
-        </div>
-        <div class="modal-actions">
-          <button class="btn btn-secondary btn-sm" onclick="closeModal()">Cancel</button>
-          <button class="btn btn-primary btn-sm" onclick="saveCourseEdit('${id}')">Save Changes</button>
-        </div>
-      </div>
-    </div>
-  `;
-}
-
-async function saveCourseEdit(id) {
-  try {
-    const title       = document.getElementById('edit-course-title').value.trim();
-    const level       = document.getElementById('edit-course-level').value;
-    const year        = document.getElementById('edit-course-year').value;
-    const group       = document.getElementById('edit-course-group').value.trim();
-    const sessionType = document.getElementById('edit-course-session').value;
-    const desc        = document.getElementById('edit-course-desc').value.trim();
-
-    if (!title)       { toastWarning('Course title is required.'); return; }
-    if (!level)       { toastWarning('Please select a level.'); return; }
-    if (!year)        { toastWarning('Please select a year.'); return; }
-    if (!sessionType) { toastWarning('Please select a session type.'); return; }
-
-    await api('/api/courses/' + id, {
-      method: 'PATCH',
-      body: JSON.stringify({ title, level, year, group: group || undefined, sessionType, description: desc }),
-    });
-    closeModal();
-    toastSuccess('Course updated ✓');
-    renderCourses();
-  } catch(e) {
     toastError(e.message);
   }
 }
@@ -8119,7 +7383,7 @@ async function handleQrScan() {
   try {
     await api('/api/attendance-sessions/mark', {
       method: 'POST',
-      body: JSON.stringify({ qrToken, method: 'qr_mark', clientTime: new Date().toISOString() }),
+      body: JSON.stringify({ qrToken, method: 'qr_mark' }),
     });
     if (content) {
       content.innerHTML = `
@@ -8132,29 +7396,12 @@ async function handleQrScan() {
     }
   } catch(e) {
     if (content) {
-      const expired   = e.message?.toLowerCase().includes('expired');
-      const wrongWifi = e.message?.toLowerCase().includes('classroom wifi') || e.message?.toLowerCase().includes('kodex-classroom') || e.message?.includes('NOT_ON_CLASSROOM_WIFI');
+      const expired = e.message?.toLowerCase().includes('expired');
       content.innerHTML = `
-        <div class="card" style="text-align:center;padding:48px 24px;max-width:400px;margin:40px auto;border-left:4px solid ${wrongWifi?'#f59e0b':'var(--danger)'}">
-          <div style="font-size:56px;margin-bottom:16px">${wrongWifi ? '📶' : expired ? '⏰' : '❌'}</div>
-          <div style="font-size:20px;font-weight:800;color:${wrongWifi?'#d97706':'var(--danger)'}">
-            ${wrongWifi ? 'Wrong WiFi Network' : expired ? 'QR Code Expired' : 'Failed'}
-          </div>
-          <p style="color:var(--text-light);font-size:13px;margin-top:8px;line-height:1.6">
-            ${wrongWifi
-              ? 'You must be connected to the <strong>KODEX-CLASSROOM</strong> WiFi to mark attendance.<br><br>📱 Turn off mobile data, then connect to <strong>KODEX-CLASSROOM</strong> and try again.'
-              : expired
-              ? 'This QR code has expired. Ask your lecturer/manager for a fresh one.'
-              : e.message}
-          </p>
-          ${wrongWifi ? `
-          <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:12px;margin-top:16px;font-size:12px;color:#92400e;text-align:left">
-            <strong>Steps:</strong><br>
-            1. Open your phone WiFi settings<br>
-            2. Turn OFF mobile data<br>
-            3. Connect to <strong>KODEX-CLASSROOM</strong><br>
-            4. Come back and scan again
-          </div>` : ''}
+        <div class="card" style="text-align:center;padding:48px 24px;max-width:400px;margin:40px auto;border-left:4px solid var(--danger)">
+          <div style="font-size:56px;margin-bottom:16px">${expired ? '⏰' : '❌'}</div>
+          <div style="font-size:20px;font-weight:800;color:var(--danger)">${expired ? 'QR Code Expired' : 'Failed'}</div>
+          <p style="color:var(--text-light);font-size:13px;margin-top:8px">${expired ? 'This QR code has expired. Ask your lecturer/manager for a fresh one.' : e.message}</p>
           <button class="btn btn-secondary" style="margin-top:20px" onclick="navigateTo('mark-attendance')">Go Back</button>
         </div>`;
     }
@@ -8361,18 +7608,13 @@ async function submitCodeMark() {
   try {
     await api('/api/attendance-sessions/mark', {
       method: 'POST',
-      body: JSON.stringify({ code, method: 'code_mark', clientTime: new Date().toISOString() }),
+      body: JSON.stringify({ code, method: 'code_mark' }),
     });
     offlineCache('pendingMark', null);
     toastSuccess('Attendance marked successfully!');
     navigateTo('mark-attendance');
   } catch (e) {
-    const wrongWifi = e.message?.toLowerCase().includes('classroom wifi') || e.message?.toLowerCase().includes('kodex-classroom');
-    if (wrongWifi) {
-      toastWarning('📶 Connect to KODEX-CLASSROOM WiFi first, then try again.');
-    } else {
-      toastError(e.message);
-    }
+    toastError(e.message);
   }
 }
 
@@ -8416,18 +7658,13 @@ async function submitQrMark() {
   try {
     await api('/api/attendance-sessions/mark', {
       method: 'POST',
-      body: JSON.stringify({ qrToken, method: 'qr_mark', clientTime: new Date().toISOString() }),
+      body: JSON.stringify({ qrToken, method: 'qr_mark' }),
     });
     offlineCache('pendingMark', null);
     toastSuccess('Attendance marked successfully!');
     navigateTo('mark-attendance');
   } catch (e) {
-    const wrongWifi = e.message?.toLowerCase().includes('classroom wifi') || e.message?.toLowerCase().includes('kodex-classroom');
-    if (wrongWifi) {
-      toastWarning('📶 Connect to KODEX-CLASSROOM WiFi first, then try again.');
-    } else {
-      toastError(e.message);
-    }
+    toastError(e.message);
   }
 }
 
@@ -8515,7 +7752,7 @@ async function markAttendance() {
     if (!code || code.length !== 4) { toastWarning('Please enter the 4-character code.'); return; }
     await api('/api/attendance-sessions/mark', {
       method: 'POST',
-      body: JSON.stringify({ code, method: 'code_mark', clientTime: new Date().toISOString() }),
+      body: JSON.stringify({ code, method: 'code_mark' }),
     });
     closeModal();
     toastSuccess('Attendance marked successfully!');
@@ -9082,22 +8319,6 @@ async function renderProfile() {
           </label>
         </div>
       </div>` : ''}
-      <!-- Attendance PIN for ESP32 device -->
-      ${['student'].includes(currentUser.role) ? `
-      <div style="padding-top:16px;border-top:1px solid var(--border);margin-top:4px">
-        <h3 style="font-size:14px;font-weight:700;margin-bottom:4px;color:var(--text-primary)">📟 Attendance PIN</h3>
-        <p style="font-size:12px;color:var(--text-muted);margin-bottom:12px">Used with the KODEX ESP32 classroom device. Set a 4-digit PIN to mark your attendance.</p>
-        <div class="form-group">
-          <label>New 4-Digit PIN</label>
-          <input type="password" id="profile-att-pin" inputmode="numeric" maxlength="4" placeholder="e.g. 1234" style="letter-spacing:6px;font-size:18px;text-align:center">
-        </div>
-        <div class="form-group">
-          <label>Confirm PIN</label>
-          <input type="password" id="profile-att-pin-confirm" inputmode="numeric" maxlength="4" placeholder="Repeat PIN" style="letter-spacing:6px;font-size:18px;text-align:center">
-        </div>
-        <p style="font-size:11px;color:var(--text-muted);margin-bottom:12px">Leave blank to keep your existing PIN.</p>
-      </div>` : ''}
-
       <button class="btn btn-primary" onclick="saveProfile()" style="width:100%">Save Changes</button>
     </div>
   `;
@@ -9146,19 +8367,6 @@ async function saveProfile() {
   }
   if (newPassword) { body.currentPassword = currentPassword; body.newPassword = newPassword; }
 
-  // Attendance PIN for ESP32
-  const attPin        = document.getElementById('profile-att-pin')?.value?.trim();
-  const attPinConfirm = document.getElementById('profile-att-pin-confirm')?.value?.trim();
-  if (attPin) {
-    if (!/^\d{4}$/.test(attPin)) {
-      msg.textContent = 'Attendance PIN must be exactly 4 digits'; msg.style.background = '#fef2f2'; msg.style.color = '#dc2626'; msg.style.display = 'block'; return;
-    }
-    if (attPin !== attPinConfirm) {
-      msg.textContent = 'Attendance PINs do not match'; msg.style.background = '#fef2f2'; msg.style.color = '#dc2626'; msg.style.display = 'block'; return;
-    }
-    body.attendancePin = attPin;
-  }
-
   try {
     const data = await api('/api/auth/profile', { method: 'PUT', body: JSON.stringify(body) });
     if (data.user?.name) { currentUser.name = data.user.name; document.getElementById('user-name').textContent = data.user.name; }
@@ -9167,8 +8375,6 @@ async function saveProfile() {
     document.getElementById('profile-current-pw').value = '';
     document.getElementById('profile-new-pw').value = '';
     document.getElementById('profile-confirm-pw').value = '';
-    const pinEl = document.getElementById('profile-att-pin'); if (pinEl) pinEl.value = '';
-    const pinCEl = document.getElementById('profile-att-pin-confirm'); if (pinCEl) pinCEl.value = '';
     setTimeout(() => { msg.style.display = 'none'; }, 4000);
   } catch(e) {
     msg.textContent = e.message; msg.style.background = '#fef2f2'; msg.style.color = '#dc2626'; msg.style.display = 'block';
@@ -9189,7 +8395,7 @@ function renderContact() {
         <div style="font-size:36px;margin-bottom:12px">📧</div>
         <div style="font-size:16px;font-weight:700;margin-bottom:6px">Email</div>
         <p style="font-size:13px;color:var(--text-light);margin-bottom:12px">Send us an email anytime</p>
-        <a href="mailto:Kellywest251@gmail.com" class="btn btn-primary btn-sm" style="display:inline-block;text-decoration:none">Kellywest251@gmail.com</a>
+        <a href="mailto:nelsonkel78@gmail.com" class="btn btn-primary btn-sm" style="display:inline-block;text-decoration:none">nelsonkel78@gmail.com</a>
       </div>
 
       <div class="card" style="text-align:center">
@@ -9384,7 +8590,7 @@ async function renderLecturerGradeBook(content) {
                 <div style="font-weight:700;font-size:15px;margin-bottom:4px;">${c.title}</div>
                 <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">${c.code} · ${c.lecturer?.name || 'N/A'}</div>
                 <div style="display:flex;justify-content:space-between;align-items:center;">
-                  <span style="font-size:12px;color:var(--text-light);">${c.totalStudents ?? c.enrolledStudents?.length ?? 0} students</span>
+                  <span style="font-size:12px;color:var(--text-light);">${c.enrolledStudents?.length || 0} students</span>
                   <span class="btn btn-sm btn-primary" style="pointer-events:none;">Open →</span>
                 </div>
               </div>`).join('')}
@@ -9400,12 +8606,9 @@ async function renderLecturerCourseGrades(courseId, courseTitle) {
   content.innerHTML = '<div class="loading">Loading grade book…</div>';
   try {
     const d = await api('/api/gradebook/course/' + courseId);
-    const grades       = d.grades       || [];
-    const gradeBook    = d.gradeBook    || { weights: { quizzes: 40, attendance: 40, manual: 20 }, manualEntries: [] };
-    const quizzes      = d.quizzes      || [];
-    const totalSessions= d.totalSessions ?? 0;
+    const { grades, gradeBook, quizzes, totalSessions } = d;
     const gb = gradeBook;
-    const w  = gb.weights || { quizzes: 40, attendance: 40, manual: 20 };
+    const w  = gb.weights;
 
     // Grade distribution summary
     const dist = { A:0, B:0, C:0, D:0, F:0 };
@@ -9423,11 +8626,10 @@ async function renderLecturerCourseGrades(courseId, courseTitle) {
 
       <!-- Summary Stats -->
       <div class="stats-grid" style="margin-bottom:16px;">
-        <div class="stat-card"><div class="stat-value">${d.totalStudents ?? grades.length}</div><div class="stat-label">Students</div></div>
+        <div class="stat-card"><div class="stat-value">${grades.length}</div><div class="stat-label">Students</div></div>
         <div class="stat-card"><div class="stat-value">${avg}%</div><div class="stat-label">Class Average</div></div>
         <div class="stat-card"><div class="stat-value">${quizzes.length}</div><div class="stat-label">Quizzes</div></div>
         <div class="stat-card"><div class="stat-value">${totalSessions}</div><div class="stat-label">Sessions</div></div>
-        ${d.pendingCount > 0 ? `<div class="stat-card"><div class="stat-value" style="color:#f59e0b">${d.pendingCount}</div><div class="stat-label">Not Registered</div></div>` : ''}
         ${Object.entries(dist).map(([l,n]) => `<div class="stat-card"><div class="stat-value" style="color:${{A:'#22c55e',B:'#84cc16',C:'#f59e0b',D:'#f97316',F:'#ef4444'}[l]}">${n}</div><div class="stat-label">Grade ${l}</div></div>`).join('')}
       </div>
 
@@ -9460,19 +8662,18 @@ async function renderLecturerCourseGrades(courseId, courseTitle) {
               </thead>
               <tbody>
                 ${grades.map((g, i) => `
-                  <tr style="border-bottom:1px solid var(--border);background:${g.pending ? '#fffbeb' : i%2===0?'transparent':'var(--bg)'};">
+                  <tr style="border-bottom:1px solid var(--border);background:${i%2===0?'transparent':'var(--bg)'};">
                     <td style="padding:10px 12px;">
                       <div style="font-weight:600;">${g.student.name}</div>
                       <div style="font-size:11px;color:var(--text-muted);">${g.student.studentId || g.student.email}</div>
-                      ${g.pending ? '<span style="font-size:10px;background:#fef3c7;color:#92400e;border-radius:4px;padding:1px 6px;font-weight:600;">Not registered</span>' : ''}
                     </td>
-                    <td style="padding:10px 8px;text-align:center;">${g.pending ? '<span style="color:var(--text-muted);">—</span>' : g.quizPct + '%'}</td>
-                    <td style="padding:10px 8px;text-align:center;">${g.pending ? '<span style="color:var(--text-muted);">—</span>' : g.attPct + '% <span style="font-size:10px;color:var(--text-muted);">(' + g.attendedSessions + '/' + g.totalSessions + ')</span>'}</td>
+                    <td style="padding:10px 8px;text-align:center;">${g.quizPct}%</td>
+                    <td style="padding:10px 8px;text-align:center;">${g.attPct}% <span style="font-size:10px;color:var(--text-muted);">(${g.attendedSessions}/${g.totalSessions})</span></td>
                     ${gb.manualEntries.map(e => {
                       const ms = g.manualScores.find(m => m.entryId.toString() === e._id.toString());
                       return `<td style="padding:10px 8px;text-align:center;">${ms?.score !== null && ms?.score !== undefined ? ms.score + '/' + e.maxScore : '<span style="color:var(--text-muted);">—</span>'}</td>`;
                     }).join('')}
-                    <td style="padding:10px 8px;text-align:center;font-weight:700;">${g.pending ? '—' : g.finalPct + '%'}</td>
+                    <td style="padding:10px 8px;text-align:center;font-weight:700;">${g.finalPct}%</td>
                     <td style="padding:10px 8px;text-align:center;">
                       <span style="font-weight:900;font-size:16px;color:${g.color};">${g.letter}</span>
                     </td>
@@ -9777,7 +8978,6 @@ function annCard(a, canPost, isAdmin) {
             ${!a.isRead ? '<span style="background:#6366f1;color:#fff;font-size:10px;padding:1px 7px;border-radius:20px;font-weight:700;">NEW</span>' : ''}
           </div>
           <div style="font-size:13px;color:var(--text-light);margin-bottom:10px;white-space:pre-wrap;line-height:1.6;">${a.body}</div>
-          ${a.hasPdf ? `<a href="/api/announcements/${a._id}/pdf" target="_blank" download="${esc(a.pdfName||'attachment.pdf')}" style="display:inline-flex;align-items:center;gap:6px;padding:6px 12px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:7px;font-size:12px;font-weight:600;color:#15803d;text-decoration:none;margin-bottom:8px;">📄 ${esc(a.pdfName||'Download PDF')}</a>` : ''}
           <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:11px;color:var(--text-muted);">
             <span>👤 ${a.author?.name || 'Unknown'}</span>
             <span>📢 ${audienceLabel}</span>
@@ -9877,22 +9077,6 @@ async function openPostAnnouncementModal() {
           <input type="checkbox" id="ann-pinned" style="accent-color:var(--primary);width:15px;height:15px;">
           📌 Pin this announcement to the top
         </label>` : ''}
-        <div>
-          <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:5px;display:block;">Attach PDF <span style="font-weight:400;text-transform:none;">(optional, max 10MB)</span></label>
-          <label for="ann-pdf-input" style="display:flex;align-items:center;gap:10px;padding:10px 14px;border:1.5px dashed var(--border);border-radius:8px;cursor:pointer;background:var(--bg);transition:border-color .2s;" onmouseover="this.style.borderColor='var(--primary)'" onmouseout="this.style.borderColor='var(--border)'">
-            <span style="font-size:20px;">📎</span>
-            <div>
-              <div id="ann-pdf-label" style="font-size:13px;font-weight:600;color:var(--text);">Click to select a PDF</div>
-              <div style="font-size:11px;color:var(--text-muted);">Only PDF files accepted</div>
-            </div>
-            <input type="file" id="ann-pdf-input" accept="application/pdf" style="display:none" onchange="annHandlePdf(this)">
-          </label>
-          <div id="ann-pdf-preview" style="display:none;margin-top:6px;padding:8px 12px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:7px;display:none;align-items:center;gap:8px;font-size:12px;">
-            <span>📄</span>
-            <span id="ann-pdf-filename" style="flex:1;font-weight:600;color:#15803d;"></span>
-            <button onclick="annClearPdf()" style="background:none;border:none;cursor:pointer;color:#dc2626;font-size:14px;padding:0 4px;">✕</button>
-          </div>
-        </div>
         <div id="ann-post-err" style="display:none;padding:8px 12px;background:#fef2f2;border:1px solid #fecaca;border-radius:7px;color:#dc2626;font-size:12px;font-weight:500;"></div>
       </div>
       <div style="padding:12px 20px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end;position:sticky;bottom:0;background:var(--card);border-radius:0 0 14px 14px;">
@@ -9912,8 +9096,6 @@ async function submitAnnouncement() {
   const pinned   = document.getElementById('ann-pinned')?.checked || false;
   const courseId = document.getElementById('ann-course')?.value || null;
   const errEl    = document.getElementById('ann-post-err');
-  const pdfData  = window._annPdfData || null;
-  const pdfName  = window._annPdfName || null;
 
   if (!title || !body) {
     if (errEl) { errEl.textContent = 'Title and message are required.'; errEl.style.display = 'block'; }
@@ -9922,46 +9104,14 @@ async function submitAnnouncement() {
   try {
     await api('/api/announcements', {
       method: 'POST',
-      body: JSON.stringify({ title, body, type, audience, pinned, expiresAt: expiresAt ? new Date(expiresAt).toISOString() : null, courseId: courseId || undefined, pdfData, pdfName }),
+      body: JSON.stringify({ title, body, type, audience, pinned, expiresAt: expiresAt ? new Date(expiresAt).toISOString() : null, courseId: courseId || undefined }),
     });
     document.getElementById('ann-post-overlay')?.remove();
-    window._annPdfData = null;
-    window._annPdfName = null;
     toastSuccess('Announcement posted ✓');
     renderAnnouncements();
   } catch(e) {
     if (errEl) { errEl.textContent = e.message || 'Failed to post'; errEl.style.display = 'block'; }
   }
-}
-
-function annHandlePdf(input) {
-  const file = input.files[0];
-  if (!file) return;
-  if (file.type !== 'application/pdf') { toastWarning('Only PDF files are accepted.'); input.value = ''; return; }
-  if (file.size > 10 * 1024 * 1024) { toastWarning('PDF must be under 10MB.'); input.value = ''; return; }
-  const reader = new FileReader();
-  reader.onload = (e) => {
-    window._annPdfData = e.target.result;
-    window._annPdfName = file.name;
-    const label   = document.getElementById('ann-pdf-label');
-    const preview = document.getElementById('ann-pdf-preview');
-    const fname   = document.getElementById('ann-pdf-filename');
-    if (label)   label.textContent = 'PDF selected';
-    if (fname)   fname.textContent = file.name;
-    if (preview) { preview.style.display = 'flex'; }
-  };
-  reader.readAsDataURL(file);
-}
-
-function annClearPdf() {
-  window._annPdfData = null;
-  window._annPdfName = null;
-  const input   = document.getElementById('ann-pdf-input');
-  const label   = document.getElementById('ann-pdf-label');
-  const preview = document.getElementById('ann-pdf-preview');
-  if (input)   input.value = '';
-  if (label)   label.textContent = 'Click to select a PDF';
-  if (preview) preview.style.display = 'none';
 }
 
 async function annDelete(id) {
@@ -10048,7 +9198,7 @@ function renderAbout() {
 
       <div style="font-size:13px;color:var(--text-light);padding-top:20px;border-top:1px solid var(--border)">
         Built by <strong style="color:var(--text-primary)">KODEX</strong> &nbsp;·&nbsp;
-        <a href="mailto:Kellywest251@gmail.com" style="color:var(--primary)">Kellywest251@gmail.com</a><br>
+        <a href="mailto:nelsonkel78@gmail.com" style="color:var(--primary)">nelsonkel78@gmail.com</a><br>
         <span style="font-size:12px">&copy; 2026 KODEX. All rights reserved.</span>
       </div>
     </div>
@@ -14154,10 +13304,8 @@ buildSidebar = function() {
 // ── Patch navigateTo for Phase 5 ─────────────────────────────────────────────
 const _p5NavigateTo = navigateTo;
 navigateTo = function(view) {
-  if (view === 'analytics')       { currentView = view; _setNavActive(view); renderAnalytics(); return; }
-  if (view === 'branches')        { currentView = view; _setNavActive(view); renderBranches(); return; }
-  if (view === 'live-attendance') { currentView = view; _setNavActive(view); renderLiveAttendance(); return; }
-  if (view === 'payroll')         { currentView = view; _setNavActive(view); renderPayroll(); return; }
+  if (view === 'analytics')     { currentView = view; _setNavActive(view); renderAnalytics(); return; }
+  if (view === 'branches')      { currentView = view; _setNavActive(view); renderBranches(); return; }
   if (view === 'branding')      { currentView = view; _setNavActive(view); renderBranding(); return; }
   if (view === 'payroll-export'){ currentView = view; _setNavActive('payroll-exp'); renderPayrollExport(); return; }
   _p5NavigateTo(view);
@@ -14323,6 +13471,106 @@ async function renderAnalytics() {
 
 // ══════════════════════════════════════════════════════════════
 // BRANCHES
+// ══════════════════════════════════════════════════════════════
+async function renderBranches() {
+  const content = document.getElementById('main-content');
+  content.innerHTML = '<div class="loading">Loading…</div>';
+  try {
+    const { branches } = await api('/api/advanced/branches');
+
+    content.innerHTML = `
+      <div class="page-header"><h2>Branch Management</h2><p>Manage your company locations</p></div>
+
+      <!-- Create Branch -->
+      <div class="card" style="margin-bottom:16px">
+        <h3 style="font-size:15px;font-weight:700;margin-bottom:12px">Add Branch</h3>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin-bottom:10px">
+          ${[
+            ['br-name','Name *','text','e.g. Accra HQ'],
+            ['br-code','Code','text','e.g. ACC'],
+            ['br-city','City','text','e.g. Accra'],
+            ['br-country','Country','text','e.g. Ghana'],
+            ['br-phone','Phone','text','Optional'],
+          ].map(([id,label,type,ph]) => `
+            <div>
+              <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:4px">${label}</label>
+              <input id="${id}" type="${type}" placeholder="${ph}" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
+            </div>
+          `).join('')}
+          <div>
+            <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:4px">Address</label>
+            <input id="br-addr" placeholder="Street address" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
+          </div>
+        </div>
+        <div id="br-error" style="color:#ef4444;font-size:13px;margin-bottom:8px;display:none"></div>
+        <button class="btn btn-primary" onclick="submitCreateBranch()">+ Add Branch</button>
+      </div>
+
+      <!-- Branches list -->
+      <div class="card">
+        <h3 style="font-size:15px;font-weight:700;margin-bottom:14px">Branches (${branches.length})</h3>
+        ${branches.length ? branches.map(b => `
+          <div style="padding:16px;border:1px solid #e5e7eb;border-radius:10px;margin-bottom:12px">
+            <div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:10px">
+              <div style="flex:1">
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;flex-wrap:wrap">
+                  <span style="font-weight:700;font-size:15px">🏢 ${b.name}</span>
+                  ${b.code ? `<span style="font-size:11px;background:#f3f4f6;color:#6b7280;padding:2px 8px;border-radius:4px;font-weight:600">${b.code}</span>` : ''}
+                  <span style="font-size:12px;color:#6b7280">${b.headcount} employee${b.headcount !== 1 ? 's' : ''}</span>
+                </div>
+                <div style="font-size:12px;color:#9ca3af">
+                  ${[b.address, b.city, b.country].filter(Boolean).join(', ') || 'No address set'}
+                  ${b.phone ? ` · ${b.phone}` : ''}
+                  ${b.manager ? ` · Manager: <strong>${b.manager.name}</strong>` : ''}
+                </div>
+              </div>
+              <div style="display:flex;gap:6px">
+                <button class="btn btn-sm" style="background:#fef2f2;color:#dc2626;border:1px solid #fecaca;font-size:11px" onclick="deleteBranch('${b._id}')">Remove</button>
+              </div>
+            </div>
+          </div>
+        `).join('') : '<p style="color:#9ca3af;font-size:13px">No branches yet. Add your first location above.</p>'}
+      </div>
+    `;
+  } catch(e) {
+    content.innerHTML = `<div class="card"><p style="color:#ef4444">Error: ${e.message}</p></div>`;
+  }
+}
+
+async function submitCreateBranch() {
+  const name = document.getElementById('br-name').value.trim();
+  const errEl = document.getElementById('br-error');
+  errEl.style.display = 'none';
+  if (!name) { errEl.textContent = 'Branch name is required.'; errEl.style.display = 'block'; return; }
+
+  const body = {
+    name,
+    code:    document.getElementById('br-code').value.trim(),
+    city:    document.getElementById('br-city').value.trim(),
+    country: document.getElementById('br-country').value.trim(),
+    phone:   document.getElementById('br-phone').value.trim(),
+    address: document.getElementById('br-addr').value.trim(),
+  };
+  const btn = event.target; btn.disabled = true; btn.textContent = 'Saving…';
+  try {
+    await api('/api/advanced/branches', { method: 'POST', body: JSON.stringify(body) });
+    toast('Branch added!', 'ok');
+    renderBranches();
+  } catch(e) {
+    errEl.textContent = e.message; errEl.style.display = 'block';
+    btn.disabled = false; btn.textContent = '+ Add Branch';
+  }
+}
+
+async function deleteBranch(id) {
+  if (!confirm('Remove this branch? Employees in this branch will be unassigned.')) return;
+  try {
+    await api(`/api/advanced/branches/${id}`, { method: 'DELETE' });
+    toast('Branch removed', 'ok');
+    renderBranches();
+  } catch(e) { toast(e.message, 'err'); }
+}
+
 // ══════════════════════════════════════════════════════════════
 // WHITE-LABEL BRANDING
 // ══════════════════════════════════════════════════════════════
