@@ -56,38 +56,53 @@ exports.getCourseGrades = async (req, res) => {
       gb = await GradeBook.create({ course: courseId, company, createdBy: req.user._id });
     }
 
-    // ── Students enrolled ────────────────────────────────────────────────────
-    // Bug fix: course.enrolledStudents only contains REGISTERED students (those
-    // who created an account). Students added via roster CSV but not yet
-    // registered are only in StudentRoster. We merge both sources so the grade
-    // book shows every student the lecturer added, not just registered ones.
+    // ── Students enrolled ─────────────────────────────────────────────────────
+    // Three sources merged to ensure no student is missed:
+    // 1. course.enrolledStudents — students who registered via the normal flow
+    // 2. StudentRoster (registered=true) — students in roster who have accounts
+    //    but may not be in enrolledStudents due to timing or import issues
+    // 3. StudentRoster (registered=false) — students added to roster but haven't
+    //    created an account yet
 
     const registeredStudentIds = course.enrolledStudents || [];
-
-    // Fetch all registered student documents
-    const registeredStudents = registeredStudentIds.length
-      ? await User.find({ _id: { $in: registeredStudentIds } })
-          .select("name email IndexNumber").lean()
-      : [];
 
     // Fetch all roster entries for this course
     const rosterEntries = await StudentRoster.find({ course: courseId, company }).lean();
 
-    // Build a set of registered student IndexNumbers (uppercase) so we can
-    // avoid double-counting students who appear in both sources
+    console.log(`[GRADEBOOK] courseId=${courseId} enrolledStudents=${registeredStudentIds.length} rosterEntries=${rosterEntries.length}`);
+
+    // Collect ALL unique user IDs: from enrolledStudents + roster registeredUser refs
+    const allUserIdSet = new Set(registeredStudentIds.map(id => id.toString()));
+    for (const r of rosterEntries) {
+      if (r.registeredUser) allUserIdSet.add(r.registeredUser.toString());
+    }
+    const allUserIds = [...allUserIdSet];
+
+    console.log(`[GRADEBOOK] total unique user IDs to look up: ${allUserIds.length}`);
+
+    // Fetch all matched users
+    const registeredStudents = allUserIds.length
+      ? await User.find({ _id: { $in: allUserIds } })
+          .select("name email IndexNumber").lean()
+      : [];
+
+    console.log(`[GRADEBOOK] registeredStudents found: ${registeredStudents.length}`);
+
+    // Build index set to avoid double-counting from roster
     const registeredIndexSet = new Set(
       registeredStudents.map(s => (s.IndexNumber || "").toUpperCase()).filter(Boolean)
     );
+    const registeredUserIdSet = new Set(registeredStudents.map(s => s._id.toString()));
 
-    // Unregistered roster students: in roster but no matching registered user
+    // Unregistered roster students: no account at all
     const unregisteredRoster = rosterEntries.filter(r => {
-      if (r.registered && r.registeredUser) return false; // already has an account
+      if (r.registeredUser && registeredUserIdSet.has(r.registeredUser.toString())) return false;
       const id = (r.studentId || "").toUpperCase();
       return id && !registeredIndexSet.has(id);
     });
 
-    // Build a unified student list
-    // Registered students get full quiz/attendance data; unregistered get zeros
+    console.log(`[GRADEBOOK] unregisteredRoster: ${unregisteredRoster.length}`);
+
     const registeredStudentList = registeredStudents.map(s => ({
       _id: s._id,
       name: s.name,
@@ -97,7 +112,7 @@ exports.getCourseGrades = async (req, res) => {
     }));
 
     const unregisteredStudentList = unregisteredRoster.map(r => ({
-      _id: null,            // no User document yet
+      _id: null,
       rosterId: r._id,
       name: r.name || r.studentId,
       email: null,
@@ -106,6 +121,8 @@ exports.getCourseGrades = async (req, res) => {
     }));
 
     const allStudents = [...registeredStudentList, ...unregisteredStudentList];
+
+    console.log(`[GRADEBOOK] allStudents total: ${allStudents.length}`);
 
     if (!allStudents.length) {
       return res.json({ course, gradeBook: gb, grades: [], weights: gb.weights });
