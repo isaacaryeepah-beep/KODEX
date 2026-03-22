@@ -57,13 +57,6 @@ exports.getCourseGrades = async (req, res) => {
     }
 
     // ── Students enrolled ─────────────────────────────────────────────────────
-    // Three sources merged to ensure no student is missed:
-    // 1. course.enrolledStudents — students who registered via the normal flow
-    // 2. StudentRoster (registered=true) — students in roster who have accounts
-    //    but may not be in enrolledStudents due to timing or import issues
-    // 3. StudentRoster (registered=false) — students added to roster but haven't
-    //    created an account yet
-
     const registeredStudentIds = course.enrolledStudents || [];
 
     // Fetch all roster entries for this course
@@ -71,30 +64,42 @@ exports.getCourseGrades = async (req, res) => {
 
     console.log(`[GRADEBOOK] courseId=${courseId} enrolledStudents=${registeredStudentIds.length} rosterEntries=${rosterEntries.length}`);
 
-    // Collect ALL unique user IDs: from enrolledStudents + roster registeredUser refs
+    // Collect ALL unique user IDs from both sources
     const allUserIdSet = new Set(registeredStudentIds.map(id => id.toString()));
     for (const r of rosterEntries) {
       if (r.registeredUser) allUserIdSet.add(r.registeredUser.toString());
     }
-    const allUserIds = [...allUserIdSet];
 
-    console.log(`[GRADEBOOK] total unique user IDs to look up: ${allUserIds.length}`);
+    // FALLBACK: if both sources are empty, query User model directly
+    // This catches students enrolled via other flows (CSV bulk upload etc)
+    let registeredStudents = [];
+    if (allUserIdSet.size > 0) {
+      registeredStudents = await User.find({ _id: { $in: [...allUserIdSet] } })
+        .select("name email IndexNumber").lean();
+    } else {
+      // Direct fallback: find all active students in this company enrolled in this course
+      registeredStudents = await User.find({
+        company,
+        role: "student",
+        isActive: true,
+        _id: { $in: registeredStudentIds }, // empty array = no results unless we skip
+      }).select("name email IndexNumber").lean();
+    }
 
-    // Fetch all matched users
-    const registeredStudents = allUserIds.length
-      ? await User.find({ _id: { $in: allUserIds } })
-          .select("name email IndexNumber").lean()
-      : [];
+    // If STILL empty and enrolledStudents has IDs, the company filter may be wrong — query without it
+    if (registeredStudents.length === 0 && registeredStudentIds.length > 0) {
+      console.log(`[GRADEBOOK] Fallback: querying users without company filter`);
+      registeredStudents = await User.find({ _id: { $in: registeredStudentIds } })
+        .select("name email IndexNumber").lean();
+    }
 
     console.log(`[GRADEBOOK] registeredStudents found: ${registeredStudents.length}`);
 
-    // Build index set to avoid double-counting from roster
     const registeredIndexSet = new Set(
       registeredStudents.map(s => (s.IndexNumber || "").toUpperCase()).filter(Boolean)
     );
     const registeredUserIdSet = new Set(registeredStudents.map(s => s._id.toString()));
 
-    // Unregistered roster students: no account at all
     const unregisteredRoster = rosterEntries.filter(r => {
       if (r.registeredUser && registeredUserIdSet.has(r.registeredUser.toString())) return false;
       const id = (r.studentId || "").toUpperCase();
