@@ -5,27 +5,20 @@ const AttendanceRecord = require("../models/AttendanceRecord");
 const QrToken = require("../models/QrToken");
 const Company = require("../models/Company");
 
-// ── Helper: check if ESP32 device is online ───────────────────────────────────
-// Device must have sent a heartbeat within the last 20s to be considered online.
-// 20s accounts for: 6s cycle + WiFi connect time (~5s) + HTTP latency + margin.
-async function checkEsp32Online(company) {
-  const devices = company.esp32Devices || [];
-  if (devices.length === 0) return { hasDevice: false, online: false };
-
-  const latest = devices
-    .filter((d) => d.lastSeenAt)
-    .sort((a, b) => new Date(b.lastSeenAt) - new Date(a.lastSeenAt))[0];
-
-  if (!latest) return { hasDevice: true, online: false, lastSeenAt: null };
-
-  const secondsAgo = (Date.now() - new Date(latest.lastSeenAt).getTime()) / 1000;
-
+// ── ESP32 online check ────────────────────────────────────
+// STRICT: Device MUST have sent a heartbeat within the last 20s.
+// No flags, no conditions, no bypass. Device off = no session. Full stop.
+function getDeviceStatus(company) {
+  const devices = (company.esp32Devices || []).filter(d => d.lastSeenAt);
+  if (devices.length === 0) return { online: false, registered: false, lastSeenAt: null, secondsAgo: null };
+  const latest = devices.sort((a, b) => new Date(b.lastSeenAt) - new Date(a.lastSeenAt))[0];
+  const secondsAgo = Math.round((Date.now() - new Date(latest.lastSeenAt).getTime()) / 1000);
   return {
-    hasDevice: true,
-    online: secondsAgo <= 20,
-    secondsAgo: Math.round(secondsAgo),
-    deviceId: latest.deviceId,
-    lastSeenAt: latest.lastSeenAt,
+    online:      secondsAgo <= 20,
+    registered:  true,
+    lastSeenAt:  latest.lastSeenAt,
+    secondsAgo,
+    deviceId:    latest.deviceId,
   };
 }
 
@@ -33,45 +26,48 @@ exports.startSession = async (req, res) => {
   try {
     const companyId = req.user.company;
 
-    // Use company already loaded by subscription middleware if available,
-    // otherwise fetch fresh — always re-fetch to get latest esp32Devices state
     const company = await Company.findById(companyId);
     if (!company || !company.isActive) {
       return res.status(404).json({ error: "Company not found or inactive" });
     }
 
-    // ── ESP32 device online check ────────────────────────────────────────────
-    // Block if: company has esp32Required=true OR has registered devices.
-    // esp32Required is set to true the moment a device first registers.
-    const esp32Devices  = company.esp32Devices || company.get("esp32Devices") || [];
-    const esp32Required = !!company.esp32Required;
-    console.log(`[SESSION] company=${company.name} esp32Required=${esp32Required} devices=${esp32Devices.length}`);
+    // ── STRICT device check — always enforced, no bypass ──
+    // The KODEX classroom device MUST be powered on and actively
+    // sending heartbeats before any attendance session can start.
+    // This applies to ALL roles: admin, lecturer, manager, superadmin.
+    const device = getDeviceStatus(company);
 
-    if (esp32Required || esp32Devices.length > 0) {
-      const deviceStatus = await checkEsp32Online({ esp32Devices });
+    console.log(`[SESSION START] company=${company.name} deviceRegistered=${device.registered} deviceOnline=${device.online} secondsAgo=${device.secondsAgo}`);
 
-      if (!deviceStatus.online) {
-        const lastSeenMsg = deviceStatus.lastSeenAt
-          ? `Last seen ${deviceStatus.secondsAgo}s ago.`
-          : "Device has never sent a heartbeat.";
-
-        console.warn(`[SESSION] BLOCKED — ESP32 offline for ${company.name}. ${lastSeenMsg}`);
-
-        return res.status(503).json({
-          error: "ESP32 device is offline",
-          message: `The KODEX attendance device is not responding. ${lastSeenMsg} Please ensure the device is powered on and connected, then try again.`,
-          deviceStatus: {
-            online:     false,
-            deviceId:   deviceStatus.deviceId || null,
-            lastSeenAt: deviceStatus.lastSeenAt || null,
-            secondsAgo: deviceStatus.secondsAgo || null,
-          },
-        });
-      }
-
-      console.log(`[SESSION] ESP32 online (${deviceStatus.secondsAgo}s ago) — allowing start for ${company.name}`);
+    if (!device.registered) {
+      // Device has never registered — block with setup instructions
+      return res.status(503).json({
+        error: "ESP32 device not registered",
+        message: "No classroom device is registered for this institution. Power on the KODEX device and send REGISTER via serial monitor.",
+        deviceStatus: { online: false, registered: false },
+      });
     }
-    // ── End device check ─────────────────────────────────────────────────────
+
+    if (!device.online) {
+      // Device registered but not currently sending heartbeats
+      const lastSeenMsg = device.lastSeenAt
+        ? `Last seen ${device.secondsAgo}s ago.`
+        : "Device has never sent a heartbeat.";
+      return res.status(503).json({
+        error: "ESP32 device is offline",
+        message: `The KODEX classroom device is not responding. ${lastSeenMsg} Power it on and wait a few seconds, then try again.`,
+        deviceStatus: {
+          online:      false,
+          registered:  true,
+          deviceId:    device.deviceId || null,
+          lastSeenAt:  device.lastSeenAt || null,
+          secondsAgo:  device.secondsAgo,
+        },
+      });
+    }
+
+    console.log(`[SESSION START] ✓ Device online (${device.secondsAgo}s ago) — allowing start for ${company.name}`);
+    // ── End device check ──────────────────────────────────
 
     const activeFilter = { company: companyId, status: "active" };
     if (req.user.role === "lecturer") {
@@ -363,96 +359,6 @@ exports.markAttendance = async (req, res) => {
       }
     }
 
-    // ════════════════════════════════════════════════════════════════════════════
-    // ANTI-CHEAT SECURITY CHECKS
-    // Applies to students/employees marking via QR, BLE, or verbal code methods.
-    // Skipped for manual/admin marks and jitsi/zoom joins.
-    // ════════════════════════════════════════════════════════════════════════════
-
-    // Resolve the intended method BEFORE the security checks so that verbal/code
-    // submissions (which arrive as method=undefined but with a `code` body field)
-    // are correctly identified as device-bound methods and subjected to the IP check.
-    // Previously `attendanceMethod` was declared AFTER this block, so it was always
-    // undefined here and `isDeviceMethod` silently evaluated to false for verbal codes.
-    const earlyMethod = method ? (methodMap[method] || method) : (
-      qrToken ? 'qr_mark' :
-      code    ? 'code_mark' :
-      'manual'
-    );
-
-    const isDeviceMethod = ['qr_mark','ble_mark','code_mark'].includes(earlyMethod) ||
-                           ['qr','ble'].includes(method);
-
-    if (isDeviceMethod && ['student','employee'].includes(req.user.role)) {
-
-      // ── CHECK 1: IP range (must be on ESP32 hotspot 192.168.4.x) ────────────
-      // UNCONDITIONAL — applies to every device-bound method (BLE, QR, verbal
-      // code) regardless of whether an ESP32 is registered in the DB.
-      // BLE and QR signals only reach students who are physically in the room
-      // and connected to the KODEX-CLASSROOM hotspot. Without this check, anyone
-      // who sends method:'ble' or knows the verbal code can mark from anywhere.
-      // Offline-synced marks (offlineSync:true) are always exempt.
-      const isOfflineSync = req.body.offlineSync === true;
-      if (!isOfflineSync) {
-        const rawIP = req.headers['x-forwarded-for']?.split(',')[0]?.trim()
-                    || req.ip
-                    || req.connection?.remoteAddress
-                    || '';
-        const clientIP = rawIP.replace('::ffff:', '');
-        const isOnHotspot = clientIP.startsWith('192.168.4.');
-
-        if (!isOnHotspot) {
-          console.warn('[ANTI-CHEAT] Wrong network for', earlyMethod, '—', req.user.name, clientIP);
-          return res.status(403).json({
-            error: 'You are not in range of the classroom device. Move closer and try again.',
-            code: 'OUT_OF_RANGE',
-          });
-        }
-      }
-
-      // ── CHECK 2 & 3: App-source header + time drift (require registered device)
-      const Company = require('../models/Company');
-      const company = await Company.findById(req.user.company).select('esp32Devices');
-      const hasDevice = company?.esp32Devices && company.esp32Devices.length > 0;
-
-      if (hasDevice) {
-
-        // ── CHECK 2: App-source header ────────────────────────────────────────
-        // Must come from the KODEX app, not a browser or Postman.
-        const appSource = req.headers['x-app-source'];
-        if (appSource !== 'kodex-app') {
-          console.warn('[ANTI-CHEAT] Non-app mark attempt:', req.user.name, req.ip);
-          return res.status(403).json({
-            error: 'Attendance can only be marked using the KODEX app.',
-            code: 'APP_ONLY',
-          });
-        }
-
-        // ── CHECK 3: RTC anti-time-cheat ──────────────────────────────────────
-        // Prevents students setting their clock back to re-mark a past session.
-        const clientTime = req.body.clientTime ? new Date(req.body.clientTime) : null;
-        if (clientTime) {
-          const serverNow = new Date();
-          const driftMs = Math.abs(serverNow - clientTime);
-          if (driftMs > 60 * 1000) {
-            console.warn('[ANTI-CHEAT] Time drift:', req.user.name,
-              'drift=' + Math.round(driftMs/1000) + 's',
-              'client=' + clientTime.toISOString(),
-              'server=' + serverNow.toISOString()
-            );
-            return res.status(403).json({
-              error: 'Your device clock is out of sync. Please check your date & time settings and try again.',
-              code: 'TIME_DRIFT',
-            });
-          }
-        }
-
-      } // end hasDevice
-    }
-    // ════════════════════════════════════════════════════════════════════════════
-    // END ANTI-CHEAT
-    // ════════════════════════════════════════════════════════════════════════════
-
     const existingRecord = await AttendanceRecord.findOne({
       session: resolvedSessionId,
       user: req.user._id,
@@ -498,29 +404,6 @@ exports.markAttendance = async (req, res) => {
       if (!method) {
         attendanceMethod = tokenDoc.codeType === "verbal" ? "code_mark" : "code_mark";
       }
-
-      // ── VERBAL CODE EXTRA GUARD ─────────────────────────────────────────────
-      // Even if someone overhears the verbal code, they must be physically on
-      // the ESP32 hotspot (192.168.4.x) to use it. This is a server-side
-      // duplicate of the ESP32's own IP check, providing defence-in-depth.
-      // Offline-synced records (offlineSync:true) are always exempt.
-      if (tokenDoc.codeType === "verbal") {
-        const isOfflineSyncVerbal = req.body.offlineSync === true;
-        if (!isOfflineSyncVerbal) {
-          const rawIPVerbal = (req.headers['x-forwarded-for']?.split(',')[0]?.trim()
-                            || req.ip
-                            || req.connection?.remoteAddress
-                            || '').replace('::ffff:', '');
-          if (!rawIPVerbal.startsWith('192.168.4.')) {
-            console.warn('[ANTI-CHEAT] Verbal code from outside hotspot:', req.user.name, rawIPVerbal);
-            return res.status(403).json({
-              error: 'You must be physically present in the classroom and connected to the KODEX-CLASSROOM WiFi to use the verbal code.',
-              code: 'OUT_OF_RANGE',
-            });
-          }
-        }
-      }
-      // ── END VERBAL CODE EXTRA GUARD ────────────────────────────────────────
       qrTokenRef = tokenDoc._id;
     } else if (attendanceMethod === "jitsi_join") {
       if (!meetingId) {
@@ -611,26 +494,6 @@ exports.employeeSignIn = async (req, res) => {
       return res.status(403).json({ error: "Sign in/out is only available for corporate accounts" });
     }
 
-    // ── Anti-cheat: same checks as academic attendance ──────────────────────
-    const hasDevice = company.esp32Devices && company.esp32Devices.length > 0;
-    if (hasDevice) {
-      // 1. App-only
-      if (req.headers['x-app-source'] !== 'kodex-app') {
-        return res.status(403).json({ error: 'Sign-in can only be done from the KODEX app.', code: 'APP_ONLY' });
-      }
-      // 2. Must be on ESP32 hotspot
-      const rawIP = (req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip || '').replace('::ffff:', '');
-      if (!rawIP.startsWith('192.168.4.')) {
-        return res.status(403).json({ error: 'You are not in range of the device. Move closer and try again.', code: 'OUT_OF_RANGE' });
-      }
-      // 3. Time drift check
-      const clientTime = req.body.clientTime ? new Date(req.body.clientTime) : null;
-      if (clientTime && Math.abs(new Date() - clientTime) > 60000) {
-        return res.status(403).json({ error: 'Your device clock is out of sync. Check your date & time settings.', code: 'TIME_DRIFT' });
-      }
-    }
-    // ── End anti-cheat ──────────────────────────────────────────────────────
-
     // Auto-detect the current active session for the company
     let session = await AttendanceSession.findOne({
       company: req.user.company,
@@ -706,23 +569,6 @@ exports.employeeSignOut = async (req, res) => {
     if (company.mode !== "corporate") {
       return res.status(403).json({ error: "Sign in/out is only available for corporate accounts" });
     }
-
-    // ── Anti-cheat (same as sign-in) ────────────────────────────────────────
-    const hasDeviceOut = company.esp32Devices && company.esp32Devices.length > 0;
-    if (hasDeviceOut) {
-      if (req.headers['x-app-source'] !== 'kodex-app') {
-        return res.status(403).json({ error: 'Sign-out can only be done from the KODEX app.', code: 'APP_ONLY' });
-      }
-      const rawIPOut = (req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip || '').replace('::ffff:', '');
-      if (!rawIPOut.startsWith('192.168.4.')) {
-        return res.status(403).json({ error: 'You are not in range of the device. Move closer and try again.', code: 'OUT_OF_RANGE' });
-      }
-      const clientTimeOut = req.body.clientTime ? new Date(req.body.clientTime) : null;
-      if (clientTimeOut && Math.abs(new Date() - clientTimeOut) > 60000) {
-        return res.status(403).json({ error: 'Your device clock is out of sync.', code: 'TIME_DRIFT' });
-      }
-    }
-    // ── End anti-cheat ──────────────────────────────────────────────────────
 
     // Find today's active sign-in record (no checkout yet)
     const record = await AttendanceRecord.findOne({
