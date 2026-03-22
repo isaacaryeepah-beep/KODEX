@@ -160,6 +160,10 @@ userSchema.pre("validate", function () {
 });
 
 userSchema.pre("save", async function () {
+  // Always store email lowercase — emails are case-insensitive by spec
+  if (this.email && this.isModified("email")) {
+    this.email = this.email.trim().toLowerCase();
+  }
   if (!this.isModified("password")) return;
   const salt = await bcrypt.genSalt(12);
   this.password = await bcrypt.hash(this.password, salt);
