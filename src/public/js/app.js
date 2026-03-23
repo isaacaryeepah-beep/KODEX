@@ -1,4 +1,8 @@
-const API = '';
+// Always point to the real server — prevents requests going to ESP32 hotspot
+// when users are connected to the classroom device's WiFi network.
+const API = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+  ? ''
+  : 'https://kodex.it.com';
 
 // ═══════════════════════════════════════════════════════
 // TOAST NOTIFICATION SYSTEM
@@ -430,7 +434,43 @@ const OFFLINE_QUEUE_KEY   = 'edu_offline_queue';
 const OFFLINE_BANNER_ID   = 'offline-banner';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
-function isOnline() { return navigator.onLine; }
+// navigator.onLine is true even when connected to an ESP32 hotspot with no
+// internet. We do a real server ping so login correctly falls back to offline
+// mode when the KODEX server is unreachable (e.g. device is on ESP32 WiFi).
+let _serverReachable = null; // null = unknown, true/false = cached result
+let _serverCheckTs   = 0;
+const SERVER_CHECK_TTL = 8000; // re-check every 8 s
+
+async function checkServerReachable() {
+  try {
+    const ctrl = new AbortController();
+    const tid   = setTimeout(() => ctrl.abort(), 4000); // 4 s timeout
+    const res   = await fetch('/api/health', { method: 'GET', signal: ctrl.signal, cache: 'no-store' });
+    clearTimeout(tid);
+    return res.ok;
+  } catch (_) {
+    return false;
+  }
+}
+
+function isOnline() {
+  // Fast path: if browser says offline, trust it immediately
+  if (!navigator.onLine) return false;
+  // Otherwise return the last known server reachability result.
+  // Callers that need a fresh check should use isOnlineAsync().
+  return _serverReachable !== false;
+}
+
+async function isOnlineAsync() {
+  if (!navigator.onLine) { _serverReachable = false; return false; }
+  const now = Date.now();
+  if (now - _serverCheckTs < SERVER_CHECK_TTL && _serverReachable !== null) {
+    return _serverReachable;
+  }
+  _serverReachable = await checkServerReachable();
+  _serverCheckTs   = now;
+  return _serverReachable;
+}
 
 function offlineCache(key, data) {
   try {
@@ -1032,7 +1072,7 @@ async function handleAdminLogin() {
     const credentials = { email, password, loginRole: 'admin', portalMode, deviceId: getDeviceFingerprint() };
 
     let data;
-    if (!isOnline()) {
+    if (!(await isOnlineAsync())) {
       showOfflineLoginNotice('admin-login-form');
       data = await attemptOfflineLogin(credentials);
     } else {
@@ -1099,7 +1139,7 @@ async function handleLecturerLogin() {
     const credentials = { email, password, loginRole: 'lecturer', portalMode: 'academic', deviceId: getDeviceFingerprint() };
 
     let data;
-    if (!isOnline()) {
+    if (!(await isOnlineAsync())) {
       // ── OFFLINE PATH ──
       showOfflineLoginNotice('lecturer-login-form');
       data = await attemptOfflineLogin(credentials);
@@ -1302,7 +1342,7 @@ async function handleHodLogin() {
 
     const credentials = { email, password, loginRole: 'hod', portalMode: 'academic', deviceId: getDeviceFingerprint() };
     let data;
-    if (!isOnline()) {
+    if (!(await isOnlineAsync())) {
       showOfflineLoginNotice('hod-login-form');
       data = await attemptOfflineLogin(credentials);
     } else {
@@ -1376,7 +1416,7 @@ async function handleEmployeeLogin() {
     const credentials = { email, password, institutionCode, loginRole: 'employee', deviceId: getDeviceFingerprint() };
 
     let data;
-    if (!isOnline()) {
+    if (!(await isOnlineAsync())) {
       // ── OFFLINE PATH ──
       showOfflineLoginNotice('employee-login-form');
       data = await attemptOfflineLogin(credentials);
@@ -1445,7 +1485,7 @@ async function handleStudentLogin() {
     const credentials = { indexNumber, password, institutionCode, loginRole: 'student', deviceId: getDeviceFingerprint() };
 
     let data;
-    if (!isOnline()) {
+    if (!(await isOnlineAsync())) {
       // ── OFFLINE PATH ──
       showOfflineLoginNotice('student-login-form');
       data = await attemptOfflineLogin(credentials);
