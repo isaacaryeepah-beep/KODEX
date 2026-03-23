@@ -7672,7 +7672,11 @@ async function submitCodeMark() {
     toastSuccess('Attendance marked successfully!');
     navigateTo('mark-attendance');
   } catch (e) {
-    toastError(e.message);
+    if (e.data && e.data.esp32Required) {
+      toastError('You must be connected to the classroom WiFi (KODEX-CLASSROOM) to mark attendance.');
+    } else {
+      toastError(e.message);
+    }
   }
 }
 
@@ -7722,7 +7726,11 @@ async function submitQrMark() {
     toastSuccess('Attendance marked successfully!');
     navigateTo('mark-attendance');
   } catch (e) {
-    toastError(e.message);
+    if (e.data && e.data.esp32Required) {
+      toastError('You must be connected to the classroom WiFi (KODEX-CLASSROOM) to mark attendance.');
+    } else {
+      toastError(e.message);
+    }
   }
 }
 
