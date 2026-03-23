@@ -3898,26 +3898,14 @@ async function showStartSessionModal() {
     return;
   }
 
-  // Device check itself failed (network error etc) — block, don't silently proceed
+  // Device check failed — could be ESP32 hotspot with no internet, or a
+  // brief server hiccup. Don't block the lecturer — just warn and proceed.
+  // The ESP32 will sync attendance records independently once it reconnects.
   if (checkError) {
-    container.innerHTML = `
-      <div class="modal-overlay" onclick="closeModal(event)">
-        <div class="modal" onclick="event.stopPropagation()" style="text-align:center;max-width:400px">
-          <div style="font-size:40px;margin-bottom:12px">⚠️</div>
-          <h3 style="margin-bottom:8px">Device Check Failed</h3>
-          <p style="font-size:13px;color:var(--text-muted);margin-bottom:20px;line-height:1.6">
-            Could not verify the classroom device status.<br>
-            Check your connection and try again.
-          </p>
-          <div style="display:flex;gap:8px;justify-content:center">
-            <button class="btn btn-secondary btn-sm" onclick="closeModal()">Cancel</button>
-            <button class="btn btn-primary btn-sm" onclick="showStartSessionModal()">↻ Retry</button>
-          </div>
-        </div>
-      </div>`;
-    return;
+    console.warn('[DeviceCheck] Could not reach device-status — proceeding without strict check.');
+    // fall through to show session form
   }
-  // ── Device is confirmed online — show session form ────────
+  // ── Show session form (device online confirmed, or check failed gracefully) ──
 
   let courses = [];
   try {
