@@ -326,6 +326,50 @@ exports.markAttendance = async (req, res) => {
       zoom: "jitsi_join",
     };
 
+    // ── ESP32 proximity enforcement ───────────────────────────────────────────
+    // If the company has an active ESP32 device (heartbeat within 20s),
+    // verbal code and QR marking are ONLY allowed from the ESP32 hotspot
+    // subnet (192.168.4.x). This prevents remote attendance fraud.
+    const isCodeOrQr = !!(code || qrToken || method === 'qr');
+    if (isCodeOrQr) {
+      const Company = require('../models/Company');
+      const company = await Company.findById(req.user.company)
+        .select('esp32Devices').lean();
+
+      if (company && company.esp32Devices && company.esp32Devices.length > 0) {
+        const now = Date.now();
+        const deviceOnline = company.esp32Devices.some(d =>
+          d.lastSeenAt && (now - new Date(d.lastSeenAt).getTime()) < 20000
+        );
+
+        if (deviceOnline) {
+          // Get student real IP (supports proxies/load balancers)
+          const clientIp = (
+            (req.headers['x-forwarded-for'] || '').split(',')[0].trim() ||
+            req.headers['x-real-ip'] ||
+            (req.socket && req.socket.remoteAddress) ||
+            ''
+          );
+
+          // ESP32 default hotspot subnet is 192.168.4.x
+          // Allow localhost for dev/testing
+          const isOnEsp32Network =
+            clientIp.startsWith('192.168.4.') ||
+            clientIp === '127.0.0.1' ||
+            clientIp === '::1' ||
+            clientIp === '::ffff:127.0.0.1';
+
+          if (!isOnEsp32Network) {
+            return res.status(403).json({
+              error: 'You must be connected to the classroom WiFi (KODEX-CLASSROOM) to mark attendance.',
+              esp32Required: true,
+            });
+          }
+        }
+      }
+    }
+    // ─────────────────────────────────────────────────────────────────────────
+
     // sessionId is optional — auto-detect the active session if not supplied
     let session;
     let resolvedSessionId = sessionId;
