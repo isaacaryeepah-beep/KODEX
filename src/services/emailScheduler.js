@@ -182,17 +182,18 @@ async function cleanStaleLocks() {
 }
 
 // ── ESP32 Watchdog ─────────────────────────────────────────────────────────────
-// Runs every 20 seconds.
-// If an esp32Only session is active but the ESP32 hasn't polled in 15 seconds,
-// the device is offline -- auto-stop the session so students aren't left blocked.
+// ESP32 Watchdog — runs every 3 seconds.
+// If any active session belongs to a company whose ESP32 device has not
+// sent a heartbeat in the last 20s, the session is auto-stopped so students
+// are not left blocked on a dead hotspot.
 const AttendanceSession = require('../models/AttendanceSession');
 
-const ESP32_OFFLINE_MS = 20000; // 20s: firmware polls every 5s, allow 4 misses + latency
+const ESP32_OFFLINE_MS = 3000;  // 3s STRICT: any missed heartbeat = offline = session stopped
 
 async function esp32Watchdog() {
   try {
-    // Find all active esp32Only sessions
-    const sessions = await AttendanceSession.find({ status: 'active', esp32Only: true })
+    // Find ALL active sessions (not just esp32Only — field doesn't exist in model)
+    const sessions = await AttendanceSession.find({ status: 'active' })
       .select('_id company title')
       .lean();
 
@@ -200,9 +201,9 @@ async function esp32Watchdog() {
 
     const companyIds = [...new Set(sessions.map(s => s.company.toString()))];
 
-    // Load company ESP32 heartbeat data
+    // Load company ESP32 device data using the correct field: esp32Devices[]
     const companies = await Company.find({ _id: { $in: companyIds } })
-      .select('_id esp32Token esp32LastSeen')
+      .select('_id esp32Devices')
       .lean();
 
     const companyMap = {};
@@ -214,18 +215,23 @@ async function esp32Watchdog() {
       const company = companyMap[session.company.toString()];
       if (!company) continue;
 
-      const esp32Online = company.esp32Token &&
-        company.esp32LastSeen &&
-        (now - new Date(company.esp32LastSeen).getTime() < ESP32_OFFLINE_MS);
+      // Only enforce watchdog if the company has a registered ESP32 device
+      const devices = company.esp32Devices || [];
+      if (devices.length === 0) continue;
+
+      // Check if ANY device has sent a heartbeat within the last 20s
+      const esp32Online = devices.some(d =>
+        d.lastSeenAt && (now - new Date(d.lastSeenAt).getTime()) < ESP32_OFFLINE_MS
+      );
 
       if (!esp32Online) {
-        // ESP32 is offline -- stop the session
+        // ESP32 lost power or went offline — auto-stop the session
         await AttendanceSession.findByIdAndUpdate(session._id, {
           status: 'stopped',
           stoppedAt: new Date(),
           stoppedReason: 'esp32_offline',
         });
-        console.log(`[ESP32 Watchdog] Auto-stopped session "${session.title}" (${session._id}) -- ESP32 went offline`);
+        console.log(`[ESP32 Watchdog] Auto-stopped session "${session.title}" (${session._id}) — ESP32 went offline`);
       }
     }
   } catch (err) {
@@ -245,14 +251,14 @@ function startScheduler() {
     cleanStaleLocks().catch(err => console.error('[LockCleanup] Unhandled error:', err));
   });
 
-  // ESP32 watchdog every 3 seconds — stops session immediately when ESP32 loses power
-  cron.schedule('*/3 * * * * *', () => {
+  // ESP32 watchdog every 1 second — STRICT, stops session the moment ESP32 loses power
+  cron.schedule('* * * * * *', () => {
     esp32Watchdog().catch(err => console.error('[ESP32 Watchdog] Unhandled error:', err));
   });
 
   console.log('[Scheduler] ✅ Email scheduler started -- runs daily at 08:00 Accra time');
   console.log('[Scheduler] ✅ Stale lock cleanup started -- runs every 5 minutes');
-  console.log('[Scheduler] ✅ ESP32 watchdog started -- checks every 3 seconds');
+  console.log('[Scheduler] ✅ ESP32 watchdog started -- checks every 1 second (STRICT)');
 }
 
 module.exports = { startScheduler, runDailyEmails, cleanStaleLocks, esp32Watchdog };
