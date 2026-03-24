@@ -3019,7 +3019,7 @@ async function renderLecturerDashboard(content) {
       <div class="stat-card"><div class="stat-value">${quizzesCreated}</div><div class="stat-label">Quizzes</div></div>
     </div>
     <div class="quick-actions">
-      <button class="btn btn-primary btn-sm" onclick="navigateTo('sessions'); setTimeout(showStartSessionModal, 300)">${sessionsIcon()} Start Session</button>
+      <button class="btn btn-primary btn-sm" onclick="navigateTo('sessions'); showStartSessionModal()">${sessionsIcon()} Start Session</button>
       <button class="btn btn-secondary btn-sm" onclick="navigateTo('courses'); setTimeout(showCreateCourseModal, 300)">${coursesIcon()} Create Course</button>
       <button class="btn btn-secondary btn-sm" onclick="navigateTo('quizzes'); setTimeout(showCreateQuizModal, 300)">${quizzesIcon()} Create Quiz</button>
     </div>
@@ -3837,7 +3837,14 @@ function _renderSessionsHTML(content, sessions, isOffline) {
 
 
 async function showStartSessionModal() {
-  const container = document.getElementById('modal-container');
+  // Wait for modal-container to be in DOM (it may not exist if called too early)
+  let container = document.getElementById('modal-container');
+  if (!container) {
+    await new Promise(r => setTimeout(r, 150));
+    container = document.getElementById('modal-container');
+  }
+  if (!container) { toastError('Page not ready. Please wait and try again.'); return; }
+
   container.classList.remove('hidden');
   container.innerHTML = `<div class="modal-overlay"><div class="modal"><p style="color:var(--text-muted);text-align:center;padding:8px 0">📡 Checking classroom device…</p></div></div>`;
 
@@ -3981,22 +3988,65 @@ async function startSession() {
   const courseId = document.getElementById('session-course')?.value;
 
   if (!courseId) { toastWarning('Please select a course.'); return; }
-  closeModal();
+
+  // Don't close modal yet — keep it open so we can show errors in it
+  const container = document.getElementById('modal-container');
+  if (container) {
+    container.innerHTML = `<div class="modal-overlay"><div class="modal"><p style="color:var(--text-muted);text-align:center;padding:16px 0">⏳ Starting session…</p></div></div>`;
+  }
 
   // Sessions cannot be started offline — device check requires live server
   if (!(await isOnlineAsync())) {
-    toastError('No internet connection. You need internet to start a session.');
+    if (container) container.innerHTML = `
+      <div class="modal-overlay" onclick="closeModal(event)">
+        <div class="modal" onclick="event.stopPropagation()" style="text-align:center;max-width:400px">
+          <div style="font-size:40px;margin-bottom:12px">📶</div>
+          <h3 style="margin-bottom:8px">No Internet</h3>
+          <p style="font-size:13px;color:var(--text-muted);margin-bottom:20px;line-height:1.6">
+            You need an internet connection to start a session.<br>The device check requires the server.
+          </p>
+          <div style="display:flex;gap:8px;justify-content:center">
+            <button class="btn btn-secondary btn-sm" onclick="closeModal()">Cancel</button>
+            <button class="btn btn-primary btn-sm" onclick="showStartSessionModal()">↻ Retry</button>
+          </div>
+        </div>
+      </div>`;
     return;
   }
 
   try {
     await api('/api/attendance-sessions/start', { method: 'POST', body: JSON.stringify({ title, courseId }) });
+    closeModal();
     renderSessions();
   } catch (e) {
+    // Device offline or not registered — show in-modal block screen
     if (e.status === 503) {
-      toastError('📟 ' + (e.data?.message || 'Device is offline. Power it on and try again.'));
+      const msg = e.data?.message || 'The classroom device is not responding. Power it on and try again.';
+      if (container) container.innerHTML = `
+        <div class="modal-overlay" onclick="closeModal(event)">
+          <div class="modal" onclick="event.stopPropagation()" style="text-align:center;max-width:400px">
+            <div style="font-size:40px;margin-bottom:12px">📟</div>
+            <h3 style="margin-bottom:8px">Device is Offline</h3>
+            <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px;line-height:1.6">${esc(msg)}</p>
+            <div style="display:flex;gap:8px;justify-content:center">
+              <button class="btn btn-secondary btn-sm" onclick="closeModal()">Cancel</button>
+              <button class="btn btn-primary btn-sm" onclick="showStartSessionModal()">↻ Retry</button>
+            </div>
+          </div>
+        </div>`;
     } else {
-      toastError(e.message);
+      if (container) container.innerHTML = `
+        <div class="modal-overlay" onclick="closeModal(event)">
+          <div class="modal" onclick="event.stopPropagation()" style="text-align:center;max-width:400px">
+            <div style="font-size:40px;margin-bottom:12px">❌</div>
+            <h3 style="margin-bottom:8px">Could Not Start Session</h3>
+            <p style="font-size:13px;color:var(--text-muted);margin-bottom:20px">${esc(e.message)}</p>
+            <div style="display:flex;gap:8px;justify-content:center">
+              <button class="btn btn-secondary btn-sm" onclick="closeModal()">Cancel</button>
+              <button class="btn btn-primary btn-sm" onclick="showStartSessionModal()">↻ Retry</button>
+            </div>
+          </div>
+        </div>`;
     }
   }
 }
@@ -7600,7 +7650,7 @@ async function renderMarkAttendance() {
           <div class="card mark-method-card" onclick="markBLE()" style="cursor:pointer;text-align:center;transition:all 0.2s">
             <div style="font-size:36px;margin-bottom:12px">${svgIcon('<path d="M6.5 6.5l11 11M6.5 17.5l11-11M12 2v20"/>', 42)}</div>
             <div style="font-size:16px;font-weight:700">BLE Proximity</div>
-            <p style="font-size:12px;color:var(--text-light);margin-top:4px">Auto-detect via Bluetooth proximity</p>
+            <p style="font-size:12px;color:var(--text-light);margin-top:4px">Auto-mark by scanning classroom device via Bluetooth</p>
           </div>
           
           <div class="card mark-method-card" onclick="showJitsiJoin()" style="cursor:pointer;text-align:center;transition:all 0.2s">
@@ -7747,15 +7797,134 @@ async function submitQrMark() {
 }
 
 async function markBLE() {
+  const area = document.getElementById('mark-input-area');
+  if (area) {
+    area.innerHTML = `
+      <div class="card" style="text-align:center;padding:28px 20px">
+        <div style="font-size:40px;margin-bottom:12px">📡</div>
+        <div style="font-size:16px;font-weight:700;margin-bottom:6px">Scanning for classroom device…</div>
+        <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px">
+          Make sure Bluetooth is ON and you are in the classroom.
+        </p>
+        <div id="ble-status" style="font-size:12px;color:var(--text-muted)">Starting scan…</div>
+      </div>`;
+  }
+
+  const setStatus = (msg) => {
+    const el = document.getElementById('ble-status');
+    if (el) el.textContent = msg;
+  };
+
+  // Web Bluetooth API check
+  if (!navigator.bluetooth) {
+    if (area) area.innerHTML = `
+      <div class="card" style="text-align:center;padding:28px 20px">
+        <div style="font-size:40px;margin-bottom:12px">❌</div>
+        <div style="font-size:15px;font-weight:700;margin-bottom:8px">Bluetooth Not Supported</div>
+        <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px">
+          Your browser does not support Web Bluetooth.<br>
+          Use <strong>Chrome on Android</strong>, or use the <strong>Enter Code</strong> method instead.
+        </p>
+        <button class="btn btn-secondary btn-sm" onclick="showCodeEntry()">Enter Code Instead</button>
+      </div>`;
+    return;
+  }
+
+  let device, server, service, characteristic;
+
   try {
+    setStatus('Requesting Bluetooth access…');
+
+    // Request device — filter for KODEX ESP32 beacon (name starts with ATT_)
+    device = await navigator.bluetooth.requestDevice({
+      filters: [
+        { namePrefix: 'ATT_' },
+        { services: ['6e400001-b5a3-f393-e0a9-e50e24dcca9e'] },
+      ],
+      optionalServices: ['6e400001-b5a3-f393-e0a9-e50e24dcca9e'],
+    });
+
+    setStatus('Connecting to ' + device.name + '…');
+    server        = await device.gatt.connect();
+    setStatus('Reading attendance token…');
+    service       = await server.getPrimaryService('6e400001-b5a3-f393-e0a9-e50e24dcca9e');
+    characteristic = await service.getCharacteristic('6e400002-b5a3-f393-e0a9-e50e24dcca9e');
+    const value   = await characteristic.readValue();
+    const text    = new TextDecoder().decode(value);
+
+    // Disconnect immediately after reading — don't stay connected
+    device.gatt.disconnect();
+
+    let bleData;
+    try { bleData = JSON.parse(text); }
+    catch(e) {
+      throw new Error('Could not read token from device. Move closer and try again.');
+    }
+
+    const { bleToken, sessionId, ts } = bleData;
+    if (!bleToken || !ts) throw new Error('Invalid data from device. Try again.');
+
+    setStatus('Verifying token with server…');
+
+    // Step 1: Verify the BLE token server-side
+    // Server checks: IP on 192.168.4.x, HMAC valid, timestamp fresh, single-use
+    let verifyResult;
+    try {
+      verifyResult = await api('/api/esp32/ble-verify', {
+        method: 'POST',
+        body: JSON.stringify({ bleToken, sessionId, timestamp: ts }),
+      });
+    } catch (e) {
+      // Map server error codes to clear messages
+      const code = e.data?.code;
+      if (code === 'NOT_ON_HOTSPOT')      throw new Error('You must be on KODEX-CLASSROOM WiFi to mark attendance.');
+      if (code === 'TOKEN_EXPIRED')       throw new Error('Token expired — move closer to the device and try again.');
+      if (code === 'INVALID_TOKEN')       throw new Error('Invalid token. You must be physically next to the classroom device.');
+      if (code === 'TOKEN_ALREADY_USED')  throw new Error('This token was already used. Each BLE scan is single-use.');
+      if (code === 'DEVICE_OFFLINE')      throw new Error('Classroom device is offline. Ask your lecturer to power it on.');
+      throw e;
+    }
+
+    if (!verifyResult?.verified) throw new Error('BLE verification failed. Try again.');
+
+    setStatus('Marking attendance…');
+
+    // Step 2: Mark attendance using the verified sessionId
     await api('/api/attendance-sessions/mark', {
       method: 'POST',
-      body: JSON.stringify({ method: 'ble_mark' }),
+      body: JSON.stringify({
+        method: 'ble_mark',
+        sessionId: verifyResult.sessionId,
+      }),
     });
-    toastSuccess('Attendance marked via BLE!');
-    navigateTo('mark-attendance');
+
+    // Success
+    if (area) area.innerHTML = `
+      <div class="card" style="text-align:center;padding:32px 20px;border-left:4px solid var(--success);background:#f0fdf4">
+        <div style="font-size:52px;margin-bottom:12px">✅</div>
+        <div style="font-size:18px;font-weight:800;color:var(--success)">Attendance Marked!</div>
+        <p style="font-size:13px;color:var(--text-muted);margin-top:6px">Verified via BLE proximity.</p>
+      </div>`;
+    toastSuccess('Attendance marked via BLE proximity!');
+    setTimeout(() => navigateTo('mark-attendance'), 2500);
+
   } catch (e) {
-    toastError(e.message);
+    // User cancelled the Bluetooth picker
+    if (e.name === 'NotFoundError' || e.message?.includes('cancelled') || e.message?.includes('User cancelled')) {
+      if (area) area.innerHTML = '';
+      return;
+    }
+    if (area) area.innerHTML = `
+      <div class="card" style="text-align:center;padding:28px 20px;border-left:4px solid var(--danger);background:#fef2f2">
+        <div style="font-size:40px;margin-bottom:12px">❌</div>
+        <div style="font-size:15px;font-weight:700;margin-bottom:8px">BLE Failed</div>
+        <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px">${e.message}</p>
+        <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
+          <button class="btn btn-secondary btn-sm" onclick="markBLE()">↻ Try Again</button>
+          <button class="btn btn-primary btn-sm" onclick="showCodeEntry()">Enter Code Instead</button>
+        </div>
+      </div>`;
+    if (device?.gatt?.connected) device.gatt.disconnect().catch(() => {});
   }
 }
 
