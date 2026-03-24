@@ -3907,11 +3907,37 @@ async function showStartSessionModal() {
   }
   // ── Show session form (device online confirmed, or check failed gracefully) ──
 
+  // Fetch courses — always from kodex.it.com (hardcoded in API constant)
+  // If this fails, it means the server is unreachable — show clear error.
   let courses = [];
+  let courseLoadError = false;
   try {
     const d = await api('/api/courses');
     courses = d.courses || d || [];
-  } catch(e) { courses = []; }
+  } catch(e) {
+    courseLoadError = true;
+    console.error('[showStartSessionModal] Failed to load courses:', e.message);
+  }
+
+  if (courseLoadError || courses.length === 0) {
+    container.innerHTML = `
+      <div class="modal-overlay" onclick="closeModal(event)">
+        <div class="modal" onclick="event.stopPropagation()" style="text-align:center;max-width:400px">
+          <div style="font-size:40px;margin-bottom:12px">📡</div>
+          <h3 style="margin-bottom:8px">${courseLoadError ? 'Connection Error' : 'No Courses Found'}</h3>
+          <p style="font-size:13px;color:var(--text-muted);margin-bottom:20px;line-height:1.6">
+            ${courseLoadError
+              ? 'Could not reach the KODEX server. Make sure your device has internet access (not just classroom WiFi).'
+              : 'No courses are assigned to you yet. Please contact your admin.'}
+          </p>
+          <div style="display:flex;gap:8px;justify-content:center">
+            <button class="btn btn-secondary btn-sm" onclick="closeModal()">Cancel</button>
+            <button class="btn btn-primary btn-sm" onclick="showStartSessionModal()">↻ Retry</button>
+          </div>
+        </div>
+      </div>`;
+    return;
+  }
 
   container.innerHTML = `
     <div class="modal-overlay" onclick="closeModal(event)">
@@ -3944,7 +3970,13 @@ async function startSession() {
   if (!courseId) { toastWarning('Please select a course.'); return; }
   closeModal();
 
-  if (!isOnline()) {
+  // Sessions cannot be started offline — requires live server connection
+  if (!(await isOnlineAsync())) {
+    toastError('No internet connection. Please ensure your device has internet access to start a session.');
+    return;
+  }
+
+  if (false) {
     const tempId = 'offline_' + Date.now();
     offlineEnqueue({
       label: `Start session: ${title || 'Untitled'}`,
