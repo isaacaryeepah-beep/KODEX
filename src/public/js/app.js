@@ -444,8 +444,8 @@ const SERVER_CHECK_TTL = 8000; // re-check every 8 s
 async function checkServerReachable() {
   try {
     const ctrl = new AbortController();
-    const tid   = setTimeout(() => ctrl.abort(), 4000); // 4 s timeout
-    const res   = await fetch('/api/health', { method: 'GET', signal: ctrl.signal, cache: 'no-store' });
+    const tid   = setTimeout(() => ctrl.abort(), 2500); // 2.5s — fast enough for mobile
+    const res   = await fetch('https://kodex.it.com/api/health', { method: 'GET', signal: ctrl.signal, cache: 'no-store' });
     clearTimeout(tid);
     return res.ok;
   } catch (_) {
@@ -7651,15 +7651,10 @@ async function submitCodeMark() {
     }
   }
 
-  if (!isOnline()) {
-    offlineEnqueue({
-      label: `Mark attendance (code: ${code})`,
-      url: '/api/attendance-sessions/mark',
-      options: { method: 'POST', body: JSON.stringify({ code, method: 'code_mark' }) }
-    });
-    offlineCache('pendingMark', { code, method: 'code_mark', queuedAt: Date.now() });
-    showToastNotif('📶 Attendance queued — will sync when online', 'warn');
-    navigateTo('mark-attendance');
+  // Offline queuing is disabled — attendance must be marked in real-time
+  // while connected to the classroom WiFi (KODEX-CLASSROOM).
+  if (!(await isOnlineAsync())) {
+    toastError('You must be connected to the classroom WiFi (KODEX-CLASSROOM) and have internet access to mark attendance.');
     return;
   }
 
@@ -7680,40 +7675,32 @@ async function submitCodeMark() {
   }
 }
 
-// Offline code entry (same as online but available when offline)
+// Offline code entry — BLOCKED. Attendance cannot be queued offline.
+// Students must be physically present on KODEX-CLASSROOM WiFi with internet.
 function showCodeEntryOffline() {
   const area = document.getElementById('mark-input-area');
   if (!area) return;
   area.innerHTML = `
-    <div class="card">
-      <div class="card-title">Enter Attendance Code</div>
-      <div style="font-size:12px;color:#92400e;background:#fef3c7;border:1px solid #fbbf24;border-radius:6px;padding:6px 12px;margin-bottom:12px">
-        📶 Offline — code will be submitted automatically when you reconnect
-      </div>
-      <div class="form-group">
-        <label>6-Digit Code</label>
-        <input type="text" id="mark-code-input" placeholder="Enter code" maxlength="4"
-          style="font-size:24px;text-align:center;letter-spacing:8px;font-weight:700" autofocus>
-      </div>
-      <button class="btn btn-primary" onclick="submitCodeMark()" style="width:100%">Queue Attendance</button>
+    <div class="card" style="text-align:center;padding:24px">
+      <div style="font-size:40px;margin-bottom:12px">📡</div>
+      <div style="font-weight:700;font-size:16px;margin-bottom:8px">No Internet Access</div>
+      <p style="font-size:13px;color:var(--text-light);line-height:1.6">
+        You must be connected to the classroom WiFi
+        <strong>(KODEX-CLASSROOM)</strong> with internet access to mark attendance.<br><br>
+        Offline queuing is disabled to prevent remote attendance fraud.
+      </p>
     </div>
   `;
-  document.getElementById('mark-code-input')?.focus();
 }
 
 async function submitQrMark() {
   const qrToken = document.getElementById('mark-qr-input')?.value;
   if (!qrToken) { toastWarning('Please enter the QR token'); return; };
 
-  if (!isOnline()) {
-    offlineEnqueue({
-      label: 'Mark attendance (QR)',
-      url: '/api/attendance-sessions/mark',
-      options: { method: 'POST', body: JSON.stringify({ qrToken, method: 'qr_mark' }) }
-    });
-    offlineCache('pendingMark', { method: 'qr_mark', queuedAt: Date.now() });
-    showToastNotif('📶 QR attendance queued — will sync when online', 'warn');
-    navigateTo('mark-attendance');
+  // Offline queuing is disabled — QR attendance must be marked in real-time
+  // while connected to the classroom WiFi (KODEX-CLASSROOM).
+  if (!(await isOnlineAsync())) {
+    toastError('You must be connected to the classroom WiFi (KODEX-CLASSROOM) and have internet access to mark attendance.');
     return;
   }
 
