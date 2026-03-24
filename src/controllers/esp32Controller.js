@@ -210,3 +210,131 @@ exports.deviceStatus = async (req, res) => {
     return res.status(500).json({ error: "Failed to check device status" });
   }
 };
+
+// POST /api/esp32/ble-verify  (JWT — web app, called by student's phone)
+// Verifies a BLE token scanned from the ESP32 beacon.
+// Anti-cheat layers:
+//   1. IP must be 192.168.4.x (student on KODEX-CLASSROOM WiFi)
+//   2. bleToken must be valid HMAC-SHA256(deviceToken, sessionId:timestamp)
+//   3. timestamp must be < 60s old (prevents replay)
+//   4. bleToken is single-use (stored in session.usedBleTokens)
+//   5. Device must be online (heartbeat within 20s)
+exports.bleVerify = async (req, res) => {
+  try {
+    const { bleToken, sessionId, timestamp } = req.body;
+
+    if (!bleToken || !timestamp) {
+      return res.status(400).json({ error: 'bleToken and timestamp are required' });
+    }
+
+    // ── 1. IP check — must be on KODEX-CLASSROOM hotspot ─────
+    const clientIp = (
+      (req.headers['x-forwarded-for'] || '').split(',')[0].trim() ||
+      req.headers['x-real-ip'] ||
+      (req.socket && req.socket.remoteAddress) ||
+      ''
+    );
+    const isOnEsp32Network =
+      clientIp.startsWith('192.168.4.') ||
+      clientIp === '127.0.0.1' ||
+      clientIp === '::1' ||
+      clientIp === '::ffff:127.0.0.1';
+
+    if (!isOnEsp32Network) {
+      console.warn(`[BLE-VERIFY] Blocked IP ${clientIp} — not on hotspot`);
+      return res.status(403).json({
+        error: 'You must be connected to KODEX-CLASSROOM WiFi to use BLE attendance.',
+        code: 'NOT_ON_HOTSPOT',
+      });
+    }
+
+    // ── 2. Timestamp freshness — must be < 60s old ────────────
+    const tokenTime = parseInt(timestamp, 10);
+    if (isNaN(tokenTime) || Math.abs(Date.now() - tokenTime) > 60000) {
+      return res.status(400).json({
+        error: 'BLE token has expired. Move closer to the device and try again.',
+        code: 'TOKEN_EXPIRED',
+      });
+    }
+
+    // ── 3. Find company and device ────────────────────────────
+    const company = await Company.findById(req.user.company)
+      .select('esp32Devices esp32Required');
+    if (!company) return res.status(404).json({ error: 'Company not found' });
+
+    const devices = company.esp32Devices || [];
+    if (devices.length === 0) {
+      return res.status(404).json({ error: 'No ESP32 device registered' });
+    }
+
+    // ── 4. Device must be online ──────────────────────────────
+    const latest = devices
+      .filter(d => d.lastSeenAt)
+      .sort((a, b) => new Date(b.lastSeenAt) - new Date(a.lastSeenAt))[0];
+    const deviceOnline = latest &&
+      (Date.now() - new Date(latest.lastSeenAt).getTime()) < 20000;
+
+    if (!deviceOnline) {
+      return res.status(503).json({
+        error: 'The classroom device is offline. Ask your lecturer to power it on.',
+        code: 'DEVICE_OFFLINE',
+      });
+    }
+
+    // ── 5. Verify HMAC signature ──────────────────────────────
+    // ESP32 computes: HMAC-SHA256(deviceToken, sessionId:timestamp)
+    // We recompute it server-side using the stored device token.
+    // If they match, the token genuinely came from the ESP32.
+    const deviceToken = latest.token;
+    const payload = `${sessionId || ''}:${timestamp}`;
+    const expected = crypto
+      .createHmac('sha256', deviceToken)
+      .update(payload)
+      .digest('hex');
+
+    if (bleToken !== expected) {
+      console.warn(`[BLE-VERIFY] Invalid token from ${clientIp} — possible forgery`);
+      return res.status(401).json({
+        error: 'Invalid BLE token. You must be next to the classroom device.',
+        code: 'INVALID_TOKEN',
+      });
+    }
+
+    // ── 6. Single-use check ───────────────────────────────────
+    const session = await AttendanceSession.findOne({
+      company: company._id,
+      status: 'active',
+      ...(sessionId ? { _id: sessionId } : {}),
+    });
+
+    if (!session) {
+      return res.status(404).json({ error: 'No active session found.' });
+    }
+
+    if (session.usedBleTokens && session.usedBleTokens.includes(bleToken)) {
+      return res.status(409).json({
+        error: 'This BLE token has already been used. Each scan is single-use.',
+        code: 'TOKEN_ALREADY_USED',
+      });
+    }
+
+    // Mark token as used — store the token in the session
+    await AttendanceSession.updateOne(
+      { _id: session._id },
+      { $addToSet: { usedBleTokens: bleToken } }
+    );
+
+    console.log(`[BLE-VERIFY] ✓ Valid token for session ${session._id} from ${clientIp}`);
+
+    // Return session info so the frontend can complete the attendance mark
+    return res.json({
+      ok: true,
+      sessionId: session._id,
+      verified: true,
+    });
+
+  } catch (err) {
+    console.error('[BLE-VERIFY]', err);
+    return res.status(500).json({ error: 'BLE verification failed' });
+  }
+};
