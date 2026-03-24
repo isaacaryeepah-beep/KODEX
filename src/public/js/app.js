@@ -3898,14 +3898,27 @@ async function showStartSessionModal() {
     return;
   }
 
-  // Device check failed — could be ESP32 hotspot with no internet, or a
-  // brief server hiccup. Don't block the lecturer — just warn and proceed.
-  // The ESP32 will sync attendance records independently once it reconnects.
+  // Device check failed — network error or server unreachable.
+  // BLOCK — never silently proceed. Show retry screen.
   if (checkError) {
-    console.warn('[DeviceCheck] Could not reach device-status — proceeding without strict check.');
-    // fall through to show session form
+    container.innerHTML = `
+      <div class="modal-overlay" onclick="closeModal(event)">
+        <div class="modal" onclick="event.stopPropagation()" style="text-align:center;max-width:400px">
+          <div style="font-size:40px;margin-bottom:12px">⚠️</div>
+          <h3 style="margin-bottom:8px">Cannot Verify Device</h3>
+          <p style="font-size:13px;color:var(--text-muted);margin-bottom:20px;line-height:1.6">
+            Could not reach the server to check whether the classroom device is online.<br><br>
+            Make sure you have internet access, then try again.
+          </p>
+          <div style="display:flex;gap:8px;justify-content:center">
+            <button class="btn btn-secondary btn-sm" onclick="closeModal()">Cancel</button>
+            <button class="btn btn-primary btn-sm" onclick="showStartSessionModal()">↻ Retry</button>
+          </div>
+        </div>
+      </div>`;
+    return;
   }
-  // ── Show session form (device online confirmed, or check failed gracefully) ──
+  // ── Device confirmed online — show session form ────────────
 
   // Fetch courses — always from kodex.it.com (hardcoded in API constant)
   // If this fails, it means the server is unreachable — show clear error.
@@ -3970,28 +3983,9 @@ async function startSession() {
   if (!courseId) { toastWarning('Please select a course.'); return; }
   closeModal();
 
-  // Sessions cannot be started offline — requires live server connection
+  // Sessions cannot be started offline — device check requires live server
   if (!(await isOnlineAsync())) {
-    toastError('No internet connection. Please ensure your device has internet access to start a session.');
-    return;
-  }
-
-  if (false) {
-    const tempId = 'offline_' + Date.now();
-    offlineEnqueue({
-      label: `Start session: ${title || 'Untitled'}`,
-      url: '/api/attendance-sessions/start',
-      options: { method: 'POST', body: JSON.stringify({ title, courseId }) }
-    });
-    const cached = offlineRead('sessions') || { sessions: [] };
-    cached.sessions.unshift({
-      _id: tempId, title: title || 'Untitled',
-      status: 'active', startedAt: new Date().toISOString(), stoppedAt: null,
-      _offlinePending: true
-    });
-    offlineCache('sessions', cached);
-    showToastNotif('📶 Session queued — will start when online', 'warn');
-    renderSessions();
+    toastError('No internet connection. You need internet to start a session.');
     return;
   }
 
@@ -3999,9 +3993,8 @@ async function startSession() {
     await api('/api/attendance-sessions/start', { method: 'POST', body: JSON.stringify({ title, courseId }) });
     renderSessions();
   } catch (e) {
-    // Device went offline between the check and the actual start attempt
     if (e.status === 503) {
-      toastError('📟 Device went offline. Power it on and try again.', { duration: 7000 });
+      toastError('📟 ' + (e.data?.message || 'Device is offline. Power it on and try again.'));
     } else {
       toastError(e.message);
     }
