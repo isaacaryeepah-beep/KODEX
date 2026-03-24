@@ -4054,21 +4054,9 @@ async function startSession() {
 async function stopSession(id) {
   if (!confirm('Stop this session?')) return;
 
-  if (!isOnline()) {
-    offlineEnqueue({
-      label: `Stop session ${id}`,
-      url: `/api/attendance-sessions/${id}/stop`,
-      options: { method: 'POST' }
-    });
-    // Optimistically update cache
-    const cached = offlineRead('sessions');
-    if (cached) {
-      const s = cached.sessions.find(s => s._id === id);
-      if (s) { s.status = 'stopped'; s.stoppedAt = new Date().toISOString(); s._offlinePending = true; }
-      offlineCache('sessions', cached);
-    }
-    showToastNotif('📶 Stop queued — will sync when online', 'warn');
-    renderSessions();
+  // Sessions cannot be stopped offline — requires live server connection
+  if (!(await isOnlineAsync())) {
+    toastError('No internet connection. You need internet access to stop a session.');
     return;
   }
 
