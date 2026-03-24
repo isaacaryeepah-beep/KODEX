@@ -367,7 +367,7 @@ exports.markAttendance = async (req, res) => {
       // Also verify device is currently online (heartbeat within 20s)
       const now = Date.now();
       const deviceOnline = companyDoc.esp32Devices.some(d =>
-        d.lastSeenAt && (now - new Date(d.lastSeenAt).getTime()) < 20000
+        d.lastSeenAt && (now - new Date(d.lastSeenAt).getTime()) < 3000  // 3s STRICT
       );
       if (!deviceOnline) {
         return res.status(503).json({
