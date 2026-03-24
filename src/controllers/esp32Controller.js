@@ -197,7 +197,7 @@ exports.deviceStatus = async (req, res) => {
 
     const latest   = devices.filter(d => d.lastSeenAt).sort((a,b) => new Date(b.lastSeenAt)-new Date(a.lastSeenAt))[0];
     const lastSeen  = latest?.lastSeenAt ? new Date(latest.lastSeenAt) : null;
-    const deviceOnline = lastSeen ? (Date.now() - lastSeen.getTime()) < 3000  // 3s STRICT : false;
+    const deviceOnline = lastSeen ? (Date.now() - lastSeen.getTime()) < 3000 : false; // 3s STRICT
 
     return res.json({
       hasDevice: true, deviceOnline, esp32Required,
