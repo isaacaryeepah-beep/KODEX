@@ -49,6 +49,11 @@ const attendanceSessionSchema = new mongoose.Schema(
       type: String,
       default: null,
     },
+    // Single-use BLE token tracking — prevents token sharing/replay attacks
+    usedBleTokens: {
+      type: [String],
+      default: [],
+    },
   },
   {
     timestamps: true,
