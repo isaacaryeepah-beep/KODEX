@@ -3848,6 +3848,57 @@ async function showStartSessionModal() {
   container.classList.remove('hidden');
   container.innerHTML = `<div class="modal-overlay"><div class="modal"><p style="color:var(--text-muted);text-align:center;padding:8px 0">📡 Checking classroom device…</p></div></div>`;
 
+  // ── STRICT local reachability check — must be on 192.168.4.1 ──
+  // The lecturer's device must be physically in the classroom and
+  // connected to the ESP32 hotspot (or same network as the device).
+  // We ping 192.168.4.1 with a short timeout — if it doesn't respond,
+  // the session is blocked completely. No bypass.
+  let esp32Reachable = false;
+  try {
+    const ctrl = new AbortController();
+    const timeout = setTimeout(() => ctrl.abort(), 3000);
+    const probe = await fetch('http://192.168.4.1/status', {
+      signal: ctrl.signal,
+      cache: 'no-store',
+    });
+    clearTimeout(timeout);
+    const probeData = await probe.json();
+    // Capture hotspot key while we're here
+    const hotspotKey = probe.headers.get('x-esp32-device-token');
+    if (hotspotKey) sessionStorage.setItem('kodex_esp32_hotspot_key', hotspotKey);
+    if (probeData.device === 'KODEX-ESP32') {
+      esp32Reachable = true;
+      setEsp32IP('192.168.4.1');
+    }
+  } catch(e) { /* not reachable */ }
+
+  if (!esp32Reachable) {
+    container.innerHTML = `
+      <div class="modal-overlay" onclick="closeModal(event)">
+        <div class="modal" onclick="event.stopPropagation()" style="text-align:center;max-width:400px">
+          <div style="font-size:40px;margin-bottom:12px">📡</div>
+          <h3 style="margin-bottom:8px">Not in Classroom</h3>
+          <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px;line-height:1.6">
+            Your device cannot reach the classroom ESP32 device.<br><br>
+            You must be <strong>connected to KODEX-CLASSROOM WiFi</strong>
+            and physically present in the classroom to start a session.
+          </p>
+          <div style="background:#fef3c7;border:1px solid #fde68a;border-radius:8px;padding:10px 14px;font-size:12px;color:#92400e;margin-bottom:20px;text-align:left">
+            <strong>How to fix:</strong><br>
+            1. Connect this device to the <strong>KODEX-CLASSROOM</strong> WiFi<br>
+            2. Make sure the ESP32 classroom device is powered on<br>
+            3. Tap Retry
+          </div>
+          <div style="display:flex;gap:8px;justify-content:center">
+            <button class="btn btn-secondary btn-sm" onclick="closeModal()">Cancel</button>
+            <button class="btn btn-primary btn-sm" onclick="showStartSessionModal()">↻ Retry</button>
+          </div>
+        </div>
+      </div>`;
+    return;
+  }
+  // ── End local reachability check ──────────────────────────
+
   // ── STRICT device check — always required, no skip ────────
   let deviceStatus = null;
   let checkError   = false;
@@ -4015,12 +4066,33 @@ async function startSession() {
   }
 
   try {
-    await api('/api/attendance-sessions/start', { method: 'POST', body: JSON.stringify({ title, courseId }) });
+    const hotspotKey = sessionStorage.getItem('kodex_esp32_hotspot_key') || '';
+    await api('/api/attendance-sessions/start', {
+      method: 'POST',
+      headers: hotspotKey ? { 'x-esp32-hotspot-key': hotspotKey } : {},
+      body: JSON.stringify({ title, courseId }),
+    });
     closeModal();
     renderSessions();
   } catch (e) {
     // Device offline or not registered — show in-modal block screen
-    if (e.status === 503) {
+    if (e.data?.code === 'NOT_IN_CLASSROOM' || e.status === 403) {
+      if (container) container.innerHTML = `
+        <div class="modal-overlay" onclick="closeModal(event)">
+          <div class="modal" onclick="event.stopPropagation()" style="text-align:center;max-width:400px">
+            <div style="font-size:40px;margin-bottom:12px">📡</div>
+            <h3 style="margin-bottom:8px">Not in Classroom</h3>
+            <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px;line-height:1.6">
+              The server confirmed you are not on the classroom network.<br><br>
+              Connect to <strong>KODEX-CLASSROOM</strong> WiFi and try again.
+            </p>
+            <div style="display:flex;gap:8px;justify-content:center">
+              <button class="btn btn-secondary btn-sm" onclick="closeModal()">Cancel</button>
+              <button class="btn btn-primary btn-sm" onclick="showStartSessionModal()">↻ Retry</button>
+            </div>
+          </div>
+        </div>`;
+    } else if (e.status === 503) {
       const msg = e.data?.message || 'The classroom device is not responding. Power it on and try again.';
       if (container) container.innerHTML = `
         <div class="modal-overlay" onclick="closeModal(event)">
