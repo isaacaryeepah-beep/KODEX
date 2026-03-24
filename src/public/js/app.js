@@ -7390,6 +7390,11 @@ async function esp32Api(path, options = {}) {
   if (!esp32IP) throw new Error('ESP32 not found. Make sure you are connected to the same network as the classroom device.');
   const url = `http://${esp32IP}${path}`;
   const res = await fetch(url, { ...options, headers: { 'Content-Type': 'application/json', ...(options.headers || {}) } });
+  // Capture the device token served by the ESP32 captive portal.
+  // We forward this as X-ESP32-Hotspot-Key on ble-verify requests so the
+  // server can confirm proximity even when Android routes via mobile data.
+  const hotspotKey = res.headers.get('x-esp32-device-token');
+  if (hotspotKey) sessionStorage.setItem('kodex_esp32_hotspot_key', hotspotKey);
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || 'ESP32 request failed');
   return data;
@@ -7858,14 +7863,25 @@ async function markBLE() {
     // Server checks: IP on 192.168.4.x, HMAC valid, timestamp fresh, single-use
     let verifyResult;
     try {
+      // Attach the hotspot proximity key so the server can verify the student
+      // was on the ESP32 WiFi even when Android routes traffic via mobile data.
+      // The ESP32 serves its device token in a custom header on its local portal;
+      // we stored it in sessionStorage when the BLE scan began.
+      const hotspotKey = sessionStorage.getItem('kodex_esp32_hotspot_key') || '';
       verifyResult = await api('/api/esp32/ble-verify', {
         method: 'POST',
+        headers: hotspotKey ? { 'x-esp32-hotspot-key': hotspotKey } : {},
         body: JSON.stringify({ bleToken, sessionId, timestamp: ts }),
       });
     } catch (e) {
       // Map server error codes to clear messages
       const code = e.data?.code;
-      if (code === 'NOT_ON_HOTSPOT')      throw new Error('You must be on KODEX-CLASSROOM WiFi to mark attendance.');
+      if (code === 'NOT_ON_HOTSPOT')      throw new Error(
+        'Connected to KODEX-CLASSROOM but still failing?\n\n' +
+        'Android is routing traffic through mobile data instead of WiFi.\n\n' +
+        'Fix: Go to Settings → Wi-Fi → tap & hold KODEX-CLASSROOM → ' +
+        'Network usage → set to \'Always use this network\', then retry.'
+      );
       if (code === 'TOKEN_EXPIRED')       throw new Error('Token expired — move closer to the device and try again.');
       if (code === 'INVALID_TOKEN')       throw new Error('Invalid token. You must be physically next to the classroom device.');
       if (code === 'TOKEN_ALREADY_USED')  throw new Error('This token was already used. Each BLE scan is single-use.');
