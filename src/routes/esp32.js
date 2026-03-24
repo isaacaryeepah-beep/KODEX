@@ -21,5 +21,6 @@ router.post("/sync",      esp32Auth, ctrl.sync);
 // Web app-side routes (JWT)
 router.post("/command",       authenticate, requireRole("admin","lecturer","manager","superadmin"), ctrl.sendCommand);
 router.get ("/device-status", authenticate, ctrl.deviceStatus);
+router.post("/ble-verify",    authenticate, ctrl.bleVerify);
 
 module.exports = router;
