@@ -327,45 +327,53 @@ exports.markAttendance = async (req, res) => {
     };
 
     // ── ESP32 proximity enforcement ───────────────────────────────────────────
-    // If the company has an active ESP32 device (heartbeat within 20s),
-    // verbal code and QR marking are ONLY allowed from the ESP32 hotspot
-    // subnet (192.168.4.x). This prevents remote attendance fraud.
-    const isCodeOrQr = !!(code || qrToken || method === 'qr');
-    if (isCodeOrQr) {
-      const Company = require('../models/Company');
-      const company = await Company.findById(req.user.company)
-        .select('esp32Devices').lean();
+    // If the company has a registered ESP32 device, ALL attendance marking
+    // (code, QR, BLE) MUST come from the ESP32 hotspot subnet (192.168.4.x).
+    // This applies whether the device is online OR offline — having a registered
+    // device means physical presence is always required. No remote marking.
+    const Company = require('../models/Company');
+    const companyDoc = await Company.findById(req.user.company)
+      .select('esp32Devices').lean();
 
-      if (company && company.esp32Devices && company.esp32Devices.length > 0) {
-        const now = Date.now();
-        const deviceOnline = company.esp32Devices.some(d =>
-          d.lastSeenAt && (now - new Date(d.lastSeenAt).getTime()) < 3000  // 3s STRICT: matches watchdog timeout
-        );
+    const hasRegisteredDevice = companyDoc &&
+      companyDoc.esp32Devices &&
+      companyDoc.esp32Devices.length > 0;
 
-        if (deviceOnline) {
-          // Get student real IP (supports proxies/load balancers)
-          const clientIp = (
-            (req.headers['x-forwarded-for'] || '').split(',')[0].trim() ||
-            req.headers['x-real-ip'] ||
-            (req.socket && req.socket.remoteAddress) ||
-            ''
-          );
+    if (hasRegisteredDevice) {
+      // Get student real IP (supports proxies/load balancers)
+      const clientIp = (
+        (req.headers['x-forwarded-for'] || '').split(',')[0].trim() ||
+        req.headers['x-real-ip'] ||
+        (req.socket && req.socket.remoteAddress) ||
+        ''
+      );
 
-          // ESP32 default hotspot subnet is 192.168.4.x
-          // Allow localhost for dev/testing
-          const isOnEsp32Network =
-            clientIp.startsWith('192.168.4.') ||
-            clientIp === '127.0.0.1' ||
-            clientIp === '::1' ||
-            clientIp === '::ffff:127.0.0.1';
+      // ESP32 default hotspot subnet is 192.168.4.x
+      // Allow localhost only for dev/testing
+      const isOnEsp32Network =
+        clientIp.startsWith('192.168.4.') ||
+        clientIp === '127.0.0.1' ||
+        clientIp === '::1' ||
+        clientIp === '::ffff:127.0.0.1';
 
-          if (!isOnEsp32Network) {
-            return res.status(403).json({
-              error: 'You must be connected to the classroom WiFi (KODEX-CLASSROOM) to mark attendance.',
-              esp32Required: true,
-            });
-          }
-        }
+      if (!isOnEsp32Network) {
+        console.warn(`[MARK] Blocked from IP ${clientIp} — not on ESP32 hotspot`);
+        return res.status(403).json({
+          error: 'You must be connected to the classroom WiFi (KODEX-CLASSROOM) to mark attendance.',
+          esp32Required: true,
+        });
+      }
+
+      // Also verify device is currently online (heartbeat within 20s)
+      const now = Date.now();
+      const deviceOnline = companyDoc.esp32Devices.some(d =>
+        d.lastSeenAt && (now - new Date(d.lastSeenAt).getTime()) < 20000
+      );
+      if (!deviceOnline) {
+        return res.status(503).json({
+          error: 'The classroom device is offline. Ask your lecturer to power it on.',
+          esp32Required: true,
+        });
       }
     }
     // ─────────────────────────────────────────────────────────────────────────
