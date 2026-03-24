@@ -339,7 +339,7 @@ exports.markAttendance = async (req, res) => {
       if (company && company.esp32Devices && company.esp32Devices.length > 0) {
         const now = Date.now();
         const deviceOnline = company.esp32Devices.some(d =>
-          d.lastSeenAt && (now - new Date(d.lastSeenAt).getTime()) < 20000
+          d.lastSeenAt && (now - new Date(d.lastSeenAt).getTime()) < 3000  // 3s STRICT: matches watchdog timeout
         );
 
         if (deviceOnline) {
