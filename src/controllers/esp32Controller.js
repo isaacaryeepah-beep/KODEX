@@ -197,7 +197,7 @@ exports.deviceStatus = async (req, res) => {
 
     const latest   = devices.filter(d => d.lastSeenAt).sort((a,b) => new Date(b.lastSeenAt)-new Date(a.lastSeenAt))[0];
     const lastSeen  = latest?.lastSeenAt ? new Date(latest.lastSeenAt) : null;
-    const deviceOnline = lastSeen ? (Date.now() - lastSeen.getTime()) < 20000 : false;
+    const deviceOnline = lastSeen ? (Date.now() - lastSeen.getTime()) < 3000  // 3s STRICT : false;
 
     return res.json({
       hasDevice: true, deviceOnline, esp32Required,
@@ -272,7 +272,7 @@ exports.bleVerify = async (req, res) => {
       .filter(d => d.lastSeenAt)
       .sort((a, b) => new Date(b.lastSeenAt) - new Date(a.lastSeenAt))[0];
     const deviceOnline = latest &&
-      (Date.now() - new Date(latest.lastSeenAt).getTime()) < 20000;
+      (Date.now() - new Date(latest.lastSeenAt).getTime()) < 3000  // 3s STRICT;
 
     if (!deviceOnline) {
       return res.status(503).json({
