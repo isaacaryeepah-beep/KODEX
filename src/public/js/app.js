@@ -7400,17 +7400,29 @@ async function esp32Api(path, options = {}) {
   return data;
 }
 
-// Try to find ESP32 on local network by pinging common IPs
+// Try to find ESP32 on local network
 async function discoverESP32() {
-  // Try last known IP first
-  if (esp32IP) {
+  // Always try the ESP32 hotspot gateway IP first (192.168.4.1) —
+  // this is the fixed IP the ESP32 always uses as AP gateway.
+  // We try this before the stored IP so that hotspot key is always
+  // captured even if the user never manually set the IP.
+  const candidates = ['192.168.4.1'];
+  if (esp32IP && esp32IP !== '192.168.4.1') candidates.push(esp32IP);
+
+  for (const ip of candidates) {
     try {
+      const tempIP = esp32IP; // save
+      esp32IP = ip;           // temporarily set so esp32Api uses it
       const status = await esp32Api('/status');
       if (status.device === 'KODEX-ESP32') {
+        setEsp32IP(ip);       // persist the working IP
         bleDetected = true;
         return true;
       }
-    } catch(e) { /* try scan */ }
+      esp32IP = tempIP;       // restore if not KODEX device
+    } catch(e) {
+      esp32IP = candidates[0] === ip ? (candidates[1] || null) : esp32IP;
+    }
   }
   return false;
 }
@@ -7859,14 +7871,19 @@ async function markBLE() {
 
     setStatus('Verifying token with server…');
 
+    // Ping the ESP32 over the local hotspot right before calling the server.
+    // This ensures the X-ESP32-Device-Token header is captured in sessionStorage
+    // even if discoverESP32() wasn't called earlier in the session.
+    // We do this silently — if it fails (e.g. Android already switched to mobile
+    // data before we got here) we still try with whatever key we have.
+    try {
+      await discoverESP32();
+    } catch(e) { /* silent — proceed with whatever key we have */ }
+
     // Step 1: Verify the BLE token server-side
-    // Server checks: IP on 192.168.4.x, HMAC valid, timestamp fresh, single-use
+    // Server checks: hotspot key OR IP on 192.168.4.x, HMAC valid, timestamp fresh, single-use
     let verifyResult;
     try {
-      // Attach the hotspot proximity key so the server can verify the student
-      // was on the ESP32 WiFi even when Android routes traffic via mobile data.
-      // The ESP32 serves its device token in a custom header on its local portal;
-      // we stored it in sessionStorage when the BLE scan began.
       const hotspotKey = sessionStorage.getItem('kodex_esp32_hotspot_key') || '';
       verifyResult = await api('/api/esp32/ble-verify', {
         method: 'POST',
