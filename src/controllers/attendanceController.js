@@ -39,6 +39,35 @@ exports.startSession = async (req, res) => {
 
     console.log(`[SESSION START] company=${company.name} deviceRegistered=${device.registered} deviceOnline=${device.online} secondsAgo=${device.secondsAgo}`);
 
+    // ── STRICT proximity check ─────────────────────────────
+    // The lecturer must be physically in the classroom (on the ESP32 hotspot)
+    // to start a session. We verify this two ways:
+    //   1. Their IP is 192.168.4.x (directly on the hotspot)
+    //   2. They passed X-ESP32-Hotspot-Key matching the device token
+    // If neither is true, block completely — no bypass.
+    const clientIp = (
+      (req.headers['x-forwarded-for'] || '').split(',')[0].trim() ||
+      req.headers['x-real-ip'] ||
+      (req.socket && req.socket.remoteAddress) ||
+      ''
+    );
+    const isOnHotspot = clientIp.startsWith('192.168.4.');
+    const hotspotKey  = (req.headers['x-esp32-hotspot-key'] || '').trim();
+    const latestDevice = (company.esp32Devices || [])
+      .filter(d => d.lastSeenAt)
+      .sort((a, b) => new Date(b.lastSeenAt) - new Date(a.lastSeenAt))[0];
+    const hotspotKeyValid = hotspotKey.length > 0 && latestDevice && hotspotKey === latestDevice.token;
+
+    if (!isOnHotspot && !hotspotKeyValid) {
+      console.warn(`[SESSION START] Blocked — lecturer IP ${clientIp} not on hotspot and no valid hotspot key`);
+      return res.status(403).json({
+        error: 'You must be in the classroom to start a session.',
+        message: 'Connect to the KODEX-CLASSROOM WiFi and make sure the classroom device is powered on, then try again.',
+        code: 'NOT_IN_CLASSROOM',
+      });
+    }
+    // ── End proximity check ───────────────────────────────
+
     if (!device.registered) {
       // Device has never registered — block with setup instructions
       return res.status(503).json({
