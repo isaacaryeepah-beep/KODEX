@@ -228,6 +228,11 @@ exports.bleVerify = async (req, res) => {
     }
 
     // ── 1. IP check — must be on KODEX-CLASSROOM hotspot ─────
+    // NOTE: Android "WiFi Assist" routes through mobile data when the ESP32
+    // hotspot has no internet, so req IP won't be 192.168.4.x.
+    // Fix: the front-end reads X-ESP32-Hotspot-Key served by the ESP32 captive
+    // portal page and forwards it here. If it matches the device token, we
+    // accept the request regardless of IP.
     const clientIp = (
       (req.headers['x-forwarded-for'] || '').split(',')[0].trim() ||
       req.headers['x-real-ip'] ||
@@ -240,8 +245,17 @@ exports.bleVerify = async (req, res) => {
       clientIp === '::1' ||
       clientIp === '::ffff:127.0.0.1';
 
-    if (!isOnEsp32Network) {
-      console.warn(`[BLE-VERIFY] Blocked IP ${clientIp} — not on hotspot`);
+    // Resolve latest device early so we can check hotspot key
+    const allDevices = (await Company.findById(req.user.company).select('esp32Devices'))?.esp32Devices || [];
+    const latestDevice = allDevices
+      .filter(d => d.lastSeenAt)
+      .sort((a, b) => new Date(b.lastSeenAt) - new Date(a.lastSeenAt))[0];
+
+    const hotspotKey = (req.headers['x-esp32-hotspot-key'] || '').trim();
+    const hotspotKeyValid = hotspotKey.length > 0 && latestDevice && hotspotKey === latestDevice.token;
+
+    if (!isOnEsp32Network && !hotspotKeyValid) {
+      console.warn(`[BLE-VERIFY] Blocked IP ${clientIp} — not on hotspot and no valid hotspot key`);
       return res.status(403).json({
         error: 'You must be connected to KODEX-CLASSROOM WiFi to use BLE attendance.',
         code: 'NOT_ON_HOTSPOT',
@@ -271,8 +285,9 @@ exports.bleVerify = async (req, res) => {
     const latest = devices
       .filter(d => d.lastSeenAt)
       .sort((a, b) => new Date(b.lastSeenAt) - new Date(a.lastSeenAt))[0];
-    const deviceOnline = latest &&
-      (Date.now() - new Date(latest.lastSeenAt).getTime()) < 3000  // 3s STRICT;
+    const deviceOnline = latest
+      ? (Date.now() - new Date(latest.lastSeenAt).getTime()) < 20000 // 20s — ESP32 heartbeats every 6s
+      : false;
 
     if (!deviceOnline) {
       return res.status(503).json({
