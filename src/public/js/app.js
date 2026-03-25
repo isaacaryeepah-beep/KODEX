@@ -3849,20 +3849,30 @@ async function showStartSessionModal() {
   container.innerHTML = `<div class="modal-overlay"><div class="modal"><p style="color:var(--text-muted);text-align:center;padding:8px 0">📡 Checking classroom device…</p></div></div>`;
 
   // ── STRICT proximity check — must be able to reach ESP32 at 192.168.4.1 ──
-  // We actively try to contact the ESP32 right now rather than relying on
-  // sessionStorage being pre-populated. This works in the Median app (which
-  // allows HTTP from HTTPS WebViews) and also picks up the key from the
-  // captive portal redirect if it happened.
-  // Priority: sessionStorage key (from URL redirect) > live fetch from ESP32.
   let proximityKey = sessionStorage.getItem('kodex_esp32_hotspot_key') || '';
+  let debugMsg = proximityKey ? '✅ Key from sessionStorage' : '🔍 No key in storage, trying ESP32…';
+  console.log('[ESP32]', debugMsg);
+
+  // Show debug status in modal while trying
+  const setDebug = (msg) => {
+    const el = document.querySelector('#modal-container .modal p');
+    if (el) el.textContent = msg;
+    console.log('[ESP32]', msg);
+  };
+
   if (!proximityKey) {
-    // Try to reach the ESP32 directly — works in Median app
+    setDebug('📡 Contacting ESP32 at 192.168.4.1…');
     try {
       const reached = await discoverESP32();
       if (reached) {
         proximityKey = sessionStorage.getItem('kodex_esp32_hotspot_key') || '';
+        setDebug(proximityKey ? '✅ ESP32 reached, key captured' : '⚠️ ESP32 reached but no token returned');
+      } else {
+        setDebug('❌ ESP32 not reachable at 192.168.4.1');
       }
-    } catch(e) { /* silent */ }
+    } catch(e) {
+      setDebug('❌ ESP32 fetch error: ' + e.message);
+    }
   }
 
   if (!proximityKey) {
