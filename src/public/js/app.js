@@ -3848,46 +3848,29 @@ async function showStartSessionModal() {
   container.classList.remove('hidden');
   container.innerHTML = `<div class="modal-overlay"><div class="modal"><p style="color:var(--text-muted);text-align:center;padding:8px 0">📡 Checking classroom device…</p></div></div>`;
 
-  // ── STRICT local reachability check — must be on 192.168.4.1 ──
-  // The lecturer's device must be physically in the classroom and
-  // connected to the ESP32 hotspot (or same network as the device).
-  // We ping 192.168.4.1 with a short timeout — if it doesn't respond,
-  // the session is blocked completely. No bypass.
-  let esp32Reachable = false;
-  try {
-    const ctrl = new AbortController();
-    const timeout = setTimeout(() => ctrl.abort(), 3000);
-    const probe = await fetch('http://192.168.4.1/status', {
-      signal: ctrl.signal,
-      cache: 'no-store',
-    });
-    clearTimeout(timeout);
-    const probeData = await probe.json();
-    // Capture hotspot key while we're here
-    const hotspotKey = probe.headers.get('x-esp32-device-token');
-    if (hotspotKey) sessionStorage.setItem('kodex_esp32_hotspot_key', hotspotKey);
-    if (probeData.device === 'KODEX-ESP32') {
-      esp32Reachable = true;
-      setEsp32IP('192.168.4.1');
-    }
-  } catch(e) { /* not reachable */ }
-
-  if (!esp32Reachable) {
+  // ── STRICT proximity check — esp32key must be in sessionStorage ──
+  // The lecturer proves physical presence by having visited 192.168.4.1 first.
+  // When they connect to KODEX-CLASSROOM WiFi, the browser opens the ESP32
+  // captive portal which redirects to kodex.it.com/?esp32key=TOKEN.
+  // handleEsp32KeyParam() stores that token in sessionStorage on load.
+  // Direct fetch to 192.168.4.1 is blocked by browsers (mixed content: http
+  // from https page), so URL redirect is the only reliable method.
+  const proximityKey = sessionStorage.getItem('kodex_esp32_hotspot_key') || '';
+  if (!proximityKey) {
     container.innerHTML = `
       <div class="modal-overlay" onclick="closeModal(event)">
         <div class="modal" onclick="event.stopPropagation()" style="text-align:center;max-width:400px">
           <div style="font-size:40px;margin-bottom:12px">📡</div>
           <h3 style="margin-bottom:8px">Not in Classroom</h3>
           <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px;line-height:1.6">
-            Your device cannot reach the classroom ESP32 device.<br><br>
-            You must be <strong>connected to KODEX-CLASSROOM WiFi</strong>
-            and physically present in the classroom to start a session.
+            You must be physically in the classroom and connected to
+            <strong>KODEX-CLASSROOM</strong> WiFi to start a session.
           </p>
-          <div style="background:#fef3c7;border:1px solid #fde68a;border-radius:8px;padding:10px 14px;font-size:12px;color:#92400e;margin-bottom:20px;text-align:left">
-            <strong>How to fix:</strong><br>
-            1. Connect this device to the <strong>KODEX-CLASSROOM</strong> WiFi<br>
-            2. Make sure the ESP32 classroom device is powered on<br>
-            3. Tap Retry
+          <div style="background:#eef2ff;border:1px solid #c7d2fe;border-radius:8px;padding:12px 14px;font-size:12px;color:#3730a3;margin-bottom:20px;text-align:left">
+            <strong>How to connect:</strong><br>
+            1. Connect this device to <strong>KODEX-CLASSROOM</strong> WiFi<br>
+            2. Open the browser — it will redirect you automatically<br>
+            3. Come back to KODEX and tap Retry
           </div>
           <div style="display:flex;gap:8px;justify-content:center">
             <button class="btn btn-secondary btn-sm" onclick="closeModal()">Cancel</button>
@@ -3897,7 +3880,7 @@ async function showStartSessionModal() {
       </div>`;
     return;
   }
-  // ── End local reachability check ──────────────────────────
+  // ── End proximity check ───────────────────────────────────
 
   // ── STRICT device check — always required, no skip ────────
   let deviceStatus = null;
@@ -7571,6 +7554,21 @@ function configureESP32() {
   }
 }
 
+// Read ?esp32key= from URL — set when browser is redirected from the ESP32 hotspot portal.
+// Store in sessionStorage so ble-verify and session-start can use it as proximity proof.
+function handleEsp32KeyParam() {
+  const params = new URLSearchParams(window.location.search);
+  const key = params.get('esp32key');
+  if (!key) return;
+  sessionStorage.setItem('kodex_esp32_hotspot_key', key);
+  setEsp32IP('192.168.4.1');
+  bleDetected = true;
+  // Strip param from URL so it doesn't linger
+  const clean = window.location.pathname + (window.location.hash || '');
+  window.history.replaceState({}, '', clean);
+  console.log('[ESP32] Hotspot key captured from URL redirect');
+}
+
 // Auto-submit attendance when student scans QR code (URL contains ?qr_token=)
 async function handleQrScan() {
   const params = new URLSearchParams(window.location.search);
@@ -7622,6 +7620,9 @@ async function handleQrScan() {
 async function renderMarkAttendance() {
   const content = document.getElementById('main-content');
   if (!content) return;
+
+  // Capture esp32key from URL if redirected from ESP32 captive portal
+  handleEsp32KeyParam();
 
   // Check if arriving via QR scan deep link
   if (await handleQrScan()) return;
