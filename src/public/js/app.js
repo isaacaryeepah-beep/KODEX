@@ -3848,58 +3848,8 @@ async function showStartSessionModal() {
   container.classList.remove('hidden');
   container.innerHTML = `<div class="modal-overlay"><div class="modal"><p style="color:var(--text-muted);text-align:center;padding:8px 0">📡 Checking classroom device…</p></div></div>`;
 
-  // ── STRICT proximity check — must be able to reach ESP32 at 192.168.4.1 ──
-  let proximityKey = sessionStorage.getItem('kodex_esp32_hotspot_key') || '';
-  let debugMsg = proximityKey ? '✅ Key from sessionStorage' : '🔍 No key in storage, trying ESP32…';
-  console.log('[ESP32]', debugMsg);
-
-  // Show debug status in modal while trying
-  const setDebug = (msg) => {
-    const el = document.querySelector('#modal-container .modal p');
-    if (el) el.textContent = msg;
-    console.log('[ESP32]', msg);
-  };
-
-  if (!proximityKey) {
-    setDebug('📡 Contacting ESP32 at 192.168.4.1…');
-    try {
-      const reached = await discoverESP32();
-      if (reached) {
-        proximityKey = sessionStorage.getItem('kodex_esp32_hotspot_key') || '';
-        setDebug(proximityKey ? '✅ ESP32 reached, key captured' : '⚠️ ESP32 reached but no token returned');
-      } else {
-        setDebug('❌ ESP32 not reachable at 192.168.4.1');
-      }
-    } catch(e) {
-      setDebug('❌ ESP32 fetch error: ' + e.message);
-    }
-  }
-
-  if (!proximityKey) {
-    container.innerHTML = `
-      <div class="modal-overlay" onclick="closeModal(event)">
-        <div class="modal" onclick="event.stopPropagation()" style="text-align:center;max-width:400px">
-          <div style="font-size:40px;margin-bottom:12px">📡</div>
-          <h3 style="margin-bottom:8px">Not in Classroom</h3>
-          <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px;line-height:1.6">
-            Your device could not reach the classroom ESP32.<br><br>
-            Make sure you are connected to <strong>KODEX-CLASSROOM</strong> WiFi
-            and the ESP32 device is powered on.
-          </p>
-          <div style="background:#eef2ff;border:1px solid #c7d2fe;border-radius:8px;padding:12px 14px;font-size:12px;color:#3730a3;margin-bottom:20px;text-align:left">
-            <strong>Steps:</strong><br>
-            1. Connect this device to <strong>KODEX-CLASSROOM</strong> WiFi<br>
-            2. Make sure the ESP32 is powered on<br>
-            3. Tap <strong>Retry</strong> — the app will contact it automatically
-          </div>
-          <div style="display:flex;gap:8px;justify-content:center">
-            <button class="btn btn-secondary btn-sm" onclick="closeModal()">Cancel</button>
-            <button class="btn btn-primary btn-sm" onclick="showStartSessionModal()">↻ Retry</button>
-          </div>
-        </div>
-      </div>`;
-    return;
-  }
+  // Proximity is enforced at attendance time via BLE token scanning.
+  // Session start only requires the ESP32 device to be online (heartbeat check below).
   // ── End proximity check ───────────────────────────────────
 
   // ── STRICT device check — always required, no skip ────────
@@ -4079,23 +4029,7 @@ async function startSession() {
     renderSessions();
   } catch (e) {
     // Device offline or not registered — show in-modal block screen
-    if (e.data?.code === 'NOT_IN_CLASSROOM' || e.status === 403) {
-      if (container) container.innerHTML = `
-        <div class="modal-overlay" onclick="closeModal(event)">
-          <div class="modal" onclick="event.stopPropagation()" style="text-align:center;max-width:400px">
-            <div style="font-size:40px;margin-bottom:12px">📡</div>
-            <h3 style="margin-bottom:8px">Not in Classroom</h3>
-            <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px;line-height:1.6">
-              The server confirmed you are not on the classroom network.<br><br>
-              Connect to <strong>KODEX-CLASSROOM</strong> WiFi and try again.
-            </p>
-            <div style="display:flex;gap:8px;justify-content:center">
-              <button class="btn btn-secondary btn-sm" onclick="closeModal()">Cancel</button>
-              <button class="btn btn-primary btn-sm" onclick="showStartSessionModal()">↻ Retry</button>
-            </div>
-          </div>
-        </div>`;
-    } else if (e.status === 503) {
+    if (e.status === 503) {
       const msg = e.data?.message || 'The classroom device is not responding. Power it on and try again.';
       if (container) container.innerHTML = `
         <div class="modal-overlay" onclick="closeModal(event)">
