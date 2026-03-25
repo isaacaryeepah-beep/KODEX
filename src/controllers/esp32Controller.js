@@ -231,7 +231,7 @@ exports.deviceStatus = async (req, res) => {
 
     const latest   = devices.filter(d => d.lastSeenAt).sort((a,b) => new Date(b.lastSeenAt)-new Date(a.lastSeenAt))[0];
     const lastSeen  = latest?.lastSeenAt ? new Date(latest.lastSeenAt) : null;
-    const deviceOnline = lastSeen ? (Date.now() - lastSeen.getTime()) < 20000 : false; // 20s window
+    const deviceOnline = lastSeen ? (Date.now() - lastSeen.getTime()) < 10000 : false; // 10s STRICT
 
     // V2 firmware hardware flags (populated from heartbeat)
     const rtcValid     = latest?.rtcValid  ?? null;
@@ -277,7 +277,7 @@ exports.deviceStatus = async (req, res) => {
 //   2. bleToken must be valid HMAC-SHA256(deviceToken, sessionId:timestamp)
 //   3. timestamp must be < 60s old (prevents replay)
 //   4. bleToken is single-use (stored in session.usedBleTokens)
-//   5. Device must be online (heartbeat within 20s)
+//   5. Device must be online (heartbeat within 10s STRICT)
 exports.bleVerify = async (req, res) => {
   try {
     const { bleToken, sessionId, timestamp } = req.body;
@@ -345,7 +345,7 @@ exports.bleVerify = async (req, res) => {
       .filter(d => d.lastSeenAt)
       .sort((a, b) => new Date(b.lastSeenAt) - new Date(a.lastSeenAt))[0];
     const deviceOnline = latest
-      ? (Date.now() - new Date(latest.lastSeenAt).getTime()) < 20000 // 20s — ESP32 heartbeats every 6s
+      ? (Date.now() - new Date(latest.lastSeenAt).getTime()) < 10000 // 10s STRICT
       : false;
 
     if (!deviceOnline) {
