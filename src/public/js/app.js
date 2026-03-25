@@ -1831,6 +1831,13 @@ function showDashboard(data) {
     showForceChangePassword();
     return;
   }
+
+  // Silently attempt ESP32 discovery in background so the hotspot key is
+  // captured via the X-ESP32-Device-Token header without needing the captive
+  // portal to open in an external browser.
+  setTimeout(() => {
+    discoverESP32().catch(() => {}); // non-fatal — fails silently if not on hotspot
+  }, 1000);
   try {
     document.getElementById('auth-page').style.display = 'none';
     const dashPage = document.getElementById('dashboard-page');
@@ -3848,8 +3855,41 @@ async function showStartSessionModal() {
   container.classList.remove('hidden');
   container.innerHTML = `<div class="modal-overlay"><div class="modal"><p style="color:var(--text-muted);text-align:center;padding:8px 0">📡 Checking classroom device…</p></div></div>`;
 
-  // Proximity is enforced at attendance time via BLE token scanning.
-  // Session start only requires the ESP32 device to be online (heartbeat check below).
+  // ── STRICT proximity check — esp32key must be in sessionStorage ──
+  // First actively try to discover the ESP32 and fetch the token.
+  // This works in Median/native WebView where mixed content is allowed.
+  // In Chrome it will fail silently and fall back to the captive portal method.
+  if (!sessionStorage.getItem('kodex_esp32_hotspot_key')) {
+    try {
+      await discoverESP32();
+    } catch(_) {}
+  }
+
+  const proximityKey = sessionStorage.getItem('kodex_esp32_hotspot_key') || '';
+  if (!proximityKey) {
+    container.innerHTML = `
+      <div class="modal-overlay" onclick="closeModal(event)">
+        <div class="modal" onclick="event.stopPropagation()" style="text-align:center;max-width:400px">
+          <div style="font-size:40px;margin-bottom:12px">📡</div>
+          <h3 style="margin-bottom:8px">Not in Classroom</h3>
+          <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px;line-height:1.6">
+            You must be physically in the classroom and connected to
+            <strong>KODEX-CLASSROOM</strong> WiFi to start a session.
+          </p>
+          <div style="background:#eef2ff;border:1px solid #c7d2fe;border-radius:8px;padding:12px 14px;font-size:12px;color:#3730a3;margin-bottom:20px;text-align:left">
+            <strong>How to connect:</strong><br>
+            1. Go to WiFi settings and connect to <strong>KODEX-CLASSROOM</strong><br>
+            2. Come back to this app and tap <strong>Retry</strong> below<br>
+            3. The app will detect the classroom device automatically
+          </div>
+          <div style="display:flex;gap:8px;justify-content:center">
+            <button class="btn btn-secondary btn-sm" onclick="closeModal()">Cancel</button>
+            <button class="btn btn-primary btn-sm" onclick="showStartSessionModal()">↻ Retry</button>
+          </div>
+        </div>
+      </div>`;
+    return;
+  }
   // ── End proximity check ───────────────────────────────────
 
   // ── STRICT device check — always required, no skip ────────
@@ -3882,23 +3922,30 @@ async function showStartSessionModal() {
     return;
   }
 
-  // Device registered but offline
-  if (!checkError && deviceStatus && deviceStatus.hasDevice && !deviceStatus.deviceOnline) {
+  // Device registered but offline OR not ready (V2 hardware check)
+  if (!checkError && deviceStatus && deviceStatus.hasDevice && (!deviceStatus.deviceOnline || !deviceStatus.deviceReady)) {
     const lastSeen = deviceStatus.lastSeenAt
       ? `Last seen: ${new Date(deviceStatus.lastSeenAt).toLocaleString()}`
       : 'Last seen: Never';
+
+    const reasonLabels = {
+      DEVICE_OFFLINE:    { icon: '📟', title: 'Device is Offline',     msg: 'The KODEX classroom device is not responding. Power it on and wait a few seconds.' },
+      RTC_INVALID:       { icon: '🕐', title: 'Clock Not Synced',      msg: 'The device clock is invalid. Connect it to WiFi once to sync the time.' },
+      SD_CARD_NOT_FOUND: { icon: '💾', title: 'SD Card Missing',       msg: 'The SD card is not detected. Insert the SD card and restart the device.' },
+      BLE_NOT_READY:     { icon: '📡', title: 'BLE Not Ready',         msg: 'Bluetooth is not initialised on the device. Restart the device.' },
+    };
+    const reason = deviceStatus.notReadyReason || 'DEVICE_OFFLINE';
+    const { icon, title, msg } = reasonLabels[reason] || reasonLabels.DEVICE_OFFLINE;
+
     container.innerHTML = `
       <div class="modal-overlay" onclick="closeModal(event)">
         <div class="modal" onclick="event.stopPropagation()" style="text-align:center;max-width:400px">
-          <div style="font-size:40px;margin-bottom:12px">📟</div>
-          <h3 style="margin-bottom:8px">Device is Offline</h3>
-          <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px;line-height:1.6">
-            The <strong>KODEX classroom device</strong> is not responding.<br>
-            Power it on, wait a few seconds, then try again.
-          </p>
+          <div style="font-size:40px;margin-bottom:12px">${icon}</div>
+          <h3 style="margin-bottom:8px">${title}</h3>
+          <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px;line-height:1.6">${msg}</p>
           <div style="background:#fef3c7;border:1px solid #fde68a;border-radius:8px;padding:10px 14px;font-size:12px;color:#92400e;margin-bottom:20px;text-align:left">
             <strong>${lastSeen}</strong><br>
-            Status: Offline — no heartbeat in last 20s
+            Reason: <code>${reason}</code>
           </div>
           <div style="display:flex;gap:8px;justify-content:center">
             <button class="btn btn-secondary btn-sm" onclick="closeModal()">Cancel</button>
@@ -4029,7 +4076,23 @@ async function startSession() {
     renderSessions();
   } catch (e) {
     // Device offline or not registered — show in-modal block screen
-    if (e.status === 503) {
+    if (e.data?.code === 'NOT_IN_CLASSROOM' || e.status === 403) {
+      if (container) container.innerHTML = `
+        <div class="modal-overlay" onclick="closeModal(event)">
+          <div class="modal" onclick="event.stopPropagation()" style="text-align:center;max-width:400px">
+            <div style="font-size:40px;margin-bottom:12px">📡</div>
+            <h3 style="margin-bottom:8px">Not in Classroom</h3>
+            <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px;line-height:1.6">
+              The server confirmed you are not on the classroom network.<br><br>
+              Connect to <strong>KODEX-CLASSROOM</strong> WiFi and try again.
+            </p>
+            <div style="display:flex;gap:8px;justify-content:center">
+              <button class="btn btn-secondary btn-sm" onclick="closeModal()">Cancel</button>
+              <button class="btn btn-primary btn-sm" onclick="showStartSessionModal()">↻ Retry</button>
+            </div>
+          </div>
+        </div>`;
+    } else if (e.status === 503) {
       const msg = e.data?.message || 'The classroom device is not responding. Power it on and try again.';
       if (container) container.innerHTML = `
         <div class="modal-overlay" onclick="closeModal(event)">
@@ -7411,38 +7474,39 @@ async function esp32Api(path, options = {}) {
 
 // Try to find ESP32 on local network
 async function discoverESP32() {
-  // Always try 192.168.4.1 — the fixed AP gateway IP of the ESP32.
-  // Works in Median app (allows HTTP from HTTPS WebView).
-  // Two-step: first /token (gets key in JSON body), then /status (confirms device).
+  // Always try the ESP32 hotspot gateway IP first (192.168.4.1) —
+  // this is the fixed IP the ESP32 always uses as AP gateway.
+  // We try this before the stored IP so that hotspot key is always
+  // captured even if the user never manually set the IP.
   const candidates = ['192.168.4.1'];
   if (esp32IP && esp32IP !== '192.168.4.1') candidates.push(esp32IP);
 
   for (const ip of candidates) {
     try {
-      // Step 1: fetch /token — returns { token: "..." } in JSON body.
-      // This is more reliable than reading response headers in a WebView.
-      const tokenRes = await fetch(`http://${ip}/token`, { cache: 'no-store' });
-      if (tokenRes.ok) {
-        const tokenData = await tokenRes.json();
-        if (tokenData.token) {
-          sessionStorage.setItem('kodex_esp32_hotspot_key', tokenData.token);
-          setEsp32IP(ip);
-          bleDetected = true;
-          return true;
-        }
-      }
-    } catch(e) { /* try /status fallback */ }
-
-    try {
-      // Step 2 fallback: /status — reads token from response header
-      esp32IP = ip;
+      const tempIP = esp32IP; // save
+      esp32IP = ip;           // temporarily set so esp32Api uses it
       const status = await esp32Api('/status');
       if (status.device === 'KODEX-ESP32') {
-        setEsp32IP(ip);
+        setEsp32IP(ip);       // persist the working IP
         bleDetected = true;
+
+        // Also fetch /token directly — captures the key in the JSON body
+        // so it works inside the app WebView without the captive portal popup.
+        try {
+          const tokenRes = await fetch(`http://${ip}/token`);
+          const tokenData = await tokenRes.json();
+          if (tokenData.token) {
+            sessionStorage.setItem('kodex_esp32_hotspot_key', tokenData.token);
+            console.log('[ESP32] Hotspot key captured via /token endpoint');
+          }
+        } catch(_) {} // non-fatal — header capture already handled by esp32Api
+
         return true;
       }
-    } catch(e) { /* not reachable on this IP */ }
+      esp32IP = tempIP;       // restore if not KODEX device
+    } catch(e) {
+      esp32IP = candidates[0] === ip ? (candidates[1] || null) : esp32IP;
+    }
   }
   return false;
 }
