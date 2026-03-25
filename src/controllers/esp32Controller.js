@@ -56,6 +56,13 @@ exports.heartbeat = async (req, res) => {
     const token = req.headers["x-esp32-token"];
     const { company, device } = await resolveDevice(token);
     device.lastSeenAt = new Date();
+
+    // Store V2 firmware hardware status so deviceStatus can report it
+    if (req.body.rtcValid      !== undefined) device.rtcValid      = !!req.body.rtcValid;
+    if (req.body.sdOK          !== undefined) device.sdOK          = !!req.body.sdOK;
+    if (req.body.bleOK         !== undefined) device.bleOK         = !!req.body.bleOK;
+    if (req.body.sessionActive !== undefined) device.sessionActive = !!req.body.sessionActive;
+
     await company.save();
 
     let resyncRTC = false;
@@ -81,8 +88,15 @@ exports.poll = async (req, res) => {
 
     const cmd = company.esp32PendingCommand;
     if (cmd && cmd.action) {
-      const delivered = { action: cmd.action, sessionId: cmd.sessionId || null, title: cmd.title || null, issuedAt: cmd.issuedAt || null };
-      company.esp32PendingCommand = { action: null, sessionId: null, title: null, issuedAt: null };
+      const delivered = {
+        action:    cmd.action,
+        sessionId: cmd.sessionId || null,
+        title:     cmd.title     || null,
+        seed:      cmd.seed      || cmd.sessionId || null, // seed = sessionId if not explicitly set
+        duration:  cmd.duration  || 300,
+        issuedAt:  cmd.issuedAt  || null,
+      };
+      company.esp32PendingCommand = { action: null, sessionId: null, title: null, seed: null, duration: 300, issuedAt: null };
       await company.save();
       console.log(`[ESP32 poll] Delivered "${delivered.action}" to ${device.deviceId}`);
       return res.json({ command: delivered });
@@ -167,7 +181,7 @@ exports.sync = async (req, res) => {
 // POST /api/esp32/command  (JWT — web app)
 exports.sendCommand = async (req, res) => {
   try {
-    const { action, sessionId, title } = req.body;
+    const { action, sessionId, title, duration } = req.body;
     if (!action || !["start","stop"].includes(action)) return res.status(400).json({ error: "action must be 'start' or 'stop'" });
 
     const company = await Company.findById(req.user.company);
@@ -175,9 +189,29 @@ exports.sendCommand = async (req, res) => {
     if (!company.esp32Devices || company.esp32Devices.length === 0)
       return res.status(404).json({ error: "No ESP32 device registered. Power on the device and send REGISTER via serial." });
 
-    company.esp32PendingCommand = { action, sessionId: sessionId || null, title: title || (action === "start" ? "Classroom Session" : null), issuedAt: new Date() };
+    // seed = sessionId — both ESP32 and server derive the same rotating code from this
+    const seed = sessionId || null;
+    const durationSecs = Number(duration) || 300;
+
+    company.esp32PendingCommand = {
+      action,
+      sessionId: sessionId || null,
+      title: title || (action === "start" ? "Classroom Session" : null),
+      seed,
+      duration: durationSecs,
+      issuedAt: new Date(),
+    };
     await company.save();
-    console.log(`[ESP32 command] "${action}" queued by ${req.user.name}`);
+
+    // Also persist seed and duration on the AttendanceSession if it exists
+    if (action === "start" && sessionId) {
+      await AttendanceSession.findByIdAndUpdate(sessionId, {
+        esp32Seed: seed,
+        durationSeconds: durationSecs,
+      }).catch(() => {}); // non-fatal
+    }
+
+    console.log(`[ESP32 command] "${action}" queued by ${req.user.name} | seed: ${seed?.substring(0,8)}... | duration: ${durationSecs}s`);
     return res.json({ ok: true, command: company.esp32PendingCommand });
   } catch (err) {
     console.error("[ESP32 command]", err);
@@ -197,13 +231,38 @@ exports.deviceStatus = async (req, res) => {
 
     const latest   = devices.filter(d => d.lastSeenAt).sort((a,b) => new Date(b.lastSeenAt)-new Date(a.lastSeenAt))[0];
     const lastSeen  = latest?.lastSeenAt ? new Date(latest.lastSeenAt) : null;
-    const deviceOnline = lastSeen ? (Date.now() - lastSeen.getTime()) < 3000 : false; // 3s STRICT
+    const deviceOnline = lastSeen ? (Date.now() - lastSeen.getTime()) < 20000 : false; // 20s window
+
+    // V2 firmware hardware flags (populated from heartbeat)
+    const rtcValid     = latest?.rtcValid  ?? null;
+    const sdOK         = latest?.sdOK      ?? null;
+    const bleOK        = latest?.bleOK     ?? null;
+    const sessionActive = latest?.sessionActive ?? false;
+
+    // Strict readiness: device online + RTC valid + SD OK + BLE OK
+    const deviceReady = deviceOnline &&
+      (rtcValid  !== false) &&
+      (sdOK      !== false) &&
+      (bleOK     !== false);
+
+    // Build exact failure reason for the app to display
+    let notReadyReason = null;
+    if (!deviceOnline)     notReadyReason = "DEVICE_OFFLINE";
+    else if (!rtcValid)    notReadyReason = "RTC_INVALID";
+    else if (sdOK === false) notReadyReason = "SD_CARD_NOT_FOUND";
+    else if (bleOK === false) notReadyReason = "BLE_NOT_READY";
 
     return res.json({
-      hasDevice: true, deviceOnline, esp32Required,
-      deviceId: latest?.deviceId || null,
+      hasDevice: true,
+      deviceOnline,
+      deviceReady,
+      esp32Required,
+      notReadyReason,
+      sessionActive,
+      deviceId:   latest?.deviceId || null,
       lastSeenAt: lastSeen ? lastSeen.toISOString() : null,
       secondsSinceLastSeen: lastSeen ? Math.round((Date.now()-lastSeen.getTime())/1000) : null,
+      hardware: { rtcValid, sdOK, bleOK },
     });
   } catch (err) {
     console.error("[ESP32 device-status]", err);
