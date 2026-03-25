@@ -3856,12 +3856,15 @@ async function showStartSessionModal() {
   container.innerHTML = `<div class="modal-overlay"><div class="modal"><p style="color:var(--text-muted);text-align:center;padding:8px 0">📡 Checking classroom device…</p></div></div>`;
 
   // ── STRICT proximity check — esp32key must be in sessionStorage ──
-  // The lecturer proves physical presence by having visited 192.168.4.1 first.
-  // When they connect to KODEX-CLASSROOM WiFi, the browser opens the ESP32
-  // captive portal which redirects to kodex.it.com/?esp32key=TOKEN.
-  // handleEsp32KeyParam() stores that token in sessionStorage on load.
-  // Direct fetch to 192.168.4.1 is blocked by browsers (mixed content: http
-  // from https page), so URL redirect is the only reliable method.
+  // First actively try to discover the ESP32 and fetch the token.
+  // This works in Median/native WebView where mixed content is allowed.
+  // In Chrome it will fail silently and fall back to the captive portal method.
+  if (!sessionStorage.getItem('kodex_esp32_hotspot_key')) {
+    try {
+      await discoverESP32();
+    } catch(_) {}
+  }
+
   const proximityKey = sessionStorage.getItem('kodex_esp32_hotspot_key') || '';
   if (!proximityKey) {
     container.innerHTML = `
@@ -3875,9 +3878,9 @@ async function showStartSessionModal() {
           </p>
           <div style="background:#eef2ff;border:1px solid #c7d2fe;border-radius:8px;padding:12px 14px;font-size:12px;color:#3730a3;margin-bottom:20px;text-align:left">
             <strong>How to connect:</strong><br>
-            1. Connect this device to <strong>KODEX-CLASSROOM</strong> WiFi<br>
-            2. Open the browser — it will redirect you automatically<br>
-            3. Come back to KODEX and tap Retry
+            1. Go to WiFi settings and connect to <strong>KODEX-CLASSROOM</strong><br>
+            2. Come back to this app and tap <strong>Retry</strong> below<br>
+            3. The app will detect the classroom device automatically
           </div>
           <div style="display:flex;gap:8px;justify-content:center">
             <button class="btn btn-secondary btn-sm" onclick="closeModal()">Cancel</button>
