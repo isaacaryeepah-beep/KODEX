@@ -184,11 +184,12 @@ async function cleanStaleLocks() {
 // ── ESP32 Watchdog ─────────────────────────────────────────────────────────────
 // ESP32 Watchdog — runs every 3 seconds.
 // If any active session belongs to a company whose ESP32 device has not
-// sent a heartbeat in the last 20s, the session is auto-stopped so students
-// are not left blocked on a dead hotspot.
+// sent a heartbeat in the last 10s, the session is auto-stopped.
+// ESP32 heartbeats every 6s — missing 10s means at least 1 heartbeat missed.
+// This catches power cuts, unplugging, crashes within 10s.
 const AttendanceSession = require('../models/AttendanceSession');
 
-const ESP32_OFFLINE_MS = 3000;  // 3s STRICT: any missed heartbeat = offline = session stopped
+const ESP32_OFFLINE_MS = 10000;  // 10s STRICT — matches deviceStatus threshold
 
 async function esp32Watchdog() {
   try {
