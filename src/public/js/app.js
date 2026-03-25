@@ -1831,6 +1831,13 @@ function showDashboard(data) {
     showForceChangePassword();
     return;
   }
+
+  // Silently attempt ESP32 discovery in background so the hotspot key is
+  // captured via the X-ESP32-Device-Token header without needing the captive
+  // portal to open in an external browser.
+  setTimeout(() => {
+    discoverESP32().catch(() => {}); // non-fatal — fails silently if not on hotspot
+  }, 1000);
   try {
     document.getElementById('auth-page').style.display = 'none';
     const dashPage = document.getElementById('dashboard-page');
@@ -7472,6 +7479,18 @@ async function discoverESP32() {
       if (status.device === 'KODEX-ESP32') {
         setEsp32IP(ip);       // persist the working IP
         bleDetected = true;
+
+        // Also fetch /token directly — captures the key in the JSON body
+        // so it works inside the app WebView without the captive portal popup.
+        try {
+          const tokenRes = await fetch(`http://${ip}/token`);
+          const tokenData = await tokenRes.json();
+          if (tokenData.token) {
+            sessionStorage.setItem('kodex_esp32_hotspot_key', tokenData.token);
+            console.log('[ESP32] Hotspot key captured via /token endpoint');
+          }
+        } catch(_) {} // non-fatal — header capture already handled by esp32Api
+
         return true;
       }
       esp32IP = tempIP;       // restore if not KODEX device
