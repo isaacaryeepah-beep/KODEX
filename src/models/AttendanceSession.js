@@ -45,6 +45,17 @@ const attendanceSessionSchema = new mongoose.Schema(
       type: String,
       default: null,
     },
+    // ESP32 V2: shared HMAC seed for rotating code derivation
+    // Both ESP32 and server derive the same 6-digit code from seed + time slot
+    esp32Seed: {
+      type: String,
+      default: null,
+    },
+    // Session window duration in seconds (used by ESP32 to auto-close)
+    durationSeconds: {
+      type: Number,
+      default: 300,
+    },
     bleLocationId: {
       type: String,
       default: null,
