@@ -41,6 +41,11 @@ const attendanceSessionSchema = new mongoose.Schema(
       ref: "User",
       default: null,
     },
+    // How the session ended: 'manual' | 'esp32_offline' | 'duration_expired'
+    stoppedReason: {
+      type: String,
+      default: null,
+    },
     qrSeed: {
       type: String,
       default: null,
