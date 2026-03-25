@@ -136,9 +136,10 @@ exports.listQuizzes = async (req, res) => {
       { $group: {
         _id: "$quiz",
         totalAttempts: { $sum: 1 },
-        avgScore:      { $avg: "$percentageScore" },
-        highestScore:  { $max: "$percentageScore" },
-        lowestScore:   { $min: "$percentageScore" },
+        avgScore:      { $avg: "$score" },
+        highestScore:  { $max: "$score" },
+        lowestScore:   { $min: "$score" },
+        avgMaxScore:   { $avg: "$maxScore" },
       }},
     ]);
 
@@ -153,35 +154,35 @@ exports.listQuizzes = async (req, res) => {
       const sid = q._id.toString();
       const s = statsMap[sid];
       const totalAttempts = s?.totalAttempts || 0;
+      const avgMaxScore = s?.avgMaxScore || 0;
       const avgScore = s?.avgScore || 0;
-      const passThreshold = q.passingScore || 50;
+      const avgPct = avgMaxScore > 0 ? Math.round((avgScore / avgMaxScore) * 100) : 0;
       return {
         ...q.toObject(),
         questionCount: qCountMap[sid] || 0,
         attemptCount:  aCountMap[sid] || 0,
         stats: {
           totalAttempts,
-          averageScore:  Math.round(avgScore * 10) / 10,
-          highestScore:  s?.highestScore != null ? Math.round(s.highestScore * 10) / 10 : null,
-          lowestScore:   s?.lowestScore  != null ? Math.round(s.lowestScore  * 10) / 10 : null,
-          passRate: totalAttempts > 0
-            ? Math.round((statsAgg.find(x => x._id.toString() === sid)
-                ? 0 : 0) || 0) // calculated below
-            : 0,
+          averageScore:  avgPct,
+          highestScore:  s?.highestScore != null && avgMaxScore > 0
+            ? Math.round((s.highestScore / avgMaxScore) * 100)
+            : null,
+          lowestScore:   s?.lowestScore != null && avgMaxScore > 0
+            ? Math.round((s.lowestScore / avgMaxScore) * 100)
+            : null,
+          passRate: 0, // calculated below
         },
       };
     });
 
-    // Calculate pass rates separately (needs per-attempt comparison)
+    // Calculate pass rates using score/maxScore ratio
     const passAgg = await Attempt.aggregate([
-      { $match: { quiz: { $in: quizIds }, isSubmitted: true } },
-      { $lookup: { from: "quizzes", localField: "quiz", foreignField: "_id", as: "quizDoc" } },
-      { $unwind: { path: "$quizDoc", preserveNullAndEmpty: true } },
+      { $match: { quiz: { $in: quizIds }, isSubmitted: true, maxScore: { $gt: 0 } } },
       { $group: {
         _id: "$quiz",
         total: { $sum: 1 },
         passed: { $sum: { $cond: [
-          { $gte: ["$percentageScore", { $ifNull: ["$quizDoc.passingScore", 50] }] },
+          { $gte: [{ $divide: ["$score", "$maxScore"] }, 0.5] },
           1, 0
         ]}},
       }},
