@@ -3855,42 +3855,11 @@ async function showStartSessionModal() {
   container.classList.remove('hidden');
   container.innerHTML = `<div class="modal-overlay"><div class="modal"><p style="color:var(--text-muted);text-align:center;padding:8px 0">📡 Checking classroom device…</p></div></div>`;
 
-  // ── STRICT proximity check — esp32key must be in sessionStorage ──
-  // First actively try to discover the ESP32 and fetch the token.
-  // This works in Median/native WebView where mixed content is allowed.
-  // In Chrome it will fail silently and fall back to the captive portal method.
-  if (!sessionStorage.getItem('kodex_esp32_hotspot_key')) {
-    try {
-      await discoverESP32();
-    } catch(_) {}
-  }
-
-  const proximityKey = sessionStorage.getItem('kodex_esp32_hotspot_key') || '';
-  if (!proximityKey) {
-    container.innerHTML = `
-      <div class="modal-overlay" onclick="closeModal(event)">
-        <div class="modal" onclick="event.stopPropagation()" style="text-align:center;max-width:400px">
-          <div style="font-size:40px;margin-bottom:12px">📡</div>
-          <h3 style="margin-bottom:8px">Not in Classroom</h3>
-          <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px;line-height:1.6">
-            You must be physically in the classroom and connected to
-            <strong>KODEX-CLASSROOM</strong> WiFi to start a session.
-          </p>
-          <div style="background:#eef2ff;border:1px solid #c7d2fe;border-radius:8px;padding:12px 14px;font-size:12px;color:#3730a3;margin-bottom:20px;text-align:left">
-            <strong>How to connect:</strong><br>
-            1. Go to WiFi settings and connect to <strong>KODEX-CLASSROOM</strong><br>
-            2. Come back to this app and tap <strong>Retry</strong> below<br>
-            3. The app will detect the classroom device automatically
-          </div>
-          <div style="display:flex;gap:8px;justify-content:center">
-            <button class="btn btn-secondary btn-sm" onclick="closeModal()">Cancel</button>
-            <button class="btn btn-primary btn-sm" onclick="showStartSessionModal()">↻ Retry</button>
-          </div>
-        </div>
-      </div>`;
-    return;
-  }
-  // ── End proximity check ───────────────────────────────────
+  // ── DEVICE CHECK — lecturer proof is the ESP32 heartbeat, not hotspot key ──
+  // The hotspot key (esp32key) is for STUDENTS marking attendance.
+  // The lecturer just needs the device to be online and ready.
+  // Silently try to discover ESP32 in the background (works in Median app).
+  discoverESP32().catch(() => {});
 
   // ── STRICT device check — always required, no skip ────────
   let deviceStatus = null;
