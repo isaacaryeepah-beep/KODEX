@@ -41,36 +41,42 @@ const PORT = process.env.PORT || 5000;
 
 // ── Helmet: secure HTTP headers ───────────────────────────────────────────────
 app.use(helmet({
-  contentSecurityPolicy: false,      // keep off — your app uses inline scripts
-  crossOriginEmbedderPolicy: false,  // needed for Jitsi/Zoom iframes
+  contentSecurityPolicy: false,
+  crossOriginEmbedderPolicy: false,
   referrerPolicy: { policy: "strict-origin-when-cross-origin" },
-  hsts: { maxAge: 31536000, includeSubDomains: true }, // force HTTPS for 1 year
-  noSniff: true,         // prevent MIME type sniffing
-  frameguard: { action: "sameorigin" }, // prevent clickjacking
-  xssFilter: true,       // basic XSS protection header
+  hsts: { maxAge: 31536000, includeSubDomains: true },
+  noSniff: true,
+  frameguard: { action: "sameorigin" },
+  xssFilter: true,
 }));
 
 // ── CORS: only allow your own domain ─────────────────────────────────────────
 const allowedOrigins = [
-  "https://kodex-713g.onrender.com",  // render subdomain
-  "https://kodex.it.com",             // custom domain
-  "https://www.kodex.it.com",         // www variant
-  "http://kodex.it.com",              // http fallback
-  "http://www.kodex.it.com",          // www http fallback
-  "http://localhost:3000",            // local dev
-  "http://localhost:5000",            // local dev
+  "https://kodex-713g.onrender.com",
+  "https://kodex.it.com",
+  "https://www.kodex.it.com",
+  "http://kodex.it.com",
+  "http://www.kodex.it.com",
+  "http://localhost:3000",
+  "http://localhost:5000",
 ];
+
 app.use(cors({
   origin: (origin, callback) => {
-    // Allow requests with no origin (mobile apps, Postman)
+    // Allow requests with no origin (ESP32, Postman, mobile apps)
     if (!origin || allowedOrigins.includes(origin)) {
-      callback(null, true);
+      return callback(null, true);
     } else {
-      callback(new Error(`CORS blocked: ${origin} is not allowed`));
+      return callback(new Error(`CORS blocked: ${origin} is not allowed`));
     }
   },
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"],
+  allowedHeaders: [
+    "Content-Type",
+    "Authorization",
+    "x-esp32-secret",   // ✅ FIX ADDED
+    "x-esp32-token",    // ✅ FIX ADDED
+  ],
   credentials: true,
 }));
 
@@ -91,18 +97,18 @@ app.use((req, res, next) => {
   }
 });
 
-app.use(express.json({ limit: "10mb" })); // kept at 10mb — proctored quiz snapshots need it
+app.use(express.json({ limit: "10mb" }));
 
-// ── Global input sanitizer (NoSQL injection + XSS prevention) ────────────────
+// ── Global input sanitizer ───────────────────────────────────────────────────
 app.use(sanitizeInputs);
 
-// ── General API rate limit (200 req / 15min per IP) ──────────────────────────
-// Exclude snapshot upload from general rate limit (large payloads, frequent during quizzes)
+// ── General API rate limit ───────────────────────────────────────────────────
 app.use("/api/", (req, res, next) => {
   if (req.path.includes('/snapshot') || req.path.includes('/health')) return next();
   return apiLimiter(req, res, next);
 });
-// Superadmin portal — must be before static middleware so it takes priority
+
+// Superadmin portal
 app.get("/superadmin", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "superadmin.html"));
 });
@@ -140,6 +146,7 @@ app.get("/health", (req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });
 });
 
+// ── Routes ───────────────────────────────────────────────────────────────────
 app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/attendance-sessions", attendanceSessionRoutes);
@@ -149,10 +156,10 @@ app.use("/api/courses", courseRoutes);
 app.use("/api/quizzes", quizRoutes);
 app.use("/api/lecturer/quizzes", lecturerQuizRoutes);
 app.use("/api/lecturer/question-bank", questionBankRoutes);
-app.use("/api/announcements",          announcementRoutes);
-app.use("/api/timetable",              require("./routes/timetable"));
-app.use("/api/webhooks",               webhookRoutes);      // public — Paystack webhook
-app.use("/api/gradebook",              gradeBookRoutes);
+app.use("/api/announcements", announcementRoutes);
+app.use("/api/timetable", require("./routes/timetable"));
+app.use("/api/webhooks", webhookRoutes);
+app.use("/api/gradebook", gradeBookRoutes);
 app.use("/api/student/quizzes", studentQuizRoutes);
 app.use("/api/admin/quizzes", adminQuizRoutes);
 app.use("/api/zoom", zoomRoutes);
@@ -165,23 +172,28 @@ app.use("/api/admin", adminDashboardRoutes);
 app.use("/api/search", searchRoutes);
 app.use("/api/proctor", proctoredQuizRoutes);
 app.use("/api/assignments", assignmentRoutes);
-app.use("/api/ai",          aiProxyRoutes);
-const esp32Routes        = require("./routes/esp32");
-app.use("/api/esp32",     esp32Routes);
-const shiftRoutes        = require("./routes/shifts");
-const leaveRoutes        = require("./routes/leaves");
-const trainingRoutes     = require("./routes/training");
-const performanceRoutes  = require("./routes/performance");
-const operationsRoutes   = require("./routes/operations");
-const advancedRoutes     = require("./routes/advanced");
-app.use("/api/shifts",      shiftRoutes);
-app.use("/api/leaves",      leaveRoutes);
-app.use("/api/training",    trainingRoutes);
-app.use("/api/performance", performanceRoutes);
-app.use("/api/operations",  operationsRoutes);
-app.use("/api/advanced",    advancedRoutes);
-if (superadminRoutes) app.use("/api/superadmin",  superadminRoutes);
+app.use("/api/ai", aiProxyRoutes);
 
+const esp32Routes = require("./routes/esp32");
+app.use("/api/esp32", esp32Routes);
+
+const shiftRoutes = require("./routes/shifts");
+const leaveRoutes = require("./routes/leaves");
+const trainingRoutes = require("./routes/training");
+const performanceRoutes = require("./routes/performance");
+const operationsRoutes = require("./routes/operations");
+const advancedRoutes = require("./routes/advanced");
+
+app.use("/api/shifts", shiftRoutes);
+app.use("/api/leaves", leaveRoutes);
+app.use("/api/training", trainingRoutes);
+app.use("/api/performance", performanceRoutes);
+app.use("/api/operations", operationsRoutes);
+app.use("/api/advanced", advancedRoutes);
+
+if (superadminRoutes) app.use("/api/superadmin", superadminRoutes);
+
+// ── Fallback ─────────────────────────────────────────────────────────────────
 app.use((req, res) => {
   const indexPath = path.join(__dirname, "public", "index.html");
   const fs = require("fs");
@@ -192,11 +204,13 @@ app.use((req, res) => {
   }
 });
 
+// ── Error handler ────────────────────────────────────────────────────────────
 app.use((err, req, res, next) => {
   console.error("Unhandled error:", err);
   res.status(500).json({ error: "Internal server error" });
 });
 
+// ── Start server ─────────────────────────────────────────────────────────────
 const start = async () => {
   await connectDB();
 
@@ -225,7 +239,6 @@ const start = async () => {
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on port ${PORT}`);
 
-    // Start email scheduler (trial reminders, renewal nudges)
     try {
       const { startScheduler } = require("./services/emailScheduler");
       startScheduler();
