@@ -189,7 +189,7 @@ async function cleanStaleLocks() {
 // This catches power cuts, unplugging, crashes within 10s.
 const AttendanceSession = require('../models/AttendanceSession');
 
-const ESP32_OFFLINE_MS = 10000;  // 10s STRICT — matches deviceStatus threshold
+const ESP32_OFFLINE_MS = 30000;  // 30s — matches deviceStatus threshold
 
 async function esp32Watchdog() {
   try {
