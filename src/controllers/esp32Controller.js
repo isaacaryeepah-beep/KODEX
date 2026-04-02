@@ -70,6 +70,7 @@ exports.heartbeat = async (req, res) => {
       const drift = Math.abs(Date.now() - new Date(req.body.rtcTime).getTime());
       resyncRTC = !isNaN(drift) && drift > 60000;
     }
+    console.log(`[ESP32 HB] ${device.deviceId} ok | lastSeenAt=${device.lastSeenAt.toISOString()}`);
     return res.json({ ok: true, serverTime: new Date().toISOString(), resyncRTC });
   } catch (err) {
     if (err.status) return res.status(err.status).json({ error: err.message });
@@ -231,7 +232,9 @@ exports.deviceStatus = async (req, res) => {
 
     const latest   = devices.filter(d => d.lastSeenAt).sort((a,b) => new Date(b.lastSeenAt)-new Date(a.lastSeenAt))[0];
     const lastSeen  = latest?.lastSeenAt ? new Date(latest.lastSeenAt) : null;
-    const deviceOnline = lastSeen ? (Date.now() - lastSeen.getTime()) < 30000 : false; // 30s window (ESP32 heartbeats every 6s)
+    const secsSince = lastSeen ? Math.round((Date.now() - lastSeen.getTime()) / 1000) : null;
+    const deviceOnline = lastSeen ? (Date.now() - lastSeen.getTime()) < 30000 : false; // 30s window
+    console.log(`[ESP32 status] lastSeen=${lastSeen?.toISOString()} secsSince=${secsSince} online=${deviceOnline}`);
 
     // V2 firmware hardware flags (populated from heartbeat)
     const rtcValid     = latest?.rtcValid  ?? null;
