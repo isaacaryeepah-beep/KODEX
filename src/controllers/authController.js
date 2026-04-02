@@ -719,10 +719,13 @@ exports.login = async (req, res) => {
 
 exports.logout = async (req, res) => {
   try {
-    await User.findByIdAndUpdate(req.user._id, {
-      lastLogoutTime: new Date(),
-      deviceId: null,
-    });
+    const updateData = { lastLogoutTime: new Date() };
+    // Students keep deviceId on logout so device lock is preserved.
+    // Non-students clear deviceId normally.
+    if (req.user.role !== "student") {
+      updateData.deviceId = null;
+    }
+    await User.findByIdAndUpdate(req.user._id, updateData);
 
     res.json({
       message: "Logged out successfully",
