@@ -295,13 +295,17 @@ exports.submitAttempt = async (req, res) => {
       if (!question) continue;
 
       let isCorrect = false;
+      let pendingManualGrade = false;
 
       if (question.questionType === "fill") {
-        // Case-insensitive, trimmed match against correctAnswerText + acceptedAnswers
         const typed = (ans.selectedAnswerText || "").trim().toLowerCase();
         const primary = (question.correctAnswerText || "").trim().toLowerCase();
         const accepted = (question.acceptedAnswers || []).map(a => a.trim().toLowerCase());
         isCorrect = typed.length > 0 && (typed === primary || accepted.includes(typed));
+      } else if (question.questionType === "explain") {
+        // Explain questions require manual grading — never auto-mark
+        isCorrect = false;
+        pendingManualGrade = true;
       } else {
         isCorrect = question.correctAnswer === ans.selectedAnswer;
       }
@@ -313,8 +317,10 @@ exports.submitAttempt = async (req, res) => {
         attempt: attempt._id,
         question: ans.questionId,
         selectedAnswer: question.questionType === "fill" ? null : ans.selectedAnswer,
-        selectedAnswerText: question.questionType === "fill" ? (ans.selectedAnswerText || null) : null,
+        selectedAnswerText: (question.questionType === "fill" || question.questionType === "explain")
+          ? (ans.selectedAnswerText || null) : null,
         isCorrect,
+        pendingManualGrade,
       });
     }
 
