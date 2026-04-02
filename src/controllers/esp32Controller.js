@@ -242,18 +242,15 @@ exports.deviceStatus = async (req, res) => {
     const bleOK        = latest?.bleOK     ?? null;
     const sessionActive = latest?.sessionActive ?? false;
 
-    // Strict readiness: device online + RTC valid + SD OK + BLE OK
-    const deviceReady = deviceOnline &&
-      (rtcValid  !== false) &&
-      (sdOK      !== false) &&
-      (bleOK     !== false);
+    // Device is ready if online. RTC/SD/BLE are warnings not blockers —
+    // RTC not found means NTP fallback is used (still valid for code derivation)
+    // SD not found means no local logging (records still synced via WiFi)
+    // BLE removed from V3 firmware entirely
+    const deviceReady = deviceOnline;
 
-    // Build exact failure reason for the app to display
+    // Build failure reason — only block on DEVICE_OFFLINE
     let notReadyReason = null;
-    if (!deviceOnline)     notReadyReason = "DEVICE_OFFLINE";
-    else if (!rtcValid)    notReadyReason = "RTC_INVALID";
-    else if (sdOK === false) notReadyReason = "SD_CARD_NOT_FOUND";
-    else if (bleOK === false) notReadyReason = "BLE_NOT_READY";
+    if (!deviceOnline) notReadyReason = "DEVICE_OFFLINE";
 
     return res.json({
       hasDevice: true,
