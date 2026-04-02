@@ -13,7 +13,6 @@ const userSchema = new mongoose.Schema(
     IndexNumber: {
       type: String,
       trim: true,
-      sparse: true,
     },
     employeeId: {
       type: String,
@@ -140,7 +139,7 @@ userSchema.index(
 );
 userSchema.index(
   { IndexNumber: 1, company: 1 },
-  { unique: true, partialFilterExpression: { IndexNumber: { $type: "string" } } }
+  { unique: true, sparse: true, partialFilterExpression: { IndexNumber: { $type: "string" } } }
 );
 userSchema.index(
   { employeeId: 1, company: 1 },
