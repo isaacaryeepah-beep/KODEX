@@ -99,6 +99,14 @@ app.use((req, res, next) => {
 
 app.use(express.json({ limit: "10mb" }));
 
+// ── Global email normalizer — always lowercase email before any controller sees it
+app.use((req, res, next) => {
+  if (req.body && req.body.email) {
+    req.body.email = req.body.email.trim().toLowerCase();
+  }
+  next();
+});
+
 // ── Global input sanitizer ───────────────────────────────────────────────────
 app.use(sanitizeInputs);
 
@@ -219,17 +227,16 @@ const start = async () => {
     const db = mongoose.connection.db;
     const usersCollection = db.collection("users");
     const indexes = await usersCollection.indexes();
-    // Drop old single-field indexNumber_1 (no company scope) if it exists.
-    // The correct index is compound: indexNumber_1_company_1 with partialFilterExpression.
     const oldIndex = indexes.find(
       (idx) =>
         idx.key &&
         idx.key.indexNumber === 1 &&
-        !idx.key.company  // single-field only — no company means it is the old bad one
+        idx.key.company === 1 &&
+        idx.sparse === true
     );
     if (oldIndex) {
       await usersCollection.dropIndex(oldIndex.name);
-      console.log("Dropped old single-field indexNumber_1 index");
+      console.log("Dropped old sparse indexNumber_1_company_1 index");
     }
   } catch (e) {
     if (e.codeName !== "IndexNotFound") {
