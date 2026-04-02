@@ -1,6 +1,6 @@
 // Always point to the real server — prevents requests going to ESP32 hotspot
 // when users are connected to the classroom device's WiFi network.
-const API = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+const API = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
   ? ''
   : 'https://kodex.it.com';
 
@@ -3866,7 +3866,8 @@ async function showStartSessionModal() {
   let checkError   = false;
 
   try {
-    deviceStatus = await api('/api/esp32/device-status');
+    // Add timestamp to bust any mobile browser cache on device-status
+    deviceStatus = await api('/api/esp32/device-status?t=' + Date.now());
   } catch(e) {
     checkError = true;
   }
