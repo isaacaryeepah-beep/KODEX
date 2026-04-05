@@ -667,6 +667,22 @@ function assignmentsIcon() {
   return svgIcon('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/>');
 }
 
+function showSubscriptionGate(message) {
+  // Redirect to subscription page with message
+  const msg = message || 'Your free trial has ended. Please subscribe to continue.';
+  const main = document.getElementById('main-content') || document.querySelector('.main-content') || document.body;
+  if (main) {
+    main.innerHTML = `<div style="padding:40px;text-align:center">
+      <div style="font-size:40px;margin-bottom:16px">🔒</div>
+      <h2 style="margin-bottom:8px">Subscription Required</h2>
+      <p style="color:#64748b;margin-bottom:24px">${msg}</p>
+      <a href="/subscription" class="btn btn-primary">View Plans</a>
+    </div>`;
+  }
+  // Also navigate to subscription page
+  if (typeof showPage === 'function') showPage('subscription');
+}
+
 async function api(path, options = {}) {
   const headers = { 'Content-Type': 'application/json' };
   if (token) headers['Authorization'] = `Bearer ${token}`;
