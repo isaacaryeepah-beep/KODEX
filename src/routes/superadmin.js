@@ -127,28 +127,39 @@ router.patch("/companies/:id/toggle", async (req, res) => {
 // ── PATCH /api/superadmin/companies/:id/extend-trial ─────────────────────────
 router.patch("/companies/:id/extend-trial", async (req, res) => {
   try {
-    const { days } = req.body;
-    if (!days || days < 1) return res.status(400).json({ error: "days must be >= 1" });
+    const { days, expiryDate } = req.body;
 
     const company = await Company.findById(req.params.id);
     if (!company) return res.status(404).json({ error: "Company not found" });
 
-    // Extend from today if expired, otherwise from current end date
-    const base = company.trialEndDate && new Date(company.trialEndDate) > Date.now()
-      ? new Date(company.trialEndDate)
-      : new Date();
-    const newEnd = new Date(base.getTime() + days * 24 * 60 * 60 * 1000);
+    let newEnd;
+    if (expiryDate) {
+      // Set exact expiry date (can reduce or extend)
+      newEnd = new Date(expiryDate);
+      newEnd.setHours(23, 59, 59, 999); // end of that day
+      if (isNaN(newEnd.getTime())) return res.status(400).json({ error: "Invalid date" });
+    } else if (days) {
+      // Legacy: extend by days from current end or today
+      if (days < 1) return res.status(400).json({ error: "days must be >= 1" });
+      const base = company.trialEndDate && new Date(company.trialEndDate) > Date.now()
+        ? new Date(company.trialEndDate)
+        : new Date();
+      newEnd = new Date(base.getTime() + days * 24 * 60 * 60 * 1000);
+    } else {
+      return res.status(400).json({ error: "Provide expiryDate or days" });
+    }
 
-    company.trialEndDate = newEnd;
-    company.trialUsed    = false; // re-enable if it was marked used
+    company.trialEndDate      = newEnd;
+    company.trialUsed         = false;
+    company.subscriptionStatus = 'trial';
     await company.save();
 
     res.json({
-      message: `Trial extended by ${days} day(s). New end: ${newEnd.toDateString()}`,
+      message: `Trial expiry set to ${newEnd.toDateString()}`,
       trialEndDate: newEnd,
     });
   } catch (err) {
-    res.status(500).json({ error: "Failed to extend trial" });
+    res.status(500).json({ error: "Failed to update trial" });
   }
 });
 
