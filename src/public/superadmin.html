@@ -295,16 +295,21 @@ function renderInstitutions(cos, data) {
   const total = cos.length;
   const active = cos.filter(c=>c.isActive).length;
   const trial = cos.filter(c=>c.isTrialActive).length;
+  const expired = cos.filter(c=>!c.isTrialActive && c.subscriptionStatus!=='active').length;
   const sub = cos.filter(c=>c.subscriptionStatus==='active').length;
   const acad = cos.filter(c=>c.mode==='academic').length;
   const corp = cos.filter(c=>c.mode==='corporate').length;
   const rev = (data && data.totalRevenue) ? data.totalRevenue : cos.reduce((s,c)=>s+(c.revenue||0),0);
+  // Count expired lecturers across all institutions
+  const expiredLecturers = cos.filter(c=>!c.isTrialActive && c.subscriptionStatus!=='active').reduce((s,c)=>s+((c.roleCounts&&c.roleCounts.lecturer)||0),0);
 
   document.getElementById('tab-institutions').innerHTML = `
     <div class="stats">
       <div class="stat"><div class="stat-val">${total}</div><div class="stat-lbl">Institutions</div></div>
       <div class="stat"><div class="stat-val" style="color:#16a34a">${active}</div><div class="stat-lbl">Active</div></div>
       <div class="stat"><div class="stat-val" style="color:#d97706">${trial}</div><div class="stat-lbl">On Trial</div></div>
+      <div class="stat"><div class="stat-val" style="color:#dc2626">${expired}</div><div class="stat-lbl">Expired</div></div>
+      <div class="stat"><div class="stat-val" style="color:#dc2626">${expiredLecturers}</div><div class="stat-lbl">Expired Lecturers</div></div>
       <div class="stat"><div class="stat-val" style="color:#2563eb">${sub}</div><div class="stat-lbl">Subscribed</div></div>
       <div class="stat"><div class="stat-val" style="color:#16a34a;font-size:20px">GHS ${rev.toLocaleString()}</div><div class="stat-lbl">Revenue</div></div>
       <div class="stat"><div class="stat-val">${acad}</div><div class="stat-lbl">Academic</div></div>
