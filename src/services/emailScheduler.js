@@ -257,9 +257,45 @@ function startScheduler() {
     esp32Watchdog().catch(err => console.error('[ESP32 Watchdog] Unhandled error:', err));
   });
 
+  // Lecturer subscription check — runs daily at 08:05 Ghana time
+  cron.schedule('5 8 * * *', () => {
+    checkLecturerSubscriptions().catch(err => console.error('[LecturerSub] Unhandled error:', err));
+  }, { timezone: 'Africa/Accra' });
+
   console.log('[Scheduler] ✅ Email scheduler started -- runs daily at 08:00 Accra time');
   console.log('[Scheduler] ✅ Stale lock cleanup started -- runs every 5 minutes');
   console.log('[Scheduler] ✅ ESP32 watchdog started -- checks every 1 second (STRICT)');
+  console.log('[Scheduler] ✅ Lecturer subscription check started -- runs daily at 08:05 Accra time');
 }
 
-module.exports = { startScheduler, runDailyEmails, cleanStaleLocks, esp32Watchdog };
+// ── Per-lecturer subscription expiry check ────────────────────────────────────
+const checkLecturerSubscriptions = async () => {
+  try {
+    const now = Date.now();
+    const lecturers = await User.find({
+      role: { $in: ["lecturer", "manager"] },
+      isActive: true,
+    }).select("name email trialEndDate subscriptionExpiry subscriptionStatus createdAt").lean();
+
+    for (const l of lecturers) {
+      const trialEnd = l.trialEndDate
+        ? new Date(l.trialEndDate)
+        : new Date(new Date(l.createdAt).getTime() + 30*24*60*60*1000);
+      const subEnd   = l.subscriptionExpiry ? new Date(l.subscriptionExpiry) : null;
+      const activeEnd = (subEnd && subEnd > now) ? subEnd : trialEnd;
+      const daysLeft  = (activeEnd - now) / (1000*60*60*24);
+      if (!l.email) continue;
+      if (daysLeft > 6 && daysLeft <= 7)
+        await sendTrialEndingSoon({ email: l.email, name: l.name, daysLeft: 7, trialEndDate: activeEnd }).catch(()=>{});
+      else if (daysLeft > 0 && daysLeft <= 1)
+        await sendTrialEndingSoon({ email: l.email, name: l.name, daysLeft: 1, trialEndDate: activeEnd }).catch(()=>{});
+      else if (daysLeft <= 0 && daysLeft > -1)
+        await User.findByIdAndUpdate(l._id, { subscriptionStatus: "expired" }).catch(()=>{});
+    }
+    console.log(`[Scheduler] Lecturer sub check: ${lecturers.length}`);
+  } catch (err) {
+    console.error("[Scheduler] Lecturer check error:", err.message);
+  }
+};
+
+module.exports = { startScheduler, runDailyEmails, cleanStaleLocks, esp32Watchdog, checkLecturerSubscriptions };
