@@ -126,6 +126,27 @@ const userSchema = new mongoose.Schema(
       ref: "Branch",
       default: null,
     },
+
+    // ── Per-lecturer subscription ─────────────────────────────
+    // Only applies to roles: lecturer, manager, admin
+    // Students, employees, HODs are always free
+    subscriptionStatus: {
+      type: String,
+      enum: ["trial", "active", "expired"],
+      default: "trial",
+    },
+    trialEndDate: {
+      type: Date,
+      default: null, // set on registration to createdAt + 30 days
+    },
+    subscriptionExpiry: {
+      type: Date,
+      default: null, // set when they pay for a semester
+    },
+    semestersPaid: {
+      type: Number,
+      default: 0,
+    },
   },
   {
     timestamps: true,
