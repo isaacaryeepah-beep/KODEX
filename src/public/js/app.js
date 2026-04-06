@@ -718,7 +718,7 @@ function showSubscriptionGate(message) {
       <h2 style="font-size:22px;font-weight:800;color:#dc2626;margin:0 0 8px">Access Suspended</h2>
       <p style="font-size:14px;color:#475569;margin:0 0 24px;line-height:1.5">${(message || 'Your subscription has expired. Please renew to continue using KODEX.').replace(/</g,'&lt;')}</p>
       <button onclick="paySemester()" style="width:100%;padding:14px 24px;background:#16a34a;color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer;margin-bottom:10px">Pay with Paystack — GHS 300</button>
-      <button onclick="logout()" style="width:100%;padding:10px 24px;background:transparent;color:#6b7280;border:1px solid #e5e7eb;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer">Sign Out</button>
+      <button onclick="handleLogout()" style="width:100%;padding:10px 24px;background:transparent;color:#6b7280;border:1px solid #e5e7eb;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer">Sign Out</button>
     </div>
   `;
   document.body.appendChild(overlay);
