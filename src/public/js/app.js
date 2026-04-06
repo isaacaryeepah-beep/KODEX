@@ -709,7 +709,7 @@ async function api(path, options = {}) {
     const data = await res.json();
     if (!res.ok) {
       // Subscription gate — redirect lecturer to subscription page automatically
-      if (res.status === 403 && data.subscriptionRequired) {
+      if (res.status === 403 && (data.subscriptionRequired || data.userSubscription || data.subscriptionExpired)) {
         showSubscriptionGate(data.message);
         throw new Error(data.error || 'Subscription required');
       }
