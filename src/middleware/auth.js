@@ -24,9 +24,14 @@ const authenticate = async (req, res, next) => {
 
     // Block expired lecturers/managers on every API request
     const PAID_ROLES = ['lecturer', 'manager'];
-    const EXEMPT = ['/api/payments', '/api/auth/logout', '/api/auth/login'];
+    // NOTE: req.path is RELATIVE to the router's mount point (e.g. "/paystack/initialize"
+    // inside routes/payments.js), so we have to test against req.originalUrl which is
+    // the full URL path. Otherwise the exemption never matches and expired lecturers
+    // get 403'd even on the Paystack initialize call — making it impossible to pay.
+    const EXEMPT = ['/api/payments', '/api/auth/logout', '/api/auth/login', '/api/auth/me'];
     if (PAID_ROLES.includes(user.role)) {
-      const isExempt = EXEMPT.some(p => req.path.startsWith(p));
+      const fullPath = (req.originalUrl || req.url || '').split('?')[0];
+      const isExempt = EXEMPT.some(p => fullPath.startsWith(p));
       if (!isExempt) {
         const now = Date.now();
         const trialEnd = user.trialEndDate
