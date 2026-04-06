@@ -21,6 +21,40 @@ const authenticate = async (req, res, next) => {
     }
 
     req.user = user;
+
+    // ── Per-lecturer subscription check ─────────────────────────────────────
+    // Block lecturers/managers with expired personal subscriptions on every request
+    // Students, employees, HODs are always free
+    const PAID_ROLES = ['lecturer', 'manager'];
+    const EXEMPT_PATHS = [
+      '/api/payments',      // allow subscription page to load
+      '/api/auth/logout',   // allow logout
+      '/api/auth/login',    // allow login
+    ];
+
+    if (PAID_ROLES.includes(user.role)) {
+      const isExempt = EXEMPT_PATHS.some(p => req.path.startsWith(p));
+      if (!isExempt) {
+        const now = Date.now();
+        const trialEnd = user.trialEndDate
+          ? new Date(user.trialEndDate)
+          : new Date(new Date(user.createdAt).getTime() + 30 * 24 * 60 * 60 * 1000);
+        const subEnd = user.subscriptionExpiry ? new Date(user.subscriptionExpiry) : null;
+        const trialActive = trialEnd > now;
+        const subActive   = subEnd && subEnd > now;
+
+        if (!trialActive && !subActive) {
+          return res.status(403).json({
+            error: 'Subscription expired',
+            message: 'Your free trial has ended. Please subscribe to continue using KODEX.',
+            subscriptionExpired: true,
+            userSubscription: true,
+          });
+        }
+      }
+    }
+    // ────────────────────────────────────────────────────────────────────────
+
     next();
   } catch (error) {
     if (error.name === "JsonWebTokenError") {
