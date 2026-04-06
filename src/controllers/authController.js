@@ -8,11 +8,9 @@ const { sendWelcome, sendAdminPasswordResetNotice, sendPasswordReset, sendNewIns
 const { sendOtp, normalisePhone } = require("../services/smsService");
 
 const SIX_HOURS_MS = 6 * 60 * 60 * 1000;
-
-// Roles that require their own subscription (students/employees/HODs are free)
-const PAID_ROLES = ["lecturer", "manager", "admin"];
+const PAID_ROLES = ["lecturer", "manager"];
 const TRIAL_DAYS = 30;
-const SEMESTER_DAYS = 112; // 16 weeks = 1 full semester
+const SEMESTER_DAYS = 112;
 
 exports.register = async (req, res) => {
   try {
@@ -188,8 +186,6 @@ exports.registerLecturer = async (req, res) => {
           role: "lecturer",
           isApproved: true,
           department: department || null,
-          subscriptionStatus: "trial",
-          trialEndDate: new Date(Date.now() + TRIAL_DAYS * 24 * 60 * 60 * 1000),
         });
       } catch (userError) {
         await Company.findByIdAndDelete(company._id);
@@ -255,7 +251,6 @@ exports.registerLecturer = async (req, res) => {
       if (phoneExists) return res.status(400).json({ error: "Phone number is already in use" });
     }
 
-    const lecTrialEnd = new Date(Date.now() + TRIAL_DAYS * 24 * 60 * 60 * 1000);
     const user = await User.create({
       name,
       email,
@@ -265,8 +260,6 @@ exports.registerLecturer = async (req, res) => {
       role: "lecturer",
       isApproved: false,
       department: department || null,
-      subscriptionStatus: "trial",
-      trialEndDate: lecTrialEnd,
     });
 
     // If a department was specified, notify the HOD of that department
@@ -657,41 +650,6 @@ exports.login = async (req, res) => {
       });
     }
 
-    // ── Per-lecturer subscription check ─────────────────────────────────────
-    // Lecturers, managers and admins must have an active personal subscription
-    // Students, employees and HODs are always free
-    if (PAID_ROLES.includes(user.role) && user.role !== "admin") {
-      const now = Date.now();
-      const trialEnd = user.trialEndDate ? new Date(user.trialEndDate).getTime() : null;
-      const subEnd   = user.subscriptionExpiry ? new Date(user.subscriptionExpiry).getTime() : null;
-
-      // Set trialEndDate if not set (legacy accounts)
-      if (!trialEnd) {
-        user.trialEndDate = new Date(new Date(user.createdAt).getTime() + 30 * 24 * 60 * 60 * 1000);
-        await user.save();
-      }
-
-      const trialActive = trialEnd && now < trialEnd;
-      const subActive   = subEnd && now < subEnd;
-
-      if (!trialActive && !subActive) {
-        user.subscriptionStatus = "expired";
-        await user.save();
-        return res.status(403).json({
-          error: "Subscription expired",
-          message: "Your free trial has ended. Please subscribe to continue using KODEX.",
-          subscriptionExpired: true,
-          userSubscription: true, // flag so frontend knows it's user-level not institution-level
-          trialEndDate: user.trialEndDate,
-        });
-      }
-
-      // Update status
-      user.subscriptionStatus = subActive ? "active" : "trial";
-      await user.save();
-    }
-    // ────────────────────────────────────────────────────────────────────────
-
     if (user.lastLogoutTime) {
       const timeSinceLogout = Date.now() - new Date(user.lastLogoutTime).getTime();
       if (timeSinceLogout < SIX_HOURS_MS && deviceId && user.deviceId && user.deviceId !== deviceId) {
@@ -755,22 +713,6 @@ exports.login = async (req, res) => {
         status: company.subscriptionStatus,
         plan: company.subscriptionPlan,
       } : null,
-      // Per-lecturer subscription info (only for paid roles)
-      userTrial: PAID_ROLES.includes(user.role) ? (() => {
-        const now = Date.now();
-        const trialEnd = user.trialEndDate
-          ? new Date(user.trialEndDate)
-          : new Date(new Date(user.createdAt).getTime() + 30*24*60*60*1000);
-        const subEnd = user.subscriptionExpiry ? new Date(user.subscriptionExpiry) : null;
-        const activeEnd = (subEnd && subEnd > now) ? subEnd : trialEnd;
-        const daysLeft = Math.ceil((activeEnd - now) / (1000*60*60*24));
-        return {
-          daysLeft,
-          activeEnd,
-          status: user.subscriptionStatus,
-          isSubscribed: subEnd && subEnd > now,
-        };
-      })() : null,
     });
   } catch (error) {
     console.error("Login error:", error);
@@ -780,13 +722,10 @@ exports.login = async (req, res) => {
 
 exports.logout = async (req, res) => {
   try {
-    const updateData = { lastLogoutTime: new Date() };
-    // Students keep deviceId on logout so device lock is preserved.
-    // Non-students clear deviceId normally.
-    if (req.user.role !== "student") {
-      updateData.deviceId = null;
-    }
-    await User.findByIdAndUpdate(req.user._id, updateData);
+    await User.findByIdAndUpdate(req.user._id, {
+      lastLogoutTime: new Date(),
+      deviceId: null,
+    });
 
     res.json({
       message: "Logged out successfully",
@@ -826,21 +765,15 @@ exports.getMe = async (req, res) => {
         status: company.subscriptionStatus,
         plan: company.subscriptionPlan,
       } : null,
-      // Per-lecturer subscription info — used for countdown banner
       userTrial: PAID_ROLES.includes(user.role) ? (() => {
         const now = Date.now();
         const trialEnd = user.trialEndDate
           ? new Date(user.trialEndDate)
-          : new Date(new Date(user.createdAt).getTime() + 30 * 24 * 60 * 60 * 1000);
+          : new Date(new Date(user.createdAt).getTime() + TRIAL_DAYS*24*60*60*1000);
         const subEnd = user.subscriptionExpiry ? new Date(user.subscriptionExpiry) : null;
         const activeEnd = (subEnd && subEnd > now) ? subEnd : trialEnd;
-        const daysLeft = Math.ceil((activeEnd - now) / (1000 * 60 * 60 * 24));
-        return {
-          daysLeft,
-          activeEnd,
-          status: subEnd && subEnd > now ? 'active' : trialEnd > now ? 'trial' : 'expired',
-          isSubscribed: !!(subEnd && subEnd > now),
-        };
+        const daysLeft = Math.ceil((activeEnd - now) / (1000*60*60*24));
+        return { daysLeft, activeEnd, status: subEnd && subEnd > now ? 'active' : trialEnd > now ? 'trial' : 'expired', isSubscribed: !!(subEnd && subEnd > now) };
       })() : null,
     });
   } catch (error) {
