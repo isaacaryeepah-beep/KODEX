@@ -6,11 +6,14 @@ const { sendSubscriptionConfirmed } = require("../services/emailService");
 const PAYSTACK_BASE_URL = "https://api.paystack.co";
 const PAYSTACK_SECRET_KEY = process.env.PAYSTACK_SECRET_KEY;
 
-// ✅ Your fixed prices
+// ✅ Fixed prices
 const PRICES_GHS = {
-  monthly: 200,
-  yearly: 2000, // 200 × 12 = 2400, discounted to 2000 (2 months free)
+  monthly:  200,
+  yearly:   2000,
+  semester: 300,  // GHS 300 per semester (16 weeks / 112 days)
 };
+
+const SEMESTER_DAYS = 112; // 16 weeks
 
 // ✅ Set end date helper
 function addMonths(date, months) {
@@ -86,13 +89,15 @@ exports.initializePaystackSubscription = async (req, res) => {
       return res.status(500).json({ error: "PAYSTACK_SECRET_KEY missing in Render environment variables" });
     }
 
-    if (!plan || !PRICES_GHS[plan]) {
-      return res.status(400).json({ error: "Invalid plan. Use: monthly or yearly" });
+    // Accept either plan name or direct amount (for semester payments)
+    const amountGhs = req.body.amount ? Math.round(req.body.amount / 100) : PRICES_GHS[plan];
+    const resolvedPlan = plan || 'semester';
+
+    if (!amountGhs) {
+      return res.status(400).json({ error: "Invalid plan. Use: monthly, yearly, or semester" });
     }
 
     const companyId = req.user.company;
-    const amountGhs = PRICES_GHS[plan];
-
     const email = req.user.email || `company_${companyId}@example.com`;
 
     const appUrl = process.env.APP_URL || `https://${req.headers.host}`;
@@ -107,9 +112,10 @@ exports.initializePaystackSubscription = async (req, res) => {
         metadata: {
           purpose: "subscription",
           companyId: String(companyId),
-          plan,
+          plan: resolvedPlan,
           userId: String(req.user._id),
           amountGhs,
+          semesterDays: resolvedPlan === 'semester' ? SEMESTER_DAYS : null,
         },
       },
       {
@@ -158,82 +164,147 @@ exports.verifyPaystackSubscription = async (req, res) => {
     const companyId = meta.companyId;
     const plan = meta.plan;
 
-    if (!companyId || !plan || !PRICES_GHS[plan]) {
+    if (!companyId || !plan) {
       return res.status(400).json({ error: "Invalid or missing metadata (companyId/plan)" });
     }
 
-    const expectedAmount = PRICES_GHS[plan] * 100;
-    if (Number(data.amount) !== expectedAmount) {
-      return res.status(400).json({
-        error: "Amount mismatch",
-        paid: data.amount,
-        expected: expectedAmount,
+    const now      = new Date();
+    const isSemester = plan === "semester";
+    const userId   = meta.userId;
+
+    if (isSemester && userId) {
+      // ── Per-lecturer semester subscription ──────────────────────────────
+      const user = await User.findById(userId);
+      if (!user) return res.status(404).json({ error: "User not found" });
+
+      // Stack from current subscription end if still active
+      const existingEnd = user.subscriptionExpiry && new Date(user.subscriptionExpiry) > now
+        ? new Date(user.subscriptionExpiry) : now;
+      const endDate = new Date(existingEnd.getTime() + SEMESTER_DAYS * 24 * 60 * 60 * 1000);
+
+      user.subscriptionExpiry  = endDate;
+      user.subscriptionStatus  = "active";
+      user.semestersPaid       = (user.semestersPaid || 0) + 1;
+      user.trialEndDate        = user.trialEndDate || endDate;
+      await user.save();
+
+      // Log payment
+      await Company.findByIdAndUpdate(companyId, {
+        $inc: { revenue: meta.amountGhs || 300 },
+        lastPaymentDate: now,
       });
-    }
 
-    const now = new Date();
-
-    // ── Subscription stacking ──────────────────────────────────────────────
-    // If the company already has an active subscription, extend from the
-    // current end date rather than from today — so early renewals stack up.
-    const existingCompany = await Company.findById(companyId).lean();
-    const baseDate =
-      existingCompany?.subscriptionActive &&
-      existingCompany?.subscriptionEndDate &&
-      new Date(existingCompany.subscriptionEndDate) > now
-        ? new Date(existingCompany.subscriptionEndDate)   // extend from current end
-        : now;                                             // new subscription from today
-
-    const endDate = plan === "monthly" ? addMonths(baseDate, 1) : addYears(baseDate, 1);
-
-    const company = await Company.findByIdAndUpdate(
-      companyId,
-      {
-        subscriptionActive:   true,
-        subscriptionStatus:   "active",
-        subscriptionPlan:     plan === "yearly" ? "annual" : "monthly",
-        subscriptionProvider: "paystack",
-        trialUsed:            true,
-        subscriptionStartDate: now,
-        subscriptionEndDate:  endDate,
-        lastPaymentReference: reference,
-        lastPaymentAmount:    meta.amountGhs,
-        lastPaymentDate:      now,
-      },
-      { new: true }
-    );
-
-    if (!company) return res.status(404).json({ error: "Company not found" });
-
-    // Send confirmation email to the paying user
-    try {
-      const user = await User.findById(meta.userId).select('email name').lean();
-      if (user) {
+      // Send confirmation email
+      try {
         await sendSubscriptionConfirmed({
           email:     user.email,
-          name:      user.name || user.email.split('@')[0],
-          plan,
-          endDate:   company.subscriptionEndDate,
-          amountGhs: meta.amountGhs,
+          name:      user.name,
+          plan:      'semester',
+          endDate,
+          amountGhs: meta.amountGhs || 300,
         });
-      }
-    } catch (emailErr) {
-      console.error('Confirmation email failed:', emailErr.message); // non-fatal
-    }
+      } catch (_) {}
 
-    return res.json({
-      message: "Subscription activated ✅",
-      company: {
-        id: company._id,
-        name: company.name,
-        subscriptionActive: company.subscriptionActive,
-        subscriptionStatus: company.subscriptionStatus,
-        subscriptionPlan: company.subscriptionPlan,
-        subscriptionEndDate: company.subscriptionEndDate,
-      },
-    });
+      return res.json({
+        message: "Semester subscription activated ✅",
+        subscriptionExpiry: endDate,
+        semestersPaid: user.semestersPaid,
+      });
+
+    } else {
+      // ── Institution-level subscription (monthly/yearly) ─────────────────
+      if (!PRICES_GHS[plan]) {
+        return res.status(400).json({ error: "Invalid plan" });
+      }
+
+      const existingCompany = await Company.findById(companyId).lean();
+      const baseDate =
+        existingCompany?.subscriptionActive &&
+        existingCompany?.subscriptionEndDate &&
+        new Date(existingCompany.subscriptionEndDate) > now
+          ? new Date(existingCompany.subscriptionEndDate)
+          : now;
+
+      const endDate = plan === "monthly" ? addMonths(baseDate, 1) : addYears(baseDate, 1);
+
+      const company = await Company.findByIdAndUpdate(
+        companyId,
+        {
+          subscriptionActive:    true,
+          subscriptionStatus:    "active",
+          subscriptionPlan:      plan === "yearly" ? "annual" : "monthly",
+          subscriptionProvider:  "paystack",
+          trialUsed:             true,
+          subscriptionStartDate: now,
+          subscriptionEndDate:   endDate,
+          lastPaymentReference:  reference,
+          lastPaymentAmount:     meta.amountGhs,
+          lastPaymentDate:       now,
+        },
+        { new: true }
+      );
+
+      if (!company) return res.status(404).json({ error: "Company not found" });
+
+      try {
+        const user = await User.findById(meta.userId).select("email name").lean();
+        if (user) {
+          await sendSubscriptionConfirmed({
+            email:     user.email,
+            name:      user.name || user.email.split("@")[0],
+            plan,
+            endDate:   company.subscriptionEndDate,
+            amountGhs: meta.amountGhs,
+          });
+        }
+      } catch (emailErr) {
+        console.error("Confirmation email failed:", emailErr.message);
+      }
+
+      return res.json({
+        message: "Subscription activated ✅",
+        company: {
+          id:                  company._id,
+          name:                company.name,
+          subscriptionActive:  company.subscriptionActive,
+          subscriptionStatus:  company.subscriptionStatus,
+          subscriptionPlan:    company.subscriptionPlan,
+          subscriptionEndDate: company.subscriptionEndDate,
+        },
+      });
+    }
   } catch (e) {
     console.error("Paystack verify error:", e.response?.data || e.message);
     return res.status(500).json({ error: "Failed to verify payment" });
+  }
+};
+
+// GET /api/payments/user-subscription
+exports.getUserSubscription = async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id)
+      .select("subscriptionStatus trialEndDate subscriptionExpiry semestersPaid createdAt role")
+      .lean();
+
+    const now = Date.now();
+    const trialEnd = user.trialEndDate
+      ? new Date(user.trialEndDate)
+      : new Date(new Date(user.createdAt).getTime() + 30*24*60*60*1000);
+    const subEnd = user.subscriptionExpiry ? new Date(user.subscriptionExpiry) : null;
+    const activeEnd = (subEnd && subEnd > now) ? subEnd : trialEnd;
+    const daysLeft  = Math.ceil((activeEnd - now) / (1000*60*60*24));
+
+    res.json({
+      subscription: {
+        status:             daysLeft > 0 ? (subEnd && subEnd > now ? "active" : "trial") : "expired",
+        trialEndDate:       trialEnd,
+        subscriptionExpiry: subEnd,
+        activeEnd,
+        daysLeft,
+        semestersPaid:      user.semestersPaid || 0,
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to get subscription status" });
   }
 };
