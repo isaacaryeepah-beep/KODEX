@@ -87,23 +87,30 @@ exports.listQuizzes = async (req, res) => {
   try {
     const { courseId } = req.query;
 
-    // HOD sees all quizzes in their department; lecturer sees only their own
+    // HOD: all quizzes in their department's courses.
+    // Lecturer: quizzes attached to courses THEY teach (not "quizzes they authored").
+    // Scoping by course ownership is the right model — a lecturer's Performance
+    // page should reflect their courses, not just quizzes they personally clicked
+    // create on, and should never leak other lecturers' courses.
     let filter;
     if (req.user.role === 'hod') {
       filter = { company: req.user.company };
       if (req.user.department) {
-        // Find lecturers in this department then filter by them
-        const User = require('../models/User');
-        const deptLecturers = await User.find({
+        const deptCourses = await Course.find({
           company: req.user.company,
-          role: 'lecturer',
           department: req.user.department,
         }).select('_id').lean();
-        const ids = deptLecturers.map(l => l._id);
-        filter.createdBy = { $in: ids };
+        filter.course = { $in: deptCourses.map(c => c._id) };
       }
     } else {
-      filter = { company: req.user.company, createdBy: req.user._id };
+      const myCourses = await Course.find({
+        company: req.user.company,
+        lecturer: req.user._id,
+      }).select('_id').lean();
+      filter = {
+        company: req.user.company,
+        course: { $in: myCourses.map(c => c._id) },
+      };
     }
 
     // Filter by source if provided (proctored = main portal, assignment = assignments page)
