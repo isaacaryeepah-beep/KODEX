@@ -1,28 +1,70 @@
-const express = require("express");
-const authenticate = require("../middleware/auth");
-const { requireRole } = require("../middleware/role");
-const authController = require("../controllers/authController");
-const { loginLimiter, registerLimiter, passwordResetLimiter } = require("../middleware/rateLimiter");
+const { verifyToken } = require("../utils/jwt");
+const User = require("../models/User");
 
-const router = express.Router();
+const authenticate = async (req, res, next) => {
+  try {
+    // Accept token from Authorization header OR query string (for file downloads)
+    const authHeader = req.headers.authorization;
+    let token;
+    if (authHeader && authHeader.startsWith("Bearer ")) {
+      token = authHeader.split(" ")[1];
+    } else if (req.query.token) {
+      token = req.query.token;
+    } else {
+      return res.status(401).json({ error: "No token provided" });
+    }
+    const decoded = verifyToken(token);
 
-// ── Auth routes with rate limiting ───────────────────────────────────────────
-router.post("/register",               registerLimiter,       authController.register);
-router.post("/register-lecturer",      registerLimiter,       authController.registerLecturer);
-router.post("/register-student",       registerLimiter,       authController.registerStudent);
-router.post("/register-employee",      registerLimiter,       authController.registerEmployee);
-router.post("/login",                  loginLimiter,          authController.login);
-router.post("/logout",                 authenticate,          authController.logout);
-router.get("/me",                      authenticate,          authController.getMe);
-router.post("/migrate-orphans",        authenticate, requireRole("superadmin"), authController.migrateOrphanUsers);
-router.post("/forgot-password",        passwordResetLimiter,  authController.forgotPassword);
-router.post("/reset-password",         passwordResetLimiter,  authController.resetPassword);
-router.post("/forgot-password-email",  passwordResetLimiter,  authController.forgotPasswordEmail);
-router.post("/reset-password-email",   passwordResetLimiter,  authController.resetPasswordEmail);
-router.post("/forgot-password-admin",  passwordResetLimiter,  authController.forgotPasswordAdmin);  // ← ADDED
-router.put("/profile",                 authenticate,          authController.updateProfile);
-router.post("/2fa/toggle",             authenticate,          authController.toggle2FA);
-router.post("/2fa/send",               authenticate,          authController.send2FACode);
-router.post("/2fa/verify",             authenticate,          authController.verify2FACode);
+    const user = await User.findById(decoded.id);
+    if (!user || !user.isActive) {
+      return res.status(401).json({ error: "User not found or inactive" });
+    }
 
-module.exports = router;
+    req.user = user;
+
+    // ── Per-lecturer subscription check ─────────────────────────────────────
+    // Block lecturers/managers with expired personal subscriptions on every request
+    // Students, employees, HODs are always free
+    const PAID_ROLES = ['lecturer', 'manager'];
+    const EXEMPT_PATHS = [
+      '/api/payments',      // allow subscription page to load
+      '/api/auth/logout',   // allow logout
+      '/api/auth/login',    // allow login
+    ];
+
+    if (PAID_ROLES.includes(user.role)) {
+      const isExempt = EXEMPT_PATHS.some(p => req.path.startsWith(p));
+      if (!isExempt) {
+        const now = Date.now();
+        const trialEnd = user.trialEndDate
+          ? new Date(user.trialEndDate)
+          : new Date(new Date(user.createdAt).getTime() + 30 * 24 * 60 * 60 * 1000);
+        const subEnd = user.subscriptionExpiry ? new Date(user.subscriptionExpiry) : null;
+        const trialActive = trialEnd > now;
+        const subActive   = subEnd && subEnd > now;
+
+        if (!trialActive && !subActive) {
+          return res.status(403).json({
+            error: 'Subscription expired',
+            message: 'Your free trial has ended. Please subscribe to continue using KODEX.',
+            subscriptionExpired: true,
+            userSubscription: true,
+          });
+        }
+      }
+    }
+    // ────────────────────────────────────────────────────────────────────────
+
+    next();
+  } catch (error) {
+    if (error.name === "JsonWebTokenError") {
+      return res.status(401).json({ error: "Invalid token" });
+    }
+    if (error.name === "TokenExpiredError") {
+      return res.status(401).json({ error: "Token expired" });
+    }
+    return res.status(500).json({ error: "Authentication failed" });
+  }
+};
+
+module.exports = authenticate;
