@@ -464,6 +464,7 @@ function showDetail(id) {
 }
 
 async function loadLecturerSubs(companyId) {
+  window.currentLecturerCompanyId = companyId;
   const container = document.getElementById('lecturer-subs-' + companyId);
   container.innerHTML = '<div style="font-size:13px;color:#6b7280">Loading…</div>';
   try {
@@ -489,6 +490,8 @@ async function loadLecturerSubs(companyId) {
         <td style="padding:8px">
           <button onclick="extendUserTrial('${l._id}','${esc(l.name)}')" style="padding:4px 10px;background:#4f46e5;color:#fff;border:none;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer">Set Trial</button>
           <button onclick="activateSemester('${l._id}','${esc(l.name)}')" style="padding:4px 10px;background:#16a34a;color:#fff;border:none;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;margin-left:4px">+ Semester (GHS 300)</button>
+          <button onclick="adjustUserDays('${l._id}','${esc(l.name)}')" style="padding:4px 10px;background:#f59e0b;color:#fff;border:none;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;margin-left:4px">Adjust Days</button>
+          <button onclick="unsubscribeUser('${l._id}','${esc(l.name)}')" style="padding:4px 10px;background:#dc2626;color:#fff;border:none;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;margin-left:4px">Unsubscribe</button>
         </td>
       </tr>`;
     }).join('');
@@ -733,6 +736,38 @@ async function activateSemester(userId, name) {
       body: JSON.stringify({ semester: true })
     });
     alert('✅ ' + data.message);
+  } catch(ex) {
+    alert('Error: ' + ex.message);
+  }
+}
+
+async function unsubscribeUser(userId, name) {
+  if (!confirm(`Unsubscribe ${name}?\n\nThis will immediately revoke access — their subscription and trial will both be cleared.`)) return;
+  try {
+    const data = await api('/api/superadmin/users/' + userId + '/extend-trial', {
+      method: 'PATCH',
+      body: JSON.stringify({ action: 'unsubscribe' })
+    });
+    alert('✅ ' + data.message);
+    // Refresh the lecturer list if we know which company we're viewing
+    if (window.currentLecturerCompanyId) loadLecturerSubs(window.currentLecturerCompanyId);
+  } catch(ex) {
+    alert('Error: ' + ex.message);
+  }
+}
+
+async function adjustUserDays(userId, name) {
+  const input = prompt(`Adjust days for ${name}.\n\nEnter a positive number to add days, negative to reduce (e.g. -14 to remove 2 weeks):`);
+  if (input === null) return;
+  const n = parseInt(input, 10);
+  if (isNaN(n) || n === 0) { alert('Please enter a non-zero whole number.'); return; }
+  try {
+    const data = await api('/api/superadmin/users/' + userId + '/extend-trial', {
+      method: 'PATCH',
+      body: JSON.stringify({ adjustDays: n })
+    });
+    alert('✅ ' + data.message);
+    if (window.currentLecturerCompanyId) loadLecturerSubs(window.currentLecturerCompanyId);
   } catch(ex) {
     alert('Error: ' + ex.message);
   }
