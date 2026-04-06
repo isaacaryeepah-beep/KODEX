@@ -163,6 +163,75 @@ router.patch("/companies/:id/extend-trial", async (req, res) => {
   }
 });
 
+// ── GET /api/superadmin/companies/:id/lecturers ───────────────────────────────
+router.get("/companies/:id/lecturers", async (req, res) => {
+  try {
+    const lecturers = await User.find({
+      company: req.params.id,
+      role: { $in: ["lecturer", "manager", "admin"] }
+    }).select("name email role subscriptionStatus trialEndDate subscriptionExpiry semestersPaid createdAt").lean();
+
+    // Auto-set trialEndDate for legacy accounts that don't have it
+    const now = Date.now();
+    const enriched = lecturers.map(l => {
+      const trialEnd = l.trialEndDate || new Date(new Date(l.createdAt).getTime() + 30*24*60*60*1000);
+      const subEnd   = l.subscriptionExpiry;
+      const trialActive = trialEnd && new Date(trialEnd) > now;
+      const subActive   = subEnd && new Date(subEnd) > now;
+      return {
+        ...l,
+        trialEndDate: trialEnd,
+        subscriptionStatus: subActive ? "active" : trialActive ? "trial" : "expired",
+      };
+    });
+
+    res.json({ lecturers: enriched });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to load lecturers" });
+  }
+});
+
+// ── PATCH /api/superadmin/users/:id/extend-trial ─────────────────────────────
+router.patch("/users/:id/extend-trial", async (req, res) => {
+  try {
+    const { expiryDate, days } = req.body;
+    const user = await User.findById(req.params.id);
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    let newEnd;
+    if (expiryDate) {
+      newEnd = new Date(expiryDate);
+      newEnd.setHours(23, 59, 59, 999);
+      if (isNaN(newEnd.getTime())) return res.status(400).json({ error: "Invalid date" });
+    } else if (days) {
+      const base = user.trialEndDate && new Date(user.trialEndDate) > Date.now()
+        ? new Date(user.trialEndDate) : new Date();
+      newEnd = new Date(base.getTime() + days * 24 * 60 * 60 * 1000);
+    } else if (req.body.semester) {
+      // 1 semester = 16 weeks = 112 days
+      const SEMESTER_DAYS = 112;
+const SEMESTER_PRICE_GHS = 300;
+      newEnd = new Date(Date.now() + SEMESTER_DAYS * 24 * 60 * 60 * 1000);
+      user.subscriptionExpiry = newEnd;
+      user.subscriptionStatus = "active";
+      user.semestersPaid = (user.semestersPaid || 0) + 1;
+      user.trialEndDate = user.trialEndDate || newEnd; // ensure trialEndDate is set
+      await user.save();
+      return res.json({ message: `Subscription activated for 1 semester (112 days) at GHS ${SEMESTER_PRICE_GHS}. Expires: ${newEnd.toDateString()}`, subscriptionExpiry: newEnd, price: SEMESTER_PRICE_GHS });
+    } else {
+      return res.status(400).json({ error: "Provide expiryDate or days" });
+    }
+
+    user.trialEndDate = newEnd;
+    user.subscriptionStatus = "trial";
+    await user.save();
+
+    res.json({ message: `Trial set to ${newEnd.toDateString()}`, trialEndDate: newEnd });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to update user trial" });
+  }
+});
+
 // ── DELETE /api/superadmin/companies/:id ─────────────────────────────────────
 router.delete("/companies/:id", async (req, res) => {
   try {
