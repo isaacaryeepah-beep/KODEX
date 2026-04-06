@@ -22,28 +22,18 @@ const authenticate = async (req, res, next) => {
 
     req.user = user;
 
-    // ── Per-lecturer subscription check ─────────────────────────────────────
-    // Block lecturers/managers with expired personal subscriptions on every request
-    // Students, employees, HODs are always free
+    // Block expired lecturers/managers on every API request
     const PAID_ROLES = ['lecturer', 'manager'];
-    const EXEMPT_PATHS = [
-      '/api/payments',      // allow subscription page to load
-      '/api/auth/logout',   // allow logout
-      '/api/auth/login',    // allow login
-    ];
-
+    const EXEMPT = ['/api/payments', '/api/auth/logout', '/api/auth/login'];
     if (PAID_ROLES.includes(user.role)) {
-      const isExempt = EXEMPT_PATHS.some(p => req.path.startsWith(p));
+      const isExempt = EXEMPT.some(p => req.path.startsWith(p));
       if (!isExempt) {
         const now = Date.now();
         const trialEnd = user.trialEndDate
           ? new Date(user.trialEndDate)
-          : new Date(new Date(user.createdAt).getTime() + 30 * 24 * 60 * 60 * 1000);
+          : new Date(new Date(user.createdAt).getTime() + 30*24*60*60*1000);
         const subEnd = user.subscriptionExpiry ? new Date(user.subscriptionExpiry) : null;
-        const trialActive = trialEnd > now;
-        const subActive   = subEnd && subEnd > now;
-
-        if (!trialActive && !subActive) {
+        if (!(trialEnd > now) && !(subEnd && subEnd > now)) {
           return res.status(403).json({
             error: 'Subscription expired',
             message: 'Your free trial has ended. Please subscribe to continue using KODEX.',
@@ -53,7 +43,6 @@ const authenticate = async (req, res, next) => {
         }
       }
     }
-    // ────────────────────────────────────────────────────────────────────────
 
     next();
   } catch (error) {
