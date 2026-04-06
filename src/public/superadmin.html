@@ -454,8 +454,111 @@ function showDetail(id) {
       <div class="detail-item"><label>Payments</label><span>${c.paymentCount||0}</span></div>
     </div>
     ${c.superadminNotes ? `<hr class="detail-divider"><div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#94a3b8;margin-bottom:8px">Notes</div><div style="font-size:14px;color:#374151;white-space:pre-wrap">${esc(c.superadminNotes)}</div>` : ''}
+    <hr class="detail-divider">
+    <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#94a3b8;margin-bottom:10px">Lecturer Subscriptions</div>
+    <div id="lecturer-subs-${c._id}">
+      <button onclick="loadLecturerSubs('${c._id}')" style="padding:8px 16px;background:#4f46e5;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer">View Lecturer Subscriptions</button>
+    </div>
   `;
   document.getElementById('detail-modal').classList.add('open');
+}
+
+async function loadLecturerSubs(companyId) {
+  const container = document.getElementById('lecturer-subs-' + companyId);
+  container.innerHTML = '<div style="font-size:13px;color:#6b7280">Loading…</div>';
+  try {
+    const data = await api('/api/superadmin/companies/' + companyId + '/lecturers');
+    if (!data.lecturers || !data.lecturers.length) {
+      container.innerHTML = '<div style="font-size:13px;color:#6b7280">No lecturers found.</div>';
+      return;
+    }
+    const rows = data.lecturers.map(l => {
+      const trialEnd = l.trialEndDate ? new Date(l.trialEndDate).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}) : '—';
+      const subEnd   = l.subscriptionExpiry ? new Date(l.subscriptionExpiry).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}) : '—';
+      const now = Date.now();
+      const trialActive = l.trialEndDate && new Date(l.trialEndDate) > now;
+      const subActive   = l.subscriptionExpiry && new Date(l.subscriptionExpiry) > now;
+      const status = subActive ? '✅ Subscribed' : trialActive ? '🟡 Trial' : '🔴 Expired';
+      const statusColor = subActive ? '#16a34a' : trialActive ? '#d97706' : '#dc2626';
+      return `<tr>
+        <td style="padding:8px;font-size:13px">${esc(l.name)}</td>
+        <td style="padding:8px;font-size:13px;color:#6b7280">${esc(l.email||'—')}</td>
+        <td style="padding:8px;font-size:13px;font-weight:700;color:${statusColor}">${status}</td>
+        <td style="padding:8px;font-size:12px">${trialEnd}</td>
+        <td style="padding:8px;font-size:12px">${subEnd}</td>
+        <td style="padding:8px">
+          <button onclick="extendUserTrial('${l._id}','${esc(l.name)}')" style="padding:4px 10px;background:#4f46e5;color:#fff;border:none;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer">Set Trial</button>
+          <button onclick="activateSemester('${l._id}','${esc(l.name)}')" style="padding:4px 10px;background:#16a34a;color:#fff;border:none;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;margin-left:4px">+ Semester (GHS 300)</button>
+        </td>
+      </tr>`;
+    }).join('');
+    container.innerHTML = `
+      <div style="overflow-x:auto">
+        <table style="width:100%;border-collapse:collapse">
+          <thead><tr style="background:#f8fafc">
+            <th style="padding:8px;font-size:11px;text-transform:uppercase;color:#94a3b8;text-align:left">Name</th>
+            <th style="padding:8px;font-size:11px;text-transform:uppercase;color:#94a3b8;text-align:left">Email</th>
+            <th style="padding:8px;font-size:11px;text-transform:uppercase;color:#94a3b8;text-align:left">Status</th>
+            <th style="padding:8px;font-size:11px;text-transform:uppercase;color:#94a3b8;text-align:left">Trial Ends</th>
+            <th style="padding:8px;font-size:11px;text-transform:uppercase;color:#94a3b8;text-align:left">Sub Ends</th>
+            <th style="padding:8px;font-size:11px;text-transform:uppercase;color:#94a3b8;text-align:left">Actions</th>
+          </tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>`;
+  } catch(ex) {
+    container.innerHTML = '<div style="font-size:13px;color:#dc2626">Error: ' + ex.message + '</div>';
+  }
+}
+
+async function extendUserTrial(userId, name) {
+  const defaultDate = new Date(Date.now() + 30*24*60*60*1000).toISOString().split('T')[0];
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px';
+  overlay.innerHTML = `
+    <div style="background:#fff;border-radius:16px;padding:28px;width:100%;max-width:380px;box-shadow:0 20px 60px rgba(0,0,0,.2)">
+      <h3 style="font-size:16px;font-weight:700;margin-bottom:4px;color:#0d1117">Set Trial — ${esc(name)}</h3>
+      <p style="font-size:13px;color:#6b7280;margin-bottom:16px">Pick the new expiry date for this lecturer.</p>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:16px">
+        <button onclick="setUserTrialDate(7)" style="padding:8px;border:1.5px solid #e5e7eb;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;background:#f9fafb">7 days</button>
+        <button onclick="setUserTrialDate(30)" style="padding:8px;border:1.5px solid #4f46e5;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;background:#eef2ff;color:#4f46e5">30 days</button>
+        <button onclick="setUserTrialDate(90)" style="padding:8px;border:1.5px solid #e5e7eb;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;background:#f9fafb">90 days</button>
+      </div>
+      <input id="user-trial-date" type="date" value="${defaultDate}" style="width:100%;padding:10px 12px;border:1.5px solid #e5e7eb;border-radius:8px;font-size:15px;font-weight:600;text-align:center;outline:none;font-family:inherit;cursor:pointer;margin-bottom:16px">
+      <div id="user-trial-msg" style="font-size:13px;margin-bottom:12px;display:none"></div>
+      <div style="display:flex;gap:8px">
+        <button onclick="this.closest('[style*=position]').remove()" style="flex:1;padding:10px;border:1.5px solid #e5e7eb;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;background:#fff">Cancel</button>
+        <button onclick="confirmUserTrial('${userId}')" style="flex:2;padding:10px;background:#4f46e5;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">Set Expiry</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+}
+
+function setUserTrialDate(days) {
+  const d = new Date(Date.now() + days*24*60*60*1000).toISOString().split('T')[0];
+  document.getElementById('user-trial-date').value = d;
+}
+
+async function confirmUserTrial(userId) {
+  const dateVal = document.getElementById('user-trial-date').value;
+  const msg = document.getElementById('user-trial-msg');
+  if (!dateVal) { msg.textContent='Pick a date'; msg.style.cssText='display:block;color:#dc2626;font-size:13px'; return; }
+  const btn = document.querySelector('[onclick*="confirmUserTrial"]');
+  btn.textContent='Saving…'; btn.disabled=true;
+  try {
+    const data = await api('/api/superadmin/users/' + userId + '/extend-trial', {
+      method: 'PATCH',
+      body: JSON.stringify({ expiryDate: dateVal })
+    });
+    msg.textContent = '✅ ' + data.message;
+    msg.style.cssText = 'display:block;color:#16a34a;font-size:13px;margin-bottom:12px';
+    btn.textContent = 'Done!';
+    setTimeout(() => document.querySelector('[style*="z-index:99999"]')?.remove(), 1500);
+  } catch(ex) {
+    msg.textContent = 'Error: ' + ex.message;
+    msg.style.cssText = 'display:block;color:#dc2626;font-size:13px;margin-bottom:12px';
+    btn.textContent='Set Expiry'; btn.disabled=false;
+  }
 }
 
 // ── Payments Tab ──────────────────────────────────────────────────────────────
@@ -619,6 +722,19 @@ async function confirmExtendTrial(id) {
     msg.textContent = 'Error: ' + ex.message;
     msg.style.cssText = 'font-size:13px;margin-bottom:12px;display:block;color:#dc2626';
     btn.textContent = 'Set Expiry Date'; btn.disabled = false;
+  }
+}
+
+async function activateSemester(userId, name) {
+  if (!confirm(`Activate 1 semester (16 weeks / 112 days) for ${name}?\n\nPrice: GHS 300`)) return;
+  try {
+    const data = await api('/api/superadmin/users/' + userId + '/extend-trial', {
+      method: 'PATCH',
+      body: JSON.stringify({ semester: true })
+    });
+    alert('✅ ' + data.message);
+  } catch(ex) {
+    alert('Error: ' + ex.message);
   }
 }
 
