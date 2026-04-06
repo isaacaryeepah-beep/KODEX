@@ -280,28 +280,45 @@ exports.verifyPaystackSubscription = async (req, res) => {
 };
 
 // GET /api/payments/user-subscription
+// Billing is institution-level (Company). A user's access mirrors their
+// company's subscription/trial so the My Subscription page never disagrees
+// with the global banner. Per-user fields are kept as an optional override.
 exports.getUserSubscription = async (req, res) => {
   try {
     const user = await User.findById(req.user._id)
-      .select("subscriptionStatus trialEndDate subscriptionExpiry semestersPaid createdAt role")
+      .select("subscriptionStatus trialEndDate subscriptionExpiry semestersPaid createdAt role company")
       .lean();
 
+    const company = user.company ? await Company.findById(user.company).lean() : null;
+
     const now = Date.now();
-    const trialEnd = user.trialEndDate
-      ? new Date(user.trialEndDate)
-      : new Date(new Date(user.createdAt).getTime() + 30*24*60*60*1000);
-    const subEnd = user.subscriptionExpiry ? new Date(user.subscriptionExpiry) : null;
-    const activeEnd = (subEnd && subEnd > now) ? subEnd : trialEnd;
-    const daysLeft  = Math.ceil((activeEnd - now) / (1000*60*60*24));
+
+    // Prefer company dates; fall back to user-level overrides if present.
+    const companyTrialEnd = company && company.trialEndDate ? new Date(company.trialEndDate) : null;
+    const companySubEnd   = company && company.subscriptionEndDate ? new Date(company.subscriptionEndDate) : null;
+    const companyActive   = !!(company && (company.subscriptionActive || company.hasAccess));
+
+    const userTrialEnd = user.trialEndDate ? new Date(user.trialEndDate) : null;
+    const userSubEnd   = user.subscriptionExpiry ? new Date(user.subscriptionExpiry) : null;
+
+    const trialEnd = companyTrialEnd || userTrialEnd;
+    const subEnd   = (companySubEnd && companyActive) ? companySubEnd : userSubEnd;
+
+    const subActive   = !!(subEnd && subEnd > now);
+    const trialActive = !subActive && !!(trialEnd && trialEnd > now);
+    const activeEnd   = subActive ? subEnd : (trialActive ? trialEnd : null);
+    const daysLeft    = activeEnd ? Math.ceil((activeEnd - now) / (1000*60*60*24)) : 0;
 
     res.json({
       subscription: {
-        status:             daysLeft > 0 ? (subEnd && subEnd > now ? "active" : "trial") : "expired",
+        status:             subActive ? "active" : trialActive ? "trial" : "expired",
         trialEndDate:       trialEnd,
         subscriptionExpiry: subEnd,
         activeEnd,
         daysLeft,
         semestersPaid:      user.semestersPaid || 0,
+        plan:               subActive ? (company && company.subscriptionPlan) || "Semester" : null,
+        source:             company ? "institution" : "user",
       }
     });
   } catch (err) {
