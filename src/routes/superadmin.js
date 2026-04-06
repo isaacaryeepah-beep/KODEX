@@ -194,9 +194,39 @@ router.get("/companies/:id/lecturers", async (req, res) => {
 // ── PATCH /api/superadmin/users/:id/extend-trial ─────────────────────────────
 router.patch("/users/:id/extend-trial", async (req, res) => {
   try {
-    const { expiryDate, days } = req.body;
+    const { expiryDate, days, action, adjustDays } = req.body;
     const user = await User.findById(req.params.id);
     if (!user) return res.status(404).json({ error: "User not found" });
+
+    // ── Unsubscribe: wipe subscription + trial so access is revoked immediately
+    if (action === 'unsubscribe') {
+      user.subscriptionExpiry = null;
+      user.subscriptionStatus = "expired";
+      user.trialEndDate = new Date(Date.now() - 1000); // set to past
+      await user.save();
+      return res.json({ message: `${user.name} has been unsubscribed. Access revoked.` });
+    }
+
+    // ── Adjust days: add or subtract days from the active access window
+    // Positive adjustDays extends, negative reduces. Operates on subscriptionExpiry
+    // if the user is subscribed, otherwise on trialEndDate.
+    if (typeof adjustDays === 'number' && adjustDays !== 0) {
+      const now = Date.now();
+      const isSubbed = user.subscriptionExpiry && new Date(user.subscriptionExpiry) > now;
+      const field = isSubbed ? 'subscriptionExpiry' : 'trialEndDate';
+      const base = user[field] ? new Date(user[field]) : new Date();
+      const shifted = new Date(base.getTime() + adjustDays * 24 * 60 * 60 * 1000);
+      user[field] = shifted;
+      if (isSubbed && shifted <= now) {
+        user.subscriptionStatus = "expired";
+      }
+      await user.save();
+      const verb = adjustDays > 0 ? 'extended' : 'reduced';
+      return res.json({
+        message: `${user.name}'s ${isSubbed ? 'subscription' : 'trial'} ${verb} by ${Math.abs(adjustDays)} day(s). New end: ${shifted.toDateString()}`,
+        [field]: shifted,
+      });
+    }
 
     let newEnd;
     if (expiryDate) {
