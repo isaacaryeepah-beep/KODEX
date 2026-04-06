@@ -826,6 +826,22 @@ exports.getMe = async (req, res) => {
         status: company.subscriptionStatus,
         plan: company.subscriptionPlan,
       } : null,
+      // Per-lecturer subscription info — used for countdown banner
+      userTrial: PAID_ROLES.includes(user.role) ? (() => {
+        const now = Date.now();
+        const trialEnd = user.trialEndDate
+          ? new Date(user.trialEndDate)
+          : new Date(new Date(user.createdAt).getTime() + 30 * 24 * 60 * 60 * 1000);
+        const subEnd = user.subscriptionExpiry ? new Date(user.subscriptionExpiry) : null;
+        const activeEnd = (subEnd && subEnd > now) ? subEnd : trialEnd;
+        const daysLeft = Math.ceil((activeEnd - now) / (1000 * 60 * 60 * 24));
+        return {
+          daysLeft,
+          activeEnd,
+          status: subEnd && subEnd > now ? 'active' : trialEnd > now ? 'trial' : 'expired',
+          isSubscribed: !!(subEnd && subEnd > now),
+        };
+      })() : null,
     });
   } catch (error) {
     console.error("Get me error:", error);
