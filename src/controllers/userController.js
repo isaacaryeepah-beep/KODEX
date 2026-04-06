@@ -1,5 +1,6 @@
 const mongoose = require("mongoose");
 const User = require("../models/User");
+const TRIAL_DAYS = 30;
 const Company = require("../models/Company");
 const Course = require("../models/Course");
 const { ROLE_HIERARCHY } = require("../middleware/role");
@@ -55,7 +56,7 @@ exports.getUserStats = async (req, res) => {
 
 exports.createUser = async (req, res) => {
   try {
-    const { email, password, name, role, IndexNumber, phone, department, programme, studentLevel, studentGroup, sessionType, semester } = req.body;
+    const { email, password, name, role, indexNumber, phone, department, programme, studentLevel, studentGroup, sessionType, semester } = req.body;
     const targetRole = role || "employee";
 
     const company = await Company.findById(req.user.company);
@@ -85,8 +86,9 @@ exports.createUser = async (req, res) => {
     const { normalisePhone } = require('../services/smsService');
     const normPhone = phone ? normalisePhone(phone) : null;
 
-    // Check for duplicate phone across the institution
-    if (normPhone) {
+    // Check for duplicate phone across the institution (non-student roles only)
+    // Students may share a phone number (e.g. siblings) so we skip this check for them
+    if (normPhone && targetRole !== 'student') {
       const phoneExists = await User.findOne({ phone: normPhone, company: req.user.company });
       if (phoneExists) {
         return res.status(400).json({
@@ -105,6 +107,7 @@ exports.createUser = async (req, res) => {
       }
     }
 
+    const PAID_ROLES = ["lecturer", "manager", "admin"];
     const userData = {
       password,
       name,
@@ -112,6 +115,11 @@ exports.createUser = async (req, res) => {
       phone: normPhone,
       company: req.user.company,
       department: department ? department.trim() : null,
+      // Set trial for paid roles
+      ...(PAID_ROLES.includes(targetRole) ? {
+        subscriptionStatus: "trial",
+        trialEndDate: new Date(Date.now() + TRIAL_DAYS * 24 * 60 * 60 * 1000),
+      } : {}),
     };
 
     // Department rules
@@ -140,10 +148,20 @@ exports.createUser = async (req, res) => {
     }
 
     if (targetRole === "student") {
-      if (!IndexNumber) {
+      if (!indexNumber) {
         return res.status(400).json({ error: "Index number is required for students" });
       }
-      userData.IndexNumber = IndexNumber;
+      // Explicit duplicate check with clear message before hitting the DB index
+      const existingStudent = await User.findOne({
+        indexNumber: indexNumber.toString().trim().toUpperCase(),
+        company: req.user.company,
+      });
+      if (existingStudent) {
+        return res.status(400).json({
+          error: `Index number ${indexNumber} is already registered to ${existingStudent.name} at this institution.`,
+        });
+      }
+      userData.indexNumber = indexNumber.toString().trim().toUpperCase();
       // Save student classification
       if (programme)    userData.programme    = programme.trim();
       if (studentLevel) userData.studentLevel = studentLevel.trim();
@@ -339,7 +357,7 @@ exports.deleteUser = async (req, res) => {
 
 // ── Bulk CSV import ──────────────────────────────────────────────────────────
 // POST /api/users/bulk-import  (multipart/form-data)
-// CSV columns: name*, IndexNumber*, email (optional), phone (optional), courseCode (optional), department (optional)
+// CSV columns: name*, indexNumber*, email (optional), phone (optional), courseCode (optional), department (optional)
 // Generates a random password for each student; returns a downloadable results list.
 exports.bulkImportStudents = async (req, res) => {
   const multer = require("multer");
@@ -375,7 +393,7 @@ exports.bulkImportStudents = async (req, res) => {
         const semesterIdx    = headers.findIndex(h => h === "semester" || h === "sem");
 
         if (nameIdx === -1 || idxIdx === -1) {
-          return res.status(400).json({ error: "CSV must have 'name' and 'IndexNumber' columns" });
+          return res.status(400).json({ error: "CSV must have 'name' and 'indexNumber' columns" });
         }
 
         for (let i = 1; i < lines.length; i++) {
@@ -383,7 +401,7 @@ exports.bulkImportStudents = async (req, res) => {
           if (!cols[nameIdx] && !cols[idxIdx]) continue; // skip blank rows
           rows.push({
             name:        (cols[nameIdx]        || "").trim(),
-            IndexNumber: (cols[idxIdx]         || "").trim().toUpperCase(),
+            indexNumber: (cols[idxIdx]         || "").trim().toUpperCase(),
             email:       emailIdx >= 0       ? (cols[emailIdx]       || "").trim() : "",
             phone:       phoneIdx >= 0       ? (cols[phoneIdx]       || "").trim() : "",
             courseCode:  courseIdx >= 0      ? (cols[courseIdx]      || "").trim().toUpperCase() : "",
@@ -422,22 +440,22 @@ exports.bulkImportStudents = async (req, res) => {
       const createdStudents = [];
 
       for (const row of rows) {
-        if (!row.name || !row.IndexNumber) {
-          results.errors.push({ row: row.IndexNumber || "?", error: "Missing name or IndexNumber" });
+        if (!row.name || !row.indexNumber) {
+          results.errors.push({ row: row.indexNumber || "?", error: "Missing name or indexNumber" });
           results.skipped++;
           continue;
         }
 
-        // Generate a readable temp password: first 3 of name + last 3 of IndexNumber + 4-digit random
+        // Generate a readable temp password: first 3 of name + last 3 of indexNumber + 4-digit random
         const namePart = row.name.replace(/[^a-zA-Z]/g, "").slice(0, 3).toLowerCase();
-        const idPart   = row.IndexNumber.replace(/[^a-zA-Z0-9]/g, "").slice(-3).toLowerCase();
+        const idPart   = row.indexNumber.replace(/[^a-zA-Z0-9]/g, "").slice(-3).toLowerCase();
         const numPart  = String(Math.floor(1000 + Math.random() * 9000));
         const tempPassword = namePart + idPart + numPart;
 
-        // Build user data — email optional for students
+        // Build user data -- email optional for students
         const userData = {
           name: row.name,
-          IndexNumber: row.IndexNumber,
+          indexNumber: row.indexNumber,
           password: tempPassword,
           role: "student",
           company: req.user.company,
@@ -466,15 +484,15 @@ exports.bulkImportStudents = async (req, res) => {
             // Also add to StudentRoster if not already there
             const StudentRoster = require("../models/StudentRoster");
             await StudentRoster.findOneAndUpdate(
-              { studentId: row.IndexNumber, course: course._id, company: req.user.company },
-              { $setOnInsert: { studentId: row.IndexNumber, name: row.name, course: course._id, company: req.user.company, addedBy: req.user._id, registered: true, registeredUser: user._id } },
+              { studentId: row.indexNumber, course: course._id, company: req.user.company },
+              { $setOnInsert: { studentId: row.indexNumber, name: row.name, course: course._id, company: req.user.company, addedBy: req.user._id, registered: true, registeredUser: user._id } },
               { upsert: true, new: false }
             ).catch(() => {}); // ignore duplicate roster errors
           }
 
           createdStudents.push({
             name: user.name,
-            IndexNumber: user.IndexNumber,
+            indexNumber: user.indexNumber,
             email: user.email || "",
             tempPassword,
             course: course?.title || "",
@@ -483,11 +501,11 @@ exports.bulkImportStudents = async (req, res) => {
         } catch (err) {
           if (err.code === 11000) {
             results.skipped++;
-            results.errors.push({ row: row.IndexNumber, error: "Already exists" });
-            createdStudents.push({ name: row.name, IndexNumber: row.IndexNumber, email: row.email || "", tempPassword: "(existing)", course: "", status: "skipped" });
+            results.errors.push({ row: row.indexNumber, error: "Already exists" });
+            createdStudents.push({ name: row.name, indexNumber: row.indexNumber, email: row.email || "", tempPassword: "(existing)", course: "", status: "skipped" });
           } else {
             results.skipped++;
-            results.errors.push({ row: row.IndexNumber, error: err.message });
+            results.errors.push({ row: row.indexNumber, error: err.message });
           }
         }
       }
@@ -556,7 +574,7 @@ exports.getResetLogs = async (req, res) => {
     const users = await User.find({
       company: req.user.company,
       "passwordResetLog.0": { $exists: true },
-    }).select("name email IndexNumber role passwordResetLog").lean();
+    }).select("name email indexNumber role passwordResetLog").lean();
 
     // Flatten all logs into one list sorted by most recent
     const logs = [];
@@ -564,9 +582,9 @@ exports.getResetLogs = async (req, res) => {
       for (const log of (user.passwordResetLog || [])) {
         logs.push({
           userId:    user._id,
-          userName:  user.name || user.email || user.IndexNumber,
+          userName:  user.name || user.email || user.indexNumber,
           userRole:  user.role,
-          userEmail: user.email || user.IndexNumber,
+          userEmail: user.email || user.indexNumber,
           resetAt:   log.resetAt,
           ipAddress: log.ipAddress,
           userAgent: log.userAgent,
@@ -615,7 +633,7 @@ exports.adminResetStudentPassword = async (req, res) => {
       message: "Temporary password generated. Give this to the student.",
       tempPassword,
       userName: target.name,
-      userEmail: target.email || target.IndexNumber,
+      userEmail: target.email || target.indexNumber,
     });
   } catch (error) {
     console.error("Admin reset student password error:", error);
@@ -656,5 +674,35 @@ exports.clearDeviceLock = async (req, res) => {
   } catch (error) {
     console.error("Clear device lock error:", error);
     res.status(500).json({ error: "Failed to clear device lock" });
+  }
+};
+
+// ── GET /api/users/lecturer-subscriptions ────────────────────────────────────
+exports.getLecturerSubscriptions = async (req, res) => {
+  try {
+    const lecturers = await User.find({
+      company: req.user.company,
+      role: { $in: ["lecturer", "manager"] },
+      isActive: true,
+    }).select("name email role subscriptionStatus trialEndDate subscriptionExpiry semestersPaid createdAt").lean();
+
+    const now = Date.now();
+    const enriched = lecturers.map(l => {
+      const trialEnd = l.trialEndDate
+        ? new Date(l.trialEndDate)
+        : new Date(new Date(l.createdAt).getTime() + 30 * 24 * 60 * 60 * 1000);
+      const subEnd = l.subscriptionExpiry ? new Date(l.subscriptionExpiry) : null;
+      const trialActive = trialEnd > now;
+      const subActive   = subEnd && subEnd > now;
+      return {
+        ...l,
+        trialEndDate: trialEnd,
+        subscriptionStatus: subActive ? "active" : trialActive ? "trial" : "expired",
+      };
+    });
+
+    res.json({ lecturers: enriched });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to load lecturer subscriptions" });
   }
 };
