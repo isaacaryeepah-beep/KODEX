@@ -668,19 +668,27 @@ function assignmentsIcon() {
 }
 
 function showSubscriptionGate(message) {
-  // Redirect to subscription page with message
   const msg = message || 'Your free trial has ended. Please subscribe to continue.';
   const main = document.getElementById('main-content') || document.querySelector('.main-content') || document.body;
   if (main) {
-    main.innerHTML = `<div style="padding:40px;text-align:center">
-      <div style="font-size:40px;margin-bottom:16px">🔒</div>
-      <h2 style="margin-bottom:8px">Subscription Required</h2>
-      <p style="color:#64748b;margin-bottom:24px">${msg}</p>
-      <a href="/subscription" class="btn btn-primary">View Plans</a>
+    main.innerHTML = `<div style="padding:40px;text-align:center;max-width:480px;margin:0 auto">
+      <div style="font-size:48px;margin-bottom:16px">🔒</div>
+      <h2 style="margin-bottom:8px;color:#0d1117">Subscription Required</h2>
+      <p style="color:#64748b;margin-bottom:28px">${msg}</p>
+      <div style="background:#f8fafc;border:1px solid #e5e7eb;border-radius:12px;padding:24px;margin-bottom:24px">
+        <div style="font-size:13px;font-weight:700;text-transform:uppercase;color:#94a3b8;margin-bottom:12px">Semester Plan</div>
+        <div style="font-size:40px;font-weight:800;color:#0d1117;margin-bottom:4px">GHS 300</div>
+        <div style="font-size:13px;color:#64748b;margin-bottom:16px">per semester · 16 weeks · 112 days</div>
+        <div style="font-size:13px;color:#374151;margin-bottom:4px">✅ Unlimited sessions</div>
+        <div style="font-size:13px;color:#374151;margin-bottom:4px">✅ Attendance tracking</div>
+        <div style="font-size:13px;color:#374151;margin-bottom:4px">✅ Quiz & assessments</div>
+        <div style="font-size:13px;color:#374151;margin-bottom:16px">✅ Reports & analytics</div>
+        <button onclick="navigateTo('subscription')" style="width:100%;padding:12px;background:#4f46e5;color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer">Subscribe Now — GHS 300</button>
+      </div>
+      <p style="font-size:12px;color:#9ca3af">Contact your institution admin or pay directly via the Subscription page.</p>
     </div>`;
   }
-  // Also navigate to subscription page
-  if (typeof showPage === 'function') showPage('subscription');
+  if (typeof navigateTo === 'function') navigateTo('subscription');
 }
 
 async function api(path, options = {}) {
@@ -1890,6 +1898,26 @@ function showDashboard(data) {
     const trial = data.trial || null;
     const subscription = data.subscription || null;
     const isSubRole = (role === 'employee' || role === 'student');
+
+    // ── Per-lecturer subscription warning ─────────────────────────────────────
+    if (role === 'lecturer' || role === 'manager') {
+      const userTrial = data.userTrial || null;
+      if (userTrial) {
+        const banner = document.getElementById('trial-banner');
+        if (userTrial.daysLeft <= 7 && userTrial.daysLeft > 0) {
+          banner.textContent = `⚠️ Your subscription expires in ${userTrial.daysLeft} day${userTrial.daysLeft===1?'':'s'}. Please renew to keep access.`;
+          banner.style.display = 'block';
+          banner.style.background = userTrial.daysLeft <= 3 ? '#dc2626' : '#d97706';
+          document.getElementById('trial-expired-banner').style.display = 'none';
+        } else if (userTrial.daysLeft <= 0) {
+          document.getElementById('trial-expired-banner').textContent = 'Your subscription has expired. Please renew to continue.';
+          document.getElementById('trial-expired-banner').style.display = 'block';
+          banner.style.display = 'none';
+        }
+        return; // skip institution trial check for lecturers
+      }
+    }
+    // ──────────────────────────────────────────────────────────────────────────
 
     if (isSubRole) {
       document.getElementById('trial-banner').style.display = 'none';
@@ -3502,11 +3530,12 @@ async function renderStudentDashboard(content) {
 }
 
 async function renderAdminDashboard(content) {
-  const [sessionsData, usersData, pendingData, announcementsData] = await Promise.all([
+  const [sessionsData, usersData, pendingData, announcementsData, lecSubData] = await Promise.all([
     api('/api/attendance-sessions?limit=5').catch(() => ({ sessions: [], pagination: { total: 0 } })),
     api('/api/users').catch(() => ({ users: [] })),
     api('/api/approvals/pending').catch(() => ({ pending: [] })),
     api('/api/announcements').catch(() => ({ announcements: [] })),
+    api('/api/users/lecturer-subscriptions').catch(() => ({ lecturers: [] })),
   ]);
 
   const activeSessions = sessionsData.sessions.filter(s => s.status === 'active').length;
@@ -3553,8 +3582,57 @@ async function renderAdminDashboard(content) {
         </div>`).join('')
     : `<div class="empty-state"><p>No announcements yet</p></div>`;
 
+  // Build lecturer subscription summary
+  const lecturers = lecSubData.lecturers || [];
+  const now = Date.now();
+  const expiredLecs = lecturers.filter(l => {
+    const trialEnd = l.trialEndDate ? new Date(l.trialEndDate) : null;
+    const subEnd   = l.subscriptionExpiry ? new Date(l.subscriptionExpiry) : null;
+    return (!trialEnd || trialEnd < now) && (!subEnd || subEnd < now);
+  });
+  const expiringSoonLecs = lecturers.filter(l => {
+    const trialEnd = l.trialEndDate ? new Date(l.trialEndDate) : null;
+    const subEnd   = l.subscriptionExpiry ? new Date(l.subscriptionExpiry) : null;
+    const activeEnd = subEnd || trialEnd;
+    if (!activeEnd) return false;
+    const daysLeft = (activeEnd - now) / (1000*60*60*24);
+    return daysLeft > 0 && daysLeft <= 7;
+  });
+
+  const lecSubWidget = lecturers.length ? `
+    <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:16px;margin-bottom:4px">
+      <div style="font-size:13px;font-weight:700;color:#0d1117;margin-bottom:10px">📋 Lecturer Subscriptions</div>
+      <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:${(expiredLecs.length||expiringSoonLecs.length)?'12px':'0'}">
+        <div style="flex:1;min-width:80px;text-align:center;padding:10px;background:#f0fdf4;border-radius:8px">
+          <div style="font-size:22px;font-weight:800;color:#16a34a">${lecturers.length - expiredLecs.length - expiringSoonLecs.length}</div>
+          <div style="font-size:11px;color:#6b7280;font-weight:600">Active</div>
+        </div>
+        <div style="flex:1;min-width:80px;text-align:center;padding:10px;background:#fffbeb;border-radius:8px">
+          <div style="font-size:22px;font-weight:800;color:#d97706">${expiringSoonLecs.length}</div>
+          <div style="font-size:11px;color:#6b7280;font-weight:600">Expiring Soon</div>
+        </div>
+        <div style="flex:1;min-width:80px;text-align:center;padding:10px;background:#fef2f2;border-radius:8px">
+          <div style="font-size:22px;font-weight:800;color:#dc2626">${expiredLecs.length}</div>
+          <div style="font-size:11px;color:#6b7280;font-weight:600">Expired</div>
+        </div>
+      </div>
+      ${expiredLecs.length ? `
+        <div style="font-size:12px;font-weight:700;color:#dc2626;margin-bottom:6px">⛔ Expired Lecturers</div>
+        ${expiredLecs.map(l=>`<div style="font-size:12px;color:#374151;padding:4px 0;border-bottom:1px solid #f3f4f6">${l.name} <span style="color:#9ca3af">${l.email||''}</span></div>`).join('')}
+      ` : ''}
+      ${expiringSoonLecs.length ? `
+        <div style="font-size:12px;font-weight:700;color:#d97706;margin-top:8px;margin-bottom:6px">⚠️ Expiring in 7 days</div>
+        ${expiringSoonLecs.map(l=>{
+          const activeEnd = l.subscriptionExpiry ? new Date(l.subscriptionExpiry) : new Date(l.trialEndDate);
+          const daysLeft = Math.ceil((activeEnd - now)/(1000*60*60*24));
+          return `<div style="font-size:12px;color:#374151;padding:4px 0;border-bottom:1px solid #f3f4f6">${l.name} — <span style="color:#d97706;font-weight:600">${daysLeft}d left</span></div>`;
+        }).join('')}
+      ` : ''}
+    </div>` : '';
+
   content.innerHTML = `
     <div style="display:flex;flex-direction:column;gap:14px">
+      ${lecSubWidget}
 
       <!-- Welcome row -->
       <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap">
@@ -8122,94 +8200,92 @@ async function renderSubscription() {
   const content = document.getElementById('main-content');
   if (!content) return;
   try {
-    const [statusData, plansData] = await Promise.all([
-      api('/api/payments/status'),
-      api('/api/payments/plans'),
+    const [statusData, userSubData] = await Promise.all([
+      api('/api/payments/status').catch(() => ({})),
+      api('/api/payments/user-subscription').catch(() => ({})),
     ]);
 
-    const sub = statusData.subscription || {};
-    const trial = statusData.trial || {};
-    const trialTimeRemaining = trial.timeRemaining || { days: 0, hours: 0, minutes: 0 };
+    const SEMESTER_PRICE = 300; // GHS 300 per semester (16 weeks / 112 days)
+    const SEMESTER_DAYS  = 112;
+
+    const userSub   = userSubData.subscription || {};
+    const trial     = statusData.trial || {};
+    const now       = Date.now();
+
+    // Per-lecturer subscription info
+    const trialEnd  = userSub.trialEndDate ? new Date(userSub.trialEndDate) : null;
+    const subEnd    = userSub.subscriptionExpiry ? new Date(userSub.subscriptionExpiry) : null;
+    const activeEnd = (subEnd && subEnd > now) ? subEnd : trialEnd;
+    const daysLeft  = activeEnd ? Math.ceil((activeEnd - now) / (1000*60*60*24)) : 0;
+    const isActive  = daysLeft > 0;
+    const isSubbed  = subEnd && subEnd > now;
+    const isTrial   = !isSubbed && trialEnd && trialEnd > now;
+    const isExpired = !isActive;
+
+    const statusColor = isSubbed ? '#16a34a' : isTrial ? '#d97706' : '#dc2626';
+    const statusText  = isSubbed ? '✅ Subscribed' : isTrial ? '🟡 Trial' : '🔴 Expired';
+    const endDateStr  = activeEnd ? new Date(activeEnd).toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'}) : '—';
 
     content.innerHTML = `
-      <div class="page-header"><h2>Subscription</h2><p>Manage your subscription plan</p></div>
-      <div class="stats-grid">
-        <div class="stat-card">
-          <div class="stat-value" style="color:${statusData.hasAccess ? 'var(--success)' : 'var(--danger)'}">${statusData.hasAccess ? 'Active' : 'Inactive'}</div>
-          <div class="stat-label">Access Status</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-value">${sub.active ? sub.plan : trial.active ? 'Trial' : 'None'}</div>
-          <div class="stat-label">Current Plan</div>
-        </div>
-        ${trial.active ? `
-          <div class="stat-card">
-            <div class="stat-value">${trial.daysRemaining || 0}</div>
-            <div class="stat-label">Trial Days Left</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-value">${trialTimeRemaining.days}d ${trialTimeRemaining.hours}h ${trialTimeRemaining.minutes}m</div>
-            <div class="stat-label">Time Remaining</div>
-          </div>
-        ` : ''}
-      </div>
+      <div class="page-header"><h2>My Subscription</h2><p>Manage your KODEX access</p></div>
 
-      <div class="card">
-        <div class="card-title">Available Plans</div>
-        <div class="stats-grid">
-          ${(plansData.plans || []).map(p => `
-            <div class="stat-card">
-              <div class="stat-value" style="font-size:18px">${p.name}</div>
-              <div style="margin-top:12px">
-                <p style="font-size:13px;color:var(--text-light)">Stripe: ${p.stripe ? p.stripe.label : 'N/A'}</p>
-                <p style="font-size:13px;color:var(--text-light)">Paystack: ${p.paystack ? p.paystack.label : 'N/A'}</p>
-              </div>
-              <div style="margin-top:12px">
-                <button class="btn btn-primary btn-sm" onclick="subscribePlan('${p.id}', 'stripe')">Pay with Stripe ($)</button>
-                <button class="btn btn-success btn-sm" style="margin-top:4px" onclick="subscribePlan('${p.id}', 'paystack')">Pay with Paystack (GHS)</button>
-              </div>
-            </div>
-          `).join('')}
+      <!-- Status Card -->
+      <div style="background:#fff;border:1px solid #e5e7eb;border-radius:16px;padding:24px;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px">
+        <div>
+          <div style="font-size:24px;font-weight:800;color:${statusColor}">${statusText}</div>
+          <div style="font-size:13px;color:#6b7280;margin-top:4px">
+            ${isExpired ? 'Your subscription has expired. Renew to regain access.' : `${daysLeft} day${daysLeft===1?'':'s'} remaining · Expires ${endDateStr}`}
+          </div>
+          ${userSub.semestersPaid ? `<div style="font-size:12px;color:#9ca3af;margin-top:4px">Semesters paid: ${userSub.semestersPaid}</div>` : ''}
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:13px;color:#6b7280">Plan</div>
+          <div style="font-size:16px;font-weight:700">${isSubbed ? 'Semester' : isTrial ? '30-Day Trial' : 'None'}</div>
         </div>
       </div>
 
-      ${!trial.active && !sub.active ? `
-        <div class="card" style="background:#fef2f2;border-color:#fecaca">
-          <p style="color:var(--danger);font-weight:600">Your free trial has ended. Please subscribe via Paystack or Stripe to continue using premium features.</p>
-        </div>
-      ` : ''}
+      <!-- Payment Card -->
+      <div style="background:#fff;border:1px solid #e5e7eb;border-radius:16px;padding:24px;margin-bottom:16px">
+        <div style="font-size:16px;font-weight:700;margin-bottom:4px">Subscribe for a Semester</div>
+        <div style="font-size:13px;color:#6b7280;margin-bottom:20px">16 weeks (112 days) of full access — GHS 300 fixed price</div>
 
-      ${sub.active ? `
-        <div class="card" style="margin-top:16px">
-          <div class="card-title" style="margin-bottom:10px">Subscription Details</div>
-          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;">
-            <div style="padding:10px 14px;background:var(--bg);border-radius:8px;border:1px solid var(--border);">
-              <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;margin-bottom:4px;">Plan</div>
-              <div style="font-weight:700;">${sub.plan || '—'}</div>
-            </div>
-            <div style="padding:10px 14px;background:var(--bg);border-radius:8px;border:1px solid var(--border);">
-              <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;margin-bottom:4px;">Status</div>
-              <div style="font-weight:700;color:${sub.status==='active'?'#22c55e':sub.status==='past_due'?'#f59e0b':'#ef4444'}">${sub.status}</div>
-            </div>
-            ${sub.endDate ? `<div style="padding:10px 14px;background:var(--bg);border-radius:8px;border:1px solid var(--border);"><div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;margin-bottom:4px;">Expires</div><div style="font-weight:700;">${new Date(sub.endDate).toLocaleDateString()}</div></div>` : ''}
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:16px;background:#f8fafc;border-radius:12px;margin-bottom:16px;flex-wrap:wrap;gap:12px">
+          <div>
+            <div style="font-size:22px;font-weight:800;color:#0d1117">GHS 300</div>
+            <div style="font-size:12px;color:#6b7280">One semester · 16 weeks · 112 days</div>
           </div>
+          <button onclick="paySemester()" style="padding:12px 28px;background:#16a34a;color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer">
+            Pay with Paystack
+          </button>
         </div>
-      ` : ''}
 
-      ${currentUser.role === 'superadmin' ? `
-        <div class="card" style="margin-top:16px;border:1px solid #e0e7ff;background:#f5f3ff;">
-          <div style="font-size:13px;font-weight:700;color:#4f46e5;margin-bottom:8px;">⚙️ Paystack Webhook Setup</div>
-          <p style="font-size:12px;color:#6b7280;margin-bottom:8px;">Add this URL in your Paystack Dashboard under <strong>Settings → API Keys & Webhooks</strong> to enable automatic renewals:</p>
-          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-            <code style="flex:1;padding:8px 12px;background:#fff;border:1px solid #c7d2fe;border-radius:7px;font-size:12px;color:#3730a3;word-break:break-all;">${window.location.origin}/api/webhooks/paystack</code>
-            <button class="btn btn-sm" style="background:#4f46e5;color:#fff;" onclick="navigator.clipboard.writeText(window.location.origin+'/api/webhooks/paystack').then(()=>toastSuccess('Copied!'))">Copy</button>
-          </div>
-          <p style="font-size:11px;color:#9ca3af;margin-top:8px;">Events to enable: <strong>charge.success, subscription.create, subscription.disable, invoice.payment_failed</strong></p>
+        <div style="font-size:12px;color:#9ca3af">
+          • Secure payment via Paystack &nbsp;·&nbsp; Access starts immediately after payment<br>
+          • Your subscription will extend by 112 days from today
+        </div>
+      </div>
+
+      ${isExpired ? `
+        <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:12px;padding:16px;margin-bottom:16px">
+          <div style="font-size:14px;font-weight:700;color:#dc2626;margin-bottom:6px">⚠️ Access Suspended</div>
+          <div style="font-size:13px;color:#374151">Your subscription has expired. Pay GHS 300 to restore access for the next semester.</div>
         </div>
       ` : ''}
     `;
+async function paySemester() {
+  try {
+    toastInfo('Connecting to Paystack...');
+    const data = await api('/api/payments/paystack/initialize', {
+      method: 'POST',
+      body: JSON.stringify({ plan: 'semester', amount: 30000 }), // 30000 kobo = GHS 300
+    });
+    if (data.authorization_url) {
+      window.location.href = data.authorization_url;
+    } else {
+      toastError('Could not get payment URL. Please try again.');
+    }
   } catch (e) {
-    content.innerHTML = `<div class="card"><p>Error: ${e.message}</p></div>`;
+    toastError(e.message || 'Payment initialization failed.');
   }
 }
 
@@ -8783,7 +8859,7 @@ function renderContact() {
         ["How do I reset a student's password?", 'Go to Users, find the student, and use the Reset Password action. The student will receive a reset code.'],
         ["Why can't a student mark attendance?", 'Ensure there is an active session running and the student is enrolled in the correct course roster.'],
         ['How do I add students to a course?', 'Go to Courses, select the course, and use the Upload Students button to add students via CSV or manually.'],
-        ['What happens when the subscription expires?', 'Access is suspended after the trial/subscription period. You can renew anytime from the Subscription page in your dashboard — payments are processed instantly via Paystack.'],
+        ['What happens when the subscription expires?', 'Access is suspended after the trial/subscription period. You can renew for GHS 300 per semester (16 weeks) anytime from the Subscription page — payments are processed instantly via Paystack.'],
         ['Can students use the system offline?', 'Yes — students can mark attendance offline using a code. It will sync automatically when they reconnect.'],
       ].map(([q, a]) => `
         <div style="padding:14px 0;border-bottom:1px solid var(--border)">
