@@ -679,6 +679,18 @@ async function api(path, options = {}) {
         showSubscriptionGate(data.message);
         throw new Error(data.error || 'Subscription required');
       }
+      // Hard lockout — user-level subscription/trial has expired.
+      // Wipe the offline cache so cached pages can't sneak past, and paint
+      // a full-screen lockout that only allows paying.
+      if (res.status === 403 && (data.subscriptionExpired || data.userSubscription)) {
+        try { localStorage.removeItem(OFFLINE_CACHE_KEY); } catch(_) {}
+        window._subscriptionBlocked = true;
+        showSubscriptionGate(data.message || 'Your subscription has expired. Please renew to continue using KODEX.');
+        const err = new Error(data.error || 'Subscription expired');
+        err.status = 403;
+        err.subscriptionBlocked = true;
+        throw err;
+      }
       const err = new Error(data.error || 'Request failed');
       err.status = res.status;
       err.data   = data;
@@ -688,6 +700,28 @@ async function api(path, options = {}) {
   }
   if (!res.ok) throw new Error('Request failed');
   return res;
+}
+
+// Full-screen lockout shown when a lecturer's subscription/trial has expired.
+// Replaces the entire UI so cached data from previous sessions cannot leak through.
+function showSubscriptionGate(message) {
+  if (document.getElementById('sub-gate-overlay')) return; // already shown
+  const overlay = document.createElement('div');
+  overlay.id = 'sub-gate-overlay';
+  overlay.style.cssText = [
+    'position:fixed','inset:0','z-index:99999','background:rgba(15,23,42,0.96)',
+    'display:flex','align-items:center','justify-content:center','padding:24px'
+  ].join(';');
+  overlay.innerHTML = `
+    <div style="background:#fff;border-radius:16px;padding:32px;max-width:440px;width:100%;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,0.5)">
+      <div style="font-size:48px;margin-bottom:12px">🔒</div>
+      <h2 style="font-size:22px;font-weight:800;color:#dc2626;margin:0 0 8px">Access Suspended</h2>
+      <p style="font-size:14px;color:#475569;margin:0 0 24px;line-height:1.5">${(message || 'Your subscription has expired. Please renew to continue using KODEX.').replace(/</g,'&lt;')}</p>
+      <button onclick="paySemester()" style="width:100%;padding:14px 24px;background:#16a34a;color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer;margin-bottom:10px">Pay with Paystack — GHS 300</button>
+      <button onclick="logout()" style="width:100%;padding:10px 24px;background:transparent;color:#6b7280;border:1px solid #e5e7eb;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer">Sign Out</button>
+    </div>
+  `;
+  document.body.appendChild(overlay);
 }
 
 function timeAgo(dateStr) {
