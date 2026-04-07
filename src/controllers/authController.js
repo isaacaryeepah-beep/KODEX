@@ -8,7 +8,7 @@ const { sendWelcome, sendAdminPasswordResetNotice, sendPasswordReset, sendNewIns
 const { sendOtp, normalisePhone } = require("../services/smsService");
 
 const SIX_HOURS_MS = 6 * 60 * 60 * 1000;
-const PAID_ROLES = ["lecturer", "manager"];
+const PAID_ROLES = ["lecturer", "manager", "admin"];
 const TRIAL_DAYS = 30;
 const SEMESTER_DAYS = 112;
 
