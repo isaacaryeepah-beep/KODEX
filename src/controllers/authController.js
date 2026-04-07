@@ -646,7 +646,7 @@ exports.login = async (req, res) => {
       return res.status(403).json({
         error: "Subscription inactive",
         message: "Your institution's subscription has expired. Please contact your admin.",
-        subscriptionExpired: true,
+        subscriptionRequired: true,
       });
     }
 
