@@ -2275,7 +2275,7 @@ async function renderApprovals() {
             <tbody>${pending.map(u => `
               <tr>
                 <td style="font-weight:500">${u.name}</td>
-                <td>${u.email || u.indexNumber || 'N/A'}</td>
+                <td>${u.email || u.IndexNumber || 'N/A'}</td>
                 <td><span class="status-badge status-active">${u.role}</span></td>
                 ${!isHod ? `<td>${u.department ? `<span style="font-size:11px;padding:2px 7px;border-radius:20px;background:#ecfeff;color:#0891b2;font-weight:600;">${u.department}</span>` : '—'}</td>` : ''}
                 <td>${new Date(u.createdAt).toLocaleDateString()}</td>
@@ -2618,9 +2618,9 @@ async function renderHodStudents() {
           <tbody id="hod-stu-tbody">
             ${students.length === 0 ? '<tr><td colspan="4" style="padding:24px;text-align:center;color:var(--text-muted);">No students found.</td></tr>' :
               students.map(u => `
-                <tr class="hod-stu-row" data-name="${(u.name||'').toLowerCase()}" data-index="${(u.indexNumber||'').toLowerCase()}" style="border-bottom:1px solid var(--border);">
+                <tr class="hod-stu-row" data-name="${(u.name||'').toLowerCase()}" data-index="${(u.IndexNumber||'').toLowerCase()}" style="border-bottom:1px solid var(--border);">
                   <td style="padding:10px 12px;font-weight:600;">${u.name}</td>
-                  <td style="padding:10px 12px;color:var(--text-muted);font-family:monospace;">${u.indexNumber || '—'}</td>
+                  <td style="padding:10px 12px;color:var(--text-muted);font-family:monospace;">${u.IndexNumber || '—'}</td>
                   <td style="padding:10px 12px;">${u.programme ? `<span style="background:#ede9fe;color:#7c3aed;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700">${esc(u.programme)}</span>` : '—'}</td>
                   <td style="padding:10px 12px;">
                     ${u.studentLevel ? `<span style="background:#dbeafe;color:#1d4ed8;padding:2px 7px;border-radius:20px;font-size:11px;font-weight:700;margin-right:3px">L${esc(u.studentLevel)}</span>` : ''}
@@ -2942,7 +2942,7 @@ async function hodExportCSV(type) {
     if (type === 'students') {
       const d = await api('/api/users?role=student&limit=500' + dept);
       headers = ['Name', 'Index Number', 'Email', 'Department', 'Status'];
-      rows = (d.users || []).map(u => [u.name, u.indexNumber || '', u.email || '', u.department || '', u.isApproved ? 'Active' : 'Pending']);
+      rows = (d.users || []).map(u => [u.name, u.IndexNumber || '', u.email || '', u.department || '', u.isApproved ? 'Active' : 'Pending']);
       filename = 'KODEX_Students_' + (currentUser.department || 'All') + '.csv';
     } else if (type === 'lecturers') {
       const d = await api('/api/users?role=lecturer&limit=200' + dept);
@@ -4412,7 +4412,7 @@ async function renderUsers(filterRole='', filterDept='', filterSearch='') {
       otherUsers = otherUsers.filter(u =>
         u.name?.toLowerCase().includes(q) ||
         u.email?.toLowerCase().includes(q) ||
-        u.indexNumber?.toLowerCase().includes(q) ||
+        u.IndexNumber?.toLowerCase().includes(q) ||
         u.department?.toLowerCase().includes(q)
       );
     }
@@ -4471,7 +4471,7 @@ async function renderUsers(filterRole='', filterDept='', filterSearch='') {
                 ${canManage ? `<td><input type="checkbox" class="user-checkbox" value="${u._id}" onchange="updateBulkActions()"></td>` : ''}
                 <td>${u.name}</td>
                 ${mode === 'corporate' ? `<td>${u.employeeId || '-'}</td>` : ''}
-                <td>${u.email || u.indexNumber || 'N/A'}</td>
+                <td>${u.email || u.IndexNumber || 'N/A'}</td>
                 <td><span class="role-badge role-${u.role}">${u.role}</span>${u.department ? `<span style="font-size:10px;margin-left:5px;padding:2px 6px;border-radius:20px;background:#ecfeff;color:#0891b2;font-weight:600;">${u.department}</span>` : ''}</td>
                 ${mode !== 'corporate' ? `<td style="font-size:11px;white-space:nowrap">
                   ${u.role === 'student' ? `
@@ -8363,7 +8363,7 @@ async function doSearch() {
 
     var rows = users.map(function(u) {
       var idCol = mode === 'academic'
-        ? '<td>' + (u.indexNumber || u.email || '—') + '</td>'
+        ? '<td>' + (u.IndexNumber || u.email || '—') + '</td>'
         : '<td>' + (u.email || '—') + '</td><td>' + (u.employeeId || '—') + '</td>';
       var activeClass = u.isActive ? 'status-active' : 'status-stopped';
       var activeLabel = u.isActive ? 'Active' : 'Inactive';
@@ -8663,7 +8663,7 @@ async function renderProfile() {
         </div>
         <div>
           <div style="font-size:18px;font-weight:700">${u.name || 'N/A'}</div>
-          <div style="font-size:13px;color:var(--text-light)">${u.email || u.indexNumber || ''}</div>
+          <div style="font-size:13px;color:var(--text-light)">${u.email || u.IndexNumber || ''}</div>
           <span class="role-badge role-${u.role}" style="margin-top:4px;display:inline-block">${u.role}</span>
         </div>
       </div>
