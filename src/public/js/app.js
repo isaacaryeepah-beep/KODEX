@@ -668,15 +668,26 @@ function assignmentsIcon() {
 }
 
 async function api(path, options = {}) {
+  // Once the lockout gate is shown, stop making requests entirely.
+  // Otherwise background pollers (announcement badge, etc.) keep firing
+  // and spam the screen with toast errors.
+  if (window._subscriptionBlocked && !path.startsWith('/api/payments') && !path.startsWith('/api/auth/logout')) {
+    const err = new Error('Subscription expired');
+    err.subscriptionBlocked = true;
+    throw err;
+  }
   const headers = { 'Content-Type': 'application/json' };
   if (token) headers['Authorization'] = `Bearer ${token}`;
   const res = await fetch(`${API}${path}`, { ...options, headers: { ...headers, ...options.headers } });
   if (res.headers.get('content-type')?.includes('application/json')) {
     const data = await res.json();
     if (!res.ok) {
-      // Subscription gate — redirect lecturer to subscription page automatically
+      // Subscription gate — company-level (institution stopped paying).
+      // The user themselves cannot fix this, only their admin can.
       if (res.status === 403 && data.subscriptionRequired) {
-        showSubscriptionGate(data.message);
+        window._subscriptionBlocked = true;
+        try { localStorage.removeItem(OFFLINE_CACHE_KEY); } catch(_) {}
+        showSubscriptionGate(data.message, { canPay: false });
         throw new Error(data.error || 'Subscription required');
       }
       // Hard lockout — user-level subscription/trial has expired.
@@ -685,7 +696,7 @@ async function api(path, options = {}) {
       if (res.status === 403 && (data.subscriptionExpired || data.userSubscription)) {
         try { localStorage.removeItem(OFFLINE_CACHE_KEY); } catch(_) {}
         window._subscriptionBlocked = true;
-        showSubscriptionGate(data.message || 'Your subscription has expired. Please renew to continue using KODEX.');
+        showSubscriptionGate(data.message || 'Your subscription has expired. Please renew to continue using KODEX.', { canPay: true });
         const err = new Error(data.error || 'Subscription expired');
         err.status = 403;
         err.subscriptionBlocked = true;
@@ -704,20 +715,24 @@ async function api(path, options = {}) {
 
 // Full-screen lockout shown when a lecturer's subscription/trial has expired.
 // Replaces the entire UI so cached data from previous sessions cannot leak through.
-function showSubscriptionGate(message) {
+function showSubscriptionGate(message, opts) {
   if (document.getElementById('sub-gate-overlay')) return; // already shown
+  const canPay = !!(opts && opts.canPay);
   const overlay = document.createElement('div');
   overlay.id = 'sub-gate-overlay';
   overlay.style.cssText = [
     'position:fixed','inset:0','z-index:99999','background:rgba(15,23,42,0.96)',
     'display:flex','align-items:center','justify-content:center','padding:24px'
   ].join(';');
+  const payBtn = canPay
+    ? `<button onclick="paySemester()" style="width:100%;padding:14px 24px;background:#16a34a;color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer;margin-bottom:10px">Pay with Paystack — GHS 300</button>`
+    : '';
   overlay.innerHTML = `
     <div style="background:#fff;border-radius:16px;padding:32px;max-width:440px;width:100%;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,0.5)">
       <div style="font-size:48px;margin-bottom:12px">🔒</div>
       <h2 style="font-size:22px;font-weight:800;color:#dc2626;margin:0 0 8px">Access Suspended</h2>
       <p style="font-size:14px;color:#475569;margin:0 0 24px;line-height:1.5">${(message || 'Your subscription has expired. Please renew to continue using KODEX.').replace(/</g,'&lt;')}</p>
-      <button onclick="paySemester()" style="width:100%;padding:14px 24px;background:#16a34a;color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer;margin-bottom:10px">Pay with Paystack — GHS 300</button>
+      ${payBtn}
       <button onclick="gateLogout()" style="width:100%;padding:10px 24px;background:transparent;color:#6b7280;border:1px solid #e5e7eb;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer">Sign Out</button>
     </div>
   `;
@@ -1897,7 +1912,7 @@ function showDashboard(data) {
   if (currentUser && _PAID_FE.indexOf(currentUser.role) !== -1) {
     var _utBlock = data.userTrial || null;
     if (_utBlock && _utBlock.daysLeft <= 0) {
-      showSubscriptionGate('Your subscription has expired. Please renew to continue using KODEX.');
+      showSubscriptionGate('Your subscription has expired. Please renew to continue using KODEX.', { canPay: true });
       return;
     }
   }
