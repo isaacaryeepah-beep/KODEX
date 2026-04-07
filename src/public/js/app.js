@@ -1,6 +1,6 @@
 // Always point to the real server — prevents requests going to ESP32 hotspot
 // when users are connected to the classroom device's WiFi network.
-const API = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+const API = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
   ? ''
   : 'https://kodex.it.com';
 
@@ -444,10 +444,8 @@ const SERVER_CHECK_TTL = 8000; // re-check every 8 s
 async function checkServerReachable() {
   try {
     const ctrl = new AbortController();
-    const tid   = setTimeout(() => ctrl.abort(), 4000); // 4s — be generous on flaky wifi
-    // Use origin-relative path so this works on any host, and hit the real
-    // /health endpoint (server.js only registers /health, not /api/health).
-    const res   = await fetch('/health', { method: 'GET', signal: ctrl.signal, cache: 'no-store' });
+    const tid   = setTimeout(() => ctrl.abort(), 2500); // 2.5s — fast enough for mobile
+    const res   = await fetch('https://kodex.it.com/api/health', { method: 'GET', signal: ctrl.signal, cache: 'no-store' });
     clearTimeout(tid);
     return res.ok;
   } catch (_) {
@@ -669,41 +667,33 @@ function assignmentsIcon() {
   return svgIcon('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/>');
 }
 
-async function api(path, options = {}) {
-  // Once the lockout gate is shown, stop making requests entirely.
-  // Otherwise background pollers (announcement badge, etc.) keep firing
-  // and spam the screen with toast errors.
-  if (window._subscriptionBlocked && !path.startsWith('/api/payments') && !path.startsWith('/api/auth/logout')) {
-    const err = new Error('Subscription expired');
-    err.subscriptionBlocked = true;
-    throw err;
+function showSubscriptionGate(message) {
+  // Redirect to subscription page with message
+  const msg = message || 'Your free trial has ended. Please subscribe to continue.';
+  const main = document.getElementById('main-content') || document.querySelector('.main-content') || document.body;
+  if (main) {
+    main.innerHTML = `<div style="padding:40px;text-align:center">
+      <div style="font-size:40px;margin-bottom:16px">🔒</div>
+      <h2 style="margin-bottom:8px">Subscription Required</h2>
+      <p style="color:#64748b;margin-bottom:24px">${msg}</p>
+      <a href="/subscription" class="btn btn-primary">View Plans</a>
+    </div>`;
   }
+  // Also navigate to subscription page
+  if (typeof showPage === 'function') showPage('subscription');
+}
+
+async function api(path, options = {}) {
   const headers = { 'Content-Type': 'application/json' };
   if (token) headers['Authorization'] = `Bearer ${token}`;
   const res = await fetch(`${API}${path}`, { ...options, headers: { ...headers, ...options.headers } });
   if (res.headers.get('content-type')?.includes('application/json')) {
     const data = await res.json();
     if (!res.ok) {
-      // Subscription gate — company-level (institution stopped paying).
-      // Lecturers can pay personally (paymentAvailable from backend); other
-      // roles must contact their admin.
+      // Subscription gate — redirect lecturer to subscription page automatically
       if (res.status === 403 && data.subscriptionRequired) {
-        window._subscriptionBlocked = true;
-        try { localStorage.removeItem(OFFLINE_CACHE_KEY); } catch(_) {}
-        showSubscriptionGate(data.message, { canPay: !!data.paymentAvailable });
+        showSubscriptionGate(data.message);
         throw new Error(data.error || 'Subscription required');
-      }
-      // Hard lockout — user-level subscription/trial has expired.
-      // Wipe the offline cache so cached pages can't sneak past, and paint
-      // a full-screen lockout that only allows paying.
-      if (res.status === 403 && (data.subscriptionExpired || data.userSubscription)) {
-        try { localStorage.removeItem(OFFLINE_CACHE_KEY); } catch(_) {}
-        window._subscriptionBlocked = true;
-        showSubscriptionGate(data.message || 'Your subscription has expired. Please renew to continue using KODEX.', { canPay: true });
-        const err = new Error(data.error || 'Subscription expired');
-        err.status = 403;
-        err.subscriptionBlocked = true;
-        throw err;
       }
       const err = new Error(data.error || 'Request failed');
       err.status = res.status;
@@ -714,55 +704,6 @@ async function api(path, options = {}) {
   }
   if (!res.ok) throw new Error('Request failed');
   return res;
-}
-
-// Full-screen lockout shown when a lecturer's subscription/trial has expired.
-// Replaces the entire UI so cached data from previous sessions cannot leak through.
-function showSubscriptionGate(message, opts) {
-  if (document.getElementById('sub-gate-overlay')) return; // already shown
-  const canPay = !!(opts && opts.canPay);
-  const overlay = document.createElement('div');
-  overlay.id = 'sub-gate-overlay';
-  overlay.style.cssText = [
-    'position:fixed','inset:0','z-index:99999','background:rgba(15,23,42,0.96)',
-    'display:flex','align-items:center','justify-content:center','padding:24px'
-  ].join(';');
-  const payBtn = canPay
-    ? `<button onclick="paySemester()" style="width:100%;padding:14px 24px;background:#16a34a;color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer;margin-bottom:10px">Pay with Paystack — GHS 300</button>`
-    : '';
-  overlay.innerHTML = `
-    <div style="background:#fff;border-radius:16px;padding:32px;max-width:440px;width:100%;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,0.5)">
-      <div style="font-size:48px;margin-bottom:12px">🔒</div>
-      <h2 style="font-size:22px;font-weight:800;color:#dc2626;margin:0 0 8px">Access Suspended</h2>
-      <p style="font-size:14px;color:#475569;margin:0 0 24px;line-height:1.5">${(message || 'Your subscription has expired. Please renew to continue using KODEX.').replace(/</g,'&lt;')}</p>
-      ${payBtn}
-      <button onclick="gateLogout()" style="width:100%;padding:10px 24px;background:transparent;color:#6b7280;border:1px solid #e5e7eb;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer">Sign Out</button>
-    </div>
-  `;
-  document.body.appendChild(overlay);
-}
-
-// Self-contained logout for the lockout gate. handleLogout() touches DOM
-// elements (trial-banner, dashboard-page, etc.) without null checks and
-// throws if any are missing — which is exactly the state we're in here.
-// Just nuke the token, clear cache, and reload.
-async function gateLogout() {
-  try {
-    const t = localStorage.getItem('token');
-    if (t && navigator.onLine) {
-      fetch(`${API}/api/auth/logout`, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${t}` },
-        keepalive: true,
-      }).catch(() => {});
-    }
-  } catch(_) {}
-  try {
-    localStorage.removeItem('token');
-    localStorage.removeItem(OFFLINE_CACHE_KEY);
-    localStorage.removeItem(OFFLINE_QUEUE_KEY);
-  } catch(_) {}
-  window.location.replace('/');
 }
 
 function timeAgo(dateStr) {
@@ -1906,19 +1847,26 @@ function showDashboard(data) {
     showForceChangePassword();
     return;
   }
+
+  // Block expired lecturers/managers immediately — redirect to subscription page
+  if (currentUser && (currentUser.role === 'lecturer' || currentUser.role === 'manager')) {
+    var _utBlock = data.userTrial || null;
+    if (_utBlock && _utBlock.daysLeft <= 0) {
+      showSubscriptionGate('Your subscription has expired. Please renew to continue using KODEX.');
+      return;
+    }
+  }
+
+  // Silently attempt ESP32 discovery in background so the hotspot key is
+  // captured via the X-ESP32-Device-Token header without needing the captive
+  // portal to open in an external browser.
+  setTimeout(() => {
+    discoverESP32().catch(() => {}); // non-fatal — fails silently if not on hotspot
+  }, 1000);
   try {
     document.getElementById('auth-page').style.display = 'none';
     const dashPage = document.getElementById('dashboard-page');
     dashPage.classList.remove('hidden');
-
-  var _PAID_FE = ['lecturer', 'manager'];
-  if (currentUser && _PAID_FE.indexOf(currentUser.role) !== -1) {
-    var _utBlock = data.userTrial || null;
-    if (_utBlock && _utBlock.daysLeft <= 0) {
-      showSubscriptionGate('Your subscription has expired. Please renew to continue using KODEX.', { canPay: true });
-      return;
-    }
-  }
 
     const role = currentUser.role;
     const portalAttr = getPortalAttr(role);
@@ -1952,33 +1900,34 @@ function showDashboard(data) {
     const subscription = data.subscription || null;
     const isSubRole = (role === 'employee' || role === 'student');
 
-    // Admins get the personal-subscription banner ONLY if they actually paid
-    // a semester themselves. Otherwise they fall through to the company-level
-    // banner below — which is correct for trial admins whose company is active.
-    var _useUserBanner = (role === 'lecturer' || role === 'manager') ||
-      (role === 'admin' && data.userTrial && data.userTrial.isSubscribed);
-    if (_useUserBanner) {
+    if (role === 'lecturer' || role === 'manager') {
+      // Per-user subscription countdown for lecturers/managers
       var _ut = data.userTrial || null;
-      var _tb = document.getElementById('trial-banner');
+      var _tb  = document.getElementById('trial-banner');
       var _teb = document.getElementById('trial-expired-banner');
       if (_ut && _ut.daysLeft <= 0) {
         _teb.textContent = 'Your subscription has expired. Please renew to continue.';
         _teb.style.display = 'block';
         _tb.style.display = 'none';
-      } else if (_ut && _ut.daysLeft <= 7) {
-        _tb.textContent = 'WARNING: Your subscription expires in ' + _ut.daysLeft + ' day' + (_ut.daysLeft===1?'':'s') + '. Please renew to keep access.';
+      } else if (_ut && _ut.daysLeft <= 3) {
+        _tb.textContent = 'URGENT: Subscription expires in ' + _ut.daysLeft + ' day' + (_ut.daysLeft === 1 ? '' : 's') + '. Renew now!';
+        _tb.style.background = '#dc2626';
         _tb.style.display = 'block';
-        _tb.style.background = _ut.daysLeft <= 3 ? '#dc2626' : '#d97706';
+        _teb.style.display = 'none';
+      } else if (_ut && _ut.daysLeft <= 7) {
+        _tb.textContent = 'WARNING: Subscription expires in ' + _ut.daysLeft + ' days. Please renew.';
+        _tb.style.background = '#d97706';
+        _tb.style.display = 'block';
         _teb.style.display = 'none';
       } else if (_ut && _ut.daysLeft <= 30) {
         _tb.textContent = 'Subscription: ' + _ut.daysLeft + ' days remaining' + (_ut.isSubscribed ? ' (Semester)' : ' (Trial)') + '. Renew before it expires.';
-        _tb.style.display = 'block';
         _tb.style.background = '#2563eb';
+        _tb.style.display = 'block';
         _teb.style.display = 'none';
       } else if (_ut) {
         _tb.textContent = 'Subscription active: ' + _ut.daysLeft + ' days remaining' + (_ut.isSubscribed ? ' (Semester)' : ' (Trial)') + '.';
-        _tb.style.display = 'block';
         _tb.style.background = '#16a34a';
+        _tb.style.display = 'block';
         _teb.style.display = 'none';
       } else {
         _tb.style.display = 'none';
@@ -1993,7 +1942,7 @@ function showDashboard(data) {
       banner.textContent = `Free Trial: ${trial.daysRemaining} days remaining (${tr.days || 0}d ${tr.hours || 0}h ${tr.minutes || 0}m)`;
       banner.style.display = 'block';
       document.getElementById('trial-expired-banner').style.display = 'none';
-    } else if (subscription && !subscription.active && trial && !trial.active && !(data.userTrial && data.userTrial.isSubscribed)) {
+    } else if (subscription && !subscription.active && trial && !trial.active) {
       document.getElementById('trial-expired-banner').textContent = 'Your free trial has ended. Please subscribe to continue using premium features.';
       document.getElementById('trial-expired-banner').style.display = 'block';
       document.getElementById('trial-banner').style.display = 'none';
@@ -2275,7 +2224,7 @@ async function renderApprovals() {
             <tbody>${pending.map(u => `
               <tr>
                 <td style="font-weight:500">${u.name}</td>
-                <td>${u.email || u.IndexNumber || 'N/A'}</td>
+                <td>${u.email || u.indexNumber || 'N/A'}</td>
                 <td><span class="status-badge status-active">${u.role}</span></td>
                 ${!isHod ? `<td>${u.department ? `<span style="font-size:11px;padding:2px 7px;border-radius:20px;background:#ecfeff;color:#0891b2;font-weight:600;">${u.department}</span>` : '—'}</td>` : ''}
                 <td>${new Date(u.createdAt).toLocaleDateString()}</td>
@@ -2618,9 +2567,9 @@ async function renderHodStudents() {
           <tbody id="hod-stu-tbody">
             ${students.length === 0 ? '<tr><td colspan="4" style="padding:24px;text-align:center;color:var(--text-muted);">No students found.</td></tr>' :
               students.map(u => `
-                <tr class="hod-stu-row" data-name="${(u.name||'').toLowerCase()}" data-index="${(u.IndexNumber||'').toLowerCase()}" style="border-bottom:1px solid var(--border);">
+                <tr class="hod-stu-row" data-name="${(u.name||'').toLowerCase()}" data-index="${(u.indexNumber||'').toLowerCase()}" style="border-bottom:1px solid var(--border);">
                   <td style="padding:10px 12px;font-weight:600;">${u.name}</td>
-                  <td style="padding:10px 12px;color:var(--text-muted);font-family:monospace;">${u.IndexNumber || '—'}</td>
+                  <td style="padding:10px 12px;color:var(--text-muted);font-family:monospace;">${u.indexNumber || '—'}</td>
                   <td style="padding:10px 12px;">${u.programme ? `<span style="background:#ede9fe;color:#7c3aed;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700">${esc(u.programme)}</span>` : '—'}</td>
                   <td style="padding:10px 12px;">
                     ${u.studentLevel ? `<span style="background:#dbeafe;color:#1d4ed8;padding:2px 7px;border-radius:20px;font-size:11px;font-weight:700;margin-right:3px">L${esc(u.studentLevel)}</span>` : ''}
@@ -2942,7 +2891,7 @@ async function hodExportCSV(type) {
     if (type === 'students') {
       const d = await api('/api/users?role=student&limit=500' + dept);
       headers = ['Name', 'Index Number', 'Email', 'Department', 'Status'];
-      rows = (d.users || []).map(u => [u.name, u.IndexNumber || '', u.email || '', u.department || '', u.isApproved ? 'Active' : 'Pending']);
+      rows = (d.users || []).map(u => [u.name, u.indexNumber || '', u.email || '', u.department || '', u.isApproved ? 'Active' : 'Pending']);
       filename = 'KODEX_Students_' + (currentUser.department || 'All') + '.csv';
     } else if (type === 'lecturers') {
       const d = await api('/api/users?role=lecturer&limit=200' + dept);
@@ -3964,15 +3913,18 @@ async function showStartSessionModal() {
   container.classList.remove('hidden');
   container.innerHTML = `<div class="modal-overlay"><div class="modal"><p style="color:var(--text-muted);text-align:center;padding:8px 0">📡 Checking classroom device…</p></div></div>`;
 
-  // Proximity is enforced at attendance time via BLE token scanning.
-  // Session start only requires the ESP32 device to be online (heartbeat check below).
-  // ── End proximity check ───────────────────────────────────
+  // ── DEVICE CHECK — lecturer proof is the ESP32 heartbeat, not hotspot key ──
+  // The hotspot key (esp32key) is for STUDENTS marking attendance.
+  // The lecturer just needs the device to be online and ready.
+  // Silently try to discover ESP32 in the background (works in Median app).
+  discoverESP32().catch(() => {});
 
   // ── STRICT device check — always required, no skip ────────
   let deviceStatus = null;
   let checkError   = false;
 
   try {
+    // Add timestamp to bust any mobile browser cache on device-status
     deviceStatus = await api('/api/esp32/device-status?t=' + Date.now());
   } catch(e) {
     checkError = true;
@@ -3998,23 +3950,30 @@ async function showStartSessionModal() {
     return;
   }
 
-  // Device registered but offline
-  if (!checkError && deviceStatus && deviceStatus.hasDevice && !deviceStatus.deviceOnline) {
+  // Device registered but offline OR not ready (V2 hardware check)
+  if (!checkError && deviceStatus && deviceStatus.hasDevice && (!deviceStatus.deviceOnline || !deviceStatus.deviceReady)) {
     const lastSeen = deviceStatus.lastSeenAt
       ? `Last seen: ${new Date(deviceStatus.lastSeenAt).toLocaleString()}`
       : 'Last seen: Never';
+
+    const reasonLabels = {
+      DEVICE_OFFLINE:    { icon: '📟', title: 'Device is Offline',     msg: 'The KODEX classroom device is not responding. Power it on and wait a few seconds.' },
+      RTC_INVALID:       { icon: '🕐', title: 'Clock Not Synced',      msg: 'The device clock is invalid. Connect it to WiFi once to sync the time.' },
+      SD_CARD_NOT_FOUND: { icon: '💾', title: 'SD Card Missing',       msg: 'The SD card is not detected. Insert the SD card and restart the device.' },
+      BLE_NOT_READY:     { icon: '📡', title: 'BLE Not Ready',         msg: 'Bluetooth is not initialised on the device. Restart the device.' },
+    };
+    const reason = deviceStatus.notReadyReason || 'DEVICE_OFFLINE';
+    const { icon, title, msg } = reasonLabels[reason] || reasonLabels.DEVICE_OFFLINE;
+
     container.innerHTML = `
       <div class="modal-overlay" onclick="closeModal(event)">
         <div class="modal" onclick="event.stopPropagation()" style="text-align:center;max-width:400px">
-          <div style="font-size:40px;margin-bottom:12px">📟</div>
-          <h3 style="margin-bottom:8px">Device is Offline</h3>
-          <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px;line-height:1.6">
-            The <strong>KODEX classroom device</strong> is not responding.<br>
-            Power it on, wait a few seconds, then try again.
-          </p>
+          <div style="font-size:40px;margin-bottom:12px">${icon}</div>
+          <h3 style="margin-bottom:8px">${title}</h3>
+          <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px;line-height:1.6">${msg}</p>
           <div style="background:#fef3c7;border:1px solid #fde68a;border-radius:8px;padding:10px 14px;font-size:12px;color:#92400e;margin-bottom:20px;text-align:left">
             <strong>${lastSeen}</strong><br>
-            Status: Offline — no heartbeat in last 20s
+            Reason: <code>${reason}</code>
           </div>
           <div style="display:flex;gap:8px;justify-content:center">
             <button class="btn btn-secondary btn-sm" onclick="closeModal()">Cancel</button>
@@ -4145,7 +4104,23 @@ async function startSession() {
     renderSessions();
   } catch (e) {
     // Device offline or not registered — show in-modal block screen
-    if (e.status === 503) {
+    if (e.data?.code === 'NOT_IN_CLASSROOM' || e.status === 403) {
+      if (container) container.innerHTML = `
+        <div class="modal-overlay" onclick="closeModal(event)">
+          <div class="modal" onclick="event.stopPropagation()" style="text-align:center;max-width:400px">
+            <div style="font-size:40px;margin-bottom:12px">📡</div>
+            <h3 style="margin-bottom:8px">Not in Classroom</h3>
+            <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px;line-height:1.6">
+              The server confirmed you are not on the classroom network.<br><br>
+              Connect to <strong>KODEX-CLASSROOM</strong> WiFi and try again.
+            </p>
+            <div style="display:flex;gap:8px;justify-content:center">
+              <button class="btn btn-secondary btn-sm" onclick="closeModal()">Cancel</button>
+              <button class="btn btn-primary btn-sm" onclick="showStartSessionModal()">↻ Retry</button>
+            </div>
+          </div>
+        </div>`;
+    } else if (e.status === 503) {
       const msg = e.data?.message || 'The classroom device is not responding. Power it on and try again.';
       if (container) container.innerHTML = `
         <div class="modal-overlay" onclick="closeModal(event)">
@@ -4412,7 +4387,7 @@ async function renderUsers(filterRole='', filterDept='', filterSearch='') {
       otherUsers = otherUsers.filter(u =>
         u.name?.toLowerCase().includes(q) ||
         u.email?.toLowerCase().includes(q) ||
-        u.IndexNumber?.toLowerCase().includes(q) ||
+        u.indexNumber?.toLowerCase().includes(q) ||
         u.department?.toLowerCase().includes(q)
       );
     }
@@ -4471,7 +4446,7 @@ async function renderUsers(filterRole='', filterDept='', filterSearch='') {
                 ${canManage ? `<td><input type="checkbox" class="user-checkbox" value="${u._id}" onchange="updateBulkActions()"></td>` : ''}
                 <td>${u.name}</td>
                 ${mode === 'corporate' ? `<td>${u.employeeId || '-'}</td>` : ''}
-                <td>${u.email || u.IndexNumber || 'N/A'}</td>
+                <td>${u.email || u.indexNumber || 'N/A'}</td>
                 <td><span class="role-badge role-${u.role}">${u.role}</span>${u.department ? `<span style="font-size:10px;margin-left:5px;padding:2px 6px;border-radius:20px;background:#ecfeff;color:#0891b2;font-weight:600;">${u.department}</span>` : ''}</td>
                 ${mode !== 'corporate' ? `<td style="font-size:11px;white-space:nowrap">
                   ${u.role === 'student' ? `
@@ -7527,38 +7502,39 @@ async function esp32Api(path, options = {}) {
 
 // Try to find ESP32 on local network
 async function discoverESP32() {
-  // Always try 192.168.4.1 — the fixed AP gateway IP of the ESP32.
-  // Works in Median app (allows HTTP from HTTPS WebView).
-  // Two-step: first /token (gets key in JSON body), then /status (confirms device).
+  // Always try the ESP32 hotspot gateway IP first (192.168.4.1) —
+  // this is the fixed IP the ESP32 always uses as AP gateway.
+  // We try this before the stored IP so that hotspot key is always
+  // captured even if the user never manually set the IP.
   const candidates = ['192.168.4.1'];
   if (esp32IP && esp32IP !== '192.168.4.1') candidates.push(esp32IP);
 
   for (const ip of candidates) {
     try {
-      // Step 1: fetch /token — returns { token: "..." } in JSON body.
-      // This is more reliable than reading response headers in a WebView.
-      const tokenRes = await fetch(`http://${ip}/token`, { cache: 'no-store' });
-      if (tokenRes.ok) {
-        const tokenData = await tokenRes.json();
-        if (tokenData.token) {
-          sessionStorage.setItem('kodex_esp32_hotspot_key', tokenData.token);
-          setEsp32IP(ip);
-          bleDetected = true;
-          return true;
-        }
-      }
-    } catch(e) { /* try /status fallback */ }
-
-    try {
-      // Step 2 fallback: /status — reads token from response header
-      esp32IP = ip;
+      const tempIP = esp32IP; // save
+      esp32IP = ip;           // temporarily set so esp32Api uses it
       const status = await esp32Api('/status');
       if (status.device === 'KODEX-ESP32') {
-        setEsp32IP(ip);
+        setEsp32IP(ip);       // persist the working IP
         bleDetected = true;
+
+        // Also fetch /token directly — captures the key in the JSON body
+        // so it works inside the app WebView without the captive portal popup.
+        try {
+          const tokenRes = await fetch(`http://${ip}/token`);
+          const tokenData = await tokenRes.json();
+          if (tokenData.token) {
+            sessionStorage.setItem('kodex_esp32_hotspot_key', tokenData.token);
+            console.log('[ESP32] Hotspot key captured via /token endpoint');
+          }
+        } catch(_) {} // non-fatal — header capture already handled by esp32Api
+
         return true;
       }
-    } catch(e) { /* not reachable on this IP */ }
+      esp32IP = tempIP;       // restore if not KODEX device
+    } catch(e) {
+      esp32IP = candidates[0] === ip ? (candidates[1] || null) : esp32IP;
+    }
   }
   return false;
 }
@@ -8192,8 +8168,7 @@ async function renderSubscription() {
       api('/api/payments/status').catch(function() { return {}; }),
       api('/api/payments/user-subscription').catch(function() { return {}; }),
     ]);
-    var userSubData = _rsArr[1];
-    var userSub = userSubData.subscription || {};
+    var userSub = (_rsArr[1] && _rsArr[1].subscription) ? _rsArr[1].subscription : {};
     var now = Date.now();
     var trialEnd  = userSub.trialEndDate ? new Date(userSub.trialEndDate) : null;
     var subEnd    = userSub.subscriptionExpiry ? new Date(userSub.subscriptionExpiry) : null;
@@ -8227,12 +8202,12 @@ async function renderSubscription() {
     if (isExpired) {
       html += '<div style="background:#fef2f2;border:1px solid #fecaca;border-radius:12px;padding:16px">';
       html += '<div style="font-size:14px;font-weight:700;color:#dc2626;margin-bottom:6px">Access Suspended</div>';
-      html += '<div style="font-size:13px;color:#374151">Pay GHS 300 to restore access for the next semester.</div></div>';
+      html += '<div style="font-size:13px;color:#374151">Pay GHS 300 to restore full access for the next semester.</div></div>';
     }
     html += '</div>';
     content.innerHTML = html;
   } catch (e) {
-    content.innerHTML = '<div class="card"><p>Error: ' + e.message + '</p></div>';
+    content.innerHTML = '<div class="card"><p>Error loading subscription: ' + e.message + '</p></div>';
   }
 }
 
@@ -8363,7 +8338,7 @@ async function doSearch() {
 
     var rows = users.map(function(u) {
       var idCol = mode === 'academic'
-        ? '<td>' + (u.IndexNumber || u.email || '—') + '</td>'
+        ? '<td>' + (u.indexNumber || u.email || '—') + '</td>'
         : '<td>' + (u.email || '—') + '</td><td>' + (u.employeeId || '—') + '</td>';
       var activeClass = u.isActive ? 'status-active' : 'status-stopped';
       var activeLabel = u.isActive ? 'Active' : 'Inactive';
@@ -8663,7 +8638,7 @@ async function renderProfile() {
         </div>
         <div>
           <div style="font-size:18px;font-weight:700">${u.name || 'N/A'}</div>
-          <div style="font-size:13px;color:var(--text-light)">${u.email || u.IndexNumber || ''}</div>
+          <div style="font-size:13px;color:var(--text-light)">${u.email || u.indexNumber || ''}</div>
           <span class="role-badge role-${u.role}" style="margin-top:4px;display:inline-block">${u.role}</span>
         </div>
       </div>
