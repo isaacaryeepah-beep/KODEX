@@ -1169,8 +1169,14 @@ async function handleLecturerLogin() {
       showLecturerError('Too many failed attempts. Please wait 15 minutes and try again.');
     } else if (m.includes('network') || m.includes('fetch')) {
       showLecturerError('Network error. Please check your connection and try again.');
-    } else {
+    } else if (m.includes('wait') && m.includes('hours')) {
+      showLecturerError(msg);
+    } else if (m.includes('subscription') || m.includes('expired')) {
+      showLecturerError(msg);
+    } else if (m.includes('invalid credentials') || m.includes('wrong')) {
       showLecturerError('Wrong Email or Password.');
+    } else {
+      showLecturerError(msg || 'Sign in failed. Please try again.');
     }
   }
 }
