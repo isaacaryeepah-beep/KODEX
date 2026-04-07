@@ -642,12 +642,26 @@ exports.login = async (req, res) => {
     }
     // ────────────────────────────────────────────────────────────────────────
 
-    if (company && !company.hasAccess && !["superadmin", "admin", "manager"].includes(user.role)) {
-      return res.status(403).json({
-        error: "Subscription inactive",
-        message: "Your institution's subscription has expired. Please contact your admin.",
-        subscriptionExpired: true,
-      });
+    // Block login only for users who genuinely cannot pay their own way.
+    // Lecturers and managers have per-user subscriptions and must be allowed
+    // to log in so they can renew personally — the auth middleware will gate
+    // them with a Pay button after login if needed.
+    // Students/employees/HODs are blocked unless an admin of their company
+    // still has an active personal subscription (legacy admin payments).
+    const SELF_PAYABLE = ["superadmin", "admin", "manager", "lecturer"];
+    if (company && !company.hasAccess && !SELF_PAYABLE.includes(user.role)) {
+      const activeAdmin = await User.findOne({
+        company: company._id,
+        role: "admin",
+        subscriptionExpiry: { $gt: new Date() },
+      }).select("_id").lean();
+      if (!activeAdmin) {
+        return res.status(403).json({
+          error: "Subscription inactive",
+          message: "Your institution's subscription has expired. Please contact your admin.",
+          subscriptionRequired: true,
+        });
+      }
     }
 
     if (user.lastLogoutTime) {
