@@ -10,7 +10,7 @@ const userSchema = new mongoose.Schema(
       sparse: true,
       match: [/^\S+@\S+\.\S+$/, "Please provide a valid email"],
     },
-    IndexNumber: {
+    indexNumber: {
       type: String,
       trim: true,
     },
@@ -159,8 +159,8 @@ userSchema.index(
   { unique: true, sparse: true, partialFilterExpression: { phone: { $type: "string" } } }
 );
 userSchema.index(
-  { IndexNumber: 1, company: 1 },
-  { unique: true, sparse: true, partialFilterExpression: { IndexNumber: { $type: "string" } } }
+  { indexNumber: 1, company: 1 },
+  { unique: true, sparse: true, partialFilterExpression: { indexNumber: { $type: "string" } } }
 );
 userSchema.index(
   { employeeId: 1, company: 1 },
@@ -169,8 +169,8 @@ userSchema.index(
 
 userSchema.pre("validate", function () {
   if (this.role === "student") {
-    if (!this.IndexNumber) {
-      this.invalidate("IndexNumber", "Index number is required for students");
+    if (!this.indexNumber) {
+      this.invalidate("indexNumber", "Index number is required for students");
     }
   } else {
     if (!this.email) {
