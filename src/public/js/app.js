@@ -683,11 +683,12 @@ async function api(path, options = {}) {
     const data = await res.json();
     if (!res.ok) {
       // Subscription gate — company-level (institution stopped paying).
-      // The user themselves cannot fix this, only their admin can.
+      // Lecturers can pay personally (paymentAvailable from backend); other
+      // roles must contact their admin.
       if (res.status === 403 && data.subscriptionRequired) {
         window._subscriptionBlocked = true;
         try { localStorage.removeItem(OFFLINE_CACHE_KEY); } catch(_) {}
-        showSubscriptionGate(data.message, { canPay: false });
+        showSubscriptionGate(data.message, { canPay: !!data.paymentAvailable });
         throw new Error(data.error || 'Subscription required');
       }
       // Hard lockout — user-level subscription/trial has expired.
