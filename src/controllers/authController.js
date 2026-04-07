@@ -648,11 +648,21 @@ exports.login = async (req, res) => {
     // — the auth middleware will gate them with the Pay button if needed.
     const SELF_PAYABLE = ["superadmin", "admin", "manager", "lecturer"];
     if (company && !company.hasAccess && !SELF_PAYABLE.includes(user.role)) {
-      return res.status(403).json({
-        error: "Subscription inactive",
-        message: "Your institution's subscription has expired. Please contact your admin.",
-        subscriptionRequired: true,
-      });
+      // Backfill: if any admin of this company still has an active personal
+      // subscription (legacy semester payments that didn't propagate to the
+      // Company doc), treat the institution as having access.
+      const activeAdmin = await User.findOne({
+        company: company._id,
+        role: "admin",
+        subscriptionExpiry: { $gt: new Date() },
+      }).select("_id").lean();
+      if (!activeAdmin) {
+        return res.status(403).json({
+          error: "Subscription inactive",
+          message: "Your institution's subscription has expired. Please contact your admin.",
+          subscriptionRequired: true,
+        });
+      }
     }
 
     if (user.lastLogoutTime) {
