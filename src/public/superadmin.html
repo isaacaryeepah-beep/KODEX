@@ -356,7 +356,10 @@ function buildInstitutionRows(cos) {
         const trialText = c.subscriptionStatus === 'active' ? 'Subscribed ✓'
           : c.isTrialActive ? `${c.trialDaysRemaining}d left`
           : 'Expired';
-        const expDate = c.trialEndDate ? new Date(c.trialEndDate).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}) : '—';
+        const dateForLabel = c.subscriptionStatus === 'active'
+          ? (c.subscriptionEndDate || c.trialEndDate)
+          : c.trialEndDate;
+        const expDate = dateForLabel ? new Date(dateForLabel).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}) : '—';
         return `<tr class="clickable" onclick="showDetail('${c._id}')">
           <td>
             <div style="font-weight:700">${esc(c.name)}</div>
