@@ -108,6 +108,7 @@ router.get("/overview", async (req, res) => {
       return {
         ...c,
         subscriptionActive:  effectiveSubActive,
+        subscriptionStatus:  effectiveSubActive ? "active" : c.subscriptionStatus,
         subscriptionEndDate: effectiveSubEnd,
         hasAccess:           c.hasAccess || !!adminSubEnd,
         userCount: counts.total || 0,
