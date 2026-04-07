@@ -42,6 +42,29 @@ exports.listCourses = async (req, res) => {
     const filter = { ...req.companyFilter, isActive: true };
 
     if (req.user.role === "student") {
+      // Self-heal: link any roster entries for this student that never got
+      // connected to their user account (case-mismatch bug, or roster uploaded
+      // before account creation). Next load will return all their courses.
+      const idx = (req.user.IndexNumber || "").toString().trim().toUpperCase();
+      if (idx) {
+        const StudentRoster = require("../models/StudentRoster");
+        const unlinked = await StudentRoster.find({
+          company: req.user.company,
+          studentId: idx,
+          $or: [{ registeredUser: null }, { registeredUser: { $exists: false } }],
+        }).select("course").lean();
+        if (unlinked.length) {
+          const courseIds = unlinked.map(r => r.course);
+          await Course.updateMany(
+            { _id: { $in: courseIds } },
+            { $addToSet: { enrolledStudents: req.user._id } }
+          );
+          await StudentRoster.updateMany(
+            { company: req.user.company, studentId: idx },
+            { $set: { registered: true, registeredUser: req.user._id } }
+          );
+        }
+      }
       filter.enrolledStudents = req.user._id;
     } else if (req.user.role === "lecturer") {
       filter.lecturer = req.user._id;
