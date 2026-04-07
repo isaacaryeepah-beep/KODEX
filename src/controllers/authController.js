@@ -8,7 +8,7 @@ const { sendWelcome, sendAdminPasswordResetNotice, sendPasswordReset, sendNewIns
 const { sendOtp, normalisePhone } = require("../services/smsService");
 
 const SIX_HOURS_MS = 6 * 60 * 60 * 1000;
-const PAID_ROLES = ["lecturer", "manager", "admin"];
+const PAID_ROLES = ["lecturer", "manager"];
 const TRIAL_DAYS = 30;
 const SEMESTER_DAYS = 112;
 
@@ -642,27 +642,12 @@ exports.login = async (req, res) => {
     }
     // ────────────────────────────────────────────────────────────────────────
 
-    // Block login only for users who genuinely cannot pay their own way
-    // (students, employees, HODs). Lecturers and managers have per-user
-    // subscriptions and must be allowed to log in so they can renew personally
-    // — the auth middleware will gate them with the Pay button if needed.
-    const SELF_PAYABLE = ["superadmin", "admin", "manager", "lecturer"];
-    if (company && !company.hasAccess && !SELF_PAYABLE.includes(user.role)) {
-      // Backfill: if any admin of this company still has an active personal
-      // subscription (legacy semester payments that didn't propagate to the
-      // Company doc), treat the institution as having access.
-      const activeAdmin = await User.findOne({
-        company: company._id,
-        role: "admin",
-        subscriptionExpiry: { $gt: new Date() },
-      }).select("_id").lean();
-      if (!activeAdmin) {
-        return res.status(403).json({
-          error: "Subscription inactive",
-          message: "Your institution's subscription has expired. Please contact your admin.",
-          subscriptionRequired: true,
-        });
-      }
+    if (company && !company.hasAccess && !["superadmin", "admin", "manager"].includes(user.role)) {
+      return res.status(403).json({
+        error: "Subscription inactive",
+        message: "Your institution's subscription has expired. Please contact your admin.",
+        subscriptionExpired: true,
+      });
     }
 
     if (user.lastLogoutTime) {
@@ -728,6 +713,21 @@ exports.login = async (req, res) => {
         status: company.subscriptionStatus,
         plan: company.subscriptionPlan,
       } : null,
+      userTrial: PAID_ROLES.includes(user.role) ? (() => {
+        const now = Date.now();
+        const trialEnd = user.trialEndDate
+          ? new Date(user.trialEndDate)
+          : new Date(new Date(user.createdAt).getTime() + TRIAL_DAYS * 24 * 60 * 60 * 1000);
+        const subEnd = user.subscriptionExpiry ? new Date(user.subscriptionExpiry) : null;
+        const activeEnd = (subEnd && subEnd > now) ? subEnd : trialEnd;
+        const daysLeft = Math.ceil((activeEnd - now) / (1000 * 60 * 60 * 24));
+        return {
+          daysLeft,
+          activeEnd,
+          status: subEnd && subEnd > now ? 'active' : trialEnd > now ? 'trial' : 'expired',
+          isSubscribed: !!(subEnd && subEnd > now),
+        };
+      })() : null,
     });
   } catch (error) {
     console.error("Login error:", error);
@@ -784,11 +784,16 @@ exports.getMe = async (req, res) => {
         const now = Date.now();
         const trialEnd = user.trialEndDate
           ? new Date(user.trialEndDate)
-          : new Date(new Date(user.createdAt).getTime() + TRIAL_DAYS*24*60*60*1000);
+          : new Date(new Date(user.createdAt).getTime() + TRIAL_DAYS * 24 * 60 * 60 * 1000);
         const subEnd = user.subscriptionExpiry ? new Date(user.subscriptionExpiry) : null;
         const activeEnd = (subEnd && subEnd > now) ? subEnd : trialEnd;
-        const daysLeft = Math.ceil((activeEnd - now) / (1000*60*60*24));
-        return { daysLeft, activeEnd, status: subEnd && subEnd > now ? 'active' : trialEnd > now ? 'trial' : 'expired', isSubscribed: !!(subEnd && subEnd > now) };
+        const daysLeft = Math.ceil((activeEnd - now) / (1000 * 60 * 60 * 24));
+        return {
+          daysLeft,
+          activeEnd,
+          status: subEnd && subEnd > now ? 'active' : trialEnd > now ? 'trial' : 'expired',
+          isSubscribed: !!(subEnd && subEnd > now),
+        };
       })() : null,
     });
   } catch (error) {
