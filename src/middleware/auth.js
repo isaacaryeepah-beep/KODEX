@@ -22,8 +22,10 @@ const authenticate = async (req, res, next) => {
 
     req.user = user;
 
-    // Block expired lecturers/managers on every API request
-    const PAID_ROLES = ['lecturer', 'manager'];
+    // Block expired lecturers/managers/admins on every API request.
+    // Admins are included so an expired institution actually locks the
+    // account — but the gate still shows the Pay button so they can renew.
+    const PAID_ROLES = ['lecturer', 'manager', 'admin'];
     // NOTE: req.path is RELATIVE to the router's mount point (e.g. "/paystack/initialize"
     // inside routes/payments.js), so we have to test against req.originalUrl which is
     // the full URL path. Otherwise the exemption never matches and expired lecturers
@@ -38,7 +40,24 @@ const authenticate = async (req, res, next) => {
           ? new Date(user.trialEndDate)
           : new Date(new Date(user.createdAt).getTime() + 30*24*60*60*1000);
         const subEnd = user.subscriptionExpiry ? new Date(user.subscriptionExpiry) : null;
-        if (!(trialEnd > now) && !(subEnd && subEnd > now)) {
+        const personalActive = (trialEnd > now) || (subEnd && subEnd > now);
+
+        // Also let them through if their COMPANY still has access (paid by
+        // someone else, e.g. an institution-wide subscription). Only block
+        // when BOTH personal and company access are gone.
+        let companyActive = false;
+        if (!personalActive && user.company) {
+          try {
+            const Company = require('../models/Company');
+            const company = await Company.findById(user.company).select('hasAccess subscriptionActive isTrialActive trialEndDate').lean();
+            if (company) {
+              const cTrialEnd = company.trialEndDate ? new Date(company.trialEndDate) : null;
+              companyActive = !!(company.hasAccess || company.subscriptionActive || (cTrialEnd && cTrialEnd > now));
+            }
+          } catch (_) {}
+        }
+
+        if (!personalActive && !companyActive) {
           return res.status(403).json({
             error: 'Subscription expired',
             message: 'Your free trial has ended. Please subscribe to continue using KODEX.',
