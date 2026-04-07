@@ -572,11 +572,11 @@ exports.login = async (req, res) => {
       // FIX: Search all companies for this lecturer email, not just mode="academic"
       // Some institutions have mode="corporate" due to registration flow issues.
       // Role-based checks below prevent cross-portal abuse.
-      user = await User.findOne({ email, role: "lecturer" }).select("+password");
+      user = await User.findOne({ email: { $regex: new RegExp("^" + email.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "$", "i") }, role: "lecturer" }).select("+password");
     } else if (email && loginRole === "hod") {
-      user = await User.findOne({ email, role: "hod" }).select("+password");
+      user = await User.findOne({ email: { $regex: new RegExp("^" + email.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "$", "i") }, role: "hod" }).select("+password");
     } else {
-      user = await User.findOne({ email }).select("+password");
+      user = await User.findOne({ email: { $regex: new RegExp("^" + email.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "$", "i") } }).select("+password");
     }
 
     if (!user || !user.isActive) {
