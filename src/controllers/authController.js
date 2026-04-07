@@ -664,13 +664,17 @@ exports.login = async (req, res) => {
       }
     }
 
-    if (user.lastLogoutTime) {
+    // 6-hour cross-device lock — only meaningful for student accounts where
+    // we want to discourage account sharing. Lecturers/admins/managers are
+    // expected to log in from multiple devices (phone, laptop, etc.) and
+    // should never be blocked by this.
+    if (user.lastLogoutTime && user.role === "student") {
       const timeSinceLogout = Date.now() - new Date(user.lastLogoutTime).getTime();
       if (timeSinceLogout < SIX_HOURS_MS && deviceId && user.deviceId && user.deviceId !== deviceId) {
         const remainingMs = SIX_HOURS_MS - timeSinceLogout;
         const remainingHours = Math.ceil(remainingMs / (60 * 60 * 1000));
         return res.status(403).json({
-          error: "You must wait 6 hours before signing in to a different account.",
+          error: "You must wait 6 hours before signing in from a different device.",
           remainingHours,
           restrictedUntil: new Date(new Date(user.lastLogoutTime).getTime() + SIX_HOURS_MS).toISOString(),
         });
