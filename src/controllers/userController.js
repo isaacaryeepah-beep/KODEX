@@ -153,7 +153,7 @@ exports.createUser = async (req, res) => {
       }
       // Explicit duplicate check with clear message before hitting the DB index
       const existingStudent = await User.findOne({
-        indexNumber: indexNumber.toString().trim().toUpperCase(),
+        IndexNumber: indexNumber.toString().trim().toUpperCase(),
         company: req.user.company,
       });
       if (existingStudent) {
@@ -161,7 +161,7 @@ exports.createUser = async (req, res) => {
           error: `Index number ${indexNumber} is already registered to ${existingStudent.name} at this institution.`,
         });
       }
-      userData.indexNumber = indexNumber.toString().trim().toUpperCase();
+      userData.IndexNumber = indexNumber.toString().trim().toUpperCase();
       // Save student classification
       if (programme)    userData.programme    = programme.trim();
       if (studentLevel) userData.studentLevel = studentLevel.trim();
@@ -189,6 +189,33 @@ exports.createUser = async (req, res) => {
     }
 
     const user = await User.create(userData);
+
+    // If this is a student, retroactively enroll them into any courses where
+    // a lecturer had already added their index number to the roster before
+    // they were registered. This fixes the case where the lecturer uploaded
+    // the class roster first and then the admin created the student account.
+    if (targetRole === 'student' && userData.IndexNumber) {
+      try {
+        const StudentRoster = require('../models/StudentRoster');
+        const rosterEntries = await StudentRoster.find({
+          studentId: userData.IndexNumber,
+          company: req.user.company,
+        });
+        if (rosterEntries.length) {
+          const courseIds = rosterEntries.map(r => r.course);
+          await Course.updateMany(
+            { _id: { $in: courseIds } },
+            { $addToSet: { enrolledStudents: user._id } }
+          );
+          await StudentRoster.updateMany(
+            { _id: { $in: rosterEntries.map(r => r._id) } },
+            { $set: { registered: true, registeredUser: user._id } }
+          );
+        }
+      } catch (e) {
+        console.error('Roster auto-link on create failed:', e.message);
+      }
+    }
 
     // Send welcome emails (non-fatal)
     try {
