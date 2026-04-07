@@ -76,6 +76,23 @@ router.get("/overview", async (req, res) => {
     const totalRevenue = revenues.reduce((s, r) => s + r.total, 0);
     const totalPayments = revenues.reduce((s, r) => s + r.count, 0);
 
+    // For legacy admin payments that landed on user.subscriptionExpiry but
+    // never propagated to the company. We consider the institution effectively
+    // subscribed if any of its admins still has an active personal sub.
+    const adminSubs = await User.find({
+      company: { $in: companyIds },
+      role: "admin",
+      subscriptionExpiry: { $gt: new Date() },
+    }).select("company subscriptionExpiry").lean();
+    const adminSubMap = {};
+    adminSubs.forEach(a => {
+      const id = a.company.toString();
+      const cur = adminSubMap[id];
+      if (!cur || new Date(a.subscriptionExpiry) > new Date(cur)) {
+        adminSubMap[id] = a.subscriptionExpiry;
+      }
+    });
+
     const enriched = companies.map(c => {
       const id = c._id.toString();
       const trialDaysRemaining = c.trialEndDate
@@ -83,8 +100,16 @@ router.get("/overview", async (req, res) => {
         : 0;
       const counts = countMap[id] || {};
       const adm = adminMap[id] || null;
+      const adminSubEnd = adminSubMap[id] || null;
+      // If company is not marked active but an admin has a live personal sub,
+      // surface that as the effective subscription in the list.
+      const effectiveSubActive = c.subscriptionActive || !!adminSubEnd;
+      const effectiveSubEnd = c.subscriptionEndDate || adminSubEnd;
       return {
         ...c,
+        subscriptionActive:  effectiveSubActive,
+        subscriptionEndDate: effectiveSubEnd,
+        hasAccess:           c.hasAccess || !!adminSubEnd,
         userCount: counts.total || 0,
         roleCounts: {
           admin: counts.admin || 0,
