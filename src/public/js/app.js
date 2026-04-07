@@ -1991,7 +1991,7 @@ function showDashboard(data) {
       banner.textContent = `Free Trial: ${trial.daysRemaining} days remaining (${tr.days || 0}d ${tr.hours || 0}h ${tr.minutes || 0}m)`;
       banner.style.display = 'block';
       document.getElementById('trial-expired-banner').style.display = 'none';
-    } else if (subscription && !subscription.active && trial && !trial.active) {
+    } else if (subscription && !subscription.active && trial && !trial.active && !(data.userTrial && data.userTrial.isSubscribed)) {
       document.getElementById('trial-expired-banner').textContent = 'Your free trial has ended. Please subscribe to continue using premium features.';
       document.getElementById('trial-expired-banner').style.display = 'block';
       document.getElementById('trial-banner').style.display = 'none';
