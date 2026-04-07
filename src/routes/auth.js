@@ -1,59 +1,36 @@
-const { verifyToken } = require("../utils/jwt");
-const User = require("../models/User");
+// ──────────────────────────────────────────────────────────────────────────────
+//  KODEX Auth Routes
+//  Mounted at /api/auth in server.js. The authenticate middleware lives in
+//  src/middleware/auth.js — this file used to be a corrupted duplicate of it
+//  which broke every login. Do not export the middleware from here.
+// ──────────────────────────────────────────────────────────────────────────────
+const express = require("express");
+const authenticate = require("../middleware/auth");
+const ctrl = require("../controllers/authController");
 
-const authenticate = async (req, res, next) => {
-  try {
-    // Accept token from Authorization header OR query string (for file downloads)
-    const authHeader = req.headers.authorization;
-    let token;
-    if (authHeader && authHeader.startsWith("Bearer ")) {
-      token = authHeader.split(" ")[1];
-    } else if (req.query.token) {
-      token = req.query.token;
-    } else {
-      return res.status(401).json({ error: "No token provided" });
-    }
-    const decoded = verifyToken(token);
+const router = express.Router();
 
-    const user = await User.findById(decoded.id);
-    if (!user || !user.isActive) {
-      return res.status(401).json({ error: "User not found or inactive" });
-    }
+// ── Public endpoints ─────────────────────────────────────────────────────────
+router.post("/login", ctrl.login);
 
-    req.user = user;
+router.post("/register",          ctrl.register);
+router.post("/register-lecturer", ctrl.registerLecturer);
+router.post("/register-student",  ctrl.registerStudent);
+router.post("/register-employee", ctrl.registerEmployee);
 
-    // Block expired lecturers/managers on every API request
-    const PAID_ROLES = ['lecturer', 'manager'];
-    const EXEMPT = ['/api/payments', '/api/auth/logout', '/api/auth/login'];
-    if (PAID_ROLES.includes(user.role)) {
-      const isExempt = EXEMPT.some(p => req.path.startsWith(p));
-      if (!isExempt) {
-        const now = Date.now();
-        const trialEnd = user.trialEndDate
-          ? new Date(user.trialEndDate)
-          : new Date(new Date(user.createdAt).getTime() + 30*24*60*60*1000);
-        const subEnd = user.subscriptionExpiry ? new Date(user.subscriptionExpiry) : null;
-        if (!(trialEnd > now) && !(subEnd && subEnd > now)) {
-          return res.status(403).json({
-            error: 'Subscription expired',
-            message: 'Your free trial has ended. Please subscribe to continue using KODEX.',
-            subscriptionExpired: true,
-            userSubscription: true,
-          });
-        }
-      }
-    }
+router.post("/forgot-password",       ctrl.forgotPassword);
+router.post("/forgot-password-email", ctrl.forgotPasswordEmail);
+router.post("/forgot-password-admin", ctrl.forgotPasswordAdmin);
+router.post("/reset-password",        ctrl.resetPassword);
+router.post("/reset-password-email",  ctrl.resetPasswordEmail);
 
-    next();
-  } catch (error) {
-    if (error.name === "JsonWebTokenError") {
-      return res.status(401).json({ error: "Invalid token" });
-    }
-    if (error.name === "TokenExpiredError") {
-      return res.status(401).json({ error: "Token expired" });
-    }
-    return res.status(500).json({ error: "Authentication failed" });
-  }
-};
+// ── Authenticated endpoints ──────────────────────────────────────────────────
+router.post("/logout", authenticate, ctrl.logout);
+router.get("/me",      authenticate, ctrl.getMe);
+router.put("/profile", authenticate, ctrl.updateProfile);
 
-module.exports = authenticate;
+router.post("/2fa/toggle", authenticate, ctrl.toggle2FA);
+router.post("/2fa/send",   authenticate, ctrl.send2FACode);
+router.post("/2fa/verify", authenticate, ctrl.verify2FACode);
+
+module.exports = router;
