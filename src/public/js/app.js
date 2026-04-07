@@ -1950,7 +1950,12 @@ function showDashboard(data) {
     const subscription = data.subscription || null;
     const isSubRole = (role === 'employee' || role === 'student');
 
-    if (role === 'lecturer' || role === 'manager') {
+    // Admins get the personal-subscription banner ONLY if they actually paid
+    // a semester themselves. Otherwise they fall through to the company-level
+    // banner below — which is correct for trial admins whose company is active.
+    var _useUserBanner = (role === 'lecturer' || role === 'manager') ||
+      (role === 'admin' && data.userTrial && data.userTrial.isSubscribed);
+    if (_useUserBanner) {
       var _ut = data.userTrial || null;
       var _tb = document.getElementById('trial-banner');
       var _teb = document.getElementById('trial-expired-banner');
