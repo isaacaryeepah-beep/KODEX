@@ -188,11 +188,34 @@ exports.verifyPaystackSubscription = async (req, res) => {
       user.trialEndDate        = user.trialEndDate || endDate;
       await user.save();
 
-      // Log payment
-      await Company.findByIdAndUpdate(companyId, {
+      // If the payer is an admin, they are paying on behalf of the institution.
+      // Activate the company-level subscription too, so the superadmin dashboard
+      // and the lecturer-facing banner both reflect the payment.
+      const companyUpdate = {
         $inc: { revenue: meta.amountGhs || 300 },
         lastPaymentDate: now,
-      });
+      };
+      if (user.role === 'admin') {
+        const existingCompany = await Company.findById(companyId).lean();
+        const base = existingCompany?.subscriptionActive &&
+          existingCompany?.subscriptionEndDate &&
+          new Date(existingCompany.subscriptionEndDate) > now
+            ? new Date(existingCompany.subscriptionEndDate)
+            : now;
+        companyUpdate.$set = {
+          subscriptionActive:    true,
+          subscriptionStatus:    "active",
+          subscriptionPlan:      "semester",
+          subscriptionProvider:  "paystack",
+          trialUsed:             true,
+          subscriptionStartDate: now,
+          subscriptionEndDate:   new Date(base.getTime() + SEMESTER_DAYS * 24 * 60 * 60 * 1000),
+          lastPaymentReference:  reference,
+          lastPaymentAmount:     meta.amountGhs || 300,
+          hasAccess:             true,
+        };
+      }
+      await Company.findByIdAndUpdate(companyId, companyUpdate);
 
       // Send confirmation email
       try {
