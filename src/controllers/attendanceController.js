@@ -122,6 +122,32 @@ exports.startSession = async (req, res) => {
 
     const session = await AttendanceSession.create(sessionData);
 
+    // ── Seed the rotating code immediately ────────────────────────────────
+    // If this company has a registered ESP32, every session needs an esp32Seed
+    // so the rotating 6-digit code can be derived by both the backend and the
+    // device. Previously the seed was only set when sendCommand was called as
+    // a separate step — if the frontend forgot that call, the session would
+    // have no seed and markAttendance would skip rotating-code enforcement,
+    // silently weakening anti-cheat. Set it here unconditionally.
+    if (company.esp32Devices && company.esp32Devices.length > 0) {
+      const SEED = session._id.toString();
+      const DURATION = Number(req.body.durationSeconds) || 300; // default 5 min window
+      session.esp32Seed = SEED;
+      session.durationSeconds = DURATION;
+      await session.save();
+
+      // Queue the start command so the ESP32 picks it up on its next poll.
+      company.esp32PendingCommand = {
+        action:    "start",
+        sessionId: session._id.toString(),
+        title:     req.body.title || "Classroom Session",
+        seed:      SEED,
+        duration:  DURATION,
+        issuedAt:  new Date(),
+      };
+      await company.save();
+    }
+
     const populated = await session.populate([
       { path: "company", select: "name" },
       { path: "createdBy", select: "name email" },
@@ -165,7 +191,27 @@ exports.stopSession = async (req, res) => {
     session.status = "stopped";
     session.stoppedAt = new Date();
     session.stoppedBy = req.user._id;
+    session.stoppedReason = "manual";
     await session.save();
+
+    // Queue stop command to the ESP32 so its OLED clears and it stops
+    // broadcasting the rotating code. Non-fatal if it fails.
+    try {
+      const company = await Company.findById(session.company);
+      if (company && company.esp32Devices && company.esp32Devices.length > 0) {
+        company.esp32PendingCommand = {
+          action:    "stop",
+          sessionId: session._id.toString(),
+          title:     null,
+          seed:      null,
+          duration:  0,
+          issuedAt:  new Date(),
+        };
+        await company.save();
+      }
+    } catch (e) {
+      console.warn("Stop: failed to queue ESP32 stop command:", e.message);
+    }
 
     const populated = await session.populate([
       { path: "company", select: "name" },
@@ -289,6 +335,49 @@ exports.getSession = async (req, res) => {
   }
 };
 
+// GET /api/attendance-sessions/:id/current-code
+// Returns the current rotating 6-digit code for a session. Used by the
+// lecturer dashboard to verify what the ESP32 OLED should be showing, and
+// to double-check the ESP32 firmware is in sync with the server. Students
+// should NOT call this endpoint (they must read the code off the OLED).
+exports.getCurrentCode = async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ error: "Invalid session ID" });
+    }
+
+    // Only the creator of the session (or admin/superadmin) can view the code.
+    // Students must be blocked at the route layer.
+    const filter = { _id: id, ...req.companyFilter };
+    if (req.user.role === "lecturer") filter.createdBy = req.user._id;
+
+    const session = await AttendanceSession.findOne(filter)
+      .select("esp32Seed status startedAt durationSeconds")
+      .lean();
+    if (!session) return res.status(404).json({ error: "Session not found" });
+
+    if (session.status !== "active") {
+      return res.status(400).json({ error: "Session is not active." });
+    }
+    if (!session.esp32Seed) {
+      return res.status(400).json({
+        error: "This session has no rotating code configured. Start it from the ESP32 classroom device.",
+      });
+    }
+
+    const { currentCodeForSession } = require("../services/attendanceCodeService");
+    const codeInfo = currentCodeForSession(session);
+    return res.json({
+      sessionId: id,
+      ...codeInfo,
+    });
+  } catch (error) {
+    console.error("Get current code error:", error);
+    res.status(500).json({ error: "Failed to get current code" });
+  }
+};
+
 
 exports.getSessionRecords = async (req, res) => {
   try {
@@ -322,61 +411,80 @@ exports.getSessionRecords = async (req, res) => {
 exports.markAttendance = async (req, res) => {
   try {
     const { sessionId, qrToken, code, method, meetingId } = req.body;
+    const clientDeviceId = req.body.deviceId || req.headers["x-device-id"] || null;
 
     const methodMap = {
       qr: "qr_mark",
       ble: "ble_mark",
       manual: "manual",
-      zoom: "jitsi_join",
+      code: "code_mark",
     };
 
-    // ── ESP32 proximity enforcement ───────────────────────────────────────────
+    // ── ESP32 liveness + same-network enforcement ─────────────────────────
     // If the company has a registered ESP32 device, ALL attendance marking
-    // (code, QR, BLE) MUST come from the ESP32 hotspot subnet (192.168.4.x).
-    // This applies whether the device is online OR offline — having a registered
-    // device means physical presence is always required. No remote marking.
+    // requires:
+    //   1. The ESP32 is sending heartbeats (within 15s)
+    //   2. The student's PUBLIC IP matches one of the IPs the ESP32 recently
+    //      reported from. Since both devices are behind the same school WiFi
+    //      router's NAT, they share a public IP — if they don't match, the
+    //      student is on a different network (home WiFi, mobile data, etc.)
+    //      and the request is rejected. This is the anti-cheat that replaces
+    //      the old ESP32-hotspot requirement.
+    //
+    // We look at the LATEST heartbeating device (highest lastSeenAt) and
+    // compare against its sliding 10-minute IP window.
     const Company = require('../models/Company');
     const companyDoc = await Company.findById(req.user.company)
-      .select('esp32Devices').lean();
+      .select('esp32Devices esp32Required').lean();
 
-    const hasRegisteredDevice = companyDoc &&
+    const hasRegisteredDevice = !!(companyDoc &&
       companyDoc.esp32Devices &&
-      companyDoc.esp32Devices.length > 0;
+      companyDoc.esp32Devices.length > 0);
 
     if (hasRegisteredDevice) {
-      // Get student real IP (supports proxies/load balancers)
-      const clientIp = (
+      const now = Date.now();
+      const HEARTBEAT_STALENESS_MS = 15000;
+
+      // Find the freshest device (the one most recently seen).
+      const freshest = companyDoc.esp32Devices
+        .filter(d => d.lastSeenAt)
+        .sort((a, b) => new Date(b.lastSeenAt) - new Date(a.lastSeenAt))[0];
+
+      if (!freshest || (now - new Date(freshest.lastSeenAt).getTime()) >= HEARTBEAT_STALENESS_MS) {
+        return res.status(503).json({
+          error: 'The classroom device is offline. Ask your lecturer to power it on.',
+          esp32Required: true,
+          esp32Offline: true,
+        });
+      }
+
+      // Same-network check via public IP match.
+      const studentIpRaw = (
         (req.headers['x-forwarded-for'] || '').split(',')[0].trim() ||
         req.headers['x-real-ip'] ||
         (req.socket && req.socket.remoteAddress) ||
         ''
       );
+      const studentIp = studentIpRaw.startsWith('::ffff:') ? studentIpRaw.slice(7) : studentIpRaw;
 
-      // ESP32 default hotspot subnet is 192.168.4.x
-      // Allow localhost only for dev/testing
-      const isOnEsp32Network =
-        clientIp.startsWith('192.168.4.') ||
-        clientIp === '127.0.0.1' ||
-        clientIp === '::1' ||
-        clientIp === '::ffff:127.0.0.1';
+      // localhost bypass for development only
+      const isLocalhost = studentIp === '127.0.0.1' || studentIp === '::1' || studentIp === '';
 
-      if (!isOnEsp32Network) {
-        console.warn(`[MARK] Blocked from IP ${clientIp} — not on ESP32 hotspot`);
+      // IPs the ESP32 has reached the backend from in the last ~10 min.
+      const TEN_MIN_AGO = now - (10 * 60 * 1000);
+      const deviceIps = (freshest.recentPublicIps || [])
+        .filter(e => e.seenAt && new Date(e.seenAt).getTime() > TEN_MIN_AGO)
+        .map(e => e.ip);
+
+      // If the device has recorded at least one IP and the student's IP
+      // doesn't match any of them, block the request.
+      const ipMatches = deviceIps.length === 0 || deviceIps.includes(studentIp);
+
+      if (!ipMatches && !isLocalhost) {
+        console.warn(`[MARK] Blocked ${req.user.name}: IP ${studentIp} not in device IPs [${deviceIps.join(', ')}]`);
         return res.status(403).json({
-          error: 'You must be connected to the classroom WiFi (KODEX-CLASSROOM) to mark attendance.',
-          esp32Required: true,
-        });
-      }
-
-      // Also verify device is currently online (heartbeat within 20s)
-      const now = Date.now();
-      const deviceOnline = companyDoc.esp32Devices.some(d =>
-        d.lastSeenAt && (now - new Date(d.lastSeenAt).getTime()) < 3000  // 3s STRICT
-      );
-      if (!deviceOnline) {
-        return res.status(503).json({
-          error: 'The classroom device is offline. Ask your lecturer to power it on.',
-          esp32Required: true,
+          error: 'You must be connected to the same WiFi as the classroom device to mark attendance.',
+          networkMismatch: true,
         });
       }
     }
@@ -419,6 +527,69 @@ exports.markAttendance = async (req, res) => {
       if (!enrolled) {
         return res.status(403).json({
           error: `You are not enrolled in this course. This session belongs to a different class.`,
+        });
+      }
+    }
+
+    // ── Attendance time window ─────────────────────────────────────────────
+    // If the session has a durationSeconds (set when the lecturer starts it),
+    // mark-attendance requests after (startedAt + durationSeconds) are rejected.
+    // This prevents a session from staying open indefinitely and lets students
+    // know the window closed rather than silently accepting late marks.
+    if (session.durationSeconds && session.startedAt) {
+      const closeAt = new Date(session.startedAt).getTime() + (session.durationSeconds * 1000);
+      if (Date.now() > closeAt) {
+        return res.status(410).json({
+          error: "The attendance window for this session has closed.",
+          attendanceWindowClosed: true,
+          closedAt: new Date(closeAt).toISOString(),
+        });
+      }
+    }
+
+    // ── Rotating code verification ─────────────────────────────────────────
+    // If this session has an esp32Seed (i.e. the ESP32 started it with a seed),
+    // the student MUST submit the current 6-digit code from the classroom's
+    // OLED display. The code rotates every 20s server-side, matching the ESP32
+    // firmware's derivation. No network round-trip between ESP32 and server —
+    // both run the same HMAC formula independently.
+    if (session.esp32Seed) {
+      const { verifyCodeForSession } = require('../services/attendanceCodeService');
+      const result = verifyCodeForSession(session, code);
+      if (!result.ok) {
+        return res.status(400).json({
+          error: result.reason,
+          codeRequired: true,
+        });
+      }
+    }
+
+    // ── Device lock enforcement ────────────────────────────────────────────
+    // Prevent account switching on a shared device: if a DIFFERENT student in
+    // this company marked attendance from this same deviceId in the last 6
+    // hours, block this user. Uses AttendanceRecord directly — no separate
+    // lock table needed. Same user on the same device is always fine because
+    // the query filters by { user: { $ne } }.
+    const DEVICE_LOCK_WINDOW_MS = 6 * 60 * 60 * 1000;
+    if (clientDeviceId && req.user.role === 'student') {
+      const recentByOther = await AttendanceRecord.findOne({
+        company: req.user.company,
+        deviceId: clientDeviceId,
+        user: { $ne: req.user._id },
+        checkInTime: { $gt: new Date(Date.now() - DEVICE_LOCK_WINDOW_MS) },
+      })
+        .sort({ checkInTime: -1 })
+        .select("checkInTime user")
+        .lean();
+      if (recentByOther) {
+        const unlockAt = new Date(recentByOther.checkInTime).getTime() + DEVICE_LOCK_WINDOW_MS;
+        const remainingMs = unlockAt - Date.now();
+        const remainingMinutes = Math.ceil(remainingMs / 60000);
+        return res.status(403).json({
+          error: `This device was recently used by another student. Try again in ${remainingMinutes} minute(s).`,
+          deviceLocked: true,
+          remainingMinutes,
+          unlockAt: new Date(unlockAt).toISOString(),
         });
       }
     }
@@ -490,7 +661,7 @@ exports.markAttendance = async (req, res) => {
       company: req.user.company,
       status,
       method: attendanceMethod,
-      deviceId: req.body.deviceId || req.headers["x-device-id"] || null,
+      deviceId: clientDeviceId,
       qrToken: qrTokenRef,
     });
 
