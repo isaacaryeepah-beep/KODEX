@@ -4690,7 +4690,7 @@ async function bulkUserAction(action) {
   }
 }
 
-async function clearStudentDeviceLock(userId, userName) {
+window.clearStudentDeviceLock = async function(userId, userName) {
   if (!confirm(`Unlock device for ${userName}? They will be able to log in from a new device.`)) return;
   try {
     await api(`/api/users/${userId}/clear-device-lock`, { method: 'POST' });
@@ -4699,10 +4699,10 @@ async function clearStudentDeviceLock(userId, userName) {
   } catch(e) {
     showToastNotif(`❌ ${e.message || 'Failed to unlock device'}`, 'error');
   }
-}
+};
 
 
-async function adminResetStudentPassword(userId, userName) {
+window.adminResetStudentPassword = async function(userId, userName) {
   if (!confirm(`Reset password for ${userName}?\n\nThis will generate a temporary password that they must change on next login.`)) return;
   try {
     const data = await api(`/api/users/${userId}/admin-reset-password`, { method: 'POST' });
@@ -4736,9 +4736,9 @@ async function adminResetStudentPassword(userId, userName) {
   } catch(e) {
     toast('Failed to reset password: ' + e.message, 'err');
   }
-}
+};
 
-async function deactivateUser(id) {
+window.deactivateUser = async function(id) {
   if (!confirm('Deactivate this user?')) return;
   try {
     await api(`/api/users/${id}`, { method: 'DELETE' });
@@ -4746,9 +4746,9 @@ async function deactivateUser(id) {
   } catch (e) {
     toastError(e.message);
   }
-}
+};
 
-async function activateUser(id) {
+window.activateUser = async function(id) {
   if (!confirm('Reactivate this user?')) return;
   try {
     await api(`/api/users/${id}/activate`, { method: 'PATCH' });
@@ -4756,9 +4756,9 @@ async function activateUser(id) {
   } catch (e) {
     toastError(e.message);
   }
-}
+};
 
-async function deleteUserPermanently(id, name) {
+window.deleteUserPermanently = async function(id, name) {
   if (!confirm(`Permanently delete "${name}"? This cannot be undone!`)) return;
   try {
     await api(`/api/users/${id}/permanent`, { method: 'DELETE' });
@@ -4766,7 +4766,7 @@ async function deleteUserPermanently(id, name) {
   } catch (e) {
     toastError(e.message);
   }
-}
+};
 
 async function renderMeetings() {
   const content = document.getElementById('main-content');
