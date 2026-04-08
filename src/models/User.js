@@ -193,9 +193,16 @@ userSchema.methods.comparePassword = async function (candidatePassword) {
   return bcrypt.compare(candidatePassword, this.password);
 };
 
+// ✅ FIXED: Added lowercase alias for frontend compatibility
 userSchema.methods.toJSON = function () {
   const obj = this.toObject();
   delete obj.password;
+  
+  // Add lowercase alias so frontend works with either IndexNumber or indexNumber
+  if (obj.IndexNumber) {
+    obj.indexNumber = obj.IndexNumber;
+  }
+  
   return obj;
 };
 
