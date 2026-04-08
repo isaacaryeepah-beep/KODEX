@@ -665,10 +665,10 @@ async function deleteBranch(id, name) {
 // ─────────────────────────────────────────────────────────────────────────────
 // OVERRIDE buildSidebar for manager to fix duplicate dashboard & add all items
 // ─────────────────────────────────────────────────────────────────────────────
-const _origBuildSidebar = buildSidebar;
+const _origBuildSidebarManager = buildSidebar;
 buildSidebar = function() {
   if (currentUser?.role !== 'manager') {
-    return _origBuildSidebar();
+    return _origBuildSidebarManager();
   }
 
   const nav = document.getElementById('sidebar-nav');
