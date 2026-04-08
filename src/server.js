@@ -39,6 +39,13 @@ const { sanitizeInputs } = require("./middleware/sanitize");
 const app = express();
 const PORT = process.env.PORT || 5000;
 
+// ── CRITICAL: trust Render's proxy ────────────────────────────────────────────
+// Without this, req.ip and X-Forwarded-For parsing are wrong, and every student
+// appears to come from Render's load balancer — which would make the same-
+// network public-IP-match anti-cheat in markAttendance silently pass for
+// everyone including cheaters at home. Must be set before any route handler.
+app.set("trust proxy", true);
+
 // ── Helmet: secure HTTP headers ───────────────────────────────────────────────
 app.use(helmet({
   contentSecurityPolicy: false,
