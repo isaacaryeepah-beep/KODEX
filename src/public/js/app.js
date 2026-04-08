@@ -11607,9 +11607,9 @@ async function cancelLeave(id) {
 
 // ── SIDEBAR: add training nav items ──────────────────────────────────────────
 // Patch buildSidebar to inject training links for corporate mode
-const _origBuildSidebar = buildSidebar;
+const _origBuildSidebarTraining = buildSidebar;
 buildSidebar = function() {
-  _origBuildSidebar();
+  _origBuildSidebarTraining();
   const role = currentUser?.role;
   const mode = currentUser?.company?.mode;
   if (mode !== 'corporate') return;
