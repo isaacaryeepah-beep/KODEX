@@ -4403,9 +4403,9 @@ async function renderUsers(filterRole='', filterDept='', filterSearch='') {
                   ${u.isActive
                     ? `<button class="btn btn-sm" style="background:#f59e0b;color:#fff;font-size:11px" onclick="deactivateUser('${u._id}')">Deactivate</button>`
                     : `<button class="btn btn-sm" style="background:#22c55e;color:#fff;font-size:11px" onclick="activateUser('${u._id}')">Activate</button>`}
-                  <button class="btn btn-sm" style="background:#6366f1;color:#fff;font-size:11px" onclick="adminResetStudentPassword('${u._id}', '${u.name.replace(/'/g, "\\'")}'')" title="Generate temp password">🔑 Reset</button>
-                  ${u.role === 'student' && u.deviceId ? `<button class="btn btn-sm" style="background:#f97316;color:#fff;font-size:11px" onclick="clearStudentDeviceLock('${u._id}', '${u.name.replace(/'/g, "\\'")}'')" title="Unlock device">🔓 Unlock</button>` : ''}
-                  <button class="btn btn-danger btn-sm" style="font-size:11px" onclick="deleteUserPermanently('${u._id}', '${u.name.replace(/'/g, "\\'")}')">Delete</button>
+                  <button class="btn btn-sm" style="background:#6366f1;color:#fff;font-size:11px" onclick="adminResetStudentPassword('${u._id}', this)">🔑 Reset</button>
+                  ${u.role === 'student' && u.deviceId ? `<button class="btn btn-sm" style="background:#f97316;color:#fff;font-size:11px" onclick="clearStudentDeviceLock('${u._id}', this)">🔓 Unlock</button>` : ''}
+                  <button class="btn btn-danger btn-sm" style="font-size:11px" onclick="deleteUserPermanently('${u._id}', this)">Delete</button>
                 </td>` : ''}
               </tr>
             `).join('')}</tbody>
@@ -4715,7 +4715,10 @@ async function bulkUserAction(action) {
   }
 }
 
-async function clearStudentDeviceLock(userId, userName) {
+async function clearStudentDeviceLock(userId, btnOrName) {
+  const userName = (btnOrName && typeof btnOrName === 'object')
+    ? (btnOrName.closest('tr')?.querySelector('td')?.textContent?.trim() || 'this user')
+    : (btnOrName || 'this user');
   if (!confirm(`Unlock device for ${userName}? They will be able to log in from a new device.`)) return;
   try {
     await api(`/api/users/${userId}/clear-device-lock`, { method: 'POST' });
@@ -4727,7 +4730,10 @@ async function clearStudentDeviceLock(userId, userName) {
 }
 
 
-async function adminResetStudentPassword(userId, userName) {
+async function adminResetStudentPassword(userId, btnOrName) {
+  const userName = (btnOrName && typeof btnOrName === 'object')
+    ? (btnOrName.closest('tr')?.querySelector('td')?.textContent?.trim() || 'this user')
+    : (btnOrName || 'this user');
   if (!confirm(`Reset password for ${userName}?\n\nThis will generate a temporary password that they must change on next login.`)) return;
   try {
     const data = await api(`/api/users/${userId}/admin-reset-password`, { method: 'POST' });
@@ -4783,7 +4789,10 @@ async function activateUser(id) {
   }
 }
 
-async function deleteUserPermanently(id, name) {
+async function deleteUserPermanently(id, btnOrName) {
+  const name = (btnOrName && typeof btnOrName === 'object')
+    ? (btnOrName.closest('tr')?.querySelector('td')?.textContent?.trim() || 'this user')
+    : (btnOrName || 'this user');
   if (!confirm(`Permanently delete "${name}"? This cannot be undone!`)) return;
   try {
     await api(`/api/users/${id}/permanent`, { method: 'DELETE' });
