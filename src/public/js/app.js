@@ -14267,3 +14267,12 @@ async function printMeetingAttendance(meetingId, title) {
     toastError('Failed to generate PDF: ' + e.message);
   }
 }
+
+
+// ── Register real functions for index.html stubs ─────────────────────────────
+window._realSelectMode   = selectMode;
+window._realSelectPortal = selectPortal;
+window._appLoaded = true;
+// Execute any pending calls from before app.js loaded
+if (window._pendingMode)   { selectMode(window._pendingMode);     window._pendingMode = null; }
+if (window._pendingPortal) { selectPortal(window._pendingPortal); window._pendingPortal = null; }
