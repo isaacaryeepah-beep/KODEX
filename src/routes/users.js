@@ -21,6 +21,5 @@ router.post("/:id/admin-reset-password", requireRole("admin", "superadmin", "man
 router.post("/change-password-after-reset", userController.changePasswordAfterReset);
 router.post("/:id/clear-device-lock", requireRole("admin", "superadmin", "manager"), companyIsolation, userController.clearDeviceLock);
 
-router.get("/lecturer-subscriptions", requireRole("admin", "superadmin", "manager"), companyIsolation, userController.getLecturerSubscriptions);
 
 module.exports = router;
