@@ -2728,6 +2728,8 @@ async function renderHodReports() {
         }
         const ctx = document.getElementById('hod-trend-chart');
         if (!ctx) return;
+        const existingHod = Chart.getChart(ctx);
+        if (existingHod) existingHod.destroy();
         new Chart(ctx, {
           type: 'line',
           data: {
@@ -3738,6 +3740,14 @@ async function _renderAdminCharts(sessionsData, usersData) {
         document.head.appendChild(s);
       });
     }
+    // Destroy any existing chart instances before reusing canvas
+    ['admin-attendance-chart', 'admin-role-chart'].forEach(id => {
+      const canvas = document.getElementById(id);
+      if (canvas) {
+        const existing = Chart.getChart(canvas);
+        if (existing) existing.destroy();
+      }
+    });
 
     // Attendance trend — group all sessions by date over last 14 days
     const allSessions = await api('/api/attendance-sessions?limit=200').catch(() => ({ sessions: [] }));
