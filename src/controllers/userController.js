@@ -281,7 +281,7 @@ exports.deactivateUser = async (req, res) => {
     }
 
     user.isActive = false;
-    await user.save();
+    await user.save({ validateBeforeSave: false });
     res.json({ message: "User deactivated successfully" });
   } catch (error) {
     console.error("Deactivate user error:", error);
@@ -305,7 +305,7 @@ exports.activateUser = async (req, res) => {
     }
 
     user.isActive = true;
-    await user.save();
+    await user.save({ validateBeforeSave: false });
     res.json({ message: "User activated successfully" });
   } catch (error) {
     console.error("Activate user error:", error);
@@ -654,7 +654,7 @@ exports.changePasswordAfterReset = async (req, res) => {
 
     user.password = newPassword;
     user.mustChangePassword = false;
-    await user.save();
+    await user.save({ validateBeforeSave: false });
     res.json({ message: "Password changed successfully." });
   } catch (error) {
     console.error("Change password after reset error:", error);
