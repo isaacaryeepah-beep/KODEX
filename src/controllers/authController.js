@@ -648,12 +648,23 @@ exports.login = async (req, res) => {
     }
     // ────────────────────────────────────────────────────────────────────────
 
-    if (company && !company.hasAccess && !["superadmin", "admin", "manager"].includes(user.role)) {
-      return res.status(403).json({
-        error: "Subscription inactive",
-        message: "Your institution's subscription has expired. Please contact your admin.",
-        subscriptionExpired: true,
-      });
+    // Check institution access — students/employees/lecturers/HODs need their
+    // institution to have an active subscription OR an active subscribed admin/lecturer
+    if (company && !company.hasAccess && !["superadmin", "admin", "manager", "lecturer"].includes(user.role)) {
+      // Check if any paid-role user in this company has an active personal subscription
+      const activeSubscriber = await User.findOne({
+        company: company._id,
+        role: { $in: ["admin", "lecturer", "manager"] },
+        subscriptionExpiry: { $gt: new Date() },
+      }).select("_id").lean();
+
+      if (!activeSubscriber) {
+        return res.status(403).json({
+          error: "Subscription inactive",
+          message: "Your institution's subscription has expired. Please contact your admin.",
+          subscriptionExpired: true,
+        });
+      }
     }
 
     if (user.lastLogoutTime) {
