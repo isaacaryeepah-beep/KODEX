@@ -612,7 +612,8 @@ exports.adminResetStudentPassword = async (req, res) => {
       method: 'admin',
       resetBy: req.user.name || req.user.email || 'Admin',
     });
-    await target.save();
+    // Skip validation — only password is changing, not required fields like IndexNumber
+    await target.save({ validateBeforeSave: false });
 
     // Notify admin of the reset (non-fatal)
     try {
