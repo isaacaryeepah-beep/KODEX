@@ -667,6 +667,11 @@ function assignmentsIcon() {
   return svgIcon('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/>');
 }
 
+function showSubscriptionGate(message) {
+  var msg = message || 'Your free trial has ended. Please subscribe to continue.';
+  if (typeof navigateTo === 'function') navigateTo('subscription');
+}
+
 async function api(path, options = {}) {
   const headers = { 'Content-Type': 'application/json' };
   if (token) headers['Authorization'] = `Bearer ${token}`;
@@ -675,7 +680,7 @@ async function api(path, options = {}) {
     const data = await res.json();
     if (!res.ok) {
       // Subscription gate — redirect lecturer to subscription page automatically
-      if (res.status === 403 && data.subscriptionRequired) {
+      if (res.status === 403 && (data.subscriptionRequired || data.userSubscription || data.subscriptionExpired)) {
         showSubscriptionGate(data.message);
         throw new Error(data.error || 'Subscription required');
       }
@@ -1169,14 +1174,8 @@ async function handleLecturerLogin() {
       showLecturerError('Too many failed attempts. Please wait 15 minutes and try again.');
     } else if (m.includes('network') || m.includes('fetch')) {
       showLecturerError('Network error. Please check your connection and try again.');
-    } else if (m.includes('wait') && m.includes('hours')) {
-      showLecturerError(msg);
-    } else if (m.includes('subscription') || m.includes('expired')) {
-      showLecturerError(msg);
-    } else if (m.includes('invalid credentials') || m.includes('wrong')) {
-      showLecturerError('Wrong Email or Password.');
     } else {
-      showLecturerError(msg || 'Sign in failed. Please try again.');
+      showLecturerError('Wrong Email or Password.');
     }
   }
 }
@@ -1836,6 +1835,16 @@ function showDashboard(data) {
   if (currentUser?.mustChangePassword) {
     showForceChangePassword();
     return;
+  }
+
+  // Block expired lecturers/managers immediately
+  var _PAID_FE = ['lecturer', 'manager'];
+  if (currentUser && _PAID_FE.indexOf(currentUser.role) !== -1) {
+    var _utBlock = data.userTrial || null;
+    if (_utBlock && _utBlock.daysLeft <= 0) {
+      showSubscriptionGate('Your subscription has expired. Please renew to continue using KODEX.');
+      return;
+    }
   }
   try {
     document.getElementById('auth-page').style.display = 'none';
@@ -3863,7 +3872,7 @@ async function showStartSessionModal() {
   let checkError   = false;
 
   try {
-    deviceStatus = await api('/api/esp32/device-status');
+    deviceStatus = await api('/api/esp32/device-status?t=' + Date.now());
   } catch(e) {
     checkError = true;
   }
@@ -4378,9 +4387,9 @@ async function renderUsers(filterRole='', filterDept='', filterSearch='') {
                   ${u.isActive
                     ? `<button class="btn btn-sm" style="background:#f59e0b;color:#fff;font-size:11px" onclick="deactivateUser('${u._id}')">Deactivate</button>`
                     : `<button class="btn btn-sm" style="background:#22c55e;color:#fff;font-size:11px" onclick="activateUser('${u._id}')">Activate</button>`}
-                  <button class="btn btn-sm" style="background:#6366f1;color:#fff;font-size:11px" onclick="adminResetStudentPassword('${u._id}', '${u.name.replace(/'/g, "\\'")}'')" title="Generate temp password">🔑 Reset</button>
-                  ${u.role === 'student' && u.deviceId ? `<button class="btn btn-sm" style="background:#f97316;color:#fff;font-size:11px" onclick="clearStudentDeviceLock('${u._id}', '${u.name.replace(/'/g, "\\'")}'')" title="Unlock device">🔓 Unlock</button>` : ''}
-                  <button class="btn btn-danger btn-sm" style="font-size:11px" onclick="deleteUserPermanently('${u._id}', '${u.name.replace(/'/g, "\\'")}'')" >Delete</button>
+                  <button class="btn btn-sm" style="background:#6366f1;color:#fff;font-size:11px" onclick="adminResetStudentPassword('${u._id}', '${u.name.replace(/'/g, "\\'")}')">🔑 Reset</button>
+                  ${u.role === 'student' && u.deviceId ? `<button class="btn btn-sm" style="background:#f97316;color:#fff;font-size:11px" onclick="clearStudentDeviceLock('${u._id}', '${u.name.replace(/'/g, "\\'")}')">🔓 Unlock</button>` : ''}
+                  <button class="btn btn-danger btn-sm" style="font-size:11px" onclick="deleteUserPermanently('${u._id}', '${u.name.replace(/'/g, "\\'")}')">Delete</button>
                 </td>` : ''}
               </tr>
             `).join('')}</tbody>
@@ -4690,7 +4699,7 @@ async function bulkUserAction(action) {
   }
 }
 
-window.clearStudentDeviceLock = async function(userId, userName) {
+async function clearStudentDeviceLock(userId, userName) {
   if (!confirm(`Unlock device for ${userName}? They will be able to log in from a new device.`)) return;
   try {
     await api(`/api/users/${userId}/clear-device-lock`, { method: 'POST' });
@@ -4699,10 +4708,10 @@ window.clearStudentDeviceLock = async function(userId, userName) {
   } catch(e) {
     showToastNotif(`❌ ${e.message || 'Failed to unlock device'}`, 'error');
   }
-};
+}
 
 
-window.adminResetStudentPassword = async function(userId, userName) {
+async function adminResetStudentPassword(userId, userName) {
   if (!confirm(`Reset password for ${userName}?\n\nThis will generate a temporary password that they must change on next login.`)) return;
   try {
     const data = await api(`/api/users/${userId}/admin-reset-password`, { method: 'POST' });
@@ -4736,9 +4745,9 @@ window.adminResetStudentPassword = async function(userId, userName) {
   } catch(e) {
     toast('Failed to reset password: ' + e.message, 'err');
   }
-};
+}
 
-window.deactivateUser = async function(id) {
+async function deactivateUser(id) {
   if (!confirm('Deactivate this user?')) return;
   try {
     await api(`/api/users/${id}`, { method: 'DELETE' });
@@ -4746,9 +4755,9 @@ window.deactivateUser = async function(id) {
   } catch (e) {
     toastError(e.message);
   }
-};
+}
 
-window.activateUser = async function(id) {
+async function activateUser(id) {
   if (!confirm('Reactivate this user?')) return;
   try {
     await api(`/api/users/${id}/activate`, { method: 'PATCH' });
@@ -4756,9 +4765,9 @@ window.activateUser = async function(id) {
   } catch (e) {
     toastError(e.message);
   }
-};
+}
 
-window.deleteUserPermanently = async function(id, name) {
+async function deleteUserPermanently(id, name) {
   if (!confirm(`Permanently delete "${name}"? This cannot be undone!`)) return;
   try {
     await api(`/api/users/${id}/permanent`, { method: 'DELETE' });
@@ -4766,7 +4775,7 @@ window.deleteUserPermanently = async function(id, name) {
   } catch (e) {
     toastError(e.message);
   }
-};
+}
 
 async function renderMeetings() {
   const content = document.getElementById('main-content');
@@ -7707,12 +7716,6 @@ async function renderMarkAttendance() {
             <div style="font-size:16px;font-weight:700">Join Meeting</div>
             <p style="font-size:12px;color:var(--text-light);margin-top:4px">Mark attendance by joining the session meeting</p>
           </div>
-
-          <div class="card mark-method-card" onclick="markViaWifi()" style="cursor:pointer;text-align:center;transition:all 0.2s;border:2px solid var(--success)">
-            <div style="font-size:36px;margin-bottom:12px">${svgIcon('<path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/>', 42)}</div>
-            <div style="font-size:16px;font-weight:700;color:var(--success)">Classroom WiFi</div>
-            <p style="font-size:12px;color:var(--text-light);margin-top:4px">One tap — auto-mark if you are on the classroom network</p>
-          </div>
         </div>
         
         <div id="mark-input-area"></div>
@@ -7996,46 +7999,6 @@ async function markBLE() {
         </div>
       </div>`;
     if (device?.gatt?.connected) device.gatt.disconnect().catch(() => {});
-  }
-}
-
-
-async function markViaWifi() {
-  const area = document.getElementById('mark-input-area');
-  if (area) {
-    area.innerHTML = `
-      <div class="card" style="text-align:center;padding:24px">
-        <div style="font-size:40px;margin-bottom:12px">&#128225;</div>
-        <div style="font-weight:700;font-size:16px;margin-bottom:8px">Checking your connection...</div>
-        <p style="font-size:13px;color:var(--text-light)">Make sure you are connected to the classroom WiFi (KODEX-CLASSROOM)</p>
-      </div>
-    `;
-  }
-
-  if (!(await isOnlineAsync())) {
-    toastError('You must be connected to the classroom WiFi (KODEX-CLASSROOM) to mark attendance.');
-    if (area) area.innerHTML = '';
-    return;
-  }
-
-  try {
-    await api('/api/attendance-sessions/mark', {
-      method: 'POST',
-      body: JSON.stringify({ method: 'wifi' }),
-    });
-    offlineCache('pendingMark', null);
-    toastSuccess('Attendance marked successfully!');
-    navigateTo('mark-attendance');
-  } catch (e) {
-    if (area) area.innerHTML = '';
-    if (e.data && e.data.esp32Required) {
-      toastError('You must be connected to the classroom WiFi (KODEX-CLASSROOM) to mark attendance.');
-    } else if (e.status === 409) {
-      toastInfo('Attendance already marked for this session.');
-      navigateTo('mark-attendance');
-    } else {
-      toastError(e.message || 'Could not mark attendance. Please try another method.');
-    }
   }
 }
 
@@ -11607,9 +11570,9 @@ async function cancelLeave(id) {
 
 // ── SIDEBAR: add training nav items ──────────────────────────────────────────
 // Patch buildSidebar to inject training links for corporate mode
-const _origBuildSidebarTraining = buildSidebar;
+const _origBuildSidebar = buildSidebar;
 buildSidebar = function() {
-  _origBuildSidebarTraining();
+  _origBuildSidebar();
   const role = currentUser?.role;
   const mode = currentUser?.company?.mode;
   if (mode !== 'corporate') return;
