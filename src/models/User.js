@@ -13,6 +13,7 @@ const userSchema = new mongoose.Schema(
     IndexNumber: {
       type: String,
       trim: true,
+      sparse: true,
     },
     employeeId: {
       type: String,
@@ -127,8 +128,8 @@ const userSchema = new mongoose.Schema(
       default: null,
     },
 
-    // ── Per-lecturer subscription ─────────────────────────────
-    // Only applies to roles: lecturer, manager, admin
+    // ── Per-lecturer subscription (1 subscription = 1 user) ──────────────
+    // Only applies to: lecturer, manager, admin
     // Students, employees, HODs are always free
     subscriptionStatus: {
       type: String,
@@ -160,7 +161,7 @@ userSchema.index(
 );
 userSchema.index(
   { IndexNumber: 1, company: 1 },
-  { unique: true, sparse: true, partialFilterExpression: { IndexNumber: { $type: "string" } } }
+  { unique: true, partialFilterExpression: { IndexNumber: { $type: "string" } } }
 );
 userSchema.index(
   { employeeId: 1, company: 1 },
@@ -193,16 +194,9 @@ userSchema.methods.comparePassword = async function (candidatePassword) {
   return bcrypt.compare(candidatePassword, this.password);
 };
 
-// ✅ FIXED: Added lowercase alias for frontend compatibility
 userSchema.methods.toJSON = function () {
   const obj = this.toObject();
   delete obj.password;
-  
-  // Add lowercase alias so frontend works with either IndexNumber or indexNumber
-  if (obj.IndexNumber) {
-    obj.indexNumber = obj.IndexNumber;
-  }
-  
   return obj;
 };
 
