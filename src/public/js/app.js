@@ -758,13 +758,25 @@ function selectMode(mode) {
 function selectPortal(type) {
   selectedPortalType = type;
   document.getElementById('portal-selector').classList.add('hidden');
-  if (type === 'admin-corporate' || type === 'admin-academic') {
+  if (type === 'admin-corporate' || type === 'admin-academic' || type === 'manager') {
     const isAcademic = type === 'admin-academic';
-    document.getElementById('admin-auth').classList.remove('hidden');
-    document.getElementById('admin-portal-title').textContent = isAcademic ? 'Institution Admin' : 'Admin Portal';
-    document.getElementById('admin-portal-subtitle').textContent = isAcademic ? 'Academic Institution Admin' : 'Corporate Admin Access';
-    document.getElementById('admin-reg-company-label').textContent = isAcademic ? 'Institution Name' : 'Company Name';
-    document.getElementById('admin-reg-company').placeholder = isAcademic ? 'Your institution name' : 'Your company name';
+    const isManager  = type === 'manager';
+    // Manager uses the same admin login form — override selectedPortalType
+    if (isManager) selectedPortalType = 'admin-corporate';
+    // Make sure portal-selector is hidden and admin-auth is visible
+    const portalSel = document.getElementById('portal-selector');
+    if (portalSel) portalSel.classList.add('hidden');
+    const adminAuth = document.getElementById('admin-auth');
+    if (adminAuth) adminAuth.classList.remove('hidden');
+    // Update labels
+    const titleEl = document.getElementById('admin-portal-title');
+    if (titleEl) titleEl.textContent = isManager ? 'Manager Portal' : isAcademic ? 'Institution Admin' : 'Admin Portal';
+    const subtitleEl = document.getElementById('admin-portal-subtitle');
+    if (subtitleEl) subtitleEl.textContent = isManager ? 'Corporate Manager Access' : isAcademic ? 'Academic Institution Admin' : 'Corporate Admin Access';
+    const labelEl = document.getElementById('admin-reg-company-label');
+    if (labelEl) labelEl.textContent = isAcademic ? 'Institution Name' : 'Company Name';
+    const placeholderEl = document.getElementById('admin-reg-company');
+    if (placeholderEl) placeholderEl.placeholder = isAcademic ? 'Your institution name' : 'Your company name';
   } else if (type === 'lecturer') {
     document.getElementById('lecturer-auth').classList.remove('hidden');
   } else if (type === 'hod') {
@@ -1084,6 +1096,7 @@ async function handleAdminLogin() {
     if (btn) { btn.textContent = 'Signing in…'; btn.disabled = true; }
 
     const portalMode = selectedPortalType === 'admin-academic' ? 'academic' : 'corporate';
+    // loginRole 'admin' allows both admin and manager roles (PORTAL_ALLOWED_ROLES.admin = ['admin','manager'])
     const credentials = { email, password, loginRole: 'admin', portalMode, deviceId: getDeviceFingerprint() };
 
     let data;
