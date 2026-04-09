@@ -556,11 +556,13 @@ exports.login = async (req, res) => {
         }
         companyId = company._id;
       }
+      // Always uppercase — IndexNumber is stored uppercase in DB
+      const normIndex = IndexNumber.trim().toUpperCase();
       // Support both new (IndexNumber) and legacy (indexNumber) field names
       const baseQuery = { role: "student", ...(companyId ? { company: companyId } : {}) };
-      user = await User.findOne({ ...baseQuery, IndexNumber }).select("+password");
+      user = await User.findOne({ ...baseQuery, IndexNumber: normIndex }).select("+password");
       if (!user) {
-        user = await User.findOne({ ...baseQuery, indexNumber: IndexNumber }).select("+password");
+        user = await User.findOne({ ...baseQuery, indexNumber: normIndex }).select("+password");
       }
     } else if (email && institutionCode && loginRole === "manager") {
       const company = await Company.findOne({ institutionCode: institutionCode.toUpperCase() });
