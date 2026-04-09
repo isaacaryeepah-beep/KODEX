@@ -667,11 +667,18 @@ async function deleteBranch(id, name) {
 // ─────────────────────────────────────────────────────────────────────────────
 const _origBuildSidebarManager = buildSidebar;
 buildSidebar = function() {
-  if (currentUser?.role !== 'manager') {
+  // ✅ FIX: Check both role and mode before applying manager sidebar
+  const role = currentUser?.role;
+  const mode = currentUser?.company?.mode;
+  
+  if (role !== 'manager' || mode !== 'corporate') {
     return _origBuildSidebarManager();
   }
 
+  // Manager-specific sidebar for corporate mode
   const nav = document.getElementById('sidebar-nav');
+  if (!nav) return;
+  
   const links = [
     { id: 'dashboard',       label: 'Dashboard',      icon: '<rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>' },
     { id: 'live-attendance', label: 'Live Attendance', icon: '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>' },
