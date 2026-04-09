@@ -6,7 +6,6 @@ const router = express.Router();
 
 router.use(authenticate);
 
-// ✅ ADD THESE TWO NEW ROUTES
 router.get("/status", paymentController.getSubscriptionStatus);
 router.get("/user-subscription", paymentController.getUserSubscription);
 router.get("/plans", paymentController.getPlans);
