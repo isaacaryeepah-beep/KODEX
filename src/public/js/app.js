@@ -1866,21 +1866,52 @@ function showDashboard(data) {
     buildBottomNav(role);
     const trial = data.trial || null;
     const subscription = data.subscription || null;
-    const isSubRole = (role === 'employee' || role === 'student');
+    // ── Per-user subscription banner (lecturer / manager / admin) ──────────
+    // userTrial comes from authController and is always based on the individual
+    // user's trialEndDate + subscriptionExpiry — NOT the company trial.
+    const PAID_FE = ['lecturer', 'manager', 'admin'];
+    const isSubRole = (role === 'employee' || role === 'student' || role === 'hod');
+    const userTrial = data.userTrial || null;
 
     if (isSubRole) {
+      // Employees / students / HODs never pay — hide both banners
       document.getElementById('trial-banner').style.display = 'none';
       document.getElementById('trial-expired-banner').style.display = 'none';
+    } else if (PAID_FE.includes(role) && userTrial) {
+      // Use per-user subscription status (ignores company trial)
+      const daysLeft = userTrial.daysLeft || 0;
+      const status   = userTrial.status;   // 'active' | 'trial' | 'expired'
+
+      if (status === 'active') {
+        // Subscribed — show green active banner
+        const banner = document.getElementById('trial-banner');
+        banner.textContent = `✅ Subscription active — ${daysLeft} day${daysLeft !== 1 ? 's' : ''} remaining`;
+        banner.style.background = '#f0fdf4';
+        banner.style.color = '#15803d';
+        banner.style.display = 'block';
+        document.getElementById('trial-expired-banner').style.display = 'none';
+      } else if (status === 'trial' && daysLeft > 0) {
+        // Still on free trial
+        const banner = document.getElementById('trial-banner');
+        const urgency = daysLeft <= 3 ? '⚠️ ' : '';
+        banner.textContent = `${urgency}Free Trial: ${daysLeft} day${daysLeft !== 1 ? 's' : ''} remaining`;
+        banner.style.background = daysLeft <= 3 ? '#fef3c7' : '';
+        banner.style.color = daysLeft <= 3 ? '#92400e' : '';
+        banner.style.display = 'block';
+        document.getElementById('trial-expired-banner').style.display = 'none';
+      } else {
+        // Trial or subscription expired — show subscribe banner
+        document.getElementById('trial-expired-banner').textContent = 'Your free trial has ended. Please subscribe to continue using KODEX.';
+        document.getElementById('trial-expired-banner').style.display = 'block';
+        document.getElementById('trial-banner').style.display = 'none';
+      }
     } else if (trial && trial.active) {
+      // Fallback: company trial (superadmin etc.)
       const banner = document.getElementById('trial-banner');
       const tr = trial.timeRemaining || {};
       banner.textContent = `Free Trial: ${trial.daysRemaining} days remaining (${tr.days || 0}d ${tr.hours || 0}h ${tr.minutes || 0}m)`;
       banner.style.display = 'block';
       document.getElementById('trial-expired-banner').style.display = 'none';
-    } else if (subscription && !subscription.active && trial && !trial.active) {
-      document.getElementById('trial-expired-banner').textContent = 'Your free trial has ended. Please subscribe to continue using premium features.';
-      document.getElementById('trial-expired-banner').style.display = 'block';
-      document.getElementById('trial-banner').style.display = 'none';
     } else {
       document.getElementById('trial-banner').style.display = 'none';
       document.getElementById('trial-expired-banner').style.display = 'none';
