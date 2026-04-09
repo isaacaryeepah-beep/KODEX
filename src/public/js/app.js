@@ -667,11 +667,6 @@ function assignmentsIcon() {
   return svgIcon('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/>');
 }
 
-function showSubscriptionGate(message) {
-  var msg = message || 'Your free trial has ended. Please subscribe to continue.';
-  if (typeof navigateTo === 'function') navigateTo('subscription');
-}
-
 async function api(path, options = {}) {
   const headers = { 'Content-Type': 'application/json' };
   if (token) headers['Authorization'] = `Bearer ${token}`;
@@ -680,7 +675,7 @@ async function api(path, options = {}) {
     const data = await res.json();
     if (!res.ok) {
       // Subscription gate — redirect lecturer to subscription page automatically
-      if (res.status === 403 && (data.subscriptionRequired || data.userSubscription || data.subscriptionExpired)) {
+      if (res.status === 403 && data.subscriptionRequired) {
         showSubscriptionGate(data.message);
         throw new Error(data.error || 'Subscription required');
       }
@@ -1835,16 +1830,6 @@ function showDashboard(data) {
   if (currentUser?.mustChangePassword) {
     showForceChangePassword();
     return;
-  }
-
-  // Block expired lecturers/managers immediately
-  var _PAID_FE = ['lecturer', 'manager'];
-  if (currentUser && _PAID_FE.indexOf(currentUser.role) !== -1) {
-    var _utBlock = data.userTrial || null;
-    if (_utBlock && _utBlock.daysLeft <= 0) {
-      showSubscriptionGate('Your subscription has expired. Please renew to continue using KODEX.');
-      return;
-    }
   }
   try {
     document.getElementById('auth-page').style.display = 'none';
@@ -3872,7 +3857,7 @@ async function showStartSessionModal() {
   let checkError   = false;
 
   try {
-    deviceStatus = await api('/api/esp32/device-status?t=' + Date.now());
+    deviceStatus = await api('/api/esp32/device-status');
   } catch(e) {
     checkError = true;
   }
@@ -4387,8 +4372,8 @@ async function renderUsers(filterRole='', filterDept='', filterSearch='') {
                   ${u.isActive
                     ? `<button class="btn btn-sm" style="background:#f59e0b;color:#fff;font-size:11px" onclick="deactivateUser('${u._id}')">Deactivate</button>`
                     : `<button class="btn btn-sm" style="background:#22c55e;color:#fff;font-size:11px" onclick="activateUser('${u._id}')">Activate</button>`}
-                  <button class="btn btn-sm" style="background:#6366f1;color:#fff;font-size:11px" onclick="adminResetStudentPassword('${u._id}', '${u.name.replace(/'/g, "\\'")}')">🔑 Reset</button>
-                  ${u.role === 'student' && u.deviceId ? `<button class="btn btn-sm" style="background:#f97316;color:#fff;font-size:11px" onclick="clearStudentDeviceLock('${u._id}', '${u.name.replace(/'/g, "\\'")}')">🔓 Unlock</button>` : ''}
+                  <button class="btn btn-sm" style="background:#6366f1;color:#fff;font-size:11px" onclick="adminResetStudentPassword('${u._id}', '${u.name.replace(/'/g, "\\'")}'')" title="Generate temp password">🔑 Reset</button>
+                  ${u.role === 'student' && u.deviceId ? `<button class="btn btn-sm" style="background:#f97316;color:#fff;font-size:11px" onclick="clearStudentDeviceLock('${u._id}', '${u.name.replace(/'/g, "\\'")}'')" title="Unlock device">🔓 Unlock</button>` : ''}
                   <button class="btn btn-danger btn-sm" style="font-size:11px" onclick="deleteUserPermanently('${u._id}', '${u.name.replace(/'/g, "\\'")}')">Delete</button>
                 </td>` : ''}
               </tr>
@@ -4704,7 +4689,7 @@ async function clearStudentDeviceLock(userId, userName) {
   try {
     await api(`/api/users/${userId}/clear-device-lock`, { method: 'POST' });
     showToastNotif(`✅ Device unlocked for ${userName}`);
-    loadUsersSection();
+    renderUsers();
   } catch(e) {
     showToastNotif(`❌ ${e.message || 'Failed to unlock device'}`, 'error');
   }
@@ -8197,6 +8182,22 @@ async function subscribePlan(plan, provider) {
     toastWarning('Please use Paystack (GHS) to subscribe.');
   }
 }
+async function paySemester() {
+  try {
+    const data = await api('/api/payments/paystack/initialize', {
+      method: 'POST',
+      body: JSON.stringify({ plan: 'semester' }),
+    });
+    if (data.authorization_url) {
+      window.location.href = data.authorization_url;
+    } else {
+      toastError('Could not get payment URL. Please try again.');
+    }
+  } catch (e) {
+    toastError(e.message || 'Payment initialization failed');
+  }
+}
+
 
 
 async function renderSearch() {
