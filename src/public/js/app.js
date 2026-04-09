@@ -1503,7 +1503,7 @@ async function handleEmployeeRegister() {
 async function handleStudentLogin() {
   const btn = document.querySelector('#student-login-form button[type="submit"]');
   try {
-    const indexNumber = document.getElementById('student-login-index').value.trim();
+    const indexNumber = document.getElementById('student-login-index').value.trim().toUpperCase();
     const institutionCode = document.getElementById('student-login-code').value.trim().toUpperCase();
     const password = document.getElementById('student-login-password').value;
     if (!indexNumber) return showStudentError('Please enter your student ID');
@@ -1594,7 +1594,7 @@ let studentForgotCode = '';
 
 async function handleStudentForgotPassword() {
   if (studentForgotStep === 'request') {
-    const indexNumber = document.getElementById('student-forgot-index').value;
+    const indexNumber = document.getElementById('student-forgot-index').value.trim().toUpperCase();
     const institutionCode = document.getElementById('student-forgot-code').value;
     if (!indexNumber || !institutionCode) return showStudentError('Please fill in all fields');
     try {
