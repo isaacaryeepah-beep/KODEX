@@ -867,8 +867,15 @@ exports.forgotPassword = async (req, res) => {
       return res.status(404).json({ error: "Student not found" });
     }
 
+    // Allow re-request if existing code is older than 1 minute
     if (user.resetPasswordExpires && user.resetPasswordExpires > Date.now()) {
-      return res.status(429).json({ error: "A reset code was already generated" });
+      const remaining = new Date(user.resetPasswordExpires) - Date.now();
+      const remainingMins = Math.ceil(remaining / 60000);
+      if (remaining > 59 * 60 * 1000) {
+        // Only block if code was generated less than 1 minute ago
+        return res.status(429).json({ error: `A reset code was already sent. Please wait ${remainingMins} minutes or check your email.` });
+      }
+      // Otherwise fall through and generate a new code
     }
 
     const code = String(crypto.randomInt(100000, 1000000));
@@ -914,18 +921,27 @@ exports.resetPassword = async (req, res) => {
     // Normalise IndexNumber to uppercase — stored uppercase in DB
     const normIndex = IndexNumber.trim().toUpperCase();
 
-    const filter = {
-      IndexNumber: normIndex,
-      resetPasswordExpires: { $gt: Date.now() },
-    };
-
+    let companyFilter = {};
     if (institutionCode) {
       const company = await Company.findOne({ institutionCode: institutionCode.toUpperCase() });
-      if (company) filter.company = company._id;
+      if (company) companyFilter.company = company._id;
     }
 
     // Must select +resetPasswordToken — it is select:false on the schema
-    const user = await User.findOne(filter).select("+password +resetPasswordToken");
+    // Try both IndexNumber (uppercase field) and indexNumber (legacy lowercase field)
+    let user = await User.findOne({
+      IndexNumber: normIndex,
+      resetPasswordExpires: { $gt: Date.now() },
+      ...companyFilter,
+    }).select("+password +resetPasswordToken");
+
+    if (!user) {
+      user = await User.findOne({
+        indexNumber: normIndex,
+        resetPasswordExpires: { $gt: Date.now() },
+        ...companyFilter,
+      }).select("+password +resetPasswordToken");
+    }
 
     if (!user) {
       return res.status(400).json({ error: "Invalid or expired reset code" });
