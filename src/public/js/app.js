@@ -771,8 +771,11 @@ function selectPortal(type) {
     document.getElementById('hod-auth').classList.remove('hidden');
   } else if (type === 'employee') {
     document.getElementById('employee-auth').classList.remove('hidden');
-  } else {
+  } else if (type === 'student') {
     document.getElementById('student-auth').classList.remove('hidden');
+  } else {
+    // Unknown portal type — go back to selector safely
+    document.getElementById('portal-selector').classList.remove('hidden');
   }
 }
 
@@ -1026,9 +1029,21 @@ function showPendingApproval(message) {
   document.getElementById('auth-page').style.display = 'flex';
   document.getElementById('dashboard-page').classList.add('hidden');
   document.getElementById('portal-selector').classList.add('hidden');
-  const authMap = { lecturer: 'lecturer-auth', student: 'student-auth', employee: 'employee-auth' };
-  const errorMap = { lecturer: 'lecturer-auth-error', student: 'student-auth-error', employee: 'employee-auth-error' };
-  const authEl = authMap[selectedPortalType] || 'lecturer-auth';
+  const authMap = {
+    lecturer: 'lecturer-auth',
+    student: 'student-auth',
+    employee: 'employee-auth',
+    'admin-corporate': 'admin-auth',
+    'admin-academic': 'admin-auth',
+  };
+  const errorMap = {
+    lecturer: 'lecturer-auth-error',
+    student: 'student-auth-error',
+    employee: 'employee-auth-error',
+    'admin-corporate': 'admin-auth-error',
+    'admin-academic': 'admin-auth-error',
+  };
+  const authEl = authMap[selectedPortalType] || 'admin-auth';
   document.getElementById(authEl).classList.remove('hidden');
   const errorEl = errorMap[selectedPortalType] || 'lecturer-auth-error';
   const el = document.getElementById(errorEl);
@@ -1688,7 +1703,7 @@ function getPortalName(role) {
 }
 
 function getPortalAttr(role) {
-  if (role === 'superadmin' || role === 'admin') return 'admin';
+  if (role === 'superadmin' || role === 'admin' || role === 'manager') return 'admin';
   return role;
 }
 
