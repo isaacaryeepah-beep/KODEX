@@ -857,9 +857,11 @@ exports.forgotPassword = async (req, res) => {
       return res.status(404).json({ error: "Institution not found" });
     }
 
-    let user = await User.findOne({ IndexNumber, company: company._id, role: "student" });
+    // Normalise to uppercase — IndexNumber is stored uppercase in DB
+    const normIdx = IndexNumber.trim().toUpperCase();
+    let user = await User.findOne({ IndexNumber: normIdx, company: company._id, role: "student" });
     if (!user) {
-      user = await User.findOne({ indexNumber: IndexNumber, company: company._id, role: "student" });
+      user = await User.findOne({ indexNumber: normIdx, company: company._id, role: "student" });
     }
     if (!user) {
       return res.status(404).json({ error: "Student not found" });
@@ -909,8 +911,11 @@ exports.resetPassword = async (req, res) => {
       return res.status(400).json({ error: "Student ID, reset code, and new password are required" });
     }
 
+    // Normalise IndexNumber to uppercase — stored uppercase in DB
+    const normIndex = IndexNumber.trim().toUpperCase();
+
     const filter = {
-      IndexNumber,
+      IndexNumber: normIndex,
       resetPasswordExpires: { $gt: Date.now() },
     };
 
@@ -919,10 +924,15 @@ exports.resetPassword = async (req, res) => {
       if (company) filter.company = company._id;
     }
 
-    const user = await User.findOne(filter).select("+password");
+    // Must select +resetPasswordToken — it is select:false on the schema
+    const user = await User.findOne(filter).select("+password +resetPasswordToken");
 
     if (!user) {
       return res.status(400).json({ error: "Invalid or expired reset code" });
+    }
+
+    if (!user.resetPasswordToken) {
+      return res.status(400).json({ error: "No reset code found. Please request a new one." });
     }
 
     const isValid = await bcrypt.compare(resetCode, user.resetPasswordToken);
@@ -941,7 +951,8 @@ exports.resetPassword = async (req, res) => {
       method: 'self',
       resetBy: user.name || user.IndexNumber,
     });
-    await user.save();
+    // Skip validation — only password fields are changing
+    await user.save({ validateBeforeSave: false });
 
     // Notify admin of student reset (non-fatal)
     try {
