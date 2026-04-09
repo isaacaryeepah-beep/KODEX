@@ -8,6 +8,11 @@
   <link rel="stylesheet" href="/css/style.css">
   <script>window.MathJax = { tex: { inlineMath: [["\\(","\\)"]], displayMath: [["\\[","\\]"]], processEscapes: true }, options: { skipHtmlTags: ["script","noscript","style","textarea"] } };</script>
   <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js"></script>
+<script>
+// Stubs prevent "X is not defined" if app.js is slow — real functions override these
+function selectMode(m){document.addEventListener('DOMContentLoaded',function(){if(window._appLoaded)window._realSelectMode(m);else window._pendingMode=m;});}
+function selectPortal(t){document.addEventListener('DOMContentLoaded',function(){if(window._appLoaded)window._realSelectPortal(t);else window._pendingPortal=t;});}
+</script>
 </head>
 <body>
   <div id="auth-page">
