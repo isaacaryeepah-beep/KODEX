@@ -8,8 +8,8 @@ const { sendWelcome, sendAdminPasswordResetNotice, sendPasswordReset, sendNewIns
 const { sendOtp, normalisePhone } = require("../services/smsService");
 
 const SIX_HOURS_MS = 6 * 60 * 60 * 1000;
-const PAID_ROLES = ["lecturer", "manager"];
-const TRIAL_DAYS = 30;
+const PAID_ROLES    = ["lecturer", "manager", "admin"];
+const TRIAL_DAYS    = 30;
 const SEMESTER_DAYS = 112;
 
 exports.register = async (req, res) => {
@@ -66,6 +66,8 @@ exports.register = async (req, res) => {
         company: company._id,
         role: "admin",
         isApproved: true,
+        trialEndDate: new Date(Date.now() + TRIAL_DAYS * 24 * 60 * 60 * 1000),
+        subscriptionStatus: "trial",
       });
     } catch (userError) {
       await Company.findByIdAndDelete(company._id);
@@ -186,6 +188,8 @@ exports.registerLecturer = async (req, res) => {
           role: "lecturer",
           isApproved: true,
           department: department || null,
+          trialEndDate: new Date(Date.now() + TRIAL_DAYS * 24 * 60 * 60 * 1000),
+          subscriptionStatus: "trial",
         });
       } catch (userError) {
         await Company.findByIdAndDelete(company._id);
@@ -260,6 +264,8 @@ exports.registerLecturer = async (req, res) => {
       role: "lecturer",
       isApproved: false,
       department: department || null,
+      trialEndDate: new Date(Date.now() + TRIAL_DAYS * 24 * 60 * 60 * 1000),
+      subscriptionStatus: "trial",
     });
 
     // If a department was specified, notify the HOD of that department
@@ -572,11 +578,11 @@ exports.login = async (req, res) => {
       // FIX: Search all companies for this lecturer email, not just mode="academic"
       // Some institutions have mode="corporate" due to registration flow issues.
       // Role-based checks below prevent cross-portal abuse.
-      user = await User.findOne({ email: { $regex: new RegExp("^" + email.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "$", "i") }, role: "lecturer" }).select("+password");
+      user = await User.findOne({ email, role: "lecturer" }).select("+password");
     } else if (email && loginRole === "hod") {
-      user = await User.findOne({ email: { $regex: new RegExp("^" + email.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "$", "i") }, role: "hod" }).select("+password");
+      user = await User.findOne({ email, role: "hod" }).select("+password");
     } else {
-      user = await User.findOne({ email: { $regex: new RegExp("^" + email.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "$", "i") } }).select("+password");
+      user = await User.findOne({ email }).select("+password");
     }
 
     if (!user || !user.isActive) {
@@ -642,39 +648,21 @@ exports.login = async (req, res) => {
     }
     // ────────────────────────────────────────────────────────────────────────
 
-    // Block login only for users who genuinely cannot pay their own way.
-    // Lecturers and managers have per-user subscriptions and must be allowed
-    // to log in so they can renew personally — the auth middleware will gate
-    // them with a Pay button after login if needed.
-    // Students/employees/HODs are blocked unless an admin of their company
-    // still has an active personal subscription (legacy admin payments).
-    const SELF_PAYABLE = ["superadmin", "admin", "manager", "lecturer"];
-    if (company && !company.hasAccess && !SELF_PAYABLE.includes(user.role)) {
-      const activeAdmin = await User.findOne({
-        company: company._id,
-        role: "admin",
-        subscriptionExpiry: { $gt: new Date() },
-      }).select("_id").lean();
-      if (!activeAdmin) {
-        return res.status(403).json({
-          error: "Subscription inactive",
-          message: "Your institution's subscription has expired. Please contact your admin.",
-          subscriptionRequired: true,
-        });
-      }
+    if (company && !company.hasAccess && !["superadmin", "admin", "manager"].includes(user.role)) {
+      return res.status(403).json({
+        error: "Subscription inactive",
+        message: "Your institution's subscription has expired. Please contact your admin.",
+        subscriptionExpired: true,
+      });
     }
 
-    // 6-hour cross-device lock — only meaningful for student accounts where
-    // we want to discourage account sharing. Lecturers/admins/managers are
-    // expected to log in from multiple devices (phone, laptop, etc.) and
-    // should never be blocked by this.
-    if (user.lastLogoutTime && user.role === "student") {
+    if (user.lastLogoutTime) {
       const timeSinceLogout = Date.now() - new Date(user.lastLogoutTime).getTime();
       if (timeSinceLogout < SIX_HOURS_MS && deviceId && user.deviceId && user.deviceId !== deviceId) {
         const remainingMs = SIX_HOURS_MS - timeSinceLogout;
         const remainingHours = Math.ceil(remainingMs / (60 * 60 * 1000));
         return res.status(403).json({
-          error: "You must wait 6 hours before signing in from a different device.",
+          error: "You must wait 6 hours before signing in to a different account.",
           remainingHours,
           restrictedUntil: new Date(new Date(user.lastLogoutTime).getTime() + SIX_HOURS_MS).toISOString(),
         });
@@ -912,7 +900,6 @@ exports.forgotPassword = async (req, res) => {
   }
 };
 
-// ✅✅✅ FIXED resetPassword FUNCTION ✅✅✅
 exports.resetPassword = async (req, res) => {
   try {
     const IndexNumber = req.body.IndexNumber || req.body.indexNumber;
@@ -922,33 +909,20 @@ exports.resetPassword = async (req, res) => {
       return res.status(400).json({ error: "Student ID, reset code, and new password are required" });
     }
 
-    // ✅ FIX #1: Institution code is now REQUIRED (security fix)
-    if (!institutionCode) {
-      return res.status(400).json({ error: "Institution code is required" });
-    }
-
-    const company = await Company.findOne({ institutionCode: institutionCode.toUpperCase() });
-    if (!company) {
-      return res.status(404).json({ error: "Institution not found" });
-    }
-
-    // ✅ FIX #2: Convert IndexNumber to UPPERCASE (MAIN FIX FOR "INVALID CODE" BUG)
     const filter = {
-      IndexNumber: IndexNumber.toUpperCase(),  // ← THIS FIXES THE BUG!
-      company: company._id,
+      IndexNumber,
       resetPasswordExpires: { $gt: Date.now() },
     };
 
-    // ✅ FIX #3: Explicitly include resetPasswordToken
-    const user = await User.findOne(filter).select("+password +resetPasswordToken");
+    if (institutionCode) {
+      const company = await Company.findOne({ institutionCode: institutionCode.toUpperCase() });
+      if (company) filter.company = company._id;
+    }
+
+    const user = await User.findOne(filter).select("+password");
 
     if (!user) {
       return res.status(400).json({ error: "Invalid or expired reset code" });
-    }
-
-    // ✅ FIX #4: Check if resetPasswordToken exists
-    if (!user.resetPasswordToken) {
-      return res.status(400).json({ error: "No reset code found. Please request a new code." });
     }
 
     const isValid = await bcrypt.compare(resetCode, user.resetPasswordToken);
@@ -977,7 +951,7 @@ exports.resetPassword = async (req, res) => {
         role: { $in: ['admin', 'manager'] },
         isActive: true,
       }).select('email name').lean();
-      const companyData = await Company.findById(user.company).select('name').lean();
+      const company = await Company.findById(user.company).select('name').lean();
       if (admin?.email) {
         sendAdminPasswordResetNotice({
           adminEmail: admin.email,
@@ -985,7 +959,7 @@ exports.resetPassword = async (req, res) => {
           targetUserName: user.name || user.IndexNumber,
           targetUserRole: user.role,
           targetUserEmail: user.email || user.IndexNumber,
-          institutionName: companyData?.name || '',
+          institutionName: company?.name || '',
         }).catch(() => {});
       }
     } catch(_) {}
@@ -996,7 +970,6 @@ exports.resetPassword = async (req, res) => {
     res.status(500).json({ error: "Failed to reset password" });
   }
 };
-// ✅✅✅ END OF FIXED resetPassword FUNCTION ✅✅✅
 
 exports.forgotPasswordEmail = async (req, res) => {
   try {
