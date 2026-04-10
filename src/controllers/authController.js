@@ -244,6 +244,24 @@ exports.registerLecturer = async (req, res) => {
       return res.status(403).json({ error: "This institution is currently inactive." });
     }
 
+    // ── HOD-first enforcement ─────────────────────────────────────────────────
+    // A department only exists if a HOD has been approved for it.
+    if (!department?.trim()) {
+      return res.status(400).json({ error: "Department is required." });
+    }
+    const hod = await User.findOne({
+      company: company._id,
+      role: "hod",
+      department: department.trim(),
+      isApproved: true,
+    });
+    if (!hod) {
+      return res.status(400).json({
+        error: `No approved HOD found for "${department.trim()}". A Head of Department must be set up for this department before lecturers can join it.`,
+      });
+    }
+    // ─────────────────────────────────────────────────────────────────────────
+
     const existingUser = await User.findOne({ email, company: company._id });
     if (existingUser) {
       return res.status(400).json({ error: "A user with this email already exists at this institution" });
@@ -263,21 +281,15 @@ exports.registerLecturer = async (req, res) => {
       company: company._id,
       role: "lecturer",
       isApproved: false,
-      department: department || null,
+      department: department.trim(),
       trialEndDate: new Date(Date.now() + TRIAL_DAYS * 24 * 60 * 60 * 1000),
       subscriptionStatus: "trial",
     });
 
-    // If a department was specified, notify the HOD of that department
-    if (department) {
-      try {
-        const hod = await User.findOne({ company: company._id, role: "hod", department: department.trim() });
-        if (hod) {
-          // Store a pending notification count on HOD (simple increment via a temp field)
-          await User.updateOne({ _id: hod._id }, { $inc: { pendingApprovals: 1 } });
-        }
-      } catch (_) {} // non-critical
-    }
+    // Notify the HOD
+    try {
+      await User.updateOne({ _id: hod._id }, { $inc: { pendingApprovals: 1 } });
+    } catch (_) {}
 
     // Send welcome email (non-fatal)
     if (user.email) {
@@ -340,6 +352,22 @@ exports.registerStudent = async (req, res) => {
     if (!company.isActive) {
       return res.status(403).json({ error: "This institution is currently inactive." });
     }
+
+    // ── HOD-first enforcement ─────────────────────────────────────────────────
+    if (department?.trim()) {
+      const hodExists = await User.findOne({
+        company: company._id,
+        role: "hod",
+        department: department.trim(),
+        isApproved: true,
+      });
+      if (!hodExists) {
+        return res.status(400).json({
+          error: `No approved HOD found for "${department.trim()}". A Head of Department must be set up for this department before students can join it.`,
+        });
+      }
+    }
+    // ─────────────────────────────────────────────────────────────────────────
 
     const rosterEntry = await StudentRoster.findOne({
       studentId: IndexNumber.trim().toUpperCase(),
@@ -529,6 +557,93 @@ exports.registerEmployee = async (req, res) => {
     }
     console.error("Employee register error:", error);
     res.status(500).json({ error: "Employee registration failed" });
+  }
+};
+
+
+exports.registerHod = async (req, res) => {
+  try {
+    const { name, email: emailRaw, password, institutionCode, department, phone } = req.body;
+    const email = emailRaw ? emailRaw.trim().toLowerCase() : '';
+
+    if (!name || !email || !password || !institutionCode || !department) {
+      return res.status(400).json({ error: 'Name, email, password, institution code and department are required' });
+    }
+    if (password.length < 8) {
+      return res.status(400).json({ error: 'Password must be at least 8 characters' });
+    }
+
+    const company = await Company.findOne({ institutionCode: institutionCode.toUpperCase(), mode: 'academic' });
+    if (!company) {
+      return res.status(404).json({ error: 'Institution not found. Please check your institution code.' });
+    }
+    if (!company.isActive) {
+      return res.status(403).json({ error: 'This institution is currently inactive.' });
+    }
+
+    const existingUser = await User.findOne({ email, company: company._id });
+    if (existingUser) {
+      return res.status(400).json({ error: 'A user with this email already exists at this institution' });
+    }
+
+    // Only one HOD per department — check if dept already has one
+    const existingHod = await User.findOne({ company: company._id, role: 'hod', department: department.trim() });
+    if (existingHod) {
+      return res.status(400).json({ error: `A HOD for "${department.trim()}" already exists. Contact your admin.` });
+    }
+
+    if (phone) {
+      const normPhone = normalisePhone(phone);
+      const phoneExists = await User.findOne({ phone: normPhone, company: company._id });
+      if (phoneExists) return res.status(400).json({ error: 'Phone number is already in use' });
+    }
+
+    const user = await User.create({
+      name,
+      email,
+      password,
+      phone: phone ? normalisePhone(phone) : null,
+      company: company._id,
+      role: 'hod',
+      department: department.trim(),
+      isApproved: false,
+      trialEndDate: new Date(Date.now() + TRIAL_DAYS * 24 * 60 * 60 * 1000),
+      subscriptionStatus: 'trial',
+    });
+
+    // Notify HOD of pending approval
+    if (user.email) {
+      sendHodWelcome({
+        email: user.email,
+        name: user.name,
+        institutionName: company.name,
+        department: department.trim(),
+        isApproved: false,
+      }).catch(err => console.error('HOD welcome email failed:', err.message));
+    }
+
+    res.status(201).json({
+      user: {
+        id: user._id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        department: user.department,
+        isApproved: user.isApproved,
+        company: { id: company._id, name: company.name, mode: company.mode },
+      },
+      message: 'Registration successful. Your HOD account is pending admin approval.',
+    });
+  } catch (error) {
+    if (error.name === 'ValidationError') {
+      const messages = Object.values(error.errors).map(e => e.message);
+      return res.status(400).json({ error: messages.join(', ') });
+    }
+    if (error.code === 11000) {
+      return res.status(400).json({ error: 'This email is already registered at this institution' });
+    }
+    console.error('HOD register error:', error);
+    res.status(500).json({ error: 'HOD registration failed' });
   }
 };
 
@@ -1373,5 +1488,28 @@ exports.updateProfile = async (req, res) => {
   } catch (error) {
     console.error("Update profile error:", error);
     res.status(500).json({ error: "Failed to update profile" });
+  }
+};
+
+exports.getDepartments = async (req, res) => {
+  try {
+    const { institutionCode } = req.query;
+    if (!institutionCode) return res.status(400).json({ error: 'institutionCode is required' });
+
+    const company = await Company.findOne({ institutionCode: institutionCode.toUpperCase() });
+    if (!company) return res.status(404).json({ error: 'Institution not found' });
+
+    // Only return departments that have an approved HOD
+    const hods = await User.find({
+      company: company._id,
+      role: 'hod',
+      isApproved: true,
+      department: { $exists: true, $ne: null },
+    }).select('department').lean();
+
+    const departments = [...new Set(hods.map(h => h.department).filter(Boolean))].sort();
+    res.json({ departments });
+  } catch(e) {
+    res.status(500).json({ error: 'Failed to fetch departments' });
   }
 };
