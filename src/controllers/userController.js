@@ -77,9 +77,22 @@ exports.createUser = async (req, res) => {
       return res.status(403).json({ error: "Cannot create user with equal or higher role" });
     }
 
-    // Only superadmin can create HODs
-    if (targetRole === "hod" && req.user.role !== "superadmin") {
-      return res.status(403).json({ error: "Only superadmins can create Head of Department accounts." });
+    // HOD-first enforcement for academic institutions
+    if (company.mode === "academic" && ["student", "lecturer"].includes(targetRole)) {
+      if (!department?.trim()) {
+        return res.status(400).json({ error: "Department is required for students and lecturers." });
+      }
+      const hodExists = await User.findOne({
+        company: company._id,
+        role: "hod",
+        department: department.trim(),
+        isApproved: true,
+      });
+      if (!hodExists) {
+        return res.status(400).json({
+          error: `No approved HOD exists for "${department.trim()}". Create and approve a HOD for this department first.`,
+        });
+      }
     }
 
     const { normalisePhone } = require('../services/smsService');
