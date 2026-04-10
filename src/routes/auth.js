@@ -1,36 +1,31 @@
-// ──────────────────────────────────────────────────────────────────────────────
-//  KODEX Auth Routes
-//  Mounted at /api/auth in server.js. The authenticate middleware lives in
-//  src/middleware/auth.js — this file used to be a corrupted duplicate of it
-//  which broke every login. Do not export the middleware from here.
-// ──────────────────────────────────────────────────────────────────────────────
 const express = require("express");
 const authenticate = require("../middleware/auth");
-const ctrl = require("../controllers/authController");
+const { requireRole } = require("../middleware/role");
+const authController = require("../controllers/authController");
+const { loginLimiter, registerLimiter, passwordResetLimiter } = require("../middleware/rateLimiter");
 
 const router = express.Router();
 
-// ── Public endpoints ─────────────────────────────────────────────────────────
-router.post("/login", ctrl.login);
+// ── Auth routes with rate limiting ───────────────────────────────────────────
+router.post("/register",               registerLimiter,       authController.register);
+router.post("/register-lecturer",      registerLimiter,       authController.registerLecturer);
+router.post("/register-student",       registerLimiter,       authController.registerStudent);
+router.post("/register-employee",      registerLimiter,       authController.registerEmployee);
+router.post("/register-hod",           registerLimiter,       authController.registerHod);
+router.post("/login",                  loginLimiter,          authController.login);
+router.post("/logout",                 authenticate,          authController.logout);
+router.get("/me",                      authenticate,          authController.getMe);
+router.post("/migrate-orphans",        authenticate, requireRole("superadmin"), authController.migrateOrphanUsers);
+router.post("/forgot-password",        passwordResetLimiter,  authController.forgotPassword);
+router.post("/reset-password",         passwordResetLimiter,  authController.resetPassword);
+router.post("/forgot-password-email",  passwordResetLimiter,  authController.forgotPasswordEmail);
+router.post("/reset-password-email",   passwordResetLimiter,  authController.resetPasswordEmail);
+router.post("/forgot-password-admin",  passwordResetLimiter,  authController.forgotPasswordAdmin);  // ← ADDED
+router.put("/profile",                 authenticate,          authController.updateProfile);
+router.post("/2fa/toggle",             authenticate,          authController.toggle2FA);
+router.post("/2fa/send",               authenticate,          authController.send2FACode);
+router.post("/2fa/verify",             authenticate,          authController.verify2FACode);
 
-router.post("/register",          ctrl.register);
-router.post("/register-lecturer", ctrl.registerLecturer);
-router.post("/register-student",  ctrl.registerStudent);
-router.post("/register-employee", ctrl.registerEmployee);
-
-router.post("/forgot-password",       ctrl.forgotPassword);
-router.post("/forgot-password-email", ctrl.forgotPasswordEmail);
-router.post("/forgot-password-admin", ctrl.forgotPasswordAdmin);
-router.post("/reset-password",        ctrl.resetPassword);
-router.post("/reset-password-email",  ctrl.resetPasswordEmail);
-
-// ── Authenticated endpoints ──────────────────────────────────────────────────
-router.post("/logout", authenticate, ctrl.logout);
-router.get("/me",      authenticate, ctrl.getMe);
-router.put("/profile", authenticate, ctrl.updateProfile);
-
-router.post("/2fa/toggle", authenticate, ctrl.toggle2FA);
-router.post("/2fa/send",   authenticate, ctrl.send2FACode);
-router.post("/2fa/verify", authenticate, ctrl.verify2FACode);
+router.get("/departments", authController.getDepartments);
 
 module.exports = router;
