@@ -1269,7 +1269,40 @@ function toggleLecturerRegMode() {
   } else {
     codeGroup.classList.remove('hidden');
     instGroup.classList.add('hidden');
-    hint.textContent = 'Your account will need admin approval before you can access the system.';
+    hint.textContent = 'Your account will need HOD and admin approval before you can access the system.';
+    // Load departments for this institution when code is entered
+    const codeInput = document.getElementById('lecturer-reg-code');
+    if (codeInput && !codeInput._hodListener) {
+      codeInput._hodListener = true;
+      codeInput.addEventListener('blur', () => loadDeptDropdown(
+        codeInput.value.trim().toUpperCase(),
+        'lecturer-reg-dept',
+        'Department (must match an existing HOD)'
+      ));
+    }
+  }
+}
+
+async function loadDeptDropdown(institutionCode, targetId, placeholder) {
+  if (!institutionCode) return;
+  try {
+    const data = await api('/api/auth/departments?institutionCode=' + institutionCode);
+    const depts = data.departments || [];
+    const el = document.getElementById(targetId);
+    if (!el) return;
+    if (depts.length === 0) {
+      el.placeholder = 'No departments set up yet — contact your admin';
+      return;
+    }
+    // Replace input with select
+    const sel = document.createElement('select');
+    sel.id = targetId;
+    sel.style.cssText = el.style.cssText || 'width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px';
+    sel.innerHTML = '<option value="">— Select Department —</option>' +
+      depts.map(d => `<option value="${d}">${d}</option>`).join('');
+    el.parentNode.replaceChild(sel, el);
+  } catch(e) {
+    console.warn('Could not load departments:', e.message);
   }
 }
 
@@ -1348,6 +1381,61 @@ async function handleEmployeeForgotPassword() {
 function showHodLogin() {
   document.getElementById('hod-login-form').classList.remove('hidden');
   document.getElementById('hod-forgot-form').classList.add('hidden');
+  const regForm = document.getElementById('hod-register-form');
+  if (regForm) regForm.classList.add('hidden');
+}
+
+function showHodRegister() {
+  document.getElementById('hod-login-form').classList.add('hidden');
+  document.getElementById('hod-forgot-form').classList.add('hidden');
+  const regForm = document.getElementById('hod-register-form');
+  if (regForm) regForm.classList.remove('hidden');
+}
+
+async function handleHodRegister() {
+  const name     = document.getElementById('hod-reg-name')?.value?.trim();
+  const email    = document.getElementById('hod-reg-email')?.value?.trim();
+  const password = document.getElementById('hod-reg-password')?.value;
+  const code     = document.getElementById('hod-reg-code')?.value?.trim().toUpperCase();
+  const dept     = document.getElementById('hod-reg-dept')?.value?.trim();
+  const phone    = document.getElementById('hod-reg-phone')?.value?.trim();
+  const errEl    = document.getElementById('hod-auth-error');
+
+  function setErr(msg) {
+    if (!errEl) return;
+    errEl.textContent = msg;
+    errEl.style.display = 'block';
+    errEl.style.background = '#fef2f2';
+    errEl.style.color = '#dc2626';
+  }
+
+  if (!name)     return setErr('Please enter your full name.');
+  if (!email)    return setErr('Please enter your email.');
+  if (!password) return setErr('Please enter a password.');
+  if (password.length < 8) return setErr('Password must be at least 8 characters.');
+  if (!code)     return setErr('Please enter your institution code.');
+  if (!dept)     return setErr('Please enter your department.');
+
+  const btn = document.querySelector('#hod-register-form button[type="submit"]');
+  if (btn) { btn.textContent = 'Registering…'; btn.disabled = true; }
+
+  try {
+    const data = await api('/api/auth/register-hod', {
+      method: 'POST',
+      body: JSON.stringify({ name, email, password, institutionCode: code, department: dept, phone: phone || undefined }),
+    });
+
+    if (errEl) {
+      errEl.textContent = data.message || 'Registration successful! Your account is pending admin approval.';
+      errEl.style.display = 'block';
+      errEl.style.background = '#f0fdf4';
+      errEl.style.color = '#15803d';
+    }
+    showHodLogin();
+  } catch(e) {
+    setErr(e.message || 'Registration failed');
+    if (btn) { btn.textContent = 'Register'; btn.disabled = false; }
+  }
 }
 function showHodForgot() {
   document.getElementById('hod-login-form').classList.add('hidden');
@@ -4506,41 +4594,85 @@ async function renderResetLogs() {
   }
 }
 
+function onCreateUserRoleChange() {
+  const role = document.getElementById('new-user-role')?.value;
+  const deptWrap = document.getElementById('new-user-dept-wrap');
+  if (!deptWrap) return;
+
+  if (role === 'hod') {
+    // HOD sets their own new department — free text input
+    deptWrap.innerHTML = `
+      <label>Department <span style="font-size:11px;color:var(--text-light)">(this will become a new department)</span></label>
+      <input type="text" id="new-user-dept" placeholder="e.g. Computer Science" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">`;
+  } else if (role === 'student' || role === 'lecturer') {
+    // Must pick from HOD departments
+    const sel = deptWrap.querySelector('select');
+    if (!sel) {
+      // Re-render as dropdown if it was changed to text input
+      deptWrap.innerHTML = `
+        <label>Department <span style="font-size:11px;color:#dc2626">*must match an existing HOD</span></label>
+        <select id="new-user-dept" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
+          <option value="">— Select Department —</option>
+        </select>
+        <p style="font-size:11px;color:#dc2626;margin-top:4px">⚠️ No departments set up. Create a HOD first.</p>`;
+    }
+  } else {
+    // Employee / manager — no dept restriction
+    deptWrap.innerHTML = `
+      <label>Department / Branch <span style="font-weight:400;color:var(--text-light)">(optional)</span></label>
+      <input type="text" id="new-user-dept" placeholder="e.g. Engineering" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">`;
+  }
+}
+
 async function showCreateUserModal() {
   const mode = currentUser.company?.mode || 'corporate';
   const isManager = currentUser.role === 'manager';
+  const isAcademic = mode === 'academic';
 
   let roles;
   if (isManager) {
     roles = '<option value="employee">Employee</option>';
-  } else if (mode === 'corporate') {
+  } else if (!isAcademic) {
     roles = '<option value="employee">Employee</option><option value="manager">Manager</option>';
   } else {
-    roles = `<option value="student">Student</option><option value="lecturer">Lecturer</option>${currentUser.role === 'superadmin' ? '<option value="hod">Head of Department (HOD)</option>' : ''}`;
+    roles = `<option value="student">Student</option><option value="lecturer">Lecturer</option><option value="hod">Head of Department (HOD)</option>`;
   }
 
-  // Fetch existing HODs to get their departments for the dropdown
+  // Fetch approved HODs to build department list
   let hodDepts = [];
   try {
     const usersData = await api('/api/users');
     hodDepts = (usersData.users || [])
-      .filter(u => u.role === 'hod' && u.department)
-      .map(u => u.department);
+      .filter(u => u.role === 'hod' && u.department && u.isApproved)
+      .map(u => u.department)
+      .filter((d, i, a) => a.indexOf(d) === i) // unique
+      .sort();
   } catch(e) { hodDepts = []; }
 
-  const defaultRole = isManager ? 'employee' : (mode === 'corporate' ? 'employee' : 'student');
+  const defaultRole = isManager ? 'employee' : (isAcademic ? 'student' : 'employee');
   const modalTitle = isManager ? 'Add Employee' : 'Add User';
+
+  // For academic: department MUST come from approved HODs
+  // If no HODs yet, warn admin before they can add students/lecturers
+  const noHodWarning = isAcademic && hodDepts.length === 0
+    ? `<div style="background:#fef3c7;border:1px solid #f59e0b;border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:13px;color:#92400e">
+        ⚠️ <strong>No departments set up yet.</strong> You must create a HOD account first before adding students or lecturers. Select "Head of Department (HOD)" above to add one now.
+       </div>`
+    : '';
 
   const deptDropdownOptions = hodDepts.length
     ? hodDepts.map(d => `<option value="${d}">${d}</option>`).join('')
     : '';
 
-  const deptField = deptDropdownOptions
-    ? `<select id="new-user-dept" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
-        <option value="">— Select Department —</option>
-        ${deptDropdownOptions}
-       </select>`
-    : `<input type="text" id="new-user-dept" placeholder="e.g. Computer Science">`;
+  const deptField = isAcademic
+    ? (deptDropdownOptions
+        ? `<select id="new-user-dept" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
+            <option value="">— Select Department —</option>
+            ${deptDropdownOptions}
+           </select>`
+        : `<input type="text" id="new-user-dept" placeholder="Department (set up a HOD first)" disabled
+            style="background:#f3f4f6;cursor:not-allowed">`)
+    : `<input type="text" id="new-user-dept" placeholder="e.g. Engineering">`;
 
   const container = document.getElementById('modal-container');
   container.classList.remove('hidden');
@@ -4548,6 +4680,7 @@ async function showCreateUserModal() {
     <div class="modal-overlay" onclick="closeModal(event)">
       <div class="modal" onclick="event.stopPropagation()">
         <h3>${modalTitle}</h3>
+        ${noHodWarning}
         <div class="form-group">
           <label>Full Name</label>
           <input type="text" id="new-user-name" placeholder="Full name">
@@ -8681,7 +8814,7 @@ async function renderProfile() {
           <input type="text" id="profile-name" value="${u.name || ''}" placeholder="Your full name">
         </div>
         ${['lecturer','hod','student'].includes(u.role) ? `
-        <div class="form-group">
+        <div class="form-group" id="new-user-dept-wrap">
           <label>Department <span style="font-weight:400;font-size:11px;color:var(--text-muted)">(cannot be changed here — contact admin)</span></label>
           <input type="text" value="${u.department || 'Not set'}" disabled style="background:var(--bg);color:var(--text-muted);">
         </div>` : ''}
