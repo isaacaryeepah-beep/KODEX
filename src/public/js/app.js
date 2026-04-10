@@ -4814,7 +4814,7 @@ async function createUser() {
       const idx = document.getElementById('new-user-index').value.trim().toUpperCase();
       if (!idx) { toastWarning('Student ID / Index Number is required.'); return; }
       if (idx.length < 3) { toastWarning('Student ID looks too short. Please enter the full index number.'); return; }
-      body.indexNumber = idx;
+      body.IndexNumber = idx;  // must match backend field name
       // Student classification — all mandatory
       const programme   = document.getElementById('new-user-programme')?.value;
       const studentLevel= document.getElementById('new-user-level')?.value;
