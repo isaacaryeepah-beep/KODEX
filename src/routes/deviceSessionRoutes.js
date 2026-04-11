@@ -4,8 +4,8 @@ const router  = express.Router();
 const deviceCtrl  = require('../controllers/deviceController');
 const sessionCtrl = require('../controllers/sessionController');
 
-// Use your existing middleware
-const { authenticate }     = require('../middleware/auth');
+// auth.js exports authenticate as default, companyIsolation is in its own file
+const authenticate       = require('../middleware/auth');
 const { companyIsolation } = require('../middleware/companyIsolation');
 
 // ─── DEVICE ROUTES ────────────────────────────────────────────────────────────
@@ -14,9 +14,7 @@ router.post('/devices/heartbeat',         authenticate, companyIsolation, device
 router.post('/devices/sync',              authenticate, companyIsolation, deviceCtrl.syncOfflineRecords);
 router.put('/devices/:deviceId/networks', authenticate, companyIsolation, deviceCtrl.updateNetworks);
 router.get('/devices/:deviceId/status',   authenticate, companyIsolation, deviceCtrl.getDeviceStatus);
-
-// Superadmin only — transfer device ownership
-router.post('/devices/transfer', authenticate, deviceCtrl.transferDevice);
+router.post('/devices/transfer',          authenticate, deviceCtrl.transferDevice);
 
 // ─── SESSION ROUTES ───────────────────────────────────────────────────────────
 router.post('/sessions/start',               authenticate, companyIsolation, sessionCtrl.startSession);
