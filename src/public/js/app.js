@@ -2306,7 +2306,7 @@ async function renderApprovals() {
             <tbody>${pending.map(u => `
               <tr>
                 <td style="font-weight:500">${u.name}</td>
-                <td>${u.email || u.indexNumber || 'N/A'}</td>
+                <td>${u.email || u.IndexNumber || u.indexNumber || 'N/A'}</td>
                 <td><span class="status-badge status-active">${u.role}</span></td>
                 ${!isHod ? `<td>${u.department ? `<span style="font-size:11px;padding:2px 7px;border-radius:20px;background:#ecfeff;color:#0891b2;font-weight:600;">${u.department}</span>` : '—'}</td>` : ''}
                 <td>${new Date(u.createdAt).toLocaleDateString()}</td>
@@ -2651,7 +2651,7 @@ async function renderHodStudents() {
               students.map(u => `
                 <tr class="hod-stu-row" data-name="${(u.name||'').toLowerCase()}" data-index="${(u.indexNumber||'').toLowerCase()}" style="border-bottom:1px solid var(--border);">
                   <td style="padding:10px 12px;font-weight:600;">${u.name}</td>
-                  <td style="padding:10px 12px;color:var(--text-muted);font-family:monospace;">${u.indexNumber || '—'}</td>
+                  <td style="padding:10px 12px;color:var(--text-muted);font-family:monospace;">${u.IndexNumber || u.indexNumber || '—'}</td>
                   <td style="padding:10px 12px;">${u.programme ? `<span style="background:#ede9fe;color:#7c3aed;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700">${esc(u.programme)}</span>` : '—'}</td>
                   <td style="padding:10px 12px;">
                     ${u.studentLevel ? `<span style="background:#dbeafe;color:#1d4ed8;padding:2px 7px;border-radius:20px;font-size:11px;font-weight:700;margin-right:3px">L${esc(u.studentLevel)}</span>` : ''}
@@ -4512,7 +4512,7 @@ async function renderUsers(filterRole='', filterDept='', filterSearch='') {
                 ${canManage ? `<td><input type="checkbox" class="user-checkbox" value="${u._id}" onchange="updateBulkActions()"></td>` : ''}
                 <td>${u.name}</td>
                 ${mode === 'corporate' ? `<td>${u.employeeId || '-'}</td>` : ''}
-                <td>${u.email || u.indexNumber || 'N/A'}</td>
+                <td>${u.email || u.IndexNumber || u.indexNumber || 'N/A'}</td>
                 <td><span class="role-badge role-${u.role}">${u.role}</span>${u.department ? `<span style="font-size:10px;margin-left:5px;padding:2px 6px;border-radius:20px;background:#ecfeff;color:#0891b2;font-weight:600;">${u.department}</span>` : ''}</td>
                 ${mode !== 'corporate' ? `<td style="font-size:11px;white-space:nowrap">
                   ${u.role === 'student' ? `
@@ -4605,17 +4605,32 @@ function onCreateUserRoleChange() {
       <label>Department <span style="font-size:11px;color:var(--text-light)">(this will become a new department)</span></label>
       <input type="text" id="new-user-dept" placeholder="e.g. Computer Science" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">`;
   } else if (role === 'student' || role === 'lecturer') {
-    // Must pick from HOD departments
-    const sel = deptWrap.querySelector('select');
-    if (!sel) {
-      // Re-render as dropdown if it was changed to text input
-      deptWrap.innerHTML = `
-        <label>Department <span style="font-size:11px;color:#dc2626">*must match an existing HOD</span></label>
-        <select id="new-user-dept" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
-          <option value="">— Select Department —</option>
-        </select>
-        <p style="font-size:11px;color:#dc2626;margin-top:4px">⚠️ No departments set up. Create a HOD first.</p>`;
-    }
+    // Must pick from HOD departments - fetch from current user list
+    const hods = Array.from(document.querySelectorAll('#users-table-body tr'))
+      .map(tr => {
+        const cells = tr.querySelectorAll('td');
+        return cells.length > 2 ? { role: cells[1]?.textContent?.trim(), dept: cells[2]?.textContent?.trim() } : null;
+      })
+      .filter(u => u && u.role === 'hod' && u.dept && u.dept !== 'N/A');
+
+    // Also try from window cached user list
+    const cachedDepts = (window._hodDepts || []);
+    const allDepts = [...new Set([...hods.map(h => h.dept), ...cachedDepts])].filter(Boolean).sort();
+
+    const opts = allDepts.length
+      ? allDepts.map(d => `<option value="${d}">${d}</option>`).join('')
+      : '';
+
+    deptWrap.innerHTML = allDepts.length
+      ? `<label>Department <span style="font-size:11px;color:#dc2626">*must match an existing HOD</span></label>
+         <select id="new-user-dept" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
+           <option value="">— Select Department —</option>
+           ${opts}
+         </select>`
+      : `<label>Department</label>
+         <input type="text" id="new-user-dept" placeholder="No HODs set up yet — create a HOD first" disabled
+           style="background:#f3f4f6;cursor:not-allowed;width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
+         <p style="font-size:11px;color:#dc2626;margin-top:4px">⚠️ No departments set up. Select HOD role above to create one first.</p>`;
   } else {
     // Employee / manager — no dept restriction
     deptWrap.innerHTML = `
@@ -4647,6 +4662,7 @@ async function showCreateUserModal() {
       .map(u => u.department)
       .filter((d, i, a) => a.indexOf(d) === i) // unique
       .sort();
+    window._hodDepts = hodDepts; // cache for onCreateUserRoleChange
   } catch(e) { hodDepts = []; }
 
   const defaultRole = isManager ? 'employee' : (isAcademic ? 'student' : 'employee');
@@ -4687,7 +4703,7 @@ async function showCreateUserModal() {
         </div>
         ${!isManager ? `<div class="form-group">
           <label>Role</label>
-          <select id="new-user-role" onchange="toggleUserFields()">${roles}</select>
+          <select id="new-user-role" onchange="toggleUserFields(); onCreateUserRoleChange();">${roles}</select>
         </div>` : `<input type="hidden" id="new-user-role" value="${defaultRole}">`}
         <div class="form-group" id="new-user-email-group" ${defaultRole === 'student' ? 'class="hidden"' : ''}>
           <label>Email</label>
@@ -5289,7 +5305,7 @@ async function viewMeetingDetail(id) {
               <tbody>${m.attendees.map(a => `
                 <tr>
                   <td>${a.user?.name || 'Unknown'}</td>
-                  <td>${a.user?.indexNumber || '—'}</td>
+                  <td>${a.user?.IndexNumber || a.user?.indexNumber || '—'}</td>
                   <td>${a.user?.role || '—'}</td>
                   <td style="font-size:0.85em;">${a.joinedAt ? new Date(a.joinedAt).toLocaleString() : '—'}</td>
                   <td><span class="status-badge" style="${a.status === 'joined' ? 'background:#22c55e;color:#fff;' : a.status === 'late' ? 'background:#f59e0b;color:#fff;' : 'background:#ef4444;color:#fff;'}">${a.status}</span></td>
@@ -6191,7 +6207,7 @@ async function viewQuizResults(quizId) {
                 <tr data-name="${(a.student?.name||'').toLowerCase()}" data-id="${(a.student?.indexNumber||a.student?.email||'').toLowerCase()}">
                   <td style="color:#9ca3af;">${i+1}</td>
                   <td style="font-weight:500;">${a.student?.name || 'Unknown'}</td>
-                  <td style="font-family:monospace;font-size:12px;">${a.student?.indexNumber || a.student?.email || '—'}</td>
+                  <td style="font-family:monospace;font-size:12px;">${a.student?.IndexNumber || a.student?.indexNumber || a.student?.email || '—'}</td>
                   <td><strong>${a.score}/${a.maxScore}</strong></td>
                   <td><span style="font-weight:700;color:${pctColor(a.percentage)};">${a.percentage}%</span></td>
                   <td><span class="status-badge ${a.percentage >= 50 ? 'status-present' : 'status-absent'}">${a.percentage >= 50 ? 'Pass' : 'Fail'}</span></td>
@@ -6760,7 +6776,7 @@ async function viewAdminQuizDetail(quizId) {
               const pct = a.maxScore > 0 ? Math.round((a.score / a.maxScore) * 100) : 0;
               return `<tr>
                 <td>${a.student?.name || 'Unknown'}</td>
-                <td>${a.student?.indexNumber || a.student?.email || 'N/A'}</td>
+                <td>${a.student?.IndexNumber || a.student?.indexNumber || a.student?.email || 'N/A'}</td>
                 <td>${a.score}/${a.maxScore}</td>
                 <td><span style="color:${pct >= 50 ? '#22c55e' : '#ef4444'};font-weight:bold;">${pct}%</span></td>
                 <td>${a.submittedAt ? new Date(a.submittedAt).toLocaleString() : 'N/A'}</td>
@@ -8500,7 +8516,7 @@ async function doSearch() {
 
     var rows = users.map(function(u) {
       var idCol = mode === 'academic'
-        ? '<td>' + (u.indexNumber || u.email || '—') + '</td>'
+        ? '<td>' + (u.IndexNumber || u.indexNumber || u.email || '—') + '</td>'
         : '<td>' + (u.email || '—') + '</td><td>' + (u.employeeId || '—') + '</td>';
       var activeClass = u.isActive ? 'status-active' : 'status-stopped';
       var activeLabel = u.isActive ? 'Active' : 'Inactive';
@@ -8754,7 +8770,7 @@ function _renderAttendeesHTML(el, data, isOffline) {
         <tbody>${records.map(r => `
           <tr>
             <td>${r.student?.name || 'N/A'}</td>
-            <td style="font-family:monospace;font-size:12px">${r.student?.indexNumber || r.student?.email || '—'}</td>
+            <td style="font-family:monospace;font-size:12px">${r.student?.IndexNumber || r.student?.indexNumber || r.student?.email || '—'}</td>
             <td><span style="background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:2px 6px;font-size:11px">${r.method || '—'}</span></td>
             <td style="font-size:12px">${r.checkInTime ? new Date(r.checkInTime).toLocaleTimeString() : '—'}</td>
             <td><span class="status-badge status-${r.status}">${r.status}</span></td>
