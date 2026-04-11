@@ -6,7 +6,8 @@ const { notifyRecipients }  = require('../services/notificationService');
 const isExpired = (ann) => ann.expiresAt && ann.expiresAt < new Date();
 
 function buildListQuery(req) {
-  const { companyId, user } = req;
+  const companyId = req.user.company;
+  const user = req.user;
   const { category, priority, pinned, status, unread, from, to, search } = req.query;
 
   // Base: company-isolated, published, visible to this user
@@ -50,7 +51,7 @@ exports.createAnnouncement = async (req, res) => {
     let recipients;
     try {
       recipients = await resolveRecipients({
-        companyId: req.companyId,
+        companyId: req.user.company,
         mode: req.announcementMode,
         targetType,
         targetRoles,
@@ -78,7 +79,7 @@ exports.createAnnouncement = async (req, res) => {
       title, message, category,
       priority:    priority || 'normal',
       status:      status   || 'published',
-      companyId:   req.companyId,
+      companyId:   req.user.company,
       mode:        req.announcementMode,
       createdBy:   req.user._id,
       creatorRole: req.user.role,
@@ -149,7 +150,7 @@ exports.getDashboard = async (req, res) => {
   try {
     const now = new Date();
     const base = {
-      companyId: req.companyId,
+      companyId: req.user.company,
       mode: req.announcementMode,
       status: 'published',
       publishAt: { $lte: now },
@@ -196,7 +197,7 @@ exports.getOne = async (req, res) => {
   try {
     const ann = await Announcement.findOne({
       _id: req.params.id,
-      companyId: req.companyId,
+      companyId: req.user.company,
       recipients: req.user._id
     }).populate('createdBy', 'name email role');
 
@@ -218,7 +219,7 @@ exports.getOne = async (req, res) => {
 // ─── UPDATE ───────────────────────────────────────────────────────────────────
 exports.updateAnnouncement = async (req, res) => {
   try {
-    const ann = await Announcement.findOne({ _id: req.params.id, companyId: req.companyId });
+    const ann = await Announcement.findOne({ _id: req.params.id, companyId: req.user.company });
     if (!ann) return res.status(404).json({ message: 'Announcement not found' });
 
     const role = req.user.role?.toLowerCase();
@@ -240,7 +241,7 @@ exports.updateAnnouncement = async (req, res) => {
 // ─── DELETE ───────────────────────────────────────────────────────────────────
 exports.deleteAnnouncement = async (req, res) => {
   try {
-    const ann = await Announcement.findOne({ _id: req.params.id, companyId: req.companyId });
+    const ann = await Announcement.findOne({ _id: req.params.id, companyId: req.user.company });
     if (!ann) return res.status(404).json({ message: 'Announcement not found' });
 
     const role = req.user.role?.toLowerCase();
@@ -259,7 +260,7 @@ exports.deleteAnnouncement = async (req, res) => {
 // ─── PIN ─────────────────────────────────────────────────────────────────────
 exports.pinAnnouncement = async (req, res) => {
   try {
-    const ann = await Announcement.findOne({ _id: req.params.id, companyId: req.companyId });
+    const ann = await Announcement.findOne({ _id: req.params.id, companyId: req.user.company });
     if (!ann) return res.status(404).json({ message: 'Announcement not found' });
     if (isExpired(ann)) return res.status(400).json({ message: 'Expired announcements cannot be pinned' });
 
@@ -278,7 +279,7 @@ exports.pinAnnouncement = async (req, res) => {
 exports.unpinAnnouncement = async (req, res) => {
   try {
     const ann = await Announcement.findOneAndUpdate(
-      { _id: req.params.id, companyId: req.companyId },
+      { _id: req.params.id, companyId: req.user.company },
       { isPinned: false, pinnedAt: null, pinnedBy: null },
       { new: true }
     );
@@ -294,7 +295,7 @@ exports.markRead = async (req, res) => {
   try {
     const ann = await Announcement.findOne({
       _id: req.params.id,
-      companyId: req.companyId,
+      companyId: req.user.company,
       recipients: req.user._id
     });
     if (!ann) return res.status(404).json({ message: 'Announcement not found' });
@@ -314,7 +315,7 @@ exports.markRead = async (req, res) => {
 // ─── READ STATS (creator/admin only) ─────────────────────────────────────────
 exports.getReadStats = async (req, res) => {
   try {
-    const ann = await Announcement.findOne({ _id: req.params.id, companyId: req.companyId })
+    const ann = await Announcement.findOne({ _id: req.params.id, companyId: req.user.company })
       .populate('readBy.userId', 'name email role')
       .populate('recipients', 'name email role');
 
@@ -349,7 +350,7 @@ exports.getArchive = async (req, res) => {
     const skip  = (page - 1) * limit;
 
     const q = {
-      companyId: req.companyId,
+      companyId: req.user.company,
       mode: req.announcementMode,
       recipients: req.user._id,
       $or: [
@@ -379,7 +380,7 @@ exports.getUnreadCount = async (req, res) => {
   try {
     const now = new Date();
     const count = await Announcement.countDocuments({
-      companyId: req.companyId,
+      companyId: req.user.company,
       mode: req.announcementMode,
       status: 'published',
       publishAt: { $lte: now },
