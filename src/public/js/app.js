@@ -8304,6 +8304,35 @@ async function markAttendance() {
   }
 }
 
+async function paySubscription() {
+  try {
+    // Determine plan from company mode
+    const mode   = currentUser?.company?.mode || 'academic';
+    const planId = mode === 'corporate' ? 'monthly' : 'semester';
+
+    // Show loading state on button
+    const btn = document.querySelector('[onclick="paySubscription()"]');
+    if (btn) { btn.disabled = true; btn.textContent = 'Initializing…'; }
+
+    const data = await api('/api/payments/paystack/initialize', {
+      method: 'POST',
+      body: JSON.stringify({ plan: planId }),
+    });
+
+    if (data.authorization_url) {
+      // Redirect to Paystack hosted payment page
+      window.location.href = data.authorization_url;
+    } else {
+      toastError('Could not get payment URL. Please try again.');
+      if (btn) { btn.disabled = false; btn.innerHTML = '💳 Pay with Paystack'; }
+    }
+  } catch (e) {
+    toastError(e.message || 'Payment initialization failed. Please try again.');
+    const btn = document.querySelector('[onclick="paySubscription()"]');
+    if (btn) { btn.disabled = false; btn.innerHTML = '💳 Pay with Paystack'; }
+  }
+}
+
 async function renderSubscription() {
   const content = document.getElementById('main-content');
   if (!content) return;
