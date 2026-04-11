@@ -26,7 +26,7 @@ const meetingSchema = new mongoose.Schema({
   allowedDepartments: [{ type: String }],
   allowedCourses:     [{ type: mongoose.Schema.Types.ObjectId, ref: 'Course' }],
   allowedTeams:       [{ type: String }],
-  openToCompany:      { type: Boolean, default: false }, // all company users can join
+  openToCompany:      { type: Boolean, default: false },
 
   // Timing
   scheduledStart: { type: Date, required: true },
@@ -35,6 +35,7 @@ const meetingSchema = new mongoose.Schema({
   actualEnd:      { type: Date, default: null },
 
   // Jitsi room
+  // unique: true on the field already creates the index — no schema.index() needed
   roomName:     { type: String, unique: true, required: true },
   roomPassword: { type: String, default: null },
 
@@ -54,9 +55,9 @@ const meetingSchema = new mongoose.Schema({
 
 }, { timestamps: true });
 
+// Compound indexes only — roomName unique index is already created by the field definition above
 meetingSchema.index({ company: 1, status: 1 });
 meetingSchema.index({ company: 1, creatorId: 1 });
 meetingSchema.index({ company: 1, scheduledStart: -1 });
-meetingSchema.index({ roomName: 1 }, { unique: true });
 
 module.exports = mongoose.model('Meeting', meetingSchema);
