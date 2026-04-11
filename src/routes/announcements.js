@@ -5,8 +5,7 @@ const path    = require('path');
 
 const ctrl = require('../controllers/announcementController');
 
-// Use your existing auth middleware — not the announcement one
-const { authenticate }    = require('../middleware/auth');
+const authenticate         = require('../middleware/auth');
 const { companyIsolation } = require('../middleware/companyIsolation');
 const { canCreate, validateMode, validateTarget } = require('../middleware/announcementMiddleware');
 
@@ -29,19 +28,19 @@ const upload = multer({
 router.use(authenticate, companyIsolation, validateMode);
 
 // ─── ROUTES ──────────────────────────────────────────────────────────────────
-router.get('/unread/count',       ctrl.getUnreadCount);
-router.get('/archive',            ctrl.getArchive);
-router.get('/dashboard',          ctrl.getDashboard);
-router.get('/',                   ctrl.getAnnouncements);
+router.get('/unread/count', ctrl.getUnreadCount);
+router.get('/archive',      ctrl.getArchive);
+router.get('/dashboard',    ctrl.getDashboard);
+router.get('/',             ctrl.getAnnouncements);
 
 router.post('/create', canCreate, validateTarget, upload.single('attachment'), ctrl.createAnnouncement);
 
-router.get('/:id',                ctrl.getOne);
-router.put('/:id',   canCreate,   ctrl.updateAnnouncement);
-router.delete('/:id', canCreate,  ctrl.deleteAnnouncement);
+router.get('/:id',             ctrl.getOne);
+router.put('/:id',  canCreate, ctrl.updateAnnouncement);
+router.delete('/:id', canCreate, ctrl.deleteAnnouncement);
 router.patch('/:id/pin',   canCreate, ctrl.pinAnnouncement);
 router.patch('/:id/unpin', canCreate, ctrl.unpinAnnouncement);
-router.patch('/:id/read',         ctrl.markRead);
+router.patch('/:id/read',  ctrl.markRead);
 router.get('/:id/read-stats', canCreate, ctrl.getReadStats);
 
 module.exports = router;
