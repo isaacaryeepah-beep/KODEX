@@ -14429,3 +14429,309 @@ window._appLoaded = true;
 // Execute any pending calls from before app.js loaded
 if (window._pendingMode)   { selectMode(window._pendingMode);     window._pendingMode = null; }
 if (window._pendingPortal) { selectPortal(window._pendingPortal); window._pendingPortal = null; }
+
+/**
+ * KODEX Jitsi Meeting Frontend Integration
+ * Add this script to your app.js or include as a separate file.
+ * Requires: Jitsi IFrame API loaded from https://meet.jit.si/external_api.js
+ */
+
+// ─── LOAD JITSI SCRIPT ────────────────────────────────────────────────────────
+function loadJitsiScript(cb) {
+  if (window.JitsiMeetExternalAPI) return cb();
+  const s = document.createElement('script');
+  s.src = 'https://meet.jit.si/external_api.js';
+  s.onload = cb;
+  document.head.appendChild(s);
+}
+
+// ─── RENDER MEETINGS PAGE ─────────────────────────────────────────────────────
+async function renderMeetings() {
+  const content = document.getElementById('main-content');
+  if (!content) return;
+
+  const role       = currentUser?.role?.toLowerCase();
+  const isCreator  = ['lecturer', 'manager', 'admin'].includes(role);
+
+  content.innerHTML = `
+    <div style="padding:20px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+        <h2 style="margin:0">📹 Meetings</h2>
+        ${isCreator ? `<button class="btn btn-primary" onclick="showCreateMeetingModal()">+ Create Meeting</button>` : ''}
+      </div>
+
+      <div style="display:flex;gap:10px;margin-bottom:16px">
+        <button class="btn btn-sm ${meetingTab==='upcoming'?'btn-primary':'btn-secondary'}" onclick="loadMeetingTab('upcoming')">Upcoming</button>
+        <button class="btn btn-sm ${meetingTab==='live'?'btn-primary':'btn-secondary'}" onclick="loadMeetingTab('live')">🔴 Live</button>
+        ${isCreator ? `<button class="btn btn-sm" onclick="loadMeetingTab('my')">My Meetings</button>` : ''}
+        <button class="btn btn-sm" onclick="loadMeetingTab('all')">All</button>
+      </div>
+
+      <div id="meetings-list"><div class="loading">Loading meetings…</div></div>
+    </div>
+  `;
+
+  loadMeetingTab('upcoming');
+}
+
+let meetingTab = 'upcoming';
+
+async function loadMeetingTab(tab) {
+  meetingTab = tab;
+  const list = document.getElementById('meetings-list');
+  if (!list) return;
+  list.innerHTML = '<div class="loading">Loading…</div>';
+
+  try {
+    let url = '/api/meetings';
+    if (tab === 'upcoming')  url = '/api/meetings/upcoming';
+    else if (tab === 'live') url = '/api/meetings/live';
+    else if (tab === 'my')   url = '/api/meetings/my-meetings';
+
+    const data = await api(url);
+    const meetings = data.data || [];
+
+    if (!meetings.length) {
+      list.innerHTML = '<div class="empty-state"><p>No meetings found.</p></div>';
+      return;
+    }
+
+    const role      = currentUser?.role?.toLowerCase();
+    const isCreator = ['lecturer', 'manager', 'admin'].includes(role);
+
+    list.innerHTML = meetings.map(m => {
+      const isOwner   = m.creatorId?._id === currentUser?._id || m.creatorId === currentUser?._id;
+      const statusColor = m.status === 'live' ? '#16a34a' : m.status === 'scheduled' ? '#2563eb' : '#6b7280';
+
+      return `
+        <div class="card" style="margin-bottom:12px;padding:16px">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start">
+            <div>
+              <div style="font-weight:700;font-size:16px">${m.title}</div>
+              <div style="font-size:12px;color:#6b7280;margin-top:4px">
+                ${new Date(m.scheduledStart).toLocaleString()} — ${new Date(m.scheduledEnd).toLocaleTimeString()}
+              </div>
+              ${m.description ? `<div style="font-size:13px;margin-top:6px;color:#374151">${m.description}</div>` : ''}
+            </div>
+            <span style="background:${statusColor}20;color:${statusColor};padding:4px 10px;border-radius:20px;font-size:12px;font-weight:600;white-space:nowrap">
+              ${m.status?.toUpperCase()}
+            </span>
+          </div>
+
+          <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
+            ${(m.status === 'live' || m.status === 'scheduled') ? `
+              <button class="btn btn-primary btn-sm" onclick="joinMeetingRoom('${m._id}')">
+                ${m.status === 'live' ? '🔴 Join Now' : '📅 Join'}
+              </button>` : ''}
+            ${isOwner && m.status === 'scheduled' ? `
+              <button class="btn btn-success btn-sm" onclick="startMeeting('${m._id}')">▶ Start</button>` : ''}
+            ${isOwner && m.status === 'live' ? `
+              <button class="btn btn-danger btn-sm" onclick="endMeeting('${m._id}')">⏹ End</button>` : ''}
+            ${isOwner ? `
+              <button class="btn btn-secondary btn-sm" onclick="viewAttendanceReport('${m._id}')">📊 Attendance</button>` : ''}
+          </div>
+        </div>
+      `;
+    }).join('');
+  } catch (e) {
+    list.innerHTML = `<div class="card"><p style="color:red">${e.message}</p></div>`;
+  }
+}
+
+// ─── CREATE MEETING MODAL ─────────────────────────────────────────────────────
+function showCreateMeetingModal() {
+  const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().slice(0, 16);
+  const twoHours = new Date(Date.now() + 26 * 60 * 60 * 1000).toISOString().slice(0, 16);
+
+  showModal('Create Meeting', `
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <div>
+        <label style="font-size:13px;font-weight:600">Title *</label>
+        <input id="mt-title" class="form-input" placeholder="e.g. Week 5 Lecture" style="width:100%;margin-top:4px">
+      </div>
+      <div>
+        <label style="font-size:13px;font-weight:600">Description</label>
+        <textarea id="mt-desc" class="form-input" rows="2" placeholder="Optional description" style="width:100%;margin-top:4px"></textarea>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div>
+          <label style="font-size:13px;font-weight:600">Start *</label>
+          <input id="mt-start" type="datetime-local" class="form-input" value="${tomorrow}" style="width:100%;margin-top:4px">
+        </div>
+        <div>
+          <label style="font-size:13px;font-weight:600">End *</label>
+          <input id="mt-end" type="datetime-local" class="form-input" value="${twoHours}" style="width:100%;margin-top:4px">
+        </div>
+      </div>
+      <div>
+        <label style="font-size:13px;font-weight:600">Visibility</label>
+        <select id="mt-visibility" class="form-input" style="width:100%;margin-top:4px">
+          <option value="open">Open to all in institution</option>
+          <option value="restricted">Restricted (specific users)</option>
+        </select>
+      </div>
+      <div style="display:flex;gap:16px;flex-wrap:wrap">
+        <label style="font-size:13px"><input type="checkbox" id="mt-lobby"> Enable Lobby</label>
+        <label style="font-size:13px"><input type="checkbox" id="mt-password"> Password Protected</label>
+        <label style="font-size:13px"><input type="checkbox" id="mt-mute" checked> Mute on Join</label>
+      </div>
+      <button class="btn btn-primary" onclick="submitCreateMeeting()" style="width:100%;margin-top:4px">Create Meeting</button>
+    </div>
+  `);
+}
+
+async function submitCreateMeeting() {
+  const title    = document.getElementById('mt-title')?.value?.trim();
+  const desc     = document.getElementById('mt-desc')?.value?.trim();
+  const start    = document.getElementById('mt-start')?.value;
+  const end      = document.getElementById('mt-end')?.value;
+  const open     = document.getElementById('mt-visibility')?.value === 'open';
+  const lobby    = document.getElementById('mt-lobby')?.checked;
+  const password = document.getElementById('mt-password')?.checked;
+  const mute     = document.getElementById('mt-mute')?.checked;
+
+  if (!title || !start || !end) return toastError('Title, start, and end time are required.');
+  if (new Date(end) <= new Date(start)) return toastError('End time must be after start time.');
+
+  try {
+    await api('/api/meetings/create', {
+      method: 'POST',
+      body: JSON.stringify({
+        title, description: desc,
+        scheduledStart: new Date(start).toISOString(),
+        scheduledEnd:   new Date(end).toISOString(),
+        openToCompany:  open,
+        settings: { enableLobby: lobby, enablePassword: password, muteOnJoin: mute }
+      })
+    });
+    closeModal();
+    toastSuccess('Meeting created!');
+    loadMeetingTab('my');
+  } catch (e) {
+    toastError(e.message);
+  }
+}
+
+// ─── START MEETING ────────────────────────────────────────────────────────────
+async function startMeeting(meetingId) {
+  try {
+    await api(`/api/meetings/${meetingId}/start`, { method: 'POST' });
+    toastSuccess('Meeting started!');
+    loadMeetingTab(meetingTab);
+  } catch (e) {
+    toastError(e.message);
+  }
+}
+
+// ─── END MEETING ──────────────────────────────────────────────────────────────
+async function endMeeting(meetingId) {
+  if (!confirm('End this meeting? All attendance will be finalized.')) return;
+  try {
+    await api(`/api/meetings/${meetingId}/end`, { method: 'POST' });
+    toastSuccess('Meeting ended');
+    loadMeetingTab(meetingTab);
+    // Close Jitsi if open
+    if (window._jitsiApi) { window._jitsiApi.dispose(); window._jitsiApi = null; }
+  } catch (e) {
+    toastError(e.message);
+  }
+}
+
+// ─── JOIN MEETING ROOM (Jitsi Embed) ─────────────────────────────────────────
+async function joinMeetingRoom(meetingId) {
+  try {
+    const data = await api(`/api/meetings/${meetingId}/join`);
+    const { jitsiConfig, meeting } = data.data;
+
+    // Log join attendance
+    await api(`/api/meetings/${meetingId}/attendance/join`, { method: 'POST' }).catch(() => {});
+
+    // Show Jitsi embed in modal
+    showModal(meeting.title, `<div id="jitsi-container" style="width:100%;height:500px;border-radius:8px;overflow:hidden"></div>`, true);
+
+    loadJitsiScript(() => {
+      if (window._jitsiApi) window._jitsiApi.dispose();
+
+      window._jitsiApi = new JitsiMeetExternalAPI(jitsiConfig.domain, {
+        roomName:    jitsiConfig.roomName,
+        parentNode:  document.getElementById('jitsi-container'),
+        userInfo:    { displayName: jitsiConfig.displayName, email: jitsiConfig.email },
+        configOverwrite:          jitsiConfig.configOverwrite,
+        interfaceConfigOverwrite: jitsiConfig.interfaceConfigOverwrite,
+      });
+
+      // Set password if enabled
+      if (jitsiConfig.password) {
+        window._jitsiApi.addEventListener('videoConferenceJoined', () => {
+          window._jitsiApi.executeCommand('password', jitsiConfig.password);
+        });
+      }
+
+      // Log leave on exit
+      window._jitsiApi.addEventListener('videoConferenceLeft', async () => {
+        await api(`/api/meetings/${meetingId}/attendance/leave`, { method: 'POST' }).catch(() => {});
+      });
+
+      window._jitsiApi.addEventListener('readyToClose', async () => {
+        await api(`/api/meetings/${meetingId}/attendance/leave`, { method: 'POST' }).catch(() => {});
+        if (window._jitsiApi) { window._jitsiApi.dispose(); window._jitsiApi = null; }
+        closeModal();
+      });
+    });
+  } catch (e) {
+    toastError(e.message);
+  }
+}
+
+// ─── VIEW ATTENDANCE REPORT ───────────────────────────────────────────────────
+async function viewAttendanceReport(meetingId) {
+  try {
+    const data    = await api(`/api/meetings/${meetingId}/attendance/report`);
+    const report  = data.data;
+    const meeting = report.meeting;
+
+    const rows = report.participants.map((p, i) => `
+      <tr style="background:${i%2===0?'#f9fafb':'#fff'}">
+        <td>${p.name || '—'}</td>
+        <td>${p.role}</td>
+        <td>${p.joinedAt ? new Date(p.joinedAt).toLocaleTimeString() : '—'}</td>
+        <td>${p.leftAt  ? new Date(p.leftAt).toLocaleTimeString()  : '—'}</td>
+        <td>${p.totalMinutes || 0} min</td>
+        <td style="color:${p.attendanceStatus==='present'?'green':p.attendanceStatus==='partial'?'orange':'red'};font-weight:600">
+          ${p.attendanceStatus?.toUpperCase()}
+        </td>
+      </tr>
+    `).join('');
+
+    showModal(`📊 ${meeting.title} — Attendance`, `
+      <div style="margin-bottom:12px;font-size:13px;color:#6b7280">
+        ${new Date(meeting.scheduledStart).toLocaleString()} &nbsp;|&nbsp; Status: ${meeting.status?.toUpperCase()}
+      </div>
+      <div style="display:flex;gap:10px;margin-bottom:16px">
+        <span style="background:#dcfce7;color:#16a34a;padding:4px 10px;border-radius:20px;font-size:13px;font-weight:600">Present: ${report.summary.present}</span>
+        <span style="background:#fef9c3;color:#b45309;padding:4px 10px;border-radius:20px;font-size:13px;font-weight:600">Partial: ${report.summary.partial}</span>
+        <span style="background:#fee2e2;color:#dc2626;padding:4px 10px;border-radius:20px;font-size:13px;font-weight:600">Absent: ${report.summary.absent}</span>
+        <button class="btn btn-secondary btn-sm" onclick="downloadMeetingPDF('${meetingId}')" style="margin-left:auto">⬇ PDF</button>
+      </div>
+      <div style="overflow-x:auto">
+        <table style="width:100%;border-collapse:collapse;font-size:13px">
+          <thead><tr style="background:#1a56db;color:#fff">
+            <th style="padding:8px;text-align:left">Name</th>
+            <th style="padding:8px;text-align:left">Role</th>
+            <th style="padding:8px;text-align:left">Joined</th>
+            <th style="padding:8px;text-align:left">Left</th>
+            <th style="padding:8px;text-align:left">Duration</th>
+            <th style="padding:8px;text-align:left">Status</th>
+          </tr></thead>
+          <tbody>${rows || '<tr><td colspan="6" style="padding:12px;text-align:center;color:#9ca3af">No participants recorded</td></tr>'}</tbody>
+        </table>
+      </div>
+    `);
+  } catch (e) {
+    toastError(e.message);
+  }
+}
+
+async function downloadMeetingPDF(meetingId) {
+  window.open(`/api/meetings/${meetingId}/attendance/pdf?token=${localStorage.getItem('token')}`, '_blank');
+}
