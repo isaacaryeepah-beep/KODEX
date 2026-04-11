@@ -2016,9 +2016,18 @@ function showDashboard(data) {
         banner.style.display = 'block';
         document.getElementById('trial-expired-banner').style.display = 'none';
       } else {
-        // Trial or subscription expired — show subscribe banner
-        document.getElementById('trial-expired-banner').textContent = 'Your free trial has ended. Please subscribe to continue using KODEX.';
-        document.getElementById('trial-expired-banner').style.display = 'block';
+        // Trial or subscription expired — show subscribe banner with Paystack CTA
+        const expiredBanner = document.getElementById('trial-expired-banner');
+        const _mode  = currentUser?.company?.mode || 'academic';
+        const _label = _mode === 'corporate' ? 'GHS 150 / Month' : 'GHS 300 / Semester';
+        expiredBanner.innerHTML = `
+          ⚠️ Your free trial has ended.
+          <button onclick="paySubscription()" style="margin-left:12px;background:#1a56db;color:#fff;border:none;border-radius:6px;padding:6px 14px;font-size:12px;font-weight:600;cursor:pointer">
+            Pay ${_label} via Paystack
+          </button>`;
+        expiredBanner.style.display = 'block';
+        expiredBanner.style.background = '#fef2f2';
+        expiredBanner.style.color = '#dc2626';
         document.getElementById('trial-banner').style.display = 'none';
       }
     } else if (trial && trial.active) {
@@ -8299,131 +8308,122 @@ async function renderSubscription() {
   const content = document.getElementById('main-content');
   if (!content) return;
   try {
-    const [statusData, plansData] = await Promise.all([
-      api('/api/payments/status'),
-      api('/api/payments/plans'),
-    ]);
+    // Per-user subscription data
+    const meData = await api('/api/auth/me');
+    const ut = meData.userTrial || {};
+    const status   = ut.status   || 'expired';   // 'active' | 'trial' | 'expired'
+    const daysLeft = ut.daysLeft  || 0;
+    const expiry   = ut.expiry    ? new Date(ut.expiry).toLocaleDateString('en-GB', { day:'numeric', month:'long', year:'numeric' }) : '—';
 
-    const sub = statusData.subscription || {};
-    const trial = statusData.trial || {};
-    const trialTimeRemaining = trial.timeRemaining || { days: 0, hours: 0, minutes: 0 };
+    const statusColor = status === 'active' ? 'var(--success)' : status === 'trial' ? '#f59e0b' : 'var(--danger)';
+    const statusLabel = status === 'active' ? '✅ Active' : status === 'trial' ? '⏳ Free Trial' : '❌ Expired';
+    const planLabel   = status === 'active' ? 'Semester Plan' : status === 'trial' ? 'Free Trial' : 'None';
 
     content.innerHTML = `
-      <div class="page-header"><h2>Subscription</h2><p>Manage your subscription plan</p></div>
-      <div class="stats-grid">
+      <div class="page-header">
+        <h2>My Subscription</h2>
+        <p>Your personal KODEX access — GHS 300 per semester</p>
+      </div>
+
+      <!-- Status cards -->
+      <div class="stats-grid" style="margin-bottom:24px">
         <div class="stat-card">
-          <div class="stat-value" style="color:${statusData.hasAccess ? 'var(--success)' : 'var(--danger)'}">${statusData.hasAccess ? 'Active' : 'Inactive'}</div>
-          <div class="stat-label">Access Status</div>
+          <div class="stat-value" style="color:${statusColor}">${statusLabel}</div>
+          <div class="stat-label">Subscription Status</div>
         </div>
         <div class="stat-card">
-          <div class="stat-value">${sub.active ? sub.plan : trial.active ? 'Trial' : 'None'}</div>
+          <div class="stat-value">${planLabel}</div>
           <div class="stat-label">Current Plan</div>
         </div>
-        ${trial.active ? `
-          <div class="stat-card">
-            <div class="stat-value">${trial.daysRemaining || 0}</div>
-            <div class="stat-label">Trial Days Left</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-value">${trialTimeRemaining.days}d ${trialTimeRemaining.hours}h ${trialTimeRemaining.minutes}m</div>
-            <div class="stat-label">Time Remaining</div>
-          </div>
-        ` : ''}
-      </div>
-
-      <div class="card">
-        <div class="card-title">Available Plans</div>
-        <div class="stats-grid">
-          ${(plansData.plans || []).map(p => `
-            <div class="stat-card">
-              <div class="stat-value" style="font-size:18px">${p.name}</div>
-              <div style="margin-top:12px">
-                <p style="font-size:13px;color:var(--text-light)">Stripe: ${p.stripe ? p.stripe.label : 'N/A'}</p>
-                <p style="font-size:13px;color:var(--text-light)">Paystack: ${p.paystack ? p.paystack.label : 'N/A'}</p>
-              </div>
-              <div style="margin-top:12px">
-                <button class="btn btn-primary btn-sm" onclick="subscribePlan('${p.id}', 'stripe')">Pay with Stripe ($)</button>
-                <button class="btn btn-success btn-sm" style="margin-top:4px" onclick="subscribePlan('${p.id}', 'paystack')">Pay with Paystack (GHS)</button>
-              </div>
-            </div>
-          `).join('')}
+        <div class="stat-card">
+          <div class="stat-value">${daysLeft}</div>
+          <div class="stat-label">Days Remaining</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" style="font-size:15px">${expiry}</div>
+          <div class="stat-label">${status === 'active' ? 'Expires On' : status === 'trial' ? 'Trial Ends' : 'Last Expiry'}</div>
         </div>
       </div>
 
-      ${!trial.active && !sub.active ? `
-        <div class="card" style="background:#fef2f2;border-color:#fecaca">
-          <p style="color:var(--danger);font-weight:600">Your free trial has ended. Please subscribe via Paystack or Stripe to continue using premium features.</p>
-        </div>
-      ` : ''}
-
-      ${sub.active ? `
-        <div class="card" style="margin-top:16px">
-          <div class="card-title" style="margin-bottom:10px">Subscription Details</div>
-          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;">
-            <div style="padding:10px 14px;background:var(--bg);border-radius:8px;border:1px solid var(--border);">
-              <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;margin-bottom:4px;">Plan</div>
-              <div style="font-weight:700;">${sub.plan || '—'}</div>
-            </div>
-            <div style="padding:10px 14px;background:var(--bg);border-radius:8px;border:1px solid var(--border);">
-              <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;margin-bottom:4px;">Status</div>
-              <div style="font-weight:700;color:${sub.status==='active'?'#22c55e':sub.status==='past_due'?'#f59e0b':'#ef4444'}">${sub.status}</div>
-            </div>
-            ${sub.endDate ? `<div style="padding:10px 14px;background:var(--bg);border-radius:8px;border:1px solid var(--border);"><div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;margin-bottom:4px;">Expires</div><div style="font-weight:700;">${new Date(sub.endDate).toLocaleDateString()}</div></div>` : ''}
+      <!-- Payment card -->
+      <div class="card" style="max-width:480px">
+        <div class="card-title">Subscribe for a Semester</div>
+        <div style="margin:16px 0;padding:16px;background:var(--bg);border-radius:10px;border:1.5px solid var(--border)">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+            <span style="font-size:15px;font-weight:600;color:var(--text)">Semester Plan</span>
+            <span style="font-size:20px;font-weight:700;color:var(--primary)">GHS 300</span>
           </div>
+          <ul style="font-size:13px;color:var(--text-light);margin:0;padding-left:18px;line-height:1.8">
+            <li>Full access for one semester (112 days)</li>
+            <li>Attendance marking &amp; session management</li>
+            <li>Assessment creation &amp; grading</li>
+            <li>Reports &amp; analytics</li>
+            <li>Renew anytime before expiry</li>
+          </ul>
         </div>
-      ` : ''}
 
-      ${currentUser.role === 'superadmin' ? `
-        <div class="card" style="margin-top:16px;border:1px solid #e0e7ff;background:#f5f3ff;">
-          <div style="font-size:13px;font-weight:700;color:#4f46e5;margin-bottom:8px;">⚙️ Paystack Webhook Setup</div>
-          <p style="font-size:12px;color:#6b7280;margin-bottom:8px;">Add this URL in your Paystack Dashboard under <strong>Settings → API Keys & Webhooks</strong> to enable automatic renewals:</p>
-          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-            <code style="flex:1;padding:8px 12px;background:#fff;border:1px solid #c7d2fe;border-radius:7px;font-size:12px;color:#3730a3;word-break:break-all;">${window.location.origin}/api/webhooks/paystack</code>
-            <button class="btn btn-sm" style="background:#4f46e5;color:#fff;" onclick="navigator.clipboard.writeText(window.location.origin+'/api/webhooks/paystack').then(()=>toastSuccess('Copied!'))">Copy</button>
-          </div>
-          <p style="font-size:11px;color:#9ca3af;margin-top:8px;">Events to enable: <strong>charge.success, subscription.create, subscription.disable, invoice.payment_failed</strong></p>
-        </div>
-      ` : ''}
+        ${status === 'active' && daysLeft > 14 ? `
+          <div style="background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:12px 14px;margin-bottom:16px;font-size:13px;color:#15803d">
+            ✅ Your subscription is active with <strong>${daysLeft} days</strong> remaining.<br>
+            You can renew early — the new semester will be added on top.
+          </div>` : ''}
+
+        ${status === 'expired' ? `
+          <div style="background:#fef2f2;border:1px solid #fca5a5;border-radius:8px;padding:12px 14px;margin-bottom:16px;font-size:13px;color:#dc2626">
+            ⚠️ Your subscription has expired. Please renew to continue using KODEX.
+          </div>` : ''}
+
+        <button class="btn btn-primary" style="width:100%;padding:14px;font-size:15px;font-weight:600;letter-spacing:0.3px"
+          onclick="paySemester()">
+          💳 Pay GHS 300 with Paystack
+        </button>
+        <p style="font-size:11px;color:var(--text-light);text-align:center;margin-top:10px">
+          Secured by Paystack · Payment processed in GHS · Mobile Money &amp; Card accepted
+        </p>
+      </div>
     `;
   } catch (e) {
-    content.innerHTML = `<div class="card"><p>Error: ${e.message}</p></div>`;
+    content.innerHTML = `<div class="card"><p>Error loading subscription: ${e.message}</p></div>`;
   }
 }
 
-async function subscribePlan(plan, provider) {
-  if (provider === 'paystack') {
-    try {
-      const data = await api('/api/payments/paystack/initialize', {
-        method: 'POST',
-        body: JSON.stringify({ plan }),
-      });
-      if (data.authorization_url) {
-        window.location.href = data.authorization_url;
-      } else {
-        toastError('Could not get payment URL. Please try again.');
-      }
-    } catch (e) {
-      toastError(e.message);
-    }
-  } else {
-    toastWarning('Please use Paystack (GHS) to subscribe.');
-  }
+
+async function subscribePlan() {
+  return paySemester();
 }
+
 async function paySemester() {
+  // Alias — calls the smart paySubscription
+  return paySubscription();
+}
+
+async function paySubscription() {
   try {
+    // Determine plan from company mode
+    const mode = currentUser?.company?.mode || 'academic';
+    const plan = mode === 'corporate' ? 'monthly' : 'semester';
+    const label = mode === 'corporate' ? 'GHS 150 / month' : 'GHS 300 / semester';
+
+    const confirmed = confirm(`Subscribe via Paystack?\n\nPlan: ${label}\n\nYou will be redirected to Paystack to complete payment securely.`);
+    if (!confirmed) return;
+
     const data = await api('/api/payments/paystack/initialize', {
       method: 'POST',
-      body: JSON.stringify({ plan: 'semester' }),
+      body: JSON.stringify({ plan }),
     });
-    if (data.authorization_url) {
-      window.location.href = data.authorization_url;
-    } else {
-      toastError('Could not get payment URL. Please try again.');
+
+    if (!data.authorization_url) {
+      toastError('Could not initialize payment. Please try again.');
+      return;
     }
-  } catch (e) {
+
+    // Redirect to Paystack checkout
+    window.location.href = data.authorization_url;
+  } catch(e) {
     toastError(e.message || 'Payment initialization failed');
   }
 }
+
 
 
 
