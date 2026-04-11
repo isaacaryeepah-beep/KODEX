@@ -29,6 +29,7 @@ const searchRoutes = require("./routes/Search");
 const proctoredQuizRoutes = require("./routes/proctoredQuizzes");
 const assignmentRoutes  = require("./routes/assignments");
 const aiProxyRoutes     = require("./routes/aiProxy");
+const meetingRoutes     = require("./routes/meetingRoutes");   // ← NEW
 let superadminRoutes = null;
 try { superadminRoutes = require("./routes/superadmin"); } catch(_) { console.warn('superadmin routes not found — skipping'); }
 
@@ -81,8 +82,8 @@ app.use(cors({
   allowedHeaders: [
     "Content-Type",
     "Authorization",
-    "x-esp32-secret",   // ✅ FIX ADDED
-    "x-esp32-token",    // ✅ FIX ADDED
+    "x-esp32-secret",
+    "x-esp32-token",
   ],
   credentials: true,
 }));
@@ -150,6 +151,7 @@ app.get("/api", (req, res) => {
       quizzes: "/api/quizzes",
       zoom: "/api/zoom",
       jitsi: "/api/jitsi",
+      meetings: "/api/meetings",
       search: "/api/search",
       proctor: "/api/proctor",
       assignments: "/api/assignments",
@@ -188,6 +190,7 @@ app.use("/api/search", searchRoutes);
 app.use("/api/proctor", proctoredQuizRoutes);
 app.use("/api/assignments", assignmentRoutes);
 app.use("/api/ai", aiProxyRoutes);
+app.use("/api/meetings", meetingRoutes);              // ← NEW
 
 const esp32Routes = require("./routes/esp32");
 app.use("/api/esp32", esp32Routes);
@@ -259,8 +262,8 @@ const start = async () => {
 
     try {
       const { startScheduler } = require("./services/emailScheduler");
-          const { runWatchdog } = require("./controllers/sessionController");
-          setInterval(runWatchdog, 5000);
+      const { runWatchdog } = require("./controllers/sessionController");
+      setInterval(runWatchdog, 5000);
       startScheduler();
     } catch (e) {
       console.error("Scheduler failed to start:", e.message);
