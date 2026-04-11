@@ -1,78 +1,120 @@
-const mongoose = require("mongoose");
+const mongoose = require('mongoose');
 
-const announcementSchema = new mongoose.Schema(
-  {
-    company: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Company",
-      required: true,
-      index: true,
-    },
-    author: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
-      required: true,
-    },
-    title: {
-      type: String,
-      required: [true, "Title is required"],
-      trim: true,
-      maxlength: 200,
-    },
-    body: {
-      type: String,
-      required: [true, "Body is required"],
-      trim: true,
-      maxlength: 5000,
-    },
-    type: {
-      type: String,
-      enum: ["info", "warning", "success", "urgent"],
-      default: "info",
-    },
-    // Who can see this: "all" (everyone), "students", "lecturers", "employees"
-    audience: {
-      type: String,
-      enum: ["all", "students", "lecturers", "employees"],
-      default: "all",
-    },
-    // Optional: target a specific course (lecturer use)
-    course: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'Course',
-      default: null,
-    },
-    // Optional: pin to top
-    pinned: {
-      type: Boolean,
-      default: false,
-    },
-    // Optional expiry — auto-hide after this date
-    expiresAt: {
-      type: Date,
-      default: null,
-    },
-    // Optional PDF attachment
-    pdfData: {
-      type: String,   // base64-encoded PDF
-      default: null,
-    },
-    pdfName: {
-      type: String,
-      default: null,
-    },
-    // Track who has read this (for unread badges)
-    readBy: [
-      {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "User",
-      },
-    ],
+const readEntrySchema = new mongoose.Schema({
+  userId:   { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  readAt:   { type: Date, default: Date.now }
+}, { _id: false });
+
+const attachmentSchema = new mongoose.Schema({
+  originalName: String,
+  fileName:     String,
+  mimeType:     String,
+  size:         Number,
+  url:          String
+}, { _id: false });
+
+const announcementSchema = new mongoose.Schema({
+  // Core
+  title:       { type: String, required: true, trim: true, maxlength: 200 },
+  message:     { type: String, required: true, trim: true },
+  category: {
+    type: String,
+    required: true,
+    enum: [
+      'General Notice',
+      'Attendance Alert',
+      'Meeting Announcement',
+      'Emergency Alert',
+      'Subscription Alert',
+      'Academic Update',
+      'Corporate Update'
+    ]
   },
-  { timestamps: true }
-);
+  priority: {
+    type: String,
+    enum: ['normal', 'important', 'urgent'],
+    default: 'normal'
+  },
+  status: {
+    type: String,
+    enum: ['draft', 'published', 'archived'],
+    default: 'published'
+  },
 
-announcementSchema.index({ company: 1, createdAt: -1 });
-announcementSchema.index({ company: 1, pinned: -1, createdAt: -1 });
+  // Tenant & mode isolation
+  companyId: { type: mongoose.Schema.Types.ObjectId, ref: 'Company', required: true },
+  mode:      { type: String, enum: ['academic', 'corporate'], required: true },
 
-module.exports = mongoose.model("Announcement", announcementSchema);
+  // Creator
+  createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  creatorRole: { type: String, required: true },
+
+  // Targeting
+  targetType: {
+    type: String,
+    enum: ['all', 'role', 'department', 'course', 'individual'],
+    required: true
+  },
+  targetRoles:       [{ type: String }],
+  targetDepartments: [{ type: String }],
+  targetCourses:     [{ type: mongoose.Schema.Types.ObjectId, ref: 'Course' }],
+  targetUserIds:     [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+
+  // Resolved recipients (populated on create)
+  recipients: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+
+  // Read tracking
+  readBy: [readEntrySchema],
+
+  // Pinning
+  isPinned:  { type: Boolean, default: false },
+  pinnedAt:  { type: Date },
+  pinnedBy:  { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+
+  // Scheduling & expiry
+  publishAt: { type: Date, default: Date.now },
+  expiresAt: { type: Date },
+
+  // Attachment
+  attachment: attachmentSchema
+
+}, { timestamps: true });
+
+// Auto-unpin expired announcements on read
+announcementSchema.pre('save', function (next) {
+  if (this.isPinned && this.expiresAt && this.expiresAt < new Date()) {
+    this.isPinned = false;
+  }
+  next();
+});
+
+// Virtual: total recipients count
+announcementSchema.virtual('totalRecipients').get(function () {
+  return this.recipients.length;
+});
+
+// Virtual: read count
+announcementSchema.virtual('readCount').get(function () {
+  return this.readBy.length;
+});
+
+// Virtual: unread count
+announcementSchema.virtual('unreadCount').get(function () {
+  return this.recipients.length - this.readBy.length;
+});
+
+// Virtual: is expired
+announcementSchema.virtual('isExpired').get(function () {
+  return this.expiresAt ? this.expiresAt < new Date() : false;
+});
+
+announcementSchema.set('toJSON', { virtuals: true });
+announcementSchema.set('toObject', { virtuals: true });
+
+// Indexes
+announcementSchema.index({ companyId: 1, status: 1, publishAt: -1 });
+announcementSchema.index({ companyId: 1, isPinned: 1 });
+announcementSchema.index({ recipients: 1 });
+announcementSchema.index({ expiresAt: 1 });
+
+module.exports = mongoose.model('Announcement', announcementSchema);
