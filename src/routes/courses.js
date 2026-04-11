@@ -1,55 +1,60 @@
-const express = require("express");
-const authenticate = require("../middleware/auth");
-const { requireRole, requireMode } = require("../middleware/role");
-const { companyIsolation } = require("../middleware/companyIsolation");
-const { requireActiveSubscription } = require("../middleware/subscription");
-const courseController = require("../controllers/courseController");
+const express = require('express');
+const router  = express.Router();
 
-const router = express.Router();
+const authenticate      = require('../middleware/auth');
+const { companyIsolation } = require('../middleware/companyIsolation');
+const { validateCourse, validateEnroll } = require('../middleware/courseValidation');
+const courseCtrl        = require('../controllers/courseController');
 
+// All routes require authentication + company isolation
 router.use(authenticate);
-router.use(requireMode("academic"));
-router.use(requireActiveSubscription);
+router.use(companyIsolation);
 
-router.post("/", requireRole("lecturer", "superadmin"), companyIsolation, courseController.createCourse);
-router.get("/", companyIsolation, courseController.listCourses);
-router.get("/:id", companyIsolation, courseController.getCourse);
-router.patch("/:id", requireRole("lecturer", "admin", "superadmin"), companyIsolation, courseController.updateCourse);
-router.post("/:id/enroll", requireRole("lecturer", "admin", "superadmin"), companyIsolation, courseController.enrollStudents);
-router.delete("/:id/students/:studentId", requireRole("lecturer", "admin", "superadmin"), companyIsolation, courseController.removeStudent);
-
-// POST /:id/email-students — bulk email to enrolled students
-router.post("/:id/email-students", requireRole("lecturer", "admin", "superadmin"), companyIsolation, async (req, res) => {
-  try {
-    const { subject, message } = req.body;
-    if (!subject || !message) return res.status(400).json({ error: "Subject and message are required" });
-
-    const Course = require("../models/Course");
-    const User = require("../models/User");
-    const { sendCustom } = require("../services/emailService");
-
-    const course = await Course.findOne({ _id: req.params.id, company: req.user.company })
-      .populate("enrolledStudents", "email name").lean();
-    if (!course) return res.status(404).json({ error: "Course not found" });
-
-    const students = (course.enrolledStudents || []).filter(s => s.email);
-    if (!students.length) return res.status(400).json({ error: "No students with email addresses in this course" });
-
-    let sentCount = 0;
-    for (const student of students) {
-      try {
-        await sendCustom({ to: student.email, toName: student.name, subject, message });
-        sentCount++;
-      } catch(e) {
-        console.error(`[BulkEmail] Failed to send to ${student.email}:`, e.message);
-      }
-    }
-
-    res.json({ ok: true, sentCount, total: students.length });
-  } catch (err) {
-    console.error("Bulk email error:", err);
-    res.status(500).json({ error: "Failed to send emails" });
+// ── Role guards ───────────────────────────────────────────────────────────────
+const requireRole = (...roles) => (req, res, next) => {
+  if (!roles.includes(req.user.role)) {
+    return res.status(403).json({ error: 'Access denied for your role.' });
   }
-});
+  next();
+};
+
+const canCreate  = requireRole('lecturer', 'admin', 'superadmin');
+const canManage  = requireRole('admin', 'superadmin');
+const canUpdate  = requireRole('lecturer', 'admin', 'superadmin');
+const canEnroll  = requireRole('admin', 'superadmin', 'lecturer');
+
+// ── Academic mode guard ───────────────────────────────────────────────────────
+const requireAcademic = (req, res, next) => {
+  const mode = req.user.company?.mode || req.user.companyMode;
+  if (mode === 'corporate') {
+    return res.status(400).json({ error: 'Courses are only available in Academic mode.' });
+  }
+  next();
+};
+router.use(requireAcademic);
+
+// ── Routes ────────────────────────────────────────────────────────────────────
+
+// Create
+router.post('/create',   canCreate,  validateCourse, courseCtrl.createCourse);
+
+// List & get
+router.get('/',                                      courseCtrl.listCourses);
+router.get('/:id',                                   courseCtrl.getCourseById);
+router.get('/:id/stats',                             courseCtrl.getCourseStats);
+
+// Update & lifecycle
+router.put('/:id/update',   canUpdate,               courseCtrl.updateCourse);
+router.put('/:id/archive',  canManage,               courseCtrl.archiveCourse);
+router.put('/:id/restore',  canManage,               courseCtrl.restoreCourse);
+router.delete('/:id',       canManage,               courseCtrl.deleteCourse);
+
+// Lecturer assignment
+router.put('/:id/assign-lecturer', canManage,        courseCtrl.assignLecturer);
+
+// Enrollment
+router.post('/:id/enroll-student',  canEnroll, validateEnroll, courseCtrl.enrollStudent);
+router.post('/:id/bulk-enroll',     canEnroll,                 courseCtrl.bulkEnrollStudents);
+router.delete('/:id/remove-student/:studentId', canEnroll,     courseCtrl.removeStudent);
 
 module.exports = router;
