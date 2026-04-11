@@ -206,6 +206,9 @@ app.use("/api/performance", performanceRoutes);
 app.use("/api/operations", operationsRoutes);
 app.use("/api/advanced", advancedRoutes);
 
+const deviceSessionRoutes = require("./routes/deviceSessionRoutes");
+app.use("/api", deviceSessionRoutes);
+
 if (superadminRoutes) app.use("/api/superadmin", superadminRoutes);
 
 // ── Fallback ─────────────────────────────────────────────────────────────────
@@ -256,6 +259,8 @@ const start = async () => {
 
     try {
       const { startScheduler } = require("./services/emailScheduler");
+          const { runWatchdog } = require("./controllers/sessionController");
+          setInterval(runWatchdog, 5000);
       startScheduler();
     } catch (e) {
       console.error("Scheduler failed to start:", e.message);
