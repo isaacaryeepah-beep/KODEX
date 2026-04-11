@@ -6,6 +6,7 @@ const StudentRoster = require("../models/StudentRoster");
 const { generateToken } = require("../utils/jwt");
 const { sendWelcome, sendAdminPasswordResetNotice, sendPasswordReset, sendNewInstitutionAlert, sendLecturerWelcome, sendStudentWelcome, sendEmployeeWelcome, sendHodWelcome } = require("../services/emailService");
 const { sendOtp, normalisePhone } = require("../services/smsService");
+const { syncStudentToRoster } = require("../utils/rosterSync");
 
 const SIX_HOURS_MS = 6 * 60 * 60 * 1000;
 const PAID_ROLES    = ["lecturer", "manager", "admin"];
@@ -76,7 +77,6 @@ exports.register = async (req, res) => {
 
     const token = generateToken(user._id);
 
-    // Send welcome email (non-fatal)
     sendWelcome({
       email:           user.email,
       name:            user.name || user.email.split('@')[0],
@@ -85,7 +85,6 @@ exports.register = async (req, res) => {
       trialEndDate:    company.trialEndDate,
     }).catch(err => console.error('Welcome email failed:', err.message));
 
-    // Notify superadmin of new signup (non-fatal)
     sendNewInstitutionAlert({
       institutionName: company.name,
       adminName:       user.name,
@@ -149,7 +148,7 @@ exports.registerLecturer = async (req, res) => {
       return res.status(400).json({ error: "Password must be at least 8 characters" });
     }
 
-    // MODE A: Lecturer creates their own institution (subscribed as admin)
+    // MODE A: Lecturer creates their own institution
     if (institutionName && !institutionCode) {
       const existingCompany = await Company.findOne({ name: institutionName });
       if (existingCompany) {
@@ -205,7 +204,7 @@ exports.registerLecturer = async (req, res) => {
           name: user.name,
           role: user.role,
           isApproved: user.isApproved,
-        mustChangePassword: user.mustChangePassword || false,
+          mustChangePassword: user.mustChangePassword || false,
           company: {
             id: company._id,
             name: company.name,
@@ -227,7 +226,7 @@ exports.registerLecturer = async (req, res) => {
       });
     }
 
-    // MODE B: Lecturer joins an existing institution using institution code
+    // MODE B: Lecturer joins an existing institution
     if (!institutionCode) {
       return res.status(400).json({ error: "Either institution name (to create) or institution code (to join) is required" });
     }
@@ -244,8 +243,6 @@ exports.registerLecturer = async (req, res) => {
       return res.status(403).json({ error: "This institution is currently inactive." });
     }
 
-    // ── HOD-first enforcement ─────────────────────────────────────────────────
-    // A department only exists if a HOD has been approved for it.
     if (!department?.trim()) {
       return res.status(400).json({ error: "Department is required." });
     }
@@ -260,7 +257,6 @@ exports.registerLecturer = async (req, res) => {
         error: `No approved HOD found for "${department.trim()}". A Head of Department must be set up for this department before lecturers can join it.`,
       });
     }
-    // ─────────────────────────────────────────────────────────────────────────
 
     const existingUser = await User.findOne({ email, company: company._id });
     if (existingUser) {
@@ -286,12 +282,10 @@ exports.registerLecturer = async (req, res) => {
       subscriptionStatus: "trial",
     });
 
-    // Notify the HOD
     try {
       await User.updateOne({ _id: hod._id }, { $inc: { pendingApprovals: 1 } });
     } catch (_) {}
 
-    // Send welcome email (non-fatal)
     if (user.email) {
       sendLecturerWelcome({
         email: user.email,
@@ -353,7 +347,7 @@ exports.registerStudent = async (req, res) => {
       return res.status(403).json({ error: "This institution is currently inactive." });
     }
 
-    // ── HOD-first enforcement ─────────────────────────────────────────────────
+    // HOD-first enforcement
     if (department?.trim()) {
       const hodExists = await User.findOne({
         company: company._id,
@@ -367,7 +361,6 @@ exports.registerStudent = async (req, res) => {
         });
       }
     }
-    // ─────────────────────────────────────────────────────────────────────────
 
     const rosterEntry = await StudentRoster.findOne({
       studentId: IndexNumber.trim().toUpperCase(),
@@ -403,27 +396,15 @@ exports.registerStudent = async (req, res) => {
       department: department ? department.trim() : null,
     });
 
-    await StudentRoster.updateMany(
-      { studentId: IndexNumber.trim().toUpperCase(), company: company._id },
-      { $set: { registered: true, registeredUser: user._id } }
+    // ── Roster sync: mark roster as registered + enroll in all matching courses ──
+    // This replaces the old manual updateMany approach with the proper rosterSync utility
+    syncStudentToRoster(user._id, company._id).catch(err =>
+      console.error('[registerStudent] rosterSync failed:', err.message)
     );
-
-    const Course = require("../models/Course");
-    const rosterEntries = await StudentRoster.find({
-      studentId: IndexNumber.trim().toUpperCase(),
-      company: company._id,
-    });
-    const courseIds = rosterEntries.map((r) => r.course);
-    if (courseIds.length > 0) {
-      await Course.updateMany(
-        { _id: { $in: courseIds } },
-        { $addToSet: { enrolledStudents: user._id } }
-      );
-    }
 
     const token = generateToken(user._id);
 
-    // Warn if no HOD exists for the student's department
+    // Warn if no HOD exists for student's department
     let departmentNote = null;
     if (department?.trim()) {
       const hod = await User.findOne({ company: company._id, role: "hod", department: department.trim() });
@@ -447,7 +428,6 @@ exports.registerStudent = async (req, res) => {
       message: "Registration successful. You have been automatically enrolled in your courses.",
     });
 
-    // Send welcome email if student has email (non-fatal)
     if (user.email) {
       sendStudentWelcome({
         email: user.email,
@@ -525,7 +505,6 @@ exports.registerEmployee = async (req, res) => {
       isApproved: false,
     });
 
-    // Send welcome email (non-fatal)
     sendEmployeeWelcome({
       email: user.email,
       name: user.name,
@@ -560,7 +539,6 @@ exports.registerEmployee = async (req, res) => {
   }
 };
 
-
 exports.registerHod = async (req, res) => {
   try {
     const { name, email: emailRaw, password, institutionCode, department, phone } = req.body;
@@ -586,7 +564,6 @@ exports.registerHod = async (req, res) => {
       return res.status(400).json({ error: 'A user with this email already exists at this institution' });
     }
 
-    // Only one HOD per department — check if dept already has one
     const existingHod = await User.findOne({ company: company._id, role: 'hod', department: department.trim() });
     if (existingHod) {
       return res.status(400).json({ error: `A HOD for "${department.trim()}" already exists. Contact your admin.` });
@@ -611,7 +588,6 @@ exports.registerHod = async (req, res) => {
       subscriptionStatus: 'trial',
     });
 
-    // Notify HOD of pending approval
     if (user.email) {
       sendHodWelcome({
         email: user.email,
@@ -671,9 +647,7 @@ exports.login = async (req, res) => {
         }
         companyId = company._id;
       }
-      // Always uppercase — IndexNumber is stored uppercase in DB
       const normIndex = IndexNumber.trim().toUpperCase();
-      // Support both new (IndexNumber) and legacy (indexNumber) field names
       const baseQuery = { role: "student", ...(companyId ? { company: companyId } : {}) };
       user = await User.findOne({ ...baseQuery, IndexNumber: normIndex }).select("+password");
       if (!user) {
@@ -692,9 +666,6 @@ exports.login = async (req, res) => {
       }
       user = await User.findOne({ email, company: company._id, role: "employee" }).select("+password");
     } else if (email && loginRole === "lecturer") {
-      // FIX: Search all companies for this lecturer email, not just mode="academic"
-      // Some institutions have mode="corporate" due to registration flow issues.
-      // Role-based checks below prevent cross-portal abuse.
       user = await User.findOne({ email, role: "lecturer" }).select("+password");
     } else if (email && loginRole === "hod") {
       user = await User.findOne({ email, role: "hod" }).select("+password");
@@ -717,8 +688,6 @@ exports.login = async (req, res) => {
 
     const company = await Company.findById(user.company);
 
-    // FIX: Auto-correct company mode if an academic role is logging in
-    // but the company mode is "corporate" due to a registration flow bug.
     if (company && ["lecturer", "hod", "student"].includes(user.role) && company.mode !== "academic") {
       company.mode = "academic";
       await company.save().catch(() => {});
@@ -726,10 +695,6 @@ exports.login = async (req, res) => {
     }
 
     if (portalMode && company && company.mode !== portalMode && user.role !== "superadmin") {
-      // FIX: Don't block lecturers/hod purely on portalMode mismatch.
-      // Some institutions registered via the corporate flow but are actually
-      // academic — their mode field may be wrong. Role-based checks below
-      // are sufficient to prevent cross-portal login.
       const academicRoles = ["lecturer", "hod", "student"];
       const corporateRoles = ["employee", "manager"];
       const isRolePortalMismatch =
@@ -738,13 +703,8 @@ exports.login = async (req, res) => {
       if (isRolePortalMismatch) {
         return res.status(401).json({ error: "Invalid credentials" });
       }
-      // Otherwise allow through — mode field may just be misconfigured
     }
 
-    // ── Role-portal enforcement ──────────────────────────────────────────────
-    // Each portal only accepts specific roles — prevents admins logging in as
-    // lecturers, employees logging in as admins, etc.
-    // Superadmin is blocked from all institution portals — superadmin portal only
     if (user.role === "superadmin" && loginRole !== "superadmin") {
       return res.status(401).json({ error: "Invalid credentials" });
     }
@@ -758,17 +718,12 @@ exports.login = async (req, res) => {
     };
     if (loginRole && PORTAL_ALLOWED_ROLES[loginRole]) {
       const allowed = PORTAL_ALLOWED_ROLES[loginRole];
-      // Wrong portal — return same error as wrong password (don't reveal account exists)
       if (!allowed.includes(user.role)) {
         return res.status(401).json({ error: "Invalid credentials" });
       }
     }
-    // ────────────────────────────────────────────────────────────────────────
 
-    // Check institution access — students/employees/lecturers/HODs need their
-    // institution to have an active subscription OR an active subscribed admin/lecturer
     if (company && !company.hasAccess && !["superadmin", "admin", "manager", "lecturer"].includes(user.role)) {
-      // Check if any paid-role user in this company has an active personal subscription
       const activeSubscriber = await User.findOne({
         company: company._id,
         role: { $in: ["admin", "lecturer", "manager"] },
@@ -797,9 +752,6 @@ exports.login = async (req, res) => {
       }
     }
 
-    // ── Student device lock ─────────────────────────────────────────────────
-    // Students are locked to a single device. If they log in from a new device
-    // their account is blocked until an admin clears the device lock.
     if (user.role === "student" && deviceId && user.deviceId && user.deviceId !== deviceId) {
       return res.status(403).json({
         error: "This account is active on another device. Please contact your admin to unlock it.",
@@ -807,7 +759,6 @@ exports.login = async (req, res) => {
       });
     }
 
-    // Update lastLoginAt and deviceId
     user.lastLoginAt = new Date();
     if (deviceId) user.deviceId = deviceId;
     await user.save();
@@ -985,7 +936,6 @@ exports.forgotPassword = async (req, res) => {
       return res.status(404).json({ error: "Institution not found" });
     }
 
-    // Normalise to uppercase — IndexNumber is stored uppercase in DB
     const normIdx = IndexNumber.trim().toUpperCase();
     let user = await User.findOne({ IndexNumber: normIdx, company: company._id, role: "student" });
     if (!user) {
@@ -995,15 +945,12 @@ exports.forgotPassword = async (req, res) => {
       return res.status(404).json({ error: "Student not found" });
     }
 
-    // Allow re-request if existing code is older than 1 minute
     if (user.resetPasswordExpires && user.resetPasswordExpires > Date.now()) {
       const remaining = new Date(user.resetPasswordExpires) - Date.now();
       const remainingMins = Math.ceil(remaining / 60000);
       if (remaining > 59 * 60 * 1000) {
-        // Only block if code was generated less than 1 minute ago
         return res.status(429).json({ error: `A reset code was already sent. Please wait ${remainingMins} minutes or check your email.` });
       }
-      // Otherwise fall through and generate a new code
     }
 
     const code = String(crypto.randomInt(100000, 1000000));
@@ -1013,7 +960,6 @@ exports.forgotPassword = async (req, res) => {
     user.resetPasswordExpires = new Date(Date.now() + 60 * 60 * 1000);
     await user.save({ validateBeforeSave: false });
 
-    // Send to student email if available, otherwise give code to lecturer
     let message = "Password reset code generated. Please contact your lecturer to get the reset code.";
     if (user.email) {
       const companyData = await Company.findById(user.company).select("name").lean().catch(() => null);
@@ -1029,7 +975,7 @@ exports.forgotPassword = async (req, res) => {
 
     res.json({
       message,
-      resetCode: user.email ? undefined : code, // only expose code to lecturer if no email
+      resetCode: user.email ? undefined : code,
     });
   } catch (error) {
     console.error("Forgot password error:", error);
@@ -1046,7 +992,6 @@ exports.resetPassword = async (req, res) => {
       return res.status(400).json({ error: "Student ID, reset code, and new password are required" });
     }
 
-    // Normalise IndexNumber to uppercase — stored uppercase in DB
     const normIndex = IndexNumber.trim().toUpperCase();
 
     let companyFilter = {};
@@ -1055,8 +1000,6 @@ exports.resetPassword = async (req, res) => {
       if (company) companyFilter.company = company._id;
     }
 
-    // Must select +resetPasswordToken — it is select:false on the schema
-    // Try both IndexNumber (uppercase field) and indexNumber (legacy lowercase field)
     let user = await User.findOne({
       IndexNumber: normIndex,
       resetPasswordExpires: { $gt: Date.now() },
@@ -1095,18 +1038,15 @@ exports.resetPassword = async (req, res) => {
       method: 'self',
       resetBy: user.name || user.IndexNumber,
     });
-    // Skip validation — only password fields are changing
     await user.save({ validateBeforeSave: false });
 
-    // Notify admin of student reset (non-fatal)
     try {
-      const Company = require('../models/Company');
-      const admin = await require('../models/User').findOne({
+      const admin = await User.findOne({
         company: user.company,
         role: { $in: ['admin', 'manager'] },
         isActive: true,
       }).select('email name').lean();
-      const company = await Company.findById(user.company).select('name').lean();
+      const companyDoc = await Company.findById(user.company).select('name').lean();
       if (admin?.email) {
         sendAdminPasswordResetNotice({
           adminEmail: admin.email,
@@ -1114,7 +1054,7 @@ exports.resetPassword = async (req, res) => {
           targetUserName: user.name || user.IndexNumber,
           targetUserRole: user.role,
           targetUserEmail: user.email || user.IndexNumber,
-          institutionName: company?.name || '',
+          institutionName: companyDoc?.name || '',
         }).catch(() => {});
       }
     } catch(_) {}
@@ -1148,10 +1088,6 @@ exports.forgotPasswordEmail = async (req, res) => {
 
     if (!user) return res.status(404).json({ error: "No account found with those details in this institution." });
 
-    // FIX: Allow lecturer and hod (not just manager/employee) — previously
-    // hod was excluded which broke password reset for heads of department.
-    // Also: don't gate on company.mode since some academic institutions have
-    // mode set to "corporate" due to a registration flow bug.
     const rolesAllowedReset = ["manager", "lecturer", "hod", "employee"];
     if (["admin", "superadmin"].includes(user.role)) {
       return res.status(403).json({ error: "Invalid input" });
@@ -1176,19 +1112,16 @@ exports.forgotPasswordEmail = async (req, res) => {
     let emailSent = false;
     let lastEmailError = null;
 
-    // Send SMS if phone was provided
     if (phone) {
       const normPhone = normalisePhone(phone);
       const smsResult = await sendOtp({ phone: normPhone, code, name: user.name });
       if (smsResult.ok || smsResult.dev) {
         smsSent = true;
-        console.log(`[ForgotPasswordEmail] OTP sent via SMS to ${normPhone}`);
       } else {
         console.error('[ForgotPasswordEmail] SMS failed:', smsResult.error);
       }
     }
 
-    // Send email if user has email
     if (user.email) {
       const companyData = await Company.findById(user.company).select('name').lean().catch(() => null);
       const emailResult = await sendPasswordReset({
@@ -1201,7 +1134,6 @@ exports.forgotPasswordEmail = async (req, res) => {
 
       if (emailResult.ok) {
         emailSent = true;
-        console.log(`[ForgotPasswordEmail] OTP sent via email to ${user.email}`);
       } else {
         console.error('[ForgotPasswordEmail] Email send failed:', emailResult.error);
         lastEmailError = emailResult.error;
@@ -1267,17 +1199,16 @@ exports.forgotPasswordAdmin = async (req, res) => {
     let smsSent = false;
     let emailSent = false;
     let lastEmailError = null;
+
     if (normPhone) {
       const smsResult = await sendOtp({ phone: normPhone, code, name: user.name });
       if (smsResult.ok || smsResult.dev) {
         smsSent = true;
-        console.log(`[ForgotPasswordAdmin] OTP sent via SMS to ${normPhone}`);
       } else {
         console.error('[ForgotPasswordAdmin] SMS failed:', smsResult.error);
       }
     }
 
-    // Send email if user has email
     if (user.email) {
       const companyData = user.company;
       const emailResult = await sendPasswordReset({
@@ -1290,7 +1221,6 @@ exports.forgotPasswordAdmin = async (req, res) => {
 
       if (emailResult.ok) {
         emailSent = true;
-        console.log(`[ForgotPasswordAdmin] OTP sent via email to ${user.email}`);
       } else {
         console.error('[ForgotPasswordAdmin] Email send failed:', emailResult.error);
         lastEmailError = emailResult.error;
@@ -1359,16 +1289,14 @@ exports.resetPasswordEmail = async (req, res) => {
     });
     await user.save();
 
-    // Notify admin of the reset (non-fatal)
     try {
-      const Company = require('../models/Company');
-      const admin = await require('../models/User').findOne({
+      const admin = await User.findOne({
         company: user.company,
         role: { $in: ['admin', 'manager'] },
         isActive: true,
         email: { $exists: true, $ne: user.email },
       }).select('email name').lean();
-      const company = await Company.findById(user.company).select('name').lean();
+      const companyDoc = await Company.findById(user.company).select('name').lean();
       if (admin?.email) {
         sendAdminPasswordResetNotice({
           adminEmail: admin.email,
@@ -1376,7 +1304,7 @@ exports.resetPasswordEmail = async (req, res) => {
           targetUserName: user.name || user.email,
           targetUserRole: user.role,
           targetUserEmail: user.email || user.IndexNumber,
-          institutionName: company?.name || '',
+          institutionName: companyDoc?.name || '',
         }).catch(() => {});
       }
     } catch(_) {}
@@ -1387,7 +1315,6 @@ exports.resetPasswordEmail = async (req, res) => {
     res.status(500).json({ error: "Failed to reset password" });
   }
 };
-
 
 // ── 2FA: Toggle enable/disable ───────────────────────────────────────────────
 exports.toggle2FA = async (req, res) => {
@@ -1409,11 +1336,9 @@ exports.send2FACode = async (req, res) => {
     const code = String(crypto.randomInt(100000, 999999));
     const hashedCode = await bcrypt.hash(code, 10);
     user.twoFactorCode = hashedCode;
-    user.twoFactorExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 min
+    user.twoFactorExpires = new Date(Date.now() + 10 * 60 * 1000);
     await user.save({ validateBeforeSave: false });
 
-    // Send email — non-fatal so modal always shows even if email is slow
-    const { sendPasswordReset } = require("../services/emailService");
     sendPasswordReset({
       email: user.email,
       name: user.name,
@@ -1440,12 +1365,10 @@ exports.verify2FACode = async (req, res) => {
     const isValid = await bcrypt.compare(code, user.twoFactorCode);
     if (!isValid) return res.status(400).json({ error: "Incorrect code" });
 
-    // Clear the code
     user.twoFactorCode = null;
     user.twoFactorExpires = null;
     await user.save({ validateBeforeSave: false });
 
-    // Issue a fresh full token
     const token = generateToken(user._id);
     res.json({ ok: true, token });
   } catch(e) {
@@ -1462,7 +1385,6 @@ exports.updateProfile = async (req, res) => {
 
     if (name && name.trim()) user.name = name.trim();
 
-    // Profile photo — store as base64 (max ~2MB)
     if (profilePhoto !== undefined) {
       if (profilePhoto && profilePhoto.length > 2 * 1024 * 1024 * 1.4) {
         return res.status(400).json({ error: "Profile photo must be under 2MB" });
@@ -1470,7 +1392,6 @@ exports.updateProfile = async (req, res) => {
       user.profilePhoto = profilePhoto || null;
     }
 
-    // Only lecturers can update their own department — HOD department is admin-controlled
     if (department !== undefined && user.role === 'lecturer') {
       user.department = department.trim() || null;
     }
@@ -1484,7 +1405,16 @@ exports.updateProfile = async (req, res) => {
     }
 
     await user.save();
-    res.json({ message: "Profile updated successfully", user: { name: user.name, email: user.email, role: user.role, department: user.department, profilePhoto: user.profilePhoto || null } });
+    res.json({
+      message: "Profile updated successfully",
+      user: {
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        department: user.department,
+        profilePhoto: user.profilePhoto || null,
+      }
+    });
   } catch (error) {
     console.error("Update profile error:", error);
     res.status(500).json({ error: "Failed to update profile" });
@@ -1499,7 +1429,6 @@ exports.getDepartments = async (req, res) => {
     const company = await Company.findOne({ institutionCode: institutionCode.toUpperCase() });
     if (!company) return res.status(404).json({ error: 'Institution not found' });
 
-    // Only return departments that have an approved HOD
     const hods = await User.find({
       company: company._id,
       role: 'hod',
