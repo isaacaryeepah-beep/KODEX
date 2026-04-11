@@ -1,4 +1,4 @@
-const User = require('../../models/User'); // adjust path
+const User = require('../models/User');
 
 const CORPORATE_ROLES = ['manager', 'employee', 'corporate_admin'];
 const ACADEMIC_ROLES  = ['lecturer', 'student', 'hod', 'academic_admin'];
