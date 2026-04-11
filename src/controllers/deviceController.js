@@ -9,7 +9,7 @@ exports.registerDevice = async (req, res) => {
   try {
     const { deviceId, deviceName, allowedNetworks, apSSID, assignedRoom, assignedDepartment } = req.body;
     const lecturerId = req.user._id;
-    const companyId  = req.user.companyId;
+    const companyId = req.user.company;
 
     // Block if device already registered to another lecturer
     const existing = await Device.findOne({ deviceId });
@@ -71,7 +71,7 @@ exports.heartbeat = async (req, res) => {
     if (!device) return res.status(404).json({ message: 'Device not found' });
 
     // Enforce ownership — heartbeat only accepted from device's assigned lecturer context
-    if (device.companyId.toString() !== req.user?.companyId?.toString()) {
+    if (device.companyId.toString() !== req.user?.company?.toString()) {
       return res.status(403).json({ message: 'Device does not belong to your institution' });
     }
 
@@ -159,7 +159,7 @@ exports.updateNetworks = async (req, res) => {
     const { deviceId } = req.params;
     const { allowedNetworks } = req.body;
 
-    const device = await Device.findOne({ deviceId, companyId: req.user.companyId });
+    const device = await Device.findOne({ deviceId, companyId: req.user.company });
     if (!device) return res.status(404).json({ message: 'Device not found' });
 
     // Only owner or admin can update networks
@@ -188,7 +188,7 @@ exports.getDeviceStatus = async (req, res) => {
   try {
     const { deviceId } = req.params;
 
-    const device = await Device.findOne({ deviceId, companyId: req.user.companyId })
+    const device = await Device.findOne({ deviceId, companyId: req.user.company })
       .populate('lecturerId', 'name email');
     if (!device) return res.status(404).json({ message: 'Device not found' });
 
