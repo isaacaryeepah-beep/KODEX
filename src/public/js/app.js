@@ -8308,31 +8308,40 @@ async function renderSubscription() {
   const content = document.getElementById('main-content');
   if (!content) return;
   try {
-    // Per-user subscription data
-    const meData = await api('/api/auth/me');
-    const ut = meData.userTrial || {};
-    const status   = ut.status   || 'expired';   // 'active' | 'trial' | 'expired'
+    const meData  = await api('/api/auth/me');
+    const ut      = meData.userTrial || {};
+    const status   = ut.status   || 'expired';
     const daysLeft = ut.daysLeft  || 0;
-    const expiry   = ut.expiry    ? new Date(ut.expiry).toLocaleDateString('en-GB', { day:'numeric', month:'long', year:'numeric' }) : '—';
+    const expiry   = ut.subscriptionExpiry
+      ? new Date(ut.subscriptionExpiry).toLocaleDateString('en-GB', { day:'numeric', month:'long', year:'numeric' })
+      : '—';
+
+    // Determine plan based on company mode
+    const mode       = currentUser?.company?.mode || 'academic';
+    const isCorp     = mode === 'corporate';
+    const planName   = isCorp ? 'Monthly Plan'   : 'Semester Plan';
+    const planPrice  = isCorp ? 'GHS 150'        : 'GHS 300';
+    const planPeriod = isCorp ? '30 days'        : '112 days (1 semester)';
+    const planId     = isCorp ? 'monthly'        : 'semester';
+    const planLabel  = isCorp ? 'GHS 150 / month': 'GHS 300 / semester';
 
     const statusColor = status === 'active' ? 'var(--success)' : status === 'trial' ? '#f59e0b' : 'var(--danger)';
     const statusLabel = status === 'active' ? '✅ Active' : status === 'trial' ? '⏳ Free Trial' : '❌ Expired';
-    const planLabel   = status === 'active' ? 'Semester Plan' : status === 'trial' ? 'Free Trial' : 'None';
+    const currentPlan = status === 'active' ? planName : status === 'trial' ? 'Free Trial' : 'None';
 
     content.innerHTML = `
       <div class="page-header">
         <h2>My Subscription</h2>
-        <p>Your personal KODEX access — GHS 300 per semester</p>
+        <p>Your personal KODEX access · ${planLabel} · Paystack only</p>
       </div>
 
-      <!-- Status cards -->
       <div class="stats-grid" style="margin-bottom:24px">
         <div class="stat-card">
           <div class="stat-value" style="color:${statusColor}">${statusLabel}</div>
           <div class="stat-label">Subscription Status</div>
         </div>
         <div class="stat-card">
-          <div class="stat-value">${planLabel}</div>
+          <div class="stat-value">${currentPlan}</div>
           <div class="stat-label">Current Plan</div>
         </div>
         <div class="stat-card">
@@ -8341,90 +8350,56 @@ async function renderSubscription() {
         </div>
         <div class="stat-card">
           <div class="stat-value" style="font-size:15px">${expiry}</div>
-          <div class="stat-label">${status === 'active' ? 'Expires On' : status === 'trial' ? 'Trial Ends' : 'Last Expiry'}</div>
+          <div class="stat-label">${status === 'active' ? 'Expires On' : status === 'trial' ? 'Trial Ends' : 'Expired On'}</div>
         </div>
       </div>
 
-      <!-- Payment card -->
-      <div class="card" style="max-width:480px">
-        <div class="card-title">Subscribe for a Semester</div>
+      <div class="card" style="max-width:500px">
+        <div class="card-title">${status === 'active' ? 'Renew Subscription' : 'Subscribe Now'}</div>
+
         <div style="margin:16px 0;padding:16px;background:var(--bg);border-radius:10px;border:1.5px solid var(--border)">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-            <span style="font-size:15px;font-weight:600;color:var(--text)">Semester Plan</span>
-            <span style="font-size:20px;font-weight:700;color:var(--primary)">GHS 300</span>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+            <span style="font-size:15px;font-weight:600;color:var(--text)">${planName}</span>
+            <span style="font-size:22px;font-weight:700;color:var(--primary)">${planPrice}</span>
           </div>
-          <ul style="font-size:13px;color:var(--text-light);margin:0;padding-left:18px;line-height:1.8">
-            <li>Full access for one semester (112 days)</li>
+          <div style="font-size:13px;color:var(--text-light);margin-bottom:10px">⏱ ${planPeriod} · Auto-stacks if renewed early</div>
+          <ul style="font-size:13px;color:var(--text-light);margin:0;padding-left:18px;line-height:1.9">
+            <li>Full platform access</li>
             <li>Attendance marking &amp; session management</li>
             <li>Assessment creation &amp; grading</li>
             <li>Reports &amp; analytics</li>
-            <li>Renew anytime before expiry</li>
+            <li>Renew any time — days stack up</li>
           </ul>
         </div>
 
         ${status === 'active' && daysLeft > 14 ? `
           <div style="background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:12px 14px;margin-bottom:16px;font-size:13px;color:#15803d">
-            ✅ Your subscription is active with <strong>${daysLeft} days</strong> remaining.<br>
-            You can renew early — the new semester will be added on top.
+            ✅ Subscription active — <strong>${daysLeft} days</strong> remaining. Renewing now will add ${planPeriod} on top.
           </div>` : ''}
 
         ${status === 'expired' ? `
           <div style="background:#fef2f2;border:1px solid #fca5a5;border-radius:8px;padding:12px 14px;margin-bottom:16px;font-size:13px;color:#dc2626">
-            ⚠️ Your subscription has expired. Please renew to continue using KODEX.
+            ⚠️ Your subscription has expired. Renew to continue using KODEX.
           </div>` : ''}
 
-        <button class="btn btn-primary" style="width:100%;padding:14px;font-size:15px;font-weight:600;letter-spacing:0.3px"
-          onclick="paySemester()">
-          💳 Pay GHS 300 with Paystack
+        ${status === 'trial' ? `
+          <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:12px 14px;margin-bottom:16px;font-size:13px;color:#92400e">
+            ⏳ Free trial active — <strong>${daysLeft} days</strong> left. Subscribe before it ends to avoid interruption.
+          </div>` : ''}
+
+        <button class="btn btn-primary" style="width:100%;padding:14px;font-size:15px;font-weight:600;letter-spacing:0.3px;border-radius:10px"
+          onclick="paySubscription()">
+          💳 Pay ${planPrice} with Paystack
         </button>
         <p style="font-size:11px;color:var(--text-light);text-align:center;margin-top:10px">
-          Secured by Paystack · Payment processed in GHS · Mobile Money &amp; Card accepted
+          Secured by Paystack · Paid in GHS · Mobile Money &amp; Card accepted
         </p>
       </div>
     `;
   } catch (e) {
-    content.innerHTML = `<div class="card"><p>Error loading subscription: ${e.message}</p></div>`;
+    content.innerHTML = `<div class="card"><p style="color:var(--danger)">Error loading subscription: ${e.message}</p></div>`;
   }
 }
-
-
-async function subscribePlan() {
-  return paySemester();
-}
-
-async function paySemester() {
-  // Alias — calls the smart paySubscription
-  return paySubscription();
-}
-
-async function paySubscription() {
-  try {
-    // Determine plan from company mode
-    const mode = currentUser?.company?.mode || 'academic';
-    const plan = mode === 'corporate' ? 'monthly' : 'semester';
-    const label = mode === 'corporate' ? 'GHS 150 / month' : 'GHS 300 / semester';
-
-    const confirmed = confirm(`Subscribe via Paystack?\n\nPlan: ${label}\n\nYou will be redirected to Paystack to complete payment securely.`);
-    if (!confirmed) return;
-
-    const data = await api('/api/payments/paystack/initialize', {
-      method: 'POST',
-      body: JSON.stringify({ plan }),
-    });
-
-    if (!data.authorization_url) {
-      toastError('Could not initialize payment. Please try again.');
-      return;
-    }
-
-    // Redirect to Paystack checkout
-    window.location.href = data.authorization_url;
-  } catch(e) {
-    toastError(e.message || 'Payment initialization failed');
-  }
-}
-
-
 
 
 async function renderSearch() {
