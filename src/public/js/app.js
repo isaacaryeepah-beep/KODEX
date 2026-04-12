@@ -690,6 +690,31 @@ async function api(path, options = {}) {
   return res;
 }
 
+function showSubscriptionGate(message) {
+  // Navigate to subscription page and show a toast if possible
+  try {
+    if (typeof navigateTo === 'function') navigateTo('subscription');
+    const msg = message || 'Your subscription or trial has expired. Please renew to continue.';
+    if (typeof toastError === 'function') {
+      toastError(msg);
+    } else {
+      // Fallback if toast not yet available
+      const content = document.getElementById('main-content');
+      if (content) {
+        content.innerHTML = `
+          <div class="card" style="max-width:480px;margin:40px auto;text-align:center;padding:32px">
+            <div style="font-size:40px;margin-bottom:16px">🔒</div>
+            <h3 style="margin-bottom:8px">Subscription Required</h3>
+            <p style="color:var(--text-muted);margin-bottom:20px">${msg}</p>
+            <button class="btn btn-primary" onclick="navigateTo('subscription')">View Subscription</button>
+          </div>`;
+      }
+    }
+  } catch(e) {
+    console.warn('showSubscriptionGate:', e.message);
+  }
+}
+
 function timeAgo(dateStr) {
   if (!dateStr) return '';
   const diff = Math.floor((Date.now() - new Date(dateStr)) / 1000);
