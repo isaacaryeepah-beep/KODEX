@@ -1,6 +1,6 @@
 const Meeting = require('../models/Meeting');
 
-const CREATOR_ROLES  = ['lecturer', 'manager', 'admin'];
+const CREATOR_ROLES  = ['lecturer', 'manager'];
 const ACADEMIC_ROLES = ['lecturer', 'student', 'hod', 'academic_admin'];
 const CORPORATE_ROLES = ['manager', 'employee', 'corporate_admin'];
 
@@ -24,7 +24,7 @@ exports.requireActiveSubscription = (req, res, next) => {
 exports.canCreateMeeting = (req, res, next) => {
   const role = req.user.role?.toLowerCase();
   if (!CREATOR_ROLES.includes(role)) {
-    return res.status(403).json({ message: 'Only lecturers and managers can create meetings.' });
+    return res.status(403).json({ message: 'Only lecturers and managers can create meetings. Admins can view and manage existing meetings.' });
   }
   next();
 };
