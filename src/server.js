@@ -30,6 +30,7 @@ const proctoredQuizRoutes = require("./routes/proctoredQuizzes");
 const assignmentRoutes  = require("./routes/assignments");
 const aiProxyRoutes     = require("./routes/aiProxy");
 const meetingRoutes     = require("./routes/meetingRoutes");   // ← NEW
+const sessionDashboardRoutes = require('./routes/sessionDashboard');
 let superadminRoutes = null;
 try { superadminRoutes = require("./routes/superadmin"); } catch(_) { console.warn('superadmin routes not found — skipping'); }
 
@@ -191,6 +192,13 @@ app.use("/api/proctor", proctoredQuizRoutes);
 app.use("/api/assignments", assignmentRoutes);
 app.use("/api/ai", aiProxyRoutes);
 app.use("/api/meetings", meetingRoutes);              // ← NEW
+app.use("/api/attendance-sessions", sessionDashboardRoutes); // session control dashboard
+
+// Student attendance mark (anti-cheat validated)
+const { markAttendance } = require('./controllers/sessionDashboardController');
+const authenticate = require('./middleware/auth');
+const { companyIsolation } = require('./middleware/companyIsolation');
+app.post('/api/attendance/mark', authenticate, companyIsolation, markAttendance);
 
 const esp32Routes = require("./routes/esp32");
 app.use("/api/esp32", esp32Routes);
