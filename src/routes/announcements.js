@@ -1,46 +1,66 @@
-const express = require('express');
-const router  = express.Router();
-const multer  = require('multer');
-const path    = require('path');
-
-const ctrl = require('../controllers/announcementController');
+const express  = require('express');
+const router   = express.Router();
 
 const authenticate         = require('../middleware/auth');
 const { companyIsolation } = require('../middleware/companyIsolation');
-const { canCreate, validateMode, validateTarget } = require('../middleware/announcementMiddleware');
+const { uploadAnnouncement, handleUploadError } = require('../middleware/announcementUpload');
+const ctrl                 = require('../controllers/announcementController');
 
-// ─── FILE UPLOAD ──────────────────────────────────────────────────────────────
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, 'uploads/announcements/'),
-  filename:    (req, file, cb) => cb(null, `${Date.now()}-${file.originalname}`)
-});
-const upload = multer({
-  storage,
-  limits: { fileSize: 10 * 1024 * 1024 },
-  fileFilter: (req, file, cb) => {
-    const allowed = /pdf|jpeg|jpg|png|doc|docx/;
-    const ext = path.extname(file.originalname).toLowerCase();
-    allowed.test(ext) ? cb(null, true) : cb(new Error('Invalid file type'));
+router.use(authenticate);
+router.use(companyIsolation);
+
+// ── Role guards ───────────────────────────────────────────────────────────────
+const canCreate = (req, res, next) => {
+  const allowed = ['lecturer', 'hod', 'admin', 'superadmin', 'manager'];
+  if (!allowed.includes(req.user.role)) {
+    return res.status(403).json({
+      success: false,
+      message: 'You are not allowed to post announcements.',
+    });
   }
-});
+  next();
+};
 
-// ─── COMMON MIDDLEWARE ────────────────────────────────────────────────────────
-router.use(authenticate, companyIsolation, validateMode);
+const canManage = (req, res, next) => {
+  const allowed = ['admin', 'superadmin'];
+  if (!allowed.includes(req.user.role)) {
+    return res.status(403).json({
+      success: false,
+      message: 'Access denied.',
+    });
+  }
+  next();
+};
 
-// ─── ROUTES ──────────────────────────────────────────────────────────────────
-router.get('/unread/count', ctrl.getUnreadCount);
-router.get('/archive',      ctrl.getArchive);
-router.get('/dashboard',    ctrl.getDashboard);
-router.get('/',             ctrl.getAnnouncements);
+// ── Routes ────────────────────────────────────────────────────────────────────
 
-router.post('/create', canCreate, validateTarget, upload.single('attachment'), ctrl.createAnnouncement);
+// Create with optional PDF upload
+router.post(
+  '/',
+  canCreate,
+  uploadAnnouncement,
+  handleUploadError,
+  ctrl.createAnnouncement
+);
 
-router.get('/:id',             ctrl.getOne);
-router.put('/:id',  canCreate, ctrl.updateAnnouncement);
+// List
+router.get('/',               ctrl.listAnnouncements);
+router.get('/unread-count',   ctrl.getUnreadCount);
+
+// Secure PDF serving (authenticated, same company)
+router.get('/attachment/:filename',          ctrl.serveAttachment);
+router.get('/attachment/:filename/download', ctrl.downloadAttachment);
+
+// Single announcement
+router.get('/:id', ctrl.getAnnouncement);
+
+// Mark read
+router.patch('/:id/read', ctrl.markRead);
+
+// Pin (admin/superadmin only)
+router.patch('/:id/pin', canManage, ctrl.togglePin);
+
+// Delete — creator or admin/superadmin only (enforced in controller too)
 router.delete('/:id', canCreate, ctrl.deleteAnnouncement);
-router.patch('/:id/pin',   canCreate, ctrl.pinAnnouncement);
-router.patch('/:id/unpin', canCreate, ctrl.unpinAnnouncement);
-router.patch('/:id/read',  ctrl.markRead);
-router.get('/:id/read-stats', canCreate, ctrl.getReadStats);
 
 module.exports = router;
