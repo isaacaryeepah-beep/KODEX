@@ -1,120 +1,84 @@
 const mongoose = require('mongoose');
 
-const readEntrySchema = new mongoose.Schema({
-  userId:   { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-  readAt:   { type: Date, default: Date.now }
-}, { _id: false });
-
 const attachmentSchema = new mongoose.Schema({
-  originalName: String,
-  fileName:     String,
-  mimeType:     String,
-  size:         Number,
-  url:          String
+  fileName:        { type: String, required: true },
+  originalName:    { type: String, required: true },
+  fileUrl:         { type: String, required: true },
+  mimeType:        { type: String, required: true },
+  fileSize:        { type: Number, required: true },
+  storageProvider: { type: String, default: 'local' },
+  uploadedAt:      { type: Date, default: Date.now },
 }, { _id: false });
 
 const announcementSchema = new mongoose.Schema({
-  // Core
-  title:       { type: String, required: true, trim: true, maxlength: 200 },
-  message:     { type: String, required: true, trim: true },
-  category: {
+
+  // ── Core ──────────────────────────────────────────────────────────────────
+  title:    { type: String, required: true, trim: true, maxlength: 300 },
+  body:     { type: String, required: true, trim: true },
+
+  // ── Tenant ────────────────────────────────────────────────────────────────
+  company:  { type: mongoose.Schema.Types.ObjectId, ref: 'Company', required: true },
+
+  // ── Creator audit ─────────────────────────────────────────────────────────
+  author:      { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  authorRole:  { type: String, required: true },
+  updatedBy:   { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+
+  // ── Audience targeting ────────────────────────────────────────────────────
+  audience: {
     type: String,
-    required: true,
     enum: [
-      'General Notice',
-      'Attendance Alert',
-      'Meeting Announcement',
-      'Emergency Alert',
-      'Subscription Alert',
-      'Academic Update',
-      'Corporate Update'
-    ]
+      'all',
+      'students',
+      'lecturers',
+      'employees',
+      'hod',
+      'department',
+      'programme',
+      'course',
+      'level',
+      'studyType',
+      'qualificationType',
+      'group',
+    ],
+    default: 'all',
   },
-  priority: {
+
+  // ── Scoping filters (optional — used when audience is specific) ───────────
+  targetDepartment:        { type: String, default: null },
+  targetProgramme:         { type: String, default: null },
+  targetCourse:            { type: mongoose.Schema.Types.ObjectId, ref: 'Course', default: null },
+  targetLevel:             { type: String, default: null },
+  targetGroup:             { type: String, default: null },
+  targetStudyType:         { type: String, default: null },
+  targetQualificationType: { type: String, default: null },
+
+  // ── Announcement type ─────────────────────────────────────────────────────
+  type: {
     type: String,
-    enum: ['normal', 'important', 'urgent'],
-    default: 'normal'
-  },
-  status: {
-    type: String,
-    enum: ['draft', 'published', 'archived'],
-    default: 'published'
+    enum: ['info', 'warning', 'success', 'urgent'],
+    default: 'info',
   },
 
-  // Tenant & mode isolation
-  companyId: { type: mongoose.Schema.Types.ObjectId, ref: 'Company', required: true },
-  mode:      { type: String, enum: ['academic', 'corporate'], required: true },
+  // ── PDF attachment (single for now, array-ready for future) ───────────────
+  attachment: { type: attachmentSchema, default: null },
 
-  // Creator
-  createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-  creatorRole: { type: String, required: true },
+  // ── Scheduling ────────────────────────────────────────────────────────────
+  publishAt:  { type: Date, default: null },
+  expiresAt:  { type: Date, default: null },
 
-  // Targeting
-  targetType: {
-    type: String,
-    enum: ['all', 'role', 'department', 'course', 'individual'],
-    required: true
-  },
-  targetRoles:       [{ type: String }],
-  targetDepartments: [{ type: String }],
-  targetCourses:     [{ type: mongoose.Schema.Types.ObjectId, ref: 'Course' }],
-  targetUserIds:     [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+  // ── State ────────────────────────────────────────────────────────────────
+  pinned:   { type: Boolean, default: false },
+  isActive: { type: Boolean, default: true },
 
-  // Resolved recipients (populated on create)
-  recipients: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
-
-  // Read tracking
-  readBy: [readEntrySchema],
-
-  // Pinning
-  isPinned:  { type: Boolean, default: false },
-  pinnedAt:  { type: Date },
-  pinnedBy:  { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-
-  // Scheduling & expiry
-  publishAt: { type: Date, default: Date.now },
-  expiresAt: { type: Date },
-
-  // Attachment
-  attachment: attachmentSchema
+  // ── Read tracking (lightweight) ───────────────────────────────────────────
+  readBy: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
 
 }, { timestamps: true });
 
-// Auto-unpin expired announcements on read
-announcementSchema.pre('save', function (next) {
-  if (this.isPinned && this.expiresAt && this.expiresAt < new Date()) {
-    this.isPinned = false;
-  }
-  next();
-});
-
-// Virtual: total recipients count
-announcementSchema.virtual('totalRecipients').get(function () {
-  return this.recipients.length;
-});
-
-// Virtual: read count
-announcementSchema.virtual('readCount').get(function () {
-  return this.readBy.length;
-});
-
-// Virtual: unread count
-announcementSchema.virtual('unreadCount').get(function () {
-  return this.recipients.length - this.readBy.length;
-});
-
-// Virtual: is expired
-announcementSchema.virtual('isExpired').get(function () {
-  return this.expiresAt ? this.expiresAt < new Date() : false;
-});
-
-announcementSchema.set('toJSON', { virtuals: true });
-announcementSchema.set('toObject', { virtuals: true });
-
-// Indexes
-announcementSchema.index({ companyId: 1, status: 1, publishAt: -1 });
-announcementSchema.index({ companyId: 1, isPinned: 1 });
-announcementSchema.index({ recipients: 1 });
-announcementSchema.index({ expiresAt: 1 });
+announcementSchema.index({ company: 1, audience: 1, isActive: 1 });
+announcementSchema.index({ company: 1, createdAt: -1 });
+announcementSchema.index({ company: 1, pinned: -1, createdAt: -1 });
+announcementSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0, sparse: true });
 
 module.exports = mongoose.model('Announcement', announcementSchema);
