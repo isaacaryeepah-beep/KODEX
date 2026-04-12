@@ -1,396 +1,306 @@
+const fs           = require('fs');
+const path         = require('path');
 const Announcement = require('../models/Announcement');
-const { resolveRecipients } = require('../services/recipientService');
-const { notifyRecipients }  = require('../services/notificationService');
+const { UPLOAD_DIR } = require('../middleware/announcementUpload');
 
-// ─── HELPERS ─────────────────────────────────────────────────────────────────
-const isExpired = (ann) => ann.expiresAt && ann.expiresAt < new Date();
-
-function buildListQuery(req) {
-  const companyId = req.user.company;
-  const user = req.user;
-  const { category, priority, pinned, status, unread, from, to, search } = req.query;
-
-  // Base: company-isolated, published, visible to this user
-  const q = {
-    companyId,
-    mode: req.announcementMode,
-    status: status || 'published',
-    publishAt: { $lte: new Date() },
-    recipients: user._id
-  };
-
-  if (category)  q.category = category;
-  if (priority)  q.priority = priority;
-  if (pinned === 'true') q.isPinned = true;
-  if (from || to) {
-    q.createdAt = {};
-    if (from) q.createdAt.$gte = new Date(from);
-    if (to)   q.createdAt.$lte = new Date(to);
-  }
-  if (search) q.$or = [
-    { title:   { $regex: search, $options: 'i' } },
-    { message: { $regex: search, $options: 'i' } }
-  ];
-  if (unread === 'true') {
-    q['readBy.userId'] = { $ne: user._id };
-  }
-
-  return q;
+function getCompanyId(req) {
+  return req.user.company || req.user.companyId;
 }
 
-// ─── CREATE ──────────────────────────────────────────────────────────────────
+// ─── POST /announcements ──────────────────────────────────────────────────────
 exports.createAnnouncement = async (req, res) => {
   try {
+    const companyId = getCompanyId(req);
     const {
-      title, message, category, priority, status,
-      targetType, targetRoles, targetDepartments, targetCourses, targetUserIds,
-      isPinned, publishAt, expiresAt
+      title, body, type, audience,
+      targetDepartment, targetProgramme, targetCourse,
+      targetLevel, targetGroup, targetStudyType, targetQualificationType,
+      publishAt, expiresAt, pinned,
     } = req.body;
 
-    // Resolve recipients
-    let recipients;
-    try {
-      recipients = await resolveRecipients({
-        companyId: req.user.company,
-        mode: req.announcementMode,
-        targetType,
-        targetRoles,
-        targetDepartments,
-        targetCourses,
-        targetUserIds
-      });
-    } catch (err) {
-      return res.status(400).json({ message: err.message });
+    if (!title || !body) {
+      // Clean up uploaded file if validation fails
+      if (req.file) fs.unlink(req.file.path, () => {});
+      return res.status(400).json({ success: false, message: 'Title and body are required.' });
     }
 
-    // Handle attachment
-    let attachment;
+    // Build attachment metadata if file was uploaded
+    let attachment = null;
     if (req.file) {
+      const baseUrl = process.env.SERVER_URL || 'https://kodex.it.com';
       attachment = {
-        originalName: req.file.originalname,
-        fileName:     req.file.filename,
-        mimeType:     req.file.mimetype,
-        size:         req.file.size,
-        url:          `/uploads/announcements/${req.file.filename}`
+        fileName:        req.file.filename,
+        originalName:    req.file.originalname,
+        fileUrl:         `${baseUrl}/api/announcements/attachment/${req.file.filename}`,
+        mimeType:        req.file.mimetype,
+        fileSize:        req.file.size,
+        storageProvider: 'local',
       };
     }
 
     const announcement = await Announcement.create({
-      title, message, category,
-      priority:    priority || 'normal',
-      status:      status   || 'published',
-      companyId:   req.user.company,
-      mode:        req.announcementMode,
-      createdBy:   req.user._id,
-      creatorRole: req.user.role,
-      targetType,
-      targetRoles:       targetRoles       || [],
-      targetDepartments: targetDepartments || [],
-      targetCourses:     targetCourses     || [],
-      targetUserIds:     targetUserIds     || [],
-      recipients,
-      isPinned: isPinned && priority !== 'normal' ? isPinned : false,
-      publishAt: publishAt ? new Date(publishAt) : new Date(),
-      expiresAt: expiresAt ? new Date(expiresAt) : undefined,
-      attachment
+      title:                   title.trim(),
+      body:                    body.trim(),
+      company:                 companyId,
+      author:                  req.user._id,
+      authorRole:              req.user.role,
+      type:                    type        || 'info',
+      audience:                audience    || 'all',
+      targetDepartment:        targetDepartment        || null,
+      targetProgramme:         targetProgramme         || null,
+      targetCourse:            targetCourse            || null,
+      targetLevel:             targetLevel             || null,
+      targetGroup:             targetGroup             || null,
+      targetStudyType:         targetStudyType         || null,
+      targetQualificationType: targetQualificationType || null,
+      publishAt:               publishAt   ? new Date(publishAt)  : null,
+      expiresAt:               expiresAt   ? new Date(expiresAt)  : null,
+      pinned:                  pinned === true || pinned === 'true',
+      attachment,
     });
 
-    // Notify asynchronously — don't block response
-    notifyRecipients(announcement, recipients).catch(() => {});
+    await announcement.populate('author', 'name email role');
 
-    res.status(201).json({
+    return res.status(201).json({
       success: true,
-      message: 'Announcement created',
-      data: announcement
+      message: 'Announcement posted.',
+      data:    announcement,
     });
   } catch (err) {
+    if (req.file) fs.unlink(req.file.path, () => {});
     console.error('[createAnnouncement]', err);
-    res.status(500).json({ message: 'Server error', error: err.message });
+    return res.status(500).json({ success: false, message: err.message });
   }
 };
 
-// ─── GET ALL (for current user) ───────────────────────────────────────────────
-exports.getAnnouncements = async (req, res) => {
+// ─── GET /announcements ───────────────────────────────────────────────────────
+exports.listAnnouncements = async (req, res) => {
   try {
-    const page  = parseInt(req.query.page)  || 1;
-    const limit = parseInt(req.query.limit) || 20;
-    const skip  = (page - 1) * limit;
+    const companyId = getCompanyId(req);
+    const role      = req.user.role;
+    const now       = new Date();
 
-    const q = buildListQuery(req);
-
-    const [announcements, total] = await Promise.all([
-      Announcement.find(q)
-        .sort({ isPinned: -1, priority: -1, publishAt: -1 })
-        .skip(skip).limit(limit)
-        .populate('createdBy', 'name email role')
-        .lean({ virtuals: true }),
-      Announcement.countDocuments(q)
-    ]);
-
-    // Attach per-user read status
-    const userId = req.user._id.toString();
-    const result = announcements.map(a => ({
-      ...a,
-      isRead: a.readBy?.some(r => r.userId?.toString() === userId),
-      isExpired: a.expiresAt ? a.expiresAt < new Date() : false
-    }));
-
-    res.json({
-      success: true,
-      data: result,
-      pagination: { page, limit, total, pages: Math.ceil(total / limit) }
-    });
-  } catch (err) {
-    res.status(500).json({ message: 'Server error', error: err.message });
-  }
-};
-
-// ─── DASHBOARD (latest 3 + pinned) ───────────────────────────────────────────
-exports.getDashboard = async (req, res) => {
-  try {
-    const now = new Date();
-    const base = {
-      companyId: req.user.company,
-      mode: req.announcementMode,
-      status: 'published',
-      publishAt: { $lte: now },
-      recipients: req.user._id,
-      $or: [{ expiresAt: { $gt: now } }, { expiresAt: { $exists: false } }]
+    const query = {
+      company:  companyId,
+      isActive: true,
+      $or: [
+        { publishAt: null },
+        { publishAt: { $lte: now } },
+      ],
+      $and: [
+        {
+          $or: [
+            { expiresAt: null },
+            { expiresAt: { $gt: now } },
+          ],
+        },
+      ],
     };
 
-    const [pinned, latest, unreadCount] = await Promise.all([
-      Announcement.find({ ...base, isPinned: true })
-        .sort({ publishAt: -1 }).limit(5)
-        .populate('createdBy', 'name role').lean({ virtuals: true }),
+    // Audience scoping
+    if (role === 'student') {
+      query.$or = [
+        { audience: 'all' },
+        { audience: 'students' },
+        { audience: 'department', targetDepartment: req.user.department },
+        { audience: 'level',     targetLevel:       req.user.studentLevel },
+        { audience: 'group',     targetGroup:       req.user.studentGroup },
+        { audience: 'studyType', targetStudyType:   req.user.studyType },
+        { audience: 'qualificationType', targetQualificationType: req.user.qualificationType },
+      ];
+    } else if (role === 'employee') {
+      query.$or = [
+        { audience: 'all' },
+        { audience: 'employees' },
+      ];
+    } else if (role === 'lecturer') {
+      query.$or = [
+        { audience: 'all' },
+        { audience: 'lecturers' },
+        { audience: 'department', targetDepartment: req.user.department },
+      ];
+    } else if (role === 'hod') {
+      query.$or = [
+        { audience: 'all' },
+        { audience: 'hod' },
+        { audience: 'lecturers' },
+        { audience: 'department', targetDepartment: req.user.department },
+      ];
+    }
+    // admin / superadmin: see all
 
-      Announcement.find(base)
-        .sort({ priority: -1, publishAt: -1 }).limit(3)
-        .populate('createdBy', 'name role').lean({ virtuals: true }),
+    const announcements = await Announcement.find(query)
+      .sort({ pinned: -1, createdAt: -1 })
+      .populate('author', 'name email role')
+      .lean();
 
-      Announcement.countDocuments({
-        ...base,
-        'readBy.userId': { $ne: req.user._id }
-      })
-    ]);
-
-    const userId = req.user._id.toString();
-    const tag = (list) => list.map(a => ({
+    // Mark which ones the user has read
+    const result = announcements.map(a => ({
       ...a,
-      isRead: a.readBy?.some(r => r.userId?.toString() === userId)
+      isRead:      (a.readBy || []).some(id => id.toString() === req.user._id.toString()),
+      readCount:   (a.readBy || []).length,
     }));
 
-    res.json({
-      success: true,
-      data: {
-        pinned:      tag(pinned),
-        latest:      tag(latest),
-        unreadCount
-      }
-    });
+    return res.json({ success: true, data: result });
   } catch (err) {
-    res.status(500).json({ message: 'Server error', error: err.message });
+    console.error('[listAnnouncements]', err);
+    return res.status(500).json({ success: false, message: err.message });
   }
 };
 
-// ─── GET ONE ─────────────────────────────────────────────────────────────────
-exports.getOne = async (req, res) => {
+// ─── GET /announcements/unread-count ─────────────────────────────────────────
+exports.getUnreadCount = async (req, res) => {
   try {
-    const ann = await Announcement.findOne({
-      _id: req.params.id,
-      companyId: req.user.company,
-      recipients: req.user._id
-    }).populate('createdBy', 'name email role');
+    const companyId = getCompanyId(req);
+    const now       = new Date();
 
-    if (!ann) return res.status(404).json({ message: 'Announcement not found' });
-
-    const userId = req.user._id.toString();
-    res.json({
-      success: true,
-      data: {
-        ...ann.toJSON(),
-        isRead: ann.readBy.some(r => r.userId?.toString() === userId)
-      }
+    const count = await Announcement.countDocuments({
+      company:  companyId,
+      isActive: true,
+      readBy:   { $ne: req.user._id },
+      $or: [{ publishAt: null }, { publishAt: { $lte: now } }],
+      $and: [{ $or: [{ expiresAt: null }, { expiresAt: { $gt: now } }] }],
     });
+
+    return res.json({ success: true, count });
   } catch (err) {
-    res.status(500).json({ message: 'Server error', error: err.message });
+    return res.status(500).json({ success: false, message: err.message });
   }
 };
 
-// ─── UPDATE ───────────────────────────────────────────────────────────────────
-exports.updateAnnouncement = async (req, res) => {
+// ─── GET /announcements/:id ───────────────────────────────────────────────────
+exports.getAnnouncement = async (req, res) => {
   try {
-    const ann = await Announcement.findOne({ _id: req.params.id, companyId: req.user.company });
-    if (!ann) return res.status(404).json({ message: 'Announcement not found' });
+    const companyId = getCompanyId(req);
+    const ann = await Announcement.findOne({ _id: req.params.id, company: companyId })
+      .populate('author', 'name email role')
+      .lean();
 
-    const role = req.user.role?.toLowerCase();
-    const isAdmin = ['admin', 'hod', 'superadmin', 'manager'].includes(role);
-    if (!isAdmin && ann.createdBy.toString() !== req.user._id.toString()) {
-      return res.status(403).json({ message: 'You can only modify your own announcements' });
+    if (!ann) {
+      return res.status(404).json({ success: false, message: 'Announcement not found.' });
     }
 
-    const allowed = ['title', 'message', 'category', 'priority', 'status', 'expiresAt', 'publishAt'];
-    allowed.forEach(f => { if (req.body[f] !== undefined) ann[f] = req.body[f]; });
-
-    await ann.save();
-    res.json({ success: true, message: 'Announcement updated', data: ann });
+    return res.json({ success: true, data: ann });
   } catch (err) {
-    res.status(500).json({ message: 'Server error', error: err.message });
+    return res.status(500).json({ success: false, message: err.message });
   }
 };
 
-// ─── DELETE ───────────────────────────────────────────────────────────────────
+// ─── PATCH /announcements/:id/read ────────────────────────────────────────────
+exports.markRead = async (req, res) => {
+  try {
+    const companyId = getCompanyId(req);
+    await Announcement.updateOne(
+      { _id: req.params.id, company: companyId },
+      { $addToSet: { readBy: req.user._id } }
+    );
+    return res.json({ success: true });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// ─── PATCH /announcements/:id/pin ─────────────────────────────────────────────
+exports.togglePin = async (req, res) => {
+  try {
+    const companyId = getCompanyId(req);
+    const ann = await Announcement.findOne({ _id: req.params.id, company: companyId });
+    if (!ann) return res.status(404).json({ success: false, message: 'Not found.' });
+    ann.pinned = !ann.pinned;
+    await ann.save();
+    return res.json({ success: true, pinned: ann.pinned });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// ─── DELETE /announcements/:id ────────────────────────────────────────────────
 exports.deleteAnnouncement = async (req, res) => {
   try {
-    const ann = await Announcement.findOne({ _id: req.params.id, companyId: req.user.company });
-    if (!ann) return res.status(404).json({ message: 'Announcement not found' });
+    const companyId = getCompanyId(req);
+    const ann = await Announcement.findOne({ _id: req.params.id, company: companyId });
+    if (!ann) return res.status(404).json({ success: false, message: 'Not found.' });
 
-    const role = req.user.role?.toLowerCase();
-    const isAdmin = ['admin', 'hod', 'superadmin', 'manager'].includes(role);
-    if (!isAdmin && ann.createdBy.toString() !== req.user._id.toString()) {
-      return res.status(403).json({ message: 'You can only delete your own announcements' });
+    // Only the creator, admin, or superadmin can delete
+    const isCreator = ann.author.toString() === req.user._id.toString();
+    const isAdmin   = ['admin', 'superadmin'].includes(req.user.role);
+    if (!isCreator && !isAdmin) {
+      return res.status(403).json({
+        success: false,
+        message: 'You can only delete your own announcements.',
+      });
+    }
+
+    // Clean up uploaded file if it exists
+    if (ann.attachment?.fileName) {
+      const filePath = path.join(UPLOAD_DIR, ann.attachment.fileName);
+      fs.unlink(filePath, () => {}); // non-fatal
     }
 
     await ann.deleteOne();
-    res.json({ success: true, message: 'Announcement deleted' });
+    return res.json({ success: true, message: 'Announcement deleted.' });
   } catch (err) {
-    res.status(500).json({ message: 'Server error', error: err.message });
+    console.error('[deleteAnnouncement]', err);
+    return res.status(500).json({ success: false, message: err.message });
   }
 };
 
-// ─── PIN ─────────────────────────────────────────────────────────────────────
-exports.pinAnnouncement = async (req, res) => {
+// ─── GET /announcements/attachment/:filename ──────────────────────────────────
+// Secure PDF serving — only authenticated users of same company
+exports.serveAttachment = async (req, res) => {
   try {
-    const ann = await Announcement.findOne({ _id: req.params.id, companyId: req.user.company });
-    if (!ann) return res.status(404).json({ message: 'Announcement not found' });
-    if (isExpired(ann)) return res.status(400).json({ message: 'Expired announcements cannot be pinned' });
+    const companyId = getCompanyId(req);
+    const { filename } = req.params;
 
-    ann.isPinned = true;
-    ann.pinnedAt = new Date();
-    ann.pinnedBy = req.user._id;
-    await ann.save();
-
-    res.json({ success: true, message: 'Announcement pinned' });
-  } catch (err) {
-    res.status(500).json({ message: 'Server error', error: err.message });
-  }
-};
-
-// ─── UNPIN ───────────────────────────────────────────────────────────────────
-exports.unpinAnnouncement = async (req, res) => {
-  try {
-    const ann = await Announcement.findOneAndUpdate(
-      { _id: req.params.id, companyId: req.user.company },
-      { isPinned: false, pinnedAt: null, pinnedBy: null },
-      { new: true }
-    );
-    if (!ann) return res.status(404).json({ message: 'Announcement not found' });
-    res.json({ success: true, message: 'Announcement unpinned' });
-  } catch (err) {
-    res.status(500).json({ message: 'Server error', error: err.message });
-  }
-};
-
-// ─── MARK READ ───────────────────────────────────────────────────────────────
-exports.markRead = async (req, res) => {
-  try {
+    // Find announcement with this attachment in same company
     const ann = await Announcement.findOne({
-      _id: req.params.id,
-      companyId: req.user.company,
-      recipients: req.user._id
-    });
-    if (!ann) return res.status(404).json({ message: 'Announcement not found' });
+      company:                 companyId,
+      'attachment.fileName':   filename,
+      isActive:                true,
+    }).lean();
 
-    const alreadyRead = ann.readBy.some(r => r.userId?.toString() === req.user._id.toString());
-    if (alreadyRead) return res.json({ success: true, message: 'Already marked as read' });
-
-    ann.readBy.push({ userId: req.user._id, readAt: new Date() });
-    await ann.save();
-
-    res.json({ success: true, message: 'Marked as read' });
-  } catch (err) {
-    res.status(500).json({ message: 'Server error', error: err.message });
-  }
-};
-
-// ─── READ STATS (creator/admin only) ─────────────────────────────────────────
-exports.getReadStats = async (req, res) => {
-  try {
-    const ann = await Announcement.findOne({ _id: req.params.id, companyId: req.user.company })
-      .populate('readBy.userId', 'name email role')
-      .populate('recipients', 'name email role');
-
-    if (!ann) return res.status(404).json({ message: 'Announcement not found' });
-
-    const role = req.user.role?.toLowerCase();
-    const isAdmin = ['admin', 'hod', 'superadmin', 'manager'].includes(role);
-    if (!isAdmin && ann.createdBy.toString() !== req.user._id.toString()) {
-      return res.status(403).json({ message: 'Not authorized to view read stats' });
+    if (!ann) {
+      return res.status(404).json({ success: false, message: 'File not found.' });
     }
 
-    res.json({
-      success: true,
-      data: {
-        title:          ann.title,
-        totalRecipients: ann.recipients.length,
-        readCount:       ann.readBy.length,
-        unreadCount:     ann.recipients.length - ann.readBy.length,
-        readBy:          ann.readBy
-      }
-    });
+    const filePath = path.join(process.cwd(), UPLOAD_DIR, filename);
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ success: false, message: 'File not found on disk.' });
+    }
+
+    res.setHeader('Content-Type', ann.attachment.mimeType || 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="${ann.attachment.originalName}"`);
+    return res.sendFile(filePath);
   } catch (err) {
-    res.status(500).json({ message: 'Server error', error: err.message });
+    console.error('[serveAttachment]', err);
+    return res.status(500).json({ success: false, message: err.message });
   }
 };
 
-// ─── ARCHIVE ─────────────────────────────────────────────────────────────────
-exports.getArchive = async (req, res) => {
+// ─── GET /announcements/attachment/:filename/download ─────────────────────────
+exports.downloadAttachment = async (req, res) => {
   try {
-    const page  = parseInt(req.query.page)  || 1;
-    const limit = parseInt(req.query.limit) || 20;
-    const skip  = (page - 1) * limit;
+    const companyId = getCompanyId(req);
+    const { filename } = req.params;
 
-    const q = {
-      companyId: req.user.company,
-      mode: req.announcementMode,
-      recipients: req.user._id,
-      $or: [
-        { status: 'archived' },
-        { expiresAt: { $lt: new Date() } }
-      ]
-    };
+    const ann = await Announcement.findOne({
+      company:               companyId,
+      'attachment.fileName': filename,
+      isActive:              true,
+    }).lean();
 
-    const [data, total] = await Promise.all([
-      Announcement.find(q).sort({ updatedAt: -1 }).skip(skip).limit(limit)
-        .populate('createdBy', 'name role').lean({ virtuals: true }),
-      Announcement.countDocuments(q)
-    ]);
+    if (!ann) {
+      return res.status(404).json({ success: false, message: 'File not found.' });
+    }
 
-    res.json({
-      success: true,
-      data,
-      pagination: { page, limit, total, pages: Math.ceil(total / limit) }
-    });
+    const filePath = path.join(process.cwd(), UPLOAD_DIR, filename);
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ success: false, message: 'File not found on disk.' });
+    }
+
+    return res.download(filePath, ann.attachment.originalName);
   } catch (err) {
-    res.status(500).json({ message: 'Server error', error: err.message });
-  }
-};
-
-// ─── UNREAD COUNT ─────────────────────────────────────────────────────────────
-exports.getUnreadCount = async (req, res) => {
-  try {
-    const now = new Date();
-    const count = await Announcement.countDocuments({
-      companyId: req.user.company,
-      mode: req.announcementMode,
-      status: 'published',
-      publishAt: { $lte: now },
-      recipients: req.user._id,
-      $or: [{ expiresAt: { $gt: now } }, { expiresAt: { $exists: false } }],
-      'readBy.userId': { $ne: req.user._id }
-    });
-
-    res.json({ success: true, unreadCount: count });
-  } catch (err) {
-    res.status(500).json({ message: 'Server error', error: err.message });
+    console.error('[downloadAttachment]', err);
+    return res.status(500).json({ success: false, message: err.message });
   }
 };
