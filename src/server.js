@@ -241,6 +241,7 @@ const transcriptRoutes          = require("./routes/transcripts");
 const evaluationRoutes          = require("./routes/evaluations");
 const calendarRoutes            = require("./routes/calendar");
 const supportRoutes             = require("./routes/support");
+const badgeRoutes               = require("./routes/badges");
 
 app.use("/api/shifts", shiftRoutes);
 app.use("/api/leaves", leaveRoutes);
@@ -266,6 +267,7 @@ app.use("/api/transcripts",         transcriptRoutes);
 app.use("/api/evaluations",         evaluationRoutes);
 app.use("/api/calendar",            calendarRoutes);
 app.use("/api/support",             supportRoutes);
+app.use("/api/badges",              badgeRoutes);
 
 const deviceSessionRoutes = require("./routes/deviceSessionRoutes");
 app.use("/api", deviceSessionRoutes);
