@@ -244,6 +244,7 @@ const supportRoutes             = require("./routes/support");
 const badgeRoutes               = require("./routes/badges");
 const staffNoteRoutes           = require("./routes/staffNotes");
 const programmeRoutes           = require("./routes/programmes");
+const engagementRoutes          = require("./routes/engagement");
 
 app.use("/api/shifts", shiftRoutes);
 app.use("/api/leaves", leaveRoutes);
@@ -272,6 +273,7 @@ app.use("/api/support",             supportRoutes);
 app.use("/api/badges",              badgeRoutes);
 app.use("/api/staff-notes",         staffNoteRoutes);
 app.use("/api/programmes",          programmeRoutes);
+app.use("/api/engagement",          engagementRoutes);
 
 const deviceSessionRoutes = require("./routes/deviceSessionRoutes");
 app.use("/api", deviceSessionRoutes);
