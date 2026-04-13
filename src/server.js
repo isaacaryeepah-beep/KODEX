@@ -238,6 +238,7 @@ const enrollmentRoutes          = require("./routes/enrollments");
 const forumRoutes               = require("./routes/forums");
 const messageRoutes             = require("./routes/messages");
 const transcriptRoutes          = require("./routes/transcripts");
+const evaluationRoutes          = require("./routes/evaluations");
 
 app.use("/api/shifts", shiftRoutes);
 app.use("/api/leaves", leaveRoutes);
@@ -260,6 +261,7 @@ app.use("/api/enrollments",         enrollmentRoutes);
 app.use("/api/forums",              forumRoutes);
 app.use("/api/messages",            messageRoutes);
 app.use("/api/transcripts",         transcriptRoutes);
+app.use("/api/evaluations",         evaluationRoutes);
 
 const deviceSessionRoutes = require("./routes/deviceSessionRoutes");
 app.use("/api", deviceSessionRoutes);
