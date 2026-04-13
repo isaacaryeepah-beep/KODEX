@@ -233,6 +233,8 @@ const notificationRoutes        = require("./routes/notifications");
 const auditLogRoutes            = require("./routes/auditLogs");
 const payrollRoutes             = require("./routes/payroll");
 const dashboardRoutes           = require("./routes/dashboard");
+const courseResourceRoutes      = require("./routes/courseResources");
+const enrollmentRoutes          = require("./routes/enrollments");
 
 app.use("/api/shifts", shiftRoutes);
 app.use("/api/leaves", leaveRoutes);
@@ -250,6 +252,8 @@ app.use("/api/notifications",        notificationRoutes);
 app.use("/api/audit-logs",           auditLogRoutes);
 app.use("/api/payroll",              payrollRoutes);
 app.use("/api/dashboard",           dashboardRoutes);
+app.use("/api/courses/:courseId/resources", courseResourceRoutes);
+app.use("/api/enrollments",         enrollmentRoutes);
 
 const deviceSessionRoutes = require("./routes/deviceSessionRoutes");
 app.use("/api", deviceSessionRoutes);
