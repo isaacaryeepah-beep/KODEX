@@ -239,6 +239,7 @@ const forumRoutes               = require("./routes/forums");
 const messageRoutes             = require("./routes/messages");
 const transcriptRoutes          = require("./routes/transcripts");
 const evaluationRoutes          = require("./routes/evaluations");
+const calendarRoutes            = require("./routes/calendar");
 
 app.use("/api/shifts", shiftRoutes);
 app.use("/api/leaves", leaveRoutes);
@@ -262,6 +263,7 @@ app.use("/api/forums",              forumRoutes);
 app.use("/api/messages",            messageRoutes);
 app.use("/api/transcripts",         transcriptRoutes);
 app.use("/api/evaluations",         evaluationRoutes);
+app.use("/api/calendar",            calendarRoutes);
 
 const deviceSessionRoutes = require("./routes/deviceSessionRoutes");
 app.use("/api", deviceSessionRoutes);
