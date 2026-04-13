@@ -223,6 +223,12 @@ const trainingRoutes = require("./routes/training");
 const performanceRoutes = require("./routes/performance");
 const operationsRoutes = require("./routes/operations");
 const advancedRoutes = require("./routes/advanced");
+const departmentRoutes         = require("./routes/departments");
+const teamRoutes               = require("./routes/teams");
+const employeeProfileRoutes    = require("./routes/employeeProfiles");
+const leavePolicyRoutes        = require("./routes/leavePolicies");
+const leaveBalanceRoutes       = require("./routes/leaveBalances");
+const corporateAttendanceRoutes = require("./routes/corporateAttendance");
 
 app.use("/api/shifts", shiftRoutes);
 app.use("/api/leaves", leaveRoutes);
@@ -230,6 +236,12 @@ app.use("/api/training", trainingRoutes);
 app.use("/api/performance", performanceRoutes);
 app.use("/api/operations", operationsRoutes);
 app.use("/api/advanced", advancedRoutes);
+app.use("/api/departments",          departmentRoutes);
+app.use("/api/teams",                teamRoutes);
+app.use("/api/employee-profiles",    employeeProfileRoutes);
+app.use("/api/leave-policies",       leavePolicyRoutes);
+app.use("/api/leave-balances",       leaveBalanceRoutes);
+app.use("/api/corporate-attendance", corporateAttendanceRoutes);
 
 const deviceSessionRoutes = require("./routes/deviceSessionRoutes");
 app.use("/api", deviceSessionRoutes);
