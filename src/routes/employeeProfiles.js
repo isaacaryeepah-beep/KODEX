@@ -37,7 +37,7 @@ const canManage = requireRole("admin", "manager", "superadmin");
 
 // Fields an employee is NOT allowed to edit on their own profile
 const SENSITIVE_FIELDS = new Set([
-  "salaryBand", "nationalId", "notes",
+  "salaryBand", "monthlySalary", "hourlyRate", "nationalId", "notes",
   "terminationDate", "terminationReason",
   "hireDate", "probationEndDate", "employmentType",
 ]);
@@ -68,6 +68,8 @@ router.get("/my", ...mw, async (req, res) => {
     const obj = profile.toObject();
     if (!isAdmin) {
       delete obj.salaryBand;
+      delete obj.monthlySalary;
+      delete obj.hourlyRate;
       delete obj.nationalId;
       delete obj.notes;
     }
