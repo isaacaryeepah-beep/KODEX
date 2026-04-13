@@ -232,6 +232,7 @@ const corporateAttendanceRoutes = require("./routes/corporateAttendance");
 const notificationRoutes        = require("./routes/notifications");
 const auditLogRoutes            = require("./routes/auditLogs");
 const payrollRoutes             = require("./routes/payroll");
+const dashboardRoutes           = require("./routes/dashboard");
 
 app.use("/api/shifts", shiftRoutes);
 app.use("/api/leaves", leaveRoutes);
@@ -248,6 +249,7 @@ app.use("/api/corporate-attendance", corporateAttendanceRoutes);
 app.use("/api/notifications",        notificationRoutes);
 app.use("/api/audit-logs",           auditLogRoutes);
 app.use("/api/payroll",              payrollRoutes);
+app.use("/api/dashboard",           dashboardRoutes);
 
 const deviceSessionRoutes = require("./routes/deviceSessionRoutes");
 app.use("/api", deviceSessionRoutes);
