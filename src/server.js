@@ -236,6 +236,7 @@ const dashboardRoutes           = require("./routes/dashboard");
 const courseResourceRoutes      = require("./routes/courseResources");
 const enrollmentRoutes          = require("./routes/enrollments");
 const forumRoutes               = require("./routes/forums");
+const messageRoutes             = require("./routes/messages");
 
 app.use("/api/shifts", shiftRoutes);
 app.use("/api/leaves", leaveRoutes);
@@ -256,6 +257,7 @@ app.use("/api/dashboard",           dashboardRoutes);
 app.use("/api/courses/:courseId/resources", courseResourceRoutes);
 app.use("/api/enrollments",         enrollmentRoutes);
 app.use("/api/forums",              forumRoutes);
+app.use("/api/messages",            messageRoutes);
 
 const deviceSessionRoutes = require("./routes/deviceSessionRoutes");
 app.use("/api", deviceSessionRoutes);
