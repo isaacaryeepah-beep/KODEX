@@ -31,6 +31,8 @@ const assignmentRoutes  = require("./routes/assignments");
 const aiProxyRoutes     = require("./routes/aiProxy");
 const meetingRoutes     = require("./routes/meetingRoutes");   // ← NEW
 const sessionDashboardRoutes = require('./routes/sessionDashboard');
+const normalQuizLecturerRoutes = require("./routes/normalQuizLecturerRoutes");
+const normalQuizStudentRoutes  = require("./routes/normalQuizStudentRoutes");
 let superadminRoutes = null;
 try { superadminRoutes = require("./routes/superadmin"); } catch(_) { console.warn('superadmin routes not found — skipping'); }
 
@@ -173,12 +175,14 @@ app.use("/api/payments", paymentRoutes);
 app.use("/api/courses", courseRoutes);
 app.use("/api/quizzes", quizRoutes);
 app.use("/api/lecturer/quizzes", lecturerQuizRoutes);
+app.use("/api/lecturer/normal-quizzes", normalQuizLecturerRoutes);
 app.use("/api/lecturer/question-bank", questionBankRoutes);
 app.use("/api/announcements", announcementRoutes);
 app.use("/api/timetable", require("./routes/timetable"));
 app.use("/api/webhooks", webhookRoutes);
 app.use("/api/gradebook", gradeBookRoutes);
 app.use("/api/student/quizzes", studentQuizRoutes);
+app.use("/api/student/normal-quizzes", normalQuizStudentRoutes);
 app.use("/api/admin/quizzes", adminQuizRoutes);
 app.use("/api/zoom", zoomRoutes);
 app.use("/api/reports", reportRoutes);
