@@ -37,6 +37,7 @@ const snapQuizLecturerRoutes        = require("./routes/snapQuizLecturerRoutes")
 const snapQuizStudentRoutes         = require("./routes/snapQuizStudentRoutes");
 const assignmentLecturerRoutes      = require("./routes/assignmentLecturerRoutes");
 const assignmentStudentRoutes       = require("./routes/assignmentStudentRoutes");
+const aiGeneratorRoutes             = require("./routes/aiGeneratorRoutes");
 let superadminRoutes = null;
 try { superadminRoutes = require("./routes/superadmin"); } catch(_) { console.warn('superadmin routes not found — skipping'); }
 
@@ -191,6 +192,7 @@ app.use("/api/lecturer/snap-quizzes",  snapQuizLecturerRoutes);
 app.use("/api/student/snap-quizzes",   snapQuizStudentRoutes);
 app.use("/api/lecturer/assignments",   assignmentLecturerRoutes);
 app.use("/api/student/assignments",    assignmentStudentRoutes);
+app.use("/api/lecturer/ai-generator",  aiGeneratorRoutes);
 app.use("/api/admin/quizzes", adminQuizRoutes);
 app.use("/api/zoom", zoomRoutes);
 app.use("/api/reports", reportRoutes);
