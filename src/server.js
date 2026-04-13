@@ -229,6 +229,8 @@ const employeeProfileRoutes    = require("./routes/employeeProfiles");
 const leavePolicyRoutes        = require("./routes/leavePolicies");
 const leaveBalanceRoutes       = require("./routes/leaveBalances");
 const corporateAttendanceRoutes = require("./routes/corporateAttendance");
+const notificationRoutes        = require("./routes/notifications");
+const auditLogRoutes            = require("./routes/auditLogs");
 
 app.use("/api/shifts", shiftRoutes);
 app.use("/api/leaves", leaveRoutes);
@@ -242,6 +244,8 @@ app.use("/api/employee-profiles",    employeeProfileRoutes);
 app.use("/api/leave-policies",       leavePolicyRoutes);
 app.use("/api/leave-balances",       leaveBalanceRoutes);
 app.use("/api/corporate-attendance", corporateAttendanceRoutes);
+app.use("/api/notifications",        notificationRoutes);
+app.use("/api/audit-logs",           auditLogRoutes);
 
 const deviceSessionRoutes = require("./routes/deviceSessionRoutes");
 app.use("/api", deviceSessionRoutes);

@@ -25,6 +25,9 @@ const { requireActiveSubscription } = require("../middleware/subscription");
 const CorporateAttendance = require("../models/CorporateAttendance");
 const ShiftAssignment     = require("../models/ShiftAssignment");
 const Shift               = require("../models/Shift");
+const AuditLog            = require("../models/AuditLog");
+const { AUDIT_ACTIONS }   = AuditLog;
+const notificationService = require("../services/notificationService");
 
 const mw        = [authenticate, requireMode("corporate"), requireActiveSubscription];
 const canManage = requireRole("admin", "manager", "superadmin");
@@ -378,38 +381,58 @@ router.patch("/:id/override", ...mw, requireRole("admin", "superadmin"), async (
       return res.status(400).json({ error: "Provide at least one field to override" });
     }
 
+    // Fetch before-state first — needed for audit trail and hours recomputation
+    const existing = await CorporateAttendance.findOne({
+      _id: req.params.id,
+      company: req.user.company,
+    });
+    if (!existing) return res.status(404).json({ error: "Attendance record not found" });
+
+    const existingStatus = existing.status;
+
     const update = {
       isManualOverride: true,
       overrideBy:       req.user._id,
       overrideAt:       new Date(),
       overrideReason:   reason || "",
     };
-    if (status)       update.status        = status;
-    if (notes)        update.notes         = notes;
-    if (clockInTime)  update["clockIn.time"]  = new Date(clockInTime);
-    if (clockOutTime) update["clockOut.time"] = new Date(clockOutTime);
+    if (status)       update.status             = status;
+    if (notes)        update.notes              = notes;
+    if (clockInTime)  update["clockIn.time"]    = new Date(clockInTime);
+    if (clockOutTime) update["clockOut.time"]   = new Date(clockOutTime);
 
-    // Recompute hours worked if both times are present
+    // Recompute hours worked when either clock time is being updated
     if (clockInTime || clockOutTime) {
-      const existing = await CorporateAttendance.findOne({
-        _id: req.params.id,
-        company: req.user.company,
-      });
-      if (existing) {
-        const ciTime = clockInTime  ? new Date(clockInTime)  : existing.clockIn?.time;
-        const coTime = clockOutTime ? new Date(clockOutTime) : existing.clockOut?.time;
-        const worked = hoursWorked(ciTime, coTime);
-        if (worked !== null) update.hoursWorked = worked;
-      }
+      const ciTime = clockInTime  ? new Date(clockInTime)  : existing.clockIn?.time;
+      const coTime = clockOutTime ? new Date(clockOutTime) : existing.clockOut?.time;
+      const worked = hoursWorked(ciTime, coTime);
+      if (worked !== null) update.hoursWorked = worked;
     }
 
-    const record = await CorporateAttendance.findOneAndUpdate(
-      { _id: req.params.id, company: req.user.company },
+    const record = await CorporateAttendance.findByIdAndUpdate(
+      existing._id,
       { $set: update },
       { new: true }
     ).populate("employee", "name employeeId");
 
-    if (!record) return res.status(404).json({ error: "Attendance record not found" });
+    // Audit + notify employee (fire-and-forget)
+    const dateLabel = new Date(record.date).toLocaleDateString("en-GB", {
+      day: "numeric", month: "short", year: "numeric",
+    });
+    AuditLog.record({
+      company:       record.company,
+      actor:         req.user,
+      action:        AUDIT_ACTIONS.ATTENDANCE_EDITED,
+      resource:      "CorporateAttendance",
+      resourceId:    record._id,
+      resourceLabel: `Attendance ${dateLabel} — ${record.employee?.name || record.employee}`,
+      changes:       { before: { status: existingStatus }, after: { status: record.status } },
+      metadata:      { reason: reason || null },
+      mode:          "corporate",
+      req,
+    });
+    notificationService.notifyAttendanceOverridden(record, req.user.name);
+
     res.json({ record });
   } catch (e) {
     console.error(e);
