@@ -33,8 +33,10 @@ const meetingRoutes     = require("./routes/meetingRoutes");   // ← NEW
 const sessionDashboardRoutes = require('./routes/sessionDashboard');
 const normalQuizLecturerRoutes = require("./routes/normalQuizLecturerRoutes");
 const normalQuizStudentRoutes  = require("./routes/normalQuizStudentRoutes");
-const snapQuizLecturerRoutes   = require("./routes/snapQuizLecturerRoutes");
-const snapQuizStudentRoutes    = require("./routes/snapQuizStudentRoutes");
+const snapQuizLecturerRoutes        = require("./routes/snapQuizLecturerRoutes");
+const snapQuizStudentRoutes         = require("./routes/snapQuizStudentRoutes");
+const assignmentLecturerRoutes      = require("./routes/assignmentLecturerRoutes");
+const assignmentStudentRoutes       = require("./routes/assignmentStudentRoutes");
 let superadminRoutes = null;
 try { superadminRoutes = require("./routes/superadmin"); } catch(_) { console.warn('superadmin routes not found — skipping'); }
 
@@ -187,6 +189,8 @@ app.use("/api/student/quizzes", studentQuizRoutes);
 app.use("/api/student/normal-quizzes", normalQuizStudentRoutes);
 app.use("/api/lecturer/snap-quizzes",  snapQuizLecturerRoutes);
 app.use("/api/student/snap-quizzes",   snapQuizStudentRoutes);
+app.use("/api/lecturer/assignments",   assignmentLecturerRoutes);
+app.use("/api/student/assignments",    assignmentStudentRoutes);
 app.use("/api/admin/quizzes", adminQuizRoutes);
 app.use("/api/zoom", zoomRoutes);
 app.use("/api/reports", reportRoutes);
