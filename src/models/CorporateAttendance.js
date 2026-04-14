@@ -60,10 +60,15 @@ const locationSchema = new mongoose.Schema(
 
 const clockEventSchema = new mongoose.Schema(
   {
-    time:     { type: Date,   default: null },
-    method:   { type: String, enum: CLOCK_METHODS, default: "web" },
-    location: { type: locationSchema, default: () => ({}) },
-    ipAddress:{ type: String, trim: true, default: null },
+    time:         { type: Date,    default: null },
+    method:       { type: String,  enum: CLOCK_METHODS, default: "web" },
+    location:     { type: locationSchema, default: () => ({}) },
+    ipAddress:    { type: String,  trim: true, default: null },
+    // Clock-in specific lateness fields
+    isLate:       { type: Boolean, default: false },
+    lateMinutes:  { type: Number,  default: 0, min: 0 },
+    // Clock-out specific early-leave field
+    earlyLeaveMinutes: { type: Number, default: 0, min: 0 },
   },
   { _id: false }
 );

@@ -3226,130 +3226,147 @@ async function renderLecturerDashboard(content) {
 }
 
 async function renderEmployeeDashboard(content) {
-  const [attendance, meetingsData, signInStatus] = await Promise.all([
-    api('/api/attendance-sessions/my-attendance?limit=5').catch(() => ({ records: [], pagination: { total: 0 } })),
+  const today     = new Date().toISOString().slice(0, 10);
+  const sevenAgo  = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
+
+  const [todayData, recentData, meetingsData] = await Promise.all([
+    api(`/api/corporate-attendance/my?from=${today}&to=${today}`).catch(() => ({ records: [] })),
+    api(`/api/corporate-attendance/my?from=${sevenAgo}&to=${today}`).catch(() => ({ records: [] })),
     api('/api/zoom').catch(() => ({ meetings: [] })),
-    api('/api/attendance-sessions/sign-in-status').catch(() => ({ signedIn: false, record: null })),
   ]);
 
+  const todayRecord  = todayData.records[0] || null;
+  const isClockedIn  = !!(todayRecord?.clockIn?.time && !todayRecord?.clockOut?.time);
+  const isClockedOut = !!(todayRecord?.clockIn?.time && todayRecord?.clockOut?.time);
+  const clockInTime  = todayRecord?.clockIn?.time  ? new Date(todayRecord.clockIn.time)  : null;
+  const isLate       = todayRecord?.clockIn?.isLate || todayRecord?.status === 'late' || false;
+  const lateMin      = todayRecord?.clockIn?.lateMinutes || todayRecord?.lateMinutes || 0;
+  const workedHrs    = todayRecord?.hoursWorked != null ? todayRecord.hoursWorked : null;
+
+  const recentRecords  = recentData.records || [];
+  const presentDays    = recentRecords.filter(r => r.status === 'present' || r.status === 'late').length;
+  const attendanceRate = recentRecords.length > 0 ? Math.round((presentDays / recentRecords.length) * 100) : 0;
   const upcomingMeetings = meetingsData.meetings.filter(m => m.status === 'scheduled');
-  const totalCheckins = attendance.pagination.total;
-  const attendanceRate = totalCheckins > 0 ? Math.round((attendance.records.filter(r => r.status === 'present').length / attendance.records.length) * 100) : 0;
-  const signedIn = signInStatus.signedIn;
-  const signInRecord = signInStatus.record;
-  const signInTime = signInRecord?.checkInTime ? new Date(signInRecord.checkInTime) : null;
+
+  const statusColor = isClockedIn ? 'var(--success)' : (isClockedOut ? 'var(--primary)' : 'var(--text-light)');
 
   content.innerHTML = `
     <div class="page-header">
       <h2>Welcome back, ${currentUser.name.split(' ')[0]}</h2>
-      <p>${currentUser.company?.name || 'Your company'}${currentUser.employeeId ? ` \u2022 ID: ${currentUser.employeeId}` : ''}</p>
+      <p>${currentUser.company?.name || 'Your company'}${currentUser.employeeId ? ` · ID: ${currentUser.employeeId}` : ''}</p>
     </div>
 
-    <div class="card" style="border-left:4px solid ${signedIn ? 'var(--success)' : 'var(--primary)'};background:${signedIn ? 'linear-gradient(135deg,#f0fdf4,#ecfdf5)' : 'linear-gradient(135deg,#eef2ff,#e0e7ff)'}">
+    <div class="card" style="border-left:4px solid ${statusColor};background:${isClockedIn ? 'linear-gradient(135deg,#f0fdf4,#ecfdf5)' : 'linear-gradient(135deg,#eef2ff,#e0e7ff)'}">
       <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px">
         <div>
-          <div style="font-size:12px;text-transform:uppercase;font-weight:700;letter-spacing:.5px;color:${signedIn ? 'var(--success)' : 'var(--primary)'}">
-            ${signedIn ? '● Currently Signed In' : '○ Not Signed In'}
+          <div style="font-size:12px;text-transform:uppercase;font-weight:700;letter-spacing:.5px;color:${statusColor}">
+            ${isClockedIn ? '● Currently Clocked In' : (isClockedOut ? '✓ Clocked Out' : '○ Not Clocked In')}
           </div>
-          <div style="font-size:18px;font-weight:700;margin-top:4px">${signedIn ? 'You are clocked in' : 'Ready to start your day?'}</div>
-          ${signInTime ? `<div style="font-size:12px;color:var(--text-light);margin-top:2px">Since ${signInTime.toLocaleString()}</div>` : ''}
+          <div style="font-size:18px;font-weight:700;margin-top:4px">
+            ${isClockedIn ? 'You are clocked in' : (isClockedOut ? 'Work day complete' : 'Ready to start your day?')}
+          </div>
+          ${clockInTime ? `<div style="font-size:12px;color:var(--text-light);margin-top:2px">
+            Clocked in at ${clockInTime.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}
+            ${isLate ? `<span style="color:#ef4444;margin-left:6px">(${lateMin}m late)</span>` : ''}
+          </div>` : ''}
+          ${isClockedOut && workedHrs != null ? `<div style="font-size:12px;color:var(--text-light);margin-top:2px">Worked ${workedHrs}h today</div>` : ''}
         </div>
         <div style="display:flex;gap:10px">
-          ${!signedIn ? `<button class="btn btn-success" onclick="employeeSignIn()" style="gap:8px;font-size:14px;padding:12px 24px">
-            ${svgIcon('<polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>', 16)} Sign In
-          </button>` : `<button class="btn btn-danger" onclick="employeeSignOut()" style="gap:8px;font-size:14px;padding:12px 24px">
-            ${svgIcon('<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>', 16)} Sign Out
-          </button>`}
+          ${!isClockedIn && !isClockedOut ? `
+            <button class="btn btn-success" onclick="employeeSignIn()" style="gap:8px;font-size:14px;padding:12px 24px">
+              ${svgIcon('<polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>', 16)} Clock In
+            </button>` : isClockedIn ? `
+            <button class="btn btn-danger" onclick="employeeSignOut()" style="gap:8px;font-size:14px;padding:12px 24px">
+              ${svgIcon('<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>', 16)} Clock Out
+            </button>` : `
+            <button class="btn btn-sm" style="background:var(--border)" onclick="navigateTo('sign-in-out')">View Details</button>`}
         </div>
       </div>
     </div>
 
     <div class="stats-grid">
-      <div class="stat-card"><div class="stat-value">${totalCheckins}</div><div class="stat-label">Total Days</div></div>
-      <div class="stat-card"><div class="stat-value">${attendanceRate}%</div><div class="stat-label">Attendance Rate</div></div>
+      <div class="stat-card"><div class="stat-value">${attendanceRate}%</div><div class="stat-label">7-Day Rate</div></div>
+      <div class="stat-card"><div class="stat-value">${presentDays}</div><div class="stat-label">Days Present</div></div>
       <div class="stat-card"><div class="stat-value">${upcomingMeetings.length}</div><div class="stat-label">Meetings</div></div>
     </div>
 
     <div class="card">
-      <div class="card-title">Recent Attendance</div>
-      ${attendance.records.length ? `
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+        <div class="card-title" style="margin:0">This Week</div>
+        <a onclick="navigateTo('my-attendance')" style="font-size:12px;color:var(--primary);cursor:pointer">View all →</a>
+      </div>
+      ${recentRecords.length ? `
         <table>
-          <thead><tr><th>Session</th><th>Status</th><th>Sign In</th><th>Sign Out</th><th>Duration</th></tr></thead>
-          <tbody>${attendance.records.map(r => {
-            const inTime = r.checkInTime ? new Date(r.checkInTime) : null;
-            const outTime = r.checkOutTime ? new Date(r.checkOutTime) : null;
-            const dur = inTime && outTime ? Math.round((outTime - inTime) / 60000) : null;
+          <thead><tr><th>Date</th><th>Status</th><th>Time In</th><th>Time Out</th><th>Worked</th></tr></thead>
+          <tbody>${recentRecords.slice(0, 7).map(r => {
+            const ci  = r.clockIn?.time  ? new Date(r.clockIn.time)  : null;
+            const co  = r.clockOut?.time ? new Date(r.clockOut.time) : null;
+            const statusColors = { present:'#16a34a', late:'#d97706', absent:'#dc2626', half_day:'#7c3aed', on_leave:'#0284c7', remote:'#0891b2' };
+            const sc = statusColors[r.status] || 'var(--text-light)';
             return `<tr>
-              <td>${r.session?.title || 'N/A'}</td>
-              <td><span class="status-badge status-${r.status}">${r.status}</span></td>
-              <td>${inTime ? inTime.toLocaleTimeString() : '—'}</td>
-              <td>${outTime ? outTime.toLocaleTimeString() : '<span style="color:#f59e0b;font-weight:600">Active</span>'}</td>
-              <td>${dur !== null ? Math.floor(dur/60)+'h '+(dur%60)+'m' : '—'}</td>
+              <td style="font-size:13px">${r.date ? new Date(r.date).toLocaleDateString('en-GB', {weekday:'short',day:'2-digit',month:'short'}) : '—'}</td>
+              <td><span style="background:${sc}20;color:${sc};border:1px solid ${sc}40;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700;text-transform:capitalize">${r.status || '—'}</span></td>
+              <td style="font-size:13px">${ci ? ci.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : '—'}</td>
+              <td style="font-size:13px">${co ? co.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : (ci ? '<span style="color:#f59e0b;font-size:11px">Active</span>' : '—')}</td>
+              <td style="font-size:13px">${r.hoursWorked != null ? r.hoursWorked+'h' : '—'}</td>
             </tr>`;
           }).join('')}</tbody>
         </table>
-      ` : '<div class="empty-state"><p>No attendance records yet. Sign in to start tracking.</p></div>'}
+      ` : '<div class="empty-state"><p>No attendance records this week. Click Clock In to start.</p></div>'}
     </div>
   `;
 }
 
 async function employeeSignIn() {
-  // If ESP32 configured, check BLE presence first
+  // If ESP32 configured, attempt BLE ping — warn if not detected but do NOT block
   if (esp32IP) {
     const detected = await discoverESP32();
     if (!detected) {
-      toastWarning('You must be at the office to sign in. BLE device not detected.');
-      return;
-    }
-    // Record sign-in on ESP32 locally
-    try {
-      await esp32Api('/sign-in', {
+      toastWarning('Office device not detected — clocking in via web.');
+    } else {
+      // Also notify the ESP32 (fire-and-forget)
+      esp32Api('/sign-in', {
         method: 'POST',
         body: JSON.stringify({ userId: currentUser.id, name: currentUser.name })
-      });
-      toastSuccess('Signed in successfully!');
-      renderSignInOut();
-      return;
-    } catch(e) {
-      console.warn('[ESP32] Sign in failed, trying server:', e.message);
+      }).catch(e => console.warn('[ESP32] ping failed:', e.message));
     }
   }
   try {
-    const data = await api('/api/attendance-sessions/sign-in', { method: 'POST' });
-    toastSuccess(data.message || 'Signed in successfully!');
-    navigateTo('dashboard');
+    const data = await api('/api/corporate-attendance/clock-in', {
+      method: 'POST',
+      body: JSON.stringify({ method: 'web' }),
+    });
+    toastSuccess(data.message || 'Clocked in successfully!');
+    renderSignInOut();
   } catch (e) {
-    toastError(e.message || 'Sign in failed');
+    toastError(e.message || 'Clock-in failed');
   }
 }
 
 async function employeeSignOut() {
-  if (!confirm('Are you sure you want to sign out?')) return;
-  // If ESP32 configured, check BLE presence first
+  if (!confirm('Are you sure you want to clock out?')) return;
+  // If ESP32 configured, attempt BLE ping — warn if not detected but do NOT block
   if (esp32IP) {
     const detected = await discoverESP32();
     if (!detected) {
-      toastWarning('You must be at the office to sign out. BLE device not detected.');
-      return;
-    }
-    try {
-      await esp32Api('/sign-out', {
+      toastWarning('Office device not detected — clocking out via web.');
+    } else {
+      esp32Api('/sign-out', {
         method: 'POST',
         body: JSON.stringify({ userId: currentUser.id, name: currentUser.name })
-      });
-      toastSuccess('Signed out successfully!');
-      renderSignInOut();
-      return;
-    } catch(e) {
-      console.warn('[ESP32] Sign out failed, trying server:', e.message);
+      }).catch(e => console.warn('[ESP32] ping failed:', e.message));
     }
   }
   try {
-    const data = await api('/api/attendance-sessions/sign-out', { method: 'POST' });
-    toastSuccess(data.message ? data.message + (data.duration ? ' Duration: ' + data.duration : '') : 'Signed out successfully!');
-    navigateTo('dashboard');
+    const data = await api('/api/corporate-attendance/clock-out', {
+      method: 'POST',
+      body: JSON.stringify({ method: 'web' }),
+    });
+    const hrs = data.hoursWorked != null ? ` · ${data.hoursWorked}h worked` : '';
+    toastSuccess((data.message || 'Clocked out successfully!') + hrs);
+    renderSignInOut();
   } catch (e) {
-    toastError(e.message || 'Sign out failed');
+    toastError(e.message || 'Clock-out failed');
   }
 }
 
@@ -3357,77 +3374,107 @@ async function renderSignInOut() {
   const content = document.getElementById('main-content');
   if (!content) return;
   try {
-    const [statusData, attendanceData] = await Promise.all([
-      api('/api/attendance-sessions/sign-in-status').catch(() => ({ signedIn: false, record: null })),
-      api('/api/attendance-sessions/my-attendance?limit=30').catch(() => ({ records: [] })),
+    const today = new Date().toISOString().slice(0, 10);
+    const thirtyAgo = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
+
+    const [todayData, historyData] = await Promise.all([
+      api(`/api/corporate-attendance/my?from=${today}&to=${today}`).catch(() => ({ records: [] })),
+      api(`/api/corporate-attendance/my?from=${thirtyAgo}&to=${today}`).catch(() => ({ records: [] })),
     ]);
 
-    const signedIn = statusData.signedIn;
-    const record = statusData.record;
-    const signInTime = record?.checkInTime ? new Date(record.checkInTime) : null;
+    const todayRecord = todayData.records[0] || null;
+    const isClockedIn  = !!(todayRecord?.clockIn?.time && !todayRecord?.clockOut?.time);
+    const isClockedOut = !!(todayRecord?.clockIn?.time && todayRecord?.clockOut?.time);
+    const clockInTime  = todayRecord?.clockIn?.time  ? new Date(todayRecord.clockIn.time)  : null;
+    const clockOutTime = todayRecord?.clockOut?.time ? new Date(todayRecord.clockOut.time) : null;
+    const shiftName    = todayRecord?.shift?.name || null;
+    const isLate       = todayRecord?.clockIn?.isLate || todayRecord?.status === 'late' || false;
+    const lateMin      = todayRecord?.clockIn?.lateMinutes || todayRecord?.lateMinutes || 0;
+    const workedHrs    = todayRecord?.hoursWorked != null ? todayRecord.hoursWorked : null;
+    const overtimeHrs  = todayRecord?.overtimeHours || 0;
+
+    // Live elapsed time if currently clocked in
+    let elapsedLabel = '';
+    if (isClockedIn && clockInTime) {
+      const elapsedMs  = Date.now() - clockInTime.getTime();
+      const elapsedH   = Math.floor(elapsedMs / 3600000);
+      const elapsedM   = Math.floor((elapsedMs % 3600000) / 60000);
+      elapsedLabel = `${elapsedH}h ${elapsedM}m elapsed`;
+    }
+
+    const statusColor = isClockedIn ? 'var(--success)' : (isClockedOut ? 'var(--primary)' : 'var(--text-light)');
+    const statusText  = isClockedIn ? 'Currently Clocked In' : (isClockedOut ? 'Clocked Out Today' : 'Not Clocked In');
 
     content.innerHTML = `
       <div class="page-header">
-        <h2>Sign In / Sign Out</h2>
-        <p>Track your daily attendance</p>
+        <h2>Clock In / Clock Out</h2>
+        <p>Track your daily attendance · ${new Date().toLocaleDateString('en-GB', {weekday:'long',day:'numeric',month:'long',year:'numeric'})}</p>
       </div>
 
       ${esp32IP ? `
       <div class="card" style="padding:10px 16px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between">
-        <span style="font-size:12px">${bleDetected ? '🟢 Office device detected — sign in/out gated to office' : '🔴 Office device not reachable — connecting...'}</span>
+        <span style="font-size:12px">${bleDetected ? '🟢 Office device detected' : '🔴 Office device not reachable — you may still clock in via web'}</span>
         <button class="btn btn-sm" style="font-size:10px;padding:3px 8px;background:var(--border)" onclick="configureESP32()">Configure</button>
       </div>` : `
       <div class="card" style="padding:10px 16px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between">
-        <span style="font-size:12px;color:var(--text-muted)">⚪ No office device configured — sign in/out works without proximity check</span>
+        <span style="font-size:12px;color:var(--text-muted)">⚪ No office device configured — clock in/out via web</span>
         <button class="btn btn-sm" style="font-size:10px;padding:3px 8px;background:var(--border)" onclick="configureESP32()">Set up ESP32</button>
       </div>`}
-      <div class="card" style="text-align:center;padding:40px 24px;border-left:4px solid ${signedIn ? 'var(--success)' : 'var(--primary)'}">
-        <div style="font-size:56px;margin-bottom:16px">${signedIn ? svgIcon('<polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>', 56) : svgIcon('<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>', 56)}</div>
-        <div style="font-size:22px;font-weight:800;color:${signedIn ? 'var(--success)' : 'var(--primary)'}">
-          ${signedIn ? 'You are currently signed in' : 'You are not signed in'}
+
+      <div class="card" style="text-align:center;padding:40px 24px;border-left:4px solid ${statusColor}">
+        <div style="font-size:48px;margin-bottom:12px">
+          ${isClockedIn ? svgIcon('<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>', 48) : svgIcon('<polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>', 48)}
         </div>
-        ${signInTime ? `<div style="font-size:14px;color:var(--text-light);margin-top:6px">Signed in at ${signInTime.toLocaleString()}</div>` : ''}
+        <div style="font-size:20px;font-weight:800;color:${statusColor}">${statusText}</div>
+        ${shiftName ? `<div style="font-size:12px;color:var(--text-muted);margin-top:4px">Shift: ${shiftName}${todayRecord?.shift?.startTime ? ' · '+todayRecord.shift.startTime+'–'+todayRecord.shift.endTime : ''}</div>` : ''}
+        ${clockInTime ? `<div style="font-size:13px;color:var(--text-light);margin-top:6px">Time in: <strong>${clockInTime.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</strong>${isLate ? ` <span style="color:#ef4444;font-size:11px">(${lateMin}m late)</span>` : ''}</div>` : ''}
+        ${clockOutTime ? `<div style="font-size:13px;color:var(--text-light);margin-top:4px">Time out: <strong>${clockOutTime.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</strong></div>` : ''}
+        ${isClockedIn && elapsedLabel ? `<div style="font-size:13px;color:var(--success);font-weight:600;margin-top:4px">${elapsedLabel}</div>` : ''}
+        ${isClockedOut && workedHrs != null ? `<div style="font-size:13px;color:var(--text-light);margin-top:4px">Worked: <strong>${workedHrs}h</strong>${overtimeHrs > 0 ? ` <span style="color:#8b5cf6;font-size:11px">(+${overtimeHrs}h overtime)</span>` : ''}</div>` : ''}
         <div style="margin-top:28px;display:flex;gap:16px;justify-content:center;flex-wrap:wrap">
-          ${!signedIn ? `
+          ${!isClockedIn && !isClockedOut ? `
             <button class="btn btn-success" onclick="employeeSignIn()" style="gap:10px;font-size:16px;padding:14px 32px;width:auto">
-              ${svgIcon('<polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>', 18)}
-              Sign In
+              ${svgIcon('<polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>', 18)} Clock In
+            </button>
+          ` : isClockedIn ? `
+            <button class="btn btn-danger" onclick="employeeSignOut()" style="gap:10px;font-size:16px;padding:14px 32px;width:auto">
+              ${svgIcon('<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>', 18)} Clock Out
             </button>
           ` : `
-            <button class="btn btn-danger" onclick="employeeSignOut()" style="gap:10px;font-size:16px;padding:14px 32px;width:auto">
-              ${svgIcon('<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>', 18)}
-              Sign Out
-            </button>
+            <div style="font-size:13px;color:var(--text-muted);padding:14px 0">Attendance recorded for today.</div>
           `}
         </div>
       </div>
 
       <div class="card">
-        <div class="card-title">Attendance History</div>
-        ${attendanceData.records.length ? `
+        <div class="card-title">Attendance History (Last 30 Days)</div>
+        ${historyData.records.length ? `
+          <div style="overflow-x:auto">
           <table>
-            <thead><tr><th>Date / Session</th><th>Status</th><th>Sign In</th><th>Sign Out</th><th>Duration</th></tr></thead>
-            <tbody>${attendanceData.records.map(r => {
-              const inTime = r.checkInTime ? new Date(r.checkInTime) : null;
-              const outTime = r.checkOutTime ? new Date(r.checkOutTime) : null;
-              const dur = inTime && outTime ? Math.round((outTime - inTime) / 60000) : null;
+            <thead><tr><th>Date</th><th>Status</th><th>Time In</th><th>Time Out</th><th>Worked</th><th>Overtime</th><th>Lateness</th></tr></thead>
+            <tbody>${historyData.records.map(r => {
+              const ci = r.clockIn?.time  ? new Date(r.clockIn.time)  : null;
+              const co = r.clockOut?.time ? new Date(r.clockOut.time) : null;
+              const dateStr = r.date ? new Date(r.date).toLocaleDateString('en-GB', {day:'2-digit',month:'short',year:'numeric'}) : '—';
+              const statusColors = { present:'#16a34a', late:'#d97706', absent:'#dc2626', half_day:'#7c3aed', on_leave:'#0284c7', remote:'#0891b2', overtime:'#8b5cf6' };
+              const sc = statusColors[r.status] || 'var(--text-light)';
               return `<tr>
-                <td>
-                  <div style="font-weight:600;font-size:13px">${r.session?.title || 'Work Day'}</div>
-                  <div style="font-size:11px;color:var(--text-muted)">${inTime ? inTime.toLocaleDateString() : ''}</div>
-                </td>
-                <td><span class="status-badge status-${r.status}">${r.status}</span></td>
-                <td style="font-size:13px">${inTime ? inTime.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : '—'}</td>
-                <td style="font-size:13px">${outTime ? outTime.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : '<span style="color:#f59e0b;font-weight:600;font-size:11px">Active</span>'}</td>
-                <td style="font-size:13px">${dur !== null ? Math.floor(dur/60)+'h '+(dur%60)+'m' : '—'}</td>
+                <td style="font-size:13px;font-weight:600">${dateStr}</td>
+                <td><span class="status-badge" style="background:${sc}20;color:${sc};border:1px solid ${sc}40;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700;text-transform:capitalize">${r.status || '—'}</span></td>
+                <td style="font-size:13px">${ci ? ci.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : '—'}</td>
+                <td style="font-size:13px">${co ? co.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : (ci ? '<span style="color:#f59e0b;font-size:11px;font-weight:600">Active</span>' : '—')}</td>
+                <td style="font-size:13px">${r.hoursWorked != null ? r.hoursWorked+'h' : '—'}</td>
+                <td style="font-size:13px">${r.overtimeHours > 0 ? '<span style="color:#8b5cf6;font-weight:600">+'+r.overtimeHours+'h</span>' : '—'}</td>
+                <td style="font-size:13px">${(r.clockIn?.isLate||r.status==='late') ? '<span style="color:#ef4444">'+(r.clockIn?.lateMinutes||r.lateMinutes||0)+'m late</span>' : '<span style="color:#16a34a">On time</span>'}</td>
               </tr>`;
             }).join('')}</tbody>
           </table>
-        ` : '<div class="empty-state"><p>No attendance records yet. Click Sign In to start.</p></div>'}
+          </div>
+        ` : '<div class="empty-state"><p>No attendance records yet. Clock in to start tracking.</p></div>'}
       </div>
     `;
   } catch (e) {
-    content.innerHTML = `<div class="card"><p>Error: ${e.message}</p></div>`;
+    content.innerHTML = `<div class="card"><p>Error loading attendance: ${e.message}</p></div>`;
   }
 }
 
@@ -6830,6 +6877,13 @@ async function viewAdminQuizDetail(quizId) {
 async function renderMyAttendance() {
   const content = document.getElementById('main-content');
   if (!content) return;
+
+  // Corporate employees use the rich CorporateAttendance system
+  if (currentUser.company?.mode === 'corporate') {
+    return renderMyCorporateAttendance(content);
+  }
+
+  // Academic students use the session-based system
   if (!isOnline()) {
     const cached = offlineRead('my_attendance');
     if (cached) {
@@ -6866,6 +6920,83 @@ async function renderMyAttendance() {
     `;
   } catch (e) {
     content.innerHTML = `<div class="card"><p>Error: ${e.message}</p></div>`;
+  }
+}
+
+async function renderMyCorporateAttendance(content) {
+  try {
+    // Fetch current month by default
+    const now       = new Date();
+    const fromDate  = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
+    const toDate    = now.toISOString().slice(0, 10);
+
+    const data = await api(`/api/corporate-attendance/my?from=${fromDate}&to=${toDate}`);
+    const records = data.records || [];
+
+    // Summary stats
+    const totalDays    = records.length;
+    const presentDays  = records.filter(r => r.status === 'present' || r.status === 'late').length;
+    const lateDays     = records.filter(r => r.status === 'late').length;
+    const totalWorked  = records.reduce((s, r) => s + (r.hoursWorked || 0), 0);
+    const totalOvertime = records.reduce((s, r) => s + (r.overtimeHours || 0), 0);
+    const attendanceRate = totalDays > 0 ? Math.round((presentDays / totalDays) * 100) : 0;
+
+    const statusColors = { present:'#16a34a', late:'#d97706', absent:'#dc2626', half_day:'#7c3aed', on_leave:'#0284c7', remote:'#0891b2' };
+
+    content.innerHTML = `
+      <div class="page-header">
+        <h2>My Attendance</h2>
+        <p>${now.toLocaleString('en-GB', {month:'long', year:'numeric'})}</p>
+      </div>
+
+      <div class="stats-grid">
+        <div class="stat-card"><div class="stat-value">${attendanceRate}%</div><div class="stat-label">Attendance Rate</div></div>
+        <div class="stat-card"><div class="stat-value">${presentDays}</div><div class="stat-label">Days Present</div></div>
+        <div class="stat-card"><div class="stat-value">${Math.round(totalWorked * 10) / 10}h</div><div class="stat-label">Hours Worked</div></div>
+        <div class="stat-card"><div class="stat-value">${lateDays}</div><div class="stat-label">Late Arrivals</div></div>
+        ${totalOvertime > 0 ? `<div class="stat-card"><div class="stat-value" style="color:#8b5cf6">+${Math.round(totalOvertime*10)/10}h</div><div class="stat-label">Overtime</div></div>` : ''}
+      </div>
+
+      <div class="card">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px">
+          <div class="card-title" style="margin:0">Attendance Records</div>
+          <button class="btn btn-primary btn-sm" onclick="navigateTo('sign-in-out')">
+            ${svgIcon('<polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>', 14)} Clock In / Out
+          </button>
+        </div>
+        ${records.length ? `
+          <div style="overflow-x:auto">
+          <table>
+            <thead>
+              <tr>
+                <th>Date</th><th>Status</th><th>Shift</th>
+                <th>Time In</th><th>Time Out</th>
+                <th>Worked</th><th>Overtime</th><th>Lateness</th>
+              </tr>
+            </thead>
+            <tbody>${records.map(r => {
+              const ci  = r.clockIn?.time  ? new Date(r.clockIn.time)  : null;
+              const co  = r.clockOut?.time ? new Date(r.clockOut.time) : null;
+              const dateStr = r.date ? new Date(r.date).toLocaleDateString('en-GB', {day:'2-digit',month:'short'}) : '—';
+              const sc  = statusColors[r.status] || 'var(--text-light)';
+              return `<tr>
+                <td style="font-size:13px;font-weight:600;white-space:nowrap">${dateStr}</td>
+                <td><span style="background:${sc}20;color:${sc};border:1px solid ${sc}40;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700;text-transform:capitalize;white-space:nowrap">${r.status || '—'}</span></td>
+                <td style="font-size:12px;color:var(--text-muted)">${r.shift?.name || '—'}</td>
+                <td style="font-size:13px">${ci ? ci.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : '—'}</td>
+                <td style="font-size:13px">${co ? co.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : (ci ? '<span style="color:#f59e0b;font-size:11px;font-weight:600">Active</span>' : '—')}</td>
+                <td style="font-size:13px">${r.hoursWorked != null ? r.hoursWorked+'h' : '—'}</td>
+                <td style="font-size:13px">${r.overtimeHours > 0 ? '<span style="color:#8b5cf6;font-weight:600">+'+r.overtimeHours+'h</span>' : '—'}</td>
+                <td style="font-size:13px">${r.clockIn?.isLate ? '<span style="color:#ef4444">'+r.clockIn.lateMinutes+'m late</span>' : (ci ? '<span style="color:#16a34a">On time</span>' : '—')}</td>
+              </tr>`;
+            }).join('')}</tbody>
+          </table>
+          </div>
+        ` : '<div class="empty-state"><p>No attendance records this month. Use Clock In / Out to start.</p></div>'}
+      </div>
+    `;
+  } catch (e) {
+    content.innerHTML = `<div class="card"><p>Error loading attendance: ${e.message}</p></div>`;
   }
 }
 
