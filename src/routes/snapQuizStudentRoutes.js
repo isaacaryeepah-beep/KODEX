@@ -36,7 +36,7 @@
 const express = require("express");
 const router  = express.Router();
 
-const authenticate             = require("../middleware/authenticate");
+const authenticate             = require("../middleware/auth");
 const { requireCompanyScope }  = require("../middleware/requireCompanyScope");
 const { studentOnly }          = require("../middleware/requireAcademicRole");
 const {
