@@ -818,13 +818,16 @@ body {
 
 /* Trial banners */
 .trial-banner {
-  background: linear-gradient(90deg, #d97706, #f59e0b);
-  color: #78350f;
-  padding: 8px 24px;
+  background: linear-gradient(90deg, #ecfdf5, #d1fae5);
+  color: #065f46;
+  border-bottom: 1px solid #a7f3d0;
+  padding: 9px 28px;
   font-size: 13px;
-  font-weight: 600;
-  text-align: center;
+  font-weight: 500;
   display: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
 }
 
 .trial-expired-banner {
@@ -4396,5 +4399,132 @@ table tr:hover td { background: #f8fafc !important; }
     bottom: 64px;
     right: 16px;
     width: calc(100vw - 32px);
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   PREMIUM DASHBOARD — Final visual polish
+   Matches reference: light gray canvas, white cards, clean topbar.
+══════════════════════════════════════════════════════════════════════ */
+
+/* ── Page canvas ── */
+#dashboard-page {
+  background: #f0f4f8 !important;
+}
+
+.main-layout {
+  display: flex !important;
+  height: calc(100vh - 58px) !important;
+  overflow: hidden !important;
+}
+
+.content {
+  background: #f0f4f8 !important;
+  flex: 1 !important;
+  overflow-y: auto !important;
+}
+
+/* ── Topbar: crisp white with refined shadow ── */
+.topbar {
+  background: #ffffff !important;
+  border-bottom: 1px solid #e4e8ef !important;
+  box-shadow: 0 1px 0 #e4e8ef, 0 4px 16px rgba(15,23,42,.05) !important;
+  height: 58px !important;
+}
+
+/* ── Announcement banner: green welcome bar (visible when active) ── */
+.trial-banner {
+  background: linear-gradient(90deg, #ecfdf5 0%, #d1fae5 100%) !important;
+  color: #065f46 !important;
+  border-bottom: 1px solid #a7f3d0 !important;
+  padding: 9px 28px !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 12px !important;
+  letter-spacing: .01em !important;
+}
+
+/* ── Cards: premium white with refined radius & shadow ── */
+.card,
+#dashboard-page .card {
+  background: #ffffff !important;
+  border: 1px solid #e4e8ef !important;
+  border-radius: 16px !important;
+  box-shadow: 0 1px 3px rgba(15,23,42,.05), 0 4px 12px rgba(15,23,42,.04) !important;
+}
+
+.stat-card-v2 {
+  border-radius: 16px !important;
+  border: 1px solid #e4e8ef !important;
+  box-shadow: 0 2px 8px rgba(15,23,42,.06), 0 1px 3px rgba(15,23,42,.03) !important;
+}
+
+.quick-actions-bar {
+  border-radius: 16px !important;
+  border-color: #e4e8ef !important;
+  box-shadow: 0 1px 3px rgba(15,23,42,.04) !important;
+}
+
+.dashboard-panel {
+  border-radius: 16px !important;
+  border-color: #e4e8ef !important;
+  box-shadow: 0 1px 3px rgba(15,23,42,.05), 0 4px 12px rgba(15,23,42,.04) !important;
+}
+
+/* ── Tables: clean header and row styling ── */
+#dashboard-page table thead th {
+  background: #f8fafc !important;
+  color: #6b7280 !important;
+  font-size: 10.5px !important;
+  font-weight: 700 !important;
+  letter-spacing: .7px !important;
+  text-transform: uppercase !important;
+  border-bottom: 1px solid #e4e8ef !important;
+  padding: 10px 14px !important;
+  white-space: nowrap !important;
+}
+
+#dashboard-page table tbody td {
+  border-bottom: 1px solid #f1f5f9 !important;
+  padding: 10px 14px !important;
+  font-size: 13px !important;
+  color: #1e293b !important;
+  vertical-align: middle !important;
+}
+
+#dashboard-page table tbody tr:last-child td {
+  border-bottom: none !important;
+}
+
+#dashboard-page table tbody tr:hover td {
+  background: #f8fafc !important;
+}
+
+/* ── Page header: tighter premium look ── */
+.page-header h2 {
+  font-size: 22px !important;
+  font-weight: 800 !important;
+  color: #0f172a !important;
+  letter-spacing: -.6px !important;
+}
+
+.page-header p {
+  font-size: 13px !important;
+  color: #6b7280 !important;
+  margin-top: 2px !important;
+}
+
+/* ── Responsive: mobile keeps flat layout ── */
+@media (max-width: 768px) {
+  .main-layout {
+    display: block !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
+  .content {
+    flex: none !important;
   }
 }
