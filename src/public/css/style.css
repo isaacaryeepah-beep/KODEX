@@ -3928,10 +3928,10 @@ table tr:hover td { background: #f8fafc !important; }
 
 /* Portal selector: centered premium glass card */
 #auth-page:has(#portal-selector:not(.hidden)) #portal-selector {
-  max-width: 580px !important;
+  max-width: 480px !important;
   width: 100% !important;
   margin: auto !important;
-  padding: 32px 28px 24px !important;
+  padding: 22px 22px 16px !important;
   background: rgba(255, 255, 255, 0.90) !important;
   backdrop-filter: blur(32px) saturate(1.4) !important;
   -webkit-backdrop-filter: blur(32px) saturate(1.4) !important;
@@ -3943,21 +3943,53 @@ table tr:hover td { background: #f8fafc !important; }
   border-radius: 20px !important;
 }
 
-/* Tighter portal header */
-#auth-page:has(#portal-selector:not(.hidden)) .portal-header {
-  margin-bottom: 18px !important;
+/* Shrink the logo SVG so it doesn't dominate */
+#auth-page:has(#portal-selector:not(.hidden)) .brand-logo svg {
+  height: 52px !important;
 }
 
-/* Mode toggles: tighter gap */
+/* Tighter portal header */
+#auth-page:has(#portal-selector:not(.hidden)) .portal-header {
+  margin-bottom: 12px !important;
+}
+
+/* Mode toggles: tighter gap and smaller padding */
 #auth-page:has(#portal-selector:not(.hidden)) .mode-toggles {
-  gap: 10px !important;
+  gap: 8px !important;
   margin-bottom: 0 !important;
 }
 
-/* Mode toggle cards: solid on blurred photo bg */
 #auth-page:has(#portal-selector:not(.hidden)) .mode-toggle {
+  padding: 14px 12px 10px !important;
   background: rgba(255, 255, 255, 0.95) !important;
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.07) !important;
+}
+
+#auth-page:has(#portal-selector:not(.hidden)) .mode-toggle-icon {
+  width: 36px !important;
+  height: 36px !important;
+  margin-bottom: 8px !important;
+}
+
+#auth-page:has(#portal-selector:not(.hidden)) .mode-toggle-check {
+  margin-top: 8px !important;
+}
+
+/* Portal cards wrap: tighter top margin */
+#auth-page:has(#portal-selector:not(.hidden)) .portal-cards-wrap {
+  margin-top: 10px !important;
+}
+
+/* Portal section label: smaller */
+#auth-page:has(#portal-selector:not(.hidden)) .portal-section-label {
+  margin-bottom: 8px !important;
+}
+
+/* Portal footer: tighter */
+#auth-page:has(#portal-selector:not(.hidden)) #portal-footer {
+  padding: 10px 8px 4px !important;
+  margin-top: 12px !important;
+  font-size: 11px !important;
 }
 
 /* Corporate: 3 cards in a single balanced row */
@@ -3974,11 +4006,18 @@ table tr:hover td { background: #f8fafc !important; }
   gap: 10px !important;
 }
 
-/* Portal cards: fill their column, crisp white on blurred bg */
+/* Portal cards: compact, fill their column */
 #auth-page:has(#portal-selector:not(.hidden)) .portal-card {
   width: 100% !important;
+  padding: 14px 12px !important;
   background: rgba(255, 255, 255, 0.97) !important;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.07) !important;
+}
+
+#auth-page:has(#portal-selector:not(.hidden)) .portal-icon {
+  width: 36px !important;
+  height: 36px !important;
+  margin-bottom: 8px !important;
 }
 
 /* ── Mobile ── */
@@ -4066,7 +4105,7 @@ table tr:hover td { background: #f8fafc !important; }
   position: fixed;
   bottom: 24px;
   right: 24px;
-  z-index: 100;
+  z-index: 9999;
   display: flex;
   align-items: center;
   gap: 6px;
@@ -4096,7 +4135,7 @@ table tr:hover td { background: #f8fafc !important; }
   position: fixed;
   bottom: 72px;
   right: 24px;
-  z-index: 100;
+  z-index: 9999;
   width: 320px;
   max-width: calc(100vw - 48px);
   background: #fff;
