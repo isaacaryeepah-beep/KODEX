@@ -11196,10 +11196,13 @@ function openAIQuizPanel(quizId) {
         <!-- Source tabs -->
         <div>
           <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:8px;display:block">Content Source</label>
-          <div style="display:flex;gap:1px;background:var(--border);border-radius:9px;overflow:hidden;margin-bottom:12px;">
-            <button id="aiq-tab-topic" onclick="aiqSwitchTab('topic')" style="flex:1;padding:8px;border:none;cursor:pointer;font-size:12px;font-weight:600;background:var(--primary);color:#fff;font-family:inherit;">📝 Topic</button>
-            <button id="aiq-tab-notes" onclick="aiqSwitchTab('notes')" style="flex:1;padding:8px;border:none;cursor:pointer;font-size:12px;font-weight:600;background:var(--card);color:var(--text-light);font-family:inherit;">📋 Paste Notes</button>
-            <button id="aiq-tab-pdf" onclick="aiqSwitchTab('pdf')" style="flex:1;padding:8px;border:none;cursor:pointer;font-size:12px;font-weight:600;background:var(--card);color:var(--text-light);font-family:inherit;">📄 Upload PDF</button>
+          <div style="display:flex;gap:1px;background:var(--border);border-radius:9px;overflow:hidden;margin-bottom:12px;flex-wrap:wrap;">
+            <button id="aiq-tab-topic"    onclick="aiqSwitchTab('topic')"   style="flex:1;min-width:70px;padding:8px 6px;border:none;cursor:pointer;font-size:11px;font-weight:600;background:var(--primary);color:#fff;font-family:inherit;">📝 Topic</button>
+            <button id="aiq-tab-notes"    onclick="aiqSwitchTab('notes')"   style="flex:1;min-width:70px;padding:8px 6px;border:none;cursor:pointer;font-size:11px;font-weight:600;background:var(--card);color:var(--text-light);font-family:inherit;">📋 Notes</button>
+            <button id="aiq-tab-pdf"      onclick="aiqSwitchTab('pdf')"     style="flex:1;min-width:70px;padding:8px 6px;border:none;cursor:pointer;font-size:11px;font-weight:600;background:var(--card);color:var(--text-light);font-family:inherit;">📄 PDF</button>
+            <button id="aiq-tab-drawing"  onclick="aiqSwitchTab('drawing')" style="flex:1;min-width:70px;padding:8px 6px;border:none;cursor:pointer;font-size:11px;font-weight:600;background:var(--card);color:var(--text-light);font-family:inherit;">✏️ Draw</button>
+            <button id="aiq-tab-graph"    onclick="aiqSwitchTab('graph')"   style="flex:1;min-width:70px;padding:8px 6px;border:none;cursor:pointer;font-size:11px;font-weight:600;background:var(--card);color:var(--text-light);font-family:inherit;">📈 Graph</button>
+            <button id="aiq-tab-image"    onclick="aiqSwitchTab('image')"   style="flex:1;min-width:70px;padding:8px 6px;border:none;cursor:pointer;font-size:11px;font-weight:600;background:var(--card);color:var(--text-light);font-family:inherit;">🖼️ Image</button>
           </div>
           <!-- Topic input -->
           <div id="aiq-src-topic">
@@ -11219,6 +11222,66 @@ function openAIQuizPanel(quizId) {
               <input type="file" id="aiq-pdf-file" accept=".pdf" style="display:none;" onchange="aiqShowPdfName(this)">
             </label>
             <div id="aiq-pdf-name" style="display:none;margin-top:8px;padding:7px 12px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:7px;font-size:12px;color:#166534;font-weight:500;"></div>
+          </div>
+          <!-- Drawing Canvas -->
+          <div id="aiq-src-drawing" style="display:none;">
+            <div style="background:#f9fafb;border:1.5px solid var(--border);border-radius:10px;overflow:hidden;">
+              <div style="display:flex;gap:4px;padding:6px 8px;background:var(--card);border-bottom:1px solid var(--border);flex-wrap:wrap;align-items:center;">
+                <span style="font-size:11px;font-weight:700;color:var(--text-muted);margin-right:4px;">Tool:</span>
+                <button id="aiq-draw-tool-pen"   onclick="aiqSetDrawTool('pen')"   style="padding:4px 9px;border:1.5px solid #7c3aed;border-radius:6px;background:#7c3aed;color:#fff;font-size:11px;cursor:pointer;font-weight:600">✏️ Pen</button>
+                <button id="aiq-draw-tool-line"  onclick="aiqSetDrawTool('line')"  style="padding:4px 9px;border:1.5px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-size:11px;cursor:pointer">/ Line</button>
+                <button id="aiq-draw-tool-rect"  onclick="aiqSetDrawTool('rect')"  style="padding:4px 9px;border:1.5px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-size:11px;cursor:pointer">□ Rect</button>
+                <button id="aiq-draw-tool-circle" onclick="aiqSetDrawTool('circle')" style="padding:4px 9px;border:1.5px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-size:11px;cursor:pointer">○ Circle</button>
+                <button id="aiq-draw-tool-text"  onclick="aiqSetDrawTool('text')"  style="padding:4px 9px;border:1.5px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-size:11px;cursor:pointer">T Text</button>
+                <button id="aiq-draw-tool-eraser" onclick="aiqSetDrawTool('eraser')" style="padding:4px 9px;border:1.5px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-size:11px;cursor:pointer">🧹 Erase</button>
+                <div style="flex:1"></div>
+                <input type="color" id="aiq-draw-color" value="#1e1e2e" style="width:26px;height:26px;border:none;cursor:pointer;border-radius:4px;padding:0" title="Colour">
+                <select id="aiq-draw-size" style="padding:3px 6px;border:1px solid var(--border);border-radius:5px;font-size:11px;outline:none">
+                  <option value="2">Thin</option><option value="4" selected>Normal</option><option value="8">Thick</option><option value="14">Bold</option>
+                </select>
+                <button onclick="aiqDrawUndo()" style="padding:4px 9px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-size:11px;cursor:pointer">↩ Undo</button>
+                <button onclick="aiqDrawClear()" style="padding:4px 9px;border:1px solid #dc2626;border-radius:6px;background:#fef2f2;color:#dc2626;font-size:11px;cursor:pointer">✕ Clear</button>
+              </div>
+              <canvas id="aiq-draw-canvas" width="460" height="280" style="display:block;width:100%;cursor:crosshair;touch-action:none;background:#fff;"></canvas>
+            </div>
+            <p style="font-size:11px;color:var(--text-muted);margin-top:6px;">Draw a diagram, geometry sketch, or concept map. AI will analyse it and generate questions.</p>
+          </div>
+          <!-- Graph / Coordinate Plane -->
+          <div id="aiq-src-graph" style="display:none;">
+            <div style="background:#f9fafb;border:1.5px solid var(--border);border-radius:10px;overflow:hidden;">
+              <div style="padding:8px 10px;background:var(--card);border-bottom:1px solid var(--border);display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+                <span style="font-size:11px;font-weight:700;color:var(--text-muted);">Function:</span>
+                <input id="aiq-graph-fn" type="text" placeholder="e.g. x^2  or  2*x+3  or  sin(x)" style="flex:1;min-width:140px;padding:4px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-family:monospace;outline:none">
+                <button onclick="aiqGraphPlot()" style="padding:4px 10px;border:none;border-radius:6px;background:#7c3aed;color:#fff;font-size:11px;cursor:pointer;font-weight:600">Plot</button>
+                <span style="font-size:11px;font-weight:700;color:var(--text-muted);">x:</span>
+                <input id="aiq-graph-xmin" type="number" value="-10" style="width:50px;padding:4px 6px;border:1px solid var(--border);border-radius:5px;font-size:11px;outline:none">
+                <span style="font-size:11px;color:var(--text-muted)">to</span>
+                <input id="aiq-graph-xmax" type="number" value="10" style="width:50px;padding:4px 6px;border:1px solid var(--border);border-radius:5px;font-size:11px;outline:none">
+                <button onclick="aiqGraphClear()" style="padding:4px 9px;border:1px solid #dc2626;border-radius:6px;background:#fef2f2;color:#dc2626;font-size:11px;cursor:pointer">Clear</button>
+              </div>
+              <canvas id="aiq-graph-canvas" width="460" height="280" style="display:block;width:100%;cursor:crosshair;background:#fff;touch-action:none;"></canvas>
+            </div>
+            <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap;align-items:center;">
+              <span style="font-size:11px;color:var(--text-muted);">Data points (click canvas or enter):</span>
+              <input id="aiq-graph-pt-x" type="number" placeholder="x" style="width:55px;padding:4px 6px;border:1px solid var(--border);border-radius:5px;font-size:11px;outline:none">
+              <input id="aiq-graph-pt-y" type="number" placeholder="y" style="width:55px;padding:4px 6px;border:1px solid var(--border);border-radius:5px;font-size:11px;outline:none">
+              <button onclick="aiqGraphAddPoint()" style="padding:4px 9px;border:1px solid var(--border);border-radius:5px;background:var(--bg);font-size:11px;cursor:pointer">+ Add</button>
+              <span id="aiq-graph-pts-display" style="font-size:11px;color:var(--text-muted)"></span>
+            </div>
+            <p style="font-size:11px;color:var(--text-muted);margin-top:4px;">Plot a function or data points. AI will generate questions based on the graph.</p>
+          </div>
+          <!-- Image upload (photo, diagram, handwritten) -->
+          <div id="aiq-src-image" style="display:none;">
+            <label for="aiq-image-file" style="display:flex;flex-direction:column;align-items:center;gap:8px;padding:20px;border:2px dashed var(--border);border-radius:10px;cursor:pointer;background:var(--bg);transition:border-color .2s;" onmouseover="this.style.borderColor='#7c3aed'" onmouseout="this.style.borderColor='var(--border)'">
+              <span style="font-size:28px;">🖼️</span>
+              <span style="font-size:13px;font-weight:600;color:var(--text);">Click to upload an image</span>
+              <span style="font-size:11px;color:var(--text-muted);">PNG, JPG, WEBP · Max 10 MB · Diagrams, photos, handwritten notes</span>
+              <input type="file" id="aiq-image-file" accept="image/png,image/jpeg,image/webp" style="display:none;" onchange="aiqShowImagePreview(this)">
+            </label>
+            <div id="aiq-image-preview" style="display:none;margin-top:10px;text-align:center;">
+              <img id="aiq-image-preview-img" style="max-width:100%;max-height:200px;border-radius:8px;border:1px solid var(--border);">
+              <div id="aiq-image-preview-name" style="font-size:11px;color:var(--text-muted);margin-top:4px;"></div>
+            </div>
           </div>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
@@ -11365,7 +11428,7 @@ function aiqToggleSubject(subj) {
 
 // Tab switching for AI panel source
 function aiqSwitchTab(tab) {
-  ['topic','notes','pdf'].forEach(t => {
+  ['topic','notes','pdf','drawing','graph','image'].forEach(t => {
     const src = document.getElementById('aiq-src-' + t);
     const btn = document.getElementById('aiq-tab-' + t);
     if (!src || !btn) return;
@@ -11374,6 +11437,9 @@ function aiqSwitchTab(tab) {
     btn.style.background = active ? 'var(--primary)' : 'var(--card)';
     btn.style.color = active ? '#fff' : 'var(--text-light)';
   });
+  // Init canvas on first show
+  if (tab === 'drawing') setTimeout(aiqInitDrawCanvas, 50);
+  if (tab === 'graph')   setTimeout(aiqInitGraphCanvas, 50);
 }
 
 function aiqShowPdfName(input) {
@@ -11387,9 +11453,292 @@ function aiqShowPdfName(input) {
   }
 }
 
+function aiqShowImagePreview(input) {
+  const preview = document.getElementById('aiq-image-preview');
+  const img     = document.getElementById('aiq-image-preview-img');
+  const name    = document.getElementById('aiq-image-preview-name');
+  if (!preview || !img) return;
+  const file = input.files?.[0];
+  if (!file) { preview.style.display = 'none'; return; }
+  const url = URL.createObjectURL(file);
+  img.src = url;
+  img.onload = () => URL.revokeObjectURL(url);
+  if (name) name.textContent = file.name + ' (' + (file.size / 1024).toFixed(1) + ' KB)';
+  preview.style.display = 'block';
+}
+
+// ── Drawing Canvas ───────────────────────────────────────────────────────────
+let _aiqDrawTool = 'pen', _aiqDrawing = false, _aiqDrawStart = null, _aiqDrawSnapshot = null;
+let _aiqDrawHistory = [];
+
+function aiqInitDrawCanvas() {
+  const canvas = document.getElementById('aiq-draw-canvas');
+  if (!canvas || canvas._aiqInited) return;
+  canvas._aiqInited = true;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  const getPos = (e) => {
+    const r = canvas.getBoundingClientRect();
+    const scaleX = canvas.width  / r.width;
+    const scaleY = canvas.height / r.height;
+    const src = e.touches?.[0] || e;
+    return { x: (src.clientX - r.left) * scaleX, y: (src.clientY - r.top) * scaleY };
+  };
+  const getCtxSettings = () => ({
+    color: document.getElementById('aiq-draw-color')?.value || '#1e1e2e',
+    size:  parseInt(document.getElementById('aiq-draw-size')?.value) || 4,
+  });
+
+  canvas.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    _aiqDrawing = true;
+    _aiqDrawStart = getPos(e);
+    _aiqDrawSnapshot = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const { color, size } = getCtxSettings();
+    ctx.strokeStyle = _aiqDrawTool === 'eraser' ? '#fff' : color;
+    ctx.lineWidth   = _aiqDrawTool === 'eraser' ? size * 3 : size;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    if (_aiqDrawTool === 'pen' || _aiqDrawTool === 'eraser') {
+      ctx.beginPath();
+      ctx.moveTo(_aiqDrawStart.x, _aiqDrawStart.y);
+    }
+    if (_aiqDrawTool === 'text') {
+      const text = prompt('Enter text label:');
+      if (text) {
+        ctx.font = `${size * 3 + 10}px sans-serif`;
+        ctx.fillStyle = color;
+        ctx.fillText(text, _aiqDrawStart.x, _aiqDrawStart.y);
+        _aiqDrawHistory.push(ctx.getImageData(0, 0, canvas.width, canvas.height));
+      }
+      _aiqDrawing = false;
+    }
+  });
+  canvas.addEventListener('pointermove', (e) => {
+    if (!_aiqDrawing) return;
+    e.preventDefault();
+    const pos = getPos(e);
+    const { color, size } = getCtxSettings();
+    ctx.strokeStyle = _aiqDrawTool === 'eraser' ? '#fff' : color;
+    ctx.lineWidth   = _aiqDrawTool === 'eraser' ? size * 3 : size;
+    if (_aiqDrawTool === 'pen' || _aiqDrawTool === 'eraser') {
+      ctx.lineTo(pos.x, pos.y);
+      ctx.stroke();
+    } else if (_aiqDrawSnapshot) {
+      ctx.putImageData(_aiqDrawSnapshot, 0, 0);
+      ctx.beginPath();
+      ctx.strokeStyle = color;
+      if (_aiqDrawTool === 'line') {
+        ctx.moveTo(_aiqDrawStart.x, _aiqDrawStart.y);
+        ctx.lineTo(pos.x, pos.y);
+      } else if (_aiqDrawTool === 'rect') {
+        ctx.rect(_aiqDrawStart.x, _aiqDrawStart.y, pos.x - _aiqDrawStart.x, pos.y - _aiqDrawStart.y);
+      } else if (_aiqDrawTool === 'circle') {
+        const rx = Math.abs(pos.x - _aiqDrawStart.x) / 2;
+        const ry = Math.abs(pos.y - _aiqDrawStart.y) / 2;
+        const cx = _aiqDrawStart.x + (pos.x - _aiqDrawStart.x) / 2;
+        const cy = _aiqDrawStart.y + (pos.y - _aiqDrawStart.y) / 2;
+        ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
+      }
+      ctx.stroke();
+    }
+  });
+  canvas.addEventListener('pointerup', (e) => {
+    if (!_aiqDrawing) return;
+    _aiqDrawing = false;
+    _aiqDrawHistory.push(ctx.getImageData(0, 0, canvas.width, canvas.height));
+    if (_aiqDrawHistory.length > 30) _aiqDrawHistory.shift();
+  });
+  canvas.addEventListener('pointerleave', () => { if (_aiqDrawing) { _aiqDrawing = false; } });
+}
+
+function aiqSetDrawTool(tool) {
+  _aiqDrawTool = tool;
+  const tools = ['pen','line','rect','circle','text','eraser'];
+  tools.forEach(t => {
+    const btn = document.getElementById('aiq-draw-tool-' + t);
+    if (!btn) return;
+    const active = t === tool;
+    btn.style.background = active ? '#7c3aed' : 'var(--bg)';
+    btn.style.color      = active ? '#fff'    : 'var(--text)';
+    btn.style.border     = active ? '1.5px solid #7c3aed' : '1.5px solid var(--border)';
+  });
+}
+
+function aiqDrawUndo() {
+  const canvas = document.getElementById('aiq-draw-canvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  if (_aiqDrawHistory.length > 1) {
+    _aiqDrawHistory.pop();
+    ctx.putImageData(_aiqDrawHistory[_aiqDrawHistory.length - 1], 0, 0);
+  } else {
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    _aiqDrawHistory = [];
+  }
+}
+
+function aiqDrawClear() {
+  const canvas = document.getElementById('aiq-draw-canvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  _aiqDrawHistory = [];
+}
+
+// ── Graph Canvas ─────────────────────────────────────────────────────────────
+window._aiqGraphPoints = [];
+
+function aiqInitGraphCanvas() {
+  const canvas = document.getElementById('aiq-graph-canvas');
+  if (!canvas || canvas._aiqGraphInited) return;
+  canvas._aiqGraphInited = true;
+  aiqGraphDraw();
+
+  canvas.addEventListener('click', (e) => {
+    const r = canvas.getBoundingClientRect();
+    const scaleX = canvas.width  / r.width;
+    const scaleY = canvas.height / r.height;
+    const px = (e.clientX - r.left) * scaleX;
+    const py = (e.clientY - r.top)  * scaleY;
+    // Convert canvas pixel to graph coordinates
+    const xmin = parseFloat(document.getElementById('aiq-graph-xmin')?.value) || -10;
+    const xmax = parseFloat(document.getElementById('aiq-graph-xmax')?.value) || 10;
+    const gx = xmin + (px / canvas.width)  * (xmax - xmin);
+    const gy = -(((py / canvas.height) - 0.5) * (xmax - xmin));
+    window._aiqGraphPoints.push({ x: +gx.toFixed(2), y: +gy.toFixed(2) });
+    aiqGraphDraw();
+    const display = document.getElementById('aiq-graph-pts-display');
+    if (display) display.textContent = window._aiqGraphPoints.map(p => `(${p.x},${p.y})`).join(' ');
+  });
+}
+
+function aiqGraphAddPoint() {
+  const x = parseFloat(document.getElementById('aiq-graph-pt-x')?.value);
+  const y = parseFloat(document.getElementById('aiq-graph-pt-y')?.value);
+  if (isNaN(x) || isNaN(y)) return;
+  window._aiqGraphPoints.push({ x, y });
+  aiqGraphDraw();
+  const display = document.getElementById('aiq-graph-pts-display');
+  if (display) display.textContent = window._aiqGraphPoints.map(p => `(${p.x},${p.y})`).join(' ');
+}
+
+function aiqGraphClear() {
+  window._aiqGraphPoints = [];
+  const c = document.getElementById('aiq-graph-canvas');
+  if (c) { c._aiqGraphInited = false; }
+  aiqInitGraphCanvas();
+  const display = document.getElementById('aiq-graph-pts-display');
+  if (display) display.textContent = '';
+}
+
+function aiqGraphPlot() {
+  aiqGraphDraw(true);
+}
+
+function aiqGraphDraw(plotFn) {
+  const canvas = document.getElementById('aiq-graph-canvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  const xmin = parseFloat(document.getElementById('aiq-graph-xmin')?.value) || -10;
+  const xmax = parseFloat(document.getElementById('aiq-graph-xmax')?.value) || 10;
+  const range = xmax - xmin;
+  const ymin = -(range / 2), ymax = range / 2;
+
+  // Helper: graph coord → canvas pixel
+  const toPixX = x => ((x - xmin) / range) * W;
+  const toPixY = y => H - ((y - ymin) / (ymax - ymin)) * H;
+
+  ctx.clearRect(0, 0, W, H);
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0, 0, W, H);
+
+  // Grid
+  ctx.strokeStyle = '#e5e7eb';
+  ctx.lineWidth = 1;
+  const step = range <= 4 ? 0.5 : range <= 20 ? 1 : range <= 50 ? 5 : 10;
+  for (let x = Math.ceil(xmin / step) * step; x <= xmax; x += step) {
+    const px = toPixX(x);
+    ctx.beginPath(); ctx.moveTo(px, 0); ctx.lineTo(px, H); ctx.stroke();
+  }
+  for (let y = Math.ceil(ymin / step) * step; y <= ymax; y += step) {
+    const py = toPixY(y);
+    ctx.beginPath(); ctx.moveTo(0, py); ctx.lineTo(W, py); ctx.stroke();
+  }
+
+  // Axes
+  ctx.strokeStyle = '#374151';
+  ctx.lineWidth = 1.5;
+  const ox = toPixX(0), oy = toPixY(0);
+  ctx.beginPath(); ctx.moveTo(0, oy); ctx.lineTo(W, oy); ctx.stroke(); // x-axis
+  ctx.beginPath(); ctx.moveTo(ox, 0); ctx.lineTo(ox, H); ctx.stroke(); // y-axis
+
+  // Axis labels
+  ctx.fillStyle = '#6b7280';
+  ctx.font = '10px sans-serif';
+  for (let x = Math.ceil(xmin / step) * step; x <= xmax; x += step) {
+    if (Math.abs(x) < 0.001) continue;
+    ctx.fillText(x, toPixX(x) + 2, Math.min(H - 2, oy + 12));
+  }
+  for (let y = Math.ceil(ymin / step) * step; y <= ymax; y += step) {
+    if (Math.abs(y) < 0.001) continue;
+    ctx.fillText(y, Math.max(2, ox + 3), toPixY(y) - 2);
+  }
+
+  // Plot function
+  if (plotFn) {
+    const fnStr = document.getElementById('aiq-graph-fn')?.value?.trim();
+    if (fnStr) {
+      try {
+        // Safe eval: allow only math expressions
+        const safeExpr = fnStr.replace(/\^/g, '**').replace(/sin/g,'Math.sin').replace(/cos/g,'Math.cos').replace(/tan/g,'Math.tan').replace(/sqrt/g,'Math.sqrt').replace(/abs/g,'Math.abs').replace(/log/g,'Math.log').replace(/exp/g,'Math.exp').replace(/pi/g,'Math.PI').replace(/e(?![a-zA-Z])/g,'Math.E');
+        // eslint-disable-next-line no-new-func
+        const fn = new Function('x', '"use strict"; return ' + safeExpr + ';');
+        ctx.strokeStyle = '#7c3aed';
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        let started = false;
+        for (let px = 0; px <= W; px += 1) {
+          const x = xmin + (px / W) * range;
+          try {
+            const y = fn(x);
+            if (!isFinite(y)) { started = false; continue; }
+            const py = toPixY(y);
+            if (!started) { ctx.moveTo(px, py); started = true; } else { ctx.lineTo(px, py); }
+          } catch(e) { started = false; }
+        }
+        ctx.stroke();
+      } catch(e) {
+        // Invalid function — ignore
+      }
+    }
+  }
+
+  // Data points
+  ctx.fillStyle = '#ef4444';
+  for (const pt of (window._aiqGraphPoints || [])) {
+    const px = toPixX(pt.x), py = toPixY(pt.y);
+    ctx.beginPath();
+    ctx.arc(px, py, 4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#374151';
+    ctx.font = '10px sans-serif';
+    ctx.fillText(`(${pt.x},${pt.y})`, px + 6, py - 4);
+    ctx.fillStyle = '#ef4444';
+  }
+}
+
 async function runAIQuizGenerate(quizId) {
-  const activeTab  = document.getElementById('aiq-src-notes')?.style.display !== 'none' ? 'notes'
-                   : document.getElementById('aiq-src-pdf')?.style.display !== 'none' ? 'pdf'
+  const activeTab  = document.getElementById('aiq-src-notes')?.style.display !== 'none'   ? 'notes'
+                   : document.getElementById('aiq-src-pdf')?.style.display !== 'none'     ? 'pdf'
+                   : document.getElementById('aiq-src-drawing')?.style.display !== 'none' ? 'drawing'
+                   : document.getElementById('aiq-src-graph')?.style.display !== 'none'   ? 'graph'
+                   : document.getElementById('aiq-src-image')?.style.display !== 'none'   ? 'image'
                    : 'topic';
   const topic      = document.getElementById('aiq-topic')?.value?.trim();
   const count      = document.getElementById('aiq-count')?.value || '5';
@@ -11407,8 +11756,8 @@ async function runAIQuizGenerate(quizId) {
   const previewDiv = document.getElementById('aiq-preview');
   const addBtn     = document.getElementById('aiq-add-btn');
 
-  // ── If PDF or Notes tab → use backend ai-generate endpoint ──
-  if (activeTab === 'pdf' || activeTab === 'notes') {
+  // ── If PDF, Notes, Drawing, Graph, or Image tab → use backend ai-generate endpoint ──
+  if (['pdf','notes','drawing','graph','image'].includes(activeTab)) {
     errEl.style.display = 'none';
     previewDiv.style.display = 'none';
     addBtn.style.display = 'none';
@@ -11423,15 +11772,38 @@ async function runAIQuizGenerate(quizId) {
       formData.append('count', count);
       formData.append('types', types);
       formData.append('difficulty', difficulty);
+      if (context) formData.append('context', context);
 
       if (activeTab === 'pdf') {
         const pdfFile = document.getElementById('aiq-pdf-file')?.files?.[0];
         if (!pdfFile) { errEl.textContent = 'Please select a PDF file.'; errEl.style.display = 'block'; btn.disabled = false; btn.innerHTML = '✨ Generate Questions'; return; }
         formData.append('pdf', pdfFile);
-      } else {
+      } else if (activeTab === 'notes') {
         const notes = document.getElementById('aiq-notes')?.value?.trim();
         if (!notes) { errEl.textContent = 'Please paste your notes.'; errEl.style.display = 'block'; btn.disabled = false; btn.innerHTML = '✨ Generate Questions'; return; }
         formData.append('notes', notes);
+      } else if (activeTab === 'drawing') {
+        const canvas = document.getElementById('aiq-draw-canvas');
+        if (!canvas) { errEl.textContent = 'Drawing canvas not ready.'; errEl.style.display = 'block'; btn.disabled = false; btn.innerHTML = '✨ Generate Questions'; return; }
+        const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+        if (!blob) { errEl.textContent = 'Could not capture drawing.'; errEl.style.display = 'block'; btn.disabled = false; btn.innerHTML = '✨ Generate Questions'; return; }
+        formData.append('image', blob, 'drawing.png');
+      } else if (activeTab === 'graph') {
+        // Serialize graph as PNG image
+        const canvas = document.getElementById('aiq-graph-canvas');
+        if (!canvas) { errEl.textContent = 'Graph canvas not ready.'; errEl.style.display = 'block'; btn.disabled = false; btn.innerHTML = '✨ Generate Questions'; return; }
+        const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+        if (!blob) { errEl.textContent = 'Could not capture graph.'; errEl.style.display = 'block'; btn.disabled = false; btn.innerHTML = '✨ Generate Questions'; return; }
+        // Also add text description for better AI context
+        const fnText = document.getElementById('aiq-graph-fn')?.value?.trim();
+        const ptsText = (window._aiqGraphPoints || []).map(p => `(${p.x},${p.y})`).join(', ');
+        const desc = [fnText ? `Function: ${fnText}` : '', ptsText ? `Points: ${ptsText}` : ''].filter(Boolean).join('. ');
+        if (desc) formData.append('context', (context ? context + '. ' : '') + 'Graph shows: ' + desc);
+        formData.append('image', blob, 'graph.png');
+      } else if (activeTab === 'image') {
+        const imgFile = document.getElementById('aiq-image-file')?.files?.[0];
+        if (!imgFile) { errEl.textContent = 'Please select an image file.'; errEl.style.display = 'block'; btn.disabled = false; btn.innerHTML = '✨ Generate Questions'; return; }
+        formData.append('image', imgFile);
       }
 
       const token = localStorage.getItem('token') || '';
