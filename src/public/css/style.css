@@ -51,7 +51,7 @@
   --transition: all .18s var(--ease);
 
   /* Sidebar */
-  --sidebar-bg: #0d1117;
+  --sidebar-bg: rgba(255,251,238,0.76);
   --sidebar-text: rgba(255,255,255,.6);
   --sidebar-active: rgba(255,255,255,.1);
   --sidebar-hover: rgba(255,255,255,.07);
@@ -73,7 +73,7 @@
   --primary: #4f80f0;
   --primary-dark: #3b6de0;
   --primary-light: rgba(79,128,240,.15);
-  --sidebar-bg: #0f1c2e;
+  --sidebar-bg: rgba(255,251,238,0.76);
   --sidebar-text: #9db3c8;
   --sidebar-active: #4f80f0;
   --topbar-bg: #162030;
@@ -87,7 +87,7 @@
 [data-theme="dark"] body { background: var(--bg); color: var(--text); }
 [data-theme="dark"] .topbar { background: var(--topbar-bg); border-color: var(--topbar-border); }
 [data-theme="dark"] .card { background: var(--card); border-color: var(--border); }
-[data-theme="dark"] .sidebar { background: var(--sidebar-bg); }
+[data-theme="dark"] .sidebar { background: rgba(255, 251, 238, 0.76); }
 [data-theme="dark"] input, [data-theme="dark"] textarea, [data-theme="dark"] select {
   background: var(--input-bg); border-color: var(--input-border); color: var(--text);
 }
@@ -1355,32 +1355,32 @@ input[type="checkbox"] {
 
 #dashboard-page[data-portal="manager"]  {
   --portal-primary: #2563eb; --portal-primary-dark: #1d4ed8; --portal-primary-light: #60a5fa;
-  --sidebar-bg: #0f172a;
+  --sidebar-bg: rgba(255,251,238,0.76);
 }
 
 #dashboard-page[data-portal="lecturer"] {
   --portal-primary: #d97706; --portal-primary-dark: #b45309; --portal-primary-light: #fbbf24;
-  --sidebar-bg: #1c1008;
+  --sidebar-bg: rgba(255,251,238,0.76);
 }
 
 #dashboard-page[data-portal="employee"] {
   --portal-primary: #16a34a; --portal-primary-dark: #15803d; --portal-primary-light: #4ade80;
-  --sidebar-bg: #0a1f14;
+  --sidebar-bg: rgba(255,251,238,0.76);
 }
 
 #dashboard-page[data-portal="student"]  {
   --portal-primary: #7c3aed; --portal-primary-dark: #6d28d9; --portal-primary-light: #a78bfa;
-  --sidebar-bg: #160d2e;
+  --sidebar-bg: rgba(255,251,238,0.76);
 }
 
 #dashboard-page[data-portal="hod"] {
   --portal-primary: #0891b2; --portal-primary-dark: #0e7490; --portal-primary-light: #22d3ee;
-  --sidebar-bg: #042f3d;
+  --sidebar-bg: rgba(255,251,238,0.76);
 }
 
 #dashboard-page[data-portal="admin"]    {
   --portal-primary: #374151; --portal-primary-dark: #1f2937; --portal-primary-light: #6b7280;
-  --sidebar-bg: #0d1117;
+  --sidebar-bg: rgba(255,251,238,0.76);
 }
 
 /* Theme overrides */
@@ -3024,13 +3024,13 @@ table tr:hover td { background: #f8fafc !important; }
   margin-bottom: 14px !important;
 }
 
-/* ── Premium sidebar nav active glow ── */
+/* ── Sidebar nav cream glass — desktop ── */
 @media (min-width: 769px) {
   .sidebar-nav a.active {
-    background: linear-gradient(90deg, rgba(59,130,246,.22), rgba(37,99,235,.1)) !important;
-    color: #93c5fd !important;
-    border-left: 3px solid #3b82f6 !important;
-    box-shadow: inset 0 0 20px rgba(59,130,246,.08) !important;
+    background: rgba(255, 236, 175, 0.80) !important;
+    color: var(--portal-primary, #2563eb) !important;
+    border-left: 3px solid var(--portal-primary, #2563eb) !important;
+    box-shadow: none !important;
     font-weight: 600 !important;
   }
 
@@ -3043,8 +3043,8 @@ table tr:hover td { background: #f8fafc !important; }
   }
 
   .sidebar-nav a:hover {
-    background: rgba(255,255,255,.07) !important;
-    color: #e2e8f0 !important;
+    background: rgba(255, 236, 190, 0.62) !important;
+    color: #1e1b4b !important;
     transform: translateX(2px) !important;
   }
 }
@@ -3055,7 +3055,7 @@ table tr:hover td { background: #f8fafc !important; }
   font-weight: 800 !important;
   letter-spacing: 1.2px !important;
   text-transform: uppercase !important;
-  color: rgba(148,163,184,.5) !important;
+  color: rgba(120, 95, 55, 0.52) !important;
   padding: 10px 18px 4px !important;
   pointer-events: none !important;
 }
