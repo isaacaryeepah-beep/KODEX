@@ -3887,24 +3887,29 @@ table tr:hover td { background: #f8fafc !important; }
 }
 
 /* ══════════════════════════════════════════════════════════════════════
-   WORKSPACE SELECTION — Cream Glass Design
+   WORKSPACE SELECTION — Bright Frosted Glass Design
    Scoped via :has() so login forms are never affected.
 ══════════════════════════════════════════════════════════════════════ */
 
-/* ── Background: warm-tinted dark photo ── */
+/* Brand + footer hidden by default (login form page) */
+#workspace-brand,
+#workspace-foot { display: none; }
+
+/* ── Background: bright light office photo ── */
 #auth-page:has(#portal-selector:not(.hidden)) {
   background-image:
-    radial-gradient(ellipse 70% 60% at 15% 60%, rgba(180,140,80,.18) 0%, transparent 55%),
-    radial-gradient(ellipse 55% 45% at 85% 30%, rgba(200,160,90,.12) 0%, transparent 55%),
-    linear-gradient(160deg, rgba(18,12,6,.80) 0%, rgba(28,20,10,.76) 100%),
-    url('/img/workspace-bg.jpg') !important;
+    linear-gradient(rgba(255,255,255,0.28), rgba(255,255,255,0.28)),
+    url('/img/login-bg.jpg') !important;
   background-size: cover !important;
   background-position: center center !important;
   background-repeat: no-repeat !important;
-  background-color: #120c06 !important;
+  background-color: #e8edf8 !important;
   align-items: center !important;
   justify-content: center !important;
   flex-direction: column !important;
+  padding: 28px 16px !important;
+  overflow-y: auto !important;
+  gap: 0 !important;
 }
 
 /* Suppress base pseudo-elements */
@@ -3919,127 +3924,172 @@ table tr:hover td { background: #f8fafc !important; }
   height: 0 !important;
 }
 
-/* ── Main card: cream frosted glass ── */
-#auth-page:has(#portal-selector:not(.hidden)) #portal-selector {
-  max-width: 480px !important;
-  width: 100% !important;
-  margin: auto !important;
-  padding: 28px 26px 20px !important;
-  background: rgba(255, 250, 238, 0.82) !important;
-  backdrop-filter: blur(48px) saturate(1.6) brightness(1.08) !important;
-  -webkit-backdrop-filter: blur(48px) saturate(1.6) brightness(1.08) !important;
-  border: 1px solid rgba(255, 245, 220, 0.90) !important;
-  box-shadow:
-    0 0 0 1px rgba(200,160,80,.12),
-    0 48px 120px rgba(0,0,0,.55),
-    0 16px 48px rgba(0,0,0,.28),
-    inset 0 1px 0 rgba(255,252,240,.95) !important;
-  border-radius: 24px !important;
+/* ── Brand above card ── */
+#auth-page:has(#portal-selector:not(.hidden)) #workspace-brand {
+  display: block !important;
+  text-align: center !important;
+  margin-bottom: 22px !important;
 }
-
-/* ── Logo ── */
-#auth-page:has(#portal-selector:not(.hidden)) .brand-logo svg {
-  height: 54px !important;
+#auth-page:has(#portal-selector:not(.hidden)) #workspace-brand .brand-logo svg {
+  height: 62px !important;
+  filter: drop-shadow(0 4px 18px rgba(79,70,229,.22)) !important;
 }
-
-/* ── Portal header ── */
-#auth-page:has(#portal-selector:not(.hidden)) .portal-header {
-  margin-bottom: 16px !important;
-}
-
-#auth-page:has(#portal-selector:not(.hidden)) .portal-header h1 {
-  font-size: 26px !important;
-  font-weight: 800 !important;
-  letter-spacing: -.6px !important;
-  color: #1c1208 !important;
-}
-
-#auth-page:has(#portal-selector:not(.hidden)) .portal-header .subtitle {
-  font-size: 13px !important;
-  color: #7c6a50 !important;
-  margin-top: 3px !important;
-}
-
-/* ── Mode selector label ── */
-#auth-page:has(#portal-selector:not(.hidden)) .mode-selector-label {
-  font-size: 10px !important;
+#auth-page:has(#portal-selector:not(.hidden)) .workspace-subtitle {
+  font-size: 11px !important;
   font-weight: 700 !important;
   letter-spacing: 2px !important;
-  color: #a8906e !important;
-  margin-bottom: 10px !important;
+  text-transform: uppercase !important;
+  color: rgba(30,27,75,.60) !important;
+  margin-top: 6px !important;
+  text-shadow: 0 1px 3px rgba(255,255,255,.70) !important;
+}
+
+/* ── Main glass card ── */
+#auth-page:has(#portal-selector:not(.hidden)) #portal-selector {
+  max-width: 520px !important;
+  width: 100% !important;
+  padding: 28px 24px 22px !important;
+  background: rgba(255,255,255,0.56) !important;
+  backdrop-filter: blur(20px) saturate(1.6) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(1.6) !important;
+  border: 1px solid rgba(255,255,255,0.82) !important;
+  box-shadow:
+    0 0 0 1px rgba(79,70,229,.07),
+    0 20px 56px rgba(0,0,0,.12),
+    0 6px 18px rgba(0,0,0,.07),
+    inset 0 1px 0 rgba(255,255,255,.92) !important;
+  border-radius: 20px !important;
+}
+
+/* ── CHOOSE YOUR WORKSPACE heading ── */
+#auth-page:has(#portal-selector:not(.hidden)) .portal-main-heading {
+  font-size: 10.5px !important;
+  font-weight: 700 !important;
+  letter-spacing: 3.5px !important;
+  text-transform: uppercase !important;
+  color: rgba(30,27,75,.50) !important;
+  text-align: center !important;
+  margin-bottom: 18px !important;
 }
 
 /* ── Mode toggle grid ── */
 #auth-page:has(#portal-selector:not(.hidden)) .mode-toggles {
-  gap: 10px !important;
-  margin-bottom: 0 !important;
+  display: grid !important;
+  grid-template-columns: 1fr 1fr !important;
+  gap: 12px !important;
+  margin-bottom: 18px !important;
 }
 
 #auth-page:has(#portal-selector:not(.hidden)) .mode-toggle {
-  padding: 16px 14px 12px !important;
-  border-radius: 14px !important;
-  border: 1.5px solid rgba(220,195,155,.60) !important;
-  background: rgba(255,252,242,.70) !important;
-  box-shadow: 0 1px 4px rgba(120,80,20,.08) !important;
-  transition: all .18s !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: flex-start !important;
+  padding: 18px 16px 14px !important;
+  border-radius: 16px !important;
+  border: 2px solid rgba(226,232,240,.70) !important;
+  background: rgba(255,255,255,.72) !important;
+  box-shadow: 0 2px 8px rgba(0,0,0,.06) !important;
+  cursor: pointer !important;
+  transition: all .2s !important;
+  min-height: 136px !important;
+  position: relative !important;
 }
 
 #auth-page:has(#portal-selector:not(.hidden)) .mode-toggle:hover {
-  border-color: rgba(200,160,80,.70) !important;
-  background: rgba(255,250,235,.85) !important;
-  box-shadow: 0 4px 14px rgba(160,110,30,.14) !important;
-  transform: translateY(-1px) !important;
+  transform: translateY(-2px) !important;
+  box-shadow: 0 8px 24px rgba(0,0,0,.11) !important;
+  background: rgba(255,255,255,.88) !important;
 }
 
+/* Corporate active */
 #auth-page:has(#portal-selector:not(.hidden)) .mode-toggle.active-corp {
-  border-color: #2563eb !important;
-  background: rgba(239,246,255,.85) !important;
-  box-shadow: 0 0 0 3px rgba(37,99,235,.10), 0 4px 16px rgba(37,99,235,.14) !important;
+  border-color: #d97706 !important;
+  background: rgba(255,251,235,.92) !important;
+  box-shadow: 0 0 0 3px rgba(217,119,6,.12), 0 8px 24px rgba(217,119,6,.13) !important;
 }
 
+/* Academic active */
 #auth-page:has(#portal-selector:not(.hidden)) .mode-toggle.active-acad {
-  border-color: #7c3aed !important;
-  background: rgba(245,243,255,.85) !important;
-  box-shadow: 0 0 0 3px rgba(124,58,237,.10), 0 4px 16px rgba(124,58,237,.12) !important;
+  border-color: #4f46e5 !important;
+  background: rgba(238,242,255,.92) !important;
+  box-shadow: 0 0 0 3px rgba(79,70,229,.12), 0 8px 24px rgba(79,70,229,.13) !important;
 }
 
+/* Mode toggle icon boxes */
 #auth-page:has(#portal-selector:not(.hidden)) .mode-toggle-icon {
-  width: 38px !important;
-  height: 38px !important;
-  border-radius: 12px !important;
-  margin-bottom: 10px !important;
+  width: 54px !important;
+  height: 54px !important;
+  border-radius: 15px !important;
+  margin-bottom: 12px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  flex-shrink: 0 !important;
+}
+
+/* Corporate: amber icon */
+#auth-page:has(#portal-selector:not(.hidden)) #mode-tgl-corp .mode-toggle-icon {
+  background: #fef3c7 !important;
+}
+#auth-page:has(#portal-selector:not(.hidden)) #mode-tgl-corp .mode-toggle-icon svg {
+  width: 26px !important; height: 26px !important; stroke: #d97706 !important;
+}
+
+/* Academic: indigo icon */
+#auth-page:has(#portal-selector:not(.hidden)) #mode-tgl-acad .mode-toggle-icon {
+  background: #e0e7ff !important;
+}
+#auth-page:has(#portal-selector:not(.hidden)) #mode-tgl-acad .mode-toggle-icon svg {
+  width: 26px !important; height: 26px !important; stroke: #4f46e5 !important;
 }
 
 #auth-page:has(#portal-selector:not(.hidden)) .mode-toggle h3 {
-  font-size: 14px !important;
+  font-size: 16px !important;
   font-weight: 800 !important;
   letter-spacing: -.3px !important;
-  color: #2c1f0a !important;
+  color: #1e1b4b !important;
+  margin-bottom: 3px !important;
 }
 
 #auth-page:has(#portal-selector:not(.hidden)) .mode-toggle p {
-  font-size: 11px !important;
-  color: #a8906e !important;
-  margin-bottom: 8px !important;
+  font-size: 12px !important;
+  color: #6b7280 !important;
+  margin-bottom: 0 !important;
+  line-height: 1.4 !important;
+  flex: 1 !important;
 }
 
+/* Check indicator: short pill bar */
 #auth-page:has(#portal-selector:not(.hidden)) .mode-toggle-check {
-  width: 18px !important;
-  height: 18px !important;
-  margin-top: 4px !important;
+  width: 30px !important;
+  height: 4px !important;
+  border-radius: 2px !important;
+  background: rgba(203,213,225,.75) !important;
+  margin-top: 12px !important;
+  overflow: hidden !important;
+  flex-shrink: 0 !important;
 }
+#auth-page:has(#portal-selector:not(.hidden)) .mode-toggle-check svg { display: none !important; }
+#auth-page:has(#portal-selector:not(.hidden)) .mode-toggle.active-corp .mode-toggle-check { background: #d97706 !important; }
+#auth-page:has(#portal-selector:not(.hidden)) .mode-toggle.active-acad .mode-toggle-check { background: #4f46e5 !important; }
 
 /* ── Portal cards area ── */
 #auth-page:has(#portal-selector:not(.hidden)) .portal-cards-wrap {
-  margin-top: 12px !important;
+  margin-top: 4px !important;
 }
 
 #auth-page:has(#portal-selector:not(.hidden)) .portal-section-label {
+  display: flex !important;
+  align-items: center !important;
+  gap: 5px !important;
   font-size: 9.5px !important;
+  font-weight: 700 !important;
   letter-spacing: 2px !important;
+  text-transform: uppercase !important;
   margin-bottom: 10px !important;
-  color: #a8906e !important;
 }
+#auth-page:has(#portal-selector:not(.hidden)) .corp-label { color: #92400e !important; }
+#auth-page:has(#portal-selector:not(.hidden)) .acad-label { color: #3730a3 !important; }
 
 /* Corporate: 3 cards in one row */
 #auth-page:has(#portal-selector:not(.hidden)) #portal-cards-corp .portal-cards {
@@ -4055,57 +4105,65 @@ table tr:hover td { background: #f8fafc !important; }
   gap: 8px !important;
 }
 
-/* Portal cards: cream glass, hover lift */
+/* Portal cards */
 #auth-page:has(#portal-selector:not(.hidden)) .portal-card {
   width: 100% !important;
-  padding: 16px 14px 12px !important;
-  background: rgba(255, 252, 242, 0.78) !important;
-  border: 1.5px solid rgba(220,195,155,.55) !important;
+  padding: 14px 12px 10px !important;
+  background: rgba(255,255,255,.78) !important;
+  border: 1.5px solid rgba(255,255,255,.82) !important;
   border-radius: 14px !important;
-  box-shadow: 0 1px 4px rgba(120,80,20,.07), 0 4px 12px rgba(100,60,10,.05) !important;
+  box-shadow: 0 1px 4px rgba(0,0,0,.06), 0 2px 8px rgba(0,0,0,.04) !important;
   transition: all .18s !important;
+  position: relative !important;
 }
 
 #auth-page:has(#portal-selector:not(.hidden)) .portal-card:hover {
   transform: translateY(-3px) !important;
-  background: rgba(255, 252, 242, 0.95) !important;
-  box-shadow: 0 8px 28px rgba(100,60,10,.14), 0 2px 8px rgba(100,60,10,.08) !important;
-  border-color: rgba(200,160,80,.60) !important;
+  background: rgba(255,255,255,.97) !important;
+  box-shadow: 0 8px 28px rgba(0,0,0,.12) !important;
+  border-color: rgba(79,70,229,.22) !important;
 }
 
 #auth-page:has(#portal-selector:not(.hidden)) .portal-card h2 {
   font-size: 13px !important;
   font-weight: 800 !important;
-  color: #2c1f0a !important;
+  color: #1e1b4b !important;
   letter-spacing: -.2px !important;
   margin-bottom: 2px !important;
 }
 
 #auth-page:has(#portal-selector:not(.hidden)) .portal-card p {
   font-size: 11px !important;
-  color: #a8906e !important;
+  color: #6b7280 !important;
   margin-bottom: 10px !important;
 }
 
 #auth-page:has(#portal-selector:not(.hidden)) .portal-icon {
-  width: 36px !important;
-  height: 36px !important;
+  width: 34px !important;
+  height: 34px !important;
   border-radius: 10px !important;
-  margin-bottom: 10px !important;
+  margin-bottom: 8px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  background: rgba(79,70,229,.09) !important;
 }
+#auth-page:has(#portal-selector:not(.hidden)) .portal-icon svg { stroke: #4f46e5 !important; }
 
 #auth-page:has(#portal-selector:not(.hidden)) .portal-arrow {
   font-size: 14px !important;
-  color: #c8a87a !important;
+  color: #9ca3af !important;
 }
 
-/* ── Footer ── */
-#auth-page:has(#portal-selector:not(.hidden)) #portal-footer {
-  padding: 10px 8px 4px !important;
-  margin-top: 14px !important;
-  font-size: 11px !important;
-  color: #a8906e !important;
-  border-top: 1px solid rgba(200,170,110,.30) !important;
+/* ── Footer below card ── */
+#auth-page:has(#portal-selector:not(.hidden)) #workspace-foot {
+  display: block !important;
+  text-align: center !important;
+  margin-top: 16px !important;
+  font-size: 11.5px !important;
+  color: rgba(15,20,50,.55) !important;
+  line-height: 1.6 !important;
+  text-shadow: 0 1px 3px rgba(255,255,255,.60) !important;
 }
 
 /* ── Mobile ── */
@@ -4113,6 +4171,14 @@ table tr:hover td { background: #f8fafc !important; }
   #auth-page:has(#portal-selector:not(.hidden)) #portal-selector {
     max-width: calc(100vw - 28px) !important;
     padding: 22px 18px 16px !important;
+  }
+  #auth-page:has(#portal-selector:not(.hidden)) .mode-toggle {
+    min-height: 116px !important;
+    padding: 14px 12px 10px !important;
+  }
+  #auth-page:has(#portal-selector:not(.hidden)) .mode-toggle-icon {
+    width: 44px !important;
+    height: 44px !important;
   }
 }
 
@@ -4122,7 +4188,10 @@ table tr:hover td { background: #f8fafc !important; }
     gap: 6px !important;
   }
   #auth-page:has(#portal-selector:not(.hidden)) .portal-card {
-    padding: 12px 10px 10px !important;
+    padding: 10px 8px 8px !important;
+  }
+  #auth-page:has(#portal-selector:not(.hidden)) .mode-toggles {
+    gap: 8px !important;
   }
 }
 
