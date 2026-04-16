@@ -5632,7 +5632,7 @@ async function createCourse() {
     if (!level) { toastWarning('Please select a level.'); return; }
     if (!group) { toastWarning('Please enter a group (e.g. A, B, C).'); return; }
 
-    await api('/api/courses', {
+    await api('/api/courses/create', {
       method: 'POST',
       body: JSON.stringify({
         code,
