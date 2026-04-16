@@ -3895,7 +3895,7 @@ table tr:hover td { background: #f8fafc !important; }
 /* Photo + dark overlay directly on #auth-page (reliable cross-browser) */
 #auth-page:has(#portal-selector:not(.hidden)) {
   background-image:
-    linear-gradient(rgba(8, 18, 42, 0.50), rgba(8, 18, 42, 0.50)),
+    linear-gradient(rgba(8, 18, 42, 0.72), rgba(8, 18, 42, 0.72)),
     url('/img/workspace-bg.jpg') !important;
   background-size: cover !important;
   background-position: center center !important;
