@@ -2123,9 +2123,19 @@ input[type="checkbox"] {
 }
 
 /* ══════════════════════════════════════════════════
-   PREMIUM UI MODERNIZATION — KODEX 2025
-   Navy / Blue / White SaaS theme upgrade
+   PREMIUM UI REBUILD — KODEX 2026
+   Full Navy / Blue / White SaaS theme
 ══════════════════════════════════════════════════ */
+
+/* ── Design tokens ── */
+:root {
+  --kodex-navy: #1a2035;
+  --kodex-navy-dark: #141929;
+  --kodex-blue: #2563eb;
+  --kodex-blue-dark: #1d4ed8;
+  --kodex-blue-light: #eff6ff;
+  --sidebar-width: 260px;
+}
 
 /* ── Premium Sidebar: Dark Navy ── */
 @media (min-width: 769px) {
