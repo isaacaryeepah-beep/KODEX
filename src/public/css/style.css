@@ -845,8 +845,9 @@ body {
 ══════════════════════════════════════════════════ */
 
 .main-layout {
-  display: block;
-  height: calc(100vh - 56px);
+  display: flex;
+  flex: 1;
+  min-height: 0;
   overflow: hidden;
 }
 
@@ -1489,7 +1490,7 @@ input[type="checkbox"] {
   .topbar { padding: 0 14px; }
   .topbar-left .portal-company,
   .topbar-left .mode-badge { display: none; }
-  .main-layout { display: block; height: calc(100vh - 56px); overflow-y: auto; }
+  .main-layout { display: block; flex: 1; min-height: 0; overflow-y: auto; }
   /* bottom padding clears the bottom nav bar */
   .content { margin-left: 0 !important; padding: 16px 14px; padding-bottom: calc(58px + env(safe-area-inset-bottom, 0px) + 16px) !important; height: auto; overflow-y: visible; max-width: 100%; }
   .modal { padding: 20px 16px; margin: 12px; }
@@ -1527,7 +1528,7 @@ input[type="checkbox"] {
   .topbar { padding: 0 12px; height: 52px; }
   /* Enough bottom padding so content clears the floating nav pill */
   .content { padding: 14px 12px; padding-bottom: calc(58px + env(safe-area-inset-bottom, 0px) + 16px); }
-  .main-layout { height: calc(100vh - 52px); }
+  .main-layout { flex: 1; min-height: 0; }
 }
 
 @media (max-width: 480px) {
@@ -4413,13 +4414,15 @@ table tr:hover td { background: #f8fafc !important; }
 
 .main-layout {
   display: flex !important;
-  height: calc(100vh - 58px) !important;
+  flex: 1 !important;
+  min-height: 0 !important;
   overflow: hidden !important;
 }
 
 .content {
   background: #f0f4f8 !important;
   flex: 1 !important;
+  min-height: 0 !important;
   overflow-y: auto !important;
 }
 
