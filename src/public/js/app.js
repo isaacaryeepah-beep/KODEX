@@ -1150,8 +1150,11 @@ async function handleAdminLogin() {
       showAdminError('Too many failed attempts. Please wait 15 minutes and try again.');
     } else if (m.includes('network') || m.includes('fetch')) {
       showAdminError('Network error. Please check your connection and try again.');
+    } else if (m.includes('invalid credentials') || m.includes('wrong') || m.includes('not authorized')) {
+      const portalLabel = selectedPortalType === 'admin-academic' ? 'Academic Admin' : 'Corporate Admin';
+      showAdminError(`Wrong email or password for the ${portalLabel} portal. Make sure you are using the correct portal for your role.`);
     } else {
-      showAdminError('Wrong Email or Password.');
+      showAdminError(msg || 'Wrong email or password. Please check your credentials.');
     }
   }
 }
@@ -1222,8 +1225,10 @@ async function handleLecturerLogin() {
       showLecturerError('Too many failed attempts. Please wait 15 minutes and try again.');
     } else if (m.includes('network') || m.includes('fetch')) {
       showLecturerError('Network error. Please check your connection and try again.');
+    } else if (m.includes('invalid credentials') || m.includes('not authorized')) {
+      showLecturerError('Wrong email or password for the Lecturer portal. If you are an admin or HOD, please use the correct portal.');
     } else {
-      showLecturerError('Wrong Email or Password.');
+      showLecturerError(msg || 'Wrong email or password. Please check your credentials.');
     }
   }
 }
@@ -1581,8 +1586,10 @@ async function handleEmployeeLogin() {
       showEmployeeError('Too many failed attempts. Please wait 15 minutes and try again.');
     } else if (m2.includes('network') || m2.includes('fetch')) {
       showEmployeeError('Network error. Please check your connection and try again.');
+    } else if (m2.includes('invalid credentials') || m2.includes('not authorized')) {
+      showEmployeeError('Wrong email or password for the Employee portal. If you are a manager or admin, please use the correct portal.');
     } else {
-      showEmployeeError('Wrong Email or Password.');
+      showEmployeeError(msg2 || 'Wrong email or password. Please check your credentials.');
     }
   }
 }
@@ -1652,8 +1659,10 @@ async function handleStudentLogin() {
       showStudentError('This account is active on another device. Contact your admin to unlock it.');
     } else if (m3.includes('network') || m3.includes('fetch')) {
       showStudentError('Network error. Please check your connection and try again.');
+    } else if (m3.includes('invalid credentials') || m3.includes('not authorized')) {
+      showStudentError('Wrong Student ID or password. If you are a lecturer or admin, please use the correct portal.');
     } else {
-      showStudentError('Wrong Student ID or Password.');
+      showStudentError(msg3 || 'Wrong Student ID or password. Please check your credentials.');
     }
   }
 }
@@ -2147,6 +2156,8 @@ function buildSidebar() {
       links.push({ id: 'hod-reports',      label: 'Reports',        icon: reportsIcon() });
       links.push({ id: 'approvals',        label: 'Approvals',      icon: approvalsIcon() });
       links.push({ id: 'announcements',    label: 'Announcements',  icon: svgIcon('<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>') });
+      links.push({ id: 'messages',         label: 'Messages',       icon: svgIcon('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>') });
+      links.push({ id: 'faq-center',       label: 'FAQ Center',     icon: svgIcon('<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>') });
       break;
     case 'lecturer':
       links.push({ id: 'sessions', label: 'Sessions', icon: sessionsIcon() });
@@ -5631,10 +5642,11 @@ async function createCourse() {
         group:  group || undefined,
       }),
     });
+    toastSuccess('Course created successfully!');
     closeModal();
     renderCourses();
   } catch (e) {
-    toastError(e.message);
+    toastError(e.message || 'Failed to create course');
   }
 }
 
@@ -11241,28 +11253,41 @@ function openAIQuizPanel(quizId) {
             </label>
             <div id="aiq-pdf-name" style="display:none;margin-top:8px;padding:7px 12px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:7px;font-size:12px;color:#166534;font-weight:500;"></div>
           </div>
-          <!-- Drawing Canvas -->
+          <!-- Drawing Canvas — Premium -->
           <div id="aiq-src-drawing" style="display:none;">
-            <div style="background:#f9fafb;border:1.5px solid var(--border);border-radius:10px;overflow:hidden;">
-              <div style="display:flex;gap:4px;padding:6px 8px;background:var(--card);border-bottom:1px solid var(--border);flex-wrap:wrap;align-items:center;">
-                <span style="font-size:11px;font-weight:700;color:var(--text-muted);margin-right:4px;">Tool:</span>
-                <button id="aiq-draw-tool-pen"   onclick="aiqSetDrawTool('pen')"   style="padding:4px 9px;border:1.5px solid #7c3aed;border-radius:6px;background:#7c3aed;color:#fff;font-size:11px;cursor:pointer;font-weight:600">✏️ Pen</button>
-                <button id="aiq-draw-tool-line"  onclick="aiqSetDrawTool('line')"  style="padding:4px 9px;border:1.5px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-size:11px;cursor:pointer">/ Line</button>
-                <button id="aiq-draw-tool-rect"  onclick="aiqSetDrawTool('rect')"  style="padding:4px 9px;border:1.5px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-size:11px;cursor:pointer">□ Rect</button>
-                <button id="aiq-draw-tool-circle" onclick="aiqSetDrawTool('circle')" style="padding:4px 9px;border:1.5px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-size:11px;cursor:pointer">○ Circle</button>
-                <button id="aiq-draw-tool-text"  onclick="aiqSetDrawTool('text')"  style="padding:4px 9px;border:1.5px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-size:11px;cursor:pointer">T Text</button>
-                <button id="aiq-draw-tool-eraser" onclick="aiqSetDrawTool('eraser')" style="padding:4px 9px;border:1.5px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-size:11px;cursor:pointer">🧹 Erase</button>
+            <div style="background:var(--bg);border:1.5px solid var(--border);border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.06);">
+              <!-- Toolbar row 1: tools -->
+              <div style="display:flex;gap:5px;padding:8px 10px;background:var(--card);border-bottom:1px solid var(--border);flex-wrap:wrap;align-items:center;">
+                <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--text-muted);margin-right:2px;">TOOLS</span>
+                <button id="aiq-draw-tool-pen"   onclick="aiqSetDrawTool('pen')"   style="padding:5px 10px;border:1.5px solid #7c3aed;border-radius:7px;background:#7c3aed;color:#fff;font-size:11px;cursor:pointer;font-weight:700;display:flex;align-items:center;gap:3px">✏️ Pen</button>
+                <button id="aiq-draw-tool-eraser" onclick="aiqSetDrawTool('eraser')" style="padding:5px 10px;border:1.5px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);font-size:11px;cursor:pointer;font-weight:600;display:flex;align-items:center;gap:3px">🧹 Eraser</button>
+                <button id="aiq-draw-tool-line"  onclick="aiqSetDrawTool('line')"  style="padding:5px 10px;border:1.5px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);font-size:11px;cursor:pointer;font-weight:600">╱ Line</button>
+                <button id="aiq-draw-tool-rect"  onclick="aiqSetDrawTool('rect')"  style="padding:5px 10px;border:1.5px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);font-size:11px;cursor:pointer;font-weight:600">▭ Rect</button>
+                <button id="aiq-draw-tool-circle" onclick="aiqSetDrawTool('circle')" style="padding:5px 10px;border:1.5px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);font-size:11px;cursor:pointer;font-weight:600">◯ Circle</button>
+                <button id="aiq-draw-tool-text"  onclick="aiqSetDrawTool('text')"  style="padding:5px 10px;border:1.5px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);font-size:11px;cursor:pointer;font-weight:600">T Text</button>
                 <div style="flex:1"></div>
-                <input type="color" id="aiq-draw-color" value="#1e1e2e" style="width:26px;height:26px;border:none;cursor:pointer;border-radius:4px;padding:0" title="Colour">
-                <select id="aiq-draw-size" style="padding:3px 6px;border:1px solid var(--border);border-radius:5px;font-size:11px;outline:none">
-                  <option value="2">Thin</option><option value="4" selected>Normal</option><option value="8">Thick</option><option value="14">Bold</option>
+                <div style="display:flex;align-items:center;gap:6px;padding:4px 8px;background:var(--bg);border:1px solid var(--border);border-radius:7px">
+                  <span style="font-size:10px;color:var(--text-muted);font-weight:600">Color</span>
+                  <input type="color" id="aiq-draw-color" value="#1a1a2e" style="width:22px;height:22px;border:none;cursor:pointer;border-radius:4px;padding:0;background:none" title="Pick colour">
+                </div>
+                <select id="aiq-draw-size" style="padding:5px 8px;border:1.5px solid var(--border);border-radius:7px;font-size:11px;font-family:inherit;outline:none;background:var(--bg);color:var(--text);cursor:pointer">
+                  <option value="2">Thin (2px)</option><option value="4" selected>Normal (4px)</option><option value="8">Thick (8px)</option><option value="14">Bold (14px)</option>
                 </select>
-                <button onclick="aiqDrawUndo()" style="padding:4px 9px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-size:11px;cursor:pointer">↩ Undo</button>
-                <button onclick="aiqDrawClear()" style="padding:4px 9px;border:1px solid #dc2626;border-radius:6px;background:#fef2f2;color:#dc2626;font-size:11px;cursor:pointer">✕ Clear</button>
               </div>
-              <canvas id="aiq-draw-canvas" width="460" height="280" style="display:block;width:100%;cursor:crosshair;touch-action:none;background:#fff;"></canvas>
+              <!-- Toolbar row 2: actions -->
+              <div style="display:flex;gap:5px;padding:6px 10px;background:var(--card);border-bottom:1px solid var(--border);align-items:center">
+                <button onclick="aiqDrawUndo()" style="padding:5px 12px;border:1.5px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);font-size:11px;cursor:pointer;font-weight:600;display:flex;align-items:center;gap:4px">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5v0a5.5 5.5 0 0 1-5.5 5.5H11"/></svg> Undo
+                </button>
+                <button onclick="aiqDrawClear()" style="padding:5px 12px;border:1.5px solid #fca5a5;border-radius:7px;background:#fef2f2;color:#dc2626;font-size:11px;cursor:pointer;font-weight:600;display:flex;align-items:center;gap:4px">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg> Clear Canvas
+                </button>
+                <div style="flex:1"></div>
+                <span style="font-size:10px;color:var(--text-muted)">Click &amp; drag to draw · Touch supported</span>
+              </div>
+              <canvas id="aiq-draw-canvas" width="460" height="300" style="display:block;width:100%;cursor:crosshair;touch-action:none;background:#fff;"></canvas>
             </div>
-            <p style="font-size:11px;color:var(--text-muted);margin-top:6px;">Draw a diagram, geometry sketch, or concept map. AI will analyse it and generate questions.</p>
+            <p style="font-size:11px;color:var(--text-muted);margin-top:8px;line-height:1.5">Draw a diagram, geometry sketch, chart or concept map. AI will analyse your drawing and generate quiz questions from it.</p>
           </div>
           <!-- Graph / Coordinate Plane -->
           <div id="aiq-src-graph" style="display:none;">
@@ -11865,9 +11890,9 @@ async function runAIQuizGenerate(quizId) {
     const styleDesc = mathStyle === 'solve' ? 'calculation/problem-solving questions'
                     : mathStyle === 'conceptual' ? 'conceptual/theory questions about mathematical properties'
                     : 'a mix of calculation problems and conceptual questions';
-    prompt = 'You are an expert mathematics educator creating quiz questions for KODEX.\n\nGenerate exactly ' + count + ' ' + difficulty + ' difficulty math MCQ questions about: "' + topic + '". ' + branch + '\n' + (context ? 'Context: ' + context : '') + '\n\nStyle: ' + styleDesc + '. Question type: ' + qtypeDesc + '. Each question has exactly 4 options.\n\nUse LaTeX \\( ... \\) for ALL inline math. Use \\[ ... \\] for display equations.\n\nReturn ONLY a valid JSON array:\n[\n  {\n    "questionText": "Find \\( x \\) if \\( x^2 - 5x + 6 = 0 \\).",\n    "options": ["\\( x = 2, 3 \\)", "\\( x = -2, -3 \\)", "\\( x = 1, 6 \\)", "\\( x = 5, -1 \\)"],\n    "correctAnswers": [0],\n    "questionType": "single",\n    "explanation": "Factorising: \\( (x-2)(x-3)=0 \\)."\n  }\n]';
+    prompt = 'You are an expert mathematics educator creating quiz questions for KODEX.\n\nGenerate exactly ' + count + ' ' + difficulty + ' difficulty math MCQ questions about: "' + topic + '". ' + branch + '\n' + (context ? 'Context: ' + context : '') + '\n\nStyle: ' + styleDesc + '. Question type: ' + qtypeDesc + '. Each question has EXACTLY 5 options (A through E).\n\nUse LaTeX \\( ... \\) for ALL inline math. Use \\[ ... \\] for display equations.\n\nReturn ONLY a valid JSON array:\n[\n  {\n    "questionText": "Find \\( x \\) if \\( x^2 - 5x + 6 = 0 \\).",\n    "options": ["\\( x = 2, 3 \\)", "\\( x = -2, -3 \\)", "\\( x = 1, 6 \\)", "\\( x = 5, -1 \\)", "\\( x = 0, 5 \\)"],\n    "correctAnswers": [0],\n    "questionType": "single",\n    "explanation": "Factorising: \\( (x-2)(x-3)=0 \\)."\n  }\n]';
   } else {
-    prompt = 'You are an expert educator creating quiz questions for KODEX.\n\nGenerate exactly ' + count + ' ' + difficulty + ' difficulty MCQ questions about: "' + topic + '".\n' + (context ? 'Context: ' + context : '') + '\nQuestion type: ' + qtypeDesc + '. Each question has exactly 4 options.\n\nReturn ONLY a valid JSON array:\n[\n  {\n    "questionText": "Question here?",\n    "options": ["Option A", "Option B", "Option C", "Option D"],\n    "correctAnswers": [0],\n    "questionType": "single",\n    "explanation": "Why this is correct"\n  }\n]\n\ncorrectAnswers = 0-based indices. questionType = "single" or "multiple". No extra text.';
+    prompt = 'You are an expert educator creating quiz questions for KODEX.\n\nGenerate exactly ' + count + ' ' + difficulty + ' difficulty MCQ questions about: "' + topic + '".\n' + (context ? 'Context: ' + context : '') + '\nQuestion type: ' + qtypeDesc + '. Each question has EXACTLY 5 options (A, B, C, D, E).\n\nReturn ONLY a valid JSON array:\n[\n  {\n    "questionText": "Question here?",\n    "options": ["Option A", "Option B", "Option C", "Option D", "Option E"],\n    "correctAnswers": [0],\n    "questionType": "single",\n    "explanation": "Why this is correct"\n  }\n]\n\ncorrectAnswers = 0-based indices. questionType = "single" or "multiple". No extra text.';
   }
 
   try {
@@ -11893,7 +11918,7 @@ async function runAIQuizGenerate(quizId) {
       correctAnswers: Array.isArray(q.correctAnswers) ? q.correctAnswers : [q.correctAnswers],
     }));
 
-    const L = ['A','B','C','D'];
+    const L = ['A','B','C','D','E'];
     document.getElementById('aiq-preview-count').textContent = _aiQuizQuestions.length + ' questions';
     document.getElementById('aiq-preview-list').innerHTML = _aiQuizQuestions.map((q, i) => `
       <div style="border:1.5px solid var(--border);border-radius:10px;padding:13px;background:var(--bg)">
@@ -15009,31 +15034,44 @@ async function renderMessages() {
   const content = document.getElementById('main-content');
   if (!content) return;
   content.innerHTML = `
-    <div class="page-header" style="margin-bottom:0">
+    <div class="page-header">
       <h2>Messages</h2>
       <p>Internal team messaging</p>
     </div>
-    <div style="display:flex;gap:0;height:calc(100vh - 160px);min-height:400px;border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-top:16px;background:var(--card)">
-      <div id="msg-sidebar" style="width:280px;min-width:220px;border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0">
-        <div style="padding:12px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
-          <span style="font-weight:700;font-size:14px">Conversations</span>
-          <button class="btn btn-primary btn-sm" onclick="showNewConvoModal()" style="font-size:11px;padding:4px 10px">+ New</button>
+    <div style="display:flex;height:calc(100vh - 172px);min-height:420px;border:1px solid var(--border);border-radius:14px;overflow:hidden;background:var(--card);box-shadow:0 2px 12px rgba(0,0,0,.06)">
+
+      <!-- Conversation sidebar -->
+      <div id="msg-sidebar" style="width:290px;min-width:240px;border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;background:var(--bg)">
+        <div style="padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;background:var(--card)">
+          <span style="font-weight:800;font-size:14px;letter-spacing:-.2px;color:var(--text)">Conversations</span>
+          <button onclick="showNewConvoModal()" style="display:flex;align-items:center;gap:5px;padding:5px 12px;background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#fff;border:none;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;letter-spacing:.2px">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>New
+          </button>
         </div>
-        <div id="msg-convo-list" style="flex:1;overflow-y:auto;padding:8px 0">
-          <div class="loading" style="padding:20px;text-align:center;font-size:13px">Loading…</div>
+        <div id="msg-convo-list" style="flex:1;overflow-y:auto;padding:6px 0">
+          <div class="loading" style="padding:28px;text-align:center;font-size:13px;color:var(--text-muted)">Loading…</div>
         </div>
       </div>
-      <div id="msg-thread" style="flex:1;display:flex;flex-direction:column;min-width:0">
-        <div id="msg-thread-header" style="padding:14px 18px;border-bottom:1px solid var(--border);font-weight:600;font-size:14px;display:flex;align-items:center;gap:10px">
-          <span style="color:var(--text-muted);font-weight:400;font-size:13px">Select a conversation to start messaging</span>
+
+      <!-- Thread pane -->
+      <div id="msg-thread" style="flex:1;display:flex;flex-direction:column;min-width:0;background:var(--card)">
+        <div id="msg-thread-header" style="padding:14px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;background:var(--card);min-height:56px">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          <span style="color:var(--text-muted);font-size:13px;font-weight:500">Select a conversation to start messaging</span>
         </div>
-        <div id="msg-thread-body" style="flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:10px">
+        <div id="msg-thread-body" style="flex:1;overflow-y:auto;padding:20px 24px;display:flex;flex-direction:column;gap:12px;background:var(--bg)">
         </div>
-        <div id="msg-input-bar" style="padding:12px 16px;border-top:1px solid var(--border);display:none">
-          <div style="display:flex;gap:8px;align-items:flex-end">
-            <textarea id="msg-input" placeholder="Type a message…" rows="1" oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,120)+'px'" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendMessage()}" style="flex:1;padding:9px 13px;border:1.5px solid var(--border);border-radius:10px;font-size:13px;font-family:inherit;resize:none;outline:none;background:var(--bg);line-height:1.4"></textarea>
-            <button class="btn btn-primary" onclick="sendMessage()" style="padding:9px 16px;font-size:13px;flex-shrink:0">Send</button>
+        <div id="msg-input-bar" style="padding:14px 20px;border-top:1px solid var(--border);display:none;background:var(--card)">
+          <div style="display:flex;gap:10px;align-items:flex-end;background:var(--bg);border:1.5px solid var(--border);border-radius:12px;padding:8px 12px;transition:.15s" onfocus-within="this.style.borderColor='#2563eb'">
+            <textarea id="msg-input" placeholder="Write a message…" rows="1"
+              oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,120)+'px';this.parentElement.style.borderColor=this.value?'#2563eb':'var(--border)'"
+              onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendMessage()}"
+              style="flex:1;padding:0;border:none;border-radius:0;font-size:13px;font-family:inherit;resize:none;outline:none;background:transparent;color:var(--text);line-height:1.5;min-height:20px"></textarea>
+            <button onclick="sendMessage()" style="flex-shrink:0;width:34px;height:34px;border-radius:9px;background:linear-gradient(135deg,#2563eb,#1d4ed8);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:transform .15s,box-shadow .15s" onmouseenter="this.style.transform='scale(1.08)';this.style.boxShadow='0 4px 12px rgba(37,99,235,.4)'" onmouseleave="this.style.transform='';this.style.boxShadow=''">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+            </button>
           </div>
+          <div style="font-size:10px;color:var(--text-muted);margin-top:5px;padding-left:2px">Press Enter to send · Shift+Enter for new line</div>
         </div>
       </div>
     </div>`;
@@ -15047,28 +15085,38 @@ async function _loadConvoList() {
     const data = await api('/api/messages/conversations');
     const convos = data.conversations || [];
     if (!convos.length) {
-      list.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-muted);font-size:13px">No conversations yet.<br>Click <strong>+ New</strong> to start one.</div>';
+      list.innerHTML = `<div style="padding:32px 20px;text-align:center;color:var(--text-muted)">
+        <div style="width:48px;height:48px;background:var(--border);border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 12px">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        </div>
+        <div style="font-size:13px;font-weight:600;color:var(--text-light);margin-bottom:4px">No conversations yet</div>
+        <div style="font-size:12px">Click <strong>+ New</strong> to start one</div>
+      </div>`;
       return;
     }
     const myId = currentUser._id || currentUser.id;
-    list.innerHTML = convos.map(c => {
+    // Color palette for avatars
+    const avatarColors = ['#2563eb','#7c3aed','#0891b2','#16a34a','#d97706','#db2777','#dc2626'];
+    list.innerHTML = convos.map((c, ci) => {
       const others = (c.participants || []).filter(p => (p.user?._id || p.user) !== myId && p.user?.name);
       const name   = c.isGroup ? (c.title || 'Group') : (others[0]?.user?.name || 'Conversation');
       const initials = name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
       const unread = c.myUnreadCount || 0;
-      const preview = c.lastMessage?.body ? (c.lastMessage.body.length > 40 ? c.lastMessage.body.slice(0, 40) + '…' : c.lastMessage.body) : 'No messages yet';
+      const preview = c.lastMessage?.body ? (c.lastMessage.body.length > 45 ? c.lastMessage.body.slice(0, 45) + '…' : c.lastMessage.body) : 'No messages yet';
       const time   = c.lastMessage?.sentAt ? new Date(c.lastMessage.sentAt).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : '';
       const isActive = _activeConvoId === c._id;
-      return `<div onclick="openConvo('${c._id}','${name.replace(/'/g,"\\'")}','${c.isGroup?'group':'direct'}')" style="padding:10px 14px;cursor:pointer;display:flex;gap:10px;align-items:flex-start;background:${isActive?'var(--primary-ultra-light)':'transparent'};border-left:3px solid ${isActive?'var(--primary)':'transparent'};transition:.12s">
-        <div style="width:36px;height:36px;border-radius:50%;background:var(--primary);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;flex-shrink:0">${initials}</div>
+      const color = avatarColors[ci % avatarColors.length];
+      return `<div onclick="openConvo('${c._id}','${name.replace(/'/g,"\\'")}','${c.isGroup?'group':'direct'}')"
+        style="padding:11px 16px;cursor:pointer;display:flex;gap:11px;align-items:flex-start;background:${isActive?'rgba(37,99,235,.08)':'transparent'};border-left:3px solid ${isActive?'#2563eb':'transparent'};transition:background .12s">
+        <div style="width:40px;height:40px;border-radius:50%;background:${color};color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;flex-shrink:0;letter-spacing:.5px">${initials}</div>
         <div style="flex:1;min-width:0">
-          <div style="display:flex;align-items:center;justify-content:space-between;gap:4px">
-            <span style="font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${name}</span>
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:4px;margin-bottom:2px">
+            <span style="font-weight:${unread>0?'700':'600'};font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text)">${name}</span>
             <span style="font-size:10px;color:var(--text-muted);flex-shrink:0">${time}</span>
           </div>
-          <div style="font-size:12px;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px">${preview}</div>
+          <div style="font-size:12px;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${preview}</div>
         </div>
-        ${unread > 0 ? `<span style="background:var(--primary);color:#fff;border-radius:20px;font-size:10px;font-weight:700;padding:1px 6px;flex-shrink:0;margin-top:2px">${unread}</span>` : ''}
+        ${unread > 0 ? `<span style="background:#2563eb;color:#fff;border-radius:20px;font-size:10px;font-weight:700;padding:2px 7px;flex-shrink:0;margin-top:3px;min-width:18px;text-align:center">${unread}</span>` : ''}
       </div>`;
     }).join('');
   } catch(e) {
@@ -15083,7 +15131,7 @@ async function openConvo(id, name, type) {
   const body   = document.getElementById('msg-thread-body');
   const bar    = document.getElementById('msg-input-bar');
   if (!header || !body || !bar) return;
-  header.innerHTML = `<div style="width:32px;height:32px;border-radius:50%;background:var(--primary);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px">${name.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase()}</div><div><div style="font-weight:700;font-size:14px">${name}</div><div style="font-size:11px;color:var(--text-muted)">${type === 'group' ? 'Group conversation' : 'Direct message'}</div></div>`;
+  header.innerHTML = `<div style="width:38px;height:38px;border-radius:50%;background:linear-gradient(135deg,#2563eb,#7c3aed);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;flex-shrink:0">${name.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase()}</div><div style="min-width:0"><div style="font-weight:700;font-size:14px;color:var(--text)">${name}</div><div style="font-size:11px;color:var(--text-muted)">${type === 'group' ? 'Group conversation' : 'Direct message'}</div></div>`;
   body.innerHTML = '<div class="loading" style="text-align:center;padding:20px;font-size:13px">Loading messages…</div>';
   bar.style.display = 'block';
   document.getElementById('msg-input').value = '';
@@ -15093,17 +15141,33 @@ async function openConvo(id, name, type) {
     const msgs  = data.messages || [];
     const myId  = currentUser._id || currentUser.id;
     if (!msgs.length) {
-      body.innerHTML = '<div style="text-align:center;color:var(--text-muted);font-size:13px;padding:24px">No messages yet. Say hello!</div>';
+      body.innerHTML = `<div style="text-align:center;color:var(--text-muted);padding:40px 20px">
+        <div style="font-size:32px;margin-bottom:10px">💬</div>
+        <div style="font-size:14px;font-weight:600;color:var(--text-light);margin-bottom:4px">No messages yet</div>
+        <div style="font-size:12px">Be the first to say hello!</div>
+      </div>`;
     } else {
       body.innerHTML = msgs.map(m => {
         const isMine = (m.sender?._id || m.sender) === myId;
         const time   = new Date(m.createdAt).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
-        const name   = m.sender?.name || 'Unknown';
-        return `<div style="display:flex;flex-direction:column;align-items:${isMine?'flex-end':'flex-start'};gap:2px">
-          ${!isMine ? `<span style="font-size:11px;color:var(--text-muted);margin-left:2px">${name}</span>` : ''}
-          <div style="max-width:70%;padding:9px 13px;border-radius:${isMine?'14px 14px 4px 14px':'14px 14px 14px 4px'};background:${isMine?'var(--primary)':'var(--bg)'};color:${isMine?'#fff':'var(--text)'};font-size:13px;line-height:1.5;word-break:break-word">${m.isDeleted ? '<em style="opacity:.6">[deleted]</em>' : (m.body || '')}</div>
-          <span style="font-size:10px;color:var(--text-muted)">${time}${m.editedAt ? ' · edited' : ''}</span>
-        </div>`;
+        const senderName = m.sender?.name || 'Unknown';
+        const initials = senderName.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
+        const msgContent = m.isDeleted ? '<em style="opacity:.55;font-size:12px">[message deleted]</em>' : (m.body || '');
+        if (isMine) {
+          return `<div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px">
+            <div style="max-width:68%;padding:10px 14px;border-radius:16px 16px 4px 16px;background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#fff;font-size:13px;line-height:1.55;word-break:break-word;box-shadow:0 2px 8px rgba(37,99,235,.25)">${msgContent}</div>
+            <span style="font-size:10px;color:var(--text-muted);padding-right:2px">${time}${m.editedAt ? ' · edited' : ''}</span>
+          </div>`;
+        } else {
+          return `<div style="display:flex;gap:8px;align-items:flex-end;max-width:72%">
+            <div style="width:28px;height:28px;border-radius:50%;background:#e2e8f0;color:#475569;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:10px;flex-shrink:0;margin-bottom:2px">${initials}</div>
+            <div style="display:flex;flex-direction:column;gap:3px">
+              <span style="font-size:11px;color:var(--text-muted);font-weight:500;padding-left:1px">${senderName}</span>
+              <div style="padding:10px 14px;border-radius:16px 16px 16px 4px;background:var(--card);border:1px solid var(--border);color:var(--text);font-size:13px;line-height:1.55;word-break:break-word">${msgContent}</div>
+              <span style="font-size:10px;color:var(--text-muted);padding-left:1px">${time}${m.editedAt ? ' · edited' : ''}</span>
+            </div>
+          </div>`;
+        }
       }).join('');
       body.scrollTop = body.scrollHeight;
     }
@@ -15130,8 +15194,8 @@ async function sendMessage() {
     if (threadBody) {
       const time = new Date(msg.createdAt || Date.now()).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
       const el = document.createElement('div');
-      el.style.cssText = 'display:flex;flex-direction:column;align-items:flex-end;gap:2px';
-      el.innerHTML = `<div style="max-width:70%;padding:9px 13px;border-radius:14px 14px 4px 14px;background:var(--primary);color:#fff;font-size:13px;line-height:1.5;word-break:break-word">${body}</div><span style="font-size:10px;color:var(--text-muted)">${time}</span>`;
+      el.style.cssText = 'display:flex;flex-direction:column;align-items:flex-end;gap:3px';
+      el.innerHTML = `<div style="max-width:68%;padding:10px 14px;border-radius:16px 16px 4px 16px;background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#fff;font-size:13px;line-height:1.55;word-break:break-word;box-shadow:0 2px 8px rgba(37,99,235,.25)">${body}</div><span style="font-size:10px;color:var(--text-muted);padding-right:2px">${time}</span>`;
       threadBody.appendChild(el);
       threadBody.scrollTop = threadBody.scrollHeight;
     }
