@@ -3887,21 +3887,21 @@ table tr:hover td { background: #f8fafc !important; }
 }
 
 /* ══════════════════════════════════════════════════════════════════════
-   WORKSPACE SELECTION — Premium Design
+   WORKSPACE SELECTION — Cream Glass Design
    Scoped via :has() so login forms are never affected.
 ══════════════════════════════════════════════════════════════════════ */
 
-/* ── Background: dark photo with depth-layered colour blooms ── */
+/* ── Background: warm-tinted dark photo ── */
 #auth-page:has(#portal-selector:not(.hidden)) {
   background-image:
-    radial-gradient(ellipse 65% 55% at 12% 50%, rgba(99,102,241,.20) 0%, transparent 55%),
-    radial-gradient(ellipse 55% 45% at 88% 35%, rgba(37,99,235,.16) 0%, transparent 55%),
-    linear-gradient(160deg, rgba(6,10,28,.84) 0%, rgba(8,18,50,.80) 100%),
+    radial-gradient(ellipse 70% 60% at 15% 60%, rgba(180,140,80,.18) 0%, transparent 55%),
+    radial-gradient(ellipse 55% 45% at 85% 30%, rgba(200,160,90,.12) 0%, transparent 55%),
+    linear-gradient(160deg, rgba(18,12,6,.80) 0%, rgba(28,20,10,.76) 100%),
     url('/img/workspace-bg.jpg') !important;
   background-size: cover !important;
   background-position: center center !important;
   background-repeat: no-repeat !important;
-  background-color: #060a1c !important;
+  background-color: #120c06 !important;
   align-items: center !important;
   justify-content: center !important;
   flex-direction: column !important;
@@ -3919,21 +3919,21 @@ table tr:hover td { background: #f8fafc !important; }
   height: 0 !important;
 }
 
-/* ── Glass card: elevated, frosted, floating ── */
+/* ── Main card: cream frosted glass ── */
 #auth-page:has(#portal-selector:not(.hidden)) #portal-selector {
   max-width: 480px !important;
   width: 100% !important;
   margin: auto !important;
   padding: 28px 26px 20px !important;
-  background: rgba(255,255,255,.97) !important;
-  backdrop-filter: blur(48px) saturate(2) !important;
-  -webkit-backdrop-filter: blur(48px) saturate(2) !important;
-  border: 1px solid rgba(255,255,255,1) !important;
+  background: rgba(255, 250, 238, 0.82) !important;
+  backdrop-filter: blur(48px) saturate(1.6) brightness(1.08) !important;
+  -webkit-backdrop-filter: blur(48px) saturate(1.6) brightness(1.08) !important;
+  border: 1px solid rgba(255, 245, 220, 0.90) !important;
   box-shadow:
-    0 0 0 1px rgba(99,102,241,.08),
-    0 48px 120px rgba(0,0,0,.60),
-    0 16px 48px rgba(0,0,0,.35),
-    inset 0 1px 0 #fff !important;
+    0 0 0 1px rgba(200,160,80,.12),
+    0 48px 120px rgba(0,0,0,.55),
+    0 16px 48px rgba(0,0,0,.28),
+    inset 0 1px 0 rgba(255,252,240,.95) !important;
   border-radius: 24px !important;
 }
 
@@ -3951,12 +3951,12 @@ table tr:hover td { background: #f8fafc !important; }
   font-size: 26px !important;
   font-weight: 800 !important;
   letter-spacing: -.6px !important;
-  color: #0f172a !important;
+  color: #1c1208 !important;
 }
 
 #auth-page:has(#portal-selector:not(.hidden)) .portal-header .subtitle {
   font-size: 13px !important;
-  color: #64748b !important;
+  color: #7c6a50 !important;
   margin-top: 3px !important;
 }
 
@@ -3965,7 +3965,7 @@ table tr:hover td { background: #f8fafc !important; }
   font-size: 10px !important;
   font-weight: 700 !important;
   letter-spacing: 2px !important;
-  color: #94a3b8 !important;
+  color: #a8906e !important;
   margin-bottom: 10px !important;
 }
 
@@ -3978,29 +3978,29 @@ table tr:hover td { background: #f8fafc !important; }
 #auth-page:has(#portal-selector:not(.hidden)) .mode-toggle {
   padding: 16px 14px 12px !important;
   border-radius: 14px !important;
-  border: 1.5px solid #e8edf5 !important;
-  background: #fafbff !important;
-  box-shadow: 0 1px 4px rgba(0,0,0,.05) !important;
+  border: 1.5px solid rgba(220,195,155,.60) !important;
+  background: rgba(255,252,242,.70) !important;
+  box-shadow: 0 1px 4px rgba(120,80,20,.08) !important;
   transition: all .18s !important;
 }
 
 #auth-page:has(#portal-selector:not(.hidden)) .mode-toggle:hover {
-  border-color: #c7d2fe !important;
-  background: #f5f7ff !important;
-  box-shadow: 0 4px 12px rgba(99,102,241,.10) !important;
+  border-color: rgba(200,160,80,.70) !important;
+  background: rgba(255,250,235,.85) !important;
+  box-shadow: 0 4px 14px rgba(160,110,30,.14) !important;
   transform: translateY(-1px) !important;
 }
 
 #auth-page:has(#portal-selector:not(.hidden)) .mode-toggle.active-corp {
   border-color: #2563eb !important;
-  background: linear-gradient(135deg, #eff6ff 0%, #f8faff 100%) !important;
-  box-shadow: 0 0 0 3px rgba(37,99,235,.08), 0 4px 16px rgba(37,99,235,.14) !important;
+  background: rgba(239,246,255,.85) !important;
+  box-shadow: 0 0 0 3px rgba(37,99,235,.10), 0 4px 16px rgba(37,99,235,.14) !important;
 }
 
 #auth-page:has(#portal-selector:not(.hidden)) .mode-toggle.active-acad {
   border-color: #7c3aed !important;
-  background: linear-gradient(135deg, #f5f3ff 0%, #faf9ff 100%) !important;
-  box-shadow: 0 0 0 3px rgba(124,58,237,.08), 0 4px 16px rgba(124,58,237,.12) !important;
+  background: rgba(245,243,255,.85) !important;
+  box-shadow: 0 0 0 3px rgba(124,58,237,.10), 0 4px 16px rgba(124,58,237,.12) !important;
 }
 
 #auth-page:has(#portal-selector:not(.hidden)) .mode-toggle-icon {
@@ -4014,12 +4014,12 @@ table tr:hover td { background: #f8fafc !important; }
   font-size: 14px !important;
   font-weight: 800 !important;
   letter-spacing: -.3px !important;
-  color: #1e293b !important;
+  color: #2c1f0a !important;
 }
 
 #auth-page:has(#portal-selector:not(.hidden)) .mode-toggle p {
   font-size: 11px !important;
-  color: #94a3b8 !important;
+  color: #a8906e !important;
   margin-bottom: 8px !important;
 }
 
@@ -4038,7 +4038,7 @@ table tr:hover td { background: #f8fafc !important; }
   font-size: 9.5px !important;
   letter-spacing: 2px !important;
   margin-bottom: 10px !important;
-  color: #94a3b8 !important;
+  color: #a8906e !important;
 }
 
 /* Corporate: 3 cards in one row */
@@ -4055,34 +4055,35 @@ table tr:hover td { background: #f8fafc !important; }
   gap: 8px !important;
 }
 
-/* Portal cards: polished with hover lift */
+/* Portal cards: cream glass, hover lift */
 #auth-page:has(#portal-selector:not(.hidden)) .portal-card {
   width: 100% !important;
   padding: 16px 14px 12px !important;
-  background: #fff !important;
-  border: 1.5px solid #f0f4f8 !important;
+  background: rgba(255, 252, 242, 0.78) !important;
+  border: 1.5px solid rgba(220,195,155,.55) !important;
   border-radius: 14px !important;
-  box-shadow: 0 1px 4px rgba(0,0,0,.06), 0 4px 12px rgba(0,0,0,.04) !important;
+  box-shadow: 0 1px 4px rgba(120,80,20,.07), 0 4px 12px rgba(100,60,10,.05) !important;
   transition: all .18s !important;
 }
 
 #auth-page:has(#portal-selector:not(.hidden)) .portal-card:hover {
   transform: translateY(-3px) !important;
-  box-shadow: 0 8px 28px rgba(0,0,0,.12), 0 2px 8px rgba(0,0,0,.06) !important;
-  border-color: transparent !important;
+  background: rgba(255, 252, 242, 0.95) !important;
+  box-shadow: 0 8px 28px rgba(100,60,10,.14), 0 2px 8px rgba(100,60,10,.08) !important;
+  border-color: rgba(200,160,80,.60) !important;
 }
 
 #auth-page:has(#portal-selector:not(.hidden)) .portal-card h2 {
   font-size: 13px !important;
   font-weight: 800 !important;
-  color: #1e293b !important;
+  color: #2c1f0a !important;
   letter-spacing: -.2px !important;
   margin-bottom: 2px !important;
 }
 
 #auth-page:has(#portal-selector:not(.hidden)) .portal-card p {
   font-size: 11px !important;
-  color: #94a3b8 !important;
+  color: #a8906e !important;
   margin-bottom: 10px !important;
 }
 
@@ -4095,7 +4096,7 @@ table tr:hover td { background: #f8fafc !important; }
 
 #auth-page:has(#portal-selector:not(.hidden)) .portal-arrow {
   font-size: 14px !important;
-  color: #cbd5e1 !important;
+  color: #c8a87a !important;
 }
 
 /* ── Footer ── */
@@ -4103,8 +4104,8 @@ table tr:hover td { background: #f8fafc !important; }
   padding: 10px 8px 4px !important;
   margin-top: 14px !important;
   font-size: 11px !important;
-  color: #94a3b8 !important;
-  border-top: 1px solid #f1f5f9 !important;
+  color: #a8906e !important;
+  border-top: 1px solid rgba(200,170,110,.30) !important;
 }
 
 /* ── Mobile ── */
