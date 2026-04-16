@@ -3887,156 +3887,241 @@ table tr:hover td { background: #f8fafc !important; }
 }
 
 /* ══════════════════════════════════════════════════════════════════════
-   WORKSPACE SELECTION PAGE — Office Photo Background
-   Scoped via :has() — only applies when #portal-selector is visible.
-   Login/register forms on the same #auth-page are NOT affected.
+   WORKSPACE SELECTION — Premium Design
+   Scoped via :has() so login forms are never affected.
 ══════════════════════════════════════════════════════════════════════ */
 
-/* Photo + dark overlay directly on #auth-page (reliable cross-browser) */
+/* ── Background: dark photo with depth-layered colour blooms ── */
 #auth-page:has(#portal-selector:not(.hidden)) {
   background-image:
-    linear-gradient(rgba(8, 18, 42, 0.72), rgba(8, 18, 42, 0.72)),
+    radial-gradient(ellipse 65% 55% at 12% 50%, rgba(99,102,241,.20) 0%, transparent 55%),
+    radial-gradient(ellipse 55% 45% at 88% 35%, rgba(37,99,235,.16) 0%, transparent 55%),
+    linear-gradient(160deg, rgba(6,10,28,.84) 0%, rgba(8,18,50,.80) 100%),
     url('/img/workspace-bg.jpg') !important;
   background-size: cover !important;
   background-position: center center !important;
   background-repeat: no-repeat !important;
-  background-color: #0d1825 !important;
+  background-color: #060a1c !important;
   align-items: center !important;
   justify-content: center !important;
   flex-direction: column !important;
 }
 
-/* Suppress the base ::before grid texture on workspace page */
+/* Suppress base pseudo-elements */
 #auth-page:has(#portal-selector:not(.hidden))::before {
   opacity: 0 !important;
   background-image: none !important;
 }
-
-/* Suppress the base ::after orb on workspace page */
 #auth-page:has(#portal-selector:not(.hidden))::after {
   opacity: 0 !important;
   background: none !important;
-  position: absolute !important;
   width: 0 !important;
   height: 0 !important;
 }
 
-/* Portal selector: centered premium glass card */
+/* ── Glass card: elevated, frosted, floating ── */
 #auth-page:has(#portal-selector:not(.hidden)) #portal-selector {
   max-width: 480px !important;
   width: 100% !important;
   margin: auto !important;
-  padding: 22px 22px 16px !important;
-  background: rgba(255, 255, 255, 0.90) !important;
-  backdrop-filter: blur(32px) saturate(1.4) !important;
-  -webkit-backdrop-filter: blur(32px) saturate(1.4) !important;
-  border: 1px solid rgba(255, 255, 255, 0.85) !important;
+  padding: 28px 26px 20px !important;
+  background: rgba(255,255,255,.97) !important;
+  backdrop-filter: blur(48px) saturate(2) !important;
+  -webkit-backdrop-filter: blur(48px) saturate(2) !important;
+  border: 1px solid rgba(255,255,255,1) !important;
   box-shadow:
-    0 32px 80px rgba(0, 0, 0, 0.45),
-    0 8px 24px rgba(0, 0, 0, 0.25),
-    inset 0 1px 0 rgba(255, 255, 255, 0.95) !important;
-  border-radius: 20px !important;
+    0 0 0 1px rgba(99,102,241,.08),
+    0 48px 120px rgba(0,0,0,.60),
+    0 16px 48px rgba(0,0,0,.35),
+    inset 0 1px 0 #fff !important;
+  border-radius: 24px !important;
 }
 
-/* Shrink the logo SVG so it doesn't dominate */
+/* ── Logo ── */
 #auth-page:has(#portal-selector:not(.hidden)) .brand-logo svg {
-  height: 52px !important;
+  height: 54px !important;
 }
 
-/* Tighter portal header */
+/* ── Portal header ── */
 #auth-page:has(#portal-selector:not(.hidden)) .portal-header {
-  margin-bottom: 12px !important;
+  margin-bottom: 16px !important;
 }
 
-/* Mode toggles: tighter gap and smaller padding */
+#auth-page:has(#portal-selector:not(.hidden)) .portal-header h1 {
+  font-size: 26px !important;
+  font-weight: 800 !important;
+  letter-spacing: -.6px !important;
+  color: #0f172a !important;
+}
+
+#auth-page:has(#portal-selector:not(.hidden)) .portal-header .subtitle {
+  font-size: 13px !important;
+  color: #64748b !important;
+  margin-top: 3px !important;
+}
+
+/* ── Mode selector label ── */
+#auth-page:has(#portal-selector:not(.hidden)) .mode-selector-label {
+  font-size: 10px !important;
+  font-weight: 700 !important;
+  letter-spacing: 2px !important;
+  color: #94a3b8 !important;
+  margin-bottom: 10px !important;
+}
+
+/* ── Mode toggle grid ── */
 #auth-page:has(#portal-selector:not(.hidden)) .mode-toggles {
-  gap: 8px !important;
+  gap: 10px !important;
   margin-bottom: 0 !important;
 }
 
 #auth-page:has(#portal-selector:not(.hidden)) .mode-toggle {
-  padding: 14px 12px 10px !important;
-  background: rgba(255, 255, 255, 0.95) !important;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.07) !important;
+  padding: 16px 14px 12px !important;
+  border-radius: 14px !important;
+  border: 1.5px solid #e8edf5 !important;
+  background: #fafbff !important;
+  box-shadow: 0 1px 4px rgba(0,0,0,.05) !important;
+  transition: all .18s !important;
+}
+
+#auth-page:has(#portal-selector:not(.hidden)) .mode-toggle:hover {
+  border-color: #c7d2fe !important;
+  background: #f5f7ff !important;
+  box-shadow: 0 4px 12px rgba(99,102,241,.10) !important;
+  transform: translateY(-1px) !important;
+}
+
+#auth-page:has(#portal-selector:not(.hidden)) .mode-toggle.active-corp {
+  border-color: #2563eb !important;
+  background: linear-gradient(135deg, #eff6ff 0%, #f8faff 100%) !important;
+  box-shadow: 0 0 0 3px rgba(37,99,235,.08), 0 4px 16px rgba(37,99,235,.14) !important;
+}
+
+#auth-page:has(#portal-selector:not(.hidden)) .mode-toggle.active-acad {
+  border-color: #7c3aed !important;
+  background: linear-gradient(135deg, #f5f3ff 0%, #faf9ff 100%) !important;
+  box-shadow: 0 0 0 3px rgba(124,58,237,.08), 0 4px 16px rgba(124,58,237,.12) !important;
 }
 
 #auth-page:has(#portal-selector:not(.hidden)) .mode-toggle-icon {
-  width: 36px !important;
-  height: 36px !important;
+  width: 38px !important;
+  height: 38px !important;
+  border-radius: 12px !important;
+  margin-bottom: 10px !important;
+}
+
+#auth-page:has(#portal-selector:not(.hidden)) .mode-toggle h3 {
+  font-size: 14px !important;
+  font-weight: 800 !important;
+  letter-spacing: -.3px !important;
+  color: #1e293b !important;
+}
+
+#auth-page:has(#portal-selector:not(.hidden)) .mode-toggle p {
+  font-size: 11px !important;
+  color: #94a3b8 !important;
   margin-bottom: 8px !important;
 }
 
 #auth-page:has(#portal-selector:not(.hidden)) .mode-toggle-check {
-  margin-top: 8px !important;
+  width: 18px !important;
+  height: 18px !important;
+  margin-top: 4px !important;
 }
 
-/* Portal cards wrap: tighter top margin */
+/* ── Portal cards area ── */
 #auth-page:has(#portal-selector:not(.hidden)) .portal-cards-wrap {
-  margin-top: 10px !important;
-}
-
-/* Portal section label: smaller */
-#auth-page:has(#portal-selector:not(.hidden)) .portal-section-label {
-  margin-bottom: 8px !important;
-}
-
-/* Portal footer: tighter */
-#auth-page:has(#portal-selector:not(.hidden)) #portal-footer {
-  padding: 10px 8px 4px !important;
   margin-top: 12px !important;
-  font-size: 11px !important;
 }
 
-/* Corporate: 3 cards in a single balanced row */
+#auth-page:has(#portal-selector:not(.hidden)) .portal-section-label {
+  font-size: 9.5px !important;
+  letter-spacing: 2px !important;
+  margin-bottom: 10px !important;
+  color: #94a3b8 !important;
+}
+
+/* Corporate: 3 cards in one row */
 #auth-page:has(#portal-selector:not(.hidden)) #portal-cards-corp .portal-cards {
   display: grid !important;
   grid-template-columns: repeat(3, 1fr) !important;
-  gap: 10px !important;
+  gap: 8px !important;
 }
 
-/* Academic: 4 cards in a clean 2×2 grid */
+/* Academic: 4 cards in 2×2 */
 #auth-page:has(#portal-selector:not(.hidden)) #portal-cards-acad .portal-cards {
   display: grid !important;
   grid-template-columns: repeat(2, 1fr) !important;
-  gap: 10px !important;
+  gap: 8px !important;
 }
 
-/* Portal cards: compact, fill their column */
+/* Portal cards: polished with hover lift */
 #auth-page:has(#portal-selector:not(.hidden)) .portal-card {
   width: 100% !important;
-  padding: 14px 12px !important;
-  background: rgba(255, 255, 255, 0.97) !important;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.07) !important;
+  padding: 16px 14px 12px !important;
+  background: #fff !important;
+  border: 1.5px solid #f0f4f8 !important;
+  border-radius: 14px !important;
+  box-shadow: 0 1px 4px rgba(0,0,0,.06), 0 4px 12px rgba(0,0,0,.04) !important;
+  transition: all .18s !important;
+}
+
+#auth-page:has(#portal-selector:not(.hidden)) .portal-card:hover {
+  transform: translateY(-3px) !important;
+  box-shadow: 0 8px 28px rgba(0,0,0,.12), 0 2px 8px rgba(0,0,0,.06) !important;
+  border-color: transparent !important;
+}
+
+#auth-page:has(#portal-selector:not(.hidden)) .portal-card h2 {
+  font-size: 13px !important;
+  font-weight: 800 !important;
+  color: #1e293b !important;
+  letter-spacing: -.2px !important;
+  margin-bottom: 2px !important;
+}
+
+#auth-page:has(#portal-selector:not(.hidden)) .portal-card p {
+  font-size: 11px !important;
+  color: #94a3b8 !important;
+  margin-bottom: 10px !important;
 }
 
 #auth-page:has(#portal-selector:not(.hidden)) .portal-icon {
   width: 36px !important;
   height: 36px !important;
-  margin-bottom: 8px !important;
+  border-radius: 10px !important;
+  margin-bottom: 10px !important;
+}
+
+#auth-page:has(#portal-selector:not(.hidden)) .portal-arrow {
+  font-size: 14px !important;
+  color: #cbd5e1 !important;
+}
+
+/* ── Footer ── */
+#auth-page:has(#portal-selector:not(.hidden)) #portal-footer {
+  padding: 10px 8px 4px !important;
+  margin-top: 14px !important;
+  font-size: 11px !important;
+  color: #94a3b8 !important;
+  border-top: 1px solid #f1f5f9 !important;
 }
 
 /* ── Mobile ── */
 @media (max-width: 768px) {
   #auth-page:has(#portal-selector:not(.hidden)) #portal-selector {
-    max-width: calc(100vw - 32px) !important;
-    padding: 24px 18px 20px !important;
+    max-width: calc(100vw - 28px) !important;
+    padding: 22px 18px 16px !important;
   }
 }
 
-/* On small screens, collapse corp to 2 cols and keep acad at 2 cols */
-@media (max-width: 520px) {
-  #auth-page:has(#portal-selector:not(.hidden)) #portal-cards-corp .portal-cards {
-    grid-template-columns: repeat(3, 1fr) !important;
-  }
-  #auth-page:has(#portal-selector:not(.hidden)) #portal-cards-acad .portal-cards {
-    grid-template-columns: repeat(2, 1fr) !important;
-  }
-}
-
-@media (max-width: 400px) {
+@media (max-width: 480px) {
   #auth-page:has(#portal-selector:not(.hidden)) #portal-cards-corp .portal-cards {
     grid-template-columns: repeat(3, 1fr) !important;
     gap: 6px !important;
+  }
+  #auth-page:has(#portal-selector:not(.hidden)) .portal-card {
+    padding: 12px 10px 10px !important;
   }
 }
 
