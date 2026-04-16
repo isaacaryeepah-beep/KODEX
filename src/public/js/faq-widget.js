@@ -1,9 +1,16 @@
 "use strict";
 /**
  * faq-widget.js
- * Floating FAQ help button — visible on the dashboard for all roles.
- * Opens the FAQ Center inline instead of a separate page.
+ * Dashboard: floating FAQ button that opens the FAQ Center inline.
+ * Auth page: toggleAuthHelp() opens a static help panel.
  */
+
+// ── Auth-page help panel toggle ───────────────────────────────────────────────
+window.toggleAuthHelp = function () {
+  const panel = document.getElementById('auth-help-panel');
+  if (!panel) return;
+  panel.classList.toggle('hidden');
+};
 
 (function () {
   function mountWidget() {

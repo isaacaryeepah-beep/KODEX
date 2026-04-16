@@ -670,6 +670,44 @@ function selectPortal(t){document.addEventListener('DOMContentLoaded',function()
         </div>
       </form>
     </div>
+
+    <!-- ── Auth-page help button ── -->
+    <button id="auth-help-btn" onclick="toggleAuthHelp()" title="Help &amp; FAQ" aria-label="Help and FAQ">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+      Help
+    </button>
+
+    <!-- ── Auth-page FAQ panel ── -->
+    <div id="auth-help-panel" class="hidden" role="dialog" aria-label="Help and FAQ">
+      <div class="auth-help-header">
+        <span>Help &amp; FAQ</span>
+        <button onclick="toggleAuthHelp()" aria-label="Close help panel">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div class="auth-help-body">
+        <details class="auth-faq-item">
+          <summary>How do I sign in?</summary>
+          <p>Select your workspace type (Corporate or Academic), then choose your portal. Enter your email and password on the login form.</p>
+        </details>
+        <details class="auth-faq-item">
+          <summary>I forgot my password</summary>
+          <p>On the login form, click <strong>Forgot password?</strong> and enter your registered phone number or email. A reset code will be sent to you.</p>
+        </details>
+        <details class="auth-faq-item">
+          <summary>Which portal should I use?</summary>
+          <p><strong>Admin</strong> — Institution or company administrators.<br><strong>HOD</strong> — Heads of Department.<br><strong>Lecturer</strong> — Teaching staff.<br><strong>Student</strong> — Enrolled students.</p>
+        </details>
+        <details class="auth-faq-item">
+          <summary>How do I get access?</summary>
+          <p>Admins can self-register a new institution. All other users (Lecturers, HODs, Students) are added by their institution's Admin from the dashboard.</p>
+        </details>
+        <details class="auth-faq-item">
+          <summary>What is KODEX?</summary>
+          <p>KODEX is an enterprise attendance &amp; learning management platform for academic institutions and businesses — covering attendance, courses, quizzes, and HR.</p>
+        </details>
+      </div>
+    </div>
   </div>
 
     <div id="dashboard-page" class="hidden">
