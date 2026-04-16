@@ -3087,7 +3087,6 @@ table tr:hover td { background: #f8fafc !important; }
   min-height: 100vh !important;
   position: relative !important;
   overflow: hidden !important;
-  display: flex !important;
   flex-direction: column !important;
   align-items: center !important;
   justify-content: center !important;
