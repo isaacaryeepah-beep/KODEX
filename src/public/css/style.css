@@ -855,12 +855,15 @@ body {
   transform: translateY(-50%);
   width: 200px;
   max-height: calc(100vh - 56px - 28px);
-  background: rgba(255,255,255,.96);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  background: rgba(255, 251, 238, 0.68);
+  backdrop-filter: blur(24px) saturate(1.7) brightness(1.06);
+  -webkit-backdrop-filter: blur(24px) saturate(1.7) brightness(1.06);
   border-radius: 22px;
-  border: 1px solid rgba(0,0,0,.07);
-  box-shadow: 0 4px 24px rgba(0,0,0,.1), 0 1px 4px rgba(0,0,0,.05);
+  border: 1px solid rgba(255, 242, 210, 0.78);
+  box-shadow:
+    0 4px 28px rgba(180, 130, 40, 0.10),
+    0 1px 4px rgba(0, 0, 0, 0.06),
+    inset 0 1px 0 rgba(255, 252, 245, 0.90);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -934,7 +937,7 @@ body {
   transition: all .15s ease;
   flex-shrink: 0;
   position: relative;
-  border-bottom: 1px solid rgba(0,0,0,.07);
+  border-bottom: 1px solid rgba(220, 185, 120, 0.28);
 }
 
 .sidebar-nav a span {
@@ -962,11 +965,11 @@ body {
   flex-shrink: 0;
 }
 
-.sidebar-nav a:hover { color: #374151; background: rgba(0,0,0,.04); }
+.sidebar-nav a:hover { color: #374151; background: rgba(255, 236, 190, 0.55); }
 
 .sidebar-nav a.active {
   color: var(--portal-primary, #2563eb);
-  background: rgba(0,0,0,.05);
+  background: rgba(255, 240, 185, 0.65);
   font-weight: normal;
 }
 .sidebar-nav a.active::after { background: none; }
@@ -978,7 +981,7 @@ body {
 .sidebar-logout {
   flex-shrink: 0;
   padding-top: 6px;
-  border-top: 1px solid rgba(0,0,0,.06);
+  border-top: 1px solid rgba(220, 185, 120, 0.32);
   width: 100%;
   display: flex;
   justify-content: center;
@@ -2140,15 +2143,15 @@ input[type="checkbox"] {
   --sidebar-width: 260px;
 }
 
-/* ── Premium Sidebar: Dark Navy ── */
+/* ── Premium Sidebar: Cream Bright Glass ── */
 @media (min-width: 769px) {
   .sidebar {
-    background: #0f172a !important;
+    background: rgba(255, 251, 238, 0.72) !important;
+    backdrop-filter: blur(26px) saturate(1.7) brightness(1.06) !important;
+    -webkit-backdrop-filter: blur(26px) saturate(1.7) brightness(1.06) !important;
     border: none !important;
     border-radius: 0 !important;
     box-shadow: none !important;
-    backdrop-filter: none !important;
-    -webkit-backdrop-filter: none !important;
     top: 0 !important;
     left: 0 !important;
     transform: none !important;
@@ -2156,7 +2159,7 @@ input[type="checkbox"] {
     max-height: 100vh !important;
     height: 100vh !important;
     padding: 0 !important;
-    border-right: 1px solid rgba(255,255,255,.06) !important;
+    border-right: 1px solid rgba(220, 185, 120, 0.35) !important;
   }
 
   .content {
@@ -2165,20 +2168,20 @@ input[type="checkbox"] {
 
   .sidebar-logo {
     padding: 20px 16px 16px !important;
-    border-bottom: 1px solid rgba(255,255,255,.07) !important;
+    border-bottom: 1px solid rgba(220, 185, 120, 0.30) !important;
     margin-bottom: 6px !important;
     width: 100% !important;
   }
 
   .sidebar-logo-text {
-    color: #f8fafc !important;
+    color: #1e1b4b !important;
     font-size: 14px !important;
     font-weight: 800 !important;
     letter-spacing: -.3px !important;
   }
 
   .sidebar-logo-icon {
-    background: linear-gradient(135deg, #2563eb, #1d4ed8) !important;
+    background: linear-gradient(135deg, #4f46e5, #3730a3) !important;
     border-radius: 10px !important;
   }
 
@@ -2195,41 +2198,41 @@ input[type="checkbox"] {
     padding: 0 12px !important;
     border-radius: 8px !important;
     border-bottom: none !important;
-    color: rgba(148,163,184,.85) !important;
+    color: #7c6a50 !important;
     margin: 0 !important;
     font-size: 12.5px !important;
   }
 
   .sidebar-nav a:hover {
-    background: rgba(255,255,255,.07) !important;
-    color: #e2e8f0 !important;
+    background: rgba(255, 236, 190, 0.60) !important;
+    color: #1e1b4b !important;
   }
 
   .sidebar-nav a.active {
-    background: linear-gradient(90deg, rgba(37,99,235,.25), rgba(37,99,235,.12)) !important;
-    color: #93c5fd !important;
-    border-left: 3px solid #3b82f6 !important;
+    background: rgba(255, 236, 175, 0.75) !important;
+    color: var(--portal-primary, #2563eb) !important;
+    border-left: 3px solid var(--portal-primary, #2563eb) !important;
     padding-left: 9px !important;
   }
 
   .sidebar-nav a.active::after { display: none !important; }
 
   .sidebar-logout {
-    border-top: 1px solid rgba(255,255,255,.07) !important;
+    border-top: 1px solid rgba(220, 185, 120, 0.32) !important;
     padding: 8px 10px 16px !important;
     width: 100% !important;
   }
 
   .sidebar-logout .btn {
-    background: rgba(255,255,255,.07) !important;
-    border: 1px solid rgba(255,255,255,.08) !important;
-    color: #94a3b8 !important;
+    background: rgba(255, 244, 215, 0.70) !important;
+    border: 1px solid rgba(220, 185, 120, 0.45) !important;
+    color: #92400e !important;
   }
 
   .sidebar-logout .btn:hover {
-    background: rgba(220,38,38,.15) !important;
-    border-color: rgba(220,38,38,.3) !important;
-    color: #fca5a5 !important;
+    background: rgba(254, 202, 202, 0.55) !important;
+    border-color: rgba(220, 38, 38, 0.30) !important;
+    color: #991b1b !important;
   }
 }
 
