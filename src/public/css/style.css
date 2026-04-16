@@ -2476,35 +2476,37 @@ table tr:hover td { background: #f8fafc !important; }
   box-shadow: 0 8px 28px rgba(37,99,235,.5) !important;
 }
 
-/* ── Sidebar Mobile Dark ── */
+/* ── Sidebar Mobile Cream Glass ── */
 @media (max-width: 768px) {
   .sidebar {
-    background: #0f172a !important;
+    background: rgba(255, 251, 238, 0.96) !important;
+    backdrop-filter: blur(24px) saturate(1.6) !important;
+    -webkit-backdrop-filter: blur(24px) saturate(1.6) !important;
   }
 
   .sidebar-nav a {
-    color: rgba(148,163,184,.85) !important;
+    color: #7c6a50 !important;
   }
 
   .sidebar-nav a:hover {
-    background: rgba(255,255,255,.07) !important;
-    color: #e2e8f0 !important;
+    background: rgba(255, 236, 190, 0.60) !important;
+    color: #1e1b4b !important;
   }
 
   .sidebar-nav a.active {
-    background: rgba(37,99,235,.2) !important;
-    color: #93c5fd !important;
-    border-left: 3px solid #3b82f6 !important;
+    background: rgba(255, 236, 175, 0.78) !important;
+    color: var(--portal-primary, #2563eb) !important;
+    border-left: 3px solid var(--portal-primary, #2563eb) !important;
   }
 
   .sidebar-logo-text {
-    color: #f8fafc !important;
+    color: #1e1b4b !important;
   }
 
   .sidebar-logout .btn {
-    background: rgba(255,255,255,.07) !important;
-    color: #94a3b8 !important;
-    border-color: rgba(255,255,255,.1) !important;
+    background: rgba(255, 244, 215, 0.70) !important;
+    color: #92400e !important;
+    border-color: rgba(220, 185, 120, 0.45) !important;
   }
 }
 
@@ -2667,32 +2669,30 @@ table tr:hover td { background: #f8fafc !important; }
   }
 }
 
-/* ── Mobile sidebar — complete dark navy drawer ── */
+/* ── Mobile sidebar — cream glass drawer ── */
 @media (max-width: 768px) {
   .sidebar {
-    background: #0f172a !important;
-    /* keep pill radius on right side for the slide-in drawer aesthetic */
+    background: rgba(255, 251, 238, 0.97) !important;
     border-radius: 0 16px 16px 0 !important;
   }
 
   .sidebar.open {
-    box-shadow: 4px 0 32px rgba(0,0,0,.4) !important;
+    box-shadow: 4px 0 32px rgba(180, 130, 40, 0.18) !important;
   }
 
   .sidebar-nav a {
-    /* dark separator lines between nav items in drawer */
-    border-bottom: 1px solid rgba(255,255,255,.06) !important;
+    border-bottom: 1px solid rgba(220, 185, 120, 0.22) !important;
   }
 
   .sidebar-nav a.active {
-    background: rgba(37,99,235,.2) !important;
-    color: #93c5fd !important;
-    border-left: 3px solid #3b82f6 !important;
-    border-bottom-color: rgba(255,255,255,.06) !important;
+    background: rgba(255, 236, 175, 0.78) !important;
+    color: var(--portal-primary, #2563eb) !important;
+    border-left: 3px solid var(--portal-primary, #2563eb) !important;
+    border-bottom-color: rgba(220, 185, 120, 0.22) !important;
   }
 
   .sidebar-logo {
-    border-bottom: 1px solid rgba(255,255,255,.08) !important;
+    border-bottom: 1px solid rgba(220, 185, 120, 0.30) !important;
   }
 
   /* overlay tint matches dark sidebar */
@@ -3218,7 +3218,7 @@ table tr:hover td { background: #f8fafc !important; }
    Placed last — overrides ALL prior sidebar / topbar / dashboard rules
 ══════════════════════════════════════════════════════════════════════ */
 
-/* ── Sidebar: full-height dark navy, flush left ── */
+/* ── Sidebar: full-height cream glass, flush left ── */
 .sidebar {
   position: fixed !important;
   top: 0 !important;
@@ -3228,13 +3228,13 @@ table tr:hover td { background: #f8fafc !important; }
   height: 100vh !important;
   max-height: 100vh !important;
   border-radius: 0 !important;
-  background: linear-gradient(180deg, #0d1829 0%, #0f1e3a 55%, #0d1829 100%) !important;
+  background: rgba(255, 251, 238, 0.76) !important;
+  backdrop-filter: blur(28px) saturate(1.8) brightness(1.06) !important;
+  -webkit-backdrop-filter: blur(28px) saturate(1.8) brightness(1.06) !important;
   border: none !important;
-  border-right: 1px solid rgba(255,255,255,.05) !important;
-  box-shadow: 3px 0 20px rgba(0,0,0,.20) !important;
+  border-right: 1px solid rgba(220, 185, 120, 0.36) !important;
+  box-shadow: 2px 0 16px rgba(180, 130, 40, 0.08) !important;
   padding: 0 0 16px !important;
-  backdrop-filter: none !important;
-  -webkit-backdrop-filter: none !important;
   display: flex !important;
   flex-direction: column !important;
   align-items: stretch !important;
@@ -3247,7 +3247,7 @@ table tr:hover td { background: #f8fafc !important; }
 
 .sidebar-logo {
   padding: 20px 18px 16px !important;
-  border-bottom: 1px solid rgba(255,255,255,.06) !important;
+  border-bottom: 1px solid rgba(220, 185, 120, 0.30) !important;
   margin-bottom: 0 !important;
   width: 100% !important;
   flex-shrink: 0 !important;
@@ -3257,7 +3257,7 @@ table tr:hover td { background: #f8fafc !important; }
 }
 
 .sidebar-logo-text {
-  color: #f1f5f9 !important;
+  color: #1e1b4b !important;
   font-size: 15px !important;
   font-weight: 800 !important;
   letter-spacing: .2px !important;
@@ -3291,7 +3291,7 @@ table tr:hover td { background: #f8fafc !important; }
   margin: 0 !important;
   padding: 0 18px !important;
   border-bottom: none !important;
-  color: rgba(148,163,184,.72) !important;
+  color: #7c6a50 !important;
   font-size: 13px !important;
   font-weight: 500 !important;
   letter-spacing: .1px !important;
@@ -3312,29 +3312,28 @@ table tr:hover td { background: #f8fafc !important; }
   width: 16px !important;
   height: 16px !important;
   flex-shrink: 0 !important;
-  opacity: .7 !important;
+  opacity: .75 !important;
   color: inherit !important;
   transition: opacity .13s !important;
 }
 
 .sidebar-nav a:hover {
-  color: #cbd5e1 !important;
-  background: rgba(255,255,255,.055) !important;
+  color: #1e1b4b !important;
+  background: rgba(255, 236, 190, 0.60) !important;
 }
 
 .sidebar-nav a:hover svg { opacity: 1 !important; }
 
 .sidebar-nav a.active {
-  color: #93c5fd !important;
-  background: linear-gradient(90deg, rgba(59,130,246,.22) 0%, rgba(59,130,246,.07) 100%) !important;
+  color: var(--portal-primary, #2563eb) !important;
+  background: rgba(255, 236, 175, 0.78) !important;
   font-weight: 600 !important;
-  border-left: 3px solid #3b82f6 !important;
+  border-left: 3px solid var(--portal-primary, #2563eb) !important;
   padding-left: 15px !important;
-  box-shadow: inset 0 0 20px rgba(59,130,246,.07) !important;
 }
 
-.sidebar-nav a.active svg { opacity: 1 !important; color: #60a5fa !important; }
-.sidebar-nav a.active span { color: #93c5fd !important; font-weight: 600 !important; }
+.sidebar-nav a.active svg { opacity: 1 !important; color: inherit !important; }
+.sidebar-nav a.active span { color: inherit !important; font-weight: 600 !important; }
 .sidebar-nav a.active::after { display: none !important; }
 
 .sidebar-nav-section {
@@ -3342,14 +3341,14 @@ table tr:hover td { background: #f8fafc !important; }
   font-weight: 800 !important;
   letter-spacing: 1.2px !important;
   text-transform: uppercase !important;
-  color: rgba(148,163,184,.38) !important;
+  color: rgba(120, 95, 55, 0.50) !important;
   padding: 14px 18px 4px !important;
   pointer-events: none !important;
 }
 
 .sidebar-logout {
   flex-shrink: 0 !important;
-  border-top: 1px solid rgba(255,255,255,.06) !important;
+  border-top: 1px solid rgba(220, 185, 120, 0.32) !important;
   padding: 10px 10px 16px !important;
   width: 100% !important;
   margin-top: 8px !important;
@@ -3358,18 +3357,18 @@ table tr:hover td { background: #f8fafc !important; }
 }
 
 .sidebar-logout .btn {
-  background: rgba(255,255,255,.06) !important;
-  border: 1px solid rgba(255,255,255,.08) !important;
-  color: #94a3b8 !important;
+  background: rgba(255, 244, 215, 0.70) !important;
+  border: 1px solid rgba(220, 185, 120, 0.45) !important;
+  color: #92400e !important;
   border-radius: 8px !important;
   font-size: 12px !important;
   transition: all .15s !important;
 }
 
 .sidebar-logout .btn:hover {
-  background: rgba(220,38,38,.15) !important;
-  border-color: rgba(220,38,38,.3) !important;
-  color: #fca5a5 !important;
+  background: rgba(254, 202, 202, 0.55) !important;
+  border-color: rgba(220, 38, 38, 0.30) !important;
+  color: #991b1b !important;
 }
 
 /* ── Topbar: premium, offset past sidebar on desktop ── */
@@ -3790,8 +3789,8 @@ table tr:hover td { background: #f8fafc !important; }
 
 /* ── Dark mode ── */
 [data-theme="dark"] .sidebar {
-  background: linear-gradient(180deg, #08111e 0%, #0c1828 60%, #08111e 100%) !important;
-  border-right-color: rgba(255,255,255,.05) !important;
+  background: rgba(255, 251, 238, 0.76) !important;
+  border-right-color: rgba(220, 185, 120, 0.36) !important;
 }
 
 [data-theme="dark"] .topbar {
