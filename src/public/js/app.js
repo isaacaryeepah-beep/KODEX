@@ -2106,14 +2106,19 @@ function buildSidebar() {
         links.push({ id: 'quizzes', label: 'Quizzes', icon: quizzesIcon() });
         links.push({ id: 'gradebook', label: 'Grade Book', icon: svgIcon('<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>') });
         links.push({ id: 'announcements', label: 'Announcements', icon: svgIcon('<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>') });
+        links.push({ id: 'programmes', label: 'Programmes', icon: svgIcon('<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>') });
       }
       if (currentUser.company?.mode === 'corporate') {
         links.push({ id: 'sign-in-out', label: 'Sign In / Out', icon: attendanceIcon() });
         links.push({ id: 'shifts', label: 'Shifts', icon: svgIcon('<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>') });
         links.push({ id: 'leave-requests', label: 'Leave Requests', icon: svgIcon('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>') });
+        links.push({ id: 'payroll', label: 'Payroll', icon: svgIcon('<rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/>') });
+        links.push({ id: 'audit-logs', label: 'Audit Logs', icon: svgIcon('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="10" y2="9"/>') });
       }
+      links.push({ id: 'messages', label: 'Messages', icon: svgIcon('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>') });
       links.push({ id: 'meetings', label: 'Meetings', icon: meetingsIcon() });
       links.push({ id: 'reports', label: 'Reports', icon: reportsIcon() });
+      links.push({ id: 'faq-center', label: 'FAQ Center', icon: svgIcon('<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>') });
       links.push({ id: 'subscription', label: 'Subscription', icon: subscriptionIcon() });
       break;
     case 'manager':
@@ -2124,9 +2129,12 @@ function buildSidebar() {
         links.push({ id: 'sign-in-out', label: 'Sign In / Out', icon: attendanceIcon() });
         links.push({ id: 'shifts', label: 'Shifts', icon: svgIcon('<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>') });
         links.push({ id: 'leave-requests', label: 'Leave Requests', icon: svgIcon('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>') });
+        links.push({ id: 'payroll', label: 'Payroll', icon: svgIcon('<rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/>') });
       }
+      links.push({ id: 'messages', label: 'Messages', icon: svgIcon('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>') });
       links.push({ id: 'meetings', label: 'Meetings', icon: meetingsIcon() });
       links.push({ id: 'reports', label: 'Reports', icon: reportsIcon() });
+      links.push({ id: 'faq-center', label: 'FAQ Center', icon: svgIcon('<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>') });
       break;
     case 'hod':
       links.push({ id: 'hod-overview',     label: 'Overview',       icon: svgIcon('<rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>') });
@@ -2149,18 +2157,23 @@ function buildSidebar() {
       links.push({ id: 'question-bank', label: 'Question Bank', icon: svgIcon('<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>') });
       links.push({ id: 'assignments', label: 'Assignments / Quiz', icon: assignmentsIcon() });
       links.push({ id: 'gradebook', label: 'Grade Book', icon: svgIcon('<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>') });
+      links.push({ id: 'messages', label: 'Messages', icon: svgIcon('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>') });
       links.push({ id: 'meetings', label: 'Meetings', icon: meetingsIcon() });
       links.push({ id: 'lecturer-performance', label: 'Performance', icon: svgIcon('<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>') });
       links.push({ id: 'reports', label: 'Reports', icon: reportsIcon() });
       links.push({ id: 'announcements', label: 'Announcements', icon: svgIcon('<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>') });
+      links.push({ id: 'faq-center', label: 'FAQ Center', icon: svgIcon('<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>') });
       links.push({ id: 'subscription', label: 'Subscription', icon: subscriptionIcon() });
       break;
     case 'employee':
-      links.push({ id: 'sign-in-out', label: 'Sign In / Out', icon: attendanceIcon() });
+      links.push({ id: 'sign-in-out', label: 'Clock In / Out', icon: attendanceIcon() });
       links.push({ id: 'my-attendance', label: 'My Attendance', icon: sessionsIcon() });
       links.push({ id: 'my-shift', label: 'My Shift', icon: svgIcon('<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>') });
       links.push({ id: 'my-leaves', label: 'Leave', icon: svgIcon('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>') });
+      links.push({ id: 'messages', label: 'Messages', icon: svgIcon('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>') });
       links.push({ id: 'meetings', label: 'Meetings', icon: meetingsIcon() });
+      links.push({ id: 'support', label: 'Support', icon: svgIcon('<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>') });
+      links.push({ id: 'faq-center', label: 'FAQ Center', icon: svgIcon('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><line x1="9" y1="10" x2="15" y2="10"/><line x1="12" y1="7" x2="12" y2="13"/>') });
       links.push({ id: 'reports', label: 'Reports', icon: reportsIcon() });
       break;
     case 'student':
@@ -2172,7 +2185,10 @@ function buildSidebar() {
       links.push({ id: 'quiz-history', label: 'My Results', icon: svgIcon('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/>') });
       links.push({ id: 'assignments', label: 'Assignments / Quiz', icon: assignmentsIcon() });
       links.push({ id: 'gradebook', label: 'My Grades', icon: svgIcon('<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>') });
+      links.push({ id: 'messages', label: 'Messages', icon: svgIcon('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>') });
       links.push({ id: 'meetings', label: 'Meetings', icon: meetingsIcon() });
+      links.push({ id: 'support', label: 'Support', icon: svgIcon('<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>') });
+      links.push({ id: 'faq-center', label: 'FAQ Center', icon: svgIcon('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><line x1="9" y1="10" x2="15" y2="10"/><line x1="12" y1="7" x2="12" y2="13"/>') });
       links.push({ id: 'announcements', label: 'Announcements', icon: svgIcon('<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>') });
       break;
     case 'superadmin':
@@ -2266,6 +2282,17 @@ function navigateTo(view) {
     case 'my-expenses':    renderMyExpenses(); break;
     case 'assets':         renderAssets(); break;
     case 'my-assets':      renderMyAssets(); break;
+    case 'messages':      renderMessages(); break;
+    case 'faq-center':   renderFAQCenter(); break;
+    case 'support':      renderSupport(); break;
+    case 'payroll':      renderPayroll(); break;
+    case 'audit-logs':   renderAuditLogs(); break;
+    case 'programmes':   renderProgrammes(); break;
+    case 'calendar-events': renderCalendarEvents(); break;
+    case 'forums':       renderForums(); break;
+    case 'badges':       renderBadges(); break;
+    case 'transcripts':  renderTranscripts(); break;
+    case 'evaluations':  renderEvaluations(); break;
     default: renderDashboard();
   }
 }
@@ -14581,6 +14608,221 @@ async function printMeetingAttendance(meetingId, title) {
 
 
 // ── Register real functions for index.html stubs ─────────────────────────────
+
+// ════════════════════════════════════════════════════════════════════════════
+// CORPORATE / INTERNAL MESSAGES
+// ════════════════════════════════════════════════════════════════════════════
+
+let _activeConvoId = null;
+
+async function renderMessages() {
+  const content = document.getElementById('main-content');
+  if (!content) return;
+  content.innerHTML = `
+    <div class="page-header" style="margin-bottom:0">
+      <h2>Messages</h2>
+      <p>Internal team messaging</p>
+    </div>
+    <div style="display:flex;gap:0;height:calc(100vh - 160px);min-height:400px;border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-top:16px;background:var(--card)">
+      <div id="msg-sidebar" style="width:280px;min-width:220px;border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0">
+        <div style="padding:12px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
+          <span style="font-weight:700;font-size:14px">Conversations</span>
+          <button class="btn btn-primary btn-sm" onclick="showNewConvoModal()" style="font-size:11px;padding:4px 10px">+ New</button>
+        </div>
+        <div id="msg-convo-list" style="flex:1;overflow-y:auto;padding:8px 0">
+          <div class="loading" style="padding:20px;text-align:center;font-size:13px">Loading…</div>
+        </div>
+      </div>
+      <div id="msg-thread" style="flex:1;display:flex;flex-direction:column;min-width:0">
+        <div id="msg-thread-header" style="padding:14px 18px;border-bottom:1px solid var(--border);font-weight:600;font-size:14px;display:flex;align-items:center;gap:10px">
+          <span style="color:var(--text-muted);font-weight:400;font-size:13px">Select a conversation to start messaging</span>
+        </div>
+        <div id="msg-thread-body" style="flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:10px">
+        </div>
+        <div id="msg-input-bar" style="padding:12px 16px;border-top:1px solid var(--border);display:none">
+          <div style="display:flex;gap:8px;align-items:flex-end">
+            <textarea id="msg-input" placeholder="Type a message…" rows="1" oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,120)+'px'" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendMessage()}" style="flex:1;padding:9px 13px;border:1.5px solid var(--border);border-radius:10px;font-size:13px;font-family:inherit;resize:none;outline:none;background:var(--bg);line-height:1.4"></textarea>
+            <button class="btn btn-primary" onclick="sendMessage()" style="padding:9px 16px;font-size:13px;flex-shrink:0">Send</button>
+          </div>
+        </div>
+      </div>
+    </div>`;
+  await _loadConvoList();
+}
+
+async function _loadConvoList() {
+  const list = document.getElementById('msg-convo-list');
+  if (!list) return;
+  try {
+    const data = await api('/api/messages/conversations');
+    const convos = data.conversations || [];
+    if (!convos.length) {
+      list.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-muted);font-size:13px">No conversations yet.<br>Click <strong>+ New</strong> to start one.</div>';
+      return;
+    }
+    const myId = currentUser._id || currentUser.id;
+    list.innerHTML = convos.map(c => {
+      const others = (c.participants || []).filter(p => (p.user?._id || p.user) !== myId && p.user?.name);
+      const name   = c.isGroup ? (c.title || 'Group') : (others[0]?.user?.name || 'Conversation');
+      const initials = name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
+      const unread = c.myUnreadCount || 0;
+      const preview = c.lastMessage?.body ? (c.lastMessage.body.length > 40 ? c.lastMessage.body.slice(0, 40) + '…' : c.lastMessage.body) : 'No messages yet';
+      const time   = c.lastMessage?.sentAt ? new Date(c.lastMessage.sentAt).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : '';
+      const isActive = _activeConvoId === c._id;
+      return `<div onclick="openConvo('${c._id}','${name.replace(/'/g,"\\'")}','${c.isGroup?'group':'direct'}')" style="padding:10px 14px;cursor:pointer;display:flex;gap:10px;align-items:flex-start;background:${isActive?'var(--primary-ultra-light)':'transparent'};border-left:3px solid ${isActive?'var(--primary)':'transparent'};transition:.12s">
+        <div style="width:36px;height:36px;border-radius:50%;background:var(--primary);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;flex-shrink:0">${initials}</div>
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:4px">
+            <span style="font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${name}</span>
+            <span style="font-size:10px;color:var(--text-muted);flex-shrink:0">${time}</span>
+          </div>
+          <div style="font-size:12px;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px">${preview}</div>
+        </div>
+        ${unread > 0 ? `<span style="background:var(--primary);color:#fff;border-radius:20px;font-size:10px;font-weight:700;padding:1px 6px;flex-shrink:0;margin-top:2px">${unread}</span>` : ''}
+      </div>`;
+    }).join('');
+  } catch(e) {
+    list.innerHTML = `<div style="padding:16px;color:var(--danger);font-size:13px">Error: ${e.message}</div>`;
+  }
+}
+
+async function openConvo(id, name, type) {
+  _activeConvoId = id;
+  _loadConvoList();
+  const header = document.getElementById('msg-thread-header');
+  const body   = document.getElementById('msg-thread-body');
+  const bar    = document.getElementById('msg-input-bar');
+  if (!header || !body || !bar) return;
+  header.innerHTML = `<div style="width:32px;height:32px;border-radius:50%;background:var(--primary);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px">${name.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase()}</div><div><div style="font-weight:700;font-size:14px">${name}</div><div style="font-size:11px;color:var(--text-muted)">${type === 'group' ? 'Group conversation' : 'Direct message'}</div></div>`;
+  body.innerHTML = '<div class="loading" style="text-align:center;padding:20px;font-size:13px">Loading messages…</div>';
+  bar.style.display = 'block';
+  document.getElementById('msg-input').value = '';
+  try {
+    await api(`/api/messages/conversations/${id}/read`, { method: 'PATCH' });
+    const data = await api(`/api/messages/conversations/${id}`);
+    const msgs  = data.messages || [];
+    const myId  = currentUser._id || currentUser.id;
+    if (!msgs.length) {
+      body.innerHTML = '<div style="text-align:center;color:var(--text-muted);font-size:13px;padding:24px">No messages yet. Say hello!</div>';
+    } else {
+      body.innerHTML = msgs.map(m => {
+        const isMine = (m.sender?._id || m.sender) === myId;
+        const time   = new Date(m.createdAt).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+        const name   = m.sender?.name || 'Unknown';
+        return `<div style="display:flex;flex-direction:column;align-items:${isMine?'flex-end':'flex-start'};gap:2px">
+          ${!isMine ? `<span style="font-size:11px;color:var(--text-muted);margin-left:2px">${name}</span>` : ''}
+          <div style="max-width:70%;padding:9px 13px;border-radius:${isMine?'14px 14px 4px 14px':'14px 14px 14px 4px'};background:${isMine?'var(--primary)':'var(--bg)'};color:${isMine?'#fff':'var(--text)'};font-size:13px;line-height:1.5;word-break:break-word">${m.isDeleted ? '<em style="opacity:.6">[deleted]</em>' : (m.body || '')}</div>
+          <span style="font-size:10px;color:var(--text-muted)">${time}${m.editedAt ? ' · edited' : ''}</span>
+        </div>`;
+      }).join('');
+      body.scrollTop = body.scrollHeight;
+    }
+  } catch(e) {
+    body.innerHTML = `<div style="color:var(--danger);padding:16px;font-size:13px">Error: ${e.message}</div>`;
+  }
+}
+
+async function sendMessage() {
+  if (!_activeConvoId) return;
+  const input = document.getElementById('msg-input');
+  const body  = input?.value.trim();
+  if (!body) return;
+  input.value = '';
+  input.style.height = 'auto';
+  try {
+    const data = await api(`/api/messages/conversations/${_activeConvoId}/messages`, {
+      method: 'POST',
+      body: JSON.stringify({ body }),
+    });
+    const msg   = data.message;
+    const myId  = currentUser._id || currentUser.id;
+    const threadBody = document.getElementById('msg-thread-body');
+    if (threadBody) {
+      const time = new Date(msg.createdAt || Date.now()).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+      const el = document.createElement('div');
+      el.style.cssText = 'display:flex;flex-direction:column;align-items:flex-end;gap:2px';
+      el.innerHTML = `<div style="max-width:70%;padding:9px 13px;border-radius:14px 14px 4px 14px;background:var(--primary);color:#fff;font-size:13px;line-height:1.5;word-break:break-word">${body}</div><span style="font-size:10px;color:var(--text-muted)">${time}</span>`;
+      threadBody.appendChild(el);
+      threadBody.scrollTop = threadBody.scrollHeight;
+    }
+    _loadConvoList();
+  } catch(e) {
+    toastError('Failed to send: ' + e.message);
+  }
+}
+
+async function showNewConvoModal() {
+  const existing = document.getElementById('new-convo-overlay');
+  if (existing) existing.remove();
+  let users = [];
+  try {
+    const d = await api('/api/users');
+    const myId = currentUser._id || currentUser.id;
+    users = (d.users || []).filter(u => (u._id || u.id) !== myId && u.isActive !== false);
+  } catch(_) {}
+  const ol = document.createElement('div');
+  ol.id = 'new-convo-overlay';
+  ol.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:500;display:flex;align-items:center;justify-content:center;padding:16px';
+  ol.innerHTML = `
+    <div style="background:var(--card);border-radius:14px;width:100%;max-width:440px;box-shadow:0 20px 60px rgba(0,0,0,.2)">
+      <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
+        <h3 style="font-size:15px;font-weight:700;margin:0">New Message</h3>
+        <button onclick="document.getElementById('new-convo-overlay').remove()" style="width:26px;height:26px;border-radius:6px;border:1px solid var(--border);background:var(--bg);cursor:pointer;font-size:14px">✕</button>
+      </div>
+      <div style="padding:18px 20px;display:flex;flex-direction:column;gap:14px">
+        <div>
+          <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);display:block;margin-bottom:6px">To (select people)</label>
+          <select id="nc-recipients" multiple style="width:100%;height:140px;padding:6px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit">
+            ${users.map(u => `<option value="${u._id||u.id}">${u.name} — ${u.role}</option>`).join('')}
+          </select>
+          <p style="font-size:11px;color:var(--text-muted);margin-top:4px">Hold Ctrl/Cmd to select multiple for group chat</p>
+        </div>
+        <div>
+          <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);display:block;margin-bottom:6px">First Message *</label>
+          <textarea id="nc-body" rows="3" placeholder="Write your first message…" style="width:100%;padding:9px 13px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;resize:vertical;outline:none"></textarea>
+        </div>
+        <div id="nc-group-title" style="display:none">
+          <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);display:block;margin-bottom:6px">Group Name (optional)</label>
+          <input id="nc-title" type="text" placeholder="e.g. Project Alpha Team" style="width:100%;padding:9px 13px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none">
+        </div>
+      </div>
+      <div style="padding:12px 20px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end">
+        <button class="btn btn-secondary btn-sm" onclick="document.getElementById('new-convo-overlay').remove()">Cancel</button>
+        <button class="btn btn-primary btn-sm" onclick="startNewConvo()">Start Conversation</button>
+      </div>
+    </div>`;
+  document.body.appendChild(ol);
+  document.getElementById('nc-recipients').addEventListener('change', function() {
+    const groupDiv = document.getElementById('nc-group-title');
+    if (groupDiv) groupDiv.style.display = this.selectedOptions.length > 1 ? 'block' : 'none';
+  });
+}
+
+async function startNewConvo() {
+  const selEl = document.getElementById('nc-recipients');
+  const body  = document.getElementById('nc-body')?.value.trim();
+  const title = document.getElementById('nc-title')?.value.trim();
+  if (!selEl || !selEl.selectedOptions.length) return toastError('Select at least one recipient.');
+  if (!body) return toastError('First message is required.');
+  const recipientIds = Array.from(selEl.selectedOptions).map(o => o.value);
+  try {
+    const data = await api('/api/messages/conversations', {
+      method: 'POST',
+      body: JSON.stringify({ recipientIds, message: body, title }),
+    });
+    document.getElementById('new-convo-overlay')?.remove();
+    const c = data.conversation;
+    const myId = currentUser._id || currentUser.id;
+    const others = (c.participants || []).filter(p => (p.user?._id || p.user?.toString?.() || p.user) !== myId);
+    const name = c.isGroup ? (c.title || 'Group') : (others[0]?.user?.name || 'Conversation');
+    toastSuccess('Conversation started!');
+    await _loadConvoList();
+    openConvo(c._id, name, c.isGroup ? 'group' : 'direct');
+  } catch(e) {
+    toastError(e.message || 'Failed to start conversation');
+  }
+}
+
 window._realSelectMode   = selectMode;
 window._realSelectPortal = selectPortal;
 window._appLoaded = true;
