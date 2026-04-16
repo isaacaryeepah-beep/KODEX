@@ -2531,3 +2531,221 @@ table tr:hover td { background: #f8fafc !important; }
   -webkit-text-fill-color: transparent;
   background-clip: text;
 }
+
+/* ── Topbar company & mode info ── */
+.topbar-left {
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  min-width: 0 !important;
+  overflow: hidden !important;
+}
+
+.portal-company {
+  font-size: 12px !important;
+  color: #94a3b8 !important;
+  font-weight: 500 !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+
+.mode-badge {
+  font-size: 10px !important;
+  font-weight: 700 !important;
+  text-transform: capitalize !important;
+  padding: 2px 9px !important;
+  border-radius: 20px !important;
+  letter-spacing: .3px !important;
+  background: #eff6ff !important;
+  color: #2563eb !important;
+  border: 1px solid #bfdbfe !important;
+  white-space: nowrap !important;
+  flex-shrink: 0 !important;
+}
+
+.topbar-right {
+  display: flex !important;
+  align-items: center !important;
+  gap: 10px !important;
+  flex-shrink: 0 !important;
+}
+
+.user-info {
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+}
+
+.user-info strong {
+  font-size: 13px !important;
+  font-weight: 700 !important;
+  color: #0f172a !important;
+  white-space: nowrap !important;
+}
+
+/* ── Stat card accent color strip (top border per position) ── */
+.stats-grid .stat-card:nth-child(1) { border-top: 3px solid #2563eb !important; }
+.stats-grid .stat-card:nth-child(2) { border-top: 3px solid #16a34a !important; }
+.stats-grid .stat-card:nth-child(3) { border-top: 3px solid #d97706 !important; }
+.stats-grid .stat-card:nth-child(4) { border-top: 3px solid #7c3aed !important; }
+.stats-grid .stat-card:nth-child(5) { border-top: 3px solid #0891b2 !important; }
+.stats-grid .stat-card:nth-child(6) { border-top: 3px solid #db2777 !important; }
+
+/* ── FAQ page — details accordion polish ── */
+#main-content details {
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 10px !important;
+  margin-bottom: 8px !important;
+  overflow: hidden !important;
+  transition: box-shadow .15s, border-color .15s !important;
+}
+
+#main-content details:hover {
+  box-shadow: 0 2px 8px rgba(0,0,0,.07) !important;
+}
+
+#main-content details[open] {
+  box-shadow: 0 2px 12px rgba(37,99,235,.08) !important;
+  border-color: #bfdbfe !important;
+}
+
+#main-content details summary {
+  outline: none !important;
+  user-select: none !important;
+  -webkit-user-select: none !important;
+}
+
+#main-content details summary::-webkit-details-marker { display: none !important; }
+#main-content details summary::marker { display: none !important; }
+
+#main-content details summary:hover {
+  background: #f8fafc !important;
+}
+
+/* ── Programmes card grid hover lift ── */
+#programmes-area .card {
+  transition: transform .18s ease, box-shadow .18s ease !important;
+}
+
+#programmes-area .card:hover {
+  transform: translateY(-3px) !important;
+  box-shadow: 0 8px 24px rgba(0,0,0,.1) !important;
+}
+
+/* ── Card title typography ── */
+.card-title {
+  font-size: 14px !important;
+  font-weight: 700 !important;
+  letter-spacing: -.2px !important;
+  color: #0f172a !important;
+}
+
+/* ── Content area desktop spacing ── */
+@media (min-width: 769px) {
+  .content {
+    padding: 24px 28px !important;
+  }
+}
+
+/* ── Mobile sidebar — complete dark navy drawer ── */
+@media (max-width: 768px) {
+  .sidebar {
+    background: #0f172a !important;
+    /* keep pill radius on right side for the slide-in drawer aesthetic */
+    border-radius: 0 16px 16px 0 !important;
+  }
+
+  .sidebar.open {
+    box-shadow: 4px 0 32px rgba(0,0,0,.4) !important;
+  }
+
+  .sidebar-nav a {
+    /* dark separator lines between nav items in drawer */
+    border-bottom: 1px solid rgba(255,255,255,.06) !important;
+  }
+
+  .sidebar-nav a.active {
+    background: rgba(37,99,235,.2) !important;
+    color: #93c5fd !important;
+    border-left: 3px solid #3b82f6 !important;
+    border-bottom-color: rgba(255,255,255,.06) !important;
+  }
+
+  .sidebar-logo {
+    border-bottom: 1px solid rgba(255,255,255,.08) !important;
+  }
+
+  /* overlay tint matches dark sidebar */
+  .sidebar-overlay {
+    background: rgba(0,0,0,.6) !important;
+    backdrop-filter: blur(4px) !important;
+    -webkit-backdrop-filter: blur(4px) !important;
+  }
+}
+
+/* ── Dark mode topbar & content ── */
+.dark-mode .topbar {
+  background: #1e293b !important;
+  border-bottom: 1px solid rgba(255,255,255,.06) !important;
+}
+
+.dark-mode .topbar-left h2 {
+  color: #f1f5f9 !important;
+}
+
+.dark-mode .portal-company {
+  color: #64748b !important;
+}
+
+.dark-mode .user-info strong {
+  color: #f1f5f9 !important;
+}
+
+.dark-mode .mode-badge {
+  background: rgba(37,99,235,.18) !important;
+  color: #93c5fd !important;
+  border-color: rgba(37,99,235,.3) !important;
+}
+
+.dark-mode .card-title {
+  color: #f1f5f9 !important;
+}
+
+.dark-mode #main-content details {
+  border-color: rgba(255,255,255,.08) !important;
+}
+
+.dark-mode #main-content details[open] {
+  border-color: rgba(37,99,235,.3) !important;
+}
+
+.dark-mode #main-content details summary:hover {
+  background: rgba(255,255,255,.04) !important;
+}
+
+.dark-mode table th {
+  background: #1e293b !important;
+  color: #94a3b8 !important;
+  border-bottom: 2px solid rgba(255,255,255,.06) !important;
+}
+
+.dark-mode table td {
+  border-bottom: 1px solid rgba(255,255,255,.04) !important;
+}
+
+.dark-mode table tr:hover td {
+  background: rgba(255,255,255,.03) !important;
+}
+
+.dark-mode .page-header {
+  border-bottom-color: rgba(255,255,255,.06) !important;
+}
+
+.dark-mode .page-header h2 {
+  color: #f1f5f9 !important;
+}
+
+.dark-mode .page-header p {
+  color: #64748b !important;
+}
