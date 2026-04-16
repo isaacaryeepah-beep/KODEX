@@ -3887,78 +3887,103 @@ table tr:hover td { background: #f8fafc !important; }
 }
 
 /* ══════════════════════════════════════════════════════════════════════
-   WORKSPACE SELECTION PAGE — Office Photo Background
-   Scoped via :has() so it applies ONLY when #portal-selector is visible.
+   WORKSPACE SELECTION PAGE — Full-viewport Office Photo Background
+   Scoped via :has() — only applies when #portal-selector is visible.
    Login/register forms on the same #auth-page are NOT affected.
 ══════════════════════════════════════════════════════════════════════ */
 
-/* Only activates when portal selector is the active auth screen */
+/* Clear auth-page's own background — photo lives on fixed ::before */
 #auth-page:has(#portal-selector:not(.hidden)) {
-  background-image:
-    /* Warm white overlay — keeps content bright and readable */
-    linear-gradient(
-      160deg,
-      rgba(255,255,255,.72) 0%,
-      rgba(245,250,255,.68) 40%,
-      rgba(255,255,255,.70) 100%
-    ),
-    url('/img/workspace-bg.jpg') !important;
-  background-size: cover !important;
-  background-position: center 35% !important;
-  background-repeat: no-repeat !important;
-  background-color: #dce8f5 !important; /* fallback if image missing */
+  background: transparent !important;
+  align-items: center !important;
+  justify-content: center !important;
+  flex-direction: column !important;
 }
 
-/* Remove dark grid texture — not needed on light photo background */
+/* Full-viewport photo layer — position:fixed covers the entire screen */
 #auth-page:has(#portal-selector:not(.hidden))::before {
-  background-image: none !important;
-  opacity: 0 !important;
+  background-image: url('/img/workspace-bg.jpg') !important;
+  background-size: cover !important;
+  background-position: center center !important;
+  background-repeat: no-repeat !important;
+  background-color: #0d1825 !important;
+  opacity: 1 !important;
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 0 !important;
 }
 
-/* Replace dark orb with a soft warm highlight */
+/* Semi-transparent dark overlay — ensures card readability */
 #auth-page:has(#portal-selector:not(.hidden))::after {
-  background: radial-gradient(ellipse 70% 60% at 70% 20%,
-    rgba(255,255,255,.35) 0%, transparent 65%) !important;
+  background: rgba(8, 18, 42, 0.48) !important;
+  position: fixed !important;
+  inset: 0 !important;
   top: 0 !important;
   right: 0 !important;
   width: 100% !important;
   height: 100% !important;
   border-radius: 0 !important;
+  z-index: 1 !important;
 }
 
-/* Portal selector card: bright glass on light photo background */
+/* Portal selector: centered premium glass card */
 #auth-page:has(#portal-selector:not(.hidden)) #portal-selector {
-  background: rgba(255,255,255,.88) !important;
-  border: 1px solid rgba(255,255,255,.92) !important;
-  backdrop-filter: blur(28px) saturate(1.4) !important;
-  -webkit-backdrop-filter: blur(28px) saturate(1.4) !important;
+  max-width: 580px !important;
+  width: 100% !important;
+  margin: auto !important;
+  padding: 32px 28px 24px !important;
+  background: rgba(255, 255, 255, 0.90) !important;
+  backdrop-filter: blur(32px) saturate(1.4) !important;
+  -webkit-backdrop-filter: blur(32px) saturate(1.4) !important;
+  border: 1px solid rgba(255, 255, 255, 0.85) !important;
   box-shadow:
-    0 24px 64px rgba(15,30,60,.14),
-    0 8px 24px rgba(15,30,60,.08),
-    inset 0 1px 0 rgba(255,255,255,.95) !important;
+    0 32px 80px rgba(0, 0, 0, 0.45),
+    0 8px 24px rgba(0, 0, 0, 0.25),
+    inset 0 1px 0 rgba(255, 255, 255, 0.95) !important;
+  border-radius: 20px !important;
 }
 
-/* Mode toggle cards: slightly more opaque on light bg */
+/* Tighter portal header */
+#auth-page:has(#portal-selector:not(.hidden)) .portal-header {
+  margin-bottom: 18px !important;
+}
+
+/* Mode toggles: tighter gap */
+#auth-page:has(#portal-selector:not(.hidden)) .mode-toggles {
+  gap: 10px !important;
+  margin-bottom: 0 !important;
+}
+
+/* Mode toggle cards: solid on blurred photo bg */
 #auth-page:has(#portal-selector:not(.hidden)) .mode-toggle {
-  background: rgba(255,255,255,.96) !important;
-  box-shadow: 0 2px 10px rgba(0,0,0,.06) !important;
+  background: rgba(255, 255, 255, 0.95) !important;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.07) !important;
 }
 
-/* Portal cards: crisp white on light bg */
+/* Portal cards: balanced 2-column grid */
+#auth-page:has(#portal-selector:not(.hidden)) .portal-cards {
+  display: grid !important;
+  grid-template-columns: 1fr 1fr !important;
+  gap: 10px !important;
+}
+
+/* Portal cards: crisp white on blurred photo bg */
 #auth-page:has(#portal-selector:not(.hidden)) .portal-card {
-  background: rgba(255,255,255,.97) !important;
-  box-shadow: 0 2px 8px rgba(0,0,0,.06) !important;
+  background: rgba(255, 255, 255, 0.97) !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.07) !important;
 }
 
-/* ── Mobile: crop from right side where the city view + desks are ── */
+/* ── Mobile ── */
 @media (max-width: 768px) {
-  #auth-page:has(#portal-selector:not(.hidden)) {
-    background-position: 68% 30% !important;
+  #auth-page:has(#portal-selector:not(.hidden)) #portal-selector {
+    max-width: calc(100vw - 32px) !important;
+    padding: 24px 18px 20px !important;
   }
 }
 
 @media (max-width: 480px) {
-  #auth-page:has(#portal-selector:not(.hidden)) {
-    background-position: 72% 25% !important;
+  #auth-page:has(#portal-selector:not(.hidden)) .portal-cards {
+    grid-template-columns: 1fr 1fr !important;
+    gap: 8px !important;
   }
 }
