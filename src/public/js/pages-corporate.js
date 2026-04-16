@@ -191,30 +191,56 @@ async function renderProgrammes() {
 async function loadProgrammes() {
   const area = document.getElementById('programmes-area');
   if (!area) return;
+
+  // Timeout guard so the page never stays on "Loading programmes…" forever
+  const timer = setTimeout(() => {
+    const el = document.getElementById('programmes-area');
+    if (el && el.querySelector('.loading')) {
+      el.innerHTML = '<div class="card"><p style="color:var(--danger);font-size:13px">Request timed out — please refresh and try again.</p></div>';
+    }
+  }, 20000);
+
   try {
     const data = await api('/api/programmes');
+    clearTimeout(timer);
+
+    // Re-acquire in case DOM changed during await
+    const liveArea = document.getElementById('programmes-area');
+    if (!liveArea) return;
+
     const programmes = data.programmes || data.items || [];
 
     if (!programmes.length) {
-      area.innerHTML = '<div class="card"><div class="empty-state"><p>No programmes found.</p></div></div>';
+      liveArea.innerHTML = '<div class="card"><div class="empty-state"><p>No programmes found. Add the first one with the button above.</p></div></div>';
       return;
     }
 
-    area.innerHTML = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px">
+    liveArea.innerHTML = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px">
       ${programmes.map(p => `
         <div class="card" style="padding:18px 20px">
           <div style="font-size:15px;font-weight:700;margin-bottom:4px">${p.name || 'Unnamed Programme'}</div>
           <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">${p.code || ''}</div>
           ${p.description ? `<div style="font-size:12px;color:var(--text-secondary);line-height:1.5;margin-bottom:10px">${p.description}</div>` : ''}
           <div style="display:flex;gap:8px;flex-wrap:wrap">
-            ${p.duration ? `<span style="font-size:10px;background:var(--primary-ultra-light);color:var(--primary);padding:2px 8px;border-radius:20px">${p.duration} years</span>` : ''}
-            ${p.level ? `<span style="font-size:10px;background:#f0fdf4;color:#15803d;padding:2px 8px;border-radius:20px;text-transform:capitalize">${p.level}</span>` : ''}
+            ${p.durationSemesters ? `<span style="font-size:10px;background:var(--primary-ultra-light);color:var(--primary);padding:2px 8px;border-radius:20px">${p.durationSemesters} semesters</span>` : (p.duration ? `<span style="font-size:10px;background:var(--primary-ultra-light);color:var(--primary);padding:2px 8px;border-radius:20px">${p.duration} yrs</span>` : '')}
+            ${p.qualificationType || p.level ? `<span style="font-size:10px;background:#f0fdf4;color:#15803d;padding:2px 8px;border-radius:20px;text-transform:capitalize">${p.qualificationType || p.level}</span>` : ''}
             <span style="font-size:10px;background:#f5f3ff;color:#7c3aed;padding:2px 8px;border-radius:20px">${p.studentCount ?? 0} students</span>
           </div>
         </div>`).join('')}
     </div>`;
   } catch(e) {
-    area.innerHTML = `<div class="card"><p style="color:var(--danger);font-size:13px">Error: ${e.message}</p></div>`;
+    clearTimeout(timer);
+    const liveArea = document.getElementById('programmes-area');
+    if (!liveArea) return;
+    // Friendly message for mode restriction (corporate company viewing academic feature)
+    if (e.message && e.message.toLowerCase().includes('academic mode')) {
+      liveArea.innerHTML = `<div class="card" style="border-left:4px solid #d97706">
+        <div style="font-size:14px;font-weight:700;color:#d97706;margin-bottom:6px">Academic Feature</div>
+        <p style="font-size:13px;color:var(--text-secondary)">Programmes are available for institutions in Academic mode. Your workspace is currently in Corporate mode.</p>
+      </div>`;
+    } else {
+      liveArea.innerHTML = `<div class="card"><p style="color:var(--danger);font-size:13px">Could not load programmes: ${e.message || 'Unknown error'}</p></div>`;
+    }
   }
 }
 

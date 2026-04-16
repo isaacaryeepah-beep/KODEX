@@ -65,15 +65,30 @@ async function loadFAQList() {
   const area = document.getElementById('faq-list-area');
   if (!area) return;
   const cat = document.getElementById('faq-cat-filter')?.value || '';
+
+  // Timeout: if API doesn't respond in 20s, show error instead of spinning forever
+  const timer = setTimeout(() => {
+    const el = document.getElementById('faq-list-area');
+    if (el && el.querySelector('.loading')) {
+      el.innerHTML = '<div style="color:var(--danger);padding:12px;font-size:13px">Request timed out — please refresh and try again.</div>';
+    }
+  }, 20000);
+
   try {
     const params = cat ? `?category=${cat}` : '';
     const data = await api(`/api/faq${params}`);
+    clearTimeout(timer);
+
+    // Re-acquire element in case DOM changed during await
+    const liveArea = document.getElementById('faq-list-area');
+    if (!liveArea) return;
+
     const faqs = data.faqs || data.items || [];
     if (!faqs.length) {
-      area.innerHTML = '<div style="text-align:center;padding:24px;color:var(--text-muted);font-size:13px">No FAQs found for this category.</div>';
+      liveArea.innerHTML = '<div style="text-align:center;padding:24px;color:var(--text-muted);font-size:13px">No FAQs found yet. Check back soon or ask the AI above.</div>';
       return;
     }
-    area.innerHTML = faqs.map(f => `
+    liveArea.innerHTML = faqs.map(f => `
       <details style="border:1px solid var(--border);border-radius:9px;margin-bottom:8px;overflow:hidden">
         <summary style="padding:12px 16px;font-size:14px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:space-between;list-style:none;gap:10px">
           <span>${f.question}</span>
@@ -82,7 +97,9 @@ async function loadFAQList() {
         <div style="padding:0 16px 14px;font-size:13px;color:var(--text-secondary);line-height:1.6;border-top:1px solid var(--border-light)">${f.answer}</div>
       </details>`).join('');
   } catch(e) {
-    area.innerHTML = `<div style="color:var(--danger);padding:12px;font-size:13px">Error: ${e.message}</div>`;
+    clearTimeout(timer);
+    const liveArea = document.getElementById('faq-list-area');
+    if (liveArea) liveArea.innerHTML = `<div style="color:var(--danger);padding:12px;font-size:13px">Could not load FAQs: ${e.message || 'Unknown error'}</div>`;
   }
 }
 

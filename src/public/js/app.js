@@ -2283,17 +2283,35 @@ function navigateTo(view) {
     case 'assets':         renderAssets(); break;
     case 'my-assets':      renderMyAssets(); break;
     case 'messages':      renderMessages(); break;
-    case 'faq-center':   renderFAQCenter(); break;
-    case 'support':      renderSupport(); break;
-    case 'payroll':      renderPayroll(); break;
-    case 'audit-logs':   renderAuditLogs(); break;
-    case 'programmes':   renderProgrammes(); break;
-    case 'calendar-events': renderCalendarEvents(); break;
-    case 'forums':       renderForums(); break;
-    case 'badges':       renderBadges(); break;
-    case 'transcripts':  renderTranscripts(); break;
-    case 'evaluations':  renderEvaluations(); break;
+    case 'faq-center':    _safeRender(content, renderFAQCenter,    'FAQ Center');    break;
+    case 'support':       _safeRender(content, renderSupport,      'Support');       break;
+    case 'payroll':       _safeRender(content, renderPayroll,      'Payroll');       break;
+    case 'audit-logs':    _safeRender(content, renderAuditLogs,    'Audit Logs');    break;
+    case 'programmes':    _safeRender(content, renderProgrammes,   'Programmes');    break;
+    case 'calendar-events': _safeRender(content, renderCalendarEvents, 'Calendar'); break;
+    case 'forums':        _safeRender(content, renderForums,       'Forums');        break;
+    case 'badges':        _safeRender(content, renderBadges,       'Badges');        break;
+    case 'transcripts':   _safeRender(content, renderTranscripts,  'Transcripts');   break;
+    case 'evaluations':   _safeRender(content, renderEvaluations,  'Evaluations');   break;
     default: renderDashboard();
+  }
+}
+
+/** Call a render function from an external module file safely.
+ *  If the function is not yet defined (module not loaded) or throws synchronously,
+ *  display a graceful error card instead of leaving the page on "Loading…".
+ */
+function _safeRender(content, fn, label) {
+  try {
+    if (typeof fn !== 'function') throw new Error(`${label} module not loaded yet — please refresh the page.`);
+    fn();
+  } catch (e) {
+    if (content) content.innerHTML = `
+      <div class="card" style="margin-top:20px;border-left:4px solid var(--danger)">
+        <div style="font-size:14px;font-weight:700;color:var(--danger);margin-bottom:6px">${label} failed to load</div>
+        <div style="font-size:13px;color:var(--text-secondary)">${e.message || 'Unknown error'}</div>
+        <button class="btn btn-secondary btn-sm" style="margin-top:12px" onclick="navigateTo('dashboard')">← Back to Dashboard</button>
+      </div>`;
   }
 }
 
