@@ -1,6 +1,6 @@
 /**
  * aiQuizController.js
- * Handles AI-powered quiz question generation from PDF or pasted text.
+ * Handles AI-powered quiz question generation from PDF, pasted text, or images.
  */
 
 const multer  = require("multer");
@@ -8,22 +8,29 @@ const pdfParse = require("pdf-parse");
 const Question = require("../models/Question");
 const Quiz     = require("../models/Quiz");
 const mongoose = require("mongoose");
-const { generateQuestionsFromText } = require("../services/aiService");
+const { generateQuestionsFromText, generateQuestionsFromImage } = require("../services/aiService");
 
-// Memory storage — PDF never written to disk
+const ALLOWED_IMAGE_TYPES = ["image/png", "image/jpeg", "image/webp", "image/gif"];
+
+// Accept PDF or image — two named fields
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 10 * 1024 * 1024 }, // 10 MB
   fileFilter: (req, file, cb) => {
     if (file.mimetype === "application/pdf") return cb(null, true);
-    cb(new Error("Only PDF files are accepted"), false);
+    if (ALLOWED_IMAGE_TYPES.includes(file.mimetype)) return cb(null, true);
+    cb(new Error("Only PDF or image files (PNG, JPG, WEBP) are accepted"), false);
   },
-}).single("pdf");
+}).fields([
+  { name: "pdf",   maxCount: 1 },
+  { name: "image", maxCount: 1 },
+]);
 
 /**
  * POST /api/lecturer/quizzes/:id/ai-generate
- * Body (multipart/form-data OR application/json):
+ * Body (multipart/form-data):
  *   - pdf        (file, optional)   — PDF to extract text from
+ *   - image      (file, optional)   — PNG/JPG image (drawing, diagram, photo)
  *   - notes      (string, optional) — Pasted text/notes
  *   - count      (number)           — How many questions (1-20, default 5)
  *   - types      (string)           — Comma-separated: "single,multiple,fill"
@@ -47,34 +54,45 @@ exports.generateQuestions = (req, res) => {
       });
       if (!quiz) return res.status(404).json({ error: "Quiz not found" });
 
-      // ── Extract text ──
-      let content = "";
-
-      if (req.file) {
-        // PDF upload
-        const parsed = await pdfParse(req.file.buffer);
-        content = parsed.text || "";
-        if (!content.trim()) {
-          return res.status(400).json({ error: "Could not extract text from this PDF. Try a text-based PDF or paste your notes instead." });
-        }
-      } else if (req.body?.notes) {
-        content = req.body.notes;
-      }
-
-      if (!content.trim()) {
-        return res.status(400).json({ error: "Please upload a PDF or paste your notes." });
-      }
-
       // ── Parse options ──
       const count = Math.min(20, Math.max(1, parseInt(req.body?.count) || 5));
       const typesRaw = req.body?.types || "single";
       const types = typesRaw.split(",").map(t => t.trim()).filter(t => ["single","multiple","fill"].includes(t));
       const difficulty = ["easy","medium","hard","mixed"].includes(req.body?.difficulty) ? req.body.difficulty : "mixed";
-
       if (types.length === 0) types.push("single");
 
-      // ── Generate via AI ──
-      const generated = await generateQuestionsFromText(content, count, types, difficulty);
+      const pdfFile   = req.files?.pdf?.[0];
+      const imageFile = req.files?.image?.[0];
+
+      let generated;
+
+      if (imageFile) {
+        // ── Image / drawing path → vision AI ──
+        generated = await generateQuestionsFromImage(
+          imageFile.buffer,
+          imageFile.mimetype,
+          count,
+          types,
+          difficulty,
+          req.body?.context || ""
+        );
+      } else {
+        // ── Text path (PDF or notes) ──
+        let content = "";
+        if (pdfFile) {
+          const parsed = await pdfParse(pdfFile.buffer);
+          content = parsed.text || "";
+          if (!content.trim()) {
+            return res.status(400).json({ error: "Could not extract text from this PDF. Try a text-based PDF or paste your notes instead." });
+          }
+        } else if (req.body?.notes) {
+          content = req.body.notes;
+        }
+        if (!content.trim()) {
+          return res.status(400).json({ error: "Please upload a PDF, image, or paste your notes." });
+        }
+        generated = await generateQuestionsFromText(content, count, types, difficulty);
+      }
 
       // ── Save questions to DB ──
       const questionDocs = generated.map(q => ({ ...q, quiz: id }));

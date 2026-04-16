@@ -2106,14 +2106,19 @@ function buildSidebar() {
         links.push({ id: 'quizzes', label: 'Quizzes', icon: quizzesIcon() });
         links.push({ id: 'gradebook', label: 'Grade Book', icon: svgIcon('<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>') });
         links.push({ id: 'announcements', label: 'Announcements', icon: svgIcon('<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>') });
+        links.push({ id: 'programmes', label: 'Programmes', icon: svgIcon('<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>') });
       }
       if (currentUser.company?.mode === 'corporate') {
         links.push({ id: 'sign-in-out', label: 'Sign In / Out', icon: attendanceIcon() });
         links.push({ id: 'shifts', label: 'Shifts', icon: svgIcon('<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>') });
         links.push({ id: 'leave-requests', label: 'Leave Requests', icon: svgIcon('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>') });
+        links.push({ id: 'payroll', label: 'Payroll', icon: svgIcon('<rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/>') });
+        links.push({ id: 'audit-logs', label: 'Audit Logs', icon: svgIcon('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="10" y2="9"/>') });
       }
+      links.push({ id: 'messages', label: 'Messages', icon: svgIcon('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>') });
       links.push({ id: 'meetings', label: 'Meetings', icon: meetingsIcon() });
       links.push({ id: 'reports', label: 'Reports', icon: reportsIcon() });
+      links.push({ id: 'faq-center', label: 'FAQ Center', icon: svgIcon('<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>') });
       links.push({ id: 'subscription', label: 'Subscription', icon: subscriptionIcon() });
       break;
     case 'manager':
@@ -2124,9 +2129,12 @@ function buildSidebar() {
         links.push({ id: 'sign-in-out', label: 'Sign In / Out', icon: attendanceIcon() });
         links.push({ id: 'shifts', label: 'Shifts', icon: svgIcon('<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>') });
         links.push({ id: 'leave-requests', label: 'Leave Requests', icon: svgIcon('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>') });
+        links.push({ id: 'payroll', label: 'Payroll', icon: svgIcon('<rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/>') });
       }
+      links.push({ id: 'messages', label: 'Messages', icon: svgIcon('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>') });
       links.push({ id: 'meetings', label: 'Meetings', icon: meetingsIcon() });
       links.push({ id: 'reports', label: 'Reports', icon: reportsIcon() });
+      links.push({ id: 'faq-center', label: 'FAQ Center', icon: svgIcon('<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>') });
       break;
     case 'hod':
       links.push({ id: 'hod-overview',     label: 'Overview',       icon: svgIcon('<rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>') });
@@ -2149,18 +2157,23 @@ function buildSidebar() {
       links.push({ id: 'question-bank', label: 'Question Bank', icon: svgIcon('<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>') });
       links.push({ id: 'assignments', label: 'Assignments / Quiz', icon: assignmentsIcon() });
       links.push({ id: 'gradebook', label: 'Grade Book', icon: svgIcon('<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>') });
+      links.push({ id: 'messages', label: 'Messages', icon: svgIcon('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>') });
       links.push({ id: 'meetings', label: 'Meetings', icon: meetingsIcon() });
       links.push({ id: 'lecturer-performance', label: 'Performance', icon: svgIcon('<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>') });
       links.push({ id: 'reports', label: 'Reports', icon: reportsIcon() });
       links.push({ id: 'announcements', label: 'Announcements', icon: svgIcon('<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>') });
+      links.push({ id: 'faq-center', label: 'FAQ Center', icon: svgIcon('<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>') });
       links.push({ id: 'subscription', label: 'Subscription', icon: subscriptionIcon() });
       break;
     case 'employee':
-      links.push({ id: 'sign-in-out', label: 'Sign In / Out', icon: attendanceIcon() });
+      links.push({ id: 'sign-in-out', label: 'Clock In / Out', icon: attendanceIcon() });
       links.push({ id: 'my-attendance', label: 'My Attendance', icon: sessionsIcon() });
       links.push({ id: 'my-shift', label: 'My Shift', icon: svgIcon('<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>') });
       links.push({ id: 'my-leaves', label: 'Leave', icon: svgIcon('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>') });
+      links.push({ id: 'messages', label: 'Messages', icon: svgIcon('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>') });
       links.push({ id: 'meetings', label: 'Meetings', icon: meetingsIcon() });
+      links.push({ id: 'support', label: 'Support', icon: svgIcon('<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>') });
+      links.push({ id: 'faq-center', label: 'FAQ Center', icon: svgIcon('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><line x1="9" y1="10" x2="15" y2="10"/><line x1="12" y1="7" x2="12" y2="13"/>') });
       links.push({ id: 'reports', label: 'Reports', icon: reportsIcon() });
       break;
     case 'student':
@@ -2172,7 +2185,10 @@ function buildSidebar() {
       links.push({ id: 'quiz-history', label: 'My Results', icon: svgIcon('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/>') });
       links.push({ id: 'assignments', label: 'Assignments / Quiz', icon: assignmentsIcon() });
       links.push({ id: 'gradebook', label: 'My Grades', icon: svgIcon('<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>') });
+      links.push({ id: 'messages', label: 'Messages', icon: svgIcon('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>') });
       links.push({ id: 'meetings', label: 'Meetings', icon: meetingsIcon() });
+      links.push({ id: 'support', label: 'Support', icon: svgIcon('<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>') });
+      links.push({ id: 'faq-center', label: 'FAQ Center', icon: svgIcon('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><line x1="9" y1="10" x2="15" y2="10"/><line x1="12" y1="7" x2="12" y2="13"/>') });
       links.push({ id: 'announcements', label: 'Announcements', icon: svgIcon('<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>') });
       break;
     case 'superadmin':
@@ -2266,7 +2282,36 @@ function navigateTo(view) {
     case 'my-expenses':    renderMyExpenses(); break;
     case 'assets':         renderAssets(); break;
     case 'my-assets':      renderMyAssets(); break;
+    case 'messages':      renderMessages(); break;
+    case 'faq-center':    _safeRender(content, renderFAQCenter,    'FAQ Center');    break;
+    case 'support':       _safeRender(content, renderSupport,      'Support');       break;
+    case 'payroll':       _safeRender(content, renderPayroll,      'Payroll');       break;
+    case 'audit-logs':    _safeRender(content, renderAuditLogs,    'Audit Logs');    break;
+    case 'programmes':    _safeRender(content, renderProgrammes,   'Programmes');    break;
+    case 'calendar-events': _safeRender(content, renderCalendarEvents, 'Calendar'); break;
+    case 'forums':        _safeRender(content, renderForums,       'Forums');        break;
+    case 'badges':        _safeRender(content, renderBadges,       'Badges');        break;
+    case 'transcripts':   _safeRender(content, renderTranscripts,  'Transcripts');   break;
+    case 'evaluations':   _safeRender(content, renderEvaluations,  'Evaluations');   break;
     default: renderDashboard();
+  }
+}
+
+/** Call a render function from an external module file safely.
+ *  If the function is not yet defined (module not loaded) or throws synchronously,
+ *  display a graceful error card instead of leaving the page on "Loading…".
+ */
+function _safeRender(content, fn, label) {
+  try {
+    if (typeof fn !== 'function') throw new Error(`${label} module not loaded yet — please refresh the page.`);
+    fn();
+  } catch (e) {
+    if (content) content.innerHTML = `
+      <div class="card" style="margin-top:20px;border-left:4px solid var(--danger)">
+        <div style="font-size:14px;font-weight:700;color:var(--danger);margin-bottom:6px">${label} failed to load</div>
+        <div style="font-size:13px;color:var(--text-secondary)">${e.message || 'Unknown error'}</div>
+        <button class="btn btn-secondary btn-sm" style="margin-top:12px" onclick="navigateTo('dashboard')">← Back to Dashboard</button>
+      </div>`;
   }
 }
 
@@ -3226,130 +3271,147 @@ async function renderLecturerDashboard(content) {
 }
 
 async function renderEmployeeDashboard(content) {
-  const [attendance, meetingsData, signInStatus] = await Promise.all([
-    api('/api/attendance-sessions/my-attendance?limit=5').catch(() => ({ records: [], pagination: { total: 0 } })),
+  const today     = new Date().toISOString().slice(0, 10);
+  const sevenAgo  = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
+
+  const [todayData, recentData, meetingsData] = await Promise.all([
+    api(`/api/corporate-attendance/my?from=${today}&to=${today}`).catch(() => ({ records: [] })),
+    api(`/api/corporate-attendance/my?from=${sevenAgo}&to=${today}`).catch(() => ({ records: [] })),
     api('/api/zoom').catch(() => ({ meetings: [] })),
-    api('/api/attendance-sessions/sign-in-status').catch(() => ({ signedIn: false, record: null })),
   ]);
 
+  const todayRecord  = todayData.records[0] || null;
+  const isClockedIn  = !!(todayRecord?.clockIn?.time && !todayRecord?.clockOut?.time);
+  const isClockedOut = !!(todayRecord?.clockIn?.time && todayRecord?.clockOut?.time);
+  const clockInTime  = todayRecord?.clockIn?.time  ? new Date(todayRecord.clockIn.time)  : null;
+  const isLate       = todayRecord?.clockIn?.isLate || todayRecord?.status === 'late' || false;
+  const lateMin      = todayRecord?.clockIn?.lateMinutes || todayRecord?.lateMinutes || 0;
+  const workedHrs    = todayRecord?.hoursWorked != null ? todayRecord.hoursWorked : null;
+
+  const recentRecords  = recentData.records || [];
+  const presentDays    = recentRecords.filter(r => r.status === 'present' || r.status === 'late').length;
+  const attendanceRate = recentRecords.length > 0 ? Math.round((presentDays / recentRecords.length) * 100) : 0;
   const upcomingMeetings = meetingsData.meetings.filter(m => m.status === 'scheduled');
-  const totalCheckins = attendance.pagination.total;
-  const attendanceRate = totalCheckins > 0 ? Math.round((attendance.records.filter(r => r.status === 'present').length / attendance.records.length) * 100) : 0;
-  const signedIn = signInStatus.signedIn;
-  const signInRecord = signInStatus.record;
-  const signInTime = signInRecord?.checkInTime ? new Date(signInRecord.checkInTime) : null;
+
+  const statusColor = isClockedIn ? 'var(--success)' : (isClockedOut ? 'var(--primary)' : 'var(--text-light)');
 
   content.innerHTML = `
     <div class="page-header">
       <h2>Welcome back, ${currentUser.name.split(' ')[0]}</h2>
-      <p>${currentUser.company?.name || 'Your company'}${currentUser.employeeId ? ` \u2022 ID: ${currentUser.employeeId}` : ''}</p>
+      <p>${currentUser.company?.name || 'Your company'}${currentUser.employeeId ? ` · ID: ${currentUser.employeeId}` : ''}</p>
     </div>
 
-    <div class="card" style="border-left:4px solid ${signedIn ? 'var(--success)' : 'var(--primary)'};background:${signedIn ? 'linear-gradient(135deg,#f0fdf4,#ecfdf5)' : 'linear-gradient(135deg,#eef2ff,#e0e7ff)'}">
+    <div class="card" style="border-left:4px solid ${statusColor};background:${isClockedIn ? 'linear-gradient(135deg,#f0fdf4,#ecfdf5)' : 'linear-gradient(135deg,#eef2ff,#e0e7ff)'}">
       <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px">
         <div>
-          <div style="font-size:12px;text-transform:uppercase;font-weight:700;letter-spacing:.5px;color:${signedIn ? 'var(--success)' : 'var(--primary)'}">
-            ${signedIn ? '● Currently Signed In' : '○ Not Signed In'}
+          <div style="font-size:12px;text-transform:uppercase;font-weight:700;letter-spacing:.5px;color:${statusColor}">
+            ${isClockedIn ? '● Currently Clocked In' : (isClockedOut ? '✓ Clocked Out' : '○ Not Clocked In')}
           </div>
-          <div style="font-size:18px;font-weight:700;margin-top:4px">${signedIn ? 'You are clocked in' : 'Ready to start your day?'}</div>
-          ${signInTime ? `<div style="font-size:12px;color:var(--text-light);margin-top:2px">Since ${signInTime.toLocaleString()}</div>` : ''}
+          <div style="font-size:18px;font-weight:700;margin-top:4px">
+            ${isClockedIn ? 'You are clocked in' : (isClockedOut ? 'Work day complete' : 'Ready to start your day?')}
+          </div>
+          ${clockInTime ? `<div style="font-size:12px;color:var(--text-light);margin-top:2px">
+            Clocked in at ${clockInTime.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}
+            ${isLate ? `<span style="color:#ef4444;margin-left:6px">(${lateMin}m late)</span>` : ''}
+          </div>` : ''}
+          ${isClockedOut && workedHrs != null ? `<div style="font-size:12px;color:var(--text-light);margin-top:2px">Worked ${workedHrs}h today</div>` : ''}
         </div>
         <div style="display:flex;gap:10px">
-          ${!signedIn ? `<button class="btn btn-success" onclick="employeeSignIn()" style="gap:8px;font-size:14px;padding:12px 24px">
-            ${svgIcon('<polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>', 16)} Sign In
-          </button>` : `<button class="btn btn-danger" onclick="employeeSignOut()" style="gap:8px;font-size:14px;padding:12px 24px">
-            ${svgIcon('<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>', 16)} Sign Out
-          </button>`}
+          ${!isClockedIn && !isClockedOut ? `
+            <button class="btn btn-success" onclick="employeeSignIn()" style="gap:8px;font-size:14px;padding:12px 24px">
+              ${svgIcon('<polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>', 16)} Clock In
+            </button>` : isClockedIn ? `
+            <button class="btn btn-danger" onclick="employeeSignOut()" style="gap:8px;font-size:14px;padding:12px 24px">
+              ${svgIcon('<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>', 16)} Clock Out
+            </button>` : `
+            <button class="btn btn-sm" style="background:var(--border)" onclick="navigateTo('sign-in-out')">View Details</button>`}
         </div>
       </div>
     </div>
 
     <div class="stats-grid">
-      <div class="stat-card"><div class="stat-value">${totalCheckins}</div><div class="stat-label">Total Days</div></div>
-      <div class="stat-card"><div class="stat-value">${attendanceRate}%</div><div class="stat-label">Attendance Rate</div></div>
+      <div class="stat-card"><div class="stat-value">${attendanceRate}%</div><div class="stat-label">7-Day Rate</div></div>
+      <div class="stat-card"><div class="stat-value">${presentDays}</div><div class="stat-label">Days Present</div></div>
       <div class="stat-card"><div class="stat-value">${upcomingMeetings.length}</div><div class="stat-label">Meetings</div></div>
     </div>
 
     <div class="card">
-      <div class="card-title">Recent Attendance</div>
-      ${attendance.records.length ? `
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+        <div class="card-title" style="margin:0">This Week</div>
+        <a onclick="navigateTo('my-attendance')" style="font-size:12px;color:var(--primary);cursor:pointer">View all →</a>
+      </div>
+      ${recentRecords.length ? `
         <table>
-          <thead><tr><th>Session</th><th>Status</th><th>Sign In</th><th>Sign Out</th><th>Duration</th></tr></thead>
-          <tbody>${attendance.records.map(r => {
-            const inTime = r.checkInTime ? new Date(r.checkInTime) : null;
-            const outTime = r.checkOutTime ? new Date(r.checkOutTime) : null;
-            const dur = inTime && outTime ? Math.round((outTime - inTime) / 60000) : null;
+          <thead><tr><th>Date</th><th>Status</th><th>Time In</th><th>Time Out</th><th>Worked</th></tr></thead>
+          <tbody>${recentRecords.slice(0, 7).map(r => {
+            const ci  = r.clockIn?.time  ? new Date(r.clockIn.time)  : null;
+            const co  = r.clockOut?.time ? new Date(r.clockOut.time) : null;
+            const statusColors = { present:'#16a34a', late:'#d97706', absent:'#dc2626', half_day:'#7c3aed', on_leave:'#0284c7', remote:'#0891b2' };
+            const sc = statusColors[r.status] || 'var(--text-light)';
             return `<tr>
-              <td>${r.session?.title || 'N/A'}</td>
-              <td><span class="status-badge status-${r.status}">${r.status}</span></td>
-              <td>${inTime ? inTime.toLocaleTimeString() : '—'}</td>
-              <td>${outTime ? outTime.toLocaleTimeString() : '<span style="color:#f59e0b;font-weight:600">Active</span>'}</td>
-              <td>${dur !== null ? Math.floor(dur/60)+'h '+(dur%60)+'m' : '—'}</td>
+              <td style="font-size:13px">${r.date ? new Date(r.date).toLocaleDateString('en-GB', {weekday:'short',day:'2-digit',month:'short'}) : '—'}</td>
+              <td><span style="background:${sc}20;color:${sc};border:1px solid ${sc}40;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700;text-transform:capitalize">${r.status || '—'}</span></td>
+              <td style="font-size:13px">${ci ? ci.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : '—'}</td>
+              <td style="font-size:13px">${co ? co.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : (ci ? '<span style="color:#f59e0b;font-size:11px">Active</span>' : '—')}</td>
+              <td style="font-size:13px">${r.hoursWorked != null ? r.hoursWorked+'h' : '—'}</td>
             </tr>`;
           }).join('')}</tbody>
         </table>
-      ` : '<div class="empty-state"><p>No attendance records yet. Sign in to start tracking.</p></div>'}
+      ` : '<div class="empty-state"><p>No attendance records this week. Click Clock In to start.</p></div>'}
     </div>
   `;
 }
 
 async function employeeSignIn() {
-  // If ESP32 configured, check BLE presence first
+  // If ESP32 configured, attempt BLE ping — warn if not detected but do NOT block
   if (esp32IP) {
     const detected = await discoverESP32();
     if (!detected) {
-      toastWarning('You must be at the office to sign in. BLE device not detected.');
-      return;
-    }
-    // Record sign-in on ESP32 locally
-    try {
-      await esp32Api('/sign-in', {
+      toastWarning('Office device not detected — clocking in via web.');
+    } else {
+      // Also notify the ESP32 (fire-and-forget)
+      esp32Api('/sign-in', {
         method: 'POST',
         body: JSON.stringify({ userId: currentUser.id, name: currentUser.name })
-      });
-      toastSuccess('Signed in successfully!');
-      renderSignInOut();
-      return;
-    } catch(e) {
-      console.warn('[ESP32] Sign in failed, trying server:', e.message);
+      }).catch(e => console.warn('[ESP32] ping failed:', e.message));
     }
   }
   try {
-    const data = await api('/api/attendance-sessions/sign-in', { method: 'POST' });
-    toastSuccess(data.message || 'Signed in successfully!');
-    navigateTo('dashboard');
+    const data = await api('/api/corporate-attendance/clock-in', {
+      method: 'POST',
+      body: JSON.stringify({ method: 'web' }),
+    });
+    toastSuccess(data.message || 'Clocked in successfully!');
+    renderSignInOut();
   } catch (e) {
-    toastError(e.message || 'Sign in failed');
+    toastError(e.message || 'Clock-in failed');
   }
 }
 
 async function employeeSignOut() {
-  if (!confirm('Are you sure you want to sign out?')) return;
-  // If ESP32 configured, check BLE presence first
+  if (!confirm('Are you sure you want to clock out?')) return;
+  // If ESP32 configured, attempt BLE ping — warn if not detected but do NOT block
   if (esp32IP) {
     const detected = await discoverESP32();
     if (!detected) {
-      toastWarning('You must be at the office to sign out. BLE device not detected.');
-      return;
-    }
-    try {
-      await esp32Api('/sign-out', {
+      toastWarning('Office device not detected — clocking out via web.');
+    } else {
+      esp32Api('/sign-out', {
         method: 'POST',
         body: JSON.stringify({ userId: currentUser.id, name: currentUser.name })
-      });
-      toastSuccess('Signed out successfully!');
-      renderSignInOut();
-      return;
-    } catch(e) {
-      console.warn('[ESP32] Sign out failed, trying server:', e.message);
+      }).catch(e => console.warn('[ESP32] ping failed:', e.message));
     }
   }
   try {
-    const data = await api('/api/attendance-sessions/sign-out', { method: 'POST' });
-    toastSuccess(data.message ? data.message + (data.duration ? ' Duration: ' + data.duration : '') : 'Signed out successfully!');
-    navigateTo('dashboard');
+    const data = await api('/api/corporate-attendance/clock-out', {
+      method: 'POST',
+      body: JSON.stringify({ method: 'web' }),
+    });
+    const hrs = data.hoursWorked != null ? ` · ${data.hoursWorked}h worked` : '';
+    toastSuccess((data.message || 'Clocked out successfully!') + hrs);
+    renderSignInOut();
   } catch (e) {
-    toastError(e.message || 'Sign out failed');
+    toastError(e.message || 'Clock-out failed');
   }
 }
 
@@ -3357,77 +3419,107 @@ async function renderSignInOut() {
   const content = document.getElementById('main-content');
   if (!content) return;
   try {
-    const [statusData, attendanceData] = await Promise.all([
-      api('/api/attendance-sessions/sign-in-status').catch(() => ({ signedIn: false, record: null })),
-      api('/api/attendance-sessions/my-attendance?limit=30').catch(() => ({ records: [] })),
+    const today = new Date().toISOString().slice(0, 10);
+    const thirtyAgo = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
+
+    const [todayData, historyData] = await Promise.all([
+      api(`/api/corporate-attendance/my?from=${today}&to=${today}`).catch(() => ({ records: [] })),
+      api(`/api/corporate-attendance/my?from=${thirtyAgo}&to=${today}`).catch(() => ({ records: [] })),
     ]);
 
-    const signedIn = statusData.signedIn;
-    const record = statusData.record;
-    const signInTime = record?.checkInTime ? new Date(record.checkInTime) : null;
+    const todayRecord = todayData.records[0] || null;
+    const isClockedIn  = !!(todayRecord?.clockIn?.time && !todayRecord?.clockOut?.time);
+    const isClockedOut = !!(todayRecord?.clockIn?.time && todayRecord?.clockOut?.time);
+    const clockInTime  = todayRecord?.clockIn?.time  ? new Date(todayRecord.clockIn.time)  : null;
+    const clockOutTime = todayRecord?.clockOut?.time ? new Date(todayRecord.clockOut.time) : null;
+    const shiftName    = todayRecord?.shift?.name || null;
+    const isLate       = todayRecord?.clockIn?.isLate || todayRecord?.status === 'late' || false;
+    const lateMin      = todayRecord?.clockIn?.lateMinutes || todayRecord?.lateMinutes || 0;
+    const workedHrs    = todayRecord?.hoursWorked != null ? todayRecord.hoursWorked : null;
+    const overtimeHrs  = todayRecord?.overtimeHours || 0;
+
+    // Live elapsed time if currently clocked in
+    let elapsedLabel = '';
+    if (isClockedIn && clockInTime) {
+      const elapsedMs  = Date.now() - clockInTime.getTime();
+      const elapsedH   = Math.floor(elapsedMs / 3600000);
+      const elapsedM   = Math.floor((elapsedMs % 3600000) / 60000);
+      elapsedLabel = `${elapsedH}h ${elapsedM}m elapsed`;
+    }
+
+    const statusColor = isClockedIn ? 'var(--success)' : (isClockedOut ? 'var(--primary)' : 'var(--text-light)');
+    const statusText  = isClockedIn ? 'Currently Clocked In' : (isClockedOut ? 'Clocked Out Today' : 'Not Clocked In');
 
     content.innerHTML = `
       <div class="page-header">
-        <h2>Sign In / Sign Out</h2>
-        <p>Track your daily attendance</p>
+        <h2>Clock In / Clock Out</h2>
+        <p>Track your daily attendance · ${new Date().toLocaleDateString('en-GB', {weekday:'long',day:'numeric',month:'long',year:'numeric'})}</p>
       </div>
 
       ${esp32IP ? `
       <div class="card" style="padding:10px 16px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between">
-        <span style="font-size:12px">${bleDetected ? '🟢 Office device detected — sign in/out gated to office' : '🔴 Office device not reachable — connecting...'}</span>
+        <span style="font-size:12px">${bleDetected ? '🟢 Office device detected' : '🔴 Office device not reachable — you may still clock in via web'}</span>
         <button class="btn btn-sm" style="font-size:10px;padding:3px 8px;background:var(--border)" onclick="configureESP32()">Configure</button>
       </div>` : `
       <div class="card" style="padding:10px 16px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between">
-        <span style="font-size:12px;color:var(--text-muted)">⚪ No office device configured — sign in/out works without proximity check</span>
+        <span style="font-size:12px;color:var(--text-muted)">⚪ No office device configured — clock in/out via web</span>
         <button class="btn btn-sm" style="font-size:10px;padding:3px 8px;background:var(--border)" onclick="configureESP32()">Set up ESP32</button>
       </div>`}
-      <div class="card" style="text-align:center;padding:40px 24px;border-left:4px solid ${signedIn ? 'var(--success)' : 'var(--primary)'}">
-        <div style="font-size:56px;margin-bottom:16px">${signedIn ? svgIcon('<polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>', 56) : svgIcon('<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>', 56)}</div>
-        <div style="font-size:22px;font-weight:800;color:${signedIn ? 'var(--success)' : 'var(--primary)'}">
-          ${signedIn ? 'You are currently signed in' : 'You are not signed in'}
+
+      <div class="card" style="text-align:center;padding:40px 24px;border-left:4px solid ${statusColor}">
+        <div style="font-size:48px;margin-bottom:12px">
+          ${isClockedIn ? svgIcon('<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>', 48) : svgIcon('<polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>', 48)}
         </div>
-        ${signInTime ? `<div style="font-size:14px;color:var(--text-light);margin-top:6px">Signed in at ${signInTime.toLocaleString()}</div>` : ''}
+        <div style="font-size:20px;font-weight:800;color:${statusColor}">${statusText}</div>
+        ${shiftName ? `<div style="font-size:12px;color:var(--text-muted);margin-top:4px">Shift: ${shiftName}${todayRecord?.shift?.startTime ? ' · '+todayRecord.shift.startTime+'–'+todayRecord.shift.endTime : ''}</div>` : ''}
+        ${clockInTime ? `<div style="font-size:13px;color:var(--text-light);margin-top:6px">Time in: <strong>${clockInTime.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</strong>${isLate ? ` <span style="color:#ef4444;font-size:11px">(${lateMin}m late)</span>` : ''}</div>` : ''}
+        ${clockOutTime ? `<div style="font-size:13px;color:var(--text-light);margin-top:4px">Time out: <strong>${clockOutTime.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</strong></div>` : ''}
+        ${isClockedIn && elapsedLabel ? `<div style="font-size:13px;color:var(--success);font-weight:600;margin-top:4px">${elapsedLabel}</div>` : ''}
+        ${isClockedOut && workedHrs != null ? `<div style="font-size:13px;color:var(--text-light);margin-top:4px">Worked: <strong>${workedHrs}h</strong>${overtimeHrs > 0 ? ` <span style="color:#8b5cf6;font-size:11px">(+${overtimeHrs}h overtime)</span>` : ''}</div>` : ''}
         <div style="margin-top:28px;display:flex;gap:16px;justify-content:center;flex-wrap:wrap">
-          ${!signedIn ? `
+          ${!isClockedIn && !isClockedOut ? `
             <button class="btn btn-success" onclick="employeeSignIn()" style="gap:10px;font-size:16px;padding:14px 32px;width:auto">
-              ${svgIcon('<polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>', 18)}
-              Sign In
+              ${svgIcon('<polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>', 18)} Clock In
+            </button>
+          ` : isClockedIn ? `
+            <button class="btn btn-danger" onclick="employeeSignOut()" style="gap:10px;font-size:16px;padding:14px 32px;width:auto">
+              ${svgIcon('<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>', 18)} Clock Out
             </button>
           ` : `
-            <button class="btn btn-danger" onclick="employeeSignOut()" style="gap:10px;font-size:16px;padding:14px 32px;width:auto">
-              ${svgIcon('<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>', 18)}
-              Sign Out
-            </button>
+            <div style="font-size:13px;color:var(--text-muted);padding:14px 0">Attendance recorded for today.</div>
           `}
         </div>
       </div>
 
       <div class="card">
-        <div class="card-title">Attendance History</div>
-        ${attendanceData.records.length ? `
+        <div class="card-title">Attendance History (Last 30 Days)</div>
+        ${historyData.records.length ? `
+          <div style="overflow-x:auto">
           <table>
-            <thead><tr><th>Date / Session</th><th>Status</th><th>Sign In</th><th>Sign Out</th><th>Duration</th></tr></thead>
-            <tbody>${attendanceData.records.map(r => {
-              const inTime = r.checkInTime ? new Date(r.checkInTime) : null;
-              const outTime = r.checkOutTime ? new Date(r.checkOutTime) : null;
-              const dur = inTime && outTime ? Math.round((outTime - inTime) / 60000) : null;
+            <thead><tr><th>Date</th><th>Status</th><th>Time In</th><th>Time Out</th><th>Worked</th><th>Overtime</th><th>Lateness</th></tr></thead>
+            <tbody>${historyData.records.map(r => {
+              const ci = r.clockIn?.time  ? new Date(r.clockIn.time)  : null;
+              const co = r.clockOut?.time ? new Date(r.clockOut.time) : null;
+              const dateStr = r.date ? new Date(r.date).toLocaleDateString('en-GB', {day:'2-digit',month:'short',year:'numeric'}) : '—';
+              const statusColors = { present:'#16a34a', late:'#d97706', absent:'#dc2626', half_day:'#7c3aed', on_leave:'#0284c7', remote:'#0891b2', overtime:'#8b5cf6' };
+              const sc = statusColors[r.status] || 'var(--text-light)';
               return `<tr>
-                <td>
-                  <div style="font-weight:600;font-size:13px">${r.session?.title || 'Work Day'}</div>
-                  <div style="font-size:11px;color:var(--text-muted)">${inTime ? inTime.toLocaleDateString() : ''}</div>
-                </td>
-                <td><span class="status-badge status-${r.status}">${r.status}</span></td>
-                <td style="font-size:13px">${inTime ? inTime.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : '—'}</td>
-                <td style="font-size:13px">${outTime ? outTime.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : '<span style="color:#f59e0b;font-weight:600;font-size:11px">Active</span>'}</td>
-                <td style="font-size:13px">${dur !== null ? Math.floor(dur/60)+'h '+(dur%60)+'m' : '—'}</td>
+                <td style="font-size:13px;font-weight:600">${dateStr}</td>
+                <td><span class="status-badge" style="background:${sc}20;color:${sc};border:1px solid ${sc}40;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700;text-transform:capitalize">${r.status || '—'}</span></td>
+                <td style="font-size:13px">${ci ? ci.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : '—'}</td>
+                <td style="font-size:13px">${co ? co.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : (ci ? '<span style="color:#f59e0b;font-size:11px;font-weight:600">Active</span>' : '—')}</td>
+                <td style="font-size:13px">${r.hoursWorked != null ? r.hoursWorked+'h' : '—'}</td>
+                <td style="font-size:13px">${r.overtimeHours > 0 ? '<span style="color:#8b5cf6;font-weight:600">+'+r.overtimeHours+'h</span>' : '—'}</td>
+                <td style="font-size:13px">${(r.clockIn?.isLate||r.status==='late') ? '<span style="color:#ef4444">'+(r.clockIn?.lateMinutes||r.lateMinutes||0)+'m late</span>' : '<span style="color:#16a34a">On time</span>'}</td>
               </tr>`;
             }).join('')}</tbody>
           </table>
-        ` : '<div class="empty-state"><p>No attendance records yet. Click Sign In to start.</p></div>'}
+          </div>
+        ` : '<div class="empty-state"><p>No attendance records yet. Clock in to start tracking.</p></div>'}
       </div>
     `;
   } catch (e) {
-    content.innerHTML = `<div class="card"><p>Error: ${e.message}</p></div>`;
+    content.innerHTML = `<div class="card"><p>Error loading attendance: ${e.message}</p></div>`;
   }
 }
 
@@ -6830,6 +6922,13 @@ async function viewAdminQuizDetail(quizId) {
 async function renderMyAttendance() {
   const content = document.getElementById('main-content');
   if (!content) return;
+
+  // Corporate employees use the rich CorporateAttendance system
+  if (currentUser.company?.mode === 'corporate') {
+    return renderMyCorporateAttendance(content);
+  }
+
+  // Academic students use the session-based system
   if (!isOnline()) {
     const cached = offlineRead('my_attendance');
     if (cached) {
@@ -6866,6 +6965,83 @@ async function renderMyAttendance() {
     `;
   } catch (e) {
     content.innerHTML = `<div class="card"><p>Error: ${e.message}</p></div>`;
+  }
+}
+
+async function renderMyCorporateAttendance(content) {
+  try {
+    // Fetch current month by default
+    const now       = new Date();
+    const fromDate  = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
+    const toDate    = now.toISOString().slice(0, 10);
+
+    const data = await api(`/api/corporate-attendance/my?from=${fromDate}&to=${toDate}`);
+    const records = data.records || [];
+
+    // Summary stats
+    const totalDays    = records.length;
+    const presentDays  = records.filter(r => r.status === 'present' || r.status === 'late').length;
+    const lateDays     = records.filter(r => r.status === 'late').length;
+    const totalWorked  = records.reduce((s, r) => s + (r.hoursWorked || 0), 0);
+    const totalOvertime = records.reduce((s, r) => s + (r.overtimeHours || 0), 0);
+    const attendanceRate = totalDays > 0 ? Math.round((presentDays / totalDays) * 100) : 0;
+
+    const statusColors = { present:'#16a34a', late:'#d97706', absent:'#dc2626', half_day:'#7c3aed', on_leave:'#0284c7', remote:'#0891b2' };
+
+    content.innerHTML = `
+      <div class="page-header">
+        <h2>My Attendance</h2>
+        <p>${now.toLocaleString('en-GB', {month:'long', year:'numeric'})}</p>
+      </div>
+
+      <div class="stats-grid">
+        <div class="stat-card"><div class="stat-value">${attendanceRate}%</div><div class="stat-label">Attendance Rate</div></div>
+        <div class="stat-card"><div class="stat-value">${presentDays}</div><div class="stat-label">Days Present</div></div>
+        <div class="stat-card"><div class="stat-value">${Math.round(totalWorked * 10) / 10}h</div><div class="stat-label">Hours Worked</div></div>
+        <div class="stat-card"><div class="stat-value">${lateDays}</div><div class="stat-label">Late Arrivals</div></div>
+        ${totalOvertime > 0 ? `<div class="stat-card"><div class="stat-value" style="color:#8b5cf6">+${Math.round(totalOvertime*10)/10}h</div><div class="stat-label">Overtime</div></div>` : ''}
+      </div>
+
+      <div class="card">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px">
+          <div class="card-title" style="margin:0">Attendance Records</div>
+          <button class="btn btn-primary btn-sm" onclick="navigateTo('sign-in-out')">
+            ${svgIcon('<polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>', 14)} Clock In / Out
+          </button>
+        </div>
+        ${records.length ? `
+          <div style="overflow-x:auto">
+          <table>
+            <thead>
+              <tr>
+                <th>Date</th><th>Status</th><th>Shift</th>
+                <th>Time In</th><th>Time Out</th>
+                <th>Worked</th><th>Overtime</th><th>Lateness</th>
+              </tr>
+            </thead>
+            <tbody>${records.map(r => {
+              const ci  = r.clockIn?.time  ? new Date(r.clockIn.time)  : null;
+              const co  = r.clockOut?.time ? new Date(r.clockOut.time) : null;
+              const dateStr = r.date ? new Date(r.date).toLocaleDateString('en-GB', {day:'2-digit',month:'short'}) : '—';
+              const sc  = statusColors[r.status] || 'var(--text-light)';
+              return `<tr>
+                <td style="font-size:13px;font-weight:600;white-space:nowrap">${dateStr}</td>
+                <td><span style="background:${sc}20;color:${sc};border:1px solid ${sc}40;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700;text-transform:capitalize;white-space:nowrap">${r.status || '—'}</span></td>
+                <td style="font-size:12px;color:var(--text-muted)">${r.shift?.name || '—'}</td>
+                <td style="font-size:13px">${ci ? ci.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : '—'}</td>
+                <td style="font-size:13px">${co ? co.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : (ci ? '<span style="color:#f59e0b;font-size:11px;font-weight:600">Active</span>' : '—')}</td>
+                <td style="font-size:13px">${r.hoursWorked != null ? r.hoursWorked+'h' : '—'}</td>
+                <td style="font-size:13px">${r.overtimeHours > 0 ? '<span style="color:#8b5cf6;font-weight:600">+'+r.overtimeHours+'h</span>' : '—'}</td>
+                <td style="font-size:13px">${r.clockIn?.isLate ? '<span style="color:#ef4444">'+r.clockIn.lateMinutes+'m late</span>' : (ci ? '<span style="color:#16a34a">On time</span>' : '—')}</td>
+              </tr>`;
+            }).join('')}</tbody>
+          </table>
+          </div>
+        ` : '<div class="empty-state"><p>No attendance records this month. Use Clock In / Out to start.</p></div>'}
+      </div>
+    `;
+  } catch (e) {
+    content.innerHTML = `<div class="card"><p>Error loading attendance: ${e.message}</p></div>`;
   }
 }
 
@@ -11038,10 +11214,13 @@ function openAIQuizPanel(quizId) {
         <!-- Source tabs -->
         <div>
           <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:8px;display:block">Content Source</label>
-          <div style="display:flex;gap:1px;background:var(--border);border-radius:9px;overflow:hidden;margin-bottom:12px;">
-            <button id="aiq-tab-topic" onclick="aiqSwitchTab('topic')" style="flex:1;padding:8px;border:none;cursor:pointer;font-size:12px;font-weight:600;background:var(--primary);color:#fff;font-family:inherit;">📝 Topic</button>
-            <button id="aiq-tab-notes" onclick="aiqSwitchTab('notes')" style="flex:1;padding:8px;border:none;cursor:pointer;font-size:12px;font-weight:600;background:var(--card);color:var(--text-light);font-family:inherit;">📋 Paste Notes</button>
-            <button id="aiq-tab-pdf" onclick="aiqSwitchTab('pdf')" style="flex:1;padding:8px;border:none;cursor:pointer;font-size:12px;font-weight:600;background:var(--card);color:var(--text-light);font-family:inherit;">📄 Upload PDF</button>
+          <div style="display:flex;gap:1px;background:var(--border);border-radius:9px;overflow:hidden;margin-bottom:12px;flex-wrap:wrap;">
+            <button id="aiq-tab-topic"    onclick="aiqSwitchTab('topic')"   style="flex:1;min-width:70px;padding:8px 6px;border:none;cursor:pointer;font-size:11px;font-weight:600;background:var(--primary);color:#fff;font-family:inherit;">📝 Topic</button>
+            <button id="aiq-tab-notes"    onclick="aiqSwitchTab('notes')"   style="flex:1;min-width:70px;padding:8px 6px;border:none;cursor:pointer;font-size:11px;font-weight:600;background:var(--card);color:var(--text-light);font-family:inherit;">📋 Notes</button>
+            <button id="aiq-tab-pdf"      onclick="aiqSwitchTab('pdf')"     style="flex:1;min-width:70px;padding:8px 6px;border:none;cursor:pointer;font-size:11px;font-weight:600;background:var(--card);color:var(--text-light);font-family:inherit;">📄 PDF</button>
+            <button id="aiq-tab-drawing"  onclick="aiqSwitchTab('drawing')" style="flex:1;min-width:70px;padding:8px 6px;border:none;cursor:pointer;font-size:11px;font-weight:600;background:var(--card);color:var(--text-light);font-family:inherit;">✏️ Draw</button>
+            <button id="aiq-tab-graph"    onclick="aiqSwitchTab('graph')"   style="flex:1;min-width:70px;padding:8px 6px;border:none;cursor:pointer;font-size:11px;font-weight:600;background:var(--card);color:var(--text-light);font-family:inherit;">📈 Graph</button>
+            <button id="aiq-tab-image"    onclick="aiqSwitchTab('image')"   style="flex:1;min-width:70px;padding:8px 6px;border:none;cursor:pointer;font-size:11px;font-weight:600;background:var(--card);color:var(--text-light);font-family:inherit;">🖼️ Image</button>
           </div>
           <!-- Topic input -->
           <div id="aiq-src-topic">
@@ -11061,6 +11240,66 @@ function openAIQuizPanel(quizId) {
               <input type="file" id="aiq-pdf-file" accept=".pdf" style="display:none;" onchange="aiqShowPdfName(this)">
             </label>
             <div id="aiq-pdf-name" style="display:none;margin-top:8px;padding:7px 12px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:7px;font-size:12px;color:#166534;font-weight:500;"></div>
+          </div>
+          <!-- Drawing Canvas -->
+          <div id="aiq-src-drawing" style="display:none;">
+            <div style="background:#f9fafb;border:1.5px solid var(--border);border-radius:10px;overflow:hidden;">
+              <div style="display:flex;gap:4px;padding:6px 8px;background:var(--card);border-bottom:1px solid var(--border);flex-wrap:wrap;align-items:center;">
+                <span style="font-size:11px;font-weight:700;color:var(--text-muted);margin-right:4px;">Tool:</span>
+                <button id="aiq-draw-tool-pen"   onclick="aiqSetDrawTool('pen')"   style="padding:4px 9px;border:1.5px solid #7c3aed;border-radius:6px;background:#7c3aed;color:#fff;font-size:11px;cursor:pointer;font-weight:600">✏️ Pen</button>
+                <button id="aiq-draw-tool-line"  onclick="aiqSetDrawTool('line')"  style="padding:4px 9px;border:1.5px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-size:11px;cursor:pointer">/ Line</button>
+                <button id="aiq-draw-tool-rect"  onclick="aiqSetDrawTool('rect')"  style="padding:4px 9px;border:1.5px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-size:11px;cursor:pointer">□ Rect</button>
+                <button id="aiq-draw-tool-circle" onclick="aiqSetDrawTool('circle')" style="padding:4px 9px;border:1.5px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-size:11px;cursor:pointer">○ Circle</button>
+                <button id="aiq-draw-tool-text"  onclick="aiqSetDrawTool('text')"  style="padding:4px 9px;border:1.5px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-size:11px;cursor:pointer">T Text</button>
+                <button id="aiq-draw-tool-eraser" onclick="aiqSetDrawTool('eraser')" style="padding:4px 9px;border:1.5px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-size:11px;cursor:pointer">🧹 Erase</button>
+                <div style="flex:1"></div>
+                <input type="color" id="aiq-draw-color" value="#1e1e2e" style="width:26px;height:26px;border:none;cursor:pointer;border-radius:4px;padding:0" title="Colour">
+                <select id="aiq-draw-size" style="padding:3px 6px;border:1px solid var(--border);border-radius:5px;font-size:11px;outline:none">
+                  <option value="2">Thin</option><option value="4" selected>Normal</option><option value="8">Thick</option><option value="14">Bold</option>
+                </select>
+                <button onclick="aiqDrawUndo()" style="padding:4px 9px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-size:11px;cursor:pointer">↩ Undo</button>
+                <button onclick="aiqDrawClear()" style="padding:4px 9px;border:1px solid #dc2626;border-radius:6px;background:#fef2f2;color:#dc2626;font-size:11px;cursor:pointer">✕ Clear</button>
+              </div>
+              <canvas id="aiq-draw-canvas" width="460" height="280" style="display:block;width:100%;cursor:crosshair;touch-action:none;background:#fff;"></canvas>
+            </div>
+            <p style="font-size:11px;color:var(--text-muted);margin-top:6px;">Draw a diagram, geometry sketch, or concept map. AI will analyse it and generate questions.</p>
+          </div>
+          <!-- Graph / Coordinate Plane -->
+          <div id="aiq-src-graph" style="display:none;">
+            <div style="background:#f9fafb;border:1.5px solid var(--border);border-radius:10px;overflow:hidden;">
+              <div style="padding:8px 10px;background:var(--card);border-bottom:1px solid var(--border);display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+                <span style="font-size:11px;font-weight:700;color:var(--text-muted);">Function:</span>
+                <input id="aiq-graph-fn" type="text" placeholder="e.g. x^2  or  2*x+3  or  sin(x)" style="flex:1;min-width:140px;padding:4px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-family:monospace;outline:none">
+                <button onclick="aiqGraphPlot()" style="padding:4px 10px;border:none;border-radius:6px;background:#7c3aed;color:#fff;font-size:11px;cursor:pointer;font-weight:600">Plot</button>
+                <span style="font-size:11px;font-weight:700;color:var(--text-muted);">x:</span>
+                <input id="aiq-graph-xmin" type="number" value="-10" style="width:50px;padding:4px 6px;border:1px solid var(--border);border-radius:5px;font-size:11px;outline:none">
+                <span style="font-size:11px;color:var(--text-muted)">to</span>
+                <input id="aiq-graph-xmax" type="number" value="10" style="width:50px;padding:4px 6px;border:1px solid var(--border);border-radius:5px;font-size:11px;outline:none">
+                <button onclick="aiqGraphClear()" style="padding:4px 9px;border:1px solid #dc2626;border-radius:6px;background:#fef2f2;color:#dc2626;font-size:11px;cursor:pointer">Clear</button>
+              </div>
+              <canvas id="aiq-graph-canvas" width="460" height="280" style="display:block;width:100%;cursor:crosshair;background:#fff;touch-action:none;"></canvas>
+            </div>
+            <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap;align-items:center;">
+              <span style="font-size:11px;color:var(--text-muted);">Data points (click canvas or enter):</span>
+              <input id="aiq-graph-pt-x" type="number" placeholder="x" style="width:55px;padding:4px 6px;border:1px solid var(--border);border-radius:5px;font-size:11px;outline:none">
+              <input id="aiq-graph-pt-y" type="number" placeholder="y" style="width:55px;padding:4px 6px;border:1px solid var(--border);border-radius:5px;font-size:11px;outline:none">
+              <button onclick="aiqGraphAddPoint()" style="padding:4px 9px;border:1px solid var(--border);border-radius:5px;background:var(--bg);font-size:11px;cursor:pointer">+ Add</button>
+              <span id="aiq-graph-pts-display" style="font-size:11px;color:var(--text-muted)"></span>
+            </div>
+            <p style="font-size:11px;color:var(--text-muted);margin-top:4px;">Plot a function or data points. AI will generate questions based on the graph.</p>
+          </div>
+          <!-- Image upload (photo, diagram, handwritten) -->
+          <div id="aiq-src-image" style="display:none;">
+            <label for="aiq-image-file" style="display:flex;flex-direction:column;align-items:center;gap:8px;padding:20px;border:2px dashed var(--border);border-radius:10px;cursor:pointer;background:var(--bg);transition:border-color .2s;" onmouseover="this.style.borderColor='#7c3aed'" onmouseout="this.style.borderColor='var(--border)'">
+              <span style="font-size:28px;">🖼️</span>
+              <span style="font-size:13px;font-weight:600;color:var(--text);">Click to upload an image</span>
+              <span style="font-size:11px;color:var(--text-muted);">PNG, JPG, WEBP · Max 10 MB · Diagrams, photos, handwritten notes</span>
+              <input type="file" id="aiq-image-file" accept="image/png,image/jpeg,image/webp" style="display:none;" onchange="aiqShowImagePreview(this)">
+            </label>
+            <div id="aiq-image-preview" style="display:none;margin-top:10px;text-align:center;">
+              <img id="aiq-image-preview-img" style="max-width:100%;max-height:200px;border-radius:8px;border:1px solid var(--border);">
+              <div id="aiq-image-preview-name" style="font-size:11px;color:var(--text-muted);margin-top:4px;"></div>
+            </div>
           </div>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
@@ -11207,7 +11446,7 @@ function aiqToggleSubject(subj) {
 
 // Tab switching for AI panel source
 function aiqSwitchTab(tab) {
-  ['topic','notes','pdf'].forEach(t => {
+  ['topic','notes','pdf','drawing','graph','image'].forEach(t => {
     const src = document.getElementById('aiq-src-' + t);
     const btn = document.getElementById('aiq-tab-' + t);
     if (!src || !btn) return;
@@ -11216,6 +11455,9 @@ function aiqSwitchTab(tab) {
     btn.style.background = active ? 'var(--primary)' : 'var(--card)';
     btn.style.color = active ? '#fff' : 'var(--text-light)';
   });
+  // Init canvas on first show
+  if (tab === 'drawing') setTimeout(aiqInitDrawCanvas, 50);
+  if (tab === 'graph')   setTimeout(aiqInitGraphCanvas, 50);
 }
 
 function aiqShowPdfName(input) {
@@ -11229,9 +11471,292 @@ function aiqShowPdfName(input) {
   }
 }
 
+function aiqShowImagePreview(input) {
+  const preview = document.getElementById('aiq-image-preview');
+  const img     = document.getElementById('aiq-image-preview-img');
+  const name    = document.getElementById('aiq-image-preview-name');
+  if (!preview || !img) return;
+  const file = input.files?.[0];
+  if (!file) { preview.style.display = 'none'; return; }
+  const url = URL.createObjectURL(file);
+  img.src = url;
+  img.onload = () => URL.revokeObjectURL(url);
+  if (name) name.textContent = file.name + ' (' + (file.size / 1024).toFixed(1) + ' KB)';
+  preview.style.display = 'block';
+}
+
+// ── Drawing Canvas ───────────────────────────────────────────────────────────
+let _aiqDrawTool = 'pen', _aiqDrawing = false, _aiqDrawStart = null, _aiqDrawSnapshot = null;
+let _aiqDrawHistory = [];
+
+function aiqInitDrawCanvas() {
+  const canvas = document.getElementById('aiq-draw-canvas');
+  if (!canvas || canvas._aiqInited) return;
+  canvas._aiqInited = true;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  const getPos = (e) => {
+    const r = canvas.getBoundingClientRect();
+    const scaleX = canvas.width  / r.width;
+    const scaleY = canvas.height / r.height;
+    const src = e.touches?.[0] || e;
+    return { x: (src.clientX - r.left) * scaleX, y: (src.clientY - r.top) * scaleY };
+  };
+  const getCtxSettings = () => ({
+    color: document.getElementById('aiq-draw-color')?.value || '#1e1e2e',
+    size:  parseInt(document.getElementById('aiq-draw-size')?.value) || 4,
+  });
+
+  canvas.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    _aiqDrawing = true;
+    _aiqDrawStart = getPos(e);
+    _aiqDrawSnapshot = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const { color, size } = getCtxSettings();
+    ctx.strokeStyle = _aiqDrawTool === 'eraser' ? '#fff' : color;
+    ctx.lineWidth   = _aiqDrawTool === 'eraser' ? size * 3 : size;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    if (_aiqDrawTool === 'pen' || _aiqDrawTool === 'eraser') {
+      ctx.beginPath();
+      ctx.moveTo(_aiqDrawStart.x, _aiqDrawStart.y);
+    }
+    if (_aiqDrawTool === 'text') {
+      const text = prompt('Enter text label:');
+      if (text) {
+        ctx.font = `${size * 3 + 10}px sans-serif`;
+        ctx.fillStyle = color;
+        ctx.fillText(text, _aiqDrawStart.x, _aiqDrawStart.y);
+        _aiqDrawHistory.push(ctx.getImageData(0, 0, canvas.width, canvas.height));
+      }
+      _aiqDrawing = false;
+    }
+  });
+  canvas.addEventListener('pointermove', (e) => {
+    if (!_aiqDrawing) return;
+    e.preventDefault();
+    const pos = getPos(e);
+    const { color, size } = getCtxSettings();
+    ctx.strokeStyle = _aiqDrawTool === 'eraser' ? '#fff' : color;
+    ctx.lineWidth   = _aiqDrawTool === 'eraser' ? size * 3 : size;
+    if (_aiqDrawTool === 'pen' || _aiqDrawTool === 'eraser') {
+      ctx.lineTo(pos.x, pos.y);
+      ctx.stroke();
+    } else if (_aiqDrawSnapshot) {
+      ctx.putImageData(_aiqDrawSnapshot, 0, 0);
+      ctx.beginPath();
+      ctx.strokeStyle = color;
+      if (_aiqDrawTool === 'line') {
+        ctx.moveTo(_aiqDrawStart.x, _aiqDrawStart.y);
+        ctx.lineTo(pos.x, pos.y);
+      } else if (_aiqDrawTool === 'rect') {
+        ctx.rect(_aiqDrawStart.x, _aiqDrawStart.y, pos.x - _aiqDrawStart.x, pos.y - _aiqDrawStart.y);
+      } else if (_aiqDrawTool === 'circle') {
+        const rx = Math.abs(pos.x - _aiqDrawStart.x) / 2;
+        const ry = Math.abs(pos.y - _aiqDrawStart.y) / 2;
+        const cx = _aiqDrawStart.x + (pos.x - _aiqDrawStart.x) / 2;
+        const cy = _aiqDrawStart.y + (pos.y - _aiqDrawStart.y) / 2;
+        ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
+      }
+      ctx.stroke();
+    }
+  });
+  canvas.addEventListener('pointerup', (e) => {
+    if (!_aiqDrawing) return;
+    _aiqDrawing = false;
+    _aiqDrawHistory.push(ctx.getImageData(0, 0, canvas.width, canvas.height));
+    if (_aiqDrawHistory.length > 30) _aiqDrawHistory.shift();
+  });
+  canvas.addEventListener('pointerleave', () => { if (_aiqDrawing) { _aiqDrawing = false; } });
+}
+
+function aiqSetDrawTool(tool) {
+  _aiqDrawTool = tool;
+  const tools = ['pen','line','rect','circle','text','eraser'];
+  tools.forEach(t => {
+    const btn = document.getElementById('aiq-draw-tool-' + t);
+    if (!btn) return;
+    const active = t === tool;
+    btn.style.background = active ? '#7c3aed' : 'var(--bg)';
+    btn.style.color      = active ? '#fff'    : 'var(--text)';
+    btn.style.border     = active ? '1.5px solid #7c3aed' : '1.5px solid var(--border)';
+  });
+}
+
+function aiqDrawUndo() {
+  const canvas = document.getElementById('aiq-draw-canvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  if (_aiqDrawHistory.length > 1) {
+    _aiqDrawHistory.pop();
+    ctx.putImageData(_aiqDrawHistory[_aiqDrawHistory.length - 1], 0, 0);
+  } else {
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    _aiqDrawHistory = [];
+  }
+}
+
+function aiqDrawClear() {
+  const canvas = document.getElementById('aiq-draw-canvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  _aiqDrawHistory = [];
+}
+
+// ── Graph Canvas ─────────────────────────────────────────────────────────────
+window._aiqGraphPoints = [];
+
+function aiqInitGraphCanvas() {
+  const canvas = document.getElementById('aiq-graph-canvas');
+  if (!canvas || canvas._aiqGraphInited) return;
+  canvas._aiqGraphInited = true;
+  aiqGraphDraw();
+
+  canvas.addEventListener('click', (e) => {
+    const r = canvas.getBoundingClientRect();
+    const scaleX = canvas.width  / r.width;
+    const scaleY = canvas.height / r.height;
+    const px = (e.clientX - r.left) * scaleX;
+    const py = (e.clientY - r.top)  * scaleY;
+    // Convert canvas pixel to graph coordinates
+    const xmin = parseFloat(document.getElementById('aiq-graph-xmin')?.value) || -10;
+    const xmax = parseFloat(document.getElementById('aiq-graph-xmax')?.value) || 10;
+    const gx = xmin + (px / canvas.width)  * (xmax - xmin);
+    const gy = -(((py / canvas.height) - 0.5) * (xmax - xmin));
+    window._aiqGraphPoints.push({ x: +gx.toFixed(2), y: +gy.toFixed(2) });
+    aiqGraphDraw();
+    const display = document.getElementById('aiq-graph-pts-display');
+    if (display) display.textContent = window._aiqGraphPoints.map(p => `(${p.x},${p.y})`).join(' ');
+  });
+}
+
+function aiqGraphAddPoint() {
+  const x = parseFloat(document.getElementById('aiq-graph-pt-x')?.value);
+  const y = parseFloat(document.getElementById('aiq-graph-pt-y')?.value);
+  if (isNaN(x) || isNaN(y)) return;
+  window._aiqGraphPoints.push({ x, y });
+  aiqGraphDraw();
+  const display = document.getElementById('aiq-graph-pts-display');
+  if (display) display.textContent = window._aiqGraphPoints.map(p => `(${p.x},${p.y})`).join(' ');
+}
+
+function aiqGraphClear() {
+  window._aiqGraphPoints = [];
+  const c = document.getElementById('aiq-graph-canvas');
+  if (c) { c._aiqGraphInited = false; }
+  aiqInitGraphCanvas();
+  const display = document.getElementById('aiq-graph-pts-display');
+  if (display) display.textContent = '';
+}
+
+function aiqGraphPlot() {
+  aiqGraphDraw(true);
+}
+
+function aiqGraphDraw(plotFn) {
+  const canvas = document.getElementById('aiq-graph-canvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  const xmin = parseFloat(document.getElementById('aiq-graph-xmin')?.value) || -10;
+  const xmax = parseFloat(document.getElementById('aiq-graph-xmax')?.value) || 10;
+  const range = xmax - xmin;
+  const ymin = -(range / 2), ymax = range / 2;
+
+  // Helper: graph coord → canvas pixel
+  const toPixX = x => ((x - xmin) / range) * W;
+  const toPixY = y => H - ((y - ymin) / (ymax - ymin)) * H;
+
+  ctx.clearRect(0, 0, W, H);
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0, 0, W, H);
+
+  // Grid
+  ctx.strokeStyle = '#e5e7eb';
+  ctx.lineWidth = 1;
+  const step = range <= 4 ? 0.5 : range <= 20 ? 1 : range <= 50 ? 5 : 10;
+  for (let x = Math.ceil(xmin / step) * step; x <= xmax; x += step) {
+    const px = toPixX(x);
+    ctx.beginPath(); ctx.moveTo(px, 0); ctx.lineTo(px, H); ctx.stroke();
+  }
+  for (let y = Math.ceil(ymin / step) * step; y <= ymax; y += step) {
+    const py = toPixY(y);
+    ctx.beginPath(); ctx.moveTo(0, py); ctx.lineTo(W, py); ctx.stroke();
+  }
+
+  // Axes
+  ctx.strokeStyle = '#374151';
+  ctx.lineWidth = 1.5;
+  const ox = toPixX(0), oy = toPixY(0);
+  ctx.beginPath(); ctx.moveTo(0, oy); ctx.lineTo(W, oy); ctx.stroke(); // x-axis
+  ctx.beginPath(); ctx.moveTo(ox, 0); ctx.lineTo(ox, H); ctx.stroke(); // y-axis
+
+  // Axis labels
+  ctx.fillStyle = '#6b7280';
+  ctx.font = '10px sans-serif';
+  for (let x = Math.ceil(xmin / step) * step; x <= xmax; x += step) {
+    if (Math.abs(x) < 0.001) continue;
+    ctx.fillText(x, toPixX(x) + 2, Math.min(H - 2, oy + 12));
+  }
+  for (let y = Math.ceil(ymin / step) * step; y <= ymax; y += step) {
+    if (Math.abs(y) < 0.001) continue;
+    ctx.fillText(y, Math.max(2, ox + 3), toPixY(y) - 2);
+  }
+
+  // Plot function
+  if (plotFn) {
+    const fnStr = document.getElementById('aiq-graph-fn')?.value?.trim();
+    if (fnStr) {
+      try {
+        // Safe eval: allow only math expressions
+        const safeExpr = fnStr.replace(/\^/g, '**').replace(/sin/g,'Math.sin').replace(/cos/g,'Math.cos').replace(/tan/g,'Math.tan').replace(/sqrt/g,'Math.sqrt').replace(/abs/g,'Math.abs').replace(/log/g,'Math.log').replace(/exp/g,'Math.exp').replace(/pi/g,'Math.PI').replace(/e(?![a-zA-Z])/g,'Math.E');
+        // eslint-disable-next-line no-new-func
+        const fn = new Function('x', '"use strict"; return ' + safeExpr + ';');
+        ctx.strokeStyle = '#7c3aed';
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        let started = false;
+        for (let px = 0; px <= W; px += 1) {
+          const x = xmin + (px / W) * range;
+          try {
+            const y = fn(x);
+            if (!isFinite(y)) { started = false; continue; }
+            const py = toPixY(y);
+            if (!started) { ctx.moveTo(px, py); started = true; } else { ctx.lineTo(px, py); }
+          } catch(e) { started = false; }
+        }
+        ctx.stroke();
+      } catch(e) {
+        // Invalid function — ignore
+      }
+    }
+  }
+
+  // Data points
+  ctx.fillStyle = '#ef4444';
+  for (const pt of (window._aiqGraphPoints || [])) {
+    const px = toPixX(pt.x), py = toPixY(pt.y);
+    ctx.beginPath();
+    ctx.arc(px, py, 4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#374151';
+    ctx.font = '10px sans-serif';
+    ctx.fillText(`(${pt.x},${pt.y})`, px + 6, py - 4);
+    ctx.fillStyle = '#ef4444';
+  }
+}
+
 async function runAIQuizGenerate(quizId) {
-  const activeTab  = document.getElementById('aiq-src-notes')?.style.display !== 'none' ? 'notes'
-                   : document.getElementById('aiq-src-pdf')?.style.display !== 'none' ? 'pdf'
+  const activeTab  = document.getElementById('aiq-src-notes')?.style.display !== 'none'   ? 'notes'
+                   : document.getElementById('aiq-src-pdf')?.style.display !== 'none'     ? 'pdf'
+                   : document.getElementById('aiq-src-drawing')?.style.display !== 'none' ? 'drawing'
+                   : document.getElementById('aiq-src-graph')?.style.display !== 'none'   ? 'graph'
+                   : document.getElementById('aiq-src-image')?.style.display !== 'none'   ? 'image'
                    : 'topic';
   const topic      = document.getElementById('aiq-topic')?.value?.trim();
   const count      = document.getElementById('aiq-count')?.value || '5';
@@ -11249,8 +11774,8 @@ async function runAIQuizGenerate(quizId) {
   const previewDiv = document.getElementById('aiq-preview');
   const addBtn     = document.getElementById('aiq-add-btn');
 
-  // ── If PDF or Notes tab → use backend ai-generate endpoint ──
-  if (activeTab === 'pdf' || activeTab === 'notes') {
+  // ── If PDF, Notes, Drawing, Graph, or Image tab → use backend ai-generate endpoint ──
+  if (['pdf','notes','drawing','graph','image'].includes(activeTab)) {
     errEl.style.display = 'none';
     previewDiv.style.display = 'none';
     addBtn.style.display = 'none';
@@ -11265,15 +11790,38 @@ async function runAIQuizGenerate(quizId) {
       formData.append('count', count);
       formData.append('types', types);
       formData.append('difficulty', difficulty);
+      if (context) formData.append('context', context);
 
       if (activeTab === 'pdf') {
         const pdfFile = document.getElementById('aiq-pdf-file')?.files?.[0];
         if (!pdfFile) { errEl.textContent = 'Please select a PDF file.'; errEl.style.display = 'block'; btn.disabled = false; btn.innerHTML = '✨ Generate Questions'; return; }
         formData.append('pdf', pdfFile);
-      } else {
+      } else if (activeTab === 'notes') {
         const notes = document.getElementById('aiq-notes')?.value?.trim();
         if (!notes) { errEl.textContent = 'Please paste your notes.'; errEl.style.display = 'block'; btn.disabled = false; btn.innerHTML = '✨ Generate Questions'; return; }
         formData.append('notes', notes);
+      } else if (activeTab === 'drawing') {
+        const canvas = document.getElementById('aiq-draw-canvas');
+        if (!canvas) { errEl.textContent = 'Drawing canvas not ready.'; errEl.style.display = 'block'; btn.disabled = false; btn.innerHTML = '✨ Generate Questions'; return; }
+        const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+        if (!blob) { errEl.textContent = 'Could not capture drawing.'; errEl.style.display = 'block'; btn.disabled = false; btn.innerHTML = '✨ Generate Questions'; return; }
+        formData.append('image', blob, 'drawing.png');
+      } else if (activeTab === 'graph') {
+        // Serialize graph as PNG image
+        const canvas = document.getElementById('aiq-graph-canvas');
+        if (!canvas) { errEl.textContent = 'Graph canvas not ready.'; errEl.style.display = 'block'; btn.disabled = false; btn.innerHTML = '✨ Generate Questions'; return; }
+        const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+        if (!blob) { errEl.textContent = 'Could not capture graph.'; errEl.style.display = 'block'; btn.disabled = false; btn.innerHTML = '✨ Generate Questions'; return; }
+        // Also add text description for better AI context
+        const fnText = document.getElementById('aiq-graph-fn')?.value?.trim();
+        const ptsText = (window._aiqGraphPoints || []).map(p => `(${p.x},${p.y})`).join(', ');
+        const desc = [fnText ? `Function: ${fnText}` : '', ptsText ? `Points: ${ptsText}` : ''].filter(Boolean).join('. ');
+        if (desc) formData.append('context', (context ? context + '. ' : '') + 'Graph shows: ' + desc);
+        formData.append('image', blob, 'graph.png');
+      } else if (activeTab === 'image') {
+        const imgFile = document.getElementById('aiq-image-file')?.files?.[0];
+        if (!imgFile) { errEl.textContent = 'Please select an image file.'; errEl.style.display = 'block'; btn.disabled = false; btn.innerHTML = '✨ Generate Questions'; return; }
+        formData.append('image', imgFile);
       }
 
       const token = localStorage.getItem('token') || '';
@@ -14450,6 +14998,221 @@ async function printMeetingAttendance(meetingId, title) {
 
 
 // ── Register real functions for index.html stubs ─────────────────────────────
+
+// ════════════════════════════════════════════════════════════════════════════
+// CORPORATE / INTERNAL MESSAGES
+// ════════════════════════════════════════════════════════════════════════════
+
+let _activeConvoId = null;
+
+async function renderMessages() {
+  const content = document.getElementById('main-content');
+  if (!content) return;
+  content.innerHTML = `
+    <div class="page-header" style="margin-bottom:0">
+      <h2>Messages</h2>
+      <p>Internal team messaging</p>
+    </div>
+    <div style="display:flex;gap:0;height:calc(100vh - 160px);min-height:400px;border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-top:16px;background:var(--card)">
+      <div id="msg-sidebar" style="width:280px;min-width:220px;border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0">
+        <div style="padding:12px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
+          <span style="font-weight:700;font-size:14px">Conversations</span>
+          <button class="btn btn-primary btn-sm" onclick="showNewConvoModal()" style="font-size:11px;padding:4px 10px">+ New</button>
+        </div>
+        <div id="msg-convo-list" style="flex:1;overflow-y:auto;padding:8px 0">
+          <div class="loading" style="padding:20px;text-align:center;font-size:13px">Loading…</div>
+        </div>
+      </div>
+      <div id="msg-thread" style="flex:1;display:flex;flex-direction:column;min-width:0">
+        <div id="msg-thread-header" style="padding:14px 18px;border-bottom:1px solid var(--border);font-weight:600;font-size:14px;display:flex;align-items:center;gap:10px">
+          <span style="color:var(--text-muted);font-weight:400;font-size:13px">Select a conversation to start messaging</span>
+        </div>
+        <div id="msg-thread-body" style="flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:10px">
+        </div>
+        <div id="msg-input-bar" style="padding:12px 16px;border-top:1px solid var(--border);display:none">
+          <div style="display:flex;gap:8px;align-items:flex-end">
+            <textarea id="msg-input" placeholder="Type a message…" rows="1" oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,120)+'px'" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendMessage()}" style="flex:1;padding:9px 13px;border:1.5px solid var(--border);border-radius:10px;font-size:13px;font-family:inherit;resize:none;outline:none;background:var(--bg);line-height:1.4"></textarea>
+            <button class="btn btn-primary" onclick="sendMessage()" style="padding:9px 16px;font-size:13px;flex-shrink:0">Send</button>
+          </div>
+        </div>
+      </div>
+    </div>`;
+  await _loadConvoList();
+}
+
+async function _loadConvoList() {
+  const list = document.getElementById('msg-convo-list');
+  if (!list) return;
+  try {
+    const data = await api('/api/messages/conversations');
+    const convos = data.conversations || [];
+    if (!convos.length) {
+      list.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-muted);font-size:13px">No conversations yet.<br>Click <strong>+ New</strong> to start one.</div>';
+      return;
+    }
+    const myId = currentUser._id || currentUser.id;
+    list.innerHTML = convos.map(c => {
+      const others = (c.participants || []).filter(p => (p.user?._id || p.user) !== myId && p.user?.name);
+      const name   = c.isGroup ? (c.title || 'Group') : (others[0]?.user?.name || 'Conversation');
+      const initials = name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
+      const unread = c.myUnreadCount || 0;
+      const preview = c.lastMessage?.body ? (c.lastMessage.body.length > 40 ? c.lastMessage.body.slice(0, 40) + '…' : c.lastMessage.body) : 'No messages yet';
+      const time   = c.lastMessage?.sentAt ? new Date(c.lastMessage.sentAt).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : '';
+      const isActive = _activeConvoId === c._id;
+      return `<div onclick="openConvo('${c._id}','${name.replace(/'/g,"\\'")}','${c.isGroup?'group':'direct'}')" style="padding:10px 14px;cursor:pointer;display:flex;gap:10px;align-items:flex-start;background:${isActive?'var(--primary-ultra-light)':'transparent'};border-left:3px solid ${isActive?'var(--primary)':'transparent'};transition:.12s">
+        <div style="width:36px;height:36px;border-radius:50%;background:var(--primary);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;flex-shrink:0">${initials}</div>
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:4px">
+            <span style="font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${name}</span>
+            <span style="font-size:10px;color:var(--text-muted);flex-shrink:0">${time}</span>
+          </div>
+          <div style="font-size:12px;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px">${preview}</div>
+        </div>
+        ${unread > 0 ? `<span style="background:var(--primary);color:#fff;border-radius:20px;font-size:10px;font-weight:700;padding:1px 6px;flex-shrink:0;margin-top:2px">${unread}</span>` : ''}
+      </div>`;
+    }).join('');
+  } catch(e) {
+    list.innerHTML = `<div style="padding:16px;color:var(--danger);font-size:13px">Error: ${e.message}</div>`;
+  }
+}
+
+async function openConvo(id, name, type) {
+  _activeConvoId = id;
+  _loadConvoList();
+  const header = document.getElementById('msg-thread-header');
+  const body   = document.getElementById('msg-thread-body');
+  const bar    = document.getElementById('msg-input-bar');
+  if (!header || !body || !bar) return;
+  header.innerHTML = `<div style="width:32px;height:32px;border-radius:50%;background:var(--primary);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px">${name.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase()}</div><div><div style="font-weight:700;font-size:14px">${name}</div><div style="font-size:11px;color:var(--text-muted)">${type === 'group' ? 'Group conversation' : 'Direct message'}</div></div>`;
+  body.innerHTML = '<div class="loading" style="text-align:center;padding:20px;font-size:13px">Loading messages…</div>';
+  bar.style.display = 'block';
+  document.getElementById('msg-input').value = '';
+  try {
+    await api(`/api/messages/conversations/${id}/read`, { method: 'PATCH' });
+    const data = await api(`/api/messages/conversations/${id}`);
+    const msgs  = data.messages || [];
+    const myId  = currentUser._id || currentUser.id;
+    if (!msgs.length) {
+      body.innerHTML = '<div style="text-align:center;color:var(--text-muted);font-size:13px;padding:24px">No messages yet. Say hello!</div>';
+    } else {
+      body.innerHTML = msgs.map(m => {
+        const isMine = (m.sender?._id || m.sender) === myId;
+        const time   = new Date(m.createdAt).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+        const name   = m.sender?.name || 'Unknown';
+        return `<div style="display:flex;flex-direction:column;align-items:${isMine?'flex-end':'flex-start'};gap:2px">
+          ${!isMine ? `<span style="font-size:11px;color:var(--text-muted);margin-left:2px">${name}</span>` : ''}
+          <div style="max-width:70%;padding:9px 13px;border-radius:${isMine?'14px 14px 4px 14px':'14px 14px 14px 4px'};background:${isMine?'var(--primary)':'var(--bg)'};color:${isMine?'#fff':'var(--text)'};font-size:13px;line-height:1.5;word-break:break-word">${m.isDeleted ? '<em style="opacity:.6">[deleted]</em>' : (m.body || '')}</div>
+          <span style="font-size:10px;color:var(--text-muted)">${time}${m.editedAt ? ' · edited' : ''}</span>
+        </div>`;
+      }).join('');
+      body.scrollTop = body.scrollHeight;
+    }
+  } catch(e) {
+    body.innerHTML = `<div style="color:var(--danger);padding:16px;font-size:13px">Error: ${e.message}</div>`;
+  }
+}
+
+async function sendMessage() {
+  if (!_activeConvoId) return;
+  const input = document.getElementById('msg-input');
+  const body  = input?.value.trim();
+  if (!body) return;
+  input.value = '';
+  input.style.height = 'auto';
+  try {
+    const data = await api(`/api/messages/conversations/${_activeConvoId}/messages`, {
+      method: 'POST',
+      body: JSON.stringify({ body }),
+    });
+    const msg   = data.message;
+    const myId  = currentUser._id || currentUser.id;
+    const threadBody = document.getElementById('msg-thread-body');
+    if (threadBody) {
+      const time = new Date(msg.createdAt || Date.now()).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+      const el = document.createElement('div');
+      el.style.cssText = 'display:flex;flex-direction:column;align-items:flex-end;gap:2px';
+      el.innerHTML = `<div style="max-width:70%;padding:9px 13px;border-radius:14px 14px 4px 14px;background:var(--primary);color:#fff;font-size:13px;line-height:1.5;word-break:break-word">${body}</div><span style="font-size:10px;color:var(--text-muted)">${time}</span>`;
+      threadBody.appendChild(el);
+      threadBody.scrollTop = threadBody.scrollHeight;
+    }
+    _loadConvoList();
+  } catch(e) {
+    toastError('Failed to send: ' + e.message);
+  }
+}
+
+async function showNewConvoModal() {
+  const existing = document.getElementById('new-convo-overlay');
+  if (existing) existing.remove();
+  let users = [];
+  try {
+    const d = await api('/api/users');
+    const myId = currentUser._id || currentUser.id;
+    users = (d.users || []).filter(u => (u._id || u.id) !== myId && u.isActive !== false);
+  } catch(_) {}
+  const ol = document.createElement('div');
+  ol.id = 'new-convo-overlay';
+  ol.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:500;display:flex;align-items:center;justify-content:center;padding:16px';
+  ol.innerHTML = `
+    <div style="background:var(--card);border-radius:14px;width:100%;max-width:440px;box-shadow:0 20px 60px rgba(0,0,0,.2)">
+      <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
+        <h3 style="font-size:15px;font-weight:700;margin:0">New Message</h3>
+        <button onclick="document.getElementById('new-convo-overlay').remove()" style="width:26px;height:26px;border-radius:6px;border:1px solid var(--border);background:var(--bg);cursor:pointer;font-size:14px">✕</button>
+      </div>
+      <div style="padding:18px 20px;display:flex;flex-direction:column;gap:14px">
+        <div>
+          <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);display:block;margin-bottom:6px">To (select people)</label>
+          <select id="nc-recipients" multiple style="width:100%;height:140px;padding:6px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit">
+            ${users.map(u => `<option value="${u._id||u.id}">${u.name} — ${u.role}</option>`).join('')}
+          </select>
+          <p style="font-size:11px;color:var(--text-muted);margin-top:4px">Hold Ctrl/Cmd to select multiple for group chat</p>
+        </div>
+        <div>
+          <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);display:block;margin-bottom:6px">First Message *</label>
+          <textarea id="nc-body" rows="3" placeholder="Write your first message…" style="width:100%;padding:9px 13px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;resize:vertical;outline:none"></textarea>
+        </div>
+        <div id="nc-group-title" style="display:none">
+          <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);display:block;margin-bottom:6px">Group Name (optional)</label>
+          <input id="nc-title" type="text" placeholder="e.g. Project Alpha Team" style="width:100%;padding:9px 13px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none">
+        </div>
+      </div>
+      <div style="padding:12px 20px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end">
+        <button class="btn btn-secondary btn-sm" onclick="document.getElementById('new-convo-overlay').remove()">Cancel</button>
+        <button class="btn btn-primary btn-sm" onclick="startNewConvo()">Start Conversation</button>
+      </div>
+    </div>`;
+  document.body.appendChild(ol);
+  document.getElementById('nc-recipients').addEventListener('change', function() {
+    const groupDiv = document.getElementById('nc-group-title');
+    if (groupDiv) groupDiv.style.display = this.selectedOptions.length > 1 ? 'block' : 'none';
+  });
+}
+
+async function startNewConvo() {
+  const selEl = document.getElementById('nc-recipients');
+  const body  = document.getElementById('nc-body')?.value.trim();
+  const title = document.getElementById('nc-title')?.value.trim();
+  if (!selEl || !selEl.selectedOptions.length) return toastError('Select at least one recipient.');
+  if (!body) return toastError('First message is required.');
+  const recipientIds = Array.from(selEl.selectedOptions).map(o => o.value);
+  try {
+    const data = await api('/api/messages/conversations', {
+      method: 'POST',
+      body: JSON.stringify({ recipientIds, message: body, title }),
+    });
+    document.getElementById('new-convo-overlay')?.remove();
+    const c = data.conversation;
+    const myId = currentUser._id || currentUser.id;
+    const others = (c.participants || []).filter(p => (p.user?._id || p.user?.toString?.() || p.user) !== myId);
+    const name = c.isGroup ? (c.title || 'Group') : (others[0]?.user?.name || 'Conversation');
+    toastSuccess('Conversation started!');
+    await _loadConvoList();
+    openConvo(c._id, name, c.isGroup ? 'group' : 'direct');
+  } catch(e) {
+    toastError(e.message || 'Failed to start conversation');
+  }
+}
+
 window._realSelectMode   = selectMode;
 window._realSelectPortal = selectPortal;
 window._appLoaded = true;
