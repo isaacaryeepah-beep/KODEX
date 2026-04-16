@@ -15,7 +15,8 @@ window.toggleAuthHelp = function () {
 (function () {
   function mountWidget() {
     if (document.getElementById('faq-widget-btn')) return;
-    if (!document.getElementById('dashboard-page')) return; // only show in app
+    const dp = document.getElementById('dashboard-page');
+    if (!dp || dp.classList.contains('hidden')) return; // only show when logged in
 
     const btn = document.createElement('button');
     btn.id = 'faq-widget-btn';
@@ -65,9 +66,10 @@ window.toggleAuthHelp = function () {
     mountWidget();
   }
 
-  // Also try mounting after login when dashboard becomes visible
+  // Mount after login when dashboard becomes visible
   const observer = new MutationObserver(() => {
-    if (document.getElementById('dashboard-page')) mountWidget();
+    const dp = document.getElementById('dashboard-page');
+    if (dp && !dp.classList.contains('hidden')) mountWidget();
   });
-  observer.observe(document.body, { childList: true, subtree: false });
+  observer.observe(document.body, { childList: true, subtree: true });
 })();
