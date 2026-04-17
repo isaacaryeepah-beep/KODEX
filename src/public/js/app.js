@@ -15468,191 +15468,322 @@ async function printMeetingAttendance(meetingId, title) {
 // ── Register real functions for index.html stubs ─────────────────────────────
 
 // ════════════════════════════════════════════════════════════════════════════
-// CORPORATE / INTERNAL MESSAGES
+// KODEX MESSAGING  (Phase 2: Facebook-style desktop UI)
 // ════════════════════════════════════════════════════════════════════════════
 
-let _activeConvoId = null;
+let _activeConvoId  = null;
+let _msgSearchQuery = '';
 
+// ── Avatar color palette ──────────────────────────────────────────────────
+const MSG_AVATAR_COLORS = ['#2563eb','#7c3aed','#0891b2','#16a34a','#d97706','#db2777','#dc2626','#0f766e'];
+function _avatarColor(str) {
+  let h = 0;
+  for (let i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) & 0xffffffff;
+  return MSG_AVATAR_COLORS[Math.abs(h) % MSG_AVATAR_COLORS.length];
+}
+function _initials(name) {
+  return (name || '?').split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
+}
+function _convoTypeLabel(type) {
+  if (type === 'hod_request') return '<span class="msg-badge msg-badge--hod">HOD Request</span>';
+  if (type === 'announcement') return '<span class="msg-badge msg-badge--ann">Announcement</span>';
+  return '';
+}
+
+// ── Render the full messages page ────────────────────────────────────────
 async function renderMessages() {
   const content = document.getElementById('main-content');
   if (!content) return;
+  const canAttach = ['admin','superadmin','lecturer','manager','hod'].includes(currentUser?.role);
+  const isStudent = currentUser?.role === 'student';
+
   content.innerHTML = `
-    <div class="page-header">
-      <h2>Messages</h2>
-      <p>Internal team messaging</p>
-    </div>
-    <div style="display:flex;height:calc(100vh - 172px);min-height:420px;border:1px solid var(--border);border-radius:14px;overflow:hidden;background:var(--card);box-shadow:0 2px 12px rgba(0,0,0,.06)">
-
-      <!-- Conversation sidebar -->
-      <div id="msg-sidebar" style="width:290px;min-width:240px;border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;background:var(--bg)">
-        <div style="padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;background:var(--card)">
-          <span style="font-weight:800;font-size:14px;letter-spacing:-.2px;color:var(--text)">Conversations</span>
-          <button onclick="showNewConvoModal()" style="display:flex;align-items:center;gap:5px;padding:5px 12px;background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#fff;border:none;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;letter-spacing:.2px">
-            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>New
-          </button>
-        </div>
-        <div id="msg-convo-list" style="flex:1;overflow-y:auto;padding:6px 0">
-          <div class="loading" style="padding:28px;text-align:center;font-size:13px;color:var(--text-muted)">Loading…</div>
-        </div>
-      </div>
-
-      <!-- Thread pane -->
-      <div id="msg-thread" style="flex:1;display:flex;flex-direction:column;min-width:0;background:var(--card)">
-        <div id="msg-thread-header" style="padding:14px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;background:var(--card);min-height:56px">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-          <span style="color:var(--text-muted);font-size:13px;font-weight:500">Select a conversation to start messaging</span>
-        </div>
-        <div id="msg-thread-body" style="flex:1;overflow-y:auto;padding:20px 24px;display:flex;flex-direction:column;gap:12px;background:var(--bg)">
-        </div>
-        <div id="msg-input-bar" style="padding:14px 20px;border-top:1px solid var(--border);display:none;background:var(--card)">
-          <div id="msg-file-preview-bar" style="display:none;margin-bottom:8px;padding:8px 10px;background:var(--bg);border:1.5px solid var(--border);border-radius:8px;display:none;align-items:center;gap:8px;">
-            <div id="msg-file-preview-inner" style="flex:1;min-width:0;font-size:12px;color:var(--text-light);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></div>
-            <button onclick="msgClearFile()" style="background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:18px;line-height:1;padding:0 4px;flex-shrink:0;">×</button>
+    <div class="msg-page">
+      <!-- ── Left sidebar: conversation list ── -->
+      <aside class="msg-sidebar" id="msg-sidebar">
+        <div class="msg-sidebar-head">
+          <div class="msg-sidebar-title-row">
+            <span class="msg-sidebar-title">Messages</span>
+            <div class="msg-sidebar-actions">
+              ${isStudent ? `
+                <button class="msg-btn-hod" onclick="showHodRequestModal()" title="Contact HOD">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 11 19.79 19.79 0 0 1 1.62 2.35 2 2 0 0 1 3.62.17h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 7.91a16 16 0 0 0 6.06 6.06l1.06-1.06a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+                  HOD Request
+                </button>
+              ` : ''}
+              <button class="msg-btn-new" onclick="showNewConvoModal()" title="New conversation">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                New
+              </button>
+            </div>
           </div>
-          <div style="display:flex;gap:8px;align-items:flex-end;background:var(--bg);border:1.5px solid var(--border);border-radius:12px;padding:8px 12px;transition:.15s" onfocus-within="this.style.borderColor='#2563eb'">
-            ${['admin','superadmin','lecturer','manager'].includes(currentUser?.role) ? `
-            <label title="Attach image or PDF" style="flex-shrink:0;width:30px;height:30px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text-muted);border-radius:7px;transition:background .12s" onmouseover="this.style.background='rgba(37,99,235,.08)';this.style.color='#2563eb'" onmouseout="this.style.background='';this.style.color='var(--text-muted)'">
-              <input type="file" id="msg-file-input" accept=".pdf,.jpg,.jpeg,.png,.webp,.gif" style="display:none" onchange="msgPreviewFile(this)">
+          <div class="msg-search-wrap">
+            <svg class="msg-search-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <input id="msg-search" class="msg-search" type="text" placeholder="Search conversations…"
+              oninput="_msgSearchQuery=this.value.toLowerCase();_renderConvoList(window._msgConvos||[])">
+          </div>
+        </div>
+        <div id="msg-convo-list" class="msg-convo-list">
+          <div class="msg-loading">Loading…</div>
+        </div>
+      </aside>
+
+      <!-- ── Right: thread pane ── -->
+      <main class="msg-thread-wrap" id="msg-thread-wrap">
+        <div class="msg-thread-empty" id="msg-thread-empty">
+          <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" style="opacity:.4"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          <p>Select a conversation to start messaging</p>
+        </div>
+        <!-- Thread header -->
+        <div class="msg-thread-header hidden" id="msg-thread-header">
+          <button class="msg-back-btn" id="msg-back-btn" onclick="_msgBackToList()">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+          </button>
+          <div class="msg-thread-avatar" id="msg-thread-avatar"></div>
+          <div class="msg-thread-meta" id="msg-thread-meta"></div>
+        </div>
+        <!-- Messages body -->
+        <div class="msg-thread-body hidden" id="msg-thread-body"></div>
+        <!-- Input bar -->
+        <div class="msg-input-bar hidden" id="msg-input-bar">
+          <div class="msg-file-preview" id="msg-file-preview-bar" style="display:none">
+            <div id="msg-file-preview-inner" class="msg-file-preview-inner"></div>
+            <button onclick="msgClearFile()" class="msg-file-clear">✕</button>
+          </div>
+          <div class="msg-composer" id="msg-composer">
+            ${canAttach ? `
+            <label class="msg-attach-btn" title="Attach file">
+              <input type="file" id="msg-file-input" accept=".pdf,.jpg,.jpeg,.png,.webp,.gif,.doc,.docx" style="display:none" onchange="msgPreviewFile(this)">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
             </label>` : ''}
-            <textarea id="msg-input" placeholder="Write a message…" rows="1"
-              oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,120)+'px';this.parentElement.style.borderColor=this.value?'#2563eb':'var(--border)'"
-              onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendMessage()}"
-              style="flex:1;padding:0;border:none;border-radius:0;font-size:13px;font-family:inherit;resize:none;outline:none;background:transparent;color:var(--text);line-height:1.5;min-height:20px"></textarea>
-            <button onclick="sendMessage()" style="flex-shrink:0;width:34px;height:34px;border-radius:9px;background:linear-gradient(135deg,#2563eb,#1d4ed8);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:transform .15s,box-shadow .15s" onmouseenter="this.style.transform='scale(1.08)';this.style.boxShadow='0 4px 12px rgba(37,99,235,.4)'" onmouseleave="this.style.transform='';this.style.boxShadow=''">
+            <textarea id="msg-input" class="msg-textarea" placeholder="Write a message…" rows="1"
+              oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,120)+'px'"
+              onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendMessage()}"></textarea>
+            <button class="msg-send-btn" onclick="sendMessage()" title="Send">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
             </button>
           </div>
-          <div style="font-size:10px;color:var(--text-muted);margin-top:5px;padding-left:2px">Press Enter to send · Shift+Enter for new line</div>
+          <div class="msg-hint">Enter to send · Shift+Enter new line</div>
         </div>
-      </div>
+      </main>
     </div>`;
+
   await _loadConvoList();
 }
 
+// ── Load and render conversation list ─────────────────────────────────────
 async function _loadConvoList() {
   const list = document.getElementById('msg-convo-list');
   if (!list) return;
   try {
     const data = await api('/api/messages/conversations');
-    const convos = data.conversations || [];
-    if (!convos.length) {
-      list.innerHTML = `<div style="padding:32px 20px;text-align:center;color:var(--text-muted)">
-        <div style="width:48px;height:48px;background:var(--border);border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 12px">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-        </div>
-        <div style="font-size:13px;font-weight:600;color:var(--text-light);margin-bottom:4px">No conversations yet</div>
-        <div style="font-size:12px">Click <strong>+ New</strong> to start one</div>
-      </div>`;
-      return;
-    }
-    const myId = currentUser._id || currentUser.id;
-    // Color palette for avatars
-    const avatarColors = ['#2563eb','#7c3aed','#0891b2','#16a34a','#d97706','#db2777','#dc2626'];
-    list.innerHTML = convos.map((c, ci) => {
-      const others = (c.participants || []).filter(p => (p.user?._id || p.user) !== myId && p.user?.name);
-      const name   = c.isGroup ? (c.title || 'Group') : (others[0]?.user?.name || 'Conversation');
-      const initials = name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
-      const unread = c.myUnreadCount || 0;
-      const preview = c.lastMessage?.body ? (c.lastMessage.body.length > 45 ? c.lastMessage.body.slice(0, 45) + '…' : c.lastMessage.body) : 'No messages yet';
-      const time   = c.lastMessage?.sentAt ? new Date(c.lastMessage.sentAt).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : '';
-      const isActive = _activeConvoId === c._id;
-      const color = avatarColors[ci % avatarColors.length];
-      return `<div onclick="openConvo('${c._id}','${name.replace(/'/g,"\\'")}','${c.isGroup?'group':'direct'}')"
-        style="padding:11px 16px;cursor:pointer;display:flex;gap:11px;align-items:flex-start;background:${isActive?'rgba(37,99,235,.08)':'transparent'};border-left:3px solid ${isActive?'#2563eb':'transparent'};transition:background .12s">
-        <div style="width:40px;height:40px;border-radius:50%;background:${color};color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;flex-shrink:0;letter-spacing:.5px">${initials}</div>
-        <div style="flex:1;min-width:0">
-          <div style="display:flex;align-items:center;justify-content:space-between;gap:4px;margin-bottom:2px">
-            <span style="font-weight:${unread>0?'700':'600'};font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text)">${name}</span>
-            <span style="font-size:10px;color:var(--text-muted);flex-shrink:0">${time}</span>
-          </div>
-          <div style="font-size:12px;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${preview}</div>
-        </div>
-        ${unread > 0 ? `<span style="background:#2563eb;color:#fff;border-radius:20px;font-size:10px;font-weight:700;padding:2px 7px;flex-shrink:0;margin-top:3px;min-width:18px;text-align:center">${unread}</span>` : ''}
-      </div>`;
-    }).join('');
+    window._msgConvos = data.conversations || [];
+    _renderConvoList(window._msgConvos);
   } catch(e) {
-    list.innerHTML = `<div style="padding:16px;color:var(--danger);font-size:13px">Error: ${e.message}</div>`;
+    list.innerHTML = `<div class="msg-error">Error: ${e.message}</div>`;
   }
 }
 
+function _renderConvoList(convos) {
+  const list = document.getElementById('msg-convo-list');
+  if (!list) return;
+  const q    = _msgSearchQuery || '';
+  const filtered = q
+    ? convos.filter(c => {
+        const myId  = currentUser._id || currentUser.id;
+        const others = (c.participants || []).filter(p => {
+          const uid = p.user?._id || p.user;
+          return uid?.toString() !== myId?.toString() && p.user?.name;
+        });
+        const name = c.isGroup ? (c.title || 'Group') : (others[0]?.user?.name || '');
+        return name.toLowerCase().includes(q) || (c.lastMessage?.body || '').toLowerCase().includes(q);
+      })
+    : convos;
+
+  if (!filtered.length) {
+    list.innerHTML = `<div class="msg-empty-list">
+      <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+      <div>${q ? 'No conversations match your search' : 'No conversations yet'}</div>
+      ${!q ? '<div style="font-size:11px;margin-top:4px">Click <strong>+ New</strong> to start one</div>' : ''}
+    </div>`;
+    return;
+  }
+
+  const myId = currentUser._id || currentUser.id;
+  list.innerHTML = filtered.map(c => {
+    const others  = (c.participants || []).filter(p => {
+      const uid = p.user?._id || p.user;
+      return uid?.toString() !== myId?.toString() && p.user?.name;
+    });
+    const name    = c.isGroup ? (c.title || 'Group') : (others[0]?.user?.name || 'Conversation');
+    const subRole = others[0]?.user?.role ? `<span class="msg-role-tag">${others[0].user.role}</span>` : '';
+    const unread  = c.myUnreadCount || 0;
+    const preview = c.lastMessage?.body
+      ? (c.lastMessage.body.length > 48 ? c.lastMessage.body.slice(0, 48) + '…' : c.lastMessage.body)
+      : 'No messages yet';
+    const time    = c.lastMessage?.sentAt
+      ? _msgRelTime(c.lastMessage.sentAt)
+      : '';
+    const isActive = _activeConvoId === c._id;
+    const color   = _avatarColor(name);
+    const typeBadge = _convoTypeLabel(c.type);
+
+    return `<div class="msg-convo-item${isActive ? ' msg-convo-item--active' : ''}"
+        onclick="openConvo('${c._id}','${name.replace(/'/g,"\\'")}','${c.type||'direct_message'}')">
+      <div class="msg-convo-avatar" style="background:${color}">${_initials(name)}</div>
+      <div class="msg-convo-info">
+        <div class="msg-convo-top">
+          <span class="msg-convo-name${unread > 0 ? ' msg-convo-name--unread' : ''}">${name}</span>
+          ${subRole}
+          <span class="msg-convo-time">${time}</span>
+        </div>
+        <div class="msg-convo-bottom">
+          ${typeBadge}
+          <span class="msg-convo-preview">${preview}</span>
+          ${unread > 0 ? `<span class="msg-unread-badge">${unread > 99 ? '99+' : unread}</span>` : ''}
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function _msgRelTime(iso) {
+  const diff = Date.now() - new Date(iso).getTime();
+  const min  = Math.floor(diff / 60000);
+  if (min < 1)  return 'now';
+  if (min < 60) return `${min}m`;
+  const hr = Math.floor(min / 60);
+  if (hr < 24)  return `${hr}h`;
+  const dy = Math.floor(hr / 24);
+  if (dy < 7)   return `${dy}d`;
+  return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
+
+// ── Open a conversation ───────────────────────────────────────────────────
 async function openConvo(id, name, type) {
   _activeConvoId = id;
-  _loadConvoList();
+  _renderConvoList(window._msgConvos || []);
+
   const header = document.getElementById('msg-thread-header');
   const body   = document.getElementById('msg-thread-body');
   const bar    = document.getElementById('msg-input-bar');
+  const empty  = document.getElementById('msg-thread-empty');
+  const wrap   = document.getElementById('msg-thread-wrap');
+
   if (!header || !body || !bar) return;
-  header.innerHTML = `<div style="width:38px;height:38px;border-radius:50%;background:linear-gradient(135deg,#2563eb,#7c3aed);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;flex-shrink:0">${name.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase()}</div><div style="min-width:0"><div style="font-weight:700;font-size:14px;color:var(--text)">${name}</div><div style="font-size:11px;color:var(--text-muted)">${type === 'group' ? 'Group conversation' : 'Direct message'}</div></div>`;
-  body.innerHTML = '<div class="loading" style="text-align:center;padding:20px;font-size:13px">Loading messages…</div>';
-  bar.style.display = 'block';
-  document.getElementById('msg-input').value = '';
+
+  empty?.classList.add('hidden');
+  header.classList.remove('hidden');
+  body.classList.remove('hidden');
+  bar.classList.remove('hidden');
+  wrap?.classList.add('msg-thread-active');
+
+  // Thread header
+  const color    = _avatarColor(name);
+  const typeLabel = type === 'hod_request' ? 'HOD Request' : type === 'group' || type === 'announcement' ? 'Group' : 'Direct message';
+  document.getElementById('msg-thread-avatar').innerHTML =
+    `<div style="width:38px;height:38px;border-radius:50%;background:${color};color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px">${_initials(name)}</div>`;
+  document.getElementById('msg-thread-meta').innerHTML =
+    `<div class="msg-thread-name">${name}</div>
+     <div class="msg-thread-sub">${_convoTypeLabel(type) || typeLabel}</div>`;
+
+  body.innerHTML = '<div class="msg-loading" style="text-align:center;padding:28px">Loading…</div>';
+  document.getElementById('msg-input')?.focus();
+
   try {
     await api(`/api/messages/conversations/${id}/read`, { method: 'PATCH' });
     const data = await api(`/api/messages/conversations/${id}`);
     const msgs  = data.messages || [];
     const myId  = currentUser._id || currentUser.id;
+
     if (!msgs.length) {
-      body.innerHTML = `<div style="text-align:center;color:var(--text-muted);padding:40px 20px">
-        <div style="font-size:32px;margin-bottom:10px">💬</div>
-        <div style="font-size:14px;font-weight:600;color:var(--text-light);margin-bottom:4px">No messages yet</div>
-        <div style="font-size:12px">Be the first to say hello!</div>
+      body.innerHTML = `<div class="msg-empty-thread">
+        <div style="font-size:28px;margin-bottom:8px">💬</div>
+        <div>No messages yet — say hello!</div>
       </div>`;
     } else {
-      body.innerHTML = msgs.map(m => {
-        const isMine = (m.sender?._id || m.sender) === myId;
-        const time   = new Date(m.createdAt).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
-        const senderName = m.sender?.name || 'Unknown';
-        const initials = senderName.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
-        const rawBody = m.isDeleted ? null : (m.body || '');
-        const msgContent = m.isDeleted
-          ? '<em style="opacity:.55;font-size:12px">[message deleted]</em>'
-          : _buildMsgBubbleContent(rawBody, m.attachment, isMine);
-        if (isMine) {
-          return `<div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px">
-            <div style="max-width:68%;padding:10px 14px;border-radius:16px 16px 4px 16px;background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#fff;font-size:13px;line-height:1.55;word-break:break-word;box-shadow:0 2px 8px rgba(37,99,235,.25)">${msgContent}</div>
-            <span style="font-size:10px;color:var(--text-muted);padding-right:2px">${time}${m.editedAt ? ' · edited' : ''}</span>
-          </div>`;
-        } else {
-          return `<div style="display:flex;gap:8px;align-items:flex-end;max-width:72%">
-            <div style="width:28px;height:28px;border-radius:50%;background:#e2e8f0;color:#475569;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:10px;flex-shrink:0;margin-bottom:2px">${initials}</div>
-            <div style="display:flex;flex-direction:column;gap:3px">
-              <span style="font-size:11px;color:var(--text-muted);font-weight:500;padding-left:1px">${senderName}</span>
-              <div style="padding:10px 14px;border-radius:16px 16px 16px 4px;background:var(--card);border:1px solid var(--border);color:var(--text);font-size:13px;line-height:1.55;word-break:break-word">${msgContent}</div>
-              <span style="font-size:10px;color:var(--text-muted);padding-left:1px">${time}${m.editedAt ? ' · edited' : ''}</span>
-            </div>
-          </div>`;
-        }
-      }).join('');
+      body.innerHTML = msgs.map(m => _buildMsgRow(m, myId)).join('');
       body.scrollTop = body.scrollHeight;
     }
+    // Refresh sidebar unread counts
+    if (window._msgConvos) {
+      const c = window._msgConvos.find(x => x._id === id);
+      if (c) { c.myUnreadCount = 0; _renderConvoList(window._msgConvos); }
+    }
   } catch(e) {
-    body.innerHTML = `<div style="color:var(--danger);padding:16px;font-size:13px">Error: ${e.message}</div>`;
+    body.innerHTML = `<div class="msg-error">Error: ${e.message}</div>`;
   }
 }
 
-function _buildMsgBubbleContent(bodyText, attachment, isMine) {
-  if (!attachment) return bodyText || '';
-  const imgColor = isMine ? '#93c5fd' : '#2563eb';
-  const t = typeof token !== 'undefined' ? token : '';
+function _buildMsgRow(m, myId) {
+  const isMine     = (m.sender?._id || m.sender)?.toString() === myId?.toString();
+  const time       = new Date(m.createdAt).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+  const senderName = m.sender?.name || 'Unknown';
+  const content    = m.isDeleted
+    ? '<em class="msg-deleted">[message deleted]</em>'
+    : _buildBubbleContent(m.body, m.attachment, isMine);
+
+  if (isMine) {
+    return `<div class="msg-row msg-row--mine">
+      <div class="msg-bubble msg-bubble--mine">${content}</div>
+      <span class="msg-ts">${time}${m.editedAt ? ' · edited' : ''}</span>
+    </div>`;
+  }
+  return `<div class="msg-row msg-row--theirs">
+    <div class="msg-avatar-sm" style="background:${_avatarColor(senderName)}">${_initials(senderName)}</div>
+    <div class="msg-bubble-wrap">
+      <span class="msg-sender-name">${senderName}</span>
+      <div class="msg-bubble msg-bubble--theirs">${content}</div>
+      <span class="msg-ts">${time}${m.editedAt ? ' · edited' : ''}</span>
+    </div>
+  </div>`;
+}
+
+function _buildBubbleContent(bodyText, attachment, isMine) {
+  if (!attachment) return (bodyText || '').replace(/\n/g, '<br>');
+  const t   = typeof token !== 'undefined' ? token : '';
   const src = `${attachment.fileUrl}?token=${t}`;
-  if (attachment.mimeType?.startsWith('image/')) {
-    return `${bodyText && bodyText !== `📎 ${attachment.originalName}` ? `<div style="margin-bottom:6px">${bodyText}</div>` : ''}<img src="${src}" style="max-width:200px;max-height:180px;border-radius:8px;object-fit:cover;cursor:pointer;display:block;" onclick="window.open('${src}','_blank')" onerror="this.style.display='none'">`;
+  const isImg  = attachment.mimeType?.startsWith('image/');
+  const isPdf  = attachment.mimeType === 'application/pdf';
+  const isDoc  = attachment.mimeType?.includes('word') || attachment.originalName?.match(/\.docx?$/i);
+  const caption = bodyText && bodyText !== `📎 ${attachment.originalName}` ? `<div class="msg-attach-caption">${bodyText}</div>` : '';
+
+  if (isImg) {
+    return `${caption}<img class="msg-img-thumb" src="${src}" onclick="window.open('${src}','_blank')" onerror="this.style.display='none'" loading="lazy">`;
   }
-  return `${bodyText && bodyText !== `📎 ${attachment.originalName}` ? `<div style="margin-bottom:4px">${bodyText}</div>` : ''}<a href="${src}" target="_blank" style="color:${imgColor};text-decoration:none;font-size:12px;display:flex;align-items:center;gap:4px;">📄 ${attachment.originalName}</a>`;
+  const icon = isPdf ? '📄' : isDoc ? '📝' : '📎';
+  const kb   = attachment.fileSize ? ` · ${(attachment.fileSize / 1024).toFixed(0)} KB` : '';
+  return `${caption}<a class="msg-file-card" href="${src}" target="_blank" rel="noopener">
+    <span class="msg-file-icon">${icon}</span>
+    <div class="msg-file-info">
+      <div class="msg-file-name">${attachment.originalName}</div>
+      <div class="msg-file-meta">${(isPdf?'PDF':isDoc?'Document':'File')}${kb}</div>
+    </div>
+    <a class="msg-file-dl" href="/api/messages/attachment/${attachment.fileName}/download?token=${t}" download title="Download">⬇</a>
+  </a>`;
 }
 
+// ── Mobile back to list ───────────────────────────────────────────────────
+function _msgBackToList() {
+  _activeConvoId = null;
+  const wrap = document.getElementById('msg-thread-wrap');
+  wrap?.classList.remove('msg-thread-active');
+  _renderConvoList(window._msgConvos || []);
+}
+
+// ── File preview ──────────────────────────────────────────────────────────
 function msgPreviewFile(input) {
-  const file = input.files[0];
+  const file  = input.files[0];
   if (!file) return;
-  const bar = document.getElementById('msg-file-preview-bar');
+  const bar   = document.getElementById('msg-file-preview-bar');
   const inner = document.getElementById('msg-file-preview-inner');
   if (!bar || !inner) return;
   if (file.type.startsWith('image/')) {
     const url = URL.createObjectURL(file);
-    inner.innerHTML = `<img src="${url}" style="height:48px;border-radius:6px;object-fit:cover;border:1px solid var(--border);margin-right:6px;vertical-align:middle;"> <span style="vertical-align:middle;">${file.name}</span>`;
+    inner.innerHTML = `<img src="${url}" class="msg-preview-img"> <span>${file.name}</span>`;
   } else {
-    inner.innerHTML = `📄 <strong>${file.name}</strong> <span style="color:var(--text-muted);font-size:11px;">(${(file.size/1024).toFixed(0)} KB)</span>`;
+    const kb = (file.size / 1024).toFixed(0);
+    inner.innerHTML = `📄 <strong>${file.name}</strong> <span class="msg-file-size">(${kb} KB)</span>`;
   }
   bar.style.display = 'flex';
 }
@@ -15661,21 +15792,34 @@ function msgClearFile() {
   const input = document.getElementById('msg-file-input');
   if (input) input.value = '';
   const bar = document.getElementById('msg-file-preview-bar');
-  if (bar) { bar.style.display = 'none'; bar.querySelector('#msg-file-preview-inner').innerHTML = ''; }
+  if (bar) {
+    bar.style.display = 'none';
+    const inner = document.getElementById('msg-file-preview-inner');
+    if (inner) inner.innerHTML = '';
+  }
 }
 
+// ── Send a message ────────────────────────────────────────────────────────
 async function sendMessage() {
   if (!_activeConvoId) return;
   const input    = document.getElementById('msg-input');
   const bodyText = input?.value.trim() || '';
   const fileInput = document.getElementById('msg-file-input');
   const file     = fileInput?.files?.[0] || null;
-
   if (!bodyText && !file) return;
 
   input.value = '';
   input.style.height = 'auto';
   msgClearFile();
+
+  const body2 = document.getElementById('msg-thread-body');
+  // Optimistic self-bubble
+  const nowTime = new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+  const tempEl  = document.createElement('div');
+  tempEl.className = 'msg-row msg-row--mine';
+  tempEl.innerHTML = `<div class="msg-bubble msg-bubble--mine">${(bodyText || (file ? `📎 ${file.name}` : '')).replace(/\n/g,'<br>')}</div><span class="msg-ts">${nowTime}</span>`;
+  body2?.appendChild(tempEl);
+  if (body2) body2.scrollTop = body2.scrollHeight;
 
   try {
     let data;
@@ -15687,105 +15831,213 @@ async function sendMessage() {
     } else {
       data = await api(`/api/messages/conversations/${_activeConvoId}/messages`, {
         method: 'POST',
-        body: JSON.stringify({ body: bodyText }),
+        body:   JSON.stringify({ body: bodyText }),
       });
     }
-    const msg = data.message;
-    const threadBody = document.getElementById('msg-thread-body');
-    if (threadBody) {
-      const time = new Date(msg.createdAt || Date.now()).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
-      const displayBody = bodyText || (file ? `📎 ${file.name}` : '');
-      const el = document.createElement('div');
-      el.style.cssText = 'display:flex;flex-direction:column;align-items:flex-end;gap:3px';
-      let bubbleContent = displayBody;
-      if (msg.attachment && msg.attachment.mimeType?.startsWith('image/')) {
-        const t2 = typeof token !== 'undefined' ? token : '';
-        const src2 = `${msg.attachment.fileUrl}?token=${t2}`;
-        bubbleContent = `${bodyText ? `<div style="margin-bottom:6px">${bodyText}</div>` : ''}<img src="${src2}" style="max-width:200px;max-height:180px;border-radius:8px;object-fit:cover;cursor:pointer;" onclick="window.open('${src2}','_blank')">`;
-      } else if (msg.attachment) {
-        const t2 = typeof token !== 'undefined' ? token : '';
-        const src2 = `${msg.attachment.fileUrl}?token=${t2}`;
-        bubbleContent = `${bodyText ? `<div style="margin-bottom:4px">${bodyText}</div>` : ''}<a href="${src2}" target="_blank" style="color:#93c5fd;text-decoration:none;font-size:12px;">📄 ${msg.attachment.originalName}</a>`;
-      }
-      el.innerHTML = `<div style="max-width:68%;padding:10px 14px;border-radius:16px 16px 4px 16px;background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#fff;font-size:13px;line-height:1.55;word-break:break-word;box-shadow:0 2px 8px rgba(37,99,235,.25)">${bubbleContent}</div><span style="font-size:10px;color:var(--text-muted);padding-right:2px">${time}</span>`;
-      threadBody.appendChild(el);
-      threadBody.scrollTop = threadBody.scrollHeight;
-    }
-    _loadConvoList();
+    // Replace optimistic bubble with real one
+    const msg  = data.message;
+    const myId = currentUser._id || currentUser.id;
+    tempEl.outerHTML = _buildMsgRow(msg, myId);
+    if (body2) body2.scrollTop = body2.scrollHeight;
+    // Update sidebar
+    await _loadConvoList();
   } catch(e) {
+    tempEl.remove();
     toastError('Failed to send: ' + e.message);
   }
 }
 
+// ── New Conversation modal (role-aware, uses /users/messageable) ──────────
 async function showNewConvoModal() {
-  const existing = document.getElementById('new-convo-overlay');
-  if (existing) existing.remove();
-  let users = [];
+  document.getElementById('new-convo-overlay')?.remove();
+  let users = [], hodUsers = [], canDirectHod = true;
   try {
-    const d = await api('/api/users');
-    const myId = currentUser._id || currentUser.id;
-    users = (d.users || []).filter(u => (u._id || u.id) !== myId && u.isActive !== false);
+    const d = await api('/api/messages/users/messageable');
+    users        = d.users        || [];
+    hodUsers     = d.hodUsers     || [];
+    canDirectHod = d.canDirectMessageHod !== false;
   } catch(_) {}
+
+  const isStudent = currentUser?.role === 'student';
+  const hodSection = !canDirectHod && hodUsers.length
+    ? `<div class="msg-modal-info">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        To contact a HOD, use the <button class="msg-link" onclick="document.getElementById('new-convo-overlay')?.remove();showHodRequestModal()">HOD Request form</button>.
+       </div>`
+    : '';
+
   const ol = document.createElement('div');
   ol.id = 'new-convo-overlay';
-  ol.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:500;display:flex;align-items:center;justify-content:center;padding:16px';
+  ol.className = 'msg-modal-overlay';
   ol.innerHTML = `
-    <div style="background:var(--card);border-radius:14px;width:100%;max-width:440px;box-shadow:0 20px 60px rgba(0,0,0,.2)">
-      <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
-        <h3 style="font-size:15px;font-weight:700;margin:0">New Message</h3>
-        <button onclick="document.getElementById('new-convo-overlay').remove()" style="width:26px;height:26px;border-radius:6px;border:1px solid var(--border);background:var(--bg);cursor:pointer;font-size:14px">✕</button>
+    <div class="msg-modal" onclick="event.stopPropagation()">
+      <div class="msg-modal-head">
+        <h3>New Message</h3>
+        <button class="msg-modal-close" onclick="document.getElementById('new-convo-overlay').remove()">✕</button>
       </div>
-      <div style="padding:18px 20px;display:flex;flex-direction:column;gap:14px">
-        <div>
-          <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);display:block;margin-bottom:6px">To (select people)</label>
-          <select id="nc-recipients" multiple style="width:100%;height:140px;padding:6px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit">
-            ${users.map(u => `<option value="${u._id||u.id}">${u.name} — ${u.role}</option>`).join('')}
-          </select>
-          <p style="font-size:11px;color:var(--text-muted);margin-top:4px">Hold Ctrl/Cmd to select multiple for group chat</p>
+      <div class="msg-modal-body">
+        ${hodSection}
+        <div class="msg-modal-field">
+          <label class="msg-field-label">To</label>
+          <div class="msg-recipient-search">
+            <input id="nc-search" type="text" placeholder="Search name or role…" class="msg-field-input"
+              oninput="_filterNcRecipients(this.value)">
+          </div>
+          <div id="nc-user-list" class="msg-user-list">
+            ${users.length === 0 ? '<div class="msg-empty-recipients">No available recipients</div>' :
+              users.map(u => `<label class="msg-user-opt" data-name="${u.name.toLowerCase()}" data-role="${u.role}">
+                <input type="checkbox" name="nc-rec" value="${u._id}">
+                <div class="msg-user-opt-avatar" style="background:${_avatarColor(u.name)}">${_initials(u.name)}</div>
+                <div class="msg-user-opt-info">
+                  <div class="msg-user-opt-name">${u.name}</div>
+                  <div class="msg-user-opt-role">${u.role}${u.department ? ' · ' + u.department : ''}</div>
+                </div>
+              </label>`).join('')}
+          </div>
         </div>
-        <div>
-          <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);display:block;margin-bottom:6px">First Message *</label>
-          <textarea id="nc-body" rows="3" placeholder="Write your first message…" style="width:100%;padding:9px 13px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;resize:vertical;outline:none"></textarea>
+        <div class="msg-modal-field" id="nc-group-name-row" style="display:none">
+          <label class="msg-field-label">Group name (optional)</label>
+          <input id="nc-title" type="text" placeholder="e.g. Project Alpha Team" class="msg-field-input">
         </div>
-        <div id="nc-group-title" style="display:none">
-          <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);display:block;margin-bottom:6px">Group Name (optional)</label>
-          <input id="nc-title" type="text" placeholder="e.g. Project Alpha Team" style="width:100%;padding:9px 13px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none">
+        <div class="msg-modal-field">
+          <label class="msg-field-label">Message <span style="color:var(--danger)">*</span></label>
+          <textarea id="nc-body" rows="3" placeholder="Write your first message…" class="msg-field-textarea"></textarea>
         </div>
       </div>
-      <div style="padding:12px 20px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end">
+      <div class="msg-modal-foot">
         <button class="btn btn-secondary btn-sm" onclick="document.getElementById('new-convo-overlay').remove()">Cancel</button>
-        <button class="btn btn-primary btn-sm" onclick="startNewConvo()">Start Conversation</button>
+        <button class="btn btn-primary btn-sm" onclick="startNewConvo()">Send</button>
       </div>
     </div>`;
   document.body.appendChild(ol);
-  document.getElementById('nc-recipients').addEventListener('change', function() {
-    const groupDiv = document.getElementById('nc-group-title');
-    if (groupDiv) groupDiv.style.display = this.selectedOptions.length > 1 ? 'block' : 'none';
+  ol.addEventListener('click', e => { if (e.target === ol) ol.remove(); });
+  document.getElementById('nc-search')?.focus();
+  document.querySelectorAll('input[name="nc-rec"]').forEach(cb =>
+    cb.addEventListener('change', () => {
+      const checked = document.querySelectorAll('input[name="nc-rec"]:checked').length;
+      const row = document.getElementById('nc-group-name-row');
+      if (row) row.style.display = checked > 1 ? 'block' : 'none';
+    })
+  );
+}
+
+function _filterNcRecipients(q) {
+  const term = q.toLowerCase();
+  document.querySelectorAll('.msg-user-opt').forEach(el => {
+    const match = el.dataset.name.includes(term) || el.dataset.role.includes(term);
+    el.style.display = match ? '' : 'none';
   });
 }
 
 async function startNewConvo() {
-  const selEl = document.getElementById('nc-recipients');
-  const body  = document.getElementById('nc-body')?.value.trim();
-  const title = document.getElementById('nc-title')?.value.trim();
-  if (!selEl || !selEl.selectedOptions.length) return toastError('Select at least one recipient.');
-  if (!body) return toastError('First message is required.');
-  const recipientIds = Array.from(selEl.selectedOptions).map(o => o.value);
+  const checked = document.querySelectorAll('input[name="nc-rec"]:checked');
+  const body    = document.getElementById('nc-body')?.value.trim();
+  const title   = document.getElementById('nc-title')?.value.trim();
+  if (!checked.length) return toastError('Select at least one recipient.');
+  if (!body)           return toastError('Message is required.');
+  const recipientIds = Array.from(checked).map(c => c.value);
   try {
     const data = await api('/api/messages/conversations', {
       method: 'POST',
-      body: JSON.stringify({ recipientIds, message: body, title }),
+      body:   JSON.stringify({ recipientIds, message: body, title }),
     });
     document.getElementById('new-convo-overlay')?.remove();
-    const c = data.conversation;
+    const c    = data.conversation;
     const myId = currentUser._id || currentUser.id;
-    const others = (c.participants || []).filter(p => (p.user?._id || p.user?.toString?.() || p.user) !== myId);
+    const others = (c.participants || []).filter(p => {
+      const uid = p.user?._id || p.user?.toString?.() || p.user;
+      return uid?.toString() !== myId?.toString();
+    });
     const name = c.isGroup ? (c.title || 'Group') : (others[0]?.user?.name || 'Conversation');
     toastSuccess('Conversation started!');
     await _loadConvoList();
-    openConvo(c._id, name, c.isGroup ? 'group' : 'direct');
+    openConvo(c._id, name, c.type || 'direct_message');
   } catch(e) {
     toastError(e.message || 'Failed to start conversation');
+  }
+}
+
+// ── HOD Request modal (students only) ────────────────────────────────────
+async function showHodRequestModal() {
+  document.getElementById('hod-request-overlay')?.remove();
+  let hods = [];
+  try {
+    const d = await api('/api/messages/users/messageable');
+    hods = d.hodUsers || [];
+  } catch(_) {}
+
+  const ol = document.createElement('div');
+  ol.id = 'hod-request-overlay';
+  ol.className = 'msg-modal-overlay';
+  ol.innerHTML = `
+    <div class="msg-modal" onclick="event.stopPropagation()">
+      <div class="msg-modal-head">
+        <h3>
+          <span class="msg-badge msg-badge--hod" style="margin-right:6px">HOD Request</span>
+          Contact HOD
+        </h3>
+        <button class="msg-modal-close" onclick="document.getElementById('hod-request-overlay').remove()">✕</button>
+      </div>
+      <div class="msg-modal-body">
+        ${hods.length === 0 ? '<div class="msg-modal-info">No HOD found in your institution. Contact your admin.</div>' : `
+        <div class="msg-modal-field">
+          <label class="msg-field-label">HOD</label>
+          <select id="hr-hod" class="msg-field-input">
+            ${hods.map(h => `<option value="${h._id}">${h.name}${h.department?' · '+h.department:''}</option>`).join('')}
+          </select>
+        </div>
+        <div class="msg-modal-field">
+          <label class="msg-field-label">Category <span style="color:var(--danger)">*</span></label>
+          <select id="hr-category" class="msg-field-input">
+            <option value="">— Select —</option>
+            <option value="complaint">Complaint</option>
+            <option value="academic_issue">Academic Issue</option>
+            <option value="emergency">Emergency</option>
+          </select>
+        </div>
+        <div class="msg-modal-field">
+          <label class="msg-field-label">Subject <span style="color:var(--danger)">*</span></label>
+          <input id="hr-subject" type="text" placeholder="Brief subject…" class="msg-field-input" maxlength="120">
+        </div>
+        <div class="msg-modal-field">
+          <label class="msg-field-label">Description <span style="color:var(--danger)">*</span></label>
+          <textarea id="hr-description" rows="4" placeholder="Describe your issue in detail…" class="msg-field-textarea"></textarea>
+        </div>`}
+      </div>
+      <div class="msg-modal-foot">
+        <button class="btn btn-secondary btn-sm" onclick="document.getElementById('hod-request-overlay').remove()">Cancel</button>
+        ${hods.length > 0 ? '<button class="btn btn-primary btn-sm" onclick="submitHodRequest()">Submit Request</button>' : ''}
+      </div>
+    </div>`;
+  document.body.appendChild(ol);
+  ol.addEventListener('click', e => { if (e.target === ol) ol.remove(); });
+}
+
+async function submitHodRequest() {
+  const hodId       = document.getElementById('hr-hod')?.value;
+  const category    = document.getElementById('hr-category')?.value;
+  const subject     = document.getElementById('hr-subject')?.value.trim();
+  const description = document.getElementById('hr-description')?.value.trim();
+  if (!category)    return toastError('Please select a category.');
+  if (!subject)     return toastError('Subject is required.');
+  if (!description) return toastError('Description is required.');
+  try {
+    const data = await api('/api/messages/hod-request', {
+      method: 'POST',
+      body:   JSON.stringify({ hodId, category, subject, description }),
+    });
+    document.getElementById('hod-request-overlay')?.remove();
+    toastSuccess('HOD request submitted!');
+    await _loadConvoList();
+    const c    = data.conversation;
+    const myId = currentUser._id || currentUser.id;
+    const others = (c.participants || []).filter(p => {
+      const uid = p.user?._id || p.user?.toString?.() || p.user;
+      return uid?.toString() !== myId?.toString();
+    });
+    openConvo(c._id, others[0]?.user?.name || 'HOD', 'hod_request');
+  } catch(e) {
+    toastError(e.message || 'Failed to submit request');
   }
 }
 
