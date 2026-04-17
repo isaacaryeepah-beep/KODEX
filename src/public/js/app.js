@@ -4458,8 +4458,11 @@ async function showStartSessionModal() {
           <label>Course <span style="color:red">*</span></label>
           <select id="session-course" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
             <option value="">— Select Course —</option>
-            ${courses.map(c => `<option value="${c._id}">${esc(c.title)}${c.level?' · L'+c.level:''}${c.group?' · Grp '+c.group:''}</option>`).join('')}
+            ${courses
+                .filter(c => !c.needsApproval || c.approvalStatus === 'approved')
+                .map(c => `<option value="${c._id}">${esc(c.title)}${c.level?' · L'+c.level:''}${c.group?' · Grp '+c.group:''}</option>`).join('')}
           </select>
+          ${courses.some(c => c.needsApproval && c.approvalStatus !== 'approved') ? `<p style="font-size:11px;color:#b45309;margin-top:4px">Some courses are hidden because they are pending approval or rejected.</p>` : ''}
         </div>
         <div class="form-group">
           <label>Session Title <span style="font-weight:400;color:var(--text-muted);font-size:12px">(optional)</span></label>
@@ -5762,7 +5765,11 @@ function _renderCoursesHTML(content, courses, isOffline) {
                 : '<span style="color:var(--text-muted);font-size:11px;">—</span>'}</td>
               <td>${!isOffline ? `<button class="btn btn-sm" style="font-size:11px;background:var(--bg);border:1px solid var(--border)" onclick="viewRoster('${course._id}', '${course.code}')">View Roster</button>` : '—'}</td>
               <td>${course.enrolledStudents?.length || 0}</td>
-              ${canManageRoster && !isOffline ? `<td style="white-space:nowrap"><button class="btn btn-primary btn-sm" style="font-size:11px" onclick="showUploadRosterModal('${course._id}', '${course.code}')">Upload Students</button> <button class="btn btn-sm" style="font-size:11px;background:#6366f1;color:#fff" onclick="openBulkEmailModal('${course._id}', '${course.title}')">✉️ Email</button> <button class="btn btn-sm" style="font-size:11px;background:#10b981;color:#fff" onclick="openBulkSmsModal('${course._id}', '${course.title}')">💬 SMS</button></td>` : currentUser.role === 'student' ? `<td><button class="btn btn-sm" style="font-size:11px;background:#f0fdf4;color:#16a34a;border:1px solid #bbf7d0" onclick="generateCertificate('${course._id}','${course.title}')">🎓 Certificate</button></td>` : ''}
+              ${canManageRoster && !isOffline ? `<td style="white-space:nowrap">${
+                (course.needsApproval && course.approvalStatus !== 'approved')
+                  ? `<span style="font-size:11px;color:var(--text-muted);font-style:italic">${course.approvalStatus === 'pending' ? 'Awaiting approval' : 'Rejected — contact HOD'}</span>`
+                  : `<button class="btn btn-primary btn-sm" style="font-size:11px" onclick="showUploadRosterModal('${course._id}', '${course.code}')">Upload Students</button>`
+              } <button class="btn btn-sm" style="font-size:11px;background:#6366f1;color:#fff" onclick="openBulkEmailModal('${course._id}', '${course.title}')">✉️ Email</button> <button class="btn btn-sm" style="font-size:11px;background:#10b981;color:#fff" onclick="openBulkSmsModal('${course._id}', '${course.title}')">💬 SMS</button></td>` : currentUser.role === 'student' ? `<td><button class="btn btn-sm" style="font-size:11px;background:#f0fdf4;color:#16a34a;border:1px solid #bbf7d0" onclick="generateCertificate('${course._id}','${course.title}')">🎓 Certificate</button></td>` : ''}
             </tr>
           `).join('')}</tbody>
         </table>
@@ -5842,7 +5849,9 @@ async function createCourse() {
         group:  group || undefined,
       }),
     });
-    toastSuccess('Course created successfully!');
+    toastSuccess(currentUser.role === 'lecturer'
+      ? 'Course submitted for HOD approval. It will be active once approved.'
+      : 'Course created successfully!');
     closeModal();
     renderCourses();
   } catch (e) {

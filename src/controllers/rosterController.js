@@ -25,6 +25,11 @@ exports.uploadRoster = async (req, res) => {
       return res.status(404).json({ error: "Course not found or you don't have access to it" });
     }
 
+    if (course.needsApproval && course.approvalStatus !== "approved") {
+      const label = course.approvalStatus === "pending" ? "pending HOD approval" : "rejected";
+      return res.status(403).json({ error: `Cannot upload roster for a course that is ${label}.` });
+    }
+
     const invalid = students.filter((s) => !s.studentId || typeof s.studentId !== "string");
     if (invalid.length > 0) {
       return res.status(400).json({ error: "Each student must have a studentId field" });
