@@ -17,7 +17,7 @@ exports.uploadRoster = async (req, res) => {
     }
 
     const courseFilter = { _id: courseId, company: req.user.company };
-    if (req.user.role === "lecturer") courseFilter.lecturer = req.user._id;
+    if (req.user.role === "lecturer") courseFilter.lecturerId = req.user._id;
     const course = await Course.findOne(courseFilter);
 
     if (!course) {
@@ -88,7 +88,7 @@ exports.getRoster = async (req, res) => {
 
     const filter = { _id: courseId, company: req.user.company };
     if (req.user.role === "lecturer") {
-      filter.lecturer = req.user._id;
+      filter.lecturerId = req.user._id;
     }
 
     const course = await Course.findOne(filter);
@@ -114,7 +114,7 @@ exports.removeFromRoster = async (req, res) => {
     const { courseId, rosterId } = req.params;
 
     if (req.user.role === "lecturer") {
-      const course = await Course.findOne({ _id: courseId, company: req.user.company, lecturer: req.user._id });
+      const course = await Course.findOne({ _id: courseId, company: req.user.company, lecturerId: req.user._id });
       if (!course) {
         return res.status(404).json({ error: "Course not found or access denied" });
       }
@@ -142,7 +142,7 @@ exports.clearRoster = async (req, res) => {
     const { courseId } = req.params;
 
     const clearFilter = { _id: courseId, company: req.user.company };
-    if (req.user.role === "lecturer") clearFilter.lecturer = req.user._id;
+    if (req.user.role === "lecturer") clearFilter.lecturerId = req.user._id;
     const course = await Course.findOne(clearFilter);
 
     if (!course) {
