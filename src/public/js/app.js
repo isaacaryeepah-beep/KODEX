@@ -2042,57 +2042,91 @@ function showDashboard(data) {
     const isSubRole = (role === 'employee' || role === 'student' || role === 'hod');
     const userTrial = data.userTrial || null;
 
+    const _bannerEl   = document.getElementById('trial-banner');
+    const _expiredEl  = document.getElementById('trial-expired-banner');
+    const _hideBoth   = () => { _bannerEl.style.display = 'none'; _expiredEl.style.display = 'none'; };
+    const _dayLabel   = n => `${n} day${n !== 1 ? 's' : ''}`;
+
     if (isSubRole) {
-      // Employees / students / HODs never pay — hide both banners
-      document.getElementById('trial-banner').style.display = 'none';
-      document.getElementById('trial-expired-banner').style.display = 'none';
+      _hideBoth();
     } else if (PAID_FE.includes(role) && userTrial) {
-      // Use per-user subscription status (ignores company trial)
       const daysLeft = userTrial.daysLeft || 0;
-      const status   = userTrial.status;   // 'active' | 'trial' | 'expired'
+      const status   = userTrial.status;
 
       if (status === 'active') {
-        // Subscribed — show green active banner
-        const banner = document.getElementById('trial-banner');
-        banner.textContent = `✅ Subscription active — ${daysLeft} day${daysLeft !== 1 ? 's' : ''} remaining`;
-        banner.style.background = '#f0fdf4';
-        banner.style.color = '#15803d';
-        banner.style.display = 'block';
-        document.getElementById('trial-expired-banner').style.display = 'none';
+        _expiredEl.style.display = 'none';
+        _bannerEl.className = 'trial-banner sub--active';
+        _bannerEl.innerHTML = `
+          <div class="sub-banner-left">
+            <div class="sub-banner-icon sub-banner-icon--active">✓</div>
+            <div class="sub-banner-text">
+              <span class="sub-banner-title">Subscription Active</span>
+              <span class="sub-banner-sep">·</span>
+              <span class="sub-banner-detail">${_dayLabel(daysLeft)} remaining</span>
+            </div>
+          </div>
+          <div class="sub-banner-right">
+            <div class="sub-banner-pill">Active</div>
+          </div>`;
+        _bannerEl.style.display = 'flex';
+
       } else if (status === 'trial' && daysLeft > 0) {
-        // Still on free trial
-        const banner = document.getElementById('trial-banner');
-        const urgency = daysLeft <= 3 ? '⚠️ ' : '';
-        banner.textContent = `${urgency}Free Trial: ${daysLeft} day${daysLeft !== 1 ? 's' : ''} remaining`;
-        banner.style.background = daysLeft <= 3 ? '#fef3c7' : '';
-        banner.style.color = daysLeft <= 3 ? '#92400e' : '';
-        banner.style.display = 'block';
-        document.getElementById('trial-expired-banner').style.display = 'none';
+        const urgent = daysLeft <= 3;
+        _expiredEl.style.display = 'none';
+        _bannerEl.className = `trial-banner ${urgent ? 'sub--urgent' : 'sub--trial'}`;
+        _bannerEl.innerHTML = `
+          <div class="sub-banner-left">
+            <div class="sub-banner-icon sub-banner-icon--${urgent ? 'urgent' : 'trial'}">${urgent ? '⚠' : '⏳'}</div>
+            <div class="sub-banner-text">
+              <span class="sub-banner-title">${urgent ? 'Trial Ending Soon' : 'Free Trial'}</span>
+              <span class="sub-banner-sep">·</span>
+              <span class="sub-banner-detail">${_dayLabel(daysLeft)} remaining</span>
+            </div>
+          </div>
+          <div class="sub-banner-right">
+            <div class="sub-banner-pill">${urgent ? 'Expiring' : 'Trial'}</div>
+            <button class="sub-banner-cta" onclick="navigateTo('subscription')">${urgent ? 'Upgrade Now' : 'Upgrade'}</button>
+          </div>`;
+        _bannerEl.style.display = 'flex';
+
       } else {
-        // Trial or subscription expired — show subscribe banner with Paystack CTA
-        const expiredBanner = document.getElementById('trial-expired-banner');
         const _mode  = currentUser?.company?.mode || 'academic';
-        const _label = _mode === 'corporate' ? 'GHS 150 / Month' : 'GHS 300 / Semester';
-        expiredBanner.innerHTML = `
-          ⚠️ Your free trial has ended.
-          <button onclick="paySubscription()" style="margin-left:12px;background:#1a56db;color:#fff;border:none;border-radius:6px;padding:6px 14px;font-size:12px;font-weight:600;cursor:pointer">
-            Pay ${_label} via Paystack
-          </button>`;
-        expiredBanner.style.display = 'block';
-        expiredBanner.style.background = '#fef2f2';
-        expiredBanner.style.color = '#dc2626';
-        document.getElementById('trial-banner').style.display = 'none';
+        const _label = _mode === 'corporate' ? 'GHS 150 / mo' : 'GHS 300 / semester';
+        _bannerEl.style.display = 'none';
+        _expiredEl.className = 'trial-expired-banner';
+        _expiredEl.innerHTML = `
+          <div class="sub-banner-left">
+            <div class="sub-banner-icon sub-banner-icon--expired">✕</div>
+            <div class="sub-banner-text">
+              <span class="sub-banner-title">Trial Expired</span>
+              <span class="sub-banner-sep">·</span>
+              <span class="sub-banner-detail">Subscribe to continue — ${_label} via Paystack</span>
+            </div>
+          </div>
+          <div class="sub-banner-right">
+            <button class="sub-banner-cta" onclick="paySubscription()">Subscribe Now</button>
+          </div>`;
+        _expiredEl.style.display = 'flex';
       }
+
     } else if (trial && trial.active) {
-      // Fallback: company trial (superadmin etc.)
-      const banner = document.getElementById('trial-banner');
       const tr = trial.timeRemaining || {};
-      banner.textContent = `Free Trial: ${trial.daysRemaining} days remaining (${tr.days || 0}d ${tr.hours || 0}h ${tr.minutes || 0}m)`;
-      banner.style.display = 'block';
-      document.getElementById('trial-expired-banner').style.display = 'none';
+      _expiredEl.style.display = 'none';
+      _bannerEl.className = 'trial-banner sub--trial';
+      _bannerEl.innerHTML = `
+        <div class="sub-banner-left">
+          <div class="sub-banner-icon sub-banner-icon--trial">⏳</div>
+          <div class="sub-banner-text">
+            <span class="sub-banner-title">Company Trial</span>
+            <span class="sub-banner-sep">·</span>
+            <span class="sub-banner-detail">${trial.daysRemaining} days remaining (${tr.days || 0}d ${tr.hours || 0}h ${tr.minutes || 0}m)</span>
+          </div>
+        </div>
+        <div class="sub-banner-right"><div class="sub-banner-pill">Trial</div></div>`;
+      _bannerEl.style.display = 'flex';
+
     } else {
-      document.getElementById('trial-banner').style.display = 'none';
-      document.getElementById('trial-expired-banner').style.display = 'none';
+      _hideBoth();
     }
 
     buildSidebar();
@@ -3426,16 +3460,40 @@ async function renderSuperadminDashboard(content) {
 
 
 async function renderLecturerDashboard(content) {
-  const [sessionsData, coursesData, quizzesData] = await Promise.all([
+  const [sessionsData, coursesData, quizzesData, meetingsData] = await Promise.all([
     api('/api/attendance-sessions?limit=5').catch(() => ({ sessions: [], pagination: { total: 0 } })),
     api('/api/courses').catch(() => ({ courses: [] })),
     api('/api/lecturer/quizzes').catch(() => ({ quizzes: [] })),
+    api('/api/meetings?limit=10').catch(() => ({ data: [] })),
   ]);
 
-  // Count students enrolled across lecturer's courses only
-  const totalStudents = coursesData.courses.reduce((sum, c) => sum + (c.enrolledStudents?.length || 0), 0);
-  const activeCourses = coursesData.courses.length;
+  const totalStudents  = coursesData.courses.reduce((sum, c) => sum + (c.enrolledStudents?.length || 0), 0);
+  const activeCourses  = coursesData.courses.length;
   const quizzesCreated = quizzesData.quizzes.length;
+
+  const now = Date.now();
+  const upcomingMeetings = (meetingsData.data || [])
+    .filter(m => m.status === 'scheduled' || m.status === 'live')
+    .sort((a, b) => new Date(a.scheduledStart) - new Date(b.scheduledStart))
+    .slice(0, 5);
+
+  const _fmtMeetingDate = iso => {
+    const d = new Date(iso);
+    return d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+  };
+  const _fmtTime = iso => new Date(iso).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+  const _joinUrl  = m => `https://meet.jit.si/${m.roomName}`;
+
+  const _meetingStatusMeta = m => {
+    if (m.status === 'live') return { label: 'Live', cls: 'sched-status--live' };
+    const diffMs  = new Date(m.scheduledStart) - now;
+    const diffMin = Math.round(diffMs / 60000);
+    if (diffMin < 0)   return { label: 'Overdue', cls: 'sched-status--overdue' };
+    if (diffMin < 60)  return { label: `In ${diffMin}m`, cls: 'sched-status--soon' };
+    const diffHr = Math.round(diffMin / 60);
+    if (diffHr < 24)   return { label: `In ${diffHr}h`, cls: 'sched-status--today' };
+    return { label: 'Scheduled', cls: 'sched-status--scheduled' };
+  };
 
   content.innerHTML = `
     <div class="page-header">
@@ -3470,6 +3528,54 @@ async function renderLecturerDashboard(content) {
           `).join('')}</tbody>
         </table>
       ` : '<div class="empty-state"><p>No sessions yet. Start your first attendance session!</p></div>'}
+    </div>
+
+    <div class="card" style="margin-top:0">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px">
+        <div>
+          <div class="card-title" style="margin-bottom:2px">Scheduled Meetings</div>
+          <div style="font-size:12px;color:var(--text-muted)">Upcoming and live Jitsi meetings</div>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="navigateTo('meetings')"
+          style="gap:6px;font-size:12px">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+          View All
+        </button>
+      </div>
+      ${upcomingMeetings.length ? `
+        <div class="sched-meetings-list">
+          ${upcomingMeetings.map(m => {
+            const meta = _meetingStatusMeta(m);
+            return `
+            <div class="sched-meeting-row">
+              <div class="sched-meeting-indicator ${m.status === 'live' ? 'sched-ind--live' : 'sched-ind--scheduled'}"></div>
+              <div class="sched-meeting-info">
+                <div class="sched-meeting-title">${m.title || 'Untitled Meeting'}</div>
+                <div class="sched-meeting-meta">
+                  <span>${_fmtMeetingDate(m.scheduledStart)}</span>
+                  <span class="sched-dot">·</span>
+                  <span>${_fmtTime(m.scheduledStart)}${m.scheduledEnd ? ' – ' + _fmtTime(m.scheduledEnd) : ''}</span>
+                  ${m.linkedCourseId ? `<span class="sched-dot">·</span><span>${m.linkedCourseId.code || m.linkedCourseId.name || ''}</span>` : ''}
+                  ${m.creatorId?.name ? `<span class="sched-dot">·</span><span>${m.creatorId.name}</span>` : ''}
+                </div>
+              </div>
+              <div class="sched-meeting-actions">
+                <span class="sched-status ${meta.cls}">${meta.label}</span>
+                <a class="btn btn-primary btn-sm sched-join-btn" href="${_joinUrl(m)}" target="_blank" rel="noopener"
+                  style="gap:5px;font-size:11.5px">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+                  Join
+                </a>
+              </div>
+            </div>`;
+          }).join('')}
+        </div>
+      ` : `
+        <div class="empty-state" style="padding:28px 0">
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom:10px;opacity:.5"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+          <p style="margin:0 0 12px">No upcoming meetings</p>
+          <button class="btn btn-primary btn-sm" onclick="navigateTo('meetings')">Schedule a Meeting</button>
+        </div>`}
     </div>
   `;
 }

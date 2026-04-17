@@ -817,28 +817,102 @@ body {
 .role-superadmin { background: #0d1117; color: #f8fafc; }
 
 /* Trial banners */
-.trial-banner {
-  background: linear-gradient(90deg, #ecfdf5, #d1fae5);
-  color: #065f46;
-  border-bottom: 1px solid #a7f3d0;
-  padding: 9px 28px;
-  font-size: 13px;
-  font-weight: 500;
+/* ── Subscription / Trial status banner ── */
+.trial-banner,
+.trial-expired-banner {
   display: none;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  padding: 0 24px;
+  min-height: 42px;
+  font-size: 13px;
+  flex-shrink: 0;
+  border-bottom: 1px solid transparent;
 }
 
-.trial-expired-banner {
-  background: var(--danger);
-  color: white;
-  padding: 8px 24px;
-  font-size: 13px;
-  font-weight: 600;
-  text-align: center;
-  display: none;
+/* active subscription */
+.trial-banner.sub--active {
+  background: linear-gradient(90deg, #f0fdf4, #dcfce7);
+  border-bottom-color: #bbf7d0;
+  color: #166534;
 }
+/* trial (healthy) */
+.trial-banner.sub--trial {
+  background: linear-gradient(90deg, #eff6ff, #dbeafe);
+  border-bottom-color: #bfdbfe;
+  color: #1e40af;
+}
+/* trial urgent */
+.trial-banner.sub--urgent {
+  background: linear-gradient(90deg, #fffbeb, #fef3c7);
+  border-bottom-color: #fde68a;
+  color: #92400e;
+}
+/* expired */
+.trial-expired-banner {
+  background: linear-gradient(90deg, #fef2f2, #fee2e2);
+  border-bottom-color: #fca5a5;
+  color: #991b1b;
+}
+
+.sub-banner-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.sub-banner-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  flex-shrink: 0;
+}
+.sub-banner-icon--active { background: #dcfce7; }
+.sub-banner-icon--trial  { background: #dbeafe; }
+.sub-banner-icon--urgent { background: #fef3c7; }
+.sub-banner-icon--expired{ background: #fee2e2; }
+
+.sub-banner-text { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.sub-banner-title { font-weight: 700; font-size: 12.5px; }
+.sub-banner-sep { opacity: .4; }
+.sub-banner-detail { font-size: 12px; opacity: .85; }
+
+.sub-banner-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.sub-banner-pill {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .6px;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border-radius: 20px;
+  border: 1.5px solid currentColor;
+  opacity: .75;
+  white-space: nowrap;
+}
+.sub-banner-cta {
+  font-size: 11.5px;
+  font-weight: 700;
+  padding: 5px 13px;
+  border-radius: 7px;
+  border: none;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: opacity .15s, transform .15s;
+}
+.sub-banner-cta:hover { opacity: .88; transform: translateY(-1px); }
+.sub--trial   .sub-banner-cta { background: #2563eb; color: #fff; }
+.sub--urgent  .sub-banner-cta { background: #d97706; color: #fff; }
+.trial-expired-banner .sub-banner-cta { background: #dc2626; color: #fff; }
 
 /* ══════════════════════════════════════════════════
    SIDEBAR
@@ -4668,11 +4742,26 @@ table tr:hover td { background: #f8fafc !important; }
 }
 .fap-close-btn:hover { background: rgba(255,255,255,.28); }
 
-/* ── Ask input ── */
+/* ── Scrollable body (suggestions + messages + FAQ) ── */
+.fap-scrollable {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border, #e5e7eb) transparent;
+}
+.fap-scrollable::-webkit-scrollbar { width: 3px; }
+.fap-scrollable::-webkit-scrollbar-thumb { background: var(--border, #e5e7eb); border-radius: 2px; }
+
+/* ── Ask input — pinned at bottom ── */
 .fap-ask-section {
-  padding: 11px 12px;
-  border-bottom: 1px solid var(--border, #e5e7eb);
+  padding: 10px 12px;
+  border-top: 1px solid var(--border, #e5e7eb);
+  border-bottom: none;
   flex-shrink: 0;
+  background: var(--card, #fff);
 }
 
 .fap-input-row {
@@ -4727,6 +4816,7 @@ table tr:hover td { background: #f8fafc !important; }
   padding: 9px 12px 10px;
   border-bottom: 1px solid var(--border, #e5e7eb);
   flex-shrink: 0;
+  background: var(--card, #fff);
 }
 
 .fap-section-label {
@@ -4762,19 +4852,13 @@ table tr:hover td { background: #f8fafc !important; }
 [data-theme="dark"] .fap-chip { background: #1e2d45; color: #60a5fa; border-color: #1e3a5f; }
 [data-theme="dark"] .fap-chip:hover { background: #2563eb; color: #fff; border-color: #2563eb; }
 
-/* ── Chat area ── */
+/* ── Chat area (natural height within .fap-scrollable) ── */
 .fap-chat-section {
-  flex: 1;
-  overflow-y: auto;
   padding: 10px 12px;
   display: flex;
   flex-direction: column;
-  min-height: 0;
-  scrollbar-width: thin;
-  scrollbar-color: var(--border, #e5e7eb) transparent;
+  flex-shrink: 0;
 }
-.fap-chat-section::-webkit-scrollbar { width: 3px; }
-.fap-chat-section::-webkit-scrollbar-thumb { background: var(--border, #e5e7eb); border-radius: 2px; }
 
 .fap-message {
   display: flex;
@@ -4845,18 +4929,12 @@ table tr:hover td { background: #f8fafc !important; }
   min-height: 80px;
 }
 
-/* ── FAQ accordion ── */
+/* ── FAQ accordion (natural height, no cap — scrollable via .fap-scrollable) ── */
 .fap-faq-section {
   border-top: 1px solid var(--border, #e5e7eb);
-  padding: 10px 12px 12px;
+  padding: 10px 12px 14px;
   flex-shrink: 0;
-  max-height: 230px;
-  overflow-y: auto;
-  scrollbar-width: thin;
-  scrollbar-color: var(--border, #e5e7eb) transparent;
 }
-.fap-faq-section::-webkit-scrollbar { width: 3px; }
-.fap-faq-section::-webkit-scrollbar-thumb { background: var(--border, #e5e7eb); border-radius: 2px; }
 
 .fap-faq-item {
   border: 1px solid var(--border, #e5e7eb);
@@ -4934,6 +5012,102 @@ table tr:hover td { background: #f8fafc !important; }
 [data-theme="dark"] .fap-topbar-btn { background: #1e2533; border-color: #2d3a4a; color: #94a3b8; }
 [data-theme="dark"] .fap-topbar-btn:hover { background: #1e2d45; border-color: #3b82f6; color: #60a5fa; }
 [data-theme="dark"] .fap-topbar-btn.fap-active { background: #2563eb; border-color: #2563eb; color: #fff; }
+
+/* ══════════════════════════════════════════════════
+   SCHEDULED MEETINGS — Lecturer Dashboard card
+══════════════════════════════════════════════════ */
+.sched-meetings-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sched-meeting-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border, #e5e7eb);
+  background: var(--bg, #f4f6f9);
+  transition: background .15s, border-color .15s;
+}
+.sched-meeting-row:hover {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+}
+[data-theme="dark"] .sched-meeting-row { background: #151d2b; border-color: #2d3a4a; }
+[data-theme="dark"] .sched-meeting-row:hover { background: #1e2d45; border-color: #1e3a5f; }
+
+.sched-meeting-indicator {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.sched-ind--live      { background: #22c55e; box-shadow: 0 0 0 3px rgba(34,197,94,.2); animation: schedPulse 1.8s infinite; }
+.sched-ind--scheduled { background: #6366f1; }
+@keyframes schedPulse {
+  0%,100% { box-shadow: 0 0 0 3px rgba(34,197,94,.2); }
+  50%      { box-shadow: 0 0 0 6px rgba(34,197,94,.05); }
+}
+
+.sched-meeting-info {
+  flex: 1;
+  min-width: 0;
+}
+.sched-meeting-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text, #0d1117);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sched-meeting-meta {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+  font-size: 11.5px;
+  color: var(--text-muted, #6b7280);
+  margin-top: 2px;
+}
+.sched-dot { opacity: .4; }
+
+.sched-meeting-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.sched-status {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: .4px;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border-radius: 20px;
+  white-space: nowrap;
+}
+.sched-status--live      { background: #dcfce7; color: #166534; }
+.sched-status--soon      { background: #fef3c7; color: #92400e; }
+.sched-status--today     { background: #dbeafe; color: #1e40af; }
+.sched-status--scheduled { background: #f1f5f9; color: #475569; }
+.sched-status--overdue   { background: #fee2e2; color: #991b1b; }
+[data-theme="dark"] .sched-status--live      { background: #14532d; color: #86efac; }
+[data-theme="dark"] .sched-status--soon      { background: #78350f; color: #fde68a; }
+[data-theme="dark"] .sched-status--today     { background: #1e3a5f; color: #93c5fd; }
+[data-theme="dark"] .sched-status--scheduled { background: #1e2533; color: #94a3b8; }
+[data-theme="dark"] .sched-status--overdue   { background: #7f1d1d; color: #fca5a5; }
+
+.sched-join-btn { text-decoration: none; }
+
+@media (max-width: 640px) {
+  .sched-meeting-row { flex-wrap: wrap; gap: 8px; }
+  .sched-meeting-actions { width: 100%; justify-content: flex-end; }
+}
 
 /* Hide panel on small screens */
 @media (max-width: 1120px) {

@@ -766,6 +766,27 @@ function selectPortal(t){document.addEventListener('DOMContentLoaded',function()
           </button>
         </div>
 
+        <!-- Scrollable body: suggestions + chat messages + FAQ accordion -->
+        <div class="fap-scrollable">
+          <div class="fap-suggestions-section">
+            <div class="fap-section-label">Quick help</div>
+            <div class="fap-chips">
+              <button class="fap-chip" onclick="faqPanelAskQ('How to create a course')">How to create a course</button>
+              <button class="fap-chip" onclick="faqPanelAskQ('How to upload students')">How to upload students</button>
+              <button class="fap-chip" onclick="faqPanelAskQ('How to start a session')">How to start a session</button>
+              <button class="fap-chip" onclick="faqPanelAskQ('How Grade Book works')">How Grade Book works</button>
+            </div>
+          </div>
+
+          <div class="fap-chat-section" id="fap-chat"></div>
+
+          <div class="fap-faq-section">
+            <div class="fap-section-label" style="margin-bottom:8px">Common Questions</div>
+            <div id="fap-faq-list"></div>
+          </div>
+        </div>
+
+        <!-- Input pinned at bottom -->
         <div class="fap-ask-section">
           <div class="fap-input-row">
             <input id="fap-input" type="text" class="fap-input" placeholder="Ask a question..." autocomplete="off" aria-label="Ask FAQ Assistant">
@@ -773,23 +794,6 @@ function selectPortal(t){document.addEventListener('DOMContentLoaded',function()
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
             </button>
           </div>
-        </div>
-
-        <div class="fap-suggestions-section">
-          <div class="fap-section-label">Quick help</div>
-          <div class="fap-chips">
-            <button class="fap-chip" onclick="faqPanelAskQ('How to create a course')">How to create a course</button>
-            <button class="fap-chip" onclick="faqPanelAskQ('How to upload students')">How to upload students</button>
-            <button class="fap-chip" onclick="faqPanelAskQ('How to start a session')">How to start a session</button>
-            <button class="fap-chip" onclick="faqPanelAskQ('How Grade Book works')">How Grade Book works</button>
-          </div>
-        </div>
-
-        <div class="fap-chat-section" id="fap-chat"></div>
-
-        <div class="fap-faq-section">
-          <div class="fap-section-label" style="margin-bottom:8px">Common Questions</div>
-          <div id="fap-faq-list"></div>
         </div>
       </div>
     </div>
