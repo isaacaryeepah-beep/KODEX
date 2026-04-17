@@ -10,11 +10,15 @@ exports.createCourse = async (req, res) => {
   try {
     const companyId  = getCompanyId(req);
     const creatorId  = req.user._id;
+    const isLecturer = req.user.role === 'lecturer';
 
-    // If lecturer is creating, force their own ID as lecturerId
+    // Lecturer-created courses enter HOD approval queue.
+    // Admin / superadmin courses are immediately approved.
     const data = {
       ...req.body,
-      lecturerId: req.user.role === 'lecturer' ? req.user._id : (req.body.lecturerId || null),
+      lecturerId:     isLecturer ? req.user._id : (req.body.lecturerId || null),
+      needsApproval:  isLecturer,
+      approvalStatus: isLecturer ? 'pending' : 'approved',
     };
 
     const course = await courseService.createCourse(data, creatorId, companyId);

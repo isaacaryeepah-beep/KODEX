@@ -38,6 +38,7 @@ const snapQuizStudentRoutes         = require("./routes/snapQuizStudentRoutes");
 const assignmentLecturerRoutes      = require("./routes/assignmentLecturerRoutes");
 const assignmentStudentRoutes       = require("./routes/assignmentStudentRoutes");
 const aiGeneratorRoutes             = require("./routes/aiGeneratorRoutes");
+const hodRoutes = require("./routes/hod");
 let superadminRoutes = null;
 try { superadminRoutes = require("./routes/superadmin"); } catch(_) { console.warn('superadmin routes not found — skipping'); }
 
@@ -197,6 +198,7 @@ app.use("/api/admin/quizzes", adminQuizRoutes);
 app.use("/api/zoom", zoomRoutes);
 app.use("/api/reports", reportRoutes);
 app.use("/api/approvals", approvalRoutes);
+app.use("/api/hod", hodRoutes);
 app.use("/api/roster", rosterRoutes);
 app.use("/api/admin/reports", adminReportRoutes);
 app.use("/api/jitsi", jitsiRoutes);

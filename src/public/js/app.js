@@ -2173,7 +2173,9 @@ function buildSidebar() {
       links.push({ id: 'hod-quizzes',      label: 'Quizzes',        icon: quizzesIcon() });
       links.push({ id: 'meetings',         label: 'Meetings',       icon: meetingsIcon() });
       links.push({ id: 'hod-reports',      label: 'Reports',        icon: reportsIcon() });
-      links.push({ id: 'approvals',        label: 'Approvals',      icon: approvalsIcon() });
+      links.push({ id: 'approvals',           label: 'Approvals',        icon: approvalsIcon() });
+      links.push({ id: 'hod-course-approvals',label: 'Course Approvals', icon: svgIcon('<path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>') });
+      links.push({ id: 'hod-unlock-students', label: 'Locked Students',  icon: svgIcon('<rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>') });
       links.push({ id: 'announcements',    label: 'Announcements',  icon: svgIcon('<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>') });
       links.push({ id: 'messages',         label: 'Messages',       icon: svgIcon('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>') });
       links.push({ id: 'faq-center',       label: 'FAQ Center',     icon: svgIcon('<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>') });
@@ -2285,13 +2287,15 @@ function navigateTo(view) {
     case 'contact':     renderContact(); break;
     case 'about':       renderAbout(); break;
     case 'superadmin-platform': renderSuperadminDashboard(document.getElementById('main-content')); break;
-    case 'hod-overview':  renderHodDashboard(document.getElementById('main-content')); break;
-    case 'hod-courses':   renderHodCourses(); break;
-    case 'hod-sessions':  renderHodSessions(); break;
-    case 'hod-lecturers': renderHodLecturers(); break;
-    case 'hod-students':  renderHodStudents(); break;
-    case 'hod-reports':   renderHodReports(); break;
-    case 'hod-quizzes':   renderHodQuizzes(); break;
+    case 'hod-overview':         renderHodDashboard(document.getElementById('main-content')); break;
+    case 'hod-courses':          renderHodCourses(); break;
+    case 'hod-sessions':         renderHodSessions(); break;
+    case 'hod-lecturers':        renderHodLecturers(); break;
+    case 'hod-students':         renderHodStudents(); break;
+    case 'hod-reports':          renderHodReports(); break;
+    case 'hod-quizzes':          renderHodQuizzes(); break;
+    case 'hod-course-approvals': renderHodCourseApprovals(); break;
+    case 'hod-unlock-students':  renderHodUnlockStudents(); break;
     case 'announcements': renderAnnouncements(); break;
     case 'gradebook': renderGradeBook(); break;
     case 'training':       renderTraining(); break;
@@ -2631,6 +2635,14 @@ async function renderHodDashboard(content) {
               Post Announcement
             </button>
             <button class="btn btn-secondary" onclick="navigateTo('approvals')" id="hod-approvals-btn">Pending Approvals</button>
+            <button class="btn btn-secondary" onclick="navigateTo('hod-course-approvals')" id="hod-course-approvals-btn">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+              Course Approvals
+            </button>
+            <button class="btn btn-secondary" onclick="navigateTo('hod-unlock-students')" id="hod-locked-btn">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+              Locked Students
+            </button>
             <div style="border-top:1px solid var(--border);padding-top:8px;margin-top:4px;">
               <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-muted);margin-bottom:6px;">Export</div>
               <div style="display:flex;gap:6px;flex-wrap:wrap;">
@@ -2645,6 +2657,16 @@ async function renderHodDashboard(content) {
     api('/api/approvals/pending').then(d => {
       const count = (d.pending || []).length;
       const btn = document.getElementById('hod-approvals-btn');
+      if (btn && count > 0) btn.innerHTML += ' <span style="background:#ef4444;color:#fff;font-size:10px;font-weight:700;padding:1px 6px;border-radius:20px;margin-left:4px;">' + count + '</span>';
+    }).catch(() => {});
+    api('/api/hod/pending-courses').then(d => {
+      const count = (d.courses || []).length;
+      const btn = document.getElementById('hod-course-approvals-btn');
+      if (btn && count > 0) btn.innerHTML += ' <span style="background:#ef4444;color:#fff;font-size:10px;font-weight:700;padding:1px 6px;border-radius:20px;margin-left:4px;">' + count + '</span>';
+    }).catch(() => {});
+    api('/api/hod/locked-students').then(d => {
+      const count = (d.students || []).length;
+      const btn = document.getElementById('hod-locked-btn');
       if (btn && count > 0) btn.innerHTML += ' <span style="background:#ef4444;color:#fff;font-size:10px;font-weight:700;padding:1px 6px;border-radius:20px;margin-left:4px;">' + count + '</span>';
     }).catch(() => {});
   } catch(e) {
@@ -3115,16 +3137,26 @@ async function renderHodCourses() {
   content.innerHTML = '<div class="loading">Loading courses…</div>';
   try {
     const dept = currentUser.department ? '&department=' + encodeURIComponent(currentUser.department) : '';
-    const data = await api('/api/courses?limit=200' + dept);
-    const courses = data.courses || [];
+    const [coursesData, pendingData] = await Promise.all([
+      api('/api/courses?limit=200' + dept),
+      api('/api/hod/pending-courses').catch(() => ({ courses: [] })),
+    ]);
+    const courses = coursesData.courses || [];
+    const pending = pendingData.courses || [];
+    const approvalBadge = s => {
+      if (s === 'pending')  return '<span style="background:#fef3c7;color:#b45309;border:1px solid #fde68a;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700;">⏳ PENDING APPROVAL</span>';
+      if (s === 'rejected') return '<span style="background:#fee2e2;color:#b91c1c;border:1px solid #fca5a5;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700;">✕ REJECTED</span>';
+      return '';
+    };
     content.innerHTML = `
       <div class="page-header">
         <div><h2>Courses</h2><p>${courses.length} course${courses.length !== 1 ? 's' : ''} in ${currentUser.department || 'your department'}</p></div>
+        ${pending.length > 0 ? `<button class="btn btn-primary btn-sm" onclick="navigateTo('hod-course-approvals')">⚠ ${pending.length} Pending Approval${pending.length > 1 ? 's' : ''}</button>` : ''}
       </div>
       ${courses.length === 0 ? '<div class="empty-state"><p>No courses found for this department.</p></div>' :
         `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px;">
           ${courses.map(c => `
-            <div class="card" style="padding:16px 18px;">
+            <div class="card" style="padding:16px 18px;${c.approvalStatus === 'rejected' ? 'border-left:3px solid #ef4444;' : c.approvalStatus === 'pending' ? 'border-left:3px solid #f59e0b;' : ''}">
               <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:8px;">
                 <div>
                   <div style="font-weight:700;font-size:14px;">${c.title}</div>
@@ -3135,12 +3167,151 @@ async function renderHodCourses() {
               <div style="font-size:12px;color:var(--text-muted);margin-bottom:6px;">
                 👨‍🏫 ${c.lecturerId?.name || 'Unassigned'}
               </div>
-              ${c.description ? `<div style="font-size:12px;color:var(--text-muted);line-height:1.5;">${c.description}</div>` : ''}
+              ${c.needsApproval ? `<div style="margin-top:6px;">${approvalBadge(c.approvalStatus)}</div>` : ''}
+              ${c.approvalNote ? `<div style="font-size:11px;color:var(--text-muted);margin-top:4px;font-style:italic;">"${esc(c.approvalNote)}"</div>` : ''}
+              ${c.description ? `<div style="font-size:12px;color:var(--text-muted);line-height:1.5;margin-top:6px;">${c.description}</div>` : ''}
             </div>`).join('')}
         </div>`}`;
   } catch(e) {
     content.innerHTML = `<div class="card"><p style="color:#ef4444;">${e.message}</p></div>`;
   }
+}
+
+// ── FEATURE 3b: HOD — Course Approval Queue ────────────────────────────────
+async function renderHodCourseApprovals() {
+  const content = document.getElementById('main-content');
+  content.innerHTML = '<div class="loading">Loading pending courses…</div>';
+  try {
+    const data = await api('/api/hod/pending-courses');
+    const courses = data.courses || [];
+    content.innerHTML = `
+      <div class="page-header">
+        <div>
+          <h2>Course Approvals</h2>
+          <p>${courses.length} course${courses.length !== 1 ? 's' : ''} awaiting your review · ${currentUser.department || 'All departments'}</p>
+        </div>
+      </div>
+      ${courses.length === 0
+        ? `<div class="card"><div class="empty-state"><p style="color:var(--text-muted);font-size:13px;">No courses pending approval. All caught up!</p></div></div>`
+        : `<div style="display:flex;flex-direction:column;gap:14px;">
+            ${courses.map(c => `
+              <div class="card" style="padding:18px 20px;border-left:3px solid #f59e0b;">
+                <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:10px;">
+                  <div>
+                    <div style="font-weight:700;font-size:15px;">${esc(c.title)}</div>
+                    <div style="font-size:11px;font-family:monospace;color:var(--text-muted);margin-top:2px;">${esc(c.code)}</div>
+                  </div>
+                  <span style="background:#fef3c7;color:#b45309;border:1px solid #fde68a;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700;white-space:nowrap;">⏳ Pending Approval</span>
+                </div>
+                <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:6px;font-size:12px;color:var(--text-muted);margin-bottom:12px;">
+                  <div>👨‍🏫 <strong>${esc(c.lecturerId?.name || c.createdBy?.name || 'Unknown')}</strong></div>
+                  ${c.academicYear ? `<div>📅 ${esc(c.academicYear)} · Sem ${esc(c.semester || '—')}</div>` : ''}
+                  ${c.level       ? `<div>🎓 Level ${esc(c.level)}${c.group ? ` · Group ${esc(c.group)}` : ''}</div>` : ''}
+                  ${c.departmentId? `<div>🏛 ${esc(c.departmentId)}</div>` : ''}
+                  <div>📅 Submitted ${timeAgo(c.createdAt)}</div>
+                </div>
+                ${c.description ? `<div style="font-size:12px;color:var(--text-secondary);line-height:1.55;margin-bottom:12px;border-left:3px solid var(--border);padding-left:10px;">${esc(c.description)}</div>` : ''}
+                <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                  <button class="btn btn-primary btn-sm" onclick="hodApproveCourse('${c._id}','${esc(c.title).replace(/'/g,"\\'")}')">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Approve
+                  </button>
+                  <button class="btn btn-sm" style="background:#fee2e2;color:#b91c1c;border:1px solid #fca5a5;" onclick="hodRejectCourse('${c._id}','${esc(c.title).replace(/'/g,"\\'")}')">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg> Reject
+                  </button>
+                </div>
+              </div>`).join('')}
+          </div>`}`;
+  } catch(e) {
+    content.innerHTML = `<div class="card"><p style="color:#ef4444;">${e.message}</p></div>`;
+  }
+}
+
+async function hodApproveCourse(id, title) {
+  const note = prompt(`Approve course: "${title}"\n\nOptional note for the lecturer:`) ;
+  if (note === null) return; // cancelled
+  try {
+    await api(`/api/hod/courses/${id}/approve`, { method: 'PATCH', body: JSON.stringify({ note: note.trim() || undefined }) });
+    toastSuccess(`"${title}" approved and published.`);
+    renderHodCourseApprovals();
+  } catch(e) { toastError(e.message || 'Failed to approve course'); }
+}
+
+async function hodRejectCourse(id, title) {
+  const note = prompt(`Reject course: "${title}"\n\nReason for rejection (required):`);
+  if (note === null || !note.trim()) { toastWarning('Rejection reason is required.'); return; }
+  try {
+    await api(`/api/hod/courses/${id}/reject`, { method: 'PATCH', body: JSON.stringify({ note: note.trim() }) });
+    toastSuccess(`"${title}" rejected. Lecturer has been notified.`);
+    renderHodCourseApprovals();
+  } catch(e) { toastError(e.message || 'Failed to reject course'); }
+}
+
+// ── FEATURE 3c: HOD — Unlock Locked Students ───────────────────────────────
+async function renderHodUnlockStudents() {
+  const content = document.getElementById('main-content');
+  content.innerHTML = '<div class="loading">Loading locked accounts…</div>';
+  try {
+    const data = await api('/api/hod/locked-students');
+    const students = data.students || [];
+    content.innerHTML = `
+      <div class="page-header">
+        <div>
+          <h2>Locked Student Accounts</h2>
+          <p>${students.length} locked account${students.length !== 1 ? 's' : ''} in ${currentUser.department || 'your institution'} · Accounts are locked after 5 failed login attempts</p>
+        </div>
+      </div>
+      ${students.length === 0
+        ? `<div class="card"><div class="empty-state"><p style="color:var(--text-muted);font-size:13px;">No locked student accounts. All clear!</p></div></div>`
+        : `<div style="overflow-x:auto;" class="card" style="padding:0">
+            <table style="width:100%;border-collapse:collapse;font-size:13px;">
+              <thead>
+                <tr style="border-bottom:2px solid var(--border);">
+                  <th style="text-align:left;padding:10px 16px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Student</th>
+                  <th style="text-align:left;padding:10px 16px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Index No.</th>
+                  <th style="text-align:left;padding:10px 16px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Department</th>
+                  <th style="text-align:left;padding:10px 16px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Lock Reason</th>
+                  <th style="text-align:left;padding:10px 16px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Locked</th>
+                  <th style="text-align:left;padding:10px 16px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Attempts</th>
+                  <th style="padding:10px 16px;"></th>
+                </tr>
+              </thead>
+              <tbody>
+                ${students.map(s => `
+                  <tr style="border-bottom:1px solid var(--border);" id="locked-row-${s._id}">
+                    <td style="padding:10px 16px;font-weight:600;">${esc(s.name)}</td>
+                    <td style="padding:10px 16px;font-family:monospace;color:var(--text-muted);">${esc(s.IndexNumber || '—')}</td>
+                    <td style="padding:10px 16px;">
+                      ${s.department ? `<span style="background:#ecfeff;color:#0891b2;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600;">${esc(s.department)}</span>` : '—'}
+                    </td>
+                    <td style="padding:10px 16px;font-size:12px;color:var(--text-muted);max-width:220px;">${esc(s.lockReason || '—')}</td>
+                    <td style="padding:10px 16px;font-size:12px;color:var(--text-muted);white-space:nowrap;">${s.lockedAt ? timeAgo(s.lockedAt) : '—'}</td>
+                    <td style="padding:10px 16px;text-align:center;">
+                      <span style="background:#fee2e2;color:#b91c1c;border:1px solid #fca5a5;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700;">${s.failedLoginAttempts || 0}</span>
+                    </td>
+                    <td style="padding:10px 16px;white-space:nowrap;">
+                      <button class="btn btn-sm btn-primary" onclick="hodUnlockStudent('${s._id}','${esc(s.name).replace(/'/g,"\\'")}')">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg>
+                        Unlock
+                      </button>
+                    </td>
+                  </tr>`).join('')}
+              </tbody>
+            </table>
+          </div>`}`;
+  } catch(e) {
+    content.innerHTML = `<div class="card"><p style="color:#ef4444;">${e.message}</p></div>`;
+  }
+}
+
+async function hodUnlockStudent(userId, name) {
+  const note = prompt(`Unlock account for: ${name}\n\nOptional note (reason for unlock):`);
+  if (note === null) return; // cancelled
+  try {
+    await api(`/api/hod/unlock/${userId}`, { method: 'PATCH', body: JSON.stringify({ note: note.trim() || undefined }) });
+    toastSuccess(`${name}'s account has been unlocked.`);
+    // Remove row from table
+    document.getElementById(`locked-row-${userId}`)?.remove();
+  } catch(e) { toastError(e.message || 'Failed to unlock account'); }
 }
 
 // ── FEATURE 4: HOD — Edit lecturer department ───────────────────────────────
@@ -3222,7 +3393,10 @@ async function renderSuperadminDashboard(content) {
                     <div style="font-weight:700;">${c.name}</div>
                     <div style="font-size:11px;color:var(--text-muted);font-family:monospace;">${c.institutionCode || '—'}</div>
                   </td>
-                  <td style="padding:10px 12px;font-weight:600;">${c.userCount || 0}</td>
+                  <td style="padding:10px 12px;">
+                    <div style="font-weight:600;">${c.userCount || 0}</div>
+                    ${c.roleCounts && c.mode === 'academic' ? `<div style="font-size:10px;color:var(--text-muted);margin-top:2px;">${c.roleCounts.lecturer||0}L · ${c.roleCounts.hod||0}H · ${c.roleCounts.student||0}S</div>` : ''}
+                  </td>
                   <td style="padding:10px 12px;"><span class="tag ${c.mode === 'academic' ? 'tag-blue' : 'tag-green'}">${c.mode}</span></td>
                   <td style="padding:10px 12px;"><span class="tag ${c.isActive ? 'tag-green' : 'tag-red'}">${c.isActive ? 'Active' : 'Inactive'}</span></td>
                   <td style="padding:10px 12px;">
@@ -5568,7 +5742,7 @@ function _renderCoursesHTML(content, courses, isOffline) {
     <div class="card">
       ${courses.length ? `
         <table>
-          <thead><tr><th>Code</th><th>Title</th><th>Level / Group</th><th>Lecturer</th><th>Roster</th><th>Enrolled</th>${canManageRoster && !isOffline ? '<th>Actions</th>' : currentUser.role === 'student' ? '<th></th>' : ''}</tr></thead>
+          <thead><tr><th>Code</th><th>Title</th><th>Level / Group</th><th>Lecturer</th><th>Status</th><th>Roster</th><th>Enrolled</th>${canManageRoster && !isOffline ? '<th>Actions</th>' : currentUser.role === 'student' ? '<th></th>' : ''}</tr></thead>
           <tbody>${courses.map(course => `
             <tr>
               <td><strong>${course.code}</strong></td>
@@ -5579,6 +5753,13 @@ function _renderCoursesHTML(content, courses, isOffline) {
                 ${!course.level && !course.group ? '<span style="color:var(--text-muted);font-size:12px">—</span>' : ''}
               </td>
               <td>${course.lecturerId?.name || 'N/A'}</td>
+              <td>${course.needsApproval
+                ? (course.approvalStatus === 'pending'
+                    ? '<span style="background:#fef3c7;color:#b45309;border:1px solid #fde68a;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700;white-space:nowrap;">⏳ Pending</span>'
+                  : course.approvalStatus === 'rejected'
+                    ? '<span style="background:#fee2e2;color:#b91c1c;border:1px solid #fca5a5;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700;white-space:nowrap;">✕ Rejected</span>'
+                    : '<span style="background:#dcfce7;color:#166534;border:1px solid #bbf7d0;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700;white-space:nowrap;">✓ Approved</span>')
+                : '<span style="color:var(--text-muted);font-size:11px;">—</span>'}</td>
               <td>${!isOffline ? `<button class="btn btn-sm" style="font-size:11px;background:var(--bg);border:1px solid var(--border)" onclick="viewRoster('${course._id}', '${course.code}')">View Roster</button>` : '—'}</td>
               <td>${course.enrolledStudents?.length || 0}</td>
               ${canManageRoster && !isOffline ? `<td style="white-space:nowrap"><button class="btn btn-primary btn-sm" style="font-size:11px" onclick="showUploadRosterModal('${course._id}', '${course.code}')">Upload Students</button> <button class="btn btn-sm" style="font-size:11px;background:#6366f1;color:#fff" onclick="openBulkEmailModal('${course._id}', '${course.title}')">✉️ Email</button> <button class="btn btn-sm" style="font-size:11px;background:#10b981;color:#fff" onclick="openBulkSmsModal('${course._id}', '${course.title}')">💬 SMS</button></td>` : currentUser.role === 'student' ? `<td><button class="btn btn-sm" style="font-size:11px;background:#f0fdf4;color:#16a34a;border:1px solid #bbf7d0" onclick="generateCertificate('${course._id}','${course.title}')">🎓 Certificate</button></td>` : ''}

@@ -193,6 +193,14 @@ const userSchema = new mongoose.Schema(
       default: null,
     },
 
+    // ── Account locking (failed logins / HOD action) ───────────────────────
+    isLocked:            { type: Boolean, default: false },
+    lockedAt:            { type: Date, default: null },
+    lockReason:          { type: String, default: null },
+    lockedBy:            { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    failedLoginAttempts: { type: Number, default: 0 },
+    lastFailedLoginAt:   { type: Date, default: null },
+
     // ── Per-lecturer subscription (1 subscription = 1 user) ──────────────
     // Only applies to: lecturer, manager, admin
     // Students, employees, HODs are always free

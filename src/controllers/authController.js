@@ -679,7 +679,25 @@ exports.login = async (req, res) => {
 
     const isMatch = await user.comparePassword(password);
     if (!isMatch) {
+      // Track failed attempts for student accounts; lock after 5 consecutive failures
+      if (user && user.role === 'student') {
+        user.failedLoginAttempts = (user.failedLoginAttempts || 0) + 1;
+        user.lastFailedLoginAt = new Date();
+        if (user.failedLoginAttempts >= 5 && !user.isLocked) {
+          user.isLocked = true;
+          user.lockedAt = new Date();
+          user.lockReason = 'Account locked after 5 failed login attempts. Contact your department HOD.';
+        }
+        await user.save().catch(() => {});
+      }
       return res.status(401).json({ error: "Invalid credentials" });
+    }
+
+    // Reset failed login counter on successful credential check
+    if (user.failedLoginAttempts > 0) {
+      user.failedLoginAttempts = 0;
+      user.lastFailedLoginAt = null;
+      await user.save().catch(() => {});
     }
 
     if (!user.isApproved) {
