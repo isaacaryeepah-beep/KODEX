@@ -51,7 +51,7 @@
   --transition: all .18s var(--ease);
 
   /* Sidebar */
-  --sidebar-bg: rgba(255,251,238,0.76);
+  --sidebar-bg: rgba(255,255,255,0.12);
   --sidebar-text: rgba(255,255,255,.6);
   --sidebar-active: rgba(255,255,255,.1);
   --sidebar-hover: rgba(255,255,255,.07);
@@ -73,7 +73,7 @@
   --primary: #4f80f0;
   --primary-dark: #3b6de0;
   --primary-light: rgba(79,128,240,.15);
-  --sidebar-bg: rgba(255,251,238,0.76);
+  --sidebar-bg: rgba(255,255,255,0.12);
   --sidebar-text: #9db3c8;
   --sidebar-active: #4f80f0;
   --topbar-bg: #162030;
@@ -87,7 +87,7 @@
 [data-theme="dark"] body { background: var(--bg); color: var(--text); }
 [data-theme="dark"] .topbar { background: var(--topbar-bg); border-color: var(--topbar-border); }
 [data-theme="dark"] .card { background: var(--card); border-color: var(--border); }
-[data-theme="dark"] .sidebar { background: rgba(255, 251, 238, 0.76); }
+[data-theme="dark"] .sidebar { background: rgba(255,255,255,0.12); }
 [data-theme="dark"] input, [data-theme="dark"] textarea, [data-theme="dark"] select {
   background: var(--input-bg); border-color: var(--input-border); color: var(--text);
 }
@@ -859,7 +859,7 @@ body {
   transform: translateY(-50%);
   width: 200px;
   max-height: calc(100vh - 56px - 28px);
-  background: rgba(255, 251, 238, 0.68);
+  background: rgba(255,255,255,0.12);
   backdrop-filter: blur(24px) saturate(1.7) brightness(1.06);
   -webkit-backdrop-filter: blur(24px) saturate(1.7) brightness(1.06);
   border-radius: 22px;
@@ -1356,32 +1356,32 @@ input[type="checkbox"] {
 
 #dashboard-page[data-portal="manager"]  {
   --portal-primary: #2563eb; --portal-primary-dark: #1d4ed8; --portal-primary-light: #60a5fa;
-  --sidebar-bg: rgba(255,251,238,0.76);
+  --sidebar-bg: rgba(255,255,255,0.12);
 }
 
 #dashboard-page[data-portal="lecturer"] {
   --portal-primary: #d97706; --portal-primary-dark: #b45309; --portal-primary-light: #fbbf24;
-  --sidebar-bg: rgba(255,251,238,0.76);
+  --sidebar-bg: rgba(255,255,255,0.12);
 }
 
 #dashboard-page[data-portal="employee"] {
   --portal-primary: #16a34a; --portal-primary-dark: #15803d; --portal-primary-light: #4ade80;
-  --sidebar-bg: rgba(255,251,238,0.76);
+  --sidebar-bg: rgba(255,255,255,0.12);
 }
 
 #dashboard-page[data-portal="student"]  {
   --portal-primary: #7c3aed; --portal-primary-dark: #6d28d9; --portal-primary-light: #a78bfa;
-  --sidebar-bg: rgba(255,251,238,0.76);
+  --sidebar-bg: rgba(255,255,255,0.12);
 }
 
 #dashboard-page[data-portal="hod"] {
   --portal-primary: #0891b2; --portal-primary-dark: #0e7490; --portal-primary-light: #22d3ee;
-  --sidebar-bg: rgba(255,251,238,0.76);
+  --sidebar-bg: rgba(255,255,255,0.12);
 }
 
 #dashboard-page[data-portal="admin"]    {
   --portal-primary: #374151; --portal-primary-dark: #1f2937; --portal-primary-light: #6b7280;
-  --sidebar-bg: rgba(255,251,238,0.76);
+  --sidebar-bg: rgba(255,255,255,0.12);
 }
 
 /* Theme overrides */
@@ -2147,12 +2147,12 @@ input[type="checkbox"] {
   --sidebar-width: 260px;
 }
 
-/* ── Premium Sidebar: Cream Bright Glass ── */
+/* ── Sidebar: Transparent Glass — desktop ── */
 @media (min-width: 769px) {
   .sidebar {
-    background: rgba(255, 251, 238, 0.72) !important;
-    backdrop-filter: blur(26px) saturate(1.7) brightness(1.06) !important;
-    -webkit-backdrop-filter: blur(26px) saturate(1.7) brightness(1.06) !important;
+    background: rgba(255,255,255,0.12) !important;
+    backdrop-filter: blur(32px) saturate(1.8) !important;
+    -webkit-backdrop-filter: blur(32px) saturate(1.8) !important;
     border: none !important;
     border-radius: 0 !important;
     box-shadow: none !important;
@@ -2163,7 +2163,7 @@ input[type="checkbox"] {
     max-height: 100vh !important;
     height: 100vh !important;
     padding: 0 !important;
-    border-right: 1px solid rgba(220, 185, 120, 0.35) !important;
+    border-right: 1px solid rgba(255,255,255,0.18) !important;
   }
 
   .content {
@@ -2172,7 +2172,7 @@ input[type="checkbox"] {
 
   .sidebar-logo {
     padding: 20px 16px 16px !important;
-    border-bottom: 1px solid rgba(220, 185, 120, 0.30) !important;
+    border-bottom: 1px solid rgba(255,255,255,0.15) !important;
     margin-bottom: 6px !important;
     width: 100% !important;
   }
@@ -2202,18 +2202,18 @@ input[type="checkbox"] {
     padding: 0 12px !important;
     border-radius: 8px !important;
     border-bottom: none !important;
-    color: #7c6a50 !important;
+    color: #2d2d3a !important;
     margin: 0 !important;
     font-size: 12.5px !important;
   }
 
   .sidebar-nav a:hover {
-    background: rgba(255, 236, 190, 0.60) !important;
-    color: #1e1b4b !important;
+    background: rgba(255,255,255,0.28) !important;
+    color: #0f172a !important;
   }
 
   .sidebar-nav a.active {
-    background: rgba(255, 236, 175, 0.75) !important;
+    background: rgba(255,255,255,0.38) !important;
     color: var(--portal-primary, #2563eb) !important;
     border-left: 3px solid var(--portal-primary, #2563eb) !important;
     padding-left: 9px !important;
@@ -2222,20 +2222,20 @@ input[type="checkbox"] {
   .sidebar-nav a.active::after { display: none !important; }
 
   .sidebar-logout {
-    border-top: 1px solid rgba(220, 185, 120, 0.32) !important;
+    border-top: 1px solid rgba(255,255,255,0.15) !important;
     padding: 8px 10px 16px !important;
     width: 100% !important;
   }
 
   .sidebar-logout .btn {
-    background: rgba(255, 244, 215, 0.70) !important;
-    border: 1px solid rgba(220, 185, 120, 0.45) !important;
-    color: #92400e !important;
+    background: rgba(255,255,255,0.22) !important;
+    border: 1px solid rgba(255,255,255,0.28) !important;
+    color: #374151 !important;
   }
 
   .sidebar-logout .btn:hover {
-    background: rgba(254, 202, 202, 0.55) !important;
-    border-color: rgba(220, 38, 38, 0.30) !important;
+    background: rgba(220,38,38,0.14) !important;
+    border-color: rgba(220,38,38,0.28) !important;
     color: #991b1b !important;
   }
 }
@@ -2477,25 +2477,25 @@ table tr:hover td { background: #f8fafc !important; }
   box-shadow: 0 8px 28px rgba(37,99,235,.5) !important;
 }
 
-/* ── Sidebar Mobile Cream Glass ── */
+/* ── Sidebar Mobile Glass ── */
 @media (max-width: 768px) {
   .sidebar {
-    background: rgba(255, 251, 238, 0.96) !important;
-    backdrop-filter: blur(24px) saturate(1.6) !important;
-    -webkit-backdrop-filter: blur(24px) saturate(1.6) !important;
+    background: rgba(255,255,255,0.15) !important;
+    backdrop-filter: blur(32px) saturate(1.8) !important;
+    -webkit-backdrop-filter: blur(32px) saturate(1.8) !important;
   }
 
   .sidebar-nav a {
-    color: #7c6a50 !important;
+    color: #2d2d3a !important;
   }
 
   .sidebar-nav a:hover {
-    background: rgba(255, 236, 190, 0.60) !important;
-    color: #1e1b4b !important;
+    background: rgba(255,255,255,0.28) !important;
+    color: #0f172a !important;
   }
 
   .sidebar-nav a.active {
-    background: rgba(255, 236, 175, 0.78) !important;
+    background: rgba(255,255,255,0.38) !important;
     color: var(--portal-primary, #2563eb) !important;
     border-left: 3px solid var(--portal-primary, #2563eb) !important;
   }
@@ -2505,9 +2505,9 @@ table tr:hover td { background: #f8fafc !important; }
   }
 
   .sidebar-logout .btn {
-    background: rgba(255, 244, 215, 0.70) !important;
-    color: #92400e !important;
-    border-color: rgba(220, 185, 120, 0.45) !important;
+    background: rgba(255,255,255,0.22) !important;
+    color: #374151 !important;
+    border-color: rgba(255,255,255,0.28) !important;
   }
 }
 
@@ -2670,30 +2670,30 @@ table tr:hover td { background: #f8fafc !important; }
   }
 }
 
-/* ── Mobile sidebar — cream glass drawer ── */
+/* ── Mobile sidebar — transparent glass drawer ── */
 @media (max-width: 768px) {
   .sidebar {
-    background: rgba(255, 251, 238, 0.97) !important;
+    background: rgba(255,255,255,0.15) !important;
     border-radius: 0 16px 16px 0 !important;
   }
 
   .sidebar.open {
-    box-shadow: 4px 0 32px rgba(180, 130, 40, 0.18) !important;
+    box-shadow: 4px 0 32px rgba(0,0,0,0.12) !important;
   }
 
   .sidebar-nav a {
-    border-bottom: 1px solid rgba(220, 185, 120, 0.22) !important;
+    border-bottom: 1px solid rgba(255,255,255,0.10) !important;
   }
 
   .sidebar-nav a.active {
-    background: rgba(255, 236, 175, 0.78) !important;
+    background: rgba(255,255,255,0.38) !important;
     color: var(--portal-primary, #2563eb) !important;
     border-left: 3px solid var(--portal-primary, #2563eb) !important;
-    border-bottom-color: rgba(220, 185, 120, 0.22) !important;
+    border-bottom-color: rgba(255,255,255,0.10) !important;
   }
 
   .sidebar-logo {
-    border-bottom: 1px solid rgba(220, 185, 120, 0.30) !important;
+    border-bottom: 1px solid rgba(255,255,255,0.15) !important;
   }
 
   /* overlay tint matches dark sidebar */
@@ -3025,10 +3025,10 @@ table tr:hover td { background: #f8fafc !important; }
   margin-bottom: 14px !important;
 }
 
-/* ── Sidebar nav cream glass — desktop ── */
+/* ── Sidebar nav glass — desktop ── */
 @media (min-width: 769px) {
   .sidebar-nav a.active {
-    background: rgba(255, 236, 175, 0.80) !important;
+    background: rgba(255,255,255,0.38) !important;
     color: var(--portal-primary, #2563eb) !important;
     border-left: 3px solid var(--portal-primary, #2563eb) !important;
     box-shadow: none !important;
@@ -3044,8 +3044,8 @@ table tr:hover td { background: #f8fafc !important; }
   }
 
   .sidebar-nav a:hover {
-    background: rgba(255, 236, 190, 0.62) !important;
-    color: #1e1b4b !important;
+    background: rgba(255,255,255,0.28) !important;
+    color: #0f172a !important;
     transform: translateX(2px) !important;
   }
 }
@@ -3219,7 +3219,7 @@ table tr:hover td { background: #f8fafc !important; }
    Placed last — overrides ALL prior sidebar / topbar / dashboard rules
 ══════════════════════════════════════════════════════════════════════ */
 
-/* ── Sidebar: full-height cream glass, flush left ── */
+/* ── Sidebar: full-height transparent glass, flush left ── */
 .sidebar {
   position: fixed !important;
   top: 0 !important;
@@ -3229,12 +3229,12 @@ table tr:hover td { background: #f8fafc !important; }
   height: 100vh !important;
   max-height: 100vh !important;
   border-radius: 0 !important;
-  background: rgba(255, 251, 238, 0.76) !important;
-  backdrop-filter: blur(28px) saturate(1.8) brightness(1.06) !important;
-  -webkit-backdrop-filter: blur(28px) saturate(1.8) brightness(1.06) !important;
+  background: rgba(255,255,255,0.12) !important;
+  backdrop-filter: blur(32px) saturate(1.8) !important;
+  -webkit-backdrop-filter: blur(32px) saturate(1.8) !important;
   border: none !important;
-  border-right: 1px solid rgba(220, 185, 120, 0.36) !important;
-  box-shadow: 2px 0 16px rgba(180, 130, 40, 0.08) !important;
+  border-right: 1px solid rgba(255,255,255,0.18) !important;
+  box-shadow: 2px 0 24px rgba(0,0,0,0.08) !important;
   padding: 0 0 16px !important;
   display: flex !important;
   flex-direction: column !important;
@@ -3248,7 +3248,7 @@ table tr:hover td { background: #f8fafc !important; }
 
 .sidebar-logo {
   padding: 20px 18px 16px !important;
-  border-bottom: 1px solid rgba(220, 185, 120, 0.30) !important;
+  border-bottom: 1px solid rgba(255,255,255,0.15) !important;
   margin-bottom: 0 !important;
   width: 100% !important;
   flex-shrink: 0 !important;
@@ -3292,7 +3292,7 @@ table tr:hover td { background: #f8fafc !important; }
   margin: 0 !important;
   padding: 0 18px !important;
   border-bottom: none !important;
-  color: #7c6a50 !important;
+  color: #2d2d3a !important;
   font-size: 13px !important;
   font-weight: 500 !important;
   letter-spacing: .1px !important;
@@ -3313,21 +3313,21 @@ table tr:hover td { background: #f8fafc !important; }
   width: 16px !important;
   height: 16px !important;
   flex-shrink: 0 !important;
-  opacity: .75 !important;
+  opacity: .65 !important;
   color: inherit !important;
   transition: opacity .13s !important;
 }
 
 .sidebar-nav a:hover {
-  color: #1e1b4b !important;
-  background: rgba(255, 236, 190, 0.60) !important;
+  color: #0f172a !important;
+  background: rgba(255,255,255,0.28) !important;
 }
 
 .sidebar-nav a:hover svg { opacity: 1 !important; }
 
 .sidebar-nav a.active {
   color: var(--portal-primary, #2563eb) !important;
-  background: rgba(255, 236, 175, 0.78) !important;
+  background: rgba(255,255,255,0.38) !important;
   font-weight: 600 !important;
   border-left: 3px solid var(--portal-primary, #2563eb) !important;
   padding-left: 15px !important;
@@ -3342,14 +3342,14 @@ table tr:hover td { background: #f8fafc !important; }
   font-weight: 800 !important;
   letter-spacing: 1.2px !important;
   text-transform: uppercase !important;
-  color: rgba(120, 95, 55, 0.50) !important;
+  color: rgba(30,27,75,0.38) !important;
   padding: 14px 18px 4px !important;
   pointer-events: none !important;
 }
 
 .sidebar-logout {
   flex-shrink: 0 !important;
-  border-top: 1px solid rgba(220, 185, 120, 0.32) !important;
+  border-top: 1px solid rgba(255,255,255,0.15) !important;
   padding: 10px 10px 16px !important;
   width: 100% !important;
   margin-top: 8px !important;
@@ -3358,17 +3358,17 @@ table tr:hover td { background: #f8fafc !important; }
 }
 
 .sidebar-logout .btn {
-  background: rgba(255, 244, 215, 0.70) !important;
-  border: 1px solid rgba(220, 185, 120, 0.45) !important;
-  color: #92400e !important;
+  background: rgba(255,255,255,0.22) !important;
+  border: 1px solid rgba(255,255,255,0.28) !important;
+  color: #374151 !important;
   border-radius: 8px !important;
   font-size: 12px !important;
   transition: all .15s !important;
 }
 
 .sidebar-logout .btn:hover {
-  background: rgba(254, 202, 202, 0.55) !important;
-  border-color: rgba(220, 38, 38, 0.30) !important;
+  background: rgba(220,38,38,0.14) !important;
+  border-color: rgba(220,38,38,0.28) !important;
   color: #991b1b !important;
 }
 
@@ -3790,7 +3790,7 @@ table tr:hover td { background: #f8fafc !important; }
 
 /* ── Dark mode ── */
 [data-theme="dark"] .sidebar {
-  background: rgba(255, 251, 238, 0.76) !important;
+  background: rgba(255,255,255,0.12) !important;
   border-right-color: rgba(220, 185, 120, 0.36) !important;
 }
 
