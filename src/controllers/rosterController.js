@@ -16,7 +16,8 @@ exports.uploadRoster = async (req, res) => {
       return res.status(400).json({ error: "Invalid course ID" });
     }
 
-    const courseFilter = { _id: courseId, company: req.user.company };
+    const companyId = req.user.company || req.user.companyId;
+    const courseFilter = { _id: courseId, companyId };
     if (req.user.role === "lecturer") courseFilter.lecturerId = req.user._id;
     const course = await Course.findOne(courseFilter);
 
@@ -86,7 +87,8 @@ exports.getRoster = async (req, res) => {
       return res.status(400).json({ error: "Invalid course ID" });
     }
 
-    const filter = { _id: courseId, company: req.user.company };
+    const companyId = req.user.company || req.user.companyId;
+    const filter = { _id: courseId, companyId };
     if (req.user.role === "lecturer") {
       filter.lecturerId = req.user._id;
     }
@@ -114,7 +116,8 @@ exports.removeFromRoster = async (req, res) => {
     const { courseId, rosterId } = req.params;
 
     if (req.user.role === "lecturer") {
-      const course = await Course.findOne({ _id: courseId, company: req.user.company, lecturerId: req.user._id });
+      const companyId = req.user.company || req.user.companyId;
+      const course = await Course.findOne({ _id: courseId, companyId, lecturerId: req.user._id });
       if (!course) {
         return res.status(404).json({ error: "Course not found or access denied" });
       }
@@ -141,7 +144,8 @@ exports.clearRoster = async (req, res) => {
   try {
     const { courseId } = req.params;
 
-    const clearFilter = { _id: courseId, company: req.user.company };
+    const companyId = req.user.company || req.user.companyId;
+    const clearFilter = { _id: courseId, companyId };
     if (req.user.role === "lecturer") clearFilter.lecturerId = req.user._id;
     const course = await Course.findOne(clearFilter);
 
