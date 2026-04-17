@@ -748,49 +748,49 @@ function selectPortal(t){document.addEventListener('DOMContentLoaded',function()
         <nav class="sidebar-nav" id="sidebar-nav"></nav>
       </div>
       <div class="content" id="main-content"></div>
-    </div>
 
-    <!-- ── FAQ Assistant Panel ─────────────────────────────────────────────── -->
-    <div id="faq-assistant-panel" class="faq-assistant-panel" role="complementary" aria-label="FAQ Assistant">
-      <div class="fap-header">
-        <div style="display:flex;align-items:center;gap:10px;min-width:0;flex:1">
-          <div class="fap-icon-wrap">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm0 14h.01M12 8a2 2 0 0 1 1.94 2.5C13.6 11.8 12 12 12 13"/></svg>
+      <!-- ── FAQ Assistant Panel (flex sibling of content) ─────────────────── -->
+      <div id="faq-assistant-panel" class="faq-assistant-panel" role="complementary" aria-label="FAQ Assistant">
+        <div class="fap-header">
+          <div style="display:flex;align-items:center;gap:10px;min-width:0;flex:1">
+            <div class="fap-icon-wrap">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm0 14h.01M12 8a2 2 0 0 1 1.94 2.5C13.6 11.8 12 12 12 13"/></svg>
+            </div>
+            <div style="min-width:0">
+              <div class="fap-title">FAQ Assistant</div>
+              <div class="fap-subtitle">Ask anything about KODEX</div>
+            </div>
           </div>
-          <div style="min-width:0">
-            <div class="fap-title">FAQ Assistant</div>
-            <div class="fap-subtitle">Ask anything about KODEX</div>
-          </div>
-        </div>
-        <button class="fap-close-btn" onclick="faqPanelClose()" title="Hide panel" aria-label="Close panel">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
-        </button>
-      </div>
-
-      <div class="fap-ask-section">
-        <div class="fap-input-row">
-          <input id="fap-input" type="text" class="fap-input" placeholder="Ask a question..." autocomplete="off" aria-label="Ask FAQ Assistant">
-          <button class="fap-send-btn" id="fap-send-btn" onclick="faqPanelAsk()" aria-label="Send question">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+          <button class="fap-close-btn" onclick="faqPanelClose()" title="Hide panel" aria-label="Close panel">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
           </button>
         </div>
-      </div>
 
-      <div class="fap-suggestions-section">
-        <div class="fap-section-label">Quick help</div>
-        <div class="fap-chips">
-          <button class="fap-chip" onclick="faqPanelAskQ('How to create a course')">How to create a course</button>
-          <button class="fap-chip" onclick="faqPanelAskQ('How to upload students')">How to upload students</button>
-          <button class="fap-chip" onclick="faqPanelAskQ('How to start a session')">How to start a session</button>
-          <button class="fap-chip" onclick="faqPanelAskQ('How Grade Book works')">How Grade Book works</button>
+        <div class="fap-ask-section">
+          <div class="fap-input-row">
+            <input id="fap-input" type="text" class="fap-input" placeholder="Ask a question..." autocomplete="off" aria-label="Ask FAQ Assistant">
+            <button class="fap-send-btn" id="fap-send-btn" onclick="faqPanelAsk()" aria-label="Send question">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+            </button>
+          </div>
         </div>
-      </div>
 
-      <div class="fap-chat-section" id="fap-chat"></div>
+        <div class="fap-suggestions-section">
+          <div class="fap-section-label">Quick help</div>
+          <div class="fap-chips">
+            <button class="fap-chip" onclick="faqPanelAskQ('How to create a course')">How to create a course</button>
+            <button class="fap-chip" onclick="faqPanelAskQ('How to upload students')">How to upload students</button>
+            <button class="fap-chip" onclick="faqPanelAskQ('How to start a session')">How to start a session</button>
+            <button class="fap-chip" onclick="faqPanelAskQ('How Grade Book works')">How Grade Book works</button>
+          </div>
+        </div>
 
-      <div class="fap-faq-section">
-        <div class="fap-section-label" style="margin-bottom:8px">Common Questions</div>
-        <div id="fap-faq-list"></div>
+        <div class="fap-chat-section" id="fap-chat"></div>
+
+        <div class="fap-faq-section">
+          <div class="fap-section-label" style="margin-bottom:8px">Common Questions</div>
+          <div id="fap-faq-list"></div>
+        </div>
       </div>
     </div>
   </div>

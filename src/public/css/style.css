@@ -4532,34 +4532,41 @@ table tr:hover td { background: #f8fafc !important; }
 }
 
 /* ══════════════════════════════════════════════════
-   FAQ ASSISTANT PANEL
+   FAQ ASSISTANT PANEL  (flex sibling of .content)
 ══════════════════════════════════════════════════ */
 .faq-assistant-panel {
-  position: fixed;
-  top: 56px;
-  right: 0;
-  width: 300px;
-  height: calc(100vh - 56px);
-  background: var(--card, #ffffff);
-  border-left: 1px solid var(--border, #e5e7eb);
-  box-shadow: -6px 0 36px rgba(0,0,0,.08), -1px 0 0 rgba(0,0,0,.04);
+  /* Collapsed by default — grows open via width transition */
+  width: 0;
+  min-width: 0;
+  flex-shrink: 0;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
-  z-index: 90;
-  overflow: hidden;
-  transform: translateX(100%);
-  transition: transform .28s cubic-bezier(.4,0,.2,1);
+  background: var(--card, #ffffff);
+  border-left: 1px solid transparent;
+  box-shadow: none;
+  transition: width .28s cubic-bezier(.4,0,.2,1),
+              border-color .28s,
+              box-shadow .28s;
+  /* height fills the flex container automatically */
 }
-.faq-assistant-panel.fap-open { transform: translateX(0); }
+.faq-assistant-panel.fap-open {
+  width: 300px;
+  min-width: 300px;
+  border-left-color: var(--border, #e5e7eb);
+  box-shadow: -6px 0 36px rgba(0,0,0,.08);
+}
 
 [data-theme="dark"] .faq-assistant-panel {
   background: #1e2533;
+}
+[data-theme="dark"] .faq-assistant-panel.fap-open {
   border-color: #2d3a4a;
   box-shadow: -6px 0 36px rgba(0,0,0,.28);
 }
 
-/* Shift content when panel is open */
-.content.faq-panel-open { margin-right: 316px; }
+/* No margin shift needed — flexbox handles layout */
+.content.faq-panel-open { margin-right: 0; }
 
 /* ── Panel Header ── */
 .fap-header {

@@ -1,8 +1,9 @@
 "use strict";
 /**
  * faq-assistant.js
- * ChatGPT-style FAQ Assistant panel fixed to the right side of the dashboard.
- * Requires: app.js globals — api(), token (for future API calls)
+ * ChatGPT-style FAQ Assistant panel — flex sibling of #main-content inside
+ * .main-layout. Width transition drives open/close; no margin hacks needed.
+ * Requires: app.js globals — api(), token
  */
 
 (function () {
@@ -71,10 +72,8 @@
 
   window.faqPanelOpen = function () {
     const panel = document.getElementById('faq-assistant-panel');
-    const content = document.getElementById('main-content');
     if (!panel) return;
     panel.classList.add('fap-open');
-    if (content) content.classList.add('faq-panel-open');
     _open = true;
     _syncToggleBtn(true);
     localStorage.setItem('kodex_fap', '1');
@@ -83,10 +82,8 @@
 
   window.faqPanelClose = function () {
     const panel = document.getElementById('faq-assistant-panel');
-    const content = document.getElementById('main-content');
     if (!panel) return;
     panel.classList.remove('fap-open');
-    if (content) content.classList.remove('faq-panel-open');
     _open = false;
     _syncToggleBtn(false);
     localStorage.setItem('kodex_fap', '0');
@@ -103,7 +100,7 @@
 
     _addMsg('user', q);
 
-    // Check local quick answers first
+    // Check local quick answers first (instant, no API)
     const key = q.toLowerCase().replace(/[^a-z0-9 ]/g, '').trim();
     const local = QUICK_ANSWERS[key];
     if (local) {
@@ -231,33 +228,16 @@
         const shouldOpen = localStorage.getItem('kodex_fap') !== '0';
         if (shouldOpen) faqPanelOpen();
         else _syncToggleBtn(false);
-      } else {
-        // Dashboard hidden — remove panel-open class to avoid stale margin
-        const content = document.getElementById('main-content');
-        if (content) content.classList.remove('faq-panel-open');
       }
     };
 
-    // Run once immediately (handles page refresh with session)
     check();
-
-    // Watch for class changes on #dashboard-page
     new MutationObserver(check).observe(dashEl, { attributes: true, attributeFilter: ['class'] });
   }
 
-  // Re-apply panel margin after any in-app navigation (content innerHTML swaps)
-  function _watchContent() {
-    const content = document.getElementById('main-content');
-    if (!content) return;
-    new MutationObserver(() => {
-      if (_open) content.classList.add('faq-panel-open');
-    }).observe(content, { childList: true });
-  }
-
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => { _boot(); _watchContent(); });
+    document.addEventListener('DOMContentLoaded', _boot);
   } else {
     _boot();
-    _watchContent();
   }
 })();
