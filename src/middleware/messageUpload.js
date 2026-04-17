@@ -19,13 +19,20 @@ const storage = multer.diskStorage({
   },
 });
 
-const ALLOWED_MIME = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp', 'image/gif'];
-const ALLOWED_EXT  = ['.pdf', '.jpg', '.jpeg', '.png', '.webp', '.gif'];
+const ALLOWED_MIME = [
+  'application/pdf',
+  'image/jpeg', 'image/png', 'image/webp', 'image/gif',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+];
+const ALLOWED_EXT  = ['.pdf', '.jpg', '.jpeg', '.png', '.webp', '.gif', '.doc', '.docx'];
 
 function fileFilter(_req, file, cb) {
   const ext = path.extname(file.originalname).toLowerCase();
-  if (!ALLOWED_MIME.includes(file.mimetype) || !ALLOWED_EXT.includes(ext)) {
-    return cb(new Error('Only images (JPG, PNG, WebP, GIF) and PDF files are allowed.'), false);
+  const mimeOk = ALLOWED_MIME.includes(file.mimetype);
+  const extOk  = ALLOWED_EXT.includes(ext);
+  if (!mimeOk || !extOk) {
+    return cb(new Error('Allowed types: images (JPG, PNG, WebP, GIF), PDF, and Word documents (DOC, DOCX).'), false);
   }
   cb(null, true);
 }
