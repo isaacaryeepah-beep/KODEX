@@ -49,6 +49,10 @@
       q: 'How do I post an announcement?',
       a: 'Go to <strong>Announcements</strong> in the sidebar. Admins and lecturers can post text, attach images or PDFs. Announcements appear on all users\' dashboards.',
     },
+    {
+      q: 'How does KODEX Messaging work?',
+      a: '<strong>Messages</strong> in the sidebar opens the inbox. Click <strong>+ New</strong> to start a conversation — you can only message users you are connected to by role (lecturer↔students, manager↔team). Students contact their HOD using the <strong>HOD Request</strong> button. You can attach images, PDFs, and Word documents.',
+    },
   ];
 
   // ── Quick-answer map (instant local responses for chip questions) ──────────
