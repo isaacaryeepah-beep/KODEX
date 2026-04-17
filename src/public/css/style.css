@@ -4530,3 +4530,365 @@ table tr:hover td { background: #f8fafc !important; }
     flex: none !important;
   }
 }
+
+/* ══════════════════════════════════════════════════
+   FAQ ASSISTANT PANEL
+══════════════════════════════════════════════════ */
+.faq-assistant-panel {
+  position: fixed;
+  top: 56px;
+  right: 0;
+  width: 300px;
+  height: calc(100vh - 56px);
+  background: var(--card, #ffffff);
+  border-left: 1px solid var(--border, #e5e7eb);
+  box-shadow: -6px 0 36px rgba(0,0,0,.08), -1px 0 0 rgba(0,0,0,.04);
+  display: flex;
+  flex-direction: column;
+  z-index: 90;
+  overflow: hidden;
+  transform: translateX(100%);
+  transition: transform .28s cubic-bezier(.4,0,.2,1);
+}
+.faq-assistant-panel.fap-open { transform: translateX(0); }
+
+[data-theme="dark"] .faq-assistant-panel {
+  background: #1e2533;
+  border-color: #2d3a4a;
+  box-shadow: -6px 0 36px rgba(0,0,0,.28);
+}
+
+/* Shift content when panel is open */
+.content.faq-panel-open { margin-right: 316px; }
+
+/* ── Panel Header ── */
+.fap-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 13px 14px;
+  background: linear-gradient(135deg, #2563eb 0%, #4338ca 100%);
+  flex-shrink: 0;
+}
+
+.fap-icon-wrap {
+  width: 30px;
+  height: 30px;
+  background: rgba(255,255,255,.18);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: white;
+}
+
+.fap-title {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: -.2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.fap-subtitle {
+  font-size: 10.5px;
+  color: rgba(255,255,255,.72);
+  margin-top: 1px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.fap-close-btn {
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  border: none;
+  background: rgba(255,255,255,.15);
+  color: white;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-left: 8px;
+  transition: background .15s;
+}
+.fap-close-btn:hover { background: rgba(255,255,255,.28); }
+
+/* ── Ask input ── */
+.fap-ask-section {
+  padding: 11px 12px;
+  border-bottom: 1px solid var(--border, #e5e7eb);
+  flex-shrink: 0;
+}
+
+.fap-input-row {
+  display: flex;
+  align-items: center;
+  background: var(--bg, #f4f6f9);
+  border: 1.5px solid var(--border, #e5e7eb);
+  border-radius: 10px;
+  padding-left: 11px;
+  transition: border-color .15s, background .15s;
+}
+.fap-input-row:focus-within {
+  border-color: #2563eb;
+  background: var(--card, #fff);
+}
+[data-theme="dark"] .fap-input-row { background: #0f1623; border-color: #2d3a4a; }
+[data-theme="dark"] .fap-input-row:focus-within { background: #151d2b; border-color: #3b82f6; }
+
+.fap-input {
+  flex: 1;
+  border: none;
+  background: transparent;
+  font-size: 12.5px;
+  font-family: inherit;
+  color: var(--text, #0d1117);
+  padding: 9px 0;
+  outline: none;
+  min-width: 0;
+}
+.fap-input::placeholder { color: var(--text-muted, #9ca3af); }
+
+.fap-send-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 7px;
+  border: none;
+  background: #2563eb;
+  color: white;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 3px;
+  flex-shrink: 0;
+  transition: background .15s;
+}
+.fap-send-btn:hover:not(:disabled) { background: #1d4ed8; }
+.fap-send-btn:disabled { opacity: .5; cursor: not-allowed; }
+
+/* ── Quick suggestions ── */
+.fap-suggestions-section {
+  padding: 9px 12px 10px;
+  border-bottom: 1px solid var(--border, #e5e7eb);
+  flex-shrink: 0;
+}
+
+.fap-section-label {
+  font-size: 9.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .65px;
+  color: var(--text-muted, #9ca3af);
+  margin-bottom: 6px;
+}
+
+.fap-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.fap-chip {
+  font-size: 11px;
+  font-family: inherit;
+  padding: 4px 9px;
+  background: #eff6ff;
+  color: #2563eb;
+  border: 1px solid #bfdbfe;
+  border-radius: 20px;
+  cursor: pointer;
+  font-weight: 500;
+  white-space: nowrap;
+  transition: all .14s;
+  line-height: 1.3;
+}
+.fap-chip:hover { background: #2563eb; color: #fff; border-color: #2563eb; }
+[data-theme="dark"] .fap-chip { background: #1e2d45; color: #60a5fa; border-color: #1e3a5f; }
+[data-theme="dark"] .fap-chip:hover { background: #2563eb; color: #fff; border-color: #2563eb; }
+
+/* ── Chat area ── */
+.fap-chat-section {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border, #e5e7eb) transparent;
+}
+.fap-chat-section::-webkit-scrollbar { width: 3px; }
+.fap-chat-section::-webkit-scrollbar-thumb { background: var(--border, #e5e7eb); border-radius: 2px; }
+
+.fap-message {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 8px;
+  animation: fapIn .18s ease;
+}
+@keyframes fapIn {
+  from { opacity: 0; transform: translateY(5px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.fap-message.fap-user  { align-items: flex-end; }
+.fap-message.fap-assistant { align-items: flex-start; }
+
+.fap-bubble {
+  max-width: 88%;
+  padding: 8px 11px;
+  font-size: 12px;
+  line-height: 1.55;
+  border-radius: 12px;
+}
+
+.fap-user .fap-bubble {
+  background: #2563eb;
+  color: #fff;
+  border-radius: 12px 12px 3px 12px;
+}
+
+.fap-assistant .fap-bubble {
+  background: var(--bg, #f4f6f9);
+  color: var(--text, #0d1117);
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 12px 12px 12px 3px;
+}
+[data-theme="dark"] .fap-assistant .fap-bubble { background: #151d2b; border-color: #2d3a4a; color: #e2e8f0; }
+
+.fap-bubble.fap-typing {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 10px 14px;
+}
+.fap-bubble.fap-typing span {
+  width: 5px;
+  height: 5px;
+  background: #2563eb;
+  border-radius: 50%;
+  animation: fapDot 1.2s infinite;
+}
+.fap-bubble.fap-typing span:nth-child(2) { animation-delay: .2s; }
+.fap-bubble.fap-typing span:nth-child(3) { animation-delay: .4s; }
+@keyframes fapDot {
+  0%,80%,100% { opacity:.2; transform:scale(.8); }
+  40%          { opacity:1;  transform:scale(1);  }
+}
+
+.fap-empty-chat {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  color: var(--text-muted, #9ca3af);
+  text-align: center;
+  padding: 16px;
+  min-height: 80px;
+}
+
+/* ── FAQ accordion ── */
+.fap-faq-section {
+  border-top: 1px solid var(--border, #e5e7eb);
+  padding: 10px 12px 12px;
+  flex-shrink: 0;
+  max-height: 230px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border, #e5e7eb) transparent;
+}
+.fap-faq-section::-webkit-scrollbar { width: 3px; }
+.fap-faq-section::-webkit-scrollbar-thumb { background: var(--border, #e5e7eb); border-radius: 2px; }
+
+.fap-faq-item {
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 7px;
+  margin-bottom: 4px;
+  overflow: hidden;
+  transition: border-color .15s;
+}
+.fap-faq-item[open] { border-color: #bfdbfe; }
+[data-theme="dark"] .fap-faq-item { border-color: #2d3a4a; }
+[data-theme="dark"] .fap-faq-item[open] { border-color: #1e3a5f; }
+
+.fap-faq-summary {
+  padding: 8px 10px;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--text, #0d1117);
+  gap: 8px;
+  user-select: none;
+}
+.fap-faq-summary::-webkit-details-marker { display: none; }
+.fap-faq-summary::after {
+  content: '';
+  display: block;
+  width: 6px;
+  height: 6px;
+  border-right: 1.5px solid var(--text-muted, #9ca3af);
+  border-bottom: 1.5px solid var(--text-muted, #9ca3af);
+  transform: rotate(45deg);
+  flex-shrink: 0;
+  margin-bottom: 2px;
+  transition: transform .18s;
+}
+.fap-faq-item[open] .fap-faq-summary::after { transform: rotate(-135deg); margin-bottom: -2px; }
+
+.fap-faq-answer {
+  padding: 7px 10px 9px;
+  font-size: 11.5px;
+  color: var(--text-secondary, #4b5563);
+  line-height: 1.55;
+  border-top: 1px solid var(--border-light, #f3f4f6);
+}
+[data-theme="dark"] .fap-faq-answer { color: #94a3b8; border-color: #1e2533; }
+
+/* ── Topbar toggle button ── */
+.fap-topbar-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: 1.5px solid var(--border, #e5e7eb);
+  background: var(--bg, #f4f6f9);
+  color: var(--text, #374151);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all .15s;
+}
+.fap-topbar-btn:hover {
+  background: #eff6ff;
+  border-color: #2563eb;
+  color: #2563eb;
+}
+.fap-topbar-btn.fap-active {
+  background: #2563eb;
+  border-color: #2563eb;
+  color: #fff;
+}
+[data-theme="dark"] .fap-topbar-btn { background: #1e2533; border-color: #2d3a4a; color: #94a3b8; }
+[data-theme="dark"] .fap-topbar-btn:hover { background: #1e2d45; border-color: #3b82f6; color: #60a5fa; }
+[data-theme="dark"] .fap-topbar-btn.fap-active { background: #2563eb; border-color: #2563eb; color: #fff; }
+
+/* Hide panel on small screens */
+@media (max-width: 1120px) {
+  .faq-assistant-panel { display: none !important; }
+  .content.faq-panel-open { margin-right: 0 !important; }
+  .fap-topbar-btn { display: none !important; }
+}
