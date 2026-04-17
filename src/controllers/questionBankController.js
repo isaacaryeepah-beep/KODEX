@@ -3,26 +3,38 @@
  * CRUD for the question bank + import-to-quiz action.
  */
 const mongoose  = require("mongoose");
+const fs        = require("fs");
+const path      = require("path");
 const QuestionBank = require("../models/QuestionBank");
 const Question  = require("../models/Question");
 const Quiz      = require("../models/Quiz");
+const { UPLOAD_DIR } = require("../middleware/questionBankUpload");
+
+function parseJsonField(val, fallback) {
+  if (Array.isArray(val)) return val;
+  if (typeof val === "string") {
+    try { return JSON.parse(val); } catch { return fallback; }
+  }
+  return fallback;
+}
 
 // ── Helper: build a bank question doc from request body ──────────────────
 function buildBankDoc(body, userId, companyId) {
-  const { questionText, questionType, options, correctAnswer, correctAnswers,
-          correctAnswerText, acceptedAnswers, modelAnswer, marks, topic } = body;
+  const { questionText, questionType, correctAnswer, correctAnswerText, modelAnswer, marks, topic } = body;
+  const options         = parseJsonField(body.options, []);
+  const correctAnswers  = parseJsonField(body.correctAnswers, []);
+  const acceptedAnswers = parseJsonField(body.acceptedAnswers, []);
   const type = ["single","multiple","fill","explain"].includes(questionType) ? questionType : "single";
   return {
     company:   companyId,
     createdBy: userId,
     questionText: questionText.trim(),
     questionType: type,
-    options: (type === "fill" || type === "explain") ? [] : (options || []).map(o => String(o).trim()),
+    options: (type === "fill" || type === "explain") ? [] : options.map(o => String(o).trim()),
     correctAnswer: (type === "fill" || type === "explain") ? null : (correctAnswer ?? null),
-    correctAnswers: type === "multiple" ? (correctAnswers || []).map(Number) : [],
+    correctAnswers: type === "multiple" ? correctAnswers.map(Number) : [],
     correctAnswerText: type === "fill" ? (correctAnswerText || "").trim() : null,
-    acceptedAnswers: type === "fill" && Array.isArray(acceptedAnswers)
-      ? acceptedAnswers.map(a => a.trim()).filter(Boolean) : [],
+    acceptedAnswers: type === "fill" ? acceptedAnswers.map(a => String(a).trim()).filter(Boolean) : [],
     modelAnswer: type === "explain" ? (modelAnswer || "").trim() : "",
     marks: Number(marks) || 1,
     topic: (topic || "").trim(),
@@ -56,12 +68,26 @@ exports.list = async (req, res) => {
 exports.create = async (req, res) => {
   try {
     if (!req.body.questionText?.trim()) {
+      if (req.file) fs.unlink(req.file.path, () => {});
       return res.status(400).json({ error: "questionText is required" });
     }
     const doc = buildBankDoc(req.body, req.user._id, req.user.company);
+
+    if (req.file) {
+      const baseUrl = process.env.SERVER_URL || "https://kodex.it.com";
+      doc.imageAttachment = {
+        fileName:     req.file.filename,
+        originalName: req.file.originalname,
+        fileUrl:      `${baseUrl}/api/lecturer/question-bank/image/${req.file.filename}`,
+        mimeType:     req.file.mimetype,
+        fileSize:     req.file.size,
+      };
+    }
+
     const q = await QuestionBank.create(doc);
     res.status(201).json({ question: q });
   } catch (err) {
+    if (req.file) fs.unlink(req.file.path, () => {});
     res.status(500).json({ error: err.message || "Failed to create question" });
   }
 };
@@ -72,14 +98,43 @@ exports.update = async (req, res) => {
     const q = await QuestionBank.findOne({
       _id: req.params.id, company: req.user.company, createdBy: req.user._id,
     });
-    if (!q) return res.status(404).json({ error: "Question not found" });
+    if (!q) {
+      if (req.file) fs.unlink(req.file.path, () => {});
+      return res.status(404).json({ error: "Question not found" });
+    }
 
-    const fields = ["questionText","questionType","options","correctAnswer","correctAnswers",
-                    "correctAnswerText","acceptedAnswers","modelAnswer","marks","topic"];
+    const fields = ["questionText","questionType","correctAnswer","correctAnswerText","modelAnswer","marks","topic"];
     fields.forEach(f => { if (req.body[f] !== undefined) q[f] = req.body[f]; });
+    const arrayFields = ["options","correctAnswers","acceptedAnswers"];
+    arrayFields.forEach(f => { if (req.body[f] !== undefined) q[f] = parseJsonField(req.body[f], q[f]); });
+
+    if (req.file) {
+      // Delete old image if present
+      if (q.imageAttachment?.fileName) {
+        fs.unlink(path.join(process.cwd(), UPLOAD_DIR, q.imageAttachment.fileName), () => {});
+      }
+      const baseUrl = process.env.SERVER_URL || "https://kodex.it.com";
+      q.imageAttachment = {
+        fileName:     req.file.filename,
+        originalName: req.file.originalname,
+        fileUrl:      `${baseUrl}/api/lecturer/question-bank/image/${req.file.filename}`,
+        mimeType:     req.file.mimetype,
+        fileSize:     req.file.size,
+      };
+    }
+
+    // Allow removing image via removeImage=true body param
+    if (req.body.removeImage === 'true' || req.body.removeImage === true) {
+      if (q.imageAttachment?.fileName) {
+        fs.unlink(path.join(process.cwd(), UPLOAD_DIR, q.imageAttachment.fileName), () => {});
+      }
+      q.imageAttachment = null;
+    }
+
     await q.save();
     res.json({ question: q });
   } catch (err) {
+    if (req.file) fs.unlink(req.file.path, () => {});
     res.status(500).json({ error: "Failed to update question" });
   }
 };
@@ -91,9 +146,58 @@ exports.remove = async (req, res) => {
       _id: req.params.id, company: req.user.company, createdBy: req.user._id,
     });
     if (!q) return res.status(404).json({ error: "Question not found" });
+    if (q.imageAttachment?.fileName) {
+      fs.unlink(path.join(process.cwd(), UPLOAD_DIR, q.imageAttachment.fileName), () => {});
+    }
     res.json({ message: "Deleted" });
   } catch (err) {
     res.status(500).json({ error: "Failed to delete question" });
+  }
+};
+
+// GET /api/lecturer/question-bank/image/:filename
+exports.serveImage = async (req, res) => {
+  try {
+    const { filename } = req.params;
+    const q = await QuestionBank.findOne({
+      company: req.user.company,
+      "imageAttachment.fileName": filename,
+    }).lean();
+    if (!q) return res.status(404).json({ error: "Image not found." });
+
+    const filePath = path.join(process.cwd(), UPLOAD_DIR, filename);
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ error: "Image not found on disk." });
+    }
+
+    res.setHeader("Content-Type", q.imageAttachment.mimeType || "image/jpeg");
+    res.setHeader("Content-Disposition", `inline; filename="${q.imageAttachment.originalName}"`);
+    return res.sendFile(filePath);
+  } catch (err) {
+    console.error("[serveImage]", err);
+    res.status(500).json({ error: "Failed to serve image." });
+  }
+};
+
+// GET /api/lecturer/question-bank/image/:filename/download
+exports.downloadImage = async (req, res) => {
+  try {
+    const { filename } = req.params;
+    const q = await QuestionBank.findOne({
+      company: req.user.company,
+      "imageAttachment.fileName": filename,
+    }).lean();
+    if (!q) return res.status(404).json({ error: "Image not found." });
+
+    const filePath = path.join(process.cwd(), UPLOAD_DIR, filename);
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ error: "Image not found on disk." });
+    }
+
+    return res.download(filePath, q.imageAttachment.originalName);
+  } catch (err) {
+    console.error("[downloadImage]", err);
+    res.status(500).json({ error: "Failed to download image." });
   }
 };
 

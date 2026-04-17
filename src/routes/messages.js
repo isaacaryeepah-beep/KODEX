@@ -24,9 +24,12 @@
 const express  = require("express");
 const router   = express.Router();
 const mongoose = require("mongoose");
+const fs       = require("fs");
+const path     = require("path");
 const authenticate                  = require("../middleware/auth");
 const { requireActiveSubscription } = require("../middleware/subscription");
 const { companyIsolation }          = require("../middleware/companyIsolation");
+const { uploadMessage, handleUploadError, UPLOAD_DIR } = require("../middleware/messageUpload");
 const Conversation = require("../models/Conversation");
 const Message      = require("../models/Message");
 const User         = require("../models/User");
@@ -281,27 +284,55 @@ router.get("/conversations/:id", ...mw, async (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
-// POST /conversations/:id/messages  — send a message
+// POST /conversations/:id/messages  — send a message (text and/or file)
+// Accepts multipart/form-data (for file uploads) or JSON (text only).
 // ---------------------------------------------------------------------------
-router.post("/conversations/:id/messages", ...mw, async (req, res) => {
+router.post("/conversations/:id/messages", ...mw, uploadMessage, handleUploadError, async (req, res) => {
   try {
     const convo = await resolveConversation(req, res, req.params.id);
-    if (!convo) return;
+    if (!convo) {
+      if (req.file) fs.unlink(req.file.path, () => {});
+      return;
+    }
 
-    const { body } = req.body;
-    if (!body?.trim()) {
-      return res.status(400).json({ error: "body is required" });
+    const bodyText = (req.body.body || "").trim();
+    const hasFile  = !!req.file;
+
+    if (!bodyText && !hasFile) {
+      return res.status(400).json({ error: "body or a file attachment is required" });
+    }
+
+    // Roles allowed to send file attachments: admin, lecturer, manager (+ superadmin)
+    const FILE_ROLES = ["admin", "superadmin", "lecturer", "manager"];
+    if (hasFile && !FILE_ROLES.includes(req.user.role)) {
+      fs.unlink(req.file.path, () => {});
+      return res.status(403).json({ error: "Your role is not allowed to send file attachments." });
     }
 
     const company = req.user.company;
     const myId    = req.user._id;
     const now     = new Date();
 
+    let attachment = null;
+    if (hasFile) {
+      const baseUrl = process.env.SERVER_URL || "https://kodex.it.com";
+      attachment = {
+        fileName:     req.file.filename,
+        originalName: req.file.originalname,
+        fileUrl:      `${baseUrl}/api/messages/attachment/${req.file.filename}`,
+        mimeType:     req.file.mimetype,
+        fileSize:     req.file.size,
+      };
+    }
+
+    const displayBody = bodyText || `📎 ${req.file.originalname}`;
+
     const msg = await Message.create({
       company,
       conversation: convo._id,
       sender:       myId,
-      body:         body.trim(),
+      body:         displayBody,
+      attachment,
     });
 
     // Update lastMessage snapshot + messageCount; increment unread for others
@@ -309,7 +340,7 @@ router.post("/conversations/:id/messages", ...mw, async (req, res) => {
       { _id: convo._id },
       {
         $set: {
-          "lastMessage.body":   body.trim(),
+          "lastMessage.body":   displayBody,
           "lastMessage.sender": myId,
           "lastMessage.sentAt": now,
         },
@@ -444,6 +475,58 @@ router.delete("/conversations/:id/messages/:msgId", ...mw, async (req, res) => {
   } catch (err) {
     console.error("delete message:", err);
     res.status(500).json({ error: "Failed to delete message" });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// GET /attachment/:filename  — serve message attachment inline (authenticated)
+// ---------------------------------------------------------------------------
+router.get("/attachment/:filename", ...mw, async (req, res) => {
+  try {
+    const { filename } = req.params;
+    const msg = await Message.findOne({
+      company:               req.user.company,
+      "attachment.fileName": filename,
+      isDeleted:             false,
+    }).lean();
+    if (!msg) return res.status(404).json({ error: "File not found." });
+
+    const filePath = path.join(process.cwd(), UPLOAD_DIR, filename);
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ error: "File not found on disk." });
+    }
+
+    res.setHeader("Content-Type", msg.attachment.mimeType || "application/octet-stream");
+    res.setHeader("Content-Disposition", `inline; filename="${msg.attachment.originalName}"`);
+    return res.sendFile(filePath);
+  } catch (err) {
+    console.error("serve message attachment:", err);
+    res.status(500).json({ error: "Failed to serve attachment." });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// GET /attachment/:filename/download  — force download
+// ---------------------------------------------------------------------------
+router.get("/attachment/:filename/download", ...mw, async (req, res) => {
+  try {
+    const { filename } = req.params;
+    const msg = await Message.findOne({
+      company:               req.user.company,
+      "attachment.fileName": filename,
+      isDeleted:             false,
+    }).lean();
+    if (!msg) return res.status(404).json({ error: "File not found." });
+
+    const filePath = path.join(process.cwd(), UPLOAD_DIR, filename);
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ error: "File not found on disk." });
+    }
+
+    return res.download(filePath, msg.attachment.originalName);
+  } catch (err) {
+    console.error("download message attachment:", err);
+    res.status(500).json({ error: "Failed to download attachment." });
   }
 });
 

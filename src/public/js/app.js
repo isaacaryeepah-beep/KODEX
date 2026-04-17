@@ -690,6 +690,25 @@ async function api(path, options = {}) {
   return res;
 }
 
+async function apiUpload(urlPath, formData, method = 'POST') {
+  const headers = {};
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+  const res = await fetch(`${API}${urlPath}`, { method, headers, body: formData });
+  if (res.headers.get('content-type')?.includes('application/json')) {
+    const data = await res.json();
+    if (!res.ok) {
+      if (res.status === 403 && data.subscriptionRequired) {
+        showSubscriptionGate(data.message);
+        throw new Error(data.error || 'Subscription required');
+      }
+      throw new Error(data.error || data.message || 'Request failed');
+    }
+    return data;
+  }
+  if (!res.ok) throw new Error('Request failed');
+  return res;
+}
+
 function showSubscriptionGate(message) {
   // Navigate to subscription page and show a toast if possible
   try {
@@ -7368,6 +7387,7 @@ function bankQuestionCard(q, i, L, typeColors, typeBg) {
             ${q.useCount > 0 ? `<span style="font-size:11px;color:#9ca3af;">Used ${q.useCount}×</span>` : ''}
           </div>
           <div class="math-content" style="font-size:13px;font-weight:600;margin-bottom:8px;line-height:1.5;">${q.questionText}</div>
+          ${q.imageAttachment ? `<div style="margin-bottom:8px;"><img src="${q.imageAttachment.fileUrl}?token=${typeof token !== 'undefined' ? token : ''}" alt="${q.imageAttachment.originalName}" style="max-width:100%;max-height:180px;border-radius:8px;border:1px solid var(--border);object-fit:contain;cursor:pointer;" onclick="window.open('${q.imageAttachment.fileUrl}?token=${typeof token !== 'undefined' ? token : ''}','_blank')"></div>` : ''}
           ${type === 'fill'
             ? `<div style="font-size:12px;color:#059669;padding:4px 10px;background:#f0fdf4;border-radius:6px;display:inline-block;">✓ ${q.correctAnswerText}${q.acceptedAnswers?.length ? ` (+${q.acceptedAnswers.length} alt)` : ''}</div>`
             : type === 'explain'
@@ -7444,6 +7464,28 @@ function openAddToBankModal(prefill) {
             <input id="bm-topic" placeholder="e.g. Biology" value="${p.topic||''}" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;">
           </div>
         </div>
+        <!-- Image attachment -->
+        <div>
+          <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:6px;display:block;">Question Image <span style="font-weight:400;text-transform:none;">(optional diagram or figure)</span></label>
+          ${p.imageAttachment ? `
+            <div id="bm-img-existing" style="margin-bottom:8px;">
+              <img src="${p.imageAttachment.fileUrl}?token=${typeof token !== 'undefined' ? token : ''}" style="max-width:100%;max-height:140px;border-radius:8px;border:1px solid var(--border);object-fit:contain;display:block;margin-bottom:6px;">
+              <div style="display:flex;align-items:center;gap:8px;">
+                <span style="font-size:11px;color:var(--text-muted);">Current: ${p.imageAttachment.originalName}</span>
+                <button type="button" onclick="bmClearExistingImage()" style="font-size:11px;padding:2px 8px;border:1px solid #fecaca;background:#fef2f2;color:#dc2626;border-radius:5px;cursor:pointer;">Remove</button>
+              </div>
+            </div>` : ''}
+          <input type="hidden" id="bm-remove-image" value="false">
+          <input type="file" id="bm-image-input" accept=".jpg,.jpeg,.png,.webp,.gif" style="display:none" onchange="bmPreviewImage(this)">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <button type="button" onclick="document.getElementById('bm-image-input').click()" style="display:flex;align-items:center;gap:6px;padding:7px 13px;border:1.5px dashed var(--border);border-radius:8px;background:var(--bg);cursor:pointer;font-size:12px;font-weight:600;color:var(--text-light);transition:.15s" onmouseover="this.style.borderColor='var(--primary)';this.style.color='var(--primary)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text-light)'">
+              🖼 ${p.imageAttachment ? 'Replace Image' : 'Upload Image'}
+            </button>
+            <span id="bm-img-name" style="font-size:12px;color:var(--text-muted);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
+            <button id="bm-img-clear" type="button" onclick="bmClearNewImage()" style="display:none;background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:16px;padding:2px 5px;">×</button>
+          </div>
+          <div id="bm-img-preview" style="margin-top:8px;display:none;"></div>
+        </div>
         <!-- Options (MCQ) -->
         <div id="bm-options-wrap">
           <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:6px;display:block;">Options & Correct Answer</label>
@@ -7481,6 +7523,35 @@ function openAddToBankModal(prefill) {
   if (p.questionType === 'fill' || p.questionType === 'explain') bmToggleType();
 }
 
+function bmPreviewImage(input) {
+  const file = input.files[0];
+  if (!file) return;
+  document.getElementById('bm-img-name').textContent = file.name;
+  document.getElementById('bm-img-clear').style.display = 'inline';
+  const url = URL.createObjectURL(file);
+  const preview = document.getElementById('bm-img-preview');
+  if (preview) {
+    preview.innerHTML = `<img src="${url}" style="max-width:100%;max-height:140px;border-radius:8px;border:1px solid var(--border);object-fit:contain;">`;
+    preview.style.display = 'block';
+  }
+}
+
+function bmClearNewImage() {
+  const input = document.getElementById('bm-image-input');
+  if (input) input.value = '';
+  document.getElementById('bm-img-name').textContent = '';
+  document.getElementById('bm-img-clear').style.display = 'none';
+  const preview = document.getElementById('bm-img-preview');
+  if (preview) { preview.innerHTML = ''; preview.style.display = 'none'; }
+}
+
+function bmClearExistingImage() {
+  const existing = document.getElementById('bm-img-existing');
+  if (existing) existing.remove();
+  const removeFlag = document.getElementById('bm-remove-image');
+  if (removeFlag) removeFlag.value = 'true';
+}
+
 function bmToggleType() {
   const type = document.getElementById('bm-type')?.value;
   const optWrap     = document.getElementById('bm-options-wrap');
@@ -7507,39 +7578,58 @@ async function submitBankQuestion(existingId) {
   const text  = document.getElementById('bm-text')?.value?.trim();
   const marks = parseInt(document.getElementById('bm-marks')?.value) || 1;
   const topic = document.getElementById('bm-topic')?.value?.trim() || '';
+  const imageFile   = document.getElementById('bm-image-input')?.files?.[0] || null;
+  const removeImage = document.getElementById('bm-remove-image')?.value === 'true';
   const errEl = document.getElementById('bm-err');
 
   if (!text) { errEl.textContent = 'Question text is required.'; errEl.style.display = 'block'; return; }
 
-  let body = { questionText: text, questionType: type, marks, topic };
+  const fields = { questionText: text, questionType: type, marks, topic };
 
   if (type === 'fill') {
     const ans = document.getElementById('bm-fill-answer')?.value?.trim();
     if (!ans) { errEl.textContent = 'Correct answer is required for fill-in questions.'; errEl.style.display = 'block'; return; }
-    body.correctAnswerText = ans;
-    body.acceptedAnswers = (document.getElementById('bm-fill-alts')?.value || '').split('\n').map(s=>s.trim()).filter(Boolean);
-    body.options = [];
+    fields.correctAnswerText = ans;
+    fields.acceptedAnswers = JSON.stringify((document.getElementById('bm-fill-alts')?.value || '').split('\n').map(s=>s.trim()).filter(Boolean));
+    fields.options = JSON.stringify([]);
   } else if (type === 'explain') {
-    body.modelAnswer = document.getElementById('bm-model-answer')?.value?.trim() || '';
-    body.options = [];
+    fields.modelAnswer = document.getElementById('bm-model-answer')?.value?.trim() || '';
+    fields.options = JSON.stringify([]);
   } else {
     const opts = [0,1,2,3].map(i => document.getElementById('bm-opt-'+i)?.value?.trim() || '');
     if (opts.filter(Boolean).length < 2) { errEl.textContent = 'At least 2 options required.'; errEl.style.display = 'block'; return; }
     const checked = [...document.querySelectorAll('input[name="bm-correct"]:checked')].map(el => parseInt(el.value));
     if (!checked.length) { errEl.textContent = 'Please mark the correct answer(s).'; errEl.style.display = 'block'; return; }
-    body.options = opts;
-    if (type === 'multiple') { body.correctAnswers = checked; }
-    else { body.correctAnswer = checked[0]; }
+    fields.options = JSON.stringify(opts);
+    if (type === 'multiple') { fields.correctAnswers = JSON.stringify(checked); }
+    else { fields.correctAnswer = checked[0]; }
   }
 
+  if (removeImage) fields.removeImage = 'true';
+
   try {
-    if (existingId) {
-      await api('/api/lecturer/question-bank/' + existingId, { method: 'PUT', body: JSON.stringify(body) });
-      toastSuccess('Question updated');
+    if (imageFile) {
+      const fd = new FormData();
+      Object.entries(fields).forEach(([k, v]) => fd.append(k, v));
+      fd.append('image', imageFile);
+      if (existingId) {
+        await apiUpload('/api/lecturer/question-bank/' + existingId, fd, 'PUT');
+      } else {
+        await apiUpload('/api/lecturer/question-bank', fd);
+      }
     } else {
-      await api('/api/lecturer/question-bank', { method: 'POST', body: JSON.stringify(body) });
-      toastSuccess('Question added to bank');
+      // Parse back JSON strings for non-file path
+      const body = { ...fields };
+      if (body.options && typeof body.options === 'string') body.options = JSON.parse(body.options);
+      if (body.acceptedAnswers && typeof body.acceptedAnswers === 'string') body.acceptedAnswers = JSON.parse(body.acceptedAnswers);
+      if (body.correctAnswers && typeof body.correctAnswers === 'string') body.correctAnswers = JSON.parse(body.correctAnswers);
+      if (existingId) {
+        await api('/api/lecturer/question-bank/' + existingId, { method: 'PUT', body: JSON.stringify(body) });
+      } else {
+        await api('/api/lecturer/question-bank', { method: 'POST', body: JSON.stringify(body) });
+      }
     }
+    toastSuccess(existingId ? 'Question updated' : 'Question added to bank');
     document.getElementById('add-bank-overlay')?.remove();
     renderQuestionBank();
   } catch(e) {
@@ -9749,6 +9839,13 @@ function annCard(a, canPost, isAdmin) {
             ${!a.isRead ? '<span style="background:#6366f1;color:#fff;font-size:10px;padding:1px 7px;border-radius:20px;font-weight:700;">NEW</span>' : ''}
           </div>
           <div style="font-size:13px;color:var(--text-light);margin-bottom:10px;white-space:pre-wrap;line-height:1.6;">${a.body}</div>
+          ${a.attachment ? (() => {
+            const t = typeof token !== 'undefined' ? token : '';
+            const src = `/api/announcements/attachment/${a.attachment.fileName}?token=${t}`;
+            return a.attachment.mimeType?.startsWith('image/')
+              ? `<div style="margin-bottom:10px;"><img src="${src}" alt="${esc(a.attachment.originalName)}" style="max-width:100%;max-height:220px;border-radius:8px;border:1px solid var(--border);object-fit:contain;cursor:pointer;" onclick="window.open('${src}','_blank')"></div>`
+              : `<div style="margin-bottom:10px;display:flex;align-items:center;gap:8px;padding:8px 12px;background:#fef9f0;border:1px solid #fed7aa;border-radius:8px;font-size:12px;color:#c2410c;cursor:pointer;" onclick="window.open('${src}','_blank')"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> 📄 ${esc(a.attachment.originalName)} <span style="color:var(--text-muted);margin-left:4px;">(click to view)</span></div>`;
+          })() : ''}
           <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:11px;color:var(--text-muted);">
             <span>👤 ${a.author?.name || 'Unknown'}</span>
             <span>📢 ${audienceLabel}</span>
@@ -9843,6 +9940,19 @@ async function openPostAnnouncementModal() {
           <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:5px;display:block;">Expires At <span style="font-weight:400;text-transform:none;">(optional)</span></label>
           <input id="ann-expires" type="datetime-local" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;">
         </div>
+        <div>
+          <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:6px;display:block;">Attachment <span style="font-weight:400;text-transform:none;">(PDF or image, optional)</span></label>
+          <input type="file" id="ann-file" accept=".pdf,.jpg,.jpeg,.png,.webp,.gif" style="display:none" onchange="annPreviewFile(this)">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <button type="button" onclick="document.getElementById('ann-file').click()" style="display:flex;align-items:center;gap:6px;padding:7px 13px;border:1.5px dashed var(--border);border-radius:8px;background:var(--bg);cursor:pointer;font-size:12px;font-weight:600;color:var(--text-light);transition:.15s" onmouseover="this.style.borderColor='var(--primary)';this.style.color='var(--primary)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text-light)'">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+              📎 Attach File
+            </button>
+            <span id="ann-file-name" style="font-size:12px;color:var(--text-muted);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
+            <button id="ann-file-clear" type="button" onclick="annClearFile()" style="display:none;background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:16px;padding:2px 5px;line-height:1;">×</button>
+          </div>
+          <div id="ann-file-preview" style="margin-top:8px;display:none;"></div>
+        </div>
         ${isAdmin ? `
         <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;font-weight:500;">
           <input type="checkbox" id="ann-pinned" style="accent-color:var(--primary);width:15px;height:15px;">
@@ -9858,6 +9968,31 @@ async function openPostAnnouncementModal() {
   document.body.appendChild(ol);
 }
 
+function annPreviewFile(input) {
+  const file = input.files[0];
+  if (!file) return;
+  document.getElementById('ann-file-name').textContent = file.name;
+  document.getElementById('ann-file-clear').style.display = 'inline';
+  const preview = document.getElementById('ann-file-preview');
+  if (file.type.startsWith('image/')) {
+    const url = URL.createObjectURL(file);
+    preview.innerHTML = `<img src="${url}" style="max-width:100%;max-height:160px;border-radius:8px;border:1px solid var(--border);object-fit:contain;">`;
+    preview.style.display = 'block';
+  } else {
+    preview.innerHTML = `<div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;font-size:12px;color:#dc2626;"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> ${file.name}</div>`;
+    preview.style.display = 'block';
+  }
+}
+
+function annClearFile() {
+  const input = document.getElementById('ann-file');
+  if (input) input.value = '';
+  document.getElementById('ann-file-name').textContent = '';
+  document.getElementById('ann-file-clear').style.display = 'none';
+  const preview = document.getElementById('ann-file-preview');
+  if (preview) { preview.innerHTML = ''; preview.style.display = 'none'; }
+}
+
 async function submitAnnouncement() {
   const title    = document.getElementById('ann-title')?.value?.trim();
   const body     = document.getElementById('ann-body')?.value?.trim();
@@ -9866,6 +10001,8 @@ async function submitAnnouncement() {
   const expiresAt= document.getElementById('ann-expires')?.value || null;
   const pinned   = document.getElementById('ann-pinned')?.checked || false;
   const courseId = document.getElementById('ann-course')?.value || null;
+  const fileInput = document.getElementById('ann-file');
+  const file     = fileInput?.files?.[0] || null;
   const errEl    = document.getElementById('ann-post-err');
 
   if (!title || !body) {
@@ -9873,10 +10010,17 @@ async function submitAnnouncement() {
     return;
   }
   try {
-    await api('/api/announcements', {
-      method: 'POST',
-      body: JSON.stringify({ title, body, type, audience, pinned, expiresAt: expiresAt ? new Date(expiresAt).toISOString() : null, courseId: courseId || undefined }),
-    });
+    const fd = new FormData();
+    fd.append('title', title);
+    fd.append('body', body);
+    fd.append('type', type);
+    fd.append('audience', audience);
+    fd.append('pinned', pinned ? 'true' : 'false');
+    if (expiresAt) fd.append('expiresAt', new Date(expiresAt).toISOString());
+    if (courseId) fd.append('courseId', courseId);
+    if (file) fd.append('attachment', file);
+
+    await apiUpload('/api/announcements', fd);
     document.getElementById('ann-post-overlay')?.remove();
     toastSuccess('Announcement posted ✓');
     renderAnnouncements();
@@ -15062,7 +15206,16 @@ async function renderMessages() {
         <div id="msg-thread-body" style="flex:1;overflow-y:auto;padding:20px 24px;display:flex;flex-direction:column;gap:12px;background:var(--bg)">
         </div>
         <div id="msg-input-bar" style="padding:14px 20px;border-top:1px solid var(--border);display:none;background:var(--card)">
-          <div style="display:flex;gap:10px;align-items:flex-end;background:var(--bg);border:1.5px solid var(--border);border-radius:12px;padding:8px 12px;transition:.15s" onfocus-within="this.style.borderColor='#2563eb'">
+          <div id="msg-file-preview-bar" style="display:none;margin-bottom:8px;padding:8px 10px;background:var(--bg);border:1.5px solid var(--border);border-radius:8px;display:none;align-items:center;gap:8px;">
+            <div id="msg-file-preview-inner" style="flex:1;min-width:0;font-size:12px;color:var(--text-light);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></div>
+            <button onclick="msgClearFile()" style="background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:18px;line-height:1;padding:0 4px;flex-shrink:0;">×</button>
+          </div>
+          <div style="display:flex;gap:8px;align-items:flex-end;background:var(--bg);border:1.5px solid var(--border);border-radius:12px;padding:8px 12px;transition:.15s" onfocus-within="this.style.borderColor='#2563eb'">
+            ${['admin','superadmin','lecturer','manager'].includes(currentUser?.role) ? `
+            <label title="Attach image or PDF" style="flex-shrink:0;width:30px;height:30px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text-muted);border-radius:7px;transition:background .12s" onmouseover="this.style.background='rgba(37,99,235,.08)';this.style.color='#2563eb'" onmouseout="this.style.background='';this.style.color='var(--text-muted)'">
+              <input type="file" id="msg-file-input" accept=".pdf,.jpg,.jpeg,.png,.webp,.gif" style="display:none" onchange="msgPreviewFile(this)">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+            </label>` : ''}
             <textarea id="msg-input" placeholder="Write a message…" rows="1"
               oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,120)+'px';this.parentElement.style.borderColor=this.value?'#2563eb':'var(--border)'"
               onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendMessage()}"
@@ -15152,7 +15305,10 @@ async function openConvo(id, name, type) {
         const time   = new Date(m.createdAt).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
         const senderName = m.sender?.name || 'Unknown';
         const initials = senderName.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
-        const msgContent = m.isDeleted ? '<em style="opacity:.55;font-size:12px">[message deleted]</em>' : (m.body || '');
+        const rawBody = m.isDeleted ? null : (m.body || '');
+        const msgContent = m.isDeleted
+          ? '<em style="opacity:.55;font-size:12px">[message deleted]</em>'
+          : _buildMsgBubbleContent(rawBody, m.attachment, isMine);
         if (isMine) {
           return `<div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px">
             <div style="max-width:68%;padding:10px 14px;border-radius:16px 16px 4px 16px;background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#fff;font-size:13px;line-height:1.55;word-break:break-word;box-shadow:0 2px 8px rgba(37,99,235,.25)">${msgContent}</div>
@@ -15176,26 +15332,83 @@ async function openConvo(id, name, type) {
   }
 }
 
+function _buildMsgBubbleContent(bodyText, attachment, isMine) {
+  if (!attachment) return bodyText || '';
+  const imgColor = isMine ? '#93c5fd' : '#2563eb';
+  const t = typeof token !== 'undefined' ? token : '';
+  const src = `${attachment.fileUrl}?token=${t}`;
+  if (attachment.mimeType?.startsWith('image/')) {
+    return `${bodyText && bodyText !== `📎 ${attachment.originalName}` ? `<div style="margin-bottom:6px">${bodyText}</div>` : ''}<img src="${src}" style="max-width:200px;max-height:180px;border-radius:8px;object-fit:cover;cursor:pointer;display:block;" onclick="window.open('${src}','_blank')" onerror="this.style.display='none'">`;
+  }
+  return `${bodyText && bodyText !== `📎 ${attachment.originalName}` ? `<div style="margin-bottom:4px">${bodyText}</div>` : ''}<a href="${src}" target="_blank" style="color:${imgColor};text-decoration:none;font-size:12px;display:flex;align-items:center;gap:4px;">📄 ${attachment.originalName}</a>`;
+}
+
+function msgPreviewFile(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const bar = document.getElementById('msg-file-preview-bar');
+  const inner = document.getElementById('msg-file-preview-inner');
+  if (!bar || !inner) return;
+  if (file.type.startsWith('image/')) {
+    const url = URL.createObjectURL(file);
+    inner.innerHTML = `<img src="${url}" style="height:48px;border-radius:6px;object-fit:cover;border:1px solid var(--border);margin-right:6px;vertical-align:middle;"> <span style="vertical-align:middle;">${file.name}</span>`;
+  } else {
+    inner.innerHTML = `📄 <strong>${file.name}</strong> <span style="color:var(--text-muted);font-size:11px;">(${(file.size/1024).toFixed(0)} KB)</span>`;
+  }
+  bar.style.display = 'flex';
+}
+
+function msgClearFile() {
+  const input = document.getElementById('msg-file-input');
+  if (input) input.value = '';
+  const bar = document.getElementById('msg-file-preview-bar');
+  if (bar) { bar.style.display = 'none'; bar.querySelector('#msg-file-preview-inner').innerHTML = ''; }
+}
+
 async function sendMessage() {
   if (!_activeConvoId) return;
-  const input = document.getElementById('msg-input');
-  const body  = input?.value.trim();
-  if (!body) return;
+  const input    = document.getElementById('msg-input');
+  const bodyText = input?.value.trim() || '';
+  const fileInput = document.getElementById('msg-file-input');
+  const file     = fileInput?.files?.[0] || null;
+
+  if (!bodyText && !file) return;
+
   input.value = '';
   input.style.height = 'auto';
+  msgClearFile();
+
   try {
-    const data = await api(`/api/messages/conversations/${_activeConvoId}/messages`, {
-      method: 'POST',
-      body: JSON.stringify({ body }),
-    });
-    const msg   = data.message;
-    const myId  = currentUser._id || currentUser.id;
+    let data;
+    if (file) {
+      const fd = new FormData();
+      if (bodyText) fd.append('body', bodyText);
+      fd.append('attachment', file);
+      data = await apiUpload(`/api/messages/conversations/${_activeConvoId}/messages`, fd);
+    } else {
+      data = await api(`/api/messages/conversations/${_activeConvoId}/messages`, {
+        method: 'POST',
+        body: JSON.stringify({ body: bodyText }),
+      });
+    }
+    const msg = data.message;
     const threadBody = document.getElementById('msg-thread-body');
     if (threadBody) {
       const time = new Date(msg.createdAt || Date.now()).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+      const displayBody = bodyText || (file ? `📎 ${file.name}` : '');
       const el = document.createElement('div');
       el.style.cssText = 'display:flex;flex-direction:column;align-items:flex-end;gap:3px';
-      el.innerHTML = `<div style="max-width:68%;padding:10px 14px;border-radius:16px 16px 4px 16px;background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#fff;font-size:13px;line-height:1.55;word-break:break-word;box-shadow:0 2px 8px rgba(37,99,235,.25)">${body}</div><span style="font-size:10px;color:var(--text-muted);padding-right:2px">${time}</span>`;
+      let bubbleContent = displayBody;
+      if (msg.attachment && msg.attachment.mimeType?.startsWith('image/')) {
+        const t2 = typeof token !== 'undefined' ? token : '';
+        const src2 = `${msg.attachment.fileUrl}?token=${t2}`;
+        bubbleContent = `${bodyText ? `<div style="margin-bottom:6px">${bodyText}</div>` : ''}<img src="${src2}" style="max-width:200px;max-height:180px;border-radius:8px;object-fit:cover;cursor:pointer;" onclick="window.open('${src2}','_blank')">`;
+      } else if (msg.attachment) {
+        const t2 = typeof token !== 'undefined' ? token : '';
+        const src2 = `${msg.attachment.fileUrl}?token=${t2}`;
+        bubbleContent = `${bodyText ? `<div style="margin-bottom:4px">${bodyText}</div>` : ''}<a href="${src2}" target="_blank" style="color:#93c5fd;text-decoration:none;font-size:12px;">📄 ${msg.attachment.originalName}</a>`;
+      }
+      el.innerHTML = `<div style="max-width:68%;padding:10px 14px;border-radius:16px 16px 4px 16px;background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#fff;font-size:13px;line-height:1.55;word-break:break-word;box-shadow:0 2px 8px rgba(37,99,235,.25)">${bubbleContent}</div><span style="font-size:10px;color:var(--text-muted);padding-right:2px">${time}</span>`;
       threadBody.appendChild(el);
       threadBody.scrollTop = threadBody.scrollHeight;
     }
