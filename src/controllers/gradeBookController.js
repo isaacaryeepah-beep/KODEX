@@ -191,11 +191,12 @@ exports.getCourseGrades = async (req, res) => {
       return res.status(403).json({ error: "Access denied" });
     }
 
-    // Get or create grade book config
-    let gb = await GradeBook.findOne({ course: courseId, company });
-    if (!gb) {
-      gb = await GradeBook.create({ course: courseId, company, createdBy: req.user._id });
-    }
+    // Get or create grade book config — upsert avoids duplicate-key race condition
+    let gb = await GradeBook.findOneAndUpdate(
+      { course: courseId, company },
+      { $setOnInsert: { course: courseId, company, createdBy: req.user._id } },
+      { upsert: true, new: true, setDefaultsOnInsert: true }
+    );
 
     // ── Students enrolled ─────────────────────────────────────────────────────
     const registeredStudentIds = course.enrolledStudents || [];
@@ -445,7 +446,8 @@ exports.getMyGrades = async (req, res) => {
     const studentId = req.user._id;
     const sid       = studentId.toString();
 
-    const course = await Course.findOne({ _id: courseId, company });
+    // Course model uses 'companyId', not 'company'
+    const course = await Course.findOne({ _id: courseId, companyId: company });
     if (!course) return res.status(404).json({ error: "Course not found" });
 
     // Must be enrolled
@@ -454,8 +456,8 @@ exports.getMyGrades = async (req, res) => {
       return res.status(403).json({ error: "You are not enrolled in this course" });
     }
 
-    let gb = await GradeBook.findOne({ course: courseId, company });
-    if (!gb) gb = { weights: { quizzes: 50, normalQuizzes: 0, snapQuizzes: 0, assignments: 0, attendance: 20, manual: 30 }, manualEntries: [] };
+    const gb = await GradeBook.findOne({ course: courseId, company })
+      || { weights: { quizzes: 50, normalQuizzes: 0, snapQuizzes: 0, assignments: 0, attendance: 20, manual: 30 }, manualEntries: [] };
 
     const w = gb.weights;
 
@@ -571,8 +573,11 @@ exports.addManualEntry = async (req, res) => {
       return res.status(400).json({ error: "Label and maxScore are required" });
     }
 
-    let gb = await GradeBook.findOne({ course: courseId, company });
-    if (!gb) gb = new GradeBook({ course: courseId, company, createdBy: req.user._id });
+    let gb = await GradeBook.findOneAndUpdate(
+      { course: courseId, company },
+      { $setOnInsert: { course: courseId, company, createdBy: req.user._id } },
+      { upsert: true, new: true, setDefaultsOnInsert: true }
+    );
     gb.manualEntries.push({ label: label.trim(), maxScore: Number(maxScore), scores: [] });
     await gb.save();
     const entry = gb.manualEntries[gb.manualEntries.length - 1];
@@ -639,8 +644,12 @@ exports.saveManualScores = async (req, res) => {
 exports.listCourses = async (req, res) => {
   try {
     const company = req.user.company;
-    const filter = { companyId: company };
+    const filter = { companyId: company, isActive: true };
     if (req.user.role === "lecturer") filter.lecturerId = req.user._id;
+    // HOD sees all courses in their department (if set), otherwise all company courses
+    if (req.user.role === "hod" && req.user.department) {
+      filter.departmentId = req.user.department;
+    }
 
     const courses = await Course.find(filter).populate("lecturerId", "name").lean();
 
@@ -688,15 +697,19 @@ exports.exportGrades = async (req, res) => {
     const { courseId } = req.params;
     const company = req.user.company;
 
-    const course = await Course.findOne({ _id: courseId, company }).lean();
+    // Course model uses 'companyId', lecturer field is 'lecturerId'
+    const course = await Course.findOne({ _id: courseId, companyId: company }).lean();
     if (!course) return res.status(404).json({ error: "Course not found" });
 
-    const isAdmin    = ["admin", "superadmin"].includes(req.user.role);
-    const isLecturer = course.lecturer?.toString() === req.user._id.toString();
+    const isAdmin    = ["admin", "superadmin", "hod"].includes(req.user.role);
+    const isLecturer = course.lecturerId?.toString() === req.user._id.toString();
     if (!isAdmin && !isLecturer) return res.status(403).json({ error: "Access denied" });
 
-    let gb = await GradeBook.findOne({ course: courseId, company });
-    if (!gb) gb = await GradeBook.create({ course: courseId, company, createdBy: req.user._id });
+    const gb = await GradeBook.findOneAndUpdate(
+      { course: courseId, company },
+      { $setOnInsert: { course: courseId, company, createdBy: req.user._id } },
+      { upsert: true, new: true, setDefaultsOnInsert: true }
+    );
 
     const registeredStudentIds = course.enrolledStudents || [];
     const students = registeredStudentIds.length

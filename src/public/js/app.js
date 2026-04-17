@@ -9654,12 +9654,13 @@ async function renderLecturerCourseGrades(courseId, courseTitle) {
   content.innerHTML = '<div class="loading">Loading grade book…</div>';
   try {
     const d = await api('/api/gradebook/course/' + courseId);
-    const grades      = d.grades      || [];
-    const gradeBook   = d.gradeBook   || { weights: { quizzes: 40, attendance: 40, manual: 20 }, manualEntries: [] };
-    const quizzes     = d.quizzes     || [];
+    const grades        = d.grades      || [];
+    const gradeBook     = d.gradeBook   || { weights: { quizzes: 50, attendance: 20, manual: 30 }, manualEntries: [] };
+    // API returns assessments.legacyQuizzes (not a top-level d.quizzes)
+    const quizzes       = d.assessments?.legacyQuizzes || [];
     const totalSessions = d.totalSessions ?? 0;
     const gb = gradeBook;
-    const w  = gb.weights || { quizzes: 40, attendance: 40, manual: 20 };
+    const w  = gb.weights || { quizzes: 50, attendance: 20, manual: 30 };
 
     // Grade distribution summary
     const dist = { A:0, B:0, C:0, D:0, F:0 };
@@ -9735,9 +9736,10 @@ async function renderLecturerCourseGrades(courseId, courseTitle) {
       }
     `;
 
-    // Store current data globally for CSV export
+    // Store current data globally for CSV export and score entry
     window._gbData = d;
     window._gbCourseId = courseId;
+    window._gbCourseTitle = courseTitle;
 
   } catch(e) {
     content.innerHTML = `<div class="card"><p style="color:#ef4444;">${e.message}</p></div>`;
@@ -9838,7 +9840,7 @@ async function saveManualEntry(courseId) {
     });
     document.getElementById('gb-entry-overlay').remove();
     toastSuccess('Grade column added ✓');
-    renderLecturerCourseGrades(courseId, document.querySelector('h2')?.textContent || '');
+    renderLecturerCourseGrades(courseId, window._gbCourseTitle || '');
   } catch(e) {
     if (errEl) { errEl.textContent = e.message; errEl.style.display = 'block'; }
   }
@@ -9853,7 +9855,8 @@ function openEditManualScores(courseId, entryId, label, maxScore) {
   ol.id = 'gb-scores-overlay';
   ol.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:400;display:flex;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(3px)';
 
-  const rows = gbData.grades.map(g => {
+  // Only registered students have a real _id — skip roster-only (unregistered) rows
+  const rows = gbData.grades.filter(g => g.student._id && g.student.isRegistered !== false).map(g => {
     const existing = g.manualScores.find(m => m.entryId.toString() === entryId);
     return `
       <tr>
@@ -9905,7 +9908,7 @@ async function submitManualScores(courseId, entryId) {
     });
     document.getElementById('gb-scores-overlay').remove();
     toastSuccess('Scores saved ✓');
-    renderLecturerCourseGrades(courseId, document.querySelector('h2')?.textContent || '');
+    renderLecturerCourseGrades(courseId, window._gbCourseTitle || '');
   } catch(e) {
     toastError(e.message);
   }
@@ -9916,7 +9919,7 @@ function confirmDeleteManualEntry(courseId, entryId) {
     try {
       await api('/api/gradebook/course/' + courseId + '/manual-entry/' + entryId, { method: 'DELETE' });
       toastSuccess('Column deleted');
-      renderLecturerCourseGrades(courseId, document.querySelector('h2')?.textContent || '');
+      renderLecturerCourseGrades(courseId, window._gbCourseTitle || '');
     } catch(e) { toastError(e.message); }
   });
 }
