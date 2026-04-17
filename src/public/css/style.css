@@ -5747,6 +5747,90 @@ table tr:hover td { background: #f8fafc !important; }
   font-family: inherit;
 }
 
+/* ── Messaging: Mobile responsive (≤680px) ───────────────────────────────── */
+@media (max-width: 680px) {
+  /* Tall full-screen layout */
+  .msg-page {
+    height: calc(100vh - 88px);
+    border-radius: 10px;
+    flex-direction: column;
+    position: relative;
+  }
+
+  /* Sidebar takes full width by default */
+  .msg-sidebar {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+    flex: 1;
+  }
+
+  /* Thread pane hidden until a conversation is opened */
+  .msg-thread-wrap {
+    display: none;
+    position: absolute;
+    inset: 0;
+    z-index: 10;
+    background: var(--card);
+    height: 100%;
+  }
+
+  /* When a convo is opened: hide sidebar, show thread */
+  .msg-thread-wrap.msg-thread-active {
+    display: flex;
+  }
+  .msg-thread-wrap.msg-thread-active ~ .msg-sidebar,
+  .msg-thread-active + .msg-sidebar {
+    display: none;
+  }
+  /* Sidebar hidden when thread active via parent class trick */
+  .msg-page:has(.msg-thread-active) .msg-sidebar {
+    display: none;
+  }
+
+  /* Show the back button on mobile */
+  .msg-back-btn {
+    display: flex;
+  }
+
+  /* Input bar pinned at bottom of the absolutely-positioned thread */
+  .msg-input-bar {
+    flex-shrink: 0;
+    position: sticky;
+    bottom: 0;
+    z-index: 2;
+    padding: 10px 12px;
+  }
+
+  /* Smaller thread padding */
+  .msg-thread-body { padding: 14px 14px; }
+  .msg-thread-header { padding: 10px 14px; }
+
+  /* Sidebar adjustments */
+  .msg-sidebar-head { padding: 12px 12px 8px; }
+  .msg-convo-item   { padding: 10px 12px; }
+
+  /* Wider bubbles on narrow screens */
+  .msg-row--mine   { max-width: 85%; }
+  .msg-row--theirs { max-width: 90%; }
+
+  /* Modal full-width on small screens */
+  .msg-modal { max-width: 100%; border-radius: 16px 16px 0 0; }
+  .msg-modal-overlay { align-items: flex-end; padding: 0; }
+
+  /* Hint hidden on mobile */
+  .msg-hint { display: none; }
+}
+
+/* ── Messaging: Tablet (681–960px) ────────────────────────────────────────── */
+@media (min-width: 681px) and (max-width: 960px) {
+  .msg-page { height: calc(100vh - 104px); }
+  .msg-sidebar { width: 240px; min-width: 200px; }
+  .msg-back-btn { display: none; }
+}
+
 /* ══════════════════════════════════════════════════
    SCHEDULED MEETINGS — Lecturer Dashboard card
 ══════════════════════════════════════════════════ */
