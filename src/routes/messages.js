@@ -33,6 +33,8 @@ const { uploadMessage, handleUploadError, UPLOAD_DIR } = require("../middleware/
 const Conversation = require("../models/Conversation");
 const Message      = require("../models/Message");
 const User         = require("../models/User");
+const Company      = require("../models/Company");
+const Course       = require("../models/Course");
 
 // ── Shared middleware ────────────────────────────────────────────────────────
 const mw = [authenticate, requireActiveSubscription, companyIsolation];
@@ -78,6 +80,330 @@ function maskDeleted(msg) {
   }
   return msg;
 }
+
+/**
+ * Check whether `sender` (full user doc) may directly message `recipientId`
+ * inside `company`.  Returns { allowed, reason?, code? }.
+ *
+ * Academic rules
+ *   student  → lecturers of enrolled courses only
+ *   student  → HOD: BLOCKED — must use /hod-request
+ *   lecturer → enrolled students + HOD + admin
+ *   hod      → anyone in company
+ *   admin    → anyone
+ *
+ * Corporate rules
+ *   employee → reporting manager + same-team members + admin
+ *   manager  → direct reports + same-team + admin
+ *   admin    → anyone
+ */
+async function canSendMessage(sender, recipientId, company) {
+  const sRole = sender.role;
+
+  // Superadmin / admin bypass all restrictions
+  if (["admin", "superadmin"].includes(sRole)) return { allowed: true };
+
+  const recipientObjId = new mongoose.Types.ObjectId(recipientId);
+
+  const recipient = await User.findOne({
+    _id:      recipientObjId,
+    company,
+    isActive: true,
+  }).select("role corporateTeamRef reportingManager").lean();
+
+  if (!recipient) return { allowed: false, reason: "Recipient not found or inactive." };
+
+  const rRole = recipient.role;
+
+  // ── Determine mode ────────────────────────────────────────────────────────
+  const companyDoc = await Company.findById(company).select("mode").lean();
+  const mode       = companyDoc?.mode || "academic";
+
+  const academicRoles  = ["lecturer", "student", "hod"];
+  const corporateRoles = ["manager", "employee"];
+  const isAcademic = mode === "academic" || (mode === "both" && academicRoles.includes(sRole));
+  const isCorporate = mode === "corporate" || (mode === "both" && corporateRoles.includes(sRole));
+
+  // ── Academic ──────────────────────────────────────────────────────────────
+  if (isAcademic) {
+    if (sRole === "hod") return { allowed: true };
+
+    if (sRole === "lecturer") {
+      if (["hod", "admin", "superadmin", "lecturer"].includes(rRole)) return { allowed: true };
+      if (rRole === "student") {
+        const enrolled = await Course.findOne({
+          companyId:        company,
+          lecturerId:       sender._id,
+          enrolledStudents: recipientObjId,
+          isActive:         true,
+        }).select("_id").lean();
+        if (!enrolled) return { allowed: false, reason: "This student is not enrolled in any of your courses." };
+        return { allowed: true };
+      }
+      return { allowed: false, reason: "Lecturers may only message their enrolled students, HOD, or admin." };
+    }
+
+    if (sRole === "student") {
+      if (["admin", "superadmin"].includes(rRole)) return { allowed: true };
+      if (rRole === "hod") {
+        return { allowed: false, reason: "To contact the HOD, please use the HOD Request form.", code: "USE_HOD_REQUEST" };
+      }
+      if (rRole === "lecturer") {
+        const enrolled = await Course.findOne({
+          companyId:        company,
+          lecturerId:       recipientObjId,
+          enrolledStudents: sender._id,
+          isActive:         true,
+        }).select("_id").lean();
+        if (!enrolled) return { allowed: false, reason: "You are not enrolled in any of this lecturer's courses." };
+        return { allowed: true };
+      }
+      return { allowed: false, reason: "Students may only message their enrolled lecturers, or submit a HOD Request." };
+    }
+  }
+
+  // ── Corporate ─────────────────────────────────────────────────────────────
+  if (isCorporate) {
+    if (sRole === "manager") {
+      if (["admin", "superadmin", "manager"].includes(rRole)) return { allowed: true };
+      const isDirectReport = recipient.reportingManager &&
+        recipient.reportingManager.toString() === sender._id.toString();
+      const sameTeam =
+        sender.corporateTeamRef && recipient.corporateTeamRef &&
+        sender.corporateTeamRef.toString() === recipient.corporateTeamRef.toString();
+      if (isDirectReport || sameTeam) return { allowed: true };
+      return { allowed: false, reason: "Managers may only message their direct reports, team members, or admin." };
+    }
+
+    if (sRole === "employee") {
+      if (["admin", "superadmin"].includes(rRole)) return { allowed: true };
+      const isMyManager = sender.reportingManager &&
+        sender.reportingManager.toString() === recipientId.toString();
+      const sameTeam =
+        sender.corporateTeamRef && recipient.corporateTeamRef &&
+        sender.corporateTeamRef.toString() === recipient.corporateTeamRef.toString();
+      if (isMyManager || sameTeam) return { allowed: true };
+      return { allowed: false, reason: "Employees may only message their manager, team members, or admin." };
+    }
+  }
+
+  return { allowed: false, reason: "Messaging not permitted between these roles." };
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// GET /users/messageable  — list users the current user may contact
+// ════════════════════════════════════════════════════════════════════════════
+router.get("/users/messageable", ...mw, async (req, res) => {
+  try {
+    const company = req.user.company;
+    const myId    = req.user._id;
+    const sRole   = req.user.role;
+
+    // Admins/HODs see everyone
+    if (["admin", "superadmin", "hod"].includes(sRole)) {
+      const users = await User.find({
+        company,
+        isActive: true,
+        _id:      { $ne: myId },
+      }).select("_id name role department").sort({ name: 1 }).lean();
+      return res.json({ users, hodUsers: [], canDirectMessageHod: true });
+    }
+
+    const companyDoc = await Company.findById(company).select("mode").lean();
+    const mode       = companyDoc?.mode || "academic";
+
+    let users    = [];
+    let hodUsers = []; // shown separately for students (require request form)
+
+    const academicRoles  = ["lecturer", "student"];
+    const corporateRoles = ["manager", "employee"];
+
+    if (mode === "academic" || (mode === "both" && academicRoles.includes(sRole))) {
+      if (sRole === "student") {
+        const courses = await Course.find({
+          companyId:        company,
+          enrolledStudents: myId,
+          isActive:         true,
+        }).select("lecturerId").lean();
+        const lecturerIds = [...new Set(courses.map(c => c.lecturerId?.toString()).filter(Boolean))];
+        users = await User.find({
+          _id:      { $in: lecturerIds },
+          isActive: true,
+        }).select("_id name role department").lean();
+        hodUsers = await User.find({
+          company,
+          role:     "hod",
+          isActive: true,
+        }).select("_id name role department").lean();
+        // also include admin
+        const admins = await User.find({
+          company,
+          role:     { $in: ["admin", "superadmin"] },
+          isActive: true,
+        }).select("_id name role").lean();
+        users = [...users, ...admins];
+      } else if (sRole === "lecturer") {
+        const courses = await Course.find({
+          companyId:  company,
+          lecturerId: myId,
+          isActive:   true,
+        }).select("enrolledStudents").lean();
+        const studentIds = [...new Set(courses.flatMap(c => (c.enrolledStudents || []).map(s => s.toString())))];
+        const students = await User.find({
+          _id:      { $in: studentIds },
+          isActive: true,
+        }).select("_id name role department").lean();
+        const staff = await User.find({
+          company,
+          role:     { $in: ["hod", "admin", "superadmin", "lecturer"] },
+          isActive: true,
+          _id:      { $ne: myId },
+        }).select("_id name role department").lean();
+        users = [...students, ...staff];
+      }
+    }
+
+    if (mode === "corporate" || (mode === "both" && corporateRoles.includes(sRole))) {
+      if (sRole === "employee") {
+        const managerUser = req.user.reportingManager
+          ? await User.findById(req.user.reportingManager).select("_id name role").lean()
+          : null;
+        let teammates = [];
+        if (req.user.corporateTeamRef) {
+          teammates = await User.find({
+            company,
+            corporateTeamRef: req.user.corporateTeamRef,
+            isActive:         true,
+            _id:              { $ne: myId },
+          }).select("_id name role").lean();
+        }
+        const admins = await User.find({
+          company,
+          role:     { $in: ["admin", "superadmin"] },
+          isActive: true,
+        }).select("_id name role").lean();
+        users = [...(managerUser ? [managerUser] : []), ...teammates, ...admins];
+      } else if (sRole === "manager") {
+        const directReports = await User.find({
+          company,
+          reportingManager: myId,
+          isActive:         true,
+        }).select("_id name role designation").lean();
+        let teammates = [];
+        if (req.user.corporateTeamRef) {
+          teammates = await User.find({
+            company,
+            corporateTeamRef: req.user.corporateTeamRef,
+            isActive:         true,
+            _id:              { $ne: myId },
+          }).select("_id name role").lean();
+        }
+        const admins = await User.find({
+          company,
+          role:     { $in: ["admin", "superadmin"] },
+          isActive: true,
+        }).select("_id name role").lean();
+        users = [...directReports, ...teammates, ...admins];
+      }
+    }
+
+    // Deduplicate
+    const seen   = new Set();
+    const unique = users.filter(u => {
+      const id = u._id.toString();
+      if (seen.has(id)) return false;
+      seen.add(id);
+      return true;
+    });
+
+    res.json({ users: unique, hodUsers, canDirectMessageHod: sRole !== "student" });
+  } catch (err) {
+    console.error("messageable:", err);
+    res.status(500).json({ error: "Failed to fetch messageable users" });
+  }
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+// POST /hod-request  — student submits a structured request to HOD
+// Body: { hodId, category: "complaint"|"academic_issue"|"emergency",
+//         subject: string, description: string }
+// ════════════════════════════════════════════════════════════════════════════
+router.post("/hod-request", ...mw, async (req, res) => {
+  try {
+    const company = req.user.company;
+    const myId    = req.user._id;
+
+    if (req.user.role !== "student") {
+      return res.status(403).json({ error: "Only students may submit HOD requests." });
+    }
+
+    const { hodId, category, subject, description } = req.body;
+
+    const VALID = ["complaint", "academic_issue", "emergency"];
+    if (!VALID.includes(category)) {
+      return res.status(400).json({ error: `category must be one of: ${VALID.join(", ")}` });
+    }
+    if (!subject?.trim())      return res.status(400).json({ error: "subject is required" });
+    if (!description?.trim())  return res.status(400).json({ error: "description is required" });
+
+    const hod = await User.findOne({ _id: hodId, company, role: "hod", isActive: true })
+      .select("_id name").lean();
+    if (!hod) return res.status(400).json({ error: "HOD not found" });
+
+    const categoryLabel = { complaint: "COMPLAINT", academic_issue: "ACADEMIC ISSUE", emergency: "EMERGENCY" }[category];
+    const bodyText = `[${categoryLabel}] ${subject.trim()}\n\n${description.trim()}`;
+
+    // Reuse existing open hod_request thread between this student and this HOD
+    const existing = await Conversation.findOne({
+      company,
+      type:                  "hod_request",
+      "participants.user":   { $all: [myId, hod._id] },
+      "participants.leftAt": null,
+    });
+
+    if (existing) {
+      const msg = await Message.create({ company, conversation: existing._id, sender: myId, body: bodyText });
+      await Conversation.updateOne(
+        { _id: existing._id },
+        {
+          $set: { "lastMessage.body": bodyText, "lastMessage.sender": myId, "lastMessage.sentAt": msg.createdAt },
+          $inc: { messageCount: 1 },
+        }
+      );
+      await Conversation.updateOne(
+        { _id: existing._id, "participants.user": hod._id },
+        { $inc: { "participants.$.unreadCount": 1 } }
+      );
+      await msg.populate("sender", "name role");
+      const populated = await Conversation.findById(existing._id)
+        .populate("participants.user", "name role").lean();
+      return res.status(200).json({ conversation: populated, message: msg, existing: true });
+    }
+
+    const convo = await Conversation.create({
+      company,
+      participants: [
+        { user: myId,    unreadCount: 0 },
+        { user: hod._id, unreadCount: 1 },
+      ],
+      isGroup:        false,
+      type:           "hod_request",
+      createdBy:      myId,
+      hodRequestMeta: { category, subject: subject.trim() },
+      lastMessage:    { body: bodyText, sender: myId, sentAt: new Date() },
+      messageCount:   1,
+    });
+
+    const msg = await Message.create({ company, conversation: convo._id, sender: myId, body: bodyText });
+    await msg.populate("sender", "name role");
+    await convo.populate("participants.user", "name role");
+
+    res.status(201).json({ conversation: convo, message: msg, existing: false });
+  } catch (err) {
+    console.error("hod-request:", err);
+    res.status(500).json({ error: "Failed to submit HOD request" });
+  }
+});
 
 // ════════════════════════════════════════════════════════════════════════════
 // CONVERSATION ROUTES
@@ -162,6 +488,20 @@ router.post("/conversations", ...mw, async (req, res) => {
     // Prevent messaging yourself
     if (recipientIds.some(id => id.toString() === myId.toString())) {
       return res.status(400).json({ error: "You cannot start a conversation with yourself" });
+    }
+
+    // ── Role-based permission check ────────────────────────────────────────
+    for (const recipient of recipients) {
+      const check = await canSendMessage(req.user, recipient._id, company);
+      if (!check.allowed) {
+        if (check.code === "USE_HOD_REQUEST") {
+          return res.status(403).json({
+            error: `To contact ${recipient.name} (HOD), please use the HOD Request form.`,
+            code:  "USE_HOD_REQUEST",
+          });
+        }
+        return res.status(403).json({ error: check.reason || "You are not allowed to message this person." });
+      }
     }
 
     const isGroup   = recipientIds.length > 1;

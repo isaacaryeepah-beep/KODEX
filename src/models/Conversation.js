@@ -62,6 +62,26 @@ const conversationSchema = new mongoose.Schema(
 
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
 
+    // ── Conversation type ─────────────────────────────────────────────────
+    type: {
+      type:    String,
+      enum:    ["direct_message", "hod_request", "announcement"],
+      default: "direct_message",
+    },
+
+    // ── HOD request metadata (type === "hod_request" only) ────────────────
+    hodRequestMeta: {
+      type: new mongoose.Schema({
+        category: {
+          type: String,
+          enum: ["complaint", "academic_issue", "emergency"],
+          default: null,
+        },
+        subject: { type: String, trim: true, default: null },
+      }, { _id: false }),
+      default: null,
+    },
+
     // ── Snapshot of the most recent message (for fast list rendering) ─────
     lastMessage: { type: lastMessageSchema, default: () => ({}) },
 
