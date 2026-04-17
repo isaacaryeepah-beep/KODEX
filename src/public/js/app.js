@@ -3133,7 +3133,7 @@ async function renderHodCourses() {
                 <span class="tag tag-blue">${c.enrolledStudents?.length || 0} students</span>
               </div>
               <div style="font-size:12px;color:var(--text-muted);margin-bottom:6px;">
-                👨‍🏫 ${c.lecturer?.name || 'Unassigned'}
+                👨‍🏫 ${c.lecturerId?.name || 'Unassigned'}
               </div>
               ${c.description ? `<div style="font-size:12px;color:var(--text-muted);line-height:1.5;">${c.description}</div>` : ''}
             </div>`).join('')}
@@ -5578,7 +5578,7 @@ function _renderCoursesHTML(content, courses, isOffline) {
                 ${course.group ? `<span style="font-size:11px;padding:2px 7px;border-radius:20px;background:#ecfdf5;color:#059669;font-weight:600">${esc(course.group)}</span>` : ''}
                 ${!course.level && !course.group ? '<span style="color:var(--text-muted);font-size:12px">—</span>' : ''}
               </td>
-              <td>${course.lecturer?.name || 'N/A'}</td>
+              <td>${course.lecturerId?.name || 'N/A'}</td>
               <td>${!isOffline ? `<button class="btn btn-sm" style="font-size:11px;background:var(--bg);border:1px solid var(--border)" onclick="viewRoster('${course._id}', '${course.code}')">View Roster</button>` : '—'}</td>
               <td>${course.enrolledStudents?.length || 0}</td>
               ${canManageRoster && !isOffline ? `<td style="white-space:nowrap"><button class="btn btn-primary btn-sm" style="font-size:11px" onclick="showUploadRosterModal('${course._id}', '${course.code}')">Upload Students</button> <button class="btn btn-sm" style="font-size:11px;background:#6366f1;color:#fff" onclick="openBulkEmailModal('${course._id}', '${course.title}')">✉️ Email</button> <button class="btn btn-sm" style="font-size:11px;background:#10b981;color:#fff" onclick="openBulkSmsModal('${course._id}', '${course.title}')">💬 SMS</button></td>` : currentUser.role === 'student' ? `<td><button class="btn btn-sm" style="font-size:11px;background:#f0fdf4;color:#16a34a;border:1px solid #bbf7d0" onclick="generateCertificate('${course._id}','${course.title}')">🎓 Certificate</button></td>` : ''}
@@ -9334,7 +9334,7 @@ async function renderStudentGradeBook(content) {
                    onmouseleave="this.style.transform=''"
                    onclick="renderStudentCourseGrades('${c._id}','${c.title} (${c.code})')">
                 <div style="font-weight:700;font-size:15px;margin-bottom:4px;">${c.title}</div>
-                <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">${c.code} · ${c.lecturer?.name || 'N/A'}</div>
+                <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">${c.code} · ${c.lecturerId?.name || 'N/A'}</div>
                 <div style="display:flex;justify-content:space-between;align-items:center;">
                   <span style="font-size:12px;color:var(--text-light);">${c.enrolledStudents?.length || 0} students</span>
                   <span class="btn btn-sm btn-primary" style="pointer-events:none;">View Grades →</span>
@@ -9446,7 +9446,7 @@ async function renderLecturerGradeBook(content) {
                    onmouseleave="this.style.transform=''"
                    onclick="renderLecturerCourseGrades('${c._id}','${c.title} (${c.code})')">
                 <div style="font-weight:700;font-size:15px;margin-bottom:4px;">${c.title}</div>
-                <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">${c.code} · ${c.lecturer?.name || 'N/A'}</div>
+                <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">${c.code} · ${c.lecturerId?.name || 'N/A'}</div>
                 <div style="display:flex;justify-content:space-between;align-items:center;">
                   <span style="font-size:12px;color:var(--text-light);">${c.enrolledStudents?.length || 0} students</span>
                   <span class="btn btn-sm btn-primary" style="pointer-events:none;">Open →</span>

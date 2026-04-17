@@ -181,12 +181,12 @@ exports.getCourseGrades = async (req, res) => {
     const { courseId } = req.params;
     const company = req.user.company;
 
-    const course = await Course.findOne({ _id: courseId, company }).populate("lecturer", "name");
+    const course = await Course.findOne({ _id: courseId, companyId: company }).populate("lecturerId", "name");
     if (!course) return res.status(404).json({ error: "Course not found" });
 
     // Only the course lecturer or admin can view
     const isAdmin = ["admin", "superadmin"].includes(req.user.role);
-    const isLecturer = course.lecturer?._id?.toString() === req.user._id.toString();
+    const isLecturer = course.lecturerId?._id?.toString() === req.user._id.toString();
     if (!isAdmin && !isLecturer) {
       return res.status(403).json({ error: "Access denied" });
     }
@@ -639,10 +639,10 @@ exports.saveManualScores = async (req, res) => {
 exports.listCourses = async (req, res) => {
   try {
     const company = req.user.company;
-    const filter = { company };
-    if (req.user.role === "lecturer") filter.lecturer = req.user._id;
+    const filter = { companyId: company };
+    if (req.user.role === "lecturer") filter.lecturerId = req.user._id;
 
-    const courses = await Course.find(filter).populate("lecturer", "name").lean();
+    const courses = await Course.find(filter).populate("lecturerId", "name").lean();
 
     // For each course, get the real student count from StudentRoster
     // (not just enrolledStudents which only counts registered users)
@@ -672,9 +672,9 @@ exports.myCoursesGrades = async (req, res) => {
     const studentId = req.user._id;
 
     const courses = await Course.find({
-      company,
+      companyId: company,
       enrolledStudents: studentId,
-    }).populate("lecturer", "name").lean();
+    }).populate("lecturerId", "name").lean();
 
     res.json({ courses });
   } catch (err) {

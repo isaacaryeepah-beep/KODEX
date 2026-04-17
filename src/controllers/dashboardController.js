@@ -124,16 +124,16 @@ exports.academicOverview = async (req, res) => {
     ]);
 
     // ── Top 5 courses by enrollment ────────────────────────────────────────
-    const allCourses = await Course.find({ company })
-      .select("title code enrolledStudents lecturer")
-      .populate("lecturer", "name")
+    const allCourses = await Course.find({ companyId: company })
+      .select("title code enrolledStudents lecturerId")
+      .populate("lecturerId", "name")
       .lean();
     const topCourses = allCourses
       .map(c => ({
         _id:          c._id,
         title:        c.title,
         code:         c.code,
-        lecturer:     c.lecturer?.name || "—",
+        lecturer:     c.lecturerId?.name || "—",
         enrolledCount:c.enrolledStudents?.length || 0,
       }))
       .sort((a, b) => b.enrolledCount - a.enrolledCount)
@@ -392,9 +392,9 @@ exports.studentDashboard = async (req, res) => {
     const ahead7    = addDays(now, 7);
 
     // Enrolled courses
-    const courses = await Course.find({ company, enrolledStudents: studentId })
-      .select("title code lecturer")
-      .populate("lecturer", "name")
+    const courses = await Course.find({ companyId: company, enrolledStudents: studentId })
+      .select("title code lecturerId")
+      .populate("lecturerId", "name")
       .lean();
     const courseIds = courses.map(c => c._id);
 
@@ -430,7 +430,7 @@ exports.studentDashboard = async (req, res) => {
         _id:      c._id,
         title:    c.title,
         code:     c.code,
-        lecturer: c.lecturer?.name || "—",
+        lecturer: c.lecturerId?.name || "—",
         attendance: {
           attended: att.attended,
           total:    att.total,

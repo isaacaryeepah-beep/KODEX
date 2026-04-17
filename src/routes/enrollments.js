@@ -45,7 +45,7 @@ router.get("/my", ...mw, requireRole("student"), async (req, res) => {
       student: req.user._id,
       status:  ENROLLMENT_STATUSES.ACTIVE,
     })
-      .populate("course", "title code academicYear semester level group studyType lecturer")
+      .populate("course", "title code academicYear semester level group studyType lecturerId")
       .sort({ enrolledAt: -1 })
       .lean();
 
