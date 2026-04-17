@@ -2204,7 +2204,6 @@ function buildSidebar() {
       links.push({ id: 'hod-courses',      label: 'Courses',        icon: coursesIcon() });
       links.push({ id: 'hod-lecturers',    label: 'Lecturers',      icon: svgIcon('<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>') });
       links.push({ id: 'hod-students',     label: 'Students',       icon: usersIcon() });
-      links.push({ id: 'hod-quizzes',      label: 'Quizzes',        icon: quizzesIcon() });
       links.push({ id: 'meetings',         label: 'Meetings',       icon: meetingsIcon() });
       links.push({ id: 'hod-reports',      label: 'Reports',        icon: reportsIcon() });
       links.push({ id: 'approvals',           label: 'Approvals',        icon: approvalsIcon() });
@@ -2327,7 +2326,7 @@ function navigateTo(view) {
     case 'hod-lecturers':        renderHodLecturers(); break;
     case 'hod-students':         renderHodStudents(); break;
     case 'hod-reports':          renderHodReports(); break;
-    case 'hod-quizzes':          renderHodQuizzes(); break;
+
     case 'hod-course-approvals': renderHodCourseApprovals(); break;
     case 'hod-unlock-students':  renderHodUnlockStudents(); break;
     case 'announcements': renderAnnouncements(); break;
@@ -11507,7 +11506,7 @@ function buildBottomNav(role) {
       : ['dashboard', 'sessions', 'users', 'reports'],
     manager:    ['dashboard', 'sessions', 'reports', 'users'],
     lecturer:   ['dashboard', 'sessions', 'quizzes', 'assignments'],
-    hod:        ['hod-overview', 'hod-courses', 'hod-lecturers', 'hod-reports', 'hod-quizzes', 'meetings'],
+    hod:        ['hod-overview', 'hod-courses', 'hod-lecturers', 'hod-reports', 'meetings'],
     employee:   ['dashboard', 'sign-in-out', 'my-attendance', 'reports'],
     student:    ['dashboard', 'mark-attendance', 'quizzes', 'assignments'],
     superadmin: currentUser?.company?.mode === 'academic'
