@@ -1196,6 +1196,77 @@ function PagePlaceholder({ id }) {
   );
 }
 
+// ── OrgCard ───────────────────────────────────────────────────────────────────
+function OrgCard({ org }) {
+  const active = org.subscriptionActive;
+  const trial  = org.isTrialActive;
+  const statusLabel = trial ? 'Trial' : active ? 'Active' : 'Expired';
+  const statusCls   = trial
+    ? 'bg-amber-50 text-amber-600'
+    : active
+    ? 'bg-emerald-50 text-emerald-600'
+    : 'bg-rose-50 text-rose-600';
+
+  return (
+    <div className="bg-white rounded-2xl p-4 shadow-sm flex items-center gap-4 hover:shadow-md transition-shadow">
+      <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center flex-shrink-0">
+        <span className="text-indigo-400 font-bold text-sm">{(org.name || '?')[0].toUpperCase()}</span>
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="font-semibold text-gray-800 truncate">{org.name}</p>
+        <p className="text-xs text-gray-400">{org.userCount || 0} users · {org.adminEmail || 'no admin'}</p>
+      </div>
+      <span className={`text-xs font-semibold px-2 py-0.5 rounded-full flex-shrink-0 ${statusCls}`}>{statusLabel}</span>
+    </div>
+  );
+}
+
+// ── OrganizationsPage ─────────────────────────────────────────────────────────
+function OrganizationsPage() {
+  const [tab, setTab]       = React.useState('academic');
+  const [orgs, setOrgs]     = React.useState(null);
+
+  React.useEffect(() => {
+    api('/api/superadmin/overview')
+      .then(d => setOrgs(d.companies || []))
+      .catch(() => setOrgs([]));
+  }, []);
+
+  const list = (orgs || []).filter(c => c.mode === tab);
+
+  const TabBtn = ({ id, label }) => (
+    <button
+      onClick={() => setTab(id)}
+      className={`px-4 py-2 text-sm font-semibold rounded-xl transition-colors ${
+        tab === id ? 'bg-indigo-600 text-white' : 'text-gray-500 hover:text-gray-800'
+      }`}
+    >
+      {label} <span className="ml-1 text-xs opacity-70">({(orgs || []).filter(c => c.mode === id).length})</span>
+    </button>
+  );
+
+  return (
+    <div className="space-y-4">
+      <div className="flex gap-2 bg-white rounded-2xl p-1.5 shadow-sm w-fit">
+        <TabBtn id="academic"  label="Academic" />
+        <TabBtn id="corporate" label="Corporate" />
+      </div>
+
+      {orgs === null && (
+        <p className="text-sm text-gray-400 text-center py-12">Loading…</p>
+      )}
+
+      {orgs !== null && list.length === 0 && (
+        <p className="text-sm text-gray-400 text-center py-12">No {tab} organizations found</p>
+      )}
+
+      <div className="grid grid-cols-1 gap-3">
+        {list.map(o => <OrgCard key={o._id} org={o} />)}
+      </div>
+    </div>
+  );
+}
+
 // ── Layout ───────────────────────────────────────────────────────────────────
 function Layout() {
   const [section, setSection] = useState('dashboard');
@@ -1207,9 +1278,9 @@ function Layout() {
       <div className="flex-1 flex flex-col overflow-auto">
         <Topbar title={title} />
         <main className="flex-1 p-6">
-          {section === 'dashboard'
-            ? <DashboardPage />
-            : <PagePlaceholder id={section} />}
+          {section === 'dashboard'     ? <DashboardPage />     :
+           section === 'organizations' ? <OrganizationsPage /> :
+           <PagePlaceholder id={section} />}
         </main>
       </div>
     </div>
