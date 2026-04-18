@@ -1,9 +1,29 @@
-const Device          = require('../models/Device');
+const Device            = require('../models/Device');
 const AttendanceSession = require('../models/AttendanceSession');
 const AttendanceRecord  = require('../models/AttendanceRecord');
-const User            = require('../models/User');
-const crypto          = require('crypto');
-const jwt = require('jsonwebtoken');
+const User              = require('../models/User');
+const AuditLog          = require('../models/AuditLog');
+const { AUDIT_ACTIONS } = require('../models/AuditLog');
+const crypto            = require('crypto');
+const jwt               = require('jsonwebtoken');
+
+// Device is considered offline if no heartbeat within this window.
+const HEARTBEAT_OFFLINE_MS = 20_000;
+
+// Fire-and-forget device audit helper (never throws).
+function _auditDevice(actor, action, device, meta = {}, req = null) {
+  AuditLog.record({
+    company:       actor?.company || device?.companyId,
+    actor,
+    action,
+    resource:      'Device',
+    resourceId:    device?._id,
+    resourceLabel: device?.deviceId,
+    metadata:      { deviceName: device?.deviceName, ...meta },
+    mode:          'academic',
+    req,
+  }).catch(() => {});
+}
 
 // ─── GENERATE PAIRING CODE ───────────────────────────────────────────────────
 // Lecturer calls this to get a one-time 6-char code the ESP32 uses to claim
@@ -63,6 +83,17 @@ exports.pairDevice = async (req, res) => {
     }).select('+devicePairingCode');
 
     if (!lecturer) {
+      // Log failed attempt (no actor — device not yet authenticated)
+      AuditLog.record({
+        company: company._id,
+        actor: null,
+        action: AUDIT_ACTIONS.ACCESS_DENIED,
+        resource: 'Device',
+        resourceLabel: deviceId,
+        metadata: { action: 'pairing_failed', reason: 'invalid_or_expired_code', deviceId },
+        severity: 'medium',
+        mode: 'academic',
+      }).catch(() => {});
       return res.status(403).json({ message: 'Invalid or expired pairing code.' });
     }
 
@@ -98,6 +129,7 @@ exports.pairDevice = async (req, res) => {
 
     await User.findByIdAndUpdate(lecturer._id, { devicePairingCode: null, devicePairingExpiry: null });
 
+    _auditDevice(lecturer, AUDIT_ACTIONS.CREATE, device, { action: 'device_paired_via_code', deviceId });
     res.status(201).json({ success: true, message: 'Device paired successfully.', token, deviceId: device.deviceId });
   } catch (err) {
     if (err.code === 11000) return res.status(409).json({ message: 'Device or lecturer already has a device registered.' });
@@ -155,6 +187,7 @@ exports.registerDevice = async (req, res) => {
       isTransferable: false
     });
 
+    _auditDevice(req.user, AUDIT_ACTIONS.CREATE, device, { action: 'device_linked' }, req);
     res.status(201).json({ success: true, message: 'Device registered', data: device, token });
   } catch (err) {
     if (err.code === 11000) {
@@ -177,11 +210,17 @@ exports.heartbeat = async (req, res) => {
       return res.status(403).json({ message: 'Device does not belong to your institution' });
     }
 
-    device.lastHeartbeat = new Date();
-    device.status        = 'online';
+    const wasOffline = device.status === 'offline';
+    device.lastHeartbeat  = new Date();
+    device.status         = 'online';
     device.currentNetwork = currentNetwork || device.currentNetwork;
-    device.mode          = mode || device.mode;
+    device.mode           = mode || device.mode;
     await device.save();
+
+    // Log heartbeat-restored event
+    if (wasOffline) {
+      _auditDevice(null, AUDIT_ACTIONS.UPDATE, device, { action: 'heartbeat_restored', network: device.currentNetwork });
+    }
 
     // Check for active session
     const session = await AttendanceSession.findOne({ deviceId, status: 'active' });
@@ -285,6 +324,21 @@ exports.updateNetworks = async (req, res) => {
   }
 };
 
+// ─── MARK STALE DEVICES OFFLINE ──────────────────────────────────────────────
+// Called whenever device status is queried; marks device offline if heartbeat
+// has not been received within HEARTBEAT_OFFLINE_MS.
+async function _markStaleOffline(device) {
+  if (device.status !== 'online') return device;
+  if (!device.lastHeartbeat) return device;
+  const elapsed = Date.now() - device.lastHeartbeat.getTime();
+  if (elapsed > HEARTBEAT_OFFLINE_MS) {
+    device.status = 'offline';
+    await device.save().catch(() => {});
+    _auditDevice(null, AUDIT_ACTIONS.UPDATE, device, { action: 'heartbeat_lost', elapsed_ms: elapsed });
+  }
+  return device;
+}
+
 // ─── GET MY DEVICE ────────────────────────────────────────────────────────────
 // Returns the device owned by the authenticated lecturer (lecturer-only).
 exports.getMyDevice = async (req, res) => {
@@ -294,9 +348,10 @@ exports.getMyDevice = async (req, res) => {
       ? { companyId: req.user.company }
       : { lecturerId: req.user._id, companyId: req.user.company };
 
-    const device = await Device.findOne(query).populate('lecturerId', 'name email');
+    let device = await Device.findOne(query).populate('lecturerId', 'name email');
     if (!device) return res.json({ success: true, data: null });
 
+    device = await _markStaleOffline(device);
     const activeSession = await AttendanceSession.findOne({ deviceId: device.deviceId, status: 'active' });
     const secsSince = device.lastHeartbeat
       ? Math.floor((Date.now() - device.lastHeartbeat.getTime()) / 1000)
@@ -389,6 +444,7 @@ exports.unlinkDevice = async (req, res) => {
       return res.status(409).json({ message: 'Cannot unlink device while an attendance session is active. Stop the session first.' });
     }
 
+    _auditDevice(req.user, AUDIT_ACTIONS.DELETE, device, { action: 'device_unlinked' }, req);
     await Device.deleteOne({ _id: device._id });
     res.json({ success: true, message: 'Device unlinked successfully.' });
   } catch (err) {
