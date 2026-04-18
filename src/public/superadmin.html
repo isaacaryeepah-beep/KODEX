@@ -866,9 +866,57 @@ if (SA_TOKEN) {
 
 <!-- React root -->
 <div id="app"></div>
+<style>
+@keyframes sa-toast-in { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
+</style>
 
 <script type="text/babel">
 const { useState } = React;
+
+// ── Toast ─────────────────────────────────────────────────────────────────────
+function useToast() {
+  const [toast, setToast] = React.useState(null);
+  const show = (msg, type = 'success') => {
+    setToast({ msg, type });
+    setTimeout(() => setToast(null), 3200);
+  };
+  const ToastEl = toast ? (
+    <div style={{
+      position:'fixed', bottom:24, right:24, zIndex:9999,
+      background: toast.type === 'error' ? '#fee2e2' : '#dcfce7',
+      color: toast.type === 'error' ? '#dc2626' : '#16a34a',
+      border: `1px solid ${toast.type === 'error' ? '#fca5a5' : '#86efac'}`,
+      borderRadius:12, padding:'10px 18px', fontSize:13, fontWeight:600,
+      boxShadow:'0 4px 16px rgba(0,0,0,.1)',
+      animation:'sa-toast-in .2s ease',
+    }}>{toast.msg}</div>
+  ) : null;
+  return { show, ToastEl };
+}
+
+// ── ConfirmDialog ─────────────────────────────────────────────────────────────
+function useConfirm() {
+  const [state, setState] = React.useState(null);
+  const ask = (msg) => new Promise(resolve => setState({ msg, resolve }));
+  const Dialog = state ? (
+    <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.35)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:9998}}>
+      <div style={{background:'#fff',borderRadius:16,padding:28,maxWidth:360,width:'90%',boxShadow:'0 20px 60px rgba(0,0,0,.18)'}}>
+        <p style={{fontSize:14,color:'#374151',margin:'0 0 20px',lineHeight:1.6}}>{state.msg}</p>
+        <div style={{display:'flex',gap:10,justifyContent:'flex-end'}}>
+          <button onClick={() => { state.resolve(false); setState(null); }}
+            style={{padding:'8px 18px',borderRadius:10,border:'1px solid #e2e8f0',background:'transparent',cursor:'pointer',fontSize:13,fontWeight:600,color:'#64748b'}}>
+            Cancel
+          </button>
+          <button onClick={() => { state.resolve(true); setState(null); }}
+            style={{padding:'8px 18px',borderRadius:10,border:'none',background:'#4f46e5',cursor:'pointer',fontSize:13,fontWeight:600,color:'#fff'}}>
+            Confirm
+          </button>
+        </div>
+      </div>
+    </div>
+  ) : null;
+  return { ask, Dialog };
+}
 
 // ── Sidebar ──────────────────────────────────────────────────────────────────
 const NAV_ITEMS = [
@@ -1388,21 +1436,26 @@ function UsersPage() {
 }
 
 // ── SubRow ────────────────────────────────────────────────────────────────────
-function SubRow({ org, pricing, onAction }) {
+function SubRow({ org, pricing, onAction, busy }) {
   const trial  = org.isTrialActive;
   const active = org.subscriptionActive;
   const statusLabel = trial ? `Trial · ${org.trialDaysRemaining}d left` : active ? 'Active' : 'Expired';
   const statusCls   = trial ? 'bg-amber-50 text-amber-600' : active ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600';
   const endDate = org.subscriptionEndDate || org.trialEndDate;
 
-  const Btn = ({ label, action, cls }) => (
-    <button
-      onClick={() => onAction && onAction(action, org)}
-      className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors ${cls}`}
-    >
-      {label}
-    </button>
-  );
+  const Btn = ({ label, action, cls }) => {
+    const key = `${org._id}-${action}`;
+    const isBusy = busy === key;
+    return (
+      <button
+        onClick={() => !isBusy && onAction && onAction(action, org)}
+        disabled={isBusy}
+        className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${cls}`}
+      >
+        {isBusy ? '…' : label}
+      </button>
+    );
+  };
 
   return (
     <tr className="border-b border-gray-50 hover:bg-gray-50 transition-colors">
@@ -1446,7 +1499,7 @@ function SubSection({ title, accent, orgs, pricing, onAction }) {
                 </tr>
               </thead>
               <tbody>
-                {orgs.map(o => <SubRow key={o._id} org={o} pricing={pricing(o)} onAction={onAction} />)}
+                {orgs.map(o => <SubRow key={o._id} org={o} pricing={pricing(o)} onAction={onAction} busy={busy} />)}
               </tbody>
             </table>
           </div>
@@ -1458,11 +1511,13 @@ function SubSection({ title, accent, orgs, pricing, onAction }) {
 
 // ── SubscriptionsPage ─────────────────────────────────────────────────────────
 function SubscriptionsPage() {
-  const [orgs, setOrgs] = React.useState(null);
+  const [orgs, setOrgs]   = React.useState(null);
+  const [busy, setBusy]   = React.useState(null); // orgId + action key
+  const { show, ToastEl } = useToast();
+  const { ask, Dialog }   = useConfirm();
 
-  React.useEffect(() => {
-    api('/api/superadmin/overview').then(d => setOrgs(d.companies || [])).catch(() => setOrgs([]));
-  }, []);
+  const reload = () => api('/api/superadmin/overview').then(d => setOrgs(d.companies || [])).catch(() => setOrgs([]));
+  React.useEffect(() => { reload(); }, []);
 
   if (orgs === null) return <p className="text-center py-16 text-sm text-gray-300">Loading…</p>;
 
@@ -1477,37 +1532,46 @@ function SubscriptionsPage() {
   const expPricing   = () => '—';
 
   const handleAction = async (action, org) => {
+    const key = `${org._id}-${action}`;
     if (action === 'view') {
       if (typeof openDetail === 'function') openDetail(org._id);
       return;
     }
     if (action === 'extend') {
-      const days = parseInt(prompt(`Extend trial for "${org.name}" by how many days?`, '30'), 10);
-      if (!days || days < 1) return;
+      const rawDays = window.prompt(`Extend trial for "${org.name}" by how many days?`, '30');
+      if (!rawDays) return;
+      const days = parseInt(rawDays, 10);
+      if (!days || days < 1) { show('Enter a valid number of days.', 'error'); return; }
+      setBusy(key);
       try {
         await api(`/api/superadmin/companies/${org._id}/extend-trial`, { method: 'PATCH', body: JSON.stringify({ days }) });
-        const d = await api('/api/superadmin/overview');
-        setOrgs(d.companies || []);
-      } catch (e) { alert('Failed to extend trial'); }
+        show(`Trial extended by ${days} days for ${org.name}.`);
+        await reload();
+      } catch { show('Failed to extend trial.', 'error'); }
+      finally { setBusy(null); }
       return;
     }
     if (action === 'activate' || action === 'suspend') {
-      const label = action === 'activate' ? 'activate subscription for' : 'suspend';
-      if (!confirm(`${label} "${org.name}"?`)) return;
+      const verb = action === 'activate' ? 'Activate subscription for' : 'Suspend subscription for';
+      const ok = await ask(`${verb} "${org.name}"?`);
+      if (!ok) return;
+      setBusy(key);
       try {
         await api(`/api/superadmin/companies/${org._id}/subscription`, { method: 'PATCH', body: JSON.stringify({ action }) });
-        const d = await api('/api/superadmin/overview');
-        setOrgs(d.companies || []);
-      } catch (e) { alert('Action failed'); }
+        show(`${org.name} ${action === 'activate' ? 'activated' : 'suspended'} successfully.`);
+        await reload();
+      } catch { show('Action failed.', 'error'); }
+      finally { setBusy(null); }
     }
   };
 
   return (
     <div className="space-y-5">
-      <SubSection title="Academic — Active"   accent="indigo" orgs={academic}  pricing={acPricing}    onAction={handleAction} />
-      <SubSection title="Corporate — Active"  accent="violet" orgs={corporate} pricing={corpPricing}  onAction={handleAction} />
-      <SubSection title="Trials Ending"       accent="amber"  orgs={trials}    pricing={trialPricing} onAction={handleAction} />
-      <SubSection title="Expired"             accent="rose"   orgs={expired}   pricing={expPricing}   onAction={handleAction} />
+      {ToastEl}{Dialog}
+      <SubSection title="Academic — Active"   accent="indigo" orgs={academic}  pricing={acPricing}    onAction={handleAction} busy={busy} />
+      <SubSection title="Corporate — Active"  accent="violet" orgs={corporate} pricing={corpPricing}  onAction={handleAction} busy={busy} />
+      <SubSection title="Trials Ending"       accent="amber"  orgs={trials}    pricing={trialPricing} onAction={handleAction} busy={busy} />
+      <SubSection title="Expired"             accent="rose"   orgs={expired}   pricing={expPricing}   onAction={handleAction} busy={busy} />
     </div>
   );
 }
@@ -1583,24 +1647,31 @@ function PaymentsPage() {
 
 // ── ApprovalsPage ─────────────────────────────────────────────────────────────
 function ApprovalsPage() {
-  const [issues, setIssues] = React.useState(null);
+  const [issues, setIssues]   = React.useState(null);
+  const [busyId, setBusyId]   = React.useState(null);
+  const { show, ToastEl }     = useToast();
+  const { ask, Dialog }       = useConfirm();
 
   const reload = () => {
     api('/api/superadmin/issues').then(d => setIssues(d)).catch(() => setIssues({}));
   };
   React.useEffect(reload, []);
 
-  const locked   = issues?.locked        || [];
-  const suspended = issues?.suspended    || [];
-  const expired  = issues?.expiredCompanies || [];
-  const loading  = issues === null;
+  const locked    = issues?.locked           || [];
+  const suspended = issues?.suspended        || [];
+  const expired   = issues?.expiredCompanies || [];
+  const loading   = issues === null;
 
-  const unlock = async (userId) => {
-    if (!confirm('Unlock this account?')) return;
+  const unlock = async (userId, name) => {
+    const ok = await ask(`Unlock account for "${name}"?`);
+    if (!ok) return;
+    setBusyId(userId);
     try {
       await api(`/api/superadmin/users/${userId}/unlock`, { method: 'PATCH' });
+      show(`${name} unlocked successfully.`);
       reload();
-    } catch { alert('Failed to unlock'); }
+    } catch { show('Failed to unlock account.', 'error'); }
+    finally { setBusyId(null); }
   };
 
   const IssueSection = ({ title, accent, rows, emptyMsg, renderRow }) => {
@@ -1624,6 +1695,7 @@ function ApprovalsPage() {
 
   return (
     <div className="space-y-5">
+      {ToastEl}{Dialog}
       <IssueSection
         title="Locked Accounts" accent="rose" emptyMsg="No locked accounts"
         rows={locked}
@@ -1634,9 +1706,9 @@ function ApprovalsPage() {
               <p className="text-xs text-gray-400">{u.email} · {u.role} · {u.company?.name || 'no org'}</p>
               {u.lockReason && <p className="text-xs text-rose-400 mt-0.5">Reason: {u.lockReason}</p>}
             </div>
-            <button onClick={() => unlock(u._id)}
-              className="px-3 py-1 rounded-lg bg-emerald-50 text-emerald-600 text-xs font-semibold hover:bg-emerald-100 transition-colors flex-shrink-0">
-              Unlock
+            <button onClick={() => unlock(u._id, u.name || u.email)} disabled={busyId === u._id}
+              className="px-3 py-1 rounded-lg bg-emerald-50 text-emerald-600 text-xs font-semibold hover:bg-emerald-100 transition-colors flex-shrink-0 disabled:opacity-50 disabled:cursor-not-allowed">
+              {busyId === u._id ? '…' : 'Unlock'}
             </button>
           </li>
         )}
