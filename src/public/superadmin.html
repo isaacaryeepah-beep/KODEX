@@ -5,6 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>KODEX — Platform Admin</title>
   <link rel="icon" type="image/svg+xml" href="/kodex-icon.svg">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <style>
     *{margin:0;padding:0;box-sizing:border-box}
     body{font-family:'DM Sans',system-ui,sans-serif;background:#0d1117;min-height:100vh;color:#111}
@@ -859,5 +863,9 @@ if (SA_TOKEN) {
   }).catch(() => { localStorage.removeItem('sa_token'); SA_TOKEN = ''; });
 }
 </script>
+
+<!-- React root (Phase 1B+) -->
+<div id="app"></div>
+
 </body>
 </html>
