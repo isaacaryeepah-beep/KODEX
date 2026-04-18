@@ -2242,6 +2242,7 @@ function buildSidebar() {
       links.push({ id: 'my-leaves',     label: 'Leave',           icon: svgIcon('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>') });
       links.push({ id: 'emp-notifications', label: 'Notifications', icon: svgIcon('<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>') });
       links.push({ id: 'my-performance', label: 'My Performance', icon: svgIcon('<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>') });
+      links.push({ id: 'emp-assistant', label: 'Assistant', icon: svgIcon('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><circle cx="12" cy="10" r="1"/><circle cx="8" cy="10" r="1"/><circle cx="16" cy="10" r="1"/>') });
       links.push({ id: 'messages',      label: 'Messages',        icon: svgIcon('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>') });
       links.push({ id: 'meetings',      label: 'Meetings',        icon: meetingsIcon() });
       links.push({ id: 'support',       label: 'Support',         icon: svgIcon('<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>') });
@@ -2317,6 +2318,7 @@ function navigateTo(view) {
     case 'mark-attendance': renderMarkAttendance(); break;
     case 'emp-home': renderEmployeeDashboard(document.getElementById('main-content')); break;
     case 'emp-notifications': renderEmpNotifications(); break;
+    case 'emp-assistant': renderEmpAssistant(); break;
     case 'sign-in-out': renderSignInOut(); break;
     case 'corp-attendance': renderCorporateAttendance(); break;
     case 'subscription': renderSubscription(); break;
@@ -13918,6 +13920,308 @@ async function renderEmpNotifications() {
   } catch(e) {
     content.innerHTML = `<div class="card"><p style="color:#ef4444">Error: ${e.message}</p></div>`;
   }
+}
+
+// ── Employee AI Assistant ─────────────────────────────────────────────────────
+let _empAssistantData = null;
+
+async function _loadEmpAssistantData() {
+  if (_empAssistantData) return _empAssistantData;
+  const today      = new Date().toISOString().slice(0, 10);
+  const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0, 10);
+  const [todayData, monthData, shiftData, leavesData] = await Promise.all([
+    api(`/api/corporate-attendance/my?from=${today}&to=${today}`).catch(() => ({ records: [] })),
+    api(`/api/corporate-attendance/my?from=${monthStart}&to=${today}`).catch(() => ({ records: [] })),
+    api('/api/shifts/my-shift').catch(() => ({})),
+    api('/api/leaves/my').catch(() => ({ leaves: [] })),
+  ]);
+  const todayRecord  = todayData.records?.[0] || null;
+  const isClockedIn  = !!(todayRecord?.clockIn?.time && !todayRecord?.clockOut?.time);
+  const isClockedOut = !!(todayRecord?.clockIn?.time && todayRecord?.clockOut?.time);
+  const monthRecords = monthData.records || [];
+  const shift        = shiftData.assignment?.shift || null;
+  const leaves       = leavesData.leaves || [];
+  const year         = new Date().getFullYear();
+  const yearLeaves   = leaves.filter(l => l.status === 'approved' && new Date(l.startDate).getFullYear() === year);
+  const annualUsed   = yearLeaves.filter(l => l.type === 'annual').reduce((s, l) => s + l.days, 0);
+  const sickUsed     = yearLeaves.filter(l => l.type === 'sick').reduce((s, l) => s + l.days, 0);
+  const presentDays  = monthRecords.filter(r => r.status === 'present' || r.status === 'late').length;
+  const lateDays     = monthRecords.filter(r => r.status === 'late').length;
+  const totalHrs     = monthRecords.reduce((s, r) => s + (r.hoursWorked || 0), 0);
+  const overtimeTot  = monthRecords.reduce((s, r) => s + (r.overtimeHours || 0), 0);
+  _empAssistantData = {
+    todayRecord, isClockedIn, isClockedOut, shift, leaves,
+    annualLeft: Math.max(0, 21 - annualUsed), sickLeft: Math.max(0, 10 - sickUsed),
+    annualUsed, sickUsed, presentDays, lateDays, totalHrs, overtimeTot,
+    monthRecords, pendingLeaves: leaves.filter(l => l.status === 'pending'),
+  };
+  return _empAssistantData;
+}
+
+function _empAssistantAnswer(q, d) {
+  const lower = q.toLowerCase().trim();
+
+  // Clock in/out status
+  if (/clocked.in|clock.in|status|working|here|in today|present/i.test(lower)) {
+    if (d.isClockedIn) {
+      const since = new Date(d.todayRecord.clockIn.time).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+      const elapsed = _empElapsed(new Date(d.todayRecord.clockIn.time));
+      return `You're currently clocked in since ${since} (${elapsed} elapsed). Click <b>Clock Out</b> when you leave.`;
+    }
+    if (d.isClockedOut) {
+      const hrs = d.todayRecord?.hoursWorked?.toFixed(1) ?? '?';
+      return `You've already clocked out today. Total hours worked: <b>${hrs}h</b>.`;
+    }
+    return `You haven't clocked in yet today. ${d.shift ? `Your shift (${d.shift.name}) starts at ${d.shift.startTime}.` : ''} Tap <b>Clock In</b> to start.`;
+  }
+
+  // Leave balance
+  if (/leave.balance|annual.leave|sick.leave|days.left|leave.days|how many.*leave/i.test(lower)) {
+    return `Your leave balance:<br>• Annual leave: <b>${d.annualLeft} days</b> remaining (${d.annualUsed} used)<br>• Sick leave: <b>${d.sickLeft} days</b> remaining (${d.sickUsed} used)`;
+  }
+
+  // Pending leave
+  if (/pending.leave|leave.*request|request.*leave/i.test(lower)) {
+    if (d.pendingLeaves.length === 0) return 'You have no pending leave requests.';
+    return `You have <b>${d.pendingLeaves.length}</b> pending leave request${d.pendingLeaves.length > 1 ? 's' : ''}:<br>` +
+      d.pendingLeaves.map(l => `• ${l.type.charAt(0).toUpperCase()+l.type.slice(1)} leave — ${new Date(l.startDate).toLocaleDateString('en-GB',{day:'2-digit',month:'short'})} to ${new Date(l.endDate).toLocaleDateString('en-GB',{day:'2-digit',month:'short'})} (${l.days} day${l.days!==1?'s':''})`).join('<br>');
+  }
+
+  // Attendance stats
+  if (/attendance|how.*often|present.*days|days.*worked|late.*times|punctual/i.test(lower)) {
+    return `This month:<br>• Present days: <b>${d.presentDays}</b><br>• Late arrivals: <b>${d.lateDays}</b><br>• Hours worked: <b>${d.totalHrs.toFixed(1)}h</b><br>• Overtime: <b>${d.overtimeTot.toFixed(1)}h</b>`;
+  }
+
+  // Hours / overtime
+  if (/overtime|hours.*worked|how.*long|total.*hours/i.test(lower)) {
+    return `This month you've logged <b>${d.totalHrs.toFixed(1)} hours</b> total with <b>${d.overtimeTot.toFixed(1)}h</b> overtime.`;
+  }
+
+  // Shift info
+  if (/shift|schedule|start.*time|end.*time|working.hours/i.test(lower)) {
+    if (!d.shift) return 'No shift has been assigned to you yet. Contact your manager or HR.';
+    return `Your shift: <b>${d.shift.name}</b><br>• Hours: ${d.shift.startTime} – ${d.shift.endTime}<br>• Days: ${(d.shift.days||[]).join(', ')}<br>• Grace period: ${d.shift.gracePeriodMinutes} min`;
+  }
+
+  // Late arrivals
+  if (/late|tardy|punctuality/i.test(lower)) {
+    if (d.lateDays === 0) return 'Great news — you have <b>zero late arrivals</b> this month. Keep it up!';
+    return `You've been late <b>${d.lateDays} time${d.lateDays > 1 ? 's' : ''}</b> this month. Try clocking in before your shift grace period ends.`;
+  }
+
+  // Performance summary
+  if (/performance|summary|how.am.i.doing|overview|report/i.test(lower)) {
+    const attRate = d.presentDays > 0 && d.monthRecords.length > 0
+      ? Math.round((d.presentDays / Math.max(d.monthRecords.length, 1)) * 100) : 0;
+    return `Your performance snapshot this month:<br>• Attendance rate: <b>${attRate}%</b><br>• Present days: <b>${d.presentDays}</b><br>• Late arrivals: <b>${d.lateDays}</b><br>• Hours worked: <b>${d.totalHrs.toFixed(1)}h</b><br>• Overtime: <b>${d.overtimeTot.toFixed(1)}h</b><br>• Annual leave left: <b>${d.annualLeft} days</b>`;
+  }
+
+  // Help / what can you do
+  if (/help|what.*can|what.*do|options|commands/i.test(lower)) {
+    return `I can answer questions about your:<br>• Clock-in / clock-out status<br>• Leave balance & pending requests<br>• Attendance this month<br>• Hours worked & overtime<br>• Your shift schedule<br>• Performance summary<br><br>Try: "Am I clocked in?", "How many leave days do I have?", "How was my attendance this month?"`;
+  }
+
+  return `I'm not sure how to answer that. I can help with your attendance, leave balance, shift details, and performance. Try asking: "Am I clocked in?", "How many leave days left?", or "Show my attendance this month."`;
+}
+
+const _empChatHistory = [];
+
+async function renderEmpAssistant() {
+  const content = document.getElementById('main-content');
+  if (!content) return;
+
+  content.innerHTML = `
+    <div class="page-header">
+      <div>
+        <h2 style="display:flex;align-items:center;gap:8px">
+          <span style="width:32px;height:32px;background:linear-gradient(135deg,#6366f1,#8b5cf6);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px">✦</span>
+          Employee Assistant
+        </h2>
+        <p style="color:var(--text-muted);font-size:13px">Ask anything about your work — powered by your own data</p>
+      </div>
+      <button class="btn btn-secondary btn-sm" onclick="navigateTo('emp-home')">← Home</button>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 300px;gap:16px;align-items:start">
+
+      <!-- Chat panel -->
+      <div class="card" style="padding:0;display:flex;flex-direction:column;height:580px">
+        <div id="emp-chat-msgs" style="flex:1;overflow-y:auto;padding:20px;display:flex;flex-direction:column;gap:12px">
+          <div style="display:flex;gap:10px;align-items:flex-start">
+            <div style="width:28px;height:28px;background:linear-gradient(135deg,#6366f1,#8b5cf6);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0">✦</div>
+            <div style="background:#f3f4f6;border-radius:0 12px 12px 12px;padding:10px 14px;font-size:13px;line-height:1.6;max-width:480px">
+              Hi ${esc(currentUser?.name?.split(' ')[0] || 'there')}! I'm your work assistant. I can answer questions about your attendance, leave balance, shift, and performance — all using your real data. What would you like to know?
+            </div>
+          </div>
+        </div>
+        <div style="border-top:1px solid var(--border);padding:14px 16px;display:flex;gap:8px;align-items:flex-end">
+          <textarea id="emp-chat-input" placeholder="Ask anything… e.g. Am I clocked in? How many leave days do I have?"
+            style="flex:1;resize:none;border:1.5px solid var(--border);border-radius:10px;padding:10px 12px;font-size:13px;font-family:inherit;line-height:1.5;min-height:42px;max-height:120px;outline:none;transition:border-color .15s;background:var(--card);color:var(--text)"
+            onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();_empChatSend();}"
+            oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,120)+'px'"
+            onfocus="this.style.borderColor='#6366f1'" onblur="this.style.borderColor='var(--border)'"></textarea>
+          <button onclick="_empChatSend()" style="width:38px;height:38px;border-radius:10px;background:linear-gradient(135deg,#6366f1,#8b5cf6);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:opacity .15s" onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Right panel: quick actions + insights -->
+      <div style="display:flex;flex-direction:column;gap:12px">
+
+        <!-- Quick Actions -->
+        <div class="card" style="padding:16px">
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-muted);letter-spacing:.6px;margin-bottom:12px">Quick Actions</div>
+          <div style="display:flex;flex-direction:column;gap:8px" id="emp-assistant-qa-btns">
+            <div class="loading" style="font-size:12px">Loading…</div>
+          </div>
+        </div>
+
+        <!-- Smart Insights -->
+        <div class="card" style="padding:16px">
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-muted);letter-spacing:.6px;margin-bottom:12px">Smart Insights</div>
+          <div id="emp-assistant-insights">
+            <div class="loading" style="font-size:12px">Loading…</div>
+          </div>
+        </div>
+
+        <!-- Suggested Questions -->
+        <div class="card" style="padding:16px">
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-muted);letter-spacing:.6px;margin-bottom:10px">Suggested Questions</div>
+          <div style="display:flex;flex-direction:column;gap:6px">
+            ${[
+              'Am I clocked in?',
+              'How many leave days do I have?',
+              'How was my attendance this month?',
+              'Am I late this month?',
+              'What are my working hours?',
+              'Show my performance summary',
+            ].map(q => `<button class="btn btn-secondary btn-sm" style="text-align:left;font-size:12px;justify-content:flex-start" onclick="_empChatAsk(${JSON.stringify(q)})">${esc(q)}</button>`).join('')}
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  // Load data and populate right panel
+  try {
+    const d = await _loadEmpAssistantData();
+    _empBuildQuickActions(d);
+    _empBuildInsights(d);
+  } catch(e) {
+    document.getElementById('emp-assistant-qa-btns').innerHTML = '<p style="font-size:12px;color:#ef4444">Failed to load data</p>';
+    document.getElementById('emp-assistant-insights').innerHTML = '<p style="font-size:12px;color:#ef4444">Failed to load data</p>';
+  }
+}
+
+function _empBuildQuickActions(d) {
+  const btn = document.getElementById('emp-assistant-qa-btns');
+  if (!btn) return;
+  const actions = [
+    { label: d.isClockedIn ? '🟠 Clock Out' : '🟢 Clock In', fn: "navigateTo('sign-in-out')" },
+    { label: '📅 View Attendance', fn: "navigateTo('my-attendance')" },
+    { label: '📋 Apply for Leave', fn: "navigateTo('my-leaves')" },
+    { label: '💬 Message Manager', fn: "navigateTo('messages')" },
+    { label: '📊 My Performance', fn: "navigateTo('my-performance')" },
+  ];
+  btn.innerHTML = actions.map(a =>
+    `<button class="btn btn-secondary btn-sm" style="text-align:left;justify-content:flex-start;font-size:12px" onclick="${a.fn}">${a.label}</button>`
+  ).join('');
+}
+
+function _empBuildInsights(d) {
+  const el = document.getElementById('emp-assistant-insights');
+  if (!el) return;
+  const insights = [];
+
+  if (d.isClockedIn) {
+    const elapsed = _empElapsed(new Date(d.todayRecord.clockIn.time));
+    insights.push({ icon: '●', color: '#16a34a', text: `Clocked in · ${elapsed} elapsed` });
+  } else if (!d.isClockedOut) {
+    insights.push({ icon: '○', color: '#dc2626', text: 'Not clocked in today' });
+  } else {
+    insights.push({ icon: '✓', color: '#16a34a', text: `Clocked out · ${(d.todayRecord?.hoursWorked||0).toFixed(1)}h today` });
+  }
+
+  insights.push({ icon: '🌴', color: '#0284c7', text: `${d.annualLeft} annual leave days remaining` });
+  insights.push({ icon: '🏥', color: '#0284c7', text: `${d.sickLeft} sick leave days remaining` });
+
+  if (d.lateDays > 0) {
+    insights.push({ icon: '⚠️', color: '#d97706', text: `${d.lateDays} late arrival${d.lateDays>1?'s':''} this month` });
+  } else {
+    insights.push({ icon: '⭐', color: '#16a34a', text: 'No late arrivals this month' });
+  }
+
+  if (d.overtimeTot > 0) {
+    insights.push({ icon: '⚡', color: '#7c3aed', text: `${d.overtimeTot.toFixed(1)}h overtime logged` });
+  }
+
+  el.innerHTML = insights.map(i => `
+    <div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border)">
+      <span style="font-size:14px;width:20px;text-align:center">${i.icon}</span>
+      <span style="font-size:12px;color:var(--text);line-height:1.4">${esc(i.text)}</span>
+    </div>`).join('').replace(/border-bottom[^"]+(?=.*last)/, '');
+}
+
+function _empChatAsk(question) {
+  const input = document.getElementById('emp-chat-input');
+  if (input) { input.value = question; input.style.height = 'auto'; }
+  _empChatSend();
+}
+
+async function _empChatSend() {
+  const input = document.getElementById('emp-chat-input');
+  if (!input) return;
+  const q = input.value.trim();
+  if (!q) return;
+  input.value = '';
+  input.style.height = 'auto';
+
+  const msgs = document.getElementById('emp-chat-msgs');
+  if (!msgs) return;
+
+  // User bubble
+  msgs.insertAdjacentHTML('beforeend', `
+    <div style="display:flex;gap:10px;align-items:flex-start;flex-direction:row-reverse">
+      <div style="width:28px;height:28px;background:var(--primary,#6366f1);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;flex-shrink:0">${esc((currentUser?.name||'?').charAt(0).toUpperCase())}</div>
+      <div style="background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;border-radius:12px 0 12px 12px;padding:10px 14px;font-size:13px;line-height:1.6;max-width:420px">${esc(q)}</div>
+    </div>`);
+  msgs.scrollTop = msgs.scrollHeight;
+
+  // Thinking bubble
+  const thinkId = 'emp-think-' + Date.now();
+  msgs.insertAdjacentHTML('beforeend', `
+    <div id="${thinkId}" style="display:flex;gap:10px;align-items:flex-start">
+      <div style="width:28px;height:28px;background:linear-gradient(135deg,#6366f1,#8b5cf6);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0">✦</div>
+      <div style="background:#f3f4f6;border-radius:0 12px 12px 12px;padding:10px 14px;font-size:13px;color:var(--text-muted)">
+        <span style="display:inline-flex;gap:3px">
+          <span style="animation:blink 1.2s infinite .0s">●</span>
+          <span style="animation:blink 1.2s infinite .2s">●</span>
+          <span style="animation:blink 1.2s infinite .4s">●</span>
+        </span>
+      </div>
+    </div>
+    <style>@keyframes blink{0%,80%,100%{opacity:.2}40%{opacity:1}}</style>`);
+  msgs.scrollTop = msgs.scrollHeight;
+
+  // Get answer
+  let answer;
+  try {
+    const d = await _loadEmpAssistantData();
+    answer = _empAssistantAnswer(q, d);
+  } catch(e) {
+    answer = 'Sorry, I couldn\'t load your data right now. Please try again.';
+  }
+
+  const thinkEl = document.getElementById(thinkId);
+  if (thinkEl) {
+    thinkEl.outerHTML = `
+      <div style="display:flex;gap:10px;align-items:flex-start">
+        <div style="width:28px;height:28px;background:linear-gradient(135deg,#6366f1,#8b5cf6);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0">✦</div>
+        <div style="background:#f3f4f6;border-radius:0 12px 12px 12px;padding:10px 14px;font-size:13px;line-height:1.6;max-width:480px">${answer}</div>
+      </div>`;
+  }
+  msgs.scrollTop = msgs.scrollHeight;
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
