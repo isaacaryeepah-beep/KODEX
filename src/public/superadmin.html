@@ -1746,15 +1746,21 @@ function SettingsPage() {
   const [saved, setSaved] = React.useState(false);
   const [saving, setSaving] = React.useState(false);
 
+  React.useEffect(() => {
+    api('/api/superadmin/settings').then(d => {
+      setForm({ trialDays: d.trialDays, academicPrice: d.academicPrice, corporatePrice: d.corporatePrice, currency: d.currency });
+    }).catch(() => {});
+  }, []);
+
   const set = (k, v) => { setForm(f => ({ ...f, [k]: v })); setSaved(false); };
 
   const save = async () => {
     setSaving(true);
     try {
-      /* Phase 9B: POST to /api/superadmin/settings */
-      await new Promise(r => setTimeout(r, 400));
+      await api('/api/superadmin/settings', { method: 'POST', body: JSON.stringify(form) });
       setSaved(true);
-    } finally { setSaving(false); }
+    } catch { alert('Failed to save'); }
+    finally { setSaving(false); }
   };
 
   const Field = ({ label, hint, field, type = 'number', prefix }) => (

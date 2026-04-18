@@ -4,7 +4,8 @@ const authenticate = require("../middleware/auth");
 const { requireRole } = require("../middleware/role");
 const Company      = require("../models/Company");
 const User         = require("../models/User");
-const PaymentLog   = require("../models/PaymentLog");
+const PaymentLog        = require("../models/PaymentLog");
+const PlatformSettings  = require("../models/PlatformSettings");
 
 const bcrypt = require("bcryptjs");
 const emailService = require("../services/emailService");
@@ -560,6 +561,33 @@ router.patch("/users/:id/unlock", async (req, res) => {
     res.json({ ok: true, user });
   } catch (err) {
     res.status(500).json({ error: "Failed to unlock user" });
+  }
+});
+
+// ── GET /api/superadmin/settings ─────────────────────────────────────────────
+router.get("/settings", async (req, res) => {
+  try {
+    let s = await PlatformSettings.findOne();
+    if (!s) s = await PlatformSettings.create({});
+    res.json(s);
+  } catch (err) {
+    res.status(500).json({ error: "Failed to load settings" });
+  }
+});
+
+// ── POST /api/superadmin/settings ─────────────────────────────────────────────
+router.post("/settings", async (req, res) => {
+  try {
+    const { trialDays, academicPrice, corporatePrice, currency } = req.body;
+    const allowed = {};
+    if (trialDays      != null) allowed.trialDays      = Math.max(1, Number(trialDays));
+    if (academicPrice  != null) allowed.academicPrice  = Math.max(0, Number(academicPrice));
+    if (corporatePrice != null) allowed.corporatePrice = Math.max(0, Number(corporatePrice));
+    if (currency       != null) allowed.currency       = String(currency).slice(0, 10);
+    const s = await PlatformSettings.findOneAndUpdate({}, { $set: allowed }, { upsert: true, new: true });
+    res.json(s);
+  } catch (err) {
+    res.status(500).json({ error: "Failed to save settings" });
   }
 });
 
