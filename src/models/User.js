@@ -84,6 +84,10 @@ const userSchema = new mongoose.Schema(
     }, // set true after admin temp reset
     resetPasswordToken: { type: String, default: null },
     resetPasswordExpires: { type: Date, default: null },
+
+    // Device pairing (lecturer) — one-time code, expires in 5 min
+    devicePairingCode:    { type: String, default: null, select: false },
+    devicePairingExpiry:  { type: Date,   default: null },
     passwordResetLog: [{
       resetAt:    { type: Date, default: Date.now },
       ipAddress:  { type: String, default: '' },

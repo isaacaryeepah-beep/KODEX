@@ -1,7 +1,109 @@
 const Device          = require('../models/Device');
 const AttendanceSession = require('../models/AttendanceSession');
 const AttendanceRecord  = require('../models/AttendanceRecord');
+const User            = require('../models/User');
+const crypto          = require('crypto');
 const jwt = require('jsonwebtoken');
+
+// ─── GENERATE PAIRING CODE ───────────────────────────────────────────────────
+// Lecturer calls this to get a one-time 6-char code the ESP32 uses to claim
+// ownership. Code is hashed server-side; expires after 5 minutes.
+exports.generatePairingCode = async (req, res) => {
+  try {
+    if (req.user.role !== 'lecturer' && !['admin','superadmin'].includes(req.user.role)) {
+      return res.status(403).json({ message: 'Only lecturers can generate pairing codes.' });
+    }
+
+    // Block if they already own a device
+    const existing = await Device.findOne({ lecturerId: req.user._id });
+    if (existing) {
+      return res.status(400).json({ message: 'You already have a linked device. Unlink it before pairing a new one.' });
+    }
+
+    // Generate readable 6-char code (uppercase A-Z + 0-9, avoid ambiguous chars)
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    const code = Array.from({ length: 6 }, () => chars[crypto.randomInt(chars.length)]).join('');
+    const hash = crypto.createHash('sha256').update(code).digest('hex');
+    const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
+
+    await User.findByIdAndUpdate(req.user._id, {
+      devicePairingCode:   hash,
+      devicePairingExpiry: expiresAt,
+    });
+
+    res.json({ success: true, code, expiresAt });
+  } catch (err) {
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+};
+
+// ─── PAIR DEVICE (ESP32-initiated) ───────────────────────────────────────────
+// ESP32 calls this (no JWT — authenticated via pairing code + institutionCode).
+// Body: { pairingCode, deviceId, deviceName, institutionCode }
+exports.pairDevice = async (req, res) => {
+  try {
+    const { pairingCode, deviceId, deviceName, institutionCode } = req.body;
+    if (!pairingCode || !deviceId || !institutionCode) {
+      return res.status(400).json({ message: 'pairingCode, deviceId, and institutionCode are required.' });
+    }
+
+    // Find company by institution code
+    const Company = require('../models/Company');
+    const company = await Company.findOne({ institutionCode: institutionCode.trim().toUpperCase() });
+    if (!company) return res.status(404).json({ message: 'Institution not found.' });
+
+    // Find lecturer with matching pairing code hash, within same company, not expired
+    const hash = crypto.createHash('sha256').update(pairingCode.trim().toUpperCase()).digest('hex');
+    const now = new Date();
+    const lecturer = await User.findOne({
+      company: company._id,
+      role: { $in: ['lecturer'] },
+      devicePairingCode: hash,
+      devicePairingExpiry: { $gt: now },
+    }).select('+devicePairingCode');
+
+    if (!lecturer) {
+      return res.status(403).json({ message: 'Invalid or expired pairing code.' });
+    }
+
+    // Block if device already claimed by another lecturer
+    const devExists = await Device.findOne({ deviceId });
+    if (devExists) {
+      if (devExists.lecturerId.toString() !== lecturer._id.toString()) {
+        return res.status(409).json({ message: 'This device is already linked to another lecturer.' });
+      }
+      // Same lecturer re-pairing — update token and clear code
+      await User.findByIdAndUpdate(lecturer._id, { devicePairingCode: null, devicePairingExpiry: null });
+      return res.json({ success: true, message: 'Device already linked to you.', token: devExists.token });
+    }
+
+    // Block if lecturer already owns a different device
+    const lecturerDev = await Device.findOne({ lecturerId: lecturer._id });
+    if (lecturerDev) {
+      return res.status(400).json({ message: 'Lecturer already owns a device. Unlink it first.' });
+    }
+
+    // Create device and clear pairing code (one-time use)
+    const token = jwt.sign({ deviceId, lecturerId: lecturer._id, companyId: company._id }, process.env.JWT_SECRET, { expiresIn: '10y' });
+    const device = await Device.create({
+      deviceId,
+      deviceName: deviceName || `Device-${deviceId.slice(-6).toUpperCase()}`,
+      companyId: company._id,
+      lecturerId: lecturer._id,
+      apSSID: `KODEX-${deviceId.slice(-6).toUpperCase()}`,
+      token,
+      ownershipType: 'dedicated',
+      isTransferable: false,
+    });
+
+    await User.findByIdAndUpdate(lecturer._id, { devicePairingCode: null, devicePairingExpiry: null });
+
+    res.status(201).json({ success: true, message: 'Device paired successfully.', token, deviceId: device.deviceId });
+  } catch (err) {
+    if (err.code === 11000) return res.status(409).json({ message: 'Device or lecturer already has a device registered.' });
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+};
 
 // ─── REGISTER DEVICE ─────────────────────────────────────────────────────────
 // Binds device permanently to one lecturer. One device = one lecturer.
