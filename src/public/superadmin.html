@@ -1099,14 +1099,14 @@ function DashboardPage() {
     Promise.all([
       api('/api/superadmin/overview'),
       api('/api/superadmin/analytics'),
-    ]).then(([ov, an]) => {
+      api('/api/superadmin/users?page=1'),
+    ]).then(([ov, an, us]) => {
       const cos = ov.companies || [];
-      const now = Date.now();
       setStats({
         institutions:  cos.filter(c => c.mode === 'academic').length,
         companies:     cos.filter(c => c.mode === 'corporate').length,
-        totalUsers:    cos.reduce((s, c) => s + (c.userCount || 0), 0),
-        activeSubs:    cos.filter(c => c.subscriptionActive).length,
+        totalUsers:    us.total || 0,
+        activeSubs:    cos.filter(c => c.subscriptionActive && !c.isTrialActive).length,
         trialsEnding:  cos.filter(c => c.isTrialActive && c.trialDaysRemaining <= 7).length,
         revenueMonth:  (an.revenue || []).slice(-1)[0] || 0,
       });
@@ -1119,12 +1119,12 @@ function DashboardPage() {
   return (
     <div className="flex gap-6 items-start">
       {/* left: stat cards + recent users */}
-      <div className="flex-1 space-y-4">
+      <div className="flex-1 min-w-0 space-y-4">
         <div className="grid grid-cols-2 gap-4">
           <StatCard label="Institutions"          value={fmt(stats?.institutions)}     sub="Academic orgs"        accent="indigo"  />
           <StatCard label="Companies"             value={fmt(stats?.companies)}        sub="Corporate orgs"       accent="violet"  />
           <StatCard label="Total Users"           value={fmt(stats?.totalUsers)}       sub="All roles incl. HOD"  accent="sky"     />
-          <StatCard label="Active Subscriptions"  value={fmt(stats?.activeSubs)}       sub="Academic + corporate" accent="emerald" />
+          <StatCard label="Active Subscriptions"  value={fmt(stats?.activeSubs)}       sub="Excl. free trials"    accent="emerald" />
           <StatCard label="Trials Ending Soon"    value={fmt(stats?.trialsEnding)}     sub="Within next 7 days"   accent="amber"   />
           <StatCard label="Revenue (This Month)"  value={fmtGhs(stats?.revenueMonth)}  sub="Subscriptions only"   accent="rose"    />
         </div>
@@ -1912,7 +1912,7 @@ function OrgDetailPage({ org, onBack }) {
       <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-50">
           <span className="text-sm font-bold text-gray-700">Staff & Roles</span>
-          <span className="text-xs text-gray-400">{staff === null ? '…' : `${staff.length} members`}</span>
+          <span className="text-xs text-gray-400">{staff === null ? '…' : `${staff.length} non-student members`}</span>
         </div>
         {staff === null && <p className="px-5 py-8 text-center text-sm text-gray-300">Loading…</p>}
         {staff !== null && staff.length === 0 && <p className="px-5 py-8 text-center text-sm text-gray-300">No staff found</p>}
