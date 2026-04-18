@@ -1020,15 +1020,39 @@ function StatCard({ label, value, sub, accent }) {
 
 // ── DashboardPage ─────────────────────────────────────────────────────────────
 function DashboardPage() {
+  const [stats, setStats] = React.useState(null);
+  const [loading, setLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    Promise.all([
+      api('/api/superadmin/overview'),
+      api('/api/superadmin/analytics'),
+    ]).then(([ov, an]) => {
+      const cos = ov.companies || [];
+      const now = Date.now();
+      setStats({
+        institutions:  cos.filter(c => c.mode === 'academic').length,
+        companies:     cos.filter(c => c.mode === 'corporate').length,
+        totalUsers:    cos.reduce((s, c) => s + (c.userCount || 0), 0),
+        activeSubs:    cos.filter(c => c.subscriptionActive).length,
+        trialsEnding:  cos.filter(c => c.isTrialActive && c.trialDaysRemaining <= 7).length,
+        revenueMonth:  (an.revenue || []).slice(-1)[0] || 0,
+      });
+    }).catch(() => setStats({})).finally(() => setLoading(false));
+  }, []);
+
+  const fmt = v => loading ? '…' : (v == null ? '—' : v.toLocaleString());
+  const fmtGhs = v => loading ? '…' : (v == null ? '—' : 'GHS ' + Number(v).toLocaleString());
+
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
-        <StatCard label="Institutions"          value="—" sub="Academic orgs"              accent="indigo"  />
-        <StatCard label="Companies"             value="—" sub="Corporate orgs"             accent="violet"  />
-        <StatCard label="Total Users"           value="—" sub="All roles incl. HOD"        accent="sky"     />
-        <StatCard label="Active Subscriptions"  value="—" sub="Academic + corporate"       accent="emerald" />
-        <StatCard label="Trials Ending Soon"    value="—" sub="Within next 7 days"         accent="amber"   />
-        <StatCard label="Revenue (This Month)"  value="—" sub="GHS — subscriptions only"   accent="rose"    />
+        <StatCard label="Institutions"          value={fmt(stats?.institutions)}          sub="Academic orgs"              accent="indigo"  />
+        <StatCard label="Companies"             value={fmt(stats?.companies)}             sub="Corporate orgs"             accent="violet"  />
+        <StatCard label="Total Users"           value={fmt(stats?.totalUsers)}            sub="All roles incl. HOD"        accent="sky"     />
+        <StatCard label="Active Subscriptions"  value={fmt(stats?.activeSubs)}            sub="Academic + corporate"       accent="emerald" />
+        <StatCard label="Trials Ending Soon"    value={fmt(stats?.trialsEnding)}          sub="Within next 7 days"         accent="amber"   />
+        <StatCard label="Revenue (This Month)"  value={fmtGhs(stats?.revenueMonth)}       sub="Subscriptions only"         accent="rose"    />
       </div>
     </div>
   );
