@@ -5952,3 +5952,8 @@ table tr:hover td { background: #f8fafc !important; }
   .content.faq-panel-open { margin-right: 0 !important; }
   .fap-topbar-btn { display: none !important; }
 }
+
+/* ── My Performance: 2-col chart grid collapses on mobile ── */
+@media (max-width: 768px) {
+  .chart-grid-2col { grid-template-columns: 1fr !important; }
+}
