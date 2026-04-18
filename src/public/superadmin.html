@@ -871,24 +871,51 @@ if (SA_TOKEN) {
 const { useState } = React;
 
 // ── Sidebar ──────────────────────────────────────────────────────────────────
-function Sidebar({ active, onNav }) {
-  const items = [
-    { id: 'dashboard',      label: 'Dashboard' },
-    { id: 'organizations',  label: 'Organizations' },
-    { id: 'users',          label: 'Users' },
-    { id: 'subscriptions',  label: 'Subscriptions' },
-    { id: 'payments',       label: 'Payments' },
-    { id: 'approvals',      label: 'Approvals & Issues' },
-    { id: 'reports',        label: 'Reports' },
-    { id: 'roles',          label: 'Role Management' },
-    { id: 'settings',       label: 'Settings' },
-    { id: 'messages',       label: 'Messages' },
-  ];
+const NAV_ITEMS = [
+  {
+    id: 'dashboard', label: 'Dashboard',
+    icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>,
+  },
+  {
+    id: 'organizations', label: 'Organizations',
+    icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>,
+  },
+  {
+    id: 'users', label: 'Users',
+    icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>,
+  },
+  {
+    id: 'subscriptions', label: 'Subscriptions',
+    icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>,
+  },
+  {
+    id: 'payments', label: 'Payments',
+    icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>,
+  },
+  {
+    id: 'approvals', label: 'Approvals',
+    icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>,
+  },
+  {
+    id: 'reports', label: 'Reports',
+    icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>,
+  },
+  {
+    id: 'roles', label: 'Roles',
+    icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>,
+  },
+  {
+    id: 'settings', label: 'Settings',
+    icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>,
+  },
+];
 
+function Sidebar({ active, onNav }) {
   return (
-    <aside className="w-52 bg-gray-950 flex flex-col min-h-screen flex-shrink-0">
-      <div className="px-4 py-5 border-b border-white/10">
-        <div className="flex items-center gap-2">
+    <aside className="w-52 bg-gray-950 flex flex-col h-screen sticky top-0 flex-shrink-0">
+      {/* Logo */}
+      <div className="px-4 py-5 border-b border-white/10 flex-shrink-0">
+        <div className="flex items-center gap-2.5">
           <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center text-white font-bold text-sm flex-shrink-0">K</div>
           <div>
             <div className="text-white font-extrabold text-sm leading-none">KODEX</div>
@@ -897,23 +924,34 @@ function Sidebar({ active, onNav }) {
         </div>
       </div>
 
+      {/* Nav */}
       <nav className="flex-1 p-2 flex flex-col gap-0.5 overflow-y-auto">
-        {items.map(item => (
-          <button
-            key={item.id}
-            onClick={() => onNav(item.id)}
-            className={`w-full text-left px-3 py-2 rounded-lg text-[13px] font-medium transition-colors ${
-              active === item.id
-                ? 'bg-indigo-600/25 text-white'
-                : 'text-gray-400 hover:bg-white/5 hover:text-gray-200'
-            }`}
-          >
-            {item.label}
-          </button>
-        ))}
+        {NAV_ITEMS.map(item => {
+          const isActive = active === item.id;
+          return (
+            <button
+              key={item.id}
+              onClick={() => onNav(item.id)}
+              className={`w-full text-left flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] font-medium transition-colors relative ${
+                isActive
+                  ? 'bg-indigo-500/20 text-white'
+                  : 'text-gray-400 hover:bg-white/5 hover:text-gray-200'
+              }`}
+            >
+              {isActive && (
+                <span className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 bg-indigo-400 rounded-r-full" />
+              )}
+              <span className={isActive ? 'text-indigo-400' : 'text-gray-500'}>
+                {item.icon}
+              </span>
+              {item.label}
+            </button>
+          );
+        })}
       </nav>
 
-      <div className="p-3 border-t border-white/10">
+      {/* Footer */}
+      <div className="p-3 border-t border-white/10 flex-shrink-0">
         <button
           onClick={() => { localStorage.removeItem('sa_token'); location.reload(); }}
           className="w-full py-2 text-xs font-semibold text-gray-400 hover:text-gray-200 bg-white/5 hover:bg-white/10 rounded-lg border border-white/10 transition-colors"
@@ -949,8 +987,8 @@ function Layout() {
   const titles = {
     dashboard: 'Dashboard', organizations: 'Organizations', users: 'Users',
     subscriptions: 'Subscriptions', payments: 'Payments',
-    approvals: 'Approvals & Issues', reports: 'Reports',
-    roles: 'Role Management', settings: 'Settings', messages: 'Messages',
+    approvals: 'Approvals', reports: 'Reports',
+    roles: 'Roles', settings: 'Settings',
   };
 
   return (
