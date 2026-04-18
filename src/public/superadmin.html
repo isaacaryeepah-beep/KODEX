@@ -1361,26 +1361,44 @@ function UsersPage() {
 }
 
 // ── SubRow ────────────────────────────────────────────────────────────────────
-function SubRow({ org, pricing }) {
+function SubRow({ org, pricing, onAction }) {
   const trial  = org.isTrialActive;
   const active = org.subscriptionActive;
   const statusLabel = trial ? `Trial · ${org.trialDaysRemaining}d left` : active ? 'Active' : 'Expired';
   const statusCls   = trial ? 'bg-amber-50 text-amber-600' : active ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600';
   const endDate = org.subscriptionEndDate || org.trialEndDate;
+
+  const Btn = ({ label, action, cls }) => (
+    <button
+      onClick={() => onAction && onAction(action, org)}
+      className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors ${cls}`}
+    >
+      {label}
+    </button>
+  );
+
   return (
     <tr className="border-b border-gray-50 hover:bg-gray-50 transition-colors">
-      <td className="px-5 py-3 font-medium text-gray-800 truncate max-w-[160px]">{org.name}</td>
+      <td className="px-5 py-3 font-medium text-gray-800 truncate max-w-[140px]">{org.name}</td>
       <td className="px-5 py-3 text-gray-500">{org.userCount || 0}</td>
       <td className="px-5 py-3 text-gray-500">{pricing}</td>
       <td className="px-5 py-3 text-gray-400 whitespace-nowrap">{endDate ? new Date(endDate).toLocaleDateString() : '—'}</td>
       <td className="px-5 py-3">
         <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${statusCls}`}>{statusLabel}</span>
       </td>
+      <td className="px-5 py-3">
+        <div className="flex gap-1.5 flex-wrap">
+          <Btn label="View"         action="view"    cls="bg-indigo-50 text-indigo-600 hover:bg-indigo-100" />
+          {trial  && <Btn label="Extend Trial" action="extend"  cls="bg-amber-50 text-amber-600 hover:bg-amber-100" />}
+          {!active && !trial && <Btn label="Activate" action="activate" cls="bg-emerald-50 text-emerald-600 hover:bg-emerald-100" />}
+          {active && !trial  && <Btn label="Suspend"  action="suspend"  cls="bg-rose-50 text-rose-600 hover:bg-rose-100" />}
+        </div>
+      </td>
     </tr>
   );
 }
 
-function SubSection({ title, accent, orgs, pricing }) {
+function SubSection({ title, accent, orgs, pricing, onAction }) {
   const bg = { amber: 'border-amber-300', emerald: 'border-emerald-300', rose: 'border-rose-300', indigo: 'border-indigo-300', violet: 'border-violet-300' }[accent] || 'border-gray-200';
   return (
     <div className={`bg-white rounded-2xl shadow-sm overflow-hidden border-t-4 ${bg}`}>
@@ -1395,13 +1413,13 @@ function SubSection({ title, accent, orgs, pricing }) {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-gray-50">
-                  {['Organization','Users','Pricing','Expires / Ends','Status'].map(c => (
+                  {['Organization','Users','Pricing','Expires / Ends','Status','Actions'].map(c => (
                     <th key={c} className="px-5 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wide">{c}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {orgs.map(o => <SubRow key={o._id} org={o} pricing={pricing(o)} />)}
+                {orgs.map(o => <SubRow key={o._id} org={o} pricing={pricing(o)} onAction={onAction} />)}
               </tbody>
             </table>
           </div>
@@ -1426,17 +1444,22 @@ function SubscriptionsPage() {
   const trials    = orgs.filter(c => c.isTrialActive);
   const expired   = orgs.filter(c => !c.subscriptionActive && !c.isTrialActive);
 
-  const acPricing  = () => '₵300 / semester';
-  const corpPricing = () => '₵150 / month';
-  const trialPricing = o => `Trial (30d) · ${o.trialDaysRemaining}d left`;
-  const expPricing = () => '—';
+  const acPricing    = () => '₵300 / semester';
+  const corpPricing  = () => '₵150 / month';
+  const trialPricing = o  => `Trial (30d) · ${o.trialDaysRemaining}d left`;
+  const expPricing   = () => '—';
+
+  const handleAction = (action, org) => {
+    /* Phase 5D: wire to backend */
+    console.log('[sub action]', action, org._id, org.name);
+  };
 
   return (
     <div className="space-y-5">
-      <SubSection title="Academic — Active"   accent="indigo" orgs={academic}  pricing={acPricing}   />
-      <SubSection title="Corporate — Active"  accent="violet" orgs={corporate} pricing={corpPricing} />
-      <SubSection title="Trials Ending"       accent="amber"  orgs={trials}    pricing={trialPricing} />
-      <SubSection title="Expired"             accent="rose"   orgs={expired}   pricing={expPricing}  />
+      <SubSection title="Academic — Active"   accent="indigo" orgs={academic}  pricing={acPricing}    onAction={handleAction} />
+      <SubSection title="Corporate — Active"  accent="violet" orgs={corporate} pricing={corpPricing}  onAction={handleAction} />
+      <SubSection title="Trials Ending"       accent="amber"  orgs={trials}    pricing={trialPricing} onAction={handleAction} />
+      <SubSection title="Expired"             accent="rose"   orgs={expired}   pricing={expPricing}   onAction={handleAction} />
     </div>
   );
 }
