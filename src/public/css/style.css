@@ -2244,6 +2244,16 @@ input[type="checkbox"] {
     margin-left: 260px !important;
   }
 
+  /* Align banner with content area so fixed sidebar does not overlap text */
+  .trial-banner,
+  .trial-expired-banner {
+    padding-left: 276px !important;
+    padding-right: 28px !important;
+    min-height: 46px !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+  }
+
   .sidebar-logo {
     padding: 20px 16px 16px !important;
     border-bottom: 1px solid rgba(255,255,255,0.15) !important;
@@ -4565,6 +4575,13 @@ table tr:hover td { background: #f8fafc !important; }
   justify-content: space-between !important;
   gap: 12px !important;
   letter-spacing: .01em !important;
+}
+/* Desktop: offset banner left-padding to clear the fixed 260px sidebar */
+@media (min-width: 769px) {
+  .trial-banner,
+  .trial-expired-banner {
+    padding-left: 276px !important;
+  }
 }
 
 /* ── Cards: premium white with refined radius & shadow ── */
