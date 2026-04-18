@@ -563,4 +563,35 @@ router.patch("/users/:id/unlock", async (req, res) => {
   }
 });
 
+// ── PATCH /api/superadmin/companies/:id/subscription ─────────────────────────
+// body: { action: 'activate' | 'suspend' }
+router.patch("/companies/:id/subscription", async (req, res) => {
+  try {
+    const { action } = req.body;
+    if (!['activate', 'suspend'].includes(action)) {
+      return res.status(400).json({ error: "action must be 'activate' or 'suspend'" });
+    }
+    const company = await Company.findById(req.params.id);
+    if (!company) return res.status(404).json({ error: "Company not found" });
+
+    if (action === 'activate') {
+      company.subscriptionActive = true;
+      company.subscriptionStatus = 'active';
+      company.hasAccess = true;
+      if (!company.subscriptionEndDate || new Date(company.subscriptionEndDate) < Date.now()) {
+        const months = company.mode === 'corporate' ? 1 : 6;
+        company.subscriptionEndDate = new Date(Date.now() + months * 30 * 24 * 60 * 60 * 1000);
+      }
+    } else {
+      company.subscriptionActive = false;
+      company.subscriptionStatus = 'inactive';
+      company.hasAccess = false;
+    }
+    await company.save();
+    res.json({ ok: true, subscriptionActive: company.subscriptionActive, subscriptionStatus: company.subscriptionStatus });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to update subscription" });
+  }
+});
+
 module.exports = router;

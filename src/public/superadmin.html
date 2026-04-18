@@ -1449,9 +1449,30 @@ function SubscriptionsPage() {
   const trialPricing = o  => `Trial (30d) · ${o.trialDaysRemaining}d left`;
   const expPricing   = () => '—';
 
-  const handleAction = (action, org) => {
-    /* Phase 5D: wire to backend */
-    console.log('[sub action]', action, org._id, org.name);
+  const handleAction = async (action, org) => {
+    if (action === 'view') {
+      if (typeof openDetail === 'function') openDetail(org._id);
+      return;
+    }
+    if (action === 'extend') {
+      const days = parseInt(prompt(`Extend trial for "${org.name}" by how many days?`, '30'), 10);
+      if (!days || days < 1) return;
+      try {
+        await api(`/api/superadmin/companies/${org._id}/extend-trial`, { method: 'PATCH', body: JSON.stringify({ days }) });
+        const d = await api('/api/superadmin/overview');
+        setOrgs(d.companies || []);
+      } catch (e) { alert('Failed to extend trial'); }
+      return;
+    }
+    if (action === 'activate' || action === 'suspend') {
+      const label = action === 'activate' ? 'activate subscription for' : 'suspend';
+      if (!confirm(`${label} "${org.name}"?`)) return;
+      try {
+        await api(`/api/superadmin/companies/${org._id}/subscription`, { method: 'PATCH', body: JSON.stringify({ action }) });
+        const d = await api('/api/superadmin/overview');
+        setOrgs(d.companies || []);
+      } catch (e) { alert('Action failed'); }
+    }
   };
 
   return (
