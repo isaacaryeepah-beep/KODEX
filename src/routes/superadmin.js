@@ -194,7 +194,7 @@ router.get("/companies/:id/lecturers", async (req, res) => {
   try {
     const lecturers = await User.find({
       company: req.params.id,
-      role: { $in: ["lecturer", "manager", "admin"] }
+      role: { $in: ["lecturer", "manager", "admin", "hod", "employee"] }
     }).select("name email role subscriptionStatus trialEndDate subscriptionExpiry semestersPaid createdAt").lean();
 
     // Auto-set trialEndDate for legacy accounts that don't have it

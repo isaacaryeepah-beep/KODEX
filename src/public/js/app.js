@@ -3430,7 +3430,11 @@ async function renderSuperadminDashboard(content) {
                   </td>
                   <td style="padding:10px 12px;">
                     <div style="font-weight:600;">${c.userCount || 0}</div>
-                    ${c.roleCounts && c.mode === 'academic' ? `<div style="font-size:10px;color:var(--text-muted);margin-top:2px;">${c.roleCounts.lecturer||0}L · ${c.roleCounts.hod||0}H · ${c.roleCounts.student||0}S</div>` : ''}
+                    ${c.roleCounts && c.mode === 'academic'
+                      ? `<div style="font-size:10px;color:var(--text-muted);margin-top:2px;">${c.roleCounts.lecturer||0}L · ${c.roleCounts.hod||0}H · ${c.roleCounts.student||0}S</div>`
+                      : c.roleCounts
+                        ? `<div style="font-size:10px;color:var(--text-muted);margin-top:2px;">${c.roleCounts.manager||0}Mgr · ${c.roleCounts.employee||0}Emp</div>`
+                        : ''}
                   </td>
                   <td style="padding:10px 12px;"><span class="tag ${c.mode === 'academic' ? 'tag-blue' : 'tag-green'}">${c.mode}</span></td>
                   <td style="padding:10px 12px;"><span class="tag ${c.isActive ? 'tag-green' : 'tag-red'}">${c.isActive ? 'Active' : 'Inactive'}</span></td>
@@ -4984,14 +4988,21 @@ async function renderUsers(filterRole='', filterDept='', filterSearch='') {
           <select id="user-role-filter" onchange="renderUsers(this.value, document.getElementById('user-dept-filter').value, document.getElementById('user-search-input').value)"
             style="padding:7px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;">
             <option value="" ${!filterRole?'selected':''}>All Roles</option>
-            ${mode === 'academic'
-              ? `<option value="admin" ${filterRole==='admin'?'selected':''}>Admin</option>
-                 <option value="hod" ${filterRole==='hod'?'selected':''}>HOD</option>
-                 <option value="lecturer" ${filterRole==='lecturer'?'selected':''}>Lecturer</option>
-                 <option value="student" ${filterRole==='student'?'selected':''}>Student</option>`
-              : `<option value="admin" ${filterRole==='admin'?'selected':''}>Admin</option>
-                 <option value="manager" ${filterRole==='manager'?'selected':''}>Manager</option>
-                 <option value="employee" ${filterRole==='employee'?'selected':''}>Employee</option>`}
+            ${currentUser.role === 'superadmin'
+              ? `<option value="admin"     ${filterRole==='admin'?'selected':''}>Admin</option>
+                 <option value="manager"   ${filterRole==='manager'?'selected':''}>Manager</option>
+                 <option value="hod"       ${filterRole==='hod'?'selected':''}>HOD</option>
+                 <option value="lecturer"  ${filterRole==='lecturer'?'selected':''}>Lecturer</option>
+                 <option value="employee"  ${filterRole==='employee'?'selected':''}>Employee</option>
+                 <option value="student"   ${filterRole==='student'?'selected':''}>Student</option>`
+              : mode === 'academic'
+                ? `<option value="admin"    ${filterRole==='admin'?'selected':''}>Admin</option>
+                   <option value="hod"      ${filterRole==='hod'?'selected':''}>HOD</option>
+                   <option value="lecturer" ${filterRole==='lecturer'?'selected':''}>Lecturer</option>
+                   <option value="student"  ${filterRole==='student'?'selected':''}>Student</option>`
+                : `<option value="admin"    ${filterRole==='admin'?'selected':''}>Admin</option>
+                   <option value="manager"  ${filterRole==='manager'?'selected':''}>Manager</option>
+                   <option value="employee" ${filterRole==='employee'?'selected':''}>Employee</option>`}
           </select>
           ${mode === 'academic' && allDepts.length > 0 ? `
           <select id="user-dept-filter" onchange="renderUsers(document.getElementById('user-role-filter').value, this.value, document.getElementById('user-search-input').value)"
