@@ -1,7 +1,7 @@
 const mongoose = require("mongoose");
 const crypto = require("crypto");
 
-const TRIAL_DURATION_DAYS = 14;
+const TRIAL_DURATION_DAYS = 30;
 
 function generateInstitutionCode() {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";

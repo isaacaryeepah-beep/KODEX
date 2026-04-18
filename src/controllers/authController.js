@@ -81,7 +81,7 @@ exports.register = async (req, res) => {
       email:           user.email,
       name:            user.name || user.email.split('@')[0],
       institutionName: company.name,
-      trialDays:       14,
+      trialDays:       TRIAL_DAYS,
       trialEndDate:    company.trialEndDate,
     }).catch(err => console.error('Welcome email failed:', err.message));
 
