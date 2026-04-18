@@ -1142,9 +1142,11 @@ function AlertsPanel() {
 function DashboardPage() {
   const [stats, setStats] = React.useState(null);
   const [loading, setLoading] = React.useState(true);
+  const [refreshing, setRefreshing] = React.useState(false);
 
-  React.useEffect(() => {
-    Promise.all([
+  const loadStats = () => {
+    setRefreshing(true);
+    return Promise.all([
       api('/api/superadmin/overview'),
       api('/api/superadmin/analytics'),
       api('/api/superadmin/users?page=1'),
@@ -1158,8 +1160,10 @@ function DashboardPage() {
         trialsEnding:  cos.filter(c => c.isTrialActive && c.trialDaysRemaining <= 7).length,
         revenueMonth:  (an.revenue || []).slice(-1)[0] || 0,
       });
-    }).catch(() => setStats({})).finally(() => setLoading(false));
-  }, []);
+    }).catch(() => setStats({})).finally(() => { setLoading(false); setRefreshing(false); });
+  };
+
+  React.useEffect(() => { loadStats(); }, []);
 
   const fmt = v => loading ? '…' : (v == null ? '—' : v.toLocaleString());
   const fmtGhs = v => loading ? '…' : (v == null ? '—' : 'GHS ' + Number(v).toLocaleString());
@@ -1168,6 +1172,17 @@ function DashboardPage() {
     <div className="flex gap-6 items-start">
       {/* left: stat cards + recent users */}
       <div className="flex-1 min-w-0 space-y-4">
+        <div className="flex items-center justify-between mb-1">
+          <span className="text-xs text-slate-400">Live stats</span>
+          <button onClick={loadStats} disabled={refreshing}
+            className="text-xs text-indigo-600 hover:text-indigo-800 font-medium disabled:opacity-40 flex items-center gap-1">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
+              style={{transform: refreshing ? 'rotate(360deg)' : 'none', transition: refreshing ? 'transform 0.6s linear' : 'none'}}>
+              <path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>
+            </svg>
+            {refreshing ? 'Refreshing…' : 'Refresh'}
+          </button>
+        </div>
         <div className="grid grid-cols-2 gap-4">
           <StatCard label="Institutions"          value={fmt(stats?.institutions)}     sub="Academic orgs"        accent="indigo"  />
           <StatCard label="Companies"             value={fmt(stats?.companies)}        sub="Corporate orgs"       accent="violet"  />
@@ -1297,11 +1312,12 @@ function OrganizationsPage() {
   const [orgs, setOrgs]         = React.useState(null);
   const [selected, setSelected] = React.useState(null);
 
-  React.useEffect(() => {
-    api('/api/superadmin/overview')
-      .then(d => setOrgs(d.companies || []))
-      .catch(() => setOrgs([]));
-  }, []);
+  const reloadOrgs = () => api('/api/superadmin/overview')
+    .then(d => setOrgs(d.companies || [])).catch(() => setOrgs([]));
+
+  React.useEffect(() => { reloadOrgs(); }, []);
+
+  const goBack = () => { setSelected(null); reloadOrgs(); };
 
   const list = (orgs || []).filter(c => c.mode === tab);
 
@@ -1317,7 +1333,7 @@ function OrganizationsPage() {
   );
 
   if (selected) {
-    return <OrgDetailPage org={selected} onBack={() => setSelected(null)} />;
+    return <OrgDetailPage org={selected} onBack={goBack} />;
   }
 
   return (
