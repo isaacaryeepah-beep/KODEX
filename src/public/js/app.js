@@ -2189,6 +2189,7 @@ function buildSidebar() {
       links.push({ id: 'users', label: 'Users', icon: usersIcon() });
       if (currentUser.company?.mode === 'corporate') {
         links.push({ id: 'sign-in-out', label: 'Sign In / Out', icon: attendanceIcon() });
+        links.push({ id: 'corp-attendance', label: 'Team Attendance', icon: svgIcon('<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/><polyline points="9 11 12 14 22 4"/>') });
         links.push({ id: 'shifts', label: 'Shifts', icon: svgIcon('<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>') });
         links.push({ id: 'leave-requests', label: 'Leave Requests', icon: svgIcon('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>') });
         links.push({ id: 'payroll', label: 'Payroll', icon: svgIcon('<rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/>') });
@@ -2307,6 +2308,7 @@ function navigateTo(view) {
     case 'my-attendance': renderMyAttendance(); break;
     case 'mark-attendance': renderMarkAttendance(); break;
     case 'sign-in-out': renderSignInOut(); break;
+    case 'corp-attendance': renderCorporateAttendance(); break;
     case 'subscription': renderSubscription(); break;
     case 'reports': renderReports(); break;
     case 'shifts': renderShifts(); break;
@@ -3671,6 +3673,62 @@ async function renderEmployeeDashboard(content) {
   `;
 }
 
+// ── GPS helpers (corporate only) ──────────────────────────────────────────────
+function _getGPSLocation() {
+  return new Promise((resolve, reject) => {
+    if (!navigator.geolocation) {
+      reject(new Error('GPS_UNSUPPORTED'));
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      pos => resolve({
+        latitude:  pos.coords.latitude,
+        longitude: pos.coords.longitude,
+        accuracy:  Math.round(pos.coords.accuracy),
+      }),
+      err => {
+        const codes = { 1: 'GPS_DENIED', 2: 'GPS_UNAVAILABLE', 3: 'GPS_TIMEOUT' };
+        reject(new Error(codes[err.code] || 'GPS_ERROR'));
+      },
+      { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
+    );
+  });
+}
+
+function _showGPSBlockedModal(code) {
+  document.getElementById('gps-blocked-modal')?.remove();
+  const messages = {
+    GPS_DENIED:      'Location permission was denied. Open your browser or device settings, allow location access for this site, then try again.',
+    GPS_UNAVAILABLE: 'Your device location is turned off. Enable GPS / Location Services in your device settings and try again.',
+    GPS_TIMEOUT:     'Location could not be determined in time. Make sure GPS is on and you have a clear signal.',
+    GPS_UNSUPPORTED: 'Your browser does not support GPS. Please use a modern browser.',
+  };
+  const msg = messages[code] || 'Location is required to clock in or out. Please enable GPS and try again.';
+
+  const helpLink = (code === 'GPS_DENIED' || code === 'GPS_UNAVAILABLE')
+    ? `<a href="https://support.google.com/chrome/answer/142065" target="_blank" rel="noopener"
+         style="display:inline-block;margin-top:12px;font-size:12px;color:var(--primary);text-decoration:underline">
+         How to enable location →
+       </a>`
+    : '';
+
+  const ol = document.createElement('div');
+  ol.id = 'gps-blocked-modal';
+  ol.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;z-index:9999;padding:16px';
+  ol.innerHTML = `
+    <div style="background:var(--card,#fff);border-radius:16px;padding:32px 24px;max-width:380px;width:100%;text-align:center;box-shadow:0 24px 64px rgba(0,0,0,.35)">
+      <div style="font-size:44px;margin-bottom:12px">📍</div>
+      <div style="font-size:16px;font-weight:800;margin-bottom:10px;color:var(--text)">Location Required</div>
+      <div style="font-size:13px;color:var(--text-light);line-height:1.65;margin-bottom:6px">${msg}</div>
+      ${helpLink}
+      <div style="margin-top:22px">
+        <button onclick="document.getElementById('gps-blocked-modal').remove()"
+          class="btn btn-secondary btn-sm">Dismiss</button>
+      </div>
+    </div>`;
+  document.body.appendChild(ol);
+}
+
 async function employeeSignIn() {
   // If ESP32 configured, attempt BLE ping — warn if not detected but do NOT block
   if (esp32IP) {
@@ -3685,10 +3743,17 @@ async function employeeSignIn() {
       }).catch(e => console.warn('[ESP32] ping failed:', e.message));
     }
   }
+  let gpsData;
+  try {
+    gpsData = await _getGPSLocation();
+  } catch (gpsErr) {
+    _showGPSBlockedModal(gpsErr.message);
+    return;
+  }
   try {
     const data = await api('/api/corporate-attendance/clock-in', {
       method: 'POST',
-      body: JSON.stringify({ method: 'web' }),
+      body: JSON.stringify({ method: 'web', ...gpsData }),
     });
     toastSuccess(data.message || 'Clocked in successfully!');
     renderSignInOut();
@@ -3711,10 +3776,17 @@ async function employeeSignOut() {
       }).catch(e => console.warn('[ESP32] ping failed:', e.message));
     }
   }
+  let gpsData;
+  try {
+    gpsData = await _getGPSLocation();
+  } catch (gpsErr) {
+    _showGPSBlockedModal(gpsErr.message);
+    return;
+  }
   try {
     const data = await api('/api/corporate-attendance/clock-out', {
       method: 'POST',
-      body: JSON.stringify({ method: 'web' }),
+      body: JSON.stringify({ method: 'web', ...gpsData }),
     });
     const hrs = data.hoursWorked != null ? ` · ${data.hoursWorked}h worked` : '';
     toastSuccess((data.message || 'Clocked out successfully!') + hrs);
@@ -12422,6 +12494,80 @@ async function addAIQuizQuestions(quizId) {
 // ══════════════════════════════════════════════════════════════════════════
 //  CORPORATE PHASE 1 — SHIFTS & LEAVE
 // ══════════════════════════════════════════════════════════════════════════
+
+// ── TEAM ATTENDANCE (Manager/Admin) ───────────────────────────────────────
+async function renderCorporateAttendance() {
+  const content = document.getElementById('main-content');
+  if (!content) return;
+  content.innerHTML = `<div class="card"><div class="loading-spinner"></div><p style="text-align:center;color:var(--text-light);margin-top:8px">Loading attendance…</p></div>`;
+
+  try {
+    const today = new Date().toISOString().slice(0, 10);
+    const thirtyAgo = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
+    const fromParam = new URLSearchParams(window.location.search).get('from') || thirtyAgo;
+    const toParam   = new URLSearchParams(window.location.search).get('to')   || today;
+
+    const data = await api(`/api/corporate-attendance/?from=${fromParam}&to=${toParam}`);
+    const records = data.records || [];
+
+    const statusBadge = s => {
+      const colors = { present:'#16a34a', late:'#d97706', absent:'#dc2626', half_day:'#7c3aed', on_leave:'#0891b2', remote:'#2563eb', excused:'#6b7280', public_holiday:'#9333ea' };
+      const col = colors[s] || '#6b7280';
+      return `<span style="background:${col}22;color:${col};border-radius:999px;padding:2px 10px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px">${(s||'—').replace('_',' ')}</span>`;
+    };
+
+    const fmtTime = t => t ? new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—';
+    const mapsLink = (lat, lng) => lat != null && lng != null
+      ? `<a href="https://www.google.com/maps?q=${lat},${lng}" target="_blank" rel="noopener"
+           style="font-size:11px;color:var(--primary);text-decoration:underline;white-space:nowrap">
+           📍 Map
+         </a>`
+      : '<span style="color:var(--text-light);font-size:11px">—</span>';
+
+    const rows = records.map(r => {
+      const emp  = r.employee || {};
+      const ci   = r.clockIn  || {};
+      const co   = r.clockOut || {};
+      const ciLat = ci.location?.latitude;  const ciLng = ci.location?.longitude;
+      const coLat = co.location?.latitude;  const coLng = co.location?.longitude;
+      const ciAcc = ci.location?.accuracy  != null ? `<span style="color:var(--text-light);font-size:10px">(±${ci.location.accuracy}m)</span>` : '';
+      const coAcc = co.location?.accuracy  != null ? `<span style="color:var(--text-light);font-size:10px">(±${co.location.accuracy}m)</span>` : '';
+      return `<tr>
+        <td><strong>${esc(emp.name || '—')}</strong><br><span style="font-size:11px;color:var(--text-light)">${esc(emp.employeeId || emp.department || '')}</span></td>
+        <td style="white-space:nowrap">${new Date(r.date).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})}</td>
+        <td>${statusBadge(r.status)}</td>
+        <td style="white-space:nowrap">${fmtTime(ci.time)}${ci.isLate ? ` <span style="color:#d97706;font-size:10px">(+${ci.lateMinutes}m late)</span>` : ''}<br>${mapsLink(ciLat,ciLng)} ${ciAcc}</td>
+        <td style="white-space:nowrap">${fmtTime(co.time)}<br>${mapsLink(coLat,coLng)} ${coAcc}</td>
+        <td>${r.hoursWorked != null ? `${r.hoursWorked}h` : '—'}</td>
+      </tr>`;
+    }).join('');
+
+    content.innerHTML = `
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:20px">
+        <h2 style="margin:0;font-size:20px;font-weight:800">Team Attendance</h2>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <label style="font-size:12px;color:var(--text-light)">From</label>
+          <input type="date" id="corp-att-from" value="${fromParam}" style="border:1px solid var(--border);border-radius:8px;padding:6px 10px;font-size:13px">
+          <label style="font-size:12px;color:var(--text-light)">To</label>
+          <input type="date" id="corp-att-to"   value="${toParam}"   style="border:1px solid var(--border);border-radius:8px;padding:6px 10px;font-size:13px">
+          <button class="btn btn-primary btn-sm" onclick="(()=>{const f=document.getElementById('corp-att-from').value,t=document.getElementById('corp-att-to').value;history.replaceState(null,'',\`?from=\${f}&to=\${t}\`);renderCorporateAttendance();})()">Filter</button>
+        </div>
+      </div>
+      <div class="card" style="overflow-x:auto">
+        ${records.length === 0
+          ? `<div class="empty-state"><p>No attendance records found for this period.</p></div>`
+          : `<table>
+              <thead><tr>
+                <th>Employee</th><th>Date</th><th>Status</th>
+                <th>Clock In / Location</th><th>Clock Out / Location</th><th>Hours</th>
+              </tr></thead>
+              <tbody>${rows}</tbody>
+             </table>`}
+      </div>`;
+  } catch (e) {
+    content.innerHTML = `<div class="card"><p style="color:var(--danger)">Failed to load attendance records.</p></div>`;
+  }
+}
 
 // ── SHIFTS (Admin/Manager) ─────────────────────────────────────────────────
 async function renderShifts() {

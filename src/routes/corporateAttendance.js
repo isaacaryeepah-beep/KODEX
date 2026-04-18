@@ -111,7 +111,7 @@ router.post("/clock-in", ...mw, async (req, res) => {
   try {
     const now     = new Date();
     const today   = toDay(now);
-    const { method, latitude, longitude, address } = req.body;
+    const { method, latitude, longitude, accuracy, address } = req.body;
     const ipAddr  = req.ip || null;
 
     // Find active shift assignment
@@ -154,6 +154,7 @@ router.post("/clock-in", ...mw, async (req, res) => {
           "clockIn.ipAddress":      ipAddr,
           "clockIn.location.latitude":  latitude  ?? null,
           "clockIn.location.longitude": longitude ?? null,
+          "clockIn.location.accuracy":  accuracy  ?? null,
           "clockIn.location.address":   address   || "",
           "clockIn.isLate":         isLate,
           "clockIn.lateMinutes":    lateMinutes,
@@ -178,7 +179,7 @@ router.post("/clock-out", ...mw, async (req, res) => {
   try {
     const now     = new Date();
     const today   = toDay(now);
-    const { method, latitude, longitude, address } = req.body;
+    const { method, latitude, longitude, accuracy, address } = req.body;
     const ipAddr  = req.ip || null;
 
     const existing = await CorporateAttendance.findOne({
@@ -233,6 +234,7 @@ router.post("/clock-out", ...mw, async (req, res) => {
           "clockOut.ipAddress":           ipAddr,
           "clockOut.location.latitude":   latitude  ?? null,
           "clockOut.location.longitude":  longitude ?? null,
+          "clockOut.location.accuracy":   accuracy  ?? null,
           "clockOut.location.address":    address   || "",
           "clockOut.earlyLeaveMinutes":   earlyLeaveMinutes,
           hoursWorked:      worked,
