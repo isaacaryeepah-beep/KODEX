@@ -144,6 +144,10 @@ function _devPairedHTML(d) {
         <span class="dev-detail-label">Registered</span>
         <span class="dev-detail-value">${d.registeredAt ? new Date(d.registeredAt).toLocaleDateString() : '—'}</span>
       </div>
+      <div class="dev-detail-item">
+        <span class="dev-detail-label">Firmware</span>
+        <span class="dev-detail-value">${_esc(d.firmware || '—')}</span>
+      </div>
     </div>
   </div>
 
@@ -595,5 +599,43 @@ function _devCSS() {
 .dev-signal-1 { color:#ef4444; }
 .dev-signal-2 { color:#f59e0b; }
 .dev-signal-3 { color:#22c55e; }
+
+/* Online pulse animation */
+@keyframes dev-pulse {
+  0%,100% { box-shadow:0 0 0 3px rgba(34,197,94,.35); }
+  50%      { box-shadow:0 0 0 6px rgba(34,197,94,.08); }
+}
+.dev-dot-online { animation: dev-pulse 2s ease-in-out infinite; }
+
+/* Card hover lift */
+.dev-card { transition: box-shadow .18s ease; }
+.dev-card:hover { box-shadow:0 4px 16px rgba(0,0,0,.09),0 0 0 1px rgba(0,0,0,.04); }
+
+/* Page fade-in */
+@keyframes dev-fade-in {
+  from { opacity:0; transform:translateY(6px); }
+  to   { opacity:1; transform:translateY(0); }
+}
+.dev-page { animation: dev-fade-in .25s ease; }
+
+/* Responsive: single-column below 480px */
+@media(max-width:480px) {
+  .dev-page-header { flex-direction:column; }
+  .dev-header-actions { width:100%; justify-content:flex-end; }
+  .dev-status-bar { flex-direction:column; align-items:flex-start; gap:6px; }
+  .dev-detail-grid { grid-template-columns:1fr 1fr !important; }
+  .dev-btn-lg { width:100%; justify-content:center; }
+}
+
+/* Divider between cards */
+.dev-grid > .dev-card { border-top:3px solid transparent; }
+.dev-grid > .dev-card:first-child { border-top-color:#6366f1; }
+
+/* Pairing code pulse */
+@keyframes dev-code-in {
+  from { transform:scale(.94); opacity:0; }
+  to   { transform:scale(1);   opacity:1; }
+}
+.dev-pairing-code { animation: dev-code-in .2s ease; }
 `;
 }
