@@ -980,26 +980,50 @@ function Topbar({ title }) {
   );
 }
 
+// ── Page metadata ─────────────────────────────────────────────────────────────
+const PAGES = {
+  dashboard:     { title: 'Dashboard',     desc: 'Platform overview — organizations, users, revenue' },
+  organizations: { title: 'Organizations', desc: 'Academic institutions and corporate companies' },
+  users:         { title: 'Users',         desc: 'All platform users across organizations' },
+  subscriptions: { title: 'Subscriptions', desc: 'Trial and subscription status' },
+  payments:      { title: 'Payments',      desc: 'Revenue and payment history' },
+  approvals:     { title: 'Approvals',     desc: 'Locked accounts and subscription issues' },
+  reports:       { title: 'Reports',       desc: 'Export data for analysis' },
+  roles:         { title: 'Roles',         desc: 'Assign and manage user roles' },
+  settings:      { title: 'Settings',      desc: 'Platform configuration and pricing' },
+};
+
+// ── Page placeholder ──────────────────────────────────────────────────────────
+function PagePlaceholder({ id }) {
+  const page = PAGES[id] || { title: id, desc: '' };
+  return (
+    <div className="flex flex-col items-center justify-center py-24 text-center">
+      <div className="w-12 h-12 rounded-2xl bg-indigo-50 flex items-center justify-center mb-4">
+        <span className="text-indigo-400">
+          {NAV_ITEMS.find(n => n.id === id)?.icon}
+        </span>
+      </div>
+      <h2 className="text-lg font-bold text-gray-800 mb-1">{page.title}</h2>
+      <p className="text-sm text-gray-400 max-w-xs">{page.desc}</p>
+      <span className="mt-4 inline-block px-3 py-1 rounded-full bg-indigo-50 text-indigo-500 text-xs font-semibold">
+        Coming soon
+      </span>
+    </div>
+  );
+}
+
 // ── Layout ───────────────────────────────────────────────────────────────────
 function Layout() {
   const [section, setSection] = useState('dashboard');
-
-  const titles = {
-    dashboard: 'Dashboard', organizations: 'Organizations', users: 'Users',
-    subscriptions: 'Subscriptions', payments: 'Payments',
-    approvals: 'Approvals', reports: 'Reports',
-    roles: 'Roles', settings: 'Settings',
-  };
+  const title = PAGES[section]?.title || section;
 
   return (
     <div className="flex min-h-screen bg-slate-100">
       <Sidebar active={section} onNav={setSection} />
       <div className="flex-1 flex flex-col overflow-auto">
-        <Topbar title={titles[section] || section} />
+        <Topbar title={title} />
         <main className="flex-1 p-6">
-          <div className="text-sm text-gray-400 text-center py-20">
-            {titles[section]} — content coming soon
-          </div>
+          <PagePlaceholder id={section} />
         </main>
       </div>
     </div>
