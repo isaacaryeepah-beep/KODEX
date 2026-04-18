@@ -713,7 +713,7 @@ function showSubscriptionGate(message) {
   // Navigate to subscription page and show a toast if possible
   try {
     if (typeof navigateTo === 'function') navigateTo('subscription');
-    const msg = message || 'Your subscription or trial has expired. Please renew to continue.';
+    const msg = message || 'Your 30-day free trial has expired. Subscribe to continue using KODEX.';
     if (typeof toastError === 'function') {
       toastError(msg);
     } else {
@@ -2078,7 +2078,7 @@ function showDashboard(data) {
           <div class="sub-banner-left">
             <div class="sub-banner-icon sub-banner-icon--${urgent ? 'urgent' : 'trial'}">${urgent ? '⚠' : '⏳'}</div>
             <div class="sub-banner-text">
-              <span class="sub-banner-title">${urgent ? 'Trial Ending Soon' : 'Free Trial'}</span>
+              <span class="sub-banner-title">${urgent ? 'Trial Ending Soon' : '30-Day Free Trial'}</span>
               <span class="sub-banner-sep">·</span>
               <span class="sub-banner-detail">${_dayLabel(daysLeft)} remaining</span>
             </div>
@@ -2091,7 +2091,7 @@ function showDashboard(data) {
 
       } else {
         const _mode  = currentUser?.company?.mode || 'academic';
-        const _label = _mode === 'corporate' ? 'GHS 150 / mo' : 'GHS 300 / semester';
+        const _label = _mode === 'corporate' ? '₵150/month' : '₵300/semester';
         _bannerEl.style.display = 'none';
         _expiredEl.className = 'trial-expired-banner';
         _expiredEl.innerHTML = `
@@ -9255,10 +9255,10 @@ async function renderSubscription() {
     const mode       = currentUser?.company?.mode || 'academic';
     const isCorp     = mode === 'corporate';
     const planName   = isCorp ? 'Monthly Plan'   : 'Semester Plan';
-    const planPrice  = isCorp ? 'GHS 150'        : 'GHS 300';
-    const planPeriod = isCorp ? '30 days'        : '112 days (1 semester)';
+    const planPrice  = isCorp ? '₵150'           : '₵300';
+    const planPeriod = isCorp ? '30 days / month': '1 semester (16 weeks)';
     const planId     = isCorp ? 'monthly'        : 'semester';
-    const planLabel  = isCorp ? 'GHS 150 / month': 'GHS 300 / semester';
+    const planLabel  = isCorp ? '₵150 / month'   : '₵300 / semester';
 
     const statusColor = status === 'active' ? 'var(--success)' : status === 'trial' ? '#f59e0b' : 'var(--danger)';
     const statusLabel = status === 'active' ? '✅ Active' : status === 'trial' ? '⏳ Free Trial' : '❌ Expired';
@@ -9319,7 +9319,7 @@ async function renderSubscription() {
 
         ${status === 'trial' ? `
           <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:12px 14px;margin-bottom:16px;font-size:13px;color:#92400e">
-            ⏳ Free trial active — <strong>${daysLeft} days</strong> left. Subscribe before it ends to avoid interruption.
+            ⏳ 30-day free trial active — <strong>${daysLeft} days</strong> left. Subscribe before it ends to avoid interruption.
           </div>` : ''}
 
         <button class="btn btn-primary" style="width:100%;padding:14px;font-size:15px;font-weight:600;letter-spacing:0.3px;border-radius:10px"
@@ -9327,7 +9327,7 @@ async function renderSubscription() {
           💳 Pay ${planPrice} with Paystack
         </button>
         <p style="font-size:11px;color:var(--text-light);text-align:center;margin-top:10px">
-          Secured by Paystack · Paid in GHS · Mobile Money &amp; Card accepted
+          Secured by Paystack · Paid in GHS (₵) · Mobile Money &amp; Card accepted
         </p>
       </div>
     `;

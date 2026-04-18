@@ -748,7 +748,7 @@ async function confirmExtendTrial(id) {
 }
 
 async function activateSemester(userId, name) {
-  if (!confirm(`Activate 1 semester (16 weeks / 112 days) for ${name}?\n\nPrice: GHS 300`)) return;
+  if (!confirm(`Activate 1 semester (16 weeks / 112 days) for ${name}?\n\nPrice: ₵300`)) return;
   try {
     const data = await api('/api/superadmin/users/' + userId + '/extend-trial', {
       method: 'PATCH',
