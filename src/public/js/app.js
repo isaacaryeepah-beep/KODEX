@@ -2343,6 +2343,7 @@ function navigateTo(view) {
     case 'my-performance':
       if (currentUser.role === 'lecturer') renderLecturerPerformance();
       else if (currentUser.role === 'student') renderStudentQuizHistory();
+      else if (currentUser.role === 'employee') renderMyPerformance();
       else renderPerformance();
       break;
     case 'timesheets':     renderTimesheets(); break;
@@ -13614,6 +13615,7 @@ navigateTo = function(view) {
     currentView = view; _setNavActive(view);
     if (currentUser?.role === 'lecturer') renderLecturerPerformance();
     else if (currentUser?.role === 'student') renderStudentQuizHistory();
+    else if (currentUser?.role === 'employee' && view === 'my-performance') renderMyPerformance();
     else renderPerformance();
     return;
   }
@@ -13746,6 +13748,101 @@ async function renderPerformance() {
     `;
   } catch(e) {
     content.innerHTML = `<div class="card"><p style="color:#ef4444">Error: ${e.message}</p></div>`;
+  }
+}
+
+// ── EMPLOYEE: My Performance (self-only) — built fully in Phase 4 ─────────────
+async function renderMyPerformance() {
+  const content = document.getElementById('main-content');
+  if (!content) return;
+  content.innerHTML = '<div class="loading">Loading your performance data…</div>';
+  try {
+    const data = await api('/api/performance/my-scorecard');
+    const { employee, goals, reviews, stats } = data;
+
+    const statusColor = s => ({ active:'#3b82f6', completed:'#22c55e', cancelled:'#9ca3af', overdue:'#f59e0b' }[s] || '#6b7280');
+    const completionPct = stats.totalGoals > 0 ? Math.round((stats.completedGoals / stats.totalGoals) * 100) : 0;
+
+    content.innerHTML = `
+      <div class="page-header">
+        <h2>My Performance</h2>
+        <p>${employee?.department || ''} · ${employee?.employeeId || ''}</p>
+      </div>
+
+      <div class="stats-grid" style="margin-bottom:20px">
+        <div class="stat-card">
+          <div class="stat-value">${stats.totalGoals}</div>
+          <div class="stat-label">Total Goals</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" style="color:#22c55e">${stats.completedGoals}</div>
+          <div class="stat-label">Completed</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">${completionPct}%</div>
+          <div class="stat-label">Goal Completion</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" style="color:#6366f1">${stats.avgReviewScore != null ? stats.avgReviewScore + ' / 5' : '—'}</div>
+          <div class="stat-label">Avg Review Score</div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-bottom:20px">
+        <h3 style="font-size:15px;font-weight:700;margin-bottom:14px">My Goals</h3>
+        ${goals.length ? `
+        <div style="overflow-x:auto">
+          <table style="width:100%;border-collapse:collapse;font-size:13px">
+            <thead><tr style="background:#f9fafb">
+              <th style="padding:10px;text-align:left;border-bottom:1px solid #e5e7eb">Goal</th>
+              <th style="padding:10px;text-align:left;border-bottom:1px solid #e5e7eb">Category</th>
+              <th style="padding:10px;text-align:left;border-bottom:1px solid #e5e7eb">Progress</th>
+              <th style="padding:10px;text-align:left;border-bottom:1px solid #e5e7eb">Status</th>
+              <th style="padding:10px;text-align:left;border-bottom:1px solid #e5e7eb">Due</th>
+            </tr></thead>
+            <tbody>
+              ${goals.map(g => {
+                const pct = g.targetValue ? Math.min(Math.round((g.currentValue / g.targetValue) * 100), 100) : 0;
+                return `<tr style="border-bottom:1px solid #f3f4f6">
+                  <td style="padding:10px;font-weight:600">${esc(g.title)}</td>
+                  <td style="padding:10px;color:#6b7280;text-transform:capitalize">${g.category || '—'}</td>
+                  <td style="padding:10px;min-width:140px">
+                    <div style="display:flex;align-items:center;gap:8px">
+                      <div style="flex:1;background:#e5e7eb;border-radius:4px;height:6px">
+                        <div style="width:${pct}%;background:#6366f1;border-radius:4px;height:6px"></div>
+                      </div>
+                      <span style="font-size:11px;color:#6b7280;white-space:nowrap">${g.currentValue || 0}/${g.targetValue || '?'} ${g.unit || ''} (${pct}%)</span>
+                    </div>
+                  </td>
+                  <td style="padding:10px"><span style="color:${statusColor(g.status)};font-weight:700;text-transform:capitalize">${g.status}</span></td>
+                  <td style="padding:10px;font-size:12px;color:#6b7280">${g.dueDate ? new Date(g.dueDate).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}) : '—'}</td>
+                </tr>`;
+              }).join('')}
+            </tbody>
+          </table>
+        </div>
+        ` : '<p style="color:#9ca3af;font-size:13px">No goals assigned yet.</p>'}
+      </div>
+
+      <div class="card">
+        <h3 style="font-size:15px;font-weight:700;margin-bottom:14px">My Reviews</h3>
+        ${reviews.length ? reviews.map(r => `
+          <div style="border:1px solid #e5e7eb;border-radius:10px;padding:14px;margin-bottom:10px">
+            <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:8px">
+              <div>
+                <span style="font-weight:700;font-size:13px">${r.period || '—'}</span>
+                <span style="margin-left:8px;font-size:11px;color:#6b7280">by ${r.reviewer?.name || 'Unknown'}</span>
+              </div>
+              ${r.overallScore != null ? `<span style="font-weight:800;color:#6366f1">${_starRating(r.overallScore)}</span>` : ''}
+            </div>
+            ${r.summary ? `<p style="font-size:13px;color:#374151;margin:0 0 6px">${esc(r.summary)}</p>` : ''}
+            ${r.strengths ? `<p style="font-size:12px;color:#16a34a;margin:0 0 4px"><strong>Strengths:</strong> ${esc(r.strengths)}</p>` : ''}
+            ${r.improvements ? `<p style="font-size:12px;color:#d97706;margin:0"><strong>Areas to improve:</strong> ${esc(r.improvements)}</p>` : ''}
+          </div>
+        `).join('') : '<p style="color:#9ca3af;font-size:13px">No reviews yet.</p>'}
+      </div>`;
+  } catch (e) {
+    content.innerHTML = `<div class="card"><p style="color:#ef4444">Failed to load performance data: ${e.message}</p></div>`;
   }
 }
 
