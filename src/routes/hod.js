@@ -26,10 +26,19 @@ router.use(companyIsolation);
 // Student account locking
 router.get("/locked-students",    hodCtrl.listLockedStudents);
 router.patch("/unlock/:userId",   hodCtrl.unlockStudent);
+router.post("/bulk-unlock",       hodCtrl.bulkUnlockStudents);
 
 // Course approvals
 router.get("/pending-courses",             hodCtrl.listPendingCourses);
 router.patch("/courses/:id/approve",       hodCtrl.approveCourse);
 router.patch("/courses/:id/reject",        hodCtrl.rejectCourse);
+
+// Performance & analytics
+router.get("/dashboard-stats",   hodCtrl.getDashboardStats);
+router.get("/alerts",            hodCtrl.getAlerts);
+router.get("/course-overview",   hodCtrl.getCourseOverview);
+
+// Messaging
+router.post("/send-group-message", hodCtrl.sendGroupMessage);
 
 module.exports = router;

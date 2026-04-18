@@ -2205,6 +2205,9 @@ function buildSidebar() {
       links.push({ id: 'hod-courses',      label: 'Courses',        icon: coursesIcon() });
       links.push({ id: 'hod-lecturers',    label: 'Lecturers',      icon: svgIcon('<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>') });
       links.push({ id: 'hod-students',     label: 'Students',       icon: usersIcon() });
+      links.push({ id: 'hod-performance',  label: 'Performance',    icon: svgIcon('<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>') });
+      links.push({ id: 'hod-alerts',       label: 'Smart Alerts',   icon: svgIcon('<path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>') });
+      links.push({ id: 'hod-messaging',    label: 'Dept. Messaging', icon: svgIcon('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><line x1="9" y1="10" x2="15" y2="10"/><line x1="12" y1="7" x2="12" y2="13"/>') });
       links.push({ id: 'meetings',         label: 'Meetings',       icon: meetingsIcon() });
       links.push({ id: 'hod-reports',      label: 'Reports',        icon: reportsIcon() });
       links.push({ id: 'approvals',           label: 'Approvals',        icon: approvalsIcon() });
@@ -2331,6 +2334,9 @@ function navigateTo(view) {
 
     case 'hod-course-approvals': renderHodCourseApprovals(); break;
     case 'hod-unlock-students':  renderHodUnlockStudents(); break;
+    case 'hod-performance':      renderHodPerformance(); break;
+    case 'hod-alerts':           renderHodAlerts(); break;
+    case 'hod-messaging':        renderHodMessaging(); break;
     case 'announcements': renderAnnouncements(); break;
     case 'gradebook': renderGradeBook(); break;
     case 'training':       renderTraining(); break;
@@ -2670,6 +2676,18 @@ async function renderHodDashboard(content) {
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
               Department Reports
             </button>
+            <button class="btn btn-secondary" onclick="navigateTo('hod-performance')">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+              Performance Dashboard
+            </button>
+            <button class="btn btn-secondary" onclick="navigateTo('hod-alerts')" id="hod-alerts-btn">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+              Smart Alerts
+            </button>
+            <button class="btn btn-secondary" onclick="navigateTo('hod-messaging')">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+              Dept. Messaging
+            </button>
             <button class="btn btn-primary" onclick="navigateTo('announcements')">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
               Post Announcement
@@ -2708,6 +2726,11 @@ async function renderHodDashboard(content) {
       const count = (d.students || []).length;
       const btn = document.getElementById('hod-locked-btn');
       if (btn && count > 0) btn.innerHTML += ' <span style="background:#ef4444;color:#fff;font-size:10px;font-weight:700;padding:1px 6px;border-radius:20px;margin-left:4px;">' + count + '</span>';
+    }).catch(() => {});
+    api('/api/hod/alerts').then(d => {
+      const count = (d.inactiveLecturers?.length || 0) + (d.repeatedAbsentees?.length || 0) + (d.lowAttendanceStudents?.length || 0);
+      const btn = document.getElementById('hod-alerts-btn');
+      if (btn && count > 0) btn.innerHTML += ' <span style="background:#f59e0b;color:#fff;font-size:10px;font-weight:700;padding:1px 6px;border-radius:20px;margin-left:4px;">' + count + '</span>';
     }).catch(() => {});
   } catch(e) {
     content.innerHTML = `<div class="card"><p style="color:#ef4444;">Error loading dashboard: ${e.message}</p></div>`;
@@ -3159,6 +3182,11 @@ async function hodExportCSV(type) {
       headers = ['Session', 'Lecturer', 'Date', 'Attendance', 'Status'];
       rows = (d.sessions || []).map(s => [s.title || s.courseName || 'Session', s.createdBy?.name || '', fmtDate(s.createdAt), s.attendanceCount ?? s.records?.length ?? 0, s.active ? 'Live' : 'Ended']);
       filename = 'KODEX_Attendance_' + (currentUser.department || 'All') + '.csv';
+    } else if (type === 'courses') {
+      const d = await api('/api/hod/course-overview');
+      headers = ['Course', 'Code', 'Lecturer', 'Enrolled', 'Sessions (30d)', 'Total Attendance', 'Last Session', 'Status'];
+      rows = (d.courses || []).map(c => [c.title, c.code || '', c.lecturer?.name || 'Unassigned', c.enrolled, c.sessions30, c.totalAttendance, c.lastSessionAt ? fmtDate(c.lastSessionAt) : '—', c.lastSessionAt && (Date.now() - new Date(c.lastSessionAt).getTime() < 14*24*60*60*1000) ? 'Active' : 'Inactive']);
+      filename = 'KODEX_Courses_' + (currentUser.department || 'All') + '.csv';
     }
 
     const csv = [headers, ...rows].map(r => r.map(v => '"' + String(v).replace(/"/g, '""') + '"').join(',')).join('\n');
@@ -3171,46 +3199,65 @@ async function hodExportCSV(type) {
 }
 
 
-// ── FEATURE 3: HOD — Courses view ──────────────────────────────────────────
+// ── HOD — Courses oversight view ───────────────────────────────────────────
 async function renderHodCourses() {
   const content = document.getElementById('main-content');
   content.innerHTML = '<div class="loading">Loading courses…</div>';
   try {
-    const dept = currentUser.department ? '&department=' + encodeURIComponent(currentUser.department) : '';
-    const [coursesData, pendingData] = await Promise.all([
-      api('/api/courses?limit=200' + dept),
+    const [overviewData, pendingData] = await Promise.all([
+      api('/api/hod/course-overview'),
       api('/api/hod/pending-courses').catch(() => ({ courses: [] })),
     ]);
-    const courses = coursesData.courses || [];
+    const courses = overviewData.courses || [];
     const pending = pendingData.courses || [];
-    const approvalBadge = s => {
-      if (s === 'pending')  return '<span style="background:#fef3c7;color:#b45309;border:1px solid #fde68a;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700;">⏳ PENDING APPROVAL</span>';
-      if (s === 'rejected') return '<span style="background:#fee2e2;color:#b91c1c;border:1px solid #fca5a5;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700;">✕ REJECTED</span>';
-      return '';
+    const now = Date.now();
+    const day14 = 14 * 24 * 60 * 60 * 1000;
+
+    const activityBadge = c => {
+      if (!c.lastSessionAt) return '<span style="background:#f3f4f6;color:#6b7280;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700;">NO SESSIONS</span>';
+      const age = now - new Date(c.lastSessionAt).getTime();
+      if (age < day14) return '<span style="background:#dcfce7;color:#16a34a;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700;">ACTIVE</span>';
+      return '<span style="background:#fef3c7;color:#b45309;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700;">INACTIVE</span>';
     };
+
     content.innerHTML = `
-      <div class="page-header">
-        <div><h2>Courses</h2><p>${courses.length} course${courses.length !== 1 ? 's' : ''} in ${currentUser.department || 'your department'}</p></div>
-        ${pending.length > 0 ? `<button class="btn btn-primary btn-sm" onclick="navigateTo('hod-course-approvals')">⚠ ${pending.length} Pending Approval${pending.length > 1 ? 's' : ''}</button>` : ''}
+      <div class="page-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
+        <div><h2>Course Oversight</h2><p>${courses.length} course${courses.length !== 1 ? 's' : ''} in ${currentUser.department || 'your department'} · last 30 days activity shown</p></div>
+        <div style="display:flex;gap:8px;">
+          ${pending.length > 0 ? `<button class="btn btn-primary btn-sm" onclick="navigateTo('hod-course-approvals')">⚠ ${pending.length} Pending</button>` : ''}
+          <button class="btn btn-secondary btn-sm" onclick="hodExportCSV('courses')">Export CSV</button>
+        </div>
       </div>
       ${courses.length === 0 ? '<div class="empty-state"><p>No courses found for this department.</p></div>' :
-        `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px;">
-          ${courses.map(c => `
-            <div class="card" style="padding:16px 18px;${c.approvalStatus === 'rejected' ? 'border-left:3px solid #ef4444;' : c.approvalStatus === 'pending' ? 'border-left:3px solid #f59e0b;' : ''}">
-              <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:8px;">
-                <div>
-                  <div style="font-weight:700;font-size:14px;">${c.title}</div>
-                  <div style="font-size:11px;font-family:monospace;color:var(--text-muted);margin-top:2px;">${c.code}</div>
-                </div>
-                <span class="tag tag-blue">${c.enrolledStudents?.length || 0} students</span>
-              </div>
-              <div style="font-size:12px;color:var(--text-muted);margin-bottom:6px;">
-                👨‍🏫 ${c.lecturerId?.name || 'Unassigned'}
-              </div>
-              ${c.needsApproval ? `<div style="margin-top:6px;">${approvalBadge(c.approvalStatus)}</div>` : ''}
-              ${c.approvalNote ? `<div style="font-size:11px;color:var(--text-muted);margin-top:4px;font-style:italic;">"${esc(c.approvalNote)}"</div>` : ''}
-              ${c.description ? `<div style="font-size:12px;color:var(--text-muted);line-height:1.5;margin-top:6px;">${c.description}</div>` : ''}
-            </div>`).join('')}
+        `<div style="overflow-x:auto;">
+          <table style="width:100%;border-collapse:collapse;font-size:13px;">
+            <thead>
+              <tr style="border-bottom:2px solid var(--border);">
+                <th style="text-align:left;padding:10px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Course</th>
+                <th style="text-align:left;padding:10px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Lecturer</th>
+                <th style="text-align:center;padding:10px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Enrolled</th>
+                <th style="text-align:center;padding:10px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Sessions (30d)</th>
+                <th style="text-align:left;padding:10px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Last Session</th>
+                <th style="text-align:center;padding:10px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Total Att.</th>
+                <th style="text-align:left;padding:10px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${courses.map(c => `
+                <tr style="border-bottom:1px solid var(--border);">
+                  <td style="padding:10px 12px;">
+                    <div style="font-weight:700;">${esc(c.title)}</div>
+                    <div style="font-size:11px;font-family:monospace;color:var(--text-muted);">${esc(c.code || '—')}</div>
+                  </td>
+                  <td style="padding:10px 12px;color:var(--text-muted);">${esc(c.lecturer?.name || 'Unassigned')}</td>
+                  <td style="padding:10px 12px;text-align:center;">${c.enrolled}</td>
+                  <td style="padding:10px 12px;text-align:center;font-weight:700;color:${c.sessions30 > 0 ? '#0891b2' : '#9ca3af'}">${c.sessions30}</td>
+                  <td style="padding:10px 12px;font-size:12px;color:var(--text-muted);">${c.lastSessionAt ? timeAgo(c.lastSessionAt) : '—'}</td>
+                  <td style="padding:10px 12px;text-align:center;">${c.totalAttendance}</td>
+                  <td style="padding:10px 12px;">${activityBadge(c)}</td>
+                </tr>`).join('')}
+            </tbody>
+          </table>
         </div>`}`;
   } catch(e) {
     content.innerHTML = `<div class="card"><p style="color:#ef4444;">${e.message}</p></div>`;
@@ -3286,49 +3333,68 @@ async function hodRejectCourse(id, title) {
   } catch(e) { toastError(e.message || 'Failed to reject course'); }
 }
 
-// ── FEATURE 3c: HOD — Unlock Locked Students ───────────────────────────────
+// ── HOD — Unlock Locked Students (with filter + bulk unlock) ──────────────
 async function renderHodUnlockStudents() {
   const content = document.getElementById('main-content');
   content.innerHTML = '<div class="loading">Loading locked accounts…</div>';
   try {
     const data = await api('/api/hod/locked-students');
     const students = data.students || [];
+
+    // Gather unique departments for filter
+    const depts = [...new Set(students.map(s => s.department).filter(Boolean))].sort();
+
     content.innerHTML = `
-      <div class="page-header">
+      <div class="page-header" style="flex-wrap:wrap;gap:10px;">
         <div>
           <h2>Locked Student Accounts</h2>
-          <p>${students.length} locked account${students.length !== 1 ? 's' : ''} in ${currentUser.department || 'your institution'} · Accounts are locked after 5 failed login attempts</p>
+          <p>${students.length} locked account${students.length !== 1 ? 's' : ''} · Locked after 5 failed login attempts</p>
         </div>
+        ${students.length > 1 ? `<button class="btn btn-primary btn-sm" onclick="hodBulkUnlockSelected()" id="hod-bulk-btn" style="display:none;">Unlock Selected</button>` : ''}
       </div>
+
       ${students.length === 0
-        ? `<div class="card"><div class="empty-state"><p style="color:var(--text-muted);font-size:13px;">No locked student accounts. All clear!</p></div></div>`
-        : `<div style="overflow-x:auto;" class="card" style="padding:0">
+        ? `<div class="card"><div class="empty-state"><p style="color:var(--text-muted);font-size:13px;">No locked student accounts. All clear! ✓</p></div></div>`
+        : `<div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center;">
+            <input id="hod-lock-search" placeholder="Search by name or index…" oninput="hodFilterLocked()" style="padding:8px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;min-width:220px;">
+            ${depts.length > 1 ? `<select id="hod-lock-dept" onchange="hodFilterLocked()" style="padding:8px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;">
+              <option value="">All Departments</option>
+              ${depts.map(d => `<option value="${esc(d)}">${esc(d)}</option>`).join('')}
+            </select>` : ''}
+          </div>
+          <div style="overflow-x:auto;" class="card" style="padding:0">
             <table style="width:100%;border-collapse:collapse;font-size:13px;">
               <thead>
                 <tr style="border-bottom:2px solid var(--border);">
-                  <th style="text-align:left;padding:10px 16px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Student</th>
-                  <th style="text-align:left;padding:10px 16px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Index No.</th>
-                  <th style="text-align:left;padding:10px 16px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Department</th>
-                  <th style="text-align:left;padding:10px 16px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Lock Reason</th>
-                  <th style="text-align:left;padding:10px 16px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Locked</th>
-                  <th style="text-align:left;padding:10px 16px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Attempts</th>
-                  <th style="padding:10px 16px;"></th>
+                  <th style="padding:10px 16px;">
+                    <input type="checkbox" id="hod-lock-all" onchange="hodToggleAllLocked(this)" title="Select all">
+                  </th>
+                  <th style="text-align:left;padding:10px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Student</th>
+                  <th style="text-align:left;padding:10px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Index No.</th>
+                  <th style="text-align:left;padding:10px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Department</th>
+                  <th style="text-align:left;padding:10px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Lock Reason</th>
+                  <th style="text-align:left;padding:10px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Locked</th>
+                  <th style="text-align:center;padding:10px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Attempts</th>
+                  <th style="padding:10px 12px;"></th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody id="hod-lock-tbody">
                 ${students.map(s => `
-                  <tr style="border-bottom:1px solid var(--border);" id="locked-row-${s._id}">
-                    <td style="padding:10px 16px;font-weight:600;">${esc(s.name)}</td>
-                    <td style="padding:10px 16px;font-family:monospace;color:var(--text-muted);">${esc(s.IndexNumber || '—')}</td>
+                  <tr class="hod-lock-row" data-id="${s._id}" data-name="${(s.name||'').toLowerCase()}" data-index="${(s.IndexNumber||'').toLowerCase()}" data-dept="${(s.department||'').toLowerCase()}" style="border-bottom:1px solid var(--border);" id="locked-row-${s._id}">
                     <td style="padding:10px 16px;">
+                      <input type="checkbox" class="hod-lock-cb" value="${s._id}" onchange="hodUpdateBulkBtn()">
+                    </td>
+                    <td style="padding:10px 12px;font-weight:600;">${esc(s.name)}</td>
+                    <td style="padding:10px 12px;font-family:monospace;color:var(--text-muted);">${esc(s.IndexNumber || '—')}</td>
+                    <td style="padding:10px 12px;">
                       ${s.department ? `<span style="background:#ecfeff;color:#0891b2;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600;">${esc(s.department)}</span>` : '—'}
                     </td>
-                    <td style="padding:10px 16px;font-size:12px;color:var(--text-muted);max-width:220px;">${esc(s.lockReason || '—')}</td>
-                    <td style="padding:10px 16px;font-size:12px;color:var(--text-muted);white-space:nowrap;">${s.lockedAt ? timeAgo(s.lockedAt) : '—'}</td>
-                    <td style="padding:10px 16px;text-align:center;">
+                    <td style="padding:10px 12px;font-size:12px;color:var(--text-muted);max-width:220px;">${esc(s.lockReason || '—')}</td>
+                    <td style="padding:10px 12px;font-size:12px;color:var(--text-muted);white-space:nowrap;">${s.lockedAt ? timeAgo(s.lockedAt) : '—'}</td>
+                    <td style="padding:10px 12px;text-align:center;">
                       <span style="background:#fee2e2;color:#b91c1c;border:1px solid #fca5a5;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700;">${s.failedLoginAttempts || 0}</span>
                     </td>
-                    <td style="padding:10px 16px;white-space:nowrap;">
+                    <td style="padding:10px 12px;white-space:nowrap;">
                       <button class="btn btn-sm btn-primary" onclick="hodUnlockStudent('${s._id}','${esc(s.name).replace(/'/g,"\\'")}')">
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg>
                         Unlock
@@ -3341,6 +3407,48 @@ async function renderHodUnlockStudents() {
   } catch(e) {
     content.innerHTML = `<div class="card"><p style="color:#ef4444;">${e.message}</p></div>`;
   }
+}
+
+function hodFilterLocked() {
+  const q    = (document.getElementById('hod-lock-search')?.value || '').toLowerCase();
+  const dept = (document.getElementById('hod-lock-dept')?.value || '').toLowerCase();
+  document.querySelectorAll('.hod-lock-row').forEach(row => {
+    const match = (!q || row.dataset.name.includes(q) || row.dataset.index.includes(q))
+               && (!dept || row.dataset.dept === dept);
+    row.style.display = match ? '' : 'none';
+  });
+  hodUpdateBulkBtn();
+}
+
+function hodToggleAllLocked(cb) {
+  document.querySelectorAll('.hod-lock-cb').forEach(c => {
+    const row = c.closest('.hod-lock-row');
+    if (row && row.style.display !== 'none') c.checked = cb.checked;
+  });
+  hodUpdateBulkBtn();
+}
+
+function hodUpdateBulkBtn() {
+  const checked = document.querySelectorAll('.hod-lock-cb:checked').length;
+  const btn = document.getElementById('hod-bulk-btn');
+  if (btn) {
+    btn.style.display = checked > 0 ? '' : 'none';
+    btn.textContent = `Unlock Selected (${checked})`;
+  }
+}
+
+async function hodBulkUnlockSelected() {
+  const ids = [...document.querySelectorAll('.hod-lock-cb:checked')].map(c => c.value);
+  if (ids.length === 0) return;
+  if (!confirm(`Bulk unlock ${ids.length} student account${ids.length !== 1 ? 's' : ''}?`)) return;
+  try {
+    const d = await api('/api/hod/bulk-unlock', { method: 'POST', body: JSON.stringify({ userIds: ids }) });
+    toastSuccess(d.message);
+    ids.forEach(id => document.getElementById(`locked-row-${id}`)?.remove());
+    hodUpdateBulkBtn();
+    const allCb = document.getElementById('hod-lock-all');
+    if (allCb) allCb.checked = false;
+  } catch(e) { toastError(e.message || 'Bulk unlock failed'); }
 }
 
 async function hodUnlockStudent(userId, name) {
@@ -3370,6 +3478,269 @@ Current: ${currentDept || 'None'}`, currentDept || '');
   }).catch(e => toastError(e.message || 'Failed to update department'));
 }
 
+
+// ── HOD — Department Performance Dashboard ────────────────────────────────
+async function renderHodPerformance() {
+  const content = document.getElementById('main-content');
+  content.innerHTML = '<div class="loading">Loading performance data…</div>';
+  try {
+    const data = await api('/api/hod/dashboard-stats');
+    const { totalSessions, endedSessions, totalAttendance, avgAttendance, bestCourse, lecturerSummary } = data;
+    const attRate = endedSessions > 0 && avgAttendance > 0 ? '~' + avgAttendance + ' / session' : '—';
+
+    content.innerHTML = `
+      <div class="page-header">
+        <div><h2>Performance Dashboard</h2><p>${currentUser.department || 'Department'} · last 30 days</p></div>
+        <button class="btn btn-secondary btn-sm" onclick="hodExportCSV('attendance')">Export Attendance CSV</button>
+      </div>
+
+      <div class="stats-grid" style="margin-bottom:20px;">
+        <div class="stat-card">
+          <div class="stat-value" style="color:#0891b2">${totalSessions}</div>
+          <div class="stat-label">TOTAL SESSIONS</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" style="color:#16a34a">${totalAttendance}</div>
+          <div class="stat-label">TOTAL ATTENDANCE</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" style="color:#0891b2">${avgAttendance}</div>
+          <div class="stat-label">AVG / SESSION</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" style="color:#7c3aed;font-size:15px;word-break:break-word;">${bestCourse ? bestCourse.name : '—'}</div>
+          <div class="stat-label">BEST COURSE</div>
+        </div>
+      </div>
+
+      ${bestCourse ? `
+      <div class="card" style="margin-bottom:16px;border-left:3px solid #7c3aed;">
+        <div style="font-size:13px;font-weight:700;margin-bottom:6px;">🏆 Best Performing Course</div>
+        <div style="display:flex;gap:24px;font-size:13px;color:var(--text-muted);">
+          <span><strong style="color:var(--text)">${esc(bestCourse.name)}</strong></span>
+          <span>${bestCourse.sessions} sessions</span>
+          <span>${bestCourse.attendance} total attendance</span>
+          <span>${bestCourse.sessions ? Math.round(bestCourse.attendance / bestCourse.sessions) : 0} avg / session</span>
+        </div>
+      </div>` : ''}
+
+      <div class="card">
+        <div style="font-size:13px;font-weight:700;margin-bottom:14px;">Lecturer Activity Summary</div>
+        ${lecturerSummary.length === 0 ? '<p style="color:var(--text-muted);font-size:13px;">No session data in the last 30 days.</p>' : `
+        <table style="width:100%;border-collapse:collapse;font-size:13px;">
+          <thead>
+            <tr style="border-bottom:2px solid var(--border);">
+              <th style="text-align:left;padding:8px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Lecturer</th>
+              <th style="text-align:center;padding:8px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Sessions</th>
+              <th style="text-align:center;padding:8px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Total Att.</th>
+              <th style="text-align:center;padding:8px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Avg / Session</th>
+              <th style="text-align:center;padding:8px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Live Now</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${lecturerSummary.map((l, i) => `
+              <tr style="border-bottom:1px solid var(--border);${i === 0 ? 'background:rgba(124,58,237,.04)' : ''}">
+                <td style="padding:9px 12px;font-weight:600;">${esc(l.name)} ${i === 0 ? '<span style="font-size:10px;color:#7c3aed;font-weight:700;">TOP</span>' : ''}</td>
+                <td style="padding:9px 12px;text-align:center;">${l.sessions}</td>
+                <td style="padding:9px 12px;text-align:center;">${l.attendance}</td>
+                <td style="padding:9px 12px;text-align:center;">${l.sessions ? Math.round(l.attendance / l.sessions) : 0}</td>
+                <td style="padding:9px 12px;text-align:center;">${l.active > 0 ? `<span class="tag tag-green">${l.active}</span>` : '—'}</td>
+              </tr>`).join('')}
+          </tbody>
+        </table>`}
+      </div>`;
+  } catch(e) {
+    content.innerHTML = `<div class="card"><p style="color:#ef4444;">${e.message}</p></div>`;
+  }
+}
+
+// ── HOD — Smart Alerts ────────────────────────────────────────────────────
+async function renderHodAlerts() {
+  const content = document.getElementById('main-content');
+  content.innerHTML = '<div class="loading">Analysing department data…</div>';
+  try {
+    const data = await api('/api/hod/alerts');
+    const { inactiveLecturers = [], inactiveCourses = [], repeatedAbsentees = [], lowAttendanceStudents = [] } = data;
+    const totalAlerts = inactiveLecturers.length + inactiveCourses.length + repeatedAbsentees.length + lowAttendanceStudents.length;
+
+    const alertSection = (title, icon, color, bg, border, items, renderRow) => `
+      <div class="card" style="margin-bottom:16px;${items.length > 0 ? `border-left:3px solid ${border}` : ''}">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:${items.length > 0 ? 14 : 0}px;">
+          <span style="font-size:18px;">${icon}</span>
+          <span style="font-size:13px;font-weight:700;">${title}</span>
+          <span style="margin-left:auto;background:${items.length > 0 ? bg : '#f3f4f6'};color:${items.length > 0 ? color : '#9ca3af'};padding:2px 10px;border-radius:20px;font-size:12px;font-weight:700;">${items.length}</span>
+        </div>
+        ${items.length === 0
+          ? `<p style="font-size:12px;color:var(--text-muted);margin:0;">✓ No alerts — all clear</p>`
+          : `<table style="width:100%;border-collapse:collapse;font-size:13px;">${renderRow(items)}</table>`}
+      </div>`;
+
+    content.innerHTML = `
+      <div class="page-header">
+        <div><h2>Smart Alerts</h2><p>${currentUser.department || 'Department'} · ${totalAlerts} alert${totalAlerts !== 1 ? 's' : ''} found</p></div>
+      </div>
+
+      ${alertSection('Low Attendance Students (< 50% in last 30 days)', '📉', '#dc2626', '#fee2e2', '#ef4444', lowAttendanceStudents,
+        items => `
+          <thead><tr style="border-bottom:2px solid var(--border);">
+            <th style="text-align:left;padding:7px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Student</th>
+            <th style="text-align:left;padding:7px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Index No.</th>
+            <th style="text-align:center;padding:7px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Attended</th>
+            <th style="text-align:center;padding:7px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Total</th>
+            <th style="text-align:center;padding:7px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Rate</th>
+          </tr></thead>
+          <tbody>${items.map(s => `
+            <tr style="border-bottom:1px solid var(--border);">
+              <td style="padding:8px 12px;font-weight:600;">${esc(s.name)}</td>
+              <td style="padding:8px 12px;font-family:monospace;color:var(--text-muted);">${esc(s.IndexNumber || '—')}</td>
+              <td style="padding:8px 12px;text-align:center;">${s.attended}</td>
+              <td style="padding:8px 12px;text-align:center;">${s.total}</td>
+              <td style="padding:8px 12px;text-align:center;">
+                <span style="font-weight:700;color:${s.rate < 30 ? '#dc2626' : '#d97706'}">${s.rate}%</span>
+                <div style="height:4px;background:var(--border);border-radius:2px;margin-top:3px;">
+                  <div style="height:4px;background:${s.rate < 30 ? '#dc2626' : '#d97706'};border-radius:2px;width:${s.rate}%;"></div>
+                </div>
+              </td>
+            </tr>`).join('')}</tbody>`
+      )}
+
+      ${alertSection('Repeated Absentees (3+ absences in 30 days)', '⚠️', '#d97706', '#fef3c7', '#f59e0b', repeatedAbsentees,
+        items => `
+          <thead><tr style="border-bottom:2px solid var(--border);">
+            <th style="text-align:left;padding:7px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Student</th>
+            <th style="text-align:left;padding:7px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Index No.</th>
+            <th style="text-align:left;padding:7px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Department</th>
+            <th style="text-align:center;padding:7px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Absences</th>
+          </tr></thead>
+          <tbody>${items.map(s => `
+            <tr style="border-bottom:1px solid var(--border);">
+              <td style="padding:8px 12px;font-weight:600;">${esc(s.name)}</td>
+              <td style="padding:8px 12px;font-family:monospace;color:var(--text-muted);">${esc(s.IndexNumber || '—')}</td>
+              <td style="padding:8px 12px;">${s.department ? `<span style="background:#ecfeff;color:#0891b2;padding:2px 8px;border-radius:20px;font-size:11px;">${esc(s.department)}</span>` : '—'}</td>
+              <td style="padding:8px 12px;text-align:center;"><span style="font-weight:700;color:#d97706;">${s.absentCount}</span></td>
+            </tr>`).join('')}</tbody>`
+      )}
+
+      ${alertSection('Lecturers Not Running Sessions (last 14 days)', '👨‍🏫', '#dc2626', '#fee2e2', '#ef4444', inactiveLecturers,
+        items => `
+          <thead><tr style="border-bottom:2px solid var(--border);">
+            <th style="text-align:left;padding:7px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Lecturer</th>
+            <th style="text-align:left;padding:7px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Email</th>
+            <th style="text-align:left;padding:7px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Department</th>
+          </tr></thead>
+          <tbody>${items.map(l => `
+            <tr style="border-bottom:1px solid var(--border);">
+              <td style="padding:8px 12px;font-weight:600;">${esc(l.name)}</td>
+              <td style="padding:8px 12px;color:var(--text-muted);">${esc(l.email || '—')}</td>
+              <td style="padding:8px 12px;">${l.department ? `<span style="background:#ecfeff;color:#0891b2;padding:2px 8px;border-radius:20px;font-size:11px;">${esc(l.department)}</span>` : '—'}</td>
+            </tr>`).join('')}</tbody>`
+      )}
+
+      ${alertSection('Inactive Courses (no sessions in 14 days)', '📚', '#7c3aed', '#ede9fe', '#7c3aed', inactiveCourses,
+        items => `
+          <thead><tr style="border-bottom:2px solid var(--border);">
+            <th style="text-align:left;padding:7px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Course</th>
+            <th style="text-align:left;padding:7px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Code</th>
+            <th style="text-align:left;padding:7px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Lecturer</th>
+          </tr></thead>
+          <tbody>${items.map(c => `
+            <tr style="border-bottom:1px solid var(--border);">
+              <td style="padding:8px 12px;font-weight:600;">${esc(c.title)}</td>
+              <td style="padding:8px 12px;font-family:monospace;color:var(--text-muted);">${esc(c.code || '—')}</td>
+              <td style="padding:8px 12px;color:var(--text-muted);">${esc(c.lecturerId?.name || 'Unassigned')}</td>
+            </tr>`).join('')}</tbody>`
+      )}`;
+  } catch(e) {
+    content.innerHTML = `<div class="card"><p style="color:#ef4444;">${e.message}</p></div>`;
+  }
+}
+
+// ── HOD — Department Messaging ────────────────────────────────────────────
+async function renderHodMessaging() {
+  const content = document.getElementById('main-content');
+  content.innerHTML = '<div class="loading">Loading…</div>';
+  try {
+    const dept = currentUser.department ? '&department=' + encodeURIComponent(currentUser.department) : '';
+    const [lecData, stuData] = await Promise.all([
+      api('/api/users?role=lecturer&limit=200' + dept),
+      api('/api/users?role=student&limit=500' + dept),
+    ]);
+    const lecCount = (lecData.users || []).length;
+    const stuCount = (stuData.users || []).length;
+
+    content.innerHTML = `
+      <div class="page-header">
+        <div><h2>Department Messaging</h2><p>Send messages or announcements to your department</p></div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;flex-wrap:wrap;">
+        <div class="card" style="padding:20px;cursor:pointer;border:2px solid transparent;transition:border .2s;" id="hod-msg-lec-card" onclick="hodSelectMsgTarget('lecturers')">
+          <div style="font-size:28px;margin-bottom:8px;">👨‍🏫</div>
+          <div style="font-weight:700;font-size:14px;">Message Lecturers</div>
+          <div style="font-size:12px;color:var(--text-muted);margin-top:4px;">${lecCount} lecturer${lecCount !== 1 ? 's' : ''} in ${currentUser.department || 'your department'}</div>
+        </div>
+        <div class="card" style="padding:20px;cursor:pointer;border:2px solid transparent;transition:border .2s;" id="hod-msg-stu-card" onclick="hodSelectMsgTarget('students')">
+          <div style="font-size:28px;margin-bottom:8px;">🎓</div>
+          <div style="font-weight:700;font-size:14px;">Message Students</div>
+          <div style="font-size:12px;color:var(--text-muted);margin-top:4px;">${stuCount} student${stuCount !== 1 ? 's' : ''} in ${currentUser.department || 'your department'}</div>
+        </div>
+      </div>
+
+      <div class="card" id="hod-msg-form" style="display:none;">
+        <div style="font-size:13px;font-weight:700;margin-bottom:14px;">Compose Message</div>
+        <div style="margin-bottom:12px;">
+          <div style="font-size:12px;font-weight:600;color:var(--text-muted);margin-bottom:6px;">TO</div>
+          <div id="hod-msg-target-label" style="font-size:13px;font-weight:700;padding:8px 12px;background:var(--bg);border-radius:8px;border:1.5px solid var(--border);"></div>
+        </div>
+        <div style="margin-bottom:16px;">
+          <div style="font-size:12px;font-weight:600;color:var(--text-muted);margin-bottom:6px;">MESSAGE</div>
+          <textarea id="hod-msg-body" placeholder="Type your message here…" rows="5" style="width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;resize:vertical;outline:none;box-sizing:border-box;"></textarea>
+        </div>
+        <div style="display:flex;gap:10px;align-items:center;">
+          <button class="btn btn-primary" onclick="hodSendGroupMessage()" id="hod-msg-send-btn">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+            Send Message
+          </button>
+          <button class="btn btn-secondary" onclick="navigateTo('announcements')">Post Announcement Instead</button>
+        </div>
+        <p style="font-size:11px;color:var(--text-muted);margin-top:10px;">Each recipient receives an individual direct message in their inbox. Max 100 recipients per send.</p>
+      </div>`;
+  } catch(e) {
+    content.innerHTML = `<div class="card"><p style="color:#ef4444;">${e.message}</p></div>`;
+  }
+}
+
+let _hodMsgTarget = null;
+function hodSelectMsgTarget(target) {
+  _hodMsgTarget = target;
+  const dept = currentUser.department || 'your department';
+  document.getElementById('hod-msg-target-label').textContent =
+    target === 'lecturers' ? `All Lecturers in ${dept}` : `All Students in ${dept}`;
+  document.getElementById('hod-msg-form').style.display = '';
+  ['hod-msg-lec-card','hod-msg-stu-card'].forEach(id => {
+    document.getElementById(id).style.border = '2px solid transparent';
+  });
+  const activeCard = target === 'lecturers' ? 'hod-msg-lec-card' : 'hod-msg-stu-card';
+  document.getElementById(activeCard).style.border = '2px solid var(--primary)';
+  document.getElementById('hod-msg-body').focus();
+}
+
+async function hodSendGroupMessage() {
+  if (!_hodMsgTarget) return;
+  const body = (document.getElementById('hod-msg-body')?.value || '').trim();
+  if (!body) { toastWarning('Please enter a message.'); return; }
+  const btn = document.getElementById('hod-msg-send-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Sending…'; }
+  try {
+    const d = await api('/api/hod/send-group-message', { method: 'POST', body: JSON.stringify({ target: _hodMsgTarget, body }) });
+    toastSuccess(d.message);
+    document.getElementById('hod-msg-body').value = '';
+  } catch(e) {
+    toastError(e.message || 'Failed to send message');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Send Message'; }
+  }
+}
 
 // ════════════════════════════════════════════════════════════════════════════
 //  SUPERADMIN DASHBOARD
