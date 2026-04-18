@@ -1658,13 +1658,58 @@ const REPORT_CARDS = [
 function ReportsPage() {
   const [busy, setBusy] = React.useState(null);
 
+  const toCSV = (rows, cols) => {
+    const esc = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
+    return [cols.join(','), ...rows.map(r => cols.map(c => esc(r[c])).join(','))].join('\n');
+  };
+
+  const download = (csv, name) => {
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href = url; a.download = name; a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const exportCSV = async (id) => {
     setBusy(id);
     try {
-      /* Phase 8B: wire real export */
-      await new Promise(r => setTimeout(r, 600));
-      alert(`Export "${id}" coming in Phase 8B`);
-    } finally { setBusy(null); }
+      if (id === 'users') {
+        const d = await api('/api/superadmin/users?page=1');
+        const rows = (d.users || []).map(u => ({
+          name: u.name, email: u.email, role: u.role,
+          mode: u.company?.mode || '', org: u.company?.name || '',
+          joined: u.createdAt ? new Date(u.createdAt).toLocaleDateString() : '',
+        }));
+        download(toCSV(rows, ['name','email','role','mode','org','joined']), 'kodex-users.csv');
+      } else if (id === 'organizations') {
+        const d = await api('/api/superadmin/overview');
+        const rows = (d.companies || []).map(c => ({
+          name: c.name, mode: c.mode, users: c.userCount,
+          status: c.subscriptionActive ? 'active' : c.isTrialActive ? 'trial' : 'expired',
+          admin: c.adminEmail || '', revenue: c.revenue || 0,
+        }));
+        download(toCSV(rows, ['name','mode','users','status','admin','revenue']), 'kodex-orgs.csv');
+      } else if (id === 'subscriptions') {
+        const d = await api('/api/superadmin/overview');
+        const rows = (d.companies || []).map(c => ({
+          name: c.name, mode: c.mode,
+          subscriptionActive: c.subscriptionActive, trialActive: c.isTrialActive,
+          trialDaysLeft: c.trialDaysRemaining || 0,
+          endDate: c.subscriptionEndDate ? new Date(c.subscriptionEndDate).toLocaleDateString() : '',
+        }));
+        download(toCSV(rows, ['name','mode','subscriptionActive','trialActive','trialDaysLeft','endDate']), 'kodex-subscriptions.csv');
+      } else if (id === 'revenue') {
+        const d = await api('/api/superadmin/payments');
+        const rows = (d.payments || []).map(p => ({
+          org: p.company?.name || '', mode: p.company?.mode || '',
+          amount: p.amount, type: p.type || p.plan || '',
+          date: p.paidAt ? new Date(p.paidAt).toLocaleDateString() : '',
+        }));
+        download(toCSV(rows, ['org','mode','amount','type','date']), 'kodex-revenue.csv');
+      }
+    } catch { alert('Export failed'); }
+    finally { setBusy(null); }
   };
 
   const dot = { sky: 'bg-sky-400', indigo: 'bg-indigo-400', emerald: 'bg-emerald-400', violet: 'bg-violet-400' };
