@@ -1554,6 +1554,99 @@ function PaymentsPage() {
   );
 }
 
+// ── ApprovalsPage ─────────────────────────────────────────────────────────────
+function ApprovalsPage() {
+  const [issues, setIssues] = React.useState(null);
+
+  const reload = () => {
+    api('/api/superadmin/issues').then(d => setIssues(d)).catch(() => setIssues({}));
+  };
+  React.useEffect(reload, []);
+
+  const locked   = issues?.locked        || [];
+  const suspended = issues?.suspended    || [];
+  const expired  = issues?.expiredCompanies || [];
+  const loading  = issues === null;
+
+  const unlock = async (userId) => {
+    if (!confirm('Unlock this account?')) return;
+    try {
+      await api(`/api/superadmin/users/${userId}/unlock`, { method: 'PATCH' });
+      reload();
+    } catch { alert('Failed to unlock'); }
+  };
+
+  const IssueSection = ({ title, accent, rows, emptyMsg, renderRow }) => {
+    const border = { rose: 'border-rose-300', amber: 'border-amber-300', sky: 'border-sky-300' }[accent] || 'border-gray-200';
+    return (
+      <div className={`bg-white rounded-2xl shadow-sm overflow-hidden border-t-4 ${border}`}>
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-50">
+          <span className="text-sm font-bold text-gray-700">{title}</span>
+          <span className="text-xs text-gray-400">{loading ? '…' : rows.length}</span>
+        </div>
+        {loading && <p className="px-5 py-8 text-sm text-gray-300 text-center">Loading…</p>}
+        {!loading && rows.length === 0 && <p className="px-5 py-8 text-sm text-gray-300 text-center">{emptyMsg}</p>}
+        {!loading && rows.length > 0 && (
+          <ul className="divide-y divide-gray-50">
+            {rows.map(renderRow)}
+          </ul>
+        )}
+      </div>
+    );
+  };
+
+  return (
+    <div className="space-y-5">
+      <IssueSection
+        title="Locked Accounts" accent="rose" emptyMsg="No locked accounts"
+        rows={locked}
+        renderRow={u => (
+          <li key={u._id} className="flex items-center gap-4 px-5 py-3 hover:bg-gray-50">
+            <div className="flex-1 min-w-0">
+              <p className="font-medium text-gray-800 truncate">{u.name || u.email}</p>
+              <p className="text-xs text-gray-400">{u.email} · {u.role} · {u.company?.name || 'no org'}</p>
+              {u.lockReason && <p className="text-xs text-rose-400 mt-0.5">Reason: {u.lockReason}</p>}
+            </div>
+            <button onClick={() => unlock(u._id)}
+              className="px-3 py-1 rounded-lg bg-emerald-50 text-emerald-600 text-xs font-semibold hover:bg-emerald-100 transition-colors flex-shrink-0">
+              Unlock
+            </button>
+          </li>
+        )}
+      />
+
+      <IssueSection
+        title="Suspended Accounts" accent="amber" emptyMsg="No suspended accounts"
+        rows={suspended}
+        renderRow={u => (
+          <li key={u._id} className="flex items-center gap-4 px-5 py-3 hover:bg-gray-50">
+            <div className="flex-1 min-w-0">
+              <p className="font-medium text-gray-800 truncate">{u.name || u.email}</p>
+              <p className="text-xs text-gray-400">{u.email} · {u.role} · {u.company?.name || 'no org'}</p>
+              {u.suspendedReason && <p className="text-xs text-amber-400 mt-0.5">Reason: {u.suspendedReason}</p>}
+            </div>
+            <span className="px-2 py-0.5 rounded-full bg-amber-50 text-amber-600 text-xs font-semibold flex-shrink-0">Suspended</span>
+          </li>
+        )}
+      />
+
+      <IssueSection
+        title="Expired Organizations" accent="sky" emptyMsg="No expired organizations"
+        rows={expired}
+        renderRow={c => (
+          <li key={c._id} className="flex items-center gap-4 px-5 py-3 hover:bg-gray-50">
+            <div className="flex-1 min-w-0">
+              <p className="font-medium text-gray-800 truncate">{c.name}</p>
+              <p className="text-xs text-gray-400 capitalize">{c.mode} · status: {c.subscriptionStatus}</p>
+            </div>
+            <span className="px-2 py-0.5 rounded-full bg-rose-50 text-rose-600 text-xs font-semibold flex-shrink-0">Expired</span>
+          </li>
+        )}
+      />
+    </div>
+  );
+}
+
 // ── Layout ───────────────────────────────────────────────────────────────────
 function Layout() {
   const [section, setSection] = useState('dashboard');
@@ -1570,6 +1663,7 @@ function Layout() {
            section === 'users'         ? <UsersPage />         :
            section === 'subscriptions' ? <SubscriptionsPage /> :
            section === 'payments'      ? <PaymentsPage />      :
+           section === 'approvals'     ? <ApprovalsPage />     :
            <PagePlaceholder id={section} />}
         </main>
       </div>
