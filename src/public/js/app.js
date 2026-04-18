@@ -2235,15 +2235,18 @@ function buildSidebar() {
       links.push({ id: 'subscription', label: 'Subscription', icon: subscriptionIcon() });
       break;
     case 'employee':
-      links.push({ id: 'sign-in-out', label: 'Clock In / Out', icon: attendanceIcon() });
-      links.push({ id: 'my-attendance', label: 'My Attendance', icon: sessionsIcon() });
-      links.push({ id: 'my-shift', label: 'My Shift', icon: svgIcon('<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>') });
-      links.push({ id: 'my-leaves', label: 'Leave', icon: svgIcon('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>') });
-      links.push({ id: 'messages', label: 'Messages', icon: svgIcon('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>') });
-      links.push({ id: 'meetings', label: 'Meetings', icon: meetingsIcon() });
-      links.push({ id: 'support', label: 'Support', icon: svgIcon('<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>') });
-      links.push({ id: 'faq-center', label: 'FAQ Center', icon: svgIcon('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><line x1="9" y1="10" x2="15" y2="10"/><line x1="12" y1="7" x2="12" y2="13"/>') });
-      links.push({ id: 'reports', label: 'Reports', icon: reportsIcon() });
+      links.push({ id: 'emp-home',      label: 'Home',            icon: svgIcon('<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>') });
+      links.push({ id: 'sign-in-out',   label: 'Clock In / Out',  icon: attendanceIcon() });
+      links.push({ id: 'my-attendance', label: 'My Attendance',   icon: sessionsIcon() });
+      links.push({ id: 'my-shift',      label: 'My Shift',        icon: svgIcon('<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>') });
+      links.push({ id: 'my-leaves',     label: 'Leave',           icon: svgIcon('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>') });
+      links.push({ id: 'emp-notifications', label: 'Notifications', icon: svgIcon('<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>') });
+      links.push({ id: 'my-performance', label: 'My Performance', icon: svgIcon('<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>') });
+      links.push({ id: 'messages',      label: 'Messages',        icon: svgIcon('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>') });
+      links.push({ id: 'meetings',      label: 'Meetings',        icon: meetingsIcon() });
+      links.push({ id: 'support',       label: 'Support',         icon: svgIcon('<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>') });
+      links.push({ id: 'faq-center',    label: 'FAQ Center',      icon: svgIcon('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><line x1="9" y1="10" x2="15" y2="10"/><line x1="12" y1="7" x2="12" y2="13"/>') });
+      links.push({ id: 'reports',       label: 'Reports',         icon: reportsIcon() });
       break;
     case 'student':
       links.push({ id: 'mark-attendance', label: 'Mark Attendance', icon: attendanceIcon() });
@@ -2288,6 +2291,8 @@ function buildSidebar() {
 }
 
 function navigateTo(view) {
+  // Clear live clock timer when leaving a clock page
+  if (window._empClockTimer) { clearInterval(window._empClockTimer); window._empClockTimer = null; }
   currentView = view;
   document.querySelectorAll('.sidebar-nav a').forEach(a => a.classList.remove('active'));
   const navEl = document.getElementById(`nav-${view}`);
@@ -2310,6 +2315,8 @@ function navigateTo(view) {
     case 'question-bank': renderQuestionBank(); break;
     case 'my-attendance': renderMyAttendance(); break;
     case 'mark-attendance': renderMarkAttendance(); break;
+    case 'emp-home': renderEmployeeDashboard(document.getElementById('main-content')); break;
+    case 'emp-notifications': renderEmpNotifications(); break;
     case 'sign-in-out': renderSignInOut(); break;
     case 'corp-attendance': renderCorporateAttendance(); break;
     case 'subscription': renderSubscription(); break;
@@ -3961,96 +3968,274 @@ async function renderLecturerDashboard(content) {
   `;
 }
 
-async function renderEmployeeDashboard(content) {
-  const today     = new Date().toISOString().slice(0, 10);
-  const sevenAgo  = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
+// ── Employee live-clock helpers ───────────────────────────────────────────────
+function _empElapsed(clockInTime) {
+  const ms = Date.now() - clockInTime.getTime();
+  const h  = Math.floor(ms / 3600000);
+  const m  = Math.floor((ms % 3600000) / 60000);
+  return h > 0 ? `${h}h ${m}m` : `${m}m`;
+}
 
-  const [todayData, recentData, meetingsData] = await Promise.all([
+function _empStartTimer(clockInTime, elId) {
+  if (window._empClockTimer) clearInterval(window._empClockTimer);
+  window._empClockTimer = setInterval(() => {
+    const el = document.getElementById(elId);
+    if (!el) { clearInterval(window._empClockTimer); return; }
+    el.textContent = _empElapsed(clockInTime);
+  }, 30000);
+}
+
+async function renderEmployeeDashboard(content) {
+  if (!content) content = document.getElementById('main-content');
+  content.innerHTML = '<div class="loading">Loading…</div>';
+
+  const today      = new Date().toISOString().slice(0, 10);
+  const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0, 10);
+
+  const [todayData, monthData, shiftData, leavesData] = await Promise.all([
     api(`/api/corporate-attendance/my?from=${today}&to=${today}`).catch(() => ({ records: [] })),
-    api(`/api/corporate-attendance/my?from=${sevenAgo}&to=${today}`).catch(() => ({ records: [] })),
-    api('/api/zoom').catch(() => ({ meetings: [] })),
+    api(`/api/corporate-attendance/my?from=${monthStart}&to=${today}`).catch(() => ({ records: [] })),
+    api('/api/shifts/my-shift').catch(() => ({})),
+    api('/api/leaves/my').catch(() => ({ leaves: [] })),
   ]);
 
-  const todayRecord  = todayData.records[0] || null;
+  // ── Today ─────────────────────────────────────────────────────────────────
+  const todayRecord  = todayData.records?.[0] || null;
   const isClockedIn  = !!(todayRecord?.clockIn?.time && !todayRecord?.clockOut?.time);
   const isClockedOut = !!(todayRecord?.clockIn?.time && todayRecord?.clockOut?.time);
   const clockInTime  = todayRecord?.clockIn?.time  ? new Date(todayRecord.clockIn.time)  : null;
-  const isLate       = todayRecord?.clockIn?.isLate || todayRecord?.status === 'late' || false;
+  const clockOutTime = todayRecord?.clockOut?.time ? new Date(todayRecord.clockOut.time) : null;
+  const isLate       = !!(todayRecord?.clockIn?.isLate || todayRecord?.status === 'late');
   const lateMin      = todayRecord?.clockIn?.lateMinutes || todayRecord?.lateMinutes || 0;
-  const workedHrs    = todayRecord?.hoursWorked != null ? todayRecord.hoursWorked : null;
+  const workedHrs    = todayRecord?.hoursWorked ?? null;
+  const overtimeHrs  = todayRecord?.overtimeHours || 0;
 
-  const recentRecords  = recentData.records || [];
-  const presentDays    = recentRecords.filter(r => r.status === 'present' || r.status === 'late').length;
-  const attendanceRate = recentRecords.length > 0 ? Math.round((presentDays / recentRecords.length) * 100) : 0;
-  const upcomingMeetings = meetingsData.meetings.filter(m => m.status === 'scheduled');
+  // Attendance status badge
+  const attStatus = (() => {
+    if (!todayRecord) return null;
+    const s = todayRecord.status;
+    if (s === 'remote') return { label: 'Remote / Outside', color: '#0891b2', bg: '#ecfeff' };
+    if (s === 'present' || s === 'late') return { label: isLate ? 'On-site · Late' : 'On-site', color: '#16a34a', bg: '#f0fdf4' };
+    if (s === 'absent') return { label: 'Absent', color: '#dc2626', bg: '#fef2f2' };
+    if (s === 'on_leave') return { label: 'On Leave', color: '#0284c7', bg: '#eff6ff' };
+    if (isClockedIn) return { label: 'Needs Review', color: '#d97706', bg: '#fffbeb' };
+    return null;
+  })();
 
-  const statusColor = isClockedIn ? 'var(--success)' : (isClockedOut ? 'var(--primary)' : 'var(--text-light)');
+  // ── Month stats ───────────────────────────────────────────────────────────
+  const monthRecords = monthData.records || [];
+  const presentDays  = monthRecords.filter(r => r.status === 'present' || r.status === 'late').length;
+  const lateDays     = monthRecords.filter(r => r.status === 'late').length;
+  const totalHrs     = monthRecords.reduce((s, r) => s + (r.hoursWorked || 0), 0);
+  const overtimeTot  = monthRecords.reduce((s, r) => s + (r.overtimeHours || 0), 0);
+  const recordedDays = monthRecords.filter(r => r.clockIn?.time).length;
+  const attRate      = recordedDays > 0 ? Math.round((presentDays / recordedDays) * 100) : 0;
+
+  // ── Shift ─────────────────────────────────────────────────────────────────
+  const shift = shiftData.assignment?.shift || null;
+
+  // ── Leave balance (computed from approved leaves this year) ───────────────
+  const currentYear = new Date().getFullYear();
+  const leaves = leavesData.leaves || [];
+  const yearLeaves = leaves.filter(l => l.status === 'approved' && new Date(l.startDate).getFullYear() === currentYear);
+  const annualUsed  = yearLeaves.filter(l => l.type === 'annual').reduce((s, l) => s + l.days, 0);
+  const sickUsed    = yearLeaves.filter(l => l.type === 'sick').reduce((s, l) => s + l.days, 0);
+  const ANNUAL_ALLOC = 21; const SICK_ALLOC = 10;
+  const annualLeft  = Math.max(0, ANNUAL_ALLOC - annualUsed);
+  const sickLeft    = Math.max(0, SICK_ALLOC - sickUsed);
+
+  // ── Pending leaves ────────────────────────────────────────────────────────
+  const pendingLeaves = leaves.filter(l => l.status === 'pending');
+  const recentLeave   = leaves[0] || null;
+
+  // ── Notifications (derived) ───────────────────────────────────────────────
+  const notifs = [];
+  if (!todayRecord && shift) {
+    const now = new Date();
+    const [sh, sm] = (shift.startTime || '09:00').split(':').map(Number);
+    const shiftStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), sh, sm);
+    if (now < shiftStart) {
+      const minsTil = Math.round((shiftStart - now) / 60000);
+      if (minsTil < 60) notifs.push({ icon: '⏰', text: `Shift starts in ${minsTil} min`, type: 'info' });
+    } else if (now > shiftStart) {
+      notifs.push({ icon: '⚠️', text: 'You haven\'t clocked in yet today', type: 'warn' });
+    }
+  }
+  pendingLeaves.forEach(l => notifs.push({ icon: '📋', text: `${l.type.charAt(0).toUpperCase()+l.type.slice(1)} leave (${new Date(l.startDate).toLocaleDateString('en-GB',{day:'2-digit',month:'short'})}) is awaiting approval`, type: 'info' }));
+  const recentReviewed = leaves.filter(l => ['approved','rejected'].includes(l.status)).slice(0, 2);
+  recentReviewed.forEach(l => {
+    const isApproved = l.status === 'approved';
+    notifs.push({ icon: isApproved ? '✅' : '❌', text: `${l.type.charAt(0).toUpperCase()+l.type.slice(1)} leave ${l.status}`, type: isApproved ? 'ok' : 'warn' });
+  });
+  if (isLate) notifs.push({ icon: '🕐', text: `You were ${lateMin} minute${lateMin !== 1 ? 's' : ''} late today`, type: 'warn' });
+  if (overtimeTot > 0) notifs.push({ icon: '⚡', text: `${overtimeTot}h overtime logged this month`, type: 'ok' });
+
+  // ── Status card colours ───────────────────────────────────────────────────
+  const statusColor = isClockedIn ? '#16a34a' : isClockedOut ? 'var(--primary)' : '#9ca3af';
+  const statusBg    = isClockedIn ? 'linear-gradient(135deg,#f0fdf4,#ecfdf5)' : isClockedOut ? 'linear-gradient(135deg,#eef2ff,#e0e7ff)' : 'linear-gradient(135deg,#f9fafb,#f3f4f6)';
+  const elapsed     = isClockedIn && clockInTime ? _empElapsed(clockInTime) : '';
+
+  const statusColors = { present:'#16a34a', late:'#d97706', absent:'#dc2626', half_day:'#7c3aed', on_leave:'#0284c7', remote:'#0891b2' };
 
   content.innerHTML = `
     <div class="page-header">
-      <h2>Welcome back, ${currentUser.name.split(' ')[0]}</h2>
-      <p>${currentUser.company?.name || 'Your company'}${currentUser.employeeId ? ` · ID: ${currentUser.employeeId}` : ''}</p>
+      <div>
+        <h2>Welcome back, ${esc(currentUser.name.split(' ')[0])}</h2>
+        <p>${esc(currentUser.company?.name || 'Your company')}${currentUser.employeeId ? ` · ID: ${esc(currentUser.employeeId)}` : ''} · ${new Date().toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'})}</p>
+      </div>
+      <button class="btn btn-secondary btn-sm" onclick="navigateTo('messages')" style="gap:6px">
+        ${svgIcon('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',14)} Message Manager
+      </button>
     </div>
 
-    <div class="card" style="border-left:4px solid ${statusColor};background:${isClockedIn ? 'linear-gradient(135deg,#f0fdf4,#ecfdf5)' : 'linear-gradient(135deg,#eef2ff,#e0e7ff)'}">
+    <!-- LIVE STATUS CARD -->
+    <div class="card" style="border-left:4px solid ${statusColor};background:${statusBg};margin-bottom:16px">
       <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px">
-        <div>
-          <div style="font-size:12px;text-transform:uppercase;font-weight:700;letter-spacing:.5px;color:${statusColor}">
-            ${isClockedIn ? '● Currently Clocked In' : (isClockedOut ? '✓ Clocked Out' : '○ Not Clocked In')}
+        <div style="flex:1;min-width:0">
+          <div style="font-size:11px;text-transform:uppercase;font-weight:700;letter-spacing:.6px;color:${statusColor};margin-bottom:4px">
+            ${isClockedIn ? '● Live — Clocked In' : isClockedOut ? '✓ Clocked Out' : '○ Not Started'}
           </div>
-          <div style="font-size:18px;font-weight:700;margin-top:4px">
-            ${isClockedIn ? 'You are clocked in' : (isClockedOut ? 'Work day complete' : 'Ready to start your day?')}
+          <div style="font-size:20px;font-weight:800;margin-bottom:4px">
+            ${isClockedIn ? `${clockInTime.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})} → <span id="emp-elapsed-timer" style="color:${statusColor}">${elapsed}</span>` : isClockedOut ? `${clockInTime.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})} → ${clockOutTime.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}` : 'Ready to clock in?'}
           </div>
-          ${clockInTime ? `<div style="font-size:12px;color:var(--text-light);margin-top:2px">
-            Clocked in at ${clockInTime.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}
-            ${isLate ? `<span style="color:#ef4444;margin-left:6px">(${lateMin}m late)</span>` : ''}
-          </div>` : ''}
-          ${isClockedOut && workedHrs != null ? `<div style="font-size:12px;color:var(--text-light);margin-top:2px">Worked ${workedHrs}h today</div>` : ''}
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+            ${attStatus ? `<span style="background:${attStatus.bg};color:${attStatus.color};border:1px solid ${attStatus.color}40;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700">${attStatus.label}</span>` : ''}
+            ${shift ? `<span style="font-size:11px;color:var(--text-muted)">Shift: <strong>${esc(shift.name)}</strong> ${shift.startTime}–${shift.endTime}</span>` : ''}
+            ${isLate ? `<span style="background:#fef2f2;color:#dc2626;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700">${lateMin}m late</span>` : ''}
+            ${isClockedOut && workedHrs != null ? `<span style="font-size:12px;color:var(--text-muted)">Worked <strong>${workedHrs}h</strong>${overtimeHrs > 0 ? ` · <span style="color:#8b5cf6">+${overtimeHrs}h OT</span>` : ''}</span>` : ''}
+          </div>
         </div>
-        <div style="display:flex;gap:10px">
+        <div style="display:flex;gap:10px;flex-shrink:0">
           ${!isClockedIn && !isClockedOut ? `
             <button class="btn btn-success" onclick="employeeSignIn()" style="gap:8px;font-size:14px;padding:12px 24px">
-              ${svgIcon('<polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>', 16)} Clock In
+              ${svgIcon('<polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>',16)} Clock In
             </button>` : isClockedIn ? `
             <button class="btn btn-danger" onclick="employeeSignOut()" style="gap:8px;font-size:14px;padding:12px 24px">
-              ${svgIcon('<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>', 16)} Clock Out
+              ${svgIcon('<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>',16)} Clock Out
             </button>` : `
-            <button class="btn btn-sm" style="background:var(--border)" onclick="navigateTo('sign-in-out')">View Details</button>`}
+            <button class="btn btn-sm" style="background:var(--bg);border:1px solid var(--border)" onclick="navigateTo('sign-in-out')">View Details</button>`}
         </div>
       </div>
     </div>
 
-    <div class="stats-grid">
-      <div class="stat-card"><div class="stat-value">${attendanceRate}%</div><div class="stat-label">7-Day Rate</div></div>
-      <div class="stat-card"><div class="stat-value">${presentDays}</div><div class="stat-label">Days Present</div></div>
-      <div class="stat-card"><div class="stat-value">${upcomingMeetings.length}</div><div class="stat-label">Meetings</div></div>
+    <!-- MONTHLY STATS -->
+    <div class="stats-grid" style="margin-bottom:16px">
+      <div class="stat-card" onclick="navigateTo('my-attendance')" style="cursor:pointer">
+        <div class="stat-value" style="color:${attRate >= 80 ? '#16a34a' : attRate >= 60 ? '#d97706' : '#dc2626'}">${attRate}%</div>
+        <div class="stat-label">Monthly Rate</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" style="color:#d97706">${lateDays}</div>
+        <div class="stat-label">Late Days</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" style="color:#0891b2">${totalHrs.toFixed(1)}h</div>
+        <div class="stat-label">Hours This Month</div>
+      </div>
+      <div class="stat-card" onclick="navigateTo('my-leaves')" style="cursor:pointer">
+        <div class="stat-value" style="color:#7c3aed">${annualLeft}</div>
+        <div class="stat-label">Annual Days Left</div>
+      </div>
     </div>
 
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
+
+      <!-- LEAVE BALANCE -->
+      <div class="card" onclick="navigateTo('my-leaves')" style="cursor:pointer">
+        <div style="font-size:13px;font-weight:700;margin-bottom:12px">Leave Balance</div>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <span style="font-size:13px">Annual Leave</span>
+            <div style="text-align:right">
+              <span style="font-weight:700;color:${annualLeft > 7 ? '#16a34a' : annualLeft > 3 ? '#d97706' : '#dc2626'}">${annualLeft}</span>
+              <span style="font-size:11px;color:var(--text-muted)"> / ${ANNUAL_ALLOC} days</span>
+              <div style="height:4px;background:var(--border);border-radius:2px;margin-top:3px;width:80px">
+                <div style="height:4px;background:${annualLeft > 7 ? '#16a34a' : annualLeft > 3 ? '#d97706' : '#dc2626'};border-radius:2px;width:${Math.round((annualLeft/ANNUAL_ALLOC)*100)}%"></div>
+              </div>
+            </div>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <span style="font-size:13px">Sick Leave</span>
+            <div style="text-align:right">
+              <span style="font-weight:700;color:${sickLeft > 3 ? '#16a34a' : '#d97706'}">${sickLeft}</span>
+              <span style="font-size:11px;color:var(--text-muted)"> / ${SICK_ALLOC} days</span>
+              <div style="height:4px;background:var(--border);border-radius:2px;margin-top:3px;width:80px">
+                <div style="height:4px;background:${sickLeft > 3 ? '#16a34a' : '#d97706'};border-radius:2px;width:${Math.round((sickLeft/SICK_ALLOC)*100)}%"></div>
+              </div>
+            </div>
+          </div>
+          ${recentLeave ? `<div style="font-size:11px;color:var(--text-muted);margin-top:4px;padding-top:8px;border-top:1px solid var(--border)">
+            Last: ${recentLeave.type} leave · ${recentLeave.days}d · <span style="color:${recentLeave.status==='approved'?'#16a34a':recentLeave.status==='pending'?'#d97706':'#dc2626'};font-weight:600">${recentLeave.status}</span>
+          </div>` : ''}
+        </div>
+        <button class="btn btn-secondary btn-sm" style="margin-top:12px;width:100%" onclick="event.stopPropagation();navigateTo('my-leaves')">Request Leave</button>
+      </div>
+
+      <!-- NOTIFICATIONS -->
+      <div class="card" style="max-height:220px;overflow-y:auto">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+          <div style="font-size:13px;font-weight:700">Notifications</div>
+          ${notifs.length > 0 ? `<span style="background:#ef4444;color:#fff;font-size:10px;font-weight:700;padding:1px 6px;border-radius:20px">${notifs.length}</span>` : ''}
+        </div>
+        ${notifs.length === 0 ? `<p style="font-size:12px;color:var(--text-muted)">✓ All clear — no alerts</p>` :
+          notifs.map(n => `
+            <div style="display:flex;gap:8px;padding:7px 0;border-bottom:1px solid var(--border);align-items:flex-start">
+              <span style="font-size:14px;flex-shrink:0">${n.icon}</span>
+              <span style="font-size:12px;line-height:1.4;color:var(--text)">${esc(n.text)}</span>
+            </div>`).join('')}
+        <button class="btn btn-secondary btn-sm" style="margin-top:8px;width:100%" onclick="navigateTo('emp-notifications')">View All →</button>
+      </div>
+    </div>
+
+    <!-- QUICK ACTIONS -->
+    <div class="card" style="margin-bottom:16px">
+      <div style="font-size:13px;font-weight:700;margin-bottom:12px">Quick Actions</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn btn-secondary btn-sm" onclick="navigateTo('sign-in-out')">🕐 Clock In / Out</button>
+        <button class="btn btn-secondary btn-sm" onclick="navigateTo('my-attendance')">📅 My Attendance</button>
+        <button class="btn btn-secondary btn-sm" onclick="navigateTo('my-leaves')">✈️ Request Leave</button>
+        <button class="btn btn-secondary btn-sm" onclick="navigateTo('my-shift')">📋 My Shift</button>
+        <button class="btn btn-secondary btn-sm" onclick="navigateTo('messages')">💬 Message Manager</button>
+        <button class="btn btn-secondary btn-sm" onclick="navigateTo('my-performance')">📊 My Performance</button>
+      </div>
+    </div>
+
+    <!-- RECENT ATTENDANCE (this week) -->
     <div class="card">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-        <div class="card-title" style="margin:0">This Week</div>
+        <div style="font-size:13px;font-weight:700">Recent Attendance</div>
         <a onclick="navigateTo('my-attendance')" style="font-size:12px;color:var(--primary);cursor:pointer">View all →</a>
       </div>
-      ${recentRecords.length ? `
-        <table>
-          <thead><tr><th>Date</th><th>Status</th><th>Time In</th><th>Time Out</th><th>Worked</th></tr></thead>
-          <tbody>${recentRecords.slice(0, 7).map(r => {
-            const ci  = r.clockIn?.time  ? new Date(r.clockIn.time)  : null;
-            const co  = r.clockOut?.time ? new Date(r.clockOut.time) : null;
-            const statusColors = { present:'#16a34a', late:'#d97706', absent:'#dc2626', half_day:'#7c3aed', on_leave:'#0284c7', remote:'#0891b2' };
-            const sc = statusColors[r.status] || 'var(--text-light)';
-            return `<tr>
-              <td style="font-size:13px">${r.date ? new Date(r.date).toLocaleDateString('en-GB', {weekday:'short',day:'2-digit',month:'short'}) : '—'}</td>
-              <td><span style="background:${sc}20;color:${sc};border:1px solid ${sc}40;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700;text-transform:capitalize">${r.status || '—'}</span></td>
-              <td style="font-size:13px">${ci ? ci.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : '—'}</td>
-              <td style="font-size:13px">${co ? co.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : (ci ? '<span style="color:#f59e0b;font-size:11px">Active</span>' : '—')}</td>
-              <td style="font-size:13px">${r.hoursWorked != null ? r.hoursWorked+'h' : '—'}</td>
+      ${monthRecords.length ? `
+        <div style="overflow-x:auto">
+        <table style="font-size:13px;width:100%;border-collapse:collapse">
+          <thead><tr>
+            <th style="text-align:left;padding:7px 10px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase">Date</th>
+            <th style="text-align:left;padding:7px 10px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase">Status</th>
+            <th style="text-align:left;padding:7px 10px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase">In</th>
+            <th style="text-align:left;padding:7px 10px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase">Out</th>
+            <th style="text-align:left;padding:7px 10px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase">Worked</th>
+          </tr></thead>
+          <tbody>${monthRecords.slice(-7).reverse().map(r => {
+            const ci = r.clockIn?.time  ? new Date(r.clockIn.time)  : null;
+            const co = r.clockOut?.time ? new Date(r.clockOut.time) : null;
+            const sc = statusColors[r.status] || '#9ca3af';
+            return `<tr style="border-bottom:1px solid var(--border)">
+              <td style="padding:8px 10px">${r.date ? new Date(r.date).toLocaleDateString('en-GB',{weekday:'short',day:'2-digit',month:'short'}) : '—'}</td>
+              <td style="padding:8px 10px"><span style="background:${sc}20;color:${sc};border:1px solid ${sc}40;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700;text-transform:capitalize">${r.status||'—'}</span></td>
+              <td style="padding:8px 10px">${ci ? ci.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}) : '—'}</td>
+              <td style="padding:8px 10px">${co ? co.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}) : (ci ? '<span style="color:#f59e0b;font-size:11px">Active</span>' : '—')}</td>
+              <td style="padding:8px 10px">${r.hoursWorked != null ? r.hoursWorked+'h' : '—'}</td>
             </tr>`;
           }).join('')}</tbody>
-        </table>
-      ` : '<div class="empty-state"><p>No attendance records this week. Click Clock In to start.</p></div>'}
+        </table></div>` : `<div class="empty-state"><p>No attendance records yet. Clock in to get started.</p></div>`}
     </div>
   `;
+
+  // Start live timer if currently clocked in
+  if (isClockedIn && clockInTime) {
+    _empStartTimer(clockInTime, 'emp-elapsed-timer');
+  }
 }
 
 // ── GPS helpers (corporate only) ──────────────────────────────────────────────
@@ -4235,7 +4420,7 @@ async function renderSignInOut() {
         ${shiftName ? `<div style="font-size:12px;color:var(--text-muted);margin-top:4px">Shift: ${shiftName}${todayRecord?.shift?.startTime ? ' · '+todayRecord.shift.startTime+'–'+todayRecord.shift.endTime : ''}</div>` : ''}
         ${clockInTime ? `<div style="font-size:13px;color:var(--text-light);margin-top:6px">Time in: <strong>${clockInTime.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</strong>${isLate ? ` <span style="color:#ef4444;font-size:11px">(${lateMin}m late)</span>` : ''}</div>` : ''}
         ${clockOutTime ? `<div style="font-size:13px;color:var(--text-light);margin-top:4px">Time out: <strong>${clockOutTime.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</strong></div>` : ''}
-        ${isClockedIn && elapsedLabel ? `<div style="font-size:13px;color:var(--success);font-weight:600;margin-top:4px">${elapsedLabel}</div>` : ''}
+        ${isClockedIn && elapsedLabel ? `<div style="font-size:13px;color:var(--success);font-weight:600;margin-top:4px"><span id="sio-elapsed-timer">${elapsedLabel}</span> elapsed</div>` : ''}
         ${isClockedOut && workedHrs != null ? `<div style="font-size:13px;color:var(--text-light);margin-top:4px">Worked: <strong>${workedHrs}h</strong>${overtimeHrs > 0 ? ` <span style="color:#8b5cf6;font-size:11px">(+${overtimeHrs}h overtime)</span>` : ''}</div>` : ''}
         <div style="margin-top:28px;display:flex;gap:16px;justify-content:center;flex-wrap:wrap">
           ${!isClockedIn && !isClockedOut ? `
@@ -4279,6 +4464,11 @@ async function renderSignInOut() {
         ` : '<div class="empty-state"><p>No attendance records yet. Clock in to start tracking.</p></div>'}
       </div>
     `;
+
+    // Live elapsed timer — updates every 30 seconds while page is open
+    if (isClockedIn && clockInTime) {
+      _empStartTimer(clockInTime, 'sio-elapsed-timer');
+    }
   } catch (e) {
     content.innerHTML = `<div class="card"><p>Error loading attendance: ${e.message}</p></div>`;
   }
@@ -13503,8 +13693,41 @@ async function renderMyLeaves() {
       cancelled: '<span style="background:#f9fafb;color:#6b7280;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600">Cancelled</span>',
     }[s] || s);
 
+    // Leave balance
+    const yr = new Date().getFullYear();
+    const approved = leaves.filter(l => l.status === 'approved' && new Date(l.startDate).getFullYear() === yr);
+    const annualUsed = approved.filter(l => l.type === 'annual').reduce((s, l) => s + l.days, 0);
+    const sickUsed   = approved.filter(l => l.type === 'sick').reduce((s, l) => s + l.days, 0);
+    const otherUsed  = approved.filter(l => !['annual','sick'].includes(l.type)).reduce((s, l) => s + l.days, 0);
+    const ANNUAL = 21, SICK = 10;
+    const mkBar = (used, alloc, color) => `<div style="height:6px;background:var(--border);border-radius:3px;margin-top:4px"><div style="height:6px;background:${color};border-radius:3px;width:${Math.min(100,Math.round((used/alloc)*100))}%"></div></div>`;
+
     content.innerHTML = `
       <div class="page-header"><h2>My Leave</h2><p>Request and track your leave</p></div>
+
+      <!-- Leave Balance -->
+      <div class="stats-grid" style="margin-bottom:16px">
+        <div class="stat-card">
+          <div class="stat-value" style="color:${ANNUAL-annualUsed>7?'#16a34a':ANNUAL-annualUsed>3?'#d97706':'#dc2626'}">${ANNUAL - annualUsed}</div>
+          <div class="stat-label">Annual Left</div>
+          ${mkBar(annualUsed, ANNUAL, ANNUAL-annualUsed>7?'#16a34a':ANNUAL-annualUsed>3?'#d97706':'#dc2626')}
+          <div style="font-size:10px;color:var(--text-muted);margin-top:4px">${annualUsed} used of ${ANNUAL}</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" style="color:${SICK-sickUsed>3?'#16a34a':'#d97706'}">${SICK - sickUsed}</div>
+          <div class="stat-label">Sick Left</div>
+          ${mkBar(sickUsed, SICK, SICK-sickUsed>3?'#16a34a':'#d97706')}
+          <div style="font-size:10px;color:var(--text-muted);margin-top:4px">${sickUsed} used of ${SICK}</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">${leaves.filter(l=>l.status==='pending').length}</div>
+          <div class="stat-label">Pending Requests</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" style="color:#7c3aed">${otherUsed}</div>
+          <div class="stat-label">Other Days Used</div>
+        </div>
+      </div>
 
       <!-- Request Form -->
       <div class="card" style="margin-bottom:20px">
@@ -13587,6 +13810,114 @@ async function cancelLeave(id) {
     toast('Leave request cancelled', 'ok');
     renderMyLeaves();
   } catch(e) { toast(e.message, 'err'); }
+}
+
+// ── EMPLOYEE — Notifications page ────────────────────────────────────────────
+async function renderEmpNotifications() {
+  const content = document.getElementById('main-content');
+  if (!content) return;
+  content.innerHTML = '<div class="loading">Loading notifications…</div>';
+  try {
+    const today      = new Date().toISOString().slice(0, 10);
+    const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0, 10);
+
+    const [todayData, monthData, shiftData, leavesData] = await Promise.all([
+      api(`/api/corporate-attendance/my?from=${today}&to=${today}`).catch(() => ({ records: [] })),
+      api(`/api/corporate-attendance/my?from=${monthStart}&to=${today}`).catch(() => ({ records: [] })),
+      api('/api/shifts/my-shift').catch(() => ({})),
+      api('/api/leaves/my').catch(() => ({ leaves: [] })),
+    ]);
+
+    const todayRecord  = todayData.records?.[0] || null;
+    const isClockedIn  = !!(todayRecord?.clockIn?.time && !todayRecord?.clockOut?.time);
+    const shift        = shiftData.assignment?.shift || null;
+    const leaves       = leavesData.leaves || [];
+    const monthRecords = monthData.records || [];
+
+    const notifs = [];
+
+    // Clock-in status
+    if (!todayRecord) {
+      if (shift) {
+        const [sh, sm] = (shift.startTime || '09:00').split(':').map(Number);
+        const shiftStart = new Date(); shiftStart.setHours(sh, sm, 0, 0);
+        const minsTil = Math.round((shiftStart - Date.now()) / 60000);
+        if (minsTil > 0 && minsTil < 60) {
+          notifs.push({ icon: '⏰', type: 'info', title: 'Shift starting soon', body: `${shift.name} starts in ${minsTil} min (${shift.startTime})`, action: { label: 'Clock In', fn: "navigateTo('sign-in-out')" } });
+        } else if (minsTil <= 0) {
+          notifs.push({ icon: '⚠️', type: 'warn', title: 'Not clocked in', body: `Your shift ${shift.name} started at ${shift.startTime}. Clock in now.`, action: { label: 'Clock In', fn: "navigateTo('sign-in-out')" } });
+        }
+      }
+    } else if (isClockedIn) {
+      const clockInTime = new Date(todayRecord.clockIn.time);
+      notifs.push({ icon: '●', type: 'ok', title: 'Currently clocked in', body: `Since ${clockInTime.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})} · ${_empElapsed(clockInTime)} elapsed`, action: { label: 'Clock Out', fn: "navigateTo('sign-in-out')" } });
+    }
+
+    // Lateness this month
+    const lateCount = monthRecords.filter(r => r.status === 'late').length;
+    if (lateCount > 0) {
+      notifs.push({ icon: '🕐', type: 'warn', title: `Late arrivals this month`, body: `You have been late ${lateCount} time${lateCount > 1 ? 's' : ''} this month.`, action: null });
+    }
+
+    // Shift info
+    if (shift) {
+      const dayMap = { Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6, Sun: 0 };
+      const today_day = new Date().getDay();
+      const shiftDays = (shift.days || []).map(d => dayMap[d] ?? -1);
+      const isWorkDay = shiftDays.includes(today_day);
+      notifs.push({ icon: '📋', type: 'info', title: `Shift: ${shift.name}`, body: `${shift.startTime}–${shift.endTime} · ${(shift.days||[]).join(', ')} · Grace: ${shift.gracePeriodMinutes}min${!isWorkDay ? ' · Not a working day today' : ''}`, action: { label: 'View Shift', fn: "navigateTo('my-shift')" } });
+    }
+
+    // Leave requests
+    const pendingLeaves = leaves.filter(l => l.status === 'pending');
+    pendingLeaves.forEach(l => {
+      notifs.push({ icon: '📋', type: 'info', title: 'Leave request pending', body: `${l.type.charAt(0).toUpperCase()+l.type.slice(1)} leave · ${new Date(l.startDate).toLocaleDateString('en-GB',{day:'2-digit',month:'short'})} → ${new Date(l.endDate).toLocaleDateString('en-GB',{day:'2-digit',month:'short'})} · ${l.days} day${l.days!==1?'s':''}`, action: { label: 'View', fn: "navigateTo('my-leaves')" } });
+    });
+
+    const recentReviewed = leaves.filter(l => ['approved','rejected'].includes(l.status)).slice(0, 3);
+    recentReviewed.forEach(l => {
+      const isApproved = l.status === 'approved';
+      notifs.push({ icon: isApproved ? '✅' : '❌', type: isApproved ? 'ok' : 'warn', title: `Leave request ${l.status}`, body: `${l.type.charAt(0).toUpperCase()+l.type.slice(1)} leave · ${l.days} day${l.days!==1?'s':''}${l.reviewNote ? ` · "${l.reviewNote}"` : ''}`, action: null });
+    });
+
+    // Overtime alert
+    const overtimeTot = monthRecords.reduce((s, r) => s + (r.overtimeHours || 0), 0);
+    if (overtimeTot > 0) {
+      notifs.push({ icon: '⚡', type: 'ok', title: `Overtime logged`, body: `${overtimeTot}h overtime recorded this month.`, action: { label: 'View Attendance', fn: "navigateTo('my-attendance')" } });
+    }
+
+    const typeStyles = {
+      ok:   { bg: '#f0fdf4', border: '#86efac', icon: '#16a34a' },
+      warn: { bg: '#fffbeb', border: '#fde68a', icon: '#d97706' },
+      info: { bg: '#eff6ff', border: '#bfdbfe', icon: '#1d4ed8' },
+    };
+
+    content.innerHTML = `
+      <div class="page-header">
+        <div><h2>Notifications</h2><p>${notifs.length} notification${notifs.length !== 1 ? 's' : ''}</p></div>
+        <button class="btn btn-secondary btn-sm" onclick="navigateTo('emp-home')">← Home</button>
+      </div>
+      ${notifs.length === 0
+        ? `<div class="card" style="text-align:center;padding:48px 24px">
+            <div style="font-size:40px;margin-bottom:16px">🔔</div>
+            <div style="font-weight:600;font-size:15px;margin-bottom:6px">All clear!</div>
+            <p style="color:var(--text-muted);font-size:13px">No notifications right now.</p>
+          </div>`
+        : notifs.map(n => {
+            const st = typeStyles[n.type] || typeStyles.info;
+            return `<div style="background:${st.bg};border:1px solid ${st.border};border-radius:10px;padding:14px 16px;margin-bottom:10px;display:flex;gap:12px;align-items:flex-start">
+              <span style="font-size:20px;flex-shrink:0;margin-top:1px">${n.icon}</span>
+              <div style="flex:1;min-width:0">
+                <div style="font-weight:700;font-size:13px;margin-bottom:3px">${esc(n.title)}</div>
+                <div style="font-size:12px;color:var(--text-muted);line-height:1.5">${esc(n.body)}</div>
+              </div>
+              ${n.action ? `<button class="btn btn-sm" style="background:var(--card);border:1px solid var(--border);flex-shrink:0;font-size:12px" onclick="${n.action.fn}">${n.action.label}</button>` : ''}
+            </div>`;
+          }).join('')}
+    `;
+  } catch(e) {
+    content.innerHTML = `<div class="card"><p style="color:#ef4444">Error: ${e.message}</p></div>`;
+  }
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
