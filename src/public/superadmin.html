@@ -455,44 +455,42 @@ function showDetail(id) {
     </div>
     ${c.superadminNotes ? `<hr class="detail-divider"><div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#94a3b8;margin-bottom:8px">Notes</div><div style="font-size:14px;color:#374151;white-space:pre-wrap">${esc(c.superadminNotes)}</div>` : ''}
     <hr class="detail-divider">
-    <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#94a3b8;margin-bottom:10px">Lecturer Subscriptions</div>
+    <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#94a3b8;margin-bottom:10px">User Subscriptions</div>
     <div id="lecturer-subs-${c._id}">
-      <button onclick="loadLecturerSubs('${c._id}')" style="padding:8px 16px;background:#4f46e5;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer">View Lecturer Subscriptions</button>
+      <button onclick="loadLecturerSubs('${c._id}')" style="padding:8px 16px;background:#4f46e5;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer">View User Subscriptions</button>
     </div>
   `;
   document.getElementById('detail-modal').classList.add('open');
 }
 
-async function loadLecturerSubs(companyId) {
-  const container = document.getElementById('lecturer-subs-' + companyId);
-  container.innerHTML = '<div style="font-size:13px;color:#6b7280">Loading…</div>';
-  try {
-    const data = await api('/api/superadmin/companies/' + companyId + '/lecturers');
-    if (!data.lecturers || !data.lecturers.length) {
-      container.innerHTML = '<div style="font-size:13px;color:#6b7280">No lecturers found.</div>';
-      return;
-    }
-    const rows = data.lecturers.map(l => {
-      const trialEnd = l.trialEndDate ? new Date(l.trialEndDate).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}) : '—';
-      const subEnd   = l.subscriptionExpiry ? new Date(l.subscriptionExpiry).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}) : '—';
-      const now = Date.now();
-      const trialActive = l.trialEndDate && new Date(l.trialEndDate) > now;
-      const subActive   = l.subscriptionExpiry && new Date(l.subscriptionExpiry) > now;
-      const status = subActive ? '✅ Subscribed' : trialActive ? '🟡 Trial' : '🔴 Expired';
-      const statusColor = subActive ? '#16a34a' : trialActive ? '#d97706' : '#dc2626';
-      return `<tr>
-        <td style="padding:8px;font-size:13px">${esc(l.name)}</td>
-        <td style="padding:8px;font-size:13px;color:#6b7280">${esc(l.email||'—')}</td>
-        <td style="padding:8px;font-size:13px;font-weight:700;color:${statusColor}">${status}</td>
-        <td style="padding:8px;font-size:12px">${trialEnd}</td>
-        <td style="padding:8px;font-size:12px">${subEnd}</td>
-        <td style="padding:8px">
-          <button onclick="extendUserTrial('${l._id}','${esc(l.name)}')" style="padding:4px 10px;background:#4f46e5;color:#fff;border:none;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer">Set Trial</button>
-          <button onclick="activateSemester('${l._id}','${esc(l.name)}')" style="padding:4px 10px;background:#16a34a;color:#fff;border:none;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;margin-left:4px">+ Semester (GHS 300)</button>
-        </td>
-      </tr>`;
-    }).join('');
-    container.innerHTML = `
+function _buildUserSubTable(users, sectionTitle, badgeColor) {
+  if (!users.length) return '';
+  const now = Date.now();
+  const rows = users.map(l => {
+    const trialEnd = l.trialEndDate ? new Date(l.trialEndDate).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}) : '—';
+    const subEnd   = l.subscriptionExpiry ? new Date(l.subscriptionExpiry).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}) : '—';
+    const trialActive = l.trialEndDate && new Date(l.trialEndDate) > now;
+    const subActive   = l.subscriptionExpiry && new Date(l.subscriptionExpiry) > now;
+    const status = subActive ? '✅ Subscribed' : trialActive ? '🟡 Trial' : '🔴 Expired';
+    const statusColor = subActive ? '#16a34a' : trialActive ? '#d97706' : '#dc2626';
+    return `<tr>
+      <td style="padding:8px;font-size:13px;font-weight:600">${esc(l.name)}</td>
+      <td style="padding:8px;font-size:12px;color:#6b7280">${esc(l.email||'—')}</td>
+      <td style="padding:8px;font-size:13px;font-weight:700;color:${statusColor}">${status}</td>
+      <td style="padding:8px;font-size:12px">${trialEnd}</td>
+      <td style="padding:8px;font-size:12px">${subEnd}</td>
+      <td style="padding:8px;white-space:nowrap">
+        <button onclick="extendUserTrial('${l._id}','${esc(l.name)}')" style="padding:4px 10px;background:#4f46e5;color:#fff;border:none;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer">Set Trial</button>
+        <button onclick="activateSemester('${l._id}','${esc(l.name)}')" style="padding:4px 10px;background:#16a34a;color:#fff;border:none;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;margin-left:4px">+ Semester</button>
+      </td>
+    </tr>`;
+  }).join('');
+  return `
+    <div style="margin-bottom:18px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+        <span style="background:${badgeColor}22;color:${badgeColor};border-radius:999px;padding:2px 12px;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.5px">${sectionTitle}</span>
+        <span style="font-size:12px;color:#94a3b8">${users.length} user${users.length!==1?'s':''}</span>
+      </div>
       <div style="overflow-x:auto">
         <table style="width:100%;border-collapse:collapse">
           <thead><tr style="background:#f8fafc">
@@ -505,7 +503,31 @@ async function loadLecturerSubs(companyId) {
           </tr></thead>
           <tbody>${rows}</tbody>
         </table>
-      </div>`;
+      </div>
+    </div>`;
+}
+
+async function loadLecturerSubs(companyId) {
+  const container = document.getElementById('lecturer-subs-' + companyId);
+  container.innerHTML = '<div style="font-size:13px;color:#6b7280">Loading…</div>';
+  try {
+    const data = await api('/api/superadmin/companies/' + companyId + '/lecturers');
+    if (!data.lecturers || !data.lecturers.length) {
+      container.innerHTML = '<div style="font-size:13px;color:#6b7280">No subscribable users found.</div>';
+      return;
+    }
+
+    const hods      = data.lecturers.filter(l => l.role === 'hod');
+    const lecturers = data.lecturers.filter(l => l.role === 'lecturer');
+    const others    = data.lecturers.filter(l => !['hod','lecturer'].includes(l.role));
+
+    const html = [
+      hods.length      ? _buildUserSubTable(hods,      'HODs',      '#0891b2') : '',
+      lecturers.length ? _buildUserSubTable(lecturers, 'Lecturers', '#7c3aed') : '',
+      others.length    ? _buildUserSubTable(others,    'Other',     '#6b7280') : '',
+    ].join('');
+
+    container.innerHTML = html || '<div style="font-size:13px;color:#6b7280">No users found.</div>';
   } catch(ex) {
     container.innerHTML = '<div style="font-size:13px;color:#dc2626">Error: ' + ex.message + '</div>';
   }
