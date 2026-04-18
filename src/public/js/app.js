@@ -2408,7 +2408,11 @@ async function renderDashboard() {
         await renderAdminDashboard(content);
         break;
       case 'manager':
-        await renderAdminDashboard(content);
+        if (currentUser.company?.mode === 'corporate') {
+          await renderManagerDashboard(content);
+        } else {
+          await renderAdminDashboard(content);
+        }
         break;
       case 'lecturer':
         await renderLecturerDashboard(content);
@@ -4418,6 +4422,224 @@ async function _renderAdminCharts(sessionsData, usersData) {
   }
 }
 
+
+// ── MANAGER DASHBOARD (corporate only) ───────────────────────────────────────
+async function renderManagerDashboard(content) {
+  if (!content) content = document.getElementById('main-content');
+  if (!content) return;
+  content.innerHTML = '<div class="loading">Loading manager dashboard…</div>';
+
+  const today     = new Date().toISOString().slice(0, 10);
+  const thirtyAgo = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
+  const firstName = currentUser.name.split(' ')[0];
+  const hour      = new Date().getHours();
+  const greeting  = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+
+  const [todayAtt, teamPerf, pending, announcements, myShift] = await Promise.all([
+    api('/api/corporate-attendance/today').catch(() => ({ records: [], summary: {} })),
+    api('/api/performance/team-overview').catch(() => ({ overview: [] })),
+    api('/api/approvals/pending').catch(() => ({ pending: [] })),
+    api('/api/announcements').catch(() => ({ announcements: [] })),
+    api('/api/shifts/my-assignment').catch(() => null),
+  ]);
+
+  const attRecs    = todayAtt.records || [];
+  const summary    = todayAtt.summary || {};
+  const overview   = teamPerf.overview || [];
+  const pendingArr = pending.pending || [];
+  const annList    = announcements.announcements || [];
+
+  // Exception alerts: late employees today
+  const lateToday  = attRecs.filter(r => r.status === 'late');
+  const absentToday = attRecs.filter(r => r.status === 'absent');
+  const notClockedIn = attRecs.filter(r => !r.clockIn?.time);
+
+  // Team performance snapshot
+  const avgScore = overview.length && overview.some(o => o.avgScore)
+    ? (overview.filter(o => o.avgScore != null).reduce((s, o) => s + parseFloat(o.avgScore||0), 0) / overview.filter(o => o.avgScore != null).length).toFixed(1)
+    : null;
+  const totalGoals     = overview.reduce((s, o) => s + (o.totalGoals || 0), 0);
+  const completedGoals = overview.reduce((s, o) => s + (o.completedGoals || 0), 0);
+
+  const statusBadge = (s, label) => {
+    const col = { present:'#16a34a', late:'#d97706', absent:'#dc2626', half_day:'#7c3aed', on_leave:'#0891b2', remote:'#2563eb' }[s] || '#6b7280';
+    return `<span style="color:${col};font-weight:700;font-size:11px;text-transform:uppercase">${label}</span>`;
+  };
+
+  content.innerHTML = `
+    <div style="display:flex;flex-direction:column;gap:16px">
+
+      <!-- Welcome -->
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap">
+        <div>
+          <h2 style="font-size:22px;font-weight:800;margin:0 0 4px">${greeting}, ${firstName}</h2>
+          <p style="color:var(--text-light);margin:0;font-size:14px">${currentUser.company?.name || ''} · Manager Portal</p>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-primary btn-sm" onclick="navigateTo('corp-attendance')">Team Attendance</button>
+          <button class="btn btn-secondary btn-sm" onclick="navigateTo('approvals')">Approvals ${pendingArr.length > 0 ? `<span style="background:#dc2626;color:#fff;border-radius:999px;padding:1px 7px;font-size:10px;margin-left:4px">${pendingArr.length}</span>` : ''}</button>
+        </div>
+      </div>
+
+      <!-- Today's Attendance Summary -->
+      <div>
+        <h3 style="font-size:13px;font-weight:700;text-transform:uppercase;color:var(--text-light);letter-spacing:.6px;margin:0 0 10px">Today's Attendance</h3>
+        <div class="stats-grid" style="margin:0">
+          <div class="stat-card-v2">
+            <div class="stat-top-bar" style="background:#16a34a"></div>
+            <div class="stat-header"><span class="stat-label">Present</span></div>
+            <div class="stat-value" style="color:#16a34a">${summary.present || 0}</div>
+          </div>
+          <div class="stat-card-v2">
+            <div class="stat-top-bar" style="background:#d97706"></div>
+            <div class="stat-header"><span class="stat-label">Late</span></div>
+            <div class="stat-value" style="color:#d97706">${summary.late || 0}</div>
+          </div>
+          <div class="stat-card-v2">
+            <div class="stat-top-bar" style="background:#dc2626"></div>
+            <div class="stat-header"><span class="stat-label">Absent</span></div>
+            <div class="stat-value" style="color:#dc2626">${summary.absent || 0}</div>
+          </div>
+          <div class="stat-card-v2">
+            <div class="stat-top-bar" style="background:#0891b2"></div>
+            <div class="stat-header"><span class="stat-label">On Leave</span></div>
+            <div class="stat-value" style="color:#0891b2">${summary.on_leave || 0}</div>
+          </div>
+          <div class="stat-card-v2">
+            <div class="stat-top-bar" style="background:#6366f1"></div>
+            <div class="stat-header"><span class="stat-label">Clocked In</span></div>
+            <div class="stat-value">${summary.total_clocked || 0}</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Exception Alerts + Performance Snapshot row -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px" class="chart-grid-2col">
+
+        <!-- Exception Alerts -->
+        <div class="card">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+            <h3 style="font-size:15px;font-weight:700;margin:0">Exception Alerts</h3>
+            <span style="font-size:11px;color:var(--text-light)">Today</span>
+          </div>
+          ${lateToday.length === 0 && absentToday.length === 0
+            ? `<div class="empty-state" style="padding:20px 0"><p style="color:#16a34a;font-weight:600">✓ No exceptions today</p></div>`
+            : `${lateToday.length > 0 ? `
+              <div style="margin-bottom:12px">
+                <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:#d97706;margin-bottom:6px">Late Arrivals (${lateToday.length})</div>
+                ${lateToday.map(r => `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid #f3f4f6;font-size:13px">
+                  <span style="font-weight:600">${esc(r.employee?.name || '—')}</span>
+                  <span style="color:#d97706;font-size:11px">+${r.lateMinutes || 0}m</span>
+                </div>`).join('')}
+              </div>` : ''}
+              ${absentToday.length > 0 ? `
+              <div>
+                <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:#dc2626;margin-bottom:6px">Absent (${absentToday.length})</div>
+                ${absentToday.slice(0, 5).map(r => `<div style="padding:5px 0;border-bottom:1px solid #f3f4f6;font-size:13px;font-weight:600">${esc(r.employee?.name || '—')}</div>`).join('')}
+                ${absentToday.length > 5 ? `<div style="font-size:12px;color:var(--text-light);margin-top:4px">+${absentToday.length - 5} more</div>` : ''}
+              </div>` : ''}`}
+          <div style="margin-top:12px">
+            <button class="btn btn-secondary btn-sm" onclick="navigateTo('corp-attendance')">View Full Report →</button>
+          </div>
+        </div>
+
+        <!-- Team Performance Snapshot -->
+        <div class="card">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+            <h3 style="font-size:15px;font-weight:700;margin:0">Team Performance</h3>
+            <button class="btn btn-xs btn-secondary" onclick="navigateTo('performance')">Full View</button>
+          </div>
+          <div style="display:flex;gap:20px;margin-bottom:16px;flex-wrap:wrap">
+            <div style="text-align:center">
+              <div style="font-size:26px;font-weight:800;color:#6366f1">${avgScore != null ? avgScore : '—'}</div>
+              <div style="font-size:11px;color:var(--text-light)">Avg Score / 5</div>
+            </div>
+            <div style="text-align:center">
+              <div style="font-size:26px;font-weight:800;color:#16a34a">${completedGoals}</div>
+              <div style="font-size:11px;color:var(--text-light)">Goals Completed</div>
+            </div>
+            <div style="text-align:center">
+              <div style="font-size:26px;font-weight:800">${totalGoals}</div>
+              <div style="font-size:11px;color:var(--text-light)">Total Goals</div>
+            </div>
+          </div>
+          ${overview.length > 0 ? `
+          <div style="overflow-x:auto">
+            <table style="width:100%;border-collapse:collapse;font-size:12px">
+              <thead><tr style="background:#f9fafb">
+                <th style="padding:7px 8px;text-align:left;border-bottom:1px solid #e5e7eb">Employee</th>
+                <th style="padding:7px 8px;text-align:center;border-bottom:1px solid #e5e7eb">Goals</th>
+                <th style="padding:7px 8px;text-align:center;border-bottom:1px solid #e5e7eb">Score</th>
+              </tr></thead>
+              <tbody>
+                ${overview.slice(0, 5).map(o => `<tr style="border-bottom:1px solid #f3f4f6">
+                  <td style="padding:7px 8px;font-weight:600">${esc(o.employee?.name || '—')}</td>
+                  <td style="padding:7px 8px;text-align:center">${o.completedGoals}/${o.totalGoals}</td>
+                  <td style="padding:7px 8px;text-align:center">${o.avgScore != null ? _starRating(o.avgScore) : '—'}</td>
+                </tr>`).join('')}
+              </tbody>
+            </table>
+          </div>` : '<p style="font-size:13px;color:#9ca3af">No performance data yet.</p>'}
+        </div>
+      </div>
+
+      <!-- Pending Approvals + Announcements -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px" class="chart-grid-2col">
+
+        <!-- Pending Approvals -->
+        <div class="card">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+            <h3 style="font-size:15px;font-weight:700;margin:0">Pending Approvals</h3>
+            <span style="background:#fee2e2;color:#dc2626;border-radius:999px;padding:2px 10px;font-size:11px;font-weight:700">${pendingArr.length}</span>
+          </div>
+          ${pendingArr.length ? pendingArr.slice(0, 6).map(p => `
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 0;border-bottom:1px solid #f3f4f6;font-size:13px">
+              <div>
+                <div style="font-weight:600">${esc(p.requestedBy?.name || p.name || '—')}</div>
+                <div style="font-size:11px;color:var(--text-light);text-transform:capitalize">${p.type || 'Request'}</div>
+              </div>
+              <button class="btn btn-xs btn-primary" onclick="navigateTo('approvals')">Review</button>
+            </div>`).join('')
+            : '<div class="empty-state" style="padding:16px 0"><p>No pending approvals</p></div>'}
+          ${pendingArr.length > 6 ? `<div style="font-size:12px;color:var(--text-light);margin-top:8px">+${pendingArr.length - 6} more · <a onclick="navigateTo('approvals')" style="color:var(--primary);cursor:pointer">View all</a></div>` : ''}
+        </div>
+
+        <!-- Announcements -->
+        <div class="card">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+            <h3 style="font-size:15px;font-weight:700;margin:0">Announcements</h3>
+            <button class="btn btn-xs btn-secondary" onclick="navigateTo('announcements')">Manage</button>
+          </div>
+          ${annList.length ? annList.slice(0, 5).map(a => {
+            const typeCol = { info:'#3b82f6', warning:'#f59e0b', success:'#10b981', urgent:'#ef4444' };
+            return `<div style="display:flex;align-items:flex-start;gap:10px;padding:8px 0;border-bottom:1px solid #f3f4f6">
+              <div style="width:8px;height:8px;border-radius:50%;background:${typeCol[a.type]||'#94a3b8'};margin-top:5px;flex-shrink:0"></div>
+              <div>
+                <div style="font-weight:600;font-size:13px">${esc(a.title)}</div>
+                <div style="font-size:11px;color:var(--text-light)">${a.audience === 'all' ? 'All employees' : a.audience} · ${timeAgo(a.createdAt)}</div>
+              </div>
+            </div>`;
+          }).join('')
+            : '<div class="empty-state" style="padding:16px 0"><p>No announcements</p></div>'}
+        </div>
+      </div>
+
+      <!-- Quick Actions -->
+      <div class="card quick-actions-bar">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-light);letter-spacing:.6px;margin-bottom:12px">Quick Actions</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-secondary btn-sm" onclick="navigateTo('corp-attendance')">Team Attendance</button>
+          <button class="btn btn-secondary btn-sm" onclick="navigateTo('shifts')">Manage Shifts</button>
+          <button class="btn btn-secondary btn-sm" onclick="navigateTo('leave-requests')">Leave Requests</button>
+          <button class="btn btn-secondary btn-sm" onclick="navigateTo('performance')">Performance</button>
+          <button class="btn btn-secondary btn-sm" onclick="navigateTo('payroll')">Payroll</button>
+          <button class="btn btn-secondary btn-sm" onclick="navigateTo('messages')">Messages</button>
+          <button class="btn btn-secondary btn-sm" onclick="navigateTo('users')">Team</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
 
 // Track selected course filter for sessions page
 let _sessionsFilterCourseId = '';
