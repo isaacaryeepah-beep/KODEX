@@ -1197,7 +1197,7 @@ function PagePlaceholder({ id }) {
 }
 
 // ── OrgCard ───────────────────────────────────────────────────────────────────
-function OrgCard({ org }) {
+function OrgCard({ org, onClick }) {
   const active = org.subscriptionActive;
   const trial  = org.isTrialActive;
   const statusLabel = trial ? 'Trial' : active ? 'Active' : 'Expired';
@@ -1208,7 +1208,7 @@ function OrgCard({ org }) {
     : 'bg-rose-50 text-rose-600';
 
   return (
-    <div className="bg-white rounded-2xl p-4 shadow-sm flex items-center gap-4 hover:shadow-md transition-shadow">
+    <div onClick={onClick} className="bg-white rounded-2xl p-4 shadow-sm flex items-center gap-4 hover:shadow-md transition-shadow cursor-pointer">
       <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center flex-shrink-0">
         <span className="text-indigo-400 font-bold text-sm">{(org.name || '?')[0].toUpperCase()}</span>
       </div>
@@ -1223,8 +1223,9 @@ function OrgCard({ org }) {
 
 // ── OrganizationsPage ─────────────────────────────────────────────────────────
 function OrganizationsPage() {
-  const [tab, setTab]       = React.useState('academic');
-  const [orgs, setOrgs]     = React.useState(null);
+  const [tab, setTab]           = React.useState('academic');
+  const [orgs, setOrgs]         = React.useState(null);
+  const [selected, setSelected] = React.useState(null);
 
   React.useEffect(() => {
     api('/api/superadmin/overview')
@@ -1245,6 +1246,10 @@ function OrganizationsPage() {
     </button>
   );
 
+  if (selected) {
+    return <OrgDetailPage org={selected} onBack={() => setSelected(null)} />;
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex gap-2 bg-white rounded-2xl p-1.5 shadow-sm w-fit">
@@ -1261,7 +1266,7 @@ function OrganizationsPage() {
       )}
 
       <div className="grid grid-cols-1 gap-3">
-        {list.map(o => <OrgCard key={o._id} org={o} />)}
+        {list.map(o => <OrgCard key={o._id} org={o} onClick={() => setSelected(o)} />)}
       </div>
     </div>
   );
@@ -1802,6 +1807,104 @@ function SettingsPage() {
           {saving ? 'Saving…' : 'Save Settings'}
         </button>
         {saved && <span className="text-sm text-emerald-500 font-medium">Saved!</span>}
+      </div>
+    </div>
+  );
+}
+
+// ── OrgDetailPage ─────────────────────────────────────────────────────────────
+function OrgDetailPage({ org, onBack }) {
+  const [staff, setStaff] = React.useState(null);
+
+  React.useEffect(() => {
+    api(`/api/superadmin/companies/${org._id}/lecturers`)
+      .then(d => setStaff(d.lecturers || d))
+      .catch(() => setStaff([]));
+  }, [org._id]);
+
+  const rc = org.roleCounts || {};
+  const roleGroups = [
+    { label: 'Admins',    key: 'admin',    cls: 'bg-indigo-50 text-indigo-600' },
+    { label: 'Managers',  key: 'manager',  cls: 'bg-violet-50 text-violet-600' },
+    { label: 'HODs',      key: 'hod',      cls: 'bg-sky-50 text-sky-600' },
+    { label: 'Lecturers / Staff', key: 'lecturer', cls: 'bg-teal-50 text-teal-600' },
+    { label: 'Employees', key: 'employee', cls: 'bg-orange-50 text-orange-600' },
+    { label: 'Students',  key: 'student',  cls: 'bg-gray-100 text-gray-500' },
+  ];
+
+  const subStatus = org.isTrialActive ? `Trial · ${org.trialDaysRemaining}d left` : org.subscriptionActive ? 'Active' : 'Expired';
+  const subCls    = org.isTrialActive ? 'bg-amber-50 text-amber-600' : org.subscriptionActive ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600';
+  const endDate   = org.subscriptionEndDate || org.trialEndDate;
+
+  return (
+    <div className="space-y-5">
+      {/* back */}
+      <button onClick={onBack} className="flex items-center gap-2 text-sm text-indigo-600 hover:text-indigo-800 font-medium">
+        ← Back to Organizations
+      </button>
+
+      {/* header */}
+      <div className="bg-white rounded-2xl p-6 shadow-sm flex items-center gap-5">
+        <div className="w-14 h-14 rounded-2xl bg-indigo-50 flex items-center justify-center flex-shrink-0">
+          <span className="text-indigo-500 font-bold text-xl">{(org.name || '?')[0].toUpperCase()}</span>
+        </div>
+        <div className="flex-1 min-w-0">
+          <h2 className="text-lg font-bold text-gray-800">{org.name}</h2>
+          <p className="text-sm text-gray-400 capitalize">{org.mode} · {org.adminEmail || 'no admin'}</p>
+        </div>
+        <span className={`px-3 py-1 rounded-full text-sm font-semibold flex-shrink-0 ${subCls}`}>{subStatus}</span>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        {/* user breakdown */}
+        <div className="bg-white rounded-2xl p-5 shadow-sm space-y-3">
+          <h3 className="text-sm font-bold text-gray-700">User Breakdown</h3>
+          <div className="grid grid-cols-3 gap-3">
+            <div className="text-center">
+              <p className="text-2xl font-bold text-gray-800">{org.userCount || 0}</p>
+              <p className="text-xs text-gray-400">Total</p>
+            </div>
+            {roleGroups.filter(r => rc[r.key] > 0).map(r => (
+              <div key={r.key} className="text-center">
+                <p className="text-lg font-bold text-gray-800">{rc[r.key]}</p>
+                <p className="text-xs text-gray-400">{r.label}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* subscription */}
+        <div className="bg-white rounded-2xl p-5 shadow-sm space-y-2">
+          <h3 className="text-sm font-bold text-gray-700">Subscription</h3>
+          <div className="space-y-1.5 text-sm">
+            <div className="flex justify-between"><span className="text-gray-400">Status</span><span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${subCls}`}>{subStatus}</span></div>
+            <div className="flex justify-between"><span className="text-gray-400">Mode</span><span className="text-gray-700 capitalize">{org.mode}</span></div>
+            <div className="flex justify-between"><span className="text-gray-400">Pricing</span><span className="text-gray-700">{org.mode === 'academic' ? '₵300 / semester' : '₵150 / month'}</span></div>
+            <div className="flex justify-between"><span className="text-gray-400">Expires</span><span className="text-gray-700">{endDate ? new Date(endDate).toLocaleDateString() : '—'}</span></div>
+            <div className="flex justify-between"><span className="text-gray-400">Revenue</span><span className="text-emerald-600 font-semibold">GHS {Number(org.revenue || 0).toLocaleString()}</span></div>
+          </div>
+        </div>
+      </div>
+
+      {/* staff list */}
+      <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-50">
+          <span className="text-sm font-bold text-gray-700">Staff & Roles</span>
+          <span className="text-xs text-gray-400">{staff === null ? '…' : `${staff.length} members`}</span>
+        </div>
+        {staff === null && <p className="px-5 py-8 text-center text-sm text-gray-300">Loading…</p>}
+        {staff !== null && staff.length === 0 && <p className="px-5 py-8 text-center text-sm text-gray-300">No staff found</p>}
+        {staff !== null && staff.length > 0 && (
+          <ul className="divide-y divide-gray-50">
+            {staff.map(u => (
+              <li key={u._id} className="flex items-center gap-3 px-5 py-3 hover:bg-gray-50">
+                <span className={`px-2 py-0.5 rounded-full text-xs font-semibold flex-shrink-0 ${ROLE_BADGE[u.role] || 'bg-gray-100 text-gray-500'}`}>{u.role}</span>
+                <span className="font-medium text-gray-800 truncate">{u.name || u.email}</span>
+                <span className="text-xs text-gray-400 truncate ml-auto">{u.email}</span>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
     </div>
   );
