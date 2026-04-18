@@ -1096,7 +1096,7 @@ function DashboardPage() {
 
   return (
     <div className="flex gap-6 items-start">
-      {/* left: stat cards */}
+      {/* left: stat cards + recent users */}
       <div className="flex-1 space-y-4">
         <div className="grid grid-cols-2 gap-4">
           <StatCard label="Institutions"          value={fmt(stats?.institutions)}     sub="Academic orgs"        accent="indigo"  />
@@ -1106,9 +1106,73 @@ function DashboardPage() {
           <StatCard label="Trials Ending Soon"    value={fmt(stats?.trialsEnding)}     sub="Within next 7 days"   accent="amber"   />
           <StatCard label="Revenue (This Month)"  value={fmtGhs(stats?.revenueMonth)}  sub="Subscriptions only"   accent="rose"    />
         </div>
+        <RecentUsersTable />
       </div>
       {/* right: alerts panel */}
       <AlertsPanel />
+    </div>
+  );
+}
+
+// ── RecentUsersTable ──────────────────────────────────────────────────────────
+const ROLE_BADGE = {
+  admin:      'bg-indigo-50 text-indigo-600',
+  manager:    'bg-violet-50 text-violet-600',
+  hod:        'bg-sky-50 text-sky-600',
+  lecturer:   'bg-teal-50 text-teal-600',
+  student:    'bg-gray-100 text-gray-500',
+  employee:   'bg-orange-50 text-orange-600',
+  superadmin: 'bg-rose-50 text-rose-600',
+};
+function RecentUsersTable() {
+  const [rows, setRows] = React.useState(null);
+
+  React.useEffect(() => {
+    api('/api/superadmin/users?page=1').then(d => setRows((d.users || []).slice(0, 8))).catch(() => setRows([]));
+  }, []);
+
+  const cols = ['Name', 'Email', 'Role', 'Org', 'Joined'];
+
+  return (
+    <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
+      <div className="flex items-center justify-between px-5 py-4 border-b border-gray-50">
+        <span className="text-sm font-bold text-gray-700">Recent Users</span>
+        <span className="text-xs text-gray-400">Latest 8</span>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-gray-50">
+              {cols.map(c => (
+                <th key={c} className="px-5 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wide">{c}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows === null && (
+              <tr><td colSpan={5} className="px-5 py-8 text-center text-sm text-gray-300">Loading…</td></tr>
+            )}
+            {rows !== null && rows.length === 0 && (
+              <tr><td colSpan={5} className="px-5 py-8 text-center text-sm text-gray-300">No users found</td></tr>
+            )}
+            {(rows || []).map(u => (
+              <tr key={u._id} className="border-b border-gray-50 hover:bg-gray-50 transition-colors">
+                <td className="px-5 py-3 font-medium text-gray-800 truncate max-w-[140px]">{u.name || '—'}</td>
+                <td className="px-5 py-3 text-gray-500 truncate max-w-[160px]">{u.email}</td>
+                <td className="px-5 py-3">
+                  <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${ROLE_BADGE[u.role] || 'bg-gray-100 text-gray-500'}`}>
+                    {u.role}
+                  </span>
+                </td>
+                <td className="px-5 py-3 text-gray-500 truncate max-w-[140px]">{u.company?.name || '—'}</td>
+                <td className="px-5 py-3 text-gray-400 whitespace-nowrap">
+                  {u.createdAt ? new Date(u.createdAt).toLocaleDateString() : '—'}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
