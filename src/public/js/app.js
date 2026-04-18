@@ -2303,6 +2303,9 @@ function navigateTo(view) {
   if (!content) return;
   content.innerHTML = '<div class="loading">Loading...</div>';
 
+  // Hide employee assistant panel on every navigation except emp-home
+  if (view !== 'emp-home') _hideEmpAssistantPanel();
+
   switch (view) {
     case 'dashboard': renderDashboard(); break;
     case 'sessions': renderSessions(); break;
@@ -3971,6 +3974,14 @@ async function renderLecturerDashboard(content) {
 }
 
 // ── Employee live-clock helpers ───────────────────────────────────────────────
+// ── Employee Assistant Panel visibility ───────────────────────────────────────
+function _showEmpAssistantPanel() {
+  document.getElementById('emp-assistant-panel')?.classList.add('eap-open');
+}
+function _hideEmpAssistantPanel() {
+  document.getElementById('emp-assistant-panel')?.classList.remove('eap-open');
+}
+
 function _empElapsed(clockInTime) {
   const ms = Date.now() - clockInTime.getTime();
   const h  = Math.floor(ms / 3600000);
@@ -4238,6 +4249,9 @@ async function renderEmployeeDashboard(content) {
   if (isClockedIn && clockInTime) {
     _empStartTimer(clockInTime, 'emp-elapsed-timer');
   }
+
+  // Show assistant panel (Phase 1 — shell only)
+  _showEmpAssistantPanel();
 }
 
 // ── GPS helpers (corporate only) ──────────────────────────────────────────────

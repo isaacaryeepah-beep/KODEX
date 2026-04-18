@@ -750,6 +750,34 @@ function selectPortal(t){document.addEventListener('DOMContentLoaded',function()
       </div>
       <div class="content" id="main-content"></div>
 
+      <!-- ── Employee Assistant Panel ─────────────────────────────────────── -->
+      <div id="emp-assistant-panel" class="emp-assistant-panel" role="complementary" aria-label="Employee Assistant">
+        <div class="eap-header">
+          <div class="eap-icon-wrap">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><circle cx="12" cy="10" r="1"/><circle cx="8" cy="10" r="1"/><circle cx="16" cy="10" r="1"/></svg>
+          </div>
+          <div class="eap-title-wrap">
+            <div class="eap-title">Assistant</div>
+            <div class="eap-subtitle">Ask anything about your work</div>
+          </div>
+        </div>
+        <div class="eap-body">
+          <!-- Phase 2+: chat messages go here -->
+        </div>
+        <div class="eap-input-row">
+          <input
+            id="emp-assistant-input"
+            class="eap-input"
+            type="text"
+            placeholder="Ask anything…"
+            autocomplete="off"
+          />
+          <button class="eap-send-btn" aria-label="Send" disabled>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+          </button>
+        </div>
+      </div>
+
       <!-- ── FAQ Assistant Panel (flex sibling of content) ─────────────────── -->
       <div id="faq-assistant-panel" class="faq-assistant-panel" role="complementary" aria-label="FAQ Assistant">
         <div class="fap-header">

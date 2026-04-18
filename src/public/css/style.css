@@ -4700,6 +4700,99 @@ table tr:hover td { background: #f8fafc !important; }
   box-shadow: -6px 0 36px rgba(0,0,0,.28);
 }
 
+/* ── Employee Assistant Panel ───────────────────────────────────────────────── */
+.emp-assistant-panel {
+  width: 0;
+  min-width: 0;
+  flex-shrink: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  background: var(--card, #ffffff);
+  border-left: 1px solid transparent;
+  transition: width .28s cubic-bezier(.4,0,.2,1),
+              border-color .28s,
+              box-shadow .28s;
+}
+.emp-assistant-panel.eap-open {
+  width: 320px;
+  min-width: 280px;
+  border-left-color: var(--border, #e5e7eb);
+  box-shadow: -4px 0 24px rgba(0,0,0,.06);
+}
+[data-theme="dark"] .emp-assistant-panel { background: #1e2533; }
+[data-theme="dark"] .emp-assistant-panel.eap-open { border-color: #2d3a4a; }
+
+.eap-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border, #e5e7eb);
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  flex-shrink: 0;
+}
+.eap-icon-wrap {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: rgba(255,255,255,.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  flex-shrink: 0;
+}
+.eap-title  { font-size: 13px; font-weight: 700; color: #fff; line-height: 1.2; }
+.eap-subtitle { font-size: 11px; color: rgba(255,255,255,.7); margin-top: 1px; }
+
+.eap-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px;
+}
+.eap-body::-webkit-scrollbar { width: 3px; }
+.eap-body::-webkit-scrollbar-thumb { background: var(--border,#e5e7eb); border-radius: 2px; }
+
+.eap-input-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-top: 1px solid var(--border, #e5e7eb);
+  flex-shrink: 0;
+}
+.eap-input {
+  flex: 1;
+  border: 1.5px solid var(--border, #e5e7eb);
+  border-radius: 8px;
+  padding: 8px 11px;
+  font-size: 13px;
+  font-family: inherit;
+  outline: none;
+  background: var(--bg, #f9fafb);
+  color: var(--text, #111);
+  transition: border-color .15s;
+}
+.eap-input:focus { border-color: #6366f1; background: var(--card, #fff); }
+.eap-input::placeholder { color: var(--text-muted, #9ca3af); }
+.eap-send-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: none;
+  background: #6366f1;
+  color: #fff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: opacity .15s;
+}
+.eap-send-btn:hover { opacity: .85; }
+.eap-send-btn:disabled { opacity: .4; cursor: not-allowed; }
+
 /* No margin shift needed — flexbox handles layout */
 .content.faq-panel-open { margin-right: 0; }
 
