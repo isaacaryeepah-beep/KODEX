@@ -183,14 +183,61 @@ exports.updateNetworks = async (req, res) => {
   }
 };
 
+// ─── GET MY DEVICE ────────────────────────────────────────────────────────────
+// Returns the device owned by the authenticated lecturer (lecturer-only).
+exports.getMyDevice = async (req, res) => {
+  try {
+    const isAdmin = ['admin', 'superadmin'].includes(req.user.role);
+    const query = isAdmin
+      ? { companyId: req.user.company }
+      : { lecturerId: req.user._id, companyId: req.user.company };
+
+    const device = await Device.findOne(query).populate('lecturerId', 'name email');
+    if (!device) return res.json({ success: true, data: null });
+
+    const activeSession = await AttendanceSession.findOne({ deviceId: device.deviceId, status: 'active' });
+    const secsSince = device.lastHeartbeat
+      ? Math.floor((Date.now() - device.lastHeartbeat.getTime()) / 1000)
+      : null;
+
+    res.json({
+      success: true,
+      data: {
+        deviceId:           device.deviceId,
+        deviceName:         device.deviceName,
+        owner:              device.lecturerId,
+        status:             device.isOnline ? 'online' : 'offline',
+        mode:               device.mode,
+        currentNetwork:     device.currentNetwork,
+        apSSID:             device.apSSID,
+        assignedRoom:       device.assignedRoom,
+        assignedDepartment: device.assignedDepartment,
+        lastHeartbeat:      device.lastHeartbeat,
+        secsSinceHeartbeat: secsSince,
+        registeredAt:       device.registeredAt,
+        activeSession:      activeSession ? { sessionId: activeSession._id, status: activeSession.status } : null,
+        allowedNetworks:    device.allowedNetworks.map(n => ({ ssid: n.ssid, priority: n.priority })), // no passwords
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+};
+
 // ─── DEVICE STATUS ────────────────────────────────────────────────────────────
 exports.getDeviceStatus = async (req, res) => {
   try {
     const { deviceId } = req.params;
+    const isAdmin = ['admin', 'superadmin'].includes(req.user.role);
 
     const device = await Device.findOne({ deviceId, companyId: req.user.company })
       .populate('lecturerId', 'name email');
     if (!device) return res.status(404).json({ message: 'Device not found' });
+
+    // Ownership: only the owning lecturer (or admin) may view device details
+    if (!isAdmin && device.lecturerId._id.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ message: 'You do not own this device.' });
+    }
 
     const activeSession = await AttendanceSession.findOne({ deviceId, status: 'active' })
       .populate('courseId', 'name')
@@ -216,6 +263,52 @@ exports.getDeviceStatus = async (req, res) => {
         activeSession: activeSession || null
       }
     });
+  } catch (err) {
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+};
+
+// ─── UNLINK DEVICE ───────────────────────────────────────────────────────────
+// Only the owning lecturer (or admin) may unlink their device.
+// Blocked if an active attendance session is running.
+exports.unlinkDevice = async (req, res) => {
+  try {
+    const isAdmin = ['admin', 'superadmin'].includes(req.user.role);
+    const query = isAdmin
+      ? { companyId: req.user.company, ...(req.body.deviceId ? { deviceId: req.body.deviceId } : {}) }
+      : { lecturerId: req.user._id, companyId: req.user.company };
+
+    const device = await Device.findOne(query);
+    if (!device) return res.status(404).json({ message: 'No device found to unlink.' });
+
+    // Block unlink if active session running on this device
+    const active = await AttendanceSession.findOne({ deviceId: device.deviceId, status: 'active' });
+    if (active) {
+      return res.status(409).json({ message: 'Cannot unlink device while an attendance session is active. Stop the session first.' });
+    }
+
+    await Device.deleteOne({ _id: device._id });
+    res.json({ success: true, message: 'Device unlinked successfully.' });
+  } catch (err) {
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+};
+
+// ─── RENAME DEVICE ───────────────────────────────────────────────────────────
+exports.renameDevice = async (req, res) => {
+  try {
+    const { deviceName } = req.body;
+    if (!deviceName?.trim()) return res.status(400).json({ message: 'Device name is required.' });
+
+    const isAdmin = ['admin', 'superadmin'].includes(req.user.role);
+    const query = isAdmin
+      ? { companyId: req.user.company, ...(req.body.deviceId ? { deviceId: req.body.deviceId } : {}) }
+      : { lecturerId: req.user._id, companyId: req.user.company };
+
+    const device = await Device.findOneAndUpdate(query, { deviceName: deviceName.trim() }, { new: true });
+    if (!device) return res.status(404).json({ message: 'Device not found or not yours.' });
+
+    res.json({ success: true, deviceName: device.deviceName });
   } catch (err) {
     res.status(500).json({ message: 'Server error', error: err.message });
   }
