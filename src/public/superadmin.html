@@ -1647,6 +1647,54 @@ function ApprovalsPage() {
   );
 }
 
+// ── ReportsPage ───────────────────────────────────────────────────────────────
+const REPORT_CARDS = [
+  { id: 'users',         label: 'All Users',          desc: 'Export every user with role, org, and status',       accent: 'sky'     },
+  { id: 'organizations', label: 'Organizations',       desc: 'Export all orgs with mode, user count, and status',  accent: 'indigo'  },
+  { id: 'subscriptions', label: 'Subscriptions',       desc: 'Active, trial, and expired subscription details',    accent: 'emerald' },
+  { id: 'revenue',       label: 'Revenue / Payments',  desc: 'Full payment log with org, amount, and date',        accent: 'violet'  },
+];
+
+function ReportsPage() {
+  const [busy, setBusy] = React.useState(null);
+
+  const exportCSV = async (id) => {
+    setBusy(id);
+    try {
+      /* Phase 8B: wire real export */
+      await new Promise(r => setTimeout(r, 600));
+      alert(`Export "${id}" coming in Phase 8B`);
+    } finally { setBusy(null); }
+  };
+
+  const dot = { sky: 'bg-sky-400', indigo: 'bg-indigo-400', emerald: 'bg-emerald-400', violet: 'bg-violet-400' };
+  const ring = { sky: 'bg-sky-50', indigo: 'bg-indigo-50', emerald: 'bg-emerald-50', violet: 'bg-violet-50' };
+  const btn  = { sky: 'bg-sky-600 hover:bg-sky-700', indigo: 'bg-indigo-600 hover:bg-indigo-700', emerald: 'bg-emerald-600 hover:bg-emerald-700', violet: 'bg-violet-600 hover:bg-violet-700' };
+
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      {REPORT_CARDS.map(card => (
+        <div key={card.id} className="bg-white rounded-2xl p-6 shadow-sm flex flex-col gap-4">
+          <div className={`w-10 h-10 rounded-xl ${ring[card.accent]} flex items-center justify-center`}>
+            <span className={`w-3 h-3 rounded-full ${dot[card.accent]}`} />
+          </div>
+          <div>
+            <p className="font-bold text-gray-800">{card.label}</p>
+            <p className="text-sm text-gray-400 mt-1">{card.desc}</p>
+          </div>
+          <button
+            onClick={() => exportCSV(card.id)}
+            disabled={busy === card.id}
+            className={`mt-auto self-start px-4 py-2 rounded-xl text-white text-sm font-semibold transition-colors disabled:opacity-50 ${btn[card.accent]}`}
+          >
+            {busy === card.id ? 'Preparing…' : 'Export CSV'}
+          </button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ── Layout ───────────────────────────────────────────────────────────────────
 function Layout() {
   const [section, setSection] = useState('dashboard');
@@ -1664,6 +1712,7 @@ function Layout() {
            section === 'subscriptions' ? <SubscriptionsPage /> :
            section === 'payments'      ? <PaymentsPage />      :
            section === 'approvals'     ? <ApprovalsPage />     :
+           section === 'reports'       ? <ReportsPage />       :
            <PagePlaceholder id={section} />}
         </main>
       </div>
