@@ -22,8 +22,9 @@ router.delete('/devices/my',       authenticate, companyIsolation, deviceCtrl.un
 router.patch('/devices/my/rename', authenticate, companyIsolation, deviceCtrl.renameDevice);
 
 // Pairing flow
-router.post('/devices/pairing-code', authenticate, deviceCtrl.generatePairingCode);
-router.post('/devices/pair',         deviceCtrl.pairDevice); // no JWT — authenticated via pairing code
+router.post('/devices/pairing-code',  authenticate, deviceCtrl.generatePairingCode);
+router.post('/devices/pair',          deviceCtrl.pairDevice); // no JWT — authenticated via pairing code
+router.get('/devices/my/activity',    authenticate, companyIsolation, deviceCtrl.getDeviceActivity);
 
 // ─── SESSION ROUTES ───────────────────────────────────────────────────────────
 router.post('/sessions/start',               authenticate, companyIsolation, sessionCtrl.startSession);

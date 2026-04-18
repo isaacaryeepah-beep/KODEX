@@ -416,6 +416,55 @@ exports.renameDevice = async (req, res) => {
   }
 };
 
+// ─── DEVICE ACTIVITY LOG ─────────────────────────────────────────────────────
+// Returns recent synthetic activity entries built from device + session data.
+exports.getDeviceActivity = async (req, res) => {
+  try {
+    const isAdmin = ['admin', 'superadmin'].includes(req.user.role);
+    const query = isAdmin
+      ? { companyId: req.user.company }
+      : { lecturerId: req.user._id, companyId: req.user.company };
+
+    const device = await Device.findOne(query);
+    if (!device) return res.json({ success: true, events: [] });
+
+    // Gather recent sessions for this device
+    const sessions = await AttendanceSession.find({ deviceId: device.deviceId })
+      .sort({ startedAt: -1 }).limit(10).lean();
+
+    const events = [];
+
+    // Device registered
+    events.push({ type: 'linked', label: 'Device registered', at: device.registeredAt, color: 'blue' });
+
+    // Session events
+    for (const s of sessions) {
+      events.push({ type: 'session_start', label: `Session started${s.title ? `: ${s.title}` : ''}`, at: s.startedAt, color: 'green' });
+      if (s.stoppedAt) events.push({ type: 'session_stop', label: `Session ended (${s.stoppedReason || 'manual'})`, at: s.stoppedAt, color: 'gray' });
+    }
+
+    // Last heartbeat
+    if (device.lastHeartbeat) {
+      events.push({ type: 'heartbeat', label: 'Last heartbeat received', at: device.lastHeartbeat, color: 'green' });
+    }
+
+    // Status transitions
+    if (device.status === 'offline' && device.lastHeartbeat) {
+      const secsSince = Math.floor((Date.now() - device.lastHeartbeat.getTime()) / 1000);
+      if (secsSince > 30) {
+        events.push({ type: 'offline', label: 'Device went offline', at: new Date(device.lastHeartbeat.getTime() + 15000), color: 'red' });
+      }
+    }
+
+    // Sort newest first
+    events.sort((a, b) => new Date(b.at) - new Date(a.at));
+
+    res.json({ success: true, events: events.slice(0, 20) });
+  } catch (err) {
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+};
+
 // ─── SUPERADMIN TRANSFER (only way to reassign a device) ─────────────────────
 exports.transferDevice = async (req, res) => {
   try {

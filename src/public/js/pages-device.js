@@ -184,23 +184,10 @@ function _devPairedHTML(d) {
   <div class="dev-card dev-card-activity" id="dev-activity-card">
     <div class="dev-card-header">
       <span class="dev-card-title">Recent Activity</span>
+      <button class="dev-btn dev-btn-ghost dev-btn-sm" onclick="_devLoadActivity()">↻</button>
     </div>
     <div id="dev-activity-list" class="dev-timeline">
-      <div class="dev-timeline-item">
-        <span class="dev-tl-dot dev-tl-dot-blue"></span>
-        <div class="dev-tl-body">
-          <span class="dev-tl-label">Device registered</span>
-          <span class="dev-tl-time">${d.registeredAt ? _devFmt(d.registeredAt) : '—'}</span>
-        </div>
-      </div>
-      ${d.lastHeartbeat ? `
-      <div class="dev-timeline-item">
-        <span class="dev-tl-dot dev-tl-dot-green"></span>
-        <div class="dev-tl-body">
-          <span class="dev-tl-label">Last heartbeat</span>
-          <span class="dev-tl-time">${_devFmt(d.lastHeartbeat)}</span>
-        </div>
-      </div>` : ''}
+      <div class="dev-tl-loading">Loading activity…</div>
     </div>
   </div>
 
@@ -301,6 +288,35 @@ function _devHelpHTML() {
 // ── event handlers ─────────────────────────────────────────────────────────────
 function _devBindEvents(device) {
   window._devCurrentDevice = device;
+  if (device) _devLoadActivity();
+}
+
+async function _devLoadActivity() {
+  const list = document.getElementById('dev-activity-list');
+  if (!list) return;
+  list.innerHTML = '<div class="dev-tl-loading">Loading…</div>';
+  try {
+    const res = await fetch('/api/devices/my/activity', {
+      headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('token') || '') }
+    });
+    const json = await res.json();
+    const events = json.events || [];
+    if (!events.length) {
+      list.innerHTML = '<div class="dev-tl-loading">No activity yet.</div>';
+      return;
+    }
+    const colorMap = { blue:'dev-tl-dot-blue', green:'dev-tl-dot-green', gray:'dev-tl-dot-gray', red:'dev-tl-dot-red', amber:'dev-tl-dot-amber' };
+    list.innerHTML = events.map(e => `
+      <div class="dev-timeline-item">
+        <span class="dev-tl-dot ${colorMap[e.color] || 'dev-tl-dot-blue'}"></span>
+        <div class="dev-tl-body">
+          <span class="dev-tl-label">${_esc(e.label)}</span>
+          <span class="dev-tl-time">${_devFmt(e.at)}</span>
+        </div>
+      </div>`).join('');
+  } catch {
+    list.innerHTML = '<div class="dev-tl-loading">Could not load activity.</div>';
+  }
 }
 
 function _devRefresh() {
@@ -542,6 +558,8 @@ function _devCSS() {
 .dev-tl-dot-green { background:#4ade80; }
 .dev-tl-dot-amber { background:#fbbf24; }
 .dev-tl-dot-red { background:#f87171; }
+.dev-tl-dot-gray { background:#cbd5e1; }
+.dev-tl-loading { font-size:13px; color:#94a3b8; padding:12px 0; text-align:center; }
 .dev-tl-body { display:flex; flex-direction:column; gap:1px; flex:1; }
 .dev-tl-label { font-size:13px; color:#374151; font-weight:500; }
 .dev-tl-time { font-size:11px; color:#94a3b8; }
