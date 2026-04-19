@@ -138,6 +138,16 @@ app.get("/superadmin", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "superadmin.html"));
 });
 
+// New React frontend — served first so client/dist/index.html wins over src/public/index.html
+app.use(express.static(path.join(__dirname, "../client/dist"), {
+  setHeaders: (res) => {
+    res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+    res.setHeader("Pragma", "no-cache");
+    res.setHeader("Expires", "0");
+  },
+}));
+
+// Legacy public assets (superadmin, snap-quiz, assignments pages, etc.)
 app.use(express.static(path.join(__dirname, "public"), {
   setHeaders: (res) => {
     res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
@@ -284,15 +294,16 @@ app.use("/api", deviceSessionRoutes);
 
 if (superadminRoutes) app.use("/api/superadmin", superadminRoutes);
 
-// ── Fallback ─────────────────────────────────────────────────────────────────
+// ── Fallback — SPA client-side routing ───────────────────────────────────────
 app.use((req, res) => {
-  const indexPath = path.join(__dirname, "public", "index.html");
   const fs = require("fs");
-  if (req.accepts("html") && fs.existsSync(indexPath)) {
-    res.sendFile(indexPath);
-  } else {
-    res.status(404).json({ error: "Route not found" });
+  if (req.accepts("html")) {
+    const newIndex = path.join(__dirname, "../client/dist", "index.html");
+    const oldIndex = path.join(__dirname, "public", "index.html");
+    const target = fs.existsSync(newIndex) ? newIndex : oldIndex;
+    if (fs.existsSync(target)) return res.sendFile(target);
   }
+  res.status(404).json({ error: "Route not found" });
 });
 
 // ── Error handler ────────────────────────────────────────────────────────────
