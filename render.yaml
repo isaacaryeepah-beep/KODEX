@@ -3,7 +3,7 @@ services:
     name: kodex
     runtime: node
     rootDir:
-    buildCommand: npm install
+    buildCommand: npm install && cd client && npm install && npm run build
     startCommand: node src/server.js
     envVars:
       - key: NODE_ENV
