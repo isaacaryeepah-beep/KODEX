@@ -5,6 +5,40 @@
  * Provides: renderFAQCenter(), renderSupport()
  */
 
+// ── Mode-based category filtering ─────────────────────────────────────────────
+const _FAQ_ALL_CATS = [
+  { value: 'attendance',     label: 'Attendance' },
+  { value: 'hr',             label: 'HR & Leave',      mode: 'corporate' },
+  { value: 'gps_attendance', label: 'GPS Attendance' },
+  { value: 'meetings',       label: 'Meetings' },
+  { value: 'snapquiz',       label: 'SnapQuiz',         mode: 'academic' },
+  { value: 'assignments',    label: 'Assignments',      mode: 'academic' },
+  { value: 'billing',        label: 'Billing' },
+  { value: 'password_reset', label: 'Password Reset' },
+  { value: 'general',        label: 'General' },
+];
+
+function _faqUserMode() {
+  return currentUser?.company?.mode || null;
+}
+
+function _faqAllowedCats() {
+  const mode = _faqUserMode();
+  if (!mode || ['admin','superadmin'].includes(currentUser?.role)) return null; // null = all
+  return new Set(
+    _FAQ_ALL_CATS
+      .filter(c => !c.mode || c.mode === mode)
+      .map(c => c.value)
+  );
+}
+
+function _faqPlaceholder() {
+  const mode = _faqUserMode();
+  if (mode === 'corporate') return 'e.g. How do I request leave?';
+  if (mode === 'academic')  return 'e.g. How do I start a quiz session?';
+  return 'e.g. How do I mark attendance?';
+}
+
 // ════════════════════════════════════════════════════════════════════════════
 // FAQ CENTER  (all roles)
 // ════════════════════════════════════════════════════════════════════════════
@@ -13,7 +47,12 @@ async function renderFAQCenter() {
   const content = document.getElementById('main-content');
   if (!content) return;
 
-  const isAdmin = currentUser.role === 'admin' || currentUser.role === 'superadmin';
+  const isAdmin  = ['admin','superadmin'].includes(currentUser?.role);
+  const allowed  = _faqAllowedCats();
+  const catOpts  = _FAQ_ALL_CATS
+    .filter(c => !allowed || allowed.has(c.value))
+    .map(c => `<option value="${c.value}">${c.label}</option>`)
+    .join('');
 
   content.innerHTML = `
     <div class="page-header">
@@ -31,7 +70,7 @@ async function renderFAQCenter() {
     <div class="card" style="margin-bottom:16px">
       <div class="card-title">Ask a Question</div>
       <div style="display:flex;gap:8px">
-        <input id="faq-ask-input" type="text" placeholder="e.g. How do I mark attendance?" style="flex:1;padding:10px 14px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;font-family:inherit;outline:none" onkeydown="if(event.key==='Enter')faqAsk()">
+        <input id="faq-ask-input" type="text" placeholder="${_faqPlaceholder()}" style="flex:1;padding:10px 14px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;font-family:inherit;outline:none" onkeydown="if(event.key==='Enter')faqAsk()">
         <button class="btn btn-primary" onclick="faqAsk()" id="faq-ask-btn" style="white-space:nowrap">Ask AI</button>
       </div>
       <div id="faq-answer-area" style="margin-top:14px;display:none"></div>
@@ -43,15 +82,7 @@ async function renderFAQCenter() {
         <div style="display:flex;gap:8px;align-items:center">
           <select id="faq-cat-filter" onchange="loadFAQList()" style="padding:6px 10px;border:1.5px solid var(--border);border-radius:7px;font-size:12px;font-family:inherit;outline:none">
             <option value="">All categories</option>
-            <option value="attendance">Attendance</option>
-            <option value="snapquiz">SnapQuiz</option>
-            <option value="assignments">Assignments</option>
-            <option value="billing">Billing</option>
-            <option value="hr">HR</option>
-            <option value="meetings">Meetings</option>
-            <option value="gps_attendance">GPS Attendance</option>
-            <option value="password_reset">Password Reset</option>
-            <option value="general">General</option>
+            ${catOpts}
           </select>
         </div>
       </div>
@@ -83,7 +114,14 @@ async function loadFAQList() {
     const liveArea = document.getElementById('faq-list-area');
     if (!liveArea) return;
 
-    const faqs = data.faqs || data.items || [];
+    let faqs = data.faqs || data.items || [];
+
+    // Filter by allowed categories to prevent cross-mode leakage
+    if (!cat) {
+      const allowed = _faqAllowedCats();
+      if (allowed) faqs = faqs.filter(f => allowed.has(f.category || 'general'));
+    }
+
     if (!faqs.length) {
       liveArea.innerHTML = '<div style="text-align:center;padding:24px;color:var(--text-muted);font-size:13px">No FAQs found yet. Check back soon or ask the AI above.</div>';
       return;
