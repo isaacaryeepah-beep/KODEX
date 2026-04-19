@@ -18,7 +18,6 @@ async function createCourse(data, creatorId, companyId) {
     level, group, sessionType,
     qualificationType, customQualificationLabel, studyType,
     lecturerId,
-    needsApproval, approvalStatus,
   } = data;
 
   // Check uniqueness with full academic compound
@@ -65,10 +64,6 @@ async function createCourse(data, creatorId, companyId) {
     level:                   level                   || null,
     group:                   group?.toUpperCase()    || null,
     sessionType:             sessionType             || null,
-    needsApproval:           needsApproval           || false,
-    approvalStatus:          approvalStatus          || 'approved',
-    // Auto-publish admin/superadmin courses; lecturer courses stay unpublished until HOD approves
-    isPublished:             !(needsApproval         || false),
   });
 
   await course.populate([

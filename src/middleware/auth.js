@@ -19,13 +19,6 @@ const authenticate = async (req, res, next) => {
     if (!user || !user.isActive) {
       return res.status(401).json({ error: "User not found or inactive" });
     }
-    if (user.isLocked) {
-      return res.status(403).json({
-        error: "Account locked",
-        message: user.lockReason || "Your account has been locked. Contact your department HOD to unlock it.",
-        accountLocked: true,
-      });
-    }
 
     req.user = user;
 

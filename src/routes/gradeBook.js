@@ -8,7 +8,7 @@ const router = express.Router();
 router.use(authenticate);
 router.use(requireActiveSubscription);
 
-const STAFF = ["admin", "superadmin", "lecturer", "hod"];
+const STAFF = ["admin", "superadmin", "lecturer"];
 
 // Lecturer / admin routes
 router.get("/courses",                                          requireRole(...STAFF), ctrl.listCourses);
