@@ -84,10 +84,6 @@ const userSchema = new mongoose.Schema(
     }, // set true after admin temp reset
     resetPasswordToken: { type: String, default: null },
     resetPasswordExpires: { type: Date, default: null },
-
-    // Device pairing (lecturer) — one-time code, expires in 5 min
-    devicePairingCode:    { type: String, default: null, select: false },
-    devicePairingExpiry:  { type: Date,   default: null },
     passwordResetLog: [{
       resetAt:    { type: Date, default: Date.now },
       ipAddress:  { type: String, default: '' },
@@ -196,14 +192,6 @@ const userSchema = new mongoose.Schema(
       type: String,
       default: null,
     },
-
-    // ── Account locking (failed logins / HOD action) ───────────────────────
-    isLocked:            { type: Boolean, default: false },
-    lockedAt:            { type: Date, default: null },
-    lockReason:          { type: String, default: null },
-    lockedBy:            { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
-    failedLoginAttempts: { type: Number, default: 0 },
-    lastFailedLoginAt:   { type: Date, default: null },
 
     // ── Per-lecturer subscription (1 subscription = 1 user) ──────────────
     // Only applies to: lecturer, manager, admin

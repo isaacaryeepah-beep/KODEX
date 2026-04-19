@@ -53,7 +53,6 @@ const locationSchema = new mongoose.Schema(
   {
     latitude:  { type: Number, default: null },
     longitude: { type: Number, default: null },
-    accuracy:  { type: Number, default: null },
     address:   { type: String, trim: true, default: "" },
   },
   { _id: false }

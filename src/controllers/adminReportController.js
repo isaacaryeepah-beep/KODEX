@@ -113,7 +113,7 @@ exports.attendanceOverview = async (req, res) => {
       AttendanceSession.find(sessionFilter)
         .populate("createdBy", "name email")
         .populate("course", "title code"),
-      Course.find({ companyId }).populate("lecturerId", "name").populate("enrolledStudents"),
+      Course.find({ company: companyId }).populate("lecturer", "name").populate("enrolledStudents"),
       Company.findById(companyId).select("name mode"),
     ]);
 
@@ -485,13 +485,13 @@ exports.performanceReport = async (req, res) => {
     const companyId = req.user.company;
     const { lecturerId, classId, startDate, endDate } = req.query;
 
-    const courseFilter = { companyId };
-    if (lecturerId) courseFilter.lecturerId = lecturerId;
+    const courseFilter = { company: companyId };
+    if (lecturerId) courseFilter.lecturer = lecturerId;
     if (classId) courseFilter._id = classId;
 
     const [courses, company] = await Promise.all([
       Course.find(courseFilter)
-        .populate("lecturerId", "name email")
+        .populate("lecturer", "name email")
         .populate("enrolledStudents", "name IndexNumber email"),
       Company.findById(companyId).select("name mode"),
     ]);
@@ -545,7 +545,7 @@ exports.performanceReport = async (req, res) => {
       return {
         courseCode: c.code,
         courseTitle: c.title,
-        lecturerName: c.lecturerId?.name || "N/A",
+        lecturerName: c.lecturer?.name || "N/A",
         enrolledStudents: c.enrolledStudents?.length || 0,
         quizCount,
         submissions: subs.length,
@@ -682,7 +682,7 @@ exports.lecturerPerformance = async (req, res) => {
     const [lecturers, sessions, courses, company] = await Promise.all([
       User.find({ company: companyId, role: "lecturer", isApproved: true }).select("name email"),
       AttendanceSession.find({ company: companyId }).populate("createdBy", "name"),
-      Course.find({ companyId }).populate("lecturerId", "name").populate("enrolledStudents", "name"),
+      Course.find({ company: companyId }).populate("lecturer", "name").populate("enrolledStudents", "name"),
       Company.findById(companyId).select("name"),
     ]);
 
@@ -707,7 +707,7 @@ exports.lecturerPerformance = async (req, res) => {
     });
 
     courses.forEach(c => {
-      const lid = c.lecturerId?._id?.toString();
+      const lid = c.lecturer?._id?.toString();
       if (lid && lecturerMap[lid]) {
         lecturerMap[lid].courses++;
         lecturerMap[lid].totalStudents += (c.enrolledStudents?.length || 0);
@@ -923,7 +923,7 @@ exports.institutionSummary = async (req, res) => {
       User.find({ company: companyId, isApproved: true }).select("role name"),
       AttendanceSession.find({ company: companyId }),
       AttendanceRecord.find({ company: companyId }).select("status method checkInTime"),
-      Course.find({ companyId }).populate("lecturerId", "name").populate("enrolledStudents"),
+      Course.find({ company: companyId }).populate("lecturer", "name").populate("enrolledStudents"),
       Quiz.find({ company: companyId }),
       Attempt.find({ company: companyId, isSubmitted: true }),
     ]);
@@ -1034,7 +1034,7 @@ exports.institutionSummary = async (req, res) => {
           y = drawTableRow(doc, [
             { text: c.code, width: courseCols[0].width },
             { text: c.title, width: courseCols[1].width },
-            { text: c.lecturerId?.name || "N/A", width: courseCols[2].width },
+            { text: c.lecturer?.name || "N/A", width: courseCols[2].width },
             { text: String(c.enrolledStudents?.length || 0), width: courseCols[3].width },
           ], y, i % 2 === 0);
         });
@@ -1125,7 +1125,7 @@ exports.chartData = async (req, res) => {
     const courseInfoMap = {};
     courses.forEach(c => {
       courseEnrollMap[c._id.toString()] = c.enrolledStudents?.length || 0;
-      courseInfoMap[c._id.toString()] = { code: c.code, title: c.title, lecturerId: c.lecturerId?._id?.toString() || c.lecturerId?.toString() };
+      courseInfoMap[c._id.toString()] = { code: c.code, title: c.title, lecturerId: c.lecturer?.toString() };
     });
 
     const lecturerIds = [...new Set(sessions.filter(s => s.createdBy).map(s => s.createdBy.toString()))];

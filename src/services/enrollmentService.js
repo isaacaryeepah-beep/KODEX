@@ -26,11 +26,6 @@ async function enrollStudent(courseId, studentId, companyId) {
   const course = await Course.findOne({ _id: courseId, companyId });
   if (!course) return { success: false, message: 'Course not found.' };
 
-  if (course.needsApproval && course.approvalStatus !== 'approved') {
-    const label = course.approvalStatus === 'pending' ? 'pending HOD approval' : 'rejected';
-    return { success: false, message: `Cannot enroll students in a course that is ${label}.` };
-  }
-
   if (course.enrolledStudents.map(id => id.toString()).includes(studentId)) {
     return { success: false, message: 'Student is already enrolled in this course.' };
   }
@@ -50,11 +45,6 @@ async function enrollStudent(courseId, studentId, companyId) {
 async function bulkEnroll(courseId, companyId, filters = {}) {
   const course = await Course.findOne({ _id: courseId, companyId });
   if (!course) return { success: false, message: 'Course not found.' };
-
-  if (course.needsApproval && course.approvalStatus !== 'approved') {
-    const label = course.approvalStatus === 'pending' ? 'pending HOD approval' : 'rejected';
-    return { success: false, message: `Cannot enroll students in a course that is ${label}.` };
-  }
 
   let students = [];
 
