@@ -418,39 +418,33 @@ exports.markAttendance = async (req, res) => {
       ble: "ble_mark",
       manual: "manual",
       code: "code_mark",
+      wifi_presence: "wifi_presence",
     };
 
-    // ── ESP32 liveness + same-network enforcement ─────────────────────────
-    // If the company has a registered ESP32 device, ALL attendance marking
-    // requires:
-    //   1. The ESP32 is sending heartbeats (within 15s)
-    //   2. The student's PUBLIC IP matches one of the IPs the ESP32 recently
-    //      reported from. Since both devices are behind the same school WiFi
-    //      router's NAT, they share a public IP — if they don't match, the
-    //      student is on a different network (home WiFi, mobile data, etc.)
-    //      and the request is rejected. This is the anti-cheat that replaces
-    //      the old ESP32-hotspot requirement.
+    // ── WiFi presence enforcement via Device model ────────────────────────
+    // If the company has a registered Device (ESP32), ALL attendance requires:
+    //   1. Device heartbeat received within 15 s (device is online in classroom)
+    //   2. Student's public IP matches the device's lastPublicIp (both behind
+    //      the same school router's NAT → same public IP). No match = student
+    //      is on mobile data or home WiFi → blocked. No guessing allowed.
     //
-    // We look at the LATEST heartbeating device (highest lastSeenAt) and
-    // compare against its sliding 10-minute IP window.
-    const Company = require('../models/Company');
-    const companyDoc = await Company.findById(req.user.company)
-      .select('esp32Devices esp32Required').lean();
+    // When method === 'wifi_presence' and the IP check passes, the rotating
+    // code step is skipped — presence on school WiFi IS the proof.
+    const DeviceModel = require('../models/Device');
+    const classroomDevice = await DeviceModel.findOne({ companyId: req.user.company, isActive: true })
+      .sort({ lastHeartbeat: -1 })
+      .select('lastPublicIp lastPublicIpAt lastHeartbeat deviceId')
+      .lean();
 
-    const hasRegisteredDevice = !!(companyDoc &&
-      companyDoc.esp32Devices &&
-      companyDoc.esp32Devices.length > 0);
+    let wifiPresenceVerified = false;
 
-    if (hasRegisteredDevice) {
+    if (classroomDevice) {
       const now = Date.now();
-      const HEARTBEAT_STALENESS_MS = 15000;
+      const heartbeatAge = classroomDevice.lastHeartbeat
+        ? now - new Date(classroomDevice.lastHeartbeat).getTime()
+        : Infinity;
 
-      // Find the freshest device (the one most recently seen).
-      const freshest = companyDoc.esp32Devices
-        .filter(d => d.lastSeenAt)
-        .sort((a, b) => new Date(b.lastSeenAt) - new Date(a.lastSeenAt))[0];
-
-      if (!freshest || (now - new Date(freshest.lastSeenAt).getTime()) >= HEARTBEAT_STALENESS_MS) {
+      if (heartbeatAge >= 15000) {
         return res.status(503).json({
           error: 'The classroom device is offline. Ask your lecturer to power it on.',
           esp32Required: true,
@@ -458,7 +452,6 @@ exports.markAttendance = async (req, res) => {
         });
       }
 
-      // Same-network check via public IP match.
       const studentIpRaw = (
         (req.headers['x-forwarded-for'] || '').split(',')[0].trim() ||
         req.headers['x-real-ip'] ||
@@ -466,26 +459,69 @@ exports.markAttendance = async (req, res) => {
         ''
       );
       const studentIp = studentIpRaw.startsWith('::ffff:') ? studentIpRaw.slice(7) : studentIpRaw;
-
-      // localhost bypass for development only
       const isLocalhost = studentIp === '127.0.0.1' || studentIp === '::1' || studentIp === '';
 
-      // IPs the ESP32 has reached the backend from in the last ~10 min.
-      const TEN_MIN_AGO = now - (10 * 60 * 1000);
-      const deviceIps = (freshest.recentPublicIps || [])
-        .filter(e => e.seenAt && new Date(e.seenAt).getTime() > TEN_MIN_AGO)
-        .map(e => e.ip);
+      const ipAge = classroomDevice.lastPublicIpAt
+        ? now - new Date(classroomDevice.lastPublicIpAt).getTime()
+        : Infinity;
 
-      // If the device has recorded at least one IP and the student's IP
-      // doesn't match any of them, block the request.
-      const ipMatches = deviceIps.length === 0 || deviceIps.includes(studentIp);
+      if (!isLocalhost && classroomDevice.lastPublicIp) {
+        if (ipAge > 5 * 60 * 1000) {
+          return res.status(503).json({
+            error: 'Classroom device network record is stale. Ask your lecturer to check the device.',
+            esp32Required: true,
+          });
+        }
+        if (studentIp !== classroomDevice.lastPublicIp) {
+          console.warn(`[MARK] Blocked ${req.user.name}: student IP ${studentIp} ≠ device IP ${classroomDevice.lastPublicIp}`);
+          return res.status(403).json({
+            error: 'You must be connected to the school WiFi to mark attendance.',
+            networkMismatch: true,
+          });
+        }
+        wifiPresenceVerified = true;
+      }
+    } else {
+      // Fall back: check legacy Company.esp32Devices if no Device model record exists
+      const Company = require('../models/Company');
+      const companyDoc = await Company.findById(req.user.company)
+        .select('esp32Devices esp32Required').lean();
 
-      if (!ipMatches && !isLocalhost) {
-        console.warn(`[MARK] Blocked ${req.user.name}: IP ${studentIp} not in device IPs [${deviceIps.join(', ')}]`);
-        return res.status(403).json({
-          error: 'You must be connected to the same WiFi as the classroom device to mark attendance.',
-          networkMismatch: true,
-        });
+      const hasLegacyDevice = !!(companyDoc?.esp32Devices?.length > 0);
+      if (hasLegacyDevice) {
+        const now = Date.now();
+        const freshest = companyDoc.esp32Devices
+          .filter(d => d.lastSeenAt)
+          .sort((a, b) => new Date(b.lastSeenAt) - new Date(a.lastSeenAt))[0];
+
+        if (!freshest || (now - new Date(freshest.lastSeenAt).getTime()) >= 15000) {
+          return res.status(503).json({
+            error: 'The classroom device is offline. Ask your lecturer to power it on.',
+            esp32Required: true,
+            esp32Offline: true,
+          });
+        }
+
+        const studentIpRaw = (
+          (req.headers['x-forwarded-for'] || '').split(',')[0].trim() ||
+          req.headers['x-real-ip'] ||
+          (req.socket && req.socket.remoteAddress) || ''
+        );
+        const studentIp = studentIpRaw.startsWith('::ffff:') ? studentIpRaw.slice(7) : studentIpRaw;
+        const isLocalhost = studentIp === '127.0.0.1' || studentIp === '::1' || studentIp === '';
+        const TEN_MIN_AGO = now - 10 * 60 * 1000;
+        const deviceIps = (freshest.recentPublicIps || [])
+          .filter(e => e.seenAt && new Date(e.seenAt).getTime() > TEN_MIN_AGO)
+          .map(e => e.ip);
+        const ipMatches = deviceIps.length === 0 || deviceIps.includes(studentIp);
+        if (!ipMatches && !isLocalhost) {
+          console.warn(`[MARK] Blocked ${req.user.name}: IP ${studentIp} not in device IPs [${deviceIps.join(', ')}]`);
+          return res.status(403).json({
+            error: 'You must be connected to the same WiFi as the classroom device to mark attendance.',
+            networkMismatch: true,
+          });
+        }
+        wifiPresenceVerified = true;
       }
     }
     // ─────────────────────────────────────────────────────────────────────────
@@ -548,12 +584,10 @@ exports.markAttendance = async (req, res) => {
     }
 
     // ── Rotating code verification ─────────────────────────────────────────
-    // If this session has an esp32Seed (i.e. the ESP32 started it with a seed),
-    // the student MUST submit the current 6-digit code from the classroom's
-    // OLED display. The code rotates every 20s server-side, matching the ESP32
-    // firmware's derivation. No network round-trip between ESP32 and server —
-    // both run the same HMAC formula independently.
-    if (session.esp32Seed) {
+    // Skipped when method is 'wifi_presence' and the student's IP matched the
+    // classroom device — WiFi presence IS the proof of physical attendance.
+    // In all other cases, the 6-digit HMAC code is required.
+    if (session.esp32Seed && !(method === 'wifi_presence' && wifiPresenceVerified)) {
       const { verifyCodeForSession } = require('../services/attendanceCodeService');
       const result = verifyCodeForSession(session, code);
       if (!result.ok) {

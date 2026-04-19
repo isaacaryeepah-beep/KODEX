@@ -2150,6 +2150,7 @@ function buildSidebar() {
       break;
     case 'lecturer':
       links.push({ id: 'sessions', label: 'Sessions', icon: sessionsIcon() });
+      links.push({ id: 'device', label: 'Device', icon: svgIcon('<rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/>') });
       links.push({ id: 'search', label: 'Search', icon: svgIcon('<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>') });
       links.push({ id: 'courses', label: 'Courses', icon: coursesIcon() });
       links.push({ id: 'quizzes', label: 'Quizzes', icon: quizzesIcon() });
@@ -2241,6 +2242,7 @@ function navigateTo(view) {
     case 'question-bank': renderQuestionBank(); break;
     case 'my-attendance': renderMyAttendance(); break;
     case 'mark-attendance': renderMarkAttendance(); break;
+    case 'device': renderDevicePage(); break;
     case 'sign-in-out': renderSignInOut(); break;
     case 'subscription': renderSubscription(); break;
     case 'reports': renderReports(); break;
@@ -8117,6 +8119,12 @@ async function renderMarkAttendance() {
       ` : `
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;margin-bottom:16px">
           
+          <div class="card mark-method-card" onclick="markViaWifi()" style="cursor:pointer;text-align:center;transition:all 0.2s;border:2px solid var(--success);background:linear-gradient(135deg,#f0fdf4,#ecfdf5)">
+            <div style="font-size:36px;margin-bottom:12px">${svgIcon('<path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/>', 42)}</div>
+            <div style="font-size:16px;font-weight:700;color:var(--success)">School WiFi</div>
+            <p style="font-size:12px;color:var(--text-light);margin-top:4px">Auto-mark if you're on the school network</p>
+          </div>
+
           <div class="card mark-method-card" onclick="showCodeEntry()" style="cursor:pointer;text-align:center;transition:all 0.2s">
             <div style="font-size:36px;margin-bottom:12px">${svgIcon('<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M7 7h.01M7 12h.01M12 7h.01M12 12h.01M17 7h.01M7 17h.01M12 17h.01M17 12h.01M17 17h.01"/>', 42)}</div>
             <div style="font-size:16px;font-weight:700">Enter Code</div>
@@ -8154,6 +8162,45 @@ async function renderMarkAttendance() {
       </div>
     `}
   `;
+}
+
+async function markViaWifi() {
+  const area = document.getElementById('mark-input-area');
+  if (area) {
+    area.innerHTML = `
+      <div class="card" style="text-align:center;padding:24px">
+        <div class="spinner" style="margin:0 auto 12px"></div>
+        <div style="font-weight:700;font-size:15px">Checking school WiFi…</div>
+        <p style="font-size:13px;color:var(--text-light);margin-top:4px">Verifying your network connection</p>
+      </div>
+    `;
+  }
+
+  try {
+    await api('/api/attendance-sessions/mark', {
+      method: 'POST',
+      body: JSON.stringify({ method: 'wifi_presence' }),
+    });
+    toastSuccess('Attendance marked via school WiFi!');
+    navigateTo('mark-attendance');
+  } catch (e) {
+    if (area) {
+      const msg = e.message || 'Unknown error';
+      const isNetworkErr = msg.toLowerCase().includes('wifi') || msg.toLowerCase().includes('network') || (e.data && e.data.networkMismatch);
+      area.innerHTML = `
+        <div class="card" style="text-align:center;padding:24px;border-left:4px solid var(--danger)">
+          <div style="font-size:36px;margin-bottom:12px">📡</div>
+          <div style="font-weight:700;font-size:16px;margin-bottom:8px;color:var(--danger)">${isNetworkErr ? 'Not on School WiFi' : 'Could Not Mark Attendance'}</div>
+          <p style="font-size:13px;color:var(--text-light);line-height:1.6">${isNetworkErr
+            ? 'Connect your phone to the school WiFi network, then try again.'
+            : msg}</p>
+          <button class="btn btn-primary btn-sm" style="margin-top:16px" onclick="markViaWifi()">Try Again</button>
+        </div>
+      `;
+    } else {
+      toastError(e.message);
+    }
+  }
 }
 
 function showCodeEntry() {

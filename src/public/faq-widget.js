@@ -481,14 +481,53 @@
     }
   });
 
+  // ── Mode helpers ──────────────────────────────────────────────────────────
+  var ACAD_ONLY_CATS = ["snapquiz", "assignments"];
+  var CORP_ONLY_CATS = ["hr"];
+
+  function getUserMode() {
+    // Prefer the currentUser global set by app.js after login
+    if (window.currentUser && window.currentUser.company && window.currentUser.company.mode) {
+      return window.currentUser.company.mode;
+    }
+    // Fallback: decode JWT payload
+    try {
+      var tok = getToken();
+      if (!tok) return null;
+      var payload = JSON.parse(atob(tok.split(".")[1]));
+      return payload.mode || (payload.company && payload.company.mode) || null;
+    } catch (_) { return null; }
+  }
+
+  function filterChipsByMode() {
+    var mode = getUserMode();
+    if (!mode) return;
+    var hide = mode === "corporate" ? ACAD_ONLY_CATS : mode === "academic" ? CORP_ONLY_CATS : [];
+    document.querySelectorAll(".kfaq-cat-chip[data-cat]").forEach(function (chip) {
+      chip.style.display = hide.indexOf(chip.dataset.cat) !== -1 ? "none" : "";
+    });
+  }
+
+  function getWelcomeMessage() {
+    var mode = getUserMode();
+    if (mode === "corporate") {
+      return "Hi! I'm your KODEX AI assistant. Ask me anything about attendance, clock-in/out, leave, HR, expenses, meetings, or any other KODEX feature.";
+    }
+    if (mode === "academic") {
+      return "Hi! I'm your KODEX AI assistant. Ask me anything about courses, quizzes, assignments, attendance, grade book, or any other KODEX feature.";
+    }
+    return "Hi! I'm your KODEX AI assistant. Ask me anything about the platform.";
+  }
+
   // ── Toggle open/close ─────────────────────────────────────────────────────
   function openWidget() {
     isOpen = true;
     popup.style.display = "flex";
     badge.style.display = "none";
     badge.textContent   = "0";
+    filterChipsByMode();
     if (messages.children.length === 0) {
-      addMessage("Hi! I'm your KODEX AI assistant. Ask me anything about attendance, quizzes, assignments, billing, or any other KODEX feature.", "bot");
+      addMessage(getWelcomeMessage(), "bot");
     }
     input.focus();
   }
