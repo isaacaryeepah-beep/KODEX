@@ -74,19 +74,6 @@ const courseSchema = new mongoose.Schema({
   // Lecturers/admins can prepare a course before publishing it.
   isPublished: { type: Boolean, default: false },
 
-  // ── HOD Course Approval ───────────────────────────────────────────────────
-  // Lecturer-created courses start as 'pending' and require HOD sign-off.
-  // Admin/superadmin-created courses are auto-approved.
-  needsApproval: { type: Boolean, default: false },
-  approvalStatus: {
-    type: String,
-    enum: ['pending', 'approved', 'rejected'],
-    default: 'approved',
-  },
-  approvedBy:   { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
-  approvedAt:   { type: Date, default: null },
-  approvalNote: { type: String, trim: true, default: null },
-
   // Course materials: syllabus, reference docs, slides uploaded by lecturer.
   attachments: {
     type: [{

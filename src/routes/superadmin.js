@@ -4,8 +4,7 @@ const authenticate = require("../middleware/auth");
 const { requireRole } = require("../middleware/role");
 const Company      = require("../models/Company");
 const User         = require("../models/User");
-const PaymentLog        = require("../models/PaymentLog");
-const PlatformSettings  = require("../models/PlatformSettings");
+const PaymentLog   = require("../models/PaymentLog");
 
 const bcrypt = require("bcryptjs");
 const emailService = require("../services/emailService");
@@ -195,7 +194,7 @@ router.get("/companies/:id/lecturers", async (req, res) => {
   try {
     const lecturers = await User.find({
       company: req.params.id,
-      role: { $in: ["lecturer", "manager", "admin", "hod", "employee"] }
+      role: { $in: ["lecturer", "manager", "admin"] }
     }).select("name email role subscriptionStatus trialEndDate subscriptionExpiry semestersPaid createdAt").lean();
 
     // Auto-set trialEndDate for legacy accounts that don't have it
@@ -448,177 +447,6 @@ router.patch("/companies/:id/notes", async (req, res) => {
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: "Failed to save notes" });
-  }
-});
-
-// ── GET /api/superadmin/analytics ────────────────────────────────────────────
-router.get("/analytics", async (req, res) => {
-  try {
-    const now = new Date();
-    const months = [];
-    for (let i = 5; i >= 0; i--) {
-      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      months.push({ year: d.getFullYear(), month: d.getMonth() + 1, label: d.toLocaleString('en', { month: 'short', year: '2-digit' }) });
-    }
-    const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1);
-
-    const [userGrowth, revenueGrowth] = await Promise.all([
-      User.aggregate([
-        { $match: { createdAt: { $gte: sixMonthsAgo }, role: { $ne: "superadmin" } } },
-        { $group: { _id: { year: { $year: "$createdAt" }, month: { $month: "$createdAt" } }, count: { $sum: 1 } } }
-      ]),
-      PaymentLog.aggregate([
-        { $match: { paidAt: { $gte: sixMonthsAgo } } },
-        { $group: { _id: { year: { $year: "$paidAt" }, month: { $month: "$paidAt" } }, total: { $sum: "$amount" } } }
-      ])
-    ]);
-
-    const uMap = {}; userGrowth.forEach(r => { uMap[`${r._id.year}-${r._id.month}`] = r.count; });
-    const rMap = {}; revenueGrowth.forEach(r => { rMap[`${r._id.year}-${r._id.month}`] = r.total; });
-
-    res.json({
-      labels:  months.map(m => m.label),
-      users:   months.map(m => uMap[`${m.year}-${m.month}`] || 0),
-      revenue: months.map(m => rMap[`${m.year}-${m.month}`] || 0),
-    });
-  } catch (err) {
-    res.status(500).json({ error: "Failed to load analytics" });
-  }
-});
-
-// ── GET /api/superadmin/issues ─────────────────────────────────────────────────
-router.get("/issues", async (req, res) => {
-  try {
-    const [locked, suspended] = await Promise.all([
-      User.find({ isLocked: true }).select("name email role company isLocked lockReason lockedAt failedLoginAttempts").populate("company","name mode").lean(),
-      User.find({ isSuspended: true }).select("name email role company suspendedAt suspendedReason").populate("company","name mode").lean(),
-    ]);
-    const expiredCompanies = await Company.find({ subscriptionStatus: { $in: ["expired","inactive"] }, isActive: true })
-      .select("name mode trialEndDate subscriptionStatus").lean();
-    res.json({ locked, suspended, expiredCompanies });
-  } catch (err) {
-    res.status(500).json({ error: "Failed to load issues" });
-  }
-});
-
-// ── GET /api/superadmin/users ──────────────────────────────────────────────────
-router.get("/users", async (req, res) => {
-  try {
-    const { role, mode, search, page = 1 } = req.query;
-    const limit = 100;
-    const query = { role: { $ne: "superadmin" } };
-    if (role) query.role = role;
-    if (search) query.$or = [
-      { name: { $regex: search, $options: "i" } },
-      { email: { $regex: search, $options: "i" } },
-    ];
-
-    let companyIds;
-    if (mode) {
-      const cos = await Company.find({ mode }).select("_id").lean();
-      companyIds = cos.map(c => c._id);
-      query.company = { $in: companyIds };
-    }
-
-    const [users, total] = await Promise.all([
-      User.find(query)
-        .select("name email role company isActive isLocked createdAt subscriptionStatus trialEndDate subscriptionExpiry")
-        .populate("company", "name mode institutionCode")
-        .sort({ createdAt: -1 })
-        .skip((page - 1) * limit)
-        .limit(limit)
-        .lean(),
-      User.countDocuments(query),
-    ]);
-
-    res.json({ users, total, page: Number(page), pages: Math.ceil(total / limit) });
-  } catch (err) {
-    res.status(500).json({ error: "Failed to load users" });
-  }
-});
-
-// ── PATCH /api/superadmin/users/:id/role ──────────────────────────────────────
-router.patch("/users/:id/role", async (req, res) => {
-  try {
-    const { role } = req.body;
-    const allowed = ["admin","manager","employee","lecturer","hod","student"];
-    if (!allowed.includes(role)) return res.status(400).json({ error: "Invalid role" });
-    const user = await User.findByIdAndUpdate(req.params.id, { role }, { new: true }).select("name email role");
-    if (!user) return res.status(404).json({ error: "User not found" });
-    res.json({ ok: true, user });
-  } catch (err) {
-    res.status(500).json({ error: "Failed to update role" });
-  }
-});
-
-// ── PATCH /api/superadmin/users/:id/unlock ────────────────────────────────────
-router.patch("/users/:id/unlock", async (req, res) => {
-  try {
-    const user = await User.findByIdAndUpdate(req.params.id, {
-      isLocked: false, lockReason: null, lockedAt: null, failedLoginAttempts: 0
-    }, { new: true }).select("name email isLocked");
-    if (!user) return res.status(404).json({ error: "User not found" });
-    res.json({ ok: true, user });
-  } catch (err) {
-    res.status(500).json({ error: "Failed to unlock user" });
-  }
-});
-
-// ── GET /api/superadmin/settings ─────────────────────────────────────────────
-router.get("/settings", async (req, res) => {
-  try {
-    let s = await PlatformSettings.findOne();
-    if (!s) s = await PlatformSettings.create({});
-    res.json(s);
-  } catch (err) {
-    res.status(500).json({ error: "Failed to load settings" });
-  }
-});
-
-// ── POST /api/superadmin/settings ─────────────────────────────────────────────
-router.post("/settings", async (req, res) => {
-  try {
-    const { trialDays, academicPrice, corporatePrice, currency } = req.body;
-    const allowed = {};
-    if (trialDays      != null) allowed.trialDays      = Math.max(1, Number(trialDays));
-    if (academicPrice  != null) allowed.academicPrice  = Math.max(0, Number(academicPrice));
-    if (corporatePrice != null) allowed.corporatePrice = Math.max(0, Number(corporatePrice));
-    if (currency       != null) allowed.currency       = String(currency).slice(0, 10);
-    const s = await PlatformSettings.findOneAndUpdate({}, { $set: allowed }, { upsert: true, new: true });
-    res.json(s);
-  } catch (err) {
-    res.status(500).json({ error: "Failed to save settings" });
-  }
-});
-
-// ── PATCH /api/superadmin/companies/:id/subscription ─────────────────────────
-// body: { action: 'activate' | 'suspend' }
-router.patch("/companies/:id/subscription", async (req, res) => {
-  try {
-    const { action } = req.body;
-    if (!['activate', 'suspend'].includes(action)) {
-      return res.status(400).json({ error: "action must be 'activate' or 'suspend'" });
-    }
-    const company = await Company.findById(req.params.id);
-    if (!company) return res.status(404).json({ error: "Company not found" });
-
-    if (action === 'activate') {
-      company.subscriptionActive = true;
-      company.subscriptionStatus = 'active';
-      company.hasAccess = true;
-      if (!company.subscriptionEndDate || new Date(company.subscriptionEndDate) < Date.now()) {
-        const months = company.mode === 'corporate' ? 1 : 6;
-        company.subscriptionEndDate = new Date(Date.now() + months * 30 * 24 * 60 * 60 * 1000);
-      }
-    } else {
-      company.subscriptionActive = false;
-      company.subscriptionStatus = 'inactive';
-      company.hasAccess = false;
-    }
-    await company.save();
-    res.json({ ok: true, subscriptionActive: company.subscriptionActive, subscriptionStatus: company.subscriptionStatus });
-  } catch (err) {
-    res.status(500).json({ error: "Failed to update subscription" });
   }
 });
 

@@ -81,7 +81,7 @@ exports.register = async (req, res) => {
       email:           user.email,
       name:            user.name || user.email.split('@')[0],
       institutionName: company.name,
-      trialDays:       TRIAL_DAYS,
+      trialDays:       14,
       trialEndDate:    company.trialEndDate,
     }).catch(err => console.error('Welcome email failed:', err.message));
 
@@ -679,25 +679,7 @@ exports.login = async (req, res) => {
 
     const isMatch = await user.comparePassword(password);
     if (!isMatch) {
-      // Track failed attempts for student accounts; lock after 5 consecutive failures
-      if (user && user.role === 'student') {
-        user.failedLoginAttempts = (user.failedLoginAttempts || 0) + 1;
-        user.lastFailedLoginAt = new Date();
-        if (user.failedLoginAttempts >= 5 && !user.isLocked) {
-          user.isLocked = true;
-          user.lockedAt = new Date();
-          user.lockReason = 'Account locked after 5 failed login attempts. Contact your department HOD.';
-        }
-        await user.save().catch(() => {});
-      }
       return res.status(401).json({ error: "Invalid credentials" });
-    }
-
-    // Reset failed login counter on successful credential check
-    if (user.failedLoginAttempts > 0) {
-      user.failedLoginAttempts = 0;
-      user.lastFailedLoginAt = null;
-      await user.save().catch(() => {});
     }
 
     if (!user.isApproved) {
@@ -717,13 +699,8 @@ exports.login = async (req, res) => {
       const corporateRoles = ["employee", "manager"];
       const isRolePortalMismatch =
         (academicRoles.includes(user.role) && portalMode === "corporate") ||
-        (corporateRoles.includes(user.role) && portalMode === "academic") ||
-        user.role === "admin";
+        (corporateRoles.includes(user.role) && portalMode === "academic");
       if (isRolePortalMismatch) {
-        if (user.role === "admin") {
-          const correctPortal = company.mode === "academic" ? "Academic Admin" : "Corporate Admin";
-          return res.status(401).json({ error: `Use the ${correctPortal} portal for this account.` });
-        }
         return res.status(401).json({ error: "Invalid credentials" });
       }
     }
