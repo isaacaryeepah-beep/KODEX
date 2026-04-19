@@ -94,14 +94,24 @@ exports.startSession = async (req, res) => {
     }
 
     const Course = require("../models/Course");
-    const courseQuery = { _id: req.body.courseId, company: companyId };
+    // Course model uses 'companyId' (not 'company') and 'lecturerId' (not 'lecturer')
+    const courseQuery = { _id: req.body.courseId, companyId };
     if (req.user.role === "lecturer") {
-      courseQuery.lecturer = req.user._id;
+      courseQuery.lecturerId = req.user._id;
     }
     const course = await Course.findOne(courseQuery);
     if (!course) {
       return res.status(400).json({ error: "Course not found or you don't have access to it" });
     }
+
+    // Block sessions on unapproved courses
+    if (course.needsApproval && course.approvalStatus !== "approved") {
+      const label = course.approvalStatus === "pending" ? "pending HOD approval" : "rejected";
+      return res.status(403).json({
+        error: `This course is ${label} and cannot have active sessions until it is approved.`,
+      });
+    }
+
     const courseRef = course._id;
 
     const sessionData = {

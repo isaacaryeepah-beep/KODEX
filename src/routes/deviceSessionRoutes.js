@@ -16,6 +16,16 @@ router.put('/devices/:deviceId/networks', authenticate, companyIsolation, device
 router.get('/devices/:deviceId/status',   authenticate, companyIsolation, deviceCtrl.getDeviceStatus);
 router.post('/devices/transfer',          authenticate, deviceCtrl.transferDevice);
 
+// Lecturer self-service (no deviceId param needed — scoped to owner)
+router.get('/devices/my',          authenticate, companyIsolation, deviceCtrl.getMyDevice);
+router.delete('/devices/my',       authenticate, companyIsolation, deviceCtrl.unlinkDevice);
+router.patch('/devices/my/rename', authenticate, companyIsolation, deviceCtrl.renameDevice);
+
+// Pairing flow
+router.post('/devices/pairing-code',  authenticate, deviceCtrl.generatePairingCode);
+router.post('/devices/pair',          deviceCtrl.pairDevice); // no JWT — authenticated via pairing code
+router.get('/devices/my/activity',    authenticate, companyIsolation, deviceCtrl.getDeviceActivity);
+
 // ─── SESSION ROUTES ───────────────────────────────────────────────────────────
 router.post('/sessions/start',               authenticate, companyIsolation, sessionCtrl.startSession);
 router.post('/sessions/end',                 authenticate, companyIsolation, sessionCtrl.endSession);

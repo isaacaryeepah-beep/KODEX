@@ -176,6 +176,44 @@ router.delete("/reviews/:id", ...mw, canManage, async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────
+// MY SCORECARD — employee self-view (no canManage guard)
+// ─────────────────────────────────────────────────────────────
+
+router.get("/my-scorecard", ...mw, async (req, res) => {
+  try {
+    const empId = req.user._id;
+    const employee = await User.findById(empId).select("name employeeId department role");
+
+    const goals = await Goal.find({ employee: empId, company: req.user.company }).sort({ createdAt: -1 });
+    const reviews = await Review.find({
+      company: req.user.company,
+      status: "submitted",
+      $or: [{ employee: empId }, { reviewer: empId }],
+    }).populate("reviewer", "name role").sort({ submittedAt: -1 });
+
+    const totalGoals = goals.length;
+    const completedGoals = goals.filter(g => g.status === "completed").length;
+    const activeGoals = goals.filter(g => g.status === "active");
+
+    let weightedProgress = 0, totalWeight = 0;
+    activeGoals.forEach(g => {
+      const w = g.weight || 1;
+      const pct = g.targetValue ? Math.min((g.currentValue / g.targetValue) * 100, 100) : 0;
+      weightedProgress += pct * w;
+      totalWeight += w;
+    });
+    const avgProgress = totalWeight > 0 ? Math.round(weightedProgress / totalWeight) : 0;
+
+    const scored = reviews.filter(r => r.overallScore != null);
+    const avgReviewScore = scored.length
+      ? (scored.reduce((s, r) => s + r.overallScore, 0) / scored.length).toFixed(1)
+      : null;
+
+    res.json({ employee, goals, reviews, stats: { totalGoals, completedGoals, avgProgress, avgReviewScore } });
+  } catch (e) { console.error(e); res.status(500).json({ error: "Failed to fetch your scorecard" }); }
+});
+
+// ─────────────────────────────────────────────────────────────
 // SCORECARD (manager dashboard — per employee overview)
 // ─────────────────────────────────────────────────────────────
 

@@ -71,6 +71,18 @@ const questionBankSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+
+    // Optional image attachment (diagram or figure for the question)
+    imageAttachment: {
+      type: new mongoose.Schema({
+        fileName:     { type: String },
+        originalName: { type: String },
+        fileUrl:      { type: String },
+        mimeType:     { type: String },
+        fileSize:     { type: Number },
+      }, { _id: false }),
+      default: null,
+    },
   },
   { timestamps: true }
 );
