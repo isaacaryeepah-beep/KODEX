@@ -148,22 +148,12 @@ async function startSession(sessionId, companyId, userId, userRole) {
     );
   }
 
-  // Permission: lecturer must own the course + course must be approved
-  if (userRole === 'lecturer' || session.course) {
-    const course = session.course
-      ? await Course.findById(session.course).select('lecturerId needsApproval approvalStatus').lean()
-      : null;
-
-    if (userRole === 'lecturer') {
-      if (!course || course.lecturerId?.toString() !== userId.toString()) {
-        throw Object.assign(new Error('You are not assigned to this course.'), { status: 403 });
-      }
-    }
-
-    if (course && course.needsApproval && course.approvalStatus !== 'approved') {
-      const label = course.approvalStatus === 'pending' ? 'pending HOD approval' : 'rejected';
+  // Permission: lecturer must own the course
+  if (userRole === 'lecturer') {
+    const course = await Course.findById(session.course).select('lecturerId').lean();
+    if (!course || course.lecturerId?.toString() !== userId.toString()) {
       throw Object.assign(
-        new Error(`This course is ${label} and cannot have active sessions.`),
+        new Error('You are not assigned to this course.'),
         { status: 403 }
       );
     }

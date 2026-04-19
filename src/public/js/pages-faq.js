@@ -9,44 +9,11 @@
 // FAQ CENTER  (all roles)
 // ════════════════════════════════════════════════════════════════════════════
 
-const _FAQ_CATEGORIES_CORPORATE = new Set([
-  'attendance', 'gps_attendance', 'hr', 'meetings', 'billing', 'password_reset', 'general',
-]);
-const _FAQ_CATEGORIES_ACADEMIC = new Set([
-  'snapquiz', 'assignments', 'attendance', 'meetings', 'billing', 'password_reset', 'general',
-]);
-
-function _faqAllowedCategories() {
-  const isAdmin = ['admin', 'superadmin'].includes(currentUser?.role);
-  if (isAdmin) return null; // null = show all
-  const mode = currentUser?.company?.mode;
-  if (mode === 'corporate') return _FAQ_CATEGORIES_CORPORATE;
-  if (mode === 'academic')  return _FAQ_CATEGORIES_ACADEMIC;
-  return null;
-}
-
-const _FAQ_ALL_CATEGORIES = [
-  { value: 'attendance',     label: 'Attendance' },
-  { value: 'snapquiz',       label: 'SnapQuiz' },
-  { value: 'assignments',    label: 'Assignments' },
-  { value: 'billing',        label: 'Billing' },
-  { value: 'hr',             label: 'HR' },
-  { value: 'meetings',       label: 'Meetings' },
-  { value: 'gps_attendance', label: 'GPS Attendance' },
-  { value: 'password_reset', label: 'Password Reset' },
-  { value: 'general',        label: 'General' },
-];
-
 async function renderFAQCenter() {
   const content = document.getElementById('main-content');
   if (!content) return;
 
-  const isAdmin   = ['admin', 'superadmin'].includes(currentUser?.role);
-  const allowed   = _faqAllowedCategories();
-  const catOptions = _FAQ_ALL_CATEGORIES
-    .filter(c => !allowed || allowed.has(c.value))
-    .map(c => `<option value="${c.value}">${c.label}</option>`)
-    .join('');
+  const isAdmin = currentUser.role === 'admin' || currentUser.role === 'superadmin';
 
   content.innerHTML = `
     <div class="page-header">
@@ -76,7 +43,15 @@ async function renderFAQCenter() {
         <div style="display:flex;gap:8px;align-items:center">
           <select id="faq-cat-filter" onchange="loadFAQList()" style="padding:6px 10px;border:1.5px solid var(--border);border-radius:7px;font-size:12px;font-family:inherit;outline:none">
             <option value="">All categories</option>
-            ${catOptions}
+            <option value="attendance">Attendance</option>
+            <option value="snapquiz">SnapQuiz</option>
+            <option value="assignments">Assignments</option>
+            <option value="billing">Billing</option>
+            <option value="hr">HR</option>
+            <option value="meetings">Meetings</option>
+            <option value="gps_attendance">GPS Attendance</option>
+            <option value="password_reset">Password Reset</option>
+            <option value="general">General</option>
           </select>
         </div>
       </div>
@@ -108,13 +83,7 @@ async function loadFAQList() {
     const liveArea = document.getElementById('faq-list-area');
     if (!liveArea) return;
 
-    let faqs = data.faqs || data.items || [];
-
-    // When showing all categories, filter to mode-appropriate ones to prevent cross-mode leakage
-    if (!cat) {
-      const allowed = _faqAllowedCategories();
-      if (allowed) faqs = faqs.filter(f => allowed.has(f.category || 'general'));
-    }
+    const faqs = data.faqs || data.items || [];
     if (!faqs.length) {
       liveArea.innerHTML = '<div style="text-align:center;padding:24px;color:var(--text-muted);font-size:13px">No FAQs found yet. Check back soon or ask the AI above.</div>';
       return;

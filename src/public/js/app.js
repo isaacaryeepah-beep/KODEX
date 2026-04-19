@@ -690,30 +690,11 @@ async function api(path, options = {}) {
   return res;
 }
 
-async function apiUpload(urlPath, formData, method = 'POST') {
-  const headers = {};
-  if (token) headers['Authorization'] = `Bearer ${token}`;
-  const res = await fetch(`${API}${urlPath}`, { method, headers, body: formData });
-  if (res.headers.get('content-type')?.includes('application/json')) {
-    const data = await res.json();
-    if (!res.ok) {
-      if (res.status === 403 && data.subscriptionRequired) {
-        showSubscriptionGate(data.message);
-        throw new Error(data.error || 'Subscription required');
-      }
-      throw new Error(data.error || data.message || 'Request failed');
-    }
-    return data;
-  }
-  if (!res.ok) throw new Error('Request failed');
-  return res;
-}
-
 function showSubscriptionGate(message) {
   // Navigate to subscription page and show a toast if possible
   try {
     if (typeof navigateTo === 'function') navigateTo('subscription');
-    const msg = message || 'Your 30-day free trial has expired. Subscribe to continue using KODEX.';
+    const msg = message || 'Your subscription or trial has expired. Please renew to continue.';
     if (typeof toastError === 'function') {
       toastError(msg);
     } else {
@@ -1169,11 +1150,8 @@ async function handleAdminLogin() {
       showAdminError('Too many failed attempts. Please wait 15 minutes and try again.');
     } else if (m.includes('network') || m.includes('fetch')) {
       showAdminError('Network error. Please check your connection and try again.');
-    } else if (m.includes('invalid credentials') || m.includes('wrong') || m.includes('not authorized')) {
-      const portalLabel = selectedPortalType === 'admin-academic' ? 'Academic Admin' : 'Corporate Admin';
-      showAdminError(`Wrong email or password for the ${portalLabel} portal. Make sure you are using the correct portal for your role.`);
     } else {
-      showAdminError(msg || 'Wrong email or password. Please check your credentials.');
+      showAdminError('Wrong Email or Password.');
     }
   }
 }
@@ -1244,10 +1222,8 @@ async function handleLecturerLogin() {
       showLecturerError('Too many failed attempts. Please wait 15 minutes and try again.');
     } else if (m.includes('network') || m.includes('fetch')) {
       showLecturerError('Network error. Please check your connection and try again.');
-    } else if (m.includes('invalid credentials') || m.includes('not authorized')) {
-      showLecturerError('Wrong email or password for the Lecturer portal. If you are an admin or HOD, please use the correct portal.');
     } else {
-      showLecturerError(msg || 'Wrong email or password. Please check your credentials.');
+      showLecturerError('Wrong Email or Password.');
     }
   }
 }
@@ -1605,10 +1581,8 @@ async function handleEmployeeLogin() {
       showEmployeeError('Too many failed attempts. Please wait 15 minutes and try again.');
     } else if (m2.includes('network') || m2.includes('fetch')) {
       showEmployeeError('Network error. Please check your connection and try again.');
-    } else if (m2.includes('invalid credentials') || m2.includes('not authorized')) {
-      showEmployeeError('Wrong email or password for the Employee portal. If you are a manager or admin, please use the correct portal.');
     } else {
-      showEmployeeError(msg2 || 'Wrong email or password. Please check your credentials.');
+      showEmployeeError('Wrong Email or Password.');
     }
   }
 }
@@ -1678,10 +1652,8 @@ async function handleStudentLogin() {
       showStudentError('This account is active on another device. Contact your admin to unlock it.');
     } else if (m3.includes('network') || m3.includes('fetch')) {
       showStudentError('Network error. Please check your connection and try again.');
-    } else if (m3.includes('invalid credentials') || m3.includes('not authorized')) {
-      showStudentError('Wrong Student ID or password. If you are a lecturer or admin, please use the correct portal.');
     } else {
-      showStudentError(msg3 || 'Wrong Student ID or password. Please check your credentials.');
+      showStudentError('Wrong Student ID or Password.');
     }
   }
 }
@@ -2042,91 +2014,57 @@ function showDashboard(data) {
     const isSubRole = (role === 'employee' || role === 'student' || role === 'hod');
     const userTrial = data.userTrial || null;
 
-    const _bannerEl   = document.getElementById('trial-banner');
-    const _expiredEl  = document.getElementById('trial-expired-banner');
-    const _hideBoth   = () => { _bannerEl.style.display = 'none'; _expiredEl.style.display = 'none'; };
-    const _dayLabel   = n => `${n} day${n !== 1 ? 's' : ''}`;
-
     if (isSubRole) {
-      _hideBoth();
+      // Employees / students / HODs never pay — hide both banners
+      document.getElementById('trial-banner').style.display = 'none';
+      document.getElementById('trial-expired-banner').style.display = 'none';
     } else if (PAID_FE.includes(role) && userTrial) {
+      // Use per-user subscription status (ignores company trial)
       const daysLeft = userTrial.daysLeft || 0;
-      const status   = userTrial.status;
+      const status   = userTrial.status;   // 'active' | 'trial' | 'expired'
 
       if (status === 'active') {
-        _expiredEl.style.display = 'none';
-        _bannerEl.className = 'trial-banner sub--active';
-        _bannerEl.innerHTML = `
-          <div class="sub-banner-left">
-            <div class="sub-banner-icon sub-banner-icon--active">✓</div>
-            <div class="sub-banner-text">
-              <span class="sub-banner-title">Subscription Active</span>
-              <span class="sub-banner-sep">·</span>
-              <span class="sub-banner-detail">${_dayLabel(daysLeft)} remaining</span>
-            </div>
-          </div>
-          <div class="sub-banner-right">
-            <div class="sub-banner-pill">Active</div>
-          </div>`;
-        _bannerEl.style.display = 'flex';
-
+        // Subscribed — show green active banner
+        const banner = document.getElementById('trial-banner');
+        banner.textContent = `✅ Subscription active — ${daysLeft} day${daysLeft !== 1 ? 's' : ''} remaining`;
+        banner.style.background = '#f0fdf4';
+        banner.style.color = '#15803d';
+        banner.style.display = 'block';
+        document.getElementById('trial-expired-banner').style.display = 'none';
       } else if (status === 'trial' && daysLeft > 0) {
-        const urgent = daysLeft <= 3;
-        _expiredEl.style.display = 'none';
-        _bannerEl.className = `trial-banner ${urgent ? 'sub--urgent' : 'sub--trial'}`;
-        _bannerEl.innerHTML = `
-          <div class="sub-banner-left">
-            <div class="sub-banner-icon sub-banner-icon--${urgent ? 'urgent' : 'trial'}">${urgent ? '⚠' : '⏳'}</div>
-            <div class="sub-banner-text">
-              <span class="sub-banner-title">${urgent ? 'Trial Ending Soon' : '30-Day Free Trial'}</span>
-              <span class="sub-banner-sep">·</span>
-              <span class="sub-banner-detail">${_dayLabel(daysLeft)} remaining</span>
-            </div>
-          </div>
-          <div class="sub-banner-right">
-            <div class="sub-banner-pill">${urgent ? 'Expiring' : 'Trial'}</div>
-            <button class="sub-banner-cta" onclick="navigateTo('subscription')">${urgent ? 'Upgrade Now' : 'Upgrade'}</button>
-          </div>`;
-        _bannerEl.style.display = 'flex';
-
+        // Still on free trial
+        const banner = document.getElementById('trial-banner');
+        const urgency = daysLeft <= 3 ? '⚠️ ' : '';
+        banner.textContent = `${urgency}Free Trial: ${daysLeft} day${daysLeft !== 1 ? 's' : ''} remaining`;
+        banner.style.background = daysLeft <= 3 ? '#fef3c7' : '';
+        banner.style.color = daysLeft <= 3 ? '#92400e' : '';
+        banner.style.display = 'block';
+        document.getElementById('trial-expired-banner').style.display = 'none';
       } else {
+        // Trial or subscription expired — show subscribe banner with Paystack CTA
+        const expiredBanner = document.getElementById('trial-expired-banner');
         const _mode  = currentUser?.company?.mode || 'academic';
-        const _label = _mode === 'corporate' ? '₵150/month' : '₵300/semester';
-        _bannerEl.style.display = 'none';
-        _expiredEl.className = 'trial-expired-banner';
-        _expiredEl.innerHTML = `
-          <div class="sub-banner-left">
-            <div class="sub-banner-icon sub-banner-icon--expired">✕</div>
-            <div class="sub-banner-text">
-              <span class="sub-banner-title">Trial Expired</span>
-              <span class="sub-banner-sep">·</span>
-              <span class="sub-banner-detail">Subscribe to continue — ${_label} via Paystack</span>
-            </div>
-          </div>
-          <div class="sub-banner-right">
-            <button class="sub-banner-cta" onclick="paySubscription()">Subscribe Now</button>
-          </div>`;
-        _expiredEl.style.display = 'flex';
+        const _label = _mode === 'corporate' ? 'GHS 150 / Month' : 'GHS 300 / Semester';
+        expiredBanner.innerHTML = `
+          ⚠️ Your free trial has ended.
+          <button onclick="paySubscription()" style="margin-left:12px;background:#1a56db;color:#fff;border:none;border-radius:6px;padding:6px 14px;font-size:12px;font-weight:600;cursor:pointer">
+            Pay ${_label} via Paystack
+          </button>`;
+        expiredBanner.style.display = 'block';
+        expiredBanner.style.background = '#fef2f2';
+        expiredBanner.style.color = '#dc2626';
+        document.getElementById('trial-banner').style.display = 'none';
       }
-
     } else if (trial && trial.active) {
+      // Fallback: company trial (superadmin etc.)
+      const banner = document.getElementById('trial-banner');
       const tr = trial.timeRemaining || {};
-      _expiredEl.style.display = 'none';
-      _bannerEl.className = 'trial-banner sub--trial';
-      _bannerEl.innerHTML = `
-        <div class="sub-banner-left">
-          <div class="sub-banner-icon sub-banner-icon--trial">⏳</div>
-          <div class="sub-banner-text">
-            <span class="sub-banner-title">Company Trial</span>
-            <span class="sub-banner-sep">·</span>
-            <span class="sub-banner-detail">${trial.daysRemaining} days remaining (${tr.days || 0}d ${tr.hours || 0}h ${tr.minutes || 0}m)</span>
-          </div>
-        </div>
-        <div class="sub-banner-right"><div class="sub-banner-pill">Trial</div></div>`;
-      _bannerEl.style.display = 'flex';
-
+      banner.textContent = `Free Trial: ${trial.daysRemaining} days remaining (${tr.days || 0}d ${tr.hours || 0}h ${tr.minutes || 0}m)`;
+      banner.style.display = 'block';
+      document.getElementById('trial-expired-banner').style.display = 'none';
     } else {
-      _hideBoth();
+      document.getElementById('trial-banner').style.display = 'none';
+      document.getElementById('trial-expired-banner').style.display = 'none';
     }
 
     buildSidebar();
@@ -2189,7 +2127,6 @@ function buildSidebar() {
       links.push({ id: 'users', label: 'Users', icon: usersIcon() });
       if (currentUser.company?.mode === 'corporate') {
         links.push({ id: 'sign-in-out', label: 'Sign In / Out', icon: attendanceIcon() });
-        links.push({ id: 'corp-attendance', label: 'Team Attendance', icon: svgIcon('<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/><polyline points="9 11 12 14 22 4"/>') });
         links.push({ id: 'shifts', label: 'Shifts', icon: svgIcon('<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>') });
         links.push({ id: 'leave-requests', label: 'Leave Requests', icon: svgIcon('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>') });
         links.push({ id: 'payroll', label: 'Payroll', icon: svgIcon('<rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/>') });
@@ -2205,21 +2142,14 @@ function buildSidebar() {
       links.push({ id: 'hod-courses',      label: 'Courses',        icon: coursesIcon() });
       links.push({ id: 'hod-lecturers',    label: 'Lecturers',      icon: svgIcon('<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>') });
       links.push({ id: 'hod-students',     label: 'Students',       icon: usersIcon() });
-      links.push({ id: 'hod-performance',  label: 'Performance',    icon: svgIcon('<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>') });
-      links.push({ id: 'hod-alerts',       label: 'Smart Alerts',   icon: svgIcon('<path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>') });
-      links.push({ id: 'hod-messaging',    label: 'Dept. Messaging', icon: svgIcon('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><line x1="9" y1="10" x2="15" y2="10"/><line x1="12" y1="7" x2="12" y2="13"/>') });
+      links.push({ id: 'hod-quizzes',      label: 'Quizzes',        icon: quizzesIcon() });
       links.push({ id: 'meetings',         label: 'Meetings',       icon: meetingsIcon() });
       links.push({ id: 'hod-reports',      label: 'Reports',        icon: reportsIcon() });
-      links.push({ id: 'approvals',           label: 'Approvals',        icon: approvalsIcon() });
-      links.push({ id: 'hod-course-approvals',label: 'Course Approvals', icon: svgIcon('<path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>') });
-      links.push({ id: 'hod-unlock-students', label: 'Locked Students',  icon: svgIcon('<rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>') });
+      links.push({ id: 'approvals',        label: 'Approvals',      icon: approvalsIcon() });
       links.push({ id: 'announcements',    label: 'Announcements',  icon: svgIcon('<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>') });
-      links.push({ id: 'messages',         label: 'Messages',       icon: svgIcon('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>') });
-      links.push({ id: 'faq-center',       label: 'FAQ Center',     icon: svgIcon('<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>') });
       break;
     case 'lecturer':
       links.push({ id: 'sessions', label: 'Sessions', icon: sessionsIcon() });
-      links.push({ id: 'attendance-device', label: 'Attendance Device', icon: svgIcon('<rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/>') });
       links.push({ id: 'search', label: 'Search', icon: svgIcon('<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>') });
       links.push({ id: 'courses', label: 'Courses', icon: coursesIcon() });
       links.push({ id: 'quizzes', label: 'Quizzes', icon: quizzesIcon() });
@@ -2236,19 +2166,15 @@ function buildSidebar() {
       links.push({ id: 'subscription', label: 'Subscription', icon: subscriptionIcon() });
       break;
     case 'employee':
-      links.push({ id: 'emp-home',      label: 'Home',            icon: svgIcon('<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>') });
-      links.push({ id: 'sign-in-out',   label: 'Clock In / Out',  icon: attendanceIcon() });
-      links.push({ id: 'my-attendance', label: 'My Attendance',   icon: sessionsIcon() });
-      links.push({ id: 'my-shift',      label: 'My Shift',        icon: svgIcon('<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>') });
-      links.push({ id: 'my-leaves',     label: 'Leave',           icon: svgIcon('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>') });
-      links.push({ id: 'emp-notifications', label: 'Notifications', icon: svgIcon('<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>') });
-      links.push({ id: 'my-performance', label: 'My Performance', icon: svgIcon('<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>') });
-      links.push({ id: 'emp-assistant', label: 'Assistant', icon: svgIcon('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><circle cx="12" cy="10" r="1"/><circle cx="8" cy="10" r="1"/><circle cx="16" cy="10" r="1"/>') });
-      links.push({ id: 'messages',      label: 'Messages',        icon: svgIcon('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>') });
-      links.push({ id: 'meetings',      label: 'Meetings',        icon: meetingsIcon() });
-      links.push({ id: 'support',       label: 'Support',         icon: svgIcon('<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>') });
-      links.push({ id: 'faq-center',    label: 'FAQ Center',      icon: svgIcon('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><line x1="9" y1="10" x2="15" y2="10"/><line x1="12" y1="7" x2="12" y2="13"/>') });
-      links.push({ id: 'reports',       label: 'Reports',         icon: reportsIcon() });
+      links.push({ id: 'sign-in-out', label: 'Clock In / Out', icon: attendanceIcon() });
+      links.push({ id: 'my-attendance', label: 'My Attendance', icon: sessionsIcon() });
+      links.push({ id: 'my-shift', label: 'My Shift', icon: svgIcon('<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>') });
+      links.push({ id: 'my-leaves', label: 'Leave', icon: svgIcon('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>') });
+      links.push({ id: 'messages', label: 'Messages', icon: svgIcon('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>') });
+      links.push({ id: 'meetings', label: 'Meetings', icon: meetingsIcon() });
+      links.push({ id: 'support', label: 'Support', icon: svgIcon('<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>') });
+      links.push({ id: 'faq-center', label: 'FAQ Center', icon: svgIcon('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><line x1="9" y1="10" x2="15" y2="10"/><line x1="12" y1="7" x2="12" y2="13"/>') });
+      links.push({ id: 'reports', label: 'Reports', icon: reportsIcon() });
       break;
     case 'student':
       links.push({ id: 'mark-attendance', label: 'Mark Attendance', icon: attendanceIcon() });
@@ -2293,8 +2219,6 @@ function buildSidebar() {
 }
 
 function navigateTo(view) {
-  // Clear live clock timer when leaving a clock page
-  if (window._empClockTimer) { clearInterval(window._empClockTimer); window._empClockTimer = null; }
   currentView = view;
   document.querySelectorAll('.sidebar-nav a').forEach(a => a.classList.remove('active'));
   const navEl = document.getElementById(`nav-${view}`);
@@ -2304,13 +2228,9 @@ function navigateTo(view) {
   if (!content) return;
   content.innerHTML = '<div class="loading">Loading...</div>';
 
-  // Hide employee assistant panel on every navigation except emp-home
-  if (view !== 'emp-home') _hideEmpAssistantPanel();
-
   switch (view) {
     case 'dashboard': renderDashboard(); break;
     case 'sessions': renderSessions(); break;
-    case 'attendance-device': _safeRender(content, renderAttendanceDevice, 'Attendance Device'); break;
     case 'users': renderUsers(); break;
     case 'meetings': renderMeetings(); break;
     case 'courses': renderCourses(); break;
@@ -2321,11 +2241,7 @@ function navigateTo(view) {
     case 'question-bank': renderQuestionBank(); break;
     case 'my-attendance': renderMyAttendance(); break;
     case 'mark-attendance': renderMarkAttendance(); break;
-    case 'emp-home': renderEmployeeDashboard(document.getElementById('main-content')); break;
-    case 'emp-notifications': renderEmpNotifications(); break;
-    case 'emp-assistant': renderEmpAssistant(); break;
     case 'sign-in-out': renderSignInOut(); break;
-    case 'corp-attendance': renderCorporateAttendance(); break;
     case 'subscription': renderSubscription(); break;
     case 'reports': renderReports(); break;
     case 'shifts': renderShifts(); break;
@@ -2339,18 +2255,13 @@ function navigateTo(view) {
     case 'contact':     renderContact(); break;
     case 'about':       renderAbout(); break;
     case 'superadmin-platform': renderSuperadminDashboard(document.getElementById('main-content')); break;
-    case 'hod-overview':         renderHodDashboard(document.getElementById('main-content')); break;
-    case 'hod-courses':          renderHodCourses(); break;
-    case 'hod-sessions':         renderHodSessions(); break;
-    case 'hod-lecturers':        renderHodLecturers(); break;
-    case 'hod-students':         renderHodStudents(); break;
-    case 'hod-reports':          renderHodReports(); break;
-
-    case 'hod-course-approvals': renderHodCourseApprovals(); break;
-    case 'hod-unlock-students':  renderHodUnlockStudents(); break;
-    case 'hod-performance':      renderHodPerformance(); break;
-    case 'hod-alerts':           renderHodAlerts(); break;
-    case 'hod-messaging':        renderHodMessaging(); break;
+    case 'hod-overview':  renderHodDashboard(document.getElementById('main-content')); break;
+    case 'hod-courses':   renderHodCourses(); break;
+    case 'hod-sessions':  renderHodSessions(); break;
+    case 'hod-lecturers': renderHodLecturers(); break;
+    case 'hod-students':  renderHodStudents(); break;
+    case 'hod-reports':   renderHodReports(); break;
+    case 'hod-quizzes':   renderHodQuizzes(); break;
     case 'announcements': renderAnnouncements(); break;
     case 'gradebook': renderGradeBook(); break;
     case 'training':       renderTraining(); break;
@@ -2363,7 +2274,6 @@ function navigateTo(view) {
     case 'my-performance':
       if (currentUser.role === 'lecturer') renderLecturerPerformance();
       else if (currentUser.role === 'student') renderStudentQuizHistory();
-      else if (currentUser.role === 'employee') renderMyPerformance();
       else renderPerformance();
       break;
     case 'timesheets':     renderTimesheets(); break;
@@ -2428,11 +2338,7 @@ async function renderDashboard() {
         await renderAdminDashboard(content);
         break;
       case 'manager':
-        if (currentUser.company?.mode === 'corporate') {
-          await renderManagerDashboard(content);
-        } else {
-          await renderAdminDashboard(content);
-        }
+        await renderAdminDashboard(content);
         break;
       case 'lecturer':
         await renderLecturerDashboard(content);
@@ -2690,31 +2596,11 @@ async function renderHodDashboard(content) {
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
               Department Reports
             </button>
-            <button class="btn btn-secondary" onclick="navigateTo('hod-performance')">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
-              Performance Dashboard
-            </button>
-            <button class="btn btn-secondary" onclick="navigateTo('hod-alerts')" id="hod-alerts-btn">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-              Smart Alerts
-            </button>
-            <button class="btn btn-secondary" onclick="navigateTo('hod-messaging')">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-              Dept. Messaging
-            </button>
             <button class="btn btn-primary" onclick="navigateTo('announcements')">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
               Post Announcement
             </button>
             <button class="btn btn-secondary" onclick="navigateTo('approvals')" id="hod-approvals-btn">Pending Approvals</button>
-            <button class="btn btn-secondary" onclick="navigateTo('hod-course-approvals')" id="hod-course-approvals-btn">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
-              Course Approvals
-            </button>
-            <button class="btn btn-secondary" onclick="navigateTo('hod-unlock-students')" id="hod-locked-btn">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-              Locked Students
-            </button>
             <div style="border-top:1px solid var(--border);padding-top:8px;margin-top:4px;">
               <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-muted);margin-bottom:6px;">Export</div>
               <div style="display:flex;gap:6px;flex-wrap:wrap;">
@@ -2730,21 +2616,6 @@ async function renderHodDashboard(content) {
       const count = (d.pending || []).length;
       const btn = document.getElementById('hod-approvals-btn');
       if (btn && count > 0) btn.innerHTML += ' <span style="background:#ef4444;color:#fff;font-size:10px;font-weight:700;padding:1px 6px;border-radius:20px;margin-left:4px;">' + count + '</span>';
-    }).catch(() => {});
-    api('/api/hod/pending-courses').then(d => {
-      const count = (d.courses || []).length;
-      const btn = document.getElementById('hod-course-approvals-btn');
-      if (btn && count > 0) btn.innerHTML += ' <span style="background:#ef4444;color:#fff;font-size:10px;font-weight:700;padding:1px 6px;border-radius:20px;margin-left:4px;">' + count + '</span>';
-    }).catch(() => {});
-    api('/api/hod/locked-students').then(d => {
-      const count = (d.students || []).length;
-      const btn = document.getElementById('hod-locked-btn');
-      if (btn && count > 0) btn.innerHTML += ' <span style="background:#ef4444;color:#fff;font-size:10px;font-weight:700;padding:1px 6px;border-radius:20px;margin-left:4px;">' + count + '</span>';
-    }).catch(() => {});
-    api('/api/hod/alerts').then(d => {
-      const count = (d.inactiveLecturers?.length || 0) + (d.repeatedAbsentees?.length || 0) + (d.lowAttendanceStudents?.length || 0);
-      const btn = document.getElementById('hod-alerts-btn');
-      if (btn && count > 0) btn.innerHTML += ' <span style="background:#f59e0b;color:#fff;font-size:10px;font-weight:700;padding:1px 6px;border-radius:20px;margin-left:4px;">' + count + '</span>';
     }).catch(() => {});
   } catch(e) {
     content.innerHTML = `<div class="card"><p style="color:#ef4444;">Error loading dashboard: ${e.message}</p></div>`;
@@ -3196,11 +3067,6 @@ async function hodExportCSV(type) {
       headers = ['Session', 'Lecturer', 'Date', 'Attendance', 'Status'];
       rows = (d.sessions || []).map(s => [s.title || s.courseName || 'Session', s.createdBy?.name || '', fmtDate(s.createdAt), s.attendanceCount ?? s.records?.length ?? 0, s.active ? 'Live' : 'Ended']);
       filename = 'KODEX_Attendance_' + (currentUser.department || 'All') + '.csv';
-    } else if (type === 'courses') {
-      const d = await api('/api/hod/course-overview');
-      headers = ['Course', 'Code', 'Lecturer', 'Enrolled', 'Sessions (30d)', 'Total Attendance', 'Last Session', 'Status'];
-      rows = (d.courses || []).map(c => [c.title, c.code || '', c.lecturer?.name || 'Unassigned', c.enrolled, c.sessions30, c.totalAttendance, c.lastSessionAt ? fmtDate(c.lastSessionAt) : '—', c.lastSessionAt && (Date.now() - new Date(c.lastSessionAt).getTime() < 14*24*60*60*1000) ? 'Active' : 'Inactive']);
-      filename = 'KODEX_Courses_' + (currentUser.department || 'All') + '.csv';
     }
 
     const csv = [headers, ...rows].map(r => r.map(v => '"' + String(v).replace(/"/g, '""') + '"').join(',')).join('\n');
@@ -3213,267 +3079,38 @@ async function hodExportCSV(type) {
 }
 
 
-// ── HOD — Courses oversight view ───────────────────────────────────────────
+// ── FEATURE 3: HOD — Courses view ──────────────────────────────────────────
 async function renderHodCourses() {
   const content = document.getElementById('main-content');
   content.innerHTML = '<div class="loading">Loading courses…</div>';
   try {
-    const [overviewData, pendingData] = await Promise.all([
-      api('/api/hod/course-overview'),
-      api('/api/hod/pending-courses').catch(() => ({ courses: [] })),
-    ]);
-    const courses = overviewData.courses || [];
-    const pending = pendingData.courses || [];
-    const now = Date.now();
-    const day14 = 14 * 24 * 60 * 60 * 1000;
-
-    const activityBadge = c => {
-      if (!c.lastSessionAt) return '<span style="background:#f3f4f6;color:#6b7280;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700;">NO SESSIONS</span>';
-      const age = now - new Date(c.lastSessionAt).getTime();
-      if (age < day14) return '<span style="background:#dcfce7;color:#16a34a;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700;">ACTIVE</span>';
-      return '<span style="background:#fef3c7;color:#b45309;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700;">INACTIVE</span>';
-    };
-
+    const dept = currentUser.department ? '&department=' + encodeURIComponent(currentUser.department) : '';
+    const data = await api('/api/courses?limit=200' + dept);
+    const courses = data.courses || [];
     content.innerHTML = `
-      <div class="page-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
-        <div><h2>Course Oversight</h2><p>${courses.length} course${courses.length !== 1 ? 's' : ''} in ${currentUser.department || 'your department'} · last 30 days activity shown</p></div>
-        <div style="display:flex;gap:8px;">
-          ${pending.length > 0 ? `<button class="btn btn-primary btn-sm" onclick="navigateTo('hod-course-approvals')">⚠ ${pending.length} Pending</button>` : ''}
-          <button class="btn btn-secondary btn-sm" onclick="hodExportCSV('courses')">Export CSV</button>
-        </div>
+      <div class="page-header">
+        <div><h2>Courses</h2><p>${courses.length} course${courses.length !== 1 ? 's' : ''} in ${currentUser.department || 'your department'}</p></div>
       </div>
       ${courses.length === 0 ? '<div class="empty-state"><p>No courses found for this department.</p></div>' :
-        `<div style="overflow-x:auto;">
-          <table style="width:100%;border-collapse:collapse;font-size:13px;">
-            <thead>
-              <tr style="border-bottom:2px solid var(--border);">
-                <th style="text-align:left;padding:10px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Course</th>
-                <th style="text-align:left;padding:10px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Lecturer</th>
-                <th style="text-align:center;padding:10px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Enrolled</th>
-                <th style="text-align:center;padding:10px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Sessions (30d)</th>
-                <th style="text-align:left;padding:10px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Last Session</th>
-                <th style="text-align:center;padding:10px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Total Att.</th>
-                <th style="text-align:left;padding:10px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${courses.map(c => `
-                <tr style="border-bottom:1px solid var(--border);">
-                  <td style="padding:10px 12px;">
-                    <div style="font-weight:700;">${esc(c.title)}</div>
-                    <div style="font-size:11px;font-family:monospace;color:var(--text-muted);">${esc(c.code || '—')}</div>
-                  </td>
-                  <td style="padding:10px 12px;color:var(--text-muted);">${esc(c.lecturer?.name || 'Unassigned')}</td>
-                  <td style="padding:10px 12px;text-align:center;">${c.enrolled}</td>
-                  <td style="padding:10px 12px;text-align:center;font-weight:700;color:${c.sessions30 > 0 ? '#0891b2' : '#9ca3af'}">${c.sessions30}</td>
-                  <td style="padding:10px 12px;font-size:12px;color:var(--text-muted);">${c.lastSessionAt ? timeAgo(c.lastSessionAt) : '—'}</td>
-                  <td style="padding:10px 12px;text-align:center;">${c.totalAttendance}</td>
-                  <td style="padding:10px 12px;">${activityBadge(c)}</td>
-                </tr>`).join('')}
-            </tbody>
-          </table>
+        `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px;">
+          ${courses.map(c => `
+            <div class="card" style="padding:16px 18px;">
+              <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:8px;">
+                <div>
+                  <div style="font-weight:700;font-size:14px;">${c.title}</div>
+                  <div style="font-size:11px;font-family:monospace;color:var(--text-muted);margin-top:2px;">${c.code}</div>
+                </div>
+                <span class="tag tag-blue">${c.enrolledStudents?.length || 0} students</span>
+              </div>
+              <div style="font-size:12px;color:var(--text-muted);margin-bottom:6px;">
+                👨‍🏫 ${c.lecturer?.name || 'Unassigned'}
+              </div>
+              ${c.description ? `<div style="font-size:12px;color:var(--text-muted);line-height:1.5;">${c.description}</div>` : ''}
+            </div>`).join('')}
         </div>`}`;
   } catch(e) {
     content.innerHTML = `<div class="card"><p style="color:#ef4444;">${e.message}</p></div>`;
   }
-}
-
-// ── FEATURE 3b: HOD — Course Approval Queue ────────────────────────────────
-async function renderHodCourseApprovals() {
-  const content = document.getElementById('main-content');
-  content.innerHTML = '<div class="loading">Loading pending courses…</div>';
-  try {
-    const data = await api('/api/hod/pending-courses');
-    const courses = data.courses || [];
-    content.innerHTML = `
-      <div class="page-header">
-        <div>
-          <h2>Course Approvals</h2>
-          <p>${courses.length} course${courses.length !== 1 ? 's' : ''} awaiting your review · ${currentUser.department || 'All departments'}</p>
-        </div>
-      </div>
-      ${courses.length === 0
-        ? `<div class="card"><div class="empty-state"><p style="color:var(--text-muted);font-size:13px;">No courses pending approval. All caught up!</p></div></div>`
-        : `<div style="display:flex;flex-direction:column;gap:14px;">
-            ${courses.map(c => `
-              <div class="card" style="padding:18px 20px;border-left:3px solid #f59e0b;">
-                <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:10px;">
-                  <div>
-                    <div style="font-weight:700;font-size:15px;">${esc(c.title)}</div>
-                    <div style="font-size:11px;font-family:monospace;color:var(--text-muted);margin-top:2px;">${esc(c.code)}</div>
-                  </div>
-                  <span style="background:#fef3c7;color:#b45309;border:1px solid #fde68a;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700;white-space:nowrap;">⏳ Pending Approval</span>
-                </div>
-                <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:6px;font-size:12px;color:var(--text-muted);margin-bottom:12px;">
-                  <div>👨‍🏫 <strong>${esc(c.lecturerId?.name || c.createdBy?.name || 'Unknown')}</strong></div>
-                  ${c.academicYear ? `<div>📅 ${esc(c.academicYear)} · Sem ${esc(c.semester || '—')}</div>` : ''}
-                  ${c.level       ? `<div>🎓 Level ${esc(c.level)}${c.group ? ` · Group ${esc(c.group)}` : ''}</div>` : ''}
-                  ${c.departmentId? `<div>🏛 ${esc(c.departmentId)}</div>` : ''}
-                  <div>📅 Submitted ${timeAgo(c.createdAt)}</div>
-                </div>
-                ${c.description ? `<div style="font-size:12px;color:var(--text-secondary);line-height:1.55;margin-bottom:12px;border-left:3px solid var(--border);padding-left:10px;">${esc(c.description)}</div>` : ''}
-                <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-                  <button class="btn btn-primary btn-sm" onclick="hodApproveCourse('${c._id}','${esc(c.title).replace(/'/g,"\\'")}')">
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Approve
-                  </button>
-                  <button class="btn btn-sm" style="background:#fee2e2;color:#b91c1c;border:1px solid #fca5a5;" onclick="hodRejectCourse('${c._id}','${esc(c.title).replace(/'/g,"\\'")}')">
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg> Reject
-                  </button>
-                </div>
-              </div>`).join('')}
-          </div>`}`;
-  } catch(e) {
-    content.innerHTML = `<div class="card"><p style="color:#ef4444;">${e.message}</p></div>`;
-  }
-}
-
-async function hodApproveCourse(id, title) {
-  const note = prompt(`Approve course: "${title}"\n\nOptional note for the lecturer:`) ;
-  if (note === null) return; // cancelled
-  try {
-    await api(`/api/hod/courses/${id}/approve`, { method: 'PATCH', body: JSON.stringify({ note: note.trim() || undefined }) });
-    toastSuccess(`"${title}" approved and published.`);
-    renderHodCourseApprovals();
-  } catch(e) { toastError(e.message || 'Failed to approve course'); }
-}
-
-async function hodRejectCourse(id, title) {
-  const note = prompt(`Reject course: "${title}"\n\nReason for rejection (required):`);
-  if (note === null || !note.trim()) { toastWarning('Rejection reason is required.'); return; }
-  try {
-    await api(`/api/hod/courses/${id}/reject`, { method: 'PATCH', body: JSON.stringify({ note: note.trim() }) });
-    toastSuccess(`"${title}" rejected. Lecturer has been notified.`);
-    renderHodCourseApprovals();
-  } catch(e) { toastError(e.message || 'Failed to reject course'); }
-}
-
-// ── HOD — Unlock Locked Students (with filter + bulk unlock) ──────────────
-async function renderHodUnlockStudents() {
-  const content = document.getElementById('main-content');
-  content.innerHTML = '<div class="loading">Loading locked accounts…</div>';
-  try {
-    const data = await api('/api/hod/locked-students');
-    const students = data.students || [];
-
-    // Gather unique departments for filter
-    const depts = [...new Set(students.map(s => s.department).filter(Boolean))].sort();
-
-    content.innerHTML = `
-      <div class="page-header" style="flex-wrap:wrap;gap:10px;">
-        <div>
-          <h2>Locked Student Accounts</h2>
-          <p>${students.length} locked account${students.length !== 1 ? 's' : ''} · Locked after 5 failed login attempts</p>
-        </div>
-        ${students.length > 1 ? `<button class="btn btn-primary btn-sm" onclick="hodBulkUnlockSelected()" id="hod-bulk-btn" style="display:none;">Unlock Selected</button>` : ''}
-      </div>
-
-      ${students.length === 0
-        ? `<div class="card"><div class="empty-state"><p style="color:var(--text-muted);font-size:13px;">No locked student accounts. All clear! ✓</p></div></div>`
-        : `<div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center;">
-            <input id="hod-lock-search" placeholder="Search by name or index…" oninput="hodFilterLocked()" style="padding:8px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;min-width:220px;">
-            ${depts.length > 1 ? `<select id="hod-lock-dept" onchange="hodFilterLocked()" style="padding:8px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;">
-              <option value="">All Departments</option>
-              ${depts.map(d => `<option value="${esc(d)}">${esc(d)}</option>`).join('')}
-            </select>` : ''}
-          </div>
-          <div style="overflow-x:auto;" class="card" style="padding:0">
-            <table style="width:100%;border-collapse:collapse;font-size:13px;">
-              <thead>
-                <tr style="border-bottom:2px solid var(--border);">
-                  <th style="padding:10px 16px;">
-                    <input type="checkbox" id="hod-lock-all" onchange="hodToggleAllLocked(this)" title="Select all">
-                  </th>
-                  <th style="text-align:left;padding:10px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Student</th>
-                  <th style="text-align:left;padding:10px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Index No.</th>
-                  <th style="text-align:left;padding:10px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Department</th>
-                  <th style="text-align:left;padding:10px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Lock Reason</th>
-                  <th style="text-align:left;padding:10px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Locked</th>
-                  <th style="text-align:center;padding:10px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Attempts</th>
-                  <th style="padding:10px 12px;"></th>
-                </tr>
-              </thead>
-              <tbody id="hod-lock-tbody">
-                ${students.map(s => `
-                  <tr class="hod-lock-row" data-id="${s._id}" data-name="${(s.name||'').toLowerCase()}" data-index="${(s.IndexNumber||'').toLowerCase()}" data-dept="${(s.department||'').toLowerCase()}" style="border-bottom:1px solid var(--border);" id="locked-row-${s._id}">
-                    <td style="padding:10px 16px;">
-                      <input type="checkbox" class="hod-lock-cb" value="${s._id}" onchange="hodUpdateBulkBtn()">
-                    </td>
-                    <td style="padding:10px 12px;font-weight:600;">${esc(s.name)}</td>
-                    <td style="padding:10px 12px;font-family:monospace;color:var(--text-muted);">${esc(s.IndexNumber || '—')}</td>
-                    <td style="padding:10px 12px;">
-                      ${s.department ? `<span style="background:#ecfeff;color:#0891b2;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600;">${esc(s.department)}</span>` : '—'}
-                    </td>
-                    <td style="padding:10px 12px;font-size:12px;color:var(--text-muted);max-width:220px;">${esc(s.lockReason || '—')}</td>
-                    <td style="padding:10px 12px;font-size:12px;color:var(--text-muted);white-space:nowrap;">${s.lockedAt ? timeAgo(s.lockedAt) : '—'}</td>
-                    <td style="padding:10px 12px;text-align:center;">
-                      <span style="background:#fee2e2;color:#b91c1c;border:1px solid #fca5a5;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700;">${s.failedLoginAttempts || 0}</span>
-                    </td>
-                    <td style="padding:10px 12px;white-space:nowrap;">
-                      <button class="btn btn-sm btn-primary" onclick="hodUnlockStudent('${s._id}','${esc(s.name).replace(/'/g,"\\'")}')">
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg>
-                        Unlock
-                      </button>
-                    </td>
-                  </tr>`).join('')}
-              </tbody>
-            </table>
-          </div>`}`;
-  } catch(e) {
-    content.innerHTML = `<div class="card"><p style="color:#ef4444;">${e.message}</p></div>`;
-  }
-}
-
-function hodFilterLocked() {
-  const q    = (document.getElementById('hod-lock-search')?.value || '').toLowerCase();
-  const dept = (document.getElementById('hod-lock-dept')?.value || '').toLowerCase();
-  document.querySelectorAll('.hod-lock-row').forEach(row => {
-    const match = (!q || row.dataset.name.includes(q) || row.dataset.index.includes(q))
-               && (!dept || row.dataset.dept === dept);
-    row.style.display = match ? '' : 'none';
-  });
-  hodUpdateBulkBtn();
-}
-
-function hodToggleAllLocked(cb) {
-  document.querySelectorAll('.hod-lock-cb').forEach(c => {
-    const row = c.closest('.hod-lock-row');
-    if (row && row.style.display !== 'none') c.checked = cb.checked;
-  });
-  hodUpdateBulkBtn();
-}
-
-function hodUpdateBulkBtn() {
-  const checked = document.querySelectorAll('.hod-lock-cb:checked').length;
-  const btn = document.getElementById('hod-bulk-btn');
-  if (btn) {
-    btn.style.display = checked > 0 ? '' : 'none';
-    btn.textContent = `Unlock Selected (${checked})`;
-  }
-}
-
-async function hodBulkUnlockSelected() {
-  const ids = [...document.querySelectorAll('.hod-lock-cb:checked')].map(c => c.value);
-  if (ids.length === 0) return;
-  if (!confirm(`Bulk unlock ${ids.length} student account${ids.length !== 1 ? 's' : ''}?`)) return;
-  try {
-    const d = await api('/api/hod/bulk-unlock', { method: 'POST', body: JSON.stringify({ userIds: ids }) });
-    toastSuccess(d.message);
-    ids.forEach(id => document.getElementById(`locked-row-${id}`)?.remove());
-    hodUpdateBulkBtn();
-    const allCb = document.getElementById('hod-lock-all');
-    if (allCb) allCb.checked = false;
-  } catch(e) { toastError(e.message || 'Bulk unlock failed'); }
-}
-
-async function hodUnlockStudent(userId, name) {
-  const note = prompt(`Unlock account for: ${name}\n\nOptional note (reason for unlock):`);
-  if (note === null) return; // cancelled
-  try {
-    await api(`/api/hod/unlock/${userId}`, { method: 'PATCH', body: JSON.stringify({ note: note.trim() || undefined }) });
-    toastSuccess(`${name}'s account has been unlocked.`);
-    // Remove row from table
-    document.getElementById(`locked-row-${userId}`)?.remove();
-  } catch(e) { toastError(e.message || 'Failed to unlock account'); }
 }
 
 // ── FEATURE 4: HOD — Edit lecturer department ───────────────────────────────
@@ -3492,269 +3129,6 @@ Current: ${currentDept || 'None'}`, currentDept || '');
   }).catch(e => toastError(e.message || 'Failed to update department'));
 }
 
-
-// ── HOD — Department Performance Dashboard ────────────────────────────────
-async function renderHodPerformance() {
-  const content = document.getElementById('main-content');
-  content.innerHTML = '<div class="loading">Loading performance data…</div>';
-  try {
-    const data = await api('/api/hod/dashboard-stats');
-    const { totalSessions, endedSessions, totalAttendance, avgAttendance, bestCourse, lecturerSummary } = data;
-    const attRate = endedSessions > 0 && avgAttendance > 0 ? '~' + avgAttendance + ' / session' : '—';
-
-    content.innerHTML = `
-      <div class="page-header">
-        <div><h2>Performance Dashboard</h2><p>${currentUser.department || 'Department'} · last 30 days</p></div>
-        <button class="btn btn-secondary btn-sm" onclick="hodExportCSV('attendance')">Export Attendance CSV</button>
-      </div>
-
-      <div class="stats-grid" style="margin-bottom:20px;">
-        <div class="stat-card">
-          <div class="stat-value" style="color:#0891b2">${totalSessions}</div>
-          <div class="stat-label">TOTAL SESSIONS</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-value" style="color:#16a34a">${totalAttendance}</div>
-          <div class="stat-label">TOTAL ATTENDANCE</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-value" style="color:#0891b2">${avgAttendance}</div>
-          <div class="stat-label">AVG / SESSION</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-value" style="color:#7c3aed;font-size:15px;word-break:break-word;">${bestCourse ? bestCourse.name : '—'}</div>
-          <div class="stat-label">BEST COURSE</div>
-        </div>
-      </div>
-
-      ${bestCourse ? `
-      <div class="card" style="margin-bottom:16px;border-left:3px solid #7c3aed;">
-        <div style="font-size:13px;font-weight:700;margin-bottom:6px;">🏆 Best Performing Course</div>
-        <div style="display:flex;gap:24px;font-size:13px;color:var(--text-muted);">
-          <span><strong style="color:var(--text)">${esc(bestCourse.name)}</strong></span>
-          <span>${bestCourse.sessions} sessions</span>
-          <span>${bestCourse.attendance} total attendance</span>
-          <span>${bestCourse.sessions ? Math.round(bestCourse.attendance / bestCourse.sessions) : 0} avg / session</span>
-        </div>
-      </div>` : ''}
-
-      <div class="card">
-        <div style="font-size:13px;font-weight:700;margin-bottom:14px;">Lecturer Activity Summary</div>
-        ${lecturerSummary.length === 0 ? '<p style="color:var(--text-muted);font-size:13px;">No session data in the last 30 days.</p>' : `
-        <table style="width:100%;border-collapse:collapse;font-size:13px;">
-          <thead>
-            <tr style="border-bottom:2px solid var(--border);">
-              <th style="text-align:left;padding:8px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Lecturer</th>
-              <th style="text-align:center;padding:8px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Sessions</th>
-              <th style="text-align:center;padding:8px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Total Att.</th>
-              <th style="text-align:center;padding:8px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Avg / Session</th>
-              <th style="text-align:center;padding:8px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Live Now</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${lecturerSummary.map((l, i) => `
-              <tr style="border-bottom:1px solid var(--border);${i === 0 ? 'background:rgba(124,58,237,.04)' : ''}">
-                <td style="padding:9px 12px;font-weight:600;">${esc(l.name)} ${i === 0 ? '<span style="font-size:10px;color:#7c3aed;font-weight:700;">TOP</span>' : ''}</td>
-                <td style="padding:9px 12px;text-align:center;">${l.sessions}</td>
-                <td style="padding:9px 12px;text-align:center;">${l.attendance}</td>
-                <td style="padding:9px 12px;text-align:center;">${l.sessions ? Math.round(l.attendance / l.sessions) : 0}</td>
-                <td style="padding:9px 12px;text-align:center;">${l.active > 0 ? `<span class="tag tag-green">${l.active}</span>` : '—'}</td>
-              </tr>`).join('')}
-          </tbody>
-        </table>`}
-      </div>`;
-  } catch(e) {
-    content.innerHTML = `<div class="card"><p style="color:#ef4444;">${e.message}</p></div>`;
-  }
-}
-
-// ── HOD — Smart Alerts ────────────────────────────────────────────────────
-async function renderHodAlerts() {
-  const content = document.getElementById('main-content');
-  content.innerHTML = '<div class="loading">Analysing department data…</div>';
-  try {
-    const data = await api('/api/hod/alerts');
-    const { inactiveLecturers = [], inactiveCourses = [], repeatedAbsentees = [], lowAttendanceStudents = [] } = data;
-    const totalAlerts = inactiveLecturers.length + inactiveCourses.length + repeatedAbsentees.length + lowAttendanceStudents.length;
-
-    const alertSection = (title, icon, color, bg, border, items, renderRow) => `
-      <div class="card" style="margin-bottom:16px;${items.length > 0 ? `border-left:3px solid ${border}` : ''}">
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:${items.length > 0 ? 14 : 0}px;">
-          <span style="font-size:18px;">${icon}</span>
-          <span style="font-size:13px;font-weight:700;">${title}</span>
-          <span style="margin-left:auto;background:${items.length > 0 ? bg : '#f3f4f6'};color:${items.length > 0 ? color : '#9ca3af'};padding:2px 10px;border-radius:20px;font-size:12px;font-weight:700;">${items.length}</span>
-        </div>
-        ${items.length === 0
-          ? `<p style="font-size:12px;color:var(--text-muted);margin:0;">✓ No alerts — all clear</p>`
-          : `<table style="width:100%;border-collapse:collapse;font-size:13px;">${renderRow(items)}</table>`}
-      </div>`;
-
-    content.innerHTML = `
-      <div class="page-header">
-        <div><h2>Smart Alerts</h2><p>${currentUser.department || 'Department'} · ${totalAlerts} alert${totalAlerts !== 1 ? 's' : ''} found</p></div>
-      </div>
-
-      ${alertSection('Low Attendance Students (< 50% in last 30 days)', '📉', '#dc2626', '#fee2e2', '#ef4444', lowAttendanceStudents,
-        items => `
-          <thead><tr style="border-bottom:2px solid var(--border);">
-            <th style="text-align:left;padding:7px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Student</th>
-            <th style="text-align:left;padding:7px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Index No.</th>
-            <th style="text-align:center;padding:7px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Attended</th>
-            <th style="text-align:center;padding:7px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Total</th>
-            <th style="text-align:center;padding:7px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Rate</th>
-          </tr></thead>
-          <tbody>${items.map(s => `
-            <tr style="border-bottom:1px solid var(--border);">
-              <td style="padding:8px 12px;font-weight:600;">${esc(s.name)}</td>
-              <td style="padding:8px 12px;font-family:monospace;color:var(--text-muted);">${esc(s.IndexNumber || '—')}</td>
-              <td style="padding:8px 12px;text-align:center;">${s.attended}</td>
-              <td style="padding:8px 12px;text-align:center;">${s.total}</td>
-              <td style="padding:8px 12px;text-align:center;">
-                <span style="font-weight:700;color:${s.rate < 30 ? '#dc2626' : '#d97706'}">${s.rate}%</span>
-                <div style="height:4px;background:var(--border);border-radius:2px;margin-top:3px;">
-                  <div style="height:4px;background:${s.rate < 30 ? '#dc2626' : '#d97706'};border-radius:2px;width:${s.rate}%;"></div>
-                </div>
-              </td>
-            </tr>`).join('')}</tbody>`
-      )}
-
-      ${alertSection('Repeated Absentees (3+ absences in 30 days)', '⚠️', '#d97706', '#fef3c7', '#f59e0b', repeatedAbsentees,
-        items => `
-          <thead><tr style="border-bottom:2px solid var(--border);">
-            <th style="text-align:left;padding:7px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Student</th>
-            <th style="text-align:left;padding:7px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Index No.</th>
-            <th style="text-align:left;padding:7px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Department</th>
-            <th style="text-align:center;padding:7px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Absences</th>
-          </tr></thead>
-          <tbody>${items.map(s => `
-            <tr style="border-bottom:1px solid var(--border);">
-              <td style="padding:8px 12px;font-weight:600;">${esc(s.name)}</td>
-              <td style="padding:8px 12px;font-family:monospace;color:var(--text-muted);">${esc(s.IndexNumber || '—')}</td>
-              <td style="padding:8px 12px;">${s.department ? `<span style="background:#ecfeff;color:#0891b2;padding:2px 8px;border-radius:20px;font-size:11px;">${esc(s.department)}</span>` : '—'}</td>
-              <td style="padding:8px 12px;text-align:center;"><span style="font-weight:700;color:#d97706;">${s.absentCount}</span></td>
-            </tr>`).join('')}</tbody>`
-      )}
-
-      ${alertSection('Lecturers Not Running Sessions (last 14 days)', '👨‍🏫', '#dc2626', '#fee2e2', '#ef4444', inactiveLecturers,
-        items => `
-          <thead><tr style="border-bottom:2px solid var(--border);">
-            <th style="text-align:left;padding:7px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Lecturer</th>
-            <th style="text-align:left;padding:7px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Email</th>
-            <th style="text-align:left;padding:7px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Department</th>
-          </tr></thead>
-          <tbody>${items.map(l => `
-            <tr style="border-bottom:1px solid var(--border);">
-              <td style="padding:8px 12px;font-weight:600;">${esc(l.name)}</td>
-              <td style="padding:8px 12px;color:var(--text-muted);">${esc(l.email || '—')}</td>
-              <td style="padding:8px 12px;">${l.department ? `<span style="background:#ecfeff;color:#0891b2;padding:2px 8px;border-radius:20px;font-size:11px;">${esc(l.department)}</span>` : '—'}</td>
-            </tr>`).join('')}</tbody>`
-      )}
-
-      ${alertSection('Inactive Courses (no sessions in 14 days)', '📚', '#7c3aed', '#ede9fe', '#7c3aed', inactiveCourses,
-        items => `
-          <thead><tr style="border-bottom:2px solid var(--border);">
-            <th style="text-align:left;padding:7px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Course</th>
-            <th style="text-align:left;padding:7px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Code</th>
-            <th style="text-align:left;padding:7px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Lecturer</th>
-          </tr></thead>
-          <tbody>${items.map(c => `
-            <tr style="border-bottom:1px solid var(--border);">
-              <td style="padding:8px 12px;font-weight:600;">${esc(c.title)}</td>
-              <td style="padding:8px 12px;font-family:monospace;color:var(--text-muted);">${esc(c.code || '—')}</td>
-              <td style="padding:8px 12px;color:var(--text-muted);">${esc(c.lecturerId?.name || 'Unassigned')}</td>
-            </tr>`).join('')}</tbody>`
-      )}`;
-  } catch(e) {
-    content.innerHTML = `<div class="card"><p style="color:#ef4444;">${e.message}</p></div>`;
-  }
-}
-
-// ── HOD — Department Messaging ────────────────────────────────────────────
-async function renderHodMessaging() {
-  const content = document.getElementById('main-content');
-  content.innerHTML = '<div class="loading">Loading…</div>';
-  try {
-    const dept = currentUser.department ? '&department=' + encodeURIComponent(currentUser.department) : '';
-    const [lecData, stuData] = await Promise.all([
-      api('/api/users?role=lecturer&limit=200' + dept),
-      api('/api/users?role=student&limit=500' + dept),
-    ]);
-    const lecCount = (lecData.users || []).length;
-    const stuCount = (stuData.users || []).length;
-
-    content.innerHTML = `
-      <div class="page-header">
-        <div><h2>Department Messaging</h2><p>Send messages or announcements to your department</p></div>
-      </div>
-
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;flex-wrap:wrap;">
-        <div class="card" style="padding:20px;cursor:pointer;border:2px solid transparent;transition:border .2s;" id="hod-msg-lec-card" onclick="hodSelectMsgTarget('lecturers')">
-          <div style="font-size:28px;margin-bottom:8px;">👨‍🏫</div>
-          <div style="font-weight:700;font-size:14px;">Message Lecturers</div>
-          <div style="font-size:12px;color:var(--text-muted);margin-top:4px;">${lecCount} lecturer${lecCount !== 1 ? 's' : ''} in ${currentUser.department || 'your department'}</div>
-        </div>
-        <div class="card" style="padding:20px;cursor:pointer;border:2px solid transparent;transition:border .2s;" id="hod-msg-stu-card" onclick="hodSelectMsgTarget('students')">
-          <div style="font-size:28px;margin-bottom:8px;">🎓</div>
-          <div style="font-weight:700;font-size:14px;">Message Students</div>
-          <div style="font-size:12px;color:var(--text-muted);margin-top:4px;">${stuCount} student${stuCount !== 1 ? 's' : ''} in ${currentUser.department || 'your department'}</div>
-        </div>
-      </div>
-
-      <div class="card" id="hod-msg-form" style="display:none;">
-        <div style="font-size:13px;font-weight:700;margin-bottom:14px;">Compose Message</div>
-        <div style="margin-bottom:12px;">
-          <div style="font-size:12px;font-weight:600;color:var(--text-muted);margin-bottom:6px;">TO</div>
-          <div id="hod-msg-target-label" style="font-size:13px;font-weight:700;padding:8px 12px;background:var(--bg);border-radius:8px;border:1.5px solid var(--border);"></div>
-        </div>
-        <div style="margin-bottom:16px;">
-          <div style="font-size:12px;font-weight:600;color:var(--text-muted);margin-bottom:6px;">MESSAGE</div>
-          <textarea id="hod-msg-body" placeholder="Type your message here…" rows="5" style="width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;resize:vertical;outline:none;box-sizing:border-box;"></textarea>
-        </div>
-        <div style="display:flex;gap:10px;align-items:center;">
-          <button class="btn btn-primary" onclick="hodSendGroupMessage()" id="hod-msg-send-btn">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
-            Send Message
-          </button>
-          <button class="btn btn-secondary" onclick="navigateTo('announcements')">Post Announcement Instead</button>
-        </div>
-        <p style="font-size:11px;color:var(--text-muted);margin-top:10px;">Each recipient receives an individual direct message in their inbox. Max 100 recipients per send.</p>
-      </div>`;
-  } catch(e) {
-    content.innerHTML = `<div class="card"><p style="color:#ef4444;">${e.message}</p></div>`;
-  }
-}
-
-let _hodMsgTarget = null;
-function hodSelectMsgTarget(target) {
-  _hodMsgTarget = target;
-  const dept = currentUser.department || 'your department';
-  document.getElementById('hod-msg-target-label').textContent =
-    target === 'lecturers' ? `All Lecturers in ${dept}` : `All Students in ${dept}`;
-  document.getElementById('hod-msg-form').style.display = '';
-  ['hod-msg-lec-card','hod-msg-stu-card'].forEach(id => {
-    document.getElementById(id).style.border = '2px solid transparent';
-  });
-  const activeCard = target === 'lecturers' ? 'hod-msg-lec-card' : 'hod-msg-stu-card';
-  document.getElementById(activeCard).style.border = '2px solid var(--primary)';
-  document.getElementById('hod-msg-body').focus();
-}
-
-async function hodSendGroupMessage() {
-  if (!_hodMsgTarget) return;
-  const body = (document.getElementById('hod-msg-body')?.value || '').trim();
-  if (!body) { toastWarning('Please enter a message.'); return; }
-  const btn = document.getElementById('hod-msg-send-btn');
-  if (btn) { btn.disabled = true; btn.textContent = 'Sending…'; }
-  try {
-    const d = await api('/api/hod/send-group-message', { method: 'POST', body: JSON.stringify({ target: _hodMsgTarget, body }) });
-    toastSuccess(d.message);
-    document.getElementById('hod-msg-body').value = '';
-  } catch(e) {
-    toastError(e.message || 'Failed to send message');
-  } finally {
-    if (btn) { btn.disabled = false; btn.textContent = 'Send Message'; }
-  }
-}
 
 // ════════════════════════════════════════════════════════════════════════════
 //  SUPERADMIN DASHBOARD
@@ -3818,14 +3192,7 @@ async function renderSuperadminDashboard(content) {
                     <div style="font-weight:700;">${c.name}</div>
                     <div style="font-size:11px;color:var(--text-muted);font-family:monospace;">${c.institutionCode || '—'}</div>
                   </td>
-                  <td style="padding:10px 12px;">
-                    <div style="font-weight:600;">${c.userCount || 0}</div>
-                    ${c.roleCounts && c.mode === 'academic'
-                      ? `<div style="font-size:10px;color:var(--text-muted);margin-top:2px;">${c.roleCounts.lecturer||0}L · ${c.roleCounts.hod||0}H · ${c.roleCounts.student||0}S</div>`
-                      : c.roleCounts
-                        ? `<div style="font-size:10px;color:var(--text-muted);margin-top:2px;">${c.roleCounts.manager||0}Mgr · ${c.roleCounts.employee||0}Emp</div>`
-                        : ''}
-                  </td>
+                  <td style="padding:10px 12px;font-weight:600;">${c.userCount || 0}</td>
                   <td style="padding:10px 12px;"><span class="tag ${c.mode === 'academic' ? 'tag-blue' : 'tag-green'}">${c.mode}</span></td>
                   <td style="padding:10px 12px;"><span class="tag ${c.isActive ? 'tag-green' : 'tag-red'}">${c.isActive ? 'Active' : 'Inactive'}</span></td>
                   <td style="padding:10px 12px;">
@@ -3855,40 +3222,16 @@ async function renderSuperadminDashboard(content) {
 
 
 async function renderLecturerDashboard(content) {
-  const [sessionsData, coursesData, quizzesData, meetingsData] = await Promise.all([
+  const [sessionsData, coursesData, quizzesData] = await Promise.all([
     api('/api/attendance-sessions?limit=5').catch(() => ({ sessions: [], pagination: { total: 0 } })),
     api('/api/courses').catch(() => ({ courses: [] })),
     api('/api/lecturer/quizzes').catch(() => ({ quizzes: [] })),
-    api('/api/meetings?limit=10').catch(() => ({ data: [] })),
   ]);
 
-  const totalStudents  = coursesData.courses.reduce((sum, c) => sum + (c.enrolledStudents?.length || 0), 0);
-  const activeCourses  = coursesData.courses.length;
+  // Count students enrolled across lecturer's courses only
+  const totalStudents = coursesData.courses.reduce((sum, c) => sum + (c.enrolledStudents?.length || 0), 0);
+  const activeCourses = coursesData.courses.length;
   const quizzesCreated = quizzesData.quizzes.length;
-
-  const now = Date.now();
-  const upcomingMeetings = (meetingsData.data || [])
-    .filter(m => m.status === 'scheduled' || m.status === 'live')
-    .sort((a, b) => new Date(a.scheduledStart) - new Date(b.scheduledStart))
-    .slice(0, 5);
-
-  const _fmtMeetingDate = iso => {
-    const d = new Date(iso);
-    return d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
-  };
-  const _fmtTime = iso => new Date(iso).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
-  const _joinUrl  = m => `https://meet.jit.si/${m.roomName}`;
-
-  const _meetingStatusMeta = m => {
-    if (m.status === 'live') return { label: 'Live', cls: 'sched-status--live' };
-    const diffMs  = new Date(m.scheduledStart) - now;
-    const diffMin = Math.round(diffMs / 60000);
-    if (diffMin < 0)   return { label: 'Overdue', cls: 'sched-status--overdue' };
-    if (diffMin < 60)  return { label: `In ${diffMin}m`, cls: 'sched-status--soon' };
-    const diffHr = Math.round(diffMin / 60);
-    if (diffHr < 24)   return { label: `In ${diffHr}h`, cls: 'sched-status--today' };
-    return { label: 'Scheduled', cls: 'sched-status--scheduled' };
-  };
 
   content.innerHTML = `
     <div class="page-header">
@@ -3924,392 +3267,99 @@ async function renderLecturerDashboard(content) {
         </table>
       ` : '<div class="empty-state"><p>No sessions yet. Start your first attendance session!</p></div>'}
     </div>
-
-    <div class="card" style="margin-top:0">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px">
-        <div>
-          <div class="card-title" style="margin-bottom:2px">Scheduled Meetings</div>
-          <div style="font-size:12px;color:var(--text-muted)">Upcoming and live Jitsi meetings</div>
-        </div>
-        <button class="btn btn-primary btn-sm" onclick="navigateTo('meetings')"
-          style="gap:6px;font-size:12px">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-          View All
-        </button>
-      </div>
-      ${upcomingMeetings.length ? `
-        <div class="sched-meetings-list">
-          ${upcomingMeetings.map(m => {
-            const meta = _meetingStatusMeta(m);
-            return `
-            <div class="sched-meeting-row">
-              <div class="sched-meeting-indicator ${m.status === 'live' ? 'sched-ind--live' : 'sched-ind--scheduled'}"></div>
-              <div class="sched-meeting-info">
-                <div class="sched-meeting-title">${m.title || 'Untitled Meeting'}</div>
-                <div class="sched-meeting-meta">
-                  <span>${_fmtMeetingDate(m.scheduledStart)}</span>
-                  <span class="sched-dot">·</span>
-                  <span>${_fmtTime(m.scheduledStart)}${m.scheduledEnd ? ' – ' + _fmtTime(m.scheduledEnd) : ''}</span>
-                  ${m.linkedCourseId ? `<span class="sched-dot">·</span><span>${m.linkedCourseId.code || m.linkedCourseId.name || ''}</span>` : ''}
-                  ${m.creatorId?.name ? `<span class="sched-dot">·</span><span>${m.creatorId.name}</span>` : ''}
-                </div>
-              </div>
-              <div class="sched-meeting-actions">
-                <span class="sched-status ${meta.cls}">${meta.label}</span>
-                <a class="btn btn-primary btn-sm sched-join-btn" href="${_joinUrl(m)}" target="_blank" rel="noopener"
-                  style="gap:5px;font-size:11.5px">
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
-                  Join
-                </a>
-              </div>
-            </div>`;
-          }).join('')}
-        </div>
-      ` : `
-        <div class="empty-state" style="padding:28px 0">
-          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom:10px;opacity:.5"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-          <p style="margin:0 0 12px">No upcoming meetings</p>
-          <button class="btn btn-primary btn-sm" onclick="navigateTo('meetings')">Schedule a Meeting</button>
-        </div>`}
-    </div>
   `;
-}
-
-// ── Employee live-clock helpers ───────────────────────────────────────────────
-// ── Employee Assistant Panel visibility ───────────────────────────────────────
-function _showEmpAssistantPanel() {
-  document.getElementById('emp-assistant-panel')?.classList.add('eap-open');
-}
-function _hideEmpAssistantPanel() {
-  document.getElementById('emp-assistant-panel')?.classList.remove('eap-open');
-}
-
-function _empElapsed(clockInTime) {
-  const ms = Date.now() - clockInTime.getTime();
-  const h  = Math.floor(ms / 3600000);
-  const m  = Math.floor((ms % 3600000) / 60000);
-  return h > 0 ? `${h}h ${m}m` : `${m}m`;
-}
-
-function _empStartTimer(clockInTime, elId) {
-  if (window._empClockTimer) clearInterval(window._empClockTimer);
-  window._empClockTimer = setInterval(() => {
-    const el = document.getElementById(elId);
-    if (!el) { clearInterval(window._empClockTimer); return; }
-    el.textContent = _empElapsed(clockInTime);
-  }, 30000);
 }
 
 async function renderEmployeeDashboard(content) {
-  if (!content) content = document.getElementById('main-content');
-  content.innerHTML = '<div class="loading">Loading…</div>';
+  const today     = new Date().toISOString().slice(0, 10);
+  const sevenAgo  = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
 
-  const today      = new Date().toISOString().slice(0, 10);
-  const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0, 10);
-
-  const [todayData, monthData, shiftData, leavesData] = await Promise.all([
+  const [todayData, recentData, meetingsData] = await Promise.all([
     api(`/api/corporate-attendance/my?from=${today}&to=${today}`).catch(() => ({ records: [] })),
-    api(`/api/corporate-attendance/my?from=${monthStart}&to=${today}`).catch(() => ({ records: [] })),
-    api('/api/shifts/my-shift').catch(() => ({})),
-    api('/api/leaves/my').catch(() => ({ leaves: [] })),
+    api(`/api/corporate-attendance/my?from=${sevenAgo}&to=${today}`).catch(() => ({ records: [] })),
+    api('/api/zoom').catch(() => ({ meetings: [] })),
   ]);
 
-  // ── Today ─────────────────────────────────────────────────────────────────
-  const todayRecord  = todayData.records?.[0] || null;
+  const todayRecord  = todayData.records[0] || null;
   const isClockedIn  = !!(todayRecord?.clockIn?.time && !todayRecord?.clockOut?.time);
   const isClockedOut = !!(todayRecord?.clockIn?.time && todayRecord?.clockOut?.time);
   const clockInTime  = todayRecord?.clockIn?.time  ? new Date(todayRecord.clockIn.time)  : null;
-  const clockOutTime = todayRecord?.clockOut?.time ? new Date(todayRecord.clockOut.time) : null;
-  const isLate       = !!(todayRecord?.clockIn?.isLate || todayRecord?.status === 'late');
+  const isLate       = todayRecord?.clockIn?.isLate || todayRecord?.status === 'late' || false;
   const lateMin      = todayRecord?.clockIn?.lateMinutes || todayRecord?.lateMinutes || 0;
-  const workedHrs    = todayRecord?.hoursWorked ?? null;
-  const overtimeHrs  = todayRecord?.overtimeHours || 0;
+  const workedHrs    = todayRecord?.hoursWorked != null ? todayRecord.hoursWorked : null;
 
-  // Attendance status badge
-  const attStatus = (() => {
-    if (!todayRecord) return null;
-    const s = todayRecord.status;
-    if (s === 'remote') return { label: 'Remote / Outside', color: '#0891b2', bg: '#ecfeff' };
-    if (s === 'present' || s === 'late') return { label: isLate ? 'On-site · Late' : 'On-site', color: '#16a34a', bg: '#f0fdf4' };
-    if (s === 'absent') return { label: 'Absent', color: '#dc2626', bg: '#fef2f2' };
-    if (s === 'on_leave') return { label: 'On Leave', color: '#0284c7', bg: '#eff6ff' };
-    if (isClockedIn) return { label: 'Needs Review', color: '#d97706', bg: '#fffbeb' };
-    return null;
-  })();
+  const recentRecords  = recentData.records || [];
+  const presentDays    = recentRecords.filter(r => r.status === 'present' || r.status === 'late').length;
+  const attendanceRate = recentRecords.length > 0 ? Math.round((presentDays / recentRecords.length) * 100) : 0;
+  const upcomingMeetings = meetingsData.meetings.filter(m => m.status === 'scheduled');
 
-  // ── Month stats ───────────────────────────────────────────────────────────
-  const monthRecords = monthData.records || [];
-  const presentDays  = monthRecords.filter(r => r.status === 'present' || r.status === 'late').length;
-  const lateDays     = monthRecords.filter(r => r.status === 'late').length;
-  const totalHrs     = monthRecords.reduce((s, r) => s + (r.hoursWorked || 0), 0);
-  const overtimeTot  = monthRecords.reduce((s, r) => s + (r.overtimeHours || 0), 0);
-  const recordedDays = monthRecords.filter(r => r.clockIn?.time).length;
-  const attRate      = recordedDays > 0 ? Math.round((presentDays / recordedDays) * 100) : 0;
-
-  // ── Shift ─────────────────────────────────────────────────────────────────
-  const shift = shiftData.assignment?.shift || null;
-
-  // ── Leave balance (computed from approved leaves this year) ───────────────
-  const currentYear = new Date().getFullYear();
-  const leaves = leavesData.leaves || [];
-  const yearLeaves = leaves.filter(l => l.status === 'approved' && new Date(l.startDate).getFullYear() === currentYear);
-  const annualUsed  = yearLeaves.filter(l => l.type === 'annual').reduce((s, l) => s + l.days, 0);
-  const sickUsed    = yearLeaves.filter(l => l.type === 'sick').reduce((s, l) => s + l.days, 0);
-  const ANNUAL_ALLOC = 21; const SICK_ALLOC = 10;
-  const annualLeft  = Math.max(0, ANNUAL_ALLOC - annualUsed);
-  const sickLeft    = Math.max(0, SICK_ALLOC - sickUsed);
-
-  // ── Pending leaves ────────────────────────────────────────────────────────
-  const pendingLeaves = leaves.filter(l => l.status === 'pending');
-  const recentLeave   = leaves[0] || null;
-
-  // ── Notifications (derived) ───────────────────────────────────────────────
-  const notifs = [];
-  if (!todayRecord && shift) {
-    const now = new Date();
-    const [sh, sm] = (shift.startTime || '09:00').split(':').map(Number);
-    const shiftStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), sh, sm);
-    if (now < shiftStart) {
-      const minsTil = Math.round((shiftStart - now) / 60000);
-      if (minsTil < 60) notifs.push({ icon: '⏰', text: `Shift starts in ${minsTil} min`, type: 'info' });
-    } else if (now > shiftStart) {
-      notifs.push({ icon: '⚠️', text: 'You haven\'t clocked in yet today', type: 'warn' });
-    }
-  }
-  pendingLeaves.forEach(l => notifs.push({ icon: '📋', text: `${l.type.charAt(0).toUpperCase()+l.type.slice(1)} leave (${new Date(l.startDate).toLocaleDateString('en-GB',{day:'2-digit',month:'short'})}) is awaiting approval`, type: 'info' }));
-  const recentReviewed = leaves.filter(l => ['approved','rejected'].includes(l.status)).slice(0, 2);
-  recentReviewed.forEach(l => {
-    const isApproved = l.status === 'approved';
-    notifs.push({ icon: isApproved ? '✅' : '❌', text: `${l.type.charAt(0).toUpperCase()+l.type.slice(1)} leave ${l.status}`, type: isApproved ? 'ok' : 'warn' });
-  });
-  if (isLate) notifs.push({ icon: '🕐', text: `You were ${lateMin} minute${lateMin !== 1 ? 's' : ''} late today`, type: 'warn' });
-  if (overtimeTot > 0) notifs.push({ icon: '⚡', text: `${overtimeTot}h overtime logged this month`, type: 'ok' });
-
-  // ── Status card colours ───────────────────────────────────────────────────
-  const statusColor = isClockedIn ? '#16a34a' : isClockedOut ? 'var(--primary)' : '#9ca3af';
-  const statusBg    = isClockedIn ? 'linear-gradient(135deg,#f0fdf4,#ecfdf5)' : isClockedOut ? 'linear-gradient(135deg,#eef2ff,#e0e7ff)' : 'linear-gradient(135deg,#f9fafb,#f3f4f6)';
-  const elapsed     = isClockedIn && clockInTime ? _empElapsed(clockInTime) : '';
-
-  const statusColors = { present:'#16a34a', late:'#d97706', absent:'#dc2626', half_day:'#7c3aed', on_leave:'#0284c7', remote:'#0891b2' };
+  const statusColor = isClockedIn ? 'var(--success)' : (isClockedOut ? 'var(--primary)' : 'var(--text-light)');
 
   content.innerHTML = `
     <div class="page-header">
-      <div>
-        <h2>Welcome back, ${esc(currentUser.name.split(' ')[0])}</h2>
-        <p>${esc(currentUser.company?.name || 'Your company')}${currentUser.employeeId ? ` · ID: ${esc(currentUser.employeeId)}` : ''} · ${new Date().toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'})}</p>
-      </div>
-      <button class="btn btn-secondary btn-sm" onclick="navigateTo('messages')" style="gap:6px">
-        ${svgIcon('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',14)} Message Manager
-      </button>
+      <h2>Welcome back, ${currentUser.name.split(' ')[0]}</h2>
+      <p>${currentUser.company?.name || 'Your company'}${currentUser.employeeId ? ` · ID: ${currentUser.employeeId}` : ''}</p>
     </div>
 
-    <!-- LIVE STATUS CARD -->
-    <div class="card" style="border-left:4px solid ${statusColor};background:${statusBg};margin-bottom:16px">
+    <div class="card" style="border-left:4px solid ${statusColor};background:${isClockedIn ? 'linear-gradient(135deg,#f0fdf4,#ecfdf5)' : 'linear-gradient(135deg,#eef2ff,#e0e7ff)'}">
       <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px">
-        <div style="flex:1;min-width:0">
-          <div style="font-size:11px;text-transform:uppercase;font-weight:700;letter-spacing:.6px;color:${statusColor};margin-bottom:4px">
-            ${isClockedIn ? '● Live — Clocked In' : isClockedOut ? '✓ Clocked Out' : '○ Not Started'}
+        <div>
+          <div style="font-size:12px;text-transform:uppercase;font-weight:700;letter-spacing:.5px;color:${statusColor}">
+            ${isClockedIn ? '● Currently Clocked In' : (isClockedOut ? '✓ Clocked Out' : '○ Not Clocked In')}
           </div>
-          <div style="font-size:20px;font-weight:800;margin-bottom:4px">
-            ${isClockedIn ? `${clockInTime.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})} → <span id="emp-elapsed-timer" style="color:${statusColor}">${elapsed}</span>` : isClockedOut ? `${clockInTime.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})} → ${clockOutTime.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}` : 'Ready to clock in?'}
+          <div style="font-size:18px;font-weight:700;margin-top:4px">
+            ${isClockedIn ? 'You are clocked in' : (isClockedOut ? 'Work day complete' : 'Ready to start your day?')}
           </div>
-          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-            ${attStatus ? `<span style="background:${attStatus.bg};color:${attStatus.color};border:1px solid ${attStatus.color}40;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700">${attStatus.label}</span>` : ''}
-            ${shift ? `<span style="font-size:11px;color:var(--text-muted)">Shift: <strong>${esc(shift.name)}</strong> ${shift.startTime}–${shift.endTime}</span>` : ''}
-            ${isLate ? `<span style="background:#fef2f2;color:#dc2626;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700">${lateMin}m late</span>` : ''}
-            ${isClockedOut && workedHrs != null ? `<span style="font-size:12px;color:var(--text-muted)">Worked <strong>${workedHrs}h</strong>${overtimeHrs > 0 ? ` · <span style="color:#8b5cf6">+${overtimeHrs}h OT</span>` : ''}</span>` : ''}
-          </div>
+          ${clockInTime ? `<div style="font-size:12px;color:var(--text-light);margin-top:2px">
+            Clocked in at ${clockInTime.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}
+            ${isLate ? `<span style="color:#ef4444;margin-left:6px">(${lateMin}m late)</span>` : ''}
+          </div>` : ''}
+          ${isClockedOut && workedHrs != null ? `<div style="font-size:12px;color:var(--text-light);margin-top:2px">Worked ${workedHrs}h today</div>` : ''}
         </div>
-        <div style="display:flex;gap:10px;flex-shrink:0">
+        <div style="display:flex;gap:10px">
           ${!isClockedIn && !isClockedOut ? `
             <button class="btn btn-success" onclick="employeeSignIn()" style="gap:8px;font-size:14px;padding:12px 24px">
-              ${svgIcon('<polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>',16)} Clock In
+              ${svgIcon('<polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>', 16)} Clock In
             </button>` : isClockedIn ? `
             <button class="btn btn-danger" onclick="employeeSignOut()" style="gap:8px;font-size:14px;padding:12px 24px">
-              ${svgIcon('<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>',16)} Clock Out
+              ${svgIcon('<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>', 16)} Clock Out
             </button>` : `
-            <button class="btn btn-sm" style="background:var(--bg);border:1px solid var(--border)" onclick="navigateTo('sign-in-out')">View Details</button>`}
+            <button class="btn btn-sm" style="background:var(--border)" onclick="navigateTo('sign-in-out')">View Details</button>`}
         </div>
       </div>
     </div>
 
-    <!-- MONTHLY STATS -->
-    <div class="stats-grid" style="margin-bottom:16px">
-      <div class="stat-card" onclick="navigateTo('my-attendance')" style="cursor:pointer">
-        <div class="stat-value" style="color:${attRate >= 80 ? '#16a34a' : attRate >= 60 ? '#d97706' : '#dc2626'}">${attRate}%</div>
-        <div class="stat-label">Monthly Rate</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-value" style="color:#d97706">${lateDays}</div>
-        <div class="stat-label">Late Days</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-value" style="color:#0891b2">${totalHrs.toFixed(1)}h</div>
-        <div class="stat-label">Hours This Month</div>
-      </div>
-      <div class="stat-card" onclick="navigateTo('my-leaves')" style="cursor:pointer">
-        <div class="stat-value" style="color:#7c3aed">${annualLeft}</div>
-        <div class="stat-label">Annual Days Left</div>
-      </div>
+    <div class="stats-grid">
+      <div class="stat-card"><div class="stat-value">${attendanceRate}%</div><div class="stat-label">7-Day Rate</div></div>
+      <div class="stat-card"><div class="stat-value">${presentDays}</div><div class="stat-label">Days Present</div></div>
+      <div class="stat-card"><div class="stat-value">${upcomingMeetings.length}</div><div class="stat-label">Meetings</div></div>
     </div>
 
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
-
-      <!-- LEAVE BALANCE -->
-      <div class="card" onclick="navigateTo('my-leaves')" style="cursor:pointer">
-        <div style="font-size:13px;font-weight:700;margin-bottom:12px">Leave Balance</div>
-        <div style="display:flex;flex-direction:column;gap:8px">
-          <div style="display:flex;justify-content:space-between;align-items:center">
-            <span style="font-size:13px">Annual Leave</span>
-            <div style="text-align:right">
-              <span style="font-weight:700;color:${annualLeft > 7 ? '#16a34a' : annualLeft > 3 ? '#d97706' : '#dc2626'}">${annualLeft}</span>
-              <span style="font-size:11px;color:var(--text-muted)"> / ${ANNUAL_ALLOC} days</span>
-              <div style="height:4px;background:var(--border);border-radius:2px;margin-top:3px;width:80px">
-                <div style="height:4px;background:${annualLeft > 7 ? '#16a34a' : annualLeft > 3 ? '#d97706' : '#dc2626'};border-radius:2px;width:${Math.round((annualLeft/ANNUAL_ALLOC)*100)}%"></div>
-              </div>
-            </div>
-          </div>
-          <div style="display:flex;justify-content:space-between;align-items:center">
-            <span style="font-size:13px">Sick Leave</span>
-            <div style="text-align:right">
-              <span style="font-weight:700;color:${sickLeft > 3 ? '#16a34a' : '#d97706'}">${sickLeft}</span>
-              <span style="font-size:11px;color:var(--text-muted)"> / ${SICK_ALLOC} days</span>
-              <div style="height:4px;background:var(--border);border-radius:2px;margin-top:3px;width:80px">
-                <div style="height:4px;background:${sickLeft > 3 ? '#16a34a' : '#d97706'};border-radius:2px;width:${Math.round((sickLeft/SICK_ALLOC)*100)}%"></div>
-              </div>
-            </div>
-          </div>
-          ${recentLeave ? `<div style="font-size:11px;color:var(--text-muted);margin-top:4px;padding-top:8px;border-top:1px solid var(--border)">
-            Last: ${recentLeave.type} leave · ${recentLeave.days}d · <span style="color:${recentLeave.status==='approved'?'#16a34a':recentLeave.status==='pending'?'#d97706':'#dc2626'};font-weight:600">${recentLeave.status}</span>
-          </div>` : ''}
-        </div>
-        <button class="btn btn-secondary btn-sm" style="margin-top:12px;width:100%" onclick="event.stopPropagation();navigateTo('my-leaves')">Request Leave</button>
-      </div>
-
-      <!-- NOTIFICATIONS -->
-      <div class="card" style="max-height:220px;overflow-y:auto">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-          <div style="font-size:13px;font-weight:700">Notifications</div>
-          ${notifs.length > 0 ? `<span style="background:#ef4444;color:#fff;font-size:10px;font-weight:700;padding:1px 6px;border-radius:20px">${notifs.length}</span>` : ''}
-        </div>
-        ${notifs.length === 0 ? `<p style="font-size:12px;color:var(--text-muted)">✓ All clear — no alerts</p>` :
-          notifs.map(n => `
-            <div style="display:flex;gap:8px;padding:7px 0;border-bottom:1px solid var(--border);align-items:flex-start">
-              <span style="font-size:14px;flex-shrink:0">${n.icon}</span>
-              <span style="font-size:12px;line-height:1.4;color:var(--text)">${esc(n.text)}</span>
-            </div>`).join('')}
-        <button class="btn btn-secondary btn-sm" style="margin-top:8px;width:100%" onclick="navigateTo('emp-notifications')">View All →</button>
-      </div>
-    </div>
-
-    <!-- QUICK ACTIONS -->
-    <div class="card" style="margin-bottom:16px">
-      <div style="font-size:13px;font-weight:700;margin-bottom:12px">Quick Actions</div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap">
-        <button class="btn btn-secondary btn-sm" onclick="navigateTo('sign-in-out')">🕐 Clock In / Out</button>
-        <button class="btn btn-secondary btn-sm" onclick="navigateTo('my-attendance')">📅 My Attendance</button>
-        <button class="btn btn-secondary btn-sm" onclick="navigateTo('my-leaves')">✈️ Request Leave</button>
-        <button class="btn btn-secondary btn-sm" onclick="navigateTo('my-shift')">📋 My Shift</button>
-        <button class="btn btn-secondary btn-sm" onclick="navigateTo('messages')">💬 Message Manager</button>
-        <button class="btn btn-secondary btn-sm" onclick="navigateTo('my-performance')">📊 My Performance</button>
-      </div>
-    </div>
-
-    <!-- RECENT ATTENDANCE (this week) -->
     <div class="card">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-        <div style="font-size:13px;font-weight:700">Recent Attendance</div>
+        <div class="card-title" style="margin:0">This Week</div>
         <a onclick="navigateTo('my-attendance')" style="font-size:12px;color:var(--primary);cursor:pointer">View all →</a>
       </div>
-      ${monthRecords.length ? `
-        <div style="overflow-x:auto">
-        <table style="font-size:13px;width:100%;border-collapse:collapse">
-          <thead><tr>
-            <th style="text-align:left;padding:7px 10px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase">Date</th>
-            <th style="text-align:left;padding:7px 10px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase">Status</th>
-            <th style="text-align:left;padding:7px 10px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase">In</th>
-            <th style="text-align:left;padding:7px 10px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase">Out</th>
-            <th style="text-align:left;padding:7px 10px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase">Worked</th>
-          </tr></thead>
-          <tbody>${monthRecords.slice(-7).reverse().map(r => {
-            const ci = r.clockIn?.time  ? new Date(r.clockIn.time)  : null;
-            const co = r.clockOut?.time ? new Date(r.clockOut.time) : null;
-            const sc = statusColors[r.status] || '#9ca3af';
-            return `<tr style="border-bottom:1px solid var(--border)">
-              <td style="padding:8px 10px">${r.date ? new Date(r.date).toLocaleDateString('en-GB',{weekday:'short',day:'2-digit',month:'short'}) : '—'}</td>
-              <td style="padding:8px 10px"><span style="background:${sc}20;color:${sc};border:1px solid ${sc}40;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700;text-transform:capitalize">${r.status||'—'}</span></td>
-              <td style="padding:8px 10px">${ci ? ci.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}) : '—'}</td>
-              <td style="padding:8px 10px">${co ? co.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}) : (ci ? '<span style="color:#f59e0b;font-size:11px">Active</span>' : '—')}</td>
-              <td style="padding:8px 10px">${r.hoursWorked != null ? r.hoursWorked+'h' : '—'}</td>
+      ${recentRecords.length ? `
+        <table>
+          <thead><tr><th>Date</th><th>Status</th><th>Time In</th><th>Time Out</th><th>Worked</th></tr></thead>
+          <tbody>${recentRecords.slice(0, 7).map(r => {
+            const ci  = r.clockIn?.time  ? new Date(r.clockIn.time)  : null;
+            const co  = r.clockOut?.time ? new Date(r.clockOut.time) : null;
+            const statusColors = { present:'#16a34a', late:'#d97706', absent:'#dc2626', half_day:'#7c3aed', on_leave:'#0284c7', remote:'#0891b2' };
+            const sc = statusColors[r.status] || 'var(--text-light)';
+            return `<tr>
+              <td style="font-size:13px">${r.date ? new Date(r.date).toLocaleDateString('en-GB', {weekday:'short',day:'2-digit',month:'short'}) : '—'}</td>
+              <td><span style="background:${sc}20;color:${sc};border:1px solid ${sc}40;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700;text-transform:capitalize">${r.status || '—'}</span></td>
+              <td style="font-size:13px">${ci ? ci.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : '—'}</td>
+              <td style="font-size:13px">${co ? co.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : (ci ? '<span style="color:#f59e0b;font-size:11px">Active</span>' : '—')}</td>
+              <td style="font-size:13px">${r.hoursWorked != null ? r.hoursWorked+'h' : '—'}</td>
             </tr>`;
           }).join('')}</tbody>
-        </table></div>` : `<div class="empty-state"><p>No attendance records yet. Clock in to get started.</p></div>`}
+        </table>
+      ` : '<div class="empty-state"><p>No attendance records this week. Click Clock In to start.</p></div>'}
     </div>
   `;
-
-  // Start live timer if currently clocked in
-  if (isClockedIn && clockInTime) {
-    _empStartTimer(clockInTime, 'emp-elapsed-timer');
-  }
-
-  // Show assistant panel (Phase 1 — shell only)
-  _showEmpAssistantPanel();
-}
-
-// ── GPS helpers (corporate only) ──────────────────────────────────────────────
-function _getGPSLocation() {
-  return new Promise((resolve, reject) => {
-    if (!navigator.geolocation) {
-      reject(new Error('GPS_UNSUPPORTED'));
-      return;
-    }
-    navigator.geolocation.getCurrentPosition(
-      pos => resolve({
-        latitude:  pos.coords.latitude,
-        longitude: pos.coords.longitude,
-        accuracy:  Math.round(pos.coords.accuracy),
-      }),
-      err => {
-        const codes = { 1: 'GPS_DENIED', 2: 'GPS_UNAVAILABLE', 3: 'GPS_TIMEOUT' };
-        reject(new Error(codes[err.code] || 'GPS_ERROR'));
-      },
-      { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
-    );
-  });
-}
-
-function _showGPSBlockedModal(code) {
-  document.getElementById('gps-blocked-modal')?.remove();
-  const messages = {
-    GPS_DENIED:      'Location permission was denied. Open your browser or device settings, allow location access for this site, then try again.',
-    GPS_UNAVAILABLE: 'Your device location is turned off. Enable GPS / Location Services in your device settings and try again.',
-    GPS_TIMEOUT:     'Location could not be determined in time. Make sure GPS is on and you have a clear signal.',
-    GPS_UNSUPPORTED: 'Your browser does not support GPS. Please use a modern browser.',
-  };
-  const msg = messages[code] || 'Location is required to clock in or out. Please enable GPS and try again.';
-
-  const helpLink = (code === 'GPS_DENIED' || code === 'GPS_UNAVAILABLE')
-    ? `<a href="https://support.google.com/chrome/answer/142065" target="_blank" rel="noopener"
-         style="display:inline-block;margin-top:12px;font-size:12px;color:var(--primary);text-decoration:underline">
-         How to enable location →
-       </a>`
-    : '';
-
-  const ol = document.createElement('div');
-  ol.id = 'gps-blocked-modal';
-  ol.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;z-index:9999;padding:16px';
-  ol.innerHTML = `
-    <div style="background:var(--card,#fff);border-radius:16px;padding:32px 24px;max-width:380px;width:100%;text-align:center;box-shadow:0 24px 64px rgba(0,0,0,.35)">
-      <div style="font-size:44px;margin-bottom:12px">📍</div>
-      <div style="font-size:16px;font-weight:800;margin-bottom:10px;color:var(--text)">Location Required</div>
-      <div style="font-size:13px;color:var(--text-light);line-height:1.65;margin-bottom:6px">${msg}</div>
-      ${helpLink}
-      <div style="margin-top:22px">
-        <button onclick="document.getElementById('gps-blocked-modal').remove()"
-          class="btn btn-secondary btn-sm">Dismiss</button>
-      </div>
-    </div>`;
-  document.body.appendChild(ol);
 }
 
 async function employeeSignIn() {
@@ -4326,17 +3376,10 @@ async function employeeSignIn() {
       }).catch(e => console.warn('[ESP32] ping failed:', e.message));
     }
   }
-  let gpsData;
-  try {
-    gpsData = await _getGPSLocation();
-  } catch (gpsErr) {
-    _showGPSBlockedModal(gpsErr.message);
-    return;
-  }
   try {
     const data = await api('/api/corporate-attendance/clock-in', {
       method: 'POST',
-      body: JSON.stringify({ method: 'web', ...gpsData }),
+      body: JSON.stringify({ method: 'web' }),
     });
     toastSuccess(data.message || 'Clocked in successfully!');
     renderSignInOut();
@@ -4359,17 +3402,10 @@ async function employeeSignOut() {
       }).catch(e => console.warn('[ESP32] ping failed:', e.message));
     }
   }
-  let gpsData;
-  try {
-    gpsData = await _getGPSLocation();
-  } catch (gpsErr) {
-    _showGPSBlockedModal(gpsErr.message);
-    return;
-  }
   try {
     const data = await api('/api/corporate-attendance/clock-out', {
       method: 'POST',
-      body: JSON.stringify({ method: 'web', ...gpsData }),
+      body: JSON.stringify({ method: 'web' }),
     });
     const hrs = data.hoursWorked != null ? ` · ${data.hoursWorked}h worked` : '';
     toastSuccess((data.message || 'Clocked out successfully!') + hrs);
@@ -4438,7 +3474,7 @@ async function renderSignInOut() {
         ${shiftName ? `<div style="font-size:12px;color:var(--text-muted);margin-top:4px">Shift: ${shiftName}${todayRecord?.shift?.startTime ? ' · '+todayRecord.shift.startTime+'–'+todayRecord.shift.endTime : ''}</div>` : ''}
         ${clockInTime ? `<div style="font-size:13px;color:var(--text-light);margin-top:6px">Time in: <strong>${clockInTime.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</strong>${isLate ? ` <span style="color:#ef4444;font-size:11px">(${lateMin}m late)</span>` : ''}</div>` : ''}
         ${clockOutTime ? `<div style="font-size:13px;color:var(--text-light);margin-top:4px">Time out: <strong>${clockOutTime.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</strong></div>` : ''}
-        ${isClockedIn && elapsedLabel ? `<div style="font-size:13px;color:var(--success);font-weight:600;margin-top:4px"><span id="sio-elapsed-timer">${elapsedLabel}</span> elapsed</div>` : ''}
+        ${isClockedIn && elapsedLabel ? `<div style="font-size:13px;color:var(--success);font-weight:600;margin-top:4px">${elapsedLabel}</div>` : ''}
         ${isClockedOut && workedHrs != null ? `<div style="font-size:13px;color:var(--text-light);margin-top:4px">Worked: <strong>${workedHrs}h</strong>${overtimeHrs > 0 ? ` <span style="color:#8b5cf6;font-size:11px">(+${overtimeHrs}h overtime)</span>` : ''}</div>` : ''}
         <div style="margin-top:28px;display:flex;gap:16px;justify-content:center;flex-wrap:wrap">
           ${!isClockedIn && !isClockedOut ? `
@@ -4482,11 +3518,6 @@ async function renderSignInOut() {
         ` : '<div class="empty-state"><p>No attendance records yet. Clock in to start tracking.</p></div>'}
       </div>
     `;
-
-    // Live elapsed timer — updates every 30 seconds while page is open
-    if (isClockedIn && clockInTime) {
-      _empStartTimer(clockInTime, 'sio-elapsed-timer');
-    }
   } catch (e) {
     content.innerHTML = `<div class="card"><p>Error loading attendance: ${e.message}</p></div>`;
   }
@@ -5002,224 +4033,6 @@ async function _renderAdminCharts(sessionsData, usersData) {
 }
 
 
-// ── MANAGER DASHBOARD (corporate only) ───────────────────────────────────────
-async function renderManagerDashboard(content) {
-  if (!content) content = document.getElementById('main-content');
-  if (!content) return;
-  content.innerHTML = '<div class="loading">Loading manager dashboard…</div>';
-
-  const today     = new Date().toISOString().slice(0, 10);
-  const thirtyAgo = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
-  const firstName = currentUser.name.split(' ')[0];
-  const hour      = new Date().getHours();
-  const greeting  = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
-
-  const [todayAtt, teamPerf, pending, announcements, myShift] = await Promise.all([
-    api('/api/corporate-attendance/today').catch(() => ({ records: [], summary: {} })),
-    api('/api/performance/team-overview').catch(() => ({ overview: [] })),
-    api('/api/approvals/pending').catch(() => ({ pending: [] })),
-    api('/api/announcements').catch(() => ({ announcements: [] })),
-    api('/api/shifts/my-assignment').catch(() => null),
-  ]);
-
-  const attRecs    = todayAtt.records || [];
-  const summary    = todayAtt.summary || {};
-  const overview   = teamPerf.overview || [];
-  const pendingArr = pending.pending || [];
-  const annList    = announcements.announcements || [];
-
-  // Exception alerts: late employees today
-  const lateToday  = attRecs.filter(r => r.status === 'late');
-  const absentToday = attRecs.filter(r => r.status === 'absent');
-  const notClockedIn = attRecs.filter(r => !r.clockIn?.time);
-
-  // Team performance snapshot
-  const avgScore = overview.length && overview.some(o => o.avgScore)
-    ? (overview.filter(o => o.avgScore != null).reduce((s, o) => s + parseFloat(o.avgScore||0), 0) / overview.filter(o => o.avgScore != null).length).toFixed(1)
-    : null;
-  const totalGoals     = overview.reduce((s, o) => s + (o.totalGoals || 0), 0);
-  const completedGoals = overview.reduce((s, o) => s + (o.completedGoals || 0), 0);
-
-  const statusBadge = (s, label) => {
-    const col = { present:'#16a34a', late:'#d97706', absent:'#dc2626', half_day:'#7c3aed', on_leave:'#0891b2', remote:'#2563eb' }[s] || '#6b7280';
-    return `<span style="color:${col};font-weight:700;font-size:11px;text-transform:uppercase">${label}</span>`;
-  };
-
-  content.innerHTML = `
-    <div style="display:flex;flex-direction:column;gap:16px">
-
-      <!-- Welcome -->
-      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap">
-        <div>
-          <h2 style="font-size:22px;font-weight:800;margin:0 0 4px">${greeting}, ${firstName}</h2>
-          <p style="color:var(--text-light);margin:0;font-size:14px">${currentUser.company?.name || ''} · Manager Portal</p>
-        </div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <button class="btn btn-primary btn-sm" onclick="navigateTo('corp-attendance')">Team Attendance</button>
-          <button class="btn btn-secondary btn-sm" onclick="navigateTo('approvals')">Approvals ${pendingArr.length > 0 ? `<span style="background:#dc2626;color:#fff;border-radius:999px;padding:1px 7px;font-size:10px;margin-left:4px">${pendingArr.length}</span>` : ''}</button>
-        </div>
-      </div>
-
-      <!-- Today's Attendance Summary -->
-      <div>
-        <h3 style="font-size:13px;font-weight:700;text-transform:uppercase;color:var(--text-light);letter-spacing:.6px;margin:0 0 10px">Today's Attendance</h3>
-        <div class="stats-grid" style="margin:0">
-          <div class="stat-card-v2">
-            <div class="stat-top-bar" style="background:#16a34a"></div>
-            <div class="stat-header"><span class="stat-label">Present</span></div>
-            <div class="stat-value" style="color:#16a34a">${summary.present || 0}</div>
-          </div>
-          <div class="stat-card-v2">
-            <div class="stat-top-bar" style="background:#d97706"></div>
-            <div class="stat-header"><span class="stat-label">Late</span></div>
-            <div class="stat-value" style="color:#d97706">${summary.late || 0}</div>
-          </div>
-          <div class="stat-card-v2">
-            <div class="stat-top-bar" style="background:#dc2626"></div>
-            <div class="stat-header"><span class="stat-label">Absent</span></div>
-            <div class="stat-value" style="color:#dc2626">${summary.absent || 0}</div>
-          </div>
-          <div class="stat-card-v2">
-            <div class="stat-top-bar" style="background:#0891b2"></div>
-            <div class="stat-header"><span class="stat-label">On Leave</span></div>
-            <div class="stat-value" style="color:#0891b2">${summary.on_leave || 0}</div>
-          </div>
-          <div class="stat-card-v2">
-            <div class="stat-top-bar" style="background:#6366f1"></div>
-            <div class="stat-header"><span class="stat-label">Clocked In</span></div>
-            <div class="stat-value">${summary.total_clocked || 0}</div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Exception Alerts + Performance Snapshot row -->
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px" class="chart-grid-2col">
-
-        <!-- Exception Alerts -->
-        <div class="card">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
-            <h3 style="font-size:15px;font-weight:700;margin:0">Exception Alerts</h3>
-            <span style="font-size:11px;color:var(--text-light)">Today</span>
-          </div>
-          ${lateToday.length === 0 && absentToday.length === 0
-            ? `<div class="empty-state" style="padding:20px 0"><p style="color:#16a34a;font-weight:600">✓ No exceptions today</p></div>`
-            : `${lateToday.length > 0 ? `
-              <div style="margin-bottom:12px">
-                <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:#d97706;margin-bottom:6px">Late Arrivals (${lateToday.length})</div>
-                ${lateToday.map(r => `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid #f3f4f6;font-size:13px">
-                  <span style="font-weight:600">${esc(r.employee?.name || '—')}</span>
-                  <span style="color:#d97706;font-size:11px">+${r.lateMinutes || 0}m</span>
-                </div>`).join('')}
-              </div>` : ''}
-              ${absentToday.length > 0 ? `
-              <div>
-                <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:#dc2626;margin-bottom:6px">Absent (${absentToday.length})</div>
-                ${absentToday.slice(0, 5).map(r => `<div style="padding:5px 0;border-bottom:1px solid #f3f4f6;font-size:13px;font-weight:600">${esc(r.employee?.name || '—')}</div>`).join('')}
-                ${absentToday.length > 5 ? `<div style="font-size:12px;color:var(--text-light);margin-top:4px">+${absentToday.length - 5} more</div>` : ''}
-              </div>` : ''}`}
-          <div style="margin-top:12px">
-            <button class="btn btn-secondary btn-sm" onclick="navigateTo('corp-attendance')">View Full Report →</button>
-          </div>
-        </div>
-
-        <!-- Team Performance Snapshot -->
-        <div class="card">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
-            <h3 style="font-size:15px;font-weight:700;margin:0">Team Performance</h3>
-            <button class="btn btn-xs btn-secondary" onclick="navigateTo('performance')">Full View</button>
-          </div>
-          <div style="display:flex;gap:20px;margin-bottom:16px;flex-wrap:wrap">
-            <div style="text-align:center">
-              <div style="font-size:26px;font-weight:800;color:#6366f1">${avgScore != null ? avgScore : '—'}</div>
-              <div style="font-size:11px;color:var(--text-light)">Avg Score / 5</div>
-            </div>
-            <div style="text-align:center">
-              <div style="font-size:26px;font-weight:800;color:#16a34a">${completedGoals}</div>
-              <div style="font-size:11px;color:var(--text-light)">Goals Completed</div>
-            </div>
-            <div style="text-align:center">
-              <div style="font-size:26px;font-weight:800">${totalGoals}</div>
-              <div style="font-size:11px;color:var(--text-light)">Total Goals</div>
-            </div>
-          </div>
-          ${overview.length > 0 ? `
-          <div style="overflow-x:auto">
-            <table style="width:100%;border-collapse:collapse;font-size:12px">
-              <thead><tr style="background:#f9fafb">
-                <th style="padding:7px 8px;text-align:left;border-bottom:1px solid #e5e7eb">Employee</th>
-                <th style="padding:7px 8px;text-align:center;border-bottom:1px solid #e5e7eb">Goals</th>
-                <th style="padding:7px 8px;text-align:center;border-bottom:1px solid #e5e7eb">Score</th>
-              </tr></thead>
-              <tbody>
-                ${overview.slice(0, 5).map(o => `<tr style="border-bottom:1px solid #f3f4f6">
-                  <td style="padding:7px 8px;font-weight:600">${esc(o.employee?.name || '—')}</td>
-                  <td style="padding:7px 8px;text-align:center">${o.completedGoals}/${o.totalGoals}</td>
-                  <td style="padding:7px 8px;text-align:center">${o.avgScore != null ? _starRating(o.avgScore) : '—'}</td>
-                </tr>`).join('')}
-              </tbody>
-            </table>
-          </div>` : '<p style="font-size:13px;color:#9ca3af">No performance data yet.</p>'}
-        </div>
-      </div>
-
-      <!-- Pending Approvals + Announcements -->
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px" class="chart-grid-2col">
-
-        <!-- Pending Approvals -->
-        <div class="card">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
-            <h3 style="font-size:15px;font-weight:700;margin:0">Pending Approvals</h3>
-            <span style="background:#fee2e2;color:#dc2626;border-radius:999px;padding:2px 10px;font-size:11px;font-weight:700">${pendingArr.length}</span>
-          </div>
-          ${pendingArr.length ? pendingArr.slice(0, 6).map(p => `
-            <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 0;border-bottom:1px solid #f3f4f6;font-size:13px">
-              <div>
-                <div style="font-weight:600">${esc(p.requestedBy?.name || p.name || '—')}</div>
-                <div style="font-size:11px;color:var(--text-light);text-transform:capitalize">${p.type || 'Request'}</div>
-              </div>
-              <button class="btn btn-xs btn-primary" onclick="navigateTo('approvals')">Review</button>
-            </div>`).join('')
-            : '<div class="empty-state" style="padding:16px 0"><p>No pending approvals</p></div>'}
-          ${pendingArr.length > 6 ? `<div style="font-size:12px;color:var(--text-light);margin-top:8px">+${pendingArr.length - 6} more · <a onclick="navigateTo('approvals')" style="color:var(--primary);cursor:pointer">View all</a></div>` : ''}
-        </div>
-
-        <!-- Announcements -->
-        <div class="card">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
-            <h3 style="font-size:15px;font-weight:700;margin:0">Announcements</h3>
-            <button class="btn btn-xs btn-secondary" onclick="navigateTo('announcements')">Manage</button>
-          </div>
-          ${annList.length ? annList.slice(0, 5).map(a => {
-            const typeCol = { info:'#3b82f6', warning:'#f59e0b', success:'#10b981', urgent:'#ef4444' };
-            return `<div style="display:flex;align-items:flex-start;gap:10px;padding:8px 0;border-bottom:1px solid #f3f4f6">
-              <div style="width:8px;height:8px;border-radius:50%;background:${typeCol[a.type]||'#94a3b8'};margin-top:5px;flex-shrink:0"></div>
-              <div>
-                <div style="font-weight:600;font-size:13px">${esc(a.title)}</div>
-                <div style="font-size:11px;color:var(--text-light)">${a.audience === 'all' ? 'All employees' : a.audience} · ${timeAgo(a.createdAt)}</div>
-              </div>
-            </div>`;
-          }).join('')
-            : '<div class="empty-state" style="padding:16px 0"><p>No announcements</p></div>'}
-        </div>
-      </div>
-
-      <!-- Quick Actions -->
-      <div class="card quick-actions-bar">
-        <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-light);letter-spacing:.6px;margin-bottom:12px">Quick Actions</div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <button class="btn btn-secondary btn-sm" onclick="navigateTo('corp-attendance')">Team Attendance</button>
-          <button class="btn btn-secondary btn-sm" onclick="navigateTo('shifts')">Manage Shifts</button>
-          <button class="btn btn-secondary btn-sm" onclick="navigateTo('leave-requests')">Leave Requests</button>
-          <button class="btn btn-secondary btn-sm" onclick="navigateTo('performance')">Performance</button>
-          <button class="btn btn-secondary btn-sm" onclick="navigateTo('payroll')">Payroll</button>
-          <button class="btn btn-secondary btn-sm" onclick="navigateTo('messages')">Messages</button>
-          <button class="btn btn-secondary btn-sm" onclick="navigateTo('users')">Team</button>
-        </div>
-      </div>
-    </div>
-  `;
-}
-
 // Track selected course filter for sessions page
 let _sessionsFilterCourseId = '';
 let _sessionsFilterCourseTitle = '';
@@ -5441,11 +4254,8 @@ async function showStartSessionModal() {
           <label>Course <span style="color:red">*</span></label>
           <select id="session-course" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
             <option value="">— Select Course —</option>
-            ${courses
-                .filter(c => !c.needsApproval || c.approvalStatus === 'approved')
-                .map(c => `<option value="${c._id}">${esc(c.title)}${c.level?' · L'+c.level:''}${c.group?' · Grp '+c.group:''}</option>`).join('')}
+            ${courses.map(c => `<option value="${c._id}">${esc(c.title)}${c.level?' · L'+c.level:''}${c.group?' · Grp '+c.group:''}</option>`).join('')}
           </select>
-          ${courses.some(c => c.needsApproval && c.approvalStatus !== 'approved') ? `<p style="font-size:11px;color:#b45309;margin-top:4px">Some courses are hidden because they are pending approval or rejected.</p>` : ''}
         </div>
         <div class="form-group">
           <label>Session Title <span style="font-weight:400;color:var(--text-muted);font-size:12px">(optional)</span></label>
@@ -5790,21 +4600,14 @@ async function renderUsers(filterRole='', filterDept='', filterSearch='') {
           <select id="user-role-filter" onchange="renderUsers(this.value, document.getElementById('user-dept-filter').value, document.getElementById('user-search-input').value)"
             style="padding:7px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;">
             <option value="" ${!filterRole?'selected':''}>All Roles</option>
-            ${currentUser.role === 'superadmin'
-              ? `<option value="admin"     ${filterRole==='admin'?'selected':''}>Admin</option>
-                 <option value="manager"   ${filterRole==='manager'?'selected':''}>Manager</option>
-                 <option value="hod"       ${filterRole==='hod'?'selected':''}>HOD</option>
-                 <option value="lecturer"  ${filterRole==='lecturer'?'selected':''}>Lecturer</option>
-                 <option value="employee"  ${filterRole==='employee'?'selected':''}>Employee</option>
-                 <option value="student"   ${filterRole==='student'?'selected':''}>Student</option>`
-              : mode === 'academic'
-                ? `<option value="admin"    ${filterRole==='admin'?'selected':''}>Admin</option>
-                   <option value="hod"      ${filterRole==='hod'?'selected':''}>HOD</option>
-                   <option value="lecturer" ${filterRole==='lecturer'?'selected':''}>Lecturer</option>
-                   <option value="student"  ${filterRole==='student'?'selected':''}>Student</option>`
-                : `<option value="admin"    ${filterRole==='admin'?'selected':''}>Admin</option>
-                   <option value="manager"  ${filterRole==='manager'?'selected':''}>Manager</option>
-                   <option value="employee" ${filterRole==='employee'?'selected':''}>Employee</option>`}
+            ${mode === 'academic'
+              ? `<option value="admin" ${filterRole==='admin'?'selected':''}>Admin</option>
+                 <option value="hod" ${filterRole==='hod'?'selected':''}>HOD</option>
+                 <option value="lecturer" ${filterRole==='lecturer'?'selected':''}>Lecturer</option>
+                 <option value="student" ${filterRole==='student'?'selected':''}>Student</option>`
+              : `<option value="admin" ${filterRole==='admin'?'selected':''}>Admin</option>
+                 <option value="manager" ${filterRole==='manager'?'selected':''}>Manager</option>
+                 <option value="employee" ${filterRole==='employee'?'selected':''}>Employee</option>`}
           </select>
           ${mode === 'academic' && allDepts.length > 0 ? `
           <select id="user-dept-filter" onchange="renderUsers(document.getElementById('user-role-filter').value, this.value, document.getElementById('user-search-input').value)"
@@ -6735,7 +5538,7 @@ function _renderCoursesHTML(content, courses, isOffline) {
     <div class="card">
       ${courses.length ? `
         <table>
-          <thead><tr><th>Code</th><th>Title</th><th>Level / Group</th><th>Lecturer</th><th>Status</th><th>Roster</th><th>Enrolled</th>${canManageRoster && !isOffline ? '<th>Actions</th>' : currentUser.role === 'student' ? '<th></th>' : ''}</tr></thead>
+          <thead><tr><th>Code</th><th>Title</th><th>Level / Group</th><th>Lecturer</th><th>Roster</th><th>Enrolled</th>${canManageRoster && !isOffline ? '<th>Actions</th>' : currentUser.role === 'student' ? '<th></th>' : ''}</tr></thead>
           <tbody>${courses.map(course => `
             <tr>
               <td><strong>${course.code}</strong></td>
@@ -6745,21 +5548,10 @@ function _renderCoursesHTML(content, courses, isOffline) {
                 ${course.group ? `<span style="font-size:11px;padding:2px 7px;border-radius:20px;background:#ecfdf5;color:#059669;font-weight:600">${esc(course.group)}</span>` : ''}
                 ${!course.level && !course.group ? '<span style="color:var(--text-muted);font-size:12px">—</span>' : ''}
               </td>
-              <td>${course.lecturerId?.name || 'N/A'}</td>
-              <td>${course.needsApproval
-                ? (course.approvalStatus === 'pending'
-                    ? '<span style="background:#fef3c7;color:#b45309;border:1px solid #fde68a;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700;white-space:nowrap;">⏳ Pending</span>'
-                  : course.approvalStatus === 'rejected'
-                    ? '<span style="background:#fee2e2;color:#b91c1c;border:1px solid #fca5a5;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700;white-space:nowrap;">✕ Rejected</span>'
-                    : '<span style="background:#dcfce7;color:#166534;border:1px solid #bbf7d0;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700;white-space:nowrap;">✓ Approved</span>')
-                : '<span style="color:var(--text-muted);font-size:11px;">—</span>'}</td>
+              <td>${course.lecturer?.name || 'N/A'}</td>
               <td>${!isOffline ? `<button class="btn btn-sm" style="font-size:11px;background:var(--bg);border:1px solid var(--border)" onclick="viewRoster('${course._id}', '${course.code}')">View Roster</button>` : '—'}</td>
               <td>${course.enrolledStudents?.length || 0}</td>
-              ${canManageRoster && !isOffline ? `<td style="white-space:nowrap">${
-                (course.needsApproval && course.approvalStatus !== 'approved')
-                  ? `<span style="font-size:11px;color:var(--text-muted);font-style:italic">${course.approvalStatus === 'pending' ? 'Awaiting approval' : 'Rejected — contact HOD'}</span>`
-                  : `<button class="btn btn-primary btn-sm" style="font-size:11px" onclick="showUploadRosterModal('${course._id}', '${course.code}')">Upload Students</button>`
-              } <button class="btn btn-sm" style="font-size:11px;background:#6366f1;color:#fff" onclick="openBulkEmailModal('${course._id}', '${course.title}')">✉️ Email</button> <button class="btn btn-sm" style="font-size:11px;background:#10b981;color:#fff" onclick="openBulkSmsModal('${course._id}', '${course.title}')">💬 SMS</button></td>` : currentUser.role === 'student' ? `<td><button class="btn btn-sm" style="font-size:11px;background:#f0fdf4;color:#16a34a;border:1px solid #bbf7d0" onclick="generateCertificate('${course._id}','${course.title}')">🎓 Certificate</button></td>` : ''}
+              ${canManageRoster && !isOffline ? `<td style="white-space:nowrap"><button class="btn btn-primary btn-sm" style="font-size:11px" onclick="showUploadRosterModal('${course._id}', '${course.code}')">Upload Students</button> <button class="btn btn-sm" style="font-size:11px;background:#6366f1;color:#fff" onclick="openBulkEmailModal('${course._id}', '${course.title}')">✉️ Email</button> <button class="btn btn-sm" style="font-size:11px;background:#10b981;color:#fff" onclick="openBulkSmsModal('${course._id}', '${course.title}')">💬 SMS</button></td>` : currentUser.role === 'student' ? `<td><button class="btn btn-sm" style="font-size:11px;background:#f0fdf4;color:#16a34a;border:1px solid #bbf7d0" onclick="generateCertificate('${course._id}','${course.title}')">🎓 Certificate</button></td>` : ''}
             </tr>
           `).join('')}</tbody>
         </table>
@@ -6829,7 +5621,7 @@ async function createCourse() {
     if (!level) { toastWarning('Please select a level.'); return; }
     if (!group) { toastWarning('Please enter a group (e.g. A, B, C).'); return; }
 
-    await api('/api/courses/create', {
+    await api('/api/courses', {
       method: 'POST',
       body: JSON.stringify({
         code,
@@ -6839,13 +5631,10 @@ async function createCourse() {
         group:  group || undefined,
       }),
     });
-    toastSuccess(currentUser.role === 'lecturer'
-      ? 'Course submitted for HOD approval. It will be active once approved.'
-      : 'Course created successfully!');
     closeModal();
     renderCourses();
   } catch (e) {
-    toastError(e.message || 'Failed to create course');
+    toastError(e.message);
   }
 }
 
@@ -8567,7 +7356,6 @@ function bankQuestionCard(q, i, L, typeColors, typeBg) {
             ${q.useCount > 0 ? `<span style="font-size:11px;color:#9ca3af;">Used ${q.useCount}×</span>` : ''}
           </div>
           <div class="math-content" style="font-size:13px;font-weight:600;margin-bottom:8px;line-height:1.5;">${q.questionText}</div>
-          ${q.imageAttachment ? `<div style="margin-bottom:8px;"><img src="${q.imageAttachment.fileUrl}?token=${typeof token !== 'undefined' ? token : ''}" alt="${q.imageAttachment.originalName}" style="max-width:100%;max-height:180px;border-radius:8px;border:1px solid var(--border);object-fit:contain;cursor:pointer;" onclick="window.open('${q.imageAttachment.fileUrl}?token=${typeof token !== 'undefined' ? token : ''}','_blank')"></div>` : ''}
           ${type === 'fill'
             ? `<div style="font-size:12px;color:#059669;padding:4px 10px;background:#f0fdf4;border-radius:6px;display:inline-block;">✓ ${q.correctAnswerText}${q.acceptedAnswers?.length ? ` (+${q.acceptedAnswers.length} alt)` : ''}</div>`
             : type === 'explain'
@@ -8644,28 +7432,6 @@ function openAddToBankModal(prefill) {
             <input id="bm-topic" placeholder="e.g. Biology" value="${p.topic||''}" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;">
           </div>
         </div>
-        <!-- Image attachment -->
-        <div>
-          <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:6px;display:block;">Question Image <span style="font-weight:400;text-transform:none;">(optional diagram or figure)</span></label>
-          ${p.imageAttachment ? `
-            <div id="bm-img-existing" style="margin-bottom:8px;">
-              <img src="${p.imageAttachment.fileUrl}?token=${typeof token !== 'undefined' ? token : ''}" style="max-width:100%;max-height:140px;border-radius:8px;border:1px solid var(--border);object-fit:contain;display:block;margin-bottom:6px;">
-              <div style="display:flex;align-items:center;gap:8px;">
-                <span style="font-size:11px;color:var(--text-muted);">Current: ${p.imageAttachment.originalName}</span>
-                <button type="button" onclick="bmClearExistingImage()" style="font-size:11px;padding:2px 8px;border:1px solid #fecaca;background:#fef2f2;color:#dc2626;border-radius:5px;cursor:pointer;">Remove</button>
-              </div>
-            </div>` : ''}
-          <input type="hidden" id="bm-remove-image" value="false">
-          <input type="file" id="bm-image-input" accept=".jpg,.jpeg,.png,.webp,.gif" style="display:none" onchange="bmPreviewImage(this)">
-          <div style="display:flex;align-items:center;gap:8px;">
-            <button type="button" onclick="document.getElementById('bm-image-input').click()" style="display:flex;align-items:center;gap:6px;padding:7px 13px;border:1.5px dashed var(--border);border-radius:8px;background:var(--bg);cursor:pointer;font-size:12px;font-weight:600;color:var(--text-light);transition:.15s" onmouseover="this.style.borderColor='var(--primary)';this.style.color='var(--primary)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text-light)'">
-              🖼 ${p.imageAttachment ? 'Replace Image' : 'Upload Image'}
-            </button>
-            <span id="bm-img-name" style="font-size:12px;color:var(--text-muted);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
-            <button id="bm-img-clear" type="button" onclick="bmClearNewImage()" style="display:none;background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:16px;padding:2px 5px;">×</button>
-          </div>
-          <div id="bm-img-preview" style="margin-top:8px;display:none;"></div>
-        </div>
         <!-- Options (MCQ) -->
         <div id="bm-options-wrap">
           <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:6px;display:block;">Options & Correct Answer</label>
@@ -8703,35 +7469,6 @@ function openAddToBankModal(prefill) {
   if (p.questionType === 'fill' || p.questionType === 'explain') bmToggleType();
 }
 
-function bmPreviewImage(input) {
-  const file = input.files[0];
-  if (!file) return;
-  document.getElementById('bm-img-name').textContent = file.name;
-  document.getElementById('bm-img-clear').style.display = 'inline';
-  const url = URL.createObjectURL(file);
-  const preview = document.getElementById('bm-img-preview');
-  if (preview) {
-    preview.innerHTML = `<img src="${url}" style="max-width:100%;max-height:140px;border-radius:8px;border:1px solid var(--border);object-fit:contain;">`;
-    preview.style.display = 'block';
-  }
-}
-
-function bmClearNewImage() {
-  const input = document.getElementById('bm-image-input');
-  if (input) input.value = '';
-  document.getElementById('bm-img-name').textContent = '';
-  document.getElementById('bm-img-clear').style.display = 'none';
-  const preview = document.getElementById('bm-img-preview');
-  if (preview) { preview.innerHTML = ''; preview.style.display = 'none'; }
-}
-
-function bmClearExistingImage() {
-  const existing = document.getElementById('bm-img-existing');
-  if (existing) existing.remove();
-  const removeFlag = document.getElementById('bm-remove-image');
-  if (removeFlag) removeFlag.value = 'true';
-}
-
 function bmToggleType() {
   const type = document.getElementById('bm-type')?.value;
   const optWrap     = document.getElementById('bm-options-wrap');
@@ -8758,58 +7495,39 @@ async function submitBankQuestion(existingId) {
   const text  = document.getElementById('bm-text')?.value?.trim();
   const marks = parseInt(document.getElementById('bm-marks')?.value) || 1;
   const topic = document.getElementById('bm-topic')?.value?.trim() || '';
-  const imageFile   = document.getElementById('bm-image-input')?.files?.[0] || null;
-  const removeImage = document.getElementById('bm-remove-image')?.value === 'true';
   const errEl = document.getElementById('bm-err');
 
   if (!text) { errEl.textContent = 'Question text is required.'; errEl.style.display = 'block'; return; }
 
-  const fields = { questionText: text, questionType: type, marks, topic };
+  let body = { questionText: text, questionType: type, marks, topic };
 
   if (type === 'fill') {
     const ans = document.getElementById('bm-fill-answer')?.value?.trim();
     if (!ans) { errEl.textContent = 'Correct answer is required for fill-in questions.'; errEl.style.display = 'block'; return; }
-    fields.correctAnswerText = ans;
-    fields.acceptedAnswers = JSON.stringify((document.getElementById('bm-fill-alts')?.value || '').split('\n').map(s=>s.trim()).filter(Boolean));
-    fields.options = JSON.stringify([]);
+    body.correctAnswerText = ans;
+    body.acceptedAnswers = (document.getElementById('bm-fill-alts')?.value || '').split('\n').map(s=>s.trim()).filter(Boolean);
+    body.options = [];
   } else if (type === 'explain') {
-    fields.modelAnswer = document.getElementById('bm-model-answer')?.value?.trim() || '';
-    fields.options = JSON.stringify([]);
+    body.modelAnswer = document.getElementById('bm-model-answer')?.value?.trim() || '';
+    body.options = [];
   } else {
     const opts = [0,1,2,3].map(i => document.getElementById('bm-opt-'+i)?.value?.trim() || '');
     if (opts.filter(Boolean).length < 2) { errEl.textContent = 'At least 2 options required.'; errEl.style.display = 'block'; return; }
     const checked = [...document.querySelectorAll('input[name="bm-correct"]:checked')].map(el => parseInt(el.value));
     if (!checked.length) { errEl.textContent = 'Please mark the correct answer(s).'; errEl.style.display = 'block'; return; }
-    fields.options = JSON.stringify(opts);
-    if (type === 'multiple') { fields.correctAnswers = JSON.stringify(checked); }
-    else { fields.correctAnswer = checked[0]; }
+    body.options = opts;
+    if (type === 'multiple') { body.correctAnswers = checked; }
+    else { body.correctAnswer = checked[0]; }
   }
 
-  if (removeImage) fields.removeImage = 'true';
-
   try {
-    if (imageFile) {
-      const fd = new FormData();
-      Object.entries(fields).forEach(([k, v]) => fd.append(k, v));
-      fd.append('image', imageFile);
-      if (existingId) {
-        await apiUpload('/api/lecturer/question-bank/' + existingId, fd, 'PUT');
-      } else {
-        await apiUpload('/api/lecturer/question-bank', fd);
-      }
+    if (existingId) {
+      await api('/api/lecturer/question-bank/' + existingId, { method: 'PUT', body: JSON.stringify(body) });
+      toastSuccess('Question updated');
     } else {
-      // Parse back JSON strings for non-file path
-      const body = { ...fields };
-      if (body.options && typeof body.options === 'string') body.options = JSON.parse(body.options);
-      if (body.acceptedAnswers && typeof body.acceptedAnswers === 'string') body.acceptedAnswers = JSON.parse(body.acceptedAnswers);
-      if (body.correctAnswers && typeof body.correctAnswers === 'string') body.correctAnswers = JSON.parse(body.correctAnswers);
-      if (existingId) {
-        await api('/api/lecturer/question-bank/' + existingId, { method: 'PUT', body: JSON.stringify(body) });
-      } else {
-        await api('/api/lecturer/question-bank', { method: 'POST', body: JSON.stringify(body) });
-      }
+      await api('/api/lecturer/question-bank', { method: 'POST', body: JSON.stringify(body) });
+      toastSuccess('Question added to bank');
     }
-    toastSuccess(existingId ? 'Question updated' : 'Question added to bank');
     document.getElementById('add-bank-overlay')?.remove();
     renderQuestionBank();
   } catch(e) {
@@ -9834,10 +8552,10 @@ async function renderSubscription() {
     const mode       = currentUser?.company?.mode || 'academic';
     const isCorp     = mode === 'corporate';
     const planName   = isCorp ? 'Monthly Plan'   : 'Semester Plan';
-    const planPrice  = isCorp ? '₵150'           : '₵300';
-    const planPeriod = isCorp ? '30 days / month': '1 semester (16 weeks)';
+    const planPrice  = isCorp ? 'GHS 150'        : 'GHS 300';
+    const planPeriod = isCorp ? '30 days'        : '112 days (1 semester)';
     const planId     = isCorp ? 'monthly'        : 'semester';
-    const planLabel  = isCorp ? '₵150 / month'   : '₵300 / semester';
+    const planLabel  = isCorp ? 'GHS 150 / month': 'GHS 300 / semester';
 
     const statusColor = status === 'active' ? 'var(--success)' : status === 'trial' ? '#f59e0b' : 'var(--danger)';
     const statusLabel = status === 'active' ? '✅ Active' : status === 'trial' ? '⏳ Free Trial' : '❌ Expired';
@@ -9898,7 +8616,7 @@ async function renderSubscription() {
 
         ${status === 'trial' ? `
           <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:12px 14px;margin-bottom:16px;font-size:13px;color:#92400e">
-            ⏳ 30-day free trial active — <strong>${daysLeft} days</strong> left. Subscribe before it ends to avoid interruption.
+            ⏳ Free trial active — <strong>${daysLeft} days</strong> left. Subscribe before it ends to avoid interruption.
           </div>` : ''}
 
         <button class="btn btn-primary" style="width:100%;padding:14px;font-size:15px;font-weight:600;letter-spacing:0.3px;border-radius:10px"
@@ -9906,7 +8624,7 @@ async function renderSubscription() {
           💳 Pay ${planPrice} with Paystack
         </button>
         <p style="font-size:11px;color:var(--text-light);text-align:center;margin-top:10px">
-          Secured by Paystack · Paid in GHS (₵) · Mobile Money &amp; Card accepted
+          Secured by Paystack · Paid in GHS · Mobile Money &amp; Card accepted
         </p>
       </div>
     `;
@@ -10514,7 +9232,7 @@ async function renderStudentGradeBook(content) {
                    onmouseleave="this.style.transform=''"
                    onclick="renderStudentCourseGrades('${c._id}','${c.title} (${c.code})')">
                 <div style="font-weight:700;font-size:15px;margin-bottom:4px;">${c.title}</div>
-                <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">${c.code} · ${c.lecturerId?.name || 'N/A'}</div>
+                <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">${c.code} · ${c.lecturer?.name || 'N/A'}</div>
                 <div style="display:flex;justify-content:space-between;align-items:center;">
                   <span style="font-size:12px;color:var(--text-light);">${c.enrolledStudents?.length || 0} students</span>
                   <span class="btn btn-sm btn-primary" style="pointer-events:none;">View Grades →</span>
@@ -10626,7 +9344,7 @@ async function renderLecturerGradeBook(content) {
                    onmouseleave="this.style.transform=''"
                    onclick="renderLecturerCourseGrades('${c._id}','${c.title} (${c.code})')">
                 <div style="font-weight:700;font-size:15px;margin-bottom:4px;">${c.title}</div>
-                <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">${c.code} · ${c.lecturerId?.name || 'N/A'}</div>
+                <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">${c.code} · ${c.lecturer?.name || 'N/A'}</div>
                 <div style="display:flex;justify-content:space-between;align-items:center;">
                   <span style="font-size:12px;color:var(--text-light);">${c.enrolledStudents?.length || 0} students</span>
                   <span class="btn btn-sm btn-primary" style="pointer-events:none;">Open →</span>
@@ -10644,13 +9362,12 @@ async function renderLecturerCourseGrades(courseId, courseTitle) {
   content.innerHTML = '<div class="loading">Loading grade book…</div>';
   try {
     const d = await api('/api/gradebook/course/' + courseId);
-    const grades        = d.grades      || [];
-    const gradeBook     = d.gradeBook   || { weights: { quizzes: 50, attendance: 20, manual: 30 }, manualEntries: [] };
-    // API returns assessments.legacyQuizzes (not a top-level d.quizzes)
-    const quizzes       = d.assessments?.legacyQuizzes || [];
+    const grades      = d.grades      || [];
+    const gradeBook   = d.gradeBook   || { weights: { quizzes: 40, attendance: 40, manual: 20 }, manualEntries: [] };
+    const quizzes     = d.quizzes     || [];
     const totalSessions = d.totalSessions ?? 0;
     const gb = gradeBook;
-    const w  = gb.weights || { quizzes: 50, attendance: 20, manual: 30 };
+    const w  = gb.weights || { quizzes: 40, attendance: 40, manual: 20 };
 
     // Grade distribution summary
     const dist = { A:0, B:0, C:0, D:0, F:0 };
@@ -10726,10 +9443,9 @@ async function renderLecturerCourseGrades(courseId, courseTitle) {
       }
     `;
 
-    // Store current data globally for CSV export and score entry
+    // Store current data globally for CSV export
     window._gbData = d;
     window._gbCourseId = courseId;
-    window._gbCourseTitle = courseTitle;
 
   } catch(e) {
     content.innerHTML = `<div class="card"><p style="color:#ef4444;">${e.message}</p></div>`;
@@ -10830,7 +9546,7 @@ async function saveManualEntry(courseId) {
     });
     document.getElementById('gb-entry-overlay').remove();
     toastSuccess('Grade column added ✓');
-    renderLecturerCourseGrades(courseId, window._gbCourseTitle || '');
+    renderLecturerCourseGrades(courseId, document.querySelector('h2')?.textContent || '');
   } catch(e) {
     if (errEl) { errEl.textContent = e.message; errEl.style.display = 'block'; }
   }
@@ -10845,8 +9561,7 @@ function openEditManualScores(courseId, entryId, label, maxScore) {
   ol.id = 'gb-scores-overlay';
   ol.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:400;display:flex;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(3px)';
 
-  // Only registered students have a real _id — skip roster-only (unregistered) rows
-  const rows = gbData.grades.filter(g => g.student._id && g.student.isRegistered !== false).map(g => {
+  const rows = gbData.grades.map(g => {
     const existing = g.manualScores.find(m => m.entryId.toString() === entryId);
     return `
       <tr>
@@ -10898,7 +9613,7 @@ async function submitManualScores(courseId, entryId) {
     });
     document.getElementById('gb-scores-overlay').remove();
     toastSuccess('Scores saved ✓');
-    renderLecturerCourseGrades(courseId, window._gbCourseTitle || '');
+    renderLecturerCourseGrades(courseId, document.querySelector('h2')?.textContent || '');
   } catch(e) {
     toastError(e.message);
   }
@@ -10909,7 +9624,7 @@ function confirmDeleteManualEntry(courseId, entryId) {
     try {
       await api('/api/gradebook/course/' + courseId + '/manual-entry/' + entryId, { method: 'DELETE' });
       toastSuccess('Column deleted');
-      renderLecturerCourseGrades(courseId, window._gbCourseTitle || '');
+      renderLecturerCourseGrades(courseId, document.querySelector('h2')?.textContent || '');
     } catch(e) { toastError(e.message); }
   });
 }
@@ -11022,13 +9737,6 @@ function annCard(a, canPost, isAdmin) {
             ${!a.isRead ? '<span style="background:#6366f1;color:#fff;font-size:10px;padding:1px 7px;border-radius:20px;font-weight:700;">NEW</span>' : ''}
           </div>
           <div style="font-size:13px;color:var(--text-light);margin-bottom:10px;white-space:pre-wrap;line-height:1.6;">${a.body}</div>
-          ${a.attachment ? (() => {
-            const t = typeof token !== 'undefined' ? token : '';
-            const src = `/api/announcements/attachment/${a.attachment.fileName}?token=${t}`;
-            return a.attachment.mimeType?.startsWith('image/')
-              ? `<div style="margin-bottom:10px;"><img src="${src}" alt="${esc(a.attachment.originalName)}" style="max-width:100%;max-height:220px;border-radius:8px;border:1px solid var(--border);object-fit:contain;cursor:pointer;" onclick="window.open('${src}','_blank')"></div>`
-              : `<div style="margin-bottom:10px;display:flex;align-items:center;gap:8px;padding:8px 12px;background:#fef9f0;border:1px solid #fed7aa;border-radius:8px;font-size:12px;color:#c2410c;cursor:pointer;" onclick="window.open('${src}','_blank')"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> 📄 ${esc(a.attachment.originalName)} <span style="color:var(--text-muted);margin-left:4px;">(click to view)</span></div>`;
-          })() : ''}
           <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:11px;color:var(--text-muted);">
             <span>👤 ${a.author?.name || 'Unknown'}</span>
             <span>📢 ${audienceLabel}</span>
@@ -11123,19 +9831,6 @@ async function openPostAnnouncementModal() {
           <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:5px;display:block;">Expires At <span style="font-weight:400;text-transform:none;">(optional)</span></label>
           <input id="ann-expires" type="datetime-local" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;">
         </div>
-        <div>
-          <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:6px;display:block;">Attachment <span style="font-weight:400;text-transform:none;">(PDF or image, optional)</span></label>
-          <input type="file" id="ann-file" accept=".pdf,.jpg,.jpeg,.png,.webp,.gif" style="display:none" onchange="annPreviewFile(this)">
-          <div style="display:flex;align-items:center;gap:8px;">
-            <button type="button" onclick="document.getElementById('ann-file').click()" style="display:flex;align-items:center;gap:6px;padding:7px 13px;border:1.5px dashed var(--border);border-radius:8px;background:var(--bg);cursor:pointer;font-size:12px;font-weight:600;color:var(--text-light);transition:.15s" onmouseover="this.style.borderColor='var(--primary)';this.style.color='var(--primary)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text-light)'">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
-              📎 Attach File
-            </button>
-            <span id="ann-file-name" style="font-size:12px;color:var(--text-muted);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
-            <button id="ann-file-clear" type="button" onclick="annClearFile()" style="display:none;background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:16px;padding:2px 5px;line-height:1;">×</button>
-          </div>
-          <div id="ann-file-preview" style="margin-top:8px;display:none;"></div>
-        </div>
         ${isAdmin ? `
         <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;font-weight:500;">
           <input type="checkbox" id="ann-pinned" style="accent-color:var(--primary);width:15px;height:15px;">
@@ -11151,31 +9846,6 @@ async function openPostAnnouncementModal() {
   document.body.appendChild(ol);
 }
 
-function annPreviewFile(input) {
-  const file = input.files[0];
-  if (!file) return;
-  document.getElementById('ann-file-name').textContent = file.name;
-  document.getElementById('ann-file-clear').style.display = 'inline';
-  const preview = document.getElementById('ann-file-preview');
-  if (file.type.startsWith('image/')) {
-    const url = URL.createObjectURL(file);
-    preview.innerHTML = `<img src="${url}" style="max-width:100%;max-height:160px;border-radius:8px;border:1px solid var(--border);object-fit:contain;">`;
-    preview.style.display = 'block';
-  } else {
-    preview.innerHTML = `<div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;font-size:12px;color:#dc2626;"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> ${file.name}</div>`;
-    preview.style.display = 'block';
-  }
-}
-
-function annClearFile() {
-  const input = document.getElementById('ann-file');
-  if (input) input.value = '';
-  document.getElementById('ann-file-name').textContent = '';
-  document.getElementById('ann-file-clear').style.display = 'none';
-  const preview = document.getElementById('ann-file-preview');
-  if (preview) { preview.innerHTML = ''; preview.style.display = 'none'; }
-}
-
 async function submitAnnouncement() {
   const title    = document.getElementById('ann-title')?.value?.trim();
   const body     = document.getElementById('ann-body')?.value?.trim();
@@ -11184,8 +9854,6 @@ async function submitAnnouncement() {
   const expiresAt= document.getElementById('ann-expires')?.value || null;
   const pinned   = document.getElementById('ann-pinned')?.checked || false;
   const courseId = document.getElementById('ann-course')?.value || null;
-  const fileInput = document.getElementById('ann-file');
-  const file     = fileInput?.files?.[0] || null;
   const errEl    = document.getElementById('ann-post-err');
 
   if (!title || !body) {
@@ -11193,17 +9861,10 @@ async function submitAnnouncement() {
     return;
   }
   try {
-    const fd = new FormData();
-    fd.append('title', title);
-    fd.append('body', body);
-    fd.append('type', type);
-    fd.append('audience', audience);
-    fd.append('pinned', pinned ? 'true' : 'false');
-    if (expiresAt) fd.append('expiresAt', new Date(expiresAt).toISOString());
-    if (courseId) fd.append('courseId', courseId);
-    if (file) fd.append('attachment', file);
-
-    await apiUpload('/api/announcements', fd);
+    await api('/api/announcements', {
+      method: 'POST',
+      body: JSON.stringify({ title, body, type, audience, pinned, expiresAt: expiresAt ? new Date(expiresAt).toISOString() : null, courseId: courseId || undefined }),
+    });
     document.getElementById('ann-post-overlay')?.remove();
     toastSuccess('Announcement posted ✓');
     renderAnnouncements();
@@ -12391,7 +11052,7 @@ function buildBottomNav(role) {
       : ['dashboard', 'sessions', 'users', 'reports'],
     manager:    ['dashboard', 'sessions', 'reports', 'users'],
     lecturer:   ['dashboard', 'sessions', 'quizzes', 'assignments'],
-    hod:        ['hod-overview', 'hod-courses', 'hod-lecturers', 'hod-reports', 'meetings'],
+    hod:        ['hod-overview', 'hod-courses', 'hod-lecturers', 'hod-reports', 'hod-quizzes', 'meetings'],
     employee:   ['dashboard', 'sign-in-out', 'my-attendance', 'reports'],
     student:    ['dashboard', 'mark-attendance', 'quizzes', 'assignments'],
     superadmin: currentUser?.company?.mode === 'academic'
@@ -12580,41 +11241,28 @@ function openAIQuizPanel(quizId) {
             </label>
             <div id="aiq-pdf-name" style="display:none;margin-top:8px;padding:7px 12px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:7px;font-size:12px;color:#166534;font-weight:500;"></div>
           </div>
-          <!-- Drawing Canvas — Premium -->
+          <!-- Drawing Canvas -->
           <div id="aiq-src-drawing" style="display:none;">
-            <div style="background:var(--bg);border:1.5px solid var(--border);border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.06);">
-              <!-- Toolbar row 1: tools -->
-              <div style="display:flex;gap:5px;padding:8px 10px;background:var(--card);border-bottom:1px solid var(--border);flex-wrap:wrap;align-items:center;">
-                <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--text-muted);margin-right:2px;">TOOLS</span>
-                <button id="aiq-draw-tool-pen"   onclick="aiqSetDrawTool('pen')"   style="padding:5px 10px;border:1.5px solid #7c3aed;border-radius:7px;background:#7c3aed;color:#fff;font-size:11px;cursor:pointer;font-weight:700;display:flex;align-items:center;gap:3px">✏️ Pen</button>
-                <button id="aiq-draw-tool-eraser" onclick="aiqSetDrawTool('eraser')" style="padding:5px 10px;border:1.5px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);font-size:11px;cursor:pointer;font-weight:600;display:flex;align-items:center;gap:3px">🧹 Eraser</button>
-                <button id="aiq-draw-tool-line"  onclick="aiqSetDrawTool('line')"  style="padding:5px 10px;border:1.5px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);font-size:11px;cursor:pointer;font-weight:600">╱ Line</button>
-                <button id="aiq-draw-tool-rect"  onclick="aiqSetDrawTool('rect')"  style="padding:5px 10px;border:1.5px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);font-size:11px;cursor:pointer;font-weight:600">▭ Rect</button>
-                <button id="aiq-draw-tool-circle" onclick="aiqSetDrawTool('circle')" style="padding:5px 10px;border:1.5px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);font-size:11px;cursor:pointer;font-weight:600">◯ Circle</button>
-                <button id="aiq-draw-tool-text"  onclick="aiqSetDrawTool('text')"  style="padding:5px 10px;border:1.5px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);font-size:11px;cursor:pointer;font-weight:600">T Text</button>
+            <div style="background:#f9fafb;border:1.5px solid var(--border);border-radius:10px;overflow:hidden;">
+              <div style="display:flex;gap:4px;padding:6px 8px;background:var(--card);border-bottom:1px solid var(--border);flex-wrap:wrap;align-items:center;">
+                <span style="font-size:11px;font-weight:700;color:var(--text-muted);margin-right:4px;">Tool:</span>
+                <button id="aiq-draw-tool-pen"   onclick="aiqSetDrawTool('pen')"   style="padding:4px 9px;border:1.5px solid #7c3aed;border-radius:6px;background:#7c3aed;color:#fff;font-size:11px;cursor:pointer;font-weight:600">✏️ Pen</button>
+                <button id="aiq-draw-tool-line"  onclick="aiqSetDrawTool('line')"  style="padding:4px 9px;border:1.5px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-size:11px;cursor:pointer">/ Line</button>
+                <button id="aiq-draw-tool-rect"  onclick="aiqSetDrawTool('rect')"  style="padding:4px 9px;border:1.5px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-size:11px;cursor:pointer">□ Rect</button>
+                <button id="aiq-draw-tool-circle" onclick="aiqSetDrawTool('circle')" style="padding:4px 9px;border:1.5px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-size:11px;cursor:pointer">○ Circle</button>
+                <button id="aiq-draw-tool-text"  onclick="aiqSetDrawTool('text')"  style="padding:4px 9px;border:1.5px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-size:11px;cursor:pointer">T Text</button>
+                <button id="aiq-draw-tool-eraser" onclick="aiqSetDrawTool('eraser')" style="padding:4px 9px;border:1.5px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-size:11px;cursor:pointer">🧹 Erase</button>
                 <div style="flex:1"></div>
-                <div style="display:flex;align-items:center;gap:6px;padding:4px 8px;background:var(--bg);border:1px solid var(--border);border-radius:7px">
-                  <span style="font-size:10px;color:var(--text-muted);font-weight:600">Color</span>
-                  <input type="color" id="aiq-draw-color" value="#1a1a2e" style="width:22px;height:22px;border:none;cursor:pointer;border-radius:4px;padding:0;background:none" title="Pick colour">
-                </div>
-                <select id="aiq-draw-size" style="padding:5px 8px;border:1.5px solid var(--border);border-radius:7px;font-size:11px;font-family:inherit;outline:none;background:var(--bg);color:var(--text);cursor:pointer">
-                  <option value="2">Thin (2px)</option><option value="4" selected>Normal (4px)</option><option value="8">Thick (8px)</option><option value="14">Bold (14px)</option>
+                <input type="color" id="aiq-draw-color" value="#1e1e2e" style="width:26px;height:26px;border:none;cursor:pointer;border-radius:4px;padding:0" title="Colour">
+                <select id="aiq-draw-size" style="padding:3px 6px;border:1px solid var(--border);border-radius:5px;font-size:11px;outline:none">
+                  <option value="2">Thin</option><option value="4" selected>Normal</option><option value="8">Thick</option><option value="14">Bold</option>
                 </select>
+                <button onclick="aiqDrawUndo()" style="padding:4px 9px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-size:11px;cursor:pointer">↩ Undo</button>
+                <button onclick="aiqDrawClear()" style="padding:4px 9px;border:1px solid #dc2626;border-radius:6px;background:#fef2f2;color:#dc2626;font-size:11px;cursor:pointer">✕ Clear</button>
               </div>
-              <!-- Toolbar row 2: actions -->
-              <div style="display:flex;gap:5px;padding:6px 10px;background:var(--card);border-bottom:1px solid var(--border);align-items:center">
-                <button onclick="aiqDrawUndo()" style="padding:5px 12px;border:1.5px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);font-size:11px;cursor:pointer;font-weight:600;display:flex;align-items:center;gap:4px">
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5v0a5.5 5.5 0 0 1-5.5 5.5H11"/></svg> Undo
-                </button>
-                <button onclick="aiqDrawClear()" style="padding:5px 12px;border:1.5px solid #fca5a5;border-radius:7px;background:#fef2f2;color:#dc2626;font-size:11px;cursor:pointer;font-weight:600;display:flex;align-items:center;gap:4px">
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg> Clear Canvas
-                </button>
-                <div style="flex:1"></div>
-                <span style="font-size:10px;color:var(--text-muted)">Click &amp; drag to draw · Touch supported</span>
-              </div>
-              <canvas id="aiq-draw-canvas" width="460" height="300" style="display:block;width:100%;cursor:crosshair;touch-action:none;background:#fff;"></canvas>
+              <canvas id="aiq-draw-canvas" width="460" height="280" style="display:block;width:100%;cursor:crosshair;touch-action:none;background:#fff;"></canvas>
             </div>
-            <p style="font-size:11px;color:var(--text-muted);margin-top:8px;line-height:1.5">Draw a diagram, geometry sketch, chart or concept map. AI will analyse your drawing and generate quiz questions from it.</p>
+            <p style="font-size:11px;color:var(--text-muted);margin-top:6px;">Draw a diagram, geometry sketch, or concept map. AI will analyse it and generate questions.</p>
           </div>
           <!-- Graph / Coordinate Plane -->
           <div id="aiq-src-graph" style="display:none;">
@@ -13217,9 +11865,9 @@ async function runAIQuizGenerate(quizId) {
     const styleDesc = mathStyle === 'solve' ? 'calculation/problem-solving questions'
                     : mathStyle === 'conceptual' ? 'conceptual/theory questions about mathematical properties'
                     : 'a mix of calculation problems and conceptual questions';
-    prompt = 'You are an expert mathematics educator creating quiz questions for KODEX.\n\nGenerate exactly ' + count + ' ' + difficulty + ' difficulty math MCQ questions about: "' + topic + '". ' + branch + '\n' + (context ? 'Context: ' + context : '') + '\n\nStyle: ' + styleDesc + '. Question type: ' + qtypeDesc + '. Each question has EXACTLY 5 options (A through E).\n\nUse LaTeX \\( ... \\) for ALL inline math. Use \\[ ... \\] for display equations.\n\nReturn ONLY a valid JSON array:\n[\n  {\n    "questionText": "Find \\( x \\) if \\( x^2 - 5x + 6 = 0 \\).",\n    "options": ["\\( x = 2, 3 \\)", "\\( x = -2, -3 \\)", "\\( x = 1, 6 \\)", "\\( x = 5, -1 \\)", "\\( x = 0, 5 \\)"],\n    "correctAnswers": [0],\n    "questionType": "single",\n    "explanation": "Factorising: \\( (x-2)(x-3)=0 \\)."\n  }\n]';
+    prompt = 'You are an expert mathematics educator creating quiz questions for KODEX.\n\nGenerate exactly ' + count + ' ' + difficulty + ' difficulty math MCQ questions about: "' + topic + '". ' + branch + '\n' + (context ? 'Context: ' + context : '') + '\n\nStyle: ' + styleDesc + '. Question type: ' + qtypeDesc + '. Each question has exactly 4 options.\n\nUse LaTeX \\( ... \\) for ALL inline math. Use \\[ ... \\] for display equations.\n\nReturn ONLY a valid JSON array:\n[\n  {\n    "questionText": "Find \\( x \\) if \\( x^2 - 5x + 6 = 0 \\).",\n    "options": ["\\( x = 2, 3 \\)", "\\( x = -2, -3 \\)", "\\( x = 1, 6 \\)", "\\( x = 5, -1 \\)"],\n    "correctAnswers": [0],\n    "questionType": "single",\n    "explanation": "Factorising: \\( (x-2)(x-3)=0 \\)."\n  }\n]';
   } else {
-    prompt = 'You are an expert educator creating quiz questions for KODEX.\n\nGenerate exactly ' + count + ' ' + difficulty + ' difficulty MCQ questions about: "' + topic + '".\n' + (context ? 'Context: ' + context : '') + '\nQuestion type: ' + qtypeDesc + '. Each question has EXACTLY 5 options (A, B, C, D, E).\n\nReturn ONLY a valid JSON array:\n[\n  {\n    "questionText": "Question here?",\n    "options": ["Option A", "Option B", "Option C", "Option D", "Option E"],\n    "correctAnswers": [0],\n    "questionType": "single",\n    "explanation": "Why this is correct"\n  }\n]\n\ncorrectAnswers = 0-based indices. questionType = "single" or "multiple". No extra text.';
+    prompt = 'You are an expert educator creating quiz questions for KODEX.\n\nGenerate exactly ' + count + ' ' + difficulty + ' difficulty MCQ questions about: "' + topic + '".\n' + (context ? 'Context: ' + context : '') + '\nQuestion type: ' + qtypeDesc + '. Each question has exactly 4 options.\n\nReturn ONLY a valid JSON array:\n[\n  {\n    "questionText": "Question here?",\n    "options": ["Option A", "Option B", "Option C", "Option D"],\n    "correctAnswers": [0],\n    "questionType": "single",\n    "explanation": "Why this is correct"\n  }\n]\n\ncorrectAnswers = 0-based indices. questionType = "single" or "multiple". No extra text.';
   }
 
   try {
@@ -13245,7 +11893,7 @@ async function runAIQuizGenerate(quizId) {
       correctAnswers: Array.isArray(q.correctAnswers) ? q.correctAnswers : [q.correctAnswers],
     }));
 
-    const L = ['A','B','C','D','E'];
+    const L = ['A','B','C','D'];
     document.getElementById('aiq-preview-count').textContent = _aiQuizQuestions.length + ' questions';
     document.getElementById('aiq-preview-list').innerHTML = _aiQuizQuestions.map((q, i) => `
       <div style="border:1.5px solid var(--border);border-radius:10px;padding:13px;background:var(--bg)">
@@ -13307,80 +11955,6 @@ async function addAIQuizQuestions(quizId) {
 // ══════════════════════════════════════════════════════════════════════════
 //  CORPORATE PHASE 1 — SHIFTS & LEAVE
 // ══════════════════════════════════════════════════════════════════════════
-
-// ── TEAM ATTENDANCE (Manager/Admin) ───────────────────────────────────────
-async function renderCorporateAttendance() {
-  const content = document.getElementById('main-content');
-  if (!content) return;
-  content.innerHTML = `<div class="card"><div class="loading-spinner"></div><p style="text-align:center;color:var(--text-light);margin-top:8px">Loading attendance…</p></div>`;
-
-  try {
-    const today = new Date().toISOString().slice(0, 10);
-    const thirtyAgo = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
-    const fromParam = new URLSearchParams(window.location.search).get('from') || thirtyAgo;
-    const toParam   = new URLSearchParams(window.location.search).get('to')   || today;
-
-    const data = await api(`/api/corporate-attendance/?from=${fromParam}&to=${toParam}`);
-    const records = data.records || [];
-
-    const statusBadge = s => {
-      const colors = { present:'#16a34a', late:'#d97706', absent:'#dc2626', half_day:'#7c3aed', on_leave:'#0891b2', remote:'#2563eb', excused:'#6b7280', public_holiday:'#9333ea' };
-      const col = colors[s] || '#6b7280';
-      return `<span style="background:${col}22;color:${col};border-radius:999px;padding:2px 10px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px">${(s||'—').replace('_',' ')}</span>`;
-    };
-
-    const fmtTime = t => t ? new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—';
-    const mapsLink = (lat, lng) => lat != null && lng != null
-      ? `<a href="https://www.google.com/maps?q=${lat},${lng}" target="_blank" rel="noopener"
-           style="font-size:11px;color:var(--primary);text-decoration:underline;white-space:nowrap">
-           📍 Map
-         </a>`
-      : '<span style="color:var(--text-light);font-size:11px">—</span>';
-
-    const rows = records.map(r => {
-      const emp  = r.employee || {};
-      const ci   = r.clockIn  || {};
-      const co   = r.clockOut || {};
-      const ciLat = ci.location?.latitude;  const ciLng = ci.location?.longitude;
-      const coLat = co.location?.latitude;  const coLng = co.location?.longitude;
-      const ciAcc = ci.location?.accuracy  != null ? `<span style="color:var(--text-light);font-size:10px">(±${ci.location.accuracy}m)</span>` : '';
-      const coAcc = co.location?.accuracy  != null ? `<span style="color:var(--text-light);font-size:10px">(±${co.location.accuracy}m)</span>` : '';
-      return `<tr>
-        <td><strong>${esc(emp.name || '—')}</strong><br><span style="font-size:11px;color:var(--text-light)">${esc(emp.employeeId || emp.department || '')}</span></td>
-        <td style="white-space:nowrap">${new Date(r.date).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})}</td>
-        <td>${statusBadge(r.status)}</td>
-        <td style="white-space:nowrap">${fmtTime(ci.time)}${ci.isLate ? ` <span style="color:#d97706;font-size:10px">(+${ci.lateMinutes}m late)</span>` : ''}<br>${mapsLink(ciLat,ciLng)} ${ciAcc}</td>
-        <td style="white-space:nowrap">${fmtTime(co.time)}<br>${mapsLink(coLat,coLng)} ${coAcc}</td>
-        <td>${r.hoursWorked != null ? `${r.hoursWorked}h` : '—'}</td>
-      </tr>`;
-    }).join('');
-
-    content.innerHTML = `
-      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:20px">
-        <h2 style="margin:0;font-size:20px;font-weight:800">Team Attendance</h2>
-        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-          <label style="font-size:12px;color:var(--text-light)">From</label>
-          <input type="date" id="corp-att-from" value="${fromParam}" style="border:1px solid var(--border);border-radius:8px;padding:6px 10px;font-size:13px">
-          <label style="font-size:12px;color:var(--text-light)">To</label>
-          <input type="date" id="corp-att-to"   value="${toParam}"   style="border:1px solid var(--border);border-radius:8px;padding:6px 10px;font-size:13px">
-          <button class="btn btn-primary btn-sm" onclick="(()=>{const f=document.getElementById('corp-att-from').value,t=document.getElementById('corp-att-to').value;history.replaceState(null,'',\`?from=\${f}&to=\${t}\`);renderCorporateAttendance();})()">Filter</button>
-        </div>
-      </div>
-      <div class="card" style="overflow-x:auto">
-        ${records.length === 0
-          ? `<div class="empty-state"><p>No attendance records found for this period.</p></div>`
-          : `<table>
-              <thead><tr>
-                <th>Employee</th><th>Date</th><th>Status</th>
-                <th>Clock In / Location</th><th>Clock Out / Location</th><th>Hours</th>
-              </tr></thead>
-              <tbody>${rows}</tbody>
-             </table>`}
-      </div>`;
-  } catch (e) {
-    content.innerHTML = `<div class="card"><p style="color:var(--danger)">Failed to load attendance records.</p></div>`;
-  }
-}
 
 // ── SHIFTS (Admin/Manager) ─────────────────────────────────────────────────
 async function renderShifts() {
@@ -13711,41 +12285,8 @@ async function renderMyLeaves() {
       cancelled: '<span style="background:#f9fafb;color:#6b7280;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600">Cancelled</span>',
     }[s] || s);
 
-    // Leave balance
-    const yr = new Date().getFullYear();
-    const approved = leaves.filter(l => l.status === 'approved' && new Date(l.startDate).getFullYear() === yr);
-    const annualUsed = approved.filter(l => l.type === 'annual').reduce((s, l) => s + l.days, 0);
-    const sickUsed   = approved.filter(l => l.type === 'sick').reduce((s, l) => s + l.days, 0);
-    const otherUsed  = approved.filter(l => !['annual','sick'].includes(l.type)).reduce((s, l) => s + l.days, 0);
-    const ANNUAL = 21, SICK = 10;
-    const mkBar = (used, alloc, color) => `<div style="height:6px;background:var(--border);border-radius:3px;margin-top:4px"><div style="height:6px;background:${color};border-radius:3px;width:${Math.min(100,Math.round((used/alloc)*100))}%"></div></div>`;
-
     content.innerHTML = `
       <div class="page-header"><h2>My Leave</h2><p>Request and track your leave</p></div>
-
-      <!-- Leave Balance -->
-      <div class="stats-grid" style="margin-bottom:16px">
-        <div class="stat-card">
-          <div class="stat-value" style="color:${ANNUAL-annualUsed>7?'#16a34a':ANNUAL-annualUsed>3?'#d97706':'#dc2626'}">${ANNUAL - annualUsed}</div>
-          <div class="stat-label">Annual Left</div>
-          ${mkBar(annualUsed, ANNUAL, ANNUAL-annualUsed>7?'#16a34a':ANNUAL-annualUsed>3?'#d97706':'#dc2626')}
-          <div style="font-size:10px;color:var(--text-muted);margin-top:4px">${annualUsed} used of ${ANNUAL}</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-value" style="color:${SICK-sickUsed>3?'#16a34a':'#d97706'}">${SICK - sickUsed}</div>
-          <div class="stat-label">Sick Left</div>
-          ${mkBar(sickUsed, SICK, SICK-sickUsed>3?'#16a34a':'#d97706')}
-          <div style="font-size:10px;color:var(--text-muted);margin-top:4px">${sickUsed} used of ${SICK}</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-value">${leaves.filter(l=>l.status==='pending').length}</div>
-          <div class="stat-label">Pending Requests</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-value" style="color:#7c3aed">${otherUsed}</div>
-          <div class="stat-label">Other Days Used</div>
-        </div>
-      </div>
 
       <!-- Request Form -->
       <div class="card" style="margin-bottom:20px">
@@ -13828,416 +12369,6 @@ async function cancelLeave(id) {
     toast('Leave request cancelled', 'ok');
     renderMyLeaves();
   } catch(e) { toast(e.message, 'err'); }
-}
-
-// ── EMPLOYEE — Notifications page ────────────────────────────────────────────
-async function renderEmpNotifications() {
-  const content = document.getElementById('main-content');
-  if (!content) return;
-  content.innerHTML = '<div class="loading">Loading notifications…</div>';
-  try {
-    const today      = new Date().toISOString().slice(0, 10);
-    const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0, 10);
-
-    const [todayData, monthData, shiftData, leavesData] = await Promise.all([
-      api(`/api/corporate-attendance/my?from=${today}&to=${today}`).catch(() => ({ records: [] })),
-      api(`/api/corporate-attendance/my?from=${monthStart}&to=${today}`).catch(() => ({ records: [] })),
-      api('/api/shifts/my-shift').catch(() => ({})),
-      api('/api/leaves/my').catch(() => ({ leaves: [] })),
-    ]);
-
-    const todayRecord  = todayData.records?.[0] || null;
-    const isClockedIn  = !!(todayRecord?.clockIn?.time && !todayRecord?.clockOut?.time);
-    const shift        = shiftData.assignment?.shift || null;
-    const leaves       = leavesData.leaves || [];
-    const monthRecords = monthData.records || [];
-
-    const notifs = [];
-
-    // Clock-in status
-    if (!todayRecord) {
-      if (shift) {
-        const [sh, sm] = (shift.startTime || '09:00').split(':').map(Number);
-        const shiftStart = new Date(); shiftStart.setHours(sh, sm, 0, 0);
-        const minsTil = Math.round((shiftStart - Date.now()) / 60000);
-        if (minsTil > 0 && minsTil < 60) {
-          notifs.push({ icon: '⏰', type: 'info', title: 'Shift starting soon', body: `${shift.name} starts in ${minsTil} min (${shift.startTime})`, action: { label: 'Clock In', fn: "navigateTo('sign-in-out')" } });
-        } else if (minsTil <= 0) {
-          notifs.push({ icon: '⚠️', type: 'warn', title: 'Not clocked in', body: `Your shift ${shift.name} started at ${shift.startTime}. Clock in now.`, action: { label: 'Clock In', fn: "navigateTo('sign-in-out')" } });
-        }
-      }
-    } else if (isClockedIn) {
-      const clockInTime = new Date(todayRecord.clockIn.time);
-      notifs.push({ icon: '●', type: 'ok', title: 'Currently clocked in', body: `Since ${clockInTime.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})} · ${_empElapsed(clockInTime)} elapsed`, action: { label: 'Clock Out', fn: "navigateTo('sign-in-out')" } });
-    }
-
-    // Lateness this month
-    const lateCount = monthRecords.filter(r => r.status === 'late').length;
-    if (lateCount > 0) {
-      notifs.push({ icon: '🕐', type: 'warn', title: `Late arrivals this month`, body: `You have been late ${lateCount} time${lateCount > 1 ? 's' : ''} this month.`, action: null });
-    }
-
-    // Shift info
-    if (shift) {
-      const dayMap = { Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6, Sun: 0 };
-      const today_day = new Date().getDay();
-      const shiftDays = (shift.days || []).map(d => dayMap[d] ?? -1);
-      const isWorkDay = shiftDays.includes(today_day);
-      notifs.push({ icon: '📋', type: 'info', title: `Shift: ${shift.name}`, body: `${shift.startTime}–${shift.endTime} · ${(shift.days||[]).join(', ')} · Grace: ${shift.gracePeriodMinutes}min${!isWorkDay ? ' · Not a working day today' : ''}`, action: { label: 'View Shift', fn: "navigateTo('my-shift')" } });
-    }
-
-    // Leave requests
-    const pendingLeaves = leaves.filter(l => l.status === 'pending');
-    pendingLeaves.forEach(l => {
-      notifs.push({ icon: '📋', type: 'info', title: 'Leave request pending', body: `${l.type.charAt(0).toUpperCase()+l.type.slice(1)} leave · ${new Date(l.startDate).toLocaleDateString('en-GB',{day:'2-digit',month:'short'})} → ${new Date(l.endDate).toLocaleDateString('en-GB',{day:'2-digit',month:'short'})} · ${l.days} day${l.days!==1?'s':''}`, action: { label: 'View', fn: "navigateTo('my-leaves')" } });
-    });
-
-    const recentReviewed = leaves.filter(l => ['approved','rejected'].includes(l.status)).slice(0, 3);
-    recentReviewed.forEach(l => {
-      const isApproved = l.status === 'approved';
-      notifs.push({ icon: isApproved ? '✅' : '❌', type: isApproved ? 'ok' : 'warn', title: `Leave request ${l.status}`, body: `${l.type.charAt(0).toUpperCase()+l.type.slice(1)} leave · ${l.days} day${l.days!==1?'s':''}${l.reviewNote ? ` · "${l.reviewNote}"` : ''}`, action: null });
-    });
-
-    // Overtime alert
-    const overtimeTot = monthRecords.reduce((s, r) => s + (r.overtimeHours || 0), 0);
-    if (overtimeTot > 0) {
-      notifs.push({ icon: '⚡', type: 'ok', title: `Overtime logged`, body: `${overtimeTot}h overtime recorded this month.`, action: { label: 'View Attendance', fn: "navigateTo('my-attendance')" } });
-    }
-
-    const typeStyles = {
-      ok:   { bg: '#f0fdf4', border: '#86efac', icon: '#16a34a' },
-      warn: { bg: '#fffbeb', border: '#fde68a', icon: '#d97706' },
-      info: { bg: '#eff6ff', border: '#bfdbfe', icon: '#1d4ed8' },
-    };
-
-    content.innerHTML = `
-      <div class="page-header">
-        <div><h2>Notifications</h2><p>${notifs.length} notification${notifs.length !== 1 ? 's' : ''}</p></div>
-        <button class="btn btn-secondary btn-sm" onclick="navigateTo('emp-home')">← Home</button>
-      </div>
-      ${notifs.length === 0
-        ? `<div class="card" style="text-align:center;padding:48px 24px">
-            <div style="font-size:40px;margin-bottom:16px">🔔</div>
-            <div style="font-weight:600;font-size:15px;margin-bottom:6px">All clear!</div>
-            <p style="color:var(--text-muted);font-size:13px">No notifications right now.</p>
-          </div>`
-        : notifs.map(n => {
-            const st = typeStyles[n.type] || typeStyles.info;
-            return `<div style="background:${st.bg};border:1px solid ${st.border};border-radius:10px;padding:14px 16px;margin-bottom:10px;display:flex;gap:12px;align-items:flex-start">
-              <span style="font-size:20px;flex-shrink:0;margin-top:1px">${n.icon}</span>
-              <div style="flex:1;min-width:0">
-                <div style="font-weight:700;font-size:13px;margin-bottom:3px">${esc(n.title)}</div>
-                <div style="font-size:12px;color:var(--text-muted);line-height:1.5">${esc(n.body)}</div>
-              </div>
-              ${n.action ? `<button class="btn btn-sm" style="background:var(--card);border:1px solid var(--border);flex-shrink:0;font-size:12px" onclick="${n.action.fn}">${n.action.label}</button>` : ''}
-            </div>`;
-          }).join('')}
-    `;
-  } catch(e) {
-    content.innerHTML = `<div class="card"><p style="color:#ef4444">Error: ${e.message}</p></div>`;
-  }
-}
-
-// ── Employee AI Assistant ─────────────────────────────────────────────────────
-let _empAssistantData = null;
-
-async function _loadEmpAssistantData() {
-  if (_empAssistantData) return _empAssistantData;
-  const today      = new Date().toISOString().slice(0, 10);
-  const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0, 10);
-  const [todayData, monthData, shiftData, leavesData] = await Promise.all([
-    api(`/api/corporate-attendance/my?from=${today}&to=${today}`).catch(() => ({ records: [] })),
-    api(`/api/corporate-attendance/my?from=${monthStart}&to=${today}`).catch(() => ({ records: [] })),
-    api('/api/shifts/my-shift').catch(() => ({})),
-    api('/api/leaves/my').catch(() => ({ leaves: [] })),
-  ]);
-  const todayRecord  = todayData.records?.[0] || null;
-  const isClockedIn  = !!(todayRecord?.clockIn?.time && !todayRecord?.clockOut?.time);
-  const isClockedOut = !!(todayRecord?.clockIn?.time && todayRecord?.clockOut?.time);
-  const monthRecords = monthData.records || [];
-  const shift        = shiftData.assignment?.shift || null;
-  const leaves       = leavesData.leaves || [];
-  const year         = new Date().getFullYear();
-  const yearLeaves   = leaves.filter(l => l.status === 'approved' && new Date(l.startDate).getFullYear() === year);
-  const annualUsed   = yearLeaves.filter(l => l.type === 'annual').reduce((s, l) => s + l.days, 0);
-  const sickUsed     = yearLeaves.filter(l => l.type === 'sick').reduce((s, l) => s + l.days, 0);
-  const presentDays  = monthRecords.filter(r => r.status === 'present' || r.status === 'late').length;
-  const lateDays     = monthRecords.filter(r => r.status === 'late').length;
-  const totalHrs     = monthRecords.reduce((s, r) => s + (r.hoursWorked || 0), 0);
-  const overtimeTot  = monthRecords.reduce((s, r) => s + (r.overtimeHours || 0), 0);
-  _empAssistantData = {
-    todayRecord, isClockedIn, isClockedOut, shift, leaves,
-    annualLeft: Math.max(0, 21 - annualUsed), sickLeft: Math.max(0, 10 - sickUsed),
-    annualUsed, sickUsed, presentDays, lateDays, totalHrs, overtimeTot,
-    monthRecords, pendingLeaves: leaves.filter(l => l.status === 'pending'),
-  };
-  return _empAssistantData;
-}
-
-function _empAssistantAnswer(q, d) {
-  const lower = q.toLowerCase().trim();
-
-  // Clock in/out status
-  if (/clocked.in|clock.in|status|working|here|in today|present/i.test(lower)) {
-    if (d.isClockedIn) {
-      const since = new Date(d.todayRecord.clockIn.time).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
-      const elapsed = _empElapsed(new Date(d.todayRecord.clockIn.time));
-      return `You're currently clocked in since ${since} (${elapsed} elapsed). Click <b>Clock Out</b> when you leave.`;
-    }
-    if (d.isClockedOut) {
-      const hrs = d.todayRecord?.hoursWorked?.toFixed(1) ?? '?';
-      return `You've already clocked out today. Total hours worked: <b>${hrs}h</b>.`;
-    }
-    return `You haven't clocked in yet today. ${d.shift ? `Your shift (${d.shift.name}) starts at ${d.shift.startTime}.` : ''} Tap <b>Clock In</b> to start.`;
-  }
-
-  // Leave balance
-  if (/leave.balance|annual.leave|sick.leave|days.left|leave.days|how many.*leave/i.test(lower)) {
-    return `Your leave balance:<br>• Annual leave: <b>${d.annualLeft} days</b> remaining (${d.annualUsed} used)<br>• Sick leave: <b>${d.sickLeft} days</b> remaining (${d.sickUsed} used)`;
-  }
-
-  // Pending leave
-  if (/pending.leave|leave.*request|request.*leave/i.test(lower)) {
-    if (d.pendingLeaves.length === 0) return 'You have no pending leave requests.';
-    return `You have <b>${d.pendingLeaves.length}</b> pending leave request${d.pendingLeaves.length > 1 ? 's' : ''}:<br>` +
-      d.pendingLeaves.map(l => `• ${l.type.charAt(0).toUpperCase()+l.type.slice(1)} leave — ${new Date(l.startDate).toLocaleDateString('en-GB',{day:'2-digit',month:'short'})} to ${new Date(l.endDate).toLocaleDateString('en-GB',{day:'2-digit',month:'short'})} (${l.days} day${l.days!==1?'s':''})`).join('<br>');
-  }
-
-  // Attendance stats
-  if (/attendance|how.*often|present.*days|days.*worked|late.*times|punctual/i.test(lower)) {
-    return `This month:<br>• Present days: <b>${d.presentDays}</b><br>• Late arrivals: <b>${d.lateDays}</b><br>• Hours worked: <b>${d.totalHrs.toFixed(1)}h</b><br>• Overtime: <b>${d.overtimeTot.toFixed(1)}h</b>`;
-  }
-
-  // Hours / overtime
-  if (/overtime|hours.*worked|how.*long|total.*hours/i.test(lower)) {
-    return `This month you've logged <b>${d.totalHrs.toFixed(1)} hours</b> total with <b>${d.overtimeTot.toFixed(1)}h</b> overtime.`;
-  }
-
-  // Shift info
-  if (/shift|schedule|start.*time|end.*time|working.hours/i.test(lower)) {
-    if (!d.shift) return 'No shift has been assigned to you yet. Contact your manager or HR.';
-    return `Your shift: <b>${d.shift.name}</b><br>• Hours: ${d.shift.startTime} – ${d.shift.endTime}<br>• Days: ${(d.shift.days||[]).join(', ')}<br>• Grace period: ${d.shift.gracePeriodMinutes} min`;
-  }
-
-  // Late arrivals
-  if (/late|tardy|punctuality/i.test(lower)) {
-    if (d.lateDays === 0) return 'Great news — you have <b>zero late arrivals</b> this month. Keep it up!';
-    return `You've been late <b>${d.lateDays} time${d.lateDays > 1 ? 's' : ''}</b> this month. Try clocking in before your shift grace period ends.`;
-  }
-
-  // Performance summary
-  if (/performance|summary|how.am.i.doing|overview|report/i.test(lower)) {
-    const attRate = d.presentDays > 0 && d.monthRecords.length > 0
-      ? Math.round((d.presentDays / Math.max(d.monthRecords.length, 1)) * 100) : 0;
-    return `Your performance snapshot this month:<br>• Attendance rate: <b>${attRate}%</b><br>• Present days: <b>${d.presentDays}</b><br>• Late arrivals: <b>${d.lateDays}</b><br>• Hours worked: <b>${d.totalHrs.toFixed(1)}h</b><br>• Overtime: <b>${d.overtimeTot.toFixed(1)}h</b><br>• Annual leave left: <b>${d.annualLeft} days</b>`;
-  }
-
-  // Help / what can you do
-  if (/help|what.*can|what.*do|options|commands/i.test(lower)) {
-    return `I can answer questions about your:<br>• Clock-in / clock-out status<br>• Leave balance & pending requests<br>• Attendance this month<br>• Hours worked & overtime<br>• Your shift schedule<br>• Performance summary<br><br>Try: "Am I clocked in?", "How many leave days do I have?", "How was my attendance this month?"`;
-  }
-
-  return `I'm not sure how to answer that. I can help with your attendance, leave balance, shift details, and performance. Try asking: "Am I clocked in?", "How many leave days left?", or "Show my attendance this month."`;
-}
-
-const _empChatHistory = [];
-
-async function renderEmpAssistant() {
-  const content = document.getElementById('main-content');
-  if (!content) return;
-
-  content.innerHTML = `
-    <div class="page-header">
-      <div>
-        <h2 style="display:flex;align-items:center;gap:8px">
-          <span style="width:32px;height:32px;background:linear-gradient(135deg,#6366f1,#8b5cf6);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px">✦</span>
-          Employee Assistant
-        </h2>
-        <p style="color:var(--text-muted);font-size:13px">Ask anything about your work — powered by your own data</p>
-      </div>
-      <button class="btn btn-secondary btn-sm" onclick="navigateTo('emp-home')">← Home</button>
-    </div>
-
-    <div style="display:grid;grid-template-columns:1fr 300px;gap:16px;align-items:start">
-
-      <!-- Chat panel -->
-      <div class="card" style="padding:0;display:flex;flex-direction:column;height:580px">
-        <div id="emp-chat-msgs" style="flex:1;overflow-y:auto;padding:20px;display:flex;flex-direction:column;gap:12px">
-          <div style="display:flex;gap:10px;align-items:flex-start">
-            <div style="width:28px;height:28px;background:linear-gradient(135deg,#6366f1,#8b5cf6);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0">✦</div>
-            <div style="background:#f3f4f6;border-radius:0 12px 12px 12px;padding:10px 14px;font-size:13px;line-height:1.6;max-width:480px">
-              Hi ${esc(currentUser?.name?.split(' ')[0] || 'there')}! I'm your work assistant. I can answer questions about your attendance, leave balance, shift, and performance — all using your real data. What would you like to know?
-            </div>
-          </div>
-        </div>
-        <div style="border-top:1px solid var(--border);padding:14px 16px;display:flex;gap:8px;align-items:flex-end">
-          <textarea id="emp-chat-input" placeholder="Ask anything… e.g. Am I clocked in? How many leave days do I have?"
-            style="flex:1;resize:none;border:1.5px solid var(--border);border-radius:10px;padding:10px 12px;font-size:13px;font-family:inherit;line-height:1.5;min-height:42px;max-height:120px;outline:none;transition:border-color .15s;background:var(--card);color:var(--text)"
-            onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();_empChatSend();}"
-            oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,120)+'px'"
-            onfocus="this.style.borderColor='#6366f1'" onblur="this.style.borderColor='var(--border)'"></textarea>
-          <button onclick="_empChatSend()" style="width:38px;height:38px;border-radius:10px;background:linear-gradient(135deg,#6366f1,#8b5cf6);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:opacity .15s" onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
-          </button>
-        </div>
-      </div>
-
-      <!-- Right panel: quick actions + insights -->
-      <div style="display:flex;flex-direction:column;gap:12px">
-
-        <!-- Quick Actions -->
-        <div class="card" style="padding:16px">
-          <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-muted);letter-spacing:.6px;margin-bottom:12px">Quick Actions</div>
-          <div style="display:flex;flex-direction:column;gap:8px" id="emp-assistant-qa-btns">
-            <div class="loading" style="font-size:12px">Loading…</div>
-          </div>
-        </div>
-
-        <!-- Smart Insights -->
-        <div class="card" style="padding:16px">
-          <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-muted);letter-spacing:.6px;margin-bottom:12px">Smart Insights</div>
-          <div id="emp-assistant-insights">
-            <div class="loading" style="font-size:12px">Loading…</div>
-          </div>
-        </div>
-
-        <!-- Suggested Questions -->
-        <div class="card" style="padding:16px">
-          <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-muted);letter-spacing:.6px;margin-bottom:10px">Suggested Questions</div>
-          <div style="display:flex;flex-direction:column;gap:6px">
-            ${[
-              'Am I clocked in?',
-              'How many leave days do I have?',
-              'How was my attendance this month?',
-              'Am I late this month?',
-              'What are my working hours?',
-              'Show my performance summary',
-            ].map(q => `<button class="btn btn-secondary btn-sm" style="text-align:left;font-size:12px;justify-content:flex-start" onclick="_empChatAsk(${JSON.stringify(q)})">${esc(q)}</button>`).join('')}
-          </div>
-        </div>
-      </div>
-    </div>
-  `;
-
-  // Load data and populate right panel
-  try {
-    const d = await _loadEmpAssistantData();
-    _empBuildQuickActions(d);
-    _empBuildInsights(d);
-  } catch(e) {
-    document.getElementById('emp-assistant-qa-btns').innerHTML = '<p style="font-size:12px;color:#ef4444">Failed to load data</p>';
-    document.getElementById('emp-assistant-insights').innerHTML = '<p style="font-size:12px;color:#ef4444">Failed to load data</p>';
-  }
-}
-
-function _empBuildQuickActions(d) {
-  const btn = document.getElementById('emp-assistant-qa-btns');
-  if (!btn) return;
-  const actions = [
-    { label: d.isClockedIn ? '🟠 Clock Out' : '🟢 Clock In', fn: "navigateTo('sign-in-out')" },
-    { label: '📅 View Attendance', fn: "navigateTo('my-attendance')" },
-    { label: '📋 Apply for Leave', fn: "navigateTo('my-leaves')" },
-    { label: '💬 Message Manager', fn: "navigateTo('messages')" },
-    { label: '📊 My Performance', fn: "navigateTo('my-performance')" },
-  ];
-  btn.innerHTML = actions.map(a =>
-    `<button class="btn btn-secondary btn-sm" style="text-align:left;justify-content:flex-start;font-size:12px" onclick="${a.fn}">${a.label}</button>`
-  ).join('');
-}
-
-function _empBuildInsights(d) {
-  const el = document.getElementById('emp-assistant-insights');
-  if (!el) return;
-  const insights = [];
-
-  if (d.isClockedIn) {
-    const elapsed = _empElapsed(new Date(d.todayRecord.clockIn.time));
-    insights.push({ icon: '●', color: '#16a34a', text: `Clocked in · ${elapsed} elapsed` });
-  } else if (!d.isClockedOut) {
-    insights.push({ icon: '○', color: '#dc2626', text: 'Not clocked in today' });
-  } else {
-    insights.push({ icon: '✓', color: '#16a34a', text: `Clocked out · ${(d.todayRecord?.hoursWorked||0).toFixed(1)}h today` });
-  }
-
-  insights.push({ icon: '🌴', color: '#0284c7', text: `${d.annualLeft} annual leave days remaining` });
-  insights.push({ icon: '🏥', color: '#0284c7', text: `${d.sickLeft} sick leave days remaining` });
-
-  if (d.lateDays > 0) {
-    insights.push({ icon: '⚠️', color: '#d97706', text: `${d.lateDays} late arrival${d.lateDays>1?'s':''} this month` });
-  } else {
-    insights.push({ icon: '⭐', color: '#16a34a', text: 'No late arrivals this month' });
-  }
-
-  if (d.overtimeTot > 0) {
-    insights.push({ icon: '⚡', color: '#7c3aed', text: `${d.overtimeTot.toFixed(1)}h overtime logged` });
-  }
-
-  el.innerHTML = insights.map(i => `
-    <div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border)">
-      <span style="font-size:14px;width:20px;text-align:center">${i.icon}</span>
-      <span style="font-size:12px;color:var(--text);line-height:1.4">${esc(i.text)}</span>
-    </div>`).join('').replace(/border-bottom[^"]+(?=.*last)/, '');
-}
-
-function _empChatAsk(question) {
-  const input = document.getElementById('emp-chat-input');
-  if (input) { input.value = question; input.style.height = 'auto'; }
-  _empChatSend();
-}
-
-async function _empChatSend() {
-  const input = document.getElementById('emp-chat-input');
-  if (!input) return;
-  const q = input.value.trim();
-  if (!q) return;
-  input.value = '';
-  input.style.height = 'auto';
-
-  const msgs = document.getElementById('emp-chat-msgs');
-  if (!msgs) return;
-
-  // User bubble
-  msgs.insertAdjacentHTML('beforeend', `
-    <div style="display:flex;gap:10px;align-items:flex-start;flex-direction:row-reverse">
-      <div style="width:28px;height:28px;background:var(--primary,#6366f1);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;flex-shrink:0">${esc((currentUser?.name||'?').charAt(0).toUpperCase())}</div>
-      <div style="background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;border-radius:12px 0 12px 12px;padding:10px 14px;font-size:13px;line-height:1.6;max-width:420px">${esc(q)}</div>
-    </div>`);
-  msgs.scrollTop = msgs.scrollHeight;
-
-  // Thinking bubble
-  const thinkId = 'emp-think-' + Date.now();
-  msgs.insertAdjacentHTML('beforeend', `
-    <div id="${thinkId}" style="display:flex;gap:10px;align-items:flex-start">
-      <div style="width:28px;height:28px;background:linear-gradient(135deg,#6366f1,#8b5cf6);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0">✦</div>
-      <div style="background:#f3f4f6;border-radius:0 12px 12px 12px;padding:10px 14px;font-size:13px;color:var(--text-muted)">
-        <span style="display:inline-flex;gap:3px">
-          <span style="animation:blink 1.2s infinite .0s">●</span>
-          <span style="animation:blink 1.2s infinite .2s">●</span>
-          <span style="animation:blink 1.2s infinite .4s">●</span>
-        </span>
-      </div>
-    </div>
-    <style>@keyframes blink{0%,80%,100%{opacity:.2}40%{opacity:1}}</style>`);
-  msgs.scrollTop = msgs.scrollHeight;
-
-  // Get answer
-  let answer;
-  try {
-    const d = await _loadEmpAssistantData();
-    answer = _empAssistantAnswer(q, d);
-  } catch(e) {
-    answer = 'Sorry, I couldn\'t load your data right now. Please try again.';
-  }
-
-  const thinkEl = document.getElementById(thinkId);
-  if (thinkEl) {
-    thinkEl.outerHTML = `
-      <div style="display:flex;gap:10px;align-items:flex-start">
-        <div style="width:28px;height:28px;background:linear-gradient(135deg,#6366f1,#8b5cf6);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0">✦</div>
-        <div style="background:#f3f4f6;border-radius:0 12px 12px 12px;padding:10px 14px;font-size:13px;line-height:1.6;max-width:480px">${answer}</div>
-      </div>`;
-  }
-  msgs.scrollTop = msgs.scrollHeight;
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -14859,7 +12990,6 @@ navigateTo = function(view) {
     currentView = view; _setNavActive(view);
     if (currentUser?.role === 'lecturer') renderLecturerPerformance();
     else if (currentUser?.role === 'student') renderStudentQuizHistory();
-    else if (currentUser?.role === 'employee' && view === 'my-performance') renderMyPerformance();
     else renderPerformance();
     return;
   }
@@ -14994,7 +13124,6 @@ async function renderPerformance() {
     content.innerHTML = `<div class="card"><p style="color:#ef4444">Error: ${e.message}</p></div>`;
   }
 }
-
 
 async function viewScorecard(employeeId, name) {
   const content = document.getElementById('main-content');
@@ -15364,124 +13493,36 @@ async function submitReview(reviewId, employeeId, name) {
   } catch(e) { toast(e.message, 'err'); }
 }
 
-// ── EMPLOYEE: My Performance (Phase 4 — full build) ──────────────────────────
+// ── EMPLOYEE: My Performance ──────────────────────────────────────────────────
 async function renderMyPerformance() {
   const content = document.getElementById('main-content');
   if (!content) return;
-  content.innerHTML = '<div class="loading">Loading your performance…</div>';
+  content.innerHTML = '<div class="loading">Loading…</div>';
 
   try {
-    const today     = new Date().toISOString().slice(0, 10);
-    const thirtyAgo = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
-    const ninetyAgo = new Date(Date.now() - 90 * 86400000).toISOString().slice(0, 10);
-
-    const [goalsData, reviewsData, attData] = await Promise.all([
-      api('/api/performance/goals').catch(() => ({ goals: [] })),
-      api('/api/performance/reviews').catch(() => ({ reviews: [] })),
-      api(`/api/corporate-attendance/my?from=${ninetyAgo}&to=${today}`).catch(() => ({ records: [] })),
+    const [goalsData, reviewsData] = await Promise.all([
+      api('/api/performance/goals'),
+      api('/api/performance/reviews'),
     ]);
 
-    const goals     = goalsData.goals || [];
-    const reviews   = (reviewsData.reviews || []).filter(r => r.status === 'submitted');
-    const attRecs   = attData.records || [];
+    const goals   = goalsData.goals || [];
+    const reviews = reviewsData.reviews.filter(r => r.status === 'submitted') || [];
 
-    // ── Attendance stats ──────────────────────────────────────────────────────
-    const totalDays      = attRecs.length;
-    const presentDays    = attRecs.filter(r => ['present','late','remote'].includes(r.status)).length;
-    const lateDays       = attRecs.filter(r => r.status === 'late').length;
-    const totalHours     = attRecs.reduce((s, r) => s + (r.hoursWorked || 0), 0);
-    const attendanceRate = totalDays > 0 ? Math.round((presentDays / totalDays) * 100) : 0;
-
-    // ── Performance score from reviews ────────────────────────────────────────
-    const scored   = reviews.filter(r => r.overallScore != null);
-    const avgScore = scored.length
-      ? (scored.reduce((s, r) => s + r.overallScore, 0) / scored.length).toFixed(1)
-      : null;
-
-    // ── Goal stats ────────────────────────────────────────────────────────────
-    const totalGoals     = goals.length;
+    const totalGoals = goals.length;
     const completedGoals = goals.filter(g => g.status === 'completed').length;
-    const activeGoals    = goals.filter(g => g.status === 'active');
-
-    // ── Chart data: last 30 days ──────────────────────────────────────────────
-    const last30 = attRecs.filter(r => new Date(r.date) >= new Date(thirtyAgo));
-    const chartLabels = last30.map(r => new Date(r.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })).reverse();
-    const chartPresent = last30.map(r => ['present','late','remote'].includes(r.status) ? 1 : 0).reverse();
-    const chartHours   = last30.map(r => r.hoursWorked || 0).reverse();
+    const activeGoals = goals.filter(g => g.status === 'active');
 
     content.innerHTML = `
-      <div class="page-header">
-        <h2>My Performance</h2>
-        <p>Last 90 days · ${currentUser.name}</p>
-      </div>
+      <div class="page-header"><h2>My Performance</h2><p>Track your goals and view your reviews</p></div>
 
-      <!-- Stat Cards -->
       <div class="stats-grid" style="margin-bottom:20px">
+        <div class="stat-card"><div class="stat-value">${totalGoals}</div><div class="stat-label">Goals</div></div>
+        <div class="stat-card"><div class="stat-value" style="color:#22c55e">${completedGoals}</div><div class="stat-label">Completed</div></div>
+        <div class="stat-card"><div class="stat-value">${reviews.length}</div><div class="stat-label">Reviews</div></div>
         <div class="stat-card">
-          <div class="stat-value" style="color:${attendanceRate>=80?'#16a34a':attendanceRate>=60?'#d97706':'#dc2626'}">${attendanceRate}%</div>
-          <div class="stat-label">Attendance Rate</div>
+          <div class="stat-value">${reviews.length && reviews[0].overallScore ? `${reviews[0].overallScore}/5` : '—'}</div>
+          <div class="stat-label">Latest Score</div>
         </div>
-        <div class="stat-card">
-          <div class="stat-value" style="color:${lateDays===0?'#16a34a':'#d97706'}">${lateDays}</div>
-          <div class="stat-label">Late Days</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-value">${Math.round(totalHours * 10) / 10}h</div>
-          <div class="stat-label">Hours Worked</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-value" style="color:#6366f1">${avgScore != null ? avgScore + ' / 5' : '—'}</div>
-          <div class="stat-label">Performance Score</div>
-        </div>
-      </div>
-
-      <!-- Charts -->
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px" class="chart-grid-2col">
-        <div class="card">
-          <h3 style="font-size:14px;font-weight:700;margin-bottom:12px">Attendance Trend (30 days)</h3>
-          ${chartLabels.length ? `<canvas id="mp-att-chart" height="160"></canvas>` : '<p style="color:#9ca3af;font-size:13px">No data yet.</p>'}
-        </div>
-        <div class="card">
-          <h3 style="font-size:14px;font-weight:700;margin-bottom:12px">Work Hours Trend (30 days)</h3>
-          ${chartLabels.length ? `<canvas id="mp-hrs-chart" height="160"></canvas>` : '<p style="color:#9ca3af;font-size:13px">No data yet.</p>'}
-        </div>
-      </div>
-
-      <!-- Attendance Logs -->
-      <div class="card" style="margin-bottom:16px">
-        <h3 style="font-size:15px;font-weight:700;margin-bottom:14px">Attendance Log</h3>
-        ${attRecs.length ? `
-        <div style="overflow-x:auto">
-          <table style="width:100%;border-collapse:collapse;font-size:13px">
-            <thead><tr style="background:#f9fafb">
-              <th style="padding:10px;text-align:left;border-bottom:1px solid #e5e7eb">Date</th>
-              <th style="padding:10px;text-align:left;border-bottom:1px solid #e5e7eb">Status</th>
-              <th style="padding:10px;text-align:left;border-bottom:1px solid #e5e7eb">Clock In</th>
-              <th style="padding:10px;text-align:left;border-bottom:1px solid #e5e7eb">Clock Out</th>
-              <th style="padding:10px;text-align:left;border-bottom:1px solid #e5e7eb">Hours</th>
-              <th style="padding:10px;text-align:left;border-bottom:1px solid #e5e7eb">Late / Early</th>
-            </tr></thead>
-            <tbody>
-              ${attRecs.map(r => {
-                const statusColors = { present:'#16a34a', late:'#d97706', absent:'#dc2626', half_day:'#7c3aed', on_leave:'#0891b2', remote:'#2563eb', excused:'#6b7280' };
-                const col = statusColors[r.status] || '#6b7280';
-                const ciT = r.clockIn?.time  ? new Date(r.clockIn.time).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}) : '—';
-                const coT = r.clockOut?.time ? new Date(r.clockOut.time).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}) : '—';
-                const lateNote  = r.lateMinutes > 0 ? `<span style="color:#d97706;font-size:11px">+${r.lateMinutes}m late</span>` : '';
-                const earlyNote = r.earlyLeaveMinutes > 0 ? `<span style="color:#7c3aed;font-size:11px">-${r.earlyLeaveMinutes}m early</span>` : '';
-                return `<tr style="border-bottom:1px solid #f3f4f6">
-                  <td style="padding:10px;white-space:nowrap">${new Date(r.date).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})}</td>
-                  <td style="padding:10px"><span style="color:${col};font-weight:700;text-transform:capitalize">${(r.status||'').replace('_',' ')}</span></td>
-                  <td style="padding:10px;white-space:nowrap">${ciT}</td>
-                  <td style="padding:10px;white-space:nowrap">${coT}</td>
-                  <td style="padding:10px">${r.hoursWorked != null ? r.hoursWorked + 'h' : '—'}</td>
-                  <td style="padding:10px">${lateNote} ${earlyNote}</td>
-                </tr>`;
-              }).join('')}
-            </tbody>
-          </table>
-        </div>
-        ` : '<p style="color:#9ca3af;font-size:13px">No attendance records found.</p>'}
       </div>
 
       <!-- Goals -->
@@ -15491,96 +13532,51 @@ async function renderMyPerformance() {
           <button class="btn btn-primary btn-sm" onclick="showMyGoalModal()">+ Add Goal</button>
         </div>
         ${activeGoals.length ? activeGoals.map(g => {
-          const pct = g.targetValue ? Math.min(Math.round((g.currentValue/g.targetValue)*100), 100) : null;
-          return `<div style="padding:12px;border:1px solid #e5e7eb;border-radius:8px;margin-bottom:8px">
+          const pct = g.targetValue ? Math.round((g.currentValue/g.targetValue)*100) : null;
+          return `
+          <div style="padding:12px;border:1px solid #e5e7eb;border-radius:8px;margin-bottom:8px">
             <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;margin-bottom:6px">
               <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-                <span style="font-weight:600;font-size:14px">${esc(g.title)}</span>
+                <span style="font-weight:600;font-size:14px">${g.title}</span>
                 ${_catBadge(g.category)}
               </div>
-              ${pct !== null ? `<button class="btn btn-sm" style="font-size:11px" onclick="showSelfUpdateGoal('${g._id}','${(g.title||'').replace(/'/g,"\\'")}',${g.currentValue},${g.targetValue},'${g.unit||''}')">Update</button>` : ''}
+              ${pct !== null ? `<button class="btn btn-sm" style="font-size:11px" onclick="showSelfUpdateGoal('${g._id}','${g.title.replace(/'/g,"\\'")}',${g.currentValue},${g.targetValue},'${g.unit||''}')">Update</button>` : ''}
             </div>
             ${pct !== null ? `
               <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
                 <div style="flex:1">${_progressBar(pct)}</div>
                 <span style="font-size:12px;font-weight:700;min-width:36px">${pct}%</span>
               </div>
-              <div style="font-size:12px;color:#6b7280">${g.currentValue} / ${g.targetValue} ${g.unit || ''} · Due ${g.dueDate ? new Date(g.dueDate).toLocaleDateString('en-GB',{day:'numeric',month:'short'}) : '—'}</div>
+              <div style="font-size:12px;color:#6b7280">${g.currentValue} / ${g.targetValue} ${g.unit} · Due ${g.dueDate ? new Date(g.dueDate).toLocaleDateString() : '—'}</div>
             ` : ''}
           </div>`;
         }).join('') : '<p style="color:#9ca3af;font-size:13px">No active goals. Add your own or wait for your manager to assign goals.</p>'}
         ${completedGoals > 0 ? `<p style="font-size:12px;color:#16a34a;margin-top:8px">✅ ${completedGoals} goal${completedGoals>1?'s':''} completed</p>` : ''}
       </div>
 
-      <!-- Reviews / Feedback -->
+      <!-- Reviews -->
       <div class="card">
-        <h3 style="font-size:15px;font-weight:700;margin-bottom:14px">Feedback & Reviews</h3>
+        <h3 style="font-size:15px;font-weight:700;margin-bottom:14px">My Reviews</h3>
         ${reviews.length ? reviews.map(r => `
           <div style="padding:14px;border:1px solid #e5e7eb;border-radius:10px;margin-bottom:10px">
             <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;margin-bottom:8px">
               <div>
-                <span style="font-weight:700;font-size:15px">${r.period || '—'}</span>
-                <span style="font-size:12px;color:#6b7280;margin-left:8px">${r.type || ''} review · ${r.reviewer?.name || 'Manager'}</span>
+                <span style="font-weight:700;font-size:15px">${r.period}</span>
+                <span style="font-size:12px;color:#6b7280;margin-left:8px">${r.type} review · ${r.reviewer?.name||'Manager'}</span>
               </div>
               <div>${_starRating(r.overallScore)}</div>
             </div>
-            ${r.summary ? `<p style="font-size:13px;line-height:1.6;margin:0 0 8px">${esc(r.summary)}</p>` : ''}
+            ${r.summary ? `<p style="font-size:13px;line-height:1.6;margin:0 0 8px">${r.summary}</p>` : ''}
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-              ${r.strengths ? `<div style="background:#f0fdf4;padding:10px;border-radius:7px"><div style="font-size:11px;font-weight:700;color:#16a34a;margin-bottom:4px">STRENGTHS</div><div style="font-size:12px">${esc(r.strengths)}</div></div>` : ''}
-              ${r.improvements ? `<div style="background:#fffbeb;padding:10px;border-radius:7px"><div style="font-size:11px;font-weight:700;color:#d97706;margin-bottom:4px">IMPROVEMENTS</div><div style="font-size:12px">${esc(r.improvements)}</div></div>` : ''}
+              ${r.strengths ? `<div style="background:#f0fdf4;padding:10px;border-radius:7px"><div style="font-size:11px;font-weight:700;color:#16a34a;margin-bottom:4px">STRENGTHS</div><div style="font-size:12px">${r.strengths}</div></div>` : ''}
+              ${r.improvements ? `<div style="background:#fffbeb;padding:10px;border-radius:7px"><div style="font-size:11px;font-weight:700;color:#d97706;margin-bottom:4px">IMPROVEMENTS</div><div style="font-size:12px">${r.improvements}</div></div>` : ''}
             </div>
           </div>
-        `).join('') : '<p style="color:#9ca3af;font-size:13px">No reviews submitted yet.</p>'}
+        `).join('') : `<p style="color:#9ca3af;font-size:13px">No reviews submitted yet.</p>`}
       </div>
     `;
-
-    // Draw charts after DOM is ready
-    if (chartLabels.length) {
-      const attCtx = document.getElementById('mp-att-chart');
-      if (attCtx) {
-        new Chart(attCtx, {
-          type: 'bar',
-          data: {
-            labels: chartLabels,
-            datasets: [{ label: 'Present', data: chartPresent, backgroundColor: '#6366f1', borderRadius: 4 }],
-          },
-          options: {
-            responsive: true, plugins: { legend: { display: false } },
-            scales: {
-              y: { beginAtZero: true, max: 1, ticks: { stepSize: 1, callback: v => v === 1 ? 'Yes' : 'No' }, grid: { color: '#f3f4f6' } },
-              x: { ticks: { maxTicksLimit: 10, font: { size: 10 } }, grid: { display: false } },
-            },
-          },
-        });
-      }
-      const hrsCtx = document.getElementById('mp-hrs-chart');
-      if (hrsCtx) {
-        new Chart(hrsCtx, {
-          type: 'line',
-          data: {
-            labels: chartLabels,
-            datasets: [{
-              label: 'Hours',
-              data: chartHours,
-              borderColor: '#16a34a',
-              backgroundColor: 'rgba(22,163,74,.1)',
-              fill: true,
-              tension: 0.35,
-              pointRadius: 3,
-            }],
-          },
-          options: {
-            responsive: true, plugins: { legend: { display: false } },
-            scales: {
-              y: { beginAtZero: true, grid: { color: '#f3f4f6' } },
-              x: { ticks: { maxTicksLimit: 10, font: { size: 10 } }, grid: { display: false } },
-            },
-          },
-        });
-      }
-    }
   } catch(e) {
-    content.innerHTML = `<div class="card"><p style="color:#ef4444">Failed to load performance data: ${e.message}</p></div>`;
+    content.innerHTML = `<div class="card"><p style="color:#ef4444">Error: ${e.message}</p></div>`;
   }
 }
 
@@ -17004,576 +15000,216 @@ async function printMeetingAttendance(meetingId, title) {
 // ── Register real functions for index.html stubs ─────────────────────────────
 
 // ════════════════════════════════════════════════════════════════════════════
-// KODEX MESSAGING  (Phase 2: Facebook-style desktop UI)
+// CORPORATE / INTERNAL MESSAGES
 // ════════════════════════════════════════════════════════════════════════════
 
-let _activeConvoId  = null;
-let _msgSearchQuery = '';
+let _activeConvoId = null;
 
-// ── Avatar color palette ──────────────────────────────────────────────────
-const MSG_AVATAR_COLORS = ['#2563eb','#7c3aed','#0891b2','#16a34a','#d97706','#db2777','#dc2626','#0f766e'];
-function _avatarColor(str) {
-  let h = 0;
-  for (let i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) & 0xffffffff;
-  return MSG_AVATAR_COLORS[Math.abs(h) % MSG_AVATAR_COLORS.length];
-}
-function _initials(name) {
-  return (name || '?').split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
-}
-function _convoTypeLabel(type) {
-  if (type === 'hod_request') return '<span class="msg-badge msg-badge--hod">HOD Request</span>';
-  if (type === 'announcement') return '<span class="msg-badge msg-badge--ann">Announcement</span>';
-  return '';
-}
-
-// ── Render the full messages page ────────────────────────────────────────
 async function renderMessages() {
   const content = document.getElementById('main-content');
   if (!content) return;
-  const canAttach = ['admin','superadmin','lecturer','manager','hod'].includes(currentUser?.role);
-  const isStudent = currentUser?.role === 'student';
-
   content.innerHTML = `
-    <div class="msg-page">
-      <!-- ── Left sidebar: conversation list ── -->
-      <aside class="msg-sidebar" id="msg-sidebar">
-        <div class="msg-sidebar-head">
-          <div class="msg-sidebar-title-row">
-            <span class="msg-sidebar-title">Messages</span>
-            <div class="msg-sidebar-actions">
-              ${isStudent ? `
-                <button class="msg-btn-hod" onclick="showHodRequestModal()" title="Contact HOD">
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 11 19.79 19.79 0 0 1 1.62 2.35 2 2 0 0 1 3.62.17h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 7.91a16 16 0 0 0 6.06 6.06l1.06-1.06a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
-                  HOD Request
-                </button>
-              ` : ''}
-              <button class="msg-btn-new" onclick="showNewConvoModal()" title="New conversation">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                New
-              </button>
-            </div>
+    <div class="page-header" style="margin-bottom:0">
+      <h2>Messages</h2>
+      <p>Internal team messaging</p>
+    </div>
+    <div style="display:flex;gap:0;height:calc(100vh - 160px);min-height:400px;border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-top:16px;background:var(--card)">
+      <div id="msg-sidebar" style="width:280px;min-width:220px;border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0">
+        <div style="padding:12px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
+          <span style="font-weight:700;font-size:14px">Conversations</span>
+          <button class="btn btn-primary btn-sm" onclick="showNewConvoModal()" style="font-size:11px;padding:4px 10px">+ New</button>
+        </div>
+        <div id="msg-convo-list" style="flex:1;overflow-y:auto;padding:8px 0">
+          <div class="loading" style="padding:20px;text-align:center;font-size:13px">Loading…</div>
+        </div>
+      </div>
+      <div id="msg-thread" style="flex:1;display:flex;flex-direction:column;min-width:0">
+        <div id="msg-thread-header" style="padding:14px 18px;border-bottom:1px solid var(--border);font-weight:600;font-size:14px;display:flex;align-items:center;gap:10px">
+          <span style="color:var(--text-muted);font-weight:400;font-size:13px">Select a conversation to start messaging</span>
+        </div>
+        <div id="msg-thread-body" style="flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:10px">
+        </div>
+        <div id="msg-input-bar" style="padding:12px 16px;border-top:1px solid var(--border);display:none">
+          <div style="display:flex;gap:8px;align-items:flex-end">
+            <textarea id="msg-input" placeholder="Type a message…" rows="1" oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,120)+'px'" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendMessage()}" style="flex:1;padding:9px 13px;border:1.5px solid var(--border);border-radius:10px;font-size:13px;font-family:inherit;resize:none;outline:none;background:var(--bg);line-height:1.4"></textarea>
+            <button class="btn btn-primary" onclick="sendMessage()" style="padding:9px 16px;font-size:13px;flex-shrink:0">Send</button>
           </div>
-          <div class="msg-search-wrap">
-            <svg class="msg-search-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-            <input id="msg-search" class="msg-search" type="text" placeholder="Search conversations…"
-              oninput="_msgSearchQuery=this.value.toLowerCase();_renderConvoList(window._msgConvos||[])">
-          </div>
         </div>
-        <div id="msg-convo-list" class="msg-convo-list">
-          <div class="msg-loading">Loading…</div>
-        </div>
-      </aside>
-
-      <!-- ── Right: thread pane ── -->
-      <main class="msg-thread-wrap" id="msg-thread-wrap">
-        <div class="msg-thread-empty" id="msg-thread-empty">
-          <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" style="opacity:.4"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-          <p>Select a conversation to start messaging</p>
-        </div>
-        <!-- Thread header -->
-        <div class="msg-thread-header hidden" id="msg-thread-header">
-          <button class="msg-back-btn" id="msg-back-btn" onclick="_msgBackToList()">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
-          </button>
-          <div class="msg-thread-avatar" id="msg-thread-avatar"></div>
-          <div class="msg-thread-meta" id="msg-thread-meta"></div>
-        </div>
-        <!-- Messages body -->
-        <div class="msg-thread-body hidden" id="msg-thread-body"></div>
-        <!-- Input bar -->
-        <div class="msg-input-bar hidden" id="msg-input-bar">
-          <div class="msg-file-preview" id="msg-file-preview-bar" style="display:none">
-            <div id="msg-file-preview-inner" class="msg-file-preview-inner"></div>
-            <button onclick="msgClearFile()" class="msg-file-clear">✕</button>
-          </div>
-          <div class="msg-composer" id="msg-composer">
-            ${canAttach ? `
-            <label class="msg-attach-btn" title="Attach file">
-              <input type="file" id="msg-file-input" accept=".pdf,.jpg,.jpeg,.png,.webp,.gif,.doc,.docx" style="display:none" onchange="msgPreviewFile(this)">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
-            </label>` : ''}
-            <textarea id="msg-input" class="msg-textarea" placeholder="Write a message…" rows="1"
-              oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,120)+'px'"
-              onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendMessage()}"></textarea>
-            <button class="msg-send-btn" onclick="sendMessage()" title="Send">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
-            </button>
-          </div>
-          <div class="msg-hint">Enter to send · Shift+Enter new line</div>
-        </div>
-      </main>
+      </div>
     </div>`;
-
   await _loadConvoList();
 }
 
-// ── Load and render conversation list ─────────────────────────────────────
 async function _loadConvoList() {
   const list = document.getElementById('msg-convo-list');
   if (!list) return;
   try {
     const data = await api('/api/messages/conversations');
-    window._msgConvos = data.conversations || [];
-    _renderConvoList(window._msgConvos);
+    const convos = data.conversations || [];
+    if (!convos.length) {
+      list.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-muted);font-size:13px">No conversations yet.<br>Click <strong>+ New</strong> to start one.</div>';
+      return;
+    }
+    const myId = currentUser._id || currentUser.id;
+    list.innerHTML = convos.map(c => {
+      const others = (c.participants || []).filter(p => (p.user?._id || p.user) !== myId && p.user?.name);
+      const name   = c.isGroup ? (c.title || 'Group') : (others[0]?.user?.name || 'Conversation');
+      const initials = name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
+      const unread = c.myUnreadCount || 0;
+      const preview = c.lastMessage?.body ? (c.lastMessage.body.length > 40 ? c.lastMessage.body.slice(0, 40) + '…' : c.lastMessage.body) : 'No messages yet';
+      const time   = c.lastMessage?.sentAt ? new Date(c.lastMessage.sentAt).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : '';
+      const isActive = _activeConvoId === c._id;
+      return `<div onclick="openConvo('${c._id}','${name.replace(/'/g,"\\'")}','${c.isGroup?'group':'direct'}')" style="padding:10px 14px;cursor:pointer;display:flex;gap:10px;align-items:flex-start;background:${isActive?'var(--primary-ultra-light)':'transparent'};border-left:3px solid ${isActive?'var(--primary)':'transparent'};transition:.12s">
+        <div style="width:36px;height:36px;border-radius:50%;background:var(--primary);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;flex-shrink:0">${initials}</div>
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:4px">
+            <span style="font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${name}</span>
+            <span style="font-size:10px;color:var(--text-muted);flex-shrink:0">${time}</span>
+          </div>
+          <div style="font-size:12px;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px">${preview}</div>
+        </div>
+        ${unread > 0 ? `<span style="background:var(--primary);color:#fff;border-radius:20px;font-size:10px;font-weight:700;padding:1px 6px;flex-shrink:0;margin-top:2px">${unread}</span>` : ''}
+      </div>`;
+    }).join('');
   } catch(e) {
-    list.innerHTML = `<div class="msg-error">Error: ${e.message}</div>`;
+    list.innerHTML = `<div style="padding:16px;color:var(--danger);font-size:13px">Error: ${e.message}</div>`;
   }
 }
 
-function _renderConvoList(convos) {
-  const list = document.getElementById('msg-convo-list');
-  if (!list) return;
-  const q    = _msgSearchQuery || '';
-  const filtered = q
-    ? convos.filter(c => {
-        const myId  = currentUser._id || currentUser.id;
-        const others = (c.participants || []).filter(p => {
-          const uid = p.user?._id || p.user;
-          return uid?.toString() !== myId?.toString() && p.user?.name;
-        });
-        const name = c.isGroup ? (c.title || 'Group') : (others[0]?.user?.name || '');
-        return name.toLowerCase().includes(q) || (c.lastMessage?.body || '').toLowerCase().includes(q);
-      })
-    : convos;
-
-  if (!filtered.length) {
-    list.innerHTML = `<div class="msg-empty-list">
-      <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-      <div>${q ? 'No conversations match your search' : 'No conversations yet'}</div>
-      ${!q ? '<div style="font-size:11px;margin-top:4px">Click <strong>+ New</strong> to start one</div>' : ''}
-    </div>`;
-    return;
-  }
-
-  const myId = currentUser._id || currentUser.id;
-  list.innerHTML = filtered.map(c => {
-    const others  = (c.participants || []).filter(p => {
-      const uid = p.user?._id || p.user;
-      return uid?.toString() !== myId?.toString() && p.user?.name;
-    });
-    const name    = c.isGroup ? (c.title || 'Group') : (others[0]?.user?.name || 'Conversation');
-    const subRole = others[0]?.user?.role ? `<span class="msg-role-tag">${others[0].user.role}</span>` : '';
-    const unread  = c.myUnreadCount || 0;
-    const preview = c.lastMessage?.body
-      ? (c.lastMessage.body.length > 48 ? c.lastMessage.body.slice(0, 48) + '…' : c.lastMessage.body)
-      : 'No messages yet';
-    const time    = c.lastMessage?.sentAt
-      ? _msgRelTime(c.lastMessage.sentAt)
-      : '';
-    const isActive = _activeConvoId === c._id;
-    const color   = _avatarColor(name);
-    const typeBadge = _convoTypeLabel(c.type);
-
-    return `<div class="msg-convo-item${isActive ? ' msg-convo-item--active' : ''}"
-        onclick="openConvo('${c._id}','${name.replace(/'/g,"\\'")}','${c.type||'direct_message'}')">
-      <div class="msg-convo-avatar" style="background:${color}">${_initials(name)}</div>
-      <div class="msg-convo-info">
-        <div class="msg-convo-top">
-          <span class="msg-convo-name${unread > 0 ? ' msg-convo-name--unread' : ''}">${name}</span>
-          ${subRole}
-          <span class="msg-convo-time">${time}</span>
-        </div>
-        <div class="msg-convo-bottom">
-          ${typeBadge}
-          <span class="msg-convo-preview">${preview}</span>
-          ${unread > 0 ? `<span class="msg-unread-badge">${unread > 99 ? '99+' : unread}</span>` : ''}
-        </div>
-      </div>
-    </div>`;
-  }).join('');
-}
-
-function _msgRelTime(iso) {
-  const diff = Date.now() - new Date(iso).getTime();
-  const min  = Math.floor(diff / 60000);
-  if (min < 1)  return 'now';
-  if (min < 60) return `${min}m`;
-  const hr = Math.floor(min / 60);
-  if (hr < 24)  return `${hr}h`;
-  const dy = Math.floor(hr / 24);
-  if (dy < 7)   return `${dy}d`;
-  return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-}
-
-// ── Open a conversation ───────────────────────────────────────────────────
 async function openConvo(id, name, type) {
   _activeConvoId = id;
-  _renderConvoList(window._msgConvos || []);
-
+  _loadConvoList();
   const header = document.getElementById('msg-thread-header');
   const body   = document.getElementById('msg-thread-body');
   const bar    = document.getElementById('msg-input-bar');
-  const empty  = document.getElementById('msg-thread-empty');
-  const wrap   = document.getElementById('msg-thread-wrap');
-
   if (!header || !body || !bar) return;
-
-  empty?.classList.add('hidden');
-  header.classList.remove('hidden');
-  body.classList.remove('hidden');
-  bar.classList.remove('hidden');
-  wrap?.classList.add('msg-thread-active');
-
-  // Thread header
-  const color    = _avatarColor(name);
-  const typeLabel = type === 'hod_request' ? 'HOD Request' : type === 'group' || type === 'announcement' ? 'Group' : 'Direct message';
-  document.getElementById('msg-thread-avatar').innerHTML =
-    `<div style="width:38px;height:38px;border-radius:50%;background:${color};color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px">${_initials(name)}</div>`;
-  document.getElementById('msg-thread-meta').innerHTML =
-    `<div class="msg-thread-name">${name}</div>
-     <div class="msg-thread-sub">${_convoTypeLabel(type) || typeLabel}</div>`;
-
-  body.innerHTML = '<div class="msg-loading" style="text-align:center;padding:28px">Loading…</div>';
-  document.getElementById('msg-input')?.focus();
-
+  header.innerHTML = `<div style="width:32px;height:32px;border-radius:50%;background:var(--primary);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px">${name.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase()}</div><div><div style="font-weight:700;font-size:14px">${name}</div><div style="font-size:11px;color:var(--text-muted)">${type === 'group' ? 'Group conversation' : 'Direct message'}</div></div>`;
+  body.innerHTML = '<div class="loading" style="text-align:center;padding:20px;font-size:13px">Loading messages…</div>';
+  bar.style.display = 'block';
+  document.getElementById('msg-input').value = '';
   try {
     await api(`/api/messages/conversations/${id}/read`, { method: 'PATCH' });
     const data = await api(`/api/messages/conversations/${id}`);
     const msgs  = data.messages || [];
     const myId  = currentUser._id || currentUser.id;
-
     if (!msgs.length) {
-      body.innerHTML = `<div class="msg-empty-thread">
-        <div style="font-size:28px;margin-bottom:8px">💬</div>
-        <div>No messages yet — say hello!</div>
-      </div>`;
+      body.innerHTML = '<div style="text-align:center;color:var(--text-muted);font-size:13px;padding:24px">No messages yet. Say hello!</div>';
     } else {
-      body.innerHTML = msgs.map(m => _buildMsgRow(m, myId)).join('');
+      body.innerHTML = msgs.map(m => {
+        const isMine = (m.sender?._id || m.sender) === myId;
+        const time   = new Date(m.createdAt).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+        const name   = m.sender?.name || 'Unknown';
+        return `<div style="display:flex;flex-direction:column;align-items:${isMine?'flex-end':'flex-start'};gap:2px">
+          ${!isMine ? `<span style="font-size:11px;color:var(--text-muted);margin-left:2px">${name}</span>` : ''}
+          <div style="max-width:70%;padding:9px 13px;border-radius:${isMine?'14px 14px 4px 14px':'14px 14px 14px 4px'};background:${isMine?'var(--primary)':'var(--bg)'};color:${isMine?'#fff':'var(--text)'};font-size:13px;line-height:1.5;word-break:break-word">${m.isDeleted ? '<em style="opacity:.6">[deleted]</em>' : (m.body || '')}</div>
+          <span style="font-size:10px;color:var(--text-muted)">${time}${m.editedAt ? ' · edited' : ''}</span>
+        </div>`;
+      }).join('');
       body.scrollTop = body.scrollHeight;
     }
-    // Refresh sidebar unread counts
-    if (window._msgConvos) {
-      const c = window._msgConvos.find(x => x._id === id);
-      if (c) { c.myUnreadCount = 0; _renderConvoList(window._msgConvos); }
-    }
   } catch(e) {
-    body.innerHTML = `<div class="msg-error">Error: ${e.message}</div>`;
+    body.innerHTML = `<div style="color:var(--danger);padding:16px;font-size:13px">Error: ${e.message}</div>`;
   }
 }
 
-function _buildMsgRow(m, myId) {
-  const isMine     = (m.sender?._id || m.sender)?.toString() === myId?.toString();
-  const time       = new Date(m.createdAt).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
-  const senderName = m.sender?.name || 'Unknown';
-  const content    = m.isDeleted
-    ? '<em class="msg-deleted">[message deleted]</em>'
-    : _buildBubbleContent(m.body, m.attachment, isMine);
-
-  if (isMine) {
-    return `<div class="msg-row msg-row--mine">
-      <div class="msg-bubble msg-bubble--mine">${content}</div>
-      <span class="msg-ts">${time}${m.editedAt ? ' · edited' : ''}</span>
-    </div>`;
-  }
-  return `<div class="msg-row msg-row--theirs">
-    <div class="msg-avatar-sm" style="background:${_avatarColor(senderName)}">${_initials(senderName)}</div>
-    <div class="msg-bubble-wrap">
-      <span class="msg-sender-name">${senderName}</span>
-      <div class="msg-bubble msg-bubble--theirs">${content}</div>
-      <span class="msg-ts">${time}${m.editedAt ? ' · edited' : ''}</span>
-    </div>
-  </div>`;
-}
-
-function _buildBubbleContent(bodyText, attachment, isMine) {
-  if (!attachment) return (bodyText || '').replace(/\n/g, '<br>');
-  const t   = typeof token !== 'undefined' ? token : '';
-  const src = `${attachment.fileUrl}?token=${t}`;
-  const isImg  = attachment.mimeType?.startsWith('image/');
-  const isPdf  = attachment.mimeType === 'application/pdf';
-  const isDoc  = attachment.mimeType?.includes('word') || attachment.originalName?.match(/\.docx?$/i);
-  const caption = bodyText && bodyText !== `📎 ${attachment.originalName}` ? `<div class="msg-attach-caption">${bodyText}</div>` : '';
-
-  if (isImg) {
-    return `${caption}<img class="msg-img-thumb" src="${src}" onclick="window.open('${src}','_blank')" onerror="this.style.display='none'" loading="lazy">`;
-  }
-  const icon = isPdf ? '📄' : isDoc ? '📝' : '📎';
-  const kb   = attachment.fileSize ? ` · ${(attachment.fileSize / 1024).toFixed(0)} KB` : '';
-  return `${caption}<a class="msg-file-card" href="${src}" target="_blank" rel="noopener">
-    <span class="msg-file-icon">${icon}</span>
-    <div class="msg-file-info">
-      <div class="msg-file-name">${attachment.originalName}</div>
-      <div class="msg-file-meta">${(isPdf?'PDF':isDoc?'Document':'File')}${kb}</div>
-    </div>
-    <a class="msg-file-dl" href="/api/messages/attachment/${attachment.fileName}/download?token=${t}" download title="Download">⬇</a>
-  </a>`;
-}
-
-// ── Mobile back to list ───────────────────────────────────────────────────
-function _msgBackToList() {
-  _activeConvoId = null;
-  const wrap = document.getElementById('msg-thread-wrap');
-  wrap?.classList.remove('msg-thread-active');
-  _renderConvoList(window._msgConvos || []);
-}
-
-// ── File preview ──────────────────────────────────────────────────────────
-function msgPreviewFile(input) {
-  const file  = input.files[0];
-  if (!file) return;
-  const bar   = document.getElementById('msg-file-preview-bar');
-  const inner = document.getElementById('msg-file-preview-inner');
-  if (!bar || !inner) return;
-  if (file.type.startsWith('image/')) {
-    const url = URL.createObjectURL(file);
-    inner.innerHTML = `<img src="${url}" class="msg-preview-img"> <span>${file.name}</span>`;
-  } else {
-    const kb = (file.size / 1024).toFixed(0);
-    inner.innerHTML = `📄 <strong>${file.name}</strong> <span class="msg-file-size">(${kb} KB)</span>`;
-  }
-  bar.style.display = 'flex';
-}
-
-function msgClearFile() {
-  const input = document.getElementById('msg-file-input');
-  if (input) input.value = '';
-  const bar = document.getElementById('msg-file-preview-bar');
-  if (bar) {
-    bar.style.display = 'none';
-    const inner = document.getElementById('msg-file-preview-inner');
-    if (inner) inner.innerHTML = '';
-  }
-}
-
-// ── Send a message ────────────────────────────────────────────────────────
 async function sendMessage() {
   if (!_activeConvoId) return;
-  const input    = document.getElementById('msg-input');
-  const bodyText = input?.value.trim() || '';
-  const fileInput = document.getElementById('msg-file-input');
-  const file     = fileInput?.files?.[0] || null;
-  if (!bodyText && !file) return;
-
+  const input = document.getElementById('msg-input');
+  const body  = input?.value.trim();
+  if (!body) return;
   input.value = '';
   input.style.height = 'auto';
-  msgClearFile();
-
-  const body2 = document.getElementById('msg-thread-body');
-  // Optimistic self-bubble
-  const nowTime = new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
-  const tempEl  = document.createElement('div');
-  tempEl.className = 'msg-row msg-row--mine';
-  tempEl.innerHTML = `<div class="msg-bubble msg-bubble--mine">${(bodyText || (file ? `📎 ${file.name}` : '')).replace(/\n/g,'<br>')}</div><span class="msg-ts">${nowTime}</span>`;
-  body2?.appendChild(tempEl);
-  if (body2) body2.scrollTop = body2.scrollHeight;
-
   try {
-    let data;
-    if (file) {
-      const fd = new FormData();
-      if (bodyText) fd.append('body', bodyText);
-      fd.append('attachment', file);
-      data = await apiUpload(`/api/messages/conversations/${_activeConvoId}/messages`, fd);
-    } else {
-      data = await api(`/api/messages/conversations/${_activeConvoId}/messages`, {
-        method: 'POST',
-        body:   JSON.stringify({ body: bodyText }),
-      });
+    const data = await api(`/api/messages/conversations/${_activeConvoId}/messages`, {
+      method: 'POST',
+      body: JSON.stringify({ body }),
+    });
+    const msg   = data.message;
+    const myId  = currentUser._id || currentUser.id;
+    const threadBody = document.getElementById('msg-thread-body');
+    if (threadBody) {
+      const time = new Date(msg.createdAt || Date.now()).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+      const el = document.createElement('div');
+      el.style.cssText = 'display:flex;flex-direction:column;align-items:flex-end;gap:2px';
+      el.innerHTML = `<div style="max-width:70%;padding:9px 13px;border-radius:14px 14px 4px 14px;background:var(--primary);color:#fff;font-size:13px;line-height:1.5;word-break:break-word">${body}</div><span style="font-size:10px;color:var(--text-muted)">${time}</span>`;
+      threadBody.appendChild(el);
+      threadBody.scrollTop = threadBody.scrollHeight;
     }
-    // Replace optimistic bubble with real one
-    const msg  = data.message;
-    const myId = currentUser._id || currentUser.id;
-    tempEl.outerHTML = _buildMsgRow(msg, myId);
-    if (body2) body2.scrollTop = body2.scrollHeight;
-    // Update sidebar
-    await _loadConvoList();
+    _loadConvoList();
   } catch(e) {
-    tempEl.remove();
     toastError('Failed to send: ' + e.message);
   }
 }
 
-// ── New Conversation modal (role-aware, uses /users/messageable) ──────────
 async function showNewConvoModal() {
-  document.getElementById('new-convo-overlay')?.remove();
-  let users = [], hodUsers = [], canDirectHod = true;
+  const existing = document.getElementById('new-convo-overlay');
+  if (existing) existing.remove();
+  let users = [];
   try {
-    const d = await api('/api/messages/users/messageable');
-    users        = d.users        || [];
-    hodUsers     = d.hodUsers     || [];
-    canDirectHod = d.canDirectMessageHod !== false;
+    const d = await api('/api/users');
+    const myId = currentUser._id || currentUser.id;
+    users = (d.users || []).filter(u => (u._id || u.id) !== myId && u.isActive !== false);
   } catch(_) {}
-
-  const isStudent = currentUser?.role === 'student';
-  const hodSection = !canDirectHod && hodUsers.length
-    ? `<div class="msg-modal-info">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-        To contact a HOD, use the <button class="msg-link" onclick="document.getElementById('new-convo-overlay')?.remove();showHodRequestModal()">HOD Request form</button>.
-       </div>`
-    : '';
-
   const ol = document.createElement('div');
   ol.id = 'new-convo-overlay';
-  ol.className = 'msg-modal-overlay';
+  ol.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:500;display:flex;align-items:center;justify-content:center;padding:16px';
   ol.innerHTML = `
-    <div class="msg-modal" onclick="event.stopPropagation()">
-      <div class="msg-modal-head">
-        <h3>New Message</h3>
-        <button class="msg-modal-close" onclick="document.getElementById('new-convo-overlay').remove()">✕</button>
+    <div style="background:var(--card);border-radius:14px;width:100%;max-width:440px;box-shadow:0 20px 60px rgba(0,0,0,.2)">
+      <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
+        <h3 style="font-size:15px;font-weight:700;margin:0">New Message</h3>
+        <button onclick="document.getElementById('new-convo-overlay').remove()" style="width:26px;height:26px;border-radius:6px;border:1px solid var(--border);background:var(--bg);cursor:pointer;font-size:14px">✕</button>
       </div>
-      <div class="msg-modal-body">
-        ${hodSection}
-        <div class="msg-modal-field">
-          <label class="msg-field-label">To</label>
-          <div class="msg-recipient-search">
-            <input id="nc-search" type="text" placeholder="Search name or role…" class="msg-field-input"
-              oninput="_filterNcRecipients(this.value)">
-          </div>
-          <div id="nc-user-list" class="msg-user-list">
-            ${users.length === 0 ? '<div class="msg-empty-recipients">No available recipients</div>' :
-              users.map(u => `<label class="msg-user-opt" data-name="${u.name.toLowerCase()}" data-role="${u.role}">
-                <input type="checkbox" name="nc-rec" value="${u._id}">
-                <div class="msg-user-opt-avatar" style="background:${_avatarColor(u.name)}">${_initials(u.name)}</div>
-                <div class="msg-user-opt-info">
-                  <div class="msg-user-opt-name">${u.name}</div>
-                  <div class="msg-user-opt-role">${u.role}${u.department ? ' · ' + u.department : ''}</div>
-                </div>
-              </label>`).join('')}
-          </div>
+      <div style="padding:18px 20px;display:flex;flex-direction:column;gap:14px">
+        <div>
+          <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);display:block;margin-bottom:6px">To (select people)</label>
+          <select id="nc-recipients" multiple style="width:100%;height:140px;padding:6px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit">
+            ${users.map(u => `<option value="${u._id||u.id}">${u.name} — ${u.role}</option>`).join('')}
+          </select>
+          <p style="font-size:11px;color:var(--text-muted);margin-top:4px">Hold Ctrl/Cmd to select multiple for group chat</p>
         </div>
-        <div class="msg-modal-field" id="nc-group-name-row" style="display:none">
-          <label class="msg-field-label">Group name (optional)</label>
-          <input id="nc-title" type="text" placeholder="e.g. Project Alpha Team" class="msg-field-input">
+        <div>
+          <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);display:block;margin-bottom:6px">First Message *</label>
+          <textarea id="nc-body" rows="3" placeholder="Write your first message…" style="width:100%;padding:9px 13px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;resize:vertical;outline:none"></textarea>
         </div>
-        <div class="msg-modal-field">
-          <label class="msg-field-label">Message <span style="color:var(--danger)">*</span></label>
-          <textarea id="nc-body" rows="3" placeholder="Write your first message…" class="msg-field-textarea"></textarea>
+        <div id="nc-group-title" style="display:none">
+          <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);display:block;margin-bottom:6px">Group Name (optional)</label>
+          <input id="nc-title" type="text" placeholder="e.g. Project Alpha Team" style="width:100%;padding:9px 13px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none">
         </div>
       </div>
-      <div class="msg-modal-foot">
+      <div style="padding:12px 20px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end">
         <button class="btn btn-secondary btn-sm" onclick="document.getElementById('new-convo-overlay').remove()">Cancel</button>
-        <button class="btn btn-primary btn-sm" onclick="startNewConvo()">Send</button>
+        <button class="btn btn-primary btn-sm" onclick="startNewConvo()">Start Conversation</button>
       </div>
     </div>`;
   document.body.appendChild(ol);
-  ol.addEventListener('click', e => { if (e.target === ol) ol.remove(); });
-  document.getElementById('nc-search')?.focus();
-  document.querySelectorAll('input[name="nc-rec"]').forEach(cb =>
-    cb.addEventListener('change', () => {
-      const checked = document.querySelectorAll('input[name="nc-rec"]:checked').length;
-      const row = document.getElementById('nc-group-name-row');
-      if (row) row.style.display = checked > 1 ? 'block' : 'none';
-    })
-  );
-}
-
-function _filterNcRecipients(q) {
-  const term = q.toLowerCase();
-  document.querySelectorAll('.msg-user-opt').forEach(el => {
-    const match = el.dataset.name.includes(term) || el.dataset.role.includes(term);
-    el.style.display = match ? '' : 'none';
+  document.getElementById('nc-recipients').addEventListener('change', function() {
+    const groupDiv = document.getElementById('nc-group-title');
+    if (groupDiv) groupDiv.style.display = this.selectedOptions.length > 1 ? 'block' : 'none';
   });
 }
 
 async function startNewConvo() {
-  const checked = document.querySelectorAll('input[name="nc-rec"]:checked');
-  const body    = document.getElementById('nc-body')?.value.trim();
-  const title   = document.getElementById('nc-title')?.value.trim();
-  if (!checked.length) return toastError('Select at least one recipient.');
-  if (!body)           return toastError('Message is required.');
-  const recipientIds = Array.from(checked).map(c => c.value);
+  const selEl = document.getElementById('nc-recipients');
+  const body  = document.getElementById('nc-body')?.value.trim();
+  const title = document.getElementById('nc-title')?.value.trim();
+  if (!selEl || !selEl.selectedOptions.length) return toastError('Select at least one recipient.');
+  if (!body) return toastError('First message is required.');
+  const recipientIds = Array.from(selEl.selectedOptions).map(o => o.value);
   try {
     const data = await api('/api/messages/conversations', {
       method: 'POST',
-      body:   JSON.stringify({ recipientIds, message: body, title }),
+      body: JSON.stringify({ recipientIds, message: body, title }),
     });
     document.getElementById('new-convo-overlay')?.remove();
-    const c    = data.conversation;
+    const c = data.conversation;
     const myId = currentUser._id || currentUser.id;
-    const others = (c.participants || []).filter(p => {
-      const uid = p.user?._id || p.user?.toString?.() || p.user;
-      return uid?.toString() !== myId?.toString();
-    });
+    const others = (c.participants || []).filter(p => (p.user?._id || p.user?.toString?.() || p.user) !== myId);
     const name = c.isGroup ? (c.title || 'Group') : (others[0]?.user?.name || 'Conversation');
     toastSuccess('Conversation started!');
     await _loadConvoList();
-    openConvo(c._id, name, c.type || 'direct_message');
+    openConvo(c._id, name, c.isGroup ? 'group' : 'direct');
   } catch(e) {
     toastError(e.message || 'Failed to start conversation');
-  }
-}
-
-// ── HOD Request modal (students only) ────────────────────────────────────
-async function showHodRequestModal() {
-  document.getElementById('hod-request-overlay')?.remove();
-  let hods = [];
-  try {
-    const d = await api('/api/messages/users/messageable');
-    hods = d.hodUsers || [];
-  } catch(_) {}
-
-  const ol = document.createElement('div');
-  ol.id = 'hod-request-overlay';
-  ol.className = 'msg-modal-overlay';
-  ol.innerHTML = `
-    <div class="msg-modal" onclick="event.stopPropagation()">
-      <div class="msg-modal-head">
-        <h3>
-          <span class="msg-badge msg-badge--hod" style="margin-right:6px">HOD Request</span>
-          Contact HOD
-        </h3>
-        <button class="msg-modal-close" onclick="document.getElementById('hod-request-overlay').remove()">✕</button>
-      </div>
-      <div class="msg-modal-body">
-        ${hods.length === 0 ? '<div class="msg-modal-info">No HOD found in your institution. Contact your admin.</div>' : `
-        <div class="msg-modal-field">
-          <label class="msg-field-label">HOD</label>
-          <select id="hr-hod" class="msg-field-input">
-            ${hods.map(h => `<option value="${h._id}">${h.name}${h.department?' · '+h.department:''}</option>`).join('')}
-          </select>
-        </div>
-        <div class="msg-modal-field">
-          <label class="msg-field-label">Category <span style="color:var(--danger)">*</span></label>
-          <select id="hr-category" class="msg-field-input">
-            <option value="">— Select —</option>
-            <option value="complaint">Complaint</option>
-            <option value="academic_issue">Academic Issue</option>
-            <option value="emergency">Emergency</option>
-          </select>
-        </div>
-        <div class="msg-modal-field">
-          <label class="msg-field-label">Subject <span style="color:var(--danger)">*</span></label>
-          <input id="hr-subject" type="text" placeholder="Brief subject…" class="msg-field-input" maxlength="120">
-        </div>
-        <div class="msg-modal-field">
-          <label class="msg-field-label">Description <span style="color:var(--danger)">*</span></label>
-          <textarea id="hr-description" rows="4" placeholder="Describe your issue in detail…" class="msg-field-textarea"></textarea>
-        </div>`}
-      </div>
-      <div class="msg-modal-foot">
-        <button class="btn btn-secondary btn-sm" onclick="document.getElementById('hod-request-overlay').remove()">Cancel</button>
-        ${hods.length > 0 ? '<button class="btn btn-primary btn-sm" onclick="submitHodRequest()">Submit Request</button>' : ''}
-      </div>
-    </div>`;
-  document.body.appendChild(ol);
-  ol.addEventListener('click', e => { if (e.target === ol) ol.remove(); });
-}
-
-async function submitHodRequest() {
-  const hodId       = document.getElementById('hr-hod')?.value;
-  const category    = document.getElementById('hr-category')?.value;
-  const subject     = document.getElementById('hr-subject')?.value.trim();
-  const description = document.getElementById('hr-description')?.value.trim();
-  if (!category)    return toastError('Please select a category.');
-  if (!subject)     return toastError('Subject is required.');
-  if (!description) return toastError('Description is required.');
-  try {
-    const data = await api('/api/messages/hod-request', {
-      method: 'POST',
-      body:   JSON.stringify({ hodId, category, subject, description }),
-    });
-    document.getElementById('hod-request-overlay')?.remove();
-    toastSuccess('HOD request submitted!');
-    await _loadConvoList();
-    const c    = data.conversation;
-    const myId = currentUser._id || currentUser.id;
-    const others = (c.participants || []).filter(p => {
-      const uid = p.user?._id || p.user?.toString?.() || p.user;
-      return uid?.toString() !== myId?.toString();
-    });
-    openConvo(c._id, others[0]?.user?.name || 'HOD', 'hod_request');
-  } catch(e) {
-    toastError(e.message || 'Failed to submit request');
   }
 }
 

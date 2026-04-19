@@ -125,7 +125,6 @@ exports.createUser = async (req, res) => {
       phone: normPhone,
       company: req.user.company,
       department: department ? department.trim() : null,
-      isApproved: true,
     };
 
     // Department rules
