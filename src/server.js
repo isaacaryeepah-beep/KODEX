@@ -137,6 +137,16 @@ app.get("/superadmin", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "superadmin.html"));
 });
 
+// Serve new premium React UI first
+app.use(express.static(path.join(__dirname, "..", "client", "dist"), {
+  setHeaders: (res) => {
+    res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+    res.setHeader("Pragma", "no-cache");
+    res.setHeader("Expires", "0");
+  },
+}));
+
+// Legacy public files (superadmin tools etc)
 app.use(express.static(path.join(__dirname, "public"), {
   setHeaders: (res) => {
     res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
@@ -284,7 +294,7 @@ if (superadminRoutes) app.use("/api/superadmin", superadminRoutes);
 
 // ── Fallback ─────────────────────────────────────────────────────────────────
 app.use((req, res) => {
-  const indexPath = path.join(__dirname, "public", "index.html");
+  const indexPath = path.join(__dirname, "..", "client", "dist", "index.html");
   const fs = require("fs");
   if (req.accepts("html") && fs.existsSync(indexPath)) {
     res.sendFile(indexPath);
