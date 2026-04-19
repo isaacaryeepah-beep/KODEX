@@ -137,7 +137,7 @@ app.get("/superadmin", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "superadmin.html"));
 });
 
-app.use(express.static(path.join(__dirname, "..", "client", "dist"), {
+app.use(express.static(path.join(__dirname, "public"), {
   setHeaders: (res) => {
     res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
     res.setHeader("Pragma", "no-cache");
@@ -284,7 +284,7 @@ if (superadminRoutes) app.use("/api/superadmin", superadminRoutes);
 
 // ── Fallback ─────────────────────────────────────────────────────────────────
 app.use((req, res) => {
-  const indexPath = path.join(__dirname, "..", "client", "dist", "index.html");
+  const indexPath = path.join(__dirname, "public", "index.html");
   const fs = require("fs");
   if (req.accepts("html") && fs.existsSync(indexPath)) {
     res.sendFile(indexPath);
