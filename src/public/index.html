@@ -17,28 +17,28 @@ function selectPortal(t){document.addEventListener('DOMContentLoaded',function()
 <body>
   <div id="auth-page">
     <div class="auth-watermark">KODEX</div>
-    <div id="portal-selector">
-      <div class="portal-header">
-        <div class="brand-logo">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 160" style="height:80px;width:auto;display:block;margin:0 auto 8px;">
-            <rect x="0" y="16" width="128" height="128" rx="28" fill="#3730a3"/>
-            <rect x="6" y="22" width="116" height="116" rx="22" fill="#4f46e5"/>
-            <rect x="30" y="44" width="17" height="80" rx="4" fill="#ffffff"/>
-            <polygon points="47,84 90,44 108,44 66,84" fill="#ffffff"/>
-            <polygon points="47,84 90,124 108,124 66,84" fill="#ffffff"/>
-            <circle cx="108" cy="28" r="6" fill="#818cf8"/>
-            <circle cx="120" cy="28" r="4" fill="#c7d2fe"/>
-            <circle cx="130" cy="28" r="2.5" fill="#e0e7ff"/>
-            <text x="148" y="96" font-family="'Plus Jakarta Sans',system-ui,sans-serif" font-size="58" font-weight="800" letter-spacing="-2" fill="#1e1b4b">KODEX</text>
-            <rect x="150" y="108" width="240" height="1.5" rx="1" fill="#c7d2fe"/>
-            <text x="150" y="127" font-family="'Plus Jakarta Sans',system-ui,sans-serif" font-size="12" font-weight="700" letter-spacing="3.5" fill="#6366f1">LEARNING  ·  ATTENDANCE  ·  MANAGEMENT</text>
-          </svg>
-        </div>
-        <p class="subtitle">Enterprise Attendance Management Platform</p>
-      </div>
 
+    <!-- Brand shown above the workspace card — against the photo background -->
+    <div id="workspace-brand" style="position:relative;z-index:1;text-align:center;margin-bottom:24px">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 160" style="height:64px;width:auto;display:block;margin:0 auto 6px;">
+        <rect x="0" y="16" width="128" height="128" rx="28" fill="#3730a3"/>
+        <rect x="6" y="22" width="116" height="116" rx="22" fill="#4f46e5"/>
+        <rect x="30" y="44" width="17" height="80" rx="4" fill="#ffffff"/>
+        <polygon points="47,84 90,44 108,44 66,84" fill="#ffffff"/>
+        <polygon points="47,84 90,124 108,124 66,84" fill="#ffffff"/>
+        <circle cx="108" cy="28" r="6" fill="#818cf8"/>
+        <circle cx="120" cy="28" r="4" fill="#c7d2fe"/>
+        <circle cx="130" cy="28" r="2.5" fill="#e0e7ff"/>
+        <text x="148" y="96" font-family="'Plus Jakarta Sans',system-ui,sans-serif" font-size="58" font-weight="800" letter-spacing="-2" fill="#ffffff">KODEX</text>
+        <rect x="150" y="108" width="240" height="1.5" rx="1" fill="rgba(255,255,255,0.4)"/>
+        <text x="150" y="127" font-family="'Plus Jakarta Sans',system-ui,sans-serif" font-size="12" font-weight="700" letter-spacing="3.5" fill="rgba(255,255,255,0.75)">LEARNING  ·  ATTENDANCE  ·  MANAGEMENT</text>
+      </svg>
+      <p style="color:rgba(255,255,255,0.85);font-size:11px;font-weight:700;letter-spacing:3px;text-transform:uppercase;margin-top:4px">Enterprise Attendance Management Platform</p>
+    </div>
+
+    <div id="portal-selector">
       <!-- Mode selector toggles -->
-      <div class="mode-selector-label">Select your workspace</div>
+      <div class="mode-selector-label">Choose your workspace</div>
       <div class="mode-toggles">
 
         <div class="mode-toggle" id="mode-tgl-corp" onclick="selectMode('corp')">
