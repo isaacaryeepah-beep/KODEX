@@ -13,7 +13,6 @@ router.post('/devices/register',          authenticate, companyIsolation, device
 router.post('/devices/heartbeat',         authenticate, companyIsolation, deviceCtrl.heartbeat);
 router.post('/devices/sync',              authenticate, companyIsolation, deviceCtrl.syncOfflineRecords);
 router.put('/devices/:deviceId/networks', authenticate, companyIsolation, deviceCtrl.updateNetworks);
-router.get('/devices/my',                 authenticate, companyIsolation, deviceCtrl.getMyDevice);
 router.get('/devices/:deviceId/status',   authenticate, companyIsolation, deviceCtrl.getDeviceStatus);
 router.post('/devices/transfer',          authenticate, deviceCtrl.transferDevice);
 

@@ -75,18 +75,10 @@ exports.heartbeat = async (req, res) => {
       return res.status(403).json({ message: 'Device does not belong to your institution' });
     }
 
-    // Capture the public IP this heartbeat arrived from
-    const rawIp = (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.ip || '';
-    const publicIp = rawIp.startsWith('::ffff:') ? rawIp.slice(7) : rawIp;
-
-    device.lastHeartbeat  = new Date();
-    device.status         = 'online';
+    device.lastHeartbeat = new Date();
+    device.status        = 'online';
     device.currentNetwork = currentNetwork || device.currentNetwork;
-    device.mode           = mode || device.mode;
-    if (publicIp) {
-      device.lastPublicIp   = publicIp;
-      device.lastPublicIpAt = new Date();
-    }
+    device.mode          = mode || device.mode;
     await device.save();
 
     // Check for active session
@@ -186,30 +178,6 @@ exports.updateNetworks = async (req, res) => {
     safe.allowedNetworks = safe.allowedNetworks.map(n => ({ ssid: n.ssid, priority: n.priority }));
 
     res.json({ success: true, message: 'Networks updated', data: safe });
-  } catch (err) {
-    res.status(500).json({ message: 'Server error', error: err.message });
-  }
-};
-
-// ─── MY DEVICE (lecturer's own device) ───────────────────────────────────────
-exports.getMyDevice = async (req, res) => {
-  try {
-    const device = await Device.findOne({ lecturerId: req.user._id })
-      .populate('lecturerId', 'name email');
-
-    if (!device) return res.json({ success: true, hasDevice: false, device: null, isOnline: false });
-
-    const secsSince = device.lastHeartbeat
-      ? Math.floor((Date.now() - device.lastHeartbeat.getTime()) / 1000)
-      : null;
-    const isOnline = device.lastHeartbeat
-      ? (Date.now() - device.lastHeartbeat.getTime()) < 10000
-      : false;
-
-    const safe = device.toObject();
-    safe.allowedNetworks = (safe.allowedNetworks || []).map(n => ({ ssid: n.ssid, priority: n.priority }));
-
-    res.json({ success: true, hasDevice: true, device: safe, isOnline, secsSince });
   } catch (err) {
     res.status(500).json({ message: 'Server error', error: err.message });
   }

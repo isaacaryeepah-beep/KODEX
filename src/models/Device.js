@@ -35,10 +35,6 @@ const deviceSchema = new mongoose.Schema({
   status:         { type: String, enum: ['online', 'offline'], default: 'offline' },
   lastHeartbeat:  { type: Date, default: null },
 
-  // WiFi presence tracking — public IP captured on each heartbeat
-  lastPublicIp:   { type: String, default: null },
-  lastPublicIpAt: { type: Date,   default: null },
-
   // Location
   assignedRoom:       { type: String, default: null },
   assignedDepartment: { type: String, default: null },

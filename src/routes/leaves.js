@@ -4,9 +4,6 @@ const authenticate = require("../middleware/auth");
 const { requireRole, requireMode } = require("../middleware/role");
 const { requireActiveSubscription } = require("../middleware/subscription");
 const LeaveRequest = require("../models/LeaveRequest");
-const AuditLog = require("../models/AuditLog");
-const { AUDIT_ACTIONS } = AuditLog;
-const notificationService = require("../services/notificationService");
 
 const mw = [authenticate, requireMode("corporate"), requireActiveSubscription];
 
@@ -69,20 +66,6 @@ router.patch("/:id/cancel", ...mw, async (req, res) => {
       { new: true }
     );
     if (!leave) return res.status(404).json({ error: "Leave request not found or cannot be cancelled" });
-
-    // Audit + notify (fire-and-forget)
-    AuditLog.record({
-      company:       leave.company,
-      actor:         req.user,
-      action:        AUDIT_ACTIONS.ARCHIVE,
-      resource:      "LeaveRequest",
-      resourceId:    leave._id,
-      resourceLabel: `${leave.type} leave`,
-      metadata:      { status: "cancelled" },
-      mode:          "corporate",
-      req,
-    });
-
     res.json({ leave });
   } catch (e) {
     res.status(500).json({ error: "Failed to cancel leave request" });
@@ -137,28 +120,6 @@ router.patch("/:id/review", ...mw, requireRole("admin", "manager", "superadmin")
       { new: true }
     ).populate("employee", "name employeeId department");
     if (!leave) return res.status(404).json({ error: "Leave request not found or already reviewed" });
-
-    // Audit log (fire-and-forget)
-    AuditLog.record({
-      company:       leave.company,
-      actor:         req.user,
-      action:        action === "approved" ? AUDIT_ACTIONS.LEAVE_APPROVED : AUDIT_ACTIONS.LEAVE_REJECTED,
-      resource:      "LeaveRequest",
-      resourceId:    leave._id,
-      resourceLabel: `${leave.type} leave (${leave.employee?.name || leave.employee})`,
-      changes:       { before: { status: "pending" }, after: { status: action } },
-      metadata:      { note: note || null, days: leave.days },
-      mode:          "corporate",
-      req,
-    });
-
-    // Notify employee (fire-and-forget)
-    if (action === "approved") {
-      notificationService.notifyLeaveApproved(leave);
-    } else {
-      notificationService.notifyLeaveRejected(leave, note);
-    }
-
     res.json({ leave });
   } catch (e) {
     res.status(500).json({ error: "Failed to review leave request" });

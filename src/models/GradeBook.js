@@ -28,21 +28,11 @@ const gradeBookSchema = new mongoose.Schema(
     company:  { type: mongoose.Schema.Types.ObjectId, ref: "Company", required: true, index: true },
     createdBy:{ type: mongoose.Schema.Types.ObjectId, ref: "User" },
 
-    // Component weights (active components determine the denominator — they
-    // need not sum to 100; the controller normalises to whatever sum is used).
+    // Component weights (must sum to 100 when all active)
     weights: {
-      // Legacy Quiz model (Phases 1–2)
-      quizzes:      { type: Number, default: 50, min: 0, max: 100 },
-      // Phase 3 NormalQuiz results
-      normalQuizzes:{ type: Number, default: 0,  min: 0, max: 100 },
-      // Phase 4 SnapQuiz results
-      snapQuizzes:  { type: Number, default: 0,  min: 0, max: 100 },
-      // Phase 5 Assignment submissions
-      assignments:  { type: Number, default: 0,  min: 0, max: 100 },
-      // Academic attendance sessions
-      attendance:   { type: Number, default: 20, min: 0, max: 100 },
-      // Lecturer-entered manual grades
-      manual:       { type: Number, default: 30, min: 0, max: 100 },
+      quizzes:    { type: Number, default: 50, min: 0, max: 100 }, // % of final grade
+      attendance: { type: Number, default: 20, min: 0, max: 100 },
+      manual:     { type: Number, default: 30, min: 0, max: 100 },
     },
 
     // Manual grade columns (e.g. midterm, lab reports, project)

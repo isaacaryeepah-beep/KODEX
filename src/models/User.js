@@ -128,71 +128,6 @@ const userSchema = new mongoose.Schema(
       default: null,
     },
 
-    // ── Corporate profile fields ──────────────────────────────────────────
-    // Granular corporate role used alongside the coarse `role` field.
-    // Only populated for users in corporate-mode companies.
-    corporateSubRole: {
-      type: String,
-      enum: [
-        "company_admin",    // owns the company account
-        "hr_manager",       // manages employees, leave, compliance
-        "department_manager", // scoped to own department
-        "team_lead",        // scoped to own team
-        "branch_manager",   // scoped to own branch
-        "payroll_officer",  // read access to payroll data
-        "compliance_officer", // compliance & training oversight
-        "employee",         // standard staff member
-      ],
-      default: null,
-    },
-    designation: {
-      type: String,
-      trim: true,
-      default: null, // e.g. "Senior Software Engineer", "HR Coordinator"
-    },
-    employmentType: {
-      type: String,
-      enum: ["full_time", "part_time", "contract", "intern", "probation", null],
-      default: null,
-    },
-    // The user's direct reporting manager (another User).
-    reportingManager: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
-      default: null,
-    },
-    dateHired: {
-      type: Date,
-      default: null,
-    },
-    workLocation: {
-      type: String,
-      enum: ["office", "remote", "hybrid", "field", null],
-      default: null,
-    },
-    // Typed reference to corporate department/team (complements string `department`).
-    corporateDepartmentRef: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Department",
-      default: null,
-      index: true,
-    },
-    corporateTeamRef: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Team",
-      default: null,
-    },
-    // ── Status & access ───────────────────────────────────────────────────
-    // Soft-suspension without removing the account.
-    suspendedAt: {
-      type: Date,
-      default: null,
-    },
-    suspendedReason: {
-      type: String,
-      default: null,
-    },
-
     // ── Per-lecturer subscription (1 subscription = 1 user) ──────────────
     // Only applies to: lecturer, manager, admin
     // Students, employees, HODs are always free
@@ -232,13 +167,6 @@ userSchema.index(
   { employeeId: 1, company: 1 },
   { unique: true, partialFilterExpression: { employeeId: { $type: "string" } } }
 );
-
-// Fast look-up of all active users for a company filtered by role.
-userSchema.index({ company: 1, role: 1, isActive: 1 });
-// Corporate sub-role lookups (e.g. "find all hr_managers for company X").
-userSchema.index({ company: 1, corporateSubRole: 1 });
-// Corporate department scoping.
-userSchema.index({ company: 1, corporateDepartmentRef: 1, isActive: 1 });
 
 userSchema.pre("validate", function () {
   if (this.role === "student") {
