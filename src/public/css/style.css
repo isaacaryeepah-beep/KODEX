@@ -137,23 +137,22 @@ body {
   min-height: 100vh;
   padding: 24px;
   flex-direction: column;
-  background: #f8f9fb;
+  background: url('/img/workspace-bg.jpg') center center / cover no-repeat fixed;
   position: relative;
   overflow: hidden;
 }
 
-
-
-/* Corner accents */
-#auth-page::after {
+/* Dark overlay so the card reads clearly against the photo */
+#auth-page::before {
   content: '';
   position: absolute;
-  top: -120px; right: -120px;
-  width: 480px; height: 480px;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgba(37,99,235,.07) 0%, transparent 70%);
+  inset: 0;
+  background: rgba(0, 0, 0, 0.38);
   pointer-events: none;
+  z-index: 0;
 }
+
+#auth-page::after { display: none; }
 
 /* KODEX background watermark */
 .auth-watermark {
@@ -165,18 +164,25 @@ body {
   animation: fadeInUp .5s var(--ease);
   position: relative;
   z-index: 1;
-  max-width: 700px;
+  max-width: 680px;
   width: 100%;
+  background: rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(18px) saturate(1.4);
+  -webkit-backdrop-filter: blur(18px) saturate(1.4);
+  border-radius: 20px;
+  padding: 36px 32px 28px;
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.28), 0 2px 8px rgba(0, 0, 0, 0.12);
 }
 
-/* Brand */
-.portal-header { margin-bottom: 44px; }
+/* Brand — sits inside the frosted card but visually matches the screenshot */
+.portal-header { margin-bottom: 20px; }
 
 .portal-header .brand-logo {
   display: inline-flex;
   align-items: center;
   gap: 11px;
-  margin-bottom: 12px;
+  margin-bottom: 10px;
 }
 
 .portal-header .brand-icon {
@@ -199,18 +205,22 @@ body {
 }
 
 .portal-header .subtitle {
-  color: var(--text-light);
-  font-size: 14px;
-  font-weight: 400;
-  margin-top: 4px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  margin-top: 6px;
 }
 
 /* ── Mode selector label ── */
 .mode-selector-label {
-  font-size: 11px;
-  font-weight: 600;
+  font-size: 10px;
+  font-weight: 700;
   color: var(--text-muted);
   text-align: center;
+  letter-spacing: 2px;
+  text-transform: uppercase;
   margin-bottom: 12px;
 }
 
@@ -225,8 +235,8 @@ body {
 .mode-toggle {
   padding: 18px 12px 14px;
   border-radius: 14px;
-  border: 2px solid var(--border);
-  background: white;
+  border: 2px solid rgba(0,0,0,0.1);
+  background: rgba(255,255,255,0.55);
   cursor: pointer;
   text-align: center;
   transition: border-color .2s, background .2s, box-shadow .2s;
@@ -235,7 +245,7 @@ body {
 
 .mode-toggle:hover {
   border-color: #c7d2fe;
-  background: #fafcff;
+  background: rgba(255,255,255,0.75);
 }
 
 .mode-toggle.active-corp {
