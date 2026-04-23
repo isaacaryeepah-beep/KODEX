@@ -20,8 +20,9 @@ const _FAQ_CATEGORIES_ACADEMIC = new Set([
 ]);
 
 function _faqAllowedCategories() {
-  const isAdmin = ['admin', 'superadmin'].includes(currentUser?.role);
-  if (isAdmin) return null; // null = show all
+  // Only superadmin (platform-level) sees all categories across all modes.
+  // Every company-scoped role — including admin — is filtered by company mode.
+  if (currentUser?.role === 'superadmin') return null;
   const mode = currentUser?.company?.mode;
   if (mode === 'corporate') return _FAQ_CATEGORIES_CORPORATE;
   if (mode === 'academic')  return _FAQ_CATEGORIES_ACADEMIC;

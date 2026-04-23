@@ -9830,14 +9830,17 @@ async function renderSubscription() {
       ? new Date(ut.subscriptionExpiry).toLocaleDateString('en-GB', { day:'numeric', month:'long', year:'numeric' })
       : '—';
 
-    // Determine plan based on company mode
+    // Determine plan based on company mode — strictly isolated
     const mode       = currentUser?.company?.mode || 'academic';
     const isCorp     = mode === 'corporate';
-    const planName   = isCorp ? 'Monthly Plan'   : 'Semester Plan';
-    const planPrice  = isCorp ? '₵150'           : '₵300';
-    const planPeriod = isCorp ? '30 days / month': '1 semester (16 weeks)';
-    const planId     = isCorp ? 'monthly'        : 'semester';
-    const planLabel  = isCorp ? '₵150 / month'   : '₵300 / semester';
+    const planName   = isCorp ? 'Monthly Plan'    : 'Semester Plan';
+    const planPrice  = isCorp ? '₵150'            : '₵300';
+    const planPeriod = isCorp ? '30 days / month' : '1 semester (16 weeks)';
+    const planId     = isCorp ? 'monthly'         : 'semester';
+    const planLabel  = isCorp ? '₵150 / month'    : '₵300 / semester';
+    const planFeatures = isCorp
+      ? ['Full platform access', 'Attendance & clock in/out management', 'Leave &amp; expense management', 'Performance tracking &amp; reporting', 'Renew any time — days stack up']
+      : ['Full platform access', 'Attendance marking &amp; session management', 'Assessment creation &amp; grading', 'Grade book &amp; reports', 'Renew any time — days stack up'];
 
     const statusColor = status === 'active' ? 'var(--success)' : status === 'trial' ? '#f59e0b' : 'var(--danger)';
     const statusLabel = status === 'active' ? '✅ Active' : status === 'trial' ? '⏳ Free Trial' : '❌ Expired';
@@ -9878,11 +9881,7 @@ async function renderSubscription() {
           </div>
           <div style="font-size:13px;color:var(--text-light);margin-bottom:10px">⏱ ${planPeriod} · Auto-stacks if renewed early</div>
           <ul style="font-size:13px;color:var(--text-light);margin:0;padding-left:18px;line-height:1.9">
-            <li>Full platform access</li>
-            <li>Attendance marking &amp; session management</li>
-            <li>Assessment creation &amp; grading</li>
-            <li>Reports &amp; analytics</li>
-            <li>Renew any time — days stack up</li>
+            ${planFeatures.map(f => `<li>${f}</li>`).join('')}
           </ul>
         </div>
 
