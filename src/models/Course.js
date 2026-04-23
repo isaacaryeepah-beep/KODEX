@@ -70,6 +70,38 @@ const courseSchema = new mongoose.Schema({
   isArchived: { type: Boolean, default: false },
   isActive:   { type: Boolean, default: true },
 
+  // Whether the course is visible to enrolled students.
+  // Lecturers/admins can prepare a course before publishing it.
+  isPublished: { type: Boolean, default: false },
+
+  // ── HOD Course Approval ───────────────────────────────────────────────────
+  // Lecturer-created courses start as 'pending' and require HOD sign-off.
+  // Admin/superadmin-created courses are auto-approved.
+  needsApproval: { type: Boolean, default: false },
+  approvalStatus: {
+    type: String,
+    enum: ['pending', 'approved', 'rejected'],
+    default: 'approved',
+  },
+  approvedBy:   { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+  approvedAt:   { type: Date, default: null },
+  approvalNote: { type: String, trim: true, default: null },
+
+  // Course materials: syllabus, reference docs, slides uploaded by lecturer.
+  attachments: {
+    type: [{
+      fileName:        { type: String },
+      originalName:    { type: String },
+      fileUrl:         { type: String },
+      mimeType:        { type: String },
+      fileSize:        { type: Number },
+      storageProvider: { type: String, default: 'local' },
+      uploadedBy:      { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+      uploadedAt:      { type: Date, default: Date.now },
+    }],
+    default: [],
+  },
+
 }, { timestamps: true });
 
 // ── Indexes ───────────────────────────────────────────────────────────────────
@@ -85,5 +117,7 @@ courseSchema.index({ companyId: 1, status: 1 });
 courseSchema.index({ companyId: 1, isActive: 1 });
 courseSchema.index({ enrolledStudents: 1 });
 courseSchema.index({ companyId: 1, qualificationType: 1, studyType: 1 });
+// Student visibility queries: "show me all published active courses for this company"
+courseSchema.index({ companyId: 1, isPublished: 1, isActive: 1 });
 
 module.exports = mongoose.model('Course', courseSchema);

@@ -1,7 +1,7 @@
 const mongoose = require("mongoose");
 const crypto = require("crypto");
 
-const TRIAL_DURATION_DAYS = 14;
+const TRIAL_DURATION_DAYS = 30;
 
 function generateInstitutionCode() {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -12,12 +12,37 @@ function generateInstitutionCode() {
   return code;
 }
 
+/** Derive a URL-safe slug from a company name. */
+function slugify(name) {
+  return name
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9\s-]/g, "")
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+    .slice(0, 64);
+}
+
 const companySchema = new mongoose.Schema(
   {
     name: {
       type: String,
       required: [true, "Institution name is required"],
       unique: true,
+      trim: true,
+    },
+    // Human-friendly display name used on portals, PDFs, and emails.
+    // Defaults to `name` if not provided.
+    displayName: {
+      type: String,
+      trim: true,
+      default: null,
+    },
+    // URL-safe unique identifier. Auto-generated from name on first save.
+    slug: {
+      type: String,
+      unique: true,
+      lowercase: true,
       trim: true,
     },
     institutionCode: {
@@ -28,9 +53,60 @@ const companySchema = new mongoose.Schema(
     },
     mode: {
       type: String,
-      enum: ["corporate", "academic"],
+      enum: ["corporate", "academic", "both"],
       required: [true, "Institution mode is required"],
       default: "corporate",
+    },
+    // Primary contact details for the institution/company.
+    contactEmail: {
+      type: String,
+      lowercase: true,
+      trim: true,
+      default: null,
+    },
+    contactPhone: {
+      type: String,
+      trim: true,
+      default: null,
+    },
+    address: {
+      street:  { type: String, trim: true, default: null },
+      city:    { type: String, trim: true, default: null },
+      region:  { type: String, trim: true, default: null },
+      country: { type: String, trim: true, default: "Ghana" },
+    },
+    // Academic-mode specific configuration.
+    academicSettings: {
+      // Supported programme types for this institution.
+      programmeTypes: {
+        type: [String],
+        default: ["HND", "Diploma", "Degree", "BSc", "BTech", "Top-Up"],
+      },
+      // Supported session types (Morning, Evening, Weekend…).
+      sessionTypes: {
+        type: [String],
+        default: ["Morning", "Afternoon", "Evening", "Weekend"],
+      },
+      // Number of semesters per academic year.
+      semestersPerYear: { type: Number, default: 2 },
+      // Whether ESP32 devices are required for attendance sessions.
+      requireEsp32Attendance: { type: Boolean, default: false },
+      // Whether students must be enrolled in a course to view its content.
+      enforceEnrollment: { type: Boolean, default: true },
+    },
+    // Corporate-mode specific configuration.
+    corporateSettings: {
+      // Supported employment types.
+      employmentTypes: {
+        type: [String],
+        default: ["full_time", "part_time", "contract", "intern", "probation"],
+      },
+      // Working hours per day used for overtime calculation.
+      standardWorkHoursPerDay: { type: Number, default: 8 },
+      // Whether geofence validation is required for clock-in.
+      requireGeofence: { type: Boolean, default: false },
+      // Whether managers can approve leave requests without HR.
+      managerLeaveApproval: { type: Boolean, default: false },
     },
     subscriptionActive: {
       type: Boolean,
@@ -150,15 +226,30 @@ const companySchema = new mongoose.Schema(
 );
 
 companySchema.pre("save", async function () {
+  const Company = mongoose.model("Company");
+
   if (!this.institutionCode) {
     let code;
     let exists = true;
     while (exists) {
       code = generateInstitutionCode();
-      exists = await mongoose.model("Company").findOne({ institutionCode: code });
+      exists = await Company.findOne({ institutionCode: code });
     }
     this.institutionCode = code;
   }
+
+  // Auto-generate slug from name on first save; ensure uniqueness with suffix.
+  if (!this.slug) {
+    let base = slugify(this.name);
+    let candidate = base;
+    let attempt = 0;
+    while (await Company.findOne({ slug: candidate, _id: { $ne: this._id } })) {
+      attempt++;
+      candidate = `${base}-${attempt}`;
+    }
+    this.slug = candidate;
+  }
+
   if (!this.qrSeed) {
     this.qrSeed = crypto.randomBytes(32).toString("hex");
   }
@@ -196,6 +287,10 @@ companySchema.virtual("hasAccess").get(function () {
 
 companySchema.set("toJSON", { virtuals: true });
 companySchema.set("toObject", { virtuals: true });
+
+// Covering index for tenant-scoped status lookups.
+companySchema.index({ isActive: 1, mode: 1 });
+companySchema.index({ subscriptionStatus: 1, trialEndDate: 1 });
 
 module.exports = mongoose.model("Company", companySchema);
 module.exports.TRIAL_DURATION_DAYS = TRIAL_DURATION_DAYS;

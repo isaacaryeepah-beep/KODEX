@@ -165,4 +165,140 @@ Generate exactly ${count} questions now:`;
   });
 }
 
-module.exports = { generateQuestionsFromText };
+/**
+ * Generate quiz questions from an image (drawing, diagram, handwritten notes, photo).
+ * Uses Claude's vision API to interpret the image and produce MCQ/fill questions.
+ * @param {Buffer}   imageBuffer  - Raw image bytes
+ * @param {string}   mimeType     - e.g. "image/png"
+ * @param {number}   count
+ * @param {string[]} types
+ * @param {string}   difficulty
+ * @param {string}   [context]    - Optional extra context from the user
+ * @returns {Promise<Array>}
+ */
+async function generateQuestionsFromImage(imageBuffer, mimeType, count = 5, types = ["single"], difficulty = "mixed", context = "") {
+  if (!ANTHROPIC_API_KEY) throw new Error("ANTHROPIC_API_KEY is not set in environment variables");
+
+  const typeInstructions = types.map(t => {
+    if (t === "single") return '"single": one correct option index (0-3) in "correctAnswer"';
+    if (t === "multiple") return '"multiple": array of correct option indices in "correctAnswers"';
+    if (t === "fill") return '"fill": correct answer string in "correctAnswerText"';
+    return t;
+  }).join("; ");
+
+  const difficultyNote = difficulty === "mixed"
+    ? "Mix difficulty levels."
+    : `All questions should be ${difficulty} difficulty.`;
+
+  const textPrompt = `You are an expert educational assessment creator. Examine the image carefully (it may be a diagram, graph, geometry sketch, handwritten notes, or a photograph of study material). Generate exactly ${count} quiz questions based on what you see.
+
+RULES:
+- ${difficultyNote}
+- Question types: ${types.join(", ")}. Distribute evenly if multiple types.
+- For "single" and "multiple": exactly 4 options (A-D).
+- For "fill": no options needed.
+- Marks: 1 easy, 2 application, 3 analysis.
+${context ? `- Extra context from educator: ${context}` : ""}
+- Return ONLY valid JSON — no markdown, no preamble.
+
+JSON format:
+[
+  { "questionText": "...", "questionType": "single", "options": ["...","...","...","..."], "correctAnswer": 0, "marks": 1 },
+  { "questionText": "...", "questionType": "multiple", "options": ["...","...","...","..."], "correctAnswers": [0,2], "marks": 2 },
+  { "questionText": "...", "questionType": "fill", "correctAnswerText": "...", "marks": 1 }
+]
+
+Type notes: ${typeInstructions}
+
+Generate exactly ${count} questions now:`;
+
+  const base64Image = imageBuffer.toString("base64");
+
+  const body = JSON.stringify({
+    model: MODEL,
+    max_tokens: 4000,
+    messages: [{
+      role: "user",
+      content: [
+        { type: "image", source: { type: "base64", media_type: mimeType, data: base64Image } },
+        { type: "text", text: textPrompt },
+      ],
+    }],
+  });
+
+  const raw = await new Promise((resolve, reject) => {
+    const req = https.request(
+      {
+        hostname: "api.anthropic.com",
+        path: "/v1/messages",
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": ANTHROPIC_API_KEY,
+          "anthropic-version": "2023-06-01",
+          "Content-Length": Buffer.byteLength(body),
+        },
+      },
+      (res) => {
+        let data = "";
+        res.on("data", (chunk) => (data += chunk));
+        res.on("end", () => resolve({ status: res.statusCode, body: data }));
+      }
+    );
+    req.on("error", reject);
+    req.write(body);
+    req.end();
+  });
+
+  if (raw.status !== 200) {
+    const err = JSON.parse(raw.body);
+    throw new Error(err.error?.message || `Anthropic API error ${raw.status}`);
+  }
+
+  const result = JSON.parse(raw.body);
+  const text = result.content?.[0]?.text || "";
+  const clean = text.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
+
+  let questions;
+  try {
+    questions = JSON.parse(clean);
+  } catch {
+    const match = clean.match(/\[[\s\S]*\]/);
+    if (!match) throw new Error("AI returned invalid JSON — please try again");
+    questions = JSON.parse(match[0]);
+  }
+
+  if (!Array.isArray(questions)) throw new Error("AI returned unexpected format");
+
+  return questions.map((q, i) => {
+    if (!q.questionText) throw new Error(`Question ${i + 1} missing questionText`);
+    const type = q.questionType || "single";
+    if (type === "fill") {
+      return {
+        questionText: q.questionText.trim(),
+        questionType: "fill",
+        options: [],
+        correctAnswerText: (q.correctAnswerText || "").trim(),
+        acceptedAnswers: Array.isArray(q.acceptedAnswers) ? q.acceptedAnswers.map(a => a.trim()).filter(Boolean) : [],
+        correctAnswer: null,
+        correctAnswers: [],
+        marks: Number(q.marks) || 1,
+      };
+    }
+    if (!Array.isArray(q.options) || q.options.length < 2) {
+      throw new Error(`Question ${i + 1} needs at least 2 options`);
+    }
+    return {
+      questionText: q.questionText.trim(),
+      questionType: type,
+      options: q.options.map(o => String(o).trim()),
+      correctAnswer: type === "single" ? Number(q.correctAnswer ?? 0) : (q.correctAnswers?.[0] ?? 0),
+      correctAnswers: type === "multiple" ? (q.correctAnswers || []).map(Number) : [],
+      correctAnswerText: null,
+      acceptedAnswers: [],
+      marks: Number(q.marks) || 1,
+    };
+  });
+}
+
+module.exports = { generateQuestionsFromText, generateQuestionsFromImage };

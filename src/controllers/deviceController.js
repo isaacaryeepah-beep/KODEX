@@ -1,7 +1,141 @@
-const Device          = require('../models/Device');
+const Device            = require('../models/Device');
 const AttendanceSession = require('../models/AttendanceSession');
 const AttendanceRecord  = require('../models/AttendanceRecord');
-const jwt = require('jsonwebtoken');
+const User              = require('../models/User');
+const AuditLog          = require('../models/AuditLog');
+const { AUDIT_ACTIONS } = require('../models/AuditLog');
+const crypto            = require('crypto');
+const jwt               = require('jsonwebtoken');
+
+// Device is considered offline if no heartbeat within this window.
+const HEARTBEAT_OFFLINE_MS = 20_000;
+
+// Fire-and-forget device audit helper (never throws).
+function _auditDevice(actor, action, device, meta = {}, req = null) {
+  AuditLog.record({
+    company:       actor?.company || device?.companyId,
+    actor,
+    action,
+    resource:      'Device',
+    resourceId:    device?._id,
+    resourceLabel: device?.deviceId,
+    metadata:      { deviceName: device?.deviceName, ...meta },
+    mode:          'academic',
+    req,
+  }).catch(() => {});
+}
+
+// ─── GENERATE PAIRING CODE ───────────────────────────────────────────────────
+// Lecturer calls this to get a one-time 6-char code the ESP32 uses to claim
+// ownership. Code is hashed server-side; expires after 5 minutes.
+exports.generatePairingCode = async (req, res) => {
+  try {
+    if (req.user.role !== 'lecturer' && !['admin','superadmin'].includes(req.user.role)) {
+      return res.status(403).json({ message: 'Only lecturers can generate pairing codes.' });
+    }
+
+    // Block if they already own a device
+    const existing = await Device.findOne({ lecturerId: req.user._id });
+    if (existing) {
+      return res.status(400).json({ message: 'You already have a linked device. Unlink it before pairing a new one.' });
+    }
+
+    // Generate readable 6-char code (uppercase A-Z + 0-9, avoid ambiguous chars)
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    const code = Array.from({ length: 6 }, () => chars[crypto.randomInt(chars.length)]).join('');
+    const hash = crypto.createHash('sha256').update(code).digest('hex');
+    const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
+
+    await User.findByIdAndUpdate(req.user._id, {
+      devicePairingCode:   hash,
+      devicePairingExpiry: expiresAt,
+    });
+
+    res.json({ success: true, code, expiresAt });
+  } catch (err) {
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+};
+
+// ─── PAIR DEVICE (ESP32-initiated) ───────────────────────────────────────────
+// ESP32 calls this (no JWT — authenticated via pairing code + institutionCode).
+// Body: { pairingCode, deviceId, deviceName, institutionCode }
+exports.pairDevice = async (req, res) => {
+  try {
+    const { pairingCode, deviceId, deviceName, institutionCode } = req.body;
+    if (!pairingCode || !deviceId || !institutionCode) {
+      return res.status(400).json({ message: 'pairingCode, deviceId, and institutionCode are required.' });
+    }
+
+    // Find company by institution code
+    const Company = require('../models/Company');
+    const company = await Company.findOne({ institutionCode: institutionCode.trim().toUpperCase() });
+    if (!company) return res.status(404).json({ message: 'Institution not found.' });
+
+    // Find lecturer with matching pairing code hash, within same company, not expired
+    const hash = crypto.createHash('sha256').update(pairingCode.trim().toUpperCase()).digest('hex');
+    const now = new Date();
+    const lecturer = await User.findOne({
+      company: company._id,
+      role: { $in: ['lecturer'] },
+      devicePairingCode: hash,
+      devicePairingExpiry: { $gt: now },
+    }).select('+devicePairingCode');
+
+    if (!lecturer) {
+      // Log failed attempt (no actor — device not yet authenticated)
+      AuditLog.record({
+        company: company._id,
+        actor: null,
+        action: AUDIT_ACTIONS.ACCESS_DENIED,
+        resource: 'Device',
+        resourceLabel: deviceId,
+        metadata: { action: 'pairing_failed', reason: 'invalid_or_expired_code', deviceId },
+        severity: 'medium',
+        mode: 'academic',
+      }).catch(() => {});
+      return res.status(403).json({ message: 'Invalid or expired pairing code.' });
+    }
+
+    // Block if device already claimed by another lecturer
+    const devExists = await Device.findOne({ deviceId });
+    if (devExists) {
+      if (devExists.lecturerId.toString() !== lecturer._id.toString()) {
+        return res.status(409).json({ message: 'This device is already linked to another lecturer.' });
+      }
+      // Same lecturer re-pairing — update token and clear code
+      await User.findByIdAndUpdate(lecturer._id, { devicePairingCode: null, devicePairingExpiry: null });
+      return res.json({ success: true, message: 'Device already linked to you.', token: devExists.token });
+    }
+
+    // Block if lecturer already owns a different device
+    const lecturerDev = await Device.findOne({ lecturerId: lecturer._id });
+    if (lecturerDev) {
+      return res.status(400).json({ message: 'Lecturer already owns a device. Unlink it first.' });
+    }
+
+    // Create device and clear pairing code (one-time use)
+    const token = jwt.sign({ deviceId, lecturerId: lecturer._id, companyId: company._id }, process.env.JWT_SECRET, { expiresIn: '10y' });
+    const device = await Device.create({
+      deviceId,
+      deviceName: deviceName || `Device-${deviceId.slice(-6).toUpperCase()}`,
+      companyId: company._id,
+      lecturerId: lecturer._id,
+      apSSID: `KODEX-${deviceId.slice(-6).toUpperCase()}`,
+      token,
+      ownershipType: 'dedicated',
+      isTransferable: false,
+    });
+
+    await User.findByIdAndUpdate(lecturer._id, { devicePairingCode: null, devicePairingExpiry: null });
+
+    _auditDevice(lecturer, AUDIT_ACTIONS.CREATE, device, { action: 'device_paired_via_code', deviceId });
+    res.status(201).json({ success: true, message: 'Device paired successfully.', token, deviceId: device.deviceId });
+  } catch (err) {
+    if (err.code === 11000) return res.status(409).json({ message: 'Device or lecturer already has a device registered.' });
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+};
 
 // ─── REGISTER DEVICE ─────────────────────────────────────────────────────────
 // Binds device permanently to one lecturer. One device = one lecturer.
@@ -53,6 +187,7 @@ exports.registerDevice = async (req, res) => {
       isTransferable: false
     });
 
+    _auditDevice(req.user, AUDIT_ACTIONS.CREATE, device, { action: 'device_linked' }, req);
     res.status(201).json({ success: true, message: 'Device registered', data: device, token });
   } catch (err) {
     if (err.code === 11000) {
@@ -75,11 +210,17 @@ exports.heartbeat = async (req, res) => {
       return res.status(403).json({ message: 'Device does not belong to your institution' });
     }
 
-    device.lastHeartbeat = new Date();
-    device.status        = 'online';
+    const wasOffline = device.status === 'offline';
+    device.lastHeartbeat  = new Date();
+    device.status         = 'online';
     device.currentNetwork = currentNetwork || device.currentNetwork;
-    device.mode          = mode || device.mode;
+    device.mode           = mode || device.mode;
     await device.save();
+
+    // Log heartbeat-restored event
+    if (wasOffline) {
+      _auditDevice(null, AUDIT_ACTIONS.UPDATE, device, { action: 'heartbeat_restored', network: device.currentNetwork });
+    }
 
     // Check for active session
     const session = await AttendanceSession.findOne({ deviceId, status: 'active' });
@@ -183,14 +324,77 @@ exports.updateNetworks = async (req, res) => {
   }
 };
 
+// ─── MARK STALE DEVICES OFFLINE ──────────────────────────────────────────────
+// Called whenever device status is queried; marks device offline if heartbeat
+// has not been received within HEARTBEAT_OFFLINE_MS.
+async function _markStaleOffline(device) {
+  if (device.status !== 'online') return device;
+  if (!device.lastHeartbeat) return device;
+  const elapsed = Date.now() - device.lastHeartbeat.getTime();
+  if (elapsed > HEARTBEAT_OFFLINE_MS) {
+    device.status = 'offline';
+    await device.save().catch(() => {});
+    _auditDevice(null, AUDIT_ACTIONS.UPDATE, device, { action: 'heartbeat_lost', elapsed_ms: elapsed });
+  }
+  return device;
+}
+
+// ─── GET MY DEVICE ────────────────────────────────────────────────────────────
+// Returns the device owned by the authenticated lecturer (lecturer-only).
+exports.getMyDevice = async (req, res) => {
+  try {
+    const isAdmin = ['admin', 'superadmin'].includes(req.user.role);
+    const query = isAdmin
+      ? { companyId: req.user.company }
+      : { lecturerId: req.user._id, companyId: req.user.company };
+
+    let device = await Device.findOne(query).populate('lecturerId', 'name email');
+    if (!device) return res.json({ success: true, data: null });
+
+    device = await _markStaleOffline(device);
+    const activeSession = await AttendanceSession.findOne({ deviceId: device.deviceId, status: 'active' });
+    const secsSince = device.lastHeartbeat
+      ? Math.floor((Date.now() - device.lastHeartbeat.getTime()) / 1000)
+      : null;
+
+    res.json({
+      success: true,
+      data: {
+        deviceId:           device.deviceId,
+        deviceName:         device.deviceName,
+        owner:              device.lecturerId,
+        status:             device.isOnline ? 'online' : 'offline',
+        mode:               device.mode,
+        currentNetwork:     device.currentNetwork,
+        apSSID:             device.apSSID,
+        assignedRoom:       device.assignedRoom,
+        assignedDepartment: device.assignedDepartment,
+        lastHeartbeat:      device.lastHeartbeat,
+        secsSinceHeartbeat: secsSince,
+        registeredAt:       device.registeredAt,
+        activeSession:      activeSession ? { sessionId: activeSession._id, status: activeSession.status } : null,
+        allowedNetworks:    device.allowedNetworks.map(n => ({ ssid: n.ssid, priority: n.priority })), // no passwords
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+};
+
 // ─── DEVICE STATUS ────────────────────────────────────────────────────────────
 exports.getDeviceStatus = async (req, res) => {
   try {
     const { deviceId } = req.params;
+    const isAdmin = ['admin', 'superadmin'].includes(req.user.role);
 
     const device = await Device.findOne({ deviceId, companyId: req.user.company })
       .populate('lecturerId', 'name email');
     if (!device) return res.status(404).json({ message: 'Device not found' });
+
+    // Ownership: only the owning lecturer (or admin) may view device details
+    if (!isAdmin && device.lecturerId._id.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ message: 'You do not own this device.' });
+    }
 
     const activeSession = await AttendanceSession.findOne({ deviceId, status: 'active' })
       .populate('courseId', 'name')
@@ -216,6 +420,102 @@ exports.getDeviceStatus = async (req, res) => {
         activeSession: activeSession || null
       }
     });
+  } catch (err) {
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+};
+
+// ─── UNLINK DEVICE ───────────────────────────────────────────────────────────
+// Only the owning lecturer (or admin) may unlink their device.
+// Blocked if an active attendance session is running.
+exports.unlinkDevice = async (req, res) => {
+  try {
+    const isAdmin = ['admin', 'superadmin'].includes(req.user.role);
+    const query = isAdmin
+      ? { companyId: req.user.company, ...(req.body.deviceId ? { deviceId: req.body.deviceId } : {}) }
+      : { lecturerId: req.user._id, companyId: req.user.company };
+
+    const device = await Device.findOne(query);
+    if (!device) return res.status(404).json({ message: 'No device found to unlink.' });
+
+    // Block unlink if active session running on this device
+    const active = await AttendanceSession.findOne({ deviceId: device.deviceId, status: 'active' });
+    if (active) {
+      return res.status(409).json({ message: 'Cannot unlink device while an attendance session is active. Stop the session first.' });
+    }
+
+    _auditDevice(req.user, AUDIT_ACTIONS.DELETE, device, { action: 'device_unlinked' }, req);
+    await Device.deleteOne({ _id: device._id });
+    res.json({ success: true, message: 'Device unlinked successfully.' });
+  } catch (err) {
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+};
+
+// ─── RENAME DEVICE ───────────────────────────────────────────────────────────
+exports.renameDevice = async (req, res) => {
+  try {
+    const { deviceName } = req.body;
+    if (!deviceName?.trim()) return res.status(400).json({ message: 'Device name is required.' });
+
+    const isAdmin = ['admin', 'superadmin'].includes(req.user.role);
+    const query = isAdmin
+      ? { companyId: req.user.company, ...(req.body.deviceId ? { deviceId: req.body.deviceId } : {}) }
+      : { lecturerId: req.user._id, companyId: req.user.company };
+
+    const device = await Device.findOneAndUpdate(query, { deviceName: deviceName.trim() }, { new: true });
+    if (!device) return res.status(404).json({ message: 'Device not found or not yours.' });
+
+    res.json({ success: true, deviceName: device.deviceName });
+  } catch (err) {
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+};
+
+// ─── DEVICE ACTIVITY LOG ─────────────────────────────────────────────────────
+// Returns recent synthetic activity entries built from device + session data.
+exports.getDeviceActivity = async (req, res) => {
+  try {
+    const isAdmin = ['admin', 'superadmin'].includes(req.user.role);
+    const query = isAdmin
+      ? { companyId: req.user.company }
+      : { lecturerId: req.user._id, companyId: req.user.company };
+
+    const device = await Device.findOne(query);
+    if (!device) return res.json({ success: true, events: [] });
+
+    // Gather recent sessions for this device
+    const sessions = await AttendanceSession.find({ deviceId: device.deviceId })
+      .sort({ startedAt: -1 }).limit(10).lean();
+
+    const events = [];
+
+    // Device registered
+    events.push({ type: 'linked', label: 'Device registered', at: device.registeredAt, color: 'blue' });
+
+    // Session events
+    for (const s of sessions) {
+      events.push({ type: 'session_start', label: `Session started${s.title ? `: ${s.title}` : ''}`, at: s.startedAt, color: 'green' });
+      if (s.stoppedAt) events.push({ type: 'session_stop', label: `Session ended (${s.stoppedReason || 'manual'})`, at: s.stoppedAt, color: 'gray' });
+    }
+
+    // Last heartbeat
+    if (device.lastHeartbeat) {
+      events.push({ type: 'heartbeat', label: 'Last heartbeat received', at: device.lastHeartbeat, color: 'green' });
+    }
+
+    // Status transitions
+    if (device.status === 'offline' && device.lastHeartbeat) {
+      const secsSince = Math.floor((Date.now() - device.lastHeartbeat.getTime()) / 1000);
+      if (secsSince > 30) {
+        events.push({ type: 'offline', label: 'Device went offline', at: new Date(device.lastHeartbeat.getTime() + 15000), color: 'red' });
+      }
+    }
+
+    // Sort newest first
+    events.sort((a, b) => new Date(b.at) - new Date(a.at));
+
+    res.json({ success: true, events: events.slice(0, 20) });
   } catch (err) {
     res.status(500).json({ message: 'Server error', error: err.message });
   }

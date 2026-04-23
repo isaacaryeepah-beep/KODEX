@@ -32,10 +32,10 @@ const requireActiveSubscription = async (req, res, next) => {
       return next();
     }
 
-    // Lecturer with a valid personal subscription bypasses the company-level
-    // gate — they paid GHS 300 themselves and shouldn't be blocked just because
-    // their institution forgot to renew.
-    if (req.user.role === "lecturer") {
+    // Lecturer and HOD with a valid personal subscription bypass the company-level
+    // gate — they paid themselves and shouldn't be blocked just because their
+    // institution forgot to renew.
+    if (req.user.role === "lecturer" || req.user.role === "hod") {
       const now = Date.now();
       const personalEnd = req.user.subscriptionExpiry ? new Date(req.user.subscriptionExpiry) : null;
       if (personalEnd && personalEnd > now) {
