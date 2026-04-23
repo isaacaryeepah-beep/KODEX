@@ -179,21 +179,39 @@ function _devPairedHTML(d) {
   <div class="dev-card" id="dev-wifi-card">
     <div class="dev-card-header">
       <span class="dev-card-title">WiFi Setup</span>
-      <button class="dev-btn dev-btn-primary dev-btn-sm" id="dev-scan-btn" onclick="_devScanWifi()">⟳ Scan WiFi</button>
     </div>
     ${_devWifiHTML(d)}
+
+    <!-- IP + Scan row -->
+    <div class="dev-wifi-ip-row">
+      <div class="dev-wifi-ip-group">
+        <label class="dev-detail-label" for="dev-esp32-ip">ESP32 IP Address</label>
+        <input type="text" id="dev-esp32-ip" class="dev-wifi-ip-input"
+               value="${_esc(d.localIp || '')}"
+               placeholder="e.g. 192.168.4.1 (AP mode) or 192.168.1.x" />
+      </div>
+      <button class="dev-btn dev-btn-primary dev-btn-sm" id="dev-scan-btn" onclick="_devScanWifi()">⟳ Scan WiFi</button>
+    </div>
+
+    <!-- Scan results (hidden until scan runs) -->
     <div id="dev-wifi-scan-results" style="display:none">
-      <p class="dev-detail-label" style="margin:12px 0 6px">Nearby Networks</p>
+      <p class="dev-detail-label" style="margin:10px 0 6px">Nearby Networks</p>
       <div id="dev-wifi-ssid-list" class="dev-wifi-scan-list"></div>
+
+      <!-- Connect form (hidden until network selected) -->
       <div id="dev-wifi-connect-form" style="display:none;margin-top:12px">
         <div class="dev-wifi-selected-row">
           <span class="dev-wifi-ssid-selected" id="dev-wifi-selected-ssid"></span>
           <button class="dev-btn dev-btn-ghost dev-btn-sm" onclick="_devClearWifiSelection()">✕</button>
         </div>
-        <input type="password" id="dev-wifi-password" class="dev-wifi-password-input" placeholder="WiFi password" autocomplete="new-password" />
-        <button class="dev-btn dev-btn-primary" style="width:100%;margin-top:8px;justify-content:center" id="dev-wifi-connect-btn" onclick="_devConnectWifi()">Connect</button>
+        <input type="password" id="dev-wifi-password" class="dev-wifi-password-input"
+               placeholder="WiFi password" autocomplete="new-password" />
+        <button class="dev-btn dev-btn-primary dev-btn-block" id="dev-wifi-connect-btn"
+                onclick="_devConnectWifi()">Connect</button>
       </div>
-      <div id="dev-wifi-status-msg" style="display:none" class="dev-wifi-status-msg"></div>
+
+      <!-- Status message -->
+      <div id="dev-wifi-status-msg" class="dev-wifi-status-msg" style="display:none"></div>
     </div>
   </div>
 
@@ -217,23 +235,39 @@ ${_devHelpHTML()}`;
 // ── WiFi section ──────────────────────────────────────────────────────────────
 function _devWifiHTML(d) {
   const current = d.currentNetwork;
-  return `
-<div class="dev-status-block" style="margin-bottom:0">
+  const nets    = (d.allowedNetworks || []);
+
+  const currentRow = `
+<div class="dev-status-block" style="margin-bottom:10px">
   <div class="dev-status-row">
     <span class="dev-detail-label">Current Network</span>
-    <span class="dev-detail-value">${current ? _esc(current) : '—'}</span>
+    <span class="dev-detail-value dev-monospace">${current ? _esc(current) : '—'}</span>
   </div>
   <div class="dev-status-row">
-    <span class="dev-detail-label">Status</span>
-    <span>${current ? '<span class="dev-badge dev-badge-green">Connected</span>' : '<span class="dev-badge dev-badge-gray">Not connected</span>'}</span>
-  </div>
-  ${d.apSSID ? `
+    <span class="dev-detail-label">WiFi Status</span>
+    <span>${current
+      ? '<span class="dev-badge dev-badge-green">Connected</span>'
+      : '<span class="dev-badge dev-badge-gray">Not connected</span>'}</span>
+  </div>${d.apSSID ? `
   <div class="dev-status-row">
-    <span class="dev-detail-label">Hotspot SSID</span>
+    <span class="dev-detail-label">Hotspot (AP) SSID</span>
     <span class="dev-detail-value dev-monospace">${_esc(d.apSSID)}</span>
   </div>` : ''}
-</div>
-<p class="dev-wifi-hint">Click <strong>Scan WiFi</strong> to configure a new network on the device.</p>`;
+</div>`;
+
+  const savedRows = nets.length ? `
+<div class="dev-wifi-saved-section">
+  <p class="dev-detail-label" style="margin-bottom:6px">Saved Networks</p>
+  ${nets.map(n => `
+  <div class="dev-wifi-saved-row">
+    <span class="dev-wifi-ssid-name">${_esc(n.ssid)}</span>
+    ${current === n.ssid
+      ? '<span class="dev-badge dev-badge-green" style="font-size:10px">Active</span>'
+      : ''}
+  </div>`).join('')}
+</div>` : '';
+
+  return currentRow + savedRows;
 }
 
 // ── pairing modal HTML ────────────────────────────────────────────────────────
@@ -474,65 +508,80 @@ async function _devScanWifi() {
   const btn      = document.getElementById('dev-scan-btn');
   const results  = document.getElementById('dev-wifi-scan-results');
   const list     = document.getElementById('dev-wifi-ssid-list');
+  const ipInput  = document.getElementById('dev-esp32-ip');
   const statusEl = document.getElementById('dev-wifi-status-msg');
   if (!btn || !results || !list) return;
 
-  btn.disabled = true; btn.textContent = 'Scanning…';
+  const ip = (ipInput ? ipInput.value.trim() : '');
+
+  btn.disabled = true;
+  btn.textContent = 'Scanning…';
   results.style.display = 'block';
   list.innerHTML = '<div class="dev-wifi-scanning">Scanning for networks…</div>';
   if (statusEl) statusEl.style.display = 'none';
   _devClearWifiSelection();
 
   try {
-    const res  = await fetch('/api/devices/my/scan-wifi', {
+    const url = '/api/devices/my/scan-wifi' + (ip ? '?ip=' + encodeURIComponent(ip) : '');
+    const res  = await fetch(url, {
       headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('token') || '') }
     });
     const json = await res.json();
     if (!res.ok) throw new Error(json.message || 'Scan failed');
 
+    // If server confirmed an IP, update the input
+    if (json.deviceIp && ipInput && !ipInput.value.trim()) {
+      ipInput.value = json.deviceIp;
+    }
+
     const networks = json.networks || [];
     if (!networks.length) {
-      list.innerHTML = '<div class="dev-wifi-scanning">No networks found. Make sure the ESP32 is powered on.</div>';
+      list.innerHTML = '<div class="dev-wifi-scanning">No networks found. Ensure the ESP32 is powered on and the IP is correct.</div>';
     } else {
-      // Sort by signal (rssi desc)
       networks.sort((a, b) => (b.rssi || -100) - (a.rssi || -100));
+      // Use data-ssid attribute — safe for SSIDs with any characters
       list.innerHTML = networks.map(n => {
-        const rssi  = n.rssi || 0;
+        const ssid  = n.ssid || n.SSID || '';
+        const rssi  = typeof n.rssi === 'number' ? n.rssi : 0;
         const bars  = rssi > -60 ? 3 : rssi > -75 ? 2 : 1;
-        const lock  = n.open === false || n.encryption ? '🔒' : '';
-        return `<div class="dev-wifi-ssid-item" onclick="_devSelectWifi('${_esc(n.ssid || n.SSID || '')}')">
-          <span class="dev-wifi-ssid-name">${_esc(n.ssid || n.SSID || 'Hidden')}</span>
-          <span class="dev-wifi-ssid-meta">${lock} ${'▂▄▆'.slice(0, bars)} ${rssi ? rssi + ' dBm' : ''}</span>
+        const lock  = (n.open === false || n.authmode || n.encryption) ? '🔒 ' : '';
+        return `<div class="dev-wifi-ssid-item" data-ssid="${_esc(ssid)}" onclick="_devSelectWifi(this)">
+          <span class="dev-wifi-ssid-name">${_esc(ssid || '(Hidden)')}</span>
+          <span class="dev-wifi-ssid-meta">${lock}${'▂▄▆'.slice(0, bars)}${rssi ? ' ' + rssi + ' dBm' : ''}</span>
         </div>`;
       }).join('');
     }
   } catch (e) {
     list.innerHTML = `<div class="dev-wifi-scan-error">${_esc(e.message)}</div>`;
   } finally {
-    btn.disabled = false; btn.textContent = '⟳ Scan WiFi';
+    btn.disabled = false;
+    btn.textContent = '⟳ Scan WiFi';
   }
 }
 
-function _devSelectWifi(ssid) {
+// Called with the clicked <div> element — reads SSID from data attribute
+function _devSelectWifi(el) {
+  const ssid   = el.dataset.ssid || '';
   const form   = document.getElementById('dev-wifi-connect-form');
   const label  = document.getElementById('dev-wifi-selected-ssid');
   const pwdEl  = document.getElementById('dev-wifi-password');
+  const msgEl  = document.getElementById('dev-wifi-status-msg');
   if (!form || !label) return;
+
   label.textContent = ssid;
   form.style.display = 'block';
   if (pwdEl) { pwdEl.value = ''; pwdEl.focus(); }
-  document.getElementById('dev-wifi-status-msg').style.display = 'none';
+  if (msgEl) msgEl.style.display = 'none';
 
-  // Highlight selected row
-  document.querySelectorAll('.dev-wifi-ssid-item').forEach(el => el.classList.remove('dev-wifi-item-selected'));
-  const allItems = document.querySelectorAll('.dev-wifi-ssid-item');
-  allItems.forEach(el => { if (el.querySelector('.dev-wifi-ssid-name')?.textContent === ssid) el.classList.add('dev-wifi-item-selected'); });
+  document.querySelectorAll('.dev-wifi-ssid-item').forEach(item => {
+    item.classList.toggle('dev-wifi-item-selected', item === el);
+  });
 }
 
 function _devClearWifiSelection() {
   const form  = document.getElementById('dev-wifi-connect-form');
   const label = document.getElementById('dev-wifi-selected-ssid');
-  if (form) form.style.display = 'none';
+  if (form)  form.style.display = 'none';
   if (label) label.textContent = '';
   document.querySelectorAll('.dev-wifi-ssid-item').forEach(el => el.classList.remove('dev-wifi-item-selected'));
 }
@@ -540,8 +589,10 @@ function _devClearWifiSelection() {
 async function _devConnectWifi() {
   const ssid     = document.getElementById('dev-wifi-selected-ssid')?.textContent?.trim();
   const password = document.getElementById('dev-wifi-password')?.value?.trim();
+  const deviceIp = document.getElementById('dev-esp32-ip')?.value?.trim() || '';
   const btn      = document.getElementById('dev-wifi-connect-btn');
   const statusEl = document.getElementById('dev-wifi-status-msg');
+
   if (!ssid) return;
   if (!password) { alert('Please enter the WiFi password.'); return; }
 
@@ -557,24 +608,24 @@ async function _devConnectWifi() {
       method: 'POST',
       headers: {
         'Authorization': 'Bearer ' + (localStorage.getItem('token') || ''),
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ ssid, password })
+      body: JSON.stringify({ ssid, password, deviceIp }),
     });
     const json = await res.json();
     if (!res.ok) throw new Error(json.message || 'Failed');
 
-    const ok = json.status === 'connected' || json.status === 'saved';
+    const ok = (json.status === 'connected' || json.status === 'saved');
     if (statusEl) {
-      statusEl.className = `dev-wifi-status-msg ${ok ? 'dev-wifi-status-ok' : 'dev-wifi-status-error'}`;
+      statusEl.className = 'dev-wifi-status-msg ' + (ok ? 'dev-wifi-status-ok' : 'dev-wifi-status-error');
       statusEl.innerHTML = ok
-        ? `✓ ${_esc(json.message)}${json.warning ? `<br><small>${_esc(json.warning)}</small>` : ''}`
-        : `✗ ${_esc(json.message)}`;
+        ? '✓ ' + _esc(json.message) + (json.warning ? '<br><small>' + _esc(json.warning) + '</small>' : '')
+        : '✗ ' + _esc(json.message);
     }
   } catch (e) {
     if (statusEl) {
       statusEl.className = 'dev-wifi-status-msg dev-wifi-status-error';
-      statusEl.textContent = `✗ ${e.message}`;
+      statusEl.textContent = '✗ ' + e.message;
     }
   } finally {
     if (btn) { btn.disabled = false; btn.textContent = 'Connect'; }
@@ -662,10 +713,13 @@ function _devCSS() {
 .dev-badge-amber { background:#fef9c3; color:#d97706; }
 
 /* WiFi */
-.dev-wifi-hint { font-size:12px; color:#94a3b8; margin:10px 0 0; }
 .dev-monospace { font-family:monospace; }
+.dev-wifi-ip-row { display:flex; align-items:flex-end; gap:10px; margin:14px 0 0; }
+.dev-wifi-ip-group { display:flex; flex-direction:column; gap:4px; flex:1; }
+.dev-wifi-ip-input { padding:8px 11px; border:1px solid #e2e8f0; border-radius:9px; font-size:13px; font-family:monospace; outline:none; width:100%; box-sizing:border-box; transition:border .15s; }
+.dev-wifi-ip-input:focus { border-color:#6366f1; }
 .dev-wifi-scan-list { display:flex; flex-direction:column; gap:4px; max-height:220px; overflow-y:auto; border:1px solid #e2e8f0; border-radius:10px; padding:4px; }
-.dev-wifi-ssid-item { display:flex; align-items:center; justify-content:space-between; padding:8px 10px; border-radius:8px; cursor:pointer; transition:background .12s; }
+.dev-wifi-ssid-item { display:flex; align-items:center; justify-content:space-between; padding:8px 10px; border-radius:8px; cursor:pointer; transition:background .12s; user-select:none; }
 .dev-wifi-ssid-item:hover { background:#f1f5f9; }
 .dev-wifi-item-selected { background:#eff6ff !important; border:1px solid #bfdbfe; }
 .dev-wifi-ssid-name { font-size:13px; font-weight:600; color:#1e293b; }
@@ -676,10 +730,13 @@ function _devCSS() {
 .dev-wifi-ssid-selected { font-size:13px; font-weight:700; color:#1e293b; font-family:monospace; }
 .dev-wifi-password-input { width:100%; box-sizing:border-box; padding:9px 12px; border:1px solid #e2e8f0; border-radius:9px; font-size:13px; outline:none; transition:border .15s; }
 .dev-wifi-password-input:focus { border-color:#6366f1; }
+.dev-btn-block { width:100%; justify-content:center; margin-top:8px; }
 .dev-wifi-status-msg { margin-top:10px; padding:10px 12px; border-radius:9px; font-size:13px; line-height:1.5; }
 .dev-wifi-status-connecting { background:#eff6ff; color:#1d4ed8; }
 .dev-wifi-status-ok { background:#f0fdf4; color:#15803d; }
 .dev-wifi-status-error { background:#fef2f2; color:#dc2626; }
+.dev-wifi-saved-section { margin-top:10px; padding-top:10px; border-top:1px solid #f1f5f9; }
+.dev-wifi-saved-row { display:flex; align-items:center; gap:8px; padding:5px 0; }
 .dev-empty-note { font-size:13px; color:#94a3b8; text-align:center; padding:16px 0; }
 
 /* Timeline */
