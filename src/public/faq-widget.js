@@ -246,17 +246,31 @@
         <button id="kfaq-close-btn" aria-label="Close">&#x2715;</button>
       </div>
 
-      <!-- Category filter chips -->
+      <!-- Category filter chips — mode-filtered by JS on open -->
       <div id="kfaq-category-bar">
         <span class="kfaq-cat-chip active" data-cat="">All</span>
+        <!-- shared -->
         <span class="kfaq-cat-chip" data-cat="attendance">Attendance</span>
-        <span class="kfaq-cat-chip" data-cat="snapquiz">SnapQuiz</span>
-        <span class="kfaq-cat-chip" data-cat="assignments">Assignments</span>
-        <span class="kfaq-cat-chip" data-cat="billing">Billing</span>
-        <span class="kfaq-cat-chip" data-cat="hr">HR</span>
         <span class="kfaq-cat-chip" data-cat="meetings">Meetings</span>
+        <span class="kfaq-cat-chip" data-cat="billing">Billing</span>
         <span class="kfaq-cat-chip" data-cat="gps_attendance">GPS</span>
         <span class="kfaq-cat-chip" data-cat="password_reset">Password</span>
+        <!-- corporate-only -->
+        <span class="kfaq-cat-chip" data-cat="hr" data-mode="corporate">HR</span>
+        <span class="kfaq-cat-chip" data-cat="leave" data-mode="corporate">Leave</span>
+        <span class="kfaq-cat-chip" data-cat="expenses" data-mode="corporate">Expenses</span>
+        <span class="kfaq-cat-chip" data-cat="timesheet" data-mode="corporate">Timesheet</span>
+        <span class="kfaq-cat-chip" data-cat="performance" data-mode="corporate">Performance</span>
+        <span class="kfaq-cat-chip" data-cat="messages" data-mode="corporate">Messages</span>
+        <span class="kfaq-cat-chip" data-cat="support" data-mode="corporate">Support</span>
+        <!-- academic-only -->
+        <span class="kfaq-cat-chip" data-cat="courses" data-mode="academic">Courses</span>
+        <span class="kfaq-cat-chip" data-cat="students" data-mode="academic">Students</span>
+        <span class="kfaq-cat-chip" data-cat="sessions" data-mode="academic">Sessions</span>
+        <span class="kfaq-cat-chip" data-cat="snapquiz" data-mode="academic">SnapQuiz</span>
+        <span class="kfaq-cat-chip" data-cat="assignments" data-mode="academic">Assignments</span>
+        <span class="kfaq-cat-chip" data-cat="grade_book" data-mode="academic">Grade Book</span>
+        <span class="kfaq-cat-chip" data-cat="announcements" data-mode="academic">Announcements</span>
       </div>
 
       <!-- Messages -->
@@ -481,14 +495,42 @@
     }
   });
 
+  // ── Mode helpers ──────────────────────────────────────────────────────────
+  function _getMode() {
+    if (window.currentUser && window.currentUser.company && window.currentUser.company.mode) {
+      return window.currentUser.company.mode;
+    }
+    try {
+      var tok = localStorage.getItem("kodex_token") || "";
+      var payload = JSON.parse(atob(tok.split(".")[1]));
+      return payload.mode || (payload.company && payload.company.mode) || null;
+    } catch (_) { return null; }
+  }
+
+  function _filterChips() {
+    var mode = _getMode();
+    if (!mode) return;
+    document.querySelectorAll(".kfaq-cat-chip[data-mode]").forEach(function (chip) {
+      chip.style.display = (chip.dataset.mode === mode) ? "" : "none";
+    });
+  }
+
+  function _welcomeMsg() {
+    var mode = _getMode();
+    if (mode === "corporate") return "Hi! I'm your KODEX assistant. Ask me about attendance, clock in/out, leave, expenses, timesheet, performance, meetings, or any other feature.";
+    if (mode === "academic")  return "Hi! I'm your KODEX assistant. Ask me about courses, students, sessions, quizzes, assignments, grade book, or any other feature.";
+    return "Hi! I'm your KODEX AI assistant. Ask me anything about the platform.";
+  }
+
   // ── Toggle open/close ─────────────────────────────────────────────────────
   function openWidget() {
     isOpen = true;
     popup.style.display = "flex";
     badge.style.display = "none";
     badge.textContent   = "0";
+    _filterChips();
     if (messages.children.length === 0) {
-      addMessage("Hi! I'm your KODEX AI assistant. Ask me anything about attendance, quizzes, assignments, billing, or any other KODEX feature.", "bot");
+      addMessage(_welcomeMsg(), "bot");
     }
     input.focus();
   }

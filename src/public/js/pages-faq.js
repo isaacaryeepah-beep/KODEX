@@ -10,10 +10,13 @@
 // ════════════════════════════════════════════════════════════════════════════
 
 const _FAQ_CATEGORIES_CORPORATE = new Set([
-  'attendance', 'gps_attendance', 'hr', 'meetings', 'billing', 'password_reset', 'general',
+  'attendance', 'gps_attendance', 'hr', 'leave', 'expenses', 'timesheet',
+  'performance', 'meetings', 'messages', 'support', 'billing', 'password_reset', 'general',
 ]);
 const _FAQ_CATEGORIES_ACADEMIC = new Set([
-  'snapquiz', 'assignments', 'attendance', 'meetings', 'billing', 'password_reset', 'general',
+  'attendance', 'gps_attendance', 'courses', 'students', 'sessions',
+  'snapquiz', 'assignments', 'grade_book', 'announcements',
+  'meetings', 'billing', 'password_reset', 'general',
 ]);
 
 function _faqAllowedCategories() {
@@ -26,15 +29,29 @@ function _faqAllowedCategories() {
 }
 
 const _FAQ_ALL_CATEGORIES = [
+  // shared
   { value: 'attendance',     label: 'Attendance' },
-  { value: 'snapquiz',       label: 'SnapQuiz' },
-  { value: 'assignments',    label: 'Assignments' },
-  { value: 'billing',        label: 'Billing' },
-  { value: 'hr',             label: 'HR' },
-  { value: 'meetings',       label: 'Meetings' },
   { value: 'gps_attendance', label: 'GPS Attendance' },
+  { value: 'meetings',       label: 'Meetings' },
+  { value: 'billing',        label: 'Billing' },
   { value: 'password_reset', label: 'Password Reset' },
   { value: 'general',        label: 'General' },
+  // corporate-only
+  { value: 'hr',             label: 'HR & Clock In/Out',  mode: 'corporate' },
+  { value: 'leave',          label: 'Leave',              mode: 'corporate' },
+  { value: 'expenses',       label: 'Expenses',           mode: 'corporate' },
+  { value: 'timesheet',      label: 'Timesheet',          mode: 'corporate' },
+  { value: 'performance',    label: 'Performance',        mode: 'corporate' },
+  { value: 'messages',       label: 'Messages',           mode: 'corporate' },
+  { value: 'support',        label: 'Support',            mode: 'corporate' },
+  // academic-only
+  { value: 'courses',        label: 'Courses',            mode: 'academic' },
+  { value: 'students',       label: 'Students',           mode: 'academic' },
+  { value: 'sessions',       label: 'Sessions',           mode: 'academic' },
+  { value: 'snapquiz',       label: 'SnapQuiz',           mode: 'academic' },
+  { value: 'assignments',    label: 'Assignments',        mode: 'academic' },
+  { value: 'grade_book',     label: 'Grade Book',         mode: 'academic' },
+  { value: 'announcements',  label: 'Announcements',      mode: 'academic' },
 ];
 
 async function renderFAQCenter() {
