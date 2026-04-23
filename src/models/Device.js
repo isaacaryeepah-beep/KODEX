@@ -32,6 +32,7 @@ const deviceSchema = new mongoose.Schema({
   mode:           { type: String, enum: ['station', 'access_point', 'hybrid'], default: 'hybrid' },
   currentNetwork: { type: String, default: null },
   apSSID:         { type: String, default: null },
+  localIp:        { type: String, default: null },
   status:         { type: String, enum: ['online', 'offline'], default: 'offline' },
   lastHeartbeat:  { type: Date, default: null },
 

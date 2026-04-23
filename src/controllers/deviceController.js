@@ -200,7 +200,7 @@ exports.registerDevice = async (req, res) => {
 // ─── HEARTBEAT ───────────────────────────────────────────────────────────────
 exports.heartbeat = async (req, res) => {
   try {
-    const { deviceId, currentNetwork, mode } = req.body;
+    const { deviceId, currentNetwork, mode, localIp } = req.body;
 
     const device = await Device.findOne({ deviceId });
     if (!device) return res.status(404).json({ message: 'Device not found' });
@@ -215,6 +215,7 @@ exports.heartbeat = async (req, res) => {
     device.status         = 'online';
     device.currentNetwork = currentNetwork || device.currentNetwork;
     device.mode           = mode || device.mode;
+    if (localIp) device.localIp = localIp;
     await device.save();
 
     // Log heartbeat-restored event
@@ -516,6 +517,103 @@ exports.getDeviceActivity = async (req, res) => {
     events.sort((a, b) => new Date(b.at) - new Date(a.at));
 
     res.json({ success: true, events: events.slice(0, 20) });
+  } catch (err) {
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+};
+
+// ─── SCAN WIFI (proxy to ESP32) ──────────────────────────────────────────────
+// Lecturer calls this; server proxies to the ESP32's local HTTP server.
+// ESP32 must be reachable from the server (same LAN or AP mode with routing).
+exports.scanWifi = async (req, res) => {
+  try {
+    const device = await Device.findOne({ lecturerId: req.user._id });
+    if (!device) return res.status(404).json({ message: 'No device linked to your account.' });
+
+    if (!device.localIp) {
+      return res.status(400).json({
+        message: 'Device IP not known. Power on the ESP32 and wait for it to send a heartbeat, then try again.',
+      });
+    }
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 8000);
+    try {
+      const esp32Res = await fetch(`http://${device.localIp}/wifi/scan`, { signal: controller.signal });
+      clearTimeout(timer);
+      if (!esp32Res.ok) throw new Error(`ESP32 returned ${esp32Res.status}`);
+      const body = await esp32Res.json();
+      // ESP32 may return { networks: [...] } or a bare array
+      const networks = Array.isArray(body) ? body : (body.networks || []);
+      res.json({ success: true, networks });
+    } catch (proxyErr) {
+      clearTimeout(timer);
+      res.status(502).json({
+        message: 'Could not reach the device. Ensure the ESP32 is powered on and on the same network.',
+        error: proxyErr.message,
+      });
+    }
+  } catch (err) {
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+};
+
+// ─── CONFIGURE WIFI (proxy to ESP32 + persist credentials) ───────────────────
+// Body: { deviceId?, ssid, password }
+exports.configureWifi = async (req, res) => {
+  try {
+    const { ssid, password } = req.body;
+    if (!ssid || !password) {
+      return res.status(400).json({ message: 'ssid and password are required.' });
+    }
+
+    const device = await Device.findOne({ lecturerId: req.user._id });
+    if (!device) return res.status(404).json({ message: 'No device linked to your account.' });
+
+    // Persist credentials in DB (upsert by SSID)
+    const idx = device.allowedNetworks.findIndex(n => n.ssid === ssid);
+    if (idx >= 0) {
+      device.allowedNetworks[idx].password = password;
+      device.allowedNetworks[idx].priority = 10;
+    } else {
+      device.allowedNetworks.push({ ssid, password, priority: 10 });
+    }
+    await device.save();
+
+    // Forward to ESP32 if its IP is known
+    if (device.localIp) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 12000);
+      try {
+        const esp32Res = await fetch(`http://${device.localIp}/wifi/configure`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ssid, password }),
+          signal: controller.signal,
+        });
+        clearTimeout(timer);
+        const body = await esp32Res.json().catch(() => ({}));
+        return res.json({
+          success: true,
+          status: body.status || (esp32Res.ok ? 'connected' : 'failed'),
+          message: body.message || (esp32Res.ok ? 'WiFi configured successfully.' : 'ESP32 reported an error.'),
+        });
+      } catch (proxyErr) {
+        clearTimeout(timer);
+        return res.json({
+          success: true,
+          status: 'saved',
+          message: 'Credentials saved. Device will apply them on next boot.',
+          warning: 'Could not reach device directly — it may have restarted to apply the new network.',
+        });
+      }
+    }
+
+    res.json({
+      success: true,
+      status: 'saved',
+      message: 'Credentials saved. Power on the ESP32 — it will connect automatically.',
+    });
   } catch (err) {
     res.status(500).json({ message: 'Server error', error: err.message });
   }

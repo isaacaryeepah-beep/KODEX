@@ -26,6 +26,10 @@ router.post('/devices/pairing-code',  authenticate, deviceCtrl.generatePairingCo
 router.post('/devices/pair',          deviceCtrl.pairDevice); // no JWT — authenticated via pairing code
 router.get('/devices/my/activity',    authenticate, companyIsolation, deviceCtrl.getDeviceActivity);
 
+// WiFi setup (proxied to ESP32)
+router.get('/devices/my/scan-wifi',   authenticate, companyIsolation, deviceCtrl.scanWifi);
+router.post('/devices/configure-wifi', authenticate, companyIsolation, deviceCtrl.configureWifi);
+
 // ─── SESSION ROUTES ───────────────────────────────────────────────────────────
 router.post('/sessions/start',               authenticate, companyIsolation, sessionCtrl.startSession);
 router.post('/sessions/end',                 authenticate, companyIsolation, sessionCtrl.endSession);
