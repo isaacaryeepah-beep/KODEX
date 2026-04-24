@@ -32,10 +32,11 @@ const requireActiveSubscription = async (req, res, next) => {
       return next();
     }
 
-    // Lecturer and HOD with a valid personal subscription bypass the company-level
-    // gate — they paid themselves and shouldn't be blocked just because their
-    // institution forgot to renew.
-    if (req.user.role === "lecturer" || req.user.role === "hod") {
+    // Lecturer, HOD, and Manager with a valid personal subscription bypass the
+    // company-level gate — they paid themselves and shouldn't be blocked just
+    // because their institution forgot to renew.
+    const selfPayRoles = ["lecturer", "hod", "manager"];
+    if (selfPayRoles.includes(req.user.role)) {
       const now = Date.now();
       const personalEnd = req.user.subscriptionExpiry ? new Date(req.user.subscriptionExpiry) : null;
       if (personalEnd && personalEnd > now) {
@@ -48,7 +49,7 @@ const requireActiveSubscription = async (req, res, next) => {
     return res.status(403).json({
       error: "Subscription required",
       subscriptionRequired: true,
-      paymentAvailable: req.user.role === "lecturer", // lecturers can pay personally
+      paymentAvailable: ["lecturer", "manager"].includes(req.user.role),
       message: isLecturer
         ? company.trialUsed
           ? "Your trial has ended. Please subscribe to continue using KODEX."
