@@ -2057,13 +2057,15 @@ function showDashboard(data) {
       const status   = userTrial.status;
 
       if (status === 'active') {
+        const _subMode  = currentUser?.company?.mode || 'academic';
+        const _planTitle = _subMode === 'corporate' ? 'Monthly Plan Active' : 'Semester Plan Active';
         _expiredEl.style.display = 'none';
         _bannerEl.className = 'trial-banner sub--active';
         _bannerEl.innerHTML = `
           <div class="sub-banner-left">
             <div class="sub-banner-icon sub-banner-icon--active">✓</div>
             <div class="sub-banner-text">
-              <span class="sub-banner-title">Subscription Active</span>
+              <span class="sub-banner-title">${_planTitle}</span>
               <span class="sub-banner-sep">·</span>
               <span class="sub-banner-detail">${_dayLabel(daysLeft)} remaining</span>
             </div>
@@ -2093,7 +2095,7 @@ function showDashboard(data) {
         _bannerEl.style.display = 'flex';
 
       } else {
-        const _mode  = currentUser?.company?.mode || 'academic';
+        const _mode  = currentUser?.company?.mode || (currentUser?.role === 'manager' ? 'corporate' : 'academic');
         const _label = _mode === 'corporate' ? '₵150/month' : '₵300/semester';
         _bannerEl.style.display = 'none';
         _expiredEl.className = 'trial-expired-banner';
@@ -9788,8 +9790,8 @@ async function markAttendance() {
 
 async function paySubscription() {
   try {
-    // Determine plan from company mode
-    const mode   = currentUser?.company?.mode || 'academic';
+    // Determine plan from company mode; fallback by role so managers never pay for semester plan
+    const mode   = currentUser?.company?.mode || (currentUser?.role === 'manager' ? 'corporate' : 'academic');
     const planId = mode === 'corporate' ? 'monthly' : 'semester';
 
     // Show loading state on button
@@ -9827,8 +9829,8 @@ async function renderSubscription() {
       ? new Date(ut.subscriptionExpiry).toLocaleDateString('en-GB', { day:'numeric', month:'long', year:'numeric' })
       : '—';
 
-    // Determine plan based on company mode — strictly isolated
-    const mode       = currentUser?.company?.mode || 'academic';
+    // Determine plan based on company mode; fallback by role so managers never see semester plan
+    const mode       = currentUser?.company?.mode || (currentUser?.role === 'manager' ? 'corporate' : 'academic');
     const isCorp     = mode === 'corporate';
     const planName   = isCorp ? 'Monthly Plan'    : 'Semester Plan';
     const planPrice  = isCorp ? '₵150'            : '₵300';
