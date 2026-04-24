@@ -64,10 +64,7 @@ function _devPageHTML(device) {
     <div class="dev-header-actions">
       <button class="dev-btn dev-btn-ghost" onclick="_devRefresh()">↻ Refresh</button>
       <button class="dev-btn dev-btn-danger" onclick="_devUnlink()">Unlink Device</button>
-    </div>` : `
-    <div class="dev-header-actions">
-      <button class="dev-btn dev-btn-primary" onclick="_devShowPairing()">+ Pair Device</button>
-    </div>`}
+    </div>` : ''}
   </div>
 
   ${!hasDevice ? _devNoPairedHTML() : _devPairedHTML(device)}
@@ -79,14 +76,76 @@ function _devPageHTML(device) {
 <style>${_devCSS()}</style>`;
 }
 
-// ── no device view ─────────────────────────────────────────────────────────────
+// ── no device view ────────────────────────────────────────────────────────────
 function _devNoPairedHTML() {
   return `
-<div class="dev-empty-state">
-  <div class="dev-empty-icon">📱</div>
-  <h2 class="dev-empty-title">No Device Linked</h2>
-  <p class="dev-empty-desc">Link your ESP32 device to enable device-based attendance tracking in your classroom.</p>
-  <button class="dev-btn dev-btn-primary dev-btn-lg" onclick="_devShowPairing()">Pair a Device</button>
+<!-- Setup steps guide -->
+<div class="dev-setup-banner">
+  <div class="dev-setup-banner-icon">⚡</div>
+  <div>
+    <div class="dev-setup-banner-title">First-time setup — follow these two steps</div>
+    <div class="dev-setup-banner-sub">Configure WiFi on your ESP32 first, then pair it to your account.</div>
+  </div>
+</div>
+
+<div class="dev-setup-grid">
+
+  <!-- Step 1: WiFi Setup -->
+  <div class="dev-card dev-setup-card">
+    <div class="dev-setup-step-badge">Step 1</div>
+    <div class="dev-card-header" style="margin-top:8px">
+      <span class="dev-card-title">WiFi Setup</span>
+    </div>
+    <p class="dev-setup-hint">
+      Power on the ESP32. It starts in hotspot mode (<code>KODEX-ESP32-XXXX</code>).
+      Connect your device to that hotspot, then enter its IP below
+      (<strong>192.168.4.1</strong> is the default AP address).
+    </p>
+
+    <!-- IP input + Scan -->
+    <div class="dev-wifi-ip-row">
+      <div class="dev-wifi-ip-group">
+        <label class="dev-detail-label" for="dev-esp32-ip">ESP32 IP Address</label>
+        <input type="text" id="dev-esp32-ip" class="dev-wifi-ip-input"
+               value="192.168.4.1"
+               placeholder="192.168.4.1" />
+      </div>
+      <button class="dev-btn dev-btn-primary dev-btn-sm" id="dev-scan-btn"
+              onclick="_devScanWifi()">⟳ Scan WiFi</button>
+    </div>
+
+    <!-- Scan results -->
+    <div id="dev-wifi-scan-results" style="display:none">
+      <p class="dev-detail-label" style="margin:10px 0 6px">Nearby Networks</p>
+      <div id="dev-wifi-ssid-list" class="dev-wifi-scan-list"></div>
+      <div id="dev-wifi-connect-form" style="display:none;margin-top:12px">
+        <div class="dev-wifi-selected-row">
+          <span class="dev-wifi-ssid-selected" id="dev-wifi-selected-ssid"></span>
+          <button class="dev-btn dev-btn-ghost dev-btn-sm" onclick="_devClearWifiSelection()">✕</button>
+        </div>
+        <input type="password" id="dev-wifi-password" class="dev-wifi-password-input"
+               placeholder="WiFi password" autocomplete="new-password" />
+        <button class="dev-btn dev-btn-primary dev-btn-block" id="dev-wifi-connect-btn"
+                onclick="_devConnectWifi()">Connect</button>
+      </div>
+      <div id="dev-wifi-status-msg" class="dev-wifi-status-msg" style="display:none"></div>
+    </div>
+  </div>
+
+  <!-- Step 2: Pair Device -->
+  <div class="dev-card dev-setup-card">
+    <div class="dev-setup-step-badge dev-setup-step-badge--2">Step 2</div>
+    <div class="dev-card-header" style="margin-top:8px">
+      <span class="dev-card-title">Pair Your Device</span>
+    </div>
+    <p class="dev-setup-hint">
+      Once the ESP32 is connected to WiFi it will appear on your school network.
+      Generate a pairing code and enter it on the device to link it to your account.
+    </p>
+    <button class="dev-btn dev-btn-primary dev-btn-block" style="margin-top:auto"
+            onclick="_devShowPairing()">+ Generate Pairing Code</button>
+  </div>
+
 </div>`;
 }
 
@@ -754,7 +813,20 @@ function _devCSS() {
 .dev-tl-label { font-size:13px; color:#374151; font-weight:500; }
 .dev-tl-time { font-size:11px; color:#94a3b8; }
 
-/* Empty state */
+/* Setup flow (no device state) */
+.dev-setup-banner { display:flex; align-items:center; gap:14px; background:#eff6ff; border:1px solid #bfdbfe; border-radius:14px; padding:16px 20px; margin-bottom:20px; }
+.dev-setup-banner-icon { font-size:26px; flex-shrink:0; }
+.dev-setup-banner-title { font-size:14px; font-weight:700; color:#1e3a8a; margin-bottom:2px; }
+.dev-setup-banner-sub { font-size:12px; color:#3b82f6; }
+.dev-setup-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; align-items:start; }
+@media(max-width:700px){ .dev-setup-grid { grid-template-columns:1fr; } }
+.dev-setup-card { display:flex; flex-direction:column; min-height:320px; }
+.dev-setup-step-badge { display:inline-block; background:#6366f1; color:#fff; font-size:11px; font-weight:700; padding:3px 10px; border-radius:20px; width:fit-content; }
+.dev-setup-step-badge--2 { background:#0ea5e9; }
+.dev-setup-hint { font-size:13px; color:#64748b; line-height:1.65; margin:0 0 14px; }
+.dev-setup-hint code { background:#f1f5f9; padding:1px 5px; border-radius:4px; font-size:12px; color:#334155; }
+
+/* Empty state (fallback) */
 .dev-empty-state { text-align:center; padding:64px 24px; background:#fff; border-radius:20px; box-shadow:0 1px 4px rgba(0,0,0,.06); }
 .dev-empty-icon { font-size:48px; margin-bottom:16px; }
 .dev-empty-title { font-size:20px; font-weight:800; color:#1e293b; margin:0 0 8px; }

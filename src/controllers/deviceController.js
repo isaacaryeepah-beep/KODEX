@@ -528,20 +528,27 @@ exports.getDeviceActivity = async (req, res) => {
 // Optional ?ip= overrides the stored localIp and saves it to the device.
 exports.scanWifi = async (req, res) => {
   try {
-    const device = await Device.findOne({ lecturerId: req.user._id });
-    if (!device) return res.status(404).json({ message: 'No device linked to your account.' });
+    // IP can come from: ?ip= query param (explicit) or stored on linked device
+    const ipOverride = (req.query.ip || '').trim();
+    let ip = ipOverride;
 
-    // Use ?ip= query param if provided; fall back to stored localIp
-    const ip = (req.query.ip || '').trim() || device.localIp;
+    if (!ip) {
+      const device = await Device.findOne({ lecturerId: req.user._id });
+      if (device?.localIp) ip = device.localIp;
+    }
+
     if (!ip) {
       return res.status(400).json({
-        message: 'Device IP not known. Enter the ESP32 IP address (e.g. 192.168.4.1 for AP mode) and try again.',
+        message: 'Enter the ESP32 IP address (e.g. 192.168.4.1 for AP/hotspot mode) and try again.',
       });
     }
 
-    // Persist the IP if it changed
-    if (ip !== device.localIp) {
-      await Device.findByIdAndUpdate(device._id, { localIp: ip });
+    // If a device is linked and the IP changed, save it
+    if (ipOverride) {
+      const device = await Device.findOne({ lecturerId: req.user._id });
+      if (device && device.localIp !== ip) {
+        await Device.findByIdAndUpdate(device._id, { localIp: ip });
+      }
     }
 
     const controller = new AbortController();
@@ -556,7 +563,7 @@ exports.scanWifi = async (req, res) => {
     } catch (proxyErr) {
       clearTimeout(timer);
       res.status(502).json({
-        message: 'Could not reach the ESP32. Check the IP address and ensure the device is powered on and reachable.',
+        message: 'Could not reach the ESP32. Check the IP and ensure the device is powered on and reachable.',
         error: proxyErr.message,
       });
     }
@@ -576,21 +583,26 @@ exports.configureWifi = async (req, res) => {
     }
 
     const device = await Device.findOne({ lecturerId: req.user._id });
-    if (!device) return res.status(404).json({ message: 'No device linked to your account.' });
 
-    // Resolve IP: body override → stored localIp
-    const ip = (deviceIp || '').trim() || device.localIp;
+    // Resolve IP: body override → stored localIp (device may not exist yet)
+    const ip = (deviceIp || '').trim() || (device ? device.localIp : null);
 
-    // Persist credentials in DB (upsert by SSID) and save IP override if provided
-    const idx = device.allowedNetworks.findIndex(n => n.ssid === ssid);
-    if (idx >= 0) {
-      device.allowedNetworks[idx].password = password;
-      device.allowedNetworks[idx].priority = 10;
-    } else {
-      device.allowedNetworks.push({ ssid, password, priority: 10 });
+    if (!ip && !device) {
+      return res.status(400).json({ message: 'Enter the ESP32 IP address — the device is not linked yet.' });
     }
-    if (ip && ip !== device.localIp) device.localIp = ip;
-    await device.save();
+
+    // Persist credentials in DB only if device is already linked
+    if (device) {
+      const idx = device.allowedNetworks.findIndex(n => n.ssid === ssid);
+      if (idx >= 0) {
+        device.allowedNetworks[idx].password = password;
+        device.allowedNetworks[idx].priority = 10;
+      } else {
+        device.allowedNetworks.push({ ssid, password, priority: 10 });
+      }
+      if (ip && ip !== device.localIp) device.localIp = ip;
+      await device.save();
+    }
 
     if (!ip) {
       return res.json({
