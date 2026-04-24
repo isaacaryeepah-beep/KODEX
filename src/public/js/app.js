@@ -2057,8 +2057,10 @@ function showDashboard(data) {
       const status   = userTrial.status;
 
       if (status === 'active') {
-        const _subMode  = currentUser?.company?.mode || 'academic';
+        const _subMode   = currentUser?.company?.mode || 'academic';
         const _planTitle = _subMode === 'corporate' ? 'Monthly Plan Active' : 'Semester Plan Active';
+        const _planDays  = _subMode === 'corporate' ? 30 : 112;
+        const _displayDays = Math.min(daysLeft, _planDays);
         _expiredEl.style.display = 'none';
         _bannerEl.className = 'trial-banner sub--active';
         _bannerEl.innerHTML = `
@@ -2067,7 +2069,7 @@ function showDashboard(data) {
             <div class="sub-banner-text">
               <span class="sub-banner-title">${_planTitle}</span>
               <span class="sub-banner-sep">·</span>
-              <span class="sub-banner-detail">${_dayLabel(daysLeft)} remaining</span>
+              <span class="sub-banner-detail">${_dayLabel(_displayDays)} remaining</span>
             </div>
           </div>
           <div class="sub-banner-right">
@@ -9823,15 +9825,18 @@ async function renderSubscription() {
   try {
     const meData  = await api('/api/auth/me');
     const ut      = meData.userTrial || {};
-    const status   = ut.status   || 'expired';
-    const daysLeft = ut.daysLeft  || 0;
+    const status    = ut.status   || 'expired';
+    const rawDays   = ut.daysLeft || 0;
+    // Determine plan based on company mode; fallback by role so managers never see semester plan
+    const mode       = currentUser?.company?.mode || (currentUser?.role === 'manager' ? 'corporate' : 'academic');
+    const isCorp     = mode === 'corporate';
+    // Cap displayed days at plan maximum — corporate is strictly 30 days per period
+    const _planMax  = isCorp ? 30 : 112;
+    const daysLeft  = Math.min(rawDays, _planMax);
     const expiry   = ut.subscriptionExpiry
       ? new Date(ut.subscriptionExpiry).toLocaleDateString('en-GB', { day:'numeric', month:'long', year:'numeric' })
       : '—';
 
-    // Determine plan based on company mode; fallback by role so managers never see semester plan
-    const mode       = currentUser?.company?.mode || (currentUser?.role === 'manager' ? 'corporate' : 'academic');
-    const isCorp     = mode === 'corporate';
     const planName   = isCorp ? 'Monthly Plan'    : 'Semester Plan';
     const planPrice  = isCorp ? '₵150'            : '₵300';
     const planPeriod = isCorp ? '30 days / month' : '1 semester (16 weeks)';

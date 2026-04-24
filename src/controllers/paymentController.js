@@ -219,10 +219,12 @@ exports.verifyPaystackSubscription = async (req, res) => {
     if (!user) return res.status(404).json({ error: "User not found" });
 
     const now     = new Date();
-    const baseDate =
-      user.subscriptionExpiry && new Date(user.subscriptionExpiry) > now
-        ? new Date(user.subscriptionExpiry)
-        : now;
+    // Corporate monthly plan always starts fresh from today (strictly 30 days per payment).
+    // Academic semester plan stacks on existing expiry if still active.
+    const existingExpiry = user.subscriptionExpiry ? new Date(user.subscriptionExpiry) : null;
+    const baseDate = (planInfo.mode === 'corporate')
+      ? now
+      : (existingExpiry && existingExpiry > now ? existingExpiry : now);
 
     const newExpiry = addDays(baseDate, planInfo.days);
 
@@ -298,12 +300,13 @@ exports.paystackWebhook = async (req, res) => {
       return res.status(200).json({ received: true, note: "Already applied" });
     }
 
-    const wPlanInfo = PLANS[meta.plan];
-    const now       = new Date();
-    const baseDate  = user.subscriptionExpiry && new Date(user.subscriptionExpiry) > now
-      ? new Date(user.subscriptionExpiry)
-      : now;
-    const newExpiry = addDays(baseDate, wPlanInfo.days);
+    const wPlanInfo      = PLANS[meta.plan];
+    const now            = new Date();
+    const wExistingExp   = user.subscriptionExpiry ? new Date(user.subscriptionExpiry) : null;
+    const wBaseDate      = (wPlanInfo.mode === 'corporate')
+      ? now
+      : (wExistingExp && wExistingExp > now ? wExistingExp : now);
+    const newExpiry = addDays(wBaseDate, wPlanInfo.days);
 
     user.subscriptionExpiry   = newExpiry;
     user.subscriptionStatus   = "active";
