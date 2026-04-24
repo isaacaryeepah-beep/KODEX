@@ -421,30 +421,11 @@ async function renderPayroll() {
       return { emp, leaveDays };
     });
 
-    const exportCSV = () => {
-      const csvRows = [['Name','Employee ID','Department','Leave Days (Month)','Status']];
-      rows.forEach(r => csvRows.push([r.emp.name, r.emp.employeeId||'', r.emp.department||'', r.leaveDays, r.emp.isActive?'Active':'Inactive']));
-      const blob = new Blob([csvRows.map(r=>r.map(v=>`"${v}"`).join(',')).join('\n')], {type:'text/csv'});
-      const a = document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=`payroll_${period}.csv`; a.click();
-    };
-    window._exportPayrollCSV = exportCSV;
-
-    const exportFull = () => {
-      window.open(`/api/advanced/payroll-export?period=${period}`, '_blank');
-    };
-    window._exportPayrollFull = exportFull;
-
     content.innerHTML = `
       <div style="display:flex;flex-direction:column;gap:16px">
-        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
-          <div>
-            <h2>Payroll Summary</h2>
-            <p style="font-size:13px;color:var(--text-muted)">Period: <strong>${period}</strong></p>
-          </div>
-          <div style="display:flex;gap:8px">
-            <button class="btn btn-secondary btn-sm" onclick="window._exportPayrollCSV()">⬇ Export CSV</button>
-            <button class="btn btn-primary btn-sm" onclick="window._exportPayrollFull()">⬇ Full Payroll Export</button>
-          </div>
+        <div>
+          <h2>Payroll Summary</h2>
+          <p style="font-size:13px;color:var(--text-muted)">Period: <strong>${period}</strong> · Read-only view</p>
         </div>
 
         <!-- Summary cards -->
@@ -464,15 +445,6 @@ async function renderPayroll() {
           <div class="card" style="text-align:center;padding:14px;border-top:3px solid #6366f1">
             <div style="font-size:24px;font-weight:800;color:#6366f1">${STANDARD}h</div>
             <div style="font-size:11px;color:var(--text-muted)">Standard Hours/Month</div>
-          </div>
-        </div>
-
-        <!-- Note about full payroll -->
-        <div class="card" style="background:#f0fdf4;border:1px solid #bbf7d0;padding:14px">
-          <div style="font-size:13px;color:#15803d;font-weight:600">💡 Full Payroll Export</div>
-          <div style="font-size:12px;color:#166534;margin-top:4px">
-            Click "Full Payroll Export" to download a complete CSV with approved timesheet hours, overtime calculations, and expense reimbursements for ${period}.
-            Only employees with <strong>approved timesheets</strong> appear in the full export.
           </div>
         </div>
 
@@ -683,7 +655,6 @@ buildSidebar = function() {
     { id: 'dashboard',       label: 'Dashboard',      icon: '<rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>' },
     { id: 'live-attendance', label: 'Live Attendance', icon: '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>' },
     { id: 'users',           label: 'Team',            icon: '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>' },
-    { id: 'sessions',        label: 'Sessions',        icon: '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>' },
     { id: 'shifts',          label: 'Shifts',          icon: '<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>' },
     { id: 'leave-requests',  label: 'Leave',           icon: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>' },
     { id: 'timesheets',      label: 'Timesheets',      icon: '<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="14" x2="16" y2="14"/>' },
