@@ -15809,6 +15809,14 @@ async function renderMyPerformance() {
 
     // Draw charts after DOM is ready
     if (chartLabels.length) {
+      if (!window.Chart) {
+        await new Promise((res, rej) => {
+          const s = document.createElement('script');
+          s.src = 'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js';
+          s.onload = res; s.onerror = rej;
+          document.head.appendChild(s);
+        });
+      }
       const attCtx = document.getElementById('mp-att-chart');
       if (attCtx) {
         new Chart(attCtx, {
