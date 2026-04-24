@@ -556,10 +556,30 @@ async function _cancelPayrollRun(runId) {
   } catch(e) { toastError(e.message || 'Failed to cancel'); }
 }
 
-function _downloadRunCSV(runId, period) {
-  const tk = localStorage.getItem('kodex_token') || localStorage.getItem('token') || '';
-  window.open(`/api/payroll/${runId}/export?token=${tk}`, '_blank');
-  toastSuccess(`Downloading payroll CSV for ${period}…`);
+async function _downloadRunCSV(runId, period) {
+  try {
+    const tk  = localStorage.getItem('token') || '';
+    const res = await fetch(`${API}/api/payroll/${runId}/export`, {
+      headers: { 'Authorization': `Bearer ${tk}` },
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      toast(data.error || 'Failed to export payroll CSV', 'error');
+      return;
+    }
+    const blob = await res.blob();
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href     = url;
+    a.download = `payroll_${period}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toastSuccess(`Payroll CSV downloaded for ${period}`);
+  } catch (e) {
+    toast('CSV download failed: ' + e.message, 'error');
+  }
 }
 
 async function _viewPayrollRun(runId, period) {
