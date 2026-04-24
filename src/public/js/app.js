@@ -4025,10 +4025,66 @@ async function renderLecturerDashboard(content) {
 // ── Employee live-clock helpers ───────────────────────────────────────────────
 // ── Employee Assistant Panel visibility ───────────────────────────────────────
 function _showEmpAssistantPanel() {
-  document.getElementById('emp-assistant-panel')?.classList.add('eap-open');
+  const panel = document.getElementById('emp-assistant-panel');
+  if (!panel) return;
+  panel.classList.add('eap-open');
+  const body = panel.querySelector('.eap-body');
+  if (body && !body.querySelector('[data-eap-welcome]')) {
+    body.innerHTML = `
+      <div data-eap-welcome style="display:flex;gap:8px;align-items:flex-start;margin-bottom:8px">
+        <div style="width:24px;height:24px;background:linear-gradient(135deg,#6366f1,#8b5cf6);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;flex-shrink:0">✦</div>
+        <div style="background:#f3f4f6;border-radius:0 10px 10px 10px;padding:8px 12px;font-size:12px;line-height:1.5;max-width:280px">Hi ${esc(currentUser?.name?.split(' ')[0] || 'there')}! I can answer questions about your attendance, leave balance, shift, and more.</div>
+      </div>`;
+  }
 }
 function _hideEmpAssistantPanel() {
   document.getElementById('emp-assistant-panel')?.classList.remove('eap-open');
+}
+
+async function _empPanelSend() {
+  const input = document.getElementById('emp-assistant-input');
+  if (!input) return;
+  const q = input.value.trim();
+  if (!q) return;
+  input.value = '';
+
+  const body = document.querySelector('#emp-assistant-panel .eap-body');
+  if (!body) return;
+
+  body.insertAdjacentHTML('beforeend', `
+    <div style="display:flex;gap:8px;align-items:flex-start;flex-direction:row-reverse;margin-bottom:8px">
+      <div style="width:24px;height:24px;background:var(--primary,#6366f1);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#fff;flex-shrink:0">${esc((currentUser?.name||'?').charAt(0).toUpperCase())}</div>
+      <div style="background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;border-radius:10px 0 10px 10px;padding:8px 12px;font-size:12px;line-height:1.5;max-width:220px">${esc(q)}</div>
+    </div>`);
+  body.scrollTop = body.scrollHeight;
+
+  const thinkId = 'eap-think-' + Date.now();
+  body.insertAdjacentHTML('beforeend', `
+    <div id="${thinkId}" style="display:flex;gap:8px;align-items:flex-start;margin-bottom:8px">
+      <div style="width:24px;height:24px;background:linear-gradient(135deg,#6366f1,#8b5cf6);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;flex-shrink:0">✦</div>
+      <div style="background:#f3f4f6;border-radius:0 10px 10px 10px;padding:8px 12px;font-size:12px;color:var(--text-muted)">
+        <span style="display:inline-flex;gap:3px"><span style="animation:blink 1.2s infinite .0s">●</span><span style="animation:blink 1.2s infinite .2s">●</span><span style="animation:blink 1.2s infinite .4s">●</span></span>
+      </div>
+    </div>`);
+  body.scrollTop = body.scrollHeight;
+
+  let answer;
+  try {
+    const d = await _loadEmpAssistantData();
+    answer = _empAssistantAnswer(q, d);
+  } catch(e) {
+    answer = "Sorry, I couldn't load your data right now.";
+  }
+
+  const thinkEl = document.getElementById(thinkId);
+  if (thinkEl) {
+    thinkEl.outerHTML = `
+      <div style="display:flex;gap:8px;align-items:flex-start;margin-bottom:8px">
+        <div style="width:24px;height:24px;background:linear-gradient(135deg,#6366f1,#8b5cf6);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;flex-shrink:0">✦</div>
+        <div style="background:#f3f4f6;border-radius:0 10px 10px 10px;padding:8px 12px;font-size:12px;line-height:1.5;max-width:280px">${answer}</div>
+      </div>`;
+  }
+  body.scrollTop = body.scrollHeight;
 }
 
 function _empElapsed(clockInTime) {
