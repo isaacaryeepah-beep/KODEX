@@ -2424,6 +2424,9 @@ function navigateTo(view) {
     case 'badges':        _safeRender(content, renderBadges,       'Badges');        break;
     case 'transcripts':   _safeRender(content, renderTranscripts,  'Transcripts');   break;
     case 'evaluations':   _safeRender(content, renderEvaluations,  'Evaluations');   break;
+    case 'live-attendance': _safeRender(content, renderLiveAttendance, 'Live Attendance'); break;
+    case 'branches':        _safeRender(content, renderBranches,       'Branches');        break;
+    case 'my-profile':      renderProfile(); break;
     default: renderDashboard();
   }
 }
