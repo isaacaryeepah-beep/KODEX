@@ -698,8 +698,8 @@ buildSidebar = function() {
   ];
 
   nav.innerHTML = links.map(l => `
-    <a class="nav-link" data-view="${l.id}" onclick="navigateTo('${l.id}')">
-      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">${l.icon}</svg>
+    <a id="nav-${l.id}" onclick="navigateTo('${l.id}')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">${l.icon}</svg>
       <span>${l.label}</span>
     </a>`).join('');
 };
