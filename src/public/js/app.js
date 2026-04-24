@@ -2237,6 +2237,7 @@ function buildSidebar() {
       links.push({ id: 'meetings', label: 'Meetings', icon: meetingsIcon() });
       links.push({ id: 'reports', label: 'Reports', icon: reportsIcon() });
       links.push({ id: 'faq-center', label: 'FAQ Center', icon: svgIcon('<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>') });
+      links.push({ id: 'subscription', label: 'Subscription', icon: subscriptionIcon() });
       break;
     case 'hod':
       links.push({ id: 'hod-overview',     label: 'Overview',       icon: svgIcon('<rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>') });
@@ -16923,6 +16924,82 @@ async function savePayrollSettings() {
 // ══════════════════════════════════════════════════════════════
 // PAYROLL EXPORT
 // ══════════════════════════════════════════════════════════════
+async function renderPayroll() {
+  const content = document.getElementById('main-content');
+  if (!content) return;
+  content.innerHTML = '<div class="loading">Loading payroll…</div>';
+
+  const period = new Date().toISOString().slice(0, 7);
+  const isAdmin = ['admin', 'superadmin'].includes(currentUser?.role);
+
+  try {
+    const [slipsData] = await Promise.all([
+      api('/api/payroll/my').catch(() => ({ payslips: [] })),
+    ]);
+    const payslips = slipsData.payslips || [];
+
+    const statusBadge = s => ({
+      draft:    '<span style="background:#f3f4f6;color:#6b7280;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600">Draft</span>',
+      approved: '<span style="background:#eff6ff;color:#1d4ed8;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600">Approved</span>',
+      paid:     '<span style="background:#f0fdf4;color:#16a34a;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600">Paid</span>',
+      cancelled:'<span style="background:#fef2f2;color:#dc2626;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600">Cancelled</span>',
+    }[s] || s);
+
+    content.innerHTML = `
+      <div class="page-header">
+        <h2>Payroll</h2>
+        <p>Your payslips and payroll export</p>
+      </div>
+
+      <!-- Payroll CSV Export -->
+      <div class="card" style="margin-bottom:20px;max-width:560px">
+        <h3 style="font-size:15px;font-weight:700;margin-bottom:12px">Generate Payroll Report</h3>
+        <p style="font-size:13px;color:#6b7280;margin-bottom:14px;line-height:1.6">
+          Export all <strong>approved timesheets</strong> and <strong>approved expenses</strong> for the selected period as a CSV file.
+        </p>
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+          <div>
+            <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:4px">Pay Period</label>
+            <input type="month" id="pr-period" value="${period}" style="padding:9px 12px;border:1px solid #d1d5db;border-radius:6px;font-size:14px">
+          </div>
+          <button class="btn btn-primary" style="margin-top:18px" onclick="downloadPayrollExport()">⬇ Download CSV</button>
+        </div>
+      </div>
+
+      <!-- My Payslips -->
+      <div class="card">
+        <h3 style="font-size:15px;font-weight:700;margin-bottom:14px">My Payslips (${payslips.length})</h3>
+        ${payslips.length ? `
+          <div style="overflow-x:auto">
+            <table style="width:100%;border-collapse:collapse;font-size:13px">
+              <thead><tr style="background:#f9fafb">
+                <th style="padding:10px;text-align:left;border-bottom:1px solid #e5e7eb">Period</th>
+                <th style="padding:10px;text-align:right;border-bottom:1px solid #e5e7eb">Regular Hrs</th>
+                <th style="padding:10px;text-align:right;border-bottom:1px solid #e5e7eb">Overtime Hrs</th>
+                <th style="padding:10px;text-align:right;border-bottom:1px solid #e5e7eb">Expenses</th>
+                <th style="padding:10px;text-align:center;border-bottom:1px solid #e5e7eb">Status</th>
+              </tr></thead>
+              <tbody>
+                ${payslips.map(p => `
+                  <tr style="border-bottom:1px solid #f3f4f6">
+                    <td style="padding:10px;font-weight:600">${p.period || '—'}</td>
+                    <td style="padding:10px;text-align:right">${p.regularHours ?? '—'}</td>
+                    <td style="padding:10px;text-align:right">${p.overtimeHours ?? '—'}</td>
+                    <td style="padding:10px;text-align:right">${p.totalExpenses != null ? 'GH₵' + Number(p.totalExpenses).toFixed(2) : '—'}</td>
+                    <td style="padding:10px;text-align:center">${statusBadge(p.status)}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+        ` : '<div class="empty-state"><p>No payslips yet. Payslips appear after your admin runs payroll.</p></div>'}
+      </div>
+    `;
+  } catch(e) {
+    content.innerHTML = `<div class="card"><p style="color:var(--danger)">Failed to load payroll: ${e.message}</p></div>`;
+  }
+}
+
 async function renderPayrollExport() {
   const content = document.getElementById('main-content');
   const period = new Date().toISOString().slice(0, 7);
@@ -16963,7 +17040,7 @@ async function renderPayrollExport() {
 }
 
 function downloadPayrollExport() {
-  const period = document.getElementById('pe-period')?.value || new Date().toISOString().slice(0, 7);
+  const period = document.getElementById('pe-period')?.value || document.getElementById('pr-period')?.value || new Date().toISOString().slice(0, 7);
   const token  = localStorage.getItem('kodex_token') || localStorage.getItem('token') || '';
   const btn = event.target; btn.disabled = true; btn.textContent = 'Generating…';
   setTimeout(() => { btn.disabled = false; btn.textContent = '⬇ Download CSV'; }, 3000);
