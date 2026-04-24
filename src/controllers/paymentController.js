@@ -1,16 +1,32 @@
-const axios   = require("axios");
-const Company = require("../models/Company");
-const User    = require("../models/User");
+const axios            = require("axios");
+const Company          = require("../models/Company");
+const User             = require("../models/User");
+const PlatformSettings = require("../models/PlatformSettings");
 const { sendSubscriptionConfirmed } = require("../services/emailService");
 
 const PAYSTACK_BASE_URL   = "https://api.paystack.co";
 const PAYSTACK_SECRET_KEY = process.env.PAYSTACK_SECRET_KEY;
 
-// ── Pricing ───────────────────────────────────────────────────────────────────
-const PLANS = {
-  semester: { price: 300, days: 112, label: "GHS 300 / semester", mode: "academic" },
-  monthly:  { price: 150, days: 30,  label: "GHS 150 / month",    mode: "corporate" },
-};
+// ── Pricing defaults (overridden by PlatformSettings) ────────────────────────
+const PLAN_DAYS = { semester: 112, monthly: 30 };
+const PLAN_MODE = { semester: "academic", monthly: "corporate" };
+
+async function getSettings() {
+  let s = await PlatformSettings.findOne().lean();
+  if (!s) s = { trialDays: 30, academicPrice: 300, corporatePrice: 150, currency: 'GHS' };
+  return s;
+}
+
+function buildPlan(planId, settings) {
+  const days  = PLAN_DAYS[planId];
+  const mode  = PLAN_MODE[planId];
+  const price = planId === 'monthly' ? settings.corporatePrice : settings.academicPrice;
+  const cur   = settings.currency || 'GHS';
+  const label = planId === 'monthly'
+    ? `${cur} ${price} / month`
+    : `${cur} ${price} / semester`;
+  return { price, days, label, mode };
+}
 
 // ── Helper ────────────────────────────────────────────────────────────────────
 function addDays(date, days) {
@@ -22,13 +38,16 @@ function addDays(date, days) {
 // ── GET /api/payments/plans ───────────────────────────────────────────────────
 exports.getPlans = async (req, res) => {
   try {
-    const company = await Company.findById(req.user.company).select("mode").lean();
-    const mode    = company?.mode || "academic";
-    const plan    = mode === "corporate" ? PLANS.monthly : PLANS.semester;
-    const planId  = mode === "corporate" ? "monthly" : "semester";
+    const [company, settings] = await Promise.all([
+      Company.findById(req.user.company).select("mode").lean(),
+      getSettings(),
+    ]);
+    const mode   = company?.mode || "academic";
+    const planId = mode === "corporate" ? "monthly" : "semester";
+    const plan   = buildPlan(planId, settings);
 
     return res.json({
-      plans: [{ id: planId, name: plan.label, duration: `${plan.days} days`, paystack: { label: plan.label, amount: plan.price } }],
+      plans: [{ id: planId, name: plan.label, duration: `${plan.days} days`, price: plan.price, currency: settings.currency || 'GHS', paystack: { label: plan.label, amount: plan.price } }],
       paymentMethods: ["paystack"],
       mode,
     });
@@ -99,9 +118,12 @@ exports.initializePaystackSubscription = async (req, res) => {
       return res.status(500).json({ error: "PAYSTACK_SECRET_KEY is not set in environment variables" });
     }
 
-    // Determine correct plan from company mode
-    const company = await Company.findById(req.user.company).select("mode").lean();
-    const mode    = company?.mode || "academic";
+    // Determine correct plan from company mode + live pricing
+    const [company, settings] = await Promise.all([
+      Company.findById(req.user.company).select("mode").lean(),
+      getSettings(),
+    ]);
+    const mode         = company?.mode || "academic";
     const expectedPlan = mode === "corporate" ? "monthly" : "semester";
 
     if (plan !== expectedPlan) {
@@ -110,11 +132,11 @@ exports.initializePaystackSubscription = async (req, res) => {
       });
     }
 
-    if (!PLANS[plan]) {
+    if (!PLAN_DAYS[plan]) {
       return res.status(400).json({ error: "Invalid plan." });
     }
 
-    const planInfo = PLANS[plan];
+    const planInfo = buildPlan(plan, settings);
     const user     = req.user;
     const PAID_ROLES = ["lecturer", "manager", "admin"];
     if (!PAID_ROLES.includes(user.role)) {
@@ -134,7 +156,7 @@ exports.initializePaystackSubscription = async (req, res) => {
       {
         email,
         amount,
-        currency: "GHS",
+        currency: settings.currency || "GHS",
         callback_url: `${appUrl}/`,
         metadata: {
           purpose:      "user_subscription",
@@ -160,7 +182,7 @@ exports.initializePaystackSubscription = async (req, res) => {
       authorization_url: resp.data.data.authorization_url,
       reference:         resp.data.data.reference,
       amount:            planInfo.price,
-      currency:          "GHS",
+      currency:          settings.currency || "GHS",
       plan,
       durationDays:      planInfo.days,
       label:             planInfo.label,
@@ -197,11 +219,12 @@ exports.verifyPaystackSubscription = async (req, res) => {
     const meta = data.metadata || {};
 
     // Accept both semester (academic) and monthly (corporate) plans
-    if (meta.purpose !== "user_subscription" || !PLANS[meta.plan]) {
+    if (meta.purpose !== "user_subscription" || !PLAN_DAYS[meta.plan]) {
       return res.status(400).json({ error: "Invalid payment purpose or unknown plan" });
     }
 
-    const planInfo = PLANS[meta.plan];
+    const settings = await getSettings();
+    const planInfo  = buildPlan(meta.plan, settings);
 
     const expectedPesewas = planInfo.price * 100;
     if (Number(data.amount) !== expectedPesewas) {
@@ -285,7 +308,7 @@ exports.paystackWebhook = async (req, res) => {
     const meta = event.data?.metadata || {};
 
     // Accept both semester (academic) and monthly (corporate) plans
-    if (meta.purpose !== "user_subscription" || !PLANS[meta.plan]) {
+    if (meta.purpose !== "user_subscription" || !PLAN_DAYS[meta.plan]) {
       return res.status(200).json({ received: true });
     }
 
@@ -300,7 +323,8 @@ exports.paystackWebhook = async (req, res) => {
       return res.status(200).json({ received: true, note: "Already applied" });
     }
 
-    const wPlanInfo      = PLANS[meta.plan];
+    const wSettings      = await getSettings();
+    const wPlanInfo      = buildPlan(meta.plan, wSettings);
     const now            = new Date();
     const wExistingExp   = user.subscriptionExpiry ? new Date(user.subscriptionExpiry) : null;
     const wBaseDate      = (wPlanInfo.mode === 'corporate')

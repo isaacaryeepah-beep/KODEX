@@ -2101,8 +2101,6 @@ function showDashboard(data) {
         _bannerEl.style.display = 'flex';
 
       } else {
-        const _mode  = currentUser?.company?.mode || (currentUser?.role === 'manager' ? 'corporate' : 'academic');
-        const _label = _mode === 'corporate' ? '₵150/month' : '₵300/semester';
         _bannerEl.style.display = 'none';
         _expiredEl.className = 'trial-expired-banner';
         _expiredEl.innerHTML = `
@@ -2111,13 +2109,23 @@ function showDashboard(data) {
             <div class="sub-banner-text">
               <span class="sub-banner-title">Trial Expired</span>
               <span class="sub-banner-sep">·</span>
-              <span class="sub-banner-detail">Subscribe to continue — ${_label} via Paystack</span>
+              <span class="sub-banner-detail" id="sub-expired-label">Subscribe to continue via Paystack</span>
             </div>
           </div>
           <div class="sub-banner-right">
             <button class="sub-banner-cta" onclick="paySubscription()">Subscribe Now</button>
           </div>`;
         _expiredEl.style.display = 'flex';
+        // Populate live price asynchronously
+        api('/api/payments/plans').then(pd => {
+          const el = document.getElementById('sub-expired-label');
+          if (!el) return;
+          const lp = pd?.plans?.[0];
+          const cur = lp?.currency === 'GHS' ? '₵' : (lp?.currency || '₵');
+          const amt = lp?.price ?? ((currentUser?.company?.mode === 'corporate') ? 150 : 300);
+          const per = currentUser?.company?.mode === 'corporate' ? '/month' : '/semester';
+          el.textContent = `Subscribe to continue — ${cur}${amt}${per} via Paystack`;
+        }).catch(() => {});
       }
 
     } else if (trial && trial.active) {
@@ -9841,7 +9849,10 @@ async function renderSubscription() {
   }
 
   try {
-    const meData  = await api('/api/auth/me');
+    const [meData, plansData] = await Promise.all([
+      api('/api/auth/me'),
+      api('/api/payments/plans').catch(() => null),
+    ]);
     const ut      = meData.userTrial || {};
     const status    = ut.status   || 'expired';
     const rawDays   = ut.daysLeft || 0;
@@ -9855,11 +9866,17 @@ async function renderSubscription() {
       ? new Date(ut.subscriptionExpiry).toLocaleDateString('en-GB', { day:'numeric', month:'long', year:'numeric' })
       : '—';
 
+    // Use live price from API; fall back to defaults if unavailable
+    const livePlan    = plansData?.plans?.[0];
+    const liveCur     = plansData?.plans?.[0]?.currency || 'GHS';
+    const liveAmt     = livePlan?.price ?? (isCorp ? 150 : 300);
+    const liveSym     = liveCur === 'GHS' ? '₵' : liveCur + ' ';
+
     const planName   = isCorp ? 'Monthly Plan'    : 'Semester Plan';
-    const planPrice  = isCorp ? '₵150'            : '₵300';
+    const planPrice  = `${liveSym}${liveAmt}`;
     const planPeriod = isCorp ? '30 days / month' : '1 semester (16 weeks)';
     const planId     = isCorp ? 'monthly'         : 'semester';
-    const planLabel  = isCorp ? '₵150 / month'    : '₵300 / semester';
+    const planLabel  = isCorp ? `${liveSym}${liveAmt} / month` : `${liveSym}${liveAmt} / semester`;
     const planFeatures = isCorp
       ? ['Full platform access', 'Attendance & clock in/out management', 'Leave &amp; expense management', 'Performance tracking &amp; reporting', 'Renew any time — days stack up']
       : ['Full platform access', 'Attendance marking &amp; session management', 'Assessment creation &amp; grading', 'Grade book &amp; reports', 'Renew any time — days stack up'];
