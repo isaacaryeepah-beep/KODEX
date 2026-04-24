@@ -383,6 +383,9 @@ exports.updateFAQ = async (req, res) => {
     const faq = await FAQ.findOne({ _id: req.params.id, company });
     if (!faq) return res.status(404).json({ error: "FAQ not found" });
 
+    if (req.body.category !== undefined && !FAQ_CATEGORIES.includes(req.body.category)) {
+      return res.status(400).json({ error: `category must be one of: ${FAQ_CATEGORIES.join(", ")}` });
+    }
     const EDITABLE = ["question", "answer", "category", "keywords", "targetRoles", "isActive"];
     for (const key of EDITABLE) {
       if (req.body[key] !== undefined) faq[key] = req.body[key];
