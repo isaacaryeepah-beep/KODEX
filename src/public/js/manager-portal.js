@@ -381,54 +381,309 @@ async function renderLiveAttendance() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PAYROLL (enhanced — overrides app.js version)
+// PAYROLL — role-aware (overrides app.js and pages-corporate.js versions)
+//   admin/superadmin → full run management (run, approve, mark-paid, cancel, export)
+//   manager          → read-only employee roster
+//   employee/others  → own payslips
 // ─────────────────────────────────────────────────────────────────────────────
 async function renderPayroll() {
   const content = document.getElementById('main-content');
   if (!content) return;
+  const role = currentUser?.role;
+  if (role === 'admin' || role === 'superadmin') {
+    await _renderAdminPayroll(content);
+  } else if (role === 'manager') {
+    await _renderManagerPayroll(content);
+  } else {
+    await _renderMyPayroll(content);
+  }
+}
+
+// ── Admin: full payroll run management ───────────────────────────────────────
+async function _renderAdminPayroll(content) {
+  content.innerHTML = '<div class="loading">Loading payroll…</div>';
+  try {
+    const data = await api('/api/payroll');
+    const runs = data.runs || [];
+
+    const _sc = { draft:'#6b7280', approved:'#1d4ed8', paid:'#16a34a', cancelled:'#dc2626' };
+    const _badge = s => { const c = _sc[s]||'#6b7280'; return `<span style="padding:2px 9px;border-radius:20px;font-size:11px;font-weight:700;background:${c}22;color:${c};text-transform:capitalize">${s||'draft'}</span>`; };
+    const _fmt   = n => (n != null && !isNaN(n)) ? Number(n).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}) : '—';
+
+    content.innerHTML = `
+      <div style="display:flex;flex-direction:column;gap:16px">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+          <div>
+            <h2 style="margin:0;font-size:20px;font-weight:800">Payroll Management</h2>
+            <p style="margin:4px 0 0;font-size:13px;color:var(--text-muted)">Run, approve, and manage employee payroll runs</p>
+          </div>
+          <button class="btn btn-primary" onclick="_showRunPayrollModal()">+ Run Payroll</button>
+        </div>
+
+        <div class="card" style="overflow-x:auto">
+          ${runs.length ? `
+            <table style="width:100%;border-collapse:collapse;font-size:13px">
+              <thead>
+                <tr style="border-bottom:2px solid var(--border)">
+                  <th style="padding:10px 12px;text-align:left;font-size:11px;text-transform:uppercase;color:var(--text-muted)">Period</th>
+                  <th style="padding:10px 8px;text-align:center;font-size:11px;text-transform:uppercase;color:var(--text-muted)">Employees</th>
+                  <th style="padding:10px 12px;text-align:right;font-size:11px;text-transform:uppercase;color:var(--text-muted)">Gross Pay</th>
+                  <th style="padding:10px 12px;text-align:right;font-size:11px;text-transform:uppercase;color:var(--text-muted)">Deductions</th>
+                  <th style="padding:10px 12px;text-align:right;font-size:11px;text-transform:uppercase;color:var(--text-muted)">Net Pay</th>
+                  <th style="padding:10px 8px;text-align:center;font-size:11px;text-transform:uppercase;color:var(--text-muted)">Status</th>
+                  <th style="padding:10px 12px;text-align:left;font-size:11px;text-transform:uppercase;color:var(--text-muted)">Run By</th>
+                  <th style="padding:10px 12px;text-align:center;font-size:11px;text-transform:uppercase;color:var(--text-muted)">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${runs.map((r,i) => {
+                  const period = `${r.year}-${String(r.month).padStart(2,'0')}`;
+                  return `<tr style="border-bottom:1px solid var(--border);background:${i%2===0?'transparent':'var(--bg)'}">
+                    <td style="padding:10px 12px;font-weight:700;cursor:pointer;color:var(--primary)" onclick="_viewPayrollRun('${r._id}','${period}')">${period}</td>
+                    <td style="padding:10px 8px;text-align:center">${r.employeeCount ?? '—'}</td>
+                    <td style="padding:10px 12px;text-align:right">${_fmt(r.totalGross)}</td>
+                    <td style="padding:10px 12px;text-align:right;color:var(--danger)">${_fmt(r.totalDeductions)}</td>
+                    <td style="padding:10px 12px;text-align:right;font-weight:700;color:var(--primary)">${_fmt(r.totalNet)}</td>
+                    <td style="padding:10px 8px;text-align:center">${_badge(r.status)}</td>
+                    <td style="padding:10px 12px;font-size:12px;color:var(--text-muted)">${r.runBy?.name||'—'}</td>
+                    <td style="padding:8px 12px;text-align:center;white-space:nowrap">
+                      ${r.status==='draft'    ? `<button class="btn btn-sm" style="background:#1d4ed8;color:#fff;margin:2px;font-size:11px" onclick="_approvePayrollRun('${r._id}')">Approve</button>` : ''}
+                      ${r.status==='approved' ? `<button class="btn btn-sm" style="background:#16a34a;color:#fff;margin:2px;font-size:11px" onclick="_markPayrollPaid('${r._id}')">Mark Paid</button>` : ''}
+                      <button class="btn btn-secondary btn-sm" style="margin:2px;font-size:11px" onclick="_downloadRunCSV('${r._id}','${period}')">CSV</button>
+                      ${r.status!=='paid'&&r.status!=='cancelled' ? `<button class="btn btn-sm" style="background:#ef4444;color:#fff;margin:2px;font-size:11px" onclick="_cancelPayrollRun('${r._id}')">Cancel</button>` : ''}
+                    </td>
+                  </tr>`;
+                }).join('')}
+              </tbody>
+            </table>
+          ` : `
+            <div style="padding:48px;text-align:center">
+              <div style="font-size:40px;margin-bottom:12px">💰</div>
+              <p style="font-size:15px;font-weight:600;color:var(--text);margin:0 0 6px">No payroll runs yet</p>
+              <p style="font-size:13px;color:var(--text-muted);margin:0 0 20px">Generate the first payroll run for your team.</p>
+              <button class="btn btn-primary" onclick="_showRunPayrollModal()">Run First Payroll</button>
+            </div>
+          `}
+        </div>
+      </div>`;
+  } catch(e) {
+    content.innerHTML = `<div class="card"><p style="color:var(--danger)">Error loading payroll: ${e.message}</p></div>`;
+  }
+}
+
+function _showRunPayrollModal() {
+  document.getElementById('_pr-modal')?.remove();
+  const now = new Date();
+  const months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const ol = document.createElement('div');
+  ol.id = '_pr-modal';
+  ol.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:500;display:flex;align-items:center;justify-content:center;padding:16px';
+  ol.innerHTML = `
+    <div style="background:var(--card);border-radius:14px;width:100%;max-width:420px;box-shadow:0 20px 60px rgba(0,0,0,.2)">
+      <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
+        <h3 style="font-size:15px;font-weight:700;margin:0">Run Payroll</h3>
+        <button onclick="document.getElementById('_pr-modal').remove()" style="width:26px;height:26px;border-radius:6px;border:1px solid var(--border);background:var(--bg);cursor:pointer;font-size:14px">✕</button>
+      </div>
+      <div style="padding:20px;display:flex;flex-direction:column;gap:14px">
+        <p style="font-size:13px;color:var(--text-muted);margin:0">Computes attendance, overtime and leave deductions for all employees in the selected period and creates a draft payroll run.</p>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <div>
+            <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-muted);display:block;margin-bottom:5px">Year</label>
+            <input id="_pr-year" type="number" min="2020" max="2099" value="${now.getFullYear()}" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;box-sizing:border-box">
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-muted);display:block;margin-bottom:5px">Month</label>
+            <select id="_pr-month" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;background:var(--card)">
+              ${months.map((m,i)=>`<option value="${i+1}"${i===now.getMonth()?' selected':''}>${m}</option>`).join('')}
+            </select>
+          </div>
+        </div>
+        <div>
+          <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-muted);display:block;margin-bottom:5px">Notes (optional)</label>
+          <textarea id="_pr-notes" rows="2" placeholder="e.g. Includes Q1 bonus…" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;resize:vertical;outline:none;box-sizing:border-box"></textarea>
+        </div>
+      </div>
+      <div style="padding:12px 20px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end">
+        <button class="btn btn-secondary btn-sm" onclick="document.getElementById('_pr-modal').remove()">Cancel</button>
+        <button class="btn btn-primary btn-sm" id="_pr-submit" onclick="_submitRunPayroll()">Run Payroll</button>
+      </div>
+    </div>`;
+  document.body.appendChild(ol);
+}
+
+async function _submitRunPayroll() {
+  const year  = parseInt(document.getElementById('_pr-year')?.value);
+  const month = parseInt(document.getElementById('_pr-month')?.value);
+  const notes = document.getElementById('_pr-notes')?.value.trim() || '';
+  const btn   = document.getElementById('_pr-submit');
+  if (!year || !month) return toastError('Year and month are required');
+  if (btn) { btn.disabled = true; btn.textContent = 'Running…'; }
+  try {
+    const data = await api('/api/payroll/run', { method: 'POST', body: JSON.stringify({ year, month, notes }) });
+    document.getElementById('_pr-modal')?.remove();
+    toastSuccess(`Payroll ${year}-${String(month).padStart(2,'0')} created — ${data.employeeCount ?? 0} payslips generated`);
+    _renderAdminPayroll(document.getElementById('main-content'));
+  } catch(e) {
+    if (btn) { btn.disabled = false; btn.textContent = 'Run Payroll'; }
+    toastError(e.message || 'Failed to run payroll');
+  }
+}
+
+async function _approvePayrollRun(runId) {
+  if (!confirm('Approve this payroll run? All payslips will be marked as approved.')) return;
+  try {
+    await api(`/api/payroll/${runId}/approve`, { method: 'PATCH' });
+    toastSuccess('Payroll run approved');
+    _renderAdminPayroll(document.getElementById('main-content'));
+  } catch(e) { toastError(e.message || 'Failed to approve'); }
+}
+
+async function _markPayrollPaid(runId) {
+  if (!confirm('Mark this payroll as paid? This confirms payment has been disbursed.')) return;
+  try {
+    await api(`/api/payroll/${runId}/mark-paid`, { method: 'PATCH' });
+    toastSuccess('Payroll marked as paid');
+    _renderAdminPayroll(document.getElementById('main-content'));
+  } catch(e) { toastError(e.message || 'Failed to mark as paid'); }
+}
+
+async function _cancelPayrollRun(runId) {
+  if (!confirm('Cancel this payroll run? This cannot be undone.')) return;
+  try {
+    await api(`/api/payroll/${runId}/cancel`, { method: 'PATCH' });
+    toastSuccess('Payroll run cancelled');
+    _renderAdminPayroll(document.getElementById('main-content'));
+  } catch(e) { toastError(e.message || 'Failed to cancel'); }
+}
+
+function _downloadRunCSV(runId, period) {
+  const tk = localStorage.getItem('kodex_token') || localStorage.getItem('token') || '';
+  window.open(`/api/payroll/${runId}/export?token=${tk}`, '_blank');
+  toastSuccess(`Downloading payroll CSV for ${period}…`);
+}
+
+async function _viewPayrollRun(runId, period) {
+  const content = document.getElementById('main-content');
+  if (!content) return;
+  content.innerHTML = '<div class="loading">Loading payroll run…</div>';
+  try {
+    const data  = await api(`/api/payroll/${runId}`);
+    const run   = data.run;
+    const slips = data.slips || [];
+
+    const _sc = { draft:'#6b7280', approved:'#1d4ed8', paid:'#16a34a', cancelled:'#dc2626' };
+    const _badge = s => { const c = _sc[s]||'#6b7280'; return `<span style="padding:2px 9px;border-radius:20px;font-size:11px;font-weight:700;background:${c}22;color:${c};text-transform:capitalize">${s||'draft'}</span>`; };
+    const _fmt   = n => (n != null && !isNaN(n)) ? Number(n).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}) : '—';
+
+    content.innerHTML = `
+      <div style="display:flex;flex-direction:column;gap:16px">
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+          <button class="btn btn-secondary btn-sm" onclick="_renderAdminPayroll(document.getElementById('main-content'))">← Back</button>
+          <h2 style="margin:0;font-size:18px;font-weight:800">Payroll Run — ${period}</h2>
+          ${_badge(run.status)}
+        </div>
+
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px">
+          <div class="card" style="text-align:center;padding:14px;border-top:3px solid #3b82f6">
+            <div style="font-size:22px;font-weight:800;color:#3b82f6">${run.employeeCount ?? slips.length}</div>
+            <div style="font-size:11px;color:var(--text-muted)">Employees</div>
+          </div>
+          <div class="card" style="text-align:center;padding:14px;border-top:3px solid #10b981">
+            <div style="font-size:22px;font-weight:800;color:#10b981">${_fmt(run.totalGross)}</div>
+            <div style="font-size:11px;color:var(--text-muted)">Gross Pay</div>
+          </div>
+          <div class="card" style="text-align:center;padding:14px;border-top:3px solid #ef4444">
+            <div style="font-size:22px;font-weight:800;color:#ef4444">${_fmt(run.totalDeductions)}</div>
+            <div style="font-size:11px;color:var(--text-muted)">Deductions</div>
+          </div>
+          <div class="card" style="text-align:center;padding:14px;border-top:3px solid #6366f1">
+            <div style="font-size:22px;font-weight:800;color:#6366f1">${_fmt(run.totalNet)}</div>
+            <div style="font-size:11px;color:var(--text-muted)">Net Pay</div>
+          </div>
+        </div>
+
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          ${run.status==='draft'    ? `<button class="btn btn-primary btn-sm" onclick="_approvePayrollRun('${runId}')">✓ Approve Run</button>` : ''}
+          ${run.status==='approved' ? `<button class="btn btn-sm" style="background:#16a34a;color:#fff" onclick="_markPayrollPaid('${runId}')">Mark Paid</button>` : ''}
+          <button class="btn btn-secondary btn-sm" onclick="_downloadRunCSV('${runId}','${period}')">⬇ Export CSV</button>
+          ${run.status!=='paid'&&run.status!=='cancelled' ? `<button class="btn btn-sm" style="background:#ef4444;color:#fff" onclick="_cancelPayrollRun('${runId}')">Cancel Run</button>` : ''}
+        </div>
+
+        <div class="card" style="overflow-x:auto">
+          <div style="font-size:13px;font-weight:700;margin-bottom:12px">Individual Payslips (${slips.length})</div>
+          ${slips.length ? `
+            <table style="width:100%;border-collapse:collapse;font-size:12px">
+              <thead>
+                <tr style="border-bottom:2px solid var(--border)">
+                  <th style="padding:8px 12px;text-align:left;font-size:11px;text-transform:uppercase;color:var(--text-muted)">Employee</th>
+                  <th style="padding:8px 8px;text-align:center;font-size:11px;text-transform:uppercase;color:var(--text-muted)">Days Present</th>
+                  <th style="padding:8px 8px;text-align:center;font-size:11px;text-transform:uppercase;color:var(--text-muted)">Hrs Worked</th>
+                  <th style="padding:8px 8px;text-align:center;font-size:11px;text-transform:uppercase;color:var(--text-muted)">OT Hrs</th>
+                  <th style="padding:8px 12px;text-align:right;font-size:11px;text-transform:uppercase;color:var(--text-muted)">Base Pay</th>
+                  <th style="padding:8px 12px;text-align:right;font-size:11px;text-transform:uppercase;color:var(--text-muted)">Gross</th>
+                  <th style="padding:8px 12px;text-align:right;font-size:11px;text-transform:uppercase;color:var(--text-muted)">Deductions</th>
+                  <th style="padding:8px 12px;text-align:right;font-size:11px;text-transform:uppercase;color:var(--text-muted)">Net Pay</th>
+                  <th style="padding:8px 8px;text-align:center;font-size:11px;text-transform:uppercase;color:var(--text-muted)">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${slips.map((s,i) => `
+                  <tr style="border-bottom:1px solid var(--border);background:${i%2===0?'transparent':'var(--bg)'}">
+                    <td style="padding:9px 12px">
+                      <div style="font-weight:600">${s.employee?.name||'—'}</div>
+                      <div style="font-size:11px;color:var(--text-muted)">${s.employee?.employeeId||s.employee?.email||''}</div>
+                    </td>
+                    <td style="padding:9px 8px;text-align:center">${s.daysPresent??'—'}</td>
+                    <td style="padding:9px 8px;text-align:center">${s.hoursWorked??'—'}</td>
+                    <td style="padding:9px 8px;text-align:center">${s.overtimeHours??'—'}</td>
+                    <td style="padding:9px 12px;text-align:right">${_fmt(s.basePay)}</td>
+                    <td style="padding:9px 12px;text-align:right;font-weight:600">${_fmt(s.grossPay)}</td>
+                    <td style="padding:9px 12px;text-align:right;color:var(--danger)">${_fmt(s.totalDeductions)}</td>
+                    <td style="padding:9px 12px;text-align:right;font-weight:700;color:var(--primary)">${_fmt(s.netPay)}</td>
+                    <td style="padding:9px 8px;text-align:center">${_badge(s.status)}</td>
+                  </tr>`).join('')}
+              </tbody>
+            </table>
+          ` : '<div class="empty-state"><p>No payslips in this run</p></div>'}
+        </div>
+      </div>`;
+  } catch(e) {
+    content.innerHTML = `<div class="card"><p style="color:var(--danger)">Error: ${e.message}</p><button class="btn btn-secondary btn-sm" style="margin-top:12px" onclick="_renderAdminPayroll(document.getElementById('main-content'))">← Back</button></div>`;
+  }
+}
+
+// ── Manager: read-only employee roster ───────────────────────────────────────
+async function _renderManagerPayroll(content) {
   content.innerHTML = '<div class="loading">Loading payroll…</div>';
   try {
     const now    = new Date();
     const period = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
-    const [usersData, exportData, leavesData] = await Promise.all([
+    const [usersData, leavesData, analyticsData] = await Promise.all([
       api('/api/users').catch(() => ({ users: [] })),
-      api(`/api/advanced/payroll-export?period=${period}`).catch(() => null),
       api('/api/leaves?status=approved').catch(() => ({ leaves: [] })),
+      api('/api/advanced/analytics').catch(() => null),
     ]);
 
     const employees = (usersData.users || []).filter(u => u.role === 'employee' || u.role === 'manager');
     const leaves    = leavesData.leaves || [];
-    const STANDARD  = 160;
+    const tsHours   = analyticsData?.timesheets?.totalHours || 0;
 
-    // Build payroll rows from employees + any timesheet data from export
-    // The payroll-export endpoint returns CSV — we need the analytics endpoint instead
-    const analyticsData = await api('/api/advanced/analytics').catch(() => null);
-    const tsHours = analyticsData?.timesheets?.totalHours || 0;
-
-    // Leave days per employee this month
     const leaveMap = {};
     leaves.forEach(l => {
       const eid = l.employee?._id?.toString();
       if (!eid) return;
       const start = new Date(l.startDate);
-      const isThisMonth = start.getFullYear() === now.getFullYear() && start.getMonth() === now.getMonth();
-      if (isThisMonth) leaveMap[eid] = (leaveMap[eid]||0) + (l.days||0);
-    });
-
-    const rows = employees.map(emp => {
-      // Without individual timesheet data in this view, show structure
-      const leaveDays = leaveMap[emp._id.toString()] || 0;
-      return { emp, leaveDays };
+      if (start.getFullYear() === now.getFullYear() && start.getMonth() === now.getMonth())
+        leaveMap[eid] = (leaveMap[eid]||0) + (l.days||0);
     });
 
     content.innerHTML = `
       <div style="display:flex;flex-direction:column;gap:16px">
         <div>
-          <h2>Payroll Summary</h2>
-          <p style="font-size:13px;color:var(--text-muted)">Period: <strong>${period}</strong> · Read-only view</p>
+          <h2 style="margin:0">Payroll Summary</h2>
+          <p style="font-size:13px;color:var(--text-muted);margin:4px 0 0">Period: <strong>${period}</strong> · Read-only view</p>
         </div>
 
-        <!-- Summary cards -->
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px">
           <div class="card" style="text-align:center;padding:14px;border-top:3px solid #3b82f6">
             <div style="font-size:24px;font-weight:800;color:#3b82f6">${employees.length}</div>
@@ -442,13 +697,8 @@ async function renderPayroll() {
             <div style="font-size:24px;font-weight:800;color:#f59e0b">${Object.values(leaveMap).reduce((s,v)=>s+v,0)}</div>
             <div style="font-size:11px;color:var(--text-muted)">Leave Days Used</div>
           </div>
-          <div class="card" style="text-align:center;padding:14px;border-top:3px solid #6366f1">
-            <div style="font-size:24px;font-weight:800;color:#6366f1">${STANDARD}h</div>
-            <div style="font-size:11px;color:var(--text-muted)">Standard Hours/Month</div>
-          </div>
         </div>
 
-        <!-- Employee table -->
         <div class="card" style="overflow-x:auto">
           <div style="font-size:13px;font-weight:700;margin-bottom:12px">Employee Roster — ${period}</div>
           <table style="width:100%;border-collapse:collapse;font-size:13px">
@@ -462,20 +712,21 @@ async function renderPayroll() {
               </tr>
             </thead>
             <tbody>
-              ${rows.length ? rows.map((r,i)=>{
-                const statusColor = r.emp.isActive ? '#10b981' : '#ef4444';
+              ${employees.length ? employees.map((emp,i) => {
+                const leaveDays  = leaveMap[emp._id?.toString()] || 0;
+                const statusColor = emp.isActive ? '#10b981' : '#ef4444';
                 return `<tr style="border-bottom:1px solid var(--border);background:${i%2===0?'transparent':'var(--bg)'}">
                   <td style="padding:10px 12px">
                     <div style="display:flex;align-items:center;gap:8px">
-                      <div style="width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,#6366f1,#8b5cf6);display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;font-weight:700">${(r.emp.name||'?')[0].toUpperCase()}</div>
-                      <span style="font-weight:600">${r.emp.name}</span>
+                      <div style="width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,#6366f1,#8b5cf6);display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;font-weight:700">${(emp.name||'?')[0].toUpperCase()}</div>
+                      <span style="font-weight:600">${emp.name}</span>
                     </div>
                   </td>
-                  <td style="padding:10px 12px;color:var(--text-muted)">${r.emp.department||'—'}</td>
-                  <td style="padding:10px 12px;font-family:monospace;font-size:12px">${r.emp.employeeId||'—'}</td>
-                  <td style="padding:10px 8px;text-align:center;font-weight:${r.leaveDays>0?'700':'400'};color:${r.leaveDays>0?'#f59e0b':'var(--text-muted)'}">${r.leaveDays||'—'}</td>
+                  <td style="padding:10px 12px;color:var(--text-muted)">${emp.department||'—'}</td>
+                  <td style="padding:10px 12px;font-family:monospace;font-size:12px">${emp.employeeId||'—'}</td>
+                  <td style="padding:10px 8px;text-align:center;font-weight:${leaveDays>0?'700':'400'};color:${leaveDays>0?'#f59e0b':'var(--text-muted)'}">${leaveDays||'—'}</td>
                   <td style="padding:10px 8px;text-align:center">
-                    <span style="padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700;background:${statusColor}22;color:${statusColor}">${r.emp.isActive?'Active':'Inactive'}</span>
+                    <span style="padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700;background:${statusColor}22;color:${statusColor}">${emp.isActive?'Active':'Inactive'}</span>
                   </td>
                 </tr>`;
               }).join('') : '<tr><td colspan="5" style="padding:20px;text-align:center;color:var(--text-muted)">No employees found</td></tr>'}
@@ -484,7 +735,56 @@ async function renderPayroll() {
         </div>
       </div>`;
   } catch(e) {
-    content.innerHTML = `<div class="card"><p style="color:#ef4444">Error: ${e.message}</p></div>`;
+    content.innerHTML = `<div class="card"><p style="color:var(--danger)">Error: ${e.message}</p></div>`;
+  }
+}
+
+// ── Employee/others: own payslips ─────────────────────────────────────────────
+async function _renderMyPayroll(content) {
+  content.innerHTML = '<div class="loading">Loading payroll…</div>';
+  try {
+    const data    = await api('/api/payroll/my');
+    const slips   = data.slips || [];
+    const _sc = { draft:'#6b7280', approved:'#1d4ed8', paid:'#16a34a', cancelled:'#dc2626' };
+    const _badge = s => { const c = _sc[s]||'#6b7280'; return `<span style="padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700;background:${c}22;color:${c};text-transform:capitalize">${s||'draft'}</span>`; };
+    const _fmt   = n => (n != null && !isNaN(n)) ? Number(n).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}) : '—';
+
+    content.innerHTML = `
+      <div class="page-header">
+        <h2>My Payroll</h2>
+        <p>Your payslip history</p>
+      </div>
+      <div class="card" style="overflow-x:auto">
+        ${slips.length ? `
+          <table style="width:100%;border-collapse:collapse;font-size:13px">
+            <thead>
+              <tr style="border-bottom:2px solid var(--border)">
+                <th style="padding:10px 12px;text-align:left;font-size:11px;text-transform:uppercase;color:var(--text-muted)">Period</th>
+                <th style="padding:10px 12px;text-align:right;font-size:11px;text-transform:uppercase;color:var(--text-muted)">Gross Pay</th>
+                <th style="padding:10px 12px;text-align:right;font-size:11px;text-transform:uppercase;color:var(--text-muted)">Deductions</th>
+                <th style="padding:10px 12px;text-align:right;font-size:11px;text-transform:uppercase;color:var(--text-muted)">Net Pay</th>
+                <th style="padding:10px 8px;text-align:center;font-size:11px;text-transform:uppercase;color:var(--text-muted)">Hrs Worked</th>
+                <th style="padding:10px 8px;text-align:center;font-size:11px;text-transform:uppercase;color:var(--text-muted)">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${slips.map((s,i) => {
+                const period = s.payrollRun ? `${s.payrollRun.year}-${String(s.payrollRun.month).padStart(2,'0')}` : (s.year ? `${s.year}-${String(s.month).padStart(2,'0')}` : '—');
+                return `<tr style="border-bottom:1px solid var(--border);background:${i%2===0?'transparent':'var(--bg)'}">
+                  <td style="padding:10px 12px;font-weight:700">${period}</td>
+                  <td style="padding:10px 12px;text-align:right">${_fmt(s.grossPay)}</td>
+                  <td style="padding:10px 12px;text-align:right;color:var(--danger)">${_fmt(s.totalDeductions)}</td>
+                  <td style="padding:10px 12px;text-align:right;font-weight:700;color:var(--primary)">${_fmt(s.netPay)}</td>
+                  <td style="padding:10px 8px;text-align:center">${s.hoursWorked??'—'}</td>
+                  <td style="padding:10px 8px;text-align:center">${_badge(s.status)}</td>
+                </tr>`;
+              }).join('')}
+            </tbody>
+          </table>
+        ` : '<div class="empty-state" style="padding:40px;text-align:center"><p>No payslips yet. Payslips appear after your admin runs payroll.</p></div>'}
+      </div>`;
+  } catch(e) {
+    content.innerHTML = `<div class="card"><p style="color:var(--danger)">Error: ${e.message}</p></div>`;
   }
 }
 
@@ -654,6 +954,7 @@ buildSidebar = function() {
   const links = [
     { id: 'dashboard',       label: 'Dashboard',      icon: '<rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>' },
     { id: 'live-attendance', label: 'Live Attendance', icon: '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>' },
+    { id: 'approvals',       label: 'Approvals',       icon: '<path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>' },
     { id: 'users',           label: 'Team',            icon: '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>' },
     { id: 'shifts',          label: 'Shifts',          icon: '<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>' },
     { id: 'leave-requests',  label: 'Leave',           icon: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>' },
