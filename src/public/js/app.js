@@ -1110,6 +1110,7 @@ function showPendingApproval(message) {
   localStorage.removeItem('token');
   token = null;
   currentUser = null;
+  window.currentUser = null;
 }
 
 
@@ -1783,6 +1784,7 @@ async function handleLogout() {
   resetBranding();
   token = null;
   currentUser = null;
+  window.currentUser = null;
   localStorage.removeItem('token');
   document.getElementById('main-content').innerHTML = '';
   document.getElementById('sidebar-nav').innerHTML = '';
@@ -2001,6 +2003,7 @@ function showDashboard(data) {
     return;
   }
   try {
+    window.currentUser = currentUser; // expose for faq-assistant.js (let ≠ window prop)
     document.getElementById('auth-page').style.display = 'none';
     const dashPage = document.getElementById('dashboard-page');
     dashPage.classList.remove('hidden');
@@ -2145,6 +2148,7 @@ function showDashboard(data) {
     localStorage.removeItem('token');
     token = null;
     currentUser = null;
+    window.currentUser = null;
     showError('Something went wrong. Please sign in again.');
   }
 }

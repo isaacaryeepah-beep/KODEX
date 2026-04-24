@@ -73,6 +73,7 @@
   // ── State ─────────────────────────────────────────────────────────────────
   let _open = false;
   let _initialized = false;
+  let _initializedMode = null;
 
   // ── Public API ─────────────────────────────────────────────────────────────
   window.faqPanelToggle = function () { _open ? faqPanelClose() : faqPanelOpen(); };
@@ -84,7 +85,8 @@
     _open = true;
     _syncToggleBtn(true);
     localStorage.setItem('kodex_fap', '1');
-    if (!_initialized) _init();
+    const currentMode = _getMode();
+    if (!_initialized || currentMode !== _initializedMode) _init();
   };
 
   window.faqPanelClose = function () {
@@ -149,9 +151,10 @@
 
   // ── Internal helpers ───────────────────────────────────────────────────────
   function _init() {
-    _initialized = true;
-
     const mode = _getMode();
+    _initialized = true;
+    _initializedMode = mode;
+
     if (mode === 'corporate') {
       FAQ_ITEMS    = FAQ_ITEMS_CORPORATE;
       QUICK_ANSWERS = QUICK_ANSWERS_CORPORATE;
@@ -165,7 +168,8 @@
     _renderEmptyState();
 
     const inputEl = document.getElementById('fap-input');
-    if (inputEl) {
+    if (inputEl && !inputEl._kbBound) {
+      inputEl._kbBound = true;
       inputEl.addEventListener('keydown', e => {
         if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); faqPanelAsk(); }
       });
