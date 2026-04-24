@@ -13,7 +13,7 @@ async function renderPayroll() {
   const content = document.getElementById('main-content');
   if (!content) return;
 
-  const isAdmin = currentUser.role === 'admin' || currentUser.role === 'superadmin' || currentUser.role === 'manager';
+  const isAdmin = currentUser.role === 'admin' || currentUser.role === 'superadmin';
 
   content.innerHTML = `
     <div class="page-header">
