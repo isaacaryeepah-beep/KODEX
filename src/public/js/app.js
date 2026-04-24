@@ -710,6 +710,10 @@ async function apiUpload(urlPath, formData, method = 'POST') {
 }
 
 function showSubscriptionGate(message) {
+  // Employees and students never pay — ignore subscription gates for them
+  const freeRoles = ['employee', 'student', 'hod'];
+  if (currentUser && freeRoles.includes(currentUser.role)) return;
+
   // Navigate to subscription page and show a toast if possible
   try {
     if (typeof navigateTo === 'function') navigateTo('subscription');
@@ -9822,6 +9826,20 @@ async function paySubscription() {
 async function renderSubscription() {
   const content = document.getElementById('main-content');
   if (!content) return;
+
+  // Employees and students do not pay — show informational message and stop
+  const freeRoles = ['employee', 'student'];
+  if (currentUser && freeRoles.includes(currentUser.role)) {
+    content.innerHTML = `
+      <div class="page-header"><h2>Subscription</h2><p>Your access plan</p></div>
+      <div class="card" style="max-width:480px;padding:32px;text-align:center">
+        <div style="font-size:40px;margin-bottom:12px">✅</div>
+        <h3 style="margin-bottom:8px">No Payment Required</h3>
+        <p style="color:var(--text-muted)">Your access is managed by your company admin. You do not need a personal subscription.</p>
+      </div>`;
+    return;
+  }
+
   try {
     const meData  = await api('/api/auth/me');
     const ut      = meData.userTrial || {};
