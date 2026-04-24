@@ -627,6 +627,7 @@ window.addEventListener('DOMContentLoaded', () => {
 });
 
 let currentUser = null;
+let currentUserTrial = null; // mirrors data.userTrial from the last /me response
 let currentView = 'dashboard';
 
 function svgIcon(path, size = 18) {
@@ -709,10 +710,22 @@ async function apiUpload(urlPath, formData, method = 'POST') {
   return res;
 }
 
+let _subGateFired = false;
 function showSubscriptionGate(message) {
-  // Employees and students never pay — ignore subscription gates for them
+  // Roles that never pay — ignore subscription gates
   const freeRoles = ['employee', 'student', 'hod'];
   if (currentUser && freeRoles.includes(currentUser.role)) return;
+
+  // If the user already has an active personal subscription, suppress the gate.
+  // This fires when multiple parallel API calls return 403 before the middleware
+  // catches up, or during login before the server fix propagates.
+  if (currentUserTrial?.isSubscribed) return;
+  if (currentUser?.subscriptionExpiry && new Date(currentUser.subscriptionExpiry) > new Date()) return;
+
+  // Deduplicate — multiple concurrent 403s should show only one toast
+  if (_subGateFired) return;
+  _subGateFired = true;
+  setTimeout(() => { _subGateFired = false; }, 3000);
 
   // Navigate to subscription page and show a toast if possible
   try {
@@ -1114,6 +1127,7 @@ function showPendingApproval(message) {
   localStorage.removeItem('token');
   token = null;
   currentUser = null;
+  currentUserTrial = null;
   window.currentUser = null;
 }
 
@@ -1788,6 +1802,7 @@ async function handleLogout() {
   resetBranding();
   token = null;
   currentUser = null;
+  currentUserTrial = null;
   window.currentUser = null;
   localStorage.removeItem('token');
   document.getElementById('main-content').innerHTML = '';
@@ -2006,6 +2021,8 @@ function showDashboard(data) {
     showForceChangePassword();
     return;
   }
+  // Cache userTrial so showSubscriptionGate can check active subscription status
+  if (data?.userTrial) currentUserTrial = data.userTrial;
   try {
     window.currentUser = currentUser; // expose for faq-assistant.js (let ≠ window prop)
     document.getElementById('auth-page').style.display = 'none';
@@ -2545,6 +2562,7 @@ function exitImpersonation() {
   localStorage.removeItem('token');
   token = null;
   currentUser = null;
+  currentUserTrial = null;
   window.location.href = '/superadmin';
 }
 

@@ -810,6 +810,8 @@ exports.login = async (req, res) => {
         } : null,
         deviceId: user.deviceId,
         lastLoginAt: user.lastLoginAt,
+        subscriptionExpiry: user.subscriptionExpiry || null,
+        subscriptionStatus: user.subscriptionStatus || null,
       },
       trial: company ? {
         active: company.isTrialActive,
