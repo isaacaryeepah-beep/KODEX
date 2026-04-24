@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: kodex
+    runtime: node
+    rootDir:
+    buildCommand: npm install && cd client && npm install && npm run build
+    startCommand: node src/server.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        generateValue: false
