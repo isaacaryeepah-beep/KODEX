@@ -4424,16 +4424,6 @@ async function renderSignInOut() {
         <p>Track your daily attendance · ${new Date().toLocaleDateString('en-GB', {weekday:'long',day:'numeric',month:'long',year:'numeric'})}</p>
       </div>
 
-      ${esp32IP ? `
-      <div class="card" style="padding:10px 16px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between">
-        <span style="font-size:12px">${bleDetected ? '🟢 Office device detected' : '🔴 Office device not reachable — you may still clock in via web'}</span>
-        <button class="btn btn-sm" style="font-size:10px;padding:3px 8px;background:var(--border)" onclick="configureESP32()">Configure</button>
-      </div>` : `
-      <div class="card" style="padding:10px 16px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between">
-        <span style="font-size:12px;color:var(--text-muted)">⚪ No office device configured — clock in/out via web</span>
-        <button class="btn btn-sm" style="font-size:10px;padding:3px 8px;background:var(--border)" onclick="configureESP32()">Set up ESP32</button>
-      </div>`}
-
       <div class="card" style="text-align:center;padding:40px 24px;border-left:4px solid ${statusColor}">
         <div style="font-size:48px;margin-bottom:12px">
           ${isClockedIn ? svgIcon('<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>', 48) : svgIcon('<polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>', 48)}
