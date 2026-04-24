@@ -20,7 +20,6 @@ function addDays(date, days) {
 }
 
 // ── GET /api/payments/plans ───────────────────────────────────────────────────
-// Returns the correct plan based on the user's company mode
 exports.getPlans = async (req, res) => {
   try {
     const company = await Company.findById(req.user.company).select("mode").lean();
@@ -39,11 +38,10 @@ exports.getPlans = async (req, res) => {
 };
 
 // ── GET /api/payments/status ──────────────────────────────────────────────────
-// Returns the CURRENT USER's personal subscription status
 exports.getSubscriptionStatus = async (req, res) => {
   try {
     const user = await User.findById(req.user._id)
-      .select("trialEndDate subscriptionExpiry subscriptionStatus semestersPaid role createdAt")
+      .select("trialEndDate subscriptionExpiry subscriptionStatus periodsPaid semestersPaid role createdAt")
       .lean();
     if (!user) return res.status(404).json({ error: "User not found" });
 
@@ -74,8 +72,9 @@ exports.getSubscriptionStatus = async (req, res) => {
       daysLeft = 0;
     }
 
+    const periodsPaid = user.periodsPaid || user.semestersPaid || 0;
     return res.json({
-      userTrial: { status, daysLeft, trialEndDate: trialEnd, subscriptionExpiry: subEnd, semestersPaid: user.semestersPaid || 0 },
+      userTrial: { status, daysLeft, trialEndDate: trialEnd, subscriptionExpiry: subEnd, periodsPaid },
     });
   } catch (e) {
     console.error("Subscription status error:", e.message);
@@ -84,7 +83,6 @@ exports.getSubscriptionStatus = async (req, res) => {
 };
 
 // ── GET /api/payments/user-subscription ──────────────────────────────────────
-// Alias for getSubscriptionStatus
 exports.getUserSubscription = exports.getSubscriptionStatus;
 
 // ── GET /api/payments/paystack/public-key ────────────────────────────────────
@@ -93,7 +91,6 @@ exports.getPaystackPublicKey = async (req, res) => {
 };
 
 // ── POST /api/payments/paystack/initialize ────────────────────────────────────
-// Body: { plan: "semester" }  — only semester is accepted
 exports.initializePaystackSubscription = async (req, res) => {
   try {
     const { plan } = req.body;
@@ -175,7 +172,6 @@ exports.initializePaystackSubscription = async (req, res) => {
 };
 
 // ── GET /api/payments/paystack/verify?reference=xxxx ─────────────────────────
-// Called after Paystack redirects back — verifies and activates user subscription
 exports.verifyPaystackSubscription = async (req, res) => {
   try {
     const { reference } = req.query;
@@ -187,7 +183,6 @@ exports.verifyPaystackSubscription = async (req, res) => {
       return res.status(400).json({ error: "Payment reference is required" });
     }
 
-    // Verify with Paystack
     const resp = await axios.get(`${PAYSTACK_BASE_URL}/transaction/verify/${reference}`, {
       headers: { Authorization: `Bearer ${PAYSTACK_SECRET_KEY}` },
     });
@@ -201,15 +196,12 @@ exports.verifyPaystackSubscription = async (req, res) => {
 
     const meta = data.metadata || {};
 
-    // Validate this is a user subscription payment
-    if (meta.purpose !== "user_subscription" || meta.plan !== "semester") {
-      return res.status(400).json({ error: "Invalid payment purpose" });
+    // Accept both semester (academic) and monthly (corporate) plans
+    if (meta.purpose !== "user_subscription" || !PLANS[meta.plan]) {
+      return res.status(400).json({ error: "Invalid payment purpose or unknown plan" });
     }
 
     const planInfo = PLANS[meta.plan];
-    if (!planInfo) {
-      return res.status(400).json({ error: "Unknown plan in payment metadata" });
-    }
 
     const expectedPesewas = planInfo.price * 100;
     if (Number(data.amount) !== expectedPesewas) {
@@ -223,21 +215,20 @@ exports.verifyPaystackSubscription = async (req, res) => {
     const userId = meta.userId;
     if (!userId) return res.status(400).json({ error: "Missing userId in payment metadata" });
 
-    // Activate the user's subscription — stack on top of existing if still active
     const user = await User.findById(userId);
     if (!user) return res.status(404).json({ error: "User not found" });
 
     const now     = new Date();
     const baseDate =
       user.subscriptionExpiry && new Date(user.subscriptionExpiry) > now
-        ? new Date(user.subscriptionExpiry)   // extend from current end date
-        : now;                                // fresh start from today
+        ? new Date(user.subscriptionExpiry)
+        : now;
 
     const newExpiry = addDays(baseDate, planInfo.days);
 
     user.subscriptionExpiry   = newExpiry;
     user.subscriptionStatus   = "active";
-    user.semestersPaid        = (user.semestersPaid || 0) + 1;
+    user.periodsPaid          = (user.periodsPaid || user.semestersPaid || 0) + 1;
     user.lastPaymentReference = reference;
     user.lastPaymentAmount    = planInfo.price;
     user.lastPaymentDate      = now;
@@ -249,9 +240,9 @@ exports.verifyPaystackSubscription = async (req, res) => {
         await sendSubscriptionConfirmed({
           email:     user.email,
           name:      user.name || user.email,
-          plan:      "semester",
+          plan:      meta.plan,
           endDate:   newExpiry,
-          amountGhs: SEMESTER_PRICE_GHS,
+          amountGhs: planInfo.price,
         });
       }
     } catch (emailErr) {
@@ -262,7 +253,7 @@ exports.verifyPaystackSubscription = async (req, res) => {
       message:            "Subscription activated ✅",
       subscriptionExpiry: newExpiry,
       daysAdded:          planInfo.days,
-      semestersPaid:      user.semestersPaid,
+      periodsPaid:        user.periodsPaid,
       plan:               meta.plan,
       amountPaid:         planInfo.price,
       label:              planInfo.label,
@@ -274,7 +265,6 @@ exports.verifyPaystackSubscription = async (req, res) => {
 };
 
 // ── POST /api/payments/paystack/webhook ──────────────────────────────────────
-// Paystack webhook for server-side confirmation (backup to verify)
 exports.paystackWebhook = async (req, res) => {
   try {
     const crypto = require("crypto");
@@ -287,11 +277,13 @@ exports.paystackWebhook = async (req, res) => {
 
     const event = req.body;
     if (event.event !== "charge.success") {
-      return res.status(200).json({ received: true }); // ignore other events
+      return res.status(200).json({ received: true });
     }
 
     const meta = event.data?.metadata || {};
-    if (meta.purpose !== "user_subscription" || meta.plan !== "semester") {
+
+    // Accept both semester (academic) and monthly (corporate) plans
+    if (meta.purpose !== "user_subscription" || !PLANS[meta.plan]) {
       return res.status(200).json({ received: true });
     }
 
@@ -301,12 +293,12 @@ exports.paystackWebhook = async (req, res) => {
     const user = await User.findById(userId);
     if (!user) return res.status(200).json({ received: true });
 
-    // Only apply if not already applied (idempotency via reference check)
+    // Idempotency — skip if already applied
     if (user.lastPaymentReference === event.data.reference) {
       return res.status(200).json({ received: true, note: "Already applied" });
     }
 
-    const wPlanInfo = PLANS[meta.plan] || PLANS.semester;
+    const wPlanInfo = PLANS[meta.plan];
     const now       = new Date();
     const baseDate  = user.subscriptionExpiry && new Date(user.subscriptionExpiry) > now
       ? new Date(user.subscriptionExpiry)
@@ -315,13 +307,13 @@ exports.paystackWebhook = async (req, res) => {
 
     user.subscriptionExpiry   = newExpiry;
     user.subscriptionStatus   = "active";
-    user.semestersPaid        = (user.semestersPaid || 0) + 1;
+    user.periodsPaid          = (user.periodsPaid || user.semestersPaid || 0) + 1;
     user.lastPaymentReference = event.data.reference;
     user.lastPaymentAmount    = wPlanInfo.price;
     user.lastPaymentDate      = now;
     await user.save({ validateBeforeSave: false });
 
-    console.log(`[Webhook] Subscription activated for ${user.name} (${user.role}) until ${newExpiry}`);
+    console.log(`[Webhook] ${meta.plan} subscription activated for ${user.name} (${user.role}) until ${newExpiry}`);
     return res.status(200).json({ received: true });
   } catch (e) {
     console.error("Webhook error:", e.message);

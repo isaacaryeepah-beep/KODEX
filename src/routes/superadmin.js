@@ -264,17 +264,20 @@ router.patch("/users/:id/extend-trial", async (req, res) => {
       const base = user.trialEndDate && new Date(user.trialEndDate) > Date.now()
         ? new Date(user.trialEndDate) : new Date();
       newEnd = new Date(base.getTime() + days * 24 * 60 * 60 * 1000);
-    } else if (req.body.semester) {
-      // 1 semester = 16 weeks = 112 days
-      const SEMESTER_DAYS = 112;
-const SEMESTER_PRICE_GHS = 300;
-      newEnd = new Date(Date.now() + SEMESTER_DAYS * 24 * 60 * 60 * 1000);
+    } else if (req.body.semester || req.body.monthly) {
+      // Grant one full subscription period — duration depends on company mode
+      const userCompany = await Company.findById(user.company).select('mode').lean();
+      const isCorp      = userCompany?.mode === 'corporate';
+      const PERIOD_DAYS  = isCorp ? 30  : 112;
+      const PERIOD_PRICE = isCorp ? 150 : 300;
+      const PERIOD_LABEL = isCorp ? '30 days (monthly)' : '1 semester (112 days)';
+      newEnd = new Date(Date.now() + PERIOD_DAYS * 24 * 60 * 60 * 1000);
       user.subscriptionExpiry = newEnd;
       user.subscriptionStatus = "active";
-      user.semestersPaid = (user.semestersPaid || 0) + 1;
-      user.trialEndDate = user.trialEndDate || newEnd; // ensure trialEndDate is set
+      user.periodsPaid        = (user.periodsPaid || user.semestersPaid || 0) + 1;
+      user.trialEndDate       = user.trialEndDate || newEnd;
       await user.save();
-      return res.json({ message: `Subscription activated for 1 semester (112 days) at GHS ${SEMESTER_PRICE_GHS}. Expires: ${newEnd.toDateString()}`, subscriptionExpiry: newEnd, price: SEMESTER_PRICE_GHS });
+      return res.json({ message: `Subscription activated for ${PERIOD_LABEL} at GHS ${PERIOD_PRICE}. Expires: ${newEnd.toDateString()}`, subscriptionExpiry: newEnd, price: PERIOD_PRICE });
     } else {
       return res.status(400).json({ error: "Provide expiryDate or days" });
     }
@@ -607,8 +610,8 @@ router.patch("/companies/:id/subscription", async (req, res) => {
       company.subscriptionStatus = 'active';
       company.hasAccess = true;
       if (!company.subscriptionEndDate || new Date(company.subscriptionEndDate) < Date.now()) {
-        const months = company.mode === 'corporate' ? 1 : 6;
-        company.subscriptionEndDate = new Date(Date.now() + months * 30 * 24 * 60 * 60 * 1000);
+        const days = company.mode === 'corporate' ? 30 : 112;
+        company.subscriptionEndDate = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
       }
     } else {
       company.subscriptionActive = false;

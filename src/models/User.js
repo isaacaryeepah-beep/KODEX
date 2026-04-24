@@ -219,9 +219,13 @@ const userSchema = new mongoose.Schema(
     },
     subscriptionExpiry: {
       type: Date,
-      default: null, // set when they pay for a semester
+      default: null,
     },
     semestersPaid: {
+      type: Number,
+      default: 0,
+    },
+    periodsPaid: {
       type: Number,
       default: 0,
     },

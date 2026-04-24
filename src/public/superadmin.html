@@ -461,13 +461,13 @@ function showDetail(id) {
     <hr class="detail-divider">
     <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#94a3b8;margin-bottom:10px">User Subscriptions</div>
     <div id="lecturer-subs-${c._id}">
-      <button onclick="loadLecturerSubs('${c._id}')" style="padding:8px 16px;background:#4f46e5;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer">View User Subscriptions</button>
+      <button onclick="loadLecturerSubs('${c._id}','${c.mode}')" style="padding:8px 16px;background:#4f46e5;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer">View User Subscriptions</button>
     </div>
   `;
   document.getElementById('detail-modal').classList.add('open');
 }
 
-function _buildUserSubTable(users, sectionTitle, badgeColor) {
+function _buildUserSubTable(users, sectionTitle, badgeColor, companyMode) {
   if (!users.length) return '';
   const now = Date.now();
   const rows = users.map(l => {
@@ -485,7 +485,7 @@ function _buildUserSubTable(users, sectionTitle, badgeColor) {
       <td style="padding:8px;font-size:12px">${subEnd}</td>
       <td style="padding:8px;white-space:nowrap">
         <button onclick="extendUserTrial('${l._id}','${esc(l.name)}')" style="padding:4px 10px;background:#4f46e5;color:#fff;border:none;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer">Set Trial</button>
-        <button onclick="activateSemester('${l._id}','${esc(l.name)}')" style="padding:4px 10px;background:#16a34a;color:#fff;border:none;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;margin-left:4px">+ Semester</button>
+        <button onclick="activateSemester('${l._id}','${esc(l.name)}','${companyMode}')" style="padding:4px 10px;background:#16a34a;color:#fff;border:none;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;margin-left:4px">${companyMode === 'corporate' ? '+ Monthly' : '+ Semester'}</button>
       </td>
     </tr>`;
   }).join('');
@@ -511,7 +511,7 @@ function _buildUserSubTable(users, sectionTitle, badgeColor) {
     </div>`;
 }
 
-async function loadLecturerSubs(companyId) {
+async function loadLecturerSubs(companyId, companyMode) {
   const container = document.getElementById('lecturer-subs-' + companyId);
   container.innerHTML = '<div style="font-size:13px;color:#6b7280">Loading…</div>';
   try {
@@ -526,9 +526,9 @@ async function loadLecturerSubs(companyId) {
     const others    = data.lecturers.filter(l => !['hod','lecturer'].includes(l.role));
 
     const html = [
-      hods.length      ? _buildUserSubTable(hods,      'HODs',      '#0891b2') : '',
-      lecturers.length ? _buildUserSubTable(lecturers, 'Lecturers', '#7c3aed') : '',
-      others.length    ? _buildUserSubTable(others,    'Other',     '#6b7280') : '',
+      hods.length      ? _buildUserSubTable(hods,      'HODs',      '#0891b2', companyMode) : '',
+      lecturers.length ? _buildUserSubTable(lecturers, 'Lecturers', '#7c3aed', companyMode) : '',
+      others.length    ? _buildUserSubTable(others,    'Other',     '#6b7280', companyMode) : '',
     ].join('');
 
     container.innerHTML = html || '<div style="font-size:13px;color:#6b7280">No users found.</div>';
@@ -751,8 +751,11 @@ async function confirmExtendTrial(id) {
   }
 }
 
-async function activateSemester(userId, name) {
-  if (!confirm(`Activate 1 semester (16 weeks / 112 days) for ${name}?\n\nPrice: ₵300`)) return;
+async function activateSemester(userId, name, mode) {
+  const isCorp = mode === 'corporate';
+  const label  = isCorp ? '30 days (monthly plan)' : '1 semester (16 weeks / 112 days)';
+  const price  = isCorp ? '₵150' : '₵300';
+  if (!confirm(`Activate ${label} for ${name}?\n\nPrice: ${price}`)) return;
   try {
     const data = await api('/api/superadmin/users/' + userId + '/extend-trial', {
       method: 'PATCH',
