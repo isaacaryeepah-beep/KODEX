@@ -244,15 +244,29 @@
       <div class="field">
         <label>Category</label>
         <select id="m-category">
+          <!-- shared -->
           <option value="general">General</option>
           <option value="attendance">Attendance</option>
-          <option value="snapquiz">SnapQuiz</option>
-          <option value="assignments">Assignments</option>
-          <option value="billing">Billing</option>
-          <option value="hr">HR</option>
-          <option value="meetings">Meetings</option>
           <option value="gps_attendance">GPS Attendance</option>
+          <option value="billing">Billing</option>
+          <option value="meetings">Meetings</option>
           <option value="password_reset">Password Reset</option>
+          <!-- corporate-only -->
+          <option value="hr" data-mode="corporate">HR &amp; Clock In/Out</option>
+          <option value="leave" data-mode="corporate">Leave</option>
+          <option value="expenses" data-mode="corporate">Expenses</option>
+          <option value="timesheet" data-mode="corporate">Timesheet</option>
+          <option value="performance" data-mode="corporate">Performance</option>
+          <option value="messages" data-mode="corporate">Messages</option>
+          <option value="support" data-mode="corporate">Support</option>
+          <!-- academic-only -->
+          <option value="courses" data-mode="academic">Courses</option>
+          <option value="students" data-mode="academic">Students</option>
+          <option value="sessions" data-mode="academic">Sessions</option>
+          <option value="snapquiz" data-mode="academic">SnapQuiz</option>
+          <option value="assignments" data-mode="academic">Assignments</option>
+          <option value="grade_book" data-mode="academic">Grade Book</option>
+          <option value="announcements" data-mode="academic">Announcements</option>
         </select>
       </div>
       <div class="field">
@@ -298,15 +312,29 @@
     <div class="field">
       <label>Category</label>
       <select id="p-category">
+        <!-- shared -->
         <option value="general">General</option>
         <option value="attendance">Attendance</option>
-        <option value="snapquiz">SnapQuiz</option>
-        <option value="assignments">Assignments</option>
-        <option value="billing">Billing</option>
-        <option value="hr">HR</option>
-        <option value="meetings">Meetings</option>
         <option value="gps_attendance">GPS Attendance</option>
+        <option value="billing">Billing</option>
+        <option value="meetings">Meetings</option>
         <option value="password_reset">Password Reset</option>
+        <!-- corporate-only -->
+        <option value="hr" data-mode="corporate">HR &amp; Clock In/Out</option>
+        <option value="leave" data-mode="corporate">Leave</option>
+        <option value="expenses" data-mode="corporate">Expenses</option>
+        <option value="timesheet" data-mode="corporate">Timesheet</option>
+        <option value="performance" data-mode="corporate">Performance</option>
+        <option value="messages" data-mode="corporate">Messages</option>
+        <option value="support" data-mode="corporate">Support</option>
+        <!-- academic-only -->
+        <option value="courses" data-mode="academic">Courses</option>
+        <option value="students" data-mode="academic">Students</option>
+        <option value="sessions" data-mode="academic">Sessions</option>
+        <option value="snapquiz" data-mode="academic">SnapQuiz</option>
+        <option value="assignments" data-mode="academic">Assignments</option>
+        <option value="grade_book" data-mode="academic">Grade Book</option>
+        <option value="announcements" data-mode="academic">Announcements</option>
       </select>
     </div>
     <div class="modal-status" id="promote-status"></div>
@@ -356,18 +384,33 @@ function toast(msg, type) {
   el._t = setTimeout(function(){ el.className = ''; }, 3000);
 }
 
+// ── Mode-based category filtering ────────────────────────────────────────────
+function _applyModeFilter(mode) {
+  if (!mode) return; // superadmin — show all
+  document.querySelectorAll('select option[data-mode]').forEach(function(opt) {
+    opt.style.display = (opt.dataset.mode === mode) ? '' : 'none';
+    if (opt.style.display === 'none' && opt.selected) opt.parentElement.value = 'general';
+  });
+}
+
 // ── Boot ─────────────────────────────────────────────────────────────────────
 (function init() {
   if (!TOKEN) {
     document.getElementById('auth-gate').style.display = 'flex';
     return;
   }
-  // Verify token and role by fetching stats
-  api('GET', '/api/faq/admin/stats')
-    .then(function(d) {
-      // If we got here, user is admin — show dashboard
+  // Verify token and role by fetching stats + get company mode
+  Promise.all([
+    api('GET', '/api/faq/admin/stats'),
+    fetch('/api/auth/me', { headers: { 'Authorization': 'Bearer ' + TOKEN } }).then(function(r){ return r.json(); }).catch(function(){ return {}; }),
+  ])
+    .then(function(results) {
+      var d    = results[0];
+      var me   = results[1];
+      var mode = me && me.user && me.user.company && me.user.company.mode;
       try { USER = JSON.parse(atob(TOKEN.split('.')[1])); } catch(_) {}
-      document.getElementById('user-chip').textContent = (USER && USER.name) ? USER.name : 'Admin';
+      document.getElementById('user-chip').textContent = (me.user && me.user.name) ? me.user.name : 'Admin';
+      _applyModeFilter(mode !== 'superadmin' ? mode : null);
       document.getElementById('dashboard').style.display = 'block';
       renderStats(d);
     })

@@ -13,9 +13,22 @@ router.post('/devices/register',          authenticate, companyIsolation, device
 router.post('/devices/heartbeat',         authenticate, companyIsolation, deviceCtrl.heartbeat);
 router.post('/devices/sync',              authenticate, companyIsolation, deviceCtrl.syncOfflineRecords);
 router.put('/devices/:deviceId/networks', authenticate, companyIsolation, deviceCtrl.updateNetworks);
-router.get('/devices/my',                 authenticate, companyIsolation, deviceCtrl.getMyDevice);
 router.get('/devices/:deviceId/status',   authenticate, companyIsolation, deviceCtrl.getDeviceStatus);
 router.post('/devices/transfer',          authenticate, deviceCtrl.transferDevice);
+
+// Lecturer self-service (no deviceId param needed — scoped to owner)
+router.get('/devices/my',          authenticate, companyIsolation, deviceCtrl.getMyDevice);
+router.delete('/devices/my',       authenticate, companyIsolation, deviceCtrl.unlinkDevice);
+router.patch('/devices/my/rename', authenticate, companyIsolation, deviceCtrl.renameDevice);
+
+// Pairing flow
+router.post('/devices/pairing-code',  authenticate, deviceCtrl.generatePairingCode);
+router.post('/devices/pair',          deviceCtrl.pairDevice); // no JWT — authenticated via pairing code
+router.get('/devices/my/activity',    authenticate, companyIsolation, deviceCtrl.getDeviceActivity);
+
+// WiFi setup (proxied to ESP32)
+router.get('/devices/my/scan-wifi',   authenticate, companyIsolation, deviceCtrl.scanWifi);
+router.post('/devices/configure-wifi', authenticate, companyIsolation, deviceCtrl.configureWifi);
 
 // ─── SESSION ROUTES ───────────────────────────────────────────────────────────
 router.post('/sessions/start',               authenticate, companyIsolation, sessionCtrl.startSession);

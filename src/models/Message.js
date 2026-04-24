@@ -42,6 +42,18 @@ const messageSchema = new mongoose.Schema(
       trim:     true,
     },
 
+    // ── Optional file attachment ──────────────────────────────────────────────
+    attachment: {
+      type: new mongoose.Schema({
+        fileName:     { type: String },
+        originalName: { type: String },
+        fileUrl:      { type: String },
+        mimeType:     { type: String },
+        fileSize:     { type: Number },
+      }, { _id: false }),
+      default: null,
+    },
+
     // ── Edit tracking ──────────────────────────────────────────────────────
     editedAt: { type: Date, default: null },
 

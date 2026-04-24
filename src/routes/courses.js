@@ -66,10 +66,10 @@ router.put('/:id/restore', requireRole('admin', 'superadmin'), ctrl.restoreCours
 // Delete (hard — only if no history)
 router.delete('/:id', requireRole('admin', 'superadmin'), ctrl.deleteCourse);
 
-// Lecturer assignment
+// Lecturer assignment (HOD can also reassign within their department)
 router.put(
   '/:id/assign-lecturer',
-  requireRole('admin', 'superadmin'),
+  requireRole('hod', 'admin', 'superadmin'),
   ctrl.assignLecturer
 );
 

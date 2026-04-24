@@ -32,12 +32,9 @@ const deviceSchema = new mongoose.Schema({
   mode:           { type: String, enum: ['station', 'access_point', 'hybrid'], default: 'hybrid' },
   currentNetwork: { type: String, default: null },
   apSSID:         { type: String, default: null },
+  localIp:        { type: String, default: null },
   status:         { type: String, enum: ['online', 'offline'], default: 'offline' },
   lastHeartbeat:  { type: Date, default: null },
-
-  // WiFi presence tracking — public IP captured on each heartbeat
-  lastPublicIp:   { type: String, default: null },
-  lastPublicIpAt: { type: Date,   default: null },
 
   // Location
   assignedRoom:       { type: String, default: null },

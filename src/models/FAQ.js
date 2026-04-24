@@ -19,15 +19,39 @@
 const mongoose = require("mongoose");
 
 const FAQ_CATEGORIES = Object.freeze([
+  // shared (both modes)
   "attendance",
-  "snapquiz",
-  "assignments",
-  "billing",
-  "hr",
-  "meetings",
   "gps_attendance",
+  "billing",
+  "meetings",
   "password_reset",
   "general",
+  // corporate-only
+  "hr",
+  "leave",
+  "expenses",
+  "timesheet",
+  "performance",
+  "messages",
+  "support",
+  // academic-only
+  "courses",
+  "students",
+  "sessions",
+  "snapquiz",
+  "assignments",
+  "grade_book",
+  "announcements",
+]);
+
+// Which categories belong to each mode (used for server-side filtering)
+const CORPORATE_CATEGORIES = new Set([
+  "attendance", "gps_attendance", "billing", "meetings", "password_reset", "general",
+  "hr", "leave", "expenses", "timesheet", "performance", "messages", "support",
+]);
+const ACADEMIC_CATEGORIES = new Set([
+  "attendance", "gps_attendance", "billing", "meetings", "password_reset", "general",
+  "courses", "students", "sessions", "snapquiz", "assignments", "grade_book", "announcements",
 ]);
 
 const faqSchema = new mongoose.Schema(
@@ -65,6 +89,13 @@ const faqSchema = new mongoose.Schema(
     // Empty = visible to all roles; non-empty = restricted to listed roles
     targetRoles: { type: [String], default: [] },
 
+    // 'all' = shown in both modes; 'corporate' / 'academic' = mode-restricted
+    targetMode: {
+      type:    String,
+      enum:    ['all', 'corporate', 'academic'],
+      default: 'all',
+    },
+
     // ── State ─────────────────────────────────────────────────────────────
     isActive: { type: Boolean, default: true },
 
@@ -93,4 +124,6 @@ faqSchema.index({ company: 1, isActive: 1 });
 
 const FAQ = mongoose.model("FAQ", faqSchema);
 module.exports = FAQ;
-module.exports.FAQ_CATEGORIES = FAQ_CATEGORIES;
+module.exports.FAQ_CATEGORIES       = FAQ_CATEGORIES;
+module.exports.CORPORATE_CATEGORIES = CORPORATE_CATEGORIES;
+module.exports.ACADEMIC_CATEGORIES  = ACADEMIC_CATEGORIES;

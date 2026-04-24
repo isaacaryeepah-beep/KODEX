@@ -1,14 +1,22 @@
 "use strict";
 /**
  * faq-widget.js
- * Floating FAQ help button — visible on the dashboard for all roles.
- * Opens the FAQ Center inline instead of a separate page.
+ * Dashboard: floating FAQ button that opens the FAQ Center inline.
+ * Auth page: toggleAuthHelp() opens a static help panel.
  */
+
+// ── Auth-page help panel toggle ───────────────────────────────────────────────
+window.toggleAuthHelp = function () {
+  const panel = document.getElementById('auth-help-panel');
+  if (!panel) return;
+  panel.classList.toggle('hidden');
+};
 
 (function () {
   function mountWidget() {
     if (document.getElementById('faq-widget-btn')) return;
-    if (!document.getElementById('dashboard-page')) return; // only show in app
+    const dp = document.getElementById('dashboard-page');
+    if (!dp || dp.classList.contains('hidden')) return; // only show when logged in
 
     const btn = document.createElement('button');
     btn.id = 'faq-widget-btn';
@@ -58,9 +66,10 @@
     mountWidget();
   }
 
-  // Also try mounting after login when dashboard becomes visible
+  // Mount after login when dashboard becomes visible
   const observer = new MutationObserver(() => {
-    if (document.getElementById('dashboard-page')) mountWidget();
+    const dp = document.getElementById('dashboard-page');
+    if (dp && !dp.classList.contains('hidden')) mountWidget();
   });
-  observer.observe(document.body, { childList: true, subtree: false });
+  observer.observe(document.body, { childList: true, subtree: true });
 })();

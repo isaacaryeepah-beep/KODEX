@@ -19,8 +19,17 @@
 const FAQ        = require("../models/FAQ");
 const FAQQuery   = require("../models/FAQQuery");
 const SupportTicket = require("../models/SupportTicket");
+const Company    = require("../models/Company");
 const { callAI } = require("../services/aiFaqService");
-const { FAQ_CATEGORIES } = FAQ;
+const { FAQ_CATEGORIES, CORPORATE_CATEGORIES, ACADEMIC_CATEGORIES } = FAQ;
+
+// Returns the allowed category Set for a company mode, or null for superadmin (no restriction).
+async function _modeFilter(req) {
+  if (req.user.role === 'superadmin') return null; // platform admin — no restriction
+  const company = await Company.findById(req.user.company).select('mode').lean();
+  const mode = company?.mode || 'academic';
+  return mode === 'corporate' ? CORPORATE_CATEGORIES : ACADEMIC_CATEGORIES;
+}
 const { Types: { ObjectId } } = require("mongoose");
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -60,7 +69,19 @@ exports.ask = async (req, res) => {
 
     // ── 1. FAQ full-text search ──────────────────────────────────────────
     const faqFilter = { company, isActive: true };
-    if (category && FAQ_CATEGORIES.includes(category)) faqFilter.category = category;
+
+    // Mode filter — only return FAQs that belong to this company's mode
+    const allowedCategories = await _modeFilter(req);
+    if (allowedCategories) {
+      faqFilter.category = { $in: Array.from(allowedCategories) };
+    }
+
+    if (category && FAQ_CATEGORIES.includes(category)) {
+      // If a specific category is requested, honour it only if it's in the allowed set
+      if (!allowedCategories || allowedCategories.has(category)) {
+        faqFilter.category = category;
+      }
+    }
 
     // Role-based filtering: return FAQs targeting this role or with no restriction
     const role = req.user.role;
@@ -270,11 +291,24 @@ exports.listFAQs = async (req, res) => {
     const role = req.user.role;
 
     const filter = { company, isActive: true };
-    if (req.query.category) filter.category = req.query.category;
 
-    // Non-admins only see FAQs that target their role (or all roles)
-    const ADMIN = ["admin", "superadmin"];
-    if (!ADMIN.includes(role)) {
+    // Mode filter — strictly restrict to the company's mode categories
+    const allowedCategories = await _modeFilter(req);
+    if (allowedCategories) {
+      filter.category = { $in: Array.from(allowedCategories) };
+    }
+
+    // If a specific category is requested, honour it only when inside the allowed set
+    if (req.query.category) {
+      if (!allowedCategories || allowedCategories.has(req.query.category)) {
+        filter.category = req.query.category;
+      }
+      // If the requested category is outside the allowed set, ignore the param
+      // (the broad mode filter above already restricts results correctly)
+    }
+
+    // Non-superadmin users only see FAQs that target their role (or all roles)
+    if (role !== 'superadmin') {
       filter.$or = [
         { targetRoles: { $size: 0 } },
         { targetRoles: role },
@@ -349,6 +383,9 @@ exports.updateFAQ = async (req, res) => {
     const faq = await FAQ.findOne({ _id: req.params.id, company });
     if (!faq) return res.status(404).json({ error: "FAQ not found" });
 
+    if (req.body.category !== undefined && !FAQ_CATEGORIES.includes(req.body.category)) {
+      return res.status(400).json({ error: `category must be one of: ${FAQ_CATEGORIES.join(", ")}` });
+    }
     const EDITABLE = ["question", "answer", "category", "keywords", "targetRoles", "isActive"];
     for (const key of EDITABLE) {
       if (req.body[key] !== undefined) faq[key] = req.body[key];
