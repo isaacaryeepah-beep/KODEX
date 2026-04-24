@@ -627,6 +627,7 @@ window.addEventListener('DOMContentLoaded', () => {
 });
 
 let currentUser = null;
+let currentUserTrial = null; // mirrors data.userTrial from the last /me response
 let currentView = 'dashboard';
 
 function svgIcon(path, size = 18) {
@@ -709,10 +710,22 @@ async function apiUpload(urlPath, formData, method = 'POST') {
   return res;
 }
 
+let _subGateFired = false;
 function showSubscriptionGate(message) {
-  // Employees and students never pay — ignore subscription gates for them
+  // Roles that never pay — ignore subscription gates
   const freeRoles = ['employee', 'student', 'hod'];
   if (currentUser && freeRoles.includes(currentUser.role)) return;
+
+  // If the user already has an active personal subscription, suppress the gate.
+  // This fires when multiple parallel API calls return 403 before the middleware
+  // catches up, or during login before the server fix propagates.
+  if (currentUserTrial?.isSubscribed) return;
+  if (currentUser?.subscriptionExpiry && new Date(currentUser.subscriptionExpiry) > new Date()) return;
+
+  // Deduplicate — multiple concurrent 403s should show only one toast
+  if (_subGateFired) return;
+  _subGateFired = true;
+  setTimeout(() => { _subGateFired = false; }, 3000);
 
   // Navigate to subscription page and show a toast if possible
   try {
@@ -1114,6 +1127,7 @@ function showPendingApproval(message) {
   localStorage.removeItem('token');
   token = null;
   currentUser = null;
+  currentUserTrial = null;
   window.currentUser = null;
 }
 
@@ -1788,6 +1802,7 @@ async function handleLogout() {
   resetBranding();
   token = null;
   currentUser = null;
+  currentUserTrial = null;
   window.currentUser = null;
   localStorage.removeItem('token');
   document.getElementById('main-content').innerHTML = '';
@@ -2006,6 +2021,8 @@ function showDashboard(data) {
     showForceChangePassword();
     return;
   }
+  // Cache userTrial so showSubscriptionGate can check active subscription status
+  if (data?.userTrial) currentUserTrial = data.userTrial;
   try {
     window.currentUser = currentUser; // expose for faq-assistant.js (let ≠ window prop)
     document.getElementById('auth-page').style.display = 'none';
@@ -2101,8 +2118,6 @@ function showDashboard(data) {
         _bannerEl.style.display = 'flex';
 
       } else {
-        const _mode  = currentUser?.company?.mode || (currentUser?.role === 'manager' ? 'corporate' : 'academic');
-        const _label = _mode === 'corporate' ? '₵150/month' : '₵300/semester';
         _bannerEl.style.display = 'none';
         _expiredEl.className = 'trial-expired-banner';
         _expiredEl.innerHTML = `
@@ -2111,13 +2126,23 @@ function showDashboard(data) {
             <div class="sub-banner-text">
               <span class="sub-banner-title">Trial Expired</span>
               <span class="sub-banner-sep">·</span>
-              <span class="sub-banner-detail">Subscribe to continue — ${_label} via Paystack</span>
+              <span class="sub-banner-detail" id="sub-expired-label">Subscribe to continue via Paystack</span>
             </div>
           </div>
           <div class="sub-banner-right">
             <button class="sub-banner-cta" onclick="paySubscription()">Subscribe Now</button>
           </div>`;
         _expiredEl.style.display = 'flex';
+        // Populate live price asynchronously
+        api('/api/payments/plans').then(pd => {
+          const el = document.getElementById('sub-expired-label');
+          if (!el) return;
+          const lp = pd?.plans?.[0];
+          const cur = lp?.currency === 'GHS' ? '₵' : (lp?.currency || '₵');
+          const amt = lp?.price ?? ((currentUser?.company?.mode === 'corporate') ? 150 : 300);
+          const per = currentUser?.company?.mode === 'corporate' ? '/month' : '/semester';
+          el.textContent = `Subscribe to continue — ${cur}${amt}${per} via Paystack`;
+        }).catch(() => {});
       }
 
     } else if (trial && trial.active) {
@@ -2537,6 +2562,7 @@ function exitImpersonation() {
   localStorage.removeItem('token');
   token = null;
   currentUser = null;
+  currentUserTrial = null;
   window.location.href = '/superadmin';
 }
 
@@ -9841,7 +9867,10 @@ async function renderSubscription() {
   }
 
   try {
-    const meData  = await api('/api/auth/me');
+    const [meData, plansData] = await Promise.all([
+      api('/api/auth/me'),
+      api('/api/payments/plans').catch(() => null),
+    ]);
     const ut      = meData.userTrial || {};
     const status    = ut.status   || 'expired';
     const rawDays   = ut.daysLeft || 0;
@@ -9855,11 +9884,17 @@ async function renderSubscription() {
       ? new Date(ut.subscriptionExpiry).toLocaleDateString('en-GB', { day:'numeric', month:'long', year:'numeric' })
       : '—';
 
+    // Use live price from API; fall back to defaults if unavailable
+    const livePlan    = plansData?.plans?.[0];
+    const liveCur     = plansData?.plans?.[0]?.currency || 'GHS';
+    const liveAmt     = livePlan?.price ?? (isCorp ? 150 : 300);
+    const liveSym     = liveCur === 'GHS' ? '₵' : liveCur + ' ';
+
     const planName   = isCorp ? 'Monthly Plan'    : 'Semester Plan';
-    const planPrice  = isCorp ? '₵150'            : '₵300';
+    const planPrice  = `${liveSym}${liveAmt}`;
     const planPeriod = isCorp ? '30 days / month' : '1 semester (16 weeks)';
     const planId     = isCorp ? 'monthly'         : 'semester';
-    const planLabel  = isCorp ? '₵150 / month'    : '₵300 / semester';
+    const planLabel  = isCorp ? `${liveSym}${liveAmt} / month` : `${liveSym}${liveAmt} / semester`;
     const planFeatures = isCorp
       ? ['Full platform access', 'Attendance & clock in/out management', 'Leave &amp; expense management', 'Performance tracking &amp; reporting', 'Renew any time — days stack up']
       : ['Full platform access', 'Attendance marking &amp; session management', 'Assessment creation &amp; grading', 'Grade book &amp; reports', 'Renew any time — days stack up'];
