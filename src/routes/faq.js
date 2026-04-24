@@ -38,7 +38,8 @@ const { requireRole }               = require("../middleware/role");
 const { companyIsolation }          = require("../middleware/companyIsolation");
 const { requireActiveSubscription } = require("../middleware/subscription");
 const ctrl = require("../controllers/faqController");
-const { FAQ_CATEGORIES } = require("../models/FAQ");
+const { FAQ_CATEGORIES, CORPORATE_CATEGORIES, ACADEMIC_CATEGORIES } = require("../models/FAQ");
+const Company = require("../models/Company");
 
 // ── Middleware ───────────────────────────────────────────────────────────────
 const mw    = [authenticate, requireActiveSubscription, companyIsolation];
@@ -48,9 +49,19 @@ const ADMIN = ["admin", "superadmin"];
 // Static / literal routes — MUST be declared before /:id
 // ════════════════════════════════════════════════════════════════════════════
 
-// GET /categories — static list, no DB call needed
-router.get("/categories", ...mw, (req, res) => {
-  res.json({ categories: FAQ_CATEGORIES });
+// GET /categories — mode-filtered list
+router.get("/categories", ...mw, async (req, res) => {
+  try {
+    if (req.user.role === 'superadmin') {
+      return res.json({ categories: FAQ_CATEGORIES });
+    }
+    const company = await Company.findById(req.user.company).select('mode').lean();
+    const mode = company?.mode || 'academic';
+    const allowed = mode === 'corporate' ? CORPORATE_CATEGORIES : ACADEMIC_CATEGORIES;
+    res.json({ categories: FAQ_CATEGORIES.filter(c => allowed.has(c)) });
+  } catch (err) {
+    res.json({ categories: FAQ_CATEGORIES });
+  }
 });
 
 // ── Admin analytics — declared before /:id ───────────────────────────────────

@@ -358,6 +358,14 @@ exports.createFAQ = async (req, res) => {
       return res.status(400).json({ error: `category must be one of: ${FAQ_CATEGORIES.join(", ")}` });
     }
 
+    // Enforce mode: category must belong to the company's mode
+    if (category && req.user.role !== 'superadmin') {
+      const allowedCats = await _modeFilter(req);
+      if (allowedCats && !allowedCats.has(category)) {
+        return res.status(400).json({ error: `Category "${category}" is not available in your portal's mode.` });
+      }
+    }
+
     const faq = await FAQ.create({
       company,
       question:    question.trim(),
@@ -385,6 +393,12 @@ exports.updateFAQ = async (req, res) => {
 
     if (req.body.category !== undefined && !FAQ_CATEGORIES.includes(req.body.category)) {
       return res.status(400).json({ error: `category must be one of: ${FAQ_CATEGORIES.join(", ")}` });
+    }
+    if (req.body.category !== undefined && req.user.role !== 'superadmin') {
+      const allowedCats = await _modeFilter(req);
+      if (allowedCats && !allowedCats.has(req.body.category)) {
+        return res.status(400).json({ error: `Category "${req.body.category}" is not available in your portal's mode.` });
+      }
     }
     const EDITABLE = ["question", "answer", "category", "keywords", "targetRoles", "isActive"];
     for (const key of EDITABLE) {

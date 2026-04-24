@@ -184,15 +184,29 @@
         <input type="text" id="faq-search" placeholder="🔍 Search questions…" oninput="filterFAQs()">
         <select id="faq-cat-filter" onchange="filterFAQs()">
           <option value="">All categories</option>
+          <!-- shared -->
           <option value="attendance">Attendance</option>
-          <option value="snapquiz">SnapQuiz</option>
-          <option value="assignments">Assignments</option>
-          <option value="billing">Billing</option>
-          <option value="hr">HR</option>
-          <option value="meetings">Meetings</option>
           <option value="gps_attendance">GPS Attendance</option>
+          <option value="billing">Billing</option>
+          <option value="meetings">Meetings</option>
           <option value="password_reset">Password Reset</option>
           <option value="general">General</option>
+          <!-- corporate-only -->
+          <option value="hr" data-mode="corporate">HR &amp; Clock In/Out</option>
+          <option value="leave" data-mode="corporate">Leave</option>
+          <option value="expenses" data-mode="corporate">Expenses</option>
+          <option value="timesheet" data-mode="corporate">Timesheet</option>
+          <option value="performance" data-mode="corporate">Performance</option>
+          <option value="messages" data-mode="corporate">Messages</option>
+          <option value="support" data-mode="corporate">Support</option>
+          <!-- academic-only -->
+          <option value="courses" data-mode="academic">Courses</option>
+          <option value="students" data-mode="academic">Students</option>
+          <option value="sessions" data-mode="academic">Sessions</option>
+          <option value="snapquiz" data-mode="academic">SnapQuiz</option>
+          <option value="assignments" data-mode="academic">Assignments</option>
+          <option value="grade_book" data-mode="academic">Grade Book</option>
+          <option value="announcements" data-mode="academic">Announcements</option>
         </select>
         <select id="faq-status-filter" onchange="filterFAQs()">
           <option value="">All statuses</option>
