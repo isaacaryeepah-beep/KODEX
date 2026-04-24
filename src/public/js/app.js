@@ -11161,9 +11161,8 @@ async function openPostAnnouncementModal() {
                 </select>`
               : `<select id="ann-audience" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;">
                   <option value="all">Everyone</option>
-                  <option value="students">Students only</option>
                   ${currentUser?.company?.mode === 'academic'
-                    ? '<option value="lecturers">Lecturers only</option>'
+                    ? '<option value="students">Students only</option><option value="lecturers">Lecturers only</option>'
                     : '<option value="employees">Employees only</option>'
                   }
                 </select>`
