@@ -26,11 +26,79 @@ const CorporateAttendance = require("../models/CorporateAttendance");
 const ShiftAssignment     = require("../models/ShiftAssignment");
 const Shift               = require("../models/Shift");
 const AuditLog            = require("../models/AuditLog");
+const Company             = require("../models/Company");
 const { AUDIT_ACTIONS }   = AuditLog;
 const notificationService = require("../services/notificationService");
 
 const mw        = [authenticate, requireMode("corporate"), requireActiveSubscription];
 const canManage = requireRole("admin", "manager", "superadmin");
+const adminOnly = requireRole("admin", "superadmin");
+
+// ---------------------------------------------------------------------------
+// Strict attendance helpers
+// ---------------------------------------------------------------------------
+
+function extractClientIp(req) {
+  const fwd = (req.headers["x-forwarded-for"] || "").split(",")[0].trim();
+  const raw  = fwd || req.headers["x-real-ip"] || req.ip || "";
+  return raw.startsWith("::ffff:") ? raw.slice(7) : raw;
+}
+
+function detectProxy(req) {
+  if (req.headers["via"] || req.headers["proxy-connection"]) return true;
+  // Multiple hops in x-forwarded-for beyond what the server's own proxy adds
+  const fwd = (req.headers["x-forwarded-for"] || "").split(",").map(s => s.trim()).filter(Boolean);
+  return fwd.length > 1;
+}
+
+function haversineMeters(lat1, lng1, lat2, lng2) {
+  const R = 6371000;
+  const toRad = d => d * Math.PI / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a = Math.sin(dLat / 2) ** 2 +
+            Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+async function validateStrictAttendance(req, companyId) {
+  const company = await Company.findById(companyId).select("corporateSettings").lean();
+  const s = company?.corporateSettings || {};
+  if (!s.strictAttendance) return { ok: true, verified: null };
+
+  const clientIp   = extractClientIp(req);
+  const isLocalDev = clientIp === "127.0.0.1" || clientIp === "::1" || clientIp === "";
+
+  // 1. VPN / proxy check
+  if (!isLocalDev && detectProxy(req)) {
+    return { ok: false, reason: "vpn_detected",
+      message: "You must be on company WiFi and at office to clock in." };
+  }
+
+  // 2. WiFi IP check
+  const allowed = s.allowedWifiIPs || [];
+  if (allowed.length > 0 && !isLocalDev && !allowed.includes(clientIp)) {
+    return { ok: false, reason: "wifi_mismatch",
+      message: "You must be on company WiFi and at office to clock in." };
+  }
+
+  // 3. Geofence check
+  if (s.officeLatitude != null && s.officeLongitude != null) {
+    const { latitude, longitude } = req.body;
+    if (latitude == null || longitude == null) {
+      return { ok: false, reason: "location_missing",
+        message: "Location is required. Please enable GPS and try again." };
+    }
+    const dist   = haversineMeters(s.officeLatitude, s.officeLongitude, latitude, longitude);
+    const radius = s.geofenceRadiusMeters || 150;
+    if (dist > radius) {
+      return { ok: false, reason: "outside_geofence",
+        message: `You must be at the office to clock in. You are ${Math.round(dist)}m away (limit: ${radius}m).` };
+    }
+  }
+
+  return { ok: true, verified: true };
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -112,7 +180,28 @@ router.post("/clock-in", ...mw, async (req, res) => {
     const now     = new Date();
     const today   = toDay(now);
     const { method, latitude, longitude, accuracy, address } = req.body;
-    const ipAddr  = req.ip || null;
+    const ipAddr  = extractClientIp(req);
+
+    // Strict WiFi + GPS check
+    const check = await validateStrictAttendance(req, req.user.company);
+    if (!check.ok) {
+      // Log the failed attempt (upsert today's record to append it)
+      await CorporateAttendance.findOneAndUpdate(
+        { company: req.user.company, employee: req.user._id, date: today },
+        {
+          $setOnInsert: { company: req.user.company, employee: req.user._id, date: today },
+          $push: { failedAttempts: {
+            attemptedAt: now,
+            reason:      check.reason,
+            ipAddress:   ipAddr,
+            latitude:    latitude ?? null,
+            longitude:   longitude ?? null,
+          }},
+        },
+        { upsert: true, setDefaultsOnInsert: true }
+      );
+      return res.status(403).json({ error: check.message, reason: check.reason, blocked: true });
+    }
 
     // Find active shift assignment
     const assignment = await ShiftAssignment.findOne({
@@ -158,6 +247,7 @@ router.post("/clock-in", ...mw, async (req, res) => {
           "clockIn.location.address":   address   || "",
           "clockIn.isLate":         isLate,
           "clockIn.lateMinutes":    lateMinutes,
+          "clockIn.verified":       check.verified,
           lateMinutes,
           status: isLate ? "late" : "present",
         },
@@ -439,6 +529,86 @@ router.patch("/:id/override", ...mw, requireRole("admin", "superadmin"), async (
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: "Failed to override attendance record" });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// GET /settings  — get strict attendance config (admin/manager read)
+// ---------------------------------------------------------------------------
+router.get("/settings", ...mw, canManage, async (req, res) => {
+  try {
+    const company = await Company.findById(req.user.company)
+      .select("corporateSettings.strictAttendance corporateSettings.allowedWifiIPs corporateSettings.officeLatitude corporateSettings.officeLongitude corporateSettings.geofenceRadiusMeters")
+      .lean();
+    const s = company?.corporateSettings || {};
+    res.json({
+      strictAttendance:     s.strictAttendance     || false,
+      allowedWifiIPs:       s.allowedWifiIPs       || [],
+      officeLatitude:       s.officeLatitude        ?? null,
+      officeLongitude:      s.officeLongitude       ?? null,
+      geofenceRadiusMeters: s.geofenceRadiusMeters  || 150,
+    });
+  } catch (e) {
+    res.status(500).json({ error: "Failed to fetch attendance settings" });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// PATCH /settings  — update strict attendance config (admin only)
+// ---------------------------------------------------------------------------
+router.patch("/settings", ...mw, adminOnly, async (req, res) => {
+  try {
+    const { strictAttendance, allowedWifiIPs, officeLatitude, officeLongitude, geofenceRadiusMeters } = req.body;
+    const update = {};
+    if (strictAttendance     !== undefined) update["corporateSettings.strictAttendance"]     = Boolean(strictAttendance);
+    if (allowedWifiIPs       !== undefined) update["corporateSettings.allowedWifiIPs"]       = Array.isArray(allowedWifiIPs) ? allowedWifiIPs.map(ip => ip.trim()).filter(Boolean) : [];
+    if (officeLatitude       !== undefined) update["corporateSettings.officeLatitude"]       = officeLatitude  != null ? Number(officeLatitude)  : null;
+    if (officeLongitude      !== undefined) update["corporateSettings.officeLongitude"]      = officeLongitude != null ? Number(officeLongitude) : null;
+    if (geofenceRadiusMeters !== undefined) update["corporateSettings.geofenceRadiusMeters"] = Number(geofenceRadiusMeters) || 150;
+    await Company.findByIdAndUpdate(req.user.company, { $set: update });
+    res.json({ message: "Attendance settings updated" });
+  } catch (e) {
+    res.status(500).json({ error: "Failed to update attendance settings" });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// GET /failed-attempts  — blocked clock-in attempts (admin/manager)
+// ---------------------------------------------------------------------------
+router.get("/failed-attempts", ...mw, canManage, async (req, res) => {
+  try {
+    const today    = toDay(new Date());
+    const weekAgo  = new Date(today);
+    weekAgo.setUTCDate(weekAgo.getUTCDate() - 7);
+
+    const records = await CorporateAttendance.find({
+      company:          req.user.company,
+      date:             { $gte: weekAgo },
+      "failedAttempts.0": { $exists: true },
+    })
+      .populate("employee", "name employeeId department")
+      .select("employee date failedAttempts")
+      .lean();
+
+    const attempts = [];
+    records.forEach(r => {
+      (r.failedAttempts || []).forEach(a => {
+        attempts.push({
+          employee:    r.employee,
+          date:        r.date,
+          attemptedAt: a.attemptedAt,
+          reason:      a.reason,
+          ipAddress:   a.ipAddress,
+          latitude:    a.latitude,
+          longitude:   a.longitude,
+        });
+      });
+    });
+    attempts.sort((a, b) => new Date(b.attemptedAt) - new Date(a.attemptedAt));
+
+    res.json({ attempts, count: attempts.length });
+  } catch (e) {
+    res.status(500).json({ error: "Failed to fetch failed attempts" });
   }
 });
 

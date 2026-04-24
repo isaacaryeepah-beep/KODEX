@@ -70,6 +70,9 @@ const clockEventSchema = new mongoose.Schema(
     lateMinutes:  { type: Number,  default: 0, min: 0 },
     // Clock-out specific early-leave field
     earlyLeaveMinutes: { type: Number, default: 0, min: 0 },
+    // Strict WiFi+GPS verification result
+    verified:      { type: Boolean, default: null },  // null = not enforced, true = passed, false = blocked
+    blockedReason: { type: String,  default: null },  // 'wifi_mismatch' | 'outside_geofence' | 'vpn_detected'
   },
   { _id: false }
 );
@@ -134,6 +137,19 @@ const corporateAttendanceSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "LeaveRequest",
       default: null,
+    },
+
+    // ── Failed clock-in attempts (strict mode) ────────────────────────────────
+    failedAttempts: {
+      type: [{
+        attemptedAt: { type: Date,   default: Date.now },
+        reason:      { type: String },
+        ipAddress:   { type: String, default: null },
+        latitude:    { type: Number, default: null },
+        longitude:   { type: Number, default: null },
+        _id:         false,
+      }],
+      default: [],
     },
 
     // ── Manual override ───────────────────────────────────────────────────────

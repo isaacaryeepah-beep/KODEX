@@ -4356,20 +4356,25 @@ function _showGPSBlockedModal(code) {
   document.body.appendChild(ol);
 }
 
+function _showStrictBlockedModal(message) {
+  document.getElementById('strict-blocked-modal')?.remove();
+  const ol = document.createElement('div');
+  ol.id = 'strict-blocked-modal';
+  ol.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;z-index:9999;padding:16px';
+  ol.innerHTML = `
+    <div style="background:var(--card,#fff);border-radius:16px;padding:32px 24px;max-width:380px;width:100%;text-align:center;box-shadow:0 24px 64px rgba(0,0,0,.35)">
+      <div style="font-size:44px;margin-bottom:12px">🔒</div>
+      <div style="font-size:16px;font-weight:800;margin-bottom:10px;color:#dc2626">Access Blocked</div>
+      <div style="font-size:13px;color:var(--text-light);line-height:1.65;margin-bottom:6px">${message}</div>
+      <div style="margin-top:22px">
+        <button onclick="document.getElementById('strict-blocked-modal').remove()"
+          class="btn btn-secondary btn-sm">Dismiss</button>
+      </div>
+    </div>`;
+  document.body.appendChild(ol);
+}
+
 async function employeeSignIn() {
-  // If ESP32 configured, attempt BLE ping — warn if not detected but do NOT block
-  if (esp32IP) {
-    const detected = await discoverESP32();
-    if (!detected) {
-      toastWarning('Office device not detected — clocking in via web.');
-    } else {
-      // Also notify the ESP32 (fire-and-forget)
-      esp32Api('/sign-in', {
-        method: 'POST',
-        body: JSON.stringify({ userId: currentUser.id, name: currentUser.name })
-      }).catch(e => console.warn('[ESP32] ping failed:', e.message));
-    }
-  }
   let gpsData;
   try {
     gpsData = await _getGPSLocation();
@@ -4385,24 +4390,16 @@ async function employeeSignIn() {
     toastSuccess(data.message || 'Clocked in successfully!');
     renderSignInOut();
   } catch (e) {
-    toastError(e.message || 'Clock-in failed');
+    if (e.data?.blocked) {
+      _showStrictBlockedModal(e.message || 'You must be on company WiFi and at office to clock in.');
+    } else {
+      toastError(e.message || 'Clock-in failed');
+    }
   }
 }
 
 async function employeeSignOut() {
   if (!confirm('Are you sure you want to clock out?')) return;
-  // If ESP32 configured, attempt BLE ping — warn if not detected but do NOT block
-  if (esp32IP) {
-    const detected = await discoverESP32();
-    if (!detected) {
-      toastWarning('Office device not detected — clocking out via web.');
-    } else {
-      esp32Api('/sign-out', {
-        method: 'POST',
-        body: JSON.stringify({ userId: currentUser.id, name: currentUser.name })
-      }).catch(e => console.warn('[ESP32] ping failed:', e.message));
-    }
-  }
   let gpsData;
   try {
     gpsData = await _getGPSLocation();
@@ -13395,6 +13392,14 @@ async function renderCorporateAttendance() {
          </a>`
       : '<span style="color:var(--text-light);font-size:11px">—</span>';
 
+    const isAdmin = ['admin', 'superadmin'].includes(currentUser?.role);
+
+    const verifiedBadge = v => {
+      if (v === true)  return `<span style="color:#16a34a;font-size:12px;font-weight:700">✅ Verified</span>`;
+      if (v === false) return `<span style="color:#dc2626;font-size:12px;font-weight:700">❌ Blocked</span>`;
+      return `<span style="color:var(--text-light);font-size:11px">—</span>`;
+    };
+
     const rows = records.map(r => {
       const emp  = r.employee || {};
       const ci   = r.clockIn  || {};
@@ -13410,34 +13415,185 @@ async function renderCorporateAttendance() {
         <td style="white-space:nowrap">${fmtTime(ci.time)}${ci.isLate ? ` <span style="color:#d97706;font-size:10px">(+${ci.lateMinutes}m late)</span>` : ''}<br>${mapsLink(ciLat,ciLng)} ${ciAcc}</td>
         <td style="white-space:nowrap">${fmtTime(co.time)}<br>${mapsLink(coLat,coLng)} ${coAcc}</td>
         <td>${r.hoursWorked != null ? `${r.hoursWorked}h` : '—'}</td>
+        <td style="text-align:center">${verifiedBadge(ci.verified)}</td>
       </tr>`;
     }).join('');
 
+    const tabStyle = active => `padding:8px 16px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;border:none;background:${active?'var(--primary)':'var(--bg)'};color:${active?'#fff':'var(--text-light)'}`;
+
     content.innerHTML = `
-      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:20px">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:16px">
         <h2 style="margin:0;font-size:20px;font-weight:800">Team Attendance</h2>
-        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <div style="display:flex;gap:6px">
+          <button id="ca-tab-records"  style="${tabStyle(true)}"  onclick="_caTab('records')">Records</button>
+          <button id="ca-tab-blocked"  style="${tabStyle(false)}" onclick="_caTab('blocked')">Blocked Attempts</button>
+          ${isAdmin ? `<button id="ca-tab-settings" style="${tabStyle(false)}" onclick="_caTab('settings')">Settings</button>` : ''}
+        </div>
+      </div>
+
+      <!-- Records tab -->
+      <div id="ca-panel-records">
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:14px">
           <label style="font-size:12px;color:var(--text-light)">From</label>
           <input type="date" id="corp-att-from" value="${fromParam}" style="border:1px solid var(--border);border-radius:8px;padding:6px 10px;font-size:13px">
           <label style="font-size:12px;color:var(--text-light)">To</label>
-          <input type="date" id="corp-att-to"   value="${toParam}"   style="border:1px solid var(--border);border-radius:8px;padding:6px 10px;font-size:13px">
-          <button class="btn btn-primary btn-sm" onclick="(()=>{const f=document.getElementById('corp-att-from').value,t=document.getElementById('corp-att-to').value;history.replaceState(null,'',\`?from=\${f}&to=\${t}\`);renderCorporateAttendance();})()">Filter</button>
+          <input type="date" id="corp-att-to" value="${toParam}" style="border:1px solid var(--border);border-radius:8px;padding:6px 10px;font-size:13px">
+          <button class="btn btn-primary btn-sm" onclick="(()=>{const f=document.getElementById('corp-att-from').value,t=document.getElementById('corp-att-to').value;renderCorporateAttendance();})()">Filter</button>
+        </div>
+        <div class="card" style="overflow-x:auto">
+          ${records.length === 0
+            ? `<div class="empty-state"><p>No attendance records found for this period.</p></div>`
+            : `<table>
+                <thead><tr>
+                  <th>Employee</th><th>Date</th><th>Status</th>
+                  <th>Clock In / Location</th><th>Clock Out / Location</th><th>Hours</th><th>Verified</th>
+                </tr></thead>
+                <tbody>${rows}</tbody>
+               </table>`}
         </div>
       </div>
-      <div class="card" style="overflow-x:auto">
-        ${records.length === 0
-          ? `<div class="empty-state"><p>No attendance records found for this period.</p></div>`
-          : `<table>
-              <thead><tr>
-                <th>Employee</th><th>Date</th><th>Status</th>
-                <th>Clock In / Location</th><th>Clock Out / Location</th><th>Hours</th>
-              </tr></thead>
-              <tbody>${rows}</tbody>
-             </table>`}
-      </div>`;
+
+      <!-- Blocked attempts tab -->
+      <div id="ca-panel-blocked" style="display:none">
+        <div id="ca-blocked-body"><div class="loading">Loading…</div></div>
+      </div>
+
+      <!-- Settings tab (admin only) -->
+      ${isAdmin ? `<div id="ca-panel-settings" style="display:none"><div id="ca-settings-body"><div class="loading">Loading…</div></div></div>` : ''}
+    `;
   } catch (e) {
     content.innerHTML = `<div class="card"><p style="color:var(--danger)">Failed to load attendance records.</p></div>`;
   }
+}
+
+function _caTab(tab) {
+  ['records','blocked','settings'].forEach(t => {
+    const panel = document.getElementById(`ca-panel-${t}`);
+    const btn   = document.getElementById(`ca-tab-${t}`);
+    if (panel) panel.style.display = t === tab ? '' : 'none';
+    if (btn)   { btn.style.background = t === tab ? 'var(--primary)' : 'var(--bg)'; btn.style.color = t === tab ? '#fff' : 'var(--text-light)'; }
+  });
+  if (tab === 'blocked') _caLoadBlocked();
+  if (tab === 'settings') _caLoadSettings();
+}
+
+async function _caLoadBlocked() {
+  const el = document.getElementById('ca-blocked-body');
+  if (!el) return;
+  try {
+    const data = await api('/api/corporate-attendance/failed-attempts');
+    const attempts = data.attempts || [];
+    const reasonLabel = { wifi_mismatch: 'Wrong WiFi', outside_geofence: 'Outside Geofence', vpn_detected: 'VPN/Proxy', location_missing: 'No Location' };
+    const mapsLink = (lat, lng) => lat != null && lng != null
+      ? `<a href="https://www.google.com/maps?q=${lat},${lng}" target="_blank" rel="noopener" style="font-size:11px;color:var(--primary);text-decoration:underline">📍 Map</a>`
+      : '—';
+    el.innerHTML = attempts.length === 0
+      ? `<div class="card"><div class="empty-state"><p>No blocked attempts in the last 7 days.</p></div></div>`
+      : `<div class="card" style="overflow-x:auto">
+           <div style="font-size:13px;font-weight:700;margin-bottom:12px;color:#dc2626">❌ Blocked Clock-In Attempts (last 7 days)</div>
+           <table>
+             <thead><tr>
+               <th>Employee</th><th>Time</th><th>Reason</th><th>IP Address</th><th>Location</th>
+             </tr></thead>
+             <tbody>
+               ${attempts.map(a => {
+                 const emp = a.employee || {};
+                 return `<tr>
+                   <td><strong>${esc(emp.name || '—')}</strong><br><span style="font-size:11px;color:var(--text-light)">${esc(emp.department || '')}</span></td>
+                   <td style="white-space:nowrap;font-size:12px">${new Date(a.attemptedAt).toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</td>
+                   <td><span style="background:#fef2f2;color:#dc2626;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700">${reasonLabel[a.reason] || a.reason || '—'}</span></td>
+                   <td style="font-family:monospace;font-size:12px">${esc(a.ipAddress || '—')}</td>
+                   <td>${mapsLink(a.latitude, a.longitude)}</td>
+                 </tr>`;
+               }).join('')}
+             </tbody>
+           </table>
+         </div>`;
+  } catch(e) {
+    el.innerHTML = `<div class="card"><p style="color:var(--danger)">Failed to load blocked attempts.</p></div>`;
+  }
+}
+
+async function _caLoadSettings() {
+  const el = document.getElementById('ca-settings-body');
+  if (!el) return;
+  try {
+    const s = await api('/api/corporate-attendance/settings');
+    el.innerHTML = `
+      <div class="card" style="max-width:560px">
+        <h3 style="font-size:15px;font-weight:700;margin-bottom:4px">Strict Attendance Settings</h3>
+        <p style="font-size:12px;color:var(--text-light);margin-bottom:18px">Employees can only clock in when on company WiFi AND inside the office geofence.</p>
+
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:18px">
+          <label style="font-size:13px;font-weight:600">Enable Strict Attendance</label>
+          <input type="checkbox" id="cas-strict" ${s.strictAttendance ? 'checked' : ''} style="width:18px;height:18px;cursor:pointer">
+        </div>
+
+        <div class="form-group">
+          <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-light)">Office WiFi Public IPs</label>
+          <input type="text" id="cas-ips" value="${(s.allowedWifiIPs || []).join(', ')}"
+            placeholder="e.g. 154.120.44.10, 154.120.44.11"
+            style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;margin-top:4px">
+          <div style="font-size:11px;color:var(--text-light);margin-top:4px">Comma-separated list. Your current IP: <strong id="cas-myip">detecting…</strong></div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px">
+          <div class="form-group">
+            <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-light)">Office Latitude</label>
+            <input type="number" id="cas-lat" value="${s.officeLatitude ?? ''}" step="0.000001" placeholder="e.g. 5.603717"
+              style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;margin-top:4px">
+          </div>
+          <div class="form-group">
+            <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-light)">Office Longitude</label>
+            <input type="number" id="cas-lng" value="${s.officeLongitude ?? ''}" step="0.000001" placeholder="e.g. -0.186964"
+              style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;margin-top:4px">
+          </div>
+        </div>
+
+        <div class="form-group" style="margin-top:14px">
+          <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-light)">Geofence Radius (metres)</label>
+          <input type="number" id="cas-radius" value="${s.geofenceRadiusMeters || 150}" min="50" max="1000"
+            style="width:140px;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;margin-top:4px">
+        </div>
+
+        <button class="btn btn-primary" style="margin-top:20px" onclick="_caSaveSettings()">Save Settings</button>
+        <button class="btn btn-secondary btn-sm" style="margin-top:20px;margin-left:8px" onclick="_caDetectMyIP()">📡 Detect My IP</button>
+      </div>`;
+    _caDetectMyIP();
+  } catch(e) {
+    el.innerHTML = `<div class="card"><p style="color:var(--danger)">Failed to load settings.</p></div>`;
+  }
+}
+
+async function _caDetectMyIP() {
+  const el = document.getElementById('cas-myip');
+  if (!el) return;
+  try {
+    const r = await fetch('https://api.ipify.org?format=json');
+    const d = await r.json();
+    el.textContent = d.ip || 'unknown';
+  } catch { el.textContent = 'unavailable'; }
+}
+
+async function _caSaveSettings() {
+  const strict = document.getElementById('cas-strict')?.checked ?? false;
+  const ipsRaw = document.getElementById('cas-ips')?.value || '';
+  const lat    = document.getElementById('cas-lat')?.value;
+  const lng    = document.getElementById('cas-lng')?.value;
+  const radius = document.getElementById('cas-radius')?.value;
+  try {
+    await api('/api/corporate-attendance/settings', {
+      method: 'PATCH',
+      body: JSON.stringify({
+        strictAttendance:     strict,
+        allowedWifiIPs:       ipsRaw.split(',').map(s => s.trim()).filter(Boolean),
+        officeLatitude:       lat  ? parseFloat(lat)  : null,
+        officeLongitude:      lng  ? parseFloat(lng)  : null,
+        geofenceRadiusMeters: radius ? parseInt(radius) : 150,
+      }),
+    });
+    toastSuccess('Attendance settings saved');
+  } catch(e) { toastError(e.message || 'Failed to save settings'); }
 }
 
 // ── SHIFTS (Admin/Manager) ─────────────────────────────────────────────────

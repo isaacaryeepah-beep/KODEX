@@ -107,6 +107,12 @@ const companySchema = new mongoose.Schema(
       requireGeofence: { type: Boolean, default: false },
       // Whether managers can approve leave requests without HR.
       managerLeaveApproval: { type: Boolean, default: false },
+      // Strict WiFi + GPS attendance enforcement
+      strictAttendance:     { type: Boolean, default: false },
+      allowedWifiIPs:       { type: [String], default: [] },
+      officeLatitude:       { type: Number, default: null },
+      officeLongitude:      { type: Number, default: null },
+      geofenceRadiusMeters: { type: Number, default: 150 },
     },
     subscriptionActive: {
       type: Boolean,
