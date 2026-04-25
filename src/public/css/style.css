@@ -818,6 +818,12 @@ body {
 
 /* Trial banners */
 /* ── Subscription / Trial status banner ── */
+/* Students never see subscription banners — guaranteed via body attribute */
+body[data-role="student"] .trial-banner,
+body[data-role="student"] .trial-expired-banner {
+  display: none !important;
+}
+
 .trial-banner,
 .trial-expired-banner {
   display: none;

@@ -2021,8 +2021,17 @@ function showDashboard(data) {
     showForceChangePassword();
     return;
   }
-  // Cache userTrial so showSubscriptionGate can check active subscription status
-  if (data?.userTrial) currentUserTrial = data.userTrial;
+  // Hard-hide subscription banners for students — they never need a subscription
+  if (currentUser?.role === 'student') {
+    const tb  = document.getElementById('trial-banner');
+    const teb = document.getElementById('trial-expired-banner');
+    if (tb)  { tb.style.display  = 'none'; tb.innerHTML  = ''; }
+    if (teb) { teb.style.display = 'none'; teb.innerHTML = ''; }
+    currentUserTrial = null;     // never cache subscription state for students
+  } else if (data?.userTrial) {
+    // Cache userTrial so showSubscriptionGate can check active subscription status
+    currentUserTrial = data.userTrial;
+  }
   try {
     window.currentUser = currentUser; // expose for faq-assistant.js (let ≠ window prop)
     document.getElementById('auth-page').style.display = 'none';
@@ -2037,6 +2046,8 @@ function showDashboard(data) {
     const roleEl = document.getElementById('user-role');
     roleEl.textContent = currentUser.role || '';
     roleEl.className = `role-badge role-${currentUser.role || 'user'}`;
+    // Mark role on body so CSS can scope role-specific overrides (e.g. hide banners for student)
+    document.body.setAttribute('data-role', currentUser.role || '');
 
     const companyName = currentUser.company?.name || '';
     const mode = currentUser.company?.mode || 'corporate';
@@ -17457,7 +17468,7 @@ function _convoTypeLabel(type) {
 async function renderMessages() {
   const content = document.getElementById('main-content');
   if (!content) return;
-  const canAttach = ['admin','superadmin','lecturer','manager','hod'].includes(currentUser?.role);
+  const canAttach = ['admin','superadmin','lecturer','manager','hod','employee'].includes(currentUser?.role);
   const isStudent = currentUser?.role === 'student';
 
   content.innerHTML = `

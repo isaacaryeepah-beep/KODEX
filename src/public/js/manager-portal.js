@@ -247,19 +247,38 @@ async function renderLiveAttendance() {
   const doRender = async () => {
     try {
       const [todayData, usersData] = await Promise.all([
-        api('/api/corporate-attendance/today').catch(() => ({ records: [], summary: {} })),
-        api('/api/users').catch(() => ({ users: [] })),
+        api('/api/corporate-attendance/today').catch(e => { console.error('today err', e); return { records: [], summary: {} }; }),
+        api('/api/users').catch(e => { console.error('users err', e); return { users: [] }; }),
       ]);
 
       const records   = todayData.records || [];
       const summary   = todayData.summary || {};
-      const employees = (usersData.users || []).filter(u => u.role === 'employee' && u.isActive !== false);
+      // Corporate workforce = employees + managers (both clock in)
+      const workforce = (usersData.users || []).filter(u =>
+        ['employee', 'manager'].includes(u.role) && u.isActive !== false
+      );
 
       // Build lookup: employeeId → today's record
       const recMap = {};
       records.forEach(r => {
         const eid = (r.employee?._id || r.employee || '').toString();
         if (eid) recMap[eid] = r;
+      });
+
+      // Surface any records whose employee was deactivated/missing from /api/users
+      const knownIds = new Set(workforce.map(u => u._id.toString()));
+      records.forEach(r => {
+        const id = (r.employee?._id || r.employee || '').toString();
+        if (id && !knownIds.has(id) && r.employee?.name) {
+          workforce.push({
+            _id:        id,
+            name:       r.employee.name,
+            employeeId: r.employee.employeeId || '',
+            department: r.employee.department || '',
+            role:       r.employee.role || 'employee',
+            isActive:   true,
+          });
+        }
       });
 
       const statusColor = { present:'#10b981', late:'#f59e0b', absent:'#ef4444',
@@ -274,15 +293,15 @@ async function renderLiveAttendance() {
       };
 
       const filterDept = window._liveFilter || '';
-      const allDepts   = [...new Set(employees.map(u => u.department || 'Unassigned').filter(Boolean))].sort();
-      const filtered   = filterDept ? employees.filter(u => (u.department || 'Unassigned') === filterDept) : employees;
+      const allDepts   = [...new Set(workforce.map(u => u.department || 'Unassigned').filter(Boolean))].sort();
+      const filtered   = filterDept ? workforce.filter(u => (u.department || 'Unassigned') === filterDept) : workforce;
 
       const presentCount  = summary.present  || 0;
       const lateCount     = summary.late     || 0;
-      const absentCount   = employees.length - records.filter(r => r.clockIn?.time).length;
       const onLeaveCount  = summary.on_leave || 0;
       const clockedIn     = summary.total_clocked || 0;
-      const attRate       = employees.length ? Math.round((clockedIn / employees.length) * 100) : 0;
+      const absentCount   = Math.max(0, workforce.length - clockedIn);
+      const attRate       = workforce.length ? Math.round((clockedIn / workforce.length) * 100) : 0;
 
       content.innerHTML = `
         <div style="display:flex;flex-direction:column;gap:16px">
@@ -319,7 +338,7 @@ async function renderLiveAttendance() {
               <div style="font-size:11px;color:var(--text-muted);margin-top:2px">On Leave</div>
             </div>
             <div class="card" style="text-align:center;padding:14px;border-top:3px solid #3b82f6">
-              <div style="font-size:28px;font-weight:800;color:#3b82f6">${employees.length}</div>
+              <div style="font-size:28px;font-weight:800;color:#3b82f6">${workforce.length}</div>
               <div style="font-size:11px;color:var(--text-muted);margin-top:2px">Total Staff</div>
             </div>
           </div>
@@ -350,18 +369,21 @@ async function renderLiveAttendance() {
                 </tr>
               </thead>
               <tbody>
-                ${filtered.length ? filtered.map((u, i) => {
+                ${filtered.length ? filtered.sort((a,b)=>(a.name||'').localeCompare(b.name||'')).map((u, i) => {
                   const rec   = recMap[u._id.toString()];
                   const st    = rec?.status || (rec ? 'present' : null);
                   const shift = rec?.shift;
                   const cin   = rec?.clockIn?.time  ? new Date(rec.clockIn.time).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})  : '—';
                   const cout  = rec?.clockOut?.time ? new Date(rec.clockOut.time).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}) : '—';
                   const isIn  = !!rec?.clockIn?.time;
+                  const roleTag = u.role === 'manager'
+                    ? '<span style="font-size:9px;font-weight:700;background:#ede9fe;color:#6d28d9;padding:1px 6px;border-radius:4px;margin-left:6px;text-transform:uppercase">MGR</span>'
+                    : '';
                   return `<tr style="border-bottom:1px solid var(--border);background:${i%2===0?'transparent':'var(--bg)'}">
                     <td style="padding:10px 12px">
                       <div style="display:flex;align-items:center;gap:8px">
                         <div style="width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,${isIn?'#10b981,#059669':'#94a3b8,#64748b'});display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;font-weight:700;flex-shrink:0">${(u.name||'?')[0].toUpperCase()}</div>
-                        <span style="font-weight:600">${u.name}</span>
+                        <span style="font-weight:600">${u.name}</span>${roleTag}
                       </div>
                     </td>
                     <td style="padding:10px 12px;color:var(--text-muted)">${u.department||'—'}</td>
@@ -371,7 +393,7 @@ async function renderLiveAttendance() {
                     <td style="padding:10px 12px;font-size:12px;color:var(--text-muted)">${cout}</td>
                     <td style="padding:10px 12px;text-align:center">${st ? badge(st) : badge('absent')}</td>
                   </tr>`;
-                }).join('') : '<tr><td colspan="7" style="padding:20px;text-align:center;color:var(--text-muted)">No employees found</td></tr>'}
+                }).join('') : `<tr><td colspan="7" style="padding:20px;text-align:center;color:var(--text-muted)">${workforce.length === 0 ? 'No active employees or managers found in this company.' : 'No staff in this department.'}</td></tr>`}
               </tbody>
             </table>
           </div>
