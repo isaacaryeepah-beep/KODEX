@@ -246,79 +246,80 @@ async function renderLiveAttendance() {
 
   const doRender = async () => {
     try {
-      const [sessionsData, usersData, shiftsData] = await Promise.all([
-        api('/api/attendance-sessions?limit=50').catch(() => ({ sessions: [] })),
+      const [todayData, usersData] = await Promise.all([
+        api('/api/corporate-attendance/today').catch(() => ({ records: [], summary: {} })),
         api('/api/users').catch(() => ({ users: [] })),
-        api('/api/shifts/assignments').catch(() => ({ assignments: [] })),
       ]);
 
-      const sessions    = sessionsData.sessions || [];
-      const employees   = (usersData.users || []).filter(u => u.role === 'employee');
-      const assignments = shiftsData.assignments || [];
-      const active      = sessions.filter(s => s.active);
+      const records   = todayData.records || [];
+      const summary   = todayData.summary || {};
+      const employees = (usersData.users || []).filter(u => u.role === 'employee' && u.isActive !== false);
 
-      // Get today's shift names per employee
-      const today = new Date().toLocaleDateString('en-US',{weekday:'short'}).slice(0,3); // Mon, Tue etc
-      const shiftMap = {};
-      assignments.forEach(a => {
-        if (a.shift?.days?.includes(today)) {
-          shiftMap[a.employee?._id?.toString()] = a.shift;
-        }
+      // Build lookup: employeeId → today's record
+      const recMap = {};
+      records.forEach(r => {
+        const eid = (r.employee?._id || r.employee || '').toString();
+        if (eid) recMap[eid] = r;
       });
 
-      // Who is clocked in
-      const presentIds = new Set();
-      active.forEach(s => (s.attendees||[]).forEach(a => {
-        presentIds.add((a.user?._id||a.user||'').toString());
-      }));
+      const statusColor = { present:'#10b981', late:'#f59e0b', absent:'#ef4444',
+                            on_leave:'#6366f1', half_day:'#06b6d4', remote:'#8b5cf6' };
+      const statusLabel = { present:'Present', late:'Late', absent:'Absent',
+                            on_leave:'On Leave', half_day:'Half Day', remote:'Remote' };
 
-      const present = employees.filter(u => presentIds.has(u._id.toString()));
-      const absent  = employees.filter(u => !presentIds.has(u._id.toString()));
-      const attRate = employees.length ? Math.round((present.length/employees.length)*100) : 0;
+      const badge = (st) => {
+        const col = statusColor[st] || '#94a3b8';
+        const lbl = statusLabel[st] || st || 'Not In';
+        return `<span style="padding:2px 9px;border-radius:20px;font-size:11px;font-weight:700;background:${col};color:#fff">${lbl}</span>`;
+      };
 
-      const badge = (label, color, bg) =>
-        `<span style="padding:2px 9px;border-radius:20px;font-size:11px;font-weight:700;background:${bg};color:${color}">${label}</span>`;
+      const filterDept = window._liveFilter || '';
+      const allDepts   = [...new Set(employees.map(u => u.department || 'Unassigned').filter(Boolean))].sort();
+      const filtered   = filterDept ? employees.filter(u => (u.department || 'Unassigned') === filterDept) : employees;
 
-      const [filterDept, setFilter] = [window._liveFilter||'', v => { window._liveFilter=v; doRender(); }];
-      const allDepts = [...new Set(employees.map(u=>u.department||'Unassigned').filter(Boolean))].sort();
-      const filtered = filterDept ? employees.filter(u=>(u.department||'Unassigned')===filterDept) : employees;
+      const presentCount  = summary.present  || 0;
+      const lateCount     = summary.late     || 0;
+      const absentCount   = employees.length - records.filter(r => r.clockIn?.time).length;
+      const onLeaveCount  = summary.on_leave || 0;
+      const clockedIn     = summary.total_clocked || 0;
+      const attRate       = employees.length ? Math.round((clockedIn / employees.length) * 100) : 0;
 
       content.innerHTML = `
         <div style="display:flex;flex-direction:column;gap:16px">
           <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
             <div>
               <h2>Live Attendance</h2>
-              <p style="font-size:13px;color:var(--text-muted)">Real-time workforce status · Auto-refreshes every 30s</p>
+              <p style="font-size:13px;color:var(--text-muted)">Real-time clock-in status · Auto-refreshes every 30s</p>
             </div>
-            <div style="display:flex;gap:8px;align-items:center">
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
               <select onchange="window._liveFilter=this.value;renderLiveAttendance()" style="padding:7px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
                 <option value="">All Departments</option>
-                ${allDepts.map(d=>`<option value="${d}" ${filterDept===d?'selected':''}>${d}</option>`).join('')}
+                ${allDepts.map(d => `<option value="${d}" ${filterDept === d ? 'selected' : ''}>${d}</option>`).join('')}
               </select>
               <button class="btn btn-secondary btn-sm" onclick="renderLiveAttendance()">↻ Refresh</button>
             </div>
           </div>
 
           <!-- Summary pills -->
-          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:12px">
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:12px">
             <div class="card" style="text-align:center;padding:14px;border-top:3px solid #10b981">
-              <div style="font-size:28px;font-weight:800;color:#10b981">${present.length}</div>
+              <div style="font-size:28px;font-weight:800;color:#10b981">${presentCount}</div>
               <div style="font-size:11px;color:var(--text-muted);margin-top:2px">Present</div>
             </div>
-            <div class="card" style="text-align:center;padding:14px;border-top:3px solid #ef4444">
-              <div style="font-size:28px;font-weight:800;color:#ef4444">${absent.length}</div>
-              <div style="font-size:11px;color:var(--text-muted);margin-top:2px">Absent</div>
+            <div class="card" style="text-align:center;padding:14px;border-top:3px solid #f59e0b">
+              <div style="font-size:28px;font-weight:800;color:#f59e0b">${lateCount}</div>
+              <div style="font-size:11px;color:var(--text-muted);margin-top:2px">Late</div>
             </div>
-            <div class="card" style="text-align:center;padding:14px;border-top:3px solid #3b82f6">
-              <div style="font-size:28px;font-weight:800;color:#3b82f6">${attRate}%</div>
-              <div style="font-size:11px;color:var(--text-muted);margin-top:2px">Rate</div>
+            <div class="card" style="text-align:center;padding:14px;border-top:3px solid #ef4444">
+              <div style="font-size:28px;font-weight:800;color:#ef4444">${Math.max(0,absentCount)}</div>
+              <div style="font-size:11px;color:var(--text-muted);margin-top:2px">Not Clocked In</div>
             </div>
             <div class="card" style="text-align:center;padding:14px;border-top:3px solid #6366f1">
-              <div style="font-size:28px;font-weight:800;color:#6366f1">${active.length}</div>
-              <div style="font-size:11px;color:var(--text-muted);margin-top:2px">Sessions</div>
+              <div style="font-size:28px;font-weight:800;color:#6366f1">${onLeaveCount}</div>
+              <div style="font-size:11px;color:var(--text-muted);margin-top:2px">On Leave</div>
             </div>
-            <div class="card" style="text-align:center;padding:14px;border-top:3px solid #f59e0b">
-              <div style="font-size:28px;font-weight:800;color:#f59e0b">${employees.length}</div>
+            <div class="card" style="text-align:center;padding:14px;border-top:3px solid #3b82f6">
+              <div style="font-size:28px;font-weight:800;color:#3b82f6">${employees.length}</div>
               <div style="font-size:11px;color:var(--text-muted);margin-top:2px">Total Staff</div>
             </div>
           </div>
@@ -326,7 +327,7 @@ async function renderLiveAttendance() {
           <!-- Attendance rate bar -->
           <div class="card" style="padding:14px">
             <div style="display:flex;justify-content:space-between;margin-bottom:8px">
-              <span style="font-size:13px;font-weight:700">Attendance Rate Today</span>
+              <span style="font-size:13px;font-weight:700">Clock-in Rate Today</span>
               <span style="font-size:13px;font-weight:800;color:${attRate>=80?'#10b981':attRate>=60?'#f59e0b':'#ef4444'}">${attRate}%</span>
             </div>
             <div style="height:10px;background:var(--border);border-radius:99px;overflow:hidden">
@@ -341,28 +342,36 @@ async function renderLiveAttendance() {
                 <tr style="border-bottom:2px solid var(--border)">
                   <th style="padding:8px 12px;text-align:left;font-size:11px;text-transform:uppercase;color:var(--text-muted)">Employee</th>
                   <th style="padding:8px 12px;text-align:left;font-size:11px;text-transform:uppercase;color:var(--text-muted)">Department</th>
-                  <th style="padding:8px 12px;text-align:left;font-size:11px;text-transform:uppercase;color:var(--text-muted)">Employee ID</th>
-                  <th style="padding:8px 12px;text-align:left;font-size:11px;text-transform:uppercase;color:var(--text-muted)">Today's Shift</th>
+                  <th style="padding:8px 12px;text-align:left;font-size:11px;text-transform:uppercase;color:var(--text-muted)">ID</th>
+                  <th style="padding:8px 12px;text-align:left;font-size:11px;text-transform:uppercase;color:var(--text-muted)">Shift</th>
+                  <th style="padding:8px 12px;text-align:left;font-size:11px;text-transform:uppercase;color:var(--text-muted)">Clock In</th>
+                  <th style="padding:8px 12px;text-align:left;font-size:11px;text-transform:uppercase;color:var(--text-muted)">Clock Out</th>
                   <th style="padding:8px 12px;text-align:center;font-size:11px;text-transform:uppercase;color:var(--text-muted)">Status</th>
                 </tr>
               </thead>
               <tbody>
-                ${filtered.length ? filtered.map((u,i)=>{
-                  const isPresent = presentIds.has(u._id.toString());
-                  const shift = shiftMap[u._id.toString()];
+                ${filtered.length ? filtered.map((u, i) => {
+                  const rec   = recMap[u._id.toString()];
+                  const st    = rec?.status || (rec ? 'present' : null);
+                  const shift = rec?.shift;
+                  const cin   = rec?.clockIn?.time  ? new Date(rec.clockIn.time).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})  : '—';
+                  const cout  = rec?.clockOut?.time ? new Date(rec.clockOut.time).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}) : '—';
+                  const isIn  = !!rec?.clockIn?.time;
                   return `<tr style="border-bottom:1px solid var(--border);background:${i%2===0?'transparent':'var(--bg)'}">
                     <td style="padding:10px 12px">
                       <div style="display:flex;align-items:center;gap:8px">
-                        <div style="width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,${isPresent?'#10b981,#059669':'#94a3b8,#64748b'});display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;font-weight:700;flex-shrink:0">${(u.name||'?')[0].toUpperCase()}</div>
+                        <div style="width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,${isIn?'#10b981,#059669':'#94a3b8,#64748b'});display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;font-weight:700;flex-shrink:0">${(u.name||'?')[0].toUpperCase()}</div>
                         <span style="font-weight:600">${u.name}</span>
                       </div>
                     </td>
                     <td style="padding:10px 12px;color:var(--text-muted)">${u.department||'—'}</td>
                     <td style="padding:10px 12px;font-family:monospace;font-size:12px">${u.employeeId||'—'}</td>
-                    <td style="padding:10px 12px;font-size:12px">${shift?`<span style="color:#6366f1;font-weight:600">${shift.name} (${shift.startTime}–${shift.endTime})</span>`:'<span style="color:var(--text-muted)">No shift</span>'}</td>
-                    <td style="padding:10px 12px;text-align:center">${isPresent?badge('Present','#fff','#10b981'):badge('Absent','#fff','#ef4444')}</td>
+                    <td style="padding:10px 12px;font-size:12px">${shift?`<span style="color:#6366f1;font-weight:600">${shift.name} (${shift.startTime}–${shift.endTime})</span>`:'<span style="color:var(--text-muted)">—</span>'}</td>
+                    <td style="padding:10px 12px;font-size:12px;font-weight:${cin!=='—'?'600':'400'};color:${cin!=='—'?'#10b981':'var(--text-muted)'}">${cin}</td>
+                    <td style="padding:10px 12px;font-size:12px;color:var(--text-muted)">${cout}</td>
+                    <td style="padding:10px 12px;text-align:center">${st ? badge(st) : badge('absent')}</td>
                   </tr>`;
-                }).join('') : '<tr><td colspan="5" style="padding:20px;text-align:center;color:var(--text-muted)">No employees found</td></tr>'}
+                }).join('') : '<tr><td colspan="7" style="padding:20px;text-align:center;color:var(--text-muted)">No employees found</td></tr>'}
               </tbody>
             </table>
           </div>
