@@ -182,57 +182,42 @@ async function cleanStaleLocks() {
 }
 
 // ── ESP32 Watchdog ─────────────────────────────────────────────────────────────
-// ESP32 Watchdog — runs every 3 seconds.
-// If any active session belongs to a company whose ESP32 device has not
-// sent a heartbeat in the last 10s, the session is auto-stopped.
-// ESP32 heartbeats every 6s — missing 10s means at least 1 heartbeat missed.
-// This catches power cuts, unplugging, crashes within 10s.
+// Runs every 3 seconds. Auto-stops any active AttendanceSession whose paired
+// ESP32 (session.deviceId) has not heart-beated within ESP32_OFFLINE_MS. The
+// firmware heart-beats every 5–6 s, so 30 s missed means at least 5 heartbeats
+// failed — almost certainly a power cut, crash, or network drop.
 const AttendanceSession = require('../models/AttendanceSession');
+const Device            = require('../models/Device');
 
-const ESP32_OFFLINE_MS = 30000;  // 30s — matches deviceStatus threshold
+const ESP32_OFFLINE_MS = 30000;
 
 async function esp32Watchdog() {
   try {
-    // Find ALL active sessions (not just esp32Only — field doesn't exist in model)
     const sessions = await AttendanceSession.find({ status: 'active' })
-      .select('_id company title')
+      .select('_id company title deviceId')
       .lean();
-
     if (!sessions.length) return;
 
-    const companyIds = [...new Set(sessions.map(s => s.company.toString()))];
+    const deviceIds = [...new Set(sessions.map(s => s.deviceId).filter(Boolean))];
+    if (!deviceIds.length) return;
 
-    // Load company ESP32 device data using the correct field: esp32Devices[]
-    const companies = await Company.find({ _id: { $in: companyIds } })
-      .select('_id esp32Devices')
+    const devices = await Device.find({ deviceId: { $in: deviceIds } })
+      .select('deviceId lastHeartbeat')
       .lean();
-
-    const companyMap = {};
-    for (const c of companies) companyMap[c._id.toString()] = c;
+    const deviceMap = Object.fromEntries(devices.map(d => [d.deviceId, d]));
 
     const now = Date.now();
-
     for (const session of sessions) {
-      const company = companyMap[session.company.toString()];
-      if (!company) continue;
-
-      // Only enforce watchdog if the company has a registered ESP32 device
-      const devices = company.esp32Devices || [];
-      if (devices.length === 0) continue;
-
-      // Check if ANY device has sent a heartbeat within the last 20s
-      const esp32Online = devices.some(d =>
-        d.lastSeenAt && (now - new Date(d.lastSeenAt).getTime()) < ESP32_OFFLINE_MS
-      );
-
-      if (!esp32Online) {
-        // ESP32 lost power or went offline — auto-stop the session
+      if (!session.deviceId) continue;
+      const dev = deviceMap[session.deviceId];
+      const ms  = dev?.lastHeartbeat ? now - new Date(dev.lastHeartbeat).getTime() : Infinity;
+      if (ms >= ESP32_OFFLINE_MS) {
         await AttendanceSession.findByIdAndUpdate(session._id, {
           status: 'stopped',
           stoppedAt: new Date(),
           stoppedReason: 'esp32_offline',
         });
-        console.log(`[ESP32 Watchdog] Auto-stopped session "${session.title}" (${session._id}) — ESP32 went offline`);
+        console.log(`[ESP32 Watchdog] Auto-stopped "${session.title}" (${session._id}) — device ${session.deviceId} offline (${Math.round(ms/1000)}s)`);
       }
     }
   } catch (err) {

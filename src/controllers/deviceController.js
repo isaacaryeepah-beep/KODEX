@@ -198,99 +198,142 @@ exports.registerDevice = async (req, res) => {
 };
 
 // ─── HEARTBEAT ───────────────────────────────────────────────────────────────
+// Authenticated by middleware/deviceAuth (req.device is set).
+// Body: { currentNetwork, mode, localIp, rtcValid, sdOK, firmwareVersion }
+// Response includes activeSession with esp32Seed + duration so the device can
+// derive the rotating 6-digit code locally without polling.
 exports.heartbeat = async (req, res) => {
   try {
-    const { deviceId, currentNetwork, mode, localIp } = req.body;
+    const device = req.device;
+    if (!device) return res.status(401).json({ message: 'Device authentication missing' });
 
-    const device = await Device.findOne({ deviceId });
-    if (!device) return res.status(404).json({ message: 'Device not found' });
-
-    // Enforce ownership — heartbeat only accepted from device's assigned lecturer context
-    if (device.companyId.toString() !== req.user?.company?.toString()) {
-      return res.status(403).json({ message: 'Device does not belong to your institution' });
-    }
+    const { currentNetwork, mode, localIp, rtcValid, sdOK, firmwareVersion } = req.body || {};
 
     const wasOffline = device.status === 'offline';
     device.lastHeartbeat  = new Date();
     device.status         = 'online';
-    device.currentNetwork = currentNetwork || device.currentNetwork;
-    device.mode           = mode || device.mode;
-    if (localIp) device.localIp = localIp;
+    if (currentNetwork)            device.currentNetwork = currentNetwork;
+    if (mode)                      device.mode           = mode;
+    if (localIp)                   device.localIp        = localIp;
+    if (rtcValid !== undefined)    device.rtcValid       = !!rtcValid;
+    if (sdOK     !== undefined)    device.sdOK           = !!sdOK;
+    if (firmwareVersion)           device.firmwareVersion = String(firmwareVersion).slice(0, 32);
+
+    // Track the public IP this device is reaching the server from.
+    // This is the same NAT IP the school router will hand to students on the
+    // same WiFi — used by markAttendance to block off-network requests.
+    const clientIp = (
+      (req.headers['x-forwarded-for'] || '').split(',')[0].trim() ||
+      req.headers['x-real-ip'] ||
+      (req.socket && req.socket.remoteAddress) ||
+      ''
+    ).replace(/^::ffff:/, '');
+
+    if (clientIp) {
+      const TEN_MIN_MS = 10 * 60 * 1000;
+      const cutoff = Date.now() - TEN_MIN_MS;
+      const kept = (device.recentPublicIps || [])
+        .filter(e => e.seenAt && new Date(e.seenAt).getTime() > cutoff && e.ip !== clientIp);
+      kept.push({ ip: clientIp, seenAt: new Date() });
+      // Cap to 8 most recent entries to keep doc size bounded.
+      device.recentPublicIps = kept.slice(-8);
+    }
+
     await device.save();
 
-    // Log heartbeat-restored event
     if (wasOffline) {
       _auditDevice(null, AUDIT_ACTIONS.UPDATE, device, { action: 'heartbeat_restored', network: device.currentNetwork });
     }
 
-    // Check for active session
-    const session = await AttendanceSession.findOne({ deviceId, status: 'active' });
+    // Active session lookup — if the lecturer has started a session, deliver
+    // the seed and duration so the firmware can display the rotating code.
+    const session = await AttendanceSession.findOne({
+      deviceId: device.deviceId,
+      status:   'active',
+    }).select('_id title esp32Seed durationSeconds startedAt').lean();
 
-    res.json({
-      success: true,
+    return res.json({
+      ok:         true,
+      success:    true,
+      serverTime: new Date().toISOString(),
       lastSeenAt: device.lastHeartbeat,
       activeSession: session ? {
-        sessionId:   session._id,
-        currentCode: session.currentCode,
-        courseId:    session.courseId,
-        departmentId: session.departmentId
-      } : null
+        sessionId:       session._id,
+        title:           session.title || '',
+        esp32Seed:       session.esp32Seed,
+        durationSeconds: session.durationSeconds || 300,
+        startedAt:       session.startedAt,
+      } : null,
     });
   } catch (err) {
+    console.error('[device heartbeat]', err);
     res.status(500).json({ message: 'Server error', error: err.message });
   }
 };
 
 // ─── OFFLINE SYNC ────────────────────────────────────────────────────────────
-// ESP32 sends batch of attendance records collected while offline
+// ESP32 sends a batch of attendance records collected while it was offline.
+// Authenticated by middleware/deviceAuth (req.device is set).
+// Body: { records: [{ sessionId, userId? , indexNumber?, codeUsed, timestamp }] }
+//
+// For each record, we resolve the user (by _id or institutional indexNumber),
+// verify the session belongs to this device, and create an AttendanceRecord
+// (skipping duplicates and sessions that don't match this device).
 exports.syncOfflineRecords = async (req, res) => {
   try {
-    const { deviceId, records } = req.body;
+    const device = req.device;
+    if (!device) return res.status(401).json({ message: 'Device authentication missing' });
 
-    if (!records?.length) return res.json({ success: true, synced: 0, skipped: 0 });
-
-    const device = await Device.findOne({ deviceId });
-    if (!device) return res.status(404).json({ message: 'Device not found' });
-
-    // Ownership check
-    if (device.lecturerId.toString() !== req.user._id.toString() &&
-        req.user.role !== 'admin' && req.user.role !== 'superadmin') {
-      return res.status(403).json({
-        message: 'This ESP32 device is assigned to another lecturer and cannot be used for this session.'
-      });
+    const { records } = req.body || {};
+    if (!Array.isArray(records) || records.length === 0) {
+      return res.json({ success: true, synced: 0, skipped: 0, errors: [] });
     }
 
     let synced = 0, skipped = 0, errors = [];
 
     for (const rec of records) {
       try {
-        // Validate session exists and belongs to this device
-        const session = await AttendanceSession.findById(rec.sessionId);
-        if (!session || session.deviceId !== deviceId) { skipped++; continue; }
+        const session = rec.sessionId ? await AttendanceSession.findById(rec.sessionId) : null;
+        if (!session || session.deviceId !== device.deviceId) { skipped++; continue; }
+
+        // Resolve user — prefer _id, fall back to indexNumber for offline-only marks
+        let userId = rec.userId || null;
+        if (!userId && rec.indexNumber) {
+          const idx = String(rec.indexNumber).trim().toUpperCase();
+          const user = await User.findOne({
+            company: device.companyId,
+            role:    'student',
+            $or: [{ IndexNumber: idx }, { indexNumber: idx }],
+          }).select('_id').lean();
+          if (user) userId = user._id;
+        }
+        if (!userId) { skipped++; continue; }
+
+        const markedAt = rec.timestamp ? new Date(rec.timestamp) : new Date();
+        const late = (markedAt - new Date(session.startedAt)) > 15 * 60 * 1000;
 
         await AttendanceRecord.create({
-          companyId:    device.companyId,
-          userId:       rec.userId,
-          lecturerId:   session.lecturerId,
-          courseId:     session.courseId,
-          departmentId: session.departmentId,
-          sessionId:    rec.sessionId,
-          deviceId,
-          codeUsed:     rec.codeUsed,
-          markedVia:    'esp32_ap',
-          timestamp:    new Date(rec.timestamp),
-          syncStatus:   'synced',
-          syncedAt:     new Date()
+          session:     session._id,
+          user:        userId,
+          company:     device.companyId,
+          deviceId:    device.deviceId,
+          codeUsed:    rec.codeUsed || null,
+          method:      'esp32_ap',
+          status:      late ? 'late' : 'present',
+          checkInTime: markedAt,
+          syncStatus:  'synced',
+          syncedAt:    new Date(),
         });
         synced++;
       } catch (e) {
-        if (e.code === 11000) skipped++; // duplicate
-        else errors.push({ rec, error: e.message });
+        if (e.code === 11000) skipped++;
+        else errors.push({ ref: rec.indexNumber || rec.userId || null, error: e.message });
       }
     }
 
     res.json({ success: true, synced, skipped, errors });
   } catch (err) {
+    console.error('[device sync]', err);
     res.status(500).json({ message: 'Server error', error: err.message });
   }
 };

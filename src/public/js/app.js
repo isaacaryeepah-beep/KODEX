@@ -5499,28 +5499,38 @@ async function showStartSessionModal() {
   // ── End proximity check ───────────────────────────────────
 
   // ── STRICT device check — always required, no skip ────────
+  // Uses /api/devices/my (per-lecturer Device model). The device must be
+  // paired AND sending heartbeats before a session can start.
   let deviceStatus = null;
   let checkError   = false;
 
   try {
-    deviceStatus = await api('/api/esp32/device-status');
+    const r = await api('/api/devices/my');
+    const d = r?.data || null;
+    deviceStatus = {
+      hasDevice:    !!d,
+      deviceOnline: !!(d && d.status === 'online'),
+      deviceId:     d?.deviceId || null,
+      lastSeenAt:   d?.lastHeartbeat || null,
+    };
   } catch(e) {
     checkError = true;
   }
 
-  // Device not registered yet
+  // Device not paired yet
   if (!checkError && deviceStatus && !deviceStatus.hasDevice) {
     container.innerHTML = `
       <div class="modal-overlay" onclick="closeModal(event)">
         <div class="modal" onclick="event.stopPropagation()" style="text-align:center;max-width:400px">
           <div style="font-size:40px;margin-bottom:12px">📟</div>
-          <h3 style="margin-bottom:8px">Device Not Set Up</h3>
+          <h3 style="margin-bottom:8px">Device Not Paired</h3>
           <p style="font-size:13px;color:var(--text-muted);margin-bottom:20px;line-height:1.6">
-            No classroom device is registered for this institution.<br>
-            Power on the KODEX device and send <strong>REGISTER</strong> via serial monitor.
+            You haven't paired a classroom device yet.<br>
+            Open <strong>Attendance Device</strong>, generate a pairing code, and enter it on your ESP32.
           </p>
           <div style="display:flex;gap:8px;justify-content:center">
             <button class="btn btn-secondary btn-sm" onclick="closeModal()">Cancel</button>
+            <button class="btn btn-primary btn-sm" onclick="closeModal();navigateTo('attendance-device')">Open Pairing</button>
             <button class="btn btn-primary btn-sm" onclick="showStartSessionModal()">↻ Retry</button>
           </div>
         </div>
@@ -9574,12 +9584,6 @@ async function renderMarkAttendance() {
             <div style="font-size:36px;margin-bottom:12px">${svgIcon('<rect x="2" y="2" width="8" height="8" rx="1"/><rect x="14" y="2" width="8" height="8" rx="1"/><rect x="2" y="14" width="8" height="8" rx="1"/><rect x="14" y="14" width="4" height="4"/><path d="M18 14h4v4M14 18h4v4"/>', 42)}</div>
             <div style="font-size:16px;font-weight:700">QR Code</div>
             <p style="font-size:12px;color:var(--text-light);margin-top:4px">Enter QR token from your lecturer's screen</p>
-          </div>
-          
-          <div class="card mark-method-card" onclick="markBLE()" style="cursor:pointer;text-align:center;transition:all 0.2s">
-            <div style="font-size:36px;margin-bottom:12px">${svgIcon('<path d="M6.5 6.5l11 11M6.5 17.5l11-11M12 2v20"/>', 42)}</div>
-            <div style="font-size:16px;font-weight:700">BLE Proximity</div>
-            <p style="font-size:12px;color:var(--text-light);margin-top:4px">Auto-mark by scanning classroom device via Bluetooth</p>
           </div>
           
           <div class="card mark-method-card" onclick="showJitsiJoin()" style="cursor:pointer;text-align:center;transition:all 0.2s">

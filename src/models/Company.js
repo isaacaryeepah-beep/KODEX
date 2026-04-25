@@ -187,31 +187,13 @@ const companySchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
-    // ── ESP32 Classroom Device ────────────────────────────────
-    esp32Devices: {
-      type: [{
-        deviceId:      { type: String },
-        token:         { type: String },
-        registeredAt:  { type: Date },
-        lastSeenAt:    { type: Date },
-        // V2 firmware hardware status (updated on every heartbeat)
-        rtcValid:      { type: Boolean, default: null },
-        sdOK:          { type: Boolean, default: null },
-        bleOK:         { type: Boolean, default: null },
-        sessionActive: { type: Boolean, default: false },
-      }],
-      default: [],
-    },
-    esp32PendingCommand: {
-      action:    { type: String, default: null },
-      sessionId: { type: String, default: null },
-      title:     { type: String, default: null },
-      seed:      { type: String, default: null }, // HMAC seed = sessionId, sent to ESP32 for code derivation
-      duration:  { type: Number, default: 300  }, // session window in seconds (default 5 min)
-      issuedAt:  { type: Date,   default: null },
-    },
-    // When true, sessions cannot start unless device is online
-    esp32Required: { type: Boolean, default: false },
+    // ── DEPRECATED ESP32 fields ───────────────────────────────────────
+    // Replaced by the per-lecturer Device model. No controller reads these
+    // any more; they remain in the schema only so existing documents don't
+    // produce strict-mode errors and so a future migration can drop them.
+    esp32Devices:        { type: [mongoose.Schema.Types.Mixed], default: undefined, select: false },
+    esp32PendingCommand: { type: mongoose.Schema.Types.Mixed,   default: undefined, select: false },
+    esp32Required:       { type: Boolean, default: false },
     superadminNotes: {
       type: String,
       default: "",

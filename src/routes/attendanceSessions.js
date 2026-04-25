@@ -7,9 +7,6 @@ const { enforceLogoutRestriction } = require("../middleware/deviceValidation");
 const attendanceController = require("../controllers/attendanceController");
 const router = express.Router();
 
-// ESP32 offline sync — must be before authenticate middleware (uses its own secret)
-router.post("/esp32-sync", attendanceController.esp32Sync);
-
 router.use(authenticate);
 router.use(requireActiveSubscription);
 

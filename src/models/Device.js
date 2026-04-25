@@ -43,7 +43,23 @@ const deviceSchema = new mongoose.Schema({
   // Meta
   isActive:    { type: Boolean, default: true },
   registeredAt: { type: Date, default: Date.now },
-  token:       { type: String, default: null }
+  token:       { type: String, default: null },
+
+  // Hardware status reported by firmware in heartbeats
+  rtcValid:      { type: Boolean, default: null },
+  sdOK:          { type: Boolean, default: null },
+  firmwareVersion: { type: String, default: null },
+
+  // Sliding window of public IPs the device has reached the server from.
+  // Used for anti-cheat: a student marking attendance from a different
+  // public IP (i.e. a different network, off-campus) is rejected.
+  recentPublicIps: {
+    type: [{
+      ip:      { type: String },
+      seenAt:  { type: Date,   default: Date.now },
+    }],
+    default: [],
+  },
 
 }, { timestamps: true });
 

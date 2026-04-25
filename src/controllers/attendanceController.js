@@ -1,24 +1,35 @@
 const mongoose = require("mongoose");
+const crypto = require("crypto");
 const User = require("../models/User");
 const AttendanceSession = require("../models/AttendanceSession");
 const AttendanceRecord = require("../models/AttendanceRecord");
 const QrToken = require("../models/QrToken");
 const Company = require("../models/Company");
+const Device  = require("../models/Device");
 
-// ── ESP32 online check ────────────────────────────────────
-// STRICT: Device MUST have sent a heartbeat within the last 20s.
-// No flags, no conditions, no bypass. Device off = no session. Full stop.
-function getDeviceStatus(company) {
-  const devices = (company.esp32Devices || []).filter(d => d.lastSeenAt);
-  if (devices.length === 0) return { online: false, registered: false, lastSeenAt: null, secondsAgo: null };
-  const latest = devices.sort((a, b) => new Date(b.lastSeenAt) - new Date(a.lastSeenAt))[0];
-  const secondsAgo = Math.round((Date.now() - new Date(latest.lastSeenAt).getTime()) / 1000);
+// Heartbeat freshness windows.
+const DEVICE_ONLINE_WINDOW_MS = 20_000;   // session start gate
+const DEVICE_MARK_WINDOW_MS   = 15_000;   // mark-attendance gate
+
+// Returns the lecturer's paired ESP32 device + online state, or null if no
+// device is paired. Admins/managers/superadmins fall back to the freshest
+// online device in the company.
+async function _resolveSessionDevice(user) {
+  if (user.role === 'lecturer') {
+    return await Device.findOne({ lecturerId: user._id, companyId: user.company });
+  }
+  return await Device.findOne({ companyId: user.company }).sort({ lastHeartbeat: -1 });
+}
+
+function _deviceFreshness(device, windowMs = DEVICE_ONLINE_WINDOW_MS) {
+  if (!device || !device.lastHeartbeat) {
+    return { online: false, secondsAgo: null, lastSeenAt: null };
+  }
+  const ms = Date.now() - new Date(device.lastHeartbeat).getTime();
   return {
-    online:      secondsAgo <= 20,
-    registered:  true,
-    lastSeenAt:  latest.lastSeenAt,
-    secondsAgo,
-    deviceId:    latest.deviceId,
+    online:     ms <= windowMs,
+    secondsAgo: Math.round(ms / 1000),
+    lastSeenAt: device.lastHeartbeat,
   };
 }
 
@@ -32,30 +43,27 @@ exports.startSession = async (req, res) => {
     }
 
     // ── STRICT device check — always enforced, no bypass ──
-    // The KODEX classroom device MUST be powered on and actively
-    // sending heartbeats before any attendance session can start.
-    // This applies to ALL roles: admin, lecturer, manager, superadmin.
-    const device = getDeviceStatus(company);
+    // The lecturer's paired ESP32 must be powered on and actively sending
+    // heartbeats before any attendance session can start. The Device model
+    // is the single source of truth — there is no "company-level" device.
+    const device  = await _resolveSessionDevice(req.user);
+    const freshness = _deviceFreshness(device, DEVICE_ONLINE_WINDOW_MS);
 
-    console.log(`[SESSION START] company=${company.name} deviceRegistered=${device.registered} deviceOnline=${device.online} secondsAgo=${device.secondsAgo}`);
+    console.log(`[SESSION START] company=${company.name} deviceRegistered=${!!device} deviceOnline=${freshness.online} secondsAgo=${freshness.secondsAgo}`);
 
-    // Proximity is enforced by the device-online check below.
-    // The ESP32 must be sending heartbeats (within 20s) for a session to start.
-    // Physical proximity is further enforced at attendance time via BLE token.
-
-    if (!device.registered) {
-      // Device has never registered — block with setup instructions
+    if (!device) {
       return res.status(503).json({
-        error: "ESP32 device not registered",
-        message: "No classroom device is registered for this institution. Power on the KODEX device and send REGISTER via serial monitor.",
+        error: "ESP32 device not paired",
+        message: req.user.role === 'lecturer'
+          ? "You haven't paired a classroom device yet. Open the Attendance Device page, generate a pairing code, and enter it on your ESP32."
+          : "No classroom device is paired for this institution. A lecturer must pair an ESP32 from the Attendance Device page.",
         deviceStatus: { online: false, registered: false },
       });
     }
 
-    if (!device.online) {
-      // Device registered but not currently sending heartbeats
-      const lastSeenMsg = device.lastSeenAt
-        ? `Last seen ${device.secondsAgo}s ago.`
+    if (!freshness.online) {
+      const lastSeenMsg = freshness.lastSeenAt
+        ? `Last seen ${freshness.secondsAgo}s ago.`
         : "Device has never sent a heartbeat.";
       return res.status(503).json({
         error: "ESP32 device is offline",
@@ -63,14 +71,14 @@ exports.startSession = async (req, res) => {
         deviceStatus: {
           online:      false,
           registered:  true,
-          deviceId:    device.deviceId || null,
-          lastSeenAt:  device.lastSeenAt || null,
-          secondsAgo:  device.secondsAgo,
+          deviceId:    device.deviceId,
+          lastSeenAt:  freshness.lastSeenAt,
+          secondsAgo:  freshness.secondsAgo,
         },
       });
     }
 
-    console.log(`[SESSION START] ✓ Device online (${device.secondsAgo}s ago) — allowing start for ${company.name}`);
+    console.log(`[SESSION START] ✓ Device ${device.deviceId} online (${freshness.secondsAgo}s ago) — allowing start for ${company.name}`);
     // ── End device check ──────────────────────────────────
 
     const activeFilter = { company: companyId, status: "active" };
@@ -114,49 +122,29 @@ exports.startSession = async (req, res) => {
 
     const courseRef = course._id;
 
+    // ── Per-session secret seed ───────────────────────────────────────────
+    // The seed is what makes the rotating 6-digit code unguessable. It is
+    // never sent to students — only to the paired ESP32 (via /api/devices/
+    // heartbeat) and held server-side for code verification.
+    const SEED     = crypto.randomBytes(24).toString("hex");
+    const DURATION = Number(req.body.durationSeconds) || 300; // 5 min default
+
     const sessionData = {
       company: companyId,
       createdBy: req.user._id,
       title: req.body.title || "",
       course: courseRef,
+      deviceId: device.deviceId,
+      esp32Seed: SEED,
+      durationSeconds: DURATION,
       status: "active",
       startedAt: new Date(),
     };
 
-    if (company.qrSeed) {
-      sessionData.qrSeed = company.qrSeed;
-    }
-    if (company.bleLocationId) {
-      sessionData.bleLocationId = company.bleLocationId;
-    }
+    if (company.qrSeed)        sessionData.qrSeed        = company.qrSeed;
+    if (company.bleLocationId) sessionData.bleLocationId = company.bleLocationId;
 
     const session = await AttendanceSession.create(sessionData);
-
-    // ── Seed the rotating code immediately ────────────────────────────────
-    // If this company has a registered ESP32, every session needs an esp32Seed
-    // so the rotating 6-digit code can be derived by both the backend and the
-    // device. Previously the seed was only set when sendCommand was called as
-    // a separate step — if the frontend forgot that call, the session would
-    // have no seed and markAttendance would skip rotating-code enforcement,
-    // silently weakening anti-cheat. Set it here unconditionally.
-    if (company.esp32Devices && company.esp32Devices.length > 0) {
-      const SEED = session._id.toString();
-      const DURATION = Number(req.body.durationSeconds) || 300; // default 5 min window
-      session.esp32Seed = SEED;
-      session.durationSeconds = DURATION;
-      await session.save();
-
-      // Queue the start command so the ESP32 picks it up on its next poll.
-      company.esp32PendingCommand = {
-        action:    "start",
-        sessionId: session._id.toString(),
-        title:     req.body.title || "Classroom Session",
-        seed:      SEED,
-        duration:  DURATION,
-        issuedAt:  new Date(),
-      };
-      await company.save();
-    }
 
     const populated = await session.populate([
       { path: "company", select: "name" },
@@ -204,24 +192,10 @@ exports.stopSession = async (req, res) => {
     session.stoppedReason = "manual";
     await session.save();
 
-    // Queue stop command to the ESP32 so its OLED clears and it stops
-    // broadcasting the rotating code. Non-fatal if it fails.
-    try {
-      const company = await Company.findById(session.company);
-      if (company && company.esp32Devices && company.esp32Devices.length > 0) {
-        company.esp32PendingCommand = {
-          action:    "stop",
-          sessionId: session._id.toString(),
-          title:     null,
-          seed:      null,
-          duration:  0,
-          issuedAt:  new Date(),
-        };
-        await company.save();
-      }
-    } catch (e) {
-      console.warn("Stop: failed to queue ESP32 stop command:", e.message);
-    }
+    // No explicit ESP32 stop command needed. The device polls
+    // /api/devices/heartbeat every few seconds; once `activeSession` returns
+    // null (because status flipped to stopped), the firmware clears the OLED
+    // automatically.
 
     const populated = await session.populate([
       { path: "company", select: "name" },
@@ -431,73 +405,17 @@ exports.markAttendance = async (req, res) => {
     };
 
     // ── ESP32 liveness + same-network enforcement ─────────────────────────
-    // If the company has a registered ESP32 device, ALL attendance marking
-    // requires:
-    //   1. The ESP32 is sending heartbeats (within 15s)
-    //   2. The student's PUBLIC IP matches one of the IPs the ESP32 recently
-    //      reported from. Since both devices are behind the same school WiFi
-    //      router's NAT, they share a public IP — if they don't match, the
-    //      student is on a different network (home WiFi, mobile data, etc.)
-    //      and the request is rejected. This is the anti-cheat that replaces
-    //      the old ESP32-hotspot requirement.
+    // The session that the student is marking against is bound to a specific
+    // ESP32 (session.deviceId set at startSession time). For attendance to be
+    // accepted:
+    //   1. The ESP32 must be sending heartbeats (within 15s).
+    //   2. The student's public IP must match one of the IPs the ESP32 has
+    //      reached the server from in the last 10 min. Both phones and the
+    //      ESP32 share the school's router NAT IP — a mismatch means the
+    //      student is on a different network (mobile data / off-campus).
     //
-    // We look at the LATEST heartbeating device (highest lastSeenAt) and
-    // compare against its sliding 10-minute IP window.
-    const Company = require('../models/Company');
-    const companyDoc = await Company.findById(req.user.company)
-      .select('esp32Devices esp32Required').lean();
-
-    const hasRegisteredDevice = !!(companyDoc &&
-      companyDoc.esp32Devices &&
-      companyDoc.esp32Devices.length > 0);
-
-    if (hasRegisteredDevice) {
-      const now = Date.now();
-      const HEARTBEAT_STALENESS_MS = 15000;
-
-      // Find the freshest device (the one most recently seen).
-      const freshest = companyDoc.esp32Devices
-        .filter(d => d.lastSeenAt)
-        .sort((a, b) => new Date(b.lastSeenAt) - new Date(a.lastSeenAt))[0];
-
-      if (!freshest || (now - new Date(freshest.lastSeenAt).getTime()) >= HEARTBEAT_STALENESS_MS) {
-        return res.status(503).json({
-          error: 'The classroom device is offline. Ask your lecturer to power it on.',
-          esp32Required: true,
-          esp32Offline: true,
-        });
-      }
-
-      // Same-network check via public IP match.
-      const studentIpRaw = (
-        (req.headers['x-forwarded-for'] || '').split(',')[0].trim() ||
-        req.headers['x-real-ip'] ||
-        (req.socket && req.socket.remoteAddress) ||
-        ''
-      );
-      const studentIp = studentIpRaw.startsWith('::ffff:') ? studentIpRaw.slice(7) : studentIpRaw;
-
-      // localhost bypass for development only
-      const isLocalhost = studentIp === '127.0.0.1' || studentIp === '::1' || studentIp === '';
-
-      // IPs the ESP32 has reached the backend from in the last ~10 min.
-      const TEN_MIN_AGO = now - (10 * 60 * 1000);
-      const deviceIps = (freshest.recentPublicIps || [])
-        .filter(e => e.seenAt && new Date(e.seenAt).getTime() > TEN_MIN_AGO)
-        .map(e => e.ip);
-
-      // If the device has recorded at least one IP and the student's IP
-      // doesn't match any of them, block the request.
-      const ipMatches = deviceIps.length === 0 || deviceIps.includes(studentIp);
-
-      if (!ipMatches && !isLocalhost) {
-        console.warn(`[MARK] Blocked ${req.user.name}: IP ${studentIp} not in device IPs [${deviceIps.join(', ')}]`);
-        return res.status(403).json({
-          error: 'You must be connected to the same WiFi as the classroom device to mark attendance.',
-          networkMismatch: true,
-        });
-      }
-    }
+    // We resolve enforcement once we have the active session below — see the
+    // `enforceDeviceProximity` block.
     // ─────────────────────────────────────────────────────────────────────────
 
     // sessionId is optional — auto-detect the active session if not supplied
@@ -523,6 +441,50 @@ exports.markAttendance = async (req, res) => {
 
     if (!session) {
       return res.status(404).json({ error: "No active session found. The manager needs to start a session first." });
+    }
+
+    // ── Device proximity enforcement (1 + 2 from the comment above) ────────
+    if (session.deviceId) {
+      const sessionDevice = await Device.findOne({ deviceId: session.deviceId, companyId: req.user.company });
+
+      if (!sessionDevice) {
+        return res.status(503).json({
+          error: 'The classroom device for this session is no longer paired.',
+          esp32Required: true,
+        });
+      }
+
+      const fresh = _deviceFreshness(sessionDevice, DEVICE_MARK_WINDOW_MS);
+      if (!fresh.online) {
+        return res.status(503).json({
+          error: 'The classroom device is offline. Ask your lecturer to power it on.',
+          esp32Required: true,
+          esp32Offline: true,
+          secondsAgo:    fresh.secondsAgo,
+        });
+      }
+
+      const studentIp = (
+        (req.headers['x-forwarded-for'] || '').split(',')[0].trim() ||
+        req.headers['x-real-ip'] ||
+        (req.socket && req.socket.remoteAddress) ||
+        ''
+      ).replace(/^::ffff:/, '');
+
+      const isLocalhost = studentIp === '127.0.0.1' || studentIp === '::1' || studentIp === '';
+      const TEN_MIN_AGO = Date.now() - 10 * 60 * 1000;
+      const deviceIps = (sessionDevice.recentPublicIps || [])
+        .filter(e => e.seenAt && new Date(e.seenAt).getTime() > TEN_MIN_AGO)
+        .map(e => e.ip);
+
+      // If we have at least one recorded device IP, student's IP must match.
+      if (!isLocalhost && deviceIps.length > 0 && !deviceIps.includes(studentIp)) {
+        console.warn(`[MARK] Blocked ${req.user.name}: IP ${studentIp} not in device IPs [${deviceIps.join(', ')}]`);
+        return res.status(403).json({
+          error: 'You must be on the same WiFi as the classroom device to mark attendance.',
+          networkMismatch: true,
+        });
+      }
     }
 
     // For students: verify they are enrolled in the course this session belongs to
@@ -869,118 +831,6 @@ exports.getSignInStatus = async (req, res) => {
   }
 };
 
-// ── ESP32 offline sync endpoint ────────────────────────────────────────────────
-exports.esp32Sync = async (req, res) => {
-  try {
-    // Validate ESP32 secret
-    const secret = req.headers['x-esp32-secret'];
-    if (!secret || secret !== process.env.ESP32_SECRET) {
-      return res.status(401).json({ error: 'Unauthorized ESP32 request' });
-    }
-
-    const { records, offlineSession, institutionCode } = req.body;
-
-    // Find company by institution code
-    const company = await Company.findOne({ institutionCode: institutionCode?.toUpperCase() });
-    if (!company) {
-      return res.status(404).json({ error: 'Institution not found: ' + institutionCode });
-    }
-
-    let session = null;
-
-    // If session was started offline on ESP32, create it in DB if not exists
-    if (offlineSession) {
-      session = await AttendanceSession.findOne({ _id: offlineSession.id }).catch(() => null);
-      if (!session) {
-        try {
-          session = await AttendanceSession.create({
-            _id: offlineSession.id.startsWith('esp32_') ? undefined : offlineSession.id,
-            title: offlineSession.title || 'Offline Session',
-            company: company._id,
-            status: 'active',
-            startedAt: new Date(offlineSession.startedAt),
-            source: 'esp32_offline',
-          });
-          console.log('[ESP32 Sync] Created offline session:', session._id);
-        } catch (e) {
-          // Session may already exist
-          session = await AttendanceSession.findOne({ company: company._id, status: 'active' }).sort({ startedAt: -1 });
-        }
-      }
-    }
-
-    if (!session) {
-      // Find the most recent active or recently stopped session for this company
-      session = await AttendanceSession.findOne({ company: company._id })
-        .sort({ startedAt: -1 });
-    }
-
-    if (!session) {
-      return res.status(404).json({ error: 'No session found to sync records into' });
-    }
-
-    let synced = 0;
-    let skipped = 0;
-    const errors = [];
-
-    for (const record of (records || [])) {
-      try {
-        // Find user
-        let user = null;
-        if (record.userId) {
-          user = await User.findOne({ _id: record.userId, company: company._id });
-        }
-        if (!user && record.indexNumber) {
-          user = await User.findOne({ indexNumber: record.indexNumber.toUpperCase(), company: company._id });
-        }
-        if (!user) {
-          errors.push({ ref: record.indexNumber || record.userId, error: 'User not found' });
-          continue;
-        }
-
-        // Corporate sign-in/out records
-        if (record.type === 'sign_in' || record.type === 'sign_out') {
-          const SignInRecord = require('../models/SignInRecord').default || require('../models/SignInRecord');
-          const time = new Date(record.time || Date.now());
-          if (record.type === 'sign_in') {
-            const exists = await SignInRecord.findOne({ user: user._id, checkInTime: { $gte: new Date(time - 60000) } });
-            if (exists) { skipped++; continue; }
-            await SignInRecord.create({ user: user._id, company: company._id, checkInTime: time, source: 'esp32' });
-          } else {
-            const last = await SignInRecord.findOne({ user: user._id, checkOutTime: null }).sort({ checkInTime: -1 });
-            if (last) { last.checkOutTime = time; await last.save(); }
-          }
-          synced++;
-          continue;
-        }
-
-        // Academic attendance records
-        if (!session) { errors.push({ ref: record.indexNumber, error: 'No session' }); continue; }
-        const existing = await AttendanceRecord.findOne({ session: session._id, user: user._id });
-        if (existing) { skipped++; continue; }
-
-        const markedAt = new Date(record.markedAt || Date.now());
-        const timeSinceStart = markedAt - new Date(session.startedAt);
-        const status = timeSinceStart > 15 * 60 * 1000 ? 'late' : 'present';
-
-        await AttendanceRecord.create({
-          session: session._id,
-          user: user._id,
-          company: company._id,
-          status,
-          method: record.method || 'ble_mark',
-          markedAt,
-        });
-        synced++;
-      } catch (e) {
-        errors.push({ ref: record.indexNumber || record.userId, error: e.message });
-      }
-    }
-
-    console.log(`[ESP32 Sync] institution=${institutionCode} synced=${synced} skipped=${skipped} errors=${errors.length}`);
-    res.json({ ok: true, synced, skipped, errors });
-  } catch (error) {
-    console.error('[ESP32 Sync] Error:', error);
-    res.status(500).json({ error: 'Sync failed: ' + error.message });
-  }
-};
+// Legacy `exports.esp32Sync` removed. Offline sync now lives at
+// POST /api/devices/sync (deviceController.syncOfflineRecords) with
+// proper device-JWT authentication.

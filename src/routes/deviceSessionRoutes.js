@@ -2,38 +2,32 @@ const express = require('express');
 const router  = express.Router();
 
 const deviceCtrl  = require('../controllers/deviceController');
-const sessionCtrl = require('../controllers/sessionController');
 
-// auth.js exports authenticate as default, companyIsolation is in its own file
-const authenticate       = require('../middleware/auth');
+const authenticate         = require('../middleware/auth');
+const deviceAuth           = require('../middleware/deviceAuth');
 const { companyIsolation } = require('../middleware/companyIsolation');
 
-// ─── DEVICE ROUTES ────────────────────────────────────────────────────────────
-router.post('/devices/register',          authenticate, companyIsolation, deviceCtrl.registerDevice);
-router.post('/devices/heartbeat',         authenticate, companyIsolation, deviceCtrl.heartbeat);
-router.post('/devices/sync',              authenticate, companyIsolation, deviceCtrl.syncOfflineRecords);
+// ─── ESP32 DEVICE-SIDE ROUTES (device JWT) ────────────────────────────────────
+// These are called by the ESP32 firmware using `Authorization: Bearer <token>`
+// where the token was issued by /api/devices/pair.
+router.post('/devices/heartbeat', deviceAuth, deviceCtrl.heartbeat);
+router.post('/devices/sync',      deviceAuth, deviceCtrl.syncOfflineRecords);
+
+// ─── PAIRING (no JWT — device uses pairingCode + institutionCode) ─────────────
+router.post('/devices/pair',          deviceCtrl.pairDevice);
+
+// ─── LECTURER PORTAL ROUTES (user JWT) ────────────────────────────────────────
+router.post('/devices/pairing-code',   authenticate, deviceCtrl.generatePairingCode);
+router.get('/devices/my',              authenticate, companyIsolation, deviceCtrl.getMyDevice);
+router.delete('/devices/my',           authenticate, companyIsolation, deviceCtrl.unlinkDevice);
+router.patch('/devices/my/rename',     authenticate, companyIsolation, deviceCtrl.renameDevice);
+router.get('/devices/my/activity',     authenticate, companyIsolation, deviceCtrl.getDeviceActivity);
 router.put('/devices/:deviceId/networks', authenticate, companyIsolation, deviceCtrl.updateNetworks);
 router.get('/devices/:deviceId/status',   authenticate, companyIsolation, deviceCtrl.getDeviceStatus);
 router.post('/devices/transfer',          authenticate, deviceCtrl.transferDevice);
 
-// Lecturer self-service (no deviceId param needed — scoped to owner)
-router.get('/devices/my',          authenticate, companyIsolation, deviceCtrl.getMyDevice);
-router.delete('/devices/my',       authenticate, companyIsolation, deviceCtrl.unlinkDevice);
-router.patch('/devices/my/rename', authenticate, companyIsolation, deviceCtrl.renameDevice);
-
-// Pairing flow
-router.post('/devices/pairing-code',  authenticate, deviceCtrl.generatePairingCode);
-router.post('/devices/pair',          deviceCtrl.pairDevice); // no JWT — authenticated via pairing code
-router.get('/devices/my/activity',    authenticate, companyIsolation, deviceCtrl.getDeviceActivity);
-
-// WiFi setup (proxied to ESP32)
-router.get('/devices/my/scan-wifi',   authenticate, companyIsolation, deviceCtrl.scanWifi);
+// WiFi setup helpers — server proxies to the ESP32 over the local network
+router.get('/devices/my/scan-wifi',    authenticate, companyIsolation, deviceCtrl.scanWifi);
 router.post('/devices/configure-wifi', authenticate, companyIsolation, deviceCtrl.configureWifi);
-
-// ─── SESSION ROUTES ───────────────────────────────────────────────────────────
-router.post('/sessions/start',               authenticate, companyIsolation, sessionCtrl.startSession);
-router.post('/sessions/end',                 authenticate, companyIsolation, sessionCtrl.endSession);
-router.get('/sessions/active/:deviceId',     authenticate, companyIsolation, sessionCtrl.getActiveSession);
-router.post('/sessions/attendance/validate', authenticate, companyIsolation, sessionCtrl.validateAttendance);
 
 module.exports = router;
