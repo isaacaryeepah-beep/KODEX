@@ -9,9 +9,9 @@
  *   - mock_gps          → -20
  *   - vpn / proxy       → -15
  *   - impossible_move   → -25
- *   - unknown_device    → -10
  *   - failed_attempt    → -5
  *   - low_accuracy_gps  → -5
+ *   - outside_window    → -5
  *   - clean event       → +1 (capped at 100)
  *
  * Lockouts:
@@ -22,6 +22,7 @@
  * Time rules:
  *   - Min 5 minutes between clock-in and clock-out
  *   - Max 16 hours of "open" clock-in (auto-flagged)
+ *   - Clock-in / clock-out time windows enforced if configured at company level
  */
 
 const MAX_HUMAN_SPEED_KMH         = 200;   // realistic ground/air travel ceiling
@@ -39,10 +40,34 @@ const PENALTIES = Object.freeze({
   mock_gps:          -20,
   vpn:               -15,
   impossible_move:   -25,
-  unknown_device:    -10,
   failed_attempt:     -5,
   low_accuracy_gps:   -5,
+  outside_window:     -5,
 });
+
+// Parse "HH:MM" → minutes-since-midnight. Returns null if invalid.
+function parseHhmm(hhmm) {
+  if (typeof hhmm !== "string") return null;
+  const m = hhmm.match(/^(\d{1,2}):(\d{2})$/);
+  if (!m) return null;
+  const h = +m[1], mn = +m[2];
+  if (h < 0 || h > 23 || mn < 0 || mn > 59) return null;
+  return h * 60 + mn;
+}
+
+/**
+ * Check if `now` falls inside a [start, end] window. End may wrap past midnight
+ * (e.g. clockOutStart=22:00, clockOutEnd=02:00).
+ * Returns null if window is not configured (start or end missing).
+ */
+function isWithinWindow(now, startStr, endStr) {
+  const start = parseHhmm(startStr);
+  const end   = parseHhmm(endStr);
+  if (start == null || end == null) return null;
+  const cur = now.getHours() * 60 + now.getMinutes();
+  if (start <= end) return cur >= start && cur <= end;
+  return cur >= start || cur <= end;   // wraps past midnight
+}
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -113,27 +138,24 @@ function checkMovement(lastEvent, current) {
 /**
  * Validate a clock event with all anti-cheat rules. Pure function — does NOT mutate the user.
  *
+ * `eventType` is "clock_in" or "clock_out" — used to enforce time windows.
+ *
  * Returns:
  *   {
- *     ok: bool,
- *     blocked: bool,
- *     reason?: string,          // short machine code if blocked
- *     message?: string,         // human-readable
- *     flags: string[],          // anti-cheat signals raised
- *     trustDelta: number,       // -ve if cheat signals, +1 if clean
- *     verified: bool|null,
- *     mockLocationFlag, impossibleMovement, movementSpeedKmh, knownDevice
+ *     ok, blocked, reason, message, flags, trustDelta, verified,
+ *     mockLocationFlag, impossibleMovement, movementSpeedKmh,
+ *     distanceFromOfficeMeters, clientIp
  *   }
  */
-function evaluateAttempt({ req, user, body, settings, lastEvent }) {
+function evaluateAttempt({ req, user, body, settings, lastEvent, eventType = "clock_in" }) {
   const flags = [];
   let blocked = false;
   let reason  = null;
   let message = null;
 
-  const clientIp     = extractClientIp(req);
-  const ipIsLocal    = isLocalIp(clientIp);
-  const { latitude, longitude, accuracy, deviceFingerprint } = body || {};
+  const clientIp  = extractClientIp(req);
+  const ipIsLocal = isLocalIp(clientIp);
+  const { latitude, longitude, accuracy } = body || {};
 
   // Lockout check (hard fail)
   if (user.attendanceLockoutUntil && new Date(user.attendanceLockoutUntil) > new Date()) {
@@ -153,14 +175,25 @@ function evaluateAttempt({ req, user, body, settings, lastEvent }) {
     };
   }
 
-  // 1. VPN / proxy
-  if (!ipIsLocal && detectProxy(req)) {
+  // 1. Time window (only if configured for the relevant event)
+  const now = new Date();
+  const startKey = eventType === "clock_out" ? "clockOutStart" : "clockInStart";
+  const endKey   = eventType === "clock_out" ? "clockOutEnd"   : "clockInEnd";
+  const within   = isWithinWindow(now, settings?.[startKey], settings?.[endKey]);
+  if (within === false) {
+    flags.push("outside_window");
+    blocked = true; reason = "outside_window";
+    message = `${eventType === "clock_out" ? "Clock-out" : "Clock-in"} is only allowed between ${settings[startKey]} and ${settings[endKey]}.`;
+  }
+
+  // 2. VPN / proxy
+  if (!blocked && !ipIsLocal && detectProxy(req)) {
     flags.push("vpn");
     blocked = true; reason = "vpn_detected";
     message = "VPN or proxy detected. Disable it and try again.";
   }
 
-  // 2. Strict WiFi (only if configured)
+  // 3. Strict WiFi (only if configured)
   const allowed = settings?.allowedWifiIPs || [];
   if (!blocked && settings?.strictAttendance && allowed.length > 0 && !ipIsLocal && !allowed.includes(clientIp)) {
     flags.push("wifi_mismatch");
@@ -168,7 +201,7 @@ function evaluateAttempt({ req, user, body, settings, lastEvent }) {
     message = "You must be on company WiFi to clock in.";
   }
 
-  // 3. GPS required (always-on, strict)
+  // 4. GPS required (always-on, strict)
   if (!blocked) {
     if (latitude == null || longitude == null) {
       flags.push("location_missing");
@@ -185,7 +218,7 @@ function evaluateAttempt({ req, user, body, settings, lastEvent }) {
     }
   }
 
-  // 4. Geofence (only if configured)
+  // 5. Geofence (only if configured)
   if (!blocked && settings?.officeLatitude != null && settings?.officeLongitude != null) {
     const dist = haversineMeters(settings.officeLatitude, settings.officeLongitude, latitude, longitude);
     const radius = settings.geofenceRadiusMeters || 150;
@@ -196,31 +229,12 @@ function evaluateAttempt({ req, user, body, settings, lastEvent }) {
     }
   }
 
-  // 5. Impossible movement (against this user's last clock event)
+  // 6. Impossible movement (against this user's last clock event)
   const movement = checkMovement(lastEvent, { latitude, longitude });
   if (!blocked && !movement.possible) {
     flags.push("impossible_move");
     blocked = true; reason = "impossible_movement";
     message = `Impossible movement detected (${movement.speedKmh} km/h since last event).`;
-  }
-
-  // 6. Device fingerprint
-  if (!blocked) {
-    if (!deviceFingerprint) {
-      flags.push("no_fingerprint");
-      blocked = true; reason = "device_fingerprint_missing";
-      message = "Device verification failed. Refresh the page and try again.";
-    } else {
-      const known = (user.recognizedDevices || []).some(d => d.fingerprint === deviceFingerprint);
-      if (!known) {
-        // First-ever device is auto-bound — handled by caller. New device on existing user is blocked.
-        if ((user.recognizedDevices || []).length > 0) {
-          flags.push("unknown_device");
-          blocked = true; reason = "unknown_device";
-          message = "Unrecognized device. Ask your manager to approve this device.";
-        }
-      }
-    }
   }
 
   // ── Compute trust delta ────────────────────────────────────────────────────
@@ -241,9 +255,6 @@ function evaluateAttempt({ req, user, body, settings, lastEvent }) {
     mockLocationFlag:   flags.includes("mock_gps"),
     impossibleMovement: flags.includes("impossible_move"),
     movementSpeedKmh:   movement.speedKmh,
-    knownDevice:        deviceFingerprint
-                          ? (user.recognizedDevices || []).some(d => d.fingerprint === deviceFingerprint)
-                          : null,
     distanceFromOfficeMeters: settings?.officeLatitude != null
       ? haversineMeters(settings.officeLatitude, settings.officeLongitude, latitude, longitude)
       : null,
@@ -290,32 +301,13 @@ async function applyTrustOutcome(user, evalResult, currentLocation) {
   return { before, after };
 }
 
-/**
- * Bind a new device to a user (auto-bind for first device, manager-approved otherwise).
- */
-function bindDevice(user, fingerprint, userAgent, approverId = null) {
-  if (!fingerprint) return;
-  user.recognizedDevices = user.recognizedDevices || [];
-  const existing = user.recognizedDevices.find(d => d.fingerprint === fingerprint);
-  if (existing) {
-    existing.lastSeen = new Date();
-    return;
-  }
-  user.recognizedDevices.push({
-    fingerprint,
-    userAgent: userAgent || null,
-    firstSeen: new Date(),
-    lastSeen:  new Date(),
-    approvedBy: approverId,
-  });
-}
-
 module.exports = {
   evaluateAttempt,
   applyTrustOutcome,
-  bindDevice,
   extractClientIp,
   haversineMeters,
+  parseHhmm,
+  isWithinWindow,
   PENALTIES,
   MAX_HUMAN_SPEED_KMH,
   MAX_GPS_ACCURACY_METERS,

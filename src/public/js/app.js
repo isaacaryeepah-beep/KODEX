@@ -4409,51 +4409,6 @@ function _getGPSLocation() {
   });
 }
 
-// ── Device fingerprint (canvas + screen + UA) ────────────────────────────────
-async function _getDeviceFingerprint() {
-  if (window._kodexDeviceFingerprint) return window._kodexDeviceFingerprint;
-  try {
-    let canvasHash = '';
-    try {
-      const canvas = document.createElement('canvas');
-      canvas.width = 240; canvas.height = 60;
-      const ctx = canvas.getContext('2d');
-      ctx.textBaseline = 'top';
-      ctx.font = "14px 'Arial'";
-      ctx.fillStyle = '#069';
-      ctx.fillText('KODEX-fp-' + navigator.userAgent.length, 2, 2);
-      ctx.fillStyle = 'rgba(102,204,0,0.7)';
-      ctx.fillText('KODEX-fp-' + navigator.userAgent.length, 4, 4);
-      canvasHash = canvas.toDataURL().slice(-64);
-    } catch (_) { canvasHash = 'no-canvas'; }
-
-    const raw = [
-      navigator.userAgent,
-      navigator.language || '',
-      navigator.platform || '',
-      navigator.hardwareConcurrency || 0,
-      screen.width + 'x' + screen.height,
-      screen.colorDepth,
-      new Date().getTimezoneOffset(),
-      canvasHash,
-    ].join('|');
-
-    // Hash with SubtleCrypto if available, fallback to simple hash
-    let hex;
-    if (window.crypto?.subtle) {
-      const bytes = new TextEncoder().encode(raw);
-      const buf   = await crypto.subtle.digest('SHA-256', bytes);
-      hex = Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
-    } else {
-      let h = 0; for (let i = 0; i < raw.length; i++) { h = ((h << 5) - h) + raw.charCodeAt(i); h |= 0; }
-      hex = (h >>> 0).toString(16).padStart(64, '0');
-    }
-    window._kodexDeviceFingerprint = hex;
-    return hex;
-  } catch (e) {
-    return 'fingerprint-error-' + Date.now();
-  }
-}
 
 function _showGPSBlockedModal(code) {
   document.getElementById('gps-blocked-modal')?.remove();
@@ -4519,11 +4474,10 @@ async function employeeSignIn() {
     _showStrictBlockedModal(`GPS accuracy too poor (${gpsData.accuracy}m). Move to an open area and try again.`);
     return;
   }
-  const fingerprint = await _getDeviceFingerprint();
   try {
     const data = await api('/api/corporate-attendance/clock-in', {
       method: 'POST',
-      body: JSON.stringify({ method: 'web', deviceFingerprint: fingerprint, ...gpsData }),
+      body: JSON.stringify({ method: 'web', ...gpsData }),
     });
     let msg = data.message || 'Clocked in successfully!';
     if (data.trustScore != null) msg += ` · Trust ${data.trustScore}`;
@@ -4553,11 +4507,10 @@ async function employeeSignOut() {
     _showStrictBlockedModal(`GPS accuracy too poor (${gpsData.accuracy}m). Move to an open area and try again.`);
     return;
   }
-  const fingerprint = await _getDeviceFingerprint();
   try {
     const data = await api('/api/corporate-attendance/clock-out', {
       method: 'POST',
-      body: JSON.stringify({ method: 'web', deviceFingerprint: fingerprint, ...gpsData }),
+      body: JSON.stringify({ method: 'web', ...gpsData }),
     });
     const hrs = data.hoursWorked != null ? ` · ${data.hoursWorked}h worked` : '';
     const trust = data.trustScore != null ? ` · Trust ${data.trustScore}` : '';
@@ -4639,11 +4592,6 @@ async function renderSignInOut() {
             <div style="font-size:13px;font-weight:600;color:${trustColor}">${trustLabel}</div>
           </div>
           <div style="font-size:11px;color:var(--text-muted);margin-top:2px">Below ${reviewTrust} = manager review · Below ${hardLockTrust} = locked</div>
-        </div>
-        <div style="text-align:right">
-          <div style="font-size:11px;text-transform:uppercase;font-weight:700;color:var(--text-muted)">Recognized Devices</div>
-          <div style="font-size:14px;font-weight:700">${(trustData.devices || []).length}</div>
-          <div style="font-size:10px;color:var(--text-muted)">First-ever device auto-binds</div>
         </div>
       </div>
 
@@ -13674,9 +13622,12 @@ async function _caLoadSettings() {
   const el = document.getElementById('ca-settings-body');
   if (!el) return;
   try {
-    const s = await api('/api/corporate-attendance/settings');
+    const [s, win] = await Promise.all([
+      api('/api/corporate-attendance/settings'),
+      api('/api/corporate-attendance/clock-window').catch(() => ({})),
+    ]);
     el.innerHTML = `
-      <div class="card" style="max-width:560px">
+      <div class="card" style="max-width:560px;margin-bottom:20px">
         <h3 style="font-size:15px;font-weight:700;margin-bottom:4px">Strict Attendance Settings</h3>
         <p style="font-size:12px;color:var(--text-light);margin-bottom:18px">Employees can only clock in when on company WiFi AND inside the office geofence.</p>
 
@@ -13714,11 +13665,73 @@ async function _caLoadSettings() {
 
         <button class="btn btn-primary" style="margin-top:20px" onclick="_caSaveSettings()">Save Settings</button>
         <button class="btn btn-secondary btn-sm" style="margin-top:20px;margin-left:8px" onclick="_caDetectMyIP()">📡 Detect My IP</button>
+      </div>
+
+      <div class="card" style="max-width:560px">
+        <h3 style="font-size:15px;font-weight:700;margin-bottom:4px">Clock-In / Clock-Out Time Windows</h3>
+        <p style="font-size:12px;color:var(--text-light);margin-bottom:18px">Restrict the times of day when employees can clock in or out. Leave both fields blank to allow any time. End may wrap past midnight (e.g. 22:00 → 02:00 for night shifts).</p>
+
+        <div style="margin-bottom:14px">
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-light);margin-bottom:6px">Clock-In Window</div>
+          <div style="display:flex;gap:10px;align-items:center">
+            <input type="time" id="cw-in-start" value="${win.clockInStart || ''}"
+              style="padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
+            <span style="color:var(--text-muted);font-size:13px">to</span>
+            <input type="time" id="cw-in-end" value="${win.clockInEnd || ''}"
+              style="padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
+          </div>
+        </div>
+
+        <div style="margin-bottom:14px">
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-light);margin-bottom:6px">Clock-Out Window</div>
+          <div style="display:flex;gap:10px;align-items:center">
+            <input type="time" id="cw-out-start" value="${win.clockOutStart || ''}"
+              style="padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
+            <span style="color:var(--text-muted);font-size:13px">to</span>
+            <input type="time" id="cw-out-end" value="${win.clockOutEnd || ''}"
+              style="padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
+          </div>
+        </div>
+
+        <button class="btn btn-primary" onclick="_caSaveClockWindow()">Save Time Windows</button>
+        <button class="btn btn-secondary btn-sm" style="margin-left:8px" onclick="_caClearClockWindow()">Clear (Allow Any Time)</button>
       </div>`;
     _caDetectMyIP();
   } catch(e) {
     el.innerHTML = `<div class="card"><p style="color:var(--danger)">Failed to load settings.</p></div>`;
   }
+}
+
+async function _caSaveClockWindow() {
+  const clockInStart  = document.getElementById('cw-in-start')?.value  || '';
+  const clockInEnd    = document.getElementById('cw-in-end')?.value    || '';
+  const clockOutStart = document.getElementById('cw-out-start')?.value || '';
+  const clockOutEnd   = document.getElementById('cw-out-end')?.value   || '';
+
+  // UI validation: both start and end must be set together for each pair
+  if (!!clockInStart !== !!clockInEnd) {
+    toastError('Set both start and end for clock-in window (or leave both empty).');
+    return;
+  }
+  if (!!clockOutStart !== !!clockOutEnd) {
+    toastError('Set both start and end for clock-out window (or leave both empty).');
+    return;
+  }
+
+  try {
+    await api('/api/corporate-attendance/clock-window', {
+      method: 'PATCH',
+      body: JSON.stringify({ clockInStart, clockInEnd, clockOutStart, clockOutEnd }),
+    });
+    toastSuccess('Clock-in / out time windows saved');
+  } catch(e) { toastError(e.message || 'Failed to save time windows'); }
+}
+
+async function _caClearClockWindow() {
+  ['cw-in-start','cw-in-end','cw-out-start','cw-out-end'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.value = '';
+  });
+  await _caSaveClockWindow();
 }
 
 async function _caDetectMyIP() {

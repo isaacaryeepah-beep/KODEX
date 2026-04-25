@@ -181,7 +181,7 @@ router.post("/clock-in", ...mw, async (req, res) => {
   try {
     const now   = new Date();
     const today = toDay(now);
-    const { method, latitude, longitude, accuracy, address, deviceFingerprint } = req.body;
+    const { method, latitude, longitude, accuracy, address } = req.body;
     const userAgent = req.headers["user-agent"] || null;
 
     // Block double clock-in
@@ -196,26 +196,20 @@ router.post("/clock-in", ...mw, async (req, res) => {
     const user = await User.findById(req.user._id);
     if (!user) return res.status(404).json({ error: "User not found" });
 
-    // Settings (used for geofence + WiFi)
+    // Settings (used for geofence + WiFi + time windows)
     const company  = await Company.findById(req.user.company).select("corporateSettings").lean();
     const settings = company?.corporateSettings || {};
 
     // Anti-cheat evaluation
     const evalResult = antiCheat.evaluateAttempt({
       req, user, body: req.body, settings, lastEvent: user.lastClockEvent,
+      eventType: "clock_in",
     });
 
     const { before, after } = await antiCheat.applyTrustOutcome(
       user, evalResult,
       evalResult.ok ? { latitude, longitude } : null
     );
-
-    if (evalResult.ok && deviceFingerprint && (user.recognizedDevices || []).length === 0) {
-      // Auto-bind first-ever device
-      antiCheat.bindDevice(user, deviceFingerprint, userAgent);
-    } else if (evalResult.ok && deviceFingerprint) {
-      antiCheat.bindDevice(user, deviceFingerprint, userAgent);  // refresh lastSeen
-    }
     await user.save();
 
     if (!evalResult.ok) {
@@ -276,9 +270,7 @@ router.post("/clock-in", ...mw, async (req, res) => {
           "clockIn.isLate":          isLate,
           "clockIn.lateMinutes":     lateMinutes,
           "clockIn.verified":        true,
-          "clockIn.deviceFingerprint": deviceFingerprint || null,
           "clockIn.userAgent":       userAgent,
-          "clockIn.knownDevice":     evalResult.knownDevice,
           "clockIn.mockLocationFlag": evalResult.mockLocationFlag,
           "clockIn.impossibleMovement": evalResult.impossibleMovement,
           "clockIn.movementSpeedKmh": evalResult.movementSpeedKmh,
@@ -312,7 +304,7 @@ router.post("/clock-out", ...mw, async (req, res) => {
   try {
     const now   = new Date();
     const today = toDay(now);
-    const { method, latitude, longitude, accuracy, address, deviceFingerprint } = req.body;
+    const { method, latitude, longitude, accuracy, address } = req.body;
     const userAgent = req.headers["user-agent"] || null;
 
     const existing = await CorporateAttendance.findOne({
@@ -345,13 +337,13 @@ router.post("/clock-out", ...mw, async (req, res) => {
     // Anti-cheat (clock-out is also strict — same rules apply)
     const evalResult = antiCheat.evaluateAttempt({
       req, user, body: req.body, settings, lastEvent: user.lastClockEvent,
+      eventType: "clock_out",
     });
 
     const { before, after } = await antiCheat.applyTrustOutcome(
       user, evalResult,
       evalResult.ok ? { latitude, longitude } : null
     );
-    if (evalResult.ok && deviceFingerprint) antiCheat.bindDevice(user, deviceFingerprint, userAgent);
     await user.save();
 
     if (!evalResult.ok) {
@@ -403,9 +395,7 @@ router.post("/clock-out", ...mw, async (req, res) => {
           "clockOut.location.address":    address   || "",
           "clockOut.earlyLeaveMinutes":   earlyLeaveMinutes,
           "clockOut.verified":            true,
-          "clockOut.deviceFingerprint":   deviceFingerprint || null,
           "clockOut.userAgent":           userAgent,
-          "clockOut.knownDevice":         evalResult.knownDevice,
           "clockOut.mockLocationFlag":    evalResult.mockLocationFlag,
           "clockOut.impossibleMovement":  evalResult.impossibleMovement,
           "clockOut.movementSpeedKmh":    evalResult.movementSpeedKmh,
@@ -699,20 +689,16 @@ router.get("/failed-attempts", ...mw, canManage, async (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
-// GET /trust  — employee: my trust score + recognized devices
+// GET /trust  — employee: my trust score
 // ---------------------------------------------------------------------------
 router.get("/trust", ...mw, async (req, res) => {
   try {
     const user = await User.findById(req.user._id)
-      .select("attendanceTrustScore attendanceLockoutUntil recognizedDevices")
+      .select("attendanceTrustScore attendanceLockoutUntil")
       .lean();
     res.json({
       trustScore: user?.attendanceTrustScore ?? 100,
       lockoutUntil: user?.attendanceLockoutUntil || null,
-      devices: (user?.recognizedDevices || []).map(d => ({
-        firstSeen: d.firstSeen, lastSeen: d.lastSeen,
-        userAgent: d.userAgent, fingerprintHash: d.fingerprint?.slice(0, 8) + "…",
-      })),
       hardLockTrust: antiCheat.HARD_LOCK_TRUST,
       reviewTrust:   antiCheat.REVIEW_TRUST,
     });
@@ -751,24 +737,62 @@ router.patch("/trust/:userId/reset", ...mw, canManage, async (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
-// DELETE /trust/:userId/device/:fingerprintPrefix  — revoke a device
+// GET  /clock-window     — admin/manager: read clock-in/out time windows
+// PATCH /clock-window    — admin/manager: update clock-in/out time windows
 // ---------------------------------------------------------------------------
-router.delete("/trust/:userId/device/:fingerprintPrefix", ...mw, canManage, async (req, res) => {
+router.get("/clock-window", ...mw, canManage, async (req, res) => {
   try {
-    const user = await User.findOne({ _id: req.params.userId, company: req.user.company });
-    if (!user) return res.status(404).json({ error: "User not found" });
-
-    const before = (user.recognizedDevices || []).length;
-    user.recognizedDevices = (user.recognizedDevices || []).filter(d =>
-      !d.fingerprint.startsWith(req.params.fingerprintPrefix)
-    );
-    if (user.recognizedDevices.length === before) {
-      return res.status(404).json({ error: "Device not found" });
-    }
-    await user.save();
-    res.json({ message: "Device revoked", remaining: user.recognizedDevices.length });
+    const company = await Company.findById(req.user.company)
+      .select("corporateSettings.clockInStart corporateSettings.clockInEnd corporateSettings.clockOutStart corporateSettings.clockOutEnd")
+      .lean();
+    const s = company?.corporateSettings || {};
+    res.json({
+      clockInStart:  s.clockInStart  || "",
+      clockInEnd:    s.clockInEnd    || "",
+      clockOutStart: s.clockOutStart || "",
+      clockOutEnd:   s.clockOutEnd   || "",
+    });
   } catch (e) {
-    res.status(500).json({ error: "Failed to revoke device" });
+    res.status(500).json({ error: "Failed to fetch clock window" });
+  }
+});
+
+router.patch("/clock-window", ...mw, canManage, async (req, res) => {
+  try {
+    const { clockInStart, clockInEnd, clockOutStart, clockOutEnd } = req.body;
+    const validate = v => v === "" || v == null || /^\d{1,2}:\d{2}$/.test(v);
+    if (![clockInStart, clockInEnd, clockOutStart, clockOutEnd].every(validate)) {
+      return res.status(400).json({ error: "Times must be HH:MM (24-hour) or empty." });
+    }
+    // Both start+end must be set together for each pair
+    const inSet  = !!clockInStart  !== !!clockInEnd;
+    const outSet = !!clockOutStart !== !!clockOutEnd;
+    if (inSet || outSet) {
+      return res.status(400).json({ error: "Set both start and end (or leave both empty) for each window." });
+    }
+
+    const update = {
+      "corporateSettings.clockInStart":  clockInStart  || null,
+      "corporateSettings.clockInEnd":    clockInEnd    || null,
+      "corporateSettings.clockOutStart": clockOutStart || null,
+      "corporateSettings.clockOutEnd":   clockOutEnd   || null,
+    };
+    await Company.findByIdAndUpdate(req.user.company, { $set: update });
+
+    await AuditLog.create({
+      company:  req.user.company,
+      actor:    req.user._id,
+      action:   AUDIT_ACTIONS?.UPDATED || "updated",
+      resource: "Company",
+      resourceId: req.user.company,
+      resourceLabel: "Updated clock-in/out time windows",
+      metadata: { clockInStart, clockInEnd, clockOutStart, clockOutEnd },
+    }).catch(() => {});
+
+    res.json({ message: "Clock window updated", clockInStart, clockInEnd, clockOutStart, clockOutEnd });
+  } catch (e) {
+    console.error("[clock-window]", e);
+    res.status(500).json({ error: "Failed to update clock window" });
   }
 });
 
