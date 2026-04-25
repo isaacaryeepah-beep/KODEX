@@ -97,6 +97,20 @@ router.patch("/branches/:id/assign-user", ...mw, canManage, async (req, res) => 
   } catch (e) { res.status(500).json({ error: "Failed to assign user to branch" }); }
 });
 
+// Remove employee from branch
+router.patch("/branches/:id/remove-user", ...mw, canManage, async (req, res) => {
+  try {
+    const { userId } = req.body;
+    const user = await User.findOneAndUpdate(
+      { _id: userId, company: req.user.company },
+      { $unset: { branch: 1 } },
+      { new: true }
+    ).select("name employeeId department");
+    if (!user) return res.status(404).json({ error: "User not found" });
+    res.json({ user });
+  } catch (e) { res.status(500).json({ error: "Failed to remove user from branch" }); }
+});
+
 // ─────────────────────────────────────────────────────────────
 // WHITE-LABEL BRANDING
 // ─────────────────────────────────────────────────────────────

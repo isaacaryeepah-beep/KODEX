@@ -820,136 +820,287 @@ async function renderBranches() {
       api('/api/advanced/branches'),
       api('/api/users').catch(() => ({ users: [] })),
     ]);
-    const branches  = branchData.branches || [];
-    const users     = usersData.users || [];
-    const managers  = users.filter(u => u.role === 'manager' || u.role === 'admin');
-    const canEdit   = ['admin','superadmin'].includes(currentUser.role);
+    const branches = branchData.branches || [];
+    const users    = usersData.users    || [];
+    const managers = users.filter(u => ['admin','manager','superadmin'].includes(u.role));
+    const canEdit  = ['admin','superadmin'].includes(currentUser?.role);
+    const totalStaff = branches.reduce((s, b) => s + (b.headcount || 0), 0);
 
-    // Stats
-    const totalStaff = branches.reduce((s,b) => s + (b.headcount||0), 0);
+    window._branchCache = { branches, users, managers };
 
     content.innerHTML = `
       <div style="display:flex;flex-direction:column;gap:16px">
         <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
           <div>
-            <h2>Branches & Locations</h2>
-            <p style="font-size:13px;color:var(--text-muted)">${branches.length} branch${branches.length!==1?'es':''} · ${totalStaff} total staff</p>
+            <h2 style="margin:0">Branches & Locations</h2>
+            <p style="font-size:13px;color:var(--text-muted);margin:4px 0 0">${branches.length} branch${branches.length !== 1 ? 'es' : ''} · ${totalStaff} staff across all branches</p>
           </div>
-          ${canEdit ? `<button class="btn btn-primary btn-sm" onclick="showCreateBranchModal()">+ Add Branch</button>` : ''}
+          ${canEdit ? `<button class="btn btn-primary btn-sm" onclick="_showBranchModal(null)">+ Add Branch</button>` : ''}
         </div>
 
         ${branches.length ? `
           <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px">
             ${branches.map(b => `
-              <div class="card" style="position:relative;border-top:3px solid #6366f1">
-                <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:12px">
+              <div class="card" style="border-top:3px solid #6366f1;cursor:pointer" onclick="_viewBranchDetail('${b._id}')">
+                <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px">
                   <div>
-                    <div style="font-size:16px;font-weight:700">${b.name}</div>
-                    ${b.code ? `<div style="font-size:11px;font-family:monospace;color:#6366f1;font-weight:700;margin-top:2px">${b.code}</div>` : ''}
+                    <div style="font-size:15px;font-weight:700">${esc(b.name)}</div>
+                    ${b.code ? `<div style="font-size:11px;font-family:monospace;color:#6366f1;font-weight:700;margin-top:2px">${esc(b.code)}</div>` : ''}
                   </div>
-                  <span style="padding:2px 9px;border-radius:20px;font-size:11px;font-weight:700;background:${b.isActive?'#f0fdf4':'#f1f5f9'};color:${b.isActive?'#15803d':'#64748b'}">${b.isActive?'Active':'Inactive'}</span>
+                  <span style="padding:2px 9px;border-radius:20px;font-size:11px;font-weight:700;background:${b.isActive?'#f0fdf4':'#f1f5f9'};color:${b.isActive?'#15803d':'#64748b'};white-space:nowrap">${b.isActive?'Active':'Inactive'}</span>
                 </div>
-                <div style="display:flex;flex-direction:column;gap:5px;margin-bottom:12px">
-                  ${(b.city||b.country) ? `<div style="font-size:12px;color:var(--text-muted)">📍 ${[b.city,b.country].filter(Boolean).join(', ')}</div>` : ''}
-                  ${b.phone ? `<div style="font-size:12px;color:var(--text-muted)">📞 ${b.phone}</div>` : ''}
-                  ${b.manager ? `<div style="font-size:12px;color:var(--text-muted)">👤 ${b.manager.name||'—'}</div>` : '<div style="font-size:12px;color:var(--text-muted)">👤 No manager assigned</div>'}
+                <div style="font-size:12px;color:var(--text-muted);display:flex;flex-direction:column;gap:4px;margin-bottom:10px">
+                  ${(b.city||b.country) ? `<div>📍 ${[b.city,b.country].filter(Boolean).join(', ')}</div>` : ''}
+                  ${b.address ? `<div>🏢 ${esc(b.address)}</div>` : ''}
+                  ${b.phone   ? `<div>📞 ${esc(b.phone)}</div>`   : ''}
+                  <div>👤 ${b.manager ? `<strong>${esc(b.manager.name)}</strong>` : 'No manager assigned'}</div>
                 </div>
                 <div style="display:flex;align-items:center;justify-content:space-between">
                   <div style="font-size:13px;font-weight:700;color:#6366f1">👥 ${b.headcount||0} staff</div>
-                  ${canEdit ? `<div style="display:flex;gap:6px">
-                    <button class="btn btn-sm btn-secondary" style="font-size:11px" onclick="showEditBranchModal('${b._id}','${esc(b.name)}','${b.code||''}','${b.city||''}','${b.country||''}','${b.phone||''}','${b.manager?._id||''}')">✏️ Edit</button>
+                  ${canEdit ? `<div onclick="event.stopPropagation()">
+                    <button class="btn btn-sm btn-secondary" style="font-size:11px" onclick="_showBranchModal('${b._id}')">Edit</button>
                   </div>` : ''}
                 </div>
               </div>`).join('')}
           </div>
-        ` : '<div class="card"><div class="empty-state"><p>No branches yet. Add your first branch to get started.</p></div></div>'}
+        ` : `<div class="card"><div class="empty-state"><p>No branches yet. ${canEdit ? 'Click <b>+ Add Branch</b> to create your first location.' : 'Contact your admin to set up branches.'}</p></div></div>`}
       </div>`;
   } catch(e) {
-    content.innerHTML = `<div class="card"><p style="color:#ef4444">Error: ${e.message}</p></div>`;
+    content.innerHTML = `<div class="card"><p style="color:#ef4444">Error loading branches: ${e.message}</p></div>`;
   }
 }
 
-function showCreateBranchModal() {
+async function _viewBranchDetail(branchId) {
+  const content = document.getElementById('main-content');
+  if (!content) return;
+  content.innerHTML = '<div class="loading">Loading branch details…</div>';
+  try {
+    const [branchData, usersData] = await Promise.all([
+      api('/api/advanced/branches'),
+      api('/api/users').catch(() => ({ users: [] })),
+    ]);
+    const branches = branchData.branches || [];
+    const users    = usersData.users    || [];
+    const managers = users.filter(u => ['admin','manager','superadmin'].includes(u.role));
+    const branch   = branches.find(b => b._id === branchId);
+    window._branchCache = { branches, users, managers };
+
+    if (!branch) {
+      content.innerHTML = `<div class="card"><p style="color:#ef4444">Branch not found.</p><button class="btn btn-secondary btn-sm" style="margin-top:12px" onclick="navigateTo('branches')">← Back</button></div>`;
+      return;
+    }
+
+    const branchUsers  = users.filter(u => u.branch && u.branch.toString() === branchId);
+    const unassigned   = users.filter(u => ['employee','manager'].includes(u.role) && !u.branch);
+    const canEdit      = ['admin','superadmin'].includes(currentUser?.role);
+
+    content.innerHTML = `
+      <div style="display:flex;flex-direction:column;gap:16px">
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+          <button class="btn btn-secondary btn-sm" onclick="navigateTo('branches')">← Branches</button>
+          <div style="flex:1">
+            <h2 style="margin:0;font-size:18px;font-weight:800">${esc(branch.name)}</h2>
+            <p style="margin:2px 0 0;font-size:12px;color:var(--text-muted)">${[branch.address,branch.city,branch.country].filter(Boolean).join(', ') || 'No location set'}</p>
+          </div>
+          ${canEdit ? `<button class="btn btn-secondary btn-sm" onclick="_showBranchModal('${branchId}')">✏️ Edit Branch</button>` : ''}
+        </div>
+
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-value" style="color:#6366f1">${branch.headcount||0}</div>
+            <div class="stat-label">Total Staff</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" style="font-size:14px">${branch.manager ? esc(branch.manager.name) : '—'}</div>
+            <div class="stat-label">Branch Manager</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value">${branch.code || '—'}</div>
+            <div class="stat-label">Branch Code</div>
+          </div>
+          ${branch.phone ? `<div class="stat-card">
+            <div class="stat-value" style="font-size:14px">${esc(branch.phone)}</div>
+            <div class="stat-label">Phone</div>
+          </div>` : ''}
+        </div>
+
+        <div class="card">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px">
+            <h3 style="font-size:15px;font-weight:700;margin:0">Staff in this Branch (${branchUsers.length})</h3>
+            ${canEdit && unassigned.length ? `<button class="btn btn-primary btn-sm" onclick="_showAssignBranchModal('${branchId}')">+ Assign Employee</button>` : ''}
+          </div>
+          ${branchUsers.length ? `
+            <div style="overflow-x:auto">
+              <table style="width:100%;border-collapse:collapse;font-size:13px">
+                <thead><tr style="border-bottom:2px solid var(--border)">
+                  <th style="padding:8px 12px;text-align:left;font-size:11px;text-transform:uppercase;color:var(--text-muted)">Name</th>
+                  <th style="padding:8px 12px;text-align:left;font-size:11px;text-transform:uppercase;color:var(--text-muted)">Role</th>
+                  <th style="padding:8px 12px;text-align:left;font-size:11px;text-transform:uppercase;color:var(--text-muted)">Department</th>
+                  ${canEdit ? `<th style="padding:8px 12px;text-align:center;font-size:11px;text-transform:uppercase;color:var(--text-muted)">Action</th>` : ''}
+                </tr></thead>
+                <tbody>
+                  ${branchUsers.map(u => `
+                    <tr style="border-bottom:1px solid var(--border)">
+                      <td style="padding:9px 12px">
+                        <div style="font-weight:600">${esc(u.name)}</div>
+                        <div style="font-size:11px;color:var(--text-muted)">${esc(u.employeeId || u.email || '')}</div>
+                      </td>
+                      <td style="padding:9px 12px;text-transform:capitalize">${u.role}</td>
+                      <td style="padding:9px 12px;color:var(--text-muted)">${esc(u.department || '—')}</td>
+                      ${canEdit ? `<td style="padding:9px 12px;text-align:center">
+                        <button class="btn btn-sm" style="background:#fef2f2;color:#dc2626;border:1px solid #fecaca;font-size:11px" onclick="_removeFromBranch('${u._id}','${esc(u.name)}','${branchId}')">Remove</button>
+                      </td>` : ''}
+                    </tr>`).join('')}
+                </tbody>
+              </table>
+            </div>
+          ` : `<p style="font-size:13px;color:var(--text-muted)">No staff assigned to this branch yet.${canEdit && unassigned.length ? ' Use <b>Assign Employee</b> to add staff.' : ''}</p>`}
+        </div>
+      </div>`;
+  } catch(e) {
+    content.innerHTML = `<div class="card"><p style="color:#ef4444">Error: ${e.message}</p><button class="btn btn-secondary btn-sm" style="margin-top:12px" onclick="navigateTo('branches')">← Back</button></div>`;
+  }
+}
+
+function _showBranchModal(branchId) {
+  const { branches = [], managers = [] } = window._branchCache || {};
+  const branch = branchId ? branches.find(b => b._id === branchId) : null;
+
   const container = document.getElementById('modal-container');
   container.classList.remove('hidden');
   container.innerHTML = `
     <div class="modal-overlay" onclick="closeModal(event)">
-      <div class="modal" onclick="event.stopPropagation()" style="max-width:480px">
-        <h3>Add Branch</h3>
-        <div class="form-group"><label>Branch Name <span style="color:red">*</span></label><input type="text" id="branch-name" placeholder="e.g. Accra Head Office"></div>
-        <div class="form-group"><label>Branch Code <span style="font-size:11px;color:var(--text-muted)">(optional)</span></label><input type="text" id="branch-code" placeholder="e.g. ACC01" style="text-transform:uppercase" oninput="this.value=this.value.toUpperCase()"></div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-          <div class="form-group"><label>City</label><input type="text" id="branch-city" placeholder="Accra"></div>
-          <div class="form-group"><label>Country</label><input type="text" id="branch-country" placeholder="Ghana"></div>
+      <div class="modal" onclick="event.stopPropagation()" style="max-width:520px">
+        <h3>${branch ? 'Edit Branch' : 'Add Branch'}</h3>
+        <div class="form-group"><label>Branch Name <span style="color:red">*</span></label>
+          <input type="text" id="bm-name" value="${branch ? esc(branch.name) : ''}" placeholder="e.g. Accra Head Office">
         </div>
-        <div class="form-group"><label>Phone <span style="font-size:11px;color:var(--text-muted)">(optional)</span></label><input type="tel" id="branch-phone" placeholder="e.g. 0201234567"></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <div class="form-group"><label>Branch Code</label>
+            <input type="text" id="bm-code" value="${branch ? esc(branch.code||'') : ''}" placeholder="e.g. ACC01" style="text-transform:uppercase" oninput="this.value=this.value.toUpperCase()">
+          </div>
+          <div class="form-group"><label>Phone</label>
+            <input type="tel" id="bm-phone" value="${branch ? esc(branch.phone||'') : ''}" placeholder="Optional">
+          </div>
+        </div>
+        <div class="form-group"><label>Address</label>
+          <input type="text" id="bm-address" value="${branch ? esc(branch.address||'') : ''}" placeholder="Street address">
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <div class="form-group"><label>City</label>
+            <input type="text" id="bm-city" value="${branch ? esc(branch.city||'') : ''}" placeholder="e.g. Accra">
+          </div>
+          <div class="form-group"><label>Country</label>
+            <input type="text" id="bm-country" value="${branch ? esc(branch.country||'') : ''}" placeholder="e.g. Ghana">
+          </div>
+        </div>
+        <div class="form-group"><label>Branch Manager</label>
+          <select id="bm-manager" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--card)">
+            <option value="">— No manager —</option>
+            ${managers.map(m => `<option value="${m._id}" ${branch?.manager?._id === m._id || branch?.manager?.toString() === m._id ? 'selected' : ''}>${esc(m.name)} (${m.role})</option>`).join('')}
+          </select>
+        </div>
+        <div id="bm-error" style="color:#ef4444;font-size:13px;margin-bottom:8px;display:none"></div>
         <div class="modal-actions">
-          <button class="btn btn-secondary btn-sm" onclick="closeModal()">Cancel</button>
-          <button class="btn btn-primary btn-sm" onclick="saveBranch()">Create Branch</button>
+          <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+          ${branch ? `<button class="btn btn-danger" onclick="_deleteBranchConfirm('${branchId}','${esc(branch.name)}')">Delete</button>` : ''}
+          <button class="btn btn-primary" id="bm-save" onclick="_saveBranch(${branchId ? `'${branchId}'` : 'null'})">${branch ? 'Save Changes' : 'Create Branch'}</button>
         </div>
       </div>
     </div>`;
 }
 
-async function saveBranch() {
-  const name    = document.getElementById('branch-name').value.trim();
-  const code    = document.getElementById('branch-code').value.trim().toUpperCase();
-  const city    = document.getElementById('branch-city').value.trim();
-  const country = document.getElementById('branch-country').value.trim();
-  const phone   = document.getElementById('branch-phone').value.trim();
-  if (!name) { toastWarning('Branch name is required'); return; }
+async function _saveBranch(branchId) {
+  const name      = document.getElementById('bm-name').value.trim();
+  const code      = document.getElementById('bm-code').value.trim().toUpperCase();
+  const phone     = document.getElementById('bm-phone').value.trim();
+  const address   = document.getElementById('bm-address').value.trim();
+  const city      = document.getElementById('bm-city').value.trim();
+  const country   = document.getElementById('bm-country').value.trim();
+  const managerId = document.getElementById('bm-manager').value || null;
+  const errEl     = document.getElementById('bm-error');
+  const saveBtn   = document.getElementById('bm-save');
+  errEl.style.display = 'none';
+  if (!name) { errEl.textContent = 'Branch name is required.'; errEl.style.display = 'block'; return; }
+
+  saveBtn.disabled = true; saveBtn.textContent = 'Saving…';
   try {
-    await api('/api/advanced/branches', { method:'POST', body: JSON.stringify({ name, code, city, country, phone }) });
+    const body = { name, code, phone, address, city, country, managerId };
+    if (branchId) {
+      await api(`/api/advanced/branches/${branchId}`, { method: 'PATCH', body: JSON.stringify(body) });
+      toastSuccess('Branch updated ✓');
+    } else {
+      await api('/api/advanced/branches', { method: 'POST', body: JSON.stringify(body) });
+      toastSuccess('Branch created ✓');
+    }
     closeModal();
-    toastSuccess('Branch created ✓');
     renderBranches();
-  } catch(e) { toastError(e.message); }
+  } catch(e) {
+    errEl.textContent = e.message; errEl.style.display = 'block';
+    saveBtn.disabled = false; saveBtn.textContent = branchId ? 'Save Changes' : 'Create Branch';
+  }
 }
 
-function showEditBranchModal(id, name, code, city, country, phone, managerId) {
-  const container = document.getElementById('modal-container');
-  container.classList.remove('hidden');
-  container.innerHTML = `
-    <div class="modal-overlay" onclick="closeModal(event)">
-      <div class="modal" onclick="event.stopPropagation()" style="max-width:480px">
-        <h3>Edit Branch</h3>
-        <div class="form-group"><label>Branch Name <span style="color:red">*</span></label><input type="text" id="edit-branch-name" value="${name}"></div>
-        <div class="form-group"><label>Branch Code</label><input type="text" id="edit-branch-code" value="${code}" style="text-transform:uppercase" oninput="this.value=this.value.toUpperCase()"></div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-          <div class="form-group"><label>City</label><input type="text" id="edit-branch-city" value="${city}"></div>
-          <div class="form-group"><label>Country</label><input type="text" id="edit-branch-country" value="${country}"></div>
-        </div>
-        <div class="form-group"><label>Phone</label><input type="tel" id="edit-branch-phone" value="${phone}"></div>
-        <div class="modal-actions">
-          <button class="btn btn-secondary btn-sm" onclick="closeModal()">Cancel</button>
-          <button class="btn btn-primary btn-sm" onclick="updateBranch('${id}')">Save Changes</button>
-          <button class="btn btn-danger btn-sm" onclick="deleteBranch('${id}','${name}')">Remove Branch</button>
-        </div>
-      </div>
-    </div>`;
-}
-
-async function updateBranch(id) {
-  const name    = document.getElementById('edit-branch-name').value.trim();
-  const code    = document.getElementById('edit-branch-code').value.trim().toUpperCase();
-  const city    = document.getElementById('edit-branch-city').value.trim();
-  const country = document.getElementById('edit-branch-country').value.trim();
-  const phone   = document.getElementById('edit-branch-phone').value.trim();
-  if (!name) { toastWarning('Branch name is required'); return; }
-  try {
-    await api(`/api/advanced/branches/${id}`, { method:'PATCH', body: JSON.stringify({ name, code, city, country, phone }) });
-    closeModal();
-    toastSuccess('Branch updated ✓');
-    renderBranches();
-  } catch(e) { toastError(e.message); }
-}
-
-async function deleteBranch(id, name) {
-  toastConfirm(`Remove "${name}"? Employees assigned here will be unlinked.`, async () => {
+function _deleteBranchConfirm(branchId, name) {
+  closeModal();
+  toastConfirm(`Remove branch "${name}"? All staff will be unassigned from this branch.`, async () => {
     try {
-      await api(`/api/advanced/branches/${id}`, { method:'DELETE' });
+      await api(`/api/advanced/branches/${branchId}`, { method: 'DELETE' });
       toastSuccess('Branch removed');
       renderBranches();
+    } catch(e) { toastError(e.message); }
+  });
+}
+
+function _showAssignBranchModal(branchId) {
+  const { users = [] } = window._branchCache || {};
+  const unassigned = users.filter(u => ['employee','manager'].includes(u.role) && !u.branch);
+
+  const container = document.getElementById('modal-container');
+  container.classList.remove('hidden');
+  container.innerHTML = `
+    <div class="modal-overlay" onclick="closeModal(event)">
+      <div class="modal" onclick="event.stopPropagation()" style="max-width:420px">
+        <h3>Assign Employee to Branch</h3>
+        <div class="form-group"><label>Select Employee</label>
+          <select id="assign-emp-sel" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--card)">
+            <option value="">— Select employee —</option>
+            ${unassigned.map(u => `<option value="${u._id}">${esc(u.name)} (${u.role}${u.department ? ', ' + esc(u.department) : ''})</option>`).join('')}
+          </select>
+        </div>
+        <div id="assign-err" style="color:#ef4444;font-size:13px;margin-bottom:8px;display:none"></div>
+        <div class="modal-actions">
+          <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+          <button class="btn btn-primary" id="assign-btn" onclick="_doAssignBranch('${branchId}')">Assign</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+async function _doAssignBranch(branchId) {
+  const userId = document.getElementById('assign-emp-sel').value;
+  const errEl  = document.getElementById('assign-err');
+  const btn    = document.getElementById('assign-btn');
+  errEl.style.display = 'none';
+  if (!userId) { errEl.textContent = 'Please select an employee.'; errEl.style.display = 'block'; return; }
+  btn.disabled = true; btn.textContent = 'Assigning…';
+  try {
+    await api(`/api/advanced/branches/${branchId}/assign-user`, { method: 'PATCH', body: JSON.stringify({ userId }) });
+    toastSuccess('Employee assigned to branch');
+    closeModal();
+    _viewBranchDetail(branchId);
+  } catch(e) {
+    errEl.textContent = e.message; errEl.style.display = 'block';
+    btn.disabled = false; btn.textContent = 'Assign';
+  }
+}
+
+async function _removeFromBranch(userId, userName, branchId) {
+  toastConfirm(`Remove ${userName} from this branch?`, async () => {
+    try {
+      await api(`/api/advanced/branches/${branchId}/remove-user`, { method: 'PATCH', body: JSON.stringify({ userId }) });
+      toastSuccess(`${userName} removed from branch`);
+      _viewBranchDetail(branchId);
     } catch(e) { toastError(e.message); }
   });
 }
