@@ -4409,6 +4409,52 @@ function _getGPSLocation() {
   });
 }
 
+// ── Device fingerprint (canvas + screen + UA) ────────────────────────────────
+async function _getDeviceFingerprint() {
+  if (window._kodexDeviceFingerprint) return window._kodexDeviceFingerprint;
+  try {
+    let canvasHash = '';
+    try {
+      const canvas = document.createElement('canvas');
+      canvas.width = 240; canvas.height = 60;
+      const ctx = canvas.getContext('2d');
+      ctx.textBaseline = 'top';
+      ctx.font = "14px 'Arial'";
+      ctx.fillStyle = '#069';
+      ctx.fillText('KODEX-fp-' + navigator.userAgent.length, 2, 2);
+      ctx.fillStyle = 'rgba(102,204,0,0.7)';
+      ctx.fillText('KODEX-fp-' + navigator.userAgent.length, 4, 4);
+      canvasHash = canvas.toDataURL().slice(-64);
+    } catch (_) { canvasHash = 'no-canvas'; }
+
+    const raw = [
+      navigator.userAgent,
+      navigator.language || '',
+      navigator.platform || '',
+      navigator.hardwareConcurrency || 0,
+      screen.width + 'x' + screen.height,
+      screen.colorDepth,
+      new Date().getTimezoneOffset(),
+      canvasHash,
+    ].join('|');
+
+    // Hash with SubtleCrypto if available, fallback to simple hash
+    let hex;
+    if (window.crypto?.subtle) {
+      const bytes = new TextEncoder().encode(raw);
+      const buf   = await crypto.subtle.digest('SHA-256', bytes);
+      hex = Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+    } else {
+      let h = 0; for (let i = 0; i < raw.length; i++) { h = ((h << 5) - h) + raw.charCodeAt(i); h |= 0; }
+      hex = (h >>> 0).toString(16).padStart(64, '0');
+    }
+    window._kodexDeviceFingerprint = hex;
+    return hex;
+  } catch (e) {
+    return 'fingerprint-error-' + Date.now();
+  }
+}
+
 function _showGPSBlockedModal(code) {
   document.getElementById('gps-blocked-modal')?.remove();
   const messages = {
@@ -4469,16 +4515,25 @@ async function employeeSignIn() {
     _showGPSBlockedModal(gpsErr.message);
     return;
   }
+  if (gpsData.accuracy != null && gpsData.accuracy > 100) {
+    _showStrictBlockedModal(`GPS accuracy too poor (${gpsData.accuracy}m). Move to an open area and try again.`);
+    return;
+  }
+  const fingerprint = await _getDeviceFingerprint();
   try {
     const data = await api('/api/corporate-attendance/clock-in', {
       method: 'POST',
-      body: JSON.stringify({ method: 'web', ...gpsData }),
+      body: JSON.stringify({ method: 'web', deviceFingerprint: fingerprint, ...gpsData }),
     });
-    toastSuccess(data.message || 'Clocked in successfully!');
+    let msg = data.message || 'Clocked in successfully!';
+    if (data.trustScore != null) msg += ` · Trust ${data.trustScore}`;
+    if (data.reviewRequired) toastWarning(msg + ' (manager review pending)'); else toastSuccess(msg);
     renderSignInOut();
   } catch (e) {
     if (e.data?.blocked) {
-      _showStrictBlockedModal(e.message || 'You must be on company WiFi and at office to clock in.');
+      const flagsStr = (e.data.flags || []).length ? `\n\nSignals: ${e.data.flags.join(', ')}` : '';
+      const trustStr = e.data.trustScore != null ? `\n\nTrust score: ${e.data.trustScore}/100` : '';
+      _showStrictBlockedModal((e.message || 'Blocked.') + flagsStr + trustStr);
     } else {
       toastError(e.message || 'Clock-in failed');
     }
@@ -4494,16 +4549,27 @@ async function employeeSignOut() {
     _showGPSBlockedModal(gpsErr.message);
     return;
   }
+  if (gpsData.accuracy != null && gpsData.accuracy > 100) {
+    _showStrictBlockedModal(`GPS accuracy too poor (${gpsData.accuracy}m). Move to an open area and try again.`);
+    return;
+  }
+  const fingerprint = await _getDeviceFingerprint();
   try {
     const data = await api('/api/corporate-attendance/clock-out', {
       method: 'POST',
-      body: JSON.stringify({ method: 'web', ...gpsData }),
+      body: JSON.stringify({ method: 'web', deviceFingerprint: fingerprint, ...gpsData }),
     });
     const hrs = data.hoursWorked != null ? ` · ${data.hoursWorked}h worked` : '';
-    toastSuccess((data.message || 'Clocked out successfully!') + hrs);
+    const trust = data.trustScore != null ? ` · Trust ${data.trustScore}` : '';
+    toastSuccess((data.message || 'Clocked out successfully!') + hrs + trust);
     renderSignInOut();
   } catch (e) {
-    toastError(e.message || 'Clock-out failed');
+    if (e.data?.blocked) {
+      const flagsStr = (e.data.flags || []).length ? `\n\nSignals: ${e.data.flags.join(', ')}` : '';
+      _showStrictBlockedModal((e.message || 'Blocked.') + flagsStr);
+    } else {
+      toastError(e.message || 'Clock-out failed');
+    }
   }
 }
 
@@ -4514,9 +4580,10 @@ async function renderSignInOut() {
     const today = new Date().toISOString().slice(0, 10);
     const thirtyAgo = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
 
-    const [todayData, historyData] = await Promise.all([
+    const [todayData, historyData, trustData] = await Promise.all([
       api(`/api/corporate-attendance/my?from=${today}&to=${today}`).catch(() => ({ records: [] })),
       api(`/api/corporate-attendance/my?from=${thirtyAgo}&to=${today}`).catch(() => ({ records: [] })),
+      api('/api/corporate-attendance/trust').catch(() => ({ trustScore: 100, devices: [] })),
     ]);
 
     const todayRecord = todayData.records[0] || null;
@@ -4542,10 +4609,42 @@ async function renderSignInOut() {
     const statusColor = isClockedIn ? 'var(--success)' : (isClockedOut ? 'var(--primary)' : 'var(--text-light)');
     const statusText  = isClockedIn ? 'Currently Clocked In' : (isClockedOut ? 'Clocked Out Today' : 'Not Clocked In');
 
+    // Trust score panel
+    const trustScore  = trustData.trustScore ?? 100;
+    const reviewTrust = trustData.reviewTrust ?? 50;
+    const hardLockTrust = trustData.hardLockTrust ?? 20;
+    const trustColor  = trustScore >= 80 ? '#10b981' : trustScore >= reviewTrust ? '#f59e0b' : '#ef4444';
+    const trustLabel  = trustScore >= 80 ? 'Excellent'
+                      : trustScore >= reviewTrust ? 'Acceptable'
+                      : trustScore >= hardLockTrust ? 'Under Review' : 'Locked';
+    const lockoutBanner = trustData.lockoutUntil && new Date(trustData.lockoutUntil) > new Date()
+      ? `<div class="card" style="background:#fef2f2;border-left:4px solid #ef4444;padding:14px;margin-bottom:16px">
+          <div style="font-weight:800;color:#dc2626;margin-bottom:4px">⛔ Temporarily Locked Out</div>
+          <div style="font-size:13px;color:#7f1d1d">Too many failed attempts. Locked until ${new Date(trustData.lockoutUntil).toLocaleTimeString()}.</div>
+        </div>` : '';
+
     content.innerHTML = `
       <div class="page-header">
         <h2>Clock In / Clock Out</h2>
         <p>Track your daily attendance · ${new Date().toLocaleDateString('en-GB', {weekday:'long',day:'numeric',month:'long',year:'numeric'})}</p>
+      </div>
+
+      ${lockoutBanner}
+
+      <div class="card" style="padding:14px 18px;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;border-left:4px solid ${trustColor}">
+        <div>
+          <div style="font-size:11px;text-transform:uppercase;font-weight:700;color:var(--text-muted);letter-spacing:0.6px">Attendance Trust Score</div>
+          <div style="display:flex;align-items:baseline;gap:8px;margin-top:4px">
+            <div style="font-size:28px;font-weight:800;color:${trustColor}">${trustScore}</div>
+            <div style="font-size:13px;font-weight:600;color:${trustColor}">${trustLabel}</div>
+          </div>
+          <div style="font-size:11px;color:var(--text-muted);margin-top:2px">Below ${reviewTrust} = manager review · Below ${hardLockTrust} = locked</div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:11px;text-transform:uppercase;font-weight:700;color:var(--text-muted)">Recognized Devices</div>
+          <div style="font-size:14px;font-weight:700">${(trustData.devices || []).length}</div>
+          <div style="font-size:10px;color:var(--text-muted)">First-ever device auto-binds</div>
+        </div>
       </div>
 
       <div class="card" style="text-align:center;padding:40px 24px;border-left:4px solid ${statusColor}">

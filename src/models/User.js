@@ -229,6 +229,44 @@ const userSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+
+    // ── Anti-cheat clock-in/out (corporate) ────────────────────────────────────
+    attendanceTrustScore: {
+      type: Number,
+      default: 100,
+      min: 0,
+      max: 100,
+    },
+    attendanceLockoutUntil: {
+      type: Date,
+      default: null,
+    },
+    attendanceFailedAttempts: {
+      type: [{
+        at:     { type: Date,   default: Date.now },
+        reason: { type: String },
+        ip:     { type: String, default: null },
+        _id:    false,
+      }],
+      default: [],
+    },
+    recognizedDevices: {
+      type: [{
+        fingerprint: { type: String, required: true },
+        firstSeen:   { type: Date,   default: Date.now },
+        lastSeen:    { type: Date,   default: Date.now },
+        userAgent:   { type: String, default: null },
+        approvedBy:  { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
+        _id: false,
+      }],
+      default: [],
+    },
+    lastClockEvent: {
+      latitude:    { type: Number, default: null },
+      longitude:   { type: Number, default: null },
+      at:          { type: Date,   default: null },
+      _id: false,
+    },
   },
   {
     timestamps: true,

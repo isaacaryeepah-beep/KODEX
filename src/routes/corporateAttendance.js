@@ -27,6 +27,8 @@ const ShiftAssignment     = require("../models/ShiftAssignment");
 const Shift               = require("../models/Shift");
 const AuditLog            = require("../models/AuditLog");
 const Company             = require("../models/Company");
+const User                = require("../models/User");
+const antiCheat           = require("../utils/attendanceAntiCheat");
 const { AUDIT_ACTIONS }   = AuditLog;
 const notificationService = require("../services/notificationService");
 
@@ -173,81 +175,117 @@ router.get("/my", ...mw, async (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
-// POST /clock-in  — employee clocks in for today
+// POST /clock-in  — employee clocks in for today (strict anti-cheat)
 // ---------------------------------------------------------------------------
 router.post("/clock-in", ...mw, async (req, res) => {
   try {
-    const now     = new Date();
-    const today   = toDay(now);
-    const { method, latitude, longitude, accuracy, address } = req.body;
-    const ipAddr  = extractClientIp(req);
+    const now   = new Date();
+    const today = toDay(now);
+    const { method, latitude, longitude, accuracy, address, deviceFingerprint } = req.body;
+    const userAgent = req.headers["user-agent"] || null;
 
-    // Strict WiFi + GPS check
-    const check = await validateStrictAttendance(req, req.user.company);
-    if (!check.ok) {
-      // Log the failed attempt (upsert today's record to append it)
+    // Block double clock-in
+    const existingToday = await CorporateAttendance.findOne({
+      company: req.user.company, employee: req.user._id, date: today,
+    });
+    if (existingToday?.clockIn?.time && !existingToday?.clockOut?.time) {
+      return res.status(400).json({ error: "Already clocked in. Clock out first." });
+    }
+
+    // Load user fresh for anti-cheat state
+    const user = await User.findById(req.user._id);
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    // Settings (used for geofence + WiFi)
+    const company  = await Company.findById(req.user.company).select("corporateSettings").lean();
+    const settings = company?.corporateSettings || {};
+
+    // Anti-cheat evaluation
+    const evalResult = antiCheat.evaluateAttempt({
+      req, user, body: req.body, settings, lastEvent: user.lastClockEvent,
+    });
+
+    const { before, after } = await antiCheat.applyTrustOutcome(
+      user, evalResult,
+      evalResult.ok ? { latitude, longitude } : null
+    );
+
+    if (evalResult.ok && deviceFingerprint && (user.recognizedDevices || []).length === 0) {
+      // Auto-bind first-ever device
+      antiCheat.bindDevice(user, deviceFingerprint, userAgent);
+    } else if (evalResult.ok && deviceFingerprint) {
+      antiCheat.bindDevice(user, deviceFingerprint, userAgent);  // refresh lastSeen
+    }
+    await user.save();
+
+    if (!evalResult.ok) {
+      // Log failed attempt on today's record
       await CorporateAttendance.findOneAndUpdate(
         { company: req.user.company, employee: req.user._id, date: today },
         {
           $setOnInsert: { company: req.user.company, employee: req.user._id, date: today },
           $push: { failedAttempts: {
             attemptedAt: now,
-            reason:      check.reason,
-            ipAddress:   ipAddr,
+            reason:      evalResult.reason,
+            ipAddress:   evalResult.clientIp,
             latitude:    latitude ?? null,
             longitude:   longitude ?? null,
           }},
         },
         { upsert: true, setDefaultsOnInsert: true }
       );
-      return res.status(403).json({ error: check.message, reason: check.reason, blocked: true });
+      return res.status(403).json({
+        error: evalResult.message, reason: evalResult.reason, blocked: true,
+        flags: evalResult.flags, trustScore: after,
+      });
     }
 
-    // Find active shift assignment
+    // ── Passed anti-cheat — proceed with clock-in ────────────────────────────
     const assignment = await ShiftAssignment.findOne({
       company:  req.user.company,
       employee: req.user._id,
       isActive: true,
     }).populate("shift");
-
     const shift = assignment?.shift || null;
 
-    // Compute late minutes
-    let lateMinutes = 0;
-    let isLate      = false;
+    let lateMinutes = 0, isLate = false;
     if (shift) {
       const [sh, sm] = shift.startTime.split(":").map(Number);
       const shiftStart = new Date(now);
       shiftStart.setHours(sh, sm, 0, 0);
       const gracePeriod = (shift.gracePeriodMinutes || 15) * 60_000;
       const diff = now - shiftStart;
-      if (diff > gracePeriod) {
-        isLate      = true;
-        lateMinutes = Math.floor(diff / 60_000);
-      }
+      if (diff > gracePeriod) { isLate = true; lateMinutes = Math.floor(diff / 60_000); }
     }
 
-    // Upsert — creates today's record or updates clockIn
     const record = await CorporateAttendance.findOneAndUpdate(
       { company: req.user.company, employee: req.user._id, date: today },
       {
         $setOnInsert: {
-          company:  req.user.company,
-          employee: req.user._id,
-          date:     today,
-          shift:    shift ? shift._id : null,
+          company: req.user.company, employee: req.user._id, date: today,
+          shift: shift ? shift._id : null,
         },
         $set: {
-          "clockIn.time":           now,
-          "clockIn.method":         method   || "web",
-          "clockIn.ipAddress":      ipAddr,
+          "clockIn.time":            now,
+          "clockIn.method":          method || "web",
+          "clockIn.ipAddress":       evalResult.clientIp,
           "clockIn.location.latitude":  latitude  ?? null,
           "clockIn.location.longitude": longitude ?? null,
           "clockIn.location.accuracy":  accuracy  ?? null,
           "clockIn.location.address":   address   || "",
-          "clockIn.isLate":         isLate,
-          "clockIn.lateMinutes":    lateMinutes,
-          "clockIn.verified":       check.verified,
+          "clockIn.isLate":          isLate,
+          "clockIn.lateMinutes":     lateMinutes,
+          "clockIn.verified":        true,
+          "clockIn.deviceFingerprint": deviceFingerprint || null,
+          "clockIn.userAgent":       userAgent,
+          "clockIn.knownDevice":     evalResult.knownDevice,
+          "clockIn.mockLocationFlag": evalResult.mockLocationFlag,
+          "clockIn.impossibleMovement": evalResult.impossibleMovement,
+          "clockIn.movementSpeedKmh": evalResult.movementSpeedKmh,
+          "clockIn.trustScoreBefore": before,
+          "clockIn.trustScoreAfter":  after,
+          "clockIn.trustScoreDelta":  evalResult.trustDelta,
+          "clockIn.flags":            evalResult.flags,
           lateMinutes,
           status: isLate ? "late" : "present",
         },
@@ -255,27 +293,30 @@ router.post("/clock-in", ...mw, async (req, res) => {
       { upsert: true, new: true, setDefaultsOnInsert: true }
     ).populate("shift", "name startTime endTime");
 
-    res.json({ record, message: isLate ? "Clocked in (late)" : "Clocked in" });
+    res.json({
+      record,
+      message: isLate ? "Clocked in (late)" : "Clocked in",
+      trustScore: after,
+      reviewRequired: after < antiCheat.REVIEW_TRUST,
+    });
   } catch (e) {
-    console.error(e);
+    console.error("[clock-in]", e);
     res.status(500).json({ error: "Failed to clock in" });
   }
 });
 
 // ---------------------------------------------------------------------------
-// POST /clock-out  — employee clocks out
+// POST /clock-out  — employee clocks out (strict anti-cheat)
 // ---------------------------------------------------------------------------
 router.post("/clock-out", ...mw, async (req, res) => {
   try {
-    const now     = new Date();
-    const today   = toDay(now);
-    const { method, latitude, longitude, accuracy, address } = req.body;
-    const ipAddr  = req.ip || null;
+    const now   = new Date();
+    const today = toDay(now);
+    const { method, latitude, longitude, accuracy, address, deviceFingerprint } = req.body;
+    const userAgent = req.headers["user-agent"] || null;
 
     const existing = await CorporateAttendance.findOne({
-      company:  req.user.company,
-      employee: req.user._id,
-      date:     today,
+      company: req.user.company, employee: req.user._id, date: today,
     }).populate("shift");
 
     if (!existing || !existing.clockIn?.time) {
@@ -285,10 +326,47 @@ router.post("/clock-out", ...mw, async (req, res) => {
       return res.status(400).json({ error: "Already clocked out today" });
     }
 
+    // Time rule — minimum interval since clock-in
+    const elapsedMs = now - new Date(existing.clockIn.time);
+    if (elapsedMs < antiCheat.MIN_CLOCK_OUT_INTERVAL_MS) {
+      const remaining = Math.ceil((antiCheat.MIN_CLOCK_OUT_INTERVAL_MS - elapsedMs) / 1000);
+      return res.status(400).json({
+        error: `Too soon to clock out. Wait ${remaining}s (min ${antiCheat.MIN_CLOCK_OUT_INTERVAL_MS / 60000} minutes after clock-in).`,
+        reason: "min_interval", blocked: true,
+      });
+    }
+
+    const user = await User.findById(req.user._id);
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    const company  = await Company.findById(req.user.company).select("corporateSettings").lean();
+    const settings = company?.corporateSettings || {};
+
+    // Anti-cheat (clock-out is also strict — same rules apply)
+    const evalResult = antiCheat.evaluateAttempt({
+      req, user, body: req.body, settings, lastEvent: user.lastClockEvent,
+    });
+
+    const { before, after } = await antiCheat.applyTrustOutcome(
+      user, evalResult,
+      evalResult.ok ? { latitude, longitude } : null
+    );
+    if (evalResult.ok && deviceFingerprint) antiCheat.bindDevice(user, deviceFingerprint, userAgent);
+    await user.save();
+
+    if (!evalResult.ok) {
+      return res.status(403).json({
+        error: evalResult.message, reason: evalResult.reason, blocked: true,
+        flags: evalResult.flags, trustScore: after,
+      });
+    }
+
+    // Auto-flag oddly long open shifts
+    const exceededMaxOpen = elapsedMs > antiCheat.MAX_CLOCK_OPEN_DURATION_MS;
+
     const worked = hoursWorked(existing.clockIn.time, now);
     const shift  = existing.shift;
 
-    // Compute early leave
     let earlyLeaveMinutes = 0;
     if (shift) {
       const [eh, em] = shift.endTime.split(":").map(Number);
@@ -298,35 +376,43 @@ router.post("/clock-out", ...mw, async (req, res) => {
       if (diff > 0) earlyLeaveMinutes = Math.floor(diff / 60_000);
     }
 
-    // Overtime: worked > shift hours
     let overtimeHours = 0;
     if (shift && worked != null) {
       const [sh, sm] = shift.startTime.split(":").map(Number);
       const [eh, em] = shift.endTime.split(":").map(Number);
       const scheduledHours = (eh * 60 + em - sh * 60 - sm) / 60;
-      if (worked > scheduledHours) {
-        overtimeHours = Math.round((worked - scheduledHours) * 100) / 100;
-      }
+      if (worked > scheduledHours) overtimeHours = Math.round((worked - scheduledHours) * 100) / 100;
     }
 
-    // Determine final status
     let finalStatus = existing.status;
-    if (worked != null && worked < 4 && finalStatus !== "on_leave") {
-      finalStatus = "half_day";
-    }
+    if (worked != null && worked < 4 && finalStatus !== "on_leave") finalStatus = "half_day";
+
+    const flags = [...(evalResult.flags || [])];
+    if (exceededMaxOpen) flags.push("excessive_duration");
 
     const record = await CorporateAttendance.findByIdAndUpdate(
       existing._id,
       {
         $set: {
           "clockOut.time":                now,
-          "clockOut.method":              method   || "web",
-          "clockOut.ipAddress":           ipAddr,
+          "clockOut.method":              method || "web",
+          "clockOut.ipAddress":           evalResult.clientIp,
           "clockOut.location.latitude":   latitude  ?? null,
           "clockOut.location.longitude":  longitude ?? null,
           "clockOut.location.accuracy":   accuracy  ?? null,
           "clockOut.location.address":    address   || "",
           "clockOut.earlyLeaveMinutes":   earlyLeaveMinutes,
+          "clockOut.verified":            true,
+          "clockOut.deviceFingerprint":   deviceFingerprint || null,
+          "clockOut.userAgent":           userAgent,
+          "clockOut.knownDevice":         evalResult.knownDevice,
+          "clockOut.mockLocationFlag":    evalResult.mockLocationFlag,
+          "clockOut.impossibleMovement":  evalResult.impossibleMovement,
+          "clockOut.movementSpeedKmh":    evalResult.movementSpeedKmh,
+          "clockOut.trustScoreBefore":    before,
+          "clockOut.trustScoreAfter":     after,
+          "clockOut.trustScoreDelta":     evalResult.trustDelta,
+          "clockOut.flags":               flags,
           hoursWorked:      worked,
           overtimeHours,
           earlyLeaveMinutes,
@@ -336,9 +422,9 @@ router.post("/clock-out", ...mw, async (req, res) => {
       { new: true }
     ).populate("shift", "name startTime endTime");
 
-    res.json({ record, message: "Clocked out", hoursWorked: worked });
+    res.json({ record, message: "Clocked out", hoursWorked: worked, trustScore: after });
   } catch (e) {
-    console.error(e);
+    console.error("[clock-out]", e);
     res.status(500).json({ error: "Failed to clock out" });
   }
 });
@@ -609,6 +695,80 @@ router.get("/failed-attempts", ...mw, canManage, async (req, res) => {
     res.json({ attempts, count: attempts.length });
   } catch (e) {
     res.status(500).json({ error: "Failed to fetch failed attempts" });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// GET /trust  — employee: my trust score + recognized devices
+// ---------------------------------------------------------------------------
+router.get("/trust", ...mw, async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id)
+      .select("attendanceTrustScore attendanceLockoutUntil recognizedDevices")
+      .lean();
+    res.json({
+      trustScore: user?.attendanceTrustScore ?? 100,
+      lockoutUntil: user?.attendanceLockoutUntil || null,
+      devices: (user?.recognizedDevices || []).map(d => ({
+        firstSeen: d.firstSeen, lastSeen: d.lastSeen,
+        userAgent: d.userAgent, fingerprintHash: d.fingerprint?.slice(0, 8) + "…",
+      })),
+      hardLockTrust: antiCheat.HARD_LOCK_TRUST,
+      reviewTrust:   antiCheat.REVIEW_TRUST,
+    });
+  } catch (e) {
+    res.status(500).json({ error: "Failed to fetch trust score" });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// PATCH /trust/:userId/reset  — admin/manager: reset employee trust score
+// ---------------------------------------------------------------------------
+router.patch("/trust/:userId/reset", ...mw, canManage, async (req, res) => {
+  try {
+    const user = await User.findOne({ _id: req.params.userId, company: req.user.company });
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    user.attendanceTrustScore = 100;
+    user.attendanceLockoutUntil = null;
+    user.attendanceFailedAttempts = [];
+    await user.save();
+
+    await AuditLog.create({
+      company:  req.user.company,
+      actor:    req.user._id,
+      action:   AUDIT_ACTIONS?.UPDATED || "updated",
+      resource: "User",
+      resourceId: user._id,
+      resourceLabel: `Reset attendance trust for ${user.name}`,
+      metadata: { reason: req.body.reason || "manual reset" },
+    });
+
+    res.json({ message: "Trust score reset", trustScore: 100 });
+  } catch (e) {
+    res.status(500).json({ error: "Failed to reset trust score" });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// DELETE /trust/:userId/device/:fingerprintPrefix  — revoke a device
+// ---------------------------------------------------------------------------
+router.delete("/trust/:userId/device/:fingerprintPrefix", ...mw, canManage, async (req, res) => {
+  try {
+    const user = await User.findOne({ _id: req.params.userId, company: req.user.company });
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    const before = (user.recognizedDevices || []).length;
+    user.recognizedDevices = (user.recognizedDevices || []).filter(d =>
+      !d.fingerprint.startsWith(req.params.fingerprintPrefix)
+    );
+    if (user.recognizedDevices.length === before) {
+      return res.status(404).json({ error: "Device not found" });
+    }
+    await user.save();
+    res.json({ message: "Device revoked", remaining: user.recognizedDevices.length });
+  } catch (e) {
+    res.status(500).json({ error: "Failed to revoke device" });
   }
 });
 

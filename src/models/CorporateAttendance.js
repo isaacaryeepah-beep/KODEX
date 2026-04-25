@@ -73,6 +73,17 @@ const clockEventSchema = new mongoose.Schema(
     // Strict WiFi+GPS verification result
     verified:      { type: Boolean, default: null },  // null = not enforced, true = passed, false = blocked
     blockedReason: { type: String,  default: null },  // 'wifi_mismatch' | 'outside_geofence' | 'vpn_detected'
+    // ── Anti-cheat metadata ─────────────────────────────────────────────────
+    deviceFingerprint:    { type: String,  default: null },
+    userAgent:            { type: String,  default: null },
+    knownDevice:          { type: Boolean, default: null },  // true=recognized, false=new, null=unchecked
+    mockLocationFlag:     { type: Boolean, default: false },
+    impossibleMovement:   { type: Boolean, default: false },
+    movementSpeedKmh:     { type: Number,  default: null },
+    trustScoreBefore:     { type: Number,  default: null },
+    trustScoreAfter:      { type: Number,  default: null },
+    trustScoreDelta:      { type: Number,  default: 0 },
+    flags:                { type: [String], default: [] },   // ['mock_gps','vpn','unknown_device',…]
   },
   { _id: false }
 );
