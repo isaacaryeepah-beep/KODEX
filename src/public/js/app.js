@@ -16708,7 +16708,6 @@ buildSidebar = function() {
     ['nav-analytics',  icons.analytics, 'Analytics',   'analytics'],
     ['nav-branches',   icons.branches,  'Branches',    'branches'],
     ['nav-branding',   icons.branding,  'Branding',    'branding'],
-    ['nav-payroll-exp',icons.payroll,   'Payroll Export','payroll-export'],
   ].forEach(([id, icon, label, view]) => {
     if (!document.getElementById(id)) {
       const a = document.createElement('a');
@@ -16726,7 +16725,6 @@ navigateTo = function(view) {
   if (view === 'analytics')     { currentView = view; _setNavActive(view); renderAnalytics(); return; }
   if (view === 'branches')      { currentView = view; _setNavActive(view); renderBranches(); return; }
   if (view === 'branding')      { currentView = view; _setNavActive(view); renderBranding(); return; }
-  if (view === 'payroll-export'){ currentView = view; _setNavActive('payroll-exp'); renderPayrollExport(); return; }
   _p5NavigateTo(view);
 };
 
@@ -17195,7 +17193,6 @@ async function renderPayroll() {
             <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:4px">Pay Period</label>
             <input type="month" id="pr-period" value="${period}" style="padding:9px 12px;border:1px solid #d1d5db;border-radius:6px;font-size:14px">
           </div>
-          <button class="btn btn-primary" style="margin-top:18px" onclick="downloadPayrollExport()">⬇ Download CSV</button>
         </div>
       </div>
 
@@ -17231,54 +17228,6 @@ async function renderPayroll() {
   } catch(e) {
     content.innerHTML = `<div class="card"><p style="color:var(--danger)">Failed to load payroll: ${e.message}</p></div>`;
   }
-}
-
-async function renderPayrollExport() {
-  const content = document.getElementById('main-content');
-  const period = new Date().toISOString().slice(0, 7);
-  content.innerHTML = `
-    <div class="page-header"><h2>Payroll Export</h2><p>Generate payroll-ready CSV for your finance team</p></div>
-
-    <div class="card" style="max-width:540px">
-      <h3 style="font-size:15px;font-weight:700;margin-bottom:14px">Generate Payroll Report</h3>
-      <p style="font-size:13px;color:#6b7280;margin-bottom:16px;line-height:1.6">
-        Exports all <strong>approved timesheets</strong> and <strong>approved expense claims</strong> for the selected period into a single CSV file compatible with most payroll systems.
-      </p>
-
-      <div style="margin-bottom:16px">
-        <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:6px">Pay Period</label>
-        <input type="month" id="pe-period" value="${period}" style="padding:9px 12px;border:1px solid #d1d5db;border-radius:6px;font-size:14px;width:200px">
-      </div>
-
-      <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:14px;margin-bottom:16px">
-        <div style="font-size:12px;font-weight:700;color:#15803d;margin-bottom:6px">What's included:</div>
-        <ul style="font-size:12px;color:#166534;margin:0;padding-left:16px;line-height:1.8">
-          <li>Employee name, ID and department</li>
-          <li>Regular hours worked (up to standard hours)</li>
-          <li>Overtime hours worked (above standard)</li>
-          <li>Overtime multiplier from payroll settings</li>
-          <li>Total approved expense reimbursements</li>
-        </ul>
-      </div>
-
-      <div style="background:#fef3c7;border:1px solid #fde68a;border-radius:10px;padding:12px;margin-bottom:20px">
-        <div style="font-size:12px;color:#92400e">⚠️ Only <strong>approved</strong> timesheets and expenses are included. Make sure to review all submissions before exporting.</div>
-      </div>
-
-      <button class="btn btn-primary" style="padding:12px 28px;font-size:14px" onclick="downloadPayrollExport()">
-        ⬇ Download CSV
-      </button>
-    </div>
-  `;
-}
-
-function downloadPayrollExport() {
-  const period = document.getElementById('pe-period')?.value || document.getElementById('pr-period')?.value || new Date().toISOString().slice(0, 7);
-  const token  = localStorage.getItem('kodex_token') || localStorage.getItem('token') || '';
-  const btn = event.target; btn.disabled = true; btn.textContent = 'Generating…';
-  setTimeout(() => { btn.disabled = false; btn.textContent = '⬇ Download CSV'; }, 3000);
-  window.open(`/api/advanced/payroll-export?period=${period}&token=${token}`, '_blank');
-  toast('Payroll CSV downloading…', 'ok');
 }
 
 // ── Meeting Attendance Modal ──────────────────────────────────────────────────
