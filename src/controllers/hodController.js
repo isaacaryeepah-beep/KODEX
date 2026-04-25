@@ -353,11 +353,14 @@ exports.bulkUnlockStudents = async (req, res) => {
 exports.sendGroupMessage = async (req, res) => {
   try {
     const { target, body: bodyText } = req.body;
+    const file = req.file || null;
+
     if (!["lecturers", "students"].includes(target)) {
       return res.status(400).json({ error: "target must be: lecturers or students" });
     }
-    if (!bodyText?.trim()) {
-      return res.status(400).json({ error: "message body is required" });
+    const trimmed = (bodyText || '').trim();
+    if (!trimmed && !file) {
+      return res.status(400).json({ error: "message body or attachment is required" });
     }
 
     const company = req.user.company;
@@ -376,7 +379,14 @@ exports.sendGroupMessage = async (req, res) => {
       return res.status(400).json({ error: "Too many recipients (max 100). Use announcements instead." });
     }
 
-    const trimmed = bodyText.trim();
+    const attachment = file ? {
+      fileName:     file.filename,
+      originalName: file.originalname,
+      fileUrl:      `/uploads/messages/${file.filename}`,
+      mimeType:     file.mimetype,
+      fileSize:     file.size,
+    } : null;
+
     let sent = 0;
 
     for (const recip of recipients) {
@@ -386,25 +396,29 @@ exports.sendGroupMessage = async (req, res) => {
           "participants.user": { $all: [myId, recip._id] },
         });
 
+        const msgData = { company, sender: myId, body: trimmed };
+        if (attachment) msgData.attachment = attachment;
+
         if (existing) {
-          const msg = await Message.create({ company, conversation: existing._id, sender: myId, body: trimmed });
+          const msg = await Message.create({ ...msgData, conversation: existing._id });
           await Conversation.updateOne(
             { _id: existing._id },
-            { $set: { "lastMessage.body": trimmed, "lastMessage.sender": myId, "lastMessage.sentAt": msg.createdAt }, $inc: { messageCount: 1 } }
+            { $set: { "lastMessage.body": trimmed || `[${file.originalname}]`, "lastMessage.sender": myId, "lastMessage.sentAt": msg.createdAt }, $inc: { messageCount: 1 } }
           );
           await Conversation.updateOne(
             { _id: existing._id, "participants.user": recip._id },
             { $inc: { "participants.$.unreadCount": 1 } }
           );
         } else {
+          const lastBody = trimmed || `[${file.originalname}]`;
           const convo = await Conversation.create({
             company,
             participants: [{ user: myId, unreadCount: 0 }, { user: recip._id, unreadCount: 1 }],
             isGroup: false, type: "direct_message", createdBy: myId,
-            lastMessage: { body: trimmed, sender: myId, sentAt: new Date() },
+            lastMessage: { body: lastBody, sender: myId, sentAt: new Date() },
             messageCount: 1,
           });
-          await Message.create({ company, conversation: convo._id, sender: myId, body: trimmed });
+          await Message.create({ ...msgData, conversation: convo._id });
         }
         sent++;
       } catch (_) { /* skip individual failures */ }

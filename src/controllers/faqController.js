@@ -475,6 +475,30 @@ exports.getQueries = async (req, res) => {
   }
 };
 
+// ── getMyQueries (user: own query history, privacy-safe) ─────────────────────
+
+exports.getMyQueries = async (req, res) => {
+  try {
+    const { page, limit, skip } = parsePage(req.query);
+    const filter = { company: req.user.company, user: req.user._id };
+
+    const [queries, total] = await Promise.all([
+      FAQQuery.find(filter)
+        .populate("matchedFAQ", "question category")
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+      FAQQuery.countDocuments(filter),
+    ]);
+
+    res.json({ queries, total, page, pages: Math.ceil(total / limit) || 1 });
+  } catch (err) {
+    console.error("faq my-queries:", err);
+    res.status(500).json({ error: "Failed to fetch your query history" });
+  }
+};
+
 // ── getStats (admin) ──────────────────────────────────────────────────────────
 
 exports.getStats = async (req, res) => {

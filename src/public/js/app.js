@@ -2214,7 +2214,6 @@ function buildSidebar() {
         links.push({ id: 'leave-requests', label: 'Leave Requests',  icon: svgIcon('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>') });
         links.push({ id: 'timesheets',     label: 'Timesheets',      icon: svgIcon('<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="14" x2="16" y2="14"/>') });
         links.push({ id: 'expenses-mgr',   label: 'Expenses',        icon: svgIcon('<line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>') });
-        links.push({ id: 'payroll',        label: 'Payroll',         icon: svgIcon('<rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/>') });
         links.push({ id: 'announcements',  label: 'Announcements',   icon: svgIcon('<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>') });
         links.push({ id: 'audit-logs',     label: 'Audit Logs',      icon: svgIcon('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="10" y2="9"/>') });
       }
@@ -2232,7 +2231,6 @@ function buildSidebar() {
         links.push({ id: 'corp-attendance', label: 'Team Attendance', icon: svgIcon('<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/><polyline points="9 11 12 14 22 4"/>') });
         links.push({ id: 'shifts', label: 'Shifts', icon: svgIcon('<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>') });
         links.push({ id: 'leave-requests', label: 'Leave Requests', icon: svgIcon('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>') });
-        links.push({ id: 'payroll', label: 'Payroll', icon: svgIcon('<rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/>') });
         links.push({ id: 'announcements', label: 'Announcements', icon: svgIcon('<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>') });
       }
       links.push({ id: 'messages', label: 'Messages', icon: svgIcon('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>') });
@@ -2242,7 +2240,6 @@ function buildSidebar() {
       links.push({ id: 'subscription', label: 'Subscription', icon: subscriptionIcon() });
       break;
     case 'hod':
-      links.push({ id: 'hod-overview',     label: 'Overview',       icon: svgIcon('<rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>') });
       links.push({ id: 'hod-sessions',     label: 'Sessions',       icon: sessionsIcon() });
       links.push({ id: 'hod-courses',      label: 'Courses',        icon: coursesIcon() });
       links.push({ id: 'hod-lecturers',    label: 'Lecturers',      icon: svgIcon('<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>') });
@@ -2382,7 +2379,6 @@ function navigateTo(view) {
     case 'contact':     renderContact(); break;
     case 'about':       renderAbout(); break;
     case 'superadmin-platform': renderSuperadminDashboard(document.getElementById('main-content')); break;
-    case 'hod-overview':         renderHodDashboard(document.getElementById('main-content')); break;
     case 'hod-courses':          renderHodCourses(); break;
     case 'hod-sessions':         renderHodSessions(); break;
     case 'hod-lecturers':        renderHodLecturers(); break;
@@ -2484,8 +2480,8 @@ async function renderDashboard() {
         await renderLecturerDashboard(content);
         break;
       case 'hod':
-        await renderHodDashboard(content);
-        break;
+        navigateTo('hod-sessions');
+        return;
       case 'employee':
         await renderEmployeeDashboard(content);
         break;
@@ -3753,11 +3749,29 @@ async function renderHodMessaging() {
           <div style="font-size:12px;font-weight:600;color:var(--text-muted);margin-bottom:6px;">TO</div>
           <div id="hod-msg-target-label" style="font-size:13px;font-weight:700;padding:8px 12px;background:var(--bg);border-radius:8px;border:1.5px solid var(--border);"></div>
         </div>
-        <div style="margin-bottom:16px;">
+        <div style="margin-bottom:12px;">
           <div style="font-size:12px;font-weight:600;color:var(--text-muted);margin-bottom:6px;">MESSAGE</div>
           <textarea id="hod-msg-body" placeholder="Type your message here…" rows="5" style="width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;resize:vertical;outline:none;box-sizing:border-box;"></textarea>
         </div>
-        <div style="display:flex;gap:10px;align-items:center;">
+        <div style="margin-bottom:16px;">
+          <div style="font-size:12px;font-weight:600;color:var(--text-muted);margin-bottom:6px;">ATTACHMENT <span style="font-weight:400;color:var(--text-muted)">(optional · PDF, Word, images up to 10 MB)</span></div>
+          <input type="file" id="hod-msg-file" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.webp,.gif"
+            style="font-size:13px;padding:6px 0;display:block;width:100%"
+            onchange="(function(el){
+              const info = document.getElementById('hod-msg-file-info');
+              if (!info) return;
+              if (!el.files[0]) { info.textContent = ''; return; }
+              const f = el.files[0];
+              const allowed = ['application/pdf','image/jpeg','image/png','image/webp','image/gif',
+                'application/msword','application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+              if (!allowed.includes(f.type)) { info.textContent = 'File type not allowed.'; info.style.color='#ef4444'; el.value=''; return; }
+              if (f.size > 10*1024*1024) { info.textContent = 'File exceeds 10 MB limit.'; info.style.color='#ef4444'; el.value=''; return; }
+              info.textContent = f.name + ' (' + (f.size/1024).toFixed(0) + ' KB)';
+              info.style.color = 'var(--text-muted)';
+            })(this)">
+          <div id="hod-msg-file-info" style="font-size:11px;margin-top:4px;color:var(--text-muted)"></div>
+        </div>
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
           <button class="btn btn-primary" onclick="hodSendGroupMessage()" id="hod-msg-send-btn">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
             Send Message
@@ -3788,14 +3802,28 @@ function hodSelectMsgTarget(target) {
 
 async function hodSendGroupMessage() {
   if (!_hodMsgTarget) return;
-  const body = (document.getElementById('hod-msg-body')?.value || '').trim();
-  if (!body) { toastWarning('Please enter a message.'); return; }
+  const bodyText = (document.getElementById('hod-msg-body')?.value || '').trim();
+  const fileInput = document.getElementById('hod-msg-file');
+  const file = fileInput?.files[0] || null;
+  if (!bodyText && !file) { toastWarning('Please enter a message or attach a file.'); return; }
   const btn = document.getElementById('hod-msg-send-btn');
   if (btn) { btn.disabled = true; btn.textContent = 'Sending…'; }
   try {
-    const d = await api('/api/hod/send-group-message', { method: 'POST', body: JSON.stringify({ target: _hodMsgTarget, body }) });
+    let d;
+    if (file) {
+      const fd = new FormData();
+      fd.append('target', _hodMsgTarget);
+      if (bodyText) fd.append('body', bodyText);
+      fd.append('attachment', file);
+      d = await apiUpload('/api/hod/send-group-message', fd);
+    } else {
+      d = await api('/api/hod/send-group-message', { method: 'POST', body: JSON.stringify({ target: _hodMsgTarget, body: bodyText }) });
+    }
     toastSuccess(d.message);
     document.getElementById('hod-msg-body').value = '';
+    if (fileInput) { fileInput.value = ''; }
+    const info = document.getElementById('hod-msg-file-info');
+    if (info) info.textContent = '';
   } catch(e) {
     toastError(e.message || 'Failed to send message');
   } finally {
@@ -7106,19 +7134,8 @@ function closeQuizModal() {
 }
 
 async function renderLecturerQuizzes(content) {
-  if (!isOnline()) {
-    const cached = offlineRead('quizzes_lecturer');
-    if (cached) {
-      content.innerHTML = '<div style="background:#fef3c7;color:#92400e;padding:10px 16px;border-radius:8px;font-size:13px;margin-bottom:16px">📡 Offline — showing cached quizzes</div>' + (content.innerHTML || '');
-      _renderLecturerQuizzesHTML(content, cached);
-    } else {
-      content.innerHTML = '<div class="card" style="text-align:center;padding:32px"><div style="font-size:36px">📡</div><p style="margin-top:8px;color:var(--text-light)">No cached data. Connect once to view quizzes offline.</p></div>';
-    }
-    return;
-  }
   try {
     const data = await api('/api/lecturer/quizzes');
-    offlineCache('quizzes_lecturer', data);
     content.innerHTML = `
       <div class="page-header"><h2>Quizzes</h2><p>Manage your quizzes and assessments</p></div>
       <div class="actions-bar"><button class="btn btn-primary btn-sm" onclick="showCreateQuizModal()">Create Quiz</button></div>
@@ -10170,12 +10187,12 @@ function renderReports() {
     'attendance', 'reports'
   );
 
-  if (isStaff) {
+  if (role === 'lecturer') {
     cards += reportCard(
       '#0ea5e9', '#06b6d4',
       '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
       'Sessions Report',
-      role === 'lecturer' ? 'Summary of your attendance sessions' : 'All sessions in your institution',
+      'Summary of your attendance sessions',
       'sessions', 'reports'
     );
   }
@@ -11419,28 +11436,9 @@ function renderAbout() {
 
 
 
-// ── Dark Mode ──────────────────────────────────────────────────────────────────
-function initDarkMode() {
-  const saved = localStorage.getItem('kodex_theme');
-  if (saved === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
-}
-
-function toggleDarkMode() {
-  const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
-  if (isDark) {
-    document.documentElement.removeAttribute('data-theme');
-    localStorage.setItem('kodex_theme', 'light');
-  } else {
-    document.documentElement.setAttribute('data-theme', 'dark');
-    localStorage.setItem('kodex_theme', 'dark');
-  }
-  // Update toggle button icon if present
-  const btn = document.getElementById('dark-mode-btn');
-  if (btn) btn.textContent = isDark ? '🌙' : '☀️';
-}
-
-// Call on load
-initDarkMode();
+// Dark mode removed — always light theme
+localStorage.removeItem('kodex_theme');
+document.documentElement.removeAttribute('data-theme');
 
 // ── Profile Photo Upload ───────────────────────────────────────────────────────
 async function uploadProfilePhoto(input) {
@@ -17151,6 +17149,17 @@ async function savePayrollSettings() {
 async function renderPayroll() {
   const content = document.getElementById('main-content');
   if (!content) return;
+
+  if (currentUser?.company?.mode === 'corporate') {
+    content.innerHTML = `<div class="card" style="margin-top:20px;text-align:center;padding:32px">
+      <div style="font-size:36px;margin-bottom:12px">🚫</div>
+      <h3>Payroll Not Available</h3>
+      <p style="color:var(--text-muted)">Payroll is not enabled for corporate accounts.</p>
+      <button class="btn btn-secondary" style="margin-top:14px" onclick="navigateTo('dashboard')">← Back</button>
+    </div>`;
+    return;
+  }
+
   content.innerHTML = '<div class="loading">Loading payroll…</div>';
 
   const period = new Date().toISOString().slice(0, 7);

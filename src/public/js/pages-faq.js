@@ -99,9 +99,15 @@ async function renderFAQCenter() {
         </div>
       </div>
       <div id="faq-list-area"><div class="loading" style="padding:20px;text-align:center;font-size:13px">Loading…</div></div>
+    </div>
+
+    <div class="card" id="faq-my-history-card" style="margin-top:0">
+      <div class="card-title">My Question History</div>
+      <div id="faq-my-history-area"><div class="loading" style="padding:16px;text-align:center;font-size:13px">Loading…</div></div>
     </div>`;
 
   loadFAQList();
+  loadMyFAQHistory();
 }
 
 async function loadFAQList() {
@@ -149,6 +155,27 @@ async function loadFAQList() {
     clearTimeout(timer);
     const liveArea = document.getElementById('faq-list-area');
     if (liveArea) liveArea.innerHTML = `<div style="color:var(--danger);padding:12px;font-size:13px">Could not load FAQs: ${e.message || 'Unknown error'}</div>`;
+  }
+}
+
+async function loadMyFAQHistory() {
+  const area = document.getElementById('faq-my-history-area');
+  if (!area) return;
+  try {
+    const data = await api('/api/faq/my-queries?limit=10');
+    const queries = data.queries || [];
+    if (!queries.length) {
+      area.innerHTML = '<div style="padding:12px;font-size:13px;color:var(--text-muted)">You have not asked any questions yet.</div>';
+      return;
+    }
+    area.innerHTML = queries.map(q => `
+      <div style="border:1px solid var(--border);border-radius:8px;padding:12px 14px;margin-bottom:8px">
+        <div style="font-size:13px;font-weight:600;margin-bottom:4px">${q.question}</div>
+        ${q.aiResponse ? `<div style="font-size:12px;color:var(--text-secondary);line-height:1.5">${q.aiResponse.slice(0,200)}${q.aiResponse.length>200?'…':''}</div>` : ''}
+        <div style="font-size:11px;color:var(--text-muted);margin-top:6px">${new Date(q.createdAt).toLocaleString()}</div>
+      </div>`).join('');
+  } catch(e) {
+    if (area) area.innerHTML = '<div style="padding:12px;font-size:13px;color:var(--text-muted)">Could not load history.</div>';
   }
 }
 

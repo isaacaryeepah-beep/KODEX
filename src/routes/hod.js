@@ -17,6 +17,7 @@ const authenticate           = require("../middleware/auth");
 const { requireRole }        = require("../middleware/role");
 const { companyIsolation }   = require("../middleware/companyIsolation");
 const hodCtrl                = require("../controllers/hodController");
+const { uploadMessage, handleUploadError } = require("../middleware/messageUpload");
 
 router.use(authenticate);
 // Admin and superadmin can also access these endpoints for management
@@ -39,6 +40,6 @@ router.get("/alerts",            hodCtrl.getAlerts);
 router.get("/course-overview",   hodCtrl.getCourseOverview);
 
 // Messaging
-router.post("/send-group-message", hodCtrl.sendGroupMessage);
+router.post("/send-group-message", uploadMessage, handleUploadError, hodCtrl.sendGroupMessage);
 
 module.exports = router;

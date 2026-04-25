@@ -73,6 +73,7 @@ router.post("/admin/promote/:queryId", ...mw, requireRole(...ADMIN), ctrl.promot
 router.post("/ask",                ...mw, ctrl.ask);
 router.post("/escalate/:queryId",  ...mw, ctrl.escalate);
 router.patch("/rate/:queryId",     ...mw, ctrl.rateAnswer);
+router.get("/my-queries",          ...mw, ctrl.getMyQueries);
 
 // ════════════════════════════════════════════════════════════════════════════
 // Collection routes
