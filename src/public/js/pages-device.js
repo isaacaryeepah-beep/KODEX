@@ -114,15 +114,14 @@ function _devNoPairedHTML() {
       Power on the ESP32. It broadcasts a hotspot named <code>KODEX-XXXXXX</code>.
     </p>
     <ol class="dev-setup-steps-list">
-      <li>Connect your phone or laptop to the <strong>KODEX-XXXXXX</strong> hotspot.</li>
-      <li>Open <strong>192.168.4.1</strong> in your browser — the setup page loads automatically.</li>
+      <li>Connect your phone or laptop to the <strong>KODEX-XXXXXX</strong> hotspot (no internet needed).</li>
+      <li>On that same device, open <strong>http://192.168.4.1</strong> in a browser — the setup page loads automatically.</li>
       <li>Enter your <strong>Institution Code</strong>, the <strong>Pairing Code</strong> from Step 1, and your <strong>WiFi credentials</strong>.</li>
-      <li>Tap <strong>Pair Device</strong>. The ESP32 will connect to WiFi and link to your account.</li>
+      <li>Tap <strong>Pair Device</strong>. The ESP32 reboots, connects to WiFi, and links to your account.</li>
     </ol>
-    <a class="dev-btn dev-btn-ghost dev-btn-block" href="http://192.168.4.1" target="_blank" rel="noopener"
-       style="margin-top:12px;text-align:center;text-decoration:none">
-      Open 192.168.4.1 →
-    </a>
+    <p style="font-size:12px;color:#94a3b8;margin:8px 0 0">
+      Note: 192.168.4.1 is only reachable while connected to the KODEX hotspot — not from the internet.
+    </p>
   </div>
 
 </div>`;
@@ -211,6 +210,7 @@ function _devPairedHTML(d) {
     <div class="dev-action-row">
       <button class="dev-btn dev-btn-secondary dev-btn-sm" onclick="_devTestConnection()">Test Connection</button>
     </div>
+    <div id="dev-test-status" class="dev-test-status" style="display:none"></div>
   </div>
 
   <!-- WiFi Setup card -->
@@ -284,6 +284,7 @@ function _devWifiHTML(d) {
 // ── pairing modal HTML ────────────────────────────────────────────────────────
 function _devPairingModalHTML() {
   return `
+<!-- Pairing modal -->
 <div id="dev-pairing-modal" class="dev-modal-overlay" style="display:none">
   <div class="dev-modal">
     <div class="dev-modal-header">
@@ -291,7 +292,8 @@ function _devPairingModalHTML() {
       <button class="dev-modal-close" onclick="_devHidePairing()">✕</button>
     </div>
     <div id="dev-pairing-body">
-      <p class="dev-modal-desc">Click <strong>Generate Code</strong> to get a pairing code. Enter it on your ESP32 device to link it to your account.</p>
+      <p class="dev-modal-desc">Click <strong>Generate Code</strong> to get a pairing code. Enter it on your ESP32 captive portal to link it to your account.</p>
+      <div id="dev-pairing-error" class="dev-modal-error" style="display:none"></div>
       <div id="dev-pairing-code-box" style="display:none" class="dev-pairing-code-box">
         <div id="dev-pairing-code" class="dev-pairing-code">——————</div>
         <div id="dev-pairing-expires" class="dev-pairing-expires"></div>
@@ -301,6 +303,38 @@ function _devPairingModalHTML() {
         <button class="dev-btn dev-btn-ghost" onclick="_devHidePairing()">Cancel</button>
         <button class="dev-btn dev-btn-primary" id="dev-gen-code-btn" onclick="_devGenerateCode()">Generate Code</button>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- Unlink confirm modal -->
+<div id="dev-unlink-modal" class="dev-modal-overlay" style="display:none">
+  <div class="dev-modal">
+    <div class="dev-modal-header">
+      <h2 class="dev-modal-title">Unlink Device</h2>
+      <button class="dev-modal-close" onclick="_devHideUnlink()">✕</button>
+    </div>
+    <p class="dev-modal-desc">Are you sure you want to unlink this device? You will need to re-pair it to use it again.</p>
+    <div id="dev-unlink-error" class="dev-modal-error" style="display:none"></div>
+    <div style="display:flex;gap:10px;justify-content:flex-end">
+      <button class="dev-btn dev-btn-ghost" onclick="_devHideUnlink()">Cancel</button>
+      <button class="dev-btn dev-btn-danger" id="dev-unlink-confirm-btn" onclick="_devUnlinkConfirm()">Yes, Unlink</button>
+    </div>
+  </div>
+</div>
+
+<!-- Rename modal -->
+<div id="dev-rename-modal" class="dev-modal-overlay" style="display:none">
+  <div class="dev-modal">
+    <div class="dev-modal-header">
+      <h2 class="dev-modal-title">Rename Device</h2>
+      <button class="dev-modal-close" onclick="_devHideRename()">✕</button>
+    </div>
+    <div id="dev-rename-error" class="dev-modal-error" style="display:none"></div>
+    <input id="dev-rename-input" type="text" class="dev-rename-input" placeholder="Device name" maxlength="64" />
+    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px">
+      <button class="dev-btn dev-btn-ghost" onclick="_devHideRename()">Cancel</button>
+      <button class="dev-btn dev-btn-primary" id="dev-rename-confirm-btn" onclick="_devRenameConfirm()">Save</button>
     </div>
   </div>
 </div>`;
@@ -390,8 +424,10 @@ function _devHidePairing() {
 }
 
 async function _devGenerateCode() {
-  const btn = document.getElementById('dev-gen-code-btn');
+  const btn   = document.getElementById('dev-gen-code-btn');
+  const errEl = document.getElementById('dev-pairing-error');
   if (btn) { btn.disabled = true; btn.textContent = 'Generating…'; }
+  if (errEl) { errEl.style.display = 'none'; errEl.textContent = ''; }
   try {
     const res = await fetch('/api/devices/pairing-code', {
       method: 'POST',
@@ -418,7 +454,10 @@ async function _devGenerateCode() {
     // Poll for device linked
     _devPollForLink(json.code);
   } catch (e) {
-    alert(e.message || 'Failed to generate pairing code');
+    const msg = e.message === 'Failed to fetch'
+      ? 'Could not reach the server. Check your connection and try again.'
+      : (e.message || 'Failed to generate pairing code');
+    if (errEl) { errEl.textContent = msg; errEl.style.display = 'block'; }
   } finally {
     if (btn) { btn.disabled = false; btn.textContent = 'Regenerate Code'; }
   }
@@ -460,7 +499,18 @@ function _devPollForLink(code) {
 }
 
 async function _devUnlink() {
-  if (!confirm('Unlink this device? You will need to re-pair it to use it again.')) return;
+  const btn = document.getElementById('dev-unlink-confirm-btn');
+  const modal = document.getElementById('dev-unlink-modal');
+  if (modal) modal.style.display = 'flex';
+  // actual delete is triggered by the confirm button in the modal (see _devUnlinkConfirm)
+}
+
+async function _devUnlinkConfirm() {
+  const modal  = document.getElementById('dev-unlink-modal');
+  const errEl  = document.getElementById('dev-unlink-error');
+  const btn    = document.getElementById('dev-unlink-confirm-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Unlinking…'; }
+  if (errEl) { errEl.style.display = 'none'; }
   try {
     const res = await fetch('/api/devices/my', {
       method: 'DELETE',
@@ -468,47 +518,91 @@ async function _devUnlink() {
     });
     const json = await res.json();
     if (!res.ok) throw new Error(json.message || 'Failed to unlink');
+    if (modal) modal.style.display = 'none';
     renderAttendanceDevice();
   } catch (e) {
-    alert(e.message);
+    const msg = e.message === 'Failed to fetch'
+      ? 'Could not reach the server. Check your connection and try again.'
+      : (e.message || 'Failed to unlink device');
+    if (errEl) { errEl.textContent = msg; errEl.style.display = 'block'; }
+    if (btn) { btn.disabled = false; btn.textContent = 'Yes, Unlink'; }
   }
 }
 
+function _devHideUnlink() {
+  const modal = document.getElementById('dev-unlink-modal');
+  if (modal) modal.style.display = 'none';
+}
+
 async function _devRename() {
+  const modal  = document.getElementById('dev-rename-modal');
+  const input  = document.getElementById('dev-rename-input');
   const current = document.getElementById('dev-name-display')?.textContent || '';
-  const name = prompt('Enter new device name:', current);
-  if (!name?.trim() || name.trim() === current) return;
+  if (input) input.value = current;
+  if (modal) modal.style.display = 'flex';
+}
+
+async function _devRenameConfirm() {
+  const modal  = document.getElementById('dev-rename-modal');
+  const input  = document.getElementById('dev-rename-input');
+  const errEl  = document.getElementById('dev-rename-error');
+  const btn    = document.getElementById('dev-rename-confirm-btn');
+  const name   = input?.value?.trim() || '';
+  if (!name) { if (errEl) { errEl.textContent = 'Name cannot be empty.'; errEl.style.display = 'block'; } return; }
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+  if (errEl) errEl.style.display = 'none';
   try {
     const res = await fetch('/api/devices/my/rename', {
       method: 'PATCH',
       headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('token') || ''), 'Content-Type': 'application/json' },
-      body: JSON.stringify({ deviceName: name.trim() })
+      body: JSON.stringify({ deviceName: name })
     });
     const json = await res.json();
     if (!res.ok) throw new Error(json.message || 'Rename failed');
     const el = document.getElementById('dev-name-display');
     if (el) el.textContent = json.deviceName;
+    if (modal) modal.style.display = 'none';
   } catch (e) {
-    alert(e.message);
+    const msg = e.message === 'Failed to fetch'
+      ? 'Could not reach the server. Check your connection and try again.'
+      : (e.message || 'Rename failed');
+    if (errEl) { errEl.textContent = msg; errEl.style.display = 'block'; }
+    if (btn) { btn.disabled = false; btn.textContent = 'Save'; }
   }
 }
 
+function _devHideRename() {
+  const modal = document.getElementById('dev-rename-modal');
+  if (modal) modal.style.display = 'none';
+}
+
 async function _devTestConnection() {
-  const btn = event.target;
+  const btn    = event.target;
+  const statusEl = document.getElementById('dev-test-status');
   btn.disabled = true; btn.textContent = 'Testing…';
+  if (statusEl) { statusEl.style.display = 'none'; statusEl.className = 'dev-test-status'; }
   try {
     const res = await fetch('/api/devices/my', {
       headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('token') || '') }
     });
     const json = await res.json();
     const d = json.data;
-    if (d?.status === 'online') {
-      alert(`✓ Device is online. Last heartbeat: ${_devFmt(d.lastHeartbeat)}`);
-    } else {
-      alert(`Device is offline. Last seen: ${_devFmt(d?.lastHeartbeat)}`);
+    if (statusEl) {
+      statusEl.style.display = 'block';
+      if (d?.status === 'online') {
+        statusEl.className = 'dev-test-status dev-test-ok';
+        statusEl.textContent = `✓ Online — last heartbeat ${_devFmt(d.lastHeartbeat)}`;
+      } else {
+        statusEl.className = 'dev-test-status dev-test-warn';
+        statusEl.textContent = `Device offline — last seen ${_devFmt(d?.lastHeartbeat)}`;
+      }
     }
   } catch (e) {
-    alert('Connection test failed.');
+    if (statusEl) {
+      statusEl.style.display = 'block';
+      statusEl.className = 'dev-test-status dev-test-err';
+      statusEl.textContent = 'Connection test failed. Check your internet connection.';
+    }
   } finally {
     btn.disabled = false; btn.textContent = 'Test Connection';
   }
@@ -605,7 +699,10 @@ async function _devConnectWifi() {
   const statusEl = document.getElementById('dev-wifi-status-msg');
 
   if (!ssid) return;
-  if (!password) { alert('Please enter the WiFi password.'); return; }
+  if (!password) {
+    if (statusEl) { statusEl.style.display = 'block'; statusEl.className = 'dev-wifi-status-msg dev-wifi-status-error'; statusEl.textContent = 'Please enter the WiFi password.'; }
+    return;
+  }
 
   if (btn) { btn.disabled = true; btn.textContent = 'Connecting…'; }
   if (statusEl) {
@@ -798,16 +895,23 @@ function _devCSS() {
 .dev-help-list { margin:0; padding-left:18px; font-size:13px; color:#475569; line-height:1.8; }
 .dev-help-section {}
 
-/* Pairing modal */
+/* Modals */
 .dev-modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,.4); display:flex; align-items:center; justify-content:center; z-index:9999; }
 .dev-modal { background:#fff; border-radius:20px; padding:28px; max-width:420px; width:90%; box-shadow:0 20px 60px rgba(0,0,0,.18); }
 .dev-modal-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; }
 .dev-modal-title { font-size:18px; font-weight:800; color:#1e293b; margin:0; }
 .dev-modal-close { background:none; border:none; font-size:18px; cursor:pointer; color:#94a3b8; line-height:1; padding:4px; }
 .dev-modal-desc { font-size:13px; color:#64748b; margin:0 0 16px; line-height:1.6; }
+.dev-modal-error { background:#fef2f2; border:1px solid #fecaca; color:#dc2626; border-radius:9px; padding:10px 14px; font-size:13px; margin-bottom:12px; }
 .dev-pairing-code-box { background:#f8fafc; border:2px solid #e2e8f0; border-radius:14px; padding:20px; text-align:center; }
 .dev-pairing-code { font-size:38px; font-weight:900; letter-spacing:10px; color:#4f46e5; font-family:monospace; }
 .dev-pairing-expires { font-size:12px; color:#94a3b8; margin-top:6px; }
+.dev-rename-input { width:100%; box-sizing:border-box; padding:10px 13px; border:1px solid #e2e8f0; border-radius:10px; font-size:14px; outline:none; transition:border .15s; }
+.dev-rename-input:focus { border-color:#6366f1; }
+.dev-test-status { margin-top:10px; padding:9px 13px; border-radius:9px; font-size:13px; }
+.dev-test-ok   { background:#f0fdf4; color:#15803d; }
+.dev-test-warn { background:#fffbeb; color:#d97706; }
+.dev-test-err  { background:#fef2f2; color:#dc2626; }
 .dev-signal { font-size:14px; color:#22c55e; }
 
 /* Signal strength */
