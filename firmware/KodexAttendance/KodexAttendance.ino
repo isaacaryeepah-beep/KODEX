@@ -104,6 +104,8 @@ uint32_t sessionDuration  = 300;   // seconds
 
 uint32_t lastHeartbeatMs = 0;
 bool     timeSynced = false;
+uint8_t  hbFailCount = 0;
+bool     wifiReconnectNeeded = false;
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 static void log(const String& s) { Serial.print("[KODEX] "); Serial.println(s); }
@@ -226,7 +228,7 @@ static int postJson(const String& path, const String& body, String& outResponse,
   if (authed && deviceJWT.length()) {
     http.addHeader("Authorization", "Bearer " + deviceJWT);
   }
-  http.setTimeout(8000);
+  http.setTimeout(15000);
   int code = http.POST(body);
   outResponse = http.getString();
   http.end();
@@ -272,7 +274,16 @@ static void sendHeartbeat() {
   String resp;
   int code = postJson("/api/devices/heartbeat", body, resp);
   if (code == 401) { log("HB 401 — token revoked. Wiping config."); factoryReset(); return; }
-  if (code != 200) { log("HB fail " + String(code)); return; }
+  if (code != 200) {
+    log("HB fail " + String(code));
+    if (++hbFailCount >= 5) {
+      log("HB fail x5 — forcing WiFi reconnect");
+      hbFailCount = 0;
+      wifiReconnectNeeded = true;
+    }
+    return;
+  }
+  hbFailCount = 0;
 
   StaticJsonDocument<768> doc;
   if (deserializeJson(doc, resp)) { log("HB parse fail"); return; }
@@ -594,8 +605,26 @@ void loop() {
 
   if (WiFi.status() != WL_CONNECTED) {
     digitalWrite(STATUS_LED_PIN, !digitalRead(STATUS_LED_PIN));
-    delay(500);
-    if (WiFi.reconnect() == false) WiFi.begin(wifiSSID.c_str(), wifiPass.c_str());
+    static uint32_t lastReconnectMs = 0;
+    uint32_t nowMs = millis();
+    if (nowMs - lastReconnectMs >= 10000) {
+      lastReconnectMs = nowMs;
+      log("WiFi lost — reconnecting");
+      WiFi.disconnect(false);
+      delay(200);
+      WiFi.begin(wifiSSID.c_str(), wifiPass.c_str());
+    } else {
+      delay(500);
+    }
+    return;
+  }
+
+  if (wifiReconnectNeeded) {
+    wifiReconnectNeeded = false;
+    log("Forcing WiFi reconnect after repeated HB failures");
+    WiFi.disconnect(false);
+    delay(200);
+    WiFi.begin(wifiSSID.c_str(), wifiPass.c_str());
     return;
   }
 
