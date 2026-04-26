@@ -84,66 +84,45 @@ function _devNoPairedHTML() {
   <div class="dev-setup-banner-icon">⚡</div>
   <div>
     <div class="dev-setup-banner-title">First-time setup — follow these two steps</div>
-    <div class="dev-setup-banner-sub">Configure WiFi on your ESP32 first, then pair it to your account.</div>
+    <div class="dev-setup-banner-sub">Generate a pairing code here, then configure the ESP32 at 192.168.4.1.</div>
   </div>
 </div>
 
 <div class="dev-setup-grid">
 
-  <!-- Step 1: WiFi Setup -->
+  <!-- Step 1: Generate Pairing Code -->
   <div class="dev-card dev-setup-card">
     <div class="dev-setup-step-badge">Step 1</div>
     <div class="dev-card-header" style="margin-top:8px">
-      <span class="dev-card-title">WiFi Setup</span>
+      <span class="dev-card-title">Generate a Pairing Code</span>
     </div>
     <p class="dev-setup-hint">
-      Power on the ESP32. It starts in hotspot mode (<code>KODEX-ESP32-XXXX</code>).
-      Connect your device to that hotspot, then enter its IP below
-      (<strong>192.168.4.1</strong> is the default AP address).
-    </p>
-
-    <!-- IP input + Scan -->
-    <div class="dev-wifi-ip-row">
-      <div class="dev-wifi-ip-group">
-        <label class="dev-detail-label" for="dev-esp32-ip">ESP32 IP Address</label>
-        <input type="text" id="dev-esp32-ip" class="dev-wifi-ip-input"
-               value="192.168.4.1"
-               placeholder="192.168.4.1" />
-      </div>
-      <button class="dev-btn dev-btn-primary dev-btn-sm" id="dev-scan-btn"
-              onclick="_devScanWifi()">⟳ Scan WiFi</button>
-    </div>
-
-    <!-- Scan results -->
-    <div id="dev-wifi-scan-results" style="display:none">
-      <p class="dev-detail-label" style="margin:10px 0 6px">Nearby Networks</p>
-      <div id="dev-wifi-ssid-list" class="dev-wifi-scan-list"></div>
-      <div id="dev-wifi-connect-form" style="display:none;margin-top:12px">
-        <div class="dev-wifi-selected-row">
-          <span class="dev-wifi-ssid-selected" id="dev-wifi-selected-ssid"></span>
-          <button class="dev-btn dev-btn-ghost dev-btn-sm" onclick="_devClearWifiSelection()">✕</button>
-        </div>
-        <input type="password" id="dev-wifi-password" class="dev-wifi-password-input"
-               placeholder="WiFi password" autocomplete="new-password" />
-        <button class="dev-btn dev-btn-primary dev-btn-block" id="dev-wifi-connect-btn"
-                onclick="_devConnectWifi()">Connect</button>
-      </div>
-      <div id="dev-wifi-status-msg" class="dev-wifi-status-msg" style="display:none"></div>
-    </div>
-  </div>
-
-  <!-- Step 2: Pair Device -->
-  <div class="dev-card dev-setup-card">
-    <div class="dev-setup-step-badge dev-setup-step-badge--2">Step 2</div>
-    <div class="dev-card-header" style="margin-top:8px">
-      <span class="dev-card-title">Pair Your Device</span>
-    </div>
-    <p class="dev-setup-hint">
-      Once the ESP32 is connected to WiFi it will appear on your school network.
-      Generate a pairing code and enter it on the device to link it to your account.
+      Generate a one-time 6-character code here first. You will need it in Step 2
+      to link the device to your account.
     </p>
     <button class="dev-btn dev-btn-primary dev-btn-block" style="margin-top:auto"
             onclick="_devShowPairing()">+ Generate Pairing Code</button>
+  </div>
+
+  <!-- Step 2: WiFi + Device Setup -->
+  <div class="dev-card dev-setup-card">
+    <div class="dev-setup-step-badge dev-setup-step-badge--2">Step 2</div>
+    <div class="dev-card-header" style="margin-top:8px">
+      <span class="dev-card-title">Configure the ESP32</span>
+    </div>
+    <p class="dev-setup-hint">
+      Power on the ESP32. It broadcasts a hotspot named <code>KODEX-XXXXXX</code>.
+    </p>
+    <ol class="dev-setup-steps-list">
+      <li>Connect your phone or laptop to the <strong>KODEX-XXXXXX</strong> hotspot.</li>
+      <li>Open <strong>192.168.4.1</strong> in your browser — the setup page loads automatically.</li>
+      <li>Enter your <strong>Institution Code</strong>, the <strong>Pairing Code</strong> from Step 1, and your <strong>WiFi credentials</strong>.</li>
+      <li>Tap <strong>Pair Device</strong>. The ESP32 will connect to WiFi and link to your account.</li>
+    </ol>
+    <a class="dev-btn dev-btn-ghost dev-btn-block" href="http://192.168.4.1" target="_blank" rel="noopener"
+       style="margin-top:12px;text-align:center;text-decoration:none">
+      Open 192.168.4.1 →
+    </a>
   </div>
 
 </div>`;
@@ -240,37 +219,10 @@ function _devPairedHTML(d) {
       <span class="dev-card-title">WiFi Setup</span>
     </div>
     ${_devWifiHTML(d)}
-
-    <!-- IP + Scan row -->
-    <div class="dev-wifi-ip-row">
-      <div class="dev-wifi-ip-group">
-        <label class="dev-detail-label" for="dev-esp32-ip">ESP32 IP Address</label>
-        <input type="text" id="dev-esp32-ip" class="dev-wifi-ip-input"
-               value="${_esc(d.localIp || '')}"
-               placeholder="e.g. 192.168.4.1 (AP mode) or 192.168.1.x" />
-      </div>
-      <button class="dev-btn dev-btn-primary dev-btn-sm" id="dev-scan-btn" onclick="_devScanWifi()">⟳ Scan WiFi</button>
-    </div>
-
-    <!-- Scan results (hidden until scan runs) -->
-    <div id="dev-wifi-scan-results" style="display:none">
-      <p class="dev-detail-label" style="margin:10px 0 6px">Nearby Networks</p>
-      <div id="dev-wifi-ssid-list" class="dev-wifi-scan-list"></div>
-
-      <!-- Connect form (hidden until network selected) -->
-      <div id="dev-wifi-connect-form" style="display:none;margin-top:12px">
-        <div class="dev-wifi-selected-row">
-          <span class="dev-wifi-ssid-selected" id="dev-wifi-selected-ssid"></span>
-          <button class="dev-btn dev-btn-ghost dev-btn-sm" onclick="_devClearWifiSelection()">✕</button>
-        </div>
-        <input type="password" id="dev-wifi-password" class="dev-wifi-password-input"
-               placeholder="WiFi password" autocomplete="new-password" />
-        <button class="dev-btn dev-btn-primary dev-btn-block" id="dev-wifi-connect-btn"
-                onclick="_devConnectWifi()">Connect</button>
-      </div>
-
-      <!-- Status message -->
-      <div id="dev-wifi-status-msg" class="dev-wifi-status-msg" style="display:none"></div>
+    <div class="dev-wifi-reconfigure-note">
+      <strong>To change networks:</strong> access the device directly at its local IP
+      (e.g. <code>http://192.168.1.x</code>) while on the same network, or hold the
+      reset button for 5 s to re-enter setup mode and visit <code>192.168.4.1</code>.
     </div>
   </div>
 
@@ -363,22 +315,22 @@ function _devHelpHTML() {
     <div class="dev-help-section">
       <p class="dev-help-title">How to Pair &amp; Set Up WiFi</p>
       <ol class="dev-help-list">
-        <li>Click <strong>Pair Device</strong> and generate a 6-character code</li>
-        <li>Power on the ESP32 — it starts in hotspot mode (<code>KODEX-ESP32-XXXX</code>)</li>
-        <li>Connect your laptop/phone to that hotspot</li>
-        <li>Enter the pairing code on the ESP32 when prompted</li>
-        <li>Return to this page → click <strong>Scan WiFi</strong></li>
-        <li>Select your campus WiFi network and enter the password</li>
-        <li>The ESP32 connects and the device shows <strong>Online</strong></li>
+        <li>Click <strong>Generate Pairing Code</strong> and note the 6-character code</li>
+        <li>Power on the ESP32 — it broadcasts hotspot <code>KODEX-XXXXXX</code></li>
+        <li>Connect your phone/laptop to that hotspot</li>
+        <li>Open <strong>192.168.4.1</strong> in your browser — setup page loads automatically</li>
+        <li>Enter your <strong>Institution Code</strong>, the <strong>Pairing Code</strong>, and your <strong>WiFi credentials</strong></li>
+        <li>Tap <strong>Pair Device</strong> — the ESP32 reboots and connects to WiFi</li>
+        <li>Return here — device shows <strong>Online</strong> within ~30 seconds</li>
       </ol>
     </div>
     <div class="dev-help-section">
       <p class="dev-help-title">Troubleshooting</p>
       <ul class="dev-help-list">
-        <li><strong>Scan fails?</strong> ESP32 must be on the same network as the server (or in hotspot mode)</li>
-        <li><strong>Wrong password?</strong> Click Scan again, select the network, re-enter and retry</li>
-        <li><strong>Offline after connecting?</strong> Wait 15 s for heartbeat; refresh if needed</li>
-        <li><strong>Can't start session?</strong> Device must be Online first</li>
+        <li><strong>192.168.4.1 unreachable?</strong> Ensure you're connected to the <code>KODEX-XXXXXX</code> hotspot, not your home WiFi</li>
+        <li><strong>Wrong WiFi password?</strong> Hold the reset button 5 s to re-enter setup mode</li>
+        <li><strong>Offline after connecting?</strong> Wait 30 s for first heartbeat; refresh if needed</li>
+        <li><strong>Can't start session?</strong> Device must show <strong>Online</strong> first</li>
       </ul>
     </div>
   </div>
@@ -825,6 +777,11 @@ function _devCSS() {
 .dev-setup-step-badge--2 { background:#0ea5e9; }
 .dev-setup-hint { font-size:13px; color:#64748b; line-height:1.65; margin:0 0 14px; }
 .dev-setup-hint code { background:#f1f5f9; padding:1px 5px; border-radius:4px; font-size:12px; color:#334155; }
+.dev-setup-steps-list { font-size:13px; color:#475569; line-height:1.9; padding-left:18px; margin:0 0 14px; }
+.dev-setup-steps-list strong { color:#1e293b; }
+.dev-setup-steps-list code { background:#f1f5f9; padding:1px 5px; border-radius:4px; font-size:12px; color:#334155; }
+.dev-wifi-reconfigure-note { margin-top:12px; padding:10px 14px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; font-size:12px; color:#475569; line-height:1.7; }
+.dev-wifi-reconfigure-note code { background:#e2e8f0; padding:1px 5px; border-radius:4px; font-family:monospace; }
 
 /* Empty state (fallback) */
 .dev-empty-state { text-align:center; padding:64px 24px; background:#fff; border-radius:20px; box-shadow:0 1px 4px rgba(0,0,0,.06); }

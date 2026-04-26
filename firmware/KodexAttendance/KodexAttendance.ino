@@ -340,46 +340,82 @@ static const char PAIR_HTML[] PROGMEM = R"HTML(<!doctype html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>KODEX Setup</title>
 <style>
-  body{font-family:system-ui,sans-serif;background:#0f172a;color:#e2e8f0;margin:0;padding:24px;max-width:420px;margin:0 auto}
+  *{box-sizing:border-box}
+  body{font-family:system-ui,sans-serif;background:#0f172a;color:#e2e8f0;margin:0;padding:24px;max-width:440px;margin:0 auto}
   h1{font-size:22px;margin:0 0 4px}
-  p{font-size:13px;color:#94a3b8;margin:0 0 16px}
-  label{display:block;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#94a3b8;margin:12px 0 4px}
-  input{width:100%;box-sizing:border-box;padding:10px 12px;border-radius:8px;border:1px solid #334155;background:#1e293b;color:#e2e8f0;font-size:14px}
-  button{width:100%;padding:12px;border-radius:8px;border:0;background:#6366f1;color:#fff;font-weight:700;font-size:14px;margin-top:18px;cursor:pointer}
-  button:disabled{opacity:.5}
-  .ok{color:#22c55e}.err{color:#ef4444}
-  .small{font-size:11px;color:#64748b;margin-top:6px}
+  .sub{font-size:13px;color:#94a3b8;margin:0 0 20px}
+  label{display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#94a3b8;margin:14px 0 4px}
+  input{width:100%;padding:10px 12px;border-radius:8px;border:1px solid #334155;background:#1e293b;color:#e2e8f0;font-size:14px}
+  input:focus{outline:none;border-color:#6366f1}
+  .row{display:flex;gap:8px;align-items:flex-end}
+  .row input{flex:1}
+  .scan-btn{flex-shrink:0;padding:10px 14px;border-radius:8px;border:1px solid #6366f1;background:transparent;color:#6366f1;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap}
+  .scan-btn:disabled{opacity:.4}
+  .net-list{margin:8px 0;border:1px solid #1e293b;border-radius:8px;overflow:hidden;max-height:200px;overflow-y:auto}
+  .net-item{padding:10px 14px;cursor:pointer;font-size:13px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #1e293b}
+  .net-item:last-child{border-bottom:0}
+  .net-item:hover,.net-item.sel{background:#1e3a5f}
+  .net-meta{font-size:11px;color:#64748b}
+  button[type=submit]{width:100%;padding:12px;border-radius:8px;border:0;background:#6366f1;color:#fff;font-weight:700;font-size:14px;margin-top:20px;cursor:pointer}
+  button[type=submit]:disabled{opacity:.5}
+  .ok{color:#22c55e;font-size:12px;margin-top:8px}
+  .err{color:#ef4444;font-size:12px;margin-top:8px}
 </style></head>
 <body>
-  <h1>KODEX Pairing</h1>
-  <p>Enter your institution code, the 6-character pairing code from the lecturer portal, and the WiFi to use.</p>
+  <h1>KODEX Device Setup</h1>
+  <p class="sub">Enter your institution code and the 6-character pairing code from the lecturer portal, then select your WiFi network.</p>
   <form id="f">
     <label>Institution Code</label>
-    <input name="institutionCode" required autocomplete="off" placeholder="e.g. ABCD23">
-    <label>Pairing Code</label>
-    <input name="pairingCode" required autocomplete="off" placeholder="6 characters" maxlength="6">
-    <label>WiFi SSID</label>
-    <input name="ssid" required autocomplete="off">
+    <input id="ic" name="institutionCode" required autocomplete="off" placeholder="e.g. ABCD23" style="text-transform:uppercase">
+    <label>Pairing Code <span style="color:#64748b;font-weight:400">(from Lecturer Portal → Attendance Device)</span></label>
+    <input id="pc" name="pairingCode" required autocomplete="off" placeholder="6 characters" maxlength="6" style="text-transform:uppercase">
+    <label>WiFi Network</label>
+    <div class="row">
+      <input id="ssid" name="ssid" required autocomplete="off" placeholder="Select or type SSID">
+      <button type="button" class="scan-btn" id="sb" onclick="scanNets()">Scan</button>
+    </div>
+    <div id="nl" class="net-list" style="display:none"></div>
     <label>WiFi Password</label>
-    <input name="password" type="password" autocomplete="new-password">
-    <label>Server (advanced — leave default)</label>
+    <input name="password" type="password" autocomplete="new-password" placeholder="Leave blank if open network">
+    <label>Server <span style="color:#64748b;font-weight:400">(advanced)</span></label>
     <input name="apiBase" value="https://kodex.it.com">
-    <button id="b" type="submit">Pair Device</button>
+    <button type="submit" id="b">Pair Device</button>
   </form>
-  <div id="msg" class="small"></div>
+  <div id="msg"></div>
 <script>
+async function scanNets() {
+  const sb = document.getElementById('sb'), nl = document.getElementById('nl');
+  sb.disabled = true; sb.textContent = '…';
+  nl.style.display = 'block'; nl.innerHTML = '<div style="padding:10px 14px;font-size:12px;color:#64748b">Scanning…</div>';
+  try {
+    const r = await fetch('/wifi/scan'); const nets = await r.json();
+    if (!nets.length) { nl.innerHTML = '<div style="padding:10px 14px;font-size:12px;color:#64748b">No networks found. Try again.</div>'; return; }
+    nets.sort((a,b)=>(b.rssi||0)-(a.rssi||0));
+    nl.innerHTML = nets.map(n=>{
+      const s=n.ssid||''; const bars=n.rssi>-60?'▂▄▆':n.rssi>-75?'▂▄':'▂'; const lock=n.open===false?'🔒 ':'';
+      return `<div class="net-item" onclick="pickNet(this,'${s.replace(/'/g,"\\'")}')"><span>${s||'(Hidden)'}</span><span class="net-meta">${lock}${bars}</span></div>`;
+    }).join('');
+  } catch(e){ nl.innerHTML = '<div style="padding:10px 14px;font-size:12px;color:#ef4444">Scan failed: '+e.message+'</div>'; }
+  finally { sb.disabled=false; sb.textContent='Scan'; }
+}
+function pickNet(el, ssid) {
+  document.getElementById('ssid').value = ssid;
+  document.querySelectorAll('.net-item').forEach(i=>i.classList.remove('sel'));
+  el.classList.add('sel');
+}
 document.getElementById('f').onsubmit = async (e) => {
   e.preventDefault();
-  const fd = new FormData(e.target);
-  const data = Object.fromEntries(fd.entries());
-  const m = document.getElementById('msg'); const b = document.getElementById('b');
-  b.disabled = true; m.className='small'; m.textContent='Pairing — this may take 30s…';
+  const data = Object.fromEntries(new FormData(e.target).entries());
+  data.institutionCode = data.institutionCode.toUpperCase().trim();
+  data.pairingCode = data.pairingCode.toUpperCase().trim();
+  const m = document.getElementById('msg'), b = document.getElementById('b');
+  b.disabled = true; m.className = ''; m.textContent = 'Pairing — this may take 30 s…';
   try {
-    const r = await fetch('/pair', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
+    const r = await fetch('/pair', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)});
     const j = await r.json();
     if (!r.ok) throw new Error(j.error || 'Pairing failed');
-    m.className='small ok'; m.textContent='✓ Paired. Device is rebooting and connecting to WiFi.';
-  } catch(err){ m.className='small err'; m.textContent='✗ '+err.message; b.disabled=false; }
+    m.className = 'ok'; m.textContent = '✓ Paired! Device is rebooting and will connect to WiFi.';
+  } catch(err) { m.className = 'err'; m.textContent = '✗ ' + err.message; b.disabled = false; }
 };
 </script></body></html>)HTML";
 
