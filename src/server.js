@@ -286,6 +286,11 @@ if (superadminRoutes) app.use("/api/superadmin", superadminRoutes);
 
 // ── Fallback ─────────────────────────────────────────────────────────────────
 app.use((req, res) => {
+  // Never serve HTML for /api routes — return JSON 404 so API clients get a
+  // parseable error instead of the SPA shell.
+  if (req.path.startsWith('/api')) {
+    return res.status(404).json({ error: 'API route not found', path: req.path });
+  }
   const indexPath = path.join(__dirname, "public", "index.html");
   const fs = require("fs");
   if (req.accepts("html") && fs.existsSync(indexPath)) {
