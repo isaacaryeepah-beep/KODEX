@@ -450,36 +450,44 @@ static void startApPortal() {
       localHttp.send(400, "application/json", "{\"error\":\"Missing fields\"}"); return;
     }
 
-    // Switch to STA on the supplied WiFi for the actual pair call.
+    // Keep the AP alive so the browser connection stays open.
+    // Switch to AP+STA dual mode to connect to the school WiFi while
+    // the captive-portal HTTP server keeps responding.
     apiBase  = api;
     wifiSSID = ssid;
     wifiPass = pass;
 
-    WiFi.softAPdisconnect(true);
-    WiFi.mode(WIFI_STA);
+    WiFi.mode(WIFI_AP_STA);
     WiFi.begin(ssid.c_str(), pass.c_str());
     uint32_t t0 = millis();
     while (WiFi.status() != WL_CONNECTED && millis() - t0 < WIFI_RETRY_TIMEOUT_MS) {
       delay(250);
+      localHttp.handleClient(); // keep AP responsive during connect wait
     }
     if (WiFi.status() != WL_CONNECTED) {
-      localHttp.send(502, "application/json", "{\"error\":\"WiFi connect failed — check SSID/password\"}");
-      // Bring AP back so the lecturer can fix it.
+      // Roll back to pure AP mode so the user can fix their credentials.
       WiFi.mode(WIFI_AP);
-      WiFi.softAP(("KODEX-" + getMacSuffix()).c_str());
+      localHttp.send(502, "application/json", "{\"error\":\"WiFi connect failed — check SSID/password\"}");
       return;
     }
 
-    // Sync time before pairing — POST may need TLS validity later.
+    // Sync time — TLS cert validation needs a valid clock.
     configTime(0, 0, "pool.ntp.org", "time.google.com");
+    uint32_t tlsWait = millis();
+    while (time(nullptr) < 1000000000UL && millis() - tlsWait < 5000) delay(100);
 
     if (!tryPair(pcode, inst)) {
       localHttp.send(401, "application/json", "{\"error\":\"Pairing rejected — check the code (it expires after 5 minutes)\"}");
+      // Restore pure AP so the user can try again with a fresh code.
+      WiFi.disconnect();
+      WiFi.mode(WIFI_AP);
       return;
     }
+
+    // Success — send response while AP is still up, then reboot into STA mode.
     saveConfig();
     localHttp.send(200, "application/json", "{\"ok\":true}");
-    delay(800);
+    delay(1200); // give the browser time to receive the response
     ESP.restart();
   });
 
