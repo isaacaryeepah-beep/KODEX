@@ -76,7 +76,7 @@ static const uint8_t  STATUS_LED_PIN = 2;
 static const uint8_t  OLED_ADDR = 0x3C;
 static const uint8_t  OLED_W = 128;
 static const uint8_t  OLED_H = 64;
-static const uint8_t  OLED_RESET_PIN = -1;
+static const int8_t   OLED_RESET_PIN = -1;
 
 // Code rotation formula constants (must mirror backend).
 static const uint32_t WINDOW_SECONDS = 20;
@@ -315,8 +315,9 @@ static void sendHeartbeat() {
     // startedAt → unix seconds
     if (sess["startedAt"].is<const char*>()) {
       struct tm tm = {};
-      strptime(sess["startedAt"], "%Y-%m-%dT%H:%M:%S", &tm);
-      sessionStartedAt = (uint32_t)mktime(&tm);
+      if (strptime(sess["startedAt"], "%Y-%m-%dT%H:%M:%S", &tm)) {
+        sessionStartedAt = (uint32_t)mktime(&tm);
+      }
     }
   }
 }
@@ -445,6 +446,20 @@ static void startApPortal() {
   localHttp.on("/generate_204", HTTP_GET, [](){ localHttp.send_P(200, "text/html", PAIR_HTML); });
   localHttp.on("/hotspot-detect.html", HTTP_GET, [](){ localHttp.send_P(200, "text/html", PAIR_HTML); });
   localHttp.onNotFound([](){ localHttp.send_P(200, "text/html", PAIR_HTML); });
+
+  localHttp.on("/wifi/scan", HTTP_GET, [](){
+    int n = WiFi.scanNetworks();
+    StaticJsonDocument<2048> doc;
+    JsonArray arr = doc.to<JsonArray>();
+    for (int i = 0; i < n && i < 24; i++) {
+      JsonObject o = arr.createNestedObject();
+      o["ssid"] = WiFi.SSID(i);
+      o["rssi"] = WiFi.RSSI(i);
+      o["open"] = (WiFi.encryptionType(i) == WIFI_AUTH_OPEN);
+    }
+    String s; serializeJson(doc, s);
+    localHttp.send(200, "application/json", s);
+  });
 
   localHttp.on("/pair", HTTP_POST, [](){
     StaticJsonDocument<384> req;
