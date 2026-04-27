@@ -228,7 +228,7 @@ static int postJson(const String& path, const String& body, String& outResponse,
   if (authed && deviceJWT.length()) {
     http.addHeader("Authorization", "Bearer " + deviceJWT);
   }
-  http.setTimeout(15000);
+  http.setTimeout(20000);
   int code = http.POST(body);
   outResponse = http.getString();
   http.end();
@@ -574,6 +574,7 @@ void setup() {
   // Paired path — connect to school WiFi.
   oledShow("KODEX", "WiFi:", wifiSSID);
   WiFi.mode(WIFI_STA);
+  WiFi.setSleep(false); // disable modem sleep — prevents multi-second TLS round-trip delays
   WiFi.begin(wifiSSID.c_str(), wifiPass.c_str());
   uint32_t t0 = millis();
   while (WiFi.status() != WL_CONNECTED && millis() - t0 < WIFI_RETRY_TIMEOUT_MS) {
