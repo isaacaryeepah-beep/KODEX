@@ -42,7 +42,7 @@ exports.register = async (req, res) => {
       subscriptionStatus: "trial",
     });
 
-    const existingUser = await User.findOne({ email: { $regex: new RegExp("^" + email.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "$", "i") } });
+    const existingUser = await User.findOne({ email });
     if (existingUser) {
       await Company.findByIdAndDelete(company._id);
       return res.status(400).json({ error: "This email is already registered" });
