@@ -444,8 +444,8 @@ const SERVER_CHECK_TTL = 8000; // re-check every 8 s
 async function checkServerReachable() {
   try {
     const ctrl = new AbortController();
-    const tid   = setTimeout(() => ctrl.abort(), 2500); // 2.5s — fast enough for mobile
-    const res   = await fetch('https://kodex.it.com/api/health', { method: 'GET', signal: ctrl.signal, cache: 'no-store' });
+    const tid   = setTimeout(() => ctrl.abort(), 8000);
+    const res   = await fetch(API + '/health', { method: 'GET', signal: ctrl.signal, cache: 'no-store' });
     clearTimeout(tid);
     return res.ok;
   } catch (_) {
@@ -5483,6 +5483,9 @@ function _renderSessionsHTML(content, sessions, isOffline) {
 
 
 async function showStartSessionModal() {
+  // Force a fresh connectivity check each time this is opened (covers Retry path)
+  _serverCheckTs = 0;
+
   // Wait for modal-container to be in DOM (it may not exist if called too early)
   let container = document.getElementById('modal-container');
   if (!container) {
