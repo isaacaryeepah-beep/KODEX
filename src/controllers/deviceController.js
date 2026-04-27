@@ -222,12 +222,7 @@ exports.heartbeat = async (req, res) => {
     // Track the public IP this device is reaching the server from.
     // This is the same NAT IP the school router will hand to students on the
     // same WiFi — used by markAttendance to block off-network requests.
-    const clientIp = (
-      (req.headers['x-forwarded-for'] || '').split(',')[0].trim() ||
-      req.headers['x-real-ip'] ||
-      (req.socket && req.socket.remoteAddress) ||
-      ''
-    ).replace(/^::ffff:/, '');
+    const clientIp = (req.ip || '').replace(/^::ffff:/, '');
 
     if (clientIp) {
       const TEN_MIN_MS = 10 * 60 * 1000;

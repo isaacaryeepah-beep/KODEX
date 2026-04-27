@@ -443,62 +443,76 @@ exports.markAttendance = async (req, res) => {
       return res.status(404).json({ error: "No active session found. The manager needs to start a session first." });
     }
 
-    // ── Device proximity enforcement (1 + 2 from the comment above) ────────
-    if (session.deviceId) {
-      const sessionDevice = await Device.findOne({ deviceId: session.deviceId, companyId: req.user.company });
-
-      if (!sessionDevice) {
-        return res.status(503).json({
-          error: 'The classroom device for this session is no longer paired.',
-          esp32Required: true,
-        });
-      }
-
-      const fresh = _deviceFreshness(sessionDevice, DEVICE_MARK_WINDOW_MS);
-      if (!fresh.online) {
-        return res.status(503).json({
-          error: 'The classroom device is offline. Ask your lecturer to power it on.',
-          esp32Required: true,
-          esp32Offline: true,
-          secondsAgo:    fresh.secondsAgo,
-        });
-      }
-
-      const studentIp = (
-        (req.headers['x-forwarded-for'] || '').split(',')[0].trim() ||
-        req.headers['x-real-ip'] ||
-        (req.socket && req.socket.remoteAddress) ||
-        ''
-      ).replace(/^::ffff:/, '');
-
-      const isLocalhost = studentIp === '127.0.0.1' || studentIp === '::1' || studentIp === '';
-      const TEN_MIN_AGO = Date.now() - 10 * 60 * 1000;
-      const deviceIps = (sessionDevice.recentPublicIps || [])
-        .filter(e => e.seenAt && new Date(e.seenAt).getTime() > TEN_MIN_AGO)
-        .map(e => e.ip);
-
-      // If we have at least one recorded device IP, student's IP must match.
-      if (!isLocalhost && deviceIps.length > 0 && !deviceIps.includes(studentIp)) {
-        console.warn(`[MARK] Blocked ${req.user.name}: IP ${studentIp} not in device IPs [${deviceIps.join(', ')}]`);
-        return res.status(403).json({
-          error: 'You must be on the same WiFi as the classroom device to mark attendance.',
-          networkMismatch: true,
-        });
-      }
+    // ── Strict device proximity enforcement ──────────────────────────────────
+    // Physical presence is required. All three conditions must pass:
+    //   1. Session must be bound to a paired device (set at startSession).
+    //   2. That device must be online (heartbeat within 15 s).
+    //   3. Student's IP must exactly match one of the IPs the ESP32 has
+    //      reached the server from in the last 10 minutes.
+    // No exceptions — empty deviceIps means the device hasn't reported yet,
+    // which is also a hard block.
+    if (!session.deviceId) {
+      return res.status(403).json({
+        error: 'This session has no classroom device. Ask your lecturer to start a new session from a paired device.',
+        esp32Required: true,
+      });
     }
 
-    // For students: verify they are enrolled in the course this session belongs to
-    if (req.user.role === 'student' && session.course) {
+    const sessionDevice = await Device.findOne({ deviceId: session.deviceId, companyId: req.user.company });
+
+    if (!sessionDevice) {
+      return res.status(503).json({
+        error: 'The classroom device for this session is no longer paired.',
+        esp32Required: true,
+      });
+    }
+
+    const fresh = _deviceFreshness(sessionDevice, DEVICE_MARK_WINDOW_MS);
+    if (!fresh.online) {
+      return res.status(503).json({
+        error: 'The classroom device is offline. Ask your lecturer to power it on.',
+        esp32Required: true,
+        esp32Offline: true,
+        secondsAgo:    fresh.secondsAgo,
+      });
+    }
+
+    // req.ip is set correctly by Express when trust proxy is enabled (server.js).
+    const studentIp = (req.ip || '').replace(/^::ffff:/, '');
+
+    const TEN_MIN_AGO = Date.now() - 10 * 60 * 1000;
+    const deviceIps = (sessionDevice.recentPublicIps || [])
+      .filter(e => e.seenAt && new Date(e.seenAt).getTime() > TEN_MIN_AGO)
+      .map(e => e.ip);
+
+    if (deviceIps.length === 0) {
+      return res.status(503).json({
+        error: 'The classroom device has not reported its network yet. Wait a few seconds and try again.',
+        esp32Required: true,
+        networkNotReady: true,
+      });
+    }
+
+    if (!deviceIps.includes(studentIp)) {
+      console.warn(`[MARK] Blocked ${req.user.name}: IP ${studentIp} not in device IPs [${deviceIps.join(', ')}]`);
+      return res.status(403).json({
+        error: 'You must be connected to the classroom WiFi to mark attendance.',
+        networkMismatch: true,
+      });
+    }
+
+    // Anyone marking against a course-linked session must be enrolled in that course.
+    if (session.course) {
       const Course = require('../models/Course');
       const enrolled = await Course.findOne({
         _id: session.course,
         company: req.user.company,
         enrolledStudents: req.user._id,
-      }).select('_id title level group').lean();
+      }).select('_id').lean();
 
       if (!enrolled) {
         return res.status(403).json({
-          error: `You are not enrolled in this course. This session belongs to a different class.`,
+          error: 'You are not enrolled in this course. This session belongs to a different class.',
         });
       }
     }
@@ -537,33 +551,36 @@ exports.markAttendance = async (req, res) => {
     }
 
     // ── Device lock enforcement ────────────────────────────────────────────
-    // Prevent account switching on a shared device: if a DIFFERENT student in
-    // this company marked attendance from this same deviceId in the last 6
-    // hours, block this user. Uses AttendanceRecord directly — no separate
-    // lock table needed. Same user on the same device is always fine because
-    // the query filters by { user: { $ne } }.
+    // deviceId is mandatory — cannot be omitted to bypass this check.
+    // If another user marked attendance from this same device in the last 6
+    // hours, block this user to prevent account switching on shared devices.
+    if (!clientDeviceId) {
+      return res.status(400).json({
+        error: 'Device identifier is required to mark attendance.',
+        deviceIdRequired: true,
+      });
+    }
+
     const DEVICE_LOCK_WINDOW_MS = 6 * 60 * 60 * 1000;
-    if (clientDeviceId && req.user.role === 'student') {
-      const recentByOther = await AttendanceRecord.findOne({
-        company: req.user.company,
-        deviceId: clientDeviceId,
-        user: { $ne: req.user._id },
-        checkInTime: { $gt: new Date(Date.now() - DEVICE_LOCK_WINDOW_MS) },
-      })
-        .sort({ checkInTime: -1 })
-        .select("checkInTime user")
-        .lean();
-      if (recentByOther) {
-        const unlockAt = new Date(recentByOther.checkInTime).getTime() + DEVICE_LOCK_WINDOW_MS;
-        const remainingMs = unlockAt - Date.now();
-        const remainingMinutes = Math.ceil(remainingMs / 60000);
-        return res.status(403).json({
-          error: `This device was recently used by another student. Try again in ${remainingMinutes} minute(s).`,
-          deviceLocked: true,
-          remainingMinutes,
-          unlockAt: new Date(unlockAt).toISOString(),
-        });
-      }
+    const recentByOther = await AttendanceRecord.findOne({
+      company: req.user.company,
+      deviceId: clientDeviceId,
+      user: { $ne: req.user._id },
+      checkInTime: { $gt: new Date(Date.now() - DEVICE_LOCK_WINDOW_MS) },
+    })
+      .sort({ checkInTime: -1 })
+      .select("checkInTime user")
+      .lean();
+    if (recentByOther) {
+      const unlockAt = new Date(recentByOther.checkInTime).getTime() + DEVICE_LOCK_WINDOW_MS;
+      const remainingMs = unlockAt - Date.now();
+      const remainingMinutes = Math.ceil(remainingMs / 60000);
+      return res.status(403).json({
+        error: `This device was recently used by another user. Try again in ${remainingMinutes} minute(s).`,
+        deviceLocked: true,
+        remainingMinutes,
+        unlockAt: new Date(unlockAt).toISOString(),
+      });
     }
 
     const existingRecord = await AttendanceRecord.findOne({
@@ -582,22 +599,27 @@ exports.markAttendance = async (req, res) => {
       if (!qrToken) {
         return res.status(400).json({ error: "QR token is required for qr_mark method" });
       }
-      const tokenDoc = await QrToken.findOne({ token: qrToken });
+      const tokenDoc = await QrToken.findOne({
+        token: qrToken,
+        company: req.user.company,
+        session: resolvedSessionId,
+      });
       if (!tokenDoc) {
         return res.status(404).json({ error: "Invalid QR code. Please scan again." });
       }
       if (tokenDoc.isExpired()) {
         return res.status(410).json({ error: "QR code has expired. Please scan the latest QR code on screen." });
       }
-      // QR is time-gated (15s window) — all students/employees can scan within the window
       qrTokenRef = tokenDoc._id;
     } else if (qrToken || code) {
-      const query = {};
+      const query = {
+        company: req.user.company,
+        session: resolvedSessionId,
+      };
       if (qrToken) {
         query.token = qrToken;
       } else {
         query.code = code;
-        query.session = resolvedSessionId;
       }
 
       const tokenDoc = await QrToken.findOne(query);
@@ -607,9 +629,8 @@ exports.markAttendance = async (req, res) => {
       if (tokenDoc.isExpired()) {
         return res.status(410).json({ error: "Code has expired. Please ask your manager for the latest code." });
       }
-      // QR is time-gated (15s window) — all students/employees can scan within the window
       if (!method) {
-        attendanceMethod = tokenDoc.codeType === "verbal" ? "code_mark" : "code_mark";
+        attendanceMethod = "code_mark";
       }
       qrTokenRef = tokenDoc._id;
     } else if (attendanceMethod === "jitsi_join") {
@@ -657,9 +678,17 @@ exports.getMyAttendance = async (req, res) => {
     const { page = 1, limit = 20, userId } = req.query;
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
-    // HOD can view any student's attendance in their company
+    // HOD can only view attendance for users in their own department.
     let targetUserId = req.user._id;
     if (userId && req.user.role === "hod") {
+      const targetUser = await User.findOne({
+        _id: userId,
+        company: req.user.company,
+        department: req.user.department,
+      }).select('_id').lean();
+      if (!targetUser) {
+        return res.status(403).json({ error: 'You can only view attendance for users in your department.' });
+      }
       targetUserId = userId;
     }
     const filter = { user: targetUserId, company: req.user.company };
