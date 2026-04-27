@@ -501,18 +501,18 @@ exports.markAttendance = async (req, res) => {
       });
     }
 
-    // For students: verify they are enrolled in the course this session belongs to
-    if (req.user.role === 'student' && session.course) {
+    // Anyone marking against a course-linked session must be enrolled in that course.
+    if (session.course) {
       const Course = require('../models/Course');
       const enrolled = await Course.findOne({
         _id: session.course,
         company: req.user.company,
         enrolledStudents: req.user._id,
-      }).select('_id title level group').lean();
+      }).select('_id').lean();
 
       if (!enrolled) {
         return res.status(403).json({
-          error: `You are not enrolled in this course. This session belongs to a different class.`,
+          error: 'You are not enrolled in this course. This session belongs to a different class.',
         });
       }
     }
@@ -551,33 +551,36 @@ exports.markAttendance = async (req, res) => {
     }
 
     // ── Device lock enforcement ────────────────────────────────────────────
-    // Prevent account switching on a shared device: if a DIFFERENT student in
-    // this company marked attendance from this same deviceId in the last 6
-    // hours, block this user. Uses AttendanceRecord directly — no separate
-    // lock table needed. Same user on the same device is always fine because
-    // the query filters by { user: { $ne } }.
+    // deviceId is mandatory — cannot be omitted to bypass this check.
+    // If another user marked attendance from this same device in the last 6
+    // hours, block this user to prevent account switching on shared devices.
+    if (!clientDeviceId) {
+      return res.status(400).json({
+        error: 'Device identifier is required to mark attendance.',
+        deviceIdRequired: true,
+      });
+    }
+
     const DEVICE_LOCK_WINDOW_MS = 6 * 60 * 60 * 1000;
-    if (clientDeviceId && req.user.role === 'student') {
-      const recentByOther = await AttendanceRecord.findOne({
-        company: req.user.company,
-        deviceId: clientDeviceId,
-        user: { $ne: req.user._id },
-        checkInTime: { $gt: new Date(Date.now() - DEVICE_LOCK_WINDOW_MS) },
-      })
-        .sort({ checkInTime: -1 })
-        .select("checkInTime user")
-        .lean();
-      if (recentByOther) {
-        const unlockAt = new Date(recentByOther.checkInTime).getTime() + DEVICE_LOCK_WINDOW_MS;
-        const remainingMs = unlockAt - Date.now();
-        const remainingMinutes = Math.ceil(remainingMs / 60000);
-        return res.status(403).json({
-          error: `This device was recently used by another student. Try again in ${remainingMinutes} minute(s).`,
-          deviceLocked: true,
-          remainingMinutes,
-          unlockAt: new Date(unlockAt).toISOString(),
-        });
-      }
+    const recentByOther = await AttendanceRecord.findOne({
+      company: req.user.company,
+      deviceId: clientDeviceId,
+      user: { $ne: req.user._id },
+      checkInTime: { $gt: new Date(Date.now() - DEVICE_LOCK_WINDOW_MS) },
+    })
+      .sort({ checkInTime: -1 })
+      .select("checkInTime user")
+      .lean();
+    if (recentByOther) {
+      const unlockAt = new Date(recentByOther.checkInTime).getTime() + DEVICE_LOCK_WINDOW_MS;
+      const remainingMs = unlockAt - Date.now();
+      const remainingMinutes = Math.ceil(remainingMs / 60000);
+      return res.status(403).json({
+        error: `This device was recently used by another user. Try again in ${remainingMinutes} minute(s).`,
+        deviceLocked: true,
+        remainingMinutes,
+        unlockAt: new Date(unlockAt).toISOString(),
+      });
     }
 
     const existingRecord = await AttendanceRecord.findOne({
@@ -596,22 +599,27 @@ exports.markAttendance = async (req, res) => {
       if (!qrToken) {
         return res.status(400).json({ error: "QR token is required for qr_mark method" });
       }
-      const tokenDoc = await QrToken.findOne({ token: qrToken });
+      const tokenDoc = await QrToken.findOne({
+        token: qrToken,
+        company: req.user.company,
+        session: resolvedSessionId,
+      });
       if (!tokenDoc) {
         return res.status(404).json({ error: "Invalid QR code. Please scan again." });
       }
       if (tokenDoc.isExpired()) {
         return res.status(410).json({ error: "QR code has expired. Please scan the latest QR code on screen." });
       }
-      // QR is time-gated (15s window) — all students/employees can scan within the window
       qrTokenRef = tokenDoc._id;
     } else if (qrToken || code) {
-      const query = {};
+      const query = {
+        company: req.user.company,
+        session: resolvedSessionId,
+      };
       if (qrToken) {
         query.token = qrToken;
       } else {
         query.code = code;
-        query.session = resolvedSessionId;
       }
 
       const tokenDoc = await QrToken.findOne(query);
@@ -621,9 +629,8 @@ exports.markAttendance = async (req, res) => {
       if (tokenDoc.isExpired()) {
         return res.status(410).json({ error: "Code has expired. Please ask your manager for the latest code." });
       }
-      // QR is time-gated (15s window) — all students/employees can scan within the window
       if (!method) {
-        attendanceMethod = tokenDoc.codeType === "verbal" ? "code_mark" : "code_mark";
+        attendanceMethod = "code_mark";
       }
       qrTokenRef = tokenDoc._id;
     } else if (attendanceMethod === "jitsi_join") {
@@ -671,9 +678,17 @@ exports.getMyAttendance = async (req, res) => {
     const { page = 1, limit = 20, userId } = req.query;
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
-    // HOD can view any student's attendance in their company
+    // HOD can only view attendance for users in their own department.
     let targetUserId = req.user._id;
     if (userId && req.user.role === "hod") {
+      const targetUser = await User.findOne({
+        _id: userId,
+        company: req.user.company,
+        department: req.user.department,
+      }).select('_id').lean();
+      if (!targetUser) {
+        return res.status(403).json({ error: 'You can only view attendance for users in your department.' });
+      }
       targetUserId = userId;
     }
     const filter = { user: targetUserId, company: req.user.company };
