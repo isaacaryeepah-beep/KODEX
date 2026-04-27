@@ -443,48 +443,62 @@ exports.markAttendance = async (req, res) => {
       return res.status(404).json({ error: "No active session found. The manager needs to start a session first." });
     }
 
-    // ── Device proximity enforcement (1 + 2 from the comment above) ────────
-    if (session.deviceId) {
-      const sessionDevice = await Device.findOne({ deviceId: session.deviceId, companyId: req.user.company });
+    // ── Strict device proximity enforcement ──────────────────────────────────
+    // Physical presence is required. All three conditions must pass:
+    //   1. Session must be bound to a paired device (set at startSession).
+    //   2. That device must be online (heartbeat within 15 s).
+    //   3. Student's IP must exactly match one of the IPs the ESP32 has
+    //      reached the server from in the last 10 minutes.
+    // No exceptions — empty deviceIps means the device hasn't reported yet,
+    // which is also a hard block.
+    if (!session.deviceId) {
+      return res.status(403).json({
+        error: 'This session has no classroom device. Ask your lecturer to start a new session from a paired device.',
+        esp32Required: true,
+      });
+    }
 
-      if (!sessionDevice) {
-        return res.status(503).json({
-          error: 'The classroom device for this session is no longer paired.',
-          esp32Required: true,
-        });
-      }
+    const sessionDevice = await Device.findOne({ deviceId: session.deviceId, companyId: req.user.company });
 
-      const fresh = _deviceFreshness(sessionDevice, DEVICE_MARK_WINDOW_MS);
-      if (!fresh.online) {
-        return res.status(503).json({
-          error: 'The classroom device is offline. Ask your lecturer to power it on.',
-          esp32Required: true,
-          esp32Offline: true,
-          secondsAgo:    fresh.secondsAgo,
-        });
-      }
+    if (!sessionDevice) {
+      return res.status(503).json({
+        error: 'The classroom device for this session is no longer paired.',
+        esp32Required: true,
+      });
+    }
 
-      const studentIp = (
-        (req.headers['x-forwarded-for'] || '').split(',')[0].trim() ||
-        req.headers['x-real-ip'] ||
-        (req.socket && req.socket.remoteAddress) ||
-        ''
-      ).replace(/^::ffff:/, '');
+    const fresh = _deviceFreshness(sessionDevice, DEVICE_MARK_WINDOW_MS);
+    if (!fresh.online) {
+      return res.status(503).json({
+        error: 'The classroom device is offline. Ask your lecturer to power it on.',
+        esp32Required: true,
+        esp32Offline: true,
+        secondsAgo:    fresh.secondsAgo,
+      });
+    }
 
-      const isLocalhost = studentIp === '127.0.0.1' || studentIp === '::1' || studentIp === '';
-      const TEN_MIN_AGO = Date.now() - 10 * 60 * 1000;
-      const deviceIps = (sessionDevice.recentPublicIps || [])
-        .filter(e => e.seenAt && new Date(e.seenAt).getTime() > TEN_MIN_AGO)
-        .map(e => e.ip);
+    // req.ip is set correctly by Express when trust proxy is enabled (server.js).
+    const studentIp = (req.ip || '').replace(/^::ffff:/, '');
 
-      // If we have at least one recorded device IP, student's IP must match.
-      if (!isLocalhost && deviceIps.length > 0 && !deviceIps.includes(studentIp)) {
-        console.warn(`[MARK] Blocked ${req.user.name}: IP ${studentIp} not in device IPs [${deviceIps.join(', ')}]`);
-        return res.status(403).json({
-          error: 'You must be on the same WiFi as the classroom device to mark attendance.',
-          networkMismatch: true,
-        });
-      }
+    const TEN_MIN_AGO = Date.now() - 10 * 60 * 1000;
+    const deviceIps = (sessionDevice.recentPublicIps || [])
+      .filter(e => e.seenAt && new Date(e.seenAt).getTime() > TEN_MIN_AGO)
+      .map(e => e.ip);
+
+    if (deviceIps.length === 0) {
+      return res.status(503).json({
+        error: 'The classroom device has not reported its network yet. Wait a few seconds and try again.',
+        esp32Required: true,
+        networkNotReady: true,
+      });
+    }
+
+    if (!deviceIps.includes(studentIp)) {
+      console.warn(`[MARK] Blocked ${req.user.name}: IP ${studentIp} not in device IPs [${deviceIps.join(', ')}]`);
+      return res.status(403).json({
+        error: 'You must be connected to the classroom WiFi to mark attendance.',
+        networkMismatch: true,
+      });
     }
 
     // For students: verify they are enrolled in the course this session belongs to
