@@ -22,17 +22,24 @@ function selectPortal(t){document.addEventListener('DOMContentLoaded',function()
     <div id="workspace-brand">
       <div class="brand-logo">
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 160" style="height:64px;width:auto;display:block;margin:0 auto 6px;">
-          <rect x="0" y="16" width="128" height="128" rx="28" fill="#3730a3"/>
-          <rect x="6" y="22" width="116" height="116" rx="22" fill="#4f46e5"/>
-          <rect x="30" y="44" width="17" height="80" rx="4" fill="#ffffff"/>
-          <polygon points="47,84 90,44 108,44 66,84" fill="#ffffff"/>
-          <polygon points="47,84 90,124 108,124 66,84" fill="#ffffff"/>
-          <circle cx="108" cy="28" r="6" fill="#818cf8"/>
-          <circle cx="120" cy="28" r="4" fill="#c7d2fe"/>
-          <circle cx="130" cy="28" r="2.5" fill="#e0e7ff"/>
-          <text x="148" y="96" font-family="'Plus Jakarta Sans',system-ui,sans-serif" font-size="58" font-weight="800" letter-spacing="-2" fill="#1e1b4b">DIKLY</text>
-          <rect x="150" y="108" width="240" height="1.5" rx="1" fill="#c7d2fe"/>
-          <text x="150" y="127" font-family="'Plus Jakarta Sans',system-ui,sans-serif" font-size="12" font-weight="700" letter-spacing="3.5" fill="#6366f1">INNOVATE  ·  CONNECT  ·  EMPOWER</text>
+          <defs>
+            <linearGradient id="blg" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="#60a5fa"/>
+              <stop offset="45%" stop-color="#2563eb"/>
+              <stop offset="100%" stop-color="#1e40af"/>
+            </linearGradient>
+            <clipPath id="blc">
+              <path d="M20,16 L20,144 L70,144 C132,141 132,19 70,16 Z"/>
+            </clipPath>
+          </defs>
+          <path d="M20,16 L20,144 L70,144 C132,141 132,19 70,16 Z" fill="url(#blg)"/>
+          <g clip-path="url(#blc)">
+            <polygon points="8,92 85,14 118,14 42,92" fill="white"/>
+            <polygon points="42,146 118,68 85,68 8,146" fill="white"/>
+          </g>
+          <text x="152" y="96" font-family="'Plus Jakarta Sans',system-ui,sans-serif" font-size="58" font-weight="800" letter-spacing="-2" fill="#1e1b4b">DIKLY</text>
+          <rect x="154" y="108" width="240" height="1.5" rx="1" fill="#c7d2fe"/>
+          <text x="154" y="127" font-family="'Plus Jakarta Sans',system-ui,sans-serif" font-size="12" font-weight="700" letter-spacing="3.5" fill="#6366f1">INNOVATE  ·  CONNECT  ·  EMPOWER</text>
         </svg>
       </div>
       <p class="workspace-subtitle">Enterprise Attendance Management Platform</p>
@@ -723,15 +730,7 @@ function selectPortal(t){document.addEventListener('DOMContentLoaded',function()
     <div class="main-layout">
       <div class="sidebar">
         <div class="sidebar-logo">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" style="width:28px;height:28px;border-radius:8px;flex-shrink:0">
-            <rect x="0" y="0" width="128" height="128" rx="28" fill="#3730a3"/>
-            <rect x="6" y="6" width="116" height="116" rx="22" fill="#4f46e5"/>
-            <rect x="30" y="28" width="17" height="72" rx="4" fill="#ffffff"/>
-            <polygon points="47,64 90,28 108,28 66,64" fill="#ffffff"/>
-            <polygon points="47,64 90,100 108,100 66,64" fill="#ffffff"/>
-            <circle cx="108" cy="16" r="6" fill="#818cf8"/>
-            <circle cx="120" cy="16" r="4" fill="#c7d2fe"/>
-          </svg>
+          <img src="/dikly-icon.svg" style="width:28px;height:28px;flex-shrink:0" alt="DIKLY">
           <span class="sidebar-logo-text">DIKLY</span>
         </div>
         <nav class="sidebar-nav" id="sidebar-nav"></nav>
