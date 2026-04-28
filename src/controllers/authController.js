@@ -336,7 +336,7 @@ exports.registerLecturer = async (req, res) => {
 
 exports.registerStudent = async (req, res) => {
   try {
-    const { name, password, institutionCode, department, email: emailRaw } = req.body;
+    const { name, password, institutionCode, department, email: emailRaw, programme, studentLevel, studentGroup, sessionType, semester } = req.body;
     const email = emailRaw ? emailRaw.trim().toLowerCase() : "";
     const IndexNumber = req.body.IndexNumber || req.body.indexNumber;
 
@@ -404,6 +404,11 @@ exports.registerStudent = async (req, res) => {
       role: "student",
       isApproved: true,
       department: department ? department.trim() : null,
+      programme: programme ? programme.trim() : null,
+      studentLevel: studentLevel ? studentLevel.trim() : null,
+      studentGroup: studentGroup ? studentGroup.trim().toUpperCase() : null,
+      sessionType: sessionType ? sessionType.trim() : null,
+      semester: semester ? semester.trim() : null,
     });
 
     // ── Roster sync: mark roster as registered + enroll in all matching courses ──
