@@ -1734,7 +1734,6 @@ async function handleStudentRegister() {
     if (!studentGroup) return showStudentError('Please enter your group (e.g. A, B, C).');
     if (!sessionType) return showStudentError('Please select your session type.');
     if (!semester) return showStudentError('Please select your semester.');
-    if (!phone) return showStudentError('Please enter your phone number.');
     const data = await api('/api/auth/register-student', { method: 'POST', body: JSON.stringify({ name, indexNumber, phone, password, institutionCode, department, programme, studentLevel, studentGroup, sessionType, semester }) });
     if (data.token) {
       token = data.token;
