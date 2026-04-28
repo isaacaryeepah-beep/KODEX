@@ -58,6 +58,7 @@ const enrolledInCourse = requireStudentCourseEnrollment({
 
 // ─── Quiz discovery ───────────────────────────────────────────────────────────
 
+router.get("/quizzes",                   ctrl.listAllQuizzes);
 router.get("/courses/:courseId/quizzes", enrolledInCourse, ctrl.listQuizzes);
 router.get("/quizzes/:quizId",           ctrl.getQuiz);
 
