@@ -67,7 +67,7 @@ exports.startSession = async (req, res) => {
         : "Device has never sent a heartbeat.";
       return res.status(503).json({
         error: "ESP32 device is offline",
-        message: `The KODEX classroom device is not responding. ${lastSeenMsg} Power it on and wait a few seconds, then try again.`,
+        message: `The DIKLY classroom device is not responding. ${lastSeenMsg} Power it on and wait a few seconds, then try again.`,
         deviceStatus: {
           online:      false,
           registered:  true,

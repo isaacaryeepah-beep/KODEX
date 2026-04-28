@@ -158,7 +158,7 @@ body {
   pointer-events: none;
 }
 
-/* KODEX background watermark */
+/* DIKLY background watermark */
 .auth-watermark {
   display: none;
 }
@@ -2281,17 +2281,17 @@ input[type="checkbox"] {
 }
 
 /* ══════════════════════════════════════════════════
-   PREMIUM UI REBUILD — KODEX 2026
+   PREMIUM UI REBUILD — DIKLY 2026
    Full Navy / Blue / White SaaS theme
 ══════════════════════════════════════════════════ */
 
 /* ── Design tokens ── */
 :root {
-  --kodex-navy: #1a2035;
-  --kodex-navy-dark: #141929;
-  --kodex-blue: #2563eb;
-  --kodex-blue-dark: #1d4ed8;
-  --kodex-blue-light: #eff6ff;
+  --dikly-navy: #1a2035;
+  --dikly-navy-dark: #141929;
+  --dikly-blue: #2563eb;
+  --dikly-blue-dark: #1d4ed8;
+  --dikly-blue-light: #eff6ff;
   --sidebar-width: 260px;
 }
 
@@ -5209,7 +5209,7 @@ table tr:hover td { background: #f8fafc !important; }
 [data-theme="dark"] .fap-topbar-btn.fap-active { background: #2563eb; border-color: #2563eb; color: #fff; }
 
 /* ══════════════════════════════════════════════════════════════════════
-   KODEX MESSAGING — Phase 2/3/4
+   DIKLY MESSAGING — Phase 2/3/4
    Two-pane layout: sidebar (conversation list) + thread panel
    Mobile: stack vertically, show list or thread one at a time
 ══════════════════════════════════════════════════════════════════════ */

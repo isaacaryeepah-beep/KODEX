@@ -4,7 +4,7 @@
  * AuditLog
  *
  * Immutable record of every security-relevant and data-changing action
- * performed inside KODEX. Records are never updated or deleted — only
+ * performed inside DIKLY. Records are never updated or deleted — only
  * appended. Companywide isolation is enforced via the `company` field.
  *
  * Design decisions:

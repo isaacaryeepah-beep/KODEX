@@ -111,16 +111,16 @@ function _devNoPairedHTML() {
       <span class="dev-card-title">Configure the ESP32</span>
     </div>
     <p class="dev-setup-hint">
-      Power on the ESP32. It broadcasts a hotspot named <code>KODEX-XXXXXX</code>.
+      Power on the ESP32. It broadcasts a hotspot named <code>DIKLY-XXXXXX</code>.
     </p>
     <ol class="dev-setup-steps-list">
-      <li>Connect your phone or laptop to the <strong>KODEX-XXXXXX</strong> hotspot (no internet needed).</li>
+      <li>Connect your phone or laptop to the <strong>DIKLY-XXXXXX</strong> hotspot (no internet needed).</li>
       <li>On that same device, open <strong>http://192.168.4.1</strong> in a browser — the setup page loads automatically.</li>
       <li>Enter your <strong>Institution Code</strong>, the <strong>Pairing Code</strong> from Step 1, and your <strong>WiFi credentials</strong>.</li>
       <li>Tap <strong>Pair Device</strong>. The ESP32 reboots, connects to WiFi, and links to your account.</li>
     </ol>
     <p style="font-size:12px;color:#94a3b8;margin:8px 0 0">
-      Note: 192.168.4.1 is only reachable while connected to the KODEX hotspot — not from the internet.
+      Note: 192.168.4.1 is only reachable while connected to the DIKLY hotspot — not from the internet.
     </p>
   </div>
 
@@ -350,7 +350,7 @@ function _devHelpHTML() {
       <p class="dev-help-title">How to Pair &amp; Set Up WiFi</p>
       <ol class="dev-help-list">
         <li>Click <strong>Generate Pairing Code</strong> and note the 6-character code</li>
-        <li>Power on the ESP32 — it broadcasts hotspot <code>KODEX-XXXXXX</code></li>
+        <li>Power on the ESP32 — it broadcasts hotspot <code>DIKLY-XXXXXX</code></li>
         <li>Connect your phone/laptop to that hotspot</li>
         <li>Open <strong>192.168.4.1</strong> in your browser — setup page loads automatically</li>
         <li>Enter your <strong>Institution Code</strong>, the <strong>Pairing Code</strong>, and your <strong>WiFi credentials</strong></li>
@@ -361,7 +361,7 @@ function _devHelpHTML() {
     <div class="dev-help-section">
       <p class="dev-help-title">Troubleshooting</p>
       <ul class="dev-help-list">
-        <li><strong>192.168.4.1 unreachable?</strong> Ensure you're connected to the <code>KODEX-XXXXXX</code> hotspot, not your home WiFi</li>
+        <li><strong>192.168.4.1 unreachable?</strong> Ensure you're connected to the <code>DIKLY-XXXXXX</code> hotspot, not your home WiFi</li>
         <li><strong>Wrong WiFi password?</strong> Hold the reset button 5 s to re-enter setup mode</li>
         <li><strong>Offline after connecting?</strong> Wait 30 s for first heartbeat; refresh if needed</li>
         <li><strong>Can't start session?</strong> Device must show <strong>Online</strong> first</li>
@@ -449,7 +449,7 @@ async function _devGenerateCode() {
 
     // QR code
     const qrEl = document.getElementById('dev-pairing-qr');
-    if (qrEl) qrEl.innerHTML = `<img src="https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent('KODEX:' + json.code)}" alt="QR" style="border-radius:8px" />`;
+    if (qrEl) qrEl.innerHTML = `<img src="https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent('DIKLY:' + json.code)}" alt="QR" style="border-radius:8px" />`;
 
     // Poll for device linked
     _devPollForLink(json.code);

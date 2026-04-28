@@ -1,5 +1,5 @@
 // ══════════════════════════════════════════════════════════════════════════════
-//  KODEX Input Sanitizer Middleware
+//  DIKLY Input Sanitizer Middleware
 //  - Strips dangerous characters from all string inputs
 //  - Prevents NoSQL injection attacks (MongoDB)
 //  - Prevents XSS (Cross Site Scripting) attacks

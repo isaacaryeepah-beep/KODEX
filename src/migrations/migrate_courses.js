@@ -1,7 +1,7 @@
 /**
  * migrate_courses.js
  *
- * Safe migration for existing KODEX course data.
+ * Safe migration for existing DIKLY course data.
  * Run once: node src/migrations/migrate_courses.js
  *
  * What it does:

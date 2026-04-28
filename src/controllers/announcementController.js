@@ -27,7 +27,7 @@ exports.createAnnouncement = async (req, res) => {
     // Build attachment metadata if file was uploaded
     let attachment = null;
     if (req.file) {
-      const baseUrl = process.env.SERVER_URL || 'https://kodex.it.com';
+      const baseUrl = process.env.SERVER_URL || 'https://dikly.it.com';
       attachment = {
         fileName:        req.file.filename,
         originalName:    req.file.originalname,

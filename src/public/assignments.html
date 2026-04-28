@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
-<title>Assignments — KODEX</title>
-  <link rel="icon" type="image/svg+xml" href="/kodex-icon.svg">
+<title>Assignments — DIKLY</title>
+  <link rel="icon" type="image/svg+xml" href="/dikly-icon.svg">
 <link rel="stylesheet" href="/css/style.css"/>
 <script>
 window.MathJax = { tex: { inlineMath: [['\\(','\\)']], displayMath: [['\\[','\\]']], processEscapes: true }, options: { skipHtmlTags: ['script','noscript','style','textarea'] } };
@@ -210,7 +210,7 @@ window.MathJax = { tex: { inlineMath: [['\\(','\\)']], displayMath: [['\\[','\\]
       <div class="sidebar-logo-icon">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
       </div>
-      <span class="sidebar-logo-text">KODEX</span>
+      <span class="sidebar-logo-text">DIKLY</span>
     </div>
 
     <div style="padding:0 8px 4px;">
@@ -782,7 +782,7 @@ async function exportAssignmentPDF(a){
   doc.rect(0,0,210,22,'F');
   doc.setTextColor(255,255,255);
   doc.setFont('helvetica','bold'); doc.setFontSize(13);
-  doc.text('KODEX — Assignment: '+a.title, margin, 13);
+  doc.text('DIKLY — Assignment: '+a.title, margin, 13);
   doc.setFontSize(8.5); doc.setFont('helvetica','normal');
   const meta=[(a.course?.code||'')+(a.course?.title?' · '+a.course.title:''), 'Due: '+fmtDate(a.dueDate), questions.length+' questions · '+(a.totalMarks||0)+' pts'].filter(Boolean).join('   ');
   doc.text(meta, margin, 19);
@@ -850,7 +850,7 @@ async function exportAssignmentPDF(a){
     }
   });
 
-  doc.save('KODEX_Assignment_'+a.title.replace(/[^a-z0-9]/gi,'_')+'_'+new Date().toISOString().slice(0,10)+'.pdf');
+  doc.save('DIKLY_Assignment_'+a.title.replace(/[^a-z0-9]/gi,'_')+'_'+new Date().toISOString().slice(0,10)+'.pdf');
   toast('PDF exported ✓','ok');
 }
 
@@ -1678,7 +1678,7 @@ async function renderStudentQuizzes() {
     <div style="padding:40px;text-align:center;color:var(--text-muted);background:var(--card);border-radius:12px;border:1px solid var(--border)">
       <div style="font-size:40px;margin-bottom:12px;opacity:.3">🔒</div>
       <div style="font-size:15px;font-weight:600;margin-bottom:6px">Proctored Quizzes</div>
-      <p style="font-size:13px;max-width:280px;margin:0 auto 16px;line-height:1.6">Quizzes are taken in a secure locked environment. Use the KODEX exam portal to start a quiz.</p>
+      <p style="font-size:13px;max-width:280px;margin:0 auto 16px;line-height:1.6">Quizzes are taken in a secure locked environment. Use the DIKLY exam portal to start a quiz.</p>
       <a href="/snap-quiz.html" class="btn btn-primary" style="text-decoration:none">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
         Open Exam Portal
@@ -1863,9 +1863,9 @@ async function runAIGenerate(quizId) {
     const styleDesc = mathStyle === 'solve' ? 'calculation/problem-solving questions where students must compute a numeric or algebraic answer'
                     : mathStyle === 'conceptual' ? 'conceptual/theory questions about mathematical properties, theorems and definitions'
                     : 'a mix of calculation problems and conceptual questions';
-    prompt = 'You are an expert mathematics educator creating quiz questions for KODEX.\n\nGenerate exactly ' + count + ' ' + difficulty + ' difficulty math MCQ questions.\nTopic: "' + topic + '". ' + branch + '\n' + (context ? 'Context: ' + context : '') + '\n\nStyle: ' + styleDesc + '. Question type: ' + qtypeDesc + '. Each question has exactly 4 options.\n\nIMPORTANT - For math notation use MATHSTART and MATHEND as delimiters instead of backslashes.\nInstead of \\(x^2\\) write MATHSTARTx^2MATHEND\nInstead of \\[x^2=4\\] write DISPSTARTx^2=4DISPEND\n\nReturn ONLY a valid JSON array:\n[\n  {\n    "questionText": "Find x if MATHSTARTx^2 - 5x + 6 = 0MATHEND.",\n    "options": ["MATHSTARTx = 2, 3MATHEND", "MATHSTARTx = -2, -3MATHEND", "MATHSTARTx = 1, 6MATHEND", "MATHSTARTx = 5, -1MATHEND"],\n    "correctAnswers": [0],\n    "questionType": "single",\n    "explanation": "Factorising: MATHSTART(x-2)(x-3)=0MATHEND gives x=2 or x=3."\n  }\n]\n\nRules: correctAnswers = 0-based indices. questionType = single or multiple. No duplicate questions.';
+    prompt = 'You are an expert mathematics educator creating quiz questions for DIKLY.\n\nGenerate exactly ' + count + ' ' + difficulty + ' difficulty math MCQ questions.\nTopic: "' + topic + '". ' + branch + '\n' + (context ? 'Context: ' + context : '') + '\n\nStyle: ' + styleDesc + '. Question type: ' + qtypeDesc + '. Each question has exactly 4 options.\n\nIMPORTANT - For math notation use MATHSTART and MATHEND as delimiters instead of backslashes.\nInstead of \\(x^2\\) write MATHSTARTx^2MATHEND\nInstead of \\[x^2=4\\] write DISPSTARTx^2=4DISPEND\n\nReturn ONLY a valid JSON array:\n[\n  {\n    "questionText": "Find x if MATHSTARTx^2 - 5x + 6 = 0MATHEND.",\n    "options": ["MATHSTARTx = 2, 3MATHEND", "MATHSTARTx = -2, -3MATHEND", "MATHSTARTx = 1, 6MATHEND", "MATHSTARTx = 5, -1MATHEND"],\n    "correctAnswers": [0],\n    "questionType": "single",\n    "explanation": "Factorising: MATHSTART(x-2)(x-3)=0MATHEND gives x=2 or x=3."\n  }\n]\n\nRules: correctAnswers = 0-based indices. questionType = single or multiple. No duplicate questions.';
   } else {
-    prompt = 'You are an expert educator creating quiz questions for a KODEX academic quiz system.\n\nGenerate exactly ' + count + ' ' + difficulty + ' difficulty multiple choice questions about: "' + topic + '".\n' + (context ? 'Additional context: ' + context : '') + '\n\nQuestion type: ' + qtypeDesc + '\nEach question must have exactly 4 options (A, B, C, D).\n' + (qtype === 'single' ? 'Each question has exactly 1 correct answer.' : qtype === 'multiple' ? 'Each question has 2 or more correct answers.' : 'Mix: some questions have 1 correct answer, some have 2-3 correct answers.') + '\n\nReturn ONLY a valid JSON array, no other text, no markdown, no explanation:\n[\n  {\n    "questionText": "The full question text here?",\n    "options": ["Option A text", "Option B text", "Option C text", "Option D text"],\n    "correctAnswers": [0],\n    "questionType": "single",\n    "explanation": "Brief explanation of why this is correct"\n  }\n]\n\nRules:\n- correctAnswers is an array of 0-based indices of correct options\n- questionType must be "single" or "multiple"\n- For "single" type, correctAnswers has exactly 1 index\n- For "multiple" type, correctAnswers has 2+ indices\n- Make options plausible and similar in length\n- No trivial questions — test real understanding\n- No duplicate questions';
+    prompt = 'You are an expert educator creating quiz questions for a DIKLY academic quiz system.\n\nGenerate exactly ' + count + ' ' + difficulty + ' difficulty multiple choice questions about: "' + topic + '".\n' + (context ? 'Additional context: ' + context : '') + '\n\nQuestion type: ' + qtypeDesc + '\nEach question must have exactly 4 options (A, B, C, D).\n' + (qtype === 'single' ? 'Each question has exactly 1 correct answer.' : qtype === 'multiple' ? 'Each question has 2 or more correct answers.' : 'Mix: some questions have 1 correct answer, some have 2-3 correct answers.') + '\n\nReturn ONLY a valid JSON array, no other text, no markdown, no explanation:\n[\n  {\n    "questionText": "The full question text here?",\n    "options": ["Option A text", "Option B text", "Option C text", "Option D text"],\n    "correctAnswers": [0],\n    "questionType": "single",\n    "explanation": "Brief explanation of why this is correct"\n  }\n]\n\nRules:\n- correctAnswers is an array of 0-based indices of correct options\n- questionType must be "single" or "multiple"\n- For "single" type, correctAnswers has exactly 1 index\n- For "multiple" type, correctAnswers has 2+ indices\n- Make options plausible and similar in length\n- No trivial questions — test real understanding\n- No duplicate questions';
   }
 
   try {

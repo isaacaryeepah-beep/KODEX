@@ -119,7 +119,7 @@ function generatePdfReport(data, res) {
   const sum = data.summary;
 
   // ── Header ─────────────────────────────────────────────────────────────────
-  doc.fontSize(18).font('Helvetica-Bold').text('KODEX Attendance Report', { align: 'center' });
+  doc.fontSize(18).font('Helvetica-Bold').text('DIKLY Attendance Report', { align: 'center' });
   doc.moveDown(0.3);
   doc.fontSize(13).font('Helvetica').text(`${c?.title || 'Unknown Course'} — ${c?.code || ''}`, { align: 'center' });
   if (c?.qualificationType || c?.studyType) {
@@ -236,7 +236,7 @@ function generatePdfReport(data, res) {
   // ── Footer ─────────────────────────────────────────────────────────────────
   doc.moveDown(1);
   doc.fontSize(9).fillColor('#888').text(
-    `Report generated: ${new Date(data.generatedAt).toLocaleString()} — KODEX Smart Attendance`,
+    `Report generated: ${new Date(data.generatedAt).toLocaleString()} — DIKLY Smart Attendance`,
     { align: 'center' }
   );
 

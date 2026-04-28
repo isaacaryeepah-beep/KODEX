@@ -52,7 +52,7 @@ const requireActiveSubscription = async (req, res, next) => {
       paymentAvailable: ["lecturer", "manager"].includes(req.user.role),
       message: isLecturer
         ? company.trialUsed
-          ? "Your trial has ended. Please subscribe to continue using KODEX."
+          ? "Your trial has ended. Please subscribe to continue using DIKLY."
           : "Your trial has expired. A subscription is required to access lecturer features."
         : company.trialUsed
           ? "Your free trial has ended. Please subscribe to continue."

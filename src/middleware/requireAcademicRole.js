@@ -11,7 +11,7 @@
  *   - authenticate      (populates req.user)
  *   - requireCompanyScope (populates req.company, req.tenantMode)
  *
- * Academic roles in KODEX:
+ * Academic roles in DIKLY:
  *   - lecturer   — creates and manages assessments for assigned courses
  *   - student    — views and submits assessments in enrolled courses
  *   - hod        — Head of Department: oversight role, no assessment creation

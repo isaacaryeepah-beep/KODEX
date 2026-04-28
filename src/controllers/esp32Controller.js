@@ -1,5 +1,5 @@
 /**
- * esp32Controller.js — KODEX ESP32 Device Logic
+ * esp32Controller.js — DIKLY ESP32 Device Logic
  *
  * FLOW:
  *  1. Device boots → POST /register → saves token + sets esp32Required=true
@@ -273,7 +273,7 @@ exports.deviceStatus = async (req, res) => {
 // POST /api/esp32/ble-verify  (JWT — web app, called by student's phone)
 // Verifies a BLE token scanned from the ESP32 beacon.
 // Anti-cheat layers:
-//   1. IP must be 192.168.4.x (student on KODEX-CLASSROOM WiFi)
+//   1. IP must be 192.168.4.x (student on DIKLY-CLASSROOM WiFi)
 //   2. bleToken must be valid HMAC-SHA256(deviceToken, sessionId:timestamp)
 //   3. timestamp must be < 60s old (prevents replay)
 //   4. bleToken is single-use (stored in session.usedBleTokens)
@@ -286,7 +286,7 @@ exports.bleVerify = async (req, res) => {
       return res.status(400).json({ error: 'bleToken and timestamp are required' });
     }
 
-    // ── 1. IP check — must be on KODEX-CLASSROOM hotspot ─────
+    // ── 1. IP check — must be on DIKLY-CLASSROOM hotspot ─────
     // NOTE: Android "WiFi Assist" routes through mobile data when the ESP32
     // hotspot has no internet, so req IP won't be 192.168.4.x.
     // Fix: the front-end reads X-ESP32-Hotspot-Key served by the ESP32 captive
@@ -316,7 +316,7 @@ exports.bleVerify = async (req, res) => {
     if (!isOnEsp32Network && !hotspotKeyValid) {
       console.warn(`[BLE-VERIFY] Blocked IP ${clientIp} — not on hotspot and no valid hotspot key`);
       return res.status(403).json({
-        error: 'You must be connected to KODEX-CLASSROOM WiFi to use BLE attendance.',
+        error: 'You must be connected to DIKLY-CLASSROOM WiFi to use BLE attendance.',
         code: 'NOT_ON_HOTSPOT',
       });
     }

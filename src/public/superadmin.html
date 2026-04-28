@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>KODEX — Platform Admin</title>
-  <link rel="icon" type="image/svg+xml" href="/kodex-icon.svg">
+  <title>DIKLY — Platform Admin</title>
+  <link rel="icon" type="image/svg+xml" href="/dikly-icon.svg">
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -138,7 +138,7 @@
         <circle cx="108" cy="16" r="6" fill="#818cf8"/>
         <circle cx="120" cy="16" r="4" fill="#c7d2fe"/>
       </svg>
-      <div><h1>KODEX</h1><p>Platform Administration</p></div>
+      <div><h1>DIKLY</h1><p>Platform Administration</p></div>
     </div>
     <div class="badge">🔒 SUPERADMIN ACCESS</div>
     <form onsubmit="doLogin(event)">
@@ -149,7 +149,7 @@
       <button class="btn-login" id="login-btn" type="submit">Sign In</button>
     </form>
     <div class="err" id="err"></div>
-    <div class="back-link"><a href="/">← Back to KODEX</a></div>
+    <div class="back-link"><a href="/">← Back to DIKLY</a></div>
   </div>
 </div>
 
@@ -848,7 +848,7 @@ function exportCSV() {
   const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
   const a = document.createElement('a');
   a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
-  a.download = `kodex-institutions-${new Date().toISOString().slice(0,10)}.csv`;
+  a.download = `dikly-institutions-${new Date().toISOString().slice(0,10)}.csv`;
   a.click();
 }
 
@@ -969,7 +969,7 @@ function Sidebar({ active, onNav }) {
         <div className="flex items-center gap-2.5">
           <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center text-white font-bold text-sm flex-shrink-0">K</div>
           <div>
-            <div className="text-white font-extrabold text-sm leading-none">KODEX</div>
+            <div className="text-white font-extrabold text-sm leading-none">DIKLY</div>
             <div className="text-gray-500 text-[10px] mt-0.5">Platform Admin</div>
           </div>
         </div>
@@ -1806,7 +1806,7 @@ function ReportsPage() {
           mode: u.company?.mode || '', org: u.company?.name || '',
           joined: u.createdAt ? new Date(u.createdAt).toLocaleDateString() : '',
         }));
-        download(toCSV(rows, ['name','email','role','mode','org','joined']), 'kodex-users.csv');
+        download(toCSV(rows, ['name','email','role','mode','org','joined']), 'dikly-users.csv');
       } else if (id === 'organizations') {
         const d = await api('/api/superadmin/overview');
         const rows = (d.companies || []).map(c => ({
@@ -1814,7 +1814,7 @@ function ReportsPage() {
           status: c.subscriptionActive ? 'active' : c.isTrialActive ? 'trial' : 'expired',
           admin: c.adminEmail || '', revenue: c.revenue || 0,
         }));
-        download(toCSV(rows, ['name','mode','users','status','admin','revenue']), 'kodex-orgs.csv');
+        download(toCSV(rows, ['name','mode','users','status','admin','revenue']), 'dikly-orgs.csv');
       } else if (id === 'subscriptions') {
         const d = await api('/api/superadmin/overview');
         const rows = (d.companies || []).map(c => ({
@@ -1823,7 +1823,7 @@ function ReportsPage() {
           trialDaysLeft: c.trialDaysRemaining || 0,
           endDate: c.subscriptionEndDate ? new Date(c.subscriptionEndDate).toLocaleDateString() : '',
         }));
-        download(toCSV(rows, ['name','mode','subscriptionActive','trialActive','trialDaysLeft','endDate']), 'kodex-subscriptions.csv');
+        download(toCSV(rows, ['name','mode','subscriptionActive','trialActive','trialDaysLeft','endDate']), 'dikly-subscriptions.csv');
       } else if (id === 'revenue') {
         const d = await api('/api/superadmin/payments');
         const rows = (d.payments || []).map(p => ({
@@ -1831,7 +1831,7 @@ function ReportsPage() {
           amount: p.amount, type: p.type || p.plan || '',
           date: p.paidAt ? new Date(p.paidAt).toLocaleDateString() : '',
         }));
-        download(toCSV(rows, ['org','mode','amount','type','date']), 'kodex-revenue.csv');
+        download(toCSV(rows, ['org','mode','amount','type','date']), 'dikly-revenue.csv');
       }
     } catch { alert('Export failed'); }
     finally { setBusy(null); }

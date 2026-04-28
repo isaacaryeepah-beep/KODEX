@@ -1,5 +1,5 @@
 /**
- * KODEX AI FAQ Widget  v1.0
+ * DIKLY AI FAQ Widget  v1.0
  * Drop-in floating chat assistant.
  *
  * Usage — add ONE line anywhere in your HTML <body>:
@@ -8,9 +8,9 @@
  * The widget reads the JWT from localStorage key "token" (falls back to
  * sessionStorage). If no token is found the widget silently does not render.
  *
- * Public API (window.KodexFAQ):
- *   KodexFAQ.open()   — open the chat window programmatically
- *   KodexFAQ.close()  — close it
+ * Public API (window.DiklyFAQ):
+ *   DiklyFAQ.open()   — open the chat window programmatically
+ *   DiklyFAQ.close()  — close it
  */
 (function () {
   "use strict";
@@ -23,7 +23,7 @@
     return (
       localStorage.getItem("token") ||
       sessionStorage.getItem("token") ||
-      localStorage.getItem("kodex_token") ||
+      localStorage.getItem("dikly_token") ||
       ""
     );
   }
@@ -232,7 +232,7 @@
     </button>
 
     <!-- Chat popup -->
-    <div id="kfaq-popup" role="dialog" aria-label="KODEX AI Assistant">
+    <div id="kfaq-popup" role="dialog" aria-label="DIKLY AI Assistant">
 
       <!-- Header -->
       <div id="kfaq-head">
@@ -240,7 +240,7 @@
           <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17h-2v-2h2v2zm2.07-7.75l-.9.92C13.45 12.9 13 13.5 13 15h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26c.37-.36.59-.86.59-1.41 0-1.1-.9-2-2-2s-2 .9-2 2H8c0-2.21 1.79-4 4-4s4 1.79 4 4c0 .88-.36 1.68-.93 2.25z"/></svg>
         </div>
         <div id="kfaq-head-text">
-          <p id="kfaq-head-title">KODEX AI Assistant</p>
+          <p id="kfaq-head-title">DIKLY AI Assistant</p>
           <p id="kfaq-head-sub">Ask me anything about the platform</p>
         </div>
         <button id="kfaq-close-btn" aria-label="Close">&#x2715;</button>
@@ -501,7 +501,7 @@
       return window.currentUser.company.mode;
     }
     try {
-      var tok = localStorage.getItem("kodex_token") || "";
+      var tok = localStorage.getItem("dikly_token") || "";
       var payload = JSON.parse(atob(tok.split(".")[1]));
       return payload.mode || (payload.company && payload.company.mode) || null;
     } catch (_) { return null; }
@@ -517,9 +517,9 @@
 
   function _welcomeMsg() {
     var mode = _getMode();
-    if (mode === "corporate") return "Hi! I'm your KODEX assistant. Ask me about attendance, clock in/out, leave, expenses, timesheet, performance, meetings, or any other feature.";
-    if (mode === "academic")  return "Hi! I'm your KODEX assistant. Ask me about courses, students, sessions, quizzes, assignments, grade book, or any other feature.";
-    return "Hi! I'm your KODEX AI assistant. Ask me anything about the platform.";
+    if (mode === "corporate") return "Hi! I'm your DIKLY assistant. Ask me about attendance, clock in/out, leave, expenses, timesheet, performance, meetings, or any other feature.";
+    if (mode === "academic")  return "Hi! I'm your DIKLY assistant. Ask me about courses, students, sessions, quizzes, assignments, grade book, or any other feature.";
+    return "Hi! I'm your DIKLY AI assistant. Ask me anything about the platform.";
   }
 
   // ── Toggle open/close ─────────────────────────────────────────────────────
@@ -575,6 +575,6 @@
   });
 
   // ── Public API ────────────────────────────────────────────────────────────
-  window.KodexFAQ = { open: openWidget, close: closeWidget };
+  window.DiklyFAQ = { open: openWidget, close: closeWidget };
 
 })();
