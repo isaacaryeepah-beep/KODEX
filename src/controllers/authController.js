@@ -195,6 +195,16 @@ exports.registerLecturer = async (req, res) => {
         throw userError;
       }
 
+      if (user.email) {
+        sendLecturerWelcome({
+          email: user.email,
+          name: user.name,
+          institutionName: company.name,
+          department: department || null,
+          isApproved: true,
+        }).catch(err => console.error('Lecturer welcome email failed:', err.message));
+      }
+
       const token = generateToken(user._id);
       return res.status(201).json({
         token,

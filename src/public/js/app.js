@@ -1205,7 +1205,7 @@ async function handleAdminRegister() {
     const password = document.getElementById('admin-reg-password').value;
     const companyName = document.getElementById('admin-reg-company').value;
     const mode = selectedPortalType === 'admin-academic' ? 'academic' : 'corporate';
-    if (!name || !email || !phone || !password || !companyName) {
+    if (!name || !email || !password || !companyName) {
       return showAdminError('Please fill in all fields');
     }
     if (password.length < 8) {
@@ -1720,6 +1720,7 @@ async function handleStudentRegister() {
     if (password.length < 8) return showStudentError('Password must be at least 8 characters.');
     if (password !== confirm) return showStudentError('Passwords do not match.');
     const phone = document.getElementById('student-reg-phone')?.value?.trim();
+    const department = document.getElementById('student-reg-dept')?.value?.trim();
     if (!department) return showStudentError('Please enter your department.');
     const data = await api('/api/auth/register-student', { method: 'POST', body: JSON.stringify({ name, indexNumber, phone, password, institutionCode, department }) });
     if (data.token) {
