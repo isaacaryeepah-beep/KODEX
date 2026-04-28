@@ -1,7 +1,7 @@
 // ──────────────────────────────────────────────────────────────────────────
 //  Legacy /api/esp32/* routes — RETIRED.
 //
-//  The KODEX classroom-device protocol was rewritten to use a per-lecturer
+//  The DIKLY classroom-device protocol was rewritten to use a per-lecturer
 //  Device model + JWT-authenticated heartbeats. The old company-wide flow
 //  (x-esp32-secret + x-esp32-token + polling for commands) is gone.
 //
@@ -20,7 +20,7 @@ const router  = express.Router();
 
 const GONE = (res, replacement) => res.status(410).json({
   error: "This ESP32 endpoint has been retired.",
-  message: "Reflash the device with the latest KODEX firmware. The new flow uses /api/devices/* with a paired device JWT.",
+  message: "Reflash the device with the latest DIKLY firmware. The new flow uses /api/devices/* with a paired device JWT.",
   replacement,
 });
 

@@ -1,11 +1,11 @@
-// ─── KODEX Email Service ───────────────────────────────────────────────────
+// ─── DIKLY Email Service ───────────────────────────────────────────────────
 // Uses MailerSend API -- free tier = 3,000 emails/month
 // Set MAILERSEND_API_KEY and EMAIL_FROM in Render environment variables
-// EMAIL_FROM example: "KODEX <no-reply@kodex.it.com>"
+// EMAIL_FROM example: "DIKLY <no-reply@dikly.it.com>"
 // If MAILERSEND_API_KEY is not set, emails are logged to console only (dev mode)
 
-const FROM     = process.env.EMAIL_FROM || 'KODEX <no-reply@kodex.it.com>';
-const BASE_URL = process.env.APP_URL    || 'https://kodex-713g.onrender.com';
+const FROM     = process.env.EMAIL_FROM || 'DIKLY <no-reply@dikly.it.com>';
+const BASE_URL = process.env.APP_URL    || 'https://dikly.onrender.com';
 
 // ── Colour palette ────────────────────────────────────────────────────────────
 const C = {
@@ -28,7 +28,7 @@ function wrap(bodyHtml, previewText = '') {
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>KODEX</title>
+<title>DIKLY</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -72,14 +72,14 @@ ${previewText ? `<div style="display:none;max-height:0;overflow:hidden;color:#f1
           <polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
         </svg>
       </span>
-      KODEX
+      DIKLY
     </span>
   </div>
   <div class="card">
     ${bodyHtml}
   </div>
   <div class="footer">
-    <p>© ${new Date().getFullYear()} KODEX · Smart Attendance & Assessment Platform</p>
+    <p>© ${new Date().getFullYear()} DIKLY · Smart Attendance & Assessment Platform</p>
     <p style="margin-top:4px">Questions? Reply to this email or visit <a href="${BASE_URL}">${BASE_URL}</a></p>
   </div>
 </div>
@@ -104,7 +104,7 @@ async function sendViaGmail({ toEmail, toName, fromEmail, fromName, subject, htm
     const pass = process.env.GMAIL_APP_PASSWORD;
 
     const auth = Buffer.from(`\x00${user}\x00${pass.replace(/\s/g, '')}`).toString('base64');
-    const boundary = `kodex_${Date.now()}`;
+    const boundary = `dikly_${Date.now()}`;
     const msgBody = [
       `From: ${fromName} <${fromEmail}>`,
       `To: ${toName} <${toEmail}>`,
@@ -131,7 +131,7 @@ async function sendViaGmail({ toEmail, toName, fromEmail, fromName, subject, htm
 
       socket.on('data', (data) => {
         const line = data.toString();
-        if (step === 0 && line.startsWith('220')) { send('EHLO kodex.it.com'); step++; }
+        if (step === 0 && line.startsWith('220')) { send('EHLO dikly.it.com'); step++; }
         else if (step === 1 && line.includes('250 ')) { send('AUTH PLAIN ' + auth); step++; }
         else if (step === 2 && line.startsWith('235')) { send(`MAIL FROM:<${fromEmail}>`); step++; }
         else if (step === 3 && line.startsWith('250')) { send(`RCPT TO:<${toEmail}>`); step++; }
@@ -217,7 +217,7 @@ async function send({ to, subject, html, textBody }) {
         toEmail: toParsed.email,
         toName: toParsed.name || toParsed.email,
         fromEmail: gmailUser,
-        fromName: fromParsed.name || 'KODEX',
+        fromName: fromParsed.name || 'DIKLY',
         subject: cleanSubject,
         html,
         textBody,
@@ -236,7 +236,7 @@ async function send({ to, subject, html, textBody }) {
         toEmail: toParsed.email,
         toName: toParsed.name || toParsed.email,
         fromEmail: fromParsed.email,
-        fromName: fromParsed.name || 'KODEX',
+        fromName: fromParsed.name || 'DIKLY',
         subject: cleanSubject,
         html,
         textBody,
@@ -261,7 +261,7 @@ async function send({ to, subject, html, textBody }) {
 async function sendWelcome({ email, name, institutionName, trialDays = 14, trialEndDate }) {
   const endStr = trialEndDate ? new Date(trialEndDate).toDateString() : `${trialDays} days from now`;
   const html = wrap(`
-    <h1>Welcome to KODEX 🎉</h1>
+    <h1>Welcome to DIKLY 🎉</h1>
     <p>Hi <span class="highlight">${name}</span>, your account for <strong>${institutionName}</strong> is ready. You're on a <strong>${trialDays}-day free trial</strong> -- no card needed.</p>
 
     <div class="info-box">
@@ -275,14 +275,14 @@ async function sendWelcome({ email, name, institutionName, trialDays = 14, trial
        3️⃣ &nbsp;Create a quiz and let the AI generate your questions</p>
 
     <div style="text-align:center;margin:28px 0">
-      <a href="${BASE_URL}" class="btn btn-primary">Open KODEX →</a>
+      <a href="${BASE_URL}" class="btn btn-primary">Open DIKLY →</a>
     </div>
 
     <hr class="divider"/>
     <p style="font-size:13px">Your trial runs until <strong>${endStr}</strong>. After that, subscribe for <strong>GHS 200/month</strong> to keep all your data and features.</p>
-  `, `Welcome to KODEX -- your ${trialDays}-day trial has started`);
+  `, `Welcome to DIKLY -- your ${trialDays}-day trial has started`);
 
-  return send({ to: email, subject: 'Welcome to KODEX -- your free trial has started 🚀', html });
+  return send({ to: email, subject: 'Welcome to DIKLY -- your free trial has started 🚀', html });
 }
 
 // 2. Trial ending soon (day 10 -- 4 days left)
@@ -290,7 +290,7 @@ async function sendTrialEndingSoon({ email, name, daysLeft, trialEndDate }) {
   const endStr = trialEndDate ? new Date(trialEndDate).toDateString() : `in ${daysLeft} days`;
   const html = wrap(`
     <h1>Your trial ends in ${daysLeft} day${daysLeft !== 1 ? 's' : ''} ⏳</h1>
-    <p>Hi <span class="highlight">${name}</span>, just a heads-up -- your KODEX free trial expires on <strong>${endStr}</strong>.</p>
+    <p>Hi <span class="highlight">${name}</span>, just a heads-up -- your DIKLY free trial expires on <strong>${endStr}</strong>.</p>
 
     <div class="info-box">
       <p><span class="badge badge-orange">TRIAL ENDING SOON</span></p>
@@ -309,15 +309,15 @@ async function sendTrialEndingSoon({ email, name, daysLeft, trialEndDate }) {
     </div>
 
     <p style="font-size:13px">Prefer annual? Pay <strong>GHS 2,000/year</strong> and get 2 months free.</p>
-  `, `Your KODEX trial ends in ${daysLeft} days -- subscribe to keep access`);
+  `, `Your DIKLY trial ends in ${daysLeft} days -- subscribe to keep access`);
 
-  return send({ to: email, subject: `⏳ Your KODEX trial ends in ${daysLeft} days`, html });
+  return send({ to: email, subject: `⏳ Your DIKLY trial ends in ${daysLeft} days`, html });
 }
 
 // 3. Trial expired
 async function sendTrialExpired({ email, name }) {
   const html = wrap(`
-    <h1>Your KODEX trial has ended</h1>
+    <h1>Your DIKLY trial has ended</h1>
     <p>Hi <span class="highlight">${name}</span>, your 14-day free trial has expired. Your account is currently paused.</p>
 
     <div class="info-box">
@@ -332,16 +332,16 @@ async function sendTrialExpired({ email, name }) {
     </div>
 
     <p style="font-size:13px">Annual plan: <strong>GHS 2,000/year</strong> (save GHS 400 -- 2 months free)</p>
-  `, 'Your KODEX trial has expired -- reactivate to keep your data');
+  `, 'Your DIKLY trial has expired -- reactivate to keep your data');
 
-  return send({ to: email, subject: 'Your KODEX trial has ended -- reactivate your account', html });
+  return send({ to: email, subject: 'Your DIKLY trial has ended -- reactivate your account', html });
 }
 
 // 4. Grace period nudge (day 16 -- 2 days after expiry)
 async function sendGraceNudge({ email, name }) {
   const html = wrap(`
     <h1>Last chance -- your data is still here 🔒</h1>
-    <p>Hi <span class="highlight">${name}</span>, your KODEX account has been paused for 2 days. We've kept all your data safe, but we wanted to check in one last time.</p>
+    <p>Hi <span class="highlight">${name}</span>, your DIKLY account has been paused for 2 days. We've kept all your data safe, but we wanted to check in one last time.</p>
 
     <div class="info-box">
       <p>📂 &nbsp;Your sessions, quizzes, and student records are all still saved.<br/>
@@ -353,9 +353,9 @@ async function sendGraceNudge({ email, name }) {
     </div>
 
     <p style="font-size:13px;text-align:center">GHS 200/month &nbsp;·&nbsp; GHS 2,000/year (2 months free)</p>
-  `, 'Last chance -- your KODEX data is still waiting for you');
+  `, 'Last chance -- your DIKLY data is still waiting for you');
 
-  return send({ to: email, subject: '🔒 Last chance -- your KODEX data is still here', html });
+  return send({ to: email, subject: '🔒 Last chance -- your DIKLY data is still here', html });
 }
 
 // 5. Subscription confirmed (after payment)
@@ -364,7 +364,7 @@ async function sendSubscriptionConfirmed({ email, name, plan, endDate, amountGhs
   const planLabel = plan === 'yearly' ? 'Annual Plan' : 'Monthly Plan';
   const html = wrap(`
     <h1>Subscription confirmed ✅</h1>
-    <p>Hi <span class="highlight">${name}</span>, your payment was successful. KODEX is fully active.</p>
+    <p>Hi <span class="highlight">${name}</span>, your payment was successful. DIKLY is fully active.</p>
 
     <div class="info-box">
       <p><span class="badge badge-green">ACTIVE</span></p>
@@ -378,14 +378,14 @@ async function sendSubscriptionConfirmed({ email, name, plan, endDate, amountGhs
     <p>Everything is exactly as you left it. Keep running sessions, creating quizzes, and tracking attendance.</p>
 
     <div style="text-align:center;margin:28px 0">
-      <a href="${BASE_URL}" class="btn btn-primary">Go to KODEX →</a>
+      <a href="${BASE_URL}" class="btn btn-primary">Go to DIKLY →</a>
     </div>
 
     <hr class="divider"/>
-    <p style="font-size:13px">We'll remind you before your next renewal. Thank you for subscribing to KODEX.</p>
-  `, `KODEX subscription confirmed -- active until ${endStr}`);
+    <p style="font-size:13px">We'll remind you before your next renewal. Thank you for subscribing to DIKLY.</p>
+  `, `DIKLY subscription confirmed -- active until ${endStr}`);
 
-  return send({ to: email, subject: '✅ KODEX subscription confirmed -- you\'re all set', html });
+  return send({ to: email, subject: '✅ DIKLY subscription confirmed -- you\'re all set', html });
 }
 
 // 6. Renewal reminder (7 days before subscription end)
@@ -394,7 +394,7 @@ async function sendRenewalReminder({ email, name, plan, endDate }) {
   const planLabel = plan === 'yearly' ? 'Annual Plan' : 'Monthly Plan';
   const html = wrap(`
     <h1>Your subscription renews in 7 days</h1>
-    <p>Hi <span class="highlight">${name}</span>, your KODEX <strong>${planLabel}</strong> expires on <strong>${endStr}</strong>.</p>
+    <p>Hi <span class="highlight">${name}</span>, your DIKLY <strong>${planLabel}</strong> expires on <strong>${endStr}</strong>.</p>
 
     <p>To avoid any interruption to your sessions and quizzes, renew before that date.</p>
 
@@ -403,9 +403,9 @@ async function sendRenewalReminder({ email, name, plan, endDate }) {
     </div>
 
     <p style="font-size:13px">Monthly: GHS 200 &nbsp;·&nbsp; Annual: GHS 2,000 (save GHS 400)</p>
-  `, `Your KODEX subscription expires on ${endStr}`);
+  `, `Your DIKLY subscription expires on ${endStr}`);
 
-  return send({ to: email, subject: `⏰ Your KODEX subscription expires on ${endStr}`, html });
+  return send({ to: email, subject: `⏰ Your DIKLY subscription expires on ${endStr}`, html });
 }
 
 // ── Password Reset OTP Email ──────────────────────────────────────────────────
@@ -423,14 +423,14 @@ async function sendPasswordReset({ email, name, resetCode, role, institutionName
       <p style="font-size:12px;color:#9ca3af;margin-top:8px">Valid for 1 hour · Do not share this code</p>
     </div>
 
-    <p>Enter this code on the KODEX password reset page to set a new password.</p>
+    <p>Enter this code on the DIKLY password reset page to set a new password.</p>
     <p>If you did not request this reset, you can safely ignore this email -- your password has not changed.</p>
 
     <hr class="divider"/>
     <p style="font-size:12px;color:#9ca3af">This code expires in 1 hour. If you need a new code, request another reset from the login page.</p>
-  `, `KODEX Password Reset Code: ${resetCode}`);
+  `, `DIKLY Password Reset Code: ${resetCode}`);
 
-  return send({ to: email, subject: `Your KODEX password reset code: ${resetCode}`, html, textBody: `Your KODEX password reset code is: ${resetCode}\n\nThis code expires in 1 hour. Do not share it with anyone.` });
+  return send({ to: email, subject: `Your DIKLY password reset code: ${resetCode}`, html, textBody: `Your DIKLY password reset code is: ${resetCode}\n\nThis code expires in 1 hour. Do not share it with anyone.` });
 }
 
 // ── Admin: User password reset notification ───────────────────────────────────
@@ -446,14 +446,14 @@ async function sendAdminPasswordResetNotice({ adminEmail, adminName, targetUserN
       <p><strong>Time:</strong> ${new Date().toLocaleString()}</p>
     </div>
 
-    <p>If you did not expect this reset, please review your institution's user activity in the KODEX admin panel.</p>
+    <p>If you did not expect this reset, please review your institution's user activity in the DIKLY admin panel.</p>
 
     <div style="text-align:center;margin:28px 0">
-      <a href="${BASE_URL}" class="btn btn-primary">Open KODEX →</a>
+      <a href="${BASE_URL}" class="btn btn-primary">Open DIKLY →</a>
     </div>
   `, `Password reset notification -- ${targetUserName}`);
 
-  return send({ to: adminEmail, subject: `🔔 KODEX: Password reset by ${targetUserName}`, html });
+  return send({ to: adminEmail, subject: `🔔 DIKLY: Password reset by ${targetUserName}`, html });
 }
 
 
@@ -466,17 +466,17 @@ async function sendPaymentFailed({ email, name, plan, institutionName }) {
 
     <div class="info-box" style="border-left:4px solid #dc2626">
       <p style="color:#dc2626;font-weight:700;margin-bottom:4px">Action Required</p>
-      <p>Your subscription will be suspended if payment is not received. Please update your payment method in the KODEX dashboard.</p>
+      <p>Your subscription will be suspended if payment is not received. Please update your payment method in the DIKLY dashboard.</p>
     </div>
 
     <div style="text-align:center;margin:28px 0">
       <a href="${BASE_URL}" class="btn btn-primary">Update Payment →</a>
     </div>
 
-    <p>If you believe this is an error, please contact your bank or try a different card. If the issue persists, contact us at <a href="mailto:support@kodex.it.com">support@kodex.it.com</a>.</p>
+    <p>If you believe this is an error, please contact your bank or try a different card. If the issue persists, contact us at <a href="mailto:support@dikly.it.com">support@dikly.it.com</a>.</p>
   `, `Payment failed -- action required`);
 
-  return send({ to: email, subject: `⚠️ KODEX: Payment failed -- action required`, html });
+  return send({ to: email, subject: `⚠️ DIKLY: Payment failed -- action required`, html });
 }
 
 
@@ -484,7 +484,7 @@ async function sendPaymentFailed({ email, name, plan, institutionName }) {
 async function sendNewInstitutionAlert({ institutionName, adminName, adminEmail, mode, institutionCode }) {
   const html = wrap(`
     <h1>New Institution Signed Up 🎉</h1>
-    <p>A new institution has registered on the KODEX platform.</p>
+    <p>A new institution has registered on the DIKLY platform.</p>
     <div class="info-box">
       <p><strong>Institution:</strong> ${institutionName}</p>
       <p><strong>Mode:</strong> ${mode === 'academic' ? 'Academic (School/University)' : 'Corporate (Company)'}</p>
@@ -497,14 +497,14 @@ async function sendNewInstitutionAlert({ institutionName, adminName, adminEmail,
       <a href="${BASE_URL}/superadmin" class="btn btn-primary">Open Superadmin →</a>
     </div>
   `, `New institution: ${institutionName}`);
-  return send({ to: FROM, subject: `🎉 New institution on KODEX: ${institutionName}`, html });
+  return send({ to: FROM, subject: `🎉 New institution on DIKLY: ${institutionName}`, html });
 }
 
 
 // ── Lecturer welcome email ────────────────────────────────────────────────────
 async function sendLecturerWelcome({ email, name, institutionName, department, isApproved }) {
   const html = wrap(`
-    <h1>Welcome to KODEX 👋</h1>
+    <h1>Welcome to DIKLY 👋</h1>
     <p>Hi <span class="highlight">${name}</span>, your lecturer account at <strong>${institutionName}</strong> has been created.</p>
 
     <div class="info-box">
@@ -516,22 +516,22 @@ async function sendLecturerWelcome({ email, name, institutionName, department, i
     ${isApproved
       ? `<p>You can log in now and start creating courses, attendance sessions, and quizzes.</p>
          <div style="text-align:center;margin:28px 0">
-           <a href="${BASE_URL}" class="btn btn-primary">Open KODEX →</a>
+           <a href="${BASE_URL}" class="btn btn-primary">Open DIKLY →</a>
          </div>`
       : `<p>Your account is pending approval by your institution admin. You will be able to log in once approved.</p>`
     }
 
     <hr class="divider"/>
     <p style="font-size:13px">Log in at <a href="${BASE_URL}">${BASE_URL}</a> using your email and the password you set during registration.</p>
-  `, `Welcome to KODEX -- ${institutionName}`);
-  return send({ to: email, subject: `Welcome to KODEX -- ${institutionName}`, html });
+  `, `Welcome to DIKLY -- ${institutionName}`);
+  return send({ to: email, subject: `Welcome to DIKLY -- ${institutionName}`, html });
 }
 
 // ── Student welcome email ─────────────────────────────────────────────────────
 async function sendStudentWelcome({ email, name, institutionName, IndexNumber }) {
   if (!email) return; // students may not have email
   const html = wrap(`
-    <h1>Welcome to KODEX 🎓</h1>
+    <h1>Welcome to DIKLY 🎓</h1>
     <p>Hi <span class="highlight">${name}</span>, your student account at <strong>${institutionName}</strong> is ready.</p>
 
     <div class="info-box">
@@ -539,26 +539,26 @@ async function sendStudentWelcome({ email, name, institutionName, IndexNumber })
       <p><strong>Student ID:</strong> <span class="highlight">${IndexNumber}</span></p>
     </div>
 
-    <p><strong>What you can do on KODEX:</strong></p>
+    <p><strong>What you can do on DIKLY:</strong></p>
     <p>📋 &nbsp;Mark your attendance using QR code or entry code<br/>
        📝 &nbsp;Take quizzes and see your results instantly<br/>
        📌 &nbsp;Submit assignments and track your grades<br/>
        📅 &nbsp;View your schedule and upcoming sessions</p>
 
     <div style="text-align:center;margin:28px 0">
-      <a href="${BASE_URL}" class="btn btn-primary">Open KODEX →</a>
+      <a href="${BASE_URL}" class="btn btn-primary">Open DIKLY →</a>
     </div>
 
     <hr class="divider"/>
     <p style="font-size:13px">Log in using your <strong>Student ID: ${IndexNumber}</strong> and the password you set during registration.</p>
-  `, `Welcome to KODEX -- ${institutionName}`);
-  return send({ to: email, subject: `Welcome to KODEX -- ${institutionName}`, html });
+  `, `Welcome to DIKLY -- ${institutionName}`);
+  return send({ to: email, subject: `Welcome to DIKLY -- ${institutionName}`, html });
 }
 
 // ── Employee welcome email ────────────────────────────────────────────────────
 async function sendEmployeeWelcome({ email, name, companyName, employeeId }) {
   const html = wrap(`
-    <h1>Welcome to KODEX 💼</h1>
+    <h1>Welcome to DIKLY 💼</h1>
     <p>Hi <span class="highlight">${name}</span>, your employee account at <strong>${companyName}</strong> has been created.</p>
 
     <div class="info-box">
@@ -575,14 +575,14 @@ async function sendEmployeeWelcome({ email, name, companyName, employeeId }) {
 
     <hr class="divider"/>
     <p style="font-size:13px">Log in at <a href="${BASE_URL}">${BASE_URL}</a> using your email and the password you set during registration.</p>
-  `, `Welcome to KODEX -- ${companyName}`);
-  return send({ to: email, subject: `Welcome to KODEX -- ${companyName}`, html });
+  `, `Welcome to DIKLY -- ${companyName}`);
+  return send({ to: email, subject: `Welcome to DIKLY -- ${companyName}`, html });
 }
 
 // ── HOD welcome email ─────────────────────────────────────────────────────────
 async function sendHodWelcome({ email, name, institutionName, department }) {
   const html = wrap(`
-    <h1>Welcome to KODEX 🏛️</h1>
+    <h1>Welcome to DIKLY 🏛️</h1>
     <p>Hi <span class="highlight">${name}</span>, your Head of Department account at <strong>${institutionName}</strong> has been created.</p>
 
     <div class="info-box">
@@ -594,13 +594,13 @@ async function sendHodWelcome({ email, name, institutionName, department }) {
     <p>As HOD you can approve lecturers in your department, monitor attendance, view department analytics, and manage courses.</p>
 
     <div style="text-align:center;margin:28px 0">
-      <a href="${BASE_URL}" class="btn btn-primary">Open KODEX →</a>
+      <a href="${BASE_URL}" class="btn btn-primary">Open DIKLY →</a>
     </div>
 
     <hr class="divider"/>
     <p style="font-size:13px">Log in at <a href="${BASE_URL}">${BASE_URL}</a> using your email and the password you set.</p>
-  `, `Welcome to KODEX -- ${institutionName}`);
-  return send({ to: email, subject: `Welcome to KODEX -- ${institutionName}`, html });
+  `, `Welcome to DIKLY -- ${institutionName}`);
+  return send({ to: email, subject: `Welcome to DIKLY -- ${institutionName}`, html });
 }
 
 module.exports = {

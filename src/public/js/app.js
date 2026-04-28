@@ -2,7 +2,7 @@
 // when users are connected to the classroom device's WiFi network.
 const API = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
   ? ''
-  : 'https://kodex.it.com';
+  : 'https://dikly.it.com';
 
 // ═══════════════════════════════════════════════════════
 // TOAST NOTIFICATION SYSTEM
@@ -290,13 +290,13 @@ function getDeviceFingerprint() {
 //  - Supports all roles: admin, lecturer, employee, student
 // ══════════════════════════════════════════════════════════════════════════════
 
-const OFFLINE_LOGIN_KEY = 'kodex_offline_profiles';  // stores cached user profiles
+const OFFLINE_LOGIN_KEY = 'dikly_offline_profiles';  // stores cached user profiles
 const OFFLINE_LOGIN_MAX_AGE_DAYS = 30;               // cached profile expires after 30 days
 
 // ── Hash a password with SHA-256 (async, no library needed) ──────────────────
 async function hashPassword(password) {
   const encoder = new TextEncoder();
-  const data = encoder.encode(password + 'KODEX_SALT_2025'); // salted hash
+  const data = encoder.encode(password + 'DIKLY_SALT_2025'); // salted hash
   const hashBuffer = await crypto.subtle.digest('SHA-256', data);
   const hashArray = Array.from(new Uint8Array(hashBuffer));
   return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
@@ -436,7 +436,7 @@ const OFFLINE_BANNER_ID   = 'offline-banner';
 // ── Helpers ──────────────────────────────────────────────────────────────────
 // navigator.onLine is true even when connected to an ESP32 hotspot with no
 // internet. We do a real server ping so login correctly falls back to offline
-// mode when the KODEX server is unreachable (e.g. device is on ESP32 WiFi).
+// mode when the DIKLY server is unreachable (e.g. device is on ESP32 WiFi).
 let _serverReachable = null; // null = unknown, true/false = cached result
 let _serverCheckTs   = 0;
 const SERVER_CHECK_TTL = 8000; // re-check every 8 s
@@ -730,7 +730,7 @@ function showSubscriptionGate(message) {
   // Navigate to subscription page and show a toast if possible
   try {
     if (typeof navigateTo === 'function') navigateTo('subscription');
-    const msg = message || 'Your 30-day free trial has expired. Subscribe to continue using KODEX.';
+    const msg = message || 'Your 30-day free trial has expired. Subscribe to continue using DIKLY.';
     if (typeof toastError === 'function') {
       toastError(msg);
     } else {
@@ -1875,7 +1875,7 @@ function getPortalName(role) {
     admin: 'Admin Portal',
     superadmin: 'Admin Portal'
   };
-  return names[role] || 'KODEX';
+  return names[role] || 'DIKLY';
 }
 
 function getPortalAttr(role) {
@@ -1922,11 +1922,11 @@ async function applyBranding() {
 
     // Update page title with company name
     if (companyName) {
-      document.title = `${companyName} | KODEX`;
+      document.title = `${companyName} | DIKLY`;
     }
 
     // Store branding for re-use (e.g. preview in settings)
-    window._kodexBranding = branding;
+    window._diklyBranding = branding;
 
   } catch (e) {
     // Branding is non-critical — fail silently
@@ -1941,8 +1941,8 @@ function resetBranding() {
   root.style.removeProperty('--primary-dark');
   root.style.removeProperty('--primary-light');
   document.getElementById('brand-logo')?.remove();
-  document.title = 'KODEX';
-  window._kodexBranding = null;
+  document.title = 'DIKLY';
+  window._diklyBranding = null;
 }
 
 function showForceChangePassword() {
@@ -1956,7 +1956,7 @@ function showForceChangePassword() {
   const sidebar = document.getElementById('sidebar-nav');
   if (sidebar) sidebar.innerHTML = '';
   const topbarLeft = document.querySelector('.topbar-left');
-  if (topbarLeft) topbarLeft.innerHTML = `<h2 style="font-size:16px;font-weight:700">KODEX</h2>`;
+  if (topbarLeft) topbarLeft.innerHTML = `<h2 style="font-size:16px;font-weight:700">DIKLY</h2>`;
 
   if (mc) mc.innerHTML = `
     <div style="min-height:80vh;display:flex;align-items:center;justify-content:center;padding:24px">
@@ -2006,7 +2006,7 @@ async function submitForceChangePassword() {
   try {
     await api('/api/users/change-password-after-reset', { method: 'POST', body: JSON.stringify({ newPassword }) });
     currentUser.mustChangePassword = false;
-    toast('✅ Password updated! Welcome to KODEX.', 'ok');
+    toast('✅ Password updated! Welcome to DIKLY.', 'ok');
     // Re-fetch user data and show dashboard properly
     const data = await api('/api/auth/me');
     currentUser = data.user;
@@ -2504,7 +2504,7 @@ async function renderDashboard() {
         await renderSuperadminDashboard(content);
         break;
       default:
-        content.innerHTML = `<div class="card"><p>Welcome to KODEX!</p></div>`;
+        content.innerHTML = `<div class="card"><p>Welcome to DIKLY!</p></div>`;
     }
   } catch (e) {
     content.innerHTML = `<div class="card"><p>Welcome to ${getPortalName(role)}!</p></div>`;
@@ -3239,23 +3239,23 @@ async function hodExportCSV(type) {
       const d = await api('/api/users?role=student&limit=500' + dept);
       headers = ['Name', 'Index Number', 'Email', 'Department', 'Status'];
       rows = (d.users || []).map(u => [u.name, u.indexNumber || '', u.email || '', u.department || '', u.isApproved ? 'Active' : 'Pending']);
-      filename = 'KODEX_Students_' + (currentUser.department || 'All') + '.csv';
+      filename = 'DIKLY_Students_' + (currentUser.department || 'All') + '.csv';
     } else if (type === 'lecturers') {
       const d = await api('/api/users?role=lecturer&limit=200' + dept);
       headers = ['Name', 'Email', 'Department', 'Status'];
       rows = (d.users || []).map(u => [u.name, u.email || '', u.department || '', u.isApproved ? 'Active' : 'Pending']);
-      filename = 'KODEX_Lecturers_' + (currentUser.department || 'All') + '.csv';
+      filename = 'DIKLY_Lecturers_' + (currentUser.department || 'All') + '.csv';
     } else if (type === 'attendance') {
       const hodDept = currentUser.department ? '&department=' + encodeURIComponent(currentUser.department) : '';
       const d = await api('/api/attendance-sessions?limit=200' + hodDept);
       headers = ['Session', 'Lecturer', 'Date', 'Attendance', 'Status'];
       rows = (d.sessions || []).map(s => [s.title || s.courseName || 'Session', s.createdBy?.name || '', fmtDate(s.createdAt), s.attendanceCount ?? s.records?.length ?? 0, s.active ? 'Live' : 'Ended']);
-      filename = 'KODEX_Attendance_' + (currentUser.department || 'All') + '.csv';
+      filename = 'DIKLY_Attendance_' + (currentUser.department || 'All') + '.csv';
     } else if (type === 'courses') {
       const d = await api('/api/hod/course-overview');
       headers = ['Course', 'Code', 'Lecturer', 'Enrolled', 'Sessions (30d)', 'Total Attendance', 'Last Session', 'Status'];
       rows = (d.courses || []).map(c => [c.title, c.code || '', c.lecturer?.name || 'Unassigned', c.enrolled, c.sessions30, c.totalAttendance, c.lastSessionAt ? fmtDate(c.lastSessionAt) : '—', c.lastSessionAt && (Date.now() - new Date(c.lastSessionAt).getTime() < 14*24*60*60*1000) ? 'Active' : 'Inactive']);
-      filename = 'KODEX_Courses_' + (currentUser.department || 'All') + '.csv';
+      filename = 'DIKLY_Courses_' + (currentUser.department || 'All') + '.csv';
     }
 
     const csv = [headers, ...rows].map(r => r.map(v => '"' + String(v).replace(/"/g, '""') + '"').join(',')).join('\n');
@@ -3863,7 +3863,7 @@ async function renderSuperadminDashboard(content) {
 
     content.innerHTML = `
       <div class="page-header">
-        <div><h2>Platform Overview</h2><p>KODEX Superadmin · All institutions</p></div>
+        <div><h2>Platform Overview</h2><p>DIKLY Superadmin · All institutions</p></div>
         <div style="display:flex;gap:8px;">
           <button class="btn btn-secondary btn-sm" onclick="superadminShowPayments()">💳 Payment History</button>
         </div>
@@ -5553,7 +5553,7 @@ async function showStartSessionModal() {
           <div style="font-size:40px;margin-bottom:12px">📟</div>
           <h3 style="margin-bottom:8px">Device is Offline</h3>
           <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px;line-height:1.6">
-            The <strong>KODEX classroom device</strong> is not responding.<br>
+            The <strong>DIKLY classroom device</strong> is not responding.<br>
             Power it on, wait a few seconds, then try again.
           </p>
           <div style="background:#fef3c7;border:1px solid #fde68a;border-radius:8px;padding:10px 14px;font-size:12px;color:#92400e;margin-bottom:20px;text-align:left">
@@ -5591,7 +5591,7 @@ async function showStartSessionModal() {
   }
   // ── Device confirmed online — show session form ────────────
 
-  // Fetch courses — always from kodex.it.com (hardcoded in API constant)
+  // Fetch courses — always from dikly.it.com (hardcoded in API constant)
   // If this fails, it means the server is unreachable — show clear error.
   let courses = [];
   let courseLoadError = false;
@@ -5611,7 +5611,7 @@ async function showStartSessionModal() {
           <h3 style="margin-bottom:8px">${courseLoadError ? 'Connection Error' : 'No Courses Found'}</h3>
           <p style="font-size:13px;color:var(--text-muted);margin-bottom:20px;line-height:1.6">
             ${courseLoadError
-              ? 'Could not reach the KODEX server. Make sure your device has internet access (not just classroom WiFi).'
+              ? 'Could not reach the DIKLY server. Make sure your device has internet access (not just classroom WiFi).'
               : 'No courses are assigned to you yet. Please contact your admin.'}
           </p>
           <div style="display:flex;gap:8px;justify-content:center">
@@ -5682,7 +5682,7 @@ async function startSession() {
   }
 
   try {
-    const hotspotKey = sessionStorage.getItem('kodex_esp32_hotspot_key') || '';
+    const hotspotKey = sessionStorage.getItem('dikly_esp32_hotspot_key') || '';
     await api('/api/attendance-sessions/start', {
       method: 'POST',
       headers: hotspotKey ? { 'x-esp32-hotspot-key': hotspotKey } : {},
@@ -8620,7 +8620,7 @@ function downloadImportTemplate() {
   const blob = new Blob([csv], { type: 'text/csv' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = 'kodex_student_import_template.csv';
+  a.download = 'dikly_student_import_template.csv';
   a.click();
 }
 
@@ -8661,7 +8661,7 @@ async function runBulkImport() {
       const blob = new Blob([csvContent], { type: 'text/csv' });
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
-      a.download = 'kodex_import_results_' + new Date().toISOString().slice(0,10) + '.csv';
+      a.download = 'dikly_import_results_' + new Date().toISOString().slice(0,10) + '.csv';
       a.click();
     }
 
@@ -9076,7 +9076,7 @@ async function exportBankToPDF() {
   doc.setTextColor(255, 255, 255);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(14);
-  doc.text('KODEX — Question Bank Export', margin, 14);
+  doc.text('DIKLY — Question Bank Export', margin, 14);
   doc.setFontSize(9);
   doc.setFont('helvetica', 'normal');
   doc.text(`${selected.length} question${selected.length !== 1 ? 's' : ''} · ${new Date().toLocaleDateString()}`, margin, 19);
@@ -9159,7 +9159,7 @@ async function exportBankToPDF() {
     }
   });
 
-  doc.save(`KODEX_QuestionBank_${new Date().toISOString().slice(0,10)}.pdf`);
+  doc.save(`DIKLY_QuestionBank_${new Date().toISOString().slice(0,10)}.pdf`);
   toastSuccess(`PDF saved with ${selected.length} question${selected.length !== 1 ? 's' : ''} ✓`);
 }
 
@@ -9284,14 +9284,14 @@ async function confirmImportFromBank(quizId) {
 
 const ESP32_BLE_PREFIX   = 'ATT_';
 const ESP32_LOCAL_PORT   = 80;
-let   esp32IP            = localStorage.getItem('kodex_esp32_ip') || null;
+let   esp32IP            = localStorage.getItem('dikly_esp32_ip') || null;
 let   bleDetected        = false;
 let   bleScanInterval    = null;
 
 // Save ESP32 IP when found
 function setEsp32IP(ip) {
   esp32IP = ip;
-  localStorage.setItem('kodex_esp32_ip', ip);
+  localStorage.setItem('dikly_esp32_ip', ip);
 }
 
 // Call ESP32 local HTTP API
@@ -9303,7 +9303,7 @@ async function esp32Api(path, options = {}) {
   // We forward this as X-ESP32-Hotspot-Key on ble-verify requests so the
   // server can confirm proximity even when Android routes via mobile data.
   const hotspotKey = res.headers.get('x-esp32-device-token');
-  if (hotspotKey) sessionStorage.setItem('kodex_esp32_hotspot_key', hotspotKey);
+  if (hotspotKey) sessionStorage.setItem('dikly_esp32_hotspot_key', hotspotKey);
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || 'ESP32 request failed');
   return data;
@@ -9325,7 +9325,7 @@ async function discoverESP32() {
       if (tokenRes.ok) {
         const tokenData = await tokenRes.json();
         if (tokenData.token) {
-          sessionStorage.setItem('kodex_esp32_hotspot_key', tokenData.token);
+          sessionStorage.setItem('dikly_esp32_hotspot_key', tokenData.token);
           setEsp32IP(ip);
           bleDetected = true;
           return true;
@@ -9337,7 +9337,7 @@ async function discoverESP32() {
       // Step 2 fallback: /status — reads token from response header
       esp32IP = ip;
       const status = await esp32Api('/status');
-      if (status.device === 'KODEX-ESP32') {
+      if (status.device === 'DIKLY-ESP32') {
         setEsp32IP(ip);
         bleDetected = true;
         return true;
@@ -9425,7 +9425,7 @@ function handleEsp32KeyParam() {
   const params = new URLSearchParams(window.location.search);
   const key = params.get('esp32key');
   if (!key) return;
-  sessionStorage.setItem('kodex_esp32_hotspot_key', key);
+  sessionStorage.setItem('dikly_esp32_hotspot_key', key);
   setEsp32IP('192.168.4.1');
   bleDetected = true;
   // Strip param from URL so it doesn't linger
@@ -9664,9 +9664,9 @@ async function submitCodeMark() {
   }
 
   // Offline queuing is disabled — attendance must be marked in real-time
-  // while connected to the classroom WiFi (KODEX-CLASSROOM).
+  // while connected to the classroom WiFi (DIKLY-CLASSROOM).
   if (!(await isOnlineAsync())) {
-    toastError('You must be connected to the classroom WiFi (KODEX-CLASSROOM) and have internet access to mark attendance.');
+    toastError('You must be connected to the classroom WiFi (DIKLY-CLASSROOM) and have internet access to mark attendance.');
     return;
   }
 
@@ -9680,7 +9680,7 @@ async function submitCodeMark() {
     navigateTo('mark-attendance');
   } catch (e) {
     if (e.data && e.data.esp32Required) {
-      toastError('You must be connected to the classroom WiFi (KODEX-CLASSROOM) to mark attendance.');
+      toastError('You must be connected to the classroom WiFi (DIKLY-CLASSROOM) to mark attendance.');
     } else {
       toastError(e.message);
     }
@@ -9688,7 +9688,7 @@ async function submitCodeMark() {
 }
 
 // Offline code entry — BLOCKED. Attendance cannot be queued offline.
-// Students must be physically present on KODEX-CLASSROOM WiFi with internet.
+// Students must be physically present on DIKLY-CLASSROOM WiFi with internet.
 function showCodeEntryOffline() {
   const area = document.getElementById('mark-input-area');
   if (!area) return;
@@ -9698,7 +9698,7 @@ function showCodeEntryOffline() {
       <div style="font-weight:700;font-size:16px;margin-bottom:8px">No Internet Access</div>
       <p style="font-size:13px;color:var(--text-light);line-height:1.6">
         You must be connected to the classroom WiFi
-        <strong>(KODEX-CLASSROOM)</strong> with internet access to mark attendance.<br><br>
+        <strong>(DIKLY-CLASSROOM)</strong> with internet access to mark attendance.<br><br>
         Offline queuing is disabled to prevent remote attendance fraud.
       </p>
     </div>
@@ -9710,9 +9710,9 @@ async function submitQrMark() {
   if (!qrToken) { toastWarning('Please enter the QR token'); return; };
 
   // Offline queuing is disabled — QR attendance must be marked in real-time
-  // while connected to the classroom WiFi (KODEX-CLASSROOM).
+  // while connected to the classroom WiFi (DIKLY-CLASSROOM).
   if (!(await isOnlineAsync())) {
-    toastError('You must be connected to the classroom WiFi (KODEX-CLASSROOM) and have internet access to mark attendance.');
+    toastError('You must be connected to the classroom WiFi (DIKLY-CLASSROOM) and have internet access to mark attendance.');
     return;
   }
 
@@ -9726,7 +9726,7 @@ async function submitQrMark() {
     navigateTo('mark-attendance');
   } catch (e) {
     if (e.data && e.data.esp32Required) {
-      toastError('You must be connected to the classroom WiFi (KODEX-CLASSROOM) to mark attendance.');
+      toastError('You must be connected to the classroom WiFi (DIKLY-CLASSROOM) to mark attendance.');
     } else {
       toastError(e.message);
     }
@@ -9772,7 +9772,7 @@ async function markBLE() {
   try {
     setStatus('Requesting Bluetooth access…');
 
-    // Request device — filter for KODEX ESP32 beacon (name starts with ATT_)
+    // Request device — filter for DIKLY ESP32 beacon (name starts with ATT_)
     device = await navigator.bluetooth.requestDevice({
       filters: [
         { namePrefix: 'ATT_' },
@@ -9816,7 +9816,7 @@ async function markBLE() {
     // Server checks: hotspot key OR IP on 192.168.4.x, HMAC valid, timestamp fresh, single-use
     let verifyResult;
     try {
-      const hotspotKey = sessionStorage.getItem('kodex_esp32_hotspot_key') || '';
+      const hotspotKey = sessionStorage.getItem('dikly_esp32_hotspot_key') || '';
       verifyResult = await api('/api/esp32/ble-verify', {
         method: 'POST',
         headers: hotspotKey ? { 'x-esp32-hotspot-key': hotspotKey } : {},
@@ -9826,9 +9826,9 @@ async function markBLE() {
       // Map server error codes to clear messages
       const code = e.data?.code;
       if (code === 'NOT_ON_HOTSPOT')      throw new Error(
-        'Connected to KODEX-CLASSROOM but still failing?\n\n' +
+        'Connected to DIKLY-CLASSROOM but still failing?\n\n' +
         'Android is routing traffic through mobile data instead of WiFi.\n\n' +
-        'Fix: Go to Settings → Wi-Fi → tap & hold KODEX-CLASSROOM → ' +
+        'Fix: Go to Settings → Wi-Fi → tap & hold DIKLY-CLASSROOM → ' +
         'Network usage → set to \'Always use this network\', then retry.'
       );
       if (code === 'TOKEN_EXPIRED')       throw new Error('Token expired — move closer to the device and try again.');
@@ -10048,7 +10048,7 @@ async function renderSubscription() {
     content.innerHTML = `
       <div class="page-header">
         <h2>My Subscription</h2>
-        <p>Your personal KODEX access · ${planLabel} · Paystack only</p>
+        <p>Your personal DIKLY access · ${planLabel} · Paystack only</p>
       </div>
 
       <div class="stats-grid" style="margin-bottom:24px">
@@ -10091,7 +10091,7 @@ async function renderSubscription() {
 
         ${status === 'expired' ? `
           <div style="background:#fef2f2;border:1px solid #fca5a5;border-radius:8px;padding:12px 14px;margin-bottom:16px;font-size:13px;color:#dc2626">
-            ⚠️ Your subscription has expired. Renew to continue using KODEX.
+            ⚠️ Your subscription has expired. Renew to continue using DIKLY.
           </div>` : ''}
 
         ${status === 'trial' ? `
@@ -10624,7 +10624,7 @@ function renderContact() {
   const content = document.getElementById('main-content');
   if (!content) return;
   content.innerHTML = `
-    <div class="page-header"><h2>Contact Us</h2><p>Get in touch with KODEX support</p></div>
+    <div class="page-header"><h2>Contact Us</h2><p>Get in touch with DIKLY support</p></div>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;margin-bottom:24px">
 
       <div class="card" style="text-align:center">
@@ -11465,13 +11465,13 @@ function renderAbout() {
   const content = document.getElementById('main-content');
   if (!content) return;
   content.innerHTML = `
-    <div class="page-header"><h2>About</h2><p>KODEX Platform</p></div>
+    <div class="page-header"><h2>About</h2><p>DIKLY Platform</p></div>
     <div class="card" style="max-width:540px;text-align:center;padding:40px 32px">
       <div style="width:72px;height:72px;border-radius:20px;background:linear-gradient(135deg,var(--primary),#6366f1);display:flex;align-items:center;justify-content:center;margin:0 auto 20px">
         <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
       </div>
-      <div style="font-size:26px;font-weight:800;margin-bottom:4px">KODEX</div>
-      <div style="font-size:14px;color:var(--text-light);margin-bottom:4px">KODEX Platform</div>
+      <div style="font-size:26px;font-weight:800;margin-bottom:4px">DIKLY</div>
+      <div style="font-size:14px;color:var(--text-light);margin-bottom:4px">DIKLY Platform</div>
       <div style="display:inline-block;background:var(--bg);border:1px solid var(--border);border-radius:999px;padding:4px 14px;font-size:12px;font-weight:600;color:var(--text-light);margin-bottom:28px">Version 1.0.0</div>
 
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:28px;text-align:left">
@@ -11492,9 +11492,9 @@ function renderAbout() {
       </div>
 
       <div style="font-size:13px;color:var(--text-light);padding-top:20px;border-top:1px solid var(--border)">
-        Built by <strong style="color:var(--text-primary)">KODEX</strong> &nbsp;·&nbsp;
+        Built by <strong style="color:var(--text-primary)">DIKLY</strong> &nbsp;·&nbsp;
         <a href="mailto:nelsonkel78@gmail.com" style="color:var(--primary)">nelsonkel78@gmail.com</a><br>
-        <span style="font-size:12px">&copy; 2026 KODEX. All rights reserved.</span>
+        <span style="font-size:12px">&copy; 2026 DIKLY. All rights reserved.</span>
       </div>
     </div>
   `;
@@ -11503,7 +11503,7 @@ function renderAbout() {
 
 
 // Dark mode removed — always light theme
-localStorage.removeItem('kodex_theme');
+localStorage.removeItem('dikly_theme');
 document.documentElement.removeAttribute('data-theme');
 
 // ── Profile Photo Upload ───────────────────────────────────────────────────────
@@ -11983,45 +11983,45 @@ async function initiate2FA(credentials) {
   // Block everything behind modal — resolve only after successful verify
   return new Promise((resolve, reject) => {
     // Remove any existing 2FA modal
-    document.getElementById('kodex-2fa-modal')?.remove();
+    document.getElementById('dikly-2fa-modal')?.remove();
 
     const modal = document.createElement('div');
-    modal.id = 'kodex-2fa-modal';
+    modal.id = 'dikly-2fa-modal';
     modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px';
     modal.innerHTML = `
       <div style="background:#fff;border-radius:16px;padding:32px;width:100%;max-width:360px;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,.3)">
         <div style="font-size:44px;margin-bottom:12px">🔐</div>
         <h3 style="font-size:17px;font-weight:700;margin-bottom:8px;color:#111">Two-Factor Authentication</h3>
         <p style="font-size:13px;color:#6b7280;margin-bottom:20px">A 6-digit code was sent to<br><strong style="color:#111">${data.user.email}</strong></p>
-        <input type="text" id="kodex-2fa-input" placeholder="Enter 6-digit code" maxlength="6" inputmode="numeric"
+        <input type="text" id="dikly-2fa-input" placeholder="Enter 6-digit code" maxlength="6" inputmode="numeric"
           style="width:100%;padding:14px;border:1.5px solid #d1d5db;border-radius:10px;font-size:22px;text-align:center;letter-spacing:10px;font-family:monospace;outline:none;margin-bottom:8px;color:#111;background:#fff">
-        <div id="kodex-2fa-err" style="color:#dc2626;font-size:13px;margin-bottom:12px;min-height:20px"></div>
-        <button id="kodex-2fa-btn" onclick="window._kodex2faVerify('${data.token}')"
+        <div id="dikly-2fa-err" style="color:#dc2626;font-size:13px;margin-bottom:12px;min-height:20px"></div>
+        <button id="dikly-2fa-btn" onclick="window._dikly2faVerify('${data.token}')"
           style="width:100%;padding:13px;background:#4f46e5;color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;margin-bottom:8px">
           Verify
         </button>
-        <button onclick="document.getElementById('kodex-2fa-modal').remove();window._kodex2faReject(new Error('2FA cancelled'))"
+        <button onclick="document.getElementById('dikly-2fa-modal').remove();window._dikly2faReject(new Error('2FA cancelled'))"
           style="width:100%;padding:10px;background:transparent;border:none;color:#9ca3af;font-size:13px;cursor:pointer">
           Cancel
         </button>
       </div>`;
     document.body.appendChild(modal);
 
-    window._kodex2faResolve = resolve;
-    window._kodex2faReject  = reject;
-    window._kodex2faData    = data;
+    window._dikly2faResolve = resolve;
+    window._dikly2faReject  = reject;
+    window._dikly2faData    = data;
 
-    const input = document.getElementById('kodex-2fa-input');
+    const input = document.getElementById('dikly-2fa-input');
     input.focus();
-    input.addEventListener('keydown', e => { if (e.key === 'Enter') window._kodex2faVerify(data.token); });
+    input.addEventListener('keydown', e => { if (e.key === 'Enter') window._dikly2faVerify(data.token); });
   });
 }
 
-async function _kodex2faVerify(tempToken) {
-  window._kodex2faVerify = _kodex2faVerify; // make global
-  const input = document.getElementById('kodex-2fa-input');
-  const errEl = document.getElementById('kodex-2fa-err');
-  const btn   = document.getElementById('kodex-2fa-btn');
+async function _dikly2faVerify(tempToken) {
+  window._dikly2faVerify = _dikly2faVerify; // make global
+  const input = document.getElementById('dikly-2fa-input');
+  const errEl = document.getElementById('dikly-2fa-err');
+  const btn   = document.getElementById('dikly-2fa-btn');
   const code  = input?.value?.trim();
 
   if (!code || code.length !== 6) {
@@ -12038,9 +12038,9 @@ async function _kodex2faVerify(tempToken) {
       headers: { Authorization: 'Bearer ' + tempToken },
       body: JSON.stringify({ code }),
     });
-    document.getElementById('kodex-2fa-modal')?.remove();
-    const finalData = { ...window._kodex2faData, token: result.token || tempToken };
-    window._kodex2faResolve?.(finalData);
+    document.getElementById('dikly-2fa-modal')?.remove();
+    const finalData = { ...window._dikly2faData, token: result.token || tempToken };
+    window._dikly2faResolve?.(finalData);
   } catch(e) {
     if (errEl) errEl.textContent = e.message || 'Invalid code — please try again';
     if (btn) { btn.textContent = 'Verify'; btn.disabled = false; }
@@ -12048,14 +12048,14 @@ async function _kodex2faVerify(tempToken) {
     input?.select();
   }
 }
-window._kodex2faVerify = _kodex2faVerify;
+window._dikly2faVerify = _dikly2faVerify;
 
 
 // ── Branding: Preview login page ─────────────────────────────────────────────
 function previewLoginPage() {
   const logo  = document.getElementById('bd-logo')?.value || '';
   const color = document.getElementById('bd-color')?.value || '#6366f1';
-  const tag   = document.getElementById('bd-tagline')?.value || 'Powered by KODEX';
+  const tag   = document.getElementById('bd-tagline')?.value || 'Powered by DIKLY Technologies';
   const name  = currentUser.company?.name || 'Your Institution';
   const code  = currentUser.company?.institutionCode || '——';
 
@@ -12332,7 +12332,7 @@ async function generateAttendanceReportCard() {
     doc.rect(0, 0, W, 40, 'F');
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(22); doc.setFont('helvetica', 'bold');
-    doc.text('KODEX', M, 16);
+    doc.text('DIKLY', M, 16);
     doc.setFontSize(11); doc.setFont('helvetica', 'normal');
     doc.text('Student Attendance Report Card', M, 24);
     doc.text('Generated: ' + new Date().toDateString(), M, 31);
@@ -12401,8 +12401,8 @@ async function generateAttendanceReportCard() {
     doc.text(overall + '%  (' + totalPresent + ' of ' + records.length + ' sessions)', 128, y + 8);
 
     doc.setFontSize(8); doc.setTextColor(150,150,150); doc.setFont('helvetica','normal');
-    doc.text('Generated automatically by KODEX — kodex.it.com', M, 285);
-    doc.save('KODEX_Report_Card_' + (currentUser.indexNumber||'student') + '_' + new Date().toISOString().slice(0,10) + '.pdf');
+    doc.text('Generated automatically by DIKLY — dikly.it.com', M, 285);
+    doc.save('DIKLY_Report_Card_' + (currentUser.indexNumber||'student') + '_' + new Date().toISOString().slice(0,10) + '.pdf');
     showToastNotif('Report card downloaded!', 'success');
   } catch(e) { showToastNotif('Failed: ' + e.message, 'error'); }
 }
@@ -12433,7 +12433,7 @@ async function generateCertificate(courseId, courseTitle) {
 
     doc.setFontSize(11); doc.setFont('helvetica','normal');
     doc.setTextColor(99,102,241);
-    doc.text('KODEX', W/2, 28, { align: 'center' });
+    doc.text('DIKLY', W/2, 28, { align: 'center' });
     doc.text('Learning & Attendance Management Platform', W/2, 34, { align: 'center' });
 
     doc.setFontSize(32); doc.setFont('helvetica','bold');
@@ -12470,12 +12470,12 @@ async function generateCertificate(courseId, courseTitle) {
     doc.setDrawColor(100,100,100); doc.setLineWidth(0.3);
     doc.line(W/2-60, 165, W/2+60, 165);
     doc.setFontSize(9);
-    doc.text('Authorised by KODEX Platform', W/2, 171, { align: 'center' });
+    doc.text('Authorised by DIKLY Platform', W/2, 171, { align: 'center' });
 
     doc.setFontSize(8); doc.setTextColor(199,210,254);
-    doc.text('kodex.it.com', W/2, H-16, { align: 'center' });
+    doc.text('dikly.it.com', W/2, H-16, { align: 'center' });
 
-    doc.save('KODEX_Certificate_' + (courseTitle||'course').replace(/[^a-z0-9]/gi,'_') + '.pdf');
+    doc.save('DIKLY_Certificate_' + (courseTitle||'course').replace(/[^a-z0-9]/gi,'_') + '.pdf');
     showToastNotif('Certificate downloaded!', 'success');
   } catch(e) { showToastNotif('Failed: ' + e.message, 'error'); }
 }
@@ -13395,9 +13395,9 @@ async function runAIQuizGenerate(quizId) {
     const styleDesc = mathStyle === 'solve' ? 'calculation/problem-solving questions'
                     : mathStyle === 'conceptual' ? 'conceptual/theory questions about mathematical properties'
                     : 'a mix of calculation problems and conceptual questions';
-    prompt = 'You are an expert mathematics educator creating quiz questions for KODEX.\n\nGenerate exactly ' + count + ' ' + difficulty + ' difficulty math MCQ questions about: "' + topic + '". ' + branch + '\n' + (context ? 'Context: ' + context : '') + '\n\nStyle: ' + styleDesc + '. Question type: ' + qtypeDesc + '. Each question has EXACTLY 5 options (A through E).\n\nUse LaTeX \\( ... \\) for ALL inline math. Use \\[ ... \\] for display equations.\n\nReturn ONLY a valid JSON array:\n[\n  {\n    "questionText": "Find \\( x \\) if \\( x^2 - 5x + 6 = 0 \\).",\n    "options": ["\\( x = 2, 3 \\)", "\\( x = -2, -3 \\)", "\\( x = 1, 6 \\)", "\\( x = 5, -1 \\)", "\\( x = 0, 5 \\)"],\n    "correctAnswers": [0],\n    "questionType": "single",\n    "explanation": "Factorising: \\( (x-2)(x-3)=0 \\)."\n  }\n]';
+    prompt = 'You are an expert mathematics educator creating quiz questions for DIKLY.\n\nGenerate exactly ' + count + ' ' + difficulty + ' difficulty math MCQ questions about: "' + topic + '". ' + branch + '\n' + (context ? 'Context: ' + context : '') + '\n\nStyle: ' + styleDesc + '. Question type: ' + qtypeDesc + '. Each question has EXACTLY 5 options (A through E).\n\nUse LaTeX \\( ... \\) for ALL inline math. Use \\[ ... \\] for display equations.\n\nReturn ONLY a valid JSON array:\n[\n  {\n    "questionText": "Find \\( x \\) if \\( x^2 - 5x + 6 = 0 \\).",\n    "options": ["\\( x = 2, 3 \\)", "\\( x = -2, -3 \\)", "\\( x = 1, 6 \\)", "\\( x = 5, -1 \\)", "\\( x = 0, 5 \\)"],\n    "correctAnswers": [0],\n    "questionType": "single",\n    "explanation": "Factorising: \\( (x-2)(x-3)=0 \\)."\n  }\n]';
   } else {
-    prompt = 'You are an expert educator creating quiz questions for KODEX.\n\nGenerate exactly ' + count + ' ' + difficulty + ' difficulty MCQ questions about: "' + topic + '".\n' + (context ? 'Context: ' + context : '') + '\nQuestion type: ' + qtypeDesc + '. Each question has EXACTLY 5 options (A, B, C, D, E).\n\nReturn ONLY a valid JSON array:\n[\n  {\n    "questionText": "Question here?",\n    "options": ["Option A", "Option B", "Option C", "Option D", "Option E"],\n    "correctAnswers": [0],\n    "questionType": "single",\n    "explanation": "Why this is correct"\n  }\n]\n\ncorrectAnswers = 0-based indices. questionType = "single" or "multiple". No extra text.';
+    prompt = 'You are an expert educator creating quiz questions for DIKLY.\n\nGenerate exactly ' + count + ' ' + difficulty + ' difficulty MCQ questions about: "' + topic + '".\n' + (context ? 'Context: ' + context : '') + '\nQuestion type: ' + qtypeDesc + '. Each question has EXACTLY 5 options (A, B, C, D, E).\n\nReturn ONLY a valid JSON array:\n[\n  {\n    "questionText": "Question here?",\n    "options": ["Option A", "Option B", "Option C", "Option D", "Option E"],\n    "correctAnswers": [0],\n    "questionType": "single",\n    "explanation": "Why this is correct"\n  }\n]\n\ncorrectAnswers = 0-based indices. questionType = "single" or "multiple". No extra text.';
   }
 
   try {
@@ -16276,7 +16276,7 @@ async function reviewTimesheet(id, action) {
 }
 
 function exportTimesheet(id) {
-  const token = localStorage.getItem('kodex_token') || localStorage.getItem('token');
+  const token = localStorage.getItem('dikly_token') || localStorage.getItem('token');
   window.open(`/api/operations/timesheets/${id}/export?token=${token}`, '_blank');
 }
 
@@ -17142,7 +17142,7 @@ async function renderBranding() {
             ${branding.logoUrl ? `<img src="${branding.logoUrl}" style="height:40px;width:auto;border-radius:6px" onerror="this.style.display='none'">` : `<div style="width:40px;height:40px;border-radius:8px;background:${branding.primaryColor||'#6366f1'};display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:18px">${companyName?.[0]||'K'}</div>`}
             <div>
               <div style="font-weight:800;font-size:16px">${companyName}</div>
-              <div style="font-size:12px;color:#6b7280">${branding.companyTagline||'Powered by KODEX'}</div>
+              <div style="font-size:12px;color:#6b7280">${branding.companyTagline||'Powered by DIKLY Technologies'}</div>
             </div>
           </div>
         </div>
@@ -17218,7 +17218,7 @@ async function renderBranding() {
 function updateBrandPreview() {
   const logo  = document.getElementById('bd-logo')?.value;
   const color = document.getElementById('bd-color')?.value || '#6366f1';
-  const tag   = document.getElementById('bd-tagline')?.value || 'Powered by KODEX';
+  const tag   = document.getElementById('bd-tagline')?.value || 'Powered by DIKLY Technologies';
   const preview = document.getElementById('brand-preview');
   if (!preview) return;
   preview.style.background = `${color}20`;
@@ -17386,7 +17386,7 @@ async function viewMeetingAttendance(meetingId, title) {
             + '<td><span style="background:' + (statusColor[a.status] || '#6b7280') + ';color:#fff;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:600">' + statusLabel + '</span></td></tr>';
     }
 
-    const token = localStorage.getItem('token') || localStorage.getItem('kodex_token') || '';
+    const token = localStorage.getItem('token') || localStorage.getItem('dikly_token') || '';
     const csvUrl = '/api/zoom/' + meetingId + '/attendance/csv?token=' + token;
 
     let tableHtml = attendance.length
@@ -17450,7 +17450,7 @@ async function printMeetingAttendance(meetingId, title) {
 // ── Register real functions for index.html stubs ─────────────────────────────
 
 // ════════════════════════════════════════════════════════════════════════════
-// KODEX MESSAGING  (Phase 2: Facebook-style desktop UI)
+// DIKLY MESSAGING  (Phase 2: Facebook-style desktop UI)
 // ════════════════════════════════════════════════════════════════════════════
 
 let _activeConvoId  = null;

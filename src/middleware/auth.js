@@ -67,7 +67,7 @@ const authenticate = async (req, res, next) => {
         if (!personalActive && !companyActive) {
           return res.status(403).json({
             error: 'Subscription expired',
-            message: 'Your free trial has ended. Please subscribe to continue using KODEX.',
+            message: 'Your free trial has ended. Please subscribe to continue using DIKLY.',
             subscriptionExpired: true,
             userSubscription: true,
           });

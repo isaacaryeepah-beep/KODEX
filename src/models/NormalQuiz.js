@@ -3,7 +3,7 @@
 /**
  * NormalQuiz
  *
- * The "lighter" quiz type in KODEX Academic — used for practice tests,
+ * The "lighter" quiz type in DIKLY Academic — used for practice tests,
  * weekly assessments, revision, and take-home quizzes.
  *
  * Intentionally more flexible than SnapQuiz:

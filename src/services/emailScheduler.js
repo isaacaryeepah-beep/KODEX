@@ -1,4 +1,4 @@
-// ─── KODEX Email Scheduler ─────────────────────────────────────────────────
+// ─── DIKLY Email Scheduler ─────────────────────────────────────────────────
 // Runs daily at 08:00 Africa/Accra time
 // Checks trial status for every company and sends lifecycle emails
 

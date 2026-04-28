@@ -613,7 +613,7 @@ exports.adminResetStudentPassword = async (req, res) => {
     // req.user.company is an ObjectId — fetch the code separately
     const Company = require('../models/Company');
     const company = await Company.findById(req.user.company).select('institutionCode').lean().catch(() => null);
-    const institutionCode = company?.institutionCode || 'KODEX';
+    const institutionCode = company?.institutionCode || 'DIKLY';
     const tempPassword = `${institutionCode}-${digits}`;
 
     target.password = tempPassword;

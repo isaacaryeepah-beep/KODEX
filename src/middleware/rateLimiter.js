@@ -1,5 +1,5 @@
 // ══════════════════════════════════════════════════════════════════════════════
-//  KODEX Rate Limiter Middleware
+//  DIKLY Rate Limiter Middleware
 //  - Protects login from brute force attacks
 //  - Protects registration from spam
 //  - Protects password reset from abuse
