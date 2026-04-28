@@ -1,8 +1,10 @@
-// Always point to the real server — prevents requests going to ESP32 hotspot
-// when users are connected to the classroom device's WiFi network.
+// Use the page's own origin so the health check always targets the live server,
+// regardless of which domain it's deployed on. This also prevents requests from
+// going to an ESP32 hotspot (no internet) — the production origin is unreachable
+// from the local hotspot, so isOnlineAsync() correctly falls back to offline mode.
 const API = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
   ? ''
-  : 'https://dikly.it.com';
+  : window.location.origin;
 
 // ═══════════════════════════════════════════════════════
 // TOAST NOTIFICATION SYSTEM
