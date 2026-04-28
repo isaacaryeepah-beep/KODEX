@@ -26,7 +26,7 @@ const SnapQuizViolationLog   = require("../models/SnapQuizViolationLog");
 const SnapQuizProctoringEvent = require("../models/SnapQuizProctoringEvent");
 const SnapQuizResult         = require("../models/SnapQuizResult");
 const { SNAP_QUIZ_STATUSES } = require("../models/SnapQuiz");
-const { GRADING_STATUSES }   = require("../models/SnapQuizAttempt");
+const { ATTEMPT_STATUSES, GRADING_STATUSES } = require("../models/SnapQuizAttempt");
 
 // ─── Quiz CRUD ───────────────────────────────────────────────────────────────
 
