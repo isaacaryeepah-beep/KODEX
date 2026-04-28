@@ -2254,6 +2254,7 @@ function buildSidebar() {
       links.push({ id: 'subscription', label: 'Subscription', icon: subscriptionIcon() });
       break;
     case 'hod':
+      links.push({ id: 'hod-overview',     label: 'Overview',       icon: dashboardIcon() });
       links.push({ id: 'hod-sessions',     label: 'Sessions',       icon: sessionsIcon() });
       links.push({ id: 'hod-courses',      label: 'Courses',        icon: coursesIcon() });
       links.push({ id: 'hod-lecturers',    label: 'Lecturers',      icon: svgIcon('<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>') });
@@ -2393,6 +2394,7 @@ function navigateTo(view) {
     case 'contact':     renderContact(); break;
     case 'about':       renderAbout(); break;
     case 'superadmin-platform': renderSuperadminDashboard(document.getElementById('main-content')); break;
+    case 'hod-overview':         renderHodDashboard(); break;
     case 'hod-courses':          renderHodCourses(); break;
     case 'hod-sessions':         renderHodSessions(); break;
     case 'hod-lecturers':        renderHodLecturers(); break;
@@ -2494,8 +2496,8 @@ async function renderDashboard() {
         await renderLecturerDashboard(content);
         break;
       case 'hod':
-        navigateTo('hod-sessions');
-        return;
+        await renderHodDashboard(content);
+        break;
       case 'employee':
         await renderEmployeeDashboard(content);
         break;
