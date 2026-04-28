@@ -178,11 +178,9 @@ function selectPortal(t){document.addEventListener('DOMContentLoaded',function()
           <input type="password" id="admin-login-password" placeholder="Enter password" name="admin-password" autocomplete="off">
         </div>
         <button type="submit" class="btn btn-primary">Sign In</button>
-        <div class="auth-toggle">
-          New institution? <a onclick="showAdminRegister()">Register here</a>
-        </div>
-        <div class="auth-toggle" style="margin-top:8px">
-          <a onclick="showAdminForgot()">Forgot password?</a>
+        <div class="auth-footer">
+          <p class="auth-footer-row">New institution? <a onclick="showAdminRegister()">Register here</a></p>
+          <p class="auth-footer-row auth-forgot"><a onclick="showAdminForgot()">Forgot password?</a></p>
         </div>
       </form>
 
@@ -258,11 +256,9 @@ function selectPortal(t){document.addEventListener('DOMContentLoaded',function()
           <input type="password" id="hod-login-password" placeholder="Enter password" name="hod-password" autocomplete="off">
         </div>
         <button type="submit" class="btn btn-primary">Sign In</button>
-        <div class="auth-toggle" style="margin-top:8px">
-          New HOD? <a onclick="showHodRegister()">Register here</a>
-        </div>
-        <div class="auth-toggle" style="margin-top:4px">
-          <a onclick="showHodForgot()">Forgot password?</a>
+        <div class="auth-footer">
+          <p class="auth-footer-row">New HOD? <a onclick="showHodRegister()">Register here</a></p>
+          <p class="auth-footer-row auth-forgot"><a onclick="showHodForgot()">Forgot password?</a></p>
         </div>
       </form>
       <form id="hod-register-form" class="hidden" onsubmit="event.preventDefault(); handleHodRegister();">
@@ -346,11 +342,9 @@ function selectPortal(t){document.addEventListener('DOMContentLoaded',function()
           <input type="password" id="lecturer-login-password" placeholder="Enter password" name="lecturer-password" autocomplete="off">
         </div>
         <button type="submit" class="btn btn-primary">Sign In</button>
-        <div class="auth-toggle">
-          New lecturer? <a onclick="showLecturerRegister()">Create or join an institution</a>
-        </div>
-        <div class="auth-toggle" style="margin-top:8px">
-          <a onclick="showLecturerForgot()">Forgot password?</a>
+        <div class="auth-footer">
+          <p class="auth-footer-row">New lecturer? <a onclick="showLecturerRegister()">Create or join an institution</a></p>
+          <p class="auth-footer-row auth-forgot"><a onclick="showLecturerForgot()">Forgot password?</a></p>
         </div>
       </form>
 
@@ -452,8 +446,8 @@ function selectPortal(t){document.addEventListener('DOMContentLoaded',function()
           <input type="password" id="manager-login-password" placeholder="Enter password" name="manager-password" autocomplete="off">
         </div>
         <button type="submit" class="btn btn-employee" style="background:#4f46e5;">Sign In</button>
-        <div class="auth-toggle" style="margin-top:6px">
-          <a onclick="showManagerForgot()">Forgot password?</a>
+        <div class="auth-footer">
+          <p class="auth-footer-row auth-forgot"><a onclick="showManagerForgot()">Forgot password?</a></p>
         </div>
       </form>
 
@@ -507,12 +501,9 @@ function selectPortal(t){document.addEventListener('DOMContentLoaded',function()
           <input type="password" id="employee-login-password" placeholder="Enter password" name="employee-password" autocomplete="off">
         </div>
         <button type="submit" class="btn btn-employee">Sign In</button>
-        <div class="auth-toggle">
-          <span>Don't have an account?</span>
-          <a onclick="showEmployeeRegister()">Register</a>
-        </div>
-        <div class="auth-toggle" style="margin-top:6px">
-          <a onclick="showEmployeeForgot()">Forgot password?</a>
+        <div class="auth-footer">
+          <p class="auth-footer-row">Don't have an account? <a onclick="showEmployeeRegister()">Register</a></p>
+          <p class="auth-footer-row auth-forgot"><a onclick="showEmployeeForgot()">Forgot password?</a></p>
         </div>
       </form>
       <form id="employee-forgot-form" class="hidden" onsubmit="event.preventDefault(); handleEmployeeForgotPassword();">
@@ -597,11 +588,9 @@ function selectPortal(t){document.addEventListener('DOMContentLoaded',function()
           <input type="password" id="student-login-password" placeholder="Enter password" name="student-password" autocomplete="off">
         </div>
         <button type="submit" class="btn btn-student">Sign In</button>
-        <div class="auth-toggle">
-          New student? <a onclick="showStudentRegister()">Register with institution code</a>
-        </div>
-        <div class="auth-toggle" style="margin-top:8px">
-          <a onclick="showStudentForgot()">Forgot password?</a>
+        <div class="auth-footer">
+          <p class="auth-footer-row">New student? <a onclick="showStudentRegister()">Register with institution code</a></p>
+          <p class="auth-footer-row auth-forgot"><a onclick="showStudentForgot()">Forgot password?</a></p>
         </div>
       </form>
 

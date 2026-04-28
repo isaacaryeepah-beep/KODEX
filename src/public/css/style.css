@@ -689,6 +689,44 @@ body {
 .employee-themed .form-group input:focus { border-color: #059669; box-shadow: 0 0 0 3px rgba(5,150,105,.08); }
 .student-themed  .form-group input:focus { border-color: #7c3aed; box-shadow: 0 0 0 3px rgba(124,58,237,.08); }
 
+.auth-footer {
+  margin-top: 22px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.auth-footer-row {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-light);
+  text-align: center;
+  line-height: 1.4;
+}
+
+.auth-footer-row a {
+  color: var(--primary);
+  cursor: pointer;
+  text-decoration: none;
+  font-weight: 600;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.auth-footer-row a:hover { text-decoration: underline; }
+
+.auth-footer-row.auth-forgot {
+  font-size: 12.5px;
+}
+
+.auth-footer-row.auth-forgot a {
+  font-weight: 500;
+  opacity: .85;
+}
+
+/* keep legacy .auth-toggle working in case anything else uses it */
 .auth-toggle {
   text-align: center;
   margin-top: 14px;
