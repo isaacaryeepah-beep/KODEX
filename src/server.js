@@ -69,6 +69,11 @@ app.use(helmet({
 
 // ── CORS: only allow your own domain ─────────────────────────────────────────
 const allowedOrigins = [
+  "https://kodex.it.com",
+  "https://www.kodex.it.com",
+  "http://kodex.it.com",
+  "http://www.kodex.it.com",
+  "https://kodex-713g.onrender.com",
   "https://dikly.onrender.com",
   "https://dikly.it.com",
   "https://www.dikly.it.com",
