@@ -220,7 +220,7 @@ exports.emailStudents = async (req, res) => {
     const { subject, message } = req.body;
     if (!subject || !message) return res.status(400).json({ error: 'Subject and message are required' });
 
-    const course = await Course.findOne({ _id: req.params.id, company: companyId })
+    const course = await Course.findOne({ _id: req.params.id, companyId })
       .populate('enrolledStudents', 'name email');
     if (!course) return res.status(404).json({ error: 'Course not found' });
 
@@ -248,7 +248,7 @@ exports.smsStudents = async (req, res) => {
     if (!message) return res.status(400).json({ error: 'Message is required' });
     if (message.length > 160) return res.status(400).json({ error: 'Message exceeds 160 characters' });
 
-    const course = await Course.findOne({ _id: req.params.id, company: companyId })
+    const course = await Course.findOne({ _id: req.params.id, companyId })
       .populate('enrolledStudents', 'name phone');
     if (!course) return res.status(404).json({ error: 'Course not found' });
 
