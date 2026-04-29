@@ -1720,6 +1720,7 @@ async function handleStudentRegister() {
     const studentGroup = document.getElementById('student-reg-group')?.value?.trim().toUpperCase();
     const sessionType = document.getElementById('student-reg-session-type')?.value?.trim();
     const semester = document.getElementById('student-reg-semester')?.value?.trim();
+    const email = document.getElementById('student-reg-email')?.value?.trim().toLowerCase();
     const phone = document.getElementById('student-reg-phone')?.value?.trim();
     if (!name) return showStudentError('Please enter your full name.');
     if (!institutionCode) return showStudentError('Please enter your Institution Code.');
@@ -1734,7 +1735,9 @@ async function handleStudentRegister() {
     if (!studentGroup) return showStudentError('Please enter your group (e.g. A, B, C).');
     if (!sessionType) return showStudentError('Please select your session type.');
     if (!semester) return showStudentError('Please select your semester.');
-    const data = await api('/api/auth/register-student', { method: 'POST', body: JSON.stringify({ name, indexNumber, phone, password, institutionCode, department, programme, studentLevel, studentGroup, sessionType, semester }) });
+    if (!email || !/^\S+@\S+\.\S+$/.test(email)) return showStudentError('Please enter a valid email address.');
+    if (!phone) return showStudentError('Phone number is required so lecturers can reach you by SMS.');
+    const data = await api('/api/auth/register-student', { method: 'POST', body: JSON.stringify({ name, indexNumber, email, phone, password, institutionCode, department, programme, studentLevel, studentGroup, sessionType, semester }) });
     if (data.token) {
       token = data.token;
       localStorage.setItem('token', token);

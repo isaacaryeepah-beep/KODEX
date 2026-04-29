@@ -338,12 +338,18 @@ exports.registerStudent = async (req, res) => {
   try {
     const { name, password, institutionCode, department, email: emailRaw, programme, studentLevel, studentGroup, sessionType, semester } = req.body;
     const email = emailRaw ? emailRaw.trim().toLowerCase() : "";
+    const phone = req.body.phone ? req.body.phone.trim() : "";
     const IndexNumber = req.body.IndexNumber || req.body.indexNumber;
 
     if (!name || !IndexNumber || !password || !institutionCode) {
       return res.status(400).json({ error: "Name, student ID, password, and institution code are required" });
     }
-
+    if (!email || !/^\S+@\S+\.\S+$/.test(email)) {
+      return res.status(400).json({ error: "A valid email address is required so lecturers can contact you." });
+    }
+    if (!phone) {
+      return res.status(400).json({ error: "A phone number is required so lecturers can reach you by SMS." });
+    }
     if (password.length < 8) {
       return res.status(400).json({ error: "Password must be at least 8 characters" });
     }
@@ -388,18 +394,19 @@ exports.registerStudent = async (req, res) => {
       return res.status(400).json({ error: "A student with this ID already exists at this institution" });
     }
 
-    if (req.body.phone) {
-      const normPhone = normalisePhone(req.body.phone);
-      const phoneExists = await User.findOne({ phone: normPhone, company: company._id });
-      if (phoneExists) return res.status(400).json({ error: "Phone number is already in use" });
-    }
+    const normPhone = normalisePhone(phone);
+    const phoneExists = await User.findOne({ phone: normPhone, company: company._id });
+    if (phoneExists) return res.status(400).json({ error: "Phone number is already in use" });
+
+    const emailExists = await User.findOne({ email, company: company._id });
+    if (emailExists) return res.status(400).json({ error: "Email address is already in use" });
 
     const user = await User.create({
       name,
       IndexNumber: IndexNumber.trim().toUpperCase(),
       password,
-      phone: req.body.phone ? normalisePhone(req.body.phone) : null,
-      email: email ? email.trim().toLowerCase() : null,
+      phone: normPhone,
+      email,
       company: company._id,
       role: "student",
       isApproved: true,
