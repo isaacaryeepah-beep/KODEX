@@ -11254,7 +11254,7 @@ async function renderAnnouncements() {
 function annCard(a, canPost, isAdmin) {
   const color = ANN_COLORS[a.type] || '#6366f1';
   const icon  = ANN_ICONS[a.type]  || 'ℹ️';
-  const canDelete = isAdmin || (canPost && a.author?._id === (currentUser._id || currentUser.id));
+  const canDelete = isAdmin || (canPost && String(a.author?._id) === String(currentUser._id || currentUser.id));
   const audienceLabel = { all:'Everyone', students:'Students', employees:'Employees' }[a.audience] || 'Everyone';
   return `
     <div class="card" style="margin-bottom:12px;border-left:4px solid ${color};position:relative;${a.pinned?'background:linear-gradient(135deg,var(--card),#fefce8);':''}" id="ann-${a._id}">
