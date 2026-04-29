@@ -3,13 +3,12 @@ const User = require("../models/User");
 exports.getPendingApprovals = async (req, res) => {
   try {
     const filter = { company: req.user.company, isApproved: false, isActive: true };
-    // HOD only sees pending lecturers in their own department
     if (req.user.role === "hod") {
-      filter.role = "lecturer";
+      // HOD sees pending lecturers AND students in their own department
+      filter.role = { $in: ["lecturer", "student"] };
       if (req.user.department) filter.department = req.user.department;
     }
     const pending = await User.find(filter).populate("company", "name mode");
-
     res.json({ pending });
   } catch (error) {
     console.error("Get pending approvals error:", error);
@@ -21,18 +20,15 @@ exports.approveUser = async (req, res) => {
   try {
     const filter = { _id: req.params.id, company: req.user.company, isApproved: false };
     if (req.user.role === "hod") {
-      filter.role = "lecturer";
+      filter.role = { $in: ["lecturer", "student"] };
       if (req.user.department) filter.department = req.user.department;
     }
     const user = await User.findOne(filter);
-
     if (!user) {
       return res.status(404).json({ error: "User not found or already approved" });
     }
-
     user.isApproved = true;
     await user.save();
-
     res.json({ message: `${user.name} has been approved`, user });
   } catch (error) {
     console.error("Approve user error:", error);
@@ -44,17 +40,14 @@ exports.rejectUser = async (req, res) => {
   try {
     const filter = { _id: req.params.id, company: req.user.company, isApproved: false };
     if (req.user.role === "hod") {
-      filter.role = "lecturer";
+      filter.role = { $in: ["lecturer", "student"] };
       if (req.user.department) filter.department = req.user.department;
     }
     const user = await User.findOne(filter);
-
     if (!user) {
       return res.status(404).json({ error: "User not found or already approved" });
     }
-
     await User.findByIdAndDelete(user._id);
-
     res.json({ message: `${user.name} has been rejected and removed` });
   } catch (error) {
     console.error("Reject user error:", error);
