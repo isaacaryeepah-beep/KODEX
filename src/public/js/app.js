@@ -11636,9 +11636,14 @@ async function sendBulkEmail(courseId) {
   }
   try {
     const data = await api(`/api/courses/${courseId}/email-students`, { method: 'POST', body: JSON.stringify({ subject, message }) });
-    status.textContent = `✓ Email sent to ${data.sentCount} student(s)`;
-    status.style.cssText = 'display:block;background:#f0fdf4;color:#15803d;padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:12px';
-    setTimeout(() => document.getElementById('bulk-email-modal')?.remove(), 2000);
+    if (data.devMode) {
+      status.innerHTML = '<strong>Email service not configured.</strong> No emails were sent. Ask your admin to set up GMAIL_USER or MAILERSEND_API_KEY in the server environment.';
+      status.style.cssText = 'display:block;background:#fff7ed;color:#92400e;padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:12px';
+    } else {
+      status.textContent = `✓ Email sent to ${data.sentCount} of ${data.total} student(s)`;
+      status.style.cssText = 'display:block;background:#f0fdf4;color:#15803d;padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:12px';
+      setTimeout(() => document.getElementById('bulk-email-modal')?.remove(), 2000);
+    }
   } catch(e) {
     status.textContent = 'Failed: ' + e.message;
     status.style.cssText = 'display:block;background:#fef2f2;color:#dc2626;padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:12px';
@@ -11689,9 +11694,14 @@ async function sendBulkSms(courseId) {
   }
   try {
     const data = await api(`/api/courses/${courseId}/sms-students`, { method: 'POST', body: JSON.stringify({ message }) });
-    status.textContent = `✓ SMS sent to ${data.sentCount} student(s)`;
-    status.style.cssText = 'display:block;background:#f0fdf4;color:#15803d;padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:12px';
-    setTimeout(() => document.getElementById('bulk-sms-modal')?.remove(), 2000);
+    if (data.devMode) {
+      status.innerHTML = '<strong>SMS service not configured.</strong> No messages were sent. Ask your admin to set up ARKESEL_API_KEY in the server environment.';
+      status.style.cssText = 'display:block;background:#fff7ed;color:#92400e;padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:12px';
+    } else {
+      status.textContent = `✓ SMS sent to ${data.sentCount} of ${data.total} student(s)`;
+      status.style.cssText = 'display:block;background:#f0fdf4;color:#15803d;padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:12px';
+      setTimeout(() => document.getElementById('bulk-sms-modal')?.remove(), 2000);
+    }
   } catch(e) {
     status.textContent = 'Failed: ' + e.message;
     status.style.cssText = 'display:block;background:#fef2f2;color:#dc2626;padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:12px';
