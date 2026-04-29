@@ -83,23 +83,16 @@ exports.listAnnouncements = async (req, res) => {
     const query = {
       company:  companyId,
       isActive: true,
-      $or: [
-        { publishAt: null },
-        { publishAt: { $lte: now } },
-      ],
       $and: [
-        {
-          $or: [
-            { expiresAt: null },
-            { expiresAt: { $gt: now } },
-          ],
-        },
+        { $or: [{ publishAt: null }, { publishAt: { $lte: now } }] },
+        { $or: [{ expiresAt: null }, { expiresAt: { $gt: now } }] },
       ],
     };
 
-    // Audience scoping
+    // Audience scoping — pushed into $and so it doesn't clobber the date filters
+    let audienceFilter = null;
     if (role === 'student') {
-      query.$or = [
+      audienceFilter = [
         { audience: 'all' },
         { audience: 'students' },
         { audience: 'department', targetDepartment: req.user.department },
@@ -109,24 +102,25 @@ exports.listAnnouncements = async (req, res) => {
         { audience: 'qualificationType', targetQualificationType: req.user.qualificationType },
       ];
     } else if (role === 'employee') {
-      query.$or = [
+      audienceFilter = [
         { audience: 'all' },
         { audience: 'employees' },
       ];
     } else if (role === 'lecturer') {
-      query.$or = [
+      audienceFilter = [
         { audience: 'all' },
         { audience: 'lecturers' },
         { audience: 'department', targetDepartment: req.user.department },
       ];
     } else if (role === 'hod') {
-      query.$or = [
+      audienceFilter = [
         { audience: 'all' },
         { audience: 'hod' },
         { audience: 'lecturers' },
         { audience: 'department', targetDepartment: req.user.department },
       ];
     }
+    if (audienceFilter) query.$and.push({ $or: audienceFilter });
     // admin / superadmin: see all
 
     const announcements = await Announcement.find(query)
