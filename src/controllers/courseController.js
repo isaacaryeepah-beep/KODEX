@@ -23,6 +23,9 @@ exports.createCourse = async (req, res) => {
       lecturerId:     isLecturer ? req.user._id : (req.body.lecturerId || null),
       needsApproval:  isLecturer,
       approvalStatus: isLecturer ? 'pending' : 'approved',
+      // Auto-assign departmentId from the creator's department so HOD course
+      // oversight can filter by department correctly
+      departmentId:   req.body.departmentId || req.user.department || null,
     };
 
     const course = await courseService.createCourse(data, creatorId, companyId);
