@@ -141,7 +141,7 @@ exports.listAnnouncements = async (req, res) => {
       readCount:   (a.readBy || []).length,
     }));
 
-    return res.json({ success: true, data: result });
+    return res.json({ success: true, announcements: result });
   } catch (err) {
     console.error('[listAnnouncements]', err);
     return res.status(500).json({ success: false, message: err.message });
