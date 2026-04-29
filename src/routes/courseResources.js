@@ -46,11 +46,11 @@ function isStaff(role) {
 // Check lecturer owns this course; admins skip this check
 async function assertLecturerOwns(req, res, courseId) {
   if (req.user.role !== "lecturer") return true; // admins always pass
-  const course = await Course.findOne({ _id: courseId, company: req.user.company })
-    .select("lecturer")
+  const course = await Course.findOne({ _id: courseId, companyId: req.user.company })
+    .select("lecturerId")
     .lean();
   if (!course) { res.status(404).json({ error: "Course not found" }); return false; }
-  if (course.lecturer?.toString() !== req.user._id.toString()) {
+  if (course.lecturerId?.toString() !== req.user._id.toString()) {
     res.status(403).json({ error: "You can only manage resources on your own courses" });
     return false;
   }

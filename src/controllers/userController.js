@@ -12,7 +12,7 @@ exports.listUsers = async (req, res) => {
     if (department) filter.department = department;
 
     if (req.user.role === "lecturer") {
-      const courses = await Course.find({ lecturer: req.user._id, company: req.user.company });
+      const courses = await Course.find({ lecturerId: req.user._id, companyId: req.user.company });
       const enrolledIds = new Set();
       courses.forEach((c) => c.enrolledStudents.forEach((id) => enrolledIds.add(id.toString())));
       const studentIds = [...enrolledIds];
@@ -429,7 +429,7 @@ exports.bulkImportStudents = async (req, res) => {
       // Also support a single courseId passed in the body/query
       let defaultCourse = null;
       if (req.body?.courseId || req.query?.courseId) {
-        defaultCourse = await Course.findOne({ _id: req.body?.courseId || req.query?.courseId, company: req.user.company });
+        defaultCourse = await Course.findOne({ _id: req.body?.courseId || req.query?.courseId, companyId: req.user.company });
       }
 
       const results = { created: 0, skipped: 0, errors: [] };

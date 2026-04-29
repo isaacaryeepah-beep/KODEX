@@ -82,7 +82,7 @@ exports.createAssignment = async (req, res) => {
     if (!mongoose.Types.ObjectId.isValid(courseId))
       return res.status(400).json({ error: "Invalid course ID" });
 
-    const course = await Course.findOne({ _id: courseId, company: req.user.company });
+    const course = await Course.findOne({ _id: courseId, companyId: req.user.company });
     if (!course) return res.status(404).json({ error: "Course not found" });
 
     if (new Date(releaseDate) >= new Date(dueDate))

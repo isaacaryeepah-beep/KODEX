@@ -85,7 +85,7 @@ exports.academicOverview = async (req, res) => {
       totalSessions,
       activeSessions,
     ] = await Promise.all([
-      Course.countDocuments({ company }),
+      Course.countDocuments({ companyId: company }),
       User.countDocuments({ company, role: "student", isApproved: true }),
       User.countDocuments({ company, role: "lecturer", isApproved: true }),
       AttendanceSession.countDocuments({ company }),
@@ -305,7 +305,7 @@ exports.lecturerDashboard = async (req, res) => {
     const ahead7   = addDays(now, 7);
 
     // My courses
-    const myCourses = await Course.find({ company, lecturer: userId })
+    const myCourses = await Course.find({ companyId: company, lecturerId: userId })
       .select("title code enrolledStudents")
       .lean();
     const courseIds   = myCourses.map(c => c._id);
