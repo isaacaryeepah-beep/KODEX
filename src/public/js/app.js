@@ -7390,83 +7390,91 @@ async function showAddQuestionsView(quizId) {
         </button>
       </div>
       <div class="card" style="margin-bottom:16px;">
-        <h3>Add New Question</h3>
+        <h3 style="font-size:16px;font-weight:700;margin-bottom:16px;">Add New Question</h3>
 
         <!-- Question Type -->
-        <div class="form-group" style="margin-bottom:14px;">
-          <label style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.4px;color:#6b7280;">Question Type</label>
-          <div style="display:flex;gap:10px;margin-top:6px;flex-wrap:wrap;">
-            <label id="aq-lbl-single" style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:8px 16px;border:2px solid var(--primary);border-radius:8px;background:var(--primary);color:#fff;font-size:13px;font-weight:600;">
-              <input type="radio" name="aq-type" value="single" checked onchange="aqToggleType('single')" style="accent-color:#fff"> Single Answer
+        <div class="form-group" style="margin-bottom:16px;">
+          <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#6b7280;display:block;margin-bottom:8px;">Question Type</label>
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;">
+            <label id="aq-lbl-single" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;cursor:pointer;padding:12px 6px;border:2px solid var(--primary);border-radius:10px;background:var(--primary);color:#fff;font-size:12px;font-weight:700;text-align:center;line-height:1.3;">
+              <input type="radio" name="aq-type" value="single" checked onchange="aqToggleType('single')" style="display:none;">
+              <span style="font-size:18px;">🔘</span>Single Answer
             </label>
-            <label id="aq-lbl-multi" style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:8px 16px;border:2px solid #e5e7eb;border-radius:8px;background:#fff;color:#374151;font-size:13px;font-weight:600;">
-              <input type="radio" name="aq-type" value="multiple" onchange="aqToggleType('multiple')" style="accent-color:var(--primary)"> Multiple Answers
+            <label id="aq-lbl-multi" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;cursor:pointer;padding:12px 6px;border:2px solid #e5e7eb;border-radius:10px;background:var(--card);color:#374151;font-size:12px;font-weight:700;text-align:center;line-height:1.3;">
+              <input type="radio" name="aq-type" value="multiple" onchange="aqToggleType('multiple')" style="display:none;">
+              <span style="font-size:18px;">☑️</span>Multi Answer
             </label>
-            <label id="aq-lbl-fill" style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:8px 16px;border:2px solid #e5e7eb;border-radius:8px;background:#fff;color:#374151;font-size:13px;font-weight:600;">
-              <input type="radio" name="aq-type" value="fill" onchange="aqToggleType('fill')" style="accent-color:var(--primary)"> Fill In
+            <label id="aq-lbl-fill" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;cursor:pointer;padding:12px 6px;border:2px solid #e5e7eb;border-radius:10px;background:var(--card);color:#374151;font-size:12px;font-weight:700;text-align:center;line-height:1.3;">
+              <input type="radio" name="aq-type" value="fill" onchange="aqToggleType('fill')" style="display:none;">
+              <span style="font-size:18px;">✏️</span>Fill In
             </label>
           </div>
-          <p id="aq-type-hint" style="font-size:12px;color:#9ca3af;margin-top:5px;">One correct answer — student picks one option.</p>
+          <p id="aq-type-hint" style="font-size:12px;color:#9ca3af;margin-top:8px;">One correct answer — student picks one option.</p>
         </div>
 
-        <div class="form-group">
-          <label>Question Text *</label>
+        <!-- Question Text -->
+        <div class="form-group" style="margin-bottom:14px;">
+          <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#6b7280;">Question Text *</label>
           ${getMathToolbar('aq-text')}
-          <textarea id="aq-text" rows="3" placeholder="Enter your question here…" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;" oninput="updateMathPreview('aq-text','aq-math-preview')"></textarea>
+          <textarea id="aq-text" rows="3" placeholder="Enter your question here…" style="width:100%;padding:10px 12px;border:1.5px solid #d1d5db;border-radius:8px;font-size:14px;font-family:inherit;resize:vertical;box-sizing:border-box;" oninput="updateMathPreview('aq-text','aq-math-preview')"></textarea>
           <div id="aq-math-preview" style="display:none;margin-top:6px;padding:8px 12px;background:#f5f3ff;border:1px solid #e0e7ff;border-radius:6px;font-size:13px;color:#374151;min-height:32px"></div>
         </div>
 
-        <div id="aq-options-section">
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">
-          ${['A','B','C','D'].map((l,i) => `
-          <div class="form-group">
-            <label>Option ${l}${i<2?' *':''}</label>
-            <input type="text" id="aq-opt-${i}" placeholder="Option ${l}" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;">
-          </div>`).join('')}
-        </div>
+        <!-- Options (MCQ) -->
+        <div id="aq-options-section" style="margin-bottom:14px;">
+          <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#6b7280;display:block;margin-bottom:8px;">Options</label>
+          <div style="display:flex;flex-direction:column;gap:8px;">
+            ${['A','B','C','D'].map((l,i) => `
+            <div style="display:flex;align-items:center;gap:10px;">
+              <span style="width:28px;height:28px;border-radius:50%;background:#f3f4f6;border:1.5px solid #d1d5db;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#374151;flex-shrink:0;">${l}</span>
+              <input type="text" id="aq-opt-${i}" placeholder="Option ${l}${i<2?' (required)':' (optional)'}" style="flex:1;padding:9px 12px;border:1.5px solid #d1d5db;border-radius:8px;font-size:14px;font-family:inherit;">
+            </div>`).join('')}
+          </div>
         </div>
 
         <!-- Single: radio buttons -->
-        <div id="aq-single-wrap" style="margin-bottom:12px;">
-          <div class="form-group">
-            <label>Correct Answer *</label>
-            <div style="display:flex;gap:12px;margin-top:4px;flex-wrap:wrap;">
-              ${['A','B','C','D'].map((l,i)=>`<label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:14px;"><input type="radio" name="aq-correct" value="${i}"> ${l}</label>`).join('')}
-            </div>
+        <div id="aq-single-wrap" style="margin-bottom:14px;">
+          <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#6b7280;display:block;margin-bottom:8px;">Correct Answer *</label>
+          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;">
+            ${['A','B','C','D'].map((l,i)=>`
+            <label style="display:flex;align-items:center;justify-content:center;gap:6px;padding:10px;border:1.5px solid #e5e7eb;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600;color:#374151;">
+              <input type="radio" name="aq-correct" value="${i}" style="accent-color:var(--primary);width:16px;height:16px;"> ${l}
+            </label>`).join('')}
           </div>
         </div>
 
         <!-- Multiple: checkboxes -->
-        <div id="aq-multi-wrap" style="display:none;margin-bottom:12px;">
-          <div class="form-group">
-            <label>Correct Answers * <span style="font-weight:400;color:#9ca3af;font-size:12px;">(check all that apply)</span></label>
-            <div style="display:flex;gap:8px;margin-top:4px;flex-wrap:wrap;">
-              ${['A','B','C','D'].map((l,i)=>`
-              <label id="aq-cblbl-${i}" style="display:flex;align-items:center;gap:5px;padding:6px 12px;border:1.5px solid #e5e7eb;border-radius:7px;cursor:pointer;font-size:13px;font-weight:500;transition:all .15s;">
-                <input type="checkbox" value="${i}" id="aq-cb-${i}" name="aq-multi-correct" onchange="aqCbChange(${i})"> ${l}
-              </label>`).join('')}
-            </div>
+        <div id="aq-multi-wrap" style="display:none;margin-bottom:14px;">
+          <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#6b7280;display:block;margin-bottom:8px;">Correct Answers * <span style="font-weight:400;text-transform:none;font-size:11px;">(select all that apply)</span></label>
+          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;">
+            ${['A','B','C','D'].map((l,i)=>`
+            <label id="aq-cblbl-${i}" style="display:flex;align-items:center;justify-content:center;gap:6px;padding:10px;border:1.5px solid #e5e7eb;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600;color:#374151;">
+              <input type="checkbox" value="${i}" id="aq-cb-${i}" name="aq-multi-correct" onchange="aqCbChange(${i})" style="accent-color:var(--primary);width:16px;height:16px;"> ${l}
+            </label>`).join('')}
           </div>
         </div>
 
-        <!-- Fill-in: text answer -->
-        <div id="aq-fill-wrap" style="display:none;margin-bottom:12px;">
-          <div class="form-group">
-            <label>Correct Answer * <span style="font-weight:400;color:#9ca3af;font-size:12px;">(case-insensitive)</span></label>
-            <input type="text" id="aq-fill-answer" placeholder="e.g. Photosynthesis" style="width:100%;padding:9px 12px;border:1.5px solid #d1d5db;border-radius:8px;font-size:13px;">
+        <!-- Fill-in -->
+        <div id="aq-fill-wrap" style="display:none;margin-bottom:14px;">
+          <div class="form-group" style="margin-bottom:10px;">
+            <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#6b7280;">Correct Answer * <span style="font-weight:400;text-transform:none;">(case-insensitive)</span></label>
+            <input type="text" id="aq-fill-answer" placeholder="e.g. Photosynthesis" style="width:100%;padding:10px 12px;border:1.5px solid #d1d5db;border-radius:8px;font-size:14px;font-family:inherit;box-sizing:border-box;margin-top:6px;">
           </div>
           <div class="form-group">
-            <label>Also Accept <span style="font-weight:400;color:#9ca3af;font-size:12px;">(one per line, optional)</span></label>
-            <textarea id="aq-fill-alts" rows="2" placeholder="photo synthesis&#10;photosynthesis process" style="width:100%;padding:8px 12px;border:1.5px solid #d1d5db;border-radius:8px;font-size:12px;font-family:inherit;resize:vertical;"></textarea>
+            <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#6b7280;">Also Accept <span style="font-weight:400;text-transform:none;">(one per line, optional)</span></label>
+            <textarea id="aq-fill-alts" rows="2" placeholder="photo synthesis&#10;photosynthesis process" style="width:100%;padding:10px 12px;border:1.5px solid #d1d5db;border-radius:8px;font-size:13px;font-family:inherit;resize:vertical;box-sizing:border-box;margin-top:6px;"></textarea>
           </div>
         </div>
 
-        <div class="form-group" style="display:inline-block;margin-right:16px;">
-          <label>Marks</label>
-          <input type="number" id="aq-marks" value="1" min="1" style="width:80px;padding:8px;border:1px solid #d1d5db;border-radius:6px;">
+        <!-- Marks + Submit -->
+        <div style="display:flex;align-items:flex-end;gap:12px;margin-top:4px;">
+          <div>
+            <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#6b7280;display:block;margin-bottom:6px;">Marks</label>
+            <input type="number" id="aq-marks" value="1" min="1" style="width:72px;padding:9px 10px;border:1.5px solid #d1d5db;border-radius:8px;font-size:14px;">
+          </div>
+          <div id="aq-error" style="color:#ef4444;font-size:13px;flex:1;"></div>
         </div>
-        <div id="aq-error" style="color:#ef4444;margin:8px 0;display:none;font-size:13px;"></div>
-        <div style="margin-top:12px;"><button class="btn btn-primary" onclick="submitAddQuestion('${quizId}')">＋ Add Question</button></div>
+        <button class="btn btn-primary" onclick="submitAddQuestion('${quizId}')" style="width:100%;margin-top:14px;padding:12px;">＋ Add Question</button>
       </div>
 
       <div class="card">
