@@ -48,42 +48,70 @@ html, body { height: 100%; background: var(--navy); color: var(--white); font-fa
 
 /* Sidebar */
 .sidebar {
-  width: 280px; min-width: 280px; background: var(--navy2);
+  width: 300px; min-width: 300px; background: var(--navy2);
   border-right: 1px solid var(--navy3); overflow-y: auto;
   display: flex; flex-direction: column;
 }
-.sidebar-section { padding: 16px; border-bottom: 1px solid var(--navy3); }
-.sidebar-section h3 { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--slate); margin-bottom: 12px; }
+.sidebar-section { padding: 14px 16px; border-bottom: 1px solid var(--navy3); }
+.sidebar-section h3 {
+  font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px;
+  color: var(--slate); margin-bottom: 10px; display: flex; align-items: center; gap: 7px;
+}
+/* Live pulse dot */
+.live-dot {
+  width: 7px; height: 7px; border-radius: 50%; background: var(--green);
+  box-shadow: 0 0 0 0 rgba(34,197,94,.6);
+  animation: live-pulse 2s infinite;
+  display: inline-block; flex-shrink: 0;
+}
+@keyframes live-pulse {
+  0%   { box-shadow: 0 0 0 0 rgba(34,197,94,.6); }
+  70%  { box-shadow: 0 0 0 6px rgba(34,197,94,0); }
+  100% { box-shadow: 0 0 0 0 rgba(34,197,94,0); }
+}
 
-.summary-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.summary-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
 .sum-box {
-  background: var(--navy); border-radius: 8px; padding: 10px;
-  text-align: center;
+  background: var(--navy); border-radius: 8px; padding: 10px 8px;
+  text-align: center; border: 1px solid var(--navy3);
 }
 .sum-val { font-family: var(--font-mono); font-size: 22px; font-weight: 700; }
-.sum-key { font-size: 10px; color: var(--slate); font-weight: 600; text-transform: uppercase; margin-top: 2px; }
+.sum-key { font-size: 9px; color: var(--slate); font-weight: 700; text-transform: uppercase; letter-spacing: .5px; margin-top: 3px; }
+
+/* Group label inside student list */
+.stu-group-label {
+  padding: 8px 16px 5px; font-size: 9px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .8px; color: var(--navy3);
+  background: var(--navy2); border-bottom: 1px solid rgba(51,65,85,.3);
+  position: sticky; top: 0; z-index: 1;
+}
 
 .student-list { flex: 1; overflow-y: auto; }
 .stu-row {
-  display: flex; align-items: center; gap: 10px; padding: 12px 16px;
-  border-bottom: 1px solid rgba(51,65,85,0.5); cursor: pointer;
-  transition: background 0.15s;
+  display: flex; align-items: center; gap: 10px; padding: 11px 16px;
+  border-bottom: 1px solid rgba(51,65,85,0.4); cursor: pointer;
+  transition: background 0.15s; position: relative;
 }
-.stu-row:hover { background: rgba(255,255,255,0.03); }
-.stu-row.active { background: rgba(56,189,248,0.08); border-left: 3px solid var(--accent); }
-.stu-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
-.stu-dot.green  { background: var(--green); box-shadow: 0 0 6px var(--green); }
+.stu-row:hover { background: rgba(255,255,255,0.035); }
+.stu-row.active { background: rgba(56,189,248,0.09); }
+.stu-row.active::before {
+  content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
+  background: var(--accent); border-radius: 0 2px 2px 0;
+}
+.stu-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+.stu-dot.green  { background: var(--green); box-shadow: 0 0 5px var(--green); }
 .stu-dot.yellow { background: var(--yellow); }
-.stu-dot.red    { background: var(--red); animation: blink 1s infinite; }
+.stu-dot.red    { background: var(--red); animation: blink 1.2s infinite; }
 .stu-dot.grey   { background: var(--slate); }
-@keyframes blink { 50% { opacity: 0.3; } }
+@keyframes blink { 50% { opacity: 0.25; } }
 
 .stu-info { flex: 1; min-width: 0; }
 .stu-name  { font-size: 13px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.stu-sub   { font-size: 11px; color: var(--slate); font-family: var(--font-mono); margin-top: 2px; }
+.stu-sub   { font-size: 10px; color: var(--slate); font-family: var(--font-mono); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-.stu-score { font-family: var(--font-mono); font-size: 14px; font-weight: 700; text-align: right; }
-.stu-time  { font-size: 10px; color: var(--slate); text-align: right; margin-top: 2px; }
+.stu-right { text-align: right; flex-shrink: 0; }
+.stu-violations { font-family: var(--font-mono); font-size: 13px; font-weight: 700; }
+.stu-status { font-size: 9px; color: var(--slate); margin-top: 2px; text-transform: uppercase; letter-spacing: .3px; }
 
 /* Detail panel */
 .detail-panel {
@@ -217,7 +245,7 @@ html, body { height: 100%; background: var(--navy); color: var(--white); font-fa
   <!-- SIDEBAR: student list -->
   <div class="sidebar">
     <div class="sidebar-section">
-      <h3>Summary</h3>
+      <h3><span class="live-dot" id="live-dot" style="display:none"></span>Students</h3>
       <div class="summary-grid" id="summary-grid">
         <div class="sum-box"><div class="sum-val">—</div><div class="sum-key">Total</div></div>
         <div class="sum-box"><div class="sum-val" style="color:var(--green)">—</div><div class="sum-key">Active</div></div>
@@ -327,6 +355,8 @@ function selectQuiz(id, title) {
 function resetView() {
   attemptsData = [];
   selectedAttemptId = null;
+  const ld = document.getElementById('live-dot');
+  if (ld) ld.style.display = 'none';
   document.getElementById('summary-grid').innerHTML = `
     <div class="sum-box"><div class="sum-val">—</div><div class="sum-key">Total</div></div>
     <div class="sum-box"><div class="sum-val" style="color:var(--green)">—</div><div class="sum-key">Active</div></div>
@@ -380,22 +410,44 @@ function renderSidebar(attempts) {
     return;
   }
 
-  const dotColor = s => s === 'active' ? 'green' : s === 'terminated' ? 'red' : s === 'abandoned' ? 'grey' : 'yellow';
-  const statusLabel = s => ({ active:'Active', submitted:'Submitted', auto_submitted:'Auto-submitted', terminated:'Terminated', abandoned:'Abandoned' }[s] || s);
+  // Show live dot when there are active students
+  const liveDot = document.getElementById('live-dot');
+  if (liveDot) liveDot.style.display = active > 0 ? 'inline-block' : 'none';
 
-  list.innerHTML = attempts.map(a => `
-    <div class="stu-row ${selectedAttemptId === a._id ? 'active' : ''}" data-aid="${a._id}">
-      <div class="stu-dot ${dotColor(a.status)}"></div>
-      <div class="stu-info">
-        <div class="stu-name">${a.student?.name || 'Student'}</div>
-        <div class="stu-sub">${a.student?.studentId || a.student?.email || '—'}</div>
-      </div>
-      <div>
-        <div class="stu-score" style="color:var(--${a.violationCount > 5 ? 'red' : a.violationCount > 0 ? 'yellow' : 'green'})">${a.violationCount ?? 0}v</div>
-        <div class="stu-time">${statusLabel(a.status)}</div>
-      </div>
-    </div>
-  `).join('');
+  const dotColor = s => s === 'active' ? 'green' : s === 'terminated' ? 'red' : s === 'abandoned' ? 'grey' : 'yellow';
+  const shortStatus = s => ({ active:'Active', submitted:'Done', auto_submitted:'Auto', terminated:'Ended', abandoned:'Away' }[s] || s);
+  const violColor = n => n > 5 ? 'var(--red)' : n > 0 ? 'var(--yellow)' : 'var(--green)';
+
+  function renderRow(a) {
+    return `
+      <div class="stu-row ${selectedAttemptId === a._id ? 'active' : ''}" data-aid="${a._id}">
+        <div class="stu-dot ${dotColor(a.status)}"></div>
+        <div class="stu-info">
+          <div class="stu-name">${a.student?.name || 'Student'}</div>
+          <div class="stu-sub">${a.student?.studentId || a.student?.email || '—'}</div>
+        </div>
+        <div class="stu-right">
+          <div class="stu-violations" style="color:${violColor(a.violationCount ?? 0)}">${a.violationCount ?? 0}v</div>
+          <div class="stu-status">${shortStatus(a.status)}</div>
+        </div>
+      </div>`;
+  }
+
+  const groups = [
+    { label: '● Active', filter: a => a.status === 'active' },
+    { label: '✓ Done', filter: a => ['submitted','auto_submitted'].includes(a.status) },
+    { label: '⛔ Terminated', filter: a => a.status === 'terminated' },
+    { label: '· Other', filter: a => !['active','submitted','auto_submitted','terminated'].includes(a.status) },
+  ];
+
+  let html = '';
+  groups.forEach(g => {
+    const rows = attempts.filter(g.filter);
+    if (!rows.length) return;
+    html += `<div class="stu-group-label">${g.label} (${rows.length})</div>`;
+    html += rows.map(renderRow).join('');
+  });
+  list.innerHTML = html;
 
   list.querySelectorAll('.stu-row').forEach(row => {
     row.addEventListener('click', () => {
