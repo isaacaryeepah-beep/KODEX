@@ -54,7 +54,8 @@ exports.listCourses = async (req, res) => {
       req.user.role,
       req.user._id,
       companyId,
-      req.query
+      req.query,
+      req.user.department || null
     );
     return res.json({ success: true, ...result });
   } catch (err) {
