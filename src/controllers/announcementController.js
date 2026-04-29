@@ -16,6 +16,7 @@ exports.createAnnouncement = async (req, res) => {
       targetDepartment, targetProgramme, targetCourse,
       targetLevel, targetGroup, targetStudyType, targetQualificationType,
       publishAt, expiresAt, pinned,
+      courseId,
     } = req.body;
 
     if (!title || !body) {
@@ -48,7 +49,7 @@ exports.createAnnouncement = async (req, res) => {
       audience:                audience    || 'all',
       targetDepartment:        targetDepartment        || null,
       targetProgramme:         targetProgramme         || null,
-      targetCourse:            targetCourse            || null,
+      targetCourse:            targetCourse || courseId  || null,
       targetLevel:             targetLevel             || null,
       targetGroup:             targetGroup             || null,
       targetStudyType:         targetStudyType         || null,
@@ -110,6 +111,7 @@ exports.listAnnouncements = async (req, res) => {
       audienceFilter = [
         { audience: 'all' },
         { audience: 'lecturers' },
+        { audience: 'students' },
         { audience: 'department', targetDepartment: req.user.department },
       ];
     } else if (role === 'hod') {
@@ -117,6 +119,7 @@ exports.listAnnouncements = async (req, res) => {
         { audience: 'all' },
         { audience: 'hod' },
         { audience: 'lecturers' },
+        { audience: 'students' },
         { audience: 'department', targetDepartment: req.user.department },
       ];
     }
