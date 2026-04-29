@@ -200,13 +200,14 @@ html, body { height: 100%; background: var(--navy); color: var(--white); font-fa
   <div style="display:flex;align-items:center;gap:12px;">
     <button class="btn btn-ghost" onclick="window.location.href='/index.html'" style="padding:7px 14px;font-size:13px;display:flex;align-items:center;gap:6px;">← Back</button>
     <div>
-      <h1>📊 Proctor Dashboard</h1>
-      <p id="quiz-label">No quiz loaded</p>
+      <h1>🎯 Snap Quiz Monitor</h1>
+      <p id="quiz-label">Lecturer live proctoring</p>
     </div>
   </div>
   <div class="toolbar">
-    <input type="text" id="quiz-id-input" placeholder="Quiz ID…" />
-    <button class="btn btn-primary" id="load-btn">Load</button>
+    <select id="quiz-picker" style="padding:8px 12px;background:var(--navy);border:1.5px solid var(--navy3);border-radius:8px;color:var(--white);font-family:var(--font-sans);font-size:13px;outline:none;min-width:200px;max-width:280px;">
+      <option value="">— Select a snap quiz —</option>
+    </select>
     <button class="btn btn-ghost" id="refresh-btn">↻ Refresh</button>
     <button class="btn btn-ghost" id="export-btn">⬇ Export</button>
   </div>
@@ -227,7 +228,7 @@ html, body { height: 100%; background: var(--navy); color: var(--white); font-fa
     <div class="student-list" id="student-list">
       <div class="detail-placeholder" style="height:200px">
         <div class="icon">🔍</div>
-        <p>Enter a Quiz ID to begin monitoring</p>
+        <p>Select a snap quiz above to begin monitoring</p>
       </div>
     </div>
   </div>
@@ -243,16 +244,15 @@ html, body { height: 100%; background: var(--navy); color: var(--white); font-fa
 
 <script>
 const API = '';
-// Read from the same key the main portal uses ('token') — no manual entry needed
-let authToken = localStorage.getItem('token') || localStorage.getItem('proctor_token') || '';
+let authToken = localStorage.getItem('token') || '';
 let currentQuizId = '';
+let currentQuizTitle = '';
 let refreshTimer = null;
-let selectedSessionId = null;
-let monitorData = null;
+let selectedAttemptId = null;
+let attemptsData = [];
 
-// Warn if not logged in instead of using a disruptive prompt
 if (!authToken) {
-  setTimeout(() => toast('Not signed in. Please log in from the main portal, then open the Live Monitor again.', 'error'), 700);
+  setTimeout(() => toast('Not signed in — please log in from the main portal first.', 'error'), 700);
 }
 
 // ── Toast ────────────────────────────────────────────────────────────
@@ -274,74 +274,125 @@ async function api(method, path) {
   return data;
 }
 
-// ── Load Monitor ─────────────────────────────────────────────────────
-// ── Auto-load quiz from URL ?quizId=xxx ─────────────────────────
-(function() {
-  const params = new URLSearchParams(window.location.search);
-  const qid = params.get('quizId');
-  if (qid) {
-    const inp = document.getElementById('quiz-id-input');
-    if (inp) inp.value = qid;
-    currentQuizId = qid;
-    setTimeout(() => {
-      loadMonitor();
-      if (refreshTimer) clearInterval(refreshTimer);
-      refreshTimer = setInterval(loadMonitor, 15000);
-    }, 500);
-  }
-})();
+// ── Populate quiz picker from lecturer's snap quizzes ─────────────
+async function loadQuizPicker() {
+  try {
+    const data = await api('GET', '/api/lecturer/snap-quizzes');
+    const quizzes = data.quizzes || [];
+    const picker = document.getElementById('quiz-picker');
+    if (!quizzes.length) {
+      picker.innerHTML = '<option value="">No snap quizzes found</option>';
+      return;
+    }
+    picker.innerHTML = '<option value="">— Select a snap quiz —</option>' +
+      quizzes.map(q => {
+        const statusIcon = q.status === 'open' ? '🟢' : q.status === 'closed' ? '🔴' : '⚪';
+        return `<option value="${q._id}">${statusIcon} ${q.title}</option>`;
+      }).join('');
 
-document.getElementById('load-btn').addEventListener('click', () => {
-  const id = document.getElementById('quiz-id-input').value.trim();
-  if (!id) return toast('Enter a quiz ID', 'error');
-  currentQuizId = id;
-  loadMonitor();
-  if (refreshTimer) clearInterval(refreshTimer);
-  refreshTimer = setInterval(loadMonitor, 15000);
+    // If URL has ?quizId= pre-select it
+    const params = new URLSearchParams(window.location.search);
+    const qid = params.get('quizId');
+    if (qid && quizzes.find(q => q._id === qid)) {
+      picker.value = qid;
+      selectQuiz(qid, quizzes.find(q => q._id === qid)?.title || qid);
+    }
+  } catch (e) {
+    toast('Failed to load snap quizzes: ' + e.message, 'error');
+  }
+}
+
+document.getElementById('quiz-picker').addEventListener('change', function () {
+  const id = this.value;
+  if (!id) {
+    currentQuizId = '';
+    clearInterval(refreshTimer);
+    document.getElementById('quiz-label').textContent = 'Lecturer live proctoring';
+    resetView();
+    return;
+  }
+  const title = this.options[this.selectedIndex].text.replace(/^[🟢🔴⚪]\s*/, '');
+  selectQuiz(id, title);
 });
+
+function selectQuiz(id, title) {
+  currentQuizId = id;
+  currentQuizTitle = title;
+  document.getElementById('quiz-label').textContent = title;
+  clearInterval(refreshTimer);
+  loadAttempts();
+  refreshTimer = setInterval(loadAttempts, 15000);
+}
+
+function resetView() {
+  attemptsData = [];
+  selectedAttemptId = null;
+  document.getElementById('summary-grid').innerHTML = `
+    <div class="sum-box"><div class="sum-val">—</div><div class="sum-key">Total</div></div>
+    <div class="sum-box"><div class="sum-val" style="color:var(--green)">—</div><div class="sum-key">Active</div></div>
+    <div class="sum-box"><div class="sum-val" style="color:var(--accent)">—</div><div class="sum-key">Done</div></div>
+    <div class="sum-box"><div class="sum-val" style="color:var(--red)">—</div><div class="sum-key">Terminated</div></div>
+  `;
+  document.getElementById('student-list').innerHTML = `
+    <div class="detail-placeholder" style="height:200px">
+      <div class="icon">🔍</div>
+      <p>Select a snap quiz above to begin monitoring</p>
+    </div>`;
+  document.getElementById('detail-panel').innerHTML = `
+    <div class="detail-placeholder">
+      <div class="icon">👈</div>
+      <p>Select a student to view their session details</p>
+    </div>`;
+}
 
 document.getElementById('refresh-btn').addEventListener('click', () => {
-  if (currentQuizId) loadMonitor();
-  else toast('Load a quiz first', 'error');
+  if (currentQuizId) loadAttempts();
+  else toast('Select a snap quiz first', 'error');
 });
 
-async function loadMonitor() {
+async function loadAttempts() {
+  if (!currentQuizId) return;
   try {
-    const data = await api('GET', `/api/proctor/quiz/${currentQuizId}/live-monitor`);
-    monitorData = data;
-    renderSidebar(data);
-    document.getElementById('quiz-label').textContent = data.quiz?.title || currentQuizId;
+    const data = await api('GET', `/api/lecturer/snap-quizzes/${currentQuizId}/attempts?limit=100`);
+    attemptsData = data.attempts || [];
+    renderSidebar(attemptsData);
   } catch (e) {
     toast(e.message, 'error');
   }
 }
 
-function renderSidebar(data) {
-  const s = data.summary || {};
+function renderSidebar(attempts) {
+  const total      = attempts.length;
+  const active     = attempts.filter(a => a.status === 'active').length;
+  const done       = attempts.filter(a => ['submitted','auto_submitted'].includes(a.status)).length;
+  const terminated = attempts.filter(a => a.status === 'terminated').length;
+
   document.getElementById('summary-grid').innerHTML = `
-    <div class="sum-box"><div class="sum-val">${s.total ?? 0}</div><div class="sum-key">Total</div></div>
-    <div class="sum-box"><div class="sum-val" style="color:var(--green)">${s.active ?? 0}</div><div class="sum-key">Active</div></div>
-    <div class="sum-box"><div class="sum-val" style="color:var(--accent)">${s.completed ?? 0}</div><div class="sum-key">Done</div></div>
-    <div class="sum-box"><div class="sum-val" style="color:var(--red)">${s.terminated ?? 0}</div><div class="sum-key">Terminated</div></div>
+    <div class="sum-box"><div class="sum-val">${total}</div><div class="sum-key">Total</div></div>
+    <div class="sum-box"><div class="sum-val" style="color:var(--green)">${active}</div><div class="sum-key">Active</div></div>
+    <div class="sum-box"><div class="sum-val" style="color:var(--accent)">${done}</div><div class="sum-key">Done</div></div>
+    <div class="sum-box"><div class="sum-val" style="color:var(--red)">${terminated}</div><div class="sum-key">Terminated</div></div>
   `;
 
-  const sessions = data.sessions || [];
   const list = document.getElementById('student-list');
-  if (sessions.length === 0) {
+  if (!attempts.length) {
     list.innerHTML = '<p style="padding:20px;text-align:center;color:var(--slate)">No students yet</p>';
     return;
   }
 
-  list.innerHTML = sessions.map(s => `
-    <div class="stu-row ${selectedSessionId === s.sessionId ? 'active' : ''}" data-sid="${s.sessionId}">
-      <div class="stu-dot ${s.statusColor}"></div>
+  const dotColor = s => s === 'active' ? 'green' : s === 'terminated' ? 'red' : s === 'abandoned' ? 'grey' : 'yellow';
+  const statusLabel = s => ({ active:'Active', submitted:'Submitted', auto_submitted:'Auto-submitted', terminated:'Terminated', abandoned:'Abandoned' }[s] || s);
+
+  list.innerHTML = attempts.map(a => `
+    <div class="stu-row ${selectedAttemptId === a._id ? 'active' : ''}" data-aid="${a._id}">
+      <div class="stu-dot ${dotColor(a.status)}"></div>
       <div class="stu-info">
-        <div class="stu-name">${s.student?.name || 'Student'}</div>
-        <div class="stu-sub">${s.student?.indexNumber || '—'} · ${s.platform}</div>
+        <div class="stu-name">${a.student?.name || 'Student'}</div>
+        <div class="stu-sub">${a.student?.studentId || a.student?.email || '—'}</div>
       </div>
       <div>
-        <div class="stu-score" style="color:var(--${s.integrityScore >= 75 ? 'green' : s.integrityScore >= 50 ? 'yellow' : 'red'})">${s.integrityScore}</div>
-        <div class="stu-time">${s.status === 'active' ? s.remainingMinutes + 'm left' : s.status}</div>
+        <div class="stu-score" style="color:var(--${a.violationCount > 5 ? 'red' : a.violationCount > 0 ? 'yellow' : 'green'})">${a.violationCount ?? 0}v</div>
+        <div class="stu-time">${statusLabel(a.status)}</div>
       </div>
     </div>
   `).join('');
@@ -350,21 +401,24 @@ function renderSidebar(data) {
     row.addEventListener('click', () => {
       document.querySelectorAll('.stu-row').forEach(r => r.classList.remove('active'));
       row.classList.add('active');
-      selectedSessionId = row.dataset.sid;
-      loadDetail(row.dataset.sid);
+      selectedAttemptId = row.dataset.aid;
+      loadDetail(row.dataset.aid);
     });
   });
 }
 
-async function loadDetail(sessionId) {
+async function loadDetail(attemptId) {
+  if (!currentQuizId) return;
   const panel = document.getElementById('detail-panel');
   panel.innerHTML = '<div class="spinner"></div>';
 
   try {
-    const data = await api('GET', `/api/proctor/session/${sessionId}/report`);
-    const s = data.session;
-    const logs = data.logs || [];
-    const snaps = data.snapshots || [];
+    const data = await api('GET', `/api/lecturer/snap-quizzes/${currentQuizId}/attempts/${attemptId}`);
+    const s = data.attempt;
+    const violations = data.violations || [];
+    const responses  = data.responses  || [];
+    // map violations to log-style entries for the timeline
+    const logs = violations;
 
     const iconMap = {
       tab_switch: '🔀', app_background: '📵', face_missing: '😶', multiple_faces: '👥',
@@ -373,87 +427,72 @@ async function loadDetail(sessionId) {
       heartbeat: '💓', copy_attempt: '📋', face_detected: '✓', app_foreground: '📲',
     };
 
+    const statusColor = st => st === 'active' ? 'accent' : ['submitted','auto_submitted'].includes(st) ? 'green' : 'red';
+    const statusLabel = st => ({ active:'ACTIVE', submitted:'SUBMITTED', auto_submitted:'AUTO-SUBMITTED', terminated:'TERMINATED', abandoned:'ABANDONED' }[st] || st.toUpperCase());
+
+    const iconMap = {
+      tab_switch:'🔀', focus_lost:'📵', fullscreen_exit:'🖥', copy_paste:'📋',
+      right_click:'🖱', print_screen:'🖨', session_lock:'🔒', heartbeat_timeout:'💔',
+      max_violations:'🚫', manual:'⚠️',
+    };
+
     panel.innerHTML = `
       <div class="detail-header">
         <div>
           <div class="detail-name">${s.student?.name || 'Student'}</div>
-          <div class="detail-sub">${s.student?.indexNumber || ''} · ${s.student?.email || ''}</div>
+          <div class="detail-sub">${s.student?.studentId || s.student?.email || '—'}</div>
           <div class="detail-sub" style="margin-top:4px">
-            ${s.os || '?'} · ${s.browser || '?'} · ${s.platform} · IP: ${s.ipAddress || '?'}
+            Attempt #${s.attemptNumber} · Started ${s.startedAt ? new Date(s.startedAt).toLocaleTimeString() : '—'}
+            ${s.submittedAt ? ` · Submitted ${new Date(s.submittedAt).toLocaleTimeString()}` : ''}
           </div>
         </div>
         <div style="text-align:right">
           <span style="padding:4px 12px;border-radius:6px;font-size:12px;font-weight:700;
-            background:rgba(${s.status === 'active' ? '56,189,248' : s.status === 'completed' ? '34,197,94' : '239,68,68'},0.15);
-            color:var(--${s.status === 'active' ? 'accent' : s.status === 'completed' ? 'green' : 'red'})">
-            ${s.status.toUpperCase()}
+            background:rgba(${s.status === 'active' ? '56,189,248' : ['submitted','auto_submitted'].includes(s.status) ? '34,197,94' : '239,68,68'},0.15);
+            color:var(--${statusColor(s.status)})">
+            ${statusLabel(s.status)}
           </span>
-          ${s.terminationReason ? `<div style="font-size:11px;color:var(--red);margin-top:6px">${s.terminationReason}</div>` : ''}
+          ${s.terminationReason ? `<div style="font-size:11px;color:var(--red);margin-top:6px">${s.terminationReason.replace(/_/g,' ')}</div>` : ''}
         </div>
       </div>
 
       <div class="stats-row">
         <div class="stat-box">
-          <div class="stat-val" style="color:var(--${s.integrityScore >= 75 ? 'green' : s.integrityScore >= 50 ? 'yellow' : 'red'})">${s.integrityScore ?? 100}</div>
-          <div class="stat-key">Integrity</div>
-        </div>
-        <div class="stat-box">
-          <div class="stat-val" style="color:var(--red)">${s.totalViolations ?? 0}</div>
+          <div class="stat-val" style="color:var(--${violations.length > 5 ? 'red' : violations.length > 0 ? 'yellow' : 'green'})">${violations.length}</div>
           <div class="stat-key">Violations</div>
         </div>
         <div class="stat-box">
-          <div class="stat-val" style="color:var(--yellow)">${s.warningsIssued ?? 0}</div>
-          <div class="stat-key">Warnings</div>
+          <div class="stat-val">${s.violationCount ?? 0}</div>
+          <div class="stat-key">Count</div>
         </div>
         <div class="stat-box">
-          <div class="stat-val">${s.attempt?.isSubmitted ? '✅' : '⏳'}</div>
-          <div class="stat-key">Submitted</div>
+          <div class="stat-val">${responses.length}</div>
+          <div class="stat-key">Answered</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-val">${s.gradingStatus?.replace('_',' ') || '—'}</div>
+          <div class="stat-key">Grading</div>
         </div>
       </div>
 
-      ${snaps.length > 0 ? `
-        <div class="section-title">Snapshots (${snaps.length})</div>
-        <div class="snaps-grid" id="snaps-grid">
-          ${snaps.map(snap => `
-            <div class="snap-thumb ${snap.flagged ? 'flagged' : ''}" data-sid="${snap._id}">
-              <div style="background:var(--navy3);height:100%;display:flex;align-items:center;justify-content:center;font-size:24px">📷</div>
-              <div class="snap-label ${snap.flagged ? 'flagged' : ''}">${snap.type}${snap.flagged ? ' ⚑' : ''}</div>
-            </div>
-          `).join('')}
-        </div>
-      ` : ''}
-
-      <div class="section-title" style="margin-top:4px">Event Log (${logs.length} events)</div>
+      <div class="section-title">Violation Log (${violations.length})</div>
       <div class="log-timeline">
-        ${logs.slice().reverse().slice(0, 50).map(l => `
+        ${violations.length === 0
+          ? '<p style="padding:14px;color:var(--slate);font-size:13px">No violations recorded ✓</p>'
+          : violations.slice().reverse().slice(0, 50).map(v => `
           <div class="log-entry">
-            <span class="log-icon">${iconMap[l.eventType] || '📋'}</span>
+            <span class="log-icon">${iconMap[v.violationType] || '⚠️'}</span>
             <div class="log-body">
               <div style="display:flex;align-items:center;gap:8px">
-                <span class="log-evt">${l.eventType.replace(/_/g,' ')}</span>
-                <span class="badge ${l.severity}">${l.severity}</span>
+                <span class="log-evt">${(v.violationType || '').replace(/_/g,' ')}</span>
+                <span class="badge ${v.severity === 'critical' ? 'critical' : v.severity === 'warning' ? 'warning' : 'info'}">${v.severity || 'info'}</span>
               </div>
-              <div class="log-meta">${new Date(l.timestamp).toLocaleTimeString()} ${l.duration ? `· ${Math.round(l.duration)}s` : ''}</div>
+              <div class="log-meta">${new Date(v.occurredAt).toLocaleTimeString()} · ${v.actionTaken || ''}</div>
             </div>
           </div>
         `).join('')}
       </div>
     `;
-
-    // Load snapshot images
-    panel.querySelectorAll('.snap-thumb[data-sid]').forEach(thumb => {
-      const sid = thumb.dataset.sid;
-      api('GET', `/api/proctor/snapshot/${sid}`).then(data => {
-        const img = document.createElement('img');
-        img.src = data.imageData;
-        img.style = 'width:100%;height:100%;object-fit:cover;display:block';
-        thumb.insertBefore(img, thumb.firstChild);
-        thumb.addEventListener('click', () => {
-          document.getElementById('snap-big').src = data.imageData;
-          document.getElementById('snap-overlay').classList.add('show');
-        });
-      }).catch(() => {});
-    });
 
   } catch (e) {
     panel.innerHTML = `<p style="color:var(--red);padding:20px">Error: ${e.message}</p>`;
@@ -467,22 +506,27 @@ document.getElementById('snap-overlay').addEventListener('click', () => {
 
 // ── Export ───────────────────────────────────────────────────────────
 document.getElementById('export-btn').addEventListener('click', () => {
-  if (!monitorData) return toast('Load a quiz first', 'error');
-  const sessions = monitorData.sessions || [];
+  if (!attemptsData.length) return toast('Select a snap quiz first', 'error');
   const csv = [
-    ['Name','Index','Platform','Status','Integrity','Violations','Warnings','Remaining(min)'].join(','),
-    ...sessions.map(s => [
-      s.student?.name || '', s.student?.indexNumber || '', s.platform,
-      s.status, s.integrityScore, s.totalViolations, s.warningsIssued, s.remainingMinutes
+    ['Name','Student ID','Status','Violations','Grading','Attempt #','Started','Submitted'].join(','),
+    ...attemptsData.map(a => [
+      `"${a.student?.name || ''}"`, a.student?.studentId || '', a.status,
+      a.violationCount ?? 0, a.gradingStatus || '',
+      a.attemptNumber || 1,
+      a.startedAt ? new Date(a.startedAt).toLocaleString() : '',
+      a.submittedAt ? new Date(a.submittedAt).toLocaleString() : '',
     ].join(','))
   ].join('\n');
   const blob = new Blob([csv], { type: 'text/csv' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
-  a.href = url; a.download = `proctor-report-${currentQuizId}.csv`; a.click();
+  a.href = url; a.download = `snap-quiz-monitor-${currentQuizId}.csv`; a.click();
   URL.revokeObjectURL(url);
   toast('Exported!', 'success');
 });
+
+// ── Init ─────────────────────────────────────────────────────────────
+if (authToken) loadQuizPicker();
 </script>
 </body>
 </html>
