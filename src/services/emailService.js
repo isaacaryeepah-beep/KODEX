@@ -604,6 +604,7 @@ async function sendHodWelcome({ email, name, institutionName, department }) {
 }
 
 module.exports = {
+  send,
   sendWelcome,
   sendTrialEndingSoon,
   sendTrialExpired,

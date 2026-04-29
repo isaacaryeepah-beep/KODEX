@@ -1,5 +1,9 @@
 const courseService     = require('../services/courseService');
 const enrollmentService = require('../services/enrollmentService');
+const Course            = require('../models/Course');
+const User              = require('../models/User');
+const { send }          = require('../services/emailService');
+const { sendSms }       = require('../services/smsService');
 
 function getCompanyId(req) {
   return req.user.company || req.user.companyId;
@@ -202,6 +206,61 @@ exports.removeStudent = async (req, res) => {
   } catch (err) {
     console.error('[removeStudent]', err);
     return res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// ─── POST /courses/:id/email-students ────────────────────────────────────────
+exports.emailStudents = async (req, res) => {
+  try {
+    const companyId = getCompanyId(req);
+    const { subject, message } = req.body;
+    if (!subject || !message) return res.status(400).json({ error: 'Subject and message are required' });
+
+    const course = await Course.findOne({ _id: req.params.id, company: companyId })
+      .populate('enrolledStudents', 'name email');
+    if (!course) return res.status(404).json({ error: 'Course not found' });
+
+    const students = course.enrolledStudents.filter(s => s.email);
+    let sentCount = 0;
+    await Promise.allSettled(students.map(async (s) => {
+      try {
+        await send({ to: s.email, subject, html: `<p>Hi ${s.name},</p><p>${message.replace(/\n/g, '<br>')}</p><p style="margin-top:16px;font-size:12px;color:#6b7280">— ${course.title} (${course.code})</p>` });
+        sentCount++;
+      } catch (_) {}
+    }));
+
+    res.json({ sentCount, total: students.length });
+  } catch (e) {
+    console.error('emailStudents error:', e);
+    res.status(500).json({ error: 'Failed to send emails' });
+  }
+};
+
+// ─── POST /courses/:id/sms-students ──────────────────────────────────────────
+exports.smsStudents = async (req, res) => {
+  try {
+    const companyId = getCompanyId(req);
+    const { message } = req.body;
+    if (!message) return res.status(400).json({ error: 'Message is required' });
+    if (message.length > 160) return res.status(400).json({ error: 'Message exceeds 160 characters' });
+
+    const course = await Course.findOne({ _id: req.params.id, company: companyId })
+      .populate('enrolledStudents', 'name phone');
+    if (!course) return res.status(404).json({ error: 'Course not found' });
+
+    const students = course.enrolledStudents.filter(s => s.phone);
+    let sentCount = 0;
+    await Promise.allSettled(students.map(async (s) => {
+      try {
+        const result = await sendSms({ to: s.phone, message });
+        if (result.ok) sentCount++;
+      } catch (_) {}
+    }));
+
+    res.json({ sentCount, total: students.length });
+  } catch (e) {
+    console.error('smsStudents error:', e);
+    res.status(500).json({ error: 'Failed to send SMS' });
   }
 };
 

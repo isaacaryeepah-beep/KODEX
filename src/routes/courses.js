@@ -91,4 +91,16 @@ router.delete(
   ctrl.removeStudent
 );
 
+// Bulk messaging
+router.post(
+  '/:id/email-students',
+  requireRole('lecturer', 'hod', 'admin', 'superadmin'),
+  ctrl.emailStudents
+);
+router.post(
+  '/:id/sms-students',
+  requireRole('lecturer', 'hod', 'admin', 'superadmin'),
+  ctrl.smsStudents
+);
+
 module.exports = router;
