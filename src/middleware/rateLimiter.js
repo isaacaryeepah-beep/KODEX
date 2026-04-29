@@ -60,10 +60,10 @@ const loginLimiter = createRateLimiter({
   message: 'Too many login attempts. Please wait 15 minutes and try again.',
 });
 
-// Register: max 5 registrations per hour per IP
+// Register: max 50 registrations per hour per IP (classrooms share one IP)
 const registerLimiter = createRateLimiter({
   windowMs: 60 * 60 * 1000,
-  max: 5,
+  max: 50,
   message: 'Too many accounts created from this IP. Please try again later.',
 });
 
