@@ -10,7 +10,7 @@ exports.listQuizzes = async (req, res) => {
     const { courseId } = req.query;
 
     const enrolledCourses = await Course.find({
-      company: req.user.company,
+      companyId: req.user.company,
       enrolledStudents: req.user._id,
       isActive: true,
     }).select("_id");
