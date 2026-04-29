@@ -1608,9 +1608,9 @@ input[type="checkbox"] {
   .topbar { padding: 0 14px; }
   .topbar-left .portal-company,
   .topbar-left .mode-badge { display: none; }
-  .main-layout { display: block; flex: 1; min-height: 0; overflow-y: auto; }
-  /* bottom padding clears the bottom nav bar */
-  .content { margin-left: 0 !important; padding: 16px; padding-bottom: calc(62px + env(safe-area-inset-bottom, 0px) + 20px) !important; height: auto; overflow-y: visible; max-width: 100%; }
+  .main-layout { flex: 1; min-height: 0; overflow: hidden; }
+  /* content is the scroll container on mobile, consistent with desktop */
+  .content { margin-left: 0 !important; padding: 16px; padding-bottom: calc(62px + env(safe-area-inset-bottom, 0px) + 20px) !important; height: 100%; overflow-y: auto; -webkit-overflow-scrolling: touch; max-width: 100%; box-sizing: border-box; }
   .modal { padding: 22px 18px; margin: 12px; }
 }
 
