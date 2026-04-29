@@ -114,8 +114,10 @@ exports.createAssignment = async (req, res) => {
 exports.updateAssignment = async (req, res) => {
   try {
     const { id } = req.params;
-    const fields = ["title","description","releaseDate","dueDate","allowFileSubmission","allowLateSubmission","isActive"];
-    const assignment = await Assignment.findOne({ _id: id, company: req.user.company, createdBy: req.user._id });
+    const fields = ["title","description","releaseDate","dueDate","allowFileSubmission","allowLateSubmission","latePenaltyPercent","isActive"];
+    const filter = { _id: id, company: req.user.company };
+    if (req.user.role === "lecturer") filter.createdBy = req.user._id;
+    const assignment = await Assignment.findOne(filter);
     if (!assignment) return res.status(404).json({ error: "Assignment not found" });
 
     fields.forEach((f) => { if (req.body[f] !== undefined) assignment[f] = req.body[f]; });
@@ -136,7 +138,9 @@ exports.updateAssignment = async (req, res) => {
 exports.deleteAssignment = async (req, res) => {
   try {
     const { id } = req.params;
-    const assignment = await Assignment.findOneAndDelete({ _id: id, company: req.user.company, createdBy: req.user._id });
+    const delFilter = { _id: id, company: req.user.company };
+    if (req.user.role === "lecturer") delFilter.createdBy = req.user._id;
+    const assignment = await Assignment.findOneAndDelete(delFilter);
     if (!assignment) return res.status(404).json({ error: "Assignment not found" });
 
     // Clean up files
@@ -159,7 +163,8 @@ exports.deleteAssignment = async (req, res) => {
 exports.listAssignments = async (req, res) => {
   try {
     const { courseId } = req.query;
-    const filter = { company: req.user.company, createdBy: req.user._id, isActive: true };
+    const filter = { company: req.user.company, isActive: true };
+    if (req.user.role === "lecturer") filter.createdBy = req.user._id;
     if (courseId && mongoose.Types.ObjectId.isValid(courseId)) filter.course = courseId;
 
     const assignments = await Assignment.find(filter)
@@ -227,7 +232,9 @@ exports.uploadPdf = (req, res) => {
 
     try {
       const { id } = req.params;
-      const assignment = await Assignment.findOne({ _id: id, company: req.user.company, createdBy: req.user._id });
+      const pdfFilter = { _id: id, company: req.user.company };
+      if (req.user.role === "lecturer") pdfFilter.createdBy = req.user._id;
+      const assignment = await Assignment.findOne(pdfFilter);
       if (!assignment) {
         safeDeleteFile(req.file.path);
         return res.status(404).json({ error: "Assignment not found" });
@@ -302,7 +309,9 @@ exports.addQuestion = async (req, res) => {
         return res.status(400).json({ error: "correctAnswers must be valid option indices" });
     }
 
-    const assignment = await Assignment.findOne({ _id: id, company: req.user.company, createdBy: req.user._id });
+    const qFilter = { _id: id, company: req.user.company };
+    if (req.user.role === "lecturer") qFilter.createdBy = req.user._id;
+    const assignment = await Assignment.findOne(qFilter);
     if (!assignment) return res.status(404).json({ error: "Assignment not found" });
 
     assignment.questions.push({
@@ -332,7 +341,9 @@ exports.addQuestion = async (req, res) => {
 exports.updateQuestion = async (req, res) => {
   try {
     const { id, questionId } = req.params;
-    const assignment = await Assignment.findOne({ _id: id, company: req.user.company, createdBy: req.user._id });
+    const uqFilter = { _id: id, company: req.user.company };
+    if (req.user.role === "lecturer") uqFilter.createdBy = req.user._id;
+    const assignment = await Assignment.findOne(uqFilter);
     if (!assignment) return res.status(404).json({ error: "Assignment not found" });
 
     const q = assignment.questions.id(questionId);
@@ -376,7 +387,9 @@ exports.updateQuestion = async (req, res) => {
 exports.deleteQuestion = async (req, res) => {
   try {
     const { id, questionId } = req.params;
-    const assignment = await Assignment.findOne({ _id: id, company: req.user.company, createdBy: req.user._id });
+    const dqFilter = { _id: id, company: req.user.company };
+    if (req.user.role === "lecturer") dqFilter.createdBy = req.user._id;
+    const assignment = await Assignment.findOne(dqFilter);
     if (!assignment) return res.status(404).json({ error: "Assignment not found" });
 
     assignment.questions = assignment.questions.filter((q) => q._id.toString() !== questionId);
@@ -471,7 +484,7 @@ exports.downloadSubmissionFile = async (req, res) => {
 exports.studentList = async (req, res) => {
   try {
     const now = new Date();
-    const courses = await Course.find({ enrolledStudents: req.user._id, company: req.user.company }).select("_id");
+    const courses = await Course.find({ enrolledStudents: req.user._id, companyId: req.user.company }).select("_id");
     const courseIds = courses.map((c) => c._id);
 
     const assignments = await Assignment.find({
