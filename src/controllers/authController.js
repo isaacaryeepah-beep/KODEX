@@ -409,45 +409,13 @@ exports.registerStudent = async (req, res) => {
       email,
       company: company._id,
       role: "student",
-      isApproved: true,
+      isApproved: false,
       department: department ? department.trim() : null,
       programme: programme ? programme.trim() : null,
       studentLevel: studentLevel ? studentLevel.trim() : null,
       studentGroup: studentGroup ? studentGroup.trim().toUpperCase() : null,
       sessionType: sessionType ? sessionType.trim() : null,
       semester: semester ? semester.trim() : null,
-    });
-
-    // ── Roster sync: mark roster as registered + enroll in all matching courses ──
-    // This replaces the old manual updateMany approach with the proper rosterSync utility
-    syncStudentToRoster(user._id, company._id).catch(err =>
-      console.error('[registerStudent] rosterSync failed:', err.message)
-    );
-
-    const token = generateToken(user._id);
-
-    // Warn if no HOD exists for student's department
-    let departmentNote = null;
-    if (department?.trim()) {
-      const hod = await User.findOne({ company: company._id, role: "hod", department: department.trim() });
-      if (!hod) {
-        departmentNote = `No Head of Department found for "${department.trim()}". Your institution admin may not have set one up yet.`;
-      }
-    }
-
-    res.status(201).json({
-      user: {
-        id: user._id,
-        IndexNumber: user.IndexNumber,
-        name: user.name,
-        role: user.role,
-        isApproved: user.isApproved,
-        mustChangePassword: user.mustChangePassword || false,
-        company: { id: company._id, name: company.name, mode: company.mode },
-      },
-      token,
-      departmentNote,
-      message: "Registration successful. You have been automatically enrolled in your courses.",
     });
 
     if (user.email) {
@@ -458,6 +426,10 @@ exports.registerStudent = async (req, res) => {
         IndexNumber: user.IndexNumber,
       }).catch(err => console.error('Student welcome email failed:', err.message));
     }
+
+    return res.status(201).json({
+      message: "Registration successful! Your account is pending approval. Your HOD or admin will review and approve your account before you can sign in.",
+    });
   } catch (error) {
     if (error.name === "ValidationError") {
       const messages = Object.values(error.errors).map((e) => e.message);
@@ -723,7 +695,10 @@ exports.login = async (req, res) => {
     }
 
     if (!user.isApproved) {
-      return res.status(403).json({ error: "Your account is pending approval. Please contact your institution admin." });
+      const msg = user.role === "student"
+        ? "Your account is pending approval. Please wait for your HOD or admin to approve your registration."
+        : "Your account is pending approval. Please contact your institution admin.";
+      return res.status(403).json({ error: msg });
     }
 
     const company = await Company.findById(user.company);
