@@ -43,14 +43,14 @@ const STAFF = ["lecturer", "hod", "admin", "superadmin"];
 
 /** Resolve a course by id scoped to the request's company. */
 async function resolveCourse(courseId, company) {
-  return Course.findOne({ _id: courseId, company }).select("_id title code lecturer enrolledStudents").lean();
+  return Course.findOne({ _id: courseId, companyId: company }).select("_id title code lecturerId enrolledStudents").lean();
 }
 
 /** Ensure the requesting lecturer owns the course or is admin/superadmin. */
 function canAccessCourse(user, course) {
   if (["admin", "superadmin", "hod"].includes(user.role)) return true;
   if (user.role === "lecturer") {
-    return course.lecturer?.toString() === user._id.toString();
+    return course.lecturerId?.toString() === user._id.toString();
   }
   return false;
 }

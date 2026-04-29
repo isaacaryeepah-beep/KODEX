@@ -53,7 +53,7 @@ exports.create = async (req, res) => {
       return res.status(400).json({ error: 'End time must be after start time' });
     }
 
-    const course = await Course.findOne({ _id: courseId, company: req.user.company });
+    const course = await Course.findOne({ _id: courseId, companyId: req.user.company });
     if (!course) return res.status(404).json({ error: 'Course not found' });
 
     // Check for time clash for this lecturer on the same day

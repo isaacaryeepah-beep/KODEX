@@ -19,8 +19,8 @@ exports.createQuiz = async (req, res) => {
 
     const course = await Course.findOne({
       _id: courseId,
-      company: req.user.company,
-      lecturer: req.user._id,
+      companyId: req.user.company,
+      lecturerId: req.user._id,
     });
 
     if (!course) {
@@ -97,15 +97,15 @@ exports.listQuizzes = async (req, res) => {
       filter = { company: req.user.company };
       if (req.user.department) {
         const deptCourses = await Course.find({
-          company: req.user.company,
+          companyId: req.user.company,
           department: req.user.department,
         }).select('_id').lean();
         filter.course = { $in: deptCourses.map(c => c._id) };
       }
     } else {
       const myCourses = await Course.find({
-        company: req.user.company,
-        lecturer: req.user._id,
+        companyId: req.user.company,
+        lecturerId: req.user._id,
       }).select('_id').lean();
       filter = {
         company: req.user.company,

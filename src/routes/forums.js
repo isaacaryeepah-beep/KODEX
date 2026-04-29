@@ -61,8 +61,8 @@ function isStaff(role) {
  */
 async function resolveParticipant(req, res, courseId) {
   const company = req.user.company;
-  const course  = await Course.findOne({ _id: courseId, company })
-    .select("enrolledStudents lecturer")
+  const course  = await Course.findOne({ _id: courseId, companyId: company })
+    .select("enrolledStudents lecturerId")
     .lean();
   if (!course) {
     res.status(404).json({ error: "Course not found" });

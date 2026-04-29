@@ -16,9 +16,9 @@ exports.createQuiz = async (req, res) => {
       return res.status(400).json({ error: "Invalid course ID" });
     }
 
-    const courseFilter = { _id: courseId, company: req.user.company };
+    const courseFilter = { _id: courseId, companyId: req.user.company };
     if (req.user.role === "lecturer") {
-      courseFilter.lecturer = req.user._id;
+      courseFilter.lecturerId = req.user._id;
     }
 
     const course = await Course.findOne(courseFilter);
@@ -67,7 +67,7 @@ exports.listQuizzes = async (req, res) => {
       if (courseId) filter.course = courseId;
     } else if (req.user.role === "student") {
       const enrolledCourses = await Course.find({
-        company: req.user.company,
+        companyId: req.user.company,
         enrolledStudents: req.user._id,
         isActive: true,
       }).select("_id");

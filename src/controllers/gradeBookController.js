@@ -418,7 +418,7 @@ exports.getCourseGrades = async (req, res) => {
     });
 
     res.json({
-      course: { _id: course._id, title: course.title, code: course.code, lecturer: course.lecturer },
+      course: { _id: course._id, title: course.title, code: course.code, lecturer: course.lecturerId },
       gradeBook: { _id: gb._id, weights: gb.weights, manualEntries: gb.manualEntries.map(e => ({ _id: e._id, label: e.label, maxScore: e.maxScore })) },
       assessments: {
         legacyQuizzes:  quizzes.map(q => ({ _id: q._id, title: q.title, totalMarks: q.totalMarks })),

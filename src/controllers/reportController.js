@@ -272,8 +272,8 @@ exports.performanceReport = async (req, res) => {
 
     if (req.user.role === "lecturer") {
       const lecturerCourses = await Course.find({
-        company: req.user.company,
-        lecturer: req.user._id,
+        companyId: req.user.company,
+        lecturerId: req.user._id,
       }).select("_id");
       const courseIds = lecturerCourses.map((c) => c._id);
 
