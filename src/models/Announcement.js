@@ -6,7 +6,8 @@ const attachmentSchema = new mongoose.Schema({
   fileUrl:         { type: String, required: true },
   mimeType:        { type: String, required: true },
   fileSize:        { type: Number, required: true },
-  storageProvider: { type: String, default: 'local' },
+  storageProvider: { type: String, default: 'db' },
+  data:            { type: Buffer, default: null },
   uploadedAt:      { type: Date, default: Date.now },
 }, { _id: false });
 

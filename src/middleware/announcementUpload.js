@@ -1,24 +1,8 @@
 const multer = require('multer');
 const path   = require('path');
-const fs     = require('fs');
-const crypto = require('crypto');
 
-const MAX_SIZE_MB  = parseInt(process.env.ANNOUNCE_FILE_MAX_MB || process.env.ANNOUNCE_PDF_MAX_MB || '10', 10);
-const UPLOAD_DIR   = process.env.ANNOUNCE_PDF_DIR || 'uploads/announcements';
-
-// Ensure upload directory exists
-if (!fs.existsSync(UPLOAD_DIR)) {
-  fs.mkdirSync(UPLOAD_DIR, { recursive: true });
-}
-
-const storage = multer.diskStorage({
-  destination: (_req, _file, cb) => cb(null, UPLOAD_DIR),
-  filename: (_req, file, cb) => {
-    const unique = crypto.randomBytes(12).toString('hex');
-    const ext    = path.extname(file.originalname).toLowerCase();
-    cb(null, `ann_${unique}${ext}`);
-  },
-});
+// 5 MB max — base64 in MongoDB stays well under the 16 MB document limit
+const MAX_SIZE_MB = parseInt(process.env.ANNOUNCE_FILE_MAX_MB || '5', 10);
 
 const ALLOWED_MIME = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp', 'image/gif'];
 const ALLOWED_EXT  = ['.pdf', '.jpg', '.jpeg', '.png', '.webp', '.gif'];
@@ -31,16 +15,15 @@ function fileFilter(_req, file, cb) {
   cb(null, true);
 }
 
+// Use memory storage — file bytes go into req.file.buffer, never touch disk
 const upload = multer({
-  storage,
+  storage: multer.memoryStorage(),
   fileFilter,
   limits: { fileSize: MAX_SIZE_MB * 1024 * 1024 },
 });
 
-// Single file (PDF or image) named "attachment"
 exports.uploadAnnouncement = upload.single('attachment');
 
-// Error handler to be used after multer middleware
 exports.handleUploadError = (err, req, res, next) => {
   if (err instanceof multer.MulterError) {
     if (err.code === 'LIMIT_FILE_SIZE') {
@@ -57,4 +40,5 @@ exports.handleUploadError = (err, req, res, next) => {
   next();
 };
 
-exports.UPLOAD_DIR = UPLOAD_DIR;
+// Kept for backwards-compat imports; no longer used for storage
+exports.UPLOAD_DIR = null;

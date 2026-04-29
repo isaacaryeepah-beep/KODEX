@@ -1,7 +1,5 @@
-const fs           = require('fs');
-const path         = require('path');
+const crypto       = require('crypto');
 const Announcement = require('../models/Announcement');
-const { UPLOAD_DIR } = require('../middleware/announcementUpload');
 
 function getCompanyId(req) {
   return req.user.company || req.user.companyId;
@@ -20,22 +18,21 @@ exports.createAnnouncement = async (req, res) => {
     } = req.body;
 
     if (!title || !body) {
-      // Clean up uploaded file if validation fails
-      if (req.file) fs.unlink(req.file.path, () => {});
       return res.status(400).json({ success: false, message: 'Title and body are required.' });
     }
 
-    // Build attachment metadata if file was uploaded
+    // Build attachment — file bytes stored in MongoDB, no disk dependency
     let attachment = null;
     if (req.file) {
-      const baseUrl = process.env.SERVER_URL || 'https://dikly.it.com';
+      const fileName = `ann_${crypto.randomBytes(12).toString('hex')}`;
       attachment = {
-        fileName:        req.file.filename,
+        fileName,
         originalName:    req.file.originalname,
-        fileUrl:         `${baseUrl}/api/announcements/attachment/${req.file.filename}`,
+        fileUrl:         `/api/announcements/attachment/${fileName}`,
         mimeType:        req.file.mimetype,
         fileSize:        req.file.size,
-        storageProvider: 'local',
+        storageProvider: 'db',
+        data:            req.file.buffer,
       };
     }
 
@@ -68,7 +65,6 @@ exports.createAnnouncement = async (req, res) => {
       data:    announcement,
     });
   } catch (err) {
-    if (req.file) fs.unlink(req.file.path, () => {});
     console.error('[createAnnouncement]', err);
     return res.status(500).json({ success: false, message: err.message });
   }
@@ -128,6 +124,7 @@ exports.listAnnouncements = async (req, res) => {
 
     const announcements = await Announcement.find(query)
       .sort({ pinned: -1, createdAt: -1 })
+      .select('-attachment.data')
       .populate('author', 'name email role')
       .lean();
 
@@ -170,6 +167,7 @@ exports.getAnnouncement = async (req, res) => {
   try {
     const companyId = getCompanyId(req);
     const ann = await Announcement.findOne({ _id: req.params.id, company: companyId })
+      .select('-attachment.data')
       .populate('author', 'name email role')
       .lean();
 
@@ -228,12 +226,6 @@ exports.deleteAnnouncement = async (req, res) => {
       });
     }
 
-    // Clean up uploaded file if it exists
-    if (ann.attachment?.fileName) {
-      const filePath = path.join(UPLOAD_DIR, ann.attachment.fileName);
-      fs.unlink(filePath, () => {}); // non-fatal
-    }
-
     await ann.deleteOne();
     return res.json({ success: true, message: 'Announcement deleted.' });
   } catch (err) {
@@ -243,31 +235,23 @@ exports.deleteAnnouncement = async (req, res) => {
 };
 
 // ─── GET /announcements/attachment/:filename ──────────────────────────────────
-// Secure PDF serving — only authenticated users of same company
 exports.serveAttachment = async (req, res) => {
   try {
     const companyId = getCompanyId(req);
     const { filename } = req.params;
 
-    // Find announcement with this attachment in same company
     const ann = await Announcement.findOne({
-      company:                 companyId,
-      'attachment.fileName':   filename,
-      isActive:                true,
-    }).lean();
+      company:               companyId,
+      'attachment.fileName': filename,
+    });
 
-    if (!ann) {
+    if (!ann?.attachment?.data) {
       return res.status(404).json({ success: false, message: 'File not found.' });
     }
 
-    const filePath = path.join(process.cwd(), UPLOAD_DIR, filename);
-    if (!fs.existsSync(filePath)) {
-      return res.status(404).json({ success: false, message: 'File not found on disk.' });
-    }
-
-    res.setHeader('Content-Type', ann.attachment.mimeType || 'application/pdf');
+    res.setHeader('Content-Type', ann.attachment.mimeType || 'application/octet-stream');
     res.setHeader('Content-Disposition', `inline; filename="${ann.attachment.originalName}"`);
-    return res.sendFile(filePath);
+    return res.send(ann.attachment.data);
   } catch (err) {
     console.error('[serveAttachment]', err);
     return res.status(500).json({ success: false, message: err.message });
@@ -283,19 +267,15 @@ exports.downloadAttachment = async (req, res) => {
     const ann = await Announcement.findOne({
       company:               companyId,
       'attachment.fileName': filename,
-      isActive:              true,
-    }).lean();
+    });
 
-    if (!ann) {
+    if (!ann?.attachment?.data) {
       return res.status(404).json({ success: false, message: 'File not found.' });
     }
 
-    const filePath = path.join(process.cwd(), UPLOAD_DIR, filename);
-    if (!fs.existsSync(filePath)) {
-      return res.status(404).json({ success: false, message: 'File not found on disk.' });
-    }
-
-    return res.download(filePath, ann.attachment.originalName);
+    res.setHeader('Content-Type', ann.attachment.mimeType || 'application/octet-stream');
+    res.setHeader('Content-Disposition', `attachment; filename="${ann.attachment.originalName}"`);
+    return res.send(ann.attachment.data);
   } catch (err) {
     console.error('[downloadAttachment]', err);
     return res.status(500).json({ success: false, message: err.message });
