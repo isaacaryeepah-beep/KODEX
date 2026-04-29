@@ -1,10 +1,10 @@
 // ════════════════════════════════════════════════════════════════════
-//  KODEX Service Worker -- Offline Support
+//  DIKLY Service Worker -- Offline Support
 //  Caches the app shell so it loads offline
 //  API requests are NOT cached here (handled in app.js with localStorage)
 // ════════════════════════════════════════════════════════════════════
 
-const CACHE_NAME = 'kodex-v4';  // ← bumped from educorp-v1 to bust stale cache
+const CACHE_NAME = 'dikly-v4';  // ← bumped from educorp-v1 to bust stale cache
 
 // App shell files to cache on install
 const SHELL_FILES = [
@@ -103,20 +103,20 @@ self.addEventListener('fetch', event => {
 self.addEventListener('push', event => {
   if (!event.data) return;
   let data = {};
-  try { data = event.data.json(); } catch(e) { data = { title: 'KODEX', body: event.data.text() }; }
+  try { data = event.data.json(); } catch(e) { data = { title: 'DIKLY', body: event.data.text() }; }
 
   const options = {
     body: data.body || '',
     icon: '/icons/icon-192.png',
     badge: '/icons/badge-72.png',
-    tag: data.tag || 'kodex-notification',
+    tag: data.tag || 'dikly-notification',
     data: { url: data.url || '/' },
     actions: data.actions || [],
     requireInteraction: data.requireInteraction || false,
   };
 
   event.waitUntil(
-    self.registration.showNotification(data.title || 'KODEX', options)
+    self.registration.showNotification(data.title || 'DIKLY', options)
   );
 });
 

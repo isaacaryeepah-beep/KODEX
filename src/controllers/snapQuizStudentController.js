@@ -21,6 +21,7 @@
  */
 
 const mongoose = require("mongoose");
+const Course                 = require("../models/Course");
 const SnapQuiz               = require("../models/SnapQuiz");
 const SnapQuizQuestion       = require("../models/SnapQuizQuestion");
 const SnapQuizAttempt        = require("../models/SnapQuizAttempt");
@@ -72,6 +73,60 @@ exports.listQuizzes = async (req, res) => {
     });
   } catch (err) {
     console.error("[snapQuiz student listQuizzes]", err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+};
+
+/**
+ * GET /student/snap-quizzes/quizzes
+ * List all published snap quizzes across all courses the student is enrolled in.
+ */
+exports.listAllQuizzes = async (req, res) => {
+  try {
+    const enrolledCourses = await Course.find({
+      company: req.companyId,
+      enrolledStudents: req.user._id,
+    }).select("_id").lean();
+
+    const courseIds = enrolledCourses.map(c => c._id);
+
+    const showAll = req.query.showAll === "true";
+    const filter = {
+      company:     req.companyId,
+      course:      { $in: courseIds },
+      isPublished: true,
+      isActive:    true,
+    };
+    if (!showAll) {
+      const now = new Date();
+      filter.startTime = { $lte: now };
+      filter.endTime   = { $gte: now };
+    }
+
+    const quizzes = await SnapQuiz.find(filter)
+      .select("-attachments")
+      .sort({ startTime: -1 })
+      .lean();
+
+    const quizIds = quizzes.map(q => q._id);
+    const counts  = await SnapQuizAttempt.aggregate([
+      {
+        $match: {
+          quiz:    { $in: quizIds },
+          student: new mongoose.Types.ObjectId(req.user._id),
+          company: new mongoose.Types.ObjectId(req.companyId),
+        },
+      },
+      { $group: { _id: "$quiz", count: { $sum: 1 } } },
+    ]);
+    const countMap = {};
+    counts.forEach(c => { countMap[c._id.toString()] = c.count; });
+
+    return res.json({
+      quizzes: quizzes.map(q => ({ ...q, myAttemptCount: countMap[q._id.toString()] || 0 })),
+    });
+  } catch (err) {
+    console.error("[snapQuiz student listAllQuizzes]", err);
     return res.status(500).json({ error: "Internal server error" });
   }
 };

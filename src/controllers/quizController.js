@@ -1,5 +1,6 @@
 const mongoose = require("mongoose");
 const Quiz = require("../models/Quiz");
+const Question = require("../models/Question");
 const QuizSubmission = require("../models/QuizSubmission");
 const Course = require("../models/Course");
 
@@ -35,8 +36,7 @@ exports.createQuiz = async (req, res) => {
       course: courseId,
       company: req.user.company,
       createdBy: req.user._id,
-      questions,
-      duration: duration || 30,
+      timeLimit: duration || 30,
       startTime: new Date(startTime),
       endTime: new Date(endTime),
     });
@@ -88,15 +88,6 @@ exports.listQuizzes = async (req, res) => {
       .populate("createdBy", "name email")
       .sort({ startTime: -1 });
 
-    if (req.user.role === "student") {
-      const sanitized = quizzes.map((q) => {
-        const obj = q.toObject();
-        obj.questions = obj.questions.map(({ correctAnswer, ...rest }) => rest);
-        return obj;
-      });
-      return res.json({ quizzes: sanitized });
-    }
-
     res.json({ quizzes });
   } catch (error) {
     console.error("List quizzes error:", error);
@@ -135,10 +126,6 @@ exports.getQuiz = async (req, res) => {
     }
 
     const result = quiz.toObject();
-
-    if (req.user.role === "student") {
-      result.questions = result.questions.map(({ correctAnswer, ...rest }) => rest);
-    }
 
     let submissions;
     if (req.user.role === "student") {
@@ -196,15 +183,20 @@ exports.submitQuiz = async (req, res) => {
       return res.status(400).json({ error: "Answers must be an array" });
     }
 
+    const questions = await Question.find({ quiz: id }).sort({ createdAt: 1 }).lean();
+    if (questions.length === 0) {
+      return res.status(400).json({ error: "This quiz has no questions" });
+    }
+
     let totalScore = 0;
     let maxScore = 0;
     const gradedAnswers = answers.map((a) => {
-      const question = quiz.questions[a.questionIndex];
+      const question = questions[a.questionIndex];
       if (!question) return { ...a, isCorrect: false, points: 0 };
 
-      maxScore += question.points;
+      maxScore += question.marks || 0;
       const isCorrect = question.correctAnswer === a.selectedAnswer;
-      const points = isCorrect ? question.points : 0;
+      const points = isCorrect ? (question.marks || 0) : 0;
       totalScore += points;
 
       return {
@@ -215,9 +207,9 @@ exports.submitQuiz = async (req, res) => {
       };
     });
 
-    quiz.questions.forEach((q, i) => {
+    questions.forEach((q, i) => {
       if (!answers.find((a) => a.questionIndex === i)) {
-        maxScore += q.points;
+        maxScore += q.marks || 0;
       }
     });
 

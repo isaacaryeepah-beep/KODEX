@@ -42,7 +42,7 @@ exports.register = async (req, res) => {
       subscriptionStatus: "trial",
     });
 
-    const existingUser = await User.findOne({ email: { $regex: new RegExp("^" + email.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "$", "i") } });
+    const existingUser = await User.findOne({ email });
     if (existingUser) {
       await Company.findByIdAndDelete(company._id);
       return res.status(400).json({ error: "This email is already registered" });
@@ -195,6 +195,16 @@ exports.registerLecturer = async (req, res) => {
         throw userError;
       }
 
+      if (user.email) {
+        sendLecturerWelcome({
+          email: user.email,
+          name: user.name,
+          institutionName: company.name,
+          department: department || null,
+          isApproved: true,
+        }).catch(err => console.error('Lecturer welcome email failed:', err.message));
+      }
+
       const token = generateToken(user._id);
       return res.status(201).json({
         token,
@@ -326,7 +336,7 @@ exports.registerLecturer = async (req, res) => {
 
 exports.registerStudent = async (req, res) => {
   try {
-    const { name, password, institutionCode, department, email: emailRaw } = req.body;
+    const { name, password, institutionCode, department, email: emailRaw, programme, studentLevel, studentGroup, sessionType, semester } = req.body;
     const email = emailRaw ? emailRaw.trim().toLowerCase() : "";
     const IndexNumber = req.body.IndexNumber || req.body.indexNumber;
 
@@ -394,6 +404,11 @@ exports.registerStudent = async (req, res) => {
       role: "student",
       isApproved: true,
       department: department ? department.trim() : null,
+      programme: programme ? programme.trim() : null,
+      studentLevel: studentLevel ? studentLevel.trim() : null,
+      studentGroup: studentGroup ? studentGroup.trim().toUpperCase() : null,
+      sessionType: sessionType ? sessionType.trim() : null,
+      semester: semester ? semester.trim() : null,
     });
 
     // ── Roster sync: mark roster as registered + enroll in all matching courses ──

@@ -13,7 +13,7 @@
       return window.currentUser.company.mode;
     }
     try {
-      var tok = localStorage.getItem('kodex_token') || '';
+      var tok = localStorage.getItem('dikly_token') || '';
       var payload = JSON.parse(atob(tok.split('.')[1]));
       return payload.mode || (payload.company && payload.company.mode) || null;
     } catch (_) { return null; }
@@ -84,7 +84,7 @@
     panel.classList.add('fap-open');
     _open = true;
     _syncToggleBtn(true);
-    localStorage.setItem('kodex_fap', '1');
+    localStorage.setItem('dikly_fap', '1');
     const currentMode = _getMode();
     if (!_initialized || currentMode !== _initializedMode) _init();
   };
@@ -95,7 +95,7 @@
     panel.classList.remove('fap-open');
     _open = false;
     _syncToggleBtn(false);
-    localStorage.setItem('kodex_fap', '0');
+    localStorage.setItem('dikly_fap', '0');
   };
 
   window.faqPanelAsk = async function (preQ) {
@@ -222,7 +222,7 @@
     chat.innerHTML = `
       <div class="fap-empty-chat">
         <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="color:var(--border,#e5e7eb)"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-        <div style="font-weight:600;font-size:12px;color:var(--text-light,#6b7280)">Ask anything about KODEX</div>
+        <div style="font-weight:600;font-size:12px;color:var(--text-light,#6b7280)">Ask anything about DIKLY</div>
         <div style="font-size:11px;color:var(--text-muted,#9ca3af);line-height:1.5">Use the quick chips above<br>or type your own question</div>
       </div>`;
   }
@@ -256,7 +256,7 @@
 
     const check = () => {
       if (!dashEl.classList.contains('hidden')) {
-        const shouldOpen = localStorage.getItem('kodex_fap') !== '0';
+        const shouldOpen = localStorage.getItem('dikly_fap') !== '0';
         if (shouldOpen) faqPanelOpen();
         else _syncToggleBtn(false);
       }

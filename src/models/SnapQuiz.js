@@ -3,7 +3,7 @@
 /**
  * SnapQuiz
  *
- * The "strict" quiz type in KODEX Academic — used for formal examinations,
+ * The "strict" quiz type in DIKLY Academic — used for formal examinations,
  * class tests, and high-stakes assessments where academic integrity matters.
  *
  * Key differences from NormalQuiz:

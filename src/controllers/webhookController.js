@@ -167,7 +167,7 @@ async function handleChargeSuccess(data) {
 async function handleSubscriptionCreate(data) {
   const customerCode    = data?.customer?.customer_code;
   const subscriptionCode= data?.subscription_code;
-  const email           = data?.customer?.email;
+  const email           = data?.customer?.email ? data.customer.email.trim().toLowerCase() : null;
 
   if (!email) return;
 

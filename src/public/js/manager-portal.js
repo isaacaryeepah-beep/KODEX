@@ -1,5 +1,5 @@
 /* ============================================================================
-   KODEX — Manager Portal Enhanced Features
+   DIKLY — Manager Portal Enhanced Features
    Loaded after app.js — extends/overrides manager-specific functions
    ============================================================================ */
 

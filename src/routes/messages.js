@@ -655,7 +655,7 @@ router.post("/conversations/:id/messages", ...mw, uploadMessage, handleUploadErr
 
     let attachment = null;
     if (hasFile) {
-      const baseUrl = process.env.SERVER_URL || "https://kodex.it.com";
+      const baseUrl = process.env.SERVER_URL || "https://dikly.it.com";
       attachment = {
         fileName:     req.file.filename,
         originalName: req.file.originalname,

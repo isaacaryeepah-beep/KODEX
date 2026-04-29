@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>KODEX</title>
-  <link rel="icon" type="image/svg+xml" href="/kodex-icon.svg">
+  <title>DIKLY</title>
+  <link rel="icon" type="image/svg+xml" href="/dikly-icon.svg">
   <link rel="stylesheet" href="/css/style.css">
   <script>window.MathJax = { tex: { inlineMath: [["\\(","\\)"]], displayMath: [["\\[","\\]"]], processEscapes: true }, options: { skipHtmlTags: ["script","noscript","style","textarea"] } };</script>
   <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js"></script>
@@ -16,23 +16,30 @@ function selectPortal(t){document.addEventListener('DOMContentLoaded',function()
 </head>
 <body>
   <div id="auth-page">
-    <div class="auth-watermark">KODEX</div>
+    <div class="auth-watermark">DIKLY</div>
 
     <!-- Brand shown above the workspace card — hidden on login forms -->
     <div id="workspace-brand">
       <div class="brand-logo">
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 160" style="height:64px;width:auto;display:block;margin:0 auto 6px;">
-          <rect x="0" y="16" width="128" height="128" rx="28" fill="#3730a3"/>
-          <rect x="6" y="22" width="116" height="116" rx="22" fill="#4f46e5"/>
-          <rect x="30" y="44" width="17" height="80" rx="4" fill="#ffffff"/>
-          <polygon points="47,84 90,44 108,44 66,84" fill="#ffffff"/>
-          <polygon points="47,84 90,124 108,124 66,84" fill="#ffffff"/>
-          <circle cx="108" cy="28" r="6" fill="#818cf8"/>
-          <circle cx="120" cy="28" r="4" fill="#c7d2fe"/>
-          <circle cx="130" cy="28" r="2.5" fill="#e0e7ff"/>
-          <text x="148" y="96" font-family="'Plus Jakarta Sans',system-ui,sans-serif" font-size="58" font-weight="800" letter-spacing="-2" fill="#1e1b4b">KODEX</text>
-          <rect x="150" y="108" width="240" height="1.5" rx="1" fill="#c7d2fe"/>
-          <text x="150" y="127" font-family="'Plus Jakarta Sans',system-ui,sans-serif" font-size="12" font-weight="700" letter-spacing="3.5" fill="#6366f1">LEARNING  ·  ATTENDANCE  ·  MANAGEMENT</text>
+          <defs>
+            <linearGradient id="blg" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="#60a5fa"/>
+              <stop offset="45%" stop-color="#2563eb"/>
+              <stop offset="100%" stop-color="#1e40af"/>
+            </linearGradient>
+            <clipPath id="blc">
+              <path d="M20,16 L20,144 L70,144 C132,141 132,19 70,16 Z"/>
+            </clipPath>
+          </defs>
+          <path d="M20,16 L20,144 L70,144 C132,141 132,19 70,16 Z" fill="url(#blg)"/>
+          <g clip-path="url(#blc)">
+            <polygon points="8,92 85,14 118,14 42,92" fill="white"/>
+            <polygon points="42,146 118,68 85,68 8,146" fill="white"/>
+          </g>
+          <text x="152" y="96" font-family="'Plus Jakarta Sans',system-ui,sans-serif" font-size="58" font-weight="800" letter-spacing="-2" fill="#1e1b4b">DIKLY</text>
+          <rect x="154" y="108" width="240" height="1.5" rx="1" fill="#c7d2fe"/>
+          <text x="154" y="127" font-family="'Plus Jakarta Sans',system-ui,sans-serif" font-size="12" font-weight="700" letter-spacing="3.5" fill="#6366f1">INNOVATE  ·  CONNECT  ·  EMPOWER</text>
         </svg>
       </div>
       <p class="workspace-subtitle">Enterprise Attendance Management Platform</p>
@@ -150,11 +157,11 @@ function selectPortal(t){document.addEventListener('DOMContentLoaded',function()
 
     <!-- Footer shown below workspace card — hidden on login forms -->
     <div id="workspace-foot">
-      By using KODEX, you agree to our
+      By using DIKLY, you agree to our
       <a onclick="showLegalModal('terms')" style="color:#2563eb;cursor:pointer;text-decoration:underline;font-weight:500">Terms &amp; Conditions</a>
       and
       <a onclick="showLegalModal('privacy')" style="color:#2563eb;cursor:pointer;text-decoration:underline;font-weight:500">Privacy Policy</a>.
-      <div style="margin-top:4px">&copy; 2026 KODEX. All rights reserved.</div>
+      <div style="margin-top:4px">&copy; 2026 DIKLY. All rights reserved.</div>
     </div>
 
     <!-- ADMIN AUTH (Corporate & Academic) -->
@@ -178,11 +185,9 @@ function selectPortal(t){document.addEventListener('DOMContentLoaded',function()
           <input type="password" id="admin-login-password" placeholder="Enter password" name="admin-password" autocomplete="off">
         </div>
         <button type="submit" class="btn btn-primary">Sign In</button>
-        <div class="auth-toggle">
-          New institution? <a onclick="showAdminRegister()">Register here</a>
-        </div>
-        <div class="auth-toggle" style="margin-top:8px">
-          <a onclick="showAdminForgot()">Forgot password?</a>
+        <div class="auth-footer">
+          <p class="auth-footer-row">New institution? <a onclick="showAdminRegister()">Register here</a></p>
+          <p class="auth-footer-row auth-forgot"><a onclick="showAdminForgot()">Forgot password?</a></p>
         </div>
       </form>
 
@@ -258,11 +263,9 @@ function selectPortal(t){document.addEventListener('DOMContentLoaded',function()
           <input type="password" id="hod-login-password" placeholder="Enter password" name="hod-password" autocomplete="off">
         </div>
         <button type="submit" class="btn btn-primary">Sign In</button>
-        <div class="auth-toggle" style="margin-top:8px">
-          New HOD? <a onclick="showHodRegister()">Register here</a>
-        </div>
-        <div class="auth-toggle" style="margin-top:4px">
-          <a onclick="showHodForgot()">Forgot password?</a>
+        <div class="auth-footer">
+          <p class="auth-footer-row">New HOD? <a onclick="showHodRegister()">Register here</a></p>
+          <p class="auth-footer-row auth-forgot"><a onclick="showHodForgot()">Forgot password?</a></p>
         </div>
       </form>
       <form id="hod-register-form" class="hidden" onsubmit="event.preventDefault(); handleHodRegister();">
@@ -346,11 +349,9 @@ function selectPortal(t){document.addEventListener('DOMContentLoaded',function()
           <input type="password" id="lecturer-login-password" placeholder="Enter password" name="lecturer-password" autocomplete="off">
         </div>
         <button type="submit" class="btn btn-primary">Sign In</button>
-        <div class="auth-toggle">
-          New lecturer? <a onclick="showLecturerRegister()">Create or join an institution</a>
-        </div>
-        <div class="auth-toggle" style="margin-top:8px">
-          <a onclick="showLecturerForgot()">Forgot password?</a>
+        <div class="auth-footer">
+          <p class="auth-footer-row">New lecturer? <a onclick="showLecturerRegister()">Create or join an institution</a></p>
+          <p class="auth-footer-row auth-forgot"><a onclick="showLecturerForgot()">Forgot password?</a></p>
         </div>
       </form>
 
@@ -452,8 +453,8 @@ function selectPortal(t){document.addEventListener('DOMContentLoaded',function()
           <input type="password" id="manager-login-password" placeholder="Enter password" name="manager-password" autocomplete="off">
         </div>
         <button type="submit" class="btn btn-employee" style="background:#4f46e5;">Sign In</button>
-        <div class="auth-toggle" style="margin-top:6px">
-          <a onclick="showManagerForgot()">Forgot password?</a>
+        <div class="auth-footer">
+          <p class="auth-footer-row auth-forgot"><a onclick="showManagerForgot()">Forgot password?</a></p>
         </div>
       </form>
 
@@ -507,12 +508,9 @@ function selectPortal(t){document.addEventListener('DOMContentLoaded',function()
           <input type="password" id="employee-login-password" placeholder="Enter password" name="employee-password" autocomplete="off">
         </div>
         <button type="submit" class="btn btn-employee">Sign In</button>
-        <div class="auth-toggle">
-          <span>Don't have an account?</span>
-          <a onclick="showEmployeeRegister()">Register</a>
-        </div>
-        <div class="auth-toggle" style="margin-top:6px">
-          <a onclick="showEmployeeForgot()">Forgot password?</a>
+        <div class="auth-footer">
+          <p class="auth-footer-row">Don't have an account? <a onclick="showEmployeeRegister()">Register</a></p>
+          <p class="auth-footer-row auth-forgot"><a onclick="showEmployeeForgot()">Forgot password?</a></p>
         </div>
       </form>
       <form id="employee-forgot-form" class="hidden" onsubmit="event.preventDefault(); handleEmployeeForgotPassword();">
@@ -597,11 +595,9 @@ function selectPortal(t){document.addEventListener('DOMContentLoaded',function()
           <input type="password" id="student-login-password" placeholder="Enter password" name="student-password" autocomplete="off">
         </div>
         <button type="submit" class="btn btn-student">Sign In</button>
-        <div class="auth-toggle">
-          New student? <a onclick="showStudentRegister()">Register with institution code</a>
-        </div>
-        <div class="auth-toggle" style="margin-top:8px">
-          <a onclick="showStudentForgot()">Forgot password?</a>
+        <div class="auth-footer">
+          <p class="auth-footer-row">New student? <a onclick="showStudentRegister()">Register with institution code</a></p>
+          <p class="auth-footer-row auth-forgot"><a onclick="showStudentForgot()">Forgot password?</a></p>
         </div>
       </form>
 
@@ -611,17 +607,13 @@ function selectPortal(t){document.addEventListener('DOMContentLoaded',function()
           <input type="text" id="student-reg-name" placeholder="Your full name">
         </div>
         <div class="form-group">
-          <label>Student ID / Index Number <span style="color:red">*</span></label>
-          <input type="text" id="student-reg-index" placeholder="e.g. UCC/CS/23/0001" style="text-transform:uppercase" autocomplete="off">
-          <p style="font-size:11px;color:#6b7280;margin-top:4px">Enter the exact index number given to you by your institution. This is unique to you and cannot be shared.</p>
-        </div>
-        <div class="form-group">
           <label>Institution Code <span style="color:red">*</span></label>
           <input type="text" id="student-reg-code" placeholder="e.g. ABC123" style="text-transform:uppercase">
         </div>
         <div class="form-group">
-          <label>Department <span style="color:red">*</span></label>
-          <input type="text" id="student-reg-dept" placeholder="e.g. Computer Science">
+          <label>Student ID / Index Number <span style="color:red">*</span></label>
+          <input type="text" id="student-reg-index" placeholder="e.g. UCC/CS/23/0001" style="text-transform:uppercase" autocomplete="off">
+          <p style="font-size:11px;color:#6b7280;margin-top:4px">Must be unique — each student has their own index number assigned by the institution.</p>
         </div>
         <div class="form-group">
           <label>Password <span style="color:red">*</span></label>
@@ -632,8 +624,67 @@ function selectPortal(t){document.addEventListener('DOMContentLoaded',function()
           <input type="password" id="student-reg-confirm" placeholder="Confirm your password">
         </div>
         <div class="form-group">
+          <label>Department <span style="color:red">*</span></label>
+          <input type="text" id="student-reg-dept" placeholder="e.g. Computer Science">
+          <p style="font-size:11px;color:#6b7280;margin-top:4px">Student will be visible to the HOD of this department.</p>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+          <div class="form-group">
+            <label>Programme <span style="color:red">*</span></label>
+            <select id="student-reg-programme">
+              <option value="">— Select —</option>
+              <option value="BSc">BSc</option>
+              <option value="HND">HND</option>
+              <option value="Diploma">Diploma</option>
+              <option value="BTech">BTech</option>
+              <option value="Top-Up">Top-Up</option>
+              <option value="BA">BA</option>
+              <option value="BEd">BEd</option>
+              <option value="MEd">MEd</option>
+              <option value="MSc">MSc</option>
+              <option value="MBA">MBA</option>
+              <option value="PhD">PhD</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Level <span style="color:red">*</span></label>
+            <select id="student-reg-level">
+              <option value="">— Select —</option>
+              <option value="100">100</option>
+              <option value="200">200</option>
+              <option value="300">300</option>
+              <option value="400">400</option>
+              <option value="500">500</option>
+              <option value="600">600</option>
+            </select>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">
+          <div class="form-group">
+            <label>Group <span style="color:red">*</span></label>
+            <input type="text" id="student-reg-group" placeholder="E.G. A, B, C">
+          </div>
+          <div class="form-group">
+            <label>Session Type <span style="color:red">*</span></label>
+            <select id="student-reg-session-type">
+              <option value="">— Select —</option>
+              <option value="Regular">Regular</option>
+              <option value="Evening">Evening</option>
+              <option value="Weekend">Weekend</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Semester <span style="color:red">*</span></label>
+            <select id="student-reg-semester">
+              <option value="">— Select —</option>
+              <option value="1">Semester 1</option>
+              <option value="2">Semester 2</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group">
           <label>Phone Number <span style="font-weight:400;color:var(--text-light)">(optional — for SMS password reset)</span></label>
-          <input type="tel" id="student-reg-phone" placeholder="e.g. 0244123456">
+          <input type="tel" id="student-reg-phone" placeholder="e.g. 0241234567">
         </div>
         <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:12px;color:#1e40af">
           <strong>Important:</strong> Your Student ID must be added to a class roster by your lecturer before you can register. Each Student ID can only be used once. If registration fails, contact your lecturer.
@@ -700,8 +751,8 @@ function selectPortal(t){document.addEventListener('DOMContentLoaded',function()
           <p>Admins can self-register a new institution. All other users (Lecturers, HODs, Students) are added by their institution's Admin from the dashboard.</p>
         </details>
         <details class="auth-faq-item">
-          <summary>What is KODEX?</summary>
-          <p>KODEX is an enterprise attendance &amp; learning management platform for academic institutions and businesses — covering attendance, courses, quizzes, and HR.</p>
+          <summary>What is DIKLY?</summary>
+          <p>DIKLY is an enterprise attendance &amp; learning management platform for academic institutions and businesses — covering attendance, courses, quizzes, and HR.</p>
         </details>
       </div>
     </div>
@@ -711,7 +762,7 @@ function selectPortal(t){document.addEventListener('DOMContentLoaded',function()
 
     <div class="topbar">
       <div class="topbar-left">
-        <h2>KODEX</h2>
+        <h2>DIKLY</h2>
       </div>
       <div class="topbar-right">
         <div class="user-info">
@@ -734,16 +785,8 @@ function selectPortal(t){document.addEventListener('DOMContentLoaded',function()
     <div class="main-layout">
       <div class="sidebar">
         <div class="sidebar-logo">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" style="width:28px;height:28px;border-radius:8px;flex-shrink:0">
-            <rect x="0" y="0" width="128" height="128" rx="28" fill="#3730a3"/>
-            <rect x="6" y="6" width="116" height="116" rx="22" fill="#4f46e5"/>
-            <rect x="30" y="28" width="17" height="72" rx="4" fill="#ffffff"/>
-            <polygon points="47,64 90,28 108,28 66,64" fill="#ffffff"/>
-            <polygon points="47,64 90,100 108,100 66,64" fill="#ffffff"/>
-            <circle cx="108" cy="16" r="6" fill="#818cf8"/>
-            <circle cx="120" cy="16" r="4" fill="#c7d2fe"/>
-          </svg>
-          <span class="sidebar-logo-text">KODEX</span>
+          <img src="/dikly-icon.svg" style="width:28px;height:28px;flex-shrink:0" alt="DIKLY">
+          <span class="sidebar-logo-text">DIKLY</span>
         </div>
         <nav class="sidebar-nav" id="sidebar-nav"></nav>
       </div>
@@ -787,7 +830,7 @@ function selectPortal(t){document.addEventListener('DOMContentLoaded',function()
             </div>
             <div style="min-width:0">
               <div class="fap-title">FAQ Assistant</div>
-              <div class="fap-subtitle">Ask anything about KODEX</div>
+              <div class="fap-subtitle">Ask anything about DIKLY</div>
             </div>
           </div>
           <button class="fap-close-btn" onclick="faqPanelClose()" title="Hide panel" aria-label="Close panel">
@@ -846,7 +889,7 @@ function selectPortal(t){document.addEventListener('DOMContentLoaded',function()
       ">
         <div>
           <div id="legal-modal-title" style="font-size:18px;font-weight:700;color:#111827"></div>
-          <div style="font-size:12px;color:#6b7280;margin-top:2px">KODEX Platform</div>
+          <div style="font-size:12px;color:#6b7280;margin-top:2px">DIKLY Platform</div>
         </div>
         <button onclick="closeLegalModal()" style="
           background:none;border:none;cursor:pointer;
@@ -902,60 +945,66 @@ function selectPortal(t){document.addEventListener('DOMContentLoaded',function()
     terms: {
       title: 'Terms & Conditions',
       html: `
-        <p style="color:#6b7280;font-size:12px;margin-bottom:20px">Last updated: January 1, 2025</p>
+        <p style="color:#6b7280;font-size:12px;margin-bottom:20px">Last updated: April 28, 2025 &nbsp;·&nbsp; DIKLY Technologies</p>
 
         <h3 style="font-size:15px;font-weight:700;color:#111827;margin:0 0 8px">1. Acceptance of Terms</h3>
-        <p>By accessing or using the KODEX platform ("Platform"), you agree to be bound by these Terms and Conditions. If you do not agree to these terms, you may not use the Platform. These terms apply to all users including administrators, lecturers, employees, and students.</p>
+        <p>By accessing or using the DIKLY platform ("Platform"), operated by <strong>DIKLY Technologies</strong>, you agree to be bound by these Terms and Conditions. If you do not agree, you may not use the Platform. These terms apply to all users including institution administrators, lecturers, heads of department, employees, and students.</p>
 
-        <h3 style="font-size:15px;font-weight:700;color:#111827;margin:20px 0 8px">2. Description of Service</h3>
-        <p>KODEX is an enterprise attendance management platform that provides tools for tracking attendance, managing courses, conducting proctored assessments, and generating reports. The Platform is provided on a subscription basis to registered institutions and organisations.</p>
+        <h3 style="font-size:15px;font-weight:700;color:#111827;margin:20px 0 8px">2. About DIKLY Technologies</h3>
+        <p>DIKLY Technologies — <em>Innovate · Connect · Empower</em> — is an enterprise technology platform providing smart attendance management, learning management, proctored assessments, and institutional analytics. The Platform is offered on a subscription basis to registered academic institutions, corporations, and public organisations.</p>
 
         <h3 style="font-size:15px;font-weight:700;color:#111827;margin:20px 0 8px">3. User Accounts & Responsibilities</h3>
-        <p>Users are responsible for maintaining the confidentiality of their login credentials. You agree to:</p>
+        <p>Users are responsible for the security of their login credentials. By registering, you agree to:</p>
         <ul style="padding-left:20px;margin:8px 0">
-          <li>Provide accurate and complete registration information</li>
-          <li>Keep your password secure and not share it with others</li>
-          <li>Notify your administrator immediately of any unauthorised access</li>
-          <li>Use the Platform only for its intended educational or corporate purposes</li>
-          <li>Not attempt to circumvent any security or access controls</li>
+          <li>Provide accurate, complete, and current registration information</li>
+          <li>Keep your password confidential and not share it with others</li>
+          <li>Notify your administrator immediately of any unauthorised access to your account</li>
+          <li>Use the Platform solely for its intended educational, corporate, or institutional purposes</li>
+          <li>Not attempt to circumvent any security, authentication, or access controls</li>
+          <li>Not share QR codes, session tokens, or attendance codes with unauthorised persons</li>
         </ul>
 
-        <h3 style="font-size:15px;font-weight:700;color:#111827;margin:20px 0 8px">4. Academic Integrity</h3>
-        <p>Students using the Platform for proctored assessments agree to:</p>
+        <h3 style="font-size:15px;font-weight:700;color:#111827;margin:20px 0 8px">4. Academic & Professional Integrity</h3>
+        <p>Users engaging in proctored assessments or attendance marking agree to:</p>
         <ul style="padding-left:20px;margin:8px 0">
-          <li>Not engage in any form of academic dishonesty during assessments</li>
-          <li>Not share QR codes, attendance tokens, or assessment codes with others</li>
-          <li>Allow the Platform to use device camera and microphone for proctoring purposes</li>
-          <li>Accept that violation of integrity policies may result in automatic assessment submission or disqualification</li>
+          <li>Not engage in any form of academic dishonesty, fraud, or misrepresentation</li>
+          <li>Not falsify, manipulate, or proxy attendance records on behalf of another person</li>
+          <li>Grant the Platform temporary use of device camera and network data for anti-fraud verification</li>
+          <li>Accept that integrity violations may result in automatic disqualification, session termination, or account suspension</li>
+          <li>Acknowledge that attendance and assessment records may be reviewed by authorised institutional staff</li>
         </ul>
 
-        <h3 style="font-size:15px;font-weight:700;color:#111827;margin:20px 0 8px">5. Attendance Data</h3>
-        <p>Attendance records generated through the Platform are the property of the registered institution. KODEX processes this data on behalf of institutions and does not independently use, sell, or share attendance records with third parties except as required by law.</p>
+        <h3 style="font-size:15px;font-weight:700;color:#111827;margin:20px 0 8px">5. Attendance & Assessment Data</h3>
+        <p>All attendance records, quiz results, and assessment data generated through the Platform are the property of the registered institution. DIKLY Technologies processes this data as a service provider on behalf of institutions and does not independently use, sell, or disclose such data to third parties except as required by applicable law.</p>
 
-        <h3 style="font-size:15px;font-weight:700;color:#111827;margin:20px 0 8px">6. Subscription & Billing</h3>
-        <p>Institutions register with a 14-day free trial. Continued use beyond the trial period requires an active subscription. KODEX reserves the right to suspend access for accounts with lapsed subscriptions. Refunds are handled on a case-by-case basis.</p>
+        <h3 style="font-size:15px;font-weight:700;color:#111827;margin:20px 0 8px">6. Subscription, Trial & Billing</h3>
+        <p>Institutions begin with a free trial period. Continued access after the trial requires an active subscription. DIKLY Technologies reserves the right to suspend or restrict access for accounts with lapsed or unpaid subscriptions. All subscription fees are non-refundable except where required by applicable consumer protection law. Billing disputes must be raised within 30 days of the charge date.</p>
 
         <h3 style="font-size:15px;font-weight:700;color:#111827;margin:20px 0 8px">7. Prohibited Uses</h3>
         <p>You may not use the Platform to:</p>
         <ul style="padding-left:20px;margin:8px 0">
-          <li>Impersonate another user or falsify attendance records</li>
-          <li>Reverse-engineer, decompile, or copy any part of the Platform</li>
-          <li>Introduce malicious software or attempt unauthorised access</li>
-          <li>Use automated tools to manipulate QR codes or tokens</li>
-          <li>Violate any applicable local, national, or international laws</li>
+          <li>Impersonate another user, institution, or entity</li>
+          <li>Reverse-engineer, decompile, copy, or redistribute any part of the Platform</li>
+          <li>Introduce malware, bots, or scripts that interfere with Platform operation</li>
+          <li>Attempt unauthorised access to backend systems, APIs, or databases</li>
+          <li>Use automated tools to manipulate QR codes, tokens, or session identifiers</li>
+          <li>Violate any applicable local, national, or international laws or regulations</li>
         </ul>
 
-        <h3 style="font-size:15px;font-weight:700;color:#111827;margin:20px 0 8px">8. Limitation of Liability</h3>
-        <p>KODEX shall not be liable for any indirect, incidental, or consequential damages arising from your use of the Platform. The Platform is provided "as is" without warranties of any kind. We do not guarantee uninterrupted or error-free service.</p>
+        <h3 style="font-size:15px;font-weight:700;color:#111827;margin:20px 0 8px">8. Intellectual Property</h3>
+        <p>All software, design, branding, and content comprising the DIKLY platform are the exclusive property of DIKLY Technologies. Nothing in these Terms grants you any ownership or licence over Platform intellectual property beyond the right to use the Platform as described herein.</p>
 
-        <h3 style="font-size:15px;font-weight:700;color:#111827;margin:20px 0 8px">9. Modifications</h3>
-        <p>KODEX reserves the right to modify these Terms at any time. Continued use of the Platform after changes are posted constitutes acceptance of the updated Terms. We will notify institution administrators of material changes via email.</p>
+        <h3 style="font-size:15px;font-weight:700;color:#111827;margin:20px 0 8px">9. Limitation of Liability</h3>
+        <p>DIKLY Technologies shall not be liable for any indirect, incidental, special, or consequential damages arising from your use of, or inability to use, the Platform. The Platform is provided "as is" without warranties of any kind, express or implied. We do not guarantee uninterrupted, error-free, or permanently secure service.</p>
 
-        <h3 style="font-size:15px;font-weight:700;color:#111827;margin:20px 0 8px">10. Governing Law</h3>
-        <p>These Terms are governed by the laws of the jurisdiction in which KODEX is registered. Any disputes shall be resolved through binding arbitration before recourse to the courts.</p>
+        <h3 style="font-size:15px;font-weight:700;color:#111827;margin:20px 0 8px">10. Modifications to Terms</h3>
+        <p>DIKLY Technologies reserves the right to update or modify these Terms at any time. Continued use of the Platform after any posted changes constitutes your acceptance of the revised Terms. Institution administrators will be notified of material changes via email.</p>
 
-        <h3 style="font-size:15px;font-weight:700;color:#111827;margin:20px 0 8px">11. Contact</h3>
-        <p>For questions about these Terms, reach us at:</p>
+        <h3 style="font-size:15px;font-weight:700;color:#111827;margin:20px 0 8px">11. Governing Law & Disputes</h3>
+        <p>These Terms are governed by the laws of the Republic of Ghana. Any disputes arising from or relating to these Terms or your use of the Platform shall first be addressed through good-faith negotiation, and thereafter through binding arbitration before recourse to the courts of Ghana.</p>
+
+        <h3 style="font-size:15px;font-weight:700;color:#111827;margin:20px 0 8px">12. Contact DIKLY Technologies</h3>
+        <p>For questions, concerns, or legal notices regarding these Terms:</p>
         <p>📧 <a href="mailto:nelsonkel78@gmail.com" style="color:var(--primary)">nelsonkel78@gmail.com</a><br>
         📞 <a href="tel:+233559545339" style="color:var(--primary)">0559545339</a> &nbsp;|&nbsp;
         <a href="tel:+233536143117" style="color:var(--primary)">0536143117</a> &nbsp;|&nbsp;
@@ -968,72 +1017,73 @@ function selectPortal(t){document.addEventListener('DOMContentLoaded',function()
     privacy: {
       title: 'Privacy Policy',
       html: `
-        <p style="color:#6b7280;font-size:12px;margin-bottom:20px">Last updated: January 1, 2025</p>
+        <p style="color:#6b7280;font-size:12px;margin-bottom:20px">Last updated: April 28, 2025 &nbsp;·&nbsp; DIKLY Technologies</p>
 
         <h3 style="font-size:15px;font-weight:700;color:#111827;margin:0 0 8px">1. Introduction</h3>
-        <p>KODEX ("we", "our", "us") is committed to protecting your personal information. This Privacy Policy explains how we collect, use, store, and safeguard data when you use the KODEX platform. By using the Platform, you consent to the practices described here.</p>
+        <p><strong>DIKLY Technologies</strong> ("we", "our", "us") is committed to protecting your personal information. This Privacy Policy explains how we collect, use, store, and protect data when you use the DIKLY platform ("Platform"). By using the Platform, you consent to the data practices described in this Policy. If you do not agree, please do not use the Platform.</p>
 
         <h3 style="font-size:15px;font-weight:700;color:#111827;margin:20px 0 8px">2. Data We Collect</h3>
-        <p>We collect the following categories of data:</p>
+        <p>We collect the following categories of personal data:</p>
         <ul style="padding-left:20px;margin:8px 0">
-          <li><strong>Account data:</strong> Name, email address, student/employee ID, role, and institution affiliation</li>
-          <li><strong>Attendance data:</strong> Check-in times, methods (QR, code, BLE), session details, and location context</li>
-          <li><strong>Assessment data:</strong> Quiz responses, scores, submission timestamps, and proctoring events</li>
-          <li><strong>Device data:</strong> Device fingerprint, IP address, browser type, and operating system</li>
-          <li><strong>Camera data:</strong> Facial detection images captured during proctored sessions (processed locally, not stored)</li>
-          <li><strong>Usage data:</strong> Pages visited, features used, and interaction logs for system improvement</li>
+          <li><strong>Account data:</strong> Full name, email address, student or employee ID, assigned role, and institutional affiliation</li>
+          <li><strong>Attendance data:</strong> Check-in timestamps, attendance methods (QR code, numeric code, BLE beacon), session details, and device network context</li>
+          <li><strong>Assessment data:</strong> Quiz and assignment responses, scores, submission timestamps, and proctoring event logs</li>
+          <li><strong>Device & network data:</strong> Device fingerprint, IP address, browser type, operating system, and WiFi network association</li>
+          <li><strong>Camera data:</strong> Facial presence and orientation data captured on-device during proctored sessions — this data is processed locally and is <strong>never uploaded to DIKLY servers</strong></li>
+          <li><strong>Usage data:</strong> Feature usage patterns and interaction logs used to improve Platform reliability and user experience</li>
         </ul>
 
         <h3 style="font-size:15px;font-weight:700;color:#111827;margin:20px 0 8px">3. How We Use Your Data</h3>
-        <p>We use collected data to:</p>
+        <p>DIKLY Technologies uses collected data to:</p>
         <ul style="padding-left:20px;margin:8px 0">
-          <li>Provide and operate the attendance and assessment services</li>
-          <li>Verify identity and prevent fraudulent attendance marking</li>
-          <li>Generate attendance reports for institutions</li>
-          <li>Enforce academic integrity during proctored assessments</li>
-          <li>Improve Platform performance, reliability, and features</li>
-          <li>Send system notifications and account-related communications</li>
+          <li>Deliver and operate the attendance tracking, assessment, and reporting services</li>
+          <li>Verify user identity and prevent fraudulent or proxy attendance marking</li>
+          <li>Generate attendance and performance reports for authorised institution staff</li>
+          <li>Enforce academic and professional integrity during proctored assessments</li>
+          <li>Continuously improve Platform performance, security, and features</li>
+          <li>Send system notifications, subscription reminders, and account-related communications</li>
         </ul>
 
-        <h3 style="font-size:15px;font-weight:700;color:#111827;margin:20px 0 8px">4. Camera & Biometric Data</h3>
-        <p>During proctored quizzes and assessments, the Platform uses your device camera to detect facial presence and head orientation. This processing happens entirely on your device using on-device AI models. <strong>No facial images are transmitted to or stored on KODEX servers.</strong> Only violation flags (e.g., "face not detected") are recorded.</p>
+        <h3 style="font-size:15px;font-weight:700;color:#111827;margin:20px 0 8px">4. Camera & Biometric Processing</h3>
+        <p>During proctored quizzes, the Platform uses your device camera to detect facial presence, head orientation, and potential integrity violations. All camera processing is performed entirely <strong>on your device</strong> using locally running AI models. <strong>No facial images or biometric data are transmitted to or stored on DIKLY Technologies servers.</strong> Only non-biometric violation flags (e.g., "face not detected", "multiple faces") are recorded in the database.</p>
 
-        <h3 style="font-size:15px;font-weight:700;color:#111827;margin:20px 0 8px">5. Data Sharing</h3>
-        <p>We do not sell your personal data. We may share data with:</p>
+        <h3 style="font-size:15px;font-weight:700;color:#111827;margin:20px 0 8px">5. Data Sharing & Disclosure</h3>
+        <p>We do not sell, rent, or trade your personal data. Data may be shared only in the following circumstances:</p>
         <ul style="padding-left:20px;margin:8px 0">
-          <li><strong>Your institution:</strong> Attendance records and assessment results are accessible to authorised administrators and lecturers within your institution</li>
-          <li><strong>Service providers:</strong> Cloud hosting and infrastructure providers who process data under strict confidentiality agreements</li>
-          <li><strong>Legal authorities:</strong> When required by law, regulation, or valid legal process</li>
+          <li><strong>Your institution:</strong> Attendance records, assessment results, and usage data are accessible to authorised administrators, lecturers, and heads of department within your registered institution only</li>
+          <li><strong>Infrastructure providers:</strong> Cloud hosting and database providers who operate under strict data processing agreements and confidentiality obligations</li>
+          <li><strong>Payment processors:</strong> Billing data is processed by Paystack in accordance with their own privacy policy; DIKLY Technologies does not store full payment card details</li>
+          <li><strong>Legal compliance:</strong> When required to do so by applicable law, court order, or valid regulatory process</li>
         </ul>
 
         <h3 style="font-size:15px;font-weight:700;color:#111827;margin:20px 0 8px">6. Data Retention</h3>
-        <p>Attendance and assessment records are retained for the duration of your institution's active subscription plus 12 months. Account data is deleted within 30 days of a deletion request. Anonymised aggregate data may be retained indefinitely for analytics purposes.</p>
+        <p>Attendance and assessment records are retained for the duration of your institution's active subscription, plus an additional 12 months following expiry or termination. Personal account data is deleted within 30 days of a verified deletion request. Anonymised, aggregated statistical data may be retained indefinitely for platform analytics and improvement purposes.</p>
 
         <h3 style="font-size:15px;font-weight:700;color:#111827;margin:20px 0 8px">7. Your Rights</h3>
-        <p>Depending on your jurisdiction, you may have the right to:</p>
+        <p>Subject to applicable law, you may have the right to:</p>
         <ul style="padding-left:20px;margin:8px 0">
-          <li>Access the personal data we hold about you</li>
-          <li>Request correction of inaccurate data</li>
-          <li>Request deletion of your data (subject to institutional requirements)</li>
-          <li>Object to or restrict certain processing activities</li>
-          <li>Data portability — receive your data in a structured format</li>
+          <li><strong>Access:</strong> Request a copy of the personal data we hold about you</li>
+          <li><strong>Rectification:</strong> Request correction of inaccurate or incomplete data</li>
+          <li><strong>Erasure:</strong> Request deletion of your personal data, subject to institutional and legal retention requirements</li>
+          <li><strong>Restriction:</strong> Object to or request restriction of certain processing activities</li>
+          <li><strong>Portability:</strong> Receive your data in a structured, machine-readable format</li>
         </ul>
-        <p style="margin-top:8px">To exercise these rights, contact your institution administrator or email <a href="mailto:nelsonkel78@gmail.com" style="color:var(--primary)">nelsonkel78@gmail.com</a>.</p>
+        <p style="margin-top:8px">To exercise any of these rights, please contact your institution administrator or reach us directly at <a href="mailto:nelsonkel78@gmail.com" style="color:var(--primary)">nelsonkel78@gmail.com</a>.</p>
 
-        <h3 style="font-size:15px;font-weight:700;color:#111827;margin:20px 0 8px">8. Security</h3>
-        <p>We implement industry-standard security measures including encrypted data transmission (HTTPS/TLS), hashed password storage, device binding, and role-based access controls. Despite these measures, no system is completely secure and we cannot guarantee absolute security.</p>
+        <h3 style="font-size:15px;font-weight:700;color:#111827;margin:20px 0 8px">8. Security Measures</h3>
+        <p>DIKLY Technologies implements industry-standard security controls including HTTPS/TLS encrypted transmission, bcrypt-hashed password storage, JWT-based authentication with device binding, IP-network verification for attendance, and role-based access control. Despite these measures, no digital system is entirely immune to security risks, and we cannot guarantee absolute security.</p>
 
         <h3 style="font-size:15px;font-weight:700;color:#111827;margin:20px 0 8px">9. Cookies & Local Storage</h3>
-        <p>The Platform uses browser local storage to maintain your session token and cache offline data. No third-party advertising cookies are used. You may clear local storage at any time through your browser settings, which will require you to log in again.</p>
+        <p>The Platform uses browser local storage to maintain your authentication session and cache offline-accessible data. We do not use third-party advertising or tracking cookies. You may clear your browser's local storage at any time, which will require you to log in again. Session data is automatically cleared on logout.</p>
 
-        <h3 style="font-size:15px;font-weight:700;color:#111827;margin:20px 0 8px">10. Children's Privacy</h3>
-        <p>The Platform may be used by students under 18 years of age only under the supervision and authorisation of their registered educational institution. We do not knowingly collect data directly from children outside of an institutional context.</p>
+        <h3 style="font-size:15px;font-weight:700;color:#111827;margin:20px 0 8px">10. Minors</h3>
+        <p>The Platform may be accessed by students under 18 years of age exclusively under the supervision, registration, and authorisation of a licensed educational institution. DIKLY Technologies does not knowingly collect personal data directly from minors outside of an established institutional context.</p>
 
         <h3 style="font-size:15px;font-weight:700;color:#111827;margin:20px 0 8px">11. Changes to This Policy</h3>
-        <p>We may update this Privacy Policy periodically. We will notify institution administrators of significant changes. Continued use of the Platform after changes constitutes acceptance of the updated policy.</p>
+        <p>DIKLY Technologies may update this Privacy Policy periodically to reflect changes in our practices, technology, or applicable law. Institution administrators will be notified of significant changes by email. Continued use of the Platform following any update constitutes acceptance of the revised Policy.</p>
 
-        <h3 style="font-size:15px;font-weight:700;color:#111827;margin:20px 0 8px">12. Contact Us</h3>
-        <p>For privacy-related questions or data requests, reach us at:<br>
+        <h3 style="font-size:15px;font-weight:700;color:#111827;margin:20px 0 8px">12. Contact DIKLY Technologies</h3>
+        <p>For privacy-related questions, data access requests, or concerns, reach our data team at:<br>
         📧 <a href="mailto:nelsonkel78@gmail.com" style="color:var(--primary)">nelsonkel78@gmail.com</a><br>
         📞 <a href="tel:+233559545339" style="color:var(--primary)">0559545339</a> &nbsp;|&nbsp;
         <a href="tel:+233536143117" style="color:var(--primary)">0536143117</a> &nbsp;|&nbsp;

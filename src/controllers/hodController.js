@@ -95,10 +95,12 @@ exports.listPendingCourses = async (req, res) => {
     const companyId = req.user.company;
     const filter    = { companyId, approvalStatus: "pending", needsApproval: true };
 
-    // Scope HOD to their department (departmentId or lecturer's department)
-    // We match courses where the creating lecturer is in the HOD's department.
-    // If no departmentId set on course, we fall back to all pending in company.
-    if (req.user.department) {
+    // HOD can only see/approve courses in their own department.
+    // Admins/superadmins have no department and see all pending courses.
+    if (req.user.role === "hod") {
+      if (!req.user.department) {
+        return res.status(403).json({ error: "Your account has no department assigned. Please contact your admin." });
+      }
       filter.departmentId = req.user.department;
     }
 
@@ -120,7 +122,12 @@ exports.approveCourse = async (req, res) => {
   try {
     const companyId = req.user.company;
     const filter    = { _id: req.params.id, companyId, approvalStatus: "pending" };
-    if (req.user.department) filter.departmentId = req.user.department;
+    if (req.user.role === "hod") {
+      if (!req.user.department) {
+        return res.status(403).json({ error: "Your account has no department assigned. Please contact your admin." });
+      }
+      filter.departmentId = req.user.department;
+    }
 
     const course = await Course.findOne(filter);
     if (!course) {
@@ -156,7 +163,12 @@ exports.rejectCourse = async (req, res) => {
   try {
     const companyId = req.user.company;
     const filter    = { _id: req.params.id, companyId, approvalStatus: "pending" };
-    if (req.user.department) filter.departmentId = req.user.department;
+    if (req.user.role === "hod") {
+      if (!req.user.department) {
+        return res.status(403).json({ error: "Your account has no department assigned. Please contact your admin." });
+      }
+      filter.departmentId = req.user.department;
+    }
 
     const course = await Course.findOne(filter);
     if (!course) {

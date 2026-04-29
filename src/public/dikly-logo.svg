@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 420" width="500" height="420">
+  <defs>
+    <linearGradient id="dg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#60a5fa"/>
+      <stop offset="45%" stop-color="#2563eb"/>
+      <stop offset="100%" stop-color="#1e40af"/>
+    </linearGradient>
+    <clipPath id="dc">
+      <path d="M148,28 L148,222 L214,222 C338,218 338,32 214,28 Z"/>
+    </clipPath>
+  </defs>
+
+  <!-- D icon mark -->
+  <path d="M148,28 L148,222 L214,222 C338,218 338,32 214,28 Z" fill="url(#dg)"/>
+  <g clip-path="url(#dc)">
+    <polygon points="128,148 258,18 298,18 168,148" fill="white"/>
+    <polygon points="168,232 298,102 258,102 128,232" fill="white"/>
+  </g>
+
+  <!-- DIKLY wordmark -->
+  <text x="250" y="292" text-anchor="middle"
+        font-family="'Plus Jakarta Sans',system-ui,sans-serif"
+        font-size="76" font-weight="800" letter-spacing="-1" fill="#0D1B2A">DIKLY</text>
+
+  <!-- TECHNOLOGIES with flanking lines -->
+  <rect x="82" y="314" width="66" height="2" rx="1" fill="#1E88E5"/>
+  <text x="250" y="326" text-anchor="middle"
+        font-family="'Plus Jakarta Sans',system-ui,sans-serif"
+        font-size="14" font-weight="700" letter-spacing="4.5" fill="#1E88E5">TECHNOLOGIES</text>
+  <rect x="352" y="314" width="66" height="2" rx="1" fill="#1E88E5"/>
+
+  <!-- Tagline -->
+  <text x="250" y="358" text-anchor="middle"
+        font-family="'Plus Jakarta Sans',system-ui,sans-serif"
+        font-size="12" font-weight="600" letter-spacing="2.5" fill="#6B7280">INNOVATE  ·  CONNECT  ·  EMPOWER</text>
+</svg>

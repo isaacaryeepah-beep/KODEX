@@ -7,8 +7,8 @@
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 <meta name="theme-color" content="#0f172a" />
-<title>KODEX — Snap Quiz</title>
-<link rel="icon" type="image/svg+xml" href="/kodex-icon.svg">
+<title>DIKLY — Snap Quiz</title>
+<link rel="icon" type="image/svg+xml" href="/dikly-icon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
 <!-- TF loaded async so it never blocks login UI wiring -->
@@ -555,7 +555,7 @@ window.addEventListener('load', () => loadMLLibs().catch(() => {}));
         <a onclick="showSnapLegal('terms')" style="color:rgba(255,255,255,.4);cursor:pointer;text-decoration:underline">Terms</a>
         &nbsp;&amp;&nbsp;
         <a onclick="showSnapLegal('privacy')" style="color:rgba(255,255,255,.4);cursor:pointer;text-decoration:underline">Privacy Policy</a>
-        &nbsp;·&nbsp;&copy; 2025 KODEX
+        &nbsp;·&nbsp;&copy; 2025 DIKLY
       </p>
     </div>
 
@@ -628,7 +628,7 @@ window.addEventListener('load', () => loadMLLibs().catch(() => {}));
     <button class="btn btn-primary" id="proceed-camera-btn" disabled>Continue to Camera Setup</button>
     <button class="btn btn-ghost" id="back-to-list-btn" style="margin-top:10px">← Back</button>
     <p style="margin-top:16px;font-size:11px;text-align:center;color:var(--slate)">
-      ⚠️ Mobile browser limitations: screen lock detection may vary by device. For maximum enforcement, use the KODEX app.
+      ⚠️ Mobile browser limitations: screen lock detection may vary by device. For maximum enforcement, use the DIKLY app.
     </p>
   </div>
 </div>
@@ -850,10 +850,10 @@ function toast(msg, type = 'info') {
 // ══════════════════════════════════════════════════════════════════
 //  API HELPERS
 // ══════════════════════════════════════════════════════════════════
-async function api(method, path, body) {
+async function api(method, path, body, extraHeaders) {
   const opts = {
     method,
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...extraHeaders },
   };
   if (state.token) opts.headers['Authorization'] = `Bearer ${state.token}`;
   if (body) opts.body = JSON.stringify(body);
@@ -1016,8 +1016,8 @@ async function loadQuizList() {
   try {
     // Fetch live + all quizzes so students see upcoming and past too
     const [liveData, allData] = await Promise.all([
-      api('GET', '/api/student/quizzes'),
-      api('GET', '/api/student/quizzes?showAll=true')
+      api('GET', '/api/student/snap-quizzes/quizzes'),
+      api('GET', '/api/student/snap-quizzes/quizzes?showAll=true')
     ]);
     const liveIds = new Set((liveData.quizzes || []).map(q => q._id));
     const merged = [
@@ -1281,23 +1281,23 @@ document.getElementById('capture-start-btn').addEventListener('click', async () 
 
   try {
     // Start proctored session via API
-    const data = await api('POST', `/api/proctor/quiz/${state.selectedQuiz._id}/start`, {
+    const data = await api('POST', `/api/student/snap-quizzes/quizzes/${state.selectedQuiz._id}/attempts/start`, {
+      termsAcknowledged: true,
       deviceFingerprint: state.deviceFingerprint,
-      consentGiven: true,
       platform: detectClientPlatform(),
     });
 
-    state.session = data.session;
-    state.sessionToken = data.session.sessionToken;
     state.attempt = data.attempt;
+    state.sessionToken = data.attempt.sessionToken;
     state.questions = data.questions;
     state.answers = {};
     state.currentIdx = 0;
-    // Calculate remaining time correctly (handles reconnects)
-    const totalSeconds = (data.timeLimit || 30) * 60;
-    const startedAt = data.attempt?.startedAt ? new Date(data.attempt.startedAt) : new Date();
-    const elapsed = Math.floor((Date.now() - startedAt.getTime()) / 1000);
-    state.timerSeconds = Math.max(0, totalSeconds - elapsed);
+    // Calculate remaining time from server-provided expiresAt
+    const expiresAt = data.attempt?.expiresAt ? new Date(data.attempt.expiresAt) : null;
+    const timeLimitMinutes = data.quiz?.timeLimitMinutes || 30;
+    state.timerSeconds = expiresAt
+      ? Math.max(0, Math.round((expiresAt.getTime() - Date.now()) / 1000))
+      : timeLimitMinutes * 60;
     state.integrityScore = 100;
     state.totalViolations = 0;
     state.warningsIssued = 0;
@@ -1504,24 +1504,29 @@ function setProctorStatus(color, text, camEl, dot, textEl) {
 }
 
 async function logEvent(eventType, metadata = {}) {
-  if (!state.sessionToken) return;
+  if (!state.sessionToken || !state.attempt?._id) return;
+  const sessionHeader = { 'x-session-token': state.sessionToken };
+  const baseUrl = `/api/student/snap-quizzes/quizzes/${state.selectedQuiz._id}/attempts/${state.attempt._id}`;
   try {
-    const res = await api('POST', '/api/proctor/log-event', {
-      sessionToken: state.sessionToken,
-      eventType,
-      ...metadata,
-    });
-
-    // Apply enforcement from server response
-    if (res.action === 'terminated') {
-      terminateExam(res.terminationReason || eventType);
-    } else if (res.action === 'warned') {
-      showViolationWarning(res.warningsIssued);
+    if (eventType === 'heartbeat') {
+      await api('POST', `${baseUrl}/heartbeat`, {}, sessionHeader);
+      return;
     }
 
-    state.integrityScore  = res.integrityScore  ?? state.integrityScore;
-    state.totalViolations = res.totalViolations ?? state.totalViolations;
-    state.warningsIssued  = res.warningsIssued  ?? state.warningsIssued;
+    const res = await api('POST', `${baseUrl}/violations`, {
+      violationType: eventType,
+      occurredAt: new Date().toISOString(),
+      ...metadata,
+    }, sessionHeader);
+
+    // Apply enforcement from server response
+    if (res.terminated) {
+      terminateExam(eventType);
+    } else if (res.warned) {
+      showViolationWarning(res.violationCount);
+    }
+
+    if (res.violationCount != null) state.totalViolations = res.violationCount;
   } catch { /* don't crash exam */ }
 }
 
@@ -1644,15 +1649,13 @@ function terminateExam(reason) {
 }
 
 async function uploadSnapshot(imageData, type, faceDetected, faceCount, faceCentered) {
-  if (!state.sessionToken) return;
-  await api('POST', '/api/proctor/upload-snapshot', {
-    sessionToken: state.sessionToken,
-    imageData,
-    type,
-    faceDetected,
-    faceCount,
-    faceCentered,
-  });
+  if (!state.sessionToken || !state.attempt?._id) return;
+  await api(
+    'POST',
+    `/api/student/snap-quizzes/quizzes/${state.selectedQuiz._id}/attempts/${state.attempt._id}/snapshots`,
+    { imageUrl: imageData, eventType: type, faceDetected, faceCount, faceCentered },
+    { 'x-session-token': state.sessionToken }
+  );
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -1762,10 +1765,12 @@ async function submitExam() {
     const snap = captureFrame(examVideo);
     await uploadSnapshot(snap, 'end', detected, count, centered).catch(console.warn);
 
-    const data = await api('POST', `/api/proctor/quiz/${state.selectedQuiz._id}/submit`, {
-      sessionToken: state.sessionToken,
-      answers,
-    });
+    const data = await api(
+      'POST',
+      `/api/student/snap-quizzes/quizzes/${state.selectedQuiz._id}/attempts/${state.attempt._id}/submit`,
+      {},
+      { 'x-session-token': state.sessionToken }
+    );
 
     state.examActive = false;
     stopExamCleanup();
@@ -1882,16 +1887,16 @@ setTimeout(() => loadFaceModel().catch(console.warn), 1500);
 const SNAP_LEGAL = {
   terms: {
     title: 'Terms & Conditions',
-    body: `<p style="color:#6b7280;font-size:11px;margin-bottom:16px">Last updated: January 1, 2025 &nbsp;·&nbsp; KODEX</p>
-    <h4 style="margin:0 0 6px;color:#111827">1. Acceptance</h4><p>By using the KODEX platform you agree to these Terms. These apply to all students using proctored assessments.</p>
+    body: `<p style="color:#6b7280;font-size:11px;margin-bottom:16px">Last updated: January 1, 2025 &nbsp;·&nbsp; DIKLY</p>
+    <h4 style="margin:0 0 6px;color:#111827">1. Acceptance</h4><p>By using the DIKLY platform you agree to these Terms. These apply to all students using proctored assessments.</p>
     <h4 style="margin:16px 0 6px;color:#111827">2. Academic Integrity</h4><p>You agree not to share QR codes, attendance tokens, or assessment codes. The platform may auto-submit your assessment if integrity violations are detected.</p>
-    <h4 style="margin:16px 0 6px;color:#111827">3. Camera & Proctoring</h4><p>You consent to camera use during assessments for facial presence detection. No images are stored on KODEX servers — processing is on-device only.</p>
+    <h4 style="margin:16px 0 6px;color:#111827">3. Camera & Proctoring</h4><p>You consent to camera use during assessments for facial presence detection. No images are stored on DIKLY servers — processing is on-device only.</p>
     <h4 style="margin:16px 0 6px;color:#111827">4. Attendance</h4><p>Attendance codes expire every 15 seconds to prevent sharing. Attempting to share or use an expired code is a violation of these Terms.</p>
     <h4 style="margin:16px 0 6px;color:#111827">5. Contact</h4><p>📧 nelsonkel78@gmail.com &nbsp;·&nbsp; 📞 0559545339 / 0536143117 / 0534707844</p>`
   },
   privacy: {
     title: 'Privacy Policy',
-    body: `<p style="color:#6b7280;font-size:11px;margin-bottom:16px">Last updated: January 1, 2025 &nbsp;·&nbsp; KODEX</p>
+    body: `<p style="color:#6b7280;font-size:11px;margin-bottom:16px">Last updated: January 1, 2025 &nbsp;·&nbsp; DIKLY</p>
     <h4 style="margin:0 0 6px;color:#111827">1. Data Collected</h4><p>We collect your name, student ID, attendance records, assessment responses, and device information for the purpose of operating the platform.</p>
     <h4 style="margin:16px 0 6px;color:#111827">2. Camera Data</h4><p>Camera access is used only for on-device face detection during proctored assessments. No facial images are transmitted or stored on our servers.</p>
     <h4 style="margin:16px 0 6px;color:#111827">3. Data Sharing</h4><p>Your data is shared only with your registered institution. We do not sell personal data. Data may be disclosed if required by law.</p>

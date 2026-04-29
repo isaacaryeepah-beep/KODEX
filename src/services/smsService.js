@@ -1,8 +1,8 @@
-// ─── KODEX SMS Service (Arkesel) ─────────────────────────────────────────────
+// ─── DIKLY SMS Service (Arkesel) ─────────────────────────────────────────────
 // Docs: https://developers.arkesel.com
 // Env vars needed in Render:
 //   ARKESEL_API_KEY  -- your API key from arkesel.com dashboard
-//   SMS_SENDER_ID    -- e.g. "KODEX" (max 11 chars, no spaces)
+//   SMS_SENDER_ID    -- e.g. "DIKLY" (max 11 chars, no spaces)
 // ─────────────────────────────────────────────────────────────────────────────
 
 const https = require('https');
@@ -19,7 +19,7 @@ function normalisePhone(raw) {
 // Send a raw SMS
 async function sendSms({ to, message }) {
   const apiKey   = process.env.ARKESEL_API_KEY;
-  const senderId = process.env.SMS_SENDER_ID || 'KODEX';
+  const senderId = process.env.SMS_SENDER_ID || 'DIKLY';
   const phone    = normalisePhone(to);
 
   if (!apiKey) {
@@ -77,7 +77,7 @@ async function sendSms({ to, message }) {
 
 // Send OTP reset code
 async function sendOtp({ phone, code, name }) {
-  const message = `KODEX: Hi ${name}, your verification code is ${code}. Valid for 1 hour.`;
+  const message = `DIKLY: Hi ${name}, your verification code is ${code}. Valid for 1 hour.`;
   return sendSms({ to: phone, message });
 }
 

@@ -162,7 +162,7 @@ exports.validateAttendance = async (req, res) => {
       const onSchoolWifi = deviceForIP.allowedSubnets?.some(sub => studentIP.startsWith(sub));
       if (!onESP32AP && !onSchoolWifi) {
         return res.status(403).json({
-          message: 'You must be connected to the classroom WiFi or KODEX hotspot to mark attendance.'
+          message: 'You must be connected to the classroom WiFi or DIKLY hotspot to mark attendance.'
         });
       }
     }

@@ -1,5 +1,5 @@
 // ══════════════════════════════════════════════════════════════════════════════
-//  KODEX Attendance Code Service
+//  DIKLY Attendance Code Service
 //  Derives a rotating 6-digit code from a per-session HMAC seed.
 //
 //  Both the backend and the ESP32 firmware run this SAME formula independently

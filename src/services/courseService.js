@@ -80,7 +80,7 @@ async function createCourse(data, creatorId, companyId) {
 }
 
 // ─── List ─────────────────────────────────────────────────────────────────────
-async function listCourses(userRole, userId, companyId, queryParams) {
+async function listCourses(userRole, userId, companyId, queryParams, userDepartment = null) {
   const {
     status, academicYear, semester, departmentId,
     level, group, qualificationType, studyType,
@@ -112,8 +112,8 @@ async function listCourses(userRole, userId, companyId, queryParams) {
   } else if (userRole === 'student') {
     query.enrolledStudents = userId;
   } else if (userRole === 'hod') {
-    // HOD sees their department if set — otherwise all (no department enforcement)
-    // departmentId filter above already handles explicit HOD filtering
+    // HOD only sees courses in their own department
+    if (userDepartment) query.departmentId = userDepartment;
   }
   // admin / superadmin: no scope restriction
 

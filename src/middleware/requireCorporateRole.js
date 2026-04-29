@@ -13,7 +13,7 @@
  *   - authenticate      (populates req.user)
  *   - requireCompanyScope (populates req.company, req.tenantMode)
  *
- * Corporate role mapping in KODEX
+ * Corporate role mapping in DIKLY
  * ────────────────────────────────
  * Coarse role (User.role)     → Typical corporateSubRole values
  *   superadmin                → (platform level, always bypassed)

@@ -69,11 +69,16 @@ app.use(helmet({
 
 // ── CORS: only allow your own domain ─────────────────────────────────────────
 const allowedOrigins = [
-  "https://kodex-713g.onrender.com",
   "https://kodex.it.com",
   "https://www.kodex.it.com",
   "http://kodex.it.com",
   "http://www.kodex.it.com",
+  "https://kodex-713g.onrender.com",
+  "https://dikly.onrender.com",
+  "https://dikly.it.com",
+  "https://www.dikly.it.com",
+  "http://dikly.it.com",
+  "http://www.dikly.it.com",
   "http://localhost:3000",
   "http://localhost:5000",
 ];
@@ -149,7 +154,7 @@ app.use(express.static(path.join(__dirname, "public"), {
 app.get("/api", (req, res) => {
   res.json({
     status: "running",
-    message: "KODEX API Server",
+    message: "DIKLY API Server",
     endpoints: {
       auth: "/api/auth",
       users: "/api/users",
