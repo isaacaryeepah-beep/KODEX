@@ -6929,47 +6929,76 @@ async function renderCourses() {
 }
 
 function _renderCoursesHTML(content, courses, isOffline) {
-  const canCreate = ['lecturer', 'admin', 'superadmin'].includes(currentUser.role);
+  const canCreate       = ['lecturer', 'admin', 'superadmin'].includes(currentUser.role);
   const canManageRoster = ['lecturer', 'admin', 'superadmin'].includes(currentUser.role);
+  const isStudent       = currentUser.role === 'student';
+
+  function statusBadge(course) {
+    if (!course.needsApproval) return '';
+    if (course.approvalStatus === 'pending')
+      return '<span style="background:#fef3c7;color:#b45309;border:1px solid #fde68a;padding:2px 9px;border-radius:20px;font-size:10px;font-weight:700;">⏳ Pending</span>';
+    if (course.approvalStatus === 'rejected')
+      return '<span style="background:#fee2e2;color:#b91c1c;border:1px solid #fca5a5;padding:2px 9px;border-radius:20px;font-size:10px;font-weight:700;">✕ Rejected</span>';
+    return '<span style="background:#dcfce7;color:#166534;border:1px solid #bbf7d0;padding:2px 9px;border-radius:20px;font-size:10px;font-weight:700;">✓ Approved</span>';
+  }
+
+  function courseCard(course) {
+    const approved   = !course.needsApproval || course.approvalStatus === 'approved';
+    const titleEsc   = esc(course.title).replace(/'/g, "\\'");
+    const codeEsc    = esc(course.code).replace(/'/g, "\\'");
+
+    const metaItems = [
+      course.lecturerId?.name ? `<span>👨‍🏫 ${esc(course.lecturerId.name)}</span>` : '',
+      course.level  ? `<span style="background:#ede9fe;color:#7c3aed;padding:2px 7px;border-radius:20px;font-weight:700;">Level ${esc(String(course.level))}</span>` : '',
+      course.group  ? `<span style="background:#ecfdf5;color:#059669;padding:2px 7px;border-radius:20px;font-weight:600;">Group ${esc(course.group)}</span>` : '',
+      `<span>👥 ${course.enrolledStudents?.length || 0} enrolled</span>`,
+    ].filter(Boolean).join('');
+
+    let actions = '';
+    if (!isOffline && canManageRoster) {
+      const uploadBtn = approved
+        ? `<button class="btn btn-primary btn-sm" onclick="showUploadRosterModal('${course._id}','${codeEsc}')">Upload Students</button>`
+        : `<span style="font-size:11px;color:var(--text-muted);font-style:italic;">${course.approvalStatus === 'pending' ? 'Awaiting HOD approval' : 'Rejected — contact HOD'}</span>`;
+      actions = `
+        ${uploadBtn}
+        <button class="btn btn-sm" style="background:var(--bg);border:1px solid var(--border);" onclick="viewRoster('${course._id}','${codeEsc}')">View Roster</button>
+        <button class="btn btn-sm" style="background:#6366f1;color:#fff;" onclick="openBulkEmailModal('${course._id}','${titleEsc}')">✉️ Email</button>
+        <button class="btn btn-sm" style="background:#10b981;color:#fff;" onclick="openBulkSmsModal('${course._id}','${titleEsc}')">💬 SMS</button>`;
+    } else if (!isOffline && isStudent) {
+      actions = `<button class="btn btn-sm" style="background:#f0fdf4;color:#16a34a;border:1px solid #bbf7d0;" onclick="generateCertificate('${course._id}','${titleEsc}')">🎓 Certificate</button>`;
+    } else if (!isOffline) {
+      actions = `<button class="btn btn-sm" style="background:var(--bg);border:1px solid var(--border);" onclick="viewRoster('${course._id}','${codeEsc}')">View Roster</button>`;
+    }
+
+    return `
+      <div class="card" style="padding:16px 18px;margin-bottom:12px;">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap;margin-bottom:8px;">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            <span style="font-family:monospace;font-size:12px;font-weight:700;background:#eff6ff;color:#1d4ed8;padding:3px 9px;border-radius:6px;">${esc(course.code)}</span>
+            <span style="font-size:15px;font-weight:700;">${esc(course.title)}</span>
+          </div>
+          <div>${statusBadge(course)}</div>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;font-size:12px;color:var(--text-muted);margin-bottom:12px;">
+          ${metaItems}
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
+          ${actions}
+        </div>
+      </div>`;
+  }
+
   content.innerHTML = `
     <div class="page-header">
-      <h2>Courses</h2>
-      <p>Manage academic courses${isOffline ? ' <span style="color:#f59e0b;font-weight:600">(Offline — cached)</span>' : ''}</p>
+      <div>
+        <h2>Courses</h2>
+        <p>Manage academic courses${isOffline ? ' <span style="color:#f59e0b;font-weight:600;">(Offline — cached)</span>' : ''}</p>
+      </div>
+      ${canCreate && !isOffline ? '<button class="btn btn-primary" onclick="showCreateCourseModal()">+ Create Course</button>' : ''}
     </div>
-    ${canCreate && !isOffline ? '<div class="actions-bar"><button class="btn btn-primary btn-sm" onclick="showCreateCourseModal()">Create Course</button></div>' : ''}
-    <div class="card">
-      ${courses.length ? `
-        <table>
-          <thead><tr><th>Code</th><th>Title</th><th>Level / Group</th><th>Lecturer</th><th>Status</th><th>Roster</th><th>Enrolled</th>${canManageRoster && !isOffline ? '<th>Actions</th>' : currentUser.role === 'student' ? '<th></th>' : ''}</tr></thead>
-          <tbody>${courses.map(course => `
-            <tr>
-              <td><strong>${course.code}</strong></td>
-              <td>${course.title}</td>
-              <td>
-                ${course.level ? `<span style="font-size:11px;padding:2px 7px;border-radius:20px;background:#ede9fe;color:#7c3aed;font-weight:700;margin-right:4px">L${course.level}</span>` : ''}
-                ${course.group ? `<span style="font-size:11px;padding:2px 7px;border-radius:20px;background:#ecfdf5;color:#059669;font-weight:600">${esc(course.group)}</span>` : ''}
-                ${!course.level && !course.group ? '<span style="color:var(--text-muted);font-size:12px">—</span>' : ''}
-              </td>
-              <td>${course.lecturerId?.name || 'N/A'}</td>
-              <td>${course.needsApproval
-                ? (course.approvalStatus === 'pending'
-                    ? '<span style="background:#fef3c7;color:#b45309;border:1px solid #fde68a;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700;white-space:nowrap;">⏳ Pending</span>'
-                  : course.approvalStatus === 'rejected'
-                    ? '<span style="background:#fee2e2;color:#b91c1c;border:1px solid #fca5a5;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700;white-space:nowrap;">✕ Rejected</span>'
-                    : '<span style="background:#dcfce7;color:#166534;border:1px solid #bbf7d0;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700;white-space:nowrap;">✓ Approved</span>')
-                : '<span style="color:var(--text-muted);font-size:11px;">—</span>'}</td>
-              <td>${!isOffline ? `<button class="btn btn-sm" style="font-size:11px;background:var(--bg);border:1px solid var(--border)" onclick="viewRoster('${course._id}', '${course.code}')">View Roster</button>` : '—'}</td>
-              <td>${course.enrolledStudents?.length || 0}</td>
-              ${canManageRoster && !isOffline ? `<td><div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">${
-                (course.needsApproval && course.approvalStatus !== 'approved')
-                  ? `<span style="font-size:11px;color:var(--text-muted);font-style:italic">${course.approvalStatus === 'pending' ? 'Awaiting approval' : 'Rejected — contact HOD'}</span>`
-                  : `<button class="btn btn-primary btn-sm" style="font-size:11px" onclick="showUploadRosterModal('${course._id}', '${course.code}')">Upload Students</button>`
-              }<button class="btn btn-sm" style="font-size:11px;background:#6366f1;color:#fff" onclick="openBulkEmailModal('${course._id}', '${course.title}')">✉️ Email</button><button class="btn btn-sm" style="font-size:11px;background:#10b981;color:#fff" onclick="openBulkSmsModal('${course._id}', '${course.title}')">💬 SMS</button></div></td>` : currentUser.role === 'student' ? `<td><button class="btn btn-sm" style="font-size:11px;background:#f0fdf4;color:#16a34a;border:1px solid #bbf7d0" onclick="generateCertificate('${course._id}','${course.title}')">🎓 Certificate</button></td>` : ''}
-            </tr>
-          `).join('')}</tbody>
-        </table>
-      ` : '<div class="empty-state"><p>No courses found</p></div>'}
-    </div>
+    ${courses.length
+      ? courses.map(courseCard).join('')
+      : '<div class="card"><div class="empty-state"><p>No courses found</p></div></div>'}
   `;
 }
 
