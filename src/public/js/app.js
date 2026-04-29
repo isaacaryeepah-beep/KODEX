@@ -6989,7 +6989,7 @@ function _renderCoursesHTML(content, courses, isOffline) {
   }
 
   content.innerHTML = `
-    <div class="page-header">
+    <div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;">
       <div>
         <h2>Courses</h2>
         <p>Manage academic courses${isOffline ? ' <span style="color:#f59e0b;font-weight:600;">(Offline — cached)</span>' : ''}</p>
