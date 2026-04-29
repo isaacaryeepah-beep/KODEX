@@ -226,14 +226,16 @@ exports.emailStudents = async (req, res) => {
 
     const students = course.enrolledStudents.filter(s => s.email);
     let sentCount = 0;
+    let devMode = false;
     await Promise.allSettled(students.map(async (s) => {
       try {
-        await send({ to: s.email, subject, html: `<p>Hi ${s.name},</p><p>${message.replace(/\n/g, '<br>')}</p><p style="margin-top:16px;font-size:12px;color:#6b7280">— ${course.title} (${course.code})</p>` });
-        sentCount++;
+        const result = await send({ to: s.email, subject, html: `<p>Hi ${s.name},</p><p>${message.replace(/\n/g, '<br>')}</p><p style="margin-top:16px;font-size:12px;color:#6b7280">— ${course.title} (${course.code})</p>` });
+        if (result?.dev) { devMode = true; }
+        else if (result?.ok) { sentCount++; }
       } catch (_) {}
     }));
 
-    res.json({ sentCount, total: students.length });
+    res.json({ sentCount, total: students.length, devMode });
   } catch (e) {
     console.error('emailStudents error:', e);
     res.status(500).json({ error: 'Failed to send emails' });
@@ -254,14 +256,16 @@ exports.smsStudents = async (req, res) => {
 
     const students = course.enrolledStudents.filter(s => s.phone);
     let sentCount = 0;
+    let devMode = false;
     await Promise.allSettled(students.map(async (s) => {
       try {
         const result = await sendSms({ to: s.phone, message });
-        if (result.ok) sentCount++;
+        if (result?.dev) { devMode = true; }
+        else if (result?.ok) { sentCount++; }
       } catch (_) {}
     }));
 
-    res.json({ sentCount, total: students.length });
+    res.json({ sentCount, total: students.length, devMode });
   } catch (e) {
     console.error('smsStudents error:', e);
     res.status(500).json({ error: 'Failed to send SMS' });
