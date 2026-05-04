@@ -183,32 +183,13 @@ html, body { height: 100%; background: var(--navy); color: var(--white); font-fa
 .badge.warning  { background: rgba(234,179,8,0.15);  color: var(--yellow); }
 .badge.critical { background: rgba(239,68,68,0.15);  color: var(--red); }
 
-/* Snapshots */
-.snaps-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 10px; margin-bottom: 24px; }
-.snap-thumb {
-  border-radius: 8px; background: var(--navy2); border: 1px solid var(--navy3);
-  overflow: hidden; aspect-ratio: 4/3; cursor: pointer;
-  position: relative; transition: border-color 0.2s;
+/* Sidebar search */
+.sidebar-search {
+  padding: 8px 12px; background: var(--navy); border: 1.5px solid var(--navy3);
+  border-radius: 8px; color: var(--white); font-family: var(--font-sans); font-size: 12px;
+  outline: none; width: 100%;
 }
-.snap-thumb:hover { border-color: var(--accent); }
-.snap-thumb.flagged { border-color: var(--red); }
-.snap-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.snap-label {
-  position: absolute; bottom: 0; left: 0; right: 0;
-  background: rgba(0,0,0,0.7); padding: 3px 6px;
-  font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;
-  color: var(--muted);
-}
-.snap-label.flagged { color: var(--red); }
-
-/* Expanded snap overlay */
-#snap-overlay {
-  position: fixed; inset: 0; background: rgba(0,0,0,0.9);
-  z-index: 500; display: none; align-items: center; justify-content: center;
-  cursor: pointer;
-}
-#snap-overlay.show { display: flex; }
-#snap-overlay img { max-width: 90%; max-height: 90%; border-radius: 10px; }
+.sidebar-search:focus { border-color: var(--accent); }
 
 /* Responsive */
 @media (max-width: 768px) {
@@ -295,7 +276,6 @@ html, body { height: 100%; background: var(--navy); color: var(--white); font-fa
 <body>
 
 <div id="toast"></div>
-<div id="snap-overlay"><img id="snap-big" src="" alt="Snapshot" /></div>
 
 <div class="topbar">
   <div style="display:flex;align-items:center;gap:12px;">
@@ -310,6 +290,7 @@ html, body { height: 100%; background: var(--navy); color: var(--white); font-fa
       <option value="">— Select a snap quiz —</option>
     </select>
     <button class="btn btn-ghost" id="refresh-btn">↻ Refresh</button>
+    <span id="last-refresh" style="font-size:11px;color:var(--slate);font-family:var(--font-mono);white-space:nowrap"></span>
     <button class="btn btn-ghost" id="export-btn">⬇ Export</button>
   </div>
 </div>
@@ -324,6 +305,9 @@ html, body { height: 100%; background: var(--navy); color: var(--white); font-fa
         <div class="sum-box"><div class="sum-val" style="color:var(--green)">—</div><div class="sum-key">Active</div></div>
         <div class="sum-box"><div class="sum-val" style="color:var(--accent)">—</div><div class="sum-key">Done</div></div>
         <div class="sum-box"><div class="sum-val" style="color:var(--red)">—</div><div class="sum-key">Terminated</div></div>
+      </div>
+      <div style="margin-top:10px">
+        <input class="sidebar-search" id="student-search" placeholder="Search student…" oninput="filterStudentList(this.value)" />
       </div>
     </div>
     <div class="student-list" id="student-list">
@@ -464,6 +448,8 @@ function resetView() {
       <p>Select a snap quiz to view all violations</p>
     </div>`;
   allViolationsFilter = '';
+  const ss = document.getElementById('student-search');
+  if (ss) ss.value = '';
 }
 
 document.getElementById('refresh-btn').addEventListener('click', () => {
@@ -478,9 +464,23 @@ async function loadAttempts() {
     attemptsData = data.attempts || [];
     renderSidebar(attemptsData);
     if (activeTab === 'violations') loadAllViolations();
+    const lr = document.getElementById('last-refresh');
+    if (lr) lr.textContent = 'Updated ' + new Date().toLocaleTimeString();
   } catch (e) {
     toast(e.message, 'error');
   }
+}
+
+// ── Sidebar student search ──────────────────────────────────────────
+function filterStudentList(query) {
+  const q = query.toLowerCase();
+  // Hide group headers when searching; rows shown by name/id match
+  document.querySelectorAll('.stu-group-label').forEach(el => { el.style.display = q ? 'none' : ''; });
+  document.querySelectorAll('.stu-row').forEach(row => {
+    const name = (row.querySelector('.stu-name')?.textContent || '').toLowerCase();
+    const sub  = (row.querySelector('.stu-sub')?.textContent || '').toLowerCase();
+    row.style.display = (!q || name.includes(q) || sub.includes(q)) ? '' : 'none';
+  });
 }
 
 function renderSidebar(attempts) {
@@ -561,8 +561,6 @@ async function loadDetail(attemptId) {
     const s = data.attempt;
     const violations = data.violations || [];
     const responses  = data.responses  || [];
-    // map violations to log-style entries for the timeline
-    const logs = violations;
 
     const chipClass = st => ['submitted','auto_submitted'].includes(st) ? 'done' : st === 'active' ? 'active' : 'terminated';
     const statusLabel = st => ({ active:'Active', submitted:'Submitted', auto_submitted:'Auto-submitted', terminated:'Terminated', abandoned:'Abandoned' }[st] || st);
@@ -737,9 +735,17 @@ function selectStudentFromViolation(attemptId) {
   loadDetail(attemptId);
 }
 
-// ── Snap overlay close ────────────────────────────────────────────────
-document.getElementById('snap-overlay').addEventListener('click', () => {
-  document.getElementById('snap-overlay').classList.remove('show');
+// ── Keyboard: Escape closes student detail ───────────────────────────
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && selectedAttemptId) {
+    selectedAttemptId = null;
+    document.querySelectorAll('.stu-row').forEach(r => r.classList.remove('active'));
+    document.getElementById('detail-panel').innerHTML = `
+      <div class="detail-placeholder">
+        <div class="icon">👈</div>
+        <p>Select a student to view their session details</p>
+      </div>`;
+  }
 });
 
 // ── Export ───────────────────────────────────────────────────────────
