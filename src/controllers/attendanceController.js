@@ -229,6 +229,16 @@ exports.listSessions = async (req, res) => {
       filter.createdBy = { $in: deptLecturers.map(u => u._id) };
     }
 
+    // Students only see sessions for their enrolled courses.
+    if (req.user.role === "student") {
+      const Course = require("../models/Course");
+      const enrolledCourses = await Course.find({
+        companyId: req.user.company,
+        enrolledStudents: req.user._id,
+      }).select("_id").lean();
+      filter.course = { $in: enrolledCourses.map(c => c._id) };
+    }
+
     // Filter by course — ensures each course only sees its own sessions
     if (courseId && mongoose.Types.ObjectId.isValid(courseId)) {
       filter.course = courseId;
@@ -273,6 +283,17 @@ exports.getActiveSession = async (req, res) => {
     if (req.user.role === "lecturer") {
       activeFilter.createdBy = req.user._id;
     }
+
+    // Students only see sessions for courses they are enrolled in.
+    if (req.user.role === "student") {
+      const Course = require("../models/Course");
+      const enrolledCourses = await Course.find({
+        companyId: req.user.company,
+        enrolledStudents: req.user._id,
+      }).select("_id").lean();
+      activeFilter.course = { $in: enrolledCourses.map(c => c._id) };
+    }
+
     const session = await AttendanceSession.findOne(activeFilter)
       .populate("company", "name")
       .populate("createdBy", "name email")
@@ -429,10 +450,18 @@ exports.markAttendance = async (req, res) => {
         status: "active",
       });
     } else {
-      // Auto-detect: find the most recent active session for this company
+      // Auto-detect: find the most recent active session for courses the student is enrolled in.
+      const Course = require('../models/Course');
+      const enrolledCourses = await Course.find({
+        companyId: req.user.company,
+        enrolledStudents: req.user._id,
+      }).select("_id").lean();
+      const enrolledCourseIds = enrolledCourses.map(c => c._id);
+
       session = await AttendanceSession.findOne({
         company: req.user.company,
         status: "active",
+        course: { $in: enrolledCourseIds },
       }).sort({ startedAt: -1 });
       if (session) {
         resolvedSessionId = session._id.toString();
@@ -506,7 +535,7 @@ exports.markAttendance = async (req, res) => {
       const Course = require('../models/Course');
       const enrolled = await Course.findOne({
         _id: session.course,
-        company: req.user.company,
+        companyId: req.user.company,
         enrolledStudents: req.user._id,
       }).select('_id').lean();
 
