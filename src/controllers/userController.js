@@ -422,7 +422,7 @@ exports.bulkImportStudents = async (req, res) => {
       const courseCodes = [...new Set(rows.map(r => r.courseCode).filter(Boolean))];
       const courseMap = {};
       if (courseCodes.length) {
-        const courses = await Course.find({ code: { $in: courseCodes }, company: req.user.company });
+        const courses = await Course.find({ code: { $in: courseCodes }, companyId: req.user.company });
         courses.forEach(c => { courseMap[c.code.toUpperCase()] = c; });
       }
 

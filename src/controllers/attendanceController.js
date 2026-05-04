@@ -230,17 +230,26 @@ exports.listSessions = async (req, res) => {
     }
 
     // Students only see sessions for their enrolled courses.
+    // If a courseId is also provided, honour it only when the student is enrolled in it.
     if (req.user.role === "student") {
       const Course = require("../models/Course");
       const enrolledCourses = await Course.find({
         companyId: req.user.company,
         enrolledStudents: req.user._id,
       }).select("_id").lean();
-      filter.course = { $in: enrolledCourses.map(c => c._id) };
-    }
+      const enrolledIds = enrolledCourses.map(c => c._id);
 
-    // Filter by course — ensures each course only sees its own sessions
-    if (courseId && mongoose.Types.ObjectId.isValid(courseId)) {
+      if (courseId && mongoose.Types.ObjectId.isValid(courseId)) {
+        const isEnrolled = enrolledIds.some(id => id.toString() === courseId);
+        if (!isEnrolled) {
+          return res.status(403).json({ error: "You are not enrolled in that course" });
+        }
+        filter.course = courseId;
+      } else {
+        filter.course = { $in: enrolledIds };
+      }
+    } else if (courseId && mongoose.Types.ObjectId.isValid(courseId)) {
+      // Non-student role: apply course filter directly
       filter.course = courseId;
     }
 
