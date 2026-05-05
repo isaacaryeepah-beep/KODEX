@@ -1,4 +1,7 @@
-const User = require("../models/User");
+const User    = require("../models/User");
+const Company = require("../models/Company");
+const { syncStudentToRoster } = require("../utils/rosterSync");
+const { sendStudentWelcome } = require("../services/emailService");
 
 exports.getPendingApprovals = async (req, res) => {
   try {
@@ -29,6 +32,25 @@ exports.approveUser = async (req, res) => {
     }
     user.isApproved = true;
     await user.save();
+
+    // For students: enroll in matching roster courses and send approval notification.
+    if (user.role === "student") {
+      syncStudentToRoster(user._id, user.company).catch(err =>
+        console.error("[approveUser] rosterSync failed:", err.message)
+      );
+
+      if (user.email) {
+        Company.findById(user.company).select("name").lean()
+          .then(company => sendStudentWelcome({
+            email: user.email,
+            name: user.name,
+            institutionName: company?.name || "",
+            IndexNumber: user.IndexNumber,
+          }))
+          .catch(err => console.error("[approveUser] welcome email failed:", err.message));
+      }
+    }
+
     res.json({ message: `${user.name} has been approved`, user });
   } catch (error) {
     console.error("Approve user error:", error);
