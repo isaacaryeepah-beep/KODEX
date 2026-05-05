@@ -242,11 +242,10 @@ auditLogSchema.index({ createdAt: 1 }, { expireAfterSeconds: RETENTION_SECONDS }
 // Pre-save: auto-derive severity if not set by caller.
 // ---------------------------------------------------------------------------
 
-auditLogSchema.pre("save", function (next) {
+auditLogSchema.pre("save", function () {
   if (!this.severity || this.severity === SEVERITY.LOW) {
     this.severity = ACTION_SEVERITY_MAP[this.action] || SEVERITY.LOW;
   }
-  next();
 });
 
 // ---------------------------------------------------------------------------

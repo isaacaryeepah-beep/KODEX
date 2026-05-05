@@ -217,11 +217,10 @@ const brandingSettingsSchema = new mongoose.Schema(
 // Pre-save: cap history at 20 entries.
 // ---------------------------------------------------------------------------
 
-brandingSettingsSchema.pre("save", function (next) {
+brandingSettingsSchema.pre("save", function () {
   if (this.updatedHistory.length > 20) {
     this.updatedHistory = this.updatedHistory.slice(-20);
   }
-  next();
 });
 
 // ---------------------------------------------------------------------------
