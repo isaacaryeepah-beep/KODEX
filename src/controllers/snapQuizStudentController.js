@@ -29,6 +29,7 @@ const SnapQuizResponse       = require("../models/SnapQuizResponse");
 const SnapQuizViolationLog   = require("../models/SnapQuizViolationLog");
 const SnapQuizProctoringEvent = require("../models/SnapQuizProctoringEvent");
 const SnapQuizResult         = require("../models/SnapQuizResult");
+const Meeting                = require("../models/Meeting");
 const { ATTEMPT_STATUSES, GRADING_STATUSES } = require("../models/SnapQuizAttempt");
 const { QUESTION_TYPES, MANUAL_GRADE_TYPES } = require("../models/SnapQuizQuestion");
 const { VIOLATION_TYPES, VIOLATION_SEVERITIES, ACTIONS_TAKEN } = require("../models/SnapQuizViolationLog");
@@ -197,6 +198,26 @@ exports.startAttempt = async (req, res) => {
       }
     }
 
+    // Live meeting gate (Phase 3): if quiz is tied to a meeting, it must be live.
+    if (quiz.requireLiveMeeting && quiz.linkedMeeting) {
+      const meeting = await Meeting.findById(quiz.linkedMeeting).select("status title").lean();
+      if (!meeting) {
+        return res.status(403).json({ error: "Linked meeting not found. Cannot start quiz." });
+      }
+      if (meeting.status !== 'live') {
+        const stateMsg = meeting.status === 'scheduled'
+          ? 'The associated meeting has not started yet. Wait for your lecturer to start the session.'
+          : meeting.status === 'ended'
+          ? 'The associated meeting has ended. This quiz is now closed.'
+          : 'The associated meeting is not currently live.';
+        return res.status(403).json({
+          error: stateMsg,
+          meetingStatus: meeting.status,
+          requiresLiveMeeting: true,
+        });
+      }
+    }
+
     // Reject if there is already an active attempt (session conflict).
     const activeAttempt = await SnapQuizAttempt.findOne({
       quiz: quiz._id, student: req.user._id, company: req.companyId,
@@ -322,6 +343,20 @@ exports.heartbeat = async (req, res) => {
     if (now > attempt.expiresAt) {
       await _autoSubmit(attempt);
       return res.json({ expired: true, terminated: false });
+    }
+
+    // Live meeting gate: if quiz requires a live meeting, verify it's still live.
+    const quiz = await SnapQuiz.findById(attempt.quiz).select("requireLiveMeeting linkedMeeting").lean();
+    if (quiz?.requireLiveMeeting && quiz?.linkedMeeting) {
+      const meeting = await Meeting.findById(quiz.linkedMeeting).select("status").lean();
+      if (!meeting || meeting.status !== 'live') {
+        await _terminateSession(attempt, "Associated meeting ended — session auto-closed");
+        return res.json({
+          expired: false, terminated: true,
+          meetingEnded: true,
+          reason: "The associated meeting has ended. Your quiz has been auto-submitted.",
+        });
+      }
     }
 
     attempt.lastHeartbeatAt = now;
@@ -540,30 +575,100 @@ exports.reportViolation = async (req, res) => {
 
 /**
  * POST /student/snap-quizzes/quizzes/:quizId/attempts/:attemptId/snapshots
- * Record a proctoring snapshot metadata entry.
- * Body: { imageUrl, thumbnailUrl, eventType, relatedViolationId }
+ * Record a proctoring snapshot + process face verification enforcement.
+ *
+ * Body: {
+ *   imageUrl, thumbnailUrl, eventType, relatedViolationId,
+ *   faceDetected, faceCount, faceScore, similarityToStart
+ * }
+ *
+ * Face enforcement policy:
+ *   - No face detected → faceFailCount++
+ *   - faceFailCount 1-2 → warn (status: "warn")
+ *   - faceFailCount 3-4 → severe warn ("warn_severe")
+ *   - faceFailCount >= 5 → auto-submit + flag account
  */
 exports.recordSnapshot = async (req, res) => {
   try {
     const attempt = await _loadLockedAttempt(req);
     if (!attempt) return res.sendStatus(204);
 
-    const quiz = await SnapQuiz.findById(attempt.quiz).select("proctoringEnabled").lean();
+    const quiz = await SnapQuiz.findById(attempt.quiz)
+      .select("proctoringEnabled aiProctoringEnabled").lean();
     if (!quiz?.proctoringEnabled) return res.sendStatus(204);
 
+    const {
+      imageUrl, thumbnailUrl, eventType, relatedViolationId,
+      faceDetected, faceCount, faceScore, similarityToStart,
+    } = req.body;
+
+    // Build AI flags from client-reported face data
+    const aiFlags = [];
+    if (faceDetected === false || faceDetected === 0) {
+      aiFlags.push({ flagType: "face_not_visible", confidence: 1.0, detail: "No face detected" });
+    }
+    if (faceCount > 1) {
+      aiFlags.push({ flagType: "multiple_faces", confidence: 1.0, detail: `${faceCount} faces detected` });
+    }
+    if (similarityToStart != null && similarityToStart < 0.5) {
+      aiFlags.push({ flagType: "low_confidence", confidence: 1 - similarityToStart, detail: "Face similarity below threshold" });
+    }
+
+    const aiRiskScore = aiFlags.length > 0 ? Math.min(1, aiFlags.length * 0.35) : 0;
+
     await SnapQuizProctoringEvent.create({
-      attempt:             attempt._id,
-      quiz:                attempt.quiz,
-      student:             attempt.student,
-      company:             attempt.company,
-      eventType:           req.body.eventType || "scheduled_snapshot",
-      capturedAt:          new Date(),
-      imageUrl:            req.body.imageUrl    || null,
-      thumbnailUrl:        req.body.thumbnailUrl || null,
-      relatedViolationId:  req.body.relatedViolationId || null,
+      attempt:              attempt._id,
+      quiz:                 attempt.quiz,
+      student:              attempt.student,
+      company:              attempt.company,
+      eventType:            eventType || "scheduled_snapshot",
+      capturedAt:           new Date(),
+      imageUrl:             imageUrl    || null,
+      thumbnailUrl:         thumbnailUrl || null,
+      relatedViolationId:   relatedViolationId || null,
+      aiAnalysisCompleted:  aiFlags.length > 0,
+      aiAnalysisCompletedAt: aiFlags.length > 0 ? new Date() : null,
+      aiFlags,
+      aiRiskScore,
+      reviewStatus:         aiFlags.length > 0 ? "flagged" : "pending",
     });
 
-    return res.sendStatus(204);
+    // Face enforcement: only apply on periodic / violation snapshots when AI proctoring enabled
+    if (quiz.aiProctoringEnabled && aiFlags.some(f => f.flagType === "face_not_visible" || f.flagType === "multiple_faces")) {
+      attempt.faceFailCount = (attempt.faceFailCount || 0) + 1;
+
+      if (attempt.faceFailCount >= 5) {
+        // Auto-submit and flag
+        await attempt.save();
+        await _autoSubmit(attempt);
+        return res.json({
+          action: "auto_submitted",
+          reason: "Face verification failed 5 or more times. Quiz auto-submitted.",
+          faceFailCount: attempt.faceFailCount,
+        });
+      } else if (attempt.faceFailCount >= 3) {
+        attempt.faceWarnCount = (attempt.faceWarnCount || 0) + 1;
+        await attempt.save();
+        return res.json({
+          action: "warn_severe",
+          warning: `Face not detected (${attempt.faceFailCount}/5). Quiz will be auto-submitted if this continues.`,
+          faceFailCount: attempt.faceFailCount,
+        });
+      } else {
+        attempt.faceWarnCount = (attempt.faceWarnCount || 0) + 1;
+        await attempt.save();
+        return res.json({
+          action: "warn",
+          warning: "Face not clearly visible. Please ensure your face is visible to the camera.",
+          faceFailCount: attempt.faceFailCount,
+        });
+      }
+    }
+
+    // Save updated attempt if faceFailCount changed
+    if (attempt.isModified()) await attempt.save();
+
+    return res.json({ action: "ok", faceFailCount: attempt.faceFailCount || 0 });
   } catch (err) {
     console.error("[snapQuiz student recordSnapshot]", err);
     return res.sendStatus(204);

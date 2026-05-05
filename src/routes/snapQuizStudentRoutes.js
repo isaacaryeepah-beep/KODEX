@@ -42,6 +42,8 @@ const { studentOnly }          = require("../middleware/requireAcademicRole");
 const {
   requireStudentCourseEnrollment,
 } = require("../middleware/requireStudentCourseEnrollment");
+const requireNoDeviceLock        = require("../middleware/requireNoDeviceLock");
+const snapQuizSecurityValidator  = require("../middleware/snapQuizSecurityValidator");
 const ctrl = require("../controllers/snapQuizStudentController");
 
 // ─── Router-level middleware ──────────────────────────────────────────────────
@@ -64,10 +66,10 @@ router.get("/quizzes/:quizId",           ctrl.getQuiz);
 
 // ─── Attempt lifecycle ────────────────────────────────────────────────────────
 
-router.post("/quizzes/:quizId/attempts/start",                     ctrl.startAttempt);
-router.post("/quizzes/:quizId/attempts/:attemptId/heartbeat",      ctrl.heartbeat);
-router.put( "/quizzes/:quizId/attempts/:attemptId/responses",      ctrl.saveResponses);
-router.post("/quizzes/:quizId/attempts/:attemptId/submit",         ctrl.submitAttempt);
+router.post("/quizzes/:quizId/attempts/start",                     requireNoDeviceLock, snapQuizSecurityValidator, ctrl.startAttempt);
+router.post("/quizzes/:quizId/attempts/:attemptId/heartbeat",      snapQuizSecurityValidator, ctrl.heartbeat);
+router.put( "/quizzes/:quizId/attempts/:attemptId/responses",      snapQuizSecurityValidator, ctrl.saveResponses);
+router.post("/quizzes/:quizId/attempts/:attemptId/submit",         snapQuizSecurityValidator, ctrl.submitAttempt);
 
 // ─── Anti-cheat enforcement ───────────────────────────────────────────────────
 

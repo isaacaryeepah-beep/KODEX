@@ -419,7 +419,7 @@ exports.getAttemptDetail = async (req, res) => {
 
     if (!attempt) return res.status(404).json({ error: "Attempt not found" });
 
-    const [responses, violations] = await Promise.all([
+    const [responses, violations, proctoringEvents] = await Promise.all([
       SnapQuizResponse.find({ attempt: attempt._id })
         .populate("question", "questionText questionType marks correctOptionIndex correctOptionIndices correctBoolean correctAnswerText numericAnswer modelAnswer")
         .sort({ createdAt: 1 })
@@ -427,14 +427,113 @@ exports.getAttemptDetail = async (req, res) => {
       SnapQuizViolationLog.find({ attempt: attempt._id })
         .sort({ occurredAt: 1 })
         .lean(),
+      SnapQuizProctoringEvent.find({ attempt: attempt._id })
+        .sort({ capturedAt: -1 })
+        .limit(20)
+        .lean(),
     ]);
 
-    return res.json({ attempt, responses, violations });
+    return res.json({ attempt, responses, violations, proctoringEvents });
   } catch (err) {
     console.error("[snapQuiz getAttemptDetail]", err);
     return res.status(500).json({ error: "Internal server error" });
   }
 };
+
+// ─── Force submit (lecturer/proctor action) ────────────────────────────────────
+exports.forceSubmitAttempt = async (req, res) => {
+  try {
+    const attempt = await SnapQuizAttempt.findOne({
+      _id: req.params.attemptId, quiz: req.assessment._id, company: req.companyId,
+    });
+    if (!attempt) return res.status(404).json({ error: "Attempt not found" });
+    if (attempt.status !== "active") {
+      return res.status(400).json({ error: "Attempt is not active" });
+    }
+
+    const reason = req.body.reason || `Force-submitted by ${req.user.name || req.user.email}`;
+    attempt.status            = "terminated";
+    attempt.isTerminated      = true;
+    attempt.terminationReason = reason;
+    attempt.terminatedAt      = new Date();
+    attempt.submittedAt       = new Date();
+    attempt.timeSpentSeconds  = Math.round((new Date() - attempt.startedAt) / 1000);
+    await attempt.save();
+
+    // Auto-grade the attempt
+    const { rawScore, maxScore, hasManual } = await _autoGradeAttemptLecturer(attempt._id, attempt.company);
+    const quiz = await SnapQuiz.findById(attempt.quiz).select("passMark autoReleaseResults").lean();
+    const pct = maxScore > 0 ? (rawScore / maxScore) * 100 : 0;
+
+    attempt.rawScore        = rawScore;
+    attempt.maxScore        = maxScore;
+    attempt.percentageScore = Math.round(pct * 100) / 100;
+    attempt.isPassed        = quiz?.passMark != null ? rawScore >= quiz.passMark : null;
+    attempt.gradingStatus   = hasManual ? GRADING_STATUSES.PARTIALLY_GRADED : GRADING_STATUSES.AUTO_GRADED;
+    if (!hasManual) attempt.gradedAt = new Date();
+    await attempt.save();
+
+    return res.json({ success: true, message: "Attempt force-submitted and auto-graded" });
+  } catch (err) {
+    console.error("[snapQuiz forceSubmitAttempt]", err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+};
+
+async function _autoGradeAttemptLecturer(attemptId, companyId) {
+  const responses   = await SnapQuizResponse.find({ attempt: attemptId }).lean();
+  const questionIds = responses.map(r => r.question);
+  const questions   = await SnapQuizQuestion.find({ _id: { $in: questionIds } }).lean();
+  const qMap = {};
+  questions.forEach(q => { qMap[q._id.toString()] = q; });
+
+  let rawScore = 0, maxScore = 0, hasManual = false;
+  const ops = [];
+
+  for (const response of responses) {
+    const q = qMap[response.question.toString()];
+    if (!q) continue;
+    maxScore += q.marks || 1;
+
+    const manualTypes = new Set(["long_answer", "essay", "file_upload"]);
+    if (manualTypes.has(q.questionType)) {
+      hasManual = true;
+      ops.push({ updateOne: { filter: { _id: response._id }, update: { $set: { gradingStatus: "pending_manual" } } } });
+      continue;
+    }
+
+    let isCorrect = false;
+    if (q.questionType === "mcq") {
+      isCorrect = response.selectedOptionIndex === q.correctOptionIndex;
+    } else if (q.questionType === "mcq_multi") {
+      const c = new Set((q.correctOptionIndices || []).map(String));
+      const s = new Set((response.selectedOptionIndices || []).map(String));
+      isCorrect = c.size > 0 && c.size === s.size && [...c].every(v => s.has(v));
+    } else if (q.questionType === "true_false") {
+      isCorrect = response.selectedBoolean === q.correctBoolean;
+    } else if (q.questionType === "fill_blank" || q.questionType === "short_answer") {
+      const typed = (response.textAnswer || "").trim().toLowerCase();
+      const correct = (q.correctAnswerText || "").trim().toLowerCase();
+      isCorrect = typed.length > 0 && (
+        typed === correct ||
+        (q.acceptedAnswers || []).map(x => x.trim().toLowerCase()).includes(typed)
+      );
+    } else if (q.questionType === "numeric") {
+      const expected = q.numericAnswer?.value;
+      const tol = q.numericAnswer?.tolerance || 0;
+      if (expected != null && response.numericAnswer != null) {
+        isCorrect = Math.abs(response.numericAnswer - expected) <= tol;
+      }
+    }
+
+    const earnedMarks = isCorrect ? (q.marks || 1) : 0;
+    rawScore += earnedMarks;
+    ops.push({ updateOne: { filter: { _id: response._id }, update: { $set: { isCorrect, earnedMarks, isAutoGraded: true, gradingStatus: "auto_graded" } } } });
+  }
+
+  if (ops.length) await SnapQuizResponse.bulkWrite(ops);
+  return { rawScore, maxScore, hasManual };
+}
 
 // ─── Violation log ────────────────────────────────────────────────────────────
 

@@ -683,12 +683,56 @@ exports.clearDeviceLock = async (req, res) => {
     if (!user) return res.status(404).json({ error: "Student not found" });
 
     user.deviceId = null;
+
+    // Also clear the 6-hour account-level device lock (snap-quiz / meeting gate)
+    if (user.accountDeviceLock?.isLocked) {
+      user.accountDeviceLock = {
+        isLocked: false,
+        lockedAt: user.accountDeviceLock.lockedAt,
+        lockedUntil: user.accountDeviceLock.lockedUntil,
+        triggerDevice: user.accountDeviceLock.triggerDevice,
+        knownDevice: user.accountDeviceLock.knownDevice,
+        unlockedBy: req.user._id,
+        unlockedAt: new Date(),
+      };
+    }
+
     await user.save({ validateBeforeSave: false });
 
     console.log(`[DeviceLock] Cleared for student ${user.name} by ${req.user.name}`);
-    res.json({ message: `Device lock cleared for ${user.name}. They can now log in from a new device.` });
+    res.json({ message: `Device lock cleared for ${user.name}. They can now log in from a new device and access quizzes/meetings.` });
   } catch (error) {
     console.error("Clear device lock error:", error);
     res.status(500).json({ error: "Failed to clear device lock" });
+  }
+};
+
+// ── Unlock account device lock only (admin/HOD action) ──────────────────────
+exports.unlockAccountDeviceLock = async (req, res) => {
+  try {
+    const user = await User.findOne({ _id: req.params.id, company: req.user.company });
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    if (!user.accountDeviceLock?.isLocked) {
+      return res.json({ message: "Account is not currently locked", alreadyUnlocked: true });
+    }
+
+    user.accountDeviceLock = {
+      isLocked: false,
+      lockedAt: user.accountDeviceLock.lockedAt,
+      lockedUntil: user.accountDeviceLock.lockedUntil,
+      triggerDevice: user.accountDeviceLock.triggerDevice,
+      knownDevice: user.accountDeviceLock.knownDevice,
+      unlockedBy: req.user._id,
+      unlockedAt: new Date(),
+    };
+
+    await user.save({ validateBeforeSave: false });
+
+    console.log(`[AccountDeviceLock] Unlocked for ${user.name} by ${req.user.name} (${req.user.role})`);
+    res.json({ message: `Account device lock cleared for ${user.name}. They can now access quizzes and meetings.` });
+  } catch (error) {
+    console.error("Unlock account device lock error:", error);
+    res.status(500).json({ error: "Failed to unlock account" });
   }
 };

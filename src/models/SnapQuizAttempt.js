@@ -190,6 +190,14 @@ const snapQuizAttemptSchema = new mongoose.Schema(
     focusLostCount: { type: Number, default: 0 },
     fullscreenExitCount: { type: Number, default: 0 },
 
+    // ── Face verification (Phase 4) ───────────────────────────────────────
+    // Running count of snapshots where no face was detected (or similarity failed).
+    faceFailCount:   { type: Number, default: 0 },
+    faceWarnCount:   { type: Number, default: 0 },
+    // Base64 thumbnail of the reference face captured at session start.
+    faceReferenceUrl: { type: String, default: null },
+    faceVerified:    { type: Boolean, default: false },
+
     // ── Result release ────────────────────────────────────────────────────
     isResultReleased:  { type: Boolean,                                    default: false },
     resultReleasedAt:  { type: Date,                                       default: null  },
