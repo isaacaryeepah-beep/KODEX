@@ -975,6 +975,16 @@ document.getElementById('login-btn').addEventListener('click', async () => {
     const payload = { indexNumber, password, institutionCode, loginRole: 'student' };
     console.log('[Login] Sending:', { indexNumber, institutionCode, loginRole: 'student' });
     const data = await api('POST', '/api/auth/login', payload);
+
+    if (data.accountLocked) {
+      const mins = data.remainingMins != null ? ` (${data.remainingMins} min remaining)` : '';
+      const errEl = document.getElementById('login-error-msg');
+      const msg = `Your account is temporarily locked due to a new device login${mins}. Contact your administrator to unlock.`;
+      if (errEl) { errEl.textContent = msg; errEl.style.display = 'block'; }
+      toast(msg, 'error');
+      return;
+    }
+
     console.log('[Login] Success:', data.user?.role, data.user?.indexNumber);
     state.token = data.token;
     state.user  = data.user;
@@ -984,7 +994,11 @@ document.getElementById('login-btn').addEventListener('click', async () => {
     toast('Signed in!', 'success');
   } catch (e) {
     const errEl = document.getElementById('login-error-msg');
-    const msg = e.message || 'Sign in failed. Please try again.';
+    let msg = e.message || 'Sign in failed. Please try again.';
+    // Surface account-lock errors that arrive as thrown exceptions
+    if (e.accountLocked || msg.toLowerCase().includes('locked')) {
+      msg = e.message || 'Your account is locked. Contact your administrator.';
+    }
     if (errEl) { errEl.textContent = msg; errEl.style.display = 'block'; }
     toast(msg, 'error');
     console.error('[Login error]', e);
@@ -1515,7 +1529,20 @@ async function logEvent(eventType, metadata = {}) {
   const baseUrl = `/api/student/snap-quizzes/quizzes/${state.selectedQuiz._id}/attempts/${state.attempt._id}`;
   try {
     if (eventType === 'heartbeat') {
-      await api('POST', `${baseUrl}/heartbeat`, {}, sessionHeader);
+      const hbRes = await api('POST', `${baseUrl}/heartbeat`, {}, sessionHeader);
+      if (hbRes?.terminated || hbRes?.meetingEnded) {
+        clearInterval(state.heartbeatInterval);
+        clearInterval(state.faceCheckInterval);
+        state.examActive = false;
+        const overlay = document.getElementById('violation-overlay');
+        overlay.innerHTML = `
+          <div class="violation-icon">🔴</div>
+          <div class="violation-title" style="color:#1e293b">Exam Session Ended</div>
+          <div class="violation-msg" style="color:#475569">${hbRes.meetingEnded ? 'The live session has ended. Your exam has been automatically submitted.' : 'Your exam session was terminated.'}</div>
+          <button class="btn btn-ghost" style="max-width:280px" onclick="document.getElementById('violation-overlay').classList.remove('show');show('quiz-list-screen')">Return to Dashboard</button>
+        `;
+        overlay.classList.add('show');
+      }
       return;
     }
 
@@ -1654,14 +1681,43 @@ function terminateExam(reason) {
   overlay.classList.add('show');
 }
 
-async function uploadSnapshot(imageData, type, faceDetected, faceCount, faceCentered) {
+async function uploadSnapshot(imageData, type, faceDetected, faceCount, faceCentered, similarityToStart) {
   if (!state.sessionToken || !state.attempt?._id) return;
-  await api(
-    'POST',
-    `/api/student/snap-quizzes/quizzes/${state.selectedQuiz._id}/attempts/${state.attempt._id}/snapshots`,
-    { imageUrl: imageData, eventType: type, faceDetected, faceCount, faceCentered },
-    { 'x-session-token': state.sessionToken }
-  );
+  try {
+    const res = await api(
+      'POST',
+      `/api/student/snap-quizzes/quizzes/${state.selectedQuiz._id}/attempts/${state.attempt._id}/snapshots`,
+      { imageUrl: imageData, eventType: type, faceDetected, faceCount, faceCentered, similarityToStart },
+      { 'x-session-token': state.sessionToken }
+    );
+    if (!res) return;
+    if (res.faceFailCount != null) state.faceFailCount = res.faceFailCount;
+
+    if (res.action === 'auto_submitted') {
+      clearInterval(state.heartbeatInterval);
+      clearInterval(state.faceCheckInterval);
+      state.examActive = false;
+      const overlay = document.getElementById('violation-overlay');
+      overlay.innerHTML = `
+        <div class="violation-icon">⛔</div>
+        <div class="violation-title" style="color:#1e293b">Exam Auto-Submitted</div>
+        <div class="violation-msg" style="color:#475569">Repeated face verification failures exceeded the allowed limit. Your exam has been automatically submitted.</div>
+        <button class="btn btn-ghost" style="max-width:280px" onclick="document.getElementById('violation-overlay').classList.remove('show');show('quiz-list-screen')">Return to Dashboard</button>
+      `;
+      overlay.classList.add('show');
+    } else if (res.action === 'warn_severe') {
+      const overlay = document.getElementById('violation-overlay');
+      overlay.innerHTML = `
+        <div class="violation-icon">⚠️</div>
+        <div class="violation-title" style="color:#dc2626">Severe Warning</div>
+        <div class="violation-msg" style="color:#475569">${res.warning || 'Face verification has failed multiple times. One more failure will auto-submit your exam.'}</div>
+        <button class="btn btn-primary" style="max-width:280px" onclick="this.closest('#violation-overlay').classList.remove('show')">I understand</button>
+      `;
+      overlay.classList.add('show');
+    } else if (res.action === 'warn') {
+      toast(res.warning || 'Face verification warning. Please stay visible to the camera.', 'error');
+    }
+  } catch { /* don't crash exam on snapshot failure */ }
 }
 
 // ══════════════════════════════════════════════════════════════════
