@@ -5,8 +5,9 @@ const meetCtrl  = require('../controllers/meetingController');
 const attendCtrl = require('../controllers/meetingAttendanceController');
 
 // Your existing middleware
-const authenticate         = require('../middleware/auth');
-const { companyIsolation } = require('../middleware/companyIsolation');
+const authenticate           = require('../middleware/auth');
+const { companyIsolation }   = require('../middleware/companyIsolation');
+const requireNoDeviceLock    = require('../middleware/requireNoDeviceLock');
 
 // Meeting-specific middleware
 const {
@@ -41,10 +42,11 @@ router.post('/:id/end',    loadMeeting, isOwner, meetCtrl.endMeeting);
 router.post('/:id/cancel', loadMeeting, isOwner, meetCtrl.cancelMeeting);
 router.delete('/:id/delete', loadMeeting, isOwner, meetCtrl.deleteMeeting);
 
-router.get('/:id/join', loadMeeting, canJoin, meetCtrl.joinMeeting);
+router.get('/:id/join',          loadMeeting, requireNoDeviceLock, canJoin, meetCtrl.joinMeeting);
+router.get('/validate-token',    meetCtrl.validateMeetingToken);
 
 // ─── ATTENDANCE ROUTES ────────────────────────────────────────────────────────
-router.post('/:id/attendance/join',    loadMeeting, canJoin, attendCtrl.joinAttendance);
+router.post('/:id/attendance/join',    loadMeeting, requireNoDeviceLock, canJoin, attendCtrl.joinAttendance);
 router.post('/:id/attendance/leave',   loadMeeting, attendCtrl.leaveAttendance);
 router.get('/:id/attendance',          loadMeeting, attendCtrl.getAttendance);
 router.get('/:id/attendance/report',   loadMeeting, attendCtrl.attendanceReport);

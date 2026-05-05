@@ -20,6 +20,6 @@ router.get("/reset-logs/all", requireRole("admin", "superadmin"), companyIsolati
 router.post("/:id/admin-reset-password", requireRole("admin", "superadmin", "manager", "hod"), companyIsolation, userController.adminResetStudentPassword);
 router.post("/change-password-after-reset", userController.changePasswordAfterReset);
 router.post("/:id/clear-device-lock", requireRole("admin", "superadmin", "manager"), companyIsolation, userController.clearDeviceLock);
-
+router.post("/:id/unlock-account-device", requireRole("admin", "superadmin", "manager", "hod", "lecturer"), companyIsolation, userController.unlockAccountDeviceLock);
 
 module.exports = router;

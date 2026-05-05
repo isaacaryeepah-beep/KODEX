@@ -1,8 +1,10 @@
 const Meeting          = require('../models/Meeting');
 const MeetingAttendance = require('../models/MeetingAttendance');
 const { generateRoomName } = require('../utils/generateRoomName');
+const { generateMeetingToken, verifyMeetingToken } = require('../utils/jwt');
 
-const JITSI_DOMAIN = process.env.JITSI_DOMAIN || 'meet.jit.si';
+const JITSI_DOMAIN    = process.env.JITSI_DOMAIN || 'meet.jit.si';
+const APP_BASE_URL    = process.env.APP_BASE_URL || 'https://dikly.com';
 
 // ─── CREATE ───────────────────────────────────────────────────────────────────
 exports.createMeeting = async (req, res) => {
@@ -238,15 +240,27 @@ exports.joinMeeting = async (req, res) => {
     const meeting = req.meeting;
     const user    = req.user;
 
+    // LIVE-only gate: meeting must be actively running
     if (meeting.status === 'scheduled') {
-      // Allow joining up to 5 minutes early
-      const minsUntilStart = (new Date(meeting.scheduledStart) - Date.now()) / 60000;
-      if (minsUntilStart > 5) {
-        return res.status(400).json({
-          message: `Meeting starts at ${new Date(meeting.scheduledStart).toLocaleTimeString()}. Too early to join.`
-        });
-      }
+      return res.status(403).json({
+        message: 'Meeting has not started yet. You can only join when the host starts the meeting.',
+        status: 'scheduled',
+        scheduledStart: meeting.scheduledStart,
+      });
     }
+    if (meeting.status === 'ended') {
+      return res.status(403).json({ message: 'This meeting has already ended.', status: 'ended' });
+    }
+    if (meeting.status === 'cancelled') {
+      return res.status(403).json({ message: 'This meeting was cancelled.', status: 'cancelled' });
+    }
+    if (meeting.status !== 'live') {
+      return res.status(403).json({ message: 'Meeting is not currently live.', status: meeting.status });
+    }
+
+    // Issue a short-lived meeting access token (30 min)
+    const deviceId = req.user.deviceId || req.headers['x-device-id'] || null;
+    const meetingToken = generateMeetingToken(user._id.toString(), meeting._id.toString(), deviceId);
 
     // Build Jitsi embed config
     const config = {
@@ -263,7 +277,7 @@ exports.joinMeeting = async (req, res) => {
         enableNoisyMicDetection: true,
       },
       interfaceConfigOverwrite: {
-        SHOW_JITSI_WATERMARK:    false,
+        SHOW_JITSI_WATERMARK:      false,
         SHOW_WATERMARK_FOR_GUESTS: false,
         TOOLBAR_BUTTONS: [
           'microphone','camera','closedcaptions','desktop',
@@ -273,7 +287,59 @@ exports.joinMeeting = async (req, res) => {
       }
     };
 
-    res.json({ success: true, data: { meeting, jitsiConfig: config } });
+    // Secure join URL — passes token instead of exposing raw room name
+    const secureJoinUrl = `${APP_BASE_URL}/meet/${meeting._id}?token=${meetingToken}`;
+
+    res.json({
+      success: true,
+      data: {
+        meeting,
+        jitsiConfig: config,
+        meetingToken,
+        secureJoinUrl,
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+};
+
+// ─── VALIDATE MEETING TOKEN (for Jitsi embed page) ────────────────────────────
+exports.validateMeetingToken = async (req, res) => {
+  try {
+    const { token } = req.query;
+    if (!token) return res.status(400).json({ error: 'Missing token' });
+
+    let decoded;
+    try {
+      decoded = verifyMeetingToken(token);
+    } catch (e) {
+      return res.status(401).json({ error: 'Invalid or expired meeting token' });
+    }
+
+    // Confirm the meeting is still live
+    const meeting = await Meeting.findById(decoded.meetingId);
+    if (!meeting) return res.status(404).json({ error: 'Meeting not found' });
+    if (meeting.status !== 'live') {
+      return res.status(403).json({ error: 'Meeting is no longer live', status: meeting.status });
+    }
+
+    // Verify caller is the same user as the token
+    if (decoded.id !== req.user._id.toString()) {
+      return res.status(403).json({ error: 'Token user mismatch' });
+    }
+
+    res.json({
+      valid: true,
+      meeting: {
+        id: meeting._id,
+        title: meeting.title,
+        roomName: meeting.roomName,
+        status: meeting.status,
+        settings: meeting.settings,
+        roomPassword: meeting.settings.enablePassword ? meeting.roomPassword : undefined,
+      },
+    });
   } catch (err) {
     res.status(500).json({ message: 'Server error', error: err.message });
   }

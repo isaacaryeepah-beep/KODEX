@@ -271,6 +271,29 @@ html, body { height: 100%; background: var(--navy); color: var(--white); font-fa
 #toast.show { opacity: 1; }
 #toast.error { border-color: var(--red); color: var(--red); }
 #toast.success { border-color: var(--green); color: var(--green); }
+
+/* ── Camera grid ── */
+.cam-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(180px,1fr)); gap:10px; }
+.cam-cell {
+  background:#0a0f1a; border-radius:10px; overflow:hidden;
+  border:2px solid var(--navy3); position:relative; aspect-ratio:4/3; cursor:pointer;
+}
+.cam-cell:hover { border-color:var(--accent); }
+.cam-cell.safe     { border-color:var(--green); }
+.cam-cell.warn     { border-color:var(--yellow); }
+.cam-cell.flagged  { border-color:var(--red); animation:borderPulse 1.5s infinite; }
+@keyframes borderPulse { 50% { border-color:transparent; } }
+.cam-cell img { width:100%;height:100%;object-fit:cover;display:block; }
+.cam-cell-footer {
+  position:absolute;bottom:0;left:0;right:0;
+  padding:5px 8px;background:rgba(0,0,0,.72);color:#fff;
+  font-size:10px;font-weight:700;display:flex;justify-content:space-between;align-items:center;
+}
+.cam-status-dot { width:7px;height:7px;border-radius:50%;flex-shrink:0; }
+.cam-status-dot.green  { background:var(--green); }
+.cam-status-dot.yellow { background:var(--yellow); }
+.cam-status-dot.red    { background:var(--red); }
+.cam-status-dot.grey   { background:var(--slate); }
 </style>
 </head>
 <body>
@@ -320,9 +343,30 @@ html, body { height: 100%; background: var(--navy); color: var(--white); font-fa
 
   <!-- DETAIL PANEL -->
   <div style="flex:1;display:flex;flex-direction:column;overflow:hidden;background:var(--navy);">
+    <!-- Controls bar -->
+    <div id="quiz-controls" style="display:none;padding:8px 16px;background:var(--navy2);border-bottom:1px solid var(--navy3);display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <span style="font-size:12px;font-weight:700;color:var(--muted);margin-right:4px">QUIZ CONTROLS</span>
+      <button class="btn btn-primary" style="font-size:12px;padding:7px 14px" onclick="openQuiz()">🟢 Open Quiz</button>
+      <button class="btn btn-ghost"   style="font-size:12px;padding:7px 14px" onclick="closeQuiz()">🔴 Close Quiz</button>
+      <button class="btn btn-ghost"   style="font-size:12px;padding:7px 14px" onclick="forceSubmitFlagged()">⛔ Submit All Flagged</button>
+      <button class="btn btn-ghost"   style="font-size:12px;padding:7px 14px;margin-left:auto" onclick="exportCSV()">⬇ Export CSV</button>
+    </div>
+
+    <!-- Risk analytics bar -->
+    <div id="risk-bar" style="display:none;padding:8px 16px;background:var(--navy2);border-bottom:1px solid var(--navy3);display:flex;gap:16px;align-items:center;flex-wrap:wrap">
+      <span style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Risk Analytics</span>
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <span id="risk-safe"    style="font-size:12px;font-weight:700;color:var(--green)">— Safe</span>
+        <span id="risk-warn"    style="font-size:12px;font-weight:700;color:var(--yellow)">— Suspicious</span>
+        <span id="risk-high"    style="font-size:12px;font-weight:700;color:var(--red)">— High Risk</span>
+      </div>
+      <div id="risk-bar-visual" style="flex:1;height:8px;border-radius:4px;background:var(--navy3);overflow:hidden;display:flex;min-width:120px"></div>
+    </div>
+
     <div class="tab-bar">
-      <button class="tab-btn active" id="tab-detail" onclick="switchTab('detail')">Student Detail</button>
-      <button class="tab-btn" id="tab-violations" onclick="switchTab('violations')">All Violations</button>
+      <button class="tab-btn active" id="tab-detail"     onclick="switchTab('detail')">Student Detail</button>
+      <button class="tab-btn"        id="tab-grid"       onclick="switchTab('grid')">Camera Grid</button>
+      <button class="tab-btn"        id="tab-violations" onclick="switchTab('violations')">All Violations</button>
     </div>
     <div class="detail-panel" id="detail-panel" style="flex:1;overflow-y:auto;padding:22px 26px;">
       <div class="detail-placeholder">
@@ -330,6 +374,7 @@ html, body { height: 100%; background: var(--navy); color: var(--white); font-fa
         <p>Select a student to view their session details</p>
       </div>
     </div>
+    <div id="grid-panel" style="display:none;flex:1;overflow-y:auto;padding:16px 20px;"></div>
     <div id="violations-panel" style="display:none;flex:1;overflow-y:auto;padding:22px 26px;">
       <div class="detail-placeholder">
         <div class="icon">⚠️</div>
@@ -496,6 +541,11 @@ function renderSidebar(attempts) {
     <div class="sum-box"><div class="sum-val" style="color:var(--red)">${terminated}</div><div class="sum-key">Terminated</div></div>
   `;
 
+  // Show quiz controls and risk analytics
+  const ctrlBar = document.getElementById('quiz-controls');
+  if (ctrlBar) ctrlBar.style.display = total > 0 ? 'flex' : 'none';
+  updateRiskAnalytics(attempts);
+
   const list = document.getElementById('student-list');
   if (!attempts.length) {
     list.innerHTML = '<p style="padding:20px;text-align:center;color:var(--slate)">No students yet</p>';
@@ -559,8 +609,9 @@ async function loadDetail(attemptId) {
   try {
     const data = await api('GET', `/api/lecturer/snap-quizzes/${currentQuizId}/attempts/${attemptId}`);
     const s = data.attempt;
-    const violations = data.violations || [];
-    const responses  = data.responses  || [];
+    const violations      = data.violations      || [];
+    const responses       = data.responses       || [];
+    const proctoringEvents = data.proctoringEvents || [];
 
     const chipClass = st => ['submitted','auto_submitted'].includes(st) ? 'done' : st === 'active' ? 'active' : 'terminated';
     const statusLabel = st => ({ active:'Active', submitted:'Submitted', auto_submitted:'Auto-submitted', terminated:'Terminated', abandoned:'Abandoned' }[st] || st);
@@ -573,6 +624,24 @@ async function loadDetail(attemptId) {
     };
 
     const initials = (name = 'S') => name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
+
+    const faceFailCount = s.faceFailCount || 0;
+    const faceRisk = faceFailCount >= 5 ? 'red' : faceFailCount >= 3 ? 'yellow' : 'green';
+
+    // Latest snapshot thumbnail
+    const latestSnap = proctoringEvents.find(e => e.imageUrl || e.thumbnailUrl);
+    const snapHtml = latestSnap ? `
+      <div style="margin:10px 0;border-radius:10px;overflow:hidden;border:1.5px solid var(--navy3);max-width:280px">
+        <div style="padding:8px 12px;background:var(--navy2);font-size:11px;color:var(--muted);font-weight:700;letter-spacing:.5px">
+          LAST CAMERA CAPTURE · ${new Date(latestSnap.capturedAt).toLocaleTimeString()}
+          ${latestSnap.aiFlags?.length ? ` · <span style="color:var(--yellow)">${latestSnap.aiFlags.map(f=>f.flagType.replace(/_/g,' ')).join(', ')}</span>` : ''}
+        </div>
+        <img src="${latestSnap.thumbnailUrl || latestSnap.imageUrl}" alt="snapshot"
+          style="width:100%;display:block;aspect-ratio:4/3;object-fit:cover;background:#000"
+          onerror="this.style.display='none'" />
+      </div>` : '';
+
+    const canForceSubmit = s.status === 'active';
 
     panel.innerHTML = `
       <div class="stu-card">
@@ -594,24 +663,46 @@ async function loadDetail(attemptId) {
         </div>
       </div>
 
+      ${canForceSubmit ? `
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
+        <button class="btn" style="background:linear-gradient(135deg,#ef4444,#dc2626);color:#fff;font-size:12px;padding:8px 16px"
+          onclick="forceSubmitAttempt('${s._id}')">⛔ Force Submit</button>
+      </div>` : ''}
+
       <div class="stats-row">
+        <div class="stat-box">
+          <div class="stat-val" style="color:var(--${faceRisk})">${faceFailCount}</div>
+          <div class="stat-key">Face Fails</div>
+        </div>
         <div class="stat-box">
           <div class="stat-val" style="color:var(--${violations.length > 5 ? 'red' : violations.length > 0 ? 'yellow' : 'green'})">${violations.length}</div>
           <div class="stat-key">Violations</div>
-        </div>
-        <div class="stat-box">
-          <div class="stat-val">${s.violationCount ?? 0}</div>
-          <div class="stat-key">Total Count</div>
         </div>
         <div class="stat-box">
           <div class="stat-val">${responses.length}</div>
           <div class="stat-key">Answered</div>
         </div>
         <div class="stat-box">
-          <div class="stat-val" style="font-size:13px;padding-top:4px">${(s.gradingStatus || 'pending').replace(/_/g,' ')}</div>
+          <div class="stat-val" style="font-size:12px;padding-top:4px">${(s.gradingStatus || 'pending').replace(/_/g,' ')}</div>
           <div class="stat-key">Grading</div>
         </div>
       </div>
+
+      ${snapHtml}
+
+      ${proctoringEvents.length > 0 ? `
+      <div class="section-title">Camera Captures <span>${proctoringEvents.length}</span></div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">
+        ${proctoringEvents.slice(0, 8).map(e => {
+          const hasFlag = e.aiFlags?.length > 0;
+          const thumb = e.thumbnailUrl || e.imageUrl;
+          return thumb ? `
+            <div style="position:relative;width:72px;height:54px;border-radius:6px;overflow:hidden;border:2px solid ${hasFlag?'var(--yellow)':'var(--navy3)'}">
+              <img src="${thumb}" style="width:100%;height:100%;object-fit:cover" onerror="this.parentElement.style.display='none'" />
+              ${hasFlag ? `<div style="position:absolute;bottom:2px;right:2px;font-size:10px">⚠️</div>` : ''}
+            </div>` : '';
+        }).join('')}
+      </div>` : ''}
 
       <div class="section-title">
         Violation Log <span>${violations.length}</span>
@@ -641,15 +732,125 @@ async function loadDetail(attemptId) {
   }
 }
 
+async function forceSubmitAttempt(attemptId) {
+  if (!confirm('Force-submit this student\'s attempt? This will terminate their session immediately.')) return;
+  try {
+    await api('POST', `/api/lecturer/snap-quizzes/${currentQuizId}/attempts/${attemptId}/force-submit`);
+    toast('Attempt force-submitted', 'success');
+    loadAttempts();
+    loadDetail(attemptId);
+  } catch (e) {
+    toast('Error: ' + e.message, 'error');
+  }
+}
+
 // ── Tab switching ─────────────────────────────────────────────────────
 let activeTab = 'detail';
 function switchTab(tab) {
   activeTab = tab;
-  document.getElementById('tab-detail').classList.toggle('active', tab === 'detail');
-  document.getElementById('tab-violations').classList.toggle('active', tab === 'violations');
-  document.getElementById('detail-panel').style.display = tab === 'detail' ? '' : 'none';
+  ['detail','grid','violations'].forEach(t => {
+    const btn = document.getElementById('tab-' + t);
+    if (btn) btn.classList.toggle('active', tab === t);
+  });
+  document.getElementById('detail-panel').style.display    = tab === 'detail'     ? '' : 'none';
+  document.getElementById('grid-panel').style.display      = tab === 'grid'       ? '' : 'none';
   document.getElementById('violations-panel').style.display = tab === 'violations' ? '' : 'none';
   if (tab === 'violations' && currentQuizId) loadAllViolations();
+  if (tab === 'grid') renderCameraGrid();
+}
+
+// ── Camera Grid ───────────────────────────────────────────────────────
+function renderCameraGrid() {
+  const panel = document.getElementById('grid-panel');
+  if (!attemptsData.length) {
+    panel.innerHTML = '<div class="detail-placeholder"><div class="icon">📷</div><p>No students yet — select a quiz above</p></div>';
+    return;
+  }
+  const riskOf = a => {
+    if ((a.faceFailCount||0) >= 3 || (a.violationCount||0) >= 3 || a.status === 'terminated') return 'flagged';
+    if ((a.faceFailCount||0) > 0 || (a.violationCount||0) > 0) return 'warn';
+    if (a.status === 'active') return 'safe';
+    return '';
+  };
+  const dotColor = r => ({ safe:'green', warn:'yellow', flagged:'red' }[r] || 'grey');
+  panel.innerHTML = `
+    <div style="margin-bottom:12px;font-size:12px;color:var(--slate)">${attemptsData.length} student(s) — click a cell to view details</div>
+    <div class="cam-grid">
+      ${attemptsData.map(a => {
+        const risk     = riskOf(a);
+        const initials = (a.student?.name||'S').split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2);
+        return `
+          <div class="cam-cell ${risk}" onclick="selectStudentFromGrid('${a._id}')">
+            <div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#0f1c2e,#1e3a5f);font-size:28px;font-weight:800;color:rgba(255,255,255,.3)">${initials}</div>
+            <div class="cam-cell-footer">
+              <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:110px">${a.student?.name||'Student'}</span>
+              <div style="display:flex;align-items:center;gap:4px;flex-shrink:0">
+                ${(a.violationCount||0)>0?`<span style="color:var(--yellow);font-size:9px">${a.violationCount}v</span>`:''}
+                <div class="cam-status-dot ${dotColor(risk)}"></div>
+              </div>
+            </div>
+          </div>`;
+      }).join('')}
+    </div>`;
+}
+
+function selectStudentFromGrid(attemptId) {
+  switchTab('detail');
+  const row = document.querySelector(`.stu-row[data-aid="${attemptId}"]`);
+  if (row) {
+    document.querySelectorAll('.stu-row').forEach(r => r.classList.remove('active'));
+    row.classList.add('active');
+    row.scrollIntoView({ block:'nearest' });
+  }
+  selectedAttemptId = attemptId;
+  loadDetail(attemptId);
+}
+
+// ── Risk Analytics ────────────────────────────────────────────────────
+function updateRiskAnalytics(attempts) {
+  const total = attempts.length;
+  if (!total) return;
+  const safe  = attempts.filter(a => (a.faceFailCount||0) === 0 && (a.violationCount||0) === 0).length;
+  const warn  = attempts.filter(a => ((a.faceFailCount||0)>0||(a.violationCount||0)>0) && (a.faceFailCount||0)<3 && (a.violationCount||0)<3).length;
+  const high  = attempts.filter(a => (a.faceFailCount||0)>=3 || (a.violationCount||0)>=3 || a.status==='terminated').length;
+  const sp = Math.round(safe/total*100), wp = Math.round(warn/total*100), hp = Math.round(high/total*100);
+  document.getElementById('risk-safe').textContent = `${sp}% Safe (${safe})`;
+  document.getElementById('risk-warn').textContent = `${wp}% Suspicious (${warn})`;
+  document.getElementById('risk-high').textContent = `${hp}% High Risk (${high})`;
+  document.getElementById('risk-bar-visual').innerHTML =
+    `<div style="width:${sp}%;background:var(--green);height:100%"></div>
+     <div style="width:${wp}%;background:var(--yellow);height:100%"></div>
+     <div style="width:${hp}%;background:var(--red);height:100%"></div>`;
+  document.getElementById('risk-bar').style.display = 'flex';
+}
+
+// ── Quiz Controls ─────────────────────────────────────────────────────
+async function quizAction(path, method = 'PATCH') {
+  if (!currentQuizId) return;
+  try {
+    await fetch(`${API}/api/lecturer/snap-quizzes/${currentQuizId}/${path}`, {
+      method, headers:{ 'Authorization':`Bearer ${authToken}`, 'Content-Type':'application/json' }
+    });
+    toast(`Quiz ${path} done`, 'success');
+  } catch (e) { toast('Error: ' + e.message, 'error'); }
+}
+function openQuiz()  { if (confirm('Open quiz for students?'))  quizAction('open'); }
+function closeQuiz() { if (confirm('Close quiz?')) quizAction('close'); }
+
+async function forceSubmitFlagged() {
+  const flagged = attemptsData.filter(a => a.status==='active' && ((a.faceFailCount||0)>=3||(a.violationCount||0)>=3));
+  if (!flagged.length) { toast('No flagged active students', ''); return; }
+  if (!confirm(`Force-submit ${flagged.length} flagged student(s)?`)) return;
+  let done = 0;
+  for (const a of flagged) {
+    try {
+      await fetch(`${API}/api/lecturer/snap-quizzes/${currentQuizId}/attempts/${a._id}/force-submit`,
+        { method:'POST', headers:{ 'Authorization':`Bearer ${authToken}`, 'Content-Type':'application/json' } });
+      done++;
+    } catch(e) {}
+  }
+  toast(`Force-submitted ${done}/${flagged.length}`, 'success');
+  loadAttempts();
 }
 
 // ── Quiz-wide violations ──────────────────────────────────────────────
@@ -749,13 +950,14 @@ document.addEventListener('keydown', e => {
 });
 
 // ── Export ───────────────────────────────────────────────────────────
-document.getElementById('export-btn').addEventListener('click', () => {
+document.getElementById('export-btn').addEventListener('click', () => exportCSV());
+function exportCSV() {
   if (!attemptsData.length) return toast('Select a snap quiz first', 'error');
   const csv = [
-    ['Name','Student ID','Status','Violations','Grading','Attempt #','Started','Submitted'].join(','),
+    ['Name','Student ID','Status','Violations','Face Fails','Grading','Attempt #','Started','Submitted'].join(','),
     ...attemptsData.map(a => [
       `"${a.student?.name || ''}"`, a.student?.studentId || '', a.status,
-      a.violationCount ?? 0, a.gradingStatus || '',
+      a.violationCount ?? 0, a.faceFailCount ?? 0, a.gradingStatus || '',
       a.attemptNumber || 1,
       a.startedAt ? new Date(a.startedAt).toLocaleString() : '',
       a.submittedAt ? new Date(a.submittedAt).toLocaleString() : '',
@@ -764,10 +966,10 @@ document.getElementById('export-btn').addEventListener('click', () => {
   const blob = new Blob([csv], { type: 'text/csv' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
-  a.href = url; a.download = `snap-quiz-monitor-${currentQuizId}.csv`; a.click();
+  a.href = url; a.download = `snap-proctor-${currentQuizId}.csv`; a.click();
   URL.revokeObjectURL(url);
   toast('Exported!', 'success');
-});
+}
 
 // ── Init ─────────────────────────────────────────────────────────────
 if (authToken) loadQuizPicker();

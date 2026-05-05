@@ -1,0 +1,623 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>DIKLY — Snap Quiz Lecturer</title>
+<link rel="icon" type="image/svg+xml" href="/dikly-icon.svg">
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #f8fafc; --surface: #ffffff; --border: #e2e8f0;
+  --text: #0f172a; --muted: #64748b; --dim: #94a3b8;
+  --primary: #0ea5e9; --primary-d: #0284c7;
+  --green: #16a34a; --yellow: #d97706; --red: #dc2626;
+  --font: 'Plus Jakarta Sans', sans-serif; --mono: 'Space Mono', monospace;
+}
+html, body { height:100%; background:var(--bg); color:var(--text); font-family:var(--font); }
+
+/* ── Topbar ── */
+.topbar {
+  position:sticky; top:0; z-index:100;
+  background:var(--surface); border-bottom:1px solid var(--border);
+  padding:14px 20px; display:flex; align-items:center; gap:12px; flex-wrap:wrap;
+  box-shadow:0 1px 6px rgba(0,0,0,0.06);
+}
+.topbar-logo { font-weight:800; font-size:16px; letter-spacing:-.3px; }
+.topbar-logo span { color:var(--primary); }
+.topbar-sub { font-size:13px; color:var(--muted); margin-left:4px; }
+.topbar-right { margin-left:auto; display:flex; gap:8px; align-items:center; }
+
+/* ── Login overlay ── */
+#login-overlay {
+  position:fixed; inset:0; background:var(--bg); z-index:200;
+  display:flex; align-items:center; justify-content:center; padding:24px;
+}
+.login-card {
+  background:var(--surface); border:1px solid var(--border);
+  border-radius:16px; padding:36px 32px; width:100%; max-width:400px;
+  box-shadow:0 8px 32px rgba(0,0,0,0.08);
+}
+.login-card h2 { font-size:22px; font-weight:800; margin-bottom:4px; }
+.login-card p  { color:var(--muted); font-size:13px; margin-bottom:24px; }
+
+/* ── Forms ── */
+.form-group { margin-bottom:14px; }
+.form-group label { display:block; font-size:12px; font-weight:700; color:var(--muted); margin-bottom:6px; text-transform:uppercase; letter-spacing:.4px; }
+.form-group input, .form-group select {
+  width:100%; padding:11px 14px; border:1.5px solid var(--border);
+  border-radius:10px; font-family:var(--font); font-size:14px; outline:none;
+  background:var(--surface); color:var(--text); transition:border-color .15s;
+}
+.form-group input:focus, .form-group select:focus { border-color:var(--primary); }
+
+/* ── Buttons ── */
+.btn {
+  display:inline-flex; align-items:center; gap:6px; justify-content:center;
+  padding:10px 20px; border:none; border-radius:10px; font-family:var(--font);
+  font-size:13px; font-weight:700; cursor:pointer; transition:all .15s;
+  white-space:nowrap; text-decoration:none;
+}
+.btn-primary { background:var(--primary); color:#fff; }
+.btn-primary:hover { background:var(--primary-d); }
+.btn-danger  { background:var(--red); color:#fff; }
+.btn-ghost   { background:transparent; border:1.5px solid var(--border); color:var(--text); }
+.btn-ghost:hover { background:var(--bg); }
+.btn-sm { padding:7px 14px; font-size:12px; border-radius:8px; }
+.btn:disabled { opacity:.4; cursor:not-allowed; }
+
+/* ── Error ── */
+.err-box { background:#fef2f2; border:1px solid #fca5a5; border-radius:8px; padding:10px 14px; font-size:13px; color:var(--red); margin-top:12px; display:none; }
+
+/* ── Layout ── */
+.layout { display:flex; height:calc(100vh - 56px); overflow:hidden; }
+.sidebar { width:280px; flex-shrink:0; border-right:1px solid var(--border); background:var(--surface); display:flex; flex-direction:column; overflow:hidden; }
+.main    { flex:1; overflow-y:auto; padding:20px; }
+
+/* ── Sidebar header ── */
+.sidebar-hd {
+  padding:16px 16px 10px; border-bottom:1px solid var(--border);
+  display:flex; flex-direction:column; gap:10px;
+}
+.sidebar-hd select {
+  width:100%; padding:9px 12px; border:1.5px solid var(--border);
+  border-radius:8px; font-family:var(--font); font-size:13px; outline:none; color:var(--text);
+}
+.sidebar-hd select:focus { border-color:var(--primary); }
+
+/* ── Stats strip ── */
+.stats-strip {
+  display:grid; grid-template-columns:repeat(4,1fr);
+  gap:1px; background:var(--border); border-bottom:1px solid var(--border);
+}
+.stat-cell { background:var(--surface); padding:10px 6px; text-align:center; }
+.stat-cell .val { font-size:18px; font-weight:800; font-family:var(--mono); }
+.stat-cell .lbl { font-size:10px; color:var(--dim); margin-top:2px; text-transform:uppercase; letter-spacing:.4px; }
+
+/* ── Student list ── */
+.stu-list { flex:1; overflow-y:auto; }
+.stu-item {
+  display:flex; align-items:center; gap:10px; padding:11px 16px;
+  border-bottom:1px solid var(--border); cursor:pointer;
+  transition:background .12s;
+}
+.stu-item:hover { background:var(--bg); }
+.stu-item.selected { background:#f0f9ff; border-left:3px solid var(--primary); }
+.stu-dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
+.stu-dot.green  { background:var(--green); box-shadow:0 0 0 3px rgba(22,163,74,.15); }
+.stu-dot.yellow { background:var(--yellow); box-shadow:0 0 0 3px rgba(215,119,0,.15); }
+.stu-dot.red    { background:var(--red); box-shadow:0 0 0 3px rgba(220,38,38,.15); }
+.stu-dot.grey   { background:var(--dim); }
+.stu-name { font-size:13px; font-weight:600; flex:1; }
+.stu-id   { font-size:11px; color:var(--muted); margin-top:1px; }
+.stu-right { text-align:right; font-size:11px; color:var(--muted); }
+.stu-violations { font-weight:700; font-size:13px; }
+
+/* ── Detail panel ── */
+.detail-card {
+  background:var(--surface); border:1px solid var(--border);
+  border-radius:14px; padding:20px; margin-bottom:16px;
+}
+.detail-card h3 { font-size:16px; font-weight:800; margin-bottom:4px; }
+.detail-meta  { font-size:12px; color:var(--muted); margin-bottom:14px; }
+
+.badge {
+  display:inline-block; padding:3px 10px; border-radius:20px;
+  font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.4px;
+}
+.badge-green  { background:#dcfce7; color:var(--green); }
+.badge-yellow { background:#fef3c7; color:var(--yellow); }
+.badge-red    { background:#fee2e2; color:var(--red); }
+.badge-blue   { background:#dbeafe; color:#1d4ed8; }
+.badge-grey   { background:#f1f5f9; color:var(--muted); }
+
+/* ── Stats row ── */
+.stats-row { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-bottom:16px; }
+.stat-box { background:var(--bg); border:1px solid var(--border); border-radius:10px; padding:14px 10px; text-align:center; }
+.stat-box .sv { font-size:22px; font-weight:800; font-family:var(--mono); }
+.stat-box .sk { font-size:10px; color:var(--dim); margin-top:4px; text-transform:uppercase; }
+
+/* ── Log timeline ── */
+.log-row {
+  display:flex; gap:10px; align-items:flex-start; padding:10px 14px;
+  border-bottom:1px solid var(--border); background:var(--surface);
+  border-radius:8px; margin-bottom:6px;
+}
+.log-row.crit { border-left:3px solid var(--red); }
+.log-row.warn { border-left:3px solid var(--yellow); }
+.log-icon-lg { font-size:20px; flex-shrink:0; }
+.log-type { font-size:13px; font-weight:700; text-transform:capitalize; }
+.log-time { font-size:11px; color:var(--muted); margin-top:2px; }
+
+/* ── Camera grid (for all-students view) ── */
+.camera-grid {
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(180px,1fr));
+  gap:10px; margin-top:14px;
+}
+.cam-cell {
+  background:#0f172a; border-radius:10px; overflow:hidden;
+  border:2px solid var(--border); position:relative; aspect-ratio:4/3;
+}
+.cam-cell.flagged { border-color:var(--red); }
+.cam-cell.warn    { border-color:var(--yellow); }
+.cam-cell img { width:100%; height:100%; object-fit:cover; display:block; }
+.cam-cell-name {
+  position:absolute; bottom:0; left:0; right:0;
+  padding:5px 8px; background:rgba(0,0,0,.65); color:#fff;
+  font-size:11px; font-weight:700;
+}
+.cam-cell-status {
+  position:absolute; top:6px; right:6px;
+  width:10px; height:10px; border-radius:50%;
+}
+
+/* ── Section title ── */
+.sec-title { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.6px; color:var(--muted); margin-bottom:10px; }
+
+/* ── Placeholder ── */
+.placeholder {
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  height:300px; color:var(--dim); gap:10px; text-align:center;
+}
+.placeholder .icon { font-size:40px; }
+.placeholder p { font-size:14px; }
+
+/* ── Toast ── */
+#toast {
+  position:fixed; bottom:20px; left:50%; transform:translateX(-50%);
+  background:var(--text); color:#fff; padding:10px 20px; border-radius:10px;
+  font-size:13px; font-weight:600; z-index:1000; pointer-events:none;
+  opacity:0; transition:opacity .2s;
+}
+#toast.show { opacity:1; }
+#toast.err  { background:var(--red); }
+#toast.ok   { background:var(--green); }
+
+/* ── Tabs ── */
+.tab-bar { display:flex; gap:2px; border-bottom:1px solid var(--border); margin-bottom:16px; }
+.tab-btn {
+  padding:9px 16px; font-family:var(--font); font-size:13px; font-weight:600;
+  border:none; background:none; cursor:pointer; color:var(--muted);
+  border-bottom:2px solid transparent; transition:all .15s; margin-bottom:-1px;
+}
+.tab-btn.active { color:var(--primary); border-bottom-color:var(--primary); }
+
+/* ── Responsive ── */
+@media (max-width:768px) {
+  .layout { flex-direction:column; height:auto; overflow:visible; }
+  .sidebar { width:100%; height:auto; border-right:none; border-bottom:1px solid var(--border); }
+  .stu-list { max-height:260px; overflow-y:auto; }
+  .stats-row { grid-template-columns:repeat(2,1fr); }
+}
+</style>
+</head>
+<body>
+
+<div id="login-overlay">
+  <div class="login-card">
+    <h2>DIKLY<span style="color:var(--primary)">.</span></h2>
+    <p>Snap Quiz Lecturer Dashboard — sign in to manage live exams</p>
+    <div class="form-group">
+      <label>Email</label>
+      <input type="email" id="l-email" placeholder="lecturer@school.edu" />
+    </div>
+    <div class="form-group">
+      <label>Password</label>
+      <input type="password" id="l-pass" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()" />
+    </div>
+    <button class="btn btn-primary" style="width:100%;margin-top:4px" onclick="doLogin()" id="login-btn">Sign In</button>
+    <div class="err-box" id="login-err"></div>
+  </div>
+</div>
+
+<div class="topbar">
+  <div class="topbar-logo">DIKLY<span>.</span></div>
+  <span class="topbar-sub">Snap Quiz Lecturer</span>
+  <div class="topbar-right">
+    <span id="user-name" style="font-size:13px;color:var(--muted)"></span>
+    <button class="btn btn-ghost btn-sm" onclick="doLogout()">Sign out</button>
+  </div>
+</div>
+
+<div class="layout">
+  <!-- Sidebar: quiz picker + student list -->
+  <div class="sidebar">
+    <div class="sidebar-hd">
+      <select id="quiz-select" onchange="selectQuiz(this.value)">
+        <option value="">— Select a Snap Quiz —</option>
+      </select>
+      <div style="display:flex;gap:6px">
+        <button class="btn btn-primary btn-sm" style="flex:1" onclick="loadStudents()">↻ Refresh</button>
+        <button class="btn btn-ghost btn-sm" style="flex:1" onclick="openProctorDashboard()">🛰 Proctor View</button>
+      </div>
+    </div>
+
+    <div class="stats-strip">
+      <div class="stat-cell"><div class="val" id="s-total">—</div><div class="lbl">Total</div></div>
+      <div class="stat-cell"><div class="val" style="color:var(--green)" id="s-active">—</div><div class="lbl">Active</div></div>
+      <div class="stat-cell"><div class="val" style="color:var(--yellow)" id="s-warned">—</div><div class="lbl">Warned</div></div>
+      <div class="stat-cell"><div class="val" style="color:var(--red)" id="s-flagged">—</div><div class="lbl">Flagged</div></div>
+    </div>
+
+    <input type="text" id="stu-search" placeholder="Search student…"
+      oninput="filterStudents(this.value)"
+      style="margin:10px 12px;padding:8px 12px;border:1.5px solid var(--border);border-radius:8px;font-family:var(--font);font-size:13px;outline:none;width:calc(100% - 24px)" />
+
+    <div class="stu-list" id="stu-list">
+      <div class="placeholder" style="height:200px">
+        <div class="icon">📋</div>
+        <p>Select a snap quiz above</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main content -->
+  <div class="main" id="main">
+    <div class="placeholder">
+      <div class="icon">👈</div>
+      <p>Select a quiz and then a student to view details</p>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const API = '';
+let authToken = localStorage.getItem('dikly_lect_token') || '';
+let currentUser = JSON.parse(localStorage.getItem('dikly_lect_user') || 'null');
+let currentQuizId = '';
+let attemptsData = [];
+let selectedAttemptId = null;
+let refreshTimer = null;
+
+// ── API helper ──────────────────────────────────────────────────────
+async function api(method, path, body) {
+  const opts = {
+    method,
+    headers: { 'Content-Type':'application/json', 'X-Request-Time': Date.now().toString() },
+  };
+  if (authToken) opts.headers['Authorization'] = `Bearer ${authToken}`;
+  if (body) opts.body = JSON.stringify(body);
+  const res = await fetch(API + path, opts);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || data.message || `HTTP ${res.status}`);
+  return data;
+}
+
+// ── Toast ───────────────────────────────────────────────────────────
+let toastTimer;
+function toast(msg, type = '') {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'show' + (type ? ' ' + type : '');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { el.className = ''; }, 3500);
+}
+
+// ── Auth ────────────────────────────────────────────────────────────
+async function doLogin() {
+  const email    = document.getElementById('l-email').value.trim();
+  const password = document.getElementById('l-pass').value;
+  const btn      = document.getElementById('login-btn');
+  const errBox   = document.getElementById('login-err');
+
+  if (!email || !password) { showErr('Email and password are required'); return; }
+  btn.textContent = 'Signing in…'; btn.disabled = true;
+  errBox.style.display = 'none';
+
+  try {
+    const data = await api('POST', '/api/auth/login', { email, password, loginRole: 'lecturer' });
+    authToken   = data.token;
+    currentUser = data.user;
+    localStorage.setItem('dikly_lect_token', authToken);
+    localStorage.setItem('dikly_lect_user', JSON.stringify(currentUser));
+    onLogin();
+  } catch (e) {
+    showErr(e.message || 'Login failed');
+    btn.textContent = 'Sign In'; btn.disabled = false;
+  }
+}
+
+function showErr(msg) {
+  const el = document.getElementById('login-err');
+  el.textContent = msg; el.style.display = 'block';
+}
+
+function doLogout() {
+  authToken = ''; currentUser = null;
+  localStorage.removeItem('dikly_lect_token');
+  localStorage.removeItem('dikly_lect_user');
+  location.reload();
+}
+
+function onLogin() {
+  document.getElementById('login-overlay').style.display = 'none';
+  document.getElementById('user-name').textContent = currentUser?.name || '';
+  loadQuizList();
+}
+
+// ── Boot ────────────────────────────────────────────────────────────
+if (authToken && currentUser) onLogin();
+
+// ── Quiz list ────────────────────────────────────────────────────────
+async function loadQuizList() {
+  try {
+    const data = await api('GET', '/api/lecturer/snap-quizzes');
+    const quizzes = data.quizzes || [];
+    const sel = document.getElementById('quiz-select');
+    const statusIcon = s => s === 'open' ? '🟢' : s === 'closed' ? '🔴' : s === 'published' ? '🔵' : '⚪';
+    sel.innerHTML = '<option value="">— Select a Snap Quiz —</option>' +
+      quizzes.map(q => `<option value="${q._id}">${statusIcon(q.status)} ${q.title}</option>`).join('');
+
+    // Auto-select if URL has ?quizId=
+    const qid = new URLSearchParams(location.search).get('quizId');
+    if (qid && quizzes.find(q => q._id === qid)) {
+      sel.value = qid; selectQuiz(qid);
+    }
+  } catch (e) { toast('Failed to load quizzes: ' + e.message, 'err'); }
+}
+
+function selectQuiz(id) {
+  currentQuizId = id;
+  clearInterval(refreshTimer);
+  if (!id) return;
+  loadStudents();
+  refreshTimer = setInterval(loadStudents, 15000);
+}
+
+// ── Students ─────────────────────────────────────────────────────────
+async function loadStudents() {
+  if (!currentQuizId) return;
+  try {
+    const data = await api('GET', `/api/lecturer/snap-quizzes/${currentQuizId}/attempts?limit=200`);
+    attemptsData = data.attempts || [];
+    renderStudentList(attemptsData);
+  } catch (e) { toast('Error loading students: ' + e.message, 'err'); }
+}
+
+function filterStudents(q) {
+  const lower = q.toLowerCase();
+  document.querySelectorAll('.stu-item').forEach(el => {
+    const name = (el.dataset.name || '').toLowerCase();
+    const id   = (el.dataset.id || '').toLowerCase();
+    el.style.display = (!lower || name.includes(lower) || id.includes(lower)) ? '' : 'none';
+  });
+}
+
+function renderStudentList(attempts) {
+  const total   = attempts.length;
+  const active  = attempts.filter(a => a.status === 'active').length;
+  const warned  = attempts.filter(a => (a.faceWarnCount || 0) > 0 || (a.violationCount || 0) > 0).length;
+  const flagged = attempts.filter(a => (a.faceFailCount || 0) >= 3 || (a.violationCount || 0) >= 3).length;
+
+  document.getElementById('s-total').textContent  = total;
+  document.getElementById('s-active').textContent = active;
+  document.getElementById('s-warned').textContent = warned;
+  document.getElementById('s-flagged').textContent = flagged;
+
+  const list = document.getElementById('stu-list');
+  if (!attempts.length) {
+    list.innerHTML = '<div class="placeholder" style="height:200px"><div class="icon">🎓</div><p>No students yet</p></div>';
+    return;
+  }
+
+  const dot = a => {
+    const ff = a.faceFailCount || 0;
+    const vc = a.violationCount || 0;
+    if (a.status === 'terminated') return 'red';
+    if (ff >= 3 || vc >= 3) return 'red';
+    if (ff > 0 || vc > 0) return 'yellow';
+    if (a.status === 'active') return 'green';
+    return 'grey';
+  };
+
+  const statusBadge = a => {
+    const map = { active:'Active', submitted:'Done', auto_submitted:'Auto', terminated:'Terminated', abandoned:'Away' };
+    return map[a.status] || a.status;
+  };
+
+  list.innerHTML = attempts.map(a => `
+    <div class="stu-item ${selectedAttemptId === a._id ? 'selected' : ''}"
+      data-id="${a._id}" data-name="${a.student?.name || ''}" onclick="selectStudent('${a._id}')">
+      <div class="stu-dot ${dot(a)}"></div>
+      <div style="flex:1;min-width:0">
+        <div class="stu-name">${a.student?.name || 'Student'}</div>
+        <div class="stu-id">${a.student?.studentId || a.student?.email || '—'}</div>
+      </div>
+      <div class="stu-right">
+        <div class="stu-violations" style="color:${(a.violationCount||0)>2?'var(--red)':(a.violationCount||0)>0?'var(--yellow)':'var(--green)'}">${a.violationCount||0}v</div>
+        <div>${statusBadge(a)}</div>
+      </div>
+    </div>`).join('');
+}
+
+async function selectStudent(id) {
+  selectedAttemptId = id;
+  document.querySelectorAll('.stu-item').forEach(el => el.classList.toggle('selected', el.dataset.id === id));
+  await loadStudentDetail(id);
+}
+
+// ── Student Detail ────────────────────────────────────────────────────
+async function loadStudentDetail(attemptId) {
+  if (!currentQuizId || !attemptId) return;
+  const main = document.getElementById('main');
+  main.innerHTML = '<div class="placeholder"><div class="icon">⏳</div><p>Loading…</p></div>';
+
+  try {
+    const data = await api('GET', `/api/lecturer/snap-quizzes/${currentQuizId}/attempts/${attemptId}`);
+    const a = data.attempt;
+    const violations = data.violations || [];
+    const proctoringEvents = data.proctoringEvents || [];
+
+    const statusBadge = () => {
+      const map = {
+        active:        '<span class="badge badge-blue">● Active</span>',
+        submitted:     '<span class="badge badge-green">Submitted</span>',
+        auto_submitted:'<span class="badge badge-yellow">Auto-submitted</span>',
+        terminated:    '<span class="badge badge-red">Terminated</span>',
+        abandoned:     '<span class="badge badge-grey">Abandoned</span>',
+      };
+      return map[a.status] || `<span class="badge badge-grey">${a.status}</span>`;
+    };
+
+    const faceFailCount = a.faceFailCount || 0;
+    const faceRisk = faceFailCount >= 5 ? 'var(--red)' : faceFailCount >= 3 ? 'var(--yellow)' : 'var(--green)';
+
+    // Latest snapshot
+    const latestSnap = proctoringEvents.find(e => e.imageUrl || e.thumbnailUrl);
+
+    const iconMap = {
+      tab_switch:'🔀', focus_lost:'📵', fullscreen_exit:'🖥️', copy_paste:'📋',
+      right_click:'🖱️', session_conflict:'⚡', heartbeat_missed:'💔',
+      face_not_visible:'😶', multiple_faces:'👥', other:'⚠️',
+    };
+
+    main.innerHTML = `
+      <div class="detail-card">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap">
+          <div>
+            <h3>${a.student?.name || 'Student'}</h3>
+            <div class="detail-meta">${a.student?.studentId || a.student?.email || '—'} · Attempt #${a.attemptNumber ?? 1}</div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+              ${statusBadge()}
+              ${a.terminationReason ? `<span style="font-size:12px;color:var(--red)">${a.terminationReason.replace(/_/g,' ')}</span>` : ''}
+            </div>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            ${a.status === 'active' ? `<button class="btn btn-danger btn-sm" onclick="forceSubmit('${a._id}')">⛔ Force Submit</button>` : ''}
+            <button class="btn btn-ghost btn-sm" onclick="loadStudentDetail('${a._id}')">↻ Refresh</button>
+          </div>
+        </div>
+        <div style="margin-top:12px;font-size:12px;color:var(--muted)">
+          Started: ${a.startedAt ? new Date(a.startedAt).toLocaleString() : '—'}
+          ${a.submittedAt ? ` · Submitted: ${new Date(a.submittedAt).toLocaleString()}` : ''}
+        </div>
+      </div>
+
+      <div class="stats-row">
+        <div class="stat-box">
+          <div class="sv" style="color:${faceRisk}">${faceFailCount}</div>
+          <div class="sk">Face Fails</div>
+        </div>
+        <div class="stat-box">
+          <div class="sv" style="color:${(a.violationCount||0)>2?'var(--red)':(a.violationCount||0)>0?'var(--yellow)':'var(--green)'}">${a.violationCount||0}</div>
+          <div class="sk">Violations</div>
+        </div>
+        <div class="stat-box">
+          <div class="sv">${data.responses?.length || 0}</div>
+          <div class="sk">Answered</div>
+        </div>
+        <div class="stat-box">
+          <div class="sv" style="font-size:12px;padding-top:6px">${(a.gradingStatus||'pending').replace(/_/g,' ')}</div>
+          <div class="sk">Grading</div>
+        </div>
+      </div>
+
+      ${latestSnap ? `
+      <div class="detail-card" style="padding:0;overflow:hidden">
+        <div style="padding:10px 14px;border-bottom:1px solid var(--border);font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">
+          Last Camera Capture · ${new Date(latestSnap.capturedAt).toLocaleTimeString()}
+          ${latestSnap.aiFlags?.length ? ` · <span style="color:var(--yellow)">${latestSnap.aiFlags.map(f=>f.flagType.replace(/_/g,' ')).join(', ')}</span>` : ''}
+        </div>
+        <img src="${latestSnap.thumbnailUrl||latestSnap.imageUrl}" alt="capture"
+          style="width:100%;max-height:220px;object-fit:cover;display:block;background:#0f172a"
+          onerror="this.parentElement.style.display='none'" />
+      </div>` : ''}
+
+      ${proctoringEvents.length > 1 ? `
+      <div class="sec-title">Recent Captures (${proctoringEvents.length})</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px">
+        ${proctoringEvents.slice(1, 9).map(e => {
+          const thumb = e.thumbnailUrl || e.imageUrl;
+          return thumb ? `<div style="position:relative;width:72px;height:54px;border-radius:8px;overflow:hidden;border:2px solid ${e.aiFlags?.length?'var(--yellow)':'var(--border)'}">
+            <img src="${thumb}" style="width:100%;height:100%;object-fit:cover" onerror="this.parentElement.style.display='none'"/>
+            ${e.aiFlags?.length ? '<div style="position:absolute;bottom:2px;right:3px;font-size:10px">⚠️</div>' : ''}
+          </div>` : '';
+        }).join('')}
+      </div>` : ''}
+
+      <div class="sec-title">Violation Log (${violations.length})</div>
+      ${violations.length === 0
+        ? `<div style="padding:14px;background:#f0fdf4;border-radius:10px;color:var(--green);font-size:13px;font-weight:600;border:1px solid #bbf7d0">✓ No violations recorded</div>`
+        : violations.slice().reverse().slice(0,40).map(v => {
+            const sev = v.severity || 'info';
+            const borderColor = sev === 'critical' ? 'var(--red)' : sev === 'high' ? 'var(--orange, #ea580c)' : 'var(--yellow)';
+            return `<div class="log-row ${['critical','high'].includes(sev)?'crit':sev==='medium'?'warn':''}">
+              <span class="log-icon-lg">${iconMap[v.violationType]||'⚠️'}</span>
+              <div>
+                <div class="log-type">${(v.violationType||'').replace(/_/g,' ')}</div>
+                <div class="log-time">${new Date(v.occurredAt).toLocaleTimeString()}${v.actionTaken?' · '+v.actionTaken.replace(/_/g,' '):''}</div>
+              </div>
+              <span class="badge ${sev==='critical'?'badge-red':sev==='medium'?'badge-yellow':'badge-grey'}" style="margin-left:auto">${sev}</span>
+            </div>`;
+          }).join('')}
+    `;
+  } catch (e) {
+    document.getElementById('main').innerHTML = `<div class="detail-card"><p style="color:var(--red)">Error: ${e.message}</p></div>`;
+  }
+}
+
+// ── Force Submit ──────────────────────────────────────────────────────
+async function forceSubmit(attemptId) {
+  if (!confirm('Force-submit this student\'s exam? Their current answers will be auto-graded.')) return;
+  try {
+    await api('POST', `/api/lecturer/snap-quizzes/${currentQuizId}/attempts/${attemptId}/force-submit`);
+    toast('Exam force-submitted and auto-graded', 'ok');
+    loadStudents();
+    loadStudentDetail(attemptId);
+  } catch (e) { toast('Error: ' + e.message, 'err'); }
+}
+
+// ── Quiz Controls ─────────────────────────────────────────────────────
+async function openQuiz() {
+  if (!currentQuizId) return toast('Select a quiz first', 'err');
+  if (!confirm('Open this quiz? Students will be able to start attempts.')) return;
+  try {
+    await api('PATCH', `/api/lecturer/snap-quizzes/${currentQuizId}/open`);
+    toast('Quiz opened — students can now start', 'ok');
+    loadQuizList();
+  } catch (e) { toast('Error: ' + e.message, 'err'); }
+}
+
+async function closeQuiz() {
+  if (!currentQuizId) return toast('Select a quiz first', 'err');
+  if (!confirm('Close this quiz? No new attempts will be allowed.')) return;
+  try {
+    await api('PATCH', `/api/lecturer/snap-quizzes/${currentQuizId}/close`);
+    toast('Quiz closed', 'ok');
+    loadQuizList();
+  } catch (e) { toast('Error: ' + e.message, 'err'); }
+}
+
+function openProctorDashboard() {
+  const url = currentQuizId
+    ? `/proctor-dashboard.html?quizId=${currentQuizId}`
+    : '/proctor-dashboard.html';
+  window.open(url, '_blank');
+}
+</script>
+</body>
+</html>

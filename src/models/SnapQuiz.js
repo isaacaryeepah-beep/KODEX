@@ -233,6 +233,20 @@ const snapQuizSchema = new mongoose.Schema(
     archivedAt:   { type: Date, default: null },
     archivedBy:   { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
 
+    // ── Meeting tie-in (Phase 3: DIKLY spec) ─────────────────────────────
+    // When set, students can only start/continue this quiz while the linked
+    // meeting is in 'live' status. Acts as an in-class proctoring gate.
+    linkedMeeting: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Meeting",
+      default: null,
+      index: true,
+    },
+    requireLiveMeeting: {
+      type: Boolean,
+      default: false,
+    },
+
     // ── Attachments ───────────────────────────────────────────────────────
     attachments: {
       type: [{
