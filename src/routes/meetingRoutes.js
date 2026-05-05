@@ -33,8 +33,9 @@ router.post('/create',
   meetCtrl.createMeeting
 );
 
-router.get('/',  meetCtrl.listMeetings);
-router.get('/:id', meetCtrl.getMeeting);
+router.get('/',                  meetCtrl.listMeetings);
+router.get('/validate-token',    meetCtrl.validateMeetingToken);
+router.get('/:id',               meetCtrl.getMeeting);
 
 router.put('/:id/update',  loadMeeting, isOwner, meetCtrl.updateMeeting);
 router.post('/:id/start',  loadMeeting, isOwner, meetCtrl.startMeeting);
@@ -43,7 +44,6 @@ router.post('/:id/cancel', loadMeeting, isOwner, meetCtrl.cancelMeeting);
 router.delete('/:id/delete', loadMeeting, isOwner, meetCtrl.deleteMeeting);
 
 router.get('/:id/join',          loadMeeting, requireNoDeviceLock, canJoin, meetCtrl.joinMeeting);
-router.get('/validate-token',    meetCtrl.validateMeetingToken);
 
 // ─── ATTENDANCE ROUTES ────────────────────────────────────────────────────────
 router.post('/:id/attendance/join',    loadMeeting, requireNoDeviceLock, canJoin, attendCtrl.joinAttendance);

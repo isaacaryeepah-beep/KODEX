@@ -6799,13 +6799,16 @@ async function startMeeting(id) {
 async function joinMeeting(id) {
   try {
     const data = await api(`/api/zoom/${id}/join`);
-    // Use secure token-based URL if available, otherwise fall back to jitsi config
+    // New Jitsi meetings return data.data.secureJoinUrl; old Zoom meetings return data.joinUrl
     const secureUrl = data.data?.secureJoinUrl;
     const jitsiConfig = data.data?.jitsiConfig;
+    const legacyUrl = data.joinUrl;
     if (secureUrl) {
       window.open(secureUrl, '_blank');
     } else if (jitsiConfig?.roomName) {
       window.open(`https://${jitsiConfig.domain}/${jitsiConfig.roomName}`, '_blank');
+    } else if (legacyUrl) {
+      window.open(legacyUrl, '_blank');
     } else {
       toastError('No join URL available');
       return;
@@ -6881,7 +6884,7 @@ async function viewMeetingDetail(id) {
           ${m.inviteLink ? `<p><strong>Invite Link:</strong> <a href="${m.inviteLink}" target="_blank" style="color:#16a34a;word-break:break-all;font-weight:600">▶ ${m.inviteLink}</a></p>` : ''}
           ${canManage ? `<button class="btn btn-sm" style="background:#0ea5e9;color:#fff;margin-top:4px" onclick="showInviteLinkForm('${m._id}', \`${m.inviteLink || ''}\`)">🔗 ${m.inviteLink ? 'Update' : 'Add'} Invite Link</button>` : ''}
           <div style="margin-top:12px;">
-            ${m.status === 'active' || m.status === 'scheduled' ? `<button class="btn btn-success btn-sm" onclick="joinMeeting('${m._id}', '${m.joinUrl}')">Join Meeting</button>` : ''}
+            ${m.status === 'active' || m.status === 'live' ? `<button class="btn btn-success btn-sm" onclick="joinMeeting('${m._id}')">Join Meeting</button>` : ''}
             ${canManage && m.status === 'active' ? `<button class="btn btn-danger btn-sm" style="margin-left:4px;" onclick="endMeeting('${m._id}')">End Meeting</button>` : ''}
           </div>
         </div>

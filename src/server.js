@@ -98,6 +98,9 @@ app.use(cors({
     "Authorization",
     "x-esp32-secret",
     "x-esp32-token",
+    "x-device-id",
+    "x-session-token",
+    "x-request-time",
   ],
   credentials: true,
 }));
