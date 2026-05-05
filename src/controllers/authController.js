@@ -764,49 +764,101 @@ exports.login = async (req, res) => {
       }
     }
 
-    if (user.role === "student" && deviceId && user.deviceId && user.deviceId !== deviceId) {
-      return res.status(403).json({
-        error: "This account is active on another device. Please contact your admin to unlock it.",
-        deviceLocked: true,
-      });
-    }
+    // ── Trusted-device check ─────────────────────────────────────────────────
+    // Login is always allowed. The 6-hour lock only blocks quiz/meeting access
+    // (enforced by requireNoDeviceLock middleware), not the login itself.
+    const now = new Date();
+    if (deviceId) {
+      if (!Array.isArray(user.trustedDevices)) user.trustedDevices = [];
 
-    // ── New-device 6-hour lock (DIKLY snap-quiz / meeting gate) ──────────────
-    // If user already has an accountDeviceLock that is still active, enforce it.
-    if (user.accountDeviceLock?.isLocked && user.accountDeviceLock?.lockedUntil) {
-      const lockExpiry = new Date(user.accountDeviceLock.lockedUntil);
-      if (lockExpiry > new Date()) {
-        const remainingMs = lockExpiry - Date.now();
-        const remainingMins = Math.ceil(remainingMs / 60000);
-        return res.status(403).json({
-          error: "Your account is temporarily locked due to a new device login. Please wait or contact your admin/HOD to unlock.",
-          accountLocked: true,
-          lockedUntil: lockExpiry.toISOString(),
-          remainingMins,
+      // Lazy migration: seed trustedDevices from legacy single deviceId field
+      if (user.trustedDevices.length === 0 && user.deviceId) {
+        user.trustedDevices.push({
+          deviceId:    user.deviceId,
+          firstSeenAt: user.createdAt || now,
+          lastSeenAt:  now,
+          ipAddress:   null,
+          userAgent:   null,
+          platform:    null,
         });
+      }
+
+      const knownIdx = user.trustedDevices.findIndex(d => d.deviceId === deviceId);
+
+      if (knownIdx >= 0) {
+        // Recognised device — refresh metadata
+        const td = user.trustedDevices[knownIdx];
+        td.lastSeenAt = now;
+        td.ipAddress  = req.ip || null;
+        td.userAgent  = req.headers["user-agent"] || null;
+
+        // Auto-clear an expired lock
+        if (user.accountDeviceLock?.isLocked) {
+          const expiry = user.accountDeviceLock.lockedUntil
+            ? new Date(user.accountDeviceLock.lockedUntil) : null;
+          if (!expiry || expiry <= now) {
+            user.accountDeviceLock.isLocked = false;
+          }
+        }
+
+      } else if (user.trustedDevices.length === 0) {
+        // First device ever — add silently, no lock
+        user.trustedDevices.push({
+          deviceId,
+          firstSeenAt: now,
+          lastSeenAt:  now,
+          ipAddress:   req.ip || null,
+          userAgent:   req.headers["user-agent"] || null,
+          platform:    _detectPlatform(req.headers["user-agent"] || ""),
+        });
+
       } else {
-        // Lock expired naturally — clear it
+        // New device on an existing account — add to whitelist and lock
+        user.trustedDevices.push({
+          deviceId,
+          firstSeenAt: now,
+          lastSeenAt:  now,
+          ipAddress:   req.ip || null,
+          userAgent:   req.headers["user-agent"] || null,
+          platform:    _detectPlatform(req.headers["user-agent"] || ""),
+        });
+
+        // Immutable audit log entry
+        if (!Array.isArray(user.newDeviceLogs)) user.newDeviceLogs = [];
+        user.newDeviceLogs.push({
+          deviceId,
+          ipAddress:  req.ip || null,
+          userAgent:  req.headers["user-agent"] || null,
+          platform:   _detectPlatform(req.headers["user-agent"] || ""),
+          detectedAt: now,
+        });
+
+        // Set 6-hour quiz/meeting lock (login is still allowed)
+        user.accountDeviceLock = {
+          isLocked:      true,
+          lockedAt:      now,
+          lockedUntil:   new Date(now.getTime() + SIX_HOURS_MS),
+          triggerDevice: deviceId,
+          knownDevice:   user.deviceId || null,
+          unlockedBy:    null,
+          unlockedAt:    null,
+        };
+      }
+
+      user.deviceId = deviceId;
+    } else if (user.accountDeviceLock?.isLocked) {
+      // No deviceId sent — auto-clear if lock has expired
+      const expiry = user.accountDeviceLock.lockedUntil
+        ? new Date(user.accountDeviceLock.lockedUntil) : null;
+      if (!expiry || expiry <= now) {
         user.accountDeviceLock.isLocked = false;
       }
     }
 
-    // Detect login from a new device fingerprint → trigger 6-hour lock
-    if (deviceId && user.deviceId && user.deviceId !== deviceId) {
-      const now = new Date();
-      user.accountDeviceLock = {
-        isLocked: true,
-        lockedAt: now,
-        lockedUntil: new Date(now.getTime() + SIX_HOURS_MS),
-        triggerDevice: deviceId,
-        knownDevice: user.deviceId,
-        unlockedBy: null,
-        unlockedAt: null,
-      };
-      // Allow login but the quiz/meeting gate will block them
-    }
-
     user.lastLoginAt = new Date();
-    if (deviceId) user.deviceId = deviceId;
+    // deviceId is already set inside the trusted-device block above; only update here
+    // when no fingerprint was provided (e.g. old clients or server-side calls)
+    if (deviceId && !user.deviceId) user.deviceId = deviceId;
     await user.save();
 
     const token = generateToken(user._id);
@@ -838,7 +890,13 @@ exports.login = async (req, res) => {
         accountDeviceLock: user.accountDeviceLock?.isLocked ? {
           isLocked: true,
           lockedUntil: user.accountDeviceLock.lockedUntil,
+          remainingMins: user.accountDeviceLock.lockedUntil
+            ? Math.ceil((new Date(user.accountDeviceLock.lockedUntil) - Date.now()) / 60000)
+            : null,
         } : null,
+        trustedDeviceCount: user.trustedDevices?.length || 0,
+        newDeviceDetected: user.accountDeviceLock?.isLocked &&
+          user.accountDeviceLock?.lockedAt?.getTime() >= (Date.now() - 5000),
       },
       trial: company ? {
         active: company.isTrialActive,
@@ -1494,3 +1552,12 @@ exports.getDepartments = async (req, res) => {
     res.status(500).json({ error: 'Failed to fetch departments' });
   }
 };
+
+
+function _detectPlatform(ua) {
+  ua = (ua || '').toLowerCase();
+  if (/mobile|android|iphone|ipod/.test(ua)) return 'mobile';
+  if (/tablet|ipad/.test(ua))                return 'tablet';
+  if (/windows|macintosh|linux/.test(ua))    return 'desktop';
+  return 'unknown';
+}
