@@ -379,9 +379,10 @@ const S = {
   pdfExisting: null,
   qDrafts:     [],
   editId:      null,
-  currentAsgn: null,
-  stuAnswers:  {},
-  stuFile:     null,
+  currentAsgn:       null,
+  stuAnswers:        {},
+  stuFile:           null,
+  _deadlineInterval: null,
 };
 
 // ══════════════════════════════════════════════════════════════════════════
@@ -1099,9 +1100,30 @@ async function openStudentAssignment(id){
     S.currentAsgn=a; $('stu-heading').textContent=a.title;
     if(sub?.status==='graded'){ renderStudentResult(a,sub); return; }
     if(sub?.status==='submitted'){ renderStudentSubmitted(a,sub); return; }
-    const canSubmit=!isOv||a.allowLateSubmission;
+    const now2=new Date();
+    let canSubmit=!isOv||a.allowLateSubmission;
+    // Enforce maxLateDays on the frontend too
+    if(canSubmit&&isOv&&a.allowLateSubmission&&a.maxLateDays>0){
+      const lateCutoff=new Date(new Date(a.dueDate).getTime()+a.maxLateDays*24*60*60*1000);
+      if(now2>lateCutoff) canSubmit=false;
+    }
     renderStudentForm(a,isOv,canSubmit);
-    if(canSubmit){ $('stu-foot').style.display='flex'; $('stu-submit-btn').disabled=false; }
+    if(canSubmit){
+      $('stu-foot').style.display='flex'; $('stu-submit-btn').disabled=false;
+      // Live deadline watcher — disables submit the moment the deadline passes
+      if(S._deadlineInterval) clearInterval(S._deadlineInterval);
+      const dueDt=new Date(a.dueDate);
+      S._deadlineInterval=setInterval(()=>{
+        const t=new Date();
+        let stillOk=t<=dueDt||(a.allowLateSubmission&&(a.maxLateDays===0||t<=new Date(dueDt.getTime()+a.maxLateDays*24*60*60*1000)));
+        if(!stillOk){
+          clearInterval(S._deadlineInterval); S._deadlineInterval=null;
+          const btn=$('stu-submit-btn'); if(btn) btn.disabled=true;
+          $('stu-foot').style.display='none';
+          toast('Submission deadline has just passed','err');
+        }
+      },10000);
+    }
   } catch(e){ $('stu-body').innerHTML=`<p style="color:#dc2626;padding:20px">${e.message}</p>`; }
 }
 
@@ -1280,6 +1302,21 @@ async function downloadStudentPdf(id){
 async function submitAssignment(){
   if(!S.currentAsgn) return;
   const id=S.currentAsgn._id, btn=$('stu-submit-btn');
+  // Enforce deadline strictly before touching the network
+  const _now=new Date(), _asgn=S.currentAsgn;
+  if(_now>new Date(_asgn.dueDate)){
+    if(!_asgn.allowLateSubmission){
+      toast('Submission deadline has passed — cannot submit','err');
+      $('stu-foot').style.display='none'; return;
+    }
+    if(_asgn.maxLateDays>0){
+      const _lateCutoff=new Date(new Date(_asgn.dueDate).getTime()+_asgn.maxLateDays*24*60*60*1000);
+      if(_now>_lateCutoff){
+        toast('Late submission window has closed','err');
+        $('stu-foot').style.display='none'; return;
+      }
+    }
+  }
   btn.disabled=true; btn.textContent='Submitting…';
   try{
     // Collect fill-in and explain answers from DOM inputs
@@ -1307,7 +1344,11 @@ async function submitAssignment(){
 //  DRAWER HELPERS
 // ══════════════════════════════════════════════════════════════════════════
 function showDrawer(id){ closeDrawers(false); $(id).classList.add('show'); $('overlay').classList.add('show'); document.body.style.overflow='hidden'; }
-function closeDrawers(hideOv=true){ ['create-drawer','detail-drawer','student-drawer'].forEach(d=>$(d).classList.remove('show')); if(hideOv){ $('overlay').classList.remove('show'); document.body.style.overflow=''; } }
+function closeDrawers(hideOv=true){
+  if(S._deadlineInterval){ clearInterval(S._deadlineInterval); S._deadlineInterval=null; }
+  ['create-drawer','detail-drawer','student-drawer'].forEach(d=>$(d).classList.remove('show'));
+  if(hideOv){ $('overlay').classList.remove('show'); document.body.style.overflow=''; }
+}
 
 // ══════════════════════════════════════════════════════════════════════════
 //  TAB SWITCHING
