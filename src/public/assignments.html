@@ -265,64 +265,68 @@ window.MathJax = { tex: { inlineMath: [['\\(','\\)']], displayMath: [['\\[','\\]
   <div class="drawer-body">
     <input type="hidden" id="edit-id"/>
 
+    <!-- Section: Basic info -->
+    <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text-muted);margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid var(--border)">Basic Info</div>
     <div class="fg"><label>Title <span class="req">*</span></label><input type="text" id="a-title" placeholder="e.g. Research Report — Climate Change"/></div>
-    <div class="fg"><label>Description</label><textarea id="a-desc" rows="2" placeholder="Brief overview of the assignment…"></textarea></div>
+    <div class="fg"><label>Description <span style="text-transform:none;letter-spacing:0;font-weight:400;color:var(--text-muted)">(optional)</span></label><textarea id="a-desc" rows="2" placeholder="Brief overview visible to students…"></textarea></div>
     <div class="fg">
       <label>Course <span class="req">*</span></label>
       <select id="a-course"><option value="">Select a course…</option></select>
     </div>
+
+    <!-- Section: Schedule -->
+    <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text-muted);margin:18px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--border)">Schedule</div>
     <div class="form-row">
       <div class="fg"><label>Release Date <span class="req">*</span></label><input type="datetime-local" id="a-release"/></div>
       <div class="fg"><label>Due Date <span class="req">*</span></label><input type="datetime-local" id="a-due"/></div>
     </div>
-    <div class="fg-checks">
+    <div style="display:flex;flex-wrap:wrap;gap:16px;margin-bottom:14px">
       <label class="fg-check"><input type="checkbox" id="a-filesub" checked/> Allow file submission</label>
       <label class="fg-check"><input type="checkbox" id="a-late" onchange="document.getElementById('late-penalty-group').style.display=this.checked?'flex':'none'"/> Allow late submission</label>
     </div>
-    <div class="fg" id="late-penalty-group" style="display:none;align-items:center;gap:8px;margin-top:8px">
-      <label style="white-space:nowrap;font-size:12px;color:var(--text-muted)">Penalty per day late:</label>
-      <input type="number" id="a-late-penalty" min="0" max="100" value="0" style="width:80px;padding:6px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit">
-      <span style="font-size:12px;color:var(--text-muted)">% deducted per day</span>
+    <div id="late-penalty-group" style="display:none;align-items:center;gap:8px;margin-bottom:14px;padding:10px 14px;background:var(--bg);border-radius:8px;border:1px solid var(--border)">
+      <span style="font-size:12px;color:var(--text-muted);white-space:nowrap">Penalty per day late:</span>
+      <input type="number" id="a-late-penalty" min="0" max="100" value="0" style="width:70px;padding:6px 10px;border:1.5px solid var(--border);border-radius:7px;font-size:13px;font-family:inherit;outline:none">
+      <span style="font-size:12px;color:var(--text-muted)">% per day</span>
     </div>
 
-    <div class="fg">
-      <label>Assignment Brief <span style="text-transform:none;letter-spacing:0;font-weight:400;color:var(--text-muted)">(PDF / Word, max 15 MB)</span></label>
-      <div class="drop-zone" id="drop-zone"
-           ondragover="event.preventDefault();this.classList.add('over')"
-           ondragleave="this.classList.remove('over')"
-           ondrop="handleDrop(event)"
-           onclick="document.getElementById('pdf-input').click()">
-        <input type="file" id="pdf-input" accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onchange="handleFileSelect(event)"/>
-        <div class="di">📄</div>
-        <strong>Click to upload or drag &amp; drop</strong>
-        <p>PDF or Word document</p>
+    <!-- Section: Brief PDF -->
+    <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text-muted);margin:4px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--border)">Assignment Brief <span style="text-transform:none;letter-spacing:0;font-weight:400">(optional — PDF / Word, max 15 MB)</span></div>
+    <div class="drop-zone" id="drop-zone"
+         ondragover="event.preventDefault();this.classList.add('over')"
+         ondragleave="this.classList.remove('over')"
+         ondrop="handleDrop(event)"
+         onclick="document.getElementById('pdf-input').click()">
+      <input type="file" id="pdf-input" accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onchange="handleFileSelect(event)"/>
+      <div style="margin-bottom:8px">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
       </div>
-      <div class="file-chip" id="pdf-preview" style="display:none">
-        <span>📄</span><span id="pdf-fname">filename.pdf</span><small id="pdf-fsize"></small>
-        <button class="file-rm" onclick="removePdf()">✕</button>
-      </div>
-      <div id="pdf-existing" style="display:none;margin-top:8px;font-size:12px;color:var(--text-muted)">
-        Existing file: <span id="pdf-existing-name" style="color:var(--primary);font-family:monospace"></span>
-        <span> — upload a new file to replace</span>
-      </div>
+      <strong>Click to upload or drag &amp; drop</strong>
+      <p>PDF or Word document</p>
+    </div>
+    <div class="file-chip" id="pdf-preview" style="display:none">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+      <span id="pdf-fname">filename.pdf</span><small id="pdf-fsize" style="color:var(--text-muted)"></small>
+      <button class="file-rm" onclick="removePdf()">✕</button>
+    </div>
+    <div id="pdf-existing" style="display:none;margin-top:8px;font-size:12px;color:var(--text-muted)">
+      Current file: <span id="pdf-existing-name" style="color:var(--primary);font-family:monospace"></span>
+      <span> — upload a new file to replace</span>
     </div>
 
-    <div class="fg">
-      <div class="section-sub">
-        <span>Questions (MCQ)</span>
-        <div style="display:flex;gap:6px;align-items:center">
-          <button class="btn btn-secondary btn-xs" onclick="addQDraft()">＋ Add Question</button>
-          <button class="btn btn-xs" style="background:linear-gradient(135deg,#7c3aed,#4f46e5);color:#fff;font-weight:600;display:flex;align-items:center;gap:4px;border:none;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:11px" onclick="openAIGenerateForAssignment()">
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
-            AI Generate
-          </button>
-        </div>
+    <!-- Section: Questions -->
+    <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text-muted);margin:18px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
+      <span>Questions <span style="text-transform:none;letter-spacing:0;font-weight:400">(optional — MCQ, Fill-in, Explain)</span></span>
+      <div style="display:flex;gap:6px">
+        <button class="btn btn-secondary btn-xs" onclick="addQDraft()">+ Add</button>
+        <button class="btn btn-xs" style="background:linear-gradient(135deg,#7c3aed,#4f46e5);color:#fff;font-weight:600;display:flex;align-items:center;gap:4px;border:none;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:11px" onclick="openAIGenerateForAssignment()">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+          AI
+        </button>
       </div>
-      <div class="q-list" id="q-draft-list">
-        <div id="q-empty-hint" style="text-align:center;padding:18px;color:var(--text-muted);font-size:13px;border:1.5px dashed var(--border);border-radius:8px">
-          No questions yet — optional
-        </div>
-      </div>
+    </div>
+    <div class="q-list" id="q-draft-list">
+      <div id="q-empty-hint" style="text-align:center;padding:18px;color:var(--text-muted);font-size:13px;border:1.5px dashed var(--border);border-radius:8px">No questions yet — optional</div>
     </div>
   </div>
   <div class="drawer-foot">
@@ -477,13 +481,29 @@ async function loadLecturerAssignments(){
 function renderLecturerList(){
   const el=$('lec-list');
   if(!S.assignments.length){
-    el.innerHTML=`<div class="empty-state"><div class="ei">📋</div><h3>No assignments yet</h3><p>Create your first assignment to share with students</p><button class="btn btn-primary" onclick="openCreate()">＋ Create Assignment</button></div>`;
+    el.innerHTML=`<div class="empty-state">
+      <div style="width:56px;height:56px;border-radius:16px;background:var(--primary-ultra-light);display:flex;align-items:center;justify-content:center;margin:0 auto 16px">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+      </div>
+      <h3>No assignments yet</h3>
+      <p>Create your first assignment to get started</p>
+      <button class="btn btn-primary" onclick="openCreate()">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        New Assignment
+      </button>
+    </div>`;
     return;
   }
   const now=new Date();
   el.innerHTML=`<div class="assign-grid">${S.assignments.map(a=>{
     const due=new Date(a.dueDate), rel=new Date(a.releaseDate);
     const isDue=now>due, isLive=now>=rel&&now<=due;
+    const statusTag=isLive
+      ?`<span class="tag tag-green"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:#16a34a;margin-right:4px;"></span>Live</span>`
+      :isDue
+        ?`<span class="tag tag-red">Closed</span>`
+        :`<span class="tag tag-gray">Scheduled</span>`;
+    const sub=a.submissionCount||0, grad=a.gradedCount||0;
     return`<div class="acard" onclick="openDetail('${a._id}')">
       <div class="acard-top">
         <div style="flex:1;min-width:0">
@@ -491,17 +511,17 @@ function renderLecturerList(){
           <div class="acard-title">${a.title}</div>
         </div>
         <div class="acard-stat">
-          <div class="acard-num">${a.submissionCount||0}</div>
-          <div class="acard-lbl">Submissions</div>
-          ${a.gradedCount?`<div style="font-size:11px;color:#16a34a;margin-top:4px;font-weight:600">✓ ${a.gradedCount} graded</div>`:''}
+          <div class="acard-num">${sub}</div>
+          <div class="acard-lbl">${sub===1?'Submission':'Submissions'}</div>
+          ${grad?`<div style="font-size:10px;color:#16a34a;margin-top:3px;font-weight:600">${grad} graded</div>`:''}
         </div>
       </div>
       ${a.description?`<div class="acard-desc">${a.description}</div>`:''}
       <div class="acard-meta">
-        ${isLive?`<span class="tag tag-green">● Live</span>`:isDue?`<span class="tag tag-red">⏰ Closed</span>`:`<span class="tag tag-gray">⏳ Scheduled</span>`}
+        ${statusTag}
         <span class="tag tag-amber">Due ${fmtDate(a.dueDate)}</span>
-        ${a.hasPdf?`<span class="tag tag-blue">📄 Brief</span>`:''}
-        ${a.questionCount?`<span class="tag tag-purple">❓ ${a.questionCount} Qs · ${a.totalMarks} pts</span>`:''}
+        ${a.hasPdf?`<span class="tag tag-blue">Brief</span>`:''}
+        ${a.questionCount?`<span class="tag tag-purple">${a.questionCount} Q${a.questionCount!==1?'s':''} · ${a.totalMarks} pts</span>`:''}
       </div>
     </div>`;
   }).join('')}</div>`;
@@ -528,15 +548,19 @@ async function openEdit(id){
     const d=await api('GET',`/api/assignments/lecturer/${id}`);
     const a=d.assignment;
     S.editId=id; S.pdfExisting=a.pdfBrief?.originalName||null; S.pdfFile=null;
-    S.qDrafts=(a.questions||[]).map(q=>({ type:q.questionType||'single',
+    S.qDrafts=(a.questions||[]).map(q=>({
+      type:q.questionType||'single',
       _id:q._id, text:q.questionText,
-      options:q.options.map((opt,i)=>({text:opt,correct:(q.correctAnswers||[]).includes(i)})),
-      marks:q.marks||1, partial:q.allowPartialMarks||false, expl:q.explanation||''
+      options:(q.options||[]).map((opt,i)=>({text:opt,correct:(q.correctAnswers||[]).includes(i)})),
+      marks:q.marks||1, partial:q.allowPartialMarks||false, expl:q.explanation||'',
+      fillAnswer:q.correctAnswerText||'',
+      modelAnswer:q.modelAnswer||''
     }));
     $('create-heading').textContent='Edit Assignment';
     $('edit-id').value=id; $('a-title').value=a.title; $('a-desc').value=a.description||'';
+    const _selCId=(a.course?._id||a.course||'').toString();
     $('a-course').innerHTML=`<option value="">Select a course…</option>`+
-      S.courses.map(c=>`<option value="${c._id}" ${c._id===a.course?._id?'selected':''}>${c.code} — ${c.title}</option>`).join('');
+      S.courses.map(c=>`<option value="${c._id}" ${c._id.toString()===_selCId?'selected':''}>${c.code} — ${c.title}</option>`).join('');
     $('a-release').value=toLocal(a.releaseDate); $('a-due').value=toLocal(a.dueDate);
     $('a-filesub').checked=a.allowFileSubmission; $('a-late').checked=a.allowLateSubmission; if($('a-late-penalty'))$('a-late-penalty').value=a.latePenaltyPercent||0; if(document.getElementById('late-penalty-group'))document.getElementById('late-penalty-group').style.display=a.allowLateSubmission?'flex':'none';
     const pp=$('pdf-preview'); if(pp) pp.style.display='none';
@@ -550,19 +574,26 @@ function toLocal(d){ if(!d)return''; return new Date(d).toISOString().slice(0,16
 
 async function saveAssignment(){
   const btn=$('save-btn');
-  const title=$('a-title').value.trim(), courseId=$('a-course').value;
+  const title=$('a-title').value.trim(), courseId=($('a-course').value||'').trim();
   const rv=$('a-release').value, dv=$('a-due').value;
-  if(!title) return toast('Title is required','err');
+  if(!title)    return toast('Title is required','err');
   if(!courseId) return toast('Please select a course','err');
-  if(!rv) return toast('Release date is required','err');
-  if(!dv) return toast('Due date is required','err');
-  if(new Date(rv)>=new Date(dv)) return toast('Release date must be before due date','err');
+  if(!rv)       return toast('Release date is required','err');
+  if(!dv)       return toast('Due date is required','err');
+  const rdObj=new Date(rv), ddObj=new Date(dv);
+  if(isNaN(rdObj.getTime())) return toast('Release date is invalid','err');
+  if(isNaN(ddObj.getTime())) return toast('Due date is invalid','err');
+  if(rdObj>=ddObj) return toast('Release date must be before due date','err');
   btn.disabled=true; btn.textContent='Saving…';
   try{
+    const penaltyEl=$('a-late-penalty');
+    const penalty=penaltyEl?Math.min(100,Math.max(0,parseInt(penaltyEl.value,10)||0)):0;
     const payload={
       title, courseId, description:$('a-desc').value.trim(),
-      releaseDate:new Date(rv).toISOString(), dueDate:new Date(dv).toISOString(),
-      allowFileSubmission:$('a-filesub').checked, allowLateSubmission:$('a-late').checked, latePenaltyPercent:parseInt($('a-late-penalty')?.value||0)
+      releaseDate:rdObj.toISOString(), dueDate:ddObj.toISOString(),
+      allowFileSubmission:$('a-filesub').checked,
+      allowLateSubmission:$('a-late').checked,
+      latePenaltyPercent:penalty
     };
     let saved;
     if(S.editId){ saved=(await api('PUT',`/api/assignments/lecturer/${S.editId}`,payload)).assignment; }
@@ -609,8 +640,11 @@ function addQDraft(){
   const items=document.querySelectorAll('.q-body'); if(items.length) items[items.length-1].classList.add('open');
 }
 function renderQDrafts(){
-  const list=$('q-draft-list'), hint=$('q-empty-hint');
-  if(!S.qDrafts.length){ list.innerHTML=''; if(!hint.parentNode) list.appendChild(hint); hint.style.display='block'; return; }
+  const list=$('q-draft-list');
+  if(!S.qDrafts.length){
+    list.innerHTML='<div id="q-empty-hint" style="text-align:center;padding:18px;color:var(--text-muted);font-size:13px;border:1.5px dashed var(--border);border-radius:8px">No questions yet — optional</div>';
+    return;
+  }
   if(hint) hint.style.display='none';
   const L=['A','B','C','D','E','F','G','H'];
   list.innerHTML=S.qDrafts.map((q,qi)=>`
@@ -694,10 +728,10 @@ async function openDetail(id){
         <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--primary);margin-bottom:5px">${a.course?.code} · ${a.course?.title}</div>
         ${a.description?`<p style="font-size:14px;color:var(--text-light);margin-bottom:12px;line-height:1.6">${a.description}</p>`:''}
         <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px">
-          <span class="tag tag-gray">📅 Released ${fmtDate(a.releaseDate)}</span>
-          <span class="tag ${isDue?'tag-red':'tag-amber'}">⏰ Due ${fmtDate(a.dueDate)}</span>
-          ${a.hasPdf?`<span class="tag tag-blue">📄 PDF brief</span>`:''}
-          ${a.questions?.length?`<span class="tag tag-purple">❓ ${a.questions.length} questions · ${a.totalMarks} pts</span>`:''}
+          <span class="tag tag-gray">Released ${fmtDate(a.releaseDate)}</span>
+          <span class="tag ${isDue?'tag-red':'tag-amber'}">Due ${fmtDate(a.dueDate)}</span>
+          ${a.hasPdf?`<span class="tag tag-blue">PDF Brief</span>`:''}
+          ${a.questions?.length?`<span class="tag tag-purple">${a.questions.length} Q${a.questions.length!==1?'s':''} · ${a.totalMarks} pts</span>`:''}
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           <button class="btn btn-secondary btn-sm" onclick="openEdit('${a._id}')">
@@ -705,7 +739,7 @@ async function openDetail(id){
             Edit
           </button>
           ${a.questions?.length?`<button class="btn btn-secondary btn-sm" onclick="exportAssignmentPDF(${JSON.stringify(a).replace(/"/g,'&quot;')})">⬇ Export Questions PDF</button>`:''}
-          ${a.hasPdf?`<button class="btn btn-secondary btn-sm" onclick="downloadPdf('${a._id}')">⬇️ Download Brief</button>`:''}
+          ${a.hasPdf?`<button class="btn btn-secondary btn-sm" onclick="downloadPdf('${a._id}')">Download Brief</button>`:''}
           <button class="btn btn-sm" style="background:#fef2f2;color:#dc2626;border:1px solid #fecaca" onclick="deleteAssignment('${a._id}')">Delete</button>
         </div>
       </div>
@@ -730,7 +764,7 @@ async function openDetail(id){
               </td>
               <td style="font-size:12px;color:var(--text-muted)">${fmtDate(s.submittedAt)}</td>
               <td style="display:flex;gap:5px;flex-wrap:wrap">
-                ${s.submittedFile?.originalName?`<button class="btn btn-secondary btn-xs" onclick="downloadSubFile('${s._id}')">⬇️</button>`:''}
+                ${s.submittedFile?.originalName?`<button class="btn btn-secondary btn-xs" onclick="downloadSubFile('${s._id}')">Download</button>`:''}
                 <button class="btn btn-primary btn-xs" onclick="openGrade('${s._id}','${a._id}','${a.totalMarks}','${s.manualGrade||''}')">Grade</button>
               </td>
             </tr>`;
@@ -1012,34 +1046,40 @@ async function loadStudentAssignments(){
 function renderStudentList(){
   const el=$('stu-list');
   if(!S.assignments.length){
-    el.innerHTML=`<div class="empty-state"><div class="ei">📖</div><h3>No assignments yet</h3><p>Your lecturers haven't posted any assignments yet</p></div>`;
+    el.innerHTML=`<div class="empty-state">
+      <div style="width:56px;height:56px;border-radius:16px;background:var(--primary-ultra-light);display:flex;align-items:center;justify-content:center;margin:0 auto 16px">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="1.8"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+      </div>
+      <h3>No assignments yet</h3>
+      <p>Your lecturers haven't posted any assignments yet. Check back later.</p>
+    </div>`;
     return;
   }
   el.innerHTML=`<div class="assign-grid">${S.assignments.map(a=>{
     const sub=a.mySubmission, ov=a.isOverdue;
     let st='';
-    if(sub?.status==='graded') st=`<span class="tag tag-purple">✓ Graded</span>`;
-    else if(sub) st=`<span class="tag tag-green">✓ Submitted</span>`;
-    else if(ov) st=`<span class="tag tag-red">⏰ Overdue</span>`;
-    else st=`<span class="tag tag-amber">📌 ${a.daysUntilDue>0?a.daysUntilDue+'d left':'Due today'}</span>`;
+    if(sub?.status==='graded')    st=`<span class="tag tag-purple">Graded</span>`;
+    else if(sub)                  st=`<span class="tag tag-green">Submitted</span>`;
+    else if(ov)                   st=`<span class="tag tag-red">Overdue</span>`;
+    else                          st=`<span class="tag tag-amber">${a.daysUntilDue>0?a.daysUntilDue+'d left':'Due today'}</span>`;
+    const score=(sub?.manualGrade!=null?sub.manualGrade:sub?.questionScore);
     return`<div class="acard" onclick="openStudentAssignment('${a._id}')">
       <div class="acard-top">
         <div style="flex:1;min-width:0">
-          <div class="acard-course">${a.course?.code||''} · ${a.createdBy?.name||''}</div>
+          <div class="acard-course">${a.course?.code||''} · ${a.createdBy?.name||'Lecturer'}</div>
           <div class="acard-title">${a.title}</div>
         </div>
-        ${sub?.questionScore!=null&&a.totalMarks>0?`<div class="acard-stat">
-          <div class="acard-num" style="color:#16a34a">${sub.questionScore}</div>
+        ${score!=null&&a.totalMarks>0?`<div class="acard-stat">
+          <div class="acard-num" style="color:#16a34a">${score}</div>
           <div class="acard-lbl">/ ${a.totalMarks} pts</div>
-          ${sub?.manualGrade!=null?`<div style="font-size:11px;color:#7c3aed;margin-top:3px;font-weight:600">Grade: ${sub.manualGrade}</div>`:''}
         </div>`:''}
       </div>
       ${a.description?`<div class="acard-desc">${a.description}</div>`:''}
       <div class="acard-meta">
         ${st}
-        ${a.hasPdf?`<span class="tag tag-blue">📄 Brief</span>`:''}
-        ${a.questionCount?`<span class="tag tag-purple">❓ ${a.questionCount} Qs</span>`:''}
-        ${sub?.isLate?`<span class="tag tag-red">⚠ Late</span>`:''}
+        ${a.hasPdf?`<span class="tag tag-blue">Brief</span>`:''}
+        ${a.questionCount?`<span class="tag tag-purple">${a.questionCount} Q${a.questionCount!==1?'s':''}</span>`:''}
+        ${sub?.isLate?`<span class="tag tag-red">Late</span>`:''}
         <span class="tag tag-gray">Due ${fmtDate(a.dueDate)}</span>
       </div>
     </div>`;
@@ -1081,10 +1121,13 @@ function renderStudentForm(a,isOv,canSubmit){
     ${a.totalMarks?`<div class="detail-meta-row"><strong>${a.totalMarks} total marks</strong></div>`:''}
   </div>`);
   if(a.description) lines.push(`<p style="font-size:14px;color:var(--text-light);margin-bottom:16px;line-height:1.6">${a.description}</p>`);
-  if(isOv&&!canSubmit) lines.push(`<div style="padding:14px;background:#fef2f2;border-radius:var(--radius-sm);color:#dc2626;font-size:14px;font-weight:600;margin-bottom:16px">⏰ Deadline has passed — submissions are closed</div>`);
-  if(a.hasPdf) lines.push(`<div style="margin-bottom:18px;padding:14px;background:var(--primary-ultra-light);border-radius:var(--radius-sm);display:flex;align-items:center;justify-content:space-between;gap:12px;border:1px solid rgba(79,70,229,.12)">
-    <div><div style="font-size:14px;font-weight:600;margin-bottom:2px">📄 Assignment Brief</div><div style="font-size:12px;color:var(--text-muted)">${a.pdfName||'Click to download'}</div></div>
-    <button class="btn btn-primary btn-sm" onclick="downloadStudentPdf('${a._id}')">⬇️ Download</button>
+  if(isOv&&!canSubmit) lines.push(`<div style="padding:12px 16px;background:#fef2f2;border-radius:var(--radius-sm);color:#dc2626;font-size:13px;font-weight:600;margin-bottom:16px;display:flex;align-items:center;gap:8px;border:1px solid #fecaca"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>Deadline has passed — submissions are closed</div>`);
+  if(a.hasPdf) lines.push(`<div style="margin-bottom:18px;padding:14px 16px;background:var(--primary-ultra-light);border-radius:var(--radius-sm);display:flex;align-items:center;justify-content:space-between;gap:12px;border:1px solid rgba(79,70,229,.12)">
+    <div style="display:flex;align-items:center;gap:10px">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+      <div><div style="font-size:13px;font-weight:600;color:var(--primary)">Assignment Brief</div><div style="font-size:11px;color:var(--text-muted)">${a.pdfName||'PDF Document'}</div></div>
+    </div>
+    <button class="btn btn-primary btn-sm" onclick="downloadStudentPdf('${a._id}')">Download</button>
   </div>`);
   if(a.questions?.length){
     lines.push(`<div style="font-size:13px;font-weight:700;margin-bottom:12px;display:flex;align-items:center;gap:8px">Questions <span style="background:var(--bg);border:1px solid var(--border);padding:1px 8px;border-radius:20px;font-size:11px;color:var(--text-muted);font-weight:400">${a.questions.length}</span></div>`);
@@ -1120,10 +1163,12 @@ function renderStudentForm(a,isOv,canSubmit){
          ondrop="handleStuDrop(event)"
          onclick="document.getElementById('stu-file-input').click()">
       <input type="file" id="stu-file-input" accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onchange="handleStuFile(event)"/>
-      <div class="di">📤</div><strong>Click to attach your work</strong><p>PDF or Word document</p>
+      <div style="margin-bottom:8px"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></div>
+      <strong>Click to attach your work</strong><p>PDF or Word document</p>
     </div>
     <div class="file-chip" id="stu-file-preview" style="display:none">
-      <span>📄</span><span id="stu-fname">file</span><small id="stu-fsize"></small>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+      <span id="stu-fname">file</span><small id="stu-fsize" style="color:var(--text-muted)"></small>
       <button class="file-rm" onclick="removeStuFile()">✕</button>
     </div>`);
   $('stu-body').innerHTML=lines.join('');
@@ -1131,13 +1176,15 @@ function renderStudentForm(a,isOv,canSubmit){
 
 function renderStudentSubmitted(a,sub){
   $('stu-body').innerHTML=`
-    <div style="padding:14px;background:#f0fdf4;border-radius:var(--radius-sm);margin-bottom:18px;border:1px solid #bbf7d0">
-      <strong style="color:#16a34a">✓ Submitted ${fmtDate(sub.submittedAt)}</strong>
-      ${sub.isLate?`<span class="tag tag-red" style="margin-left:8px">Late</span>`:''}
-      <p style="font-size:13px;color:var(--text-light);margin-top:4px">Awaiting lecturer review.</p>
+    <div style="padding:16px;background:#f0fdf4;border-radius:var(--radius-sm);margin-bottom:18px;border:1px solid #bbf7d0;display:flex;align-items:flex-start;gap:12px">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="2" style="flex-shrink:0;margin-top:2px"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+      <div>
+        <div style="font-weight:700;color:#16a34a;margin-bottom:2px">Submitted ${fmtDate(sub.submittedAt)} ${sub.isLate?'<span class="tag tag-red" style="margin-left:6px">Late</span>':''}</div>
+        <div style="font-size:13px;color:var(--text-light)">Your work has been received. Awaiting lecturer review.</div>
+      </div>
     </div>
-    ${a.totalMarks&&sub.questionScore!=null?`<p style="font-size:14px;margin-bottom:16px">MCQ Score: <strong>${sub.questionScore} / ${a.totalMarks}</strong></p>`:''}
-    ${a.hasPdf?`<button class="btn btn-secondary btn-sm" onclick="downloadStudentPdf('${a._id}')">⬇️ Download Brief</button>`:''}`;
+    ${a.totalMarks&&sub.questionScore!=null?`<p style="font-size:14px;margin-bottom:16px">MCQ Score: <strong>${sub.questionScore} / ${a.totalMarks} pts</strong></p>`:''}
+    ${a.hasPdf?`<button class="btn btn-secondary btn-sm" onclick="downloadStudentPdf('${a._id}')">Download Brief</button>`:''}`;
 }
 
 function renderStudentResult(a,sub){
@@ -1156,12 +1203,12 @@ function renderStudentResult(a,sub){
   // Feedback box — prominent
   if(sub.feedback){
     lines.push(`<div style="padding:14px 16px;background:#f5f3ff;border:1.5px solid #ddd6fe;border-radius:10px;margin-bottom:16px;">
-      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:#7c3aed;margin-bottom:6px;">💬 Lecturer Feedback</div>
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:#7c3aed;margin-bottom:6px;">Lecturer Feedback</div>
       <div style="font-size:14px;color:#1e1b4b;line-height:1.6;">${sub.feedback}</div>
     </div>`);
   }
 
-  if(a.hasPdf) lines.push(`<button class="btn btn-secondary btn-sm" style="margin-bottom:16px" onclick="downloadStudentPdf('${a._id}')">⬇️ Download Brief</button>`);
+  if(a.hasPdf) lines.push(`<button class="btn btn-secondary btn-sm" style="margin-bottom:16px" onclick="downloadStudentPdf('${a._id}')">Download Brief</button>`);
 
   if(sub.answers?.length){
     lines.push(`<div style="font-size:13px;font-weight:700;margin-bottom:12px;">Question Results</div>`);
