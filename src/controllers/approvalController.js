@@ -51,6 +51,7 @@ exports.approveUser = async (req, res) => {
       }
     }
 
+
     res.json({ message: `${user.name} has been approved`, user });
   } catch (error) {
     console.error("Approve user error:", error);
