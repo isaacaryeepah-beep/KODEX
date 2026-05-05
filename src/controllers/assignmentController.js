@@ -104,7 +104,13 @@ exports.createAssignment = async (req, res) => {
     res.status(201).json({ assignment });
   } catch (err) {
     console.error("createAssignment:", err);
-    res.status(500).json({ error: "Failed to create assignment" });
+    if (err.name === "ValidationError") {
+      return res.status(400).json({ error: err.message });
+    }
+    if (err.code === 11000) {
+      return res.status(409).json({ error: "An assignment already exists with conflicting data. Please try again or contact support." });
+    }
+    res.status(500).json({ error: "Failed to create assignment", details: err.message });
   }
 };
 

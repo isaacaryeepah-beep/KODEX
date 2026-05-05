@@ -337,6 +337,27 @@ const start = async () => {
     }
   }
 
+  // Drop any stale unique indexes on the assignments collection.
+  // An older schema version had unique({ company, course }) which blocks
+  // lecturers from creating more than one assignment per course.
+  try {
+    const mongoose = require("mongoose");
+    const db = mongoose.connection.db;
+    const assignmentsCol = db.collection("assignments");
+    const aIdxs = await assignmentsCol.indexes();
+    for (const idx of aIdxs) {
+      if (idx.unique && idx.key && idx.key.company !== undefined && Object.keys(idx.key).length <= 3) {
+        // Only drop compound unique indexes — leave the default _id index alone.
+        console.log(`Dropping stale unique assignment index: ${idx.name}`);
+        await assignmentsCol.dropIndex(idx.name);
+      }
+    }
+  } catch (e) {
+    if (e.codeName !== "IndexNotFound" && e.code !== 26) {
+      console.log("Assignment index cleanup note:", e.message);
+    }
+  }
+
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on port ${PORT}`);
 
