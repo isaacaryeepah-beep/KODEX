@@ -257,13 +257,38 @@ const userSchema = new mongoose.Schema(
       _id: false,
     },
 
+    // ── Trusted device whitelist ──────────────────────────────────────────────
+    // Every device fingerprint the user has logged in from. The FIRST entry is
+    // added without locking (initial setup). Subsequent new fingerprints trigger
+    // a 6-hour quiz/meeting lock until admin clears it.
+    trustedDevices: [{
+      deviceId:    { type: String, required: true },
+      firstSeenAt: { type: Date,   default: Date.now },
+      lastSeenAt:  { type: Date,   default: Date.now },
+      ipAddress:   { type: String, default: null },
+      userAgent:   { type: String, default: null },
+      platform:    { type: String, default: null }, // "mobile" | "tablet" | "desktop" | "unknown"
+      _id: false,
+    }],
+
+    // ── New-device event log ──────────────────────────────────────────────────
+    // Immutable audit trail of every time a new (unrecognised) device was detected.
+    newDeviceLogs: [{
+      deviceId:   { type: String, default: null },
+      ipAddress:  { type: String, default: null },
+      userAgent:  { type: String, default: null },
+      platform:   { type: String, default: null },
+      detectedAt: { type: Date,   default: Date.now },
+      _id: false,
+    }],
+
     // ── New-device 6-hour account lock (DIKLY snap-quiz / meeting gate) ─────
     accountDeviceLock: {
       isLocked:      { type: Boolean, default: false },
       lockedAt:      { type: Date,    default: null },
       lockedUntil:   { type: Date,    default: null },
-      triggerDevice: { type: String,  default: null }, // fingerprint that triggered lock
-      knownDevice:   { type: String,  default: null }, // previously known device
+      triggerDevice: { type: String,  default: null },
+      knownDevice:   { type: String,  default: null },
       unlockedBy:    { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
       unlockedAt:    { type: Date,    default: null },
       _id: false,
