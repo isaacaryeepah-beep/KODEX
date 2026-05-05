@@ -9585,12 +9585,10 @@ async function renderMarkAttendance() {
   // Offline: show queued state and cached session info
   if (!isOnline()) {
     const cachedSession = offlineRead('activeSession');
-    const pendingMark   = offlineRead('pendingMark');
     const pendingCount  = offlineQueueCount();
 
     // SVG icons
     const wifiOffIcon  = svgIcon('<line x1="1" y1="1" x2="23" y2="23"/><path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55"/><path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39"/><path d="M10.71 5.05A16 16 0 0 1 22.56 9"/><path d="M1.42 9a15.91 15.91 0 0 1 4.7-2.88"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/>', 22);
-    const clockIcon    = svgIcon('<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>', 40);
     const radarIcon    = svgIcon('<circle cx="12" cy="12" r="2"/><path d="M16.24 7.76a6 6 0 0 1 0 8.49m-8.48-.01a6 6 0 0 1 0-8.49m11.31-2.82a10 10 0 0 1 0 14.14m-14.14 0a10 10 0 0 1 0-14.14"/>', 48);
 
     content.innerHTML = `
@@ -9627,21 +9625,17 @@ async function renderMarkAttendance() {
           <div style="font-size:12px;color:var(--text-muted);margin-top:4px">Started ${new Date(cachedSession.startedAt).toLocaleString()}</div>
         </div>
 
-        ${pendingMark ? `
-          <!-- Attendance already queued -->
-          <div class="card" style="text-align:center;padding:32px 20px;border-left:4px solid var(--primary)">
-            <div style="display:inline-flex;align-items:center;justify-content:center;width:64px;height:64px;border-radius:50%;background:var(--primary-light, #e0e7ff);color:var(--primary);margin-bottom:14px">
-              ${clockIcon}
-            </div>
-            <div style="font-size:18px;font-weight:700;color:var(--primary)">Attendance Queued</div>
-            <p style="font-size:13px;color:var(--text-light);margin-top:6px;line-height:1.5">
-              Your check-in is saved and will be submitted<br>automatically once you're back online.
-            </p>
+        <!-- Explain that attendance requires internet (offline queuing disabled to prevent fraud) -->
+        <div class="card" style="text-align:center;padding:28px 20px">
+          <div style="display:inline-flex;align-items:center;justify-content:center;width:56px;height:56px;border-radius:50%;background:#f0f9ff;color:#0369a1;margin-bottom:14px">
+            ${radarIcon}
           </div>
-        ` : `
-          <!-- Can still enter code offline (queued) -->
-          <div id="mark-input-area"></div>
-        `}
+          <div style="font-size:16px;font-weight:700;margin-bottom:8px">Internet Required to Mark Attendance</div>
+          <p style="font-size:13px;color:var(--text-light);max-width:300px;margin:0 auto;line-height:1.6">
+            Connect to <strong>classroom WiFi with internet access</strong> to submit your attendance code.
+            Offline marking is disabled to prevent remote fraud.
+          </p>
+        </div>
       ` : `
         <!-- No cached data at all -->
         <div class="card" style="text-align:center;padding:48px 24px">
@@ -9811,14 +9805,16 @@ async function submitCodeMark() {
 function showCodeEntryOffline() {
   const area = document.getElementById('mark-input-area');
   if (!area) return;
+  const icon = svgIcon('<circle cx="12" cy="12" r="2"/><path d="M16.24 7.76a6 6 0 0 1 0 8.49m-8.48-.01a6 6 0 0 1 0-8.49m11.31-2.82a10 10 0 0 1 0 14.14m-14.14 0a10 10 0 0 1 0-14.14"/>', 36);
   area.innerHTML = `
-    <div class="card" style="text-align:center;padding:24px">
-      <div style="font-size:40px;margin-bottom:12px">📡</div>
-      <div style="font-weight:700;font-size:16px;margin-bottom:8px">No Internet Access</div>
-      <p style="font-size:13px;color:var(--text-light);line-height:1.6">
-        You must be connected to the classroom WiFi
-        <strong>(DIKLY-CLASSROOM)</strong> with internet access to mark attendance.<br><br>
-        Offline queuing is disabled to prevent remote attendance fraud.
+    <div class="card" style="text-align:center;padding:28px 20px">
+      <div style="display:inline-flex;align-items:center;justify-content:center;width:56px;height:56px;border-radius:50%;background:#f0f9ff;color:#0369a1;margin-bottom:14px">
+        ${icon}
+      </div>
+      <div style="font-weight:700;font-size:16px;margin-bottom:8px">Internet Required to Mark Attendance</div>
+      <p style="font-size:13px;color:var(--text-light);max-width:280px;margin:0 auto;line-height:1.6">
+        Connect to <strong>classroom WiFi with internet access</strong> to submit your attendance code.
+        Offline marking is disabled to prevent remote fraud.
       </p>
     </div>
   `;
