@@ -976,22 +976,18 @@ document.getElementById('login-btn').addEventListener('click', async () => {
     console.log('[Login] Sending:', { indexNumber, institutionCode, loginRole: 'student' });
     const data = await api('POST', '/api/auth/login', payload);
 
-    if (data.accountLocked) {
-      const mins = data.remainingMins != null ? ` (${data.remainingMins} min remaining)` : '';
-      const errEl = document.getElementById('login-error-msg');
-      const msg = `Your account is temporarily locked due to a new device login${mins}. Contact your administrator to unlock.`;
-      if (errEl) { errEl.textContent = msg; errEl.style.display = 'block'; }
-      toast(msg, 'error');
-      return;
-    }
-
     console.log('[Login] Success:', data.user?.role, data.user?.indexNumber);
     state.token = data.token;
     state.user  = data.user;
     state.deviceFingerprint = buildFingerprint();
     loadQuizList();
     show('quiz-list-screen');
-    toast('Signed in!', 'success');
+
+    if (data.user?.accountDeviceLock?.isLocked) {
+      toast('Account locked: new device detected. You cannot start quizzes or join meetings until an admin unlocks your account.', 'error');
+    } else {
+      toast('Signed in!', 'success');
+    }
   } catch (e) {
     const errEl = document.getElementById('login-error-msg');
     let msg = e.message || 'Sign in failed. Please try again.';
