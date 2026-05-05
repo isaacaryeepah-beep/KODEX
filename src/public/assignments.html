@@ -402,7 +402,7 @@ async function api(method, path, body, isForm){
   const res=await fetch(path,opts);
   if(res.headers.get('content-type')?.includes('application/json')){
     const d=await res.json();
-    if(!res.ok) throw new Error(d.error||`HTTP ${res.status}`);
+    if(!res.ok) throw new Error(d.details?`${d.error}: ${d.details}`:(d.error||`HTTP ${res.status}`));
     return d;
   }
   if(!res.ok) throw new Error(`HTTP ${res.status}`);

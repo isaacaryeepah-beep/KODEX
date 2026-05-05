@@ -74,45 +74,66 @@ function safeDeleteFile(filePath) {
 //  LECTURER — Create assignment
 // ══════════════════════════════════════════════════════════════════════════
 exports.createAssignment = async (req, res) => {
+  const { title, description, courseId, releaseDate, dueDate, allowFileSubmission, allowLateSubmission, latePenaltyPercent } = req.body;
+
+  if (!title || !courseId || !releaseDate || !dueDate)
+    return res.status(400).json({ error: "title, courseId, releaseDate and dueDate are required" });
+  if (!mongoose.Types.ObjectId.isValid(courseId))
+    return res.status(400).json({ error: "Invalid course ID" });
+  if (!req.user.company)
+    return res.status(400).json({ error: "User has no company assigned" });
+
+  // ── Step 1: verify course exists in this company ─────────────────────────
+  let course;
   try {
-    const { title, description, courseId, releaseDate, dueDate, allowFileSubmission, allowLateSubmission, latePenaltyPercent } = req.body;
+    course = await Course.findOne({ _id: courseId, companyId: req.user.company });
+  } catch (err) {
+    console.error("createAssignment [findCourse]:", err);
+    _logAssignmentError("findCourse", err);
+    return res.status(500).json({ error: "Failed to look up course", details: err.message });
+  }
+  if (!course) return res.status(404).json({ error: "Course not found" });
 
-    if (!title || !courseId || !releaseDate || !dueDate)
-      return res.status(400).json({ error: "title, courseId, releaseDate and dueDate are required" });
-    if (!mongoose.Types.ObjectId.isValid(courseId))
-      return res.status(400).json({ error: "Invalid course ID" });
+  if (new Date(releaseDate) >= new Date(dueDate))
+    return res.status(400).json({ error: "Release date must be before due date" });
 
-    const course = await Course.findOne({ _id: courseId, companyId: req.user.company });
-    if (!course) return res.status(404).json({ error: "Course not found" });
-
-    if (new Date(releaseDate) >= new Date(dueDate))
-      return res.status(400).json({ error: "Release date must be before due date" });
-
+  // ── Step 2: create the assignment document ────────────────────────────────
+  try {
     const assignment = await Assignment.create({
       title,
-      description: description || "",
-      course:      courseId,
-      company:     req.user.company,
-      createdBy:   req.user._id,
-      releaseDate: new Date(releaseDate),
-      dueDate:     new Date(dueDate),
+      description:    description || "",
+      course:         courseId,
+      company:        req.user.company,
+      createdBy:      req.user._id,
+      releaseDate:    new Date(releaseDate),
+      dueDate:        new Date(dueDate),
       latePenaltyPercent: latePenaltyPercent ? Math.min(100, Math.max(0, Number(latePenaltyPercent))) : 0,
       allowFileSubmission: allowFileSubmission !== "false" && allowFileSubmission !== false,
       allowLateSubmission: allowLateSubmission === "true"  || allowLateSubmission === true,
     });
-
-    res.status(201).json({ assignment });
+    return res.status(201).json({ assignment });
   } catch (err) {
-    console.error("createAssignment:", err);
+    console.error("createAssignment [create]:", err);
+    _logAssignmentError("create", err);
     if (err.name === "ValidationError") {
       return res.status(400).json({ error: err.message });
     }
     if (err.code === 11000) {
-      return res.status(409).json({ error: "An assignment already exists with conflicting data. Please try again or contact support." });
+      return res.status(409).json({ error: "Duplicate key conflict — please try again." });
     }
-    res.status(500).json({ error: "Failed to create assignment", details: err.message });
+    return res.status(500).json({ error: "Failed to create assignment", details: err.message, errType: err.name });
   }
 };
+
+function _logAssignmentError(step, err) {
+  try {
+    fs.appendFileSync("/tmp/kodex-asgn-err.log", JSON.stringify({
+      ts: new Date().toISOString(), step,
+      name: err.name, code: err.code, msg: err.message,
+      stack: (err.stack || "").split("\n").slice(0, 4).join(" | "),
+    }) + "\n");
+  } catch (_) {}
+}
 
 // ══════════════════════════════════════════════════════════════════════════
 //  LECTURER — Update assignment metadata
