@@ -7942,7 +7942,6 @@ async function renderStudentQuizzes(content, showAll) {
   try {
     const url = showAll ? '/api/student/quizzes?showAll=true' : '/api/student/quizzes';
     const data = await api(url);
-    // Deduplicate: same title + startTime => keep the one with most questions
     const raw = data.quizzes || [];
     const seen = new Map();
     raw.forEach(q => {
@@ -7951,50 +7950,86 @@ async function renderStudentQuizzes(content, showAll) {
       if (!existing || (q.questionCount||0) > (existing.questionCount||0)) seen.set(key, q);
     });
     const quizzes = Array.from(seen.values());
+
+    const statusCfg = {
+      open:     { color: '#16a34a', bg: '#f0fdf4', border: '#bbf7d0', label: 'Open' },
+      upcoming: { color: '#7c3aed', bg: '#f5f3ff', border: '#ddd6fe', label: 'Upcoming' },
+      closed:   { color: '#6b7280', bg: '#f9fafb', border: '#e5e7eb', label: 'Closed' },
+    };
+
+    function quizCard(q) {
+      const cfg = statusCfg[q.status] || statusCfg.closed;
+      const scoreStr = q.isSubmitted
+        ? `${q.myScore ?? '?'}/${q.myMaxScore ?? '?'}`
+        : null;
+      const pct = q.isSubmitted && q.myMaxScore
+        ? Math.round((q.myScore / q.myMaxScore) * 100) : null;
+      const attemptsNote = q.maxAttempts === 0
+        ? 'Unlimited attempts'
+        : q.maxAttempts > 1
+          ? `${q.attemptsLeft ?? 0} of ${q.maxAttempts} attempts left`
+          : '';
+
+      return `
+      <div class="card" style="margin-bottom:12px;border-left:4px solid ${cfg.color};padding:16px 18px;">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:10px;">
+          <div style="flex:1;min-width:0;">
+            <div style="font-size:15px;font-weight:700;margin-bottom:4px;color:var(--text);">${esc(q.title)}</div>
+            <div style="font-size:12px;color:var(--text-muted);">${q.course?.title ? esc(q.course.title) : ''}${q.course?.code ? ' · <span style="font-weight:600;">'+esc(q.course.code)+'</span>' : ''}</div>
+          </div>
+          <span style="flex-shrink:0;padding:4px 10px;border-radius:20px;font-size:11px;font-weight:700;background:${cfg.bg};color:${cfg.color};border:1px solid ${cfg.border};">${cfg.label}</span>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;">
+          <div style="background:var(--bg);border-radius:8px;padding:8px 10px;">
+            <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-muted);margin-bottom:2px;">Questions</div>
+            <div style="font-size:15px;font-weight:700;">${q.questionCount || 0}</div>
+          </div>
+          <div style="background:var(--bg);border-radius:8px;padding:8px 10px;">
+            <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-muted);margin-bottom:2px;">Time Limit</div>
+            <div style="font-size:15px;font-weight:700;">${q.timeLimit || 30} min</div>
+          </div>
+          <div style="background:var(--bg);border-radius:8px;padding:8px 10px;">
+            <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-muted);margin-bottom:2px;">Opens</div>
+            <div style="font-size:12px;font-weight:600;">${new Date(q.startTime).toLocaleString()}</div>
+          </div>
+          <div style="background:var(--bg);border-radius:8px;padding:8px 10px;">
+            <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-muted);margin-bottom:2px;">Closes</div>
+            <div style="font-size:12px;font-weight:600;">${new Date(q.endTime).toLocaleString()}</div>
+          </div>
+        </div>
+
+        ${scoreStr ? `
+        <div style="display:flex;align-items:center;justify-content:space-between;background:${pct>=50?'#f0fdf4':'#fef2f2'};border:1px solid ${pct>=50?'#bbf7d0':'#fecaca'};border-radius:8px;padding:8px 12px;margin-bottom:12px;">
+          <span style="font-size:13px;color:var(--text-muted);">Your score ${q.scorePolicy==='best'&&q.attemptCount>1?' (best)':''}</span>
+          <span style="font-size:16px;font-weight:700;color:${pct>=50?'#16a34a':'#dc2626'};">${scoreStr} <span style="font-size:12px;">(${pct}%)</span></span>
+        </div>` : ''}
+        ${attemptsNote ? `<div style="font-size:11px;color:var(--text-muted);margin-bottom:10px;">${attemptsNote}</div>` : ''}
+
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          ${q.canContinue ? `<button class="btn btn-primary" style="flex:1;" onclick="startStudentQuiz('${q._id}')">▶ Continue Quiz</button>` : ''}
+          ${q.canAttempt && !q.canContinue ? `<button class="btn btn-primary" style="flex:1;" onclick="startStudentQuiz('${q._id}')">${q.attemptCount > 0 ? '↩ Retake' : '▶ Take Quiz'}</button>` : ''}
+          ${q.isSubmitted ? `<button class="btn btn-secondary" style="flex:1;" onclick="viewStudentResult('${q._id}')">📊 View Result</button>` : ''}
+          ${q.status === 'closed' && !q.isSubmitted ? `<div style="font-size:12px;color:var(--text-muted);padding:8px 0;">This quiz has closed.</div>` : ''}
+          ${q.status === 'upcoming' && !q.canAttempt ? `<div style="font-size:12px;color:#7c3aed;padding:8px 0;">Not open yet — check back at the start time.</div>` : ''}
+        </div>
+      </div>`;
+    }
+
     content.innerHTML = `
-      <div class="page-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;">
+      <div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;margin-bottom:16px;">
         <div><h2>Quizzes</h2><p>Your available quizzes and assessments</p></div>
-        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:0.9em;">
-          <input type="checkbox" ${showAll ? 'checked' : ''} onchange="renderStudentQuizzes(document.getElementById('main-content'), this.checked)">
-          Show past & upcoming
-        </label>
       </div>
-      <div class="card">
-        ${quizzes.length ? `
-          <table>
-            <thead><tr><th>Title</th><th>Course</th><th>Questions</th><th>Time Limit</th><th>Start Time</th><th>End Time</th><th>Status</th><th>Score</th><th>Actions</th></tr></thead>
-            <tbody>${quizzes.map(q => {
-              const statusColors = { upcoming: 'background:#6b7280;color:#fff;', open: 'background:#22c55e;color:#fff;', closed: 'background:#ef4444;color:#fff;' };
-              const statusLabel = q.status ? q.status.charAt(0).toUpperCase() + q.status.slice(1) : 'Unknown';
-              return `<tr>
-                <td><strong>${q.title}</strong>${q.description ? `<div style="font-size:0.85em;color:#6b7280;">${q.description}</div>` : ''}</td>
-                <td>${q.course?.code || 'N/A'}</td>
-                <td>${q.questionCount || 0}</td>
-                <td>${q.timeLimit || 30} min</td>
-                <td style="font-size:0.85em;">${new Date(q.startTime).toLocaleString()}</td>
-                <td style="font-size:0.85em;">${new Date(q.endTime).toLocaleString()}</td>
-                <td><span class="status-badge" style="${statusColors[q.status] || ''}">${statusLabel}</span></td>
-                <td>
-                  ${q.isSubmitted
-                    ? `<strong style="color:#3b82f6;">${q.myScore}/${q.myMaxScore}</strong>${q.scorePolicy==='best'&&q.attemptCount>1?' <span style="font-size:10px;color:#9ca3af;">(best)</span>':''}`
-                    : '—'}
-                  ${q.maxAttempts !== 1 && q.isSubmitted
-                    ? `<br><span style="font-size:10px;color:#9ca3af;">${q.maxAttempts===0?'Unlimited retakes':q.attemptsLeft===0?'No retakes left':(q.attemptsLeft+' retake'+(q.attemptsLeft!==1?'s':'')+' left')}</span>`
-                    : ''}
-                </td>
-                <td style="white-space:nowrap;">
-                  ${q.canContinue ? `<button class="btn btn-sm btn-primary" onclick="startStudentQuiz('${q._id}')">Continue</button>` : ''}
-                  ${q.canAttempt && !q.canContinue ? `<button class="btn btn-sm btn-primary" onclick="startStudentQuiz('${q._id}')">${q.attemptCount>0?'Retake':'Take Quiz'}</button>` : ''}
-                  ${q.isSubmitted ? `<button class="btn btn-sm btn-secondary" onclick="viewStudentResult('${q._id}')">View Result</button>` : ''}
-                </td>
-              </tr>`;
-            }).join('')}</tbody>
-          </table>
-        ` : '<div class="empty-state"><p>No quizzes available at the moment.</p></div>'}
-      </div>
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;font-weight:500;margin-bottom:16px;padding:10px 14px;background:var(--card);border-radius:8px;border:1px solid var(--border);">
+        <input type="checkbox" ${showAll ? 'checked' : ''} onchange="renderStudentQuizzes(document.getElementById('main-content'), this.checked)" style="accent-color:var(--primary);width:15px;height:15px;">
+        Show past &amp; upcoming quizzes
+      </label>
+      ${quizzes.length
+        ? quizzes.map(q => quizCard(q)).join('')
+        : '<div class="card"><div class="empty-state"><p>No quizzes available right now.</p><p style="font-size:13px;color:var(--text-muted);margin-top:4px;">Check back when your lecturer opens a quiz.</p></div></div>'}
     `;
   } catch (e) {
-    content.innerHTML = `<div class="card"><p>Error: ${e.message}</p></div>`;
+    content.innerHTML = `<div class="card"><p style="color:#ef4444;">Error: ${e.message}</p></div>`;
   }
 }
 

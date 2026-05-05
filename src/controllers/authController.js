@@ -4,7 +4,7 @@ const User = require("../models/User");
 const Company = require("../models/Company");
 const StudentRoster = require("../models/StudentRoster");
 const { generateToken } = require("../utils/jwt");
-const { sendWelcome, sendAdminPasswordResetNotice, sendPasswordReset, sendNewInstitutionAlert, sendLecturerWelcome, sendStudentWelcome, sendEmployeeWelcome, sendHodWelcome } = require("../services/emailService");
+const { sendWelcome, sendAdminPasswordResetNotice, sendPasswordReset, sendNewInstitutionAlert, sendLecturerWelcome, sendEmployeeWelcome, sendHodWelcome } = require("../services/emailService");
 const { sendOtp, normalisePhone } = require("../services/smsService");
 const { syncStudentToRoster } = require("../utils/rosterSync");
 
@@ -418,15 +418,7 @@ exports.registerStudent = async (req, res) => {
       semester: semester ? semester.trim() : null,
     });
 
-    if (user.email) {
-      sendStudentWelcome({
-        email: user.email,
-        name: user.name,
-        institutionName: company.name,
-        IndexNumber: user.IndexNumber,
-      }).catch(err => console.error('Student welcome email failed:', err.message));
-    }
-
+    // Welcome email is sent when the account is approved, not at registration.
     return res.status(201).json({
       message: "Registration successful! Your account is pending approval. Your HOD or admin will review and approve your account before you can sign in.",
     });

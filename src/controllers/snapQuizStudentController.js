@@ -84,7 +84,7 @@ exports.listQuizzes = async (req, res) => {
 exports.listAllQuizzes = async (req, res) => {
   try {
     const enrolledCourses = await Course.find({
-      company: req.companyId,
+      companyId: req.companyId,
       enrolledStudents: req.user._id,
     }).select("_id").lean();
 
@@ -145,6 +145,14 @@ exports.getQuiz = async (req, res) => {
 
     if (!quiz) return res.status(404).json({ error: "Quiz not found" });
 
+    // Verify the student is enrolled in the course this quiz belongs to.
+    if (quiz.course) {
+      const enrolled = await Course.findOne({
+        _id: quiz.course, companyId: req.companyId, enrolledStudents: req.user._id,
+      }).select("_id").lean();
+      if (!enrolled) return res.status(403).json({ error: "You are not enrolled in this course" });
+    }
+
     return res.json({ quiz });
   } catch (err) {
     console.error("[snapQuiz student getQuiz]", err);
@@ -168,6 +176,14 @@ exports.startAttempt = async (req, res) => {
     }).lean();
 
     if (!quiz) return res.status(404).json({ error: "Quiz not found" });
+
+    // Verify the student is enrolled in the course this quiz belongs to.
+    if (quiz.course) {
+      const enrolled = await Course.findOne({
+        _id: quiz.course, companyId: req.companyId, enrolledStudents: req.user._id,
+      }).select("_id").lean();
+      if (!enrolled) return res.status(403).json({ error: "You are not enrolled in this course" });
+    }
 
     // Check window.
     const now = new Date();

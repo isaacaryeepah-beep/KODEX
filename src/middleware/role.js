@@ -68,7 +68,9 @@ const requireMode = (mode) => {
       return res.status(404).json({ error: "Company not found" });
     }
 
-    if (company.mode !== mode) {
+    // "both" mode companies run academic AND corporate features — always allowed.
+    const modeAllowed = company.mode === mode || company.mode === "both";
+    if (!modeAllowed) {
       return res.status(403).json({
         error: `This feature is only available in ${mode} mode`,
       });

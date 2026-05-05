@@ -34,7 +34,7 @@ const STAFF = ["lecturer", "admin", "superadmin"];
 // ---------------------------------------------------------------------------
 
 async function getCourse(req, res) {
-  const course = await Course.findOne({ _id: req.params.courseId, company: req.user.company }).lean();
+  const course = await Course.findOne({ _id: req.params.courseId, companyId: req.user.company }).lean();
   if (!course) { res.status(404).json({ error: "Course not found" }); return null; }
   return course;
 }
