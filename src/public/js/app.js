@@ -2288,6 +2288,7 @@ function buildSidebar() {
     case 'lecturer':
       links.push({ id: 'sessions', label: 'Sessions', icon: sessionsIcon() });
       links.push({ id: 'attendance-device', label: 'Attendance Device', icon: svgIcon('<rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/>') });
+      links.push({ sep: true, label: 'CONTENT' });
       links.push({ id: 'search', label: 'Search', icon: svgIcon('<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>') });
       links.push({ id: 'courses', label: 'Courses', icon: coursesIcon() });
       links.push({ id: 'quizzes', label: 'Quizzes', icon: quizzesIcon() });
@@ -2295,11 +2296,14 @@ function buildSidebar() {
       links.push({ id: 'question-bank', label: 'Question Bank', icon: svgIcon('<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>') });
       links.push({ id: 'assignments', label: 'Assignments / Quiz', icon: assignmentsIcon() });
       links.push({ id: 'gradebook', label: 'Grade Book', icon: svgIcon('<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>') });
+      links.push({ sep: true, label: 'COMMUNICATE' });
       links.push({ id: 'messages', label: 'Messages', icon: svgIcon('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>') });
       links.push({ id: 'meetings', label: 'Meetings', icon: meetingsIcon() });
+      links.push({ sep: true, label: 'INSIGHTS' });
       links.push({ id: 'lecturer-performance', label: 'Performance', icon: svgIcon('<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>') });
       links.push({ id: 'reports', label: 'Reports', icon: reportsIcon() });
       links.push({ id: 'announcements', label: 'Announcements', icon: svgIcon('<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>') });
+      links.push({ sep: true, label: 'SUPPORT' });
       links.push({ id: 'faq-center', label: 'FAQ Center', icon: svgIcon('<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>') });
       links.push({ id: 'subscription', label: 'Subscription', icon: subscriptionIcon() });
       break;
@@ -2358,7 +2362,10 @@ function buildSidebar() {
   }
 
   nav.innerHTML =
-    [...links, ...universalLinks].map(l => `<a onclick="navigateTo('${l.id}')" id="nav-${l.id}" data-tooltip="${l.label}">${l.id==='announcements'?'<div class="ann-line"></div>':''} ${l.icon}<span>${l.label}</span>${l.id==='announcements'?'<span id="ann-badge" style="display:none;position:absolute;top:4px;right:4px;background:#ef4444;color:#fff;font-size:9px;font-weight:700;padding:1px 5px;border-radius:20px;min-width:14px;text-align:center;line-height:14px;"></span>':''}</a>`).join('');
+    [...links, ...universalLinks].map(l => {
+      if (l.sep) return l.label ? `<div class="nav-section-label">${l.label}</div>` : `<div class="nav-sep"></div>`;
+      return `<a onclick="navigateTo('${l.id}')" id="nav-${l.id}" data-tooltip="${l.label}">${l.id==='announcements'?'<div class="ann-line"></div>':''} ${l.icon}<span>${l.label}</span>${l.id==='announcements'?'<span id="ann-badge" style="display:none;position:absolute;top:4px;right:4px;background:#ef4444;color:#fff;font-size:9px;font-weight:700;padding:1px 5px;border-radius:20px;min-width:14px;text-align:center;line-height:14px;"></span>':''}</a>`;
+    }).join('');
 }
 
 function navigateTo(view) {
@@ -6960,13 +6967,13 @@ function _renderCoursesHTML(content, courses, isOffline) {
     let actions = '';
     if (!isOffline && canManageRoster) {
       const uploadBtn = approved
-        ? `<button class="btn btn-primary btn-sm" onclick="showUploadRosterModal('${course._id}','${codeEsc}')">Upload Students</button>`
-        : `<span style="font-size:11px;color:var(--text-muted);font-style:italic;">${course.approvalStatus === 'pending' ? 'Awaiting HOD approval' : 'Rejected — contact HOD'}</span>`;
+        ? `<button class="btn btn-primary btn-sm" style="display:inline-flex;align-items:center;gap:5px" onclick="showUploadRosterModal('${course._id}','${codeEsc}')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>Upload Students</button>`
+        : `<span style="font-size:11px;color:var(--text-muted);font-style:italic">${course.approvalStatus === 'pending' ? 'Awaiting HOD approval' : 'Rejected — contact HOD'}</span>`;
       actions = `
         ${uploadBtn}
-        <button class="btn btn-sm" style="background:var(--bg);border:1px solid var(--border);" onclick="viewRoster('${course._id}','${codeEsc}')">View Roster</button>
-        <button class="btn btn-sm" style="background:#6366f1;color:#fff;" onclick="openBulkEmailModal('${course._id}','${titleEsc}')">✉️ Email</button>
-        <button class="btn btn-sm" style="background:#10b981;color:#fff;" onclick="openBulkSmsModal('${course._id}','${titleEsc}')">💬 SMS</button>`;
+        <button class="btn btn-sm" style="background:#f8fafc;border:1px solid #e2e8f0;color:#475569;display:inline-flex;align-items:center;gap:5px" onclick="viewRoster('${course._id}','${codeEsc}')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>View Roster</button>
+        <button class="btn btn-sm" style="background:#ede9fe;color:#6d28d9;border:1px solid #ddd6fe;display:inline-flex;align-items:center;gap:5px" onclick="openBulkEmailModal('${course._id}','${titleEsc}')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>Email</button>
+        <button class="btn btn-sm" style="background:#dcfce7;color:#166534;border:1px solid #bbf7d0;display:inline-flex;align-items:center;gap:5px" onclick="openBulkSmsModal('${course._id}','${titleEsc}')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>SMS</button>`;
     } else if (!isOffline && isStudent) {
       actions = `<button class="btn btn-sm" style="background:#f0fdf4;color:#16a34a;border:1px solid #bbf7d0;" onclick="generateCertificate('${course._id}','${titleEsc}')">🎓 Certificate</button>`;
     } else if (!isOffline) {
@@ -6974,34 +6981,46 @@ function _renderCoursesHTML(content, courses, isOffline) {
     }
 
     return `
-      <div class="card" style="padding:16px 18px;margin-bottom:12px;">
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap;margin-bottom:8px;">
-          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-            <span style="font-family:monospace;font-size:12px;font-weight:700;background:#eff6ff;color:#1d4ed8;padding:3px 9px;border-radius:6px;">${esc(course.code)}</span>
-            <span style="font-size:15px;font-weight:700;">${esc(course.title)}</span>
+      <div style="background:#fff;border:1px solid #e8eaed;border-radius:14px;padding:18px 20px;margin-bottom:12px;box-shadow:0 1px 4px rgba(0,0,0,.05);transition:box-shadow .18s" onmouseover="this.style.boxShadow='0 4px 18px rgba(0,0,0,.09)'" onmouseout="this.style.boxShadow='0 1px 4px rgba(0,0,0,.05)'">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap;margin-bottom:10px">
+          <div style="display:flex;align-items:center;gap:10px;min-width:0">
+            <div style="width:38px;height:38px;border-radius:10px;background:#eff6ff;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+            </div>
+            <div>
+              <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                <span style="font-family:monospace;font-size:11.5px;font-weight:700;background:#eff6ff;color:#1d4ed8;padding:2px 8px;border-radius:5px">${esc(course.code)}</span>
+                <span style="font-size:15px;font-weight:700;color:#0f172a">${esc(course.title)}</span>
+              </div>
+              <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:12px;color:#64748b;margin-top:5px">${metaItems}</div>
+            </div>
           </div>
           <div>${statusBadge(course)}</div>
         </div>
-        <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;font-size:12px;color:var(--text-muted);margin-bottom:12px;">
-          ${metaItems}
-        </div>
-        <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
+        <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding-top:10px;border-top:1px solid #f1f5f9">
           ${actions}
         </div>
       </div>`;
   }
 
   content.innerHTML = `
-    <div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;margin-bottom:20px">
       <div>
-        <h2>Courses</h2>
-        <p>Manage academic courses${isOffline ? ' <span style="color:#f59e0b;font-weight:600;">(Offline — cached)</span>' : ''}</p>
+        <h2 style="font-size:22px;font-weight:800;letter-spacing:-.5px;color:#0f172a;margin-bottom:2px">${isStudent ? 'My Courses' : 'Courses'}</h2>
+        <p style="color:#64748b;font-size:13px">${isStudent ? 'Your enrolled academic courses' : 'Manage academic courses'}${isOffline ? ' · <span style="color:#f59e0b;font-weight:600">Offline — cached</span>' : ''}</p>
       </div>
-      ${canCreate && !isOffline ? '<button class="btn btn-primary" onclick="showCreateCourseModal()">+ Create Course</button>' : ''}
+      ${canCreate && !isOffline ? `<button class="btn btn-primary" onclick="showCreateCourseModal()" style="display:flex;align-items:center;gap:6px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Create Course</button>` : ''}
     </div>
     ${courses.length
       ? courses.map(courseCard).join('')
-      : '<div class="card"><div class="empty-state"><p>No courses found</p></div></div>'}
+      : `<div style="background:#fff;border:1px solid #e8eaed;border-radius:16px;padding:60px 20px;text-align:center;box-shadow:0 1px 4px rgba(0,0,0,.05)">
+          <div style="width:56px;height:56px;border-radius:16px;background:#eff6ff;display:flex;align-items:center;justify-content:center;margin:0 auto 16px">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="1.8"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+          </div>
+          <h3 style="font-size:16px;font-weight:700;color:#0f172a;margin-bottom:6px">No courses yet</h3>
+          <p style="color:#64748b;font-size:13px;margin-bottom:20px">${canCreate ? 'Create your first course to get started' : 'No courses have been assigned to you yet'}</p>
+          ${canCreate && !isOffline ? '<button class="btn btn-primary" onclick="showCreateCourseModal()">+ Create Course</button>' : ''}
+        </div>`}
   `;
 }
 
@@ -7255,37 +7274,70 @@ function closeQuizModal() {
 async function renderLecturerQuizzes(content) {
   try {
     const data = await api('/api/lecturer/quizzes');
+    const now = new Date();
+    const quizCard = q => {
+      const start = new Date(q.startTime), end = new Date(q.endTime);
+      const isLive = now >= start && now <= end, isClosed = now > end;
+      const statusColor = isLive ? {bg:'#dcfce7',color:'#166534',dot:'#16a34a',label:'Live'} : isClosed ? {bg:'#fee2e2',color:'#991b1b',dot:'#dc2626',label:'Closed'} : {bg:'#f1f5f9',color:'#475569',dot:'#94a3b8',label:'Scheduled'};
+      const fmt = d => d.toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
+      return `<div style="background:#fff;border:1px solid #e8eaed;border-radius:14px;padding:18px 20px;margin-bottom:12px;box-shadow:0 1px 4px rgba(0,0,0,.05);transition:box-shadow .18s" onmouseover="this.style.boxShadow='0 4px 18px rgba(0,0,0,.09)'" onmouseout="this.style.boxShadow='0 1px 4px rgba(0,0,0,.05)'">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:12px">
+          <div style="display:flex;align-items:center;gap:10px;min-width:0">
+            <div style="width:38px;height:38px;border-radius:10px;background:#eff6ff;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+            </div>
+            <div>
+              <div style="font-size:14px;font-weight:700;color:#0f172a">${esc(q.title)}</div>
+              <div style="display:flex;align-items:center;gap:6px;margin-top:3px;flex-wrap:wrap">
+                ${q.course?.code?`<span style="background:#eff6ff;color:#1d4ed8;padding:1px 7px;border-radius:5px;font-size:11px;font-weight:700">${esc(q.course.code)}</span>`:''}
+                <span style="font-size:11px;color:#94a3b8;display:flex;align-items:center;gap:4px"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>${fmt(start)} — ${fmt(end)}</span>
+              </div>
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
+            <span style="display:flex;align-items:center;gap:5px;background:${statusColor.bg};color:${statusColor.color};padding:4px 10px;border-radius:20px;font-size:11px;font-weight:700">
+              <span style="width:6px;height:6px;border-radius:50%;background:${statusColor.dot};flex-shrink:0${isLive?';animation:pulse 1.8s infinite':''}"></span>${statusColor.label}
+            </span>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:16px;margin-bottom:14px;padding:10px 12px;background:#f8fafc;border-radius:8px">
+          <span style="font-size:12px;color:#64748b;display:flex;align-items:center;gap:5px"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><strong style="color:#0f172a">${q.questionCount||0}</strong> questions</span>
+          <span style="font-size:12px;color:#64748b;display:flex;align-items:center;gap:5px"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg><strong style="color:#0f172a">${q.attemptCount||0}</strong> submissions</span>
+          <span style="font-size:12px;color:#64748b;display:flex;align-items:center;gap:5px"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg><strong style="color:#0f172a">${q.timeLimit||30}</strong> min limit</span>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-secondary btn-sm" onclick="viewLecturerQuizDetail('${q._id}')">Details</button>
+          <button class="btn btn-primary btn-sm" onclick="showAddQuestionsView('${q._id}')">Questions</button>
+          <button class="btn btn-sm" style="background:#dcfce7;color:#166534;border:1px solid #bbf7d0;font-weight:600" onclick="viewQuizResults('${q._id}')">Results</button>
+          <button class="btn btn-sm" style="background:#fee2e2;color:#991b1b;border:1px solid #fecaca;font-weight:600" onclick="openLiveMonitor('${q._id}')">Monitor</button>
+          <button class="btn btn-sm" style="background:#f1f5f9;color:#475569;border:1px solid #e2e8f0" onclick="copyQuizId('${q._id}')">Copy ID</button>
+          <button class="btn btn-sm" style="background:#fff0f0;color:#dc2626;border:1px solid #fecaca" onclick="deleteLecturerQuiz('${q._id}')">Delete</button>
+        </div>
+      </div>`;
+    };
     content.innerHTML = `
-      <div class="page-header"><h2>Quizzes</h2><p>Manage your quizzes and assessments</p></div>
-      <div class="actions-bar"><button class="btn btn-primary btn-sm" onclick="showCreateQuizModal()">Create Quiz</button></div>
-      <div class="card">
-        ${data.quizzes.length ? `
-          <table>
-            <thead><tr><th>Title</th><th>Course</th><th>Questions</th><th>Submissions</th><th>Time Range</th><th>Status</th><th>Actions</th></tr></thead>
-            <tbody>${data.quizzes.map(q => `
-              <tr>
-                <td><strong>${q.title}</strong></td>
-                <td>${q.course?.code || 'N/A'}</td>
-                <td>${q.questionCount || 0}</td>
-                <td>${q.attemptCount || 0}</td>
-                <td style="font-size:0.85em;">${new Date(q.startTime).toLocaleString()} — ${new Date(q.endTime).toLocaleString()}</td>
-                <td>${quizStatusBadge(q)}</td>
-                <td style="white-space:nowrap;">
-                  <button class="btn btn-sm btn-secondary" onclick="viewLecturerQuizDetail('${q._id}')">Details</button>
-                  <button class="btn btn-sm btn-primary" onclick="showAddQuestionsView('${q._id}')">Questions</button>
-                  <button class="btn btn-sm btn-success" onclick="viewQuizResults('${q._id}')">Results</button>
-                  <button class="btn btn-sm" style="background:#dc2626;color:#fff;font-weight:700;" onclick="openLiveMonitor('${q._id}')" title="Open Live Proctor Monitor">🔴 Monitor</button>
-                  <button class="btn btn-sm" style="background:#0ea5e9;color:#fff;" onclick="copyQuizId('${q._id}')" title="Copy Quiz ID">📋 ID</button>
-                  <button class="btn btn-sm btn-danger" onclick="deleteLecturerQuiz('${q._id}')">Delete</button>
-                </td>
-              </tr>
-            `).join('')}</tbody>
-          </table>
-        ` : '<div class="empty-state"><p>No quizzes found. Create your first quiz!</p></div>'}
+      <div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;margin-bottom:20px">
+        <div>
+          <h2 style="font-size:22px;font-weight:800;letter-spacing:-.5px;color:#0f172a;margin-bottom:2px">Quizzes</h2>
+          <p style="color:#64748b;font-size:13px">Create and manage proctored quizzes for your students</p>
+        </div>
+        <button class="btn btn-primary" onclick="showCreateQuizModal()" style="display:flex;align-items:center;gap:6px">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Create Quiz
+        </button>
       </div>
+      ${data.quizzes.length ? data.quizzes.map(quizCard).join('') : `
+        <div style="text-align:center;padding:60px 20px;background:#fff;border:1px solid #e8eaed;border-radius:16px">
+          <div style="width:56px;height:56px;border-radius:16px;background:#eff6ff;display:flex;align-items:center;justify-content:center;margin:0 auto 16px">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="1.8"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+          </div>
+          <h3 style="font-size:17px;font-weight:700;color:#0f172a;margin-bottom:6px">No quizzes yet</h3>
+          <p style="color:#64748b;font-size:13px;margin-bottom:20px">Create your first proctored quiz and share the ID with your students</p>
+          <button class="btn btn-primary" onclick="showCreateQuizModal()">+ Create Your First Quiz</button>
+        </div>`}
     `;
   } catch (e) {
-    content.innerHTML = `<div class="card"><p>Error: ${e.message}</p></div>`;
+    content.innerHTML = `<div class="card"><p style="color:#dc2626">Error: ${e.message}</p></div>`;
   }
 }
 
@@ -10262,17 +10314,23 @@ async function renderSearch() {
     : 'Search by name, email, employee ID...';
 
   content.innerHTML =
-    '<div class="page-header"><h2>Search</h2><p>Find ' + (isAcademic ? 'students, lecturers, or staff' : 'employees or staff') + ' quickly</p></div>' +
-    '<div class="card" style="margin-bottom:16px">' +
-      '<div style="display:flex;gap:10px;align-items:center">' +
-        '<input type="text" id="search-input" placeholder="' + placeholder + '" style="flex:1;padding:12px 16px;border:1px solid var(--border);border-radius:8px;font-size:14px;outline:none" oninput="debounceSearch()" onkeydown="if(event.key===\'Enter\')doSearch()">' +
-        '<button class="btn btn-primary" onclick="doSearch()" style="padding:12px 20px">Search</button>' +
+    '<div class="page-header" style="margin-bottom:20px"><h2 style="font-size:22px;font-weight:800;letter-spacing:-.5px;color:#0f172a;margin-bottom:2px">Search</h2><p style="color:#64748b;font-size:13px">Find ' + (isAcademic ? 'students, lecturers, or staff' : 'employees or staff') + ' quickly</p></div>' +
+    '<div style="background:#fff;border:1px solid #e8eaed;border-radius:14px;padding:18px 20px;margin-bottom:16px;box-shadow:0 1px 4px rgba(0,0,0,.05)">' +
+      '<div style="display:flex;gap:10px;align-items:center;margin-bottom:12px">' +
+        '<div style="flex:1;position:relative">' +
+          '<svg style="position:absolute;left:12px;top:50%;transform:translateY(-50%);pointer-events:none;color:#94a3b8" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>' +
+          '<input type="text" id="search-input" placeholder="' + placeholder + '" style="width:100%;padding:11px 14px 11px 38px;border:1.5px solid #e2e8f0;border-radius:10px;font-size:13.5px;font-family:inherit;outline:none;transition:border-color .15s;box-sizing:border-box" onfocus="this.style.borderColor=\'#2563eb\'" onblur="this.style.borderColor=\'#e2e8f0\'" oninput="debounceSearch()" onkeydown="if(event.key===\'Enter\')doSearch()">' +
+        '</div>' +
+        '<button class="btn btn-primary" onclick="doSearch()" style="padding:11px 20px;border-radius:10px;font-weight:600;display:flex;align-items:center;gap:6px;white-space:nowrap"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>Search</button>' +
       '</div>' +
-      '<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap" id="search-filters">' + filterBtns + '</div>' +
+      '<div style="display:flex;gap:6px;flex-wrap:wrap" id="search-filters">' + filterBtns + '</div>' +
     '</div>' +
     '<div id="search-results">' +
-      '<div class="empty-state" style="padding:40px 20px;text-align:center;color:var(--text-light)">' +
-        '<p>Enter a name, email' + (isAcademic ? ', or index number' : ', or employee ID') + ' to search</p>' +
+      '<div style="text-align:center;padding:48px 20px">' +
+        '<div style="width:52px;height:52px;border-radius:14px;background:#f1f5f9;display:flex;align-items:center;justify-content:center;margin:0 auto 14px">' +
+          '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="1.8"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>' +
+        '</div>' +
+        '<p style="color:#94a3b8;font-size:13.5px">Enter a name, email' + (isAcademic ? ', or index number' : ', or employee ID') + ' to search</p>' +
       '</div>' +
     '</div>';
 }
@@ -11929,20 +11987,29 @@ async function renderLecturerTimetable() {
     _timetableCourses = (courseData.courses || courseData || []);
 
     content.innerHTML = `
-      <div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px">
+      <div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;margin-bottom:20px">
         <div>
-          <h2>My Schedule</h2>
-          <p>Your weekly class timetable — click any slot to edit, + to add a new class</p>
+          <h2 style="font-size:22px;font-weight:800;letter-spacing:-.5px;color:#0f172a;margin-bottom:2px">My Schedule</h2>
+          <p style="color:#64748b;font-size:13px">Your weekly class timetable — click any slot to edit</p>
         </div>
-        <button class="btn btn-primary" onclick="openAddSlotModal()">+ Add Class</button>
+        <button class="btn btn-primary" onclick="openAddSlotModal()" style="display:flex;align-items:center;gap:6px">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Add Class
+        </button>
       </div>
       ${_timetableSlots.length === 0
-        ? `<div class="card" style="text-align:center;padding:40px">
-            <div style="font-size:48px;margin-bottom:12px">📅</div>
-            <p style="color:var(--text-muted);margin-bottom:16px">No classes scheduled yet. Add your first class to get started.</p>
-            <button class="btn btn-primary" onclick="openAddSlotModal()">+ Add Your First Class</button>
+        ? `<div style="background:#fff;border:1px solid #e8eaed;border-radius:16px;padding:60px 20px;text-align:center;box-shadow:0 1px 4px rgba(0,0,0,.05)">
+            <div style="width:56px;height:56px;border-radius:16px;background:#eff6ff;display:flex;align-items:center;justify-content:center;margin:0 auto 16px">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="1.8"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+            </div>
+            <h3 style="font-size:16px;font-weight:700;color:#0f172a;margin-bottom:6px">No classes scheduled yet</h3>
+            <p style="color:#64748b;font-size:13px;margin-bottom:22px">Add your first class to build out your weekly timetable</p>
+            <button class="btn btn-primary" onclick="openAddSlotModal()" style="display:inline-flex;align-items:center;gap:6px">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              Add Your First Class
+            </button>
           </div>`
-        : `<div class="card" style="overflow-x:auto">${_timetableGrid(_timetableSlots, true)}</div>`
+        : `<div style="background:#fff;border:1px solid #e8eaed;border-radius:14px;overflow-x:auto;box-shadow:0 1px 4px rgba(0,0,0,.05)">${_timetableGrid(_timetableSlots, true)}</div>`
       }`;
   } catch(e) {
     content.innerHTML = `<div class="card"><p style="color:var(--danger)">Error: ${e.message}</p></div>`;
@@ -11957,16 +12024,19 @@ async function renderStudentTimetable() {
     const slotData = await api('/api/timetable');
     const slots = slotData.slots || [];
     content.innerHTML = `
-      <div class="page-header">
-        <h2>My Schedule</h2>
-        <p>Your weekly class timetable based on your enrolled courses</p>
+      <div class="page-header" style="margin-bottom:20px">
+        <h2 style="font-size:22px;font-weight:800;letter-spacing:-.5px;color:#0f172a;margin-bottom:2px">My Schedule</h2>
+        <p style="color:#64748b;font-size:13px">Your weekly class timetable based on enrolled courses</p>
       </div>
       ${slots.length === 0
-        ? `<div class="card" style="text-align:center;padding:40px">
-            <div style="font-size:48px">📅</div>
-            <p style="margin-top:12px;color:var(--text-muted)">No classes scheduled yet. Your lecturers haven't added timetable slots yet.</p>
+        ? `<div style="background:#fff;border:1px solid #e8eaed;border-radius:16px;padding:60px 20px;text-align:center;box-shadow:0 1px 4px rgba(0,0,0,.05)">
+            <div style="width:56px;height:56px;border-radius:16px;background:#eff6ff;display:flex;align-items:center;justify-content:center;margin:0 auto 16px">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="1.8"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+            </div>
+            <h3 style="font-size:16px;font-weight:700;color:#0f172a;margin-bottom:6px">No classes scheduled yet</h3>
+            <p style="color:#64748b;font-size:13px">Your lecturers haven't added timetable slots yet. Check back soon.</p>
           </div>`
-        : `<div class="card" style="overflow-x:auto">${_timetableGrid(slots, false)}</div>`
+        : `<div style="background:#fff;border:1px solid #e8eaed;border-radius:14px;overflow-x:auto;box-shadow:0 1px 4px rgba(0,0,0,.05)">${_timetableGrid(slots, false)}</div>`
       }`;
   } catch(e) {
     content.innerHTML = `<div class="card"><p style="color:var(--danger)">Error: ${e.message}</p></div>`;
