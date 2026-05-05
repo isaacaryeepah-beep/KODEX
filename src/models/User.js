@@ -256,6 +256,18 @@ const userSchema = new mongoose.Schema(
       at:          { type: Date,   default: null },
       _id: false,
     },
+
+    // ── New-device 6-hour account lock (DIKLY snap-quiz / meeting gate) ─────
+    accountDeviceLock: {
+      isLocked:      { type: Boolean, default: false },
+      lockedAt:      { type: Date,    default: null },
+      lockedUntil:   { type: Date,    default: null },
+      triggerDevice: { type: String,  default: null }, // fingerprint that triggered lock
+      knownDevice:   { type: String,  default: null }, // previously known device
+      unlockedBy:    { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
+      unlockedAt:    { type: Date,    default: null },
+      _id: false,
+    },
   },
   {
     timestamps: true,

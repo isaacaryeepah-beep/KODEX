@@ -28,4 +28,21 @@ const verifyToken = (token) => {
   return decoded;
 };
 
-module.exports = { generateToken, verifyToken };
+// ── Meeting access token (short-lived, single-use context) ──────────────────
+const generateMeetingToken = (userId, meetingId, deviceId) => {
+  if (!process.env.JWT_SECRET) throw new Error("JWT_SECRET is not set");
+  return jwt.sign(
+    { id: userId, meetingId, deviceId: deviceId || null, type: "meeting" },
+    process.env.JWT_SECRET,
+    { expiresIn: "30m" }
+  );
+};
+
+const verifyMeetingToken = (token) => {
+  if (!process.env.JWT_SECRET) throw new Error("JWT_SECRET is not set");
+  const decoded = jwt.verify(token, process.env.JWT_SECRET);
+  if (decoded.type !== "meeting") throw new Error("Invalid token type");
+  return decoded;
+};
+
+module.exports = { generateToken, verifyToken, generateMeetingToken, verifyMeetingToken };

@@ -853,9 +853,15 @@ function toast(msg, type = 'info') {
 async function api(method, path, body, extraHeaders) {
   const opts = {
     method,
-    headers: { 'Content-Type': 'application/json', ...extraHeaders },
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Request-Time': Date.now().toString(),
+      ...extraHeaders,
+    },
   };
   if (state.token) opts.headers['Authorization'] = `Bearer ${state.token}`;
+  if (state.deviceId) opts.headers['X-Device-ID'] = state.deviceId;
+  if (state.sessionToken) opts.headers['X-Session-Token'] = state.sessionToken;
   if (body) opts.body = JSON.stringify(body);
 
   let res;

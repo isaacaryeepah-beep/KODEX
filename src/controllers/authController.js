@@ -771,6 +771,40 @@ exports.login = async (req, res) => {
       });
     }
 
+    // ── New-device 6-hour lock (DIKLY snap-quiz / meeting gate) ──────────────
+    // If user already has an accountDeviceLock that is still active, enforce it.
+    if (user.accountDeviceLock?.isLocked && user.accountDeviceLock?.lockedUntil) {
+      const lockExpiry = new Date(user.accountDeviceLock.lockedUntil);
+      if (lockExpiry > new Date()) {
+        const remainingMs = lockExpiry - Date.now();
+        const remainingMins = Math.ceil(remainingMs / 60000);
+        return res.status(403).json({
+          error: "Your account is temporarily locked due to a new device login. Please wait or contact your admin/HOD to unlock.",
+          accountLocked: true,
+          lockedUntil: lockExpiry.toISOString(),
+          remainingMins,
+        });
+      } else {
+        // Lock expired naturally — clear it
+        user.accountDeviceLock.isLocked = false;
+      }
+    }
+
+    // Detect login from a new device fingerprint → trigger 6-hour lock
+    if (deviceId && user.deviceId && user.deviceId !== deviceId) {
+      const now = new Date();
+      user.accountDeviceLock = {
+        isLocked: true,
+        lockedAt: now,
+        lockedUntil: new Date(now.getTime() + SIX_HOURS_MS),
+        triggerDevice: deviceId,
+        knownDevice: user.deviceId,
+        unlockedBy: null,
+        unlockedAt: null,
+      };
+      // Allow login but the quiz/meeting gate will block them
+    }
+
     user.lastLoginAt = new Date();
     if (deviceId) user.deviceId = deviceId;
     await user.save();
@@ -801,6 +835,10 @@ exports.login = async (req, res) => {
         lastLoginAt: user.lastLoginAt,
         subscriptionExpiry: user.subscriptionExpiry || null,
         subscriptionStatus: user.subscriptionStatus || null,
+        accountDeviceLock: user.accountDeviceLock?.isLocked ? {
+          isLocked: true,
+          lockedUntil: user.accountDeviceLock.lockedUntil,
+        } : null,
       },
       trial: company ? {
         active: company.isTrialActive,

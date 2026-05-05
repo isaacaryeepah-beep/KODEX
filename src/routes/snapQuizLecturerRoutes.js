@@ -87,8 +87,9 @@ router.delete("/:quizId/questions/:questionId",   ownsQuiz, ctrl.deleteQuestion)
 
 // ─── Attempt monitoring ───────────────────────────────────────────────────────
 
-router.get("/:quizId/attempts",              ownsQuiz, ctrl.listAttempts);
-router.get("/:quizId/attempts/:attemptId",   ownsQuiz, ctrl.getAttemptDetail);
+router.get(   "/:quizId/attempts",                       ownsQuiz, ctrl.listAttempts);
+router.get(   "/:quizId/attempts/:attemptId",            ownsQuiz, ctrl.getAttemptDetail);
+router.post(  "/:quizId/attempts/:attemptId/force-submit", ownsQuiz, ctrl.forceSubmitAttempt);
 
 // ─── Violation log ────────────────────────────────────────────────────────────
 

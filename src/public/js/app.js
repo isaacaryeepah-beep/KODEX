@@ -4846,12 +4846,30 @@ async function renderStudentDashboard(content) {
     return labels[m] || m;
   };
 
+  // Device lock banner
+  const devLock = currentUser?.accountDeviceLock;
+  const devLockBanner = devLock?.isLocked && devLock?.lockedUntil ? (() => {
+    const until = new Date(devLock.lockedUntil);
+    const remaining = Math.max(0, until - Date.now());
+    const hrs = Math.floor(remaining / 3600000);
+    const mins = Math.ceil((remaining % 3600000) / 60000);
+    const timeStr = hrs > 0 ? `${hrs}h ${mins}m` : `${mins}m`;
+    return `<div style="background:#fef3c7;border:1.5px solid #f59e0b;border-radius:12px;padding:16px 20px;margin-bottom:16px;display:flex;gap:14px;align-items:flex-start">
+      <div style="font-size:22px;flex-shrink:0">\ud83d\udd12</div>
+      <div>
+        <div style="font-weight:700;color:#92400e;font-size:14px">Account Temporarily Locked \u2014 New Device Detected</div>
+        <div style="color:#78350f;font-size:13px;margin-top:4px">You logged in from a new device. Quizzes and meetings are blocked for <strong>${timeStr}</strong> (until ${until.toLocaleTimeString()}). Contact your admin or HOD to unlock early.</div>
+      </div>
+    </div>`;
+  })() : '';
+
   content.innerHTML = `
     <div class="page-header">
       <h2>Welcome back, ${currentUser.name.split(' ')[0]}</h2>
       <p>${currentUser.company?.name || 'Your institution'}${currentUser.indexNumber ? ' \u2022 ' + currentUser.indexNumber : ''}</p>
     </div>
-    
+    ${devLockBanner}
+
     ${activeSession ? `
       <div class="card" style="border-left:4px solid var(--success);background:linear-gradient(135deg,#f0fdf4,#ecfdf5);cursor:pointer" onclick="navigateTo('mark-attendance')">
         <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
@@ -6531,37 +6549,56 @@ async function renderMeetings() {
     const canManage = canManageExisting;
 
     const statusStyle = (s) => {
-      const map = { scheduled: 'background:#3b82f6;color:#fff;', active: 'background:#22c55e;color:#fff;', completed: 'background:#6b7280;color:#fff;', cancelled: 'background:#ef4444;color:#fff;' };
+      const map = {
+        scheduled: 'background:#3b82f6;color:#fff;',
+        live:      'background:#22c55e;color:#fff;',
+        active:    'background:#22c55e;color:#fff;',
+        ended:     'background:#6b7280;color:#fff;',
+        completed: 'background:#6b7280;color:#fff;',
+        cancelled: 'background:#ef4444;color:#fff;',
+      };
       return map[s] || '';
     };
+    const statusLabel = s => ({ scheduled:'Scheduled', live:'● LIVE', active:'● LIVE', ended:'Ended', completed:'Ended', cancelled:'Cancelled' }[s] || s);
+
+    // Device lock warning banner
+    const devLock = currentUser?.accountDeviceLock;
+    const isDeviceLocked = devLock?.isLocked && devLock?.lockedUntil && new Date(devLock.lockedUntil) > new Date();
+    const lockBanner = isDeviceLocked ? `
+      <div style="background:#fef3c7;border:1.5px solid #f59e0b;border-radius:10px;padding:12px 16px;margin-bottom:14px;font-size:13px;color:#92400e">
+        🔒 <strong>Device Lock Active</strong> — Joining meetings is blocked until ${new Date(devLock.lockedUntil).toLocaleTimeString()}. Contact your admin or HOD to unlock early.
+      </div>` : '';
 
     content.innerHTML = `
-      <div class="page-header"><h2>Meetings</h2><p>Jitsi video meetings for your organization</p></div>
+      <div class="page-header"><h2>Meetings</h2><p>DIKLY secure video meetings</p></div>
+      ${lockBanner}
       ${canCreate ? '<div class="actions-bar"><button class="btn btn-primary btn-sm" onclick="showCreateMeetingModal()">Schedule Meeting</button></div>' : ''}
       <div class="card">
         ${data.meetings.length ? `
           <table>
-            <thead><tr><th>Title</th><th>Host</th><th>Scheduled</th><th>Duration</th><th>Attendees</th><th>Status</th><th>Actions</th></tr></thead>
+            <thead><tr><th>Title</th><th>Host</th><th>Scheduled</th><th>Duration</th><th>Status</th><th>Actions</th></tr></thead>
             <tbody>${data.meetings.map(m => {
               const isCreator = m.createdBy?._id === currentUser._id;
               const isAdmin = ['admin', 'superadmin'].includes(currentUser.role);
               const canControl = canManage && (isCreator || isAdmin);
+              const isLive = m.status === 'live' || m.status === 'active';
+              const isScheduled = m.status === 'scheduled';
+              const isEnded = ['ended', 'completed', 'cancelled'].includes(m.status);
               return `<tr>
-                <td><strong>${m.title}</strong>${m.course ? `<div style="font-size:0.85em;color:#7c3aed;font-weight:600;">${esc(m.course.title||'')}${m.course.level?' · L'+m.course.level:''}${m.course.group?' · Grp '+m.course.group:''}</div>` : ''}</td>
+                <td><strong>${m.title}</strong>${m.course ? `<div style="font-size:0.85em;color:#7c3aed;font-weight:600;">${esc(m.course.title||'')}</div>` : ''}</td>
                 <td>${m.createdBy?.name || 'Unknown'}</td>
                 <td style="font-size:0.85em;">${new Date(m.scheduledStart).toLocaleString()}<br><span style="color:#6b7280;">to ${new Date(m.scheduledEnd).toLocaleString()}</span></td>
                 <td>${m.duration} min</td>
-                <td>${m.attendees?.length || 0}</td>
-                <td><span class="status-badge" style="${statusStyle(m.status)}">${m.status.charAt(0).toUpperCase() + m.status.slice(1)}</span></td>
-                <td style="white-space:nowrap;">
-                  ${m.status === 'active' || m.status === 'scheduled' ? `<button class="btn btn-success btn-sm" onclick="joinMeeting('${m._id}', '${m.joinUrl}')">Join</button>` : ''}
-                  ${canControl && m.status === 'scheduled' ? `<button class="btn btn-primary btn-sm" onclick="startMeeting('${m._id}')" style="margin-left:4px;">▶ Start Now</button>` : ''}
-                  ${canControl ? `<button class="btn btn-sm" style="margin-left:4px;background:#0ea5e9;color:#fff;font-size:11px" onclick="showInviteLinkForm('${m._id}', \`${m.inviteLink || ''}\`)">🔗 Invite Link</button>` : ''}
-                  ${m.inviteLink ? `<a href="${m.inviteLink}" target="_blank" class="btn btn-sm" style="margin-left:4px;background:#f0fdf4;color:#16a34a;border:1px solid #86efac;font-size:11px">▶ Join via Link</a>` : ''}
-                  ${canControl && m.status === 'active' ? `<button class="btn btn-danger btn-sm" onclick="endMeeting('${m._id}')" style="margin-left:4px;">End</button>` : ''}
-                  ${canControl && (m.status === 'scheduled' || m.status === 'active') ? `<button class="btn btn-secondary btn-sm" onclick="cancelMeeting('${m._id}')" style="margin-left:4px;">Cancel</button>` : ''}
-                  <button class="btn btn-secondary btn-sm" onclick="viewMeetingDetail('${m._id}')" style="margin-left:4px;">Details</button>
-                  ${canControl && m.status === 'completed' ? `<button class="btn btn-sm" style="margin-left:4px;background:#7c3aed;color:#fff" onclick="viewMeetingAttendance('${m._id}', '${m.title}')">Attendance</button>` : ''}
+                <td><span class="status-badge" style="${statusStyle(m.status)}">${statusLabel(m.status)}</span></td>
+                <td style="white-space:nowrap;display:flex;gap:4px;flex-wrap:wrap;align-items:center">
+                  ${isLive && !isDeviceLocked ? `<button class="btn btn-success btn-sm" onclick="joinMeeting('${m._id}')">▶ Join</button>` : ''}
+                  ${isLive && isDeviceLocked ? `<button class="btn btn-sm" disabled style="background:#fde68a;color:#78350f;cursor:not-allowed;font-size:11px">🔒 Locked</button>` : ''}
+                  ${!isLive && !isEnded ? `<button class="btn btn-sm" disabled style="background:#e5e7eb;color:#9ca3af;cursor:not-allowed;font-size:11px">Not Live Yet</button>` : ''}
+                  ${canControl && isScheduled ? `<button class="btn btn-primary btn-sm" onclick="startMeeting('${m._id}')">▶ Start</button>` : ''}
+                  ${canControl && isLive ? `<button class="btn btn-danger btn-sm" onclick="endMeeting('${m._id}')">■ End</button>` : ''}
+                  ${canControl && (isScheduled || isLive) ? `<button class="btn btn-secondary btn-sm" onclick="cancelMeeting('${m._id}')">Cancel</button>` : ''}
+                  <button class="btn btn-secondary btn-sm" onclick="viewMeetingDetail('${m._id}')">Details</button>
+                  ${canControl && isEnded ? `<button class="btn btn-sm" style="background:#7c3aed;color:#fff" onclick="viewMeetingAttendance('${m._id}', '${m.title}')">Attendance</button>` : ''}
                 </td>
               </tr>`;
             }).join('')}</tbody>
@@ -6752,16 +6789,34 @@ async function startMeeting(id) {
   }
 }
 
-function joinMeeting(id, joinUrl) {
-  const w = window.open('', '_blank');
-  api(`/api/zoom/${id}/join`, { method: 'POST' }).then((data) => {
-    const url = data.joinUrl || joinUrl;
-    w.location.href = url;
+async function joinMeeting(id) {
+  try {
+    const data = await api(`/api/zoom/${id}/join`);
+    // Use secure token-based URL if available, otherwise fall back to jitsi config
+    const secureUrl = data.data?.secureJoinUrl;
+    const jitsiConfig = data.data?.jitsiConfig;
+    if (secureUrl) {
+      window.open(secureUrl, '_blank');
+    } else if (jitsiConfig?.roomName) {
+      window.open(`https://${jitsiConfig.domain}/${jitsiConfig.roomName}`, '_blank');
+    } else {
+      toastError('No join URL available');
+      return;
+    }
     setTimeout(() => renderMeetings(), 1000);
-  }).catch((e) => {
-    w.close();
-    toastError(e.message || 'Failed to join meeting');
-  });
+  } catch (e) {
+    const msg = e.message || 'Failed to join meeting';
+    if (msg.includes('locked') || msg.includes('device')) {
+      toastError('🔒 ' + msg);
+    } else if (msg.includes('not started') || msg.includes('not currently live')) {
+      toastError('Meeting is not live yet. Wait for the host to start.');
+    } else if (msg.includes('ended')) {
+      toastError('This meeting has ended.');
+    } else {
+      toastError(msg);
+    }
+    renderMeetings();
+  }
 }
 
 async function endMeeting(id) {
