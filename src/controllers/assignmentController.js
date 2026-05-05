@@ -619,6 +619,15 @@ exports.studentSubmit = (req, res) => {
         safeDeleteFile(req.file?.path);
         return res.status(400).json({ error: "Submission deadline has passed" });
       }
+      if (isLate && assignment.allowLateSubmission && assignment.maxLateDays > 0) {
+        const lateCutoff = new Date(assignment.dueDate.getTime() + assignment.maxLateDays * 24 * 60 * 60 * 1000);
+        if (now > lateCutoff) {
+          safeDeleteFile(req.file?.path);
+          return res.status(400).json({
+            error: `Late submission period has ended (${assignment.maxLateDays} day${assignment.maxLateDays !== 1 ? "s" : ""} after due date)`,
+          });
+        }
+      }
 
       if (req.file && !assignment.allowFileSubmission) {
         safeDeleteFile(req.file.path);
