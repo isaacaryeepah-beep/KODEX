@@ -227,11 +227,10 @@ normalQuizQuestionSchema.index({ company: 1, quiz: 1 });
 // Pre-save: auto-set requiresManualGrading from question type.
 // ---------------------------------------------------------------------------
 
-normalQuizQuestionSchema.pre("save", function (next) {
+normalQuizQuestionSchema.pre("save", function () {
   if (MANUAL_GRADE_TYPES.has(this.questionType)) {
     this.requiresManualGrading = true;
   }
-  next();
 });
 
 // ---------------------------------------------------------------------------
