@@ -645,7 +645,6 @@ function renderQDrafts(){
     list.innerHTML='<div id="q-empty-hint" style="text-align:center;padding:18px;color:var(--text-muted);font-size:13px;border:1.5px dashed var(--border);border-radius:8px">No questions yet — optional</div>';
     return;
   }
-  if(hint) hint.style.display='none';
   const L=['A','B','C','D','E','F','G','H'];
   list.innerHTML=S.qDrafts.map((q,qi)=>`
     <div class="q-item">
@@ -2003,10 +2002,13 @@ async function addAIQuestionsToQuiz(quizId) {
     _aiGeneratedQuestions.forEach(q => {
       S.qDrafts.push({
         text: q.questionText,
+        type: q.questionType || 'single',
         options: q.options.map((text, i) => ({ text, correct: q.correctAnswers.includes(i) })),
         marks: q.marks || 1,
         partial: false,
-        expl: q.explanation || ''
+        expl: q.explanation || '',
+        fillAnswer: '',
+        modelAnswer: ''
       });
     });
     document.getElementById('ai-gen-overlay')?.remove();
