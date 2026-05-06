@@ -764,11 +764,12 @@ exports.login = async (req, res) => {
       }
     }
 
-    // ── Trusted-device check ─────────────────────────────────────────────────
-    // Login is always allowed. The 6-hour lock only blocks quiz/meeting access
-    // (enforced by requireNoDeviceLock middleware), not the login itself.
+    // ── Trusted-device check (students only) ────────────────────────────────
+    // Login is always allowed. The 6-hour lock only blocks quiz/meeting/attendance
+    // access (enforced by requireNoDeviceLock middleware), not the login itself.
+    // Non-student roles (lecturers, HODs, admins, employees) are never locked.
     const now = new Date();
-    if (deviceId) {
+    if (deviceId && user.role === 'student') {
       if (!Array.isArray(user.trustedDevices)) user.trustedDevices = [];
 
       // Lazy migration: seed trustedDevices from legacy single deviceId field
@@ -846,8 +847,8 @@ exports.login = async (req, res) => {
       }
 
       user.deviceId = deviceId;
-    } else if (user.accountDeviceLock?.isLocked) {
-      // No deviceId sent — auto-clear if lock has expired
+    } else if (user.role === 'student' && user.accountDeviceLock?.isLocked) {
+      // No deviceId sent — auto-clear expired lock for students
       const expiry = user.accountDeviceLock.lockedUntil
         ? new Date(user.accountDeviceLock.lockedUntil) : null;
       if (!expiry || expiry <= now) {
