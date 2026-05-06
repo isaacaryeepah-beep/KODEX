@@ -1266,7 +1266,7 @@ async function handleLecturerLogin() {
     } else if (m.includes('network') || m.includes('fetch')) {
       showLecturerError('Network error. Please check your connection and try again.');
     } else if (m.includes('invalid credentials') || m.includes('not authorized')) {
-      showLecturerError('Wrong email or password for the Lecturer portal. If you are an admin or HOD, please use the correct portal.');
+      showLecturerError('Wrong email or password.');
     } else {
       showLecturerError(msg || 'Wrong email or password. Please check your credentials.');
     }
