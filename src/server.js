@@ -56,6 +56,14 @@ const PORT = process.env.PORT || 5000;
 // everyone including cheaters at home. Must be set before any route handler.
 app.set("trust proxy", true);
 
+// ── Force HTTPS in production ─────────────────────────────────────────────────
+app.use((req, res, next) => {
+  if (process.env.NODE_ENV === 'production' && req.headers['x-forwarded-proto'] !== 'https') {
+    return res.redirect(301, `https://${req.hostname}${req.originalUrl}`);
+  }
+  next();
+});
+
 // ── Helmet: secure HTTP headers ───────────────────────────────────────────────
 app.use(helmet({
   contentSecurityPolicy: false,
@@ -69,16 +77,8 @@ app.use(helmet({
 
 // ── CORS: only allow your own domain ─────────────────────────────────────────
 const allowedOrigins = [
-  "https://kodex.it.com",
-  "https://www.kodex.it.com",
-  "http://kodex.it.com",
-  "http://www.kodex.it.com",
-  "https://kodex-713g.onrender.com",
-  "https://dikly.onrender.com",
-  "https://dikly.it.com",
-  "https://www.dikly.it.com",
-  "http://dikly.it.com",
-  "http://www.dikly.it.com",
+  "https://dikly.sbs",
+  "https://www.dikly.sbs",
   "http://localhost:3000",
   "http://localhost:5000",
 ];

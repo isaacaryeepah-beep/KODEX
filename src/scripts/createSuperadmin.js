@@ -32,7 +32,7 @@ async function run() {
       mustChangePassword: false,
     });
 
-    console.log('✅ Superadmin created! Login at https://dikly.it.com/superadmin');
+    console.log('✅ Superadmin created! Login at https://dikly.sbs/superadmin');
     process.exit(0);
   } catch (err) {
     console.error('❌ Error:', err.message);

@@ -5680,7 +5680,7 @@ async function showStartSessionModal() {
   }
   // ── Device confirmed online — show session form ────────────
 
-  // Fetch courses — always from dikly.it.com (hardcoded in API constant)
+  // Fetch courses — always from dikly.sbs (hardcoded in API constant)
   // If this fails, it means the server is unreachable — show clear error.
   let courses = [];
   let courseLoadError = false;
@@ -12779,7 +12779,7 @@ async function generateAttendanceReportCard() {
     doc.text(overall + '%  (' + totalPresent + ' of ' + records.length + ' sessions)', 128, y + 8);
 
     doc.setFontSize(8); doc.setTextColor(150,150,150); doc.setFont('helvetica','normal');
-    doc.text('Generated automatically by DIKLY — dikly.it.com', M, 285);
+    doc.text('Generated automatically by DIKLY — dikly.sbs', M, 285);
     doc.save('DIKLY_Report_Card_' + (currentUser.indexNumber||'student') + '_' + new Date().toISOString().slice(0,10) + '.pdf');
     showToastNotif('Report card downloaded!', 'success');
   } catch(e) { showToastNotif('Failed: ' + e.message, 'error'); }
@@ -12851,7 +12851,7 @@ async function generateCertificate(courseId, courseTitle) {
     doc.text('Authorised by DIKLY Platform', W/2, 171, { align: 'center' });
 
     doc.setFontSize(8); doc.setTextColor(199,210,254);
-    doc.text('dikly.it.com', W/2, H-16, { align: 'center' });
+    doc.text('dikly.sbs', W/2, H-16, { align: 'center' });
 
     doc.save('DIKLY_Certificate_' + (courseTitle||'course').replace(/[^a-z0-9]/gi,'_') + '.pdf');
     showToastNotif('Certificate downloaded!', 'success');

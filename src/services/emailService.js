@@ -1,11 +1,11 @@
 // ─── DIKLY Email Service ───────────────────────────────────────────────────
 // Uses MailerSend API -- free tier = 3,000 emails/month
 // Set MAILERSEND_API_KEY and EMAIL_FROM in Render environment variables
-// EMAIL_FROM example: "DIKLY <no-reply@dikly.it.com>"
+// EMAIL_FROM example: "DIKLY <no-reply@dikly.sbs>"
 // If MAILERSEND_API_KEY is not set, emails are logged to console only (dev mode)
 
-const FROM     = process.env.EMAIL_FROM || 'DIKLY <no-reply@dikly.it.com>';
-const BASE_URL = process.env.APP_URL    || 'https://dikly.onrender.com';
+const FROM     = process.env.EMAIL_FROM || 'DIKLY <no-reply@dikly.sbs>';
+const BASE_URL = process.env.APP_URL    || 'https://dikly.sbs';
 
 // ── Colour palette ────────────────────────────────────────────────────────────
 const C = {
@@ -131,7 +131,7 @@ async function sendViaGmail({ toEmail, toName, fromEmail, fromName, subject, htm
 
       socket.on('data', (data) => {
         const line = data.toString();
-        if (step === 0 && line.startsWith('220')) { send('EHLO dikly.it.com'); step++; }
+        if (step === 0 && line.startsWith('220')) { send('EHLO dikly.sbs'); step++; }
         else if (step === 1 && line.includes('250 ')) { send('AUTH PLAIN ' + auth); step++; }
         else if (step === 2 && line.startsWith('235')) { send(`MAIL FROM:<${fromEmail}>`); step++; }
         else if (step === 3 && line.startsWith('250')) { send(`RCPT TO:<${toEmail}>`); step++; }
@@ -473,7 +473,7 @@ async function sendPaymentFailed({ email, name, plan, institutionName }) {
       <a href="${BASE_URL}" class="btn btn-primary">Update Payment →</a>
     </div>
 
-    <p>If you believe this is an error, please contact your bank or try a different card. If the issue persists, contact us at <a href="mailto:support@dikly.it.com">support@dikly.it.com</a>.</p>
+    <p>If you believe this is an error, please contact your bank or try a different card. If the issue persists, contact us at <a href="mailto:support@dikly.sbs">support@dikly.sbs</a>.</p>
   `, `Payment failed -- action required`);
 
   return send({ to: email, subject: `⚠️ DIKLY: Payment failed -- action required`, html });

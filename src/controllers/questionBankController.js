@@ -74,7 +74,7 @@ exports.create = async (req, res) => {
     const doc = buildBankDoc(req.body, req.user._id, req.user.company);
 
     if (req.file) {
-      const baseUrl = process.env.SERVER_URL || "https://dikly.it.com";
+      const baseUrl = process.env.SERVER_URL || "https://dikly.sbs";
       doc.imageAttachment = {
         fileName:     req.file.filename,
         originalName: req.file.originalname,
@@ -113,7 +113,7 @@ exports.update = async (req, res) => {
       if (q.imageAttachment?.fileName) {
         fs.unlink(path.join(process.cwd(), UPLOAD_DIR, q.imageAttachment.fileName), () => {});
       }
-      const baseUrl = process.env.SERVER_URL || "https://dikly.it.com";
+      const baseUrl = process.env.SERVER_URL || "https://dikly.sbs";
       q.imageAttachment = {
         fileName:     req.file.filename,
         originalName: req.file.originalname,
