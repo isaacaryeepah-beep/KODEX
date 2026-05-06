@@ -18,7 +18,7 @@ router.post('/generate-questions', authenticate, async (req, res) => {
   }
 
   const payload = JSON.stringify({
-    model: 'claude-sonnet-4-20250514',
+    model: 'claude-sonnet-4-6',
     max_tokens: Math.min(parseInt(max_tokens) || 4000, 6000),
     messages: [{ role: 'user', content: prompt }]
   });

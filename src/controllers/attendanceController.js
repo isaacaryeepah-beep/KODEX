@@ -253,7 +253,8 @@ exports.listSessions = async (req, res) => {
       filter.course = courseId;
     }
 
-    if (status && ["active", "stopped"].includes(status)) {
+    const allStatuses = ["scheduled", "active", "live", "paused", "locked", "stopped", "ended", "device_disconnected"];
+    if (status && allStatuses.includes(status)) {
       filter.status = status;
     }
 
@@ -288,7 +289,8 @@ exports.listSessions = async (req, res) => {
 
 exports.getActiveSession = async (req, res) => {
   try {
-    const activeFilter = { ...req.companyFilter, status: "active" };
+    // Include all states where a session is "open" (legacy "active" + dashboard states)
+    const activeFilter = { ...req.companyFilter, status: { $in: ["active", "live", "paused", "locked"] } };
     if (req.user.role === "lecturer") {
       activeFilter.createdBy = req.user._id;
     }

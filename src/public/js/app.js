@@ -5016,7 +5016,7 @@ async function renderAdminDashboard(content) {
     api('/api/announcements').catch(() => ({ announcements: [] })),
   ]);
 
-  const activeSessions = sessionsData.sessions.filter(s => s.status === 'active').length;
+  const activeSessions = sessionsData.sessions.filter(s => ['active', 'live', 'paused', 'locked'].includes(s.status)).length;
   // Auto-refresh every 30s if there are active sessions
   if (activeSessions > 0) {
     clearTimeout(window._dashRefreshTimer);
@@ -5035,7 +5035,7 @@ async function renderAdminDashboard(content) {
 
   const sessionRows = sessionsData.sessions.length
     ? sessionsData.sessions.map(s => {
-        const isLive = s.status === 'active';
+        const isLive = ['active', 'live', 'paused', 'locked'].includes(s.status);
         return `
           <div class="session-row">
             <div class="session-indicator ${isLive ? 'live' : 'ended'}"></div>
@@ -5575,12 +5575,12 @@ function _renderSessionsHTML(content, sessions, isOffline) {
               <td><span class="status-badge status-${s.status}">${s.status}</span></td>
               <td>${new Date(s.startedAt).toLocaleString()}</td>
               <td>${s.stoppedAt ? new Date(s.stoppedAt).toLocaleString() : '-'}</td>
-              <td>${s.status === 'active' && canStart ? `
+              <td>${['active','live','paused','locked'].includes(s.status) && canStart ? `
                 <button class="btn btn-danger btn-sm" onclick="stopSession('${s._id}')">Stop</button>
                 ${!isOffline ? `<button class="btn btn-success btn-sm" onclick="generateQR('${s._id}')">QR Code</button>` : ''}
                 ${!isOffline ? `<button class="btn btn-sm" style="background:#7c3aed;color:#fff;font-size:11px" onclick="generateVerbalCode('${s._id}')">Verbal Code</button>` : ''}
                 <button class="btn btn-sm" style="font-size:11px;background:var(--bg);border:1px solid var(--border)" onclick="viewAttendees('${s._id}', '${(s.title||'Session').replace(/['\''\'']/g,'')}')">Attendees</button>
-              ` : s.status === 'active' ? `
+              ` : ['active','live','paused','locked'].includes(s.status) ? `
                 <button class="btn btn-sm" style="font-size:11px;background:var(--bg);border:1px solid var(--border)" onclick="viewAttendees('${s._id}', '${(s.title||'Session').replace(/['\''\'']/g,'')}')">Attendees</button>
               ` : ''}</td>
             </tr>

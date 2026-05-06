@@ -141,7 +141,8 @@ async function startSession(sessionId, companyId, userId, userRole) {
   const session = await AttendanceSession.findOne({ _id: sessionId, company: companyId });
   if (!session) throw Object.assign(new Error('Session not found.'), { status: 404 });
 
-  if (!['scheduled', 'paused'].includes(session.status)) {
+  // Accept both "scheduled" (new flow) and "active" (legacy flow created via POST /start)
+  if (!['scheduled', 'paused', 'active'].includes(session.status)) {
     throw Object.assign(
       new Error(`Cannot start a session that is ${session.status}.`),
       { status: 400 }
@@ -227,12 +228,14 @@ async function unlockSession(sessionId, companyId, userId, userRole) {
 
 async function endSession(sessionId, companyId, userId, userRole) {
   const session = await _findAndCheckOwnership(sessionId, companyId, userId, userRole);
-  if (session.status === 'ended') {
+  if (session.status === 'ended' || session.status === 'stopped') {
     throw Object.assign(new Error('Session is already ended.'), { status: 400 });
   }
 
-  session.status    = 'ended';
-  session.stoppedAt = new Date();
+  session.status        = 'ended';
+  session.stoppedAt     = new Date();
+  session.stoppedBy     = userId;
+  session.stoppedReason = 'manual';
   await session.save();
 
   // Generate report summary
@@ -256,7 +259,7 @@ async function endSession(sessionId, companyId, userId, userRole) {
 
 async function updateSession(sessionId, companyId, userId, userRole, updates) {
   const session = await _findAndCheckOwnership(sessionId, companyId, userId, userRole);
-  if (session.status === 'ended') {
+  if (session.status === 'ended' || session.status === 'stopped') {
     throw Object.assign(new Error('Cannot edit an ended session.'), { status: 400 });
   }
 
@@ -301,10 +304,11 @@ async function validateAttendanceMark(data) {
   if (session.status === 'locked') {
     return fail('locked_session_attempt', 'Session is locked. No more attendance is being accepted.', session, userId);
   }
-  if (session.status === 'ended') {
+  if (session.status === 'ended' || session.status === 'stopped') {
     return fail('ended_session_attempt', 'Session has ended.', session, userId);
   }
-  if (session.status !== 'live') {
+  // Accept both "live" (dashboard flow) and "active" (legacy flow)
+  if (!['live', 'active'].includes(session.status)) {
     return fail('paused_session_attempt', `Session is ${session.status} and not accepting marks.`, session, userId);
   }
 

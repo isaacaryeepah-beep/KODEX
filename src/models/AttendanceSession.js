@@ -26,7 +26,16 @@ const attendanceSessionSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ["active", "stopped", "device_disconnected"],
+      enum: [
+        "scheduled",        // pre-created, not yet started (dashboard flow)
+        "active",           // started via legacy flow (equivalent to "live")
+        "live",             // started via dashboard flow
+        "paused",           // temporarily paused by lecturer
+        "locked",           // no new marks accepted
+        "stopped",          // stopped via legacy flow
+        "ended",            // ended via dashboard flow
+        "device_disconnected",
+      ],
       default: "active",
     },
     startedAt: {
@@ -115,6 +124,24 @@ const attendanceSessionSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+
+    // ── Session Dashboard fields ──────────────────────────────────────────────
+    // Timestamp when session was paused (dashboard flow)
+    pausedAt: { type: Date, default: null },
+    // Timestamp when session was locked (dashboard flow)
+    lockedAt: { type: Date, default: null },
+    // Physical venue / room name
+    venue: { type: String, default: null },
+    // Whether to enforce network proximity check
+    networkEnforcement: { type: Boolean, default: false },
+    // How often the QR code rotates (seconds)
+    codeRotationSeconds: { type: Number, default: 30, min: 15, max: 120 },
+    // When current QR code was last generated
+    currentCodeGeneratedAt: { type: Date, default: null },
+    // Linked meeting session (optional)
+    linkedMeetingId: { type: mongoose.Schema.Types.ObjectId, ref: "Meeting", default: null },
+    // Lecturer notes visible on dashboard
+    notes: { type: String, default: null },
   },
   {
     timestamps: true,
