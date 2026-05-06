@@ -56,9 +56,10 @@ const PORT = process.env.PORT || 5000;
 // everyone including cheaters at home. Must be set before any route handler.
 app.set("trust proxy", true);
 
-// ── Force HTTPS in production ─────────────────────────────────────────────────
+// ── Force HTTPS in production (Render sets RENDER env var) ───────────────────
 app.use((req, res, next) => {
-  if (process.env.NODE_ENV === 'production' && req.headers['x-forwarded-proto'] !== 'https') {
+  const isProduction = process.env.NODE_ENV === 'production' || process.env.RENDER;
+  if (isProduction && req.headers['x-forwarded-proto'] === 'http') {
     return res.redirect(301, `https://${req.hostname}${req.originalUrl}`);
   }
   next();
