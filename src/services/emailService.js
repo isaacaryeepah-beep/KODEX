@@ -1,16 +1,21 @@
 // ─── DIKLY Email Service ───────────────────────────────────────────────────
-// Uses MailerSend API -- free tier = 3,000 emails/month
-// Set MAILERSEND_API_KEY and EMAIL_FROM in Render environment variables
-// EMAIL_FROM example: "DIKLY <no-reply@dikly.sbs>"
-// If MAILERSEND_API_KEY is not set, emails are logged to console only (dev mode)
+// Primary sender: Gmail SMTP (GMAIL_USER + GMAIL_APP_PASSWORD env vars)
+// Fallback:       MailerSend API (MAILERSEND_API_KEY env var)
+// FROM address always resolves to the Gmail user so bounces reach a real inbox.
 
-// Guard: replace any stale old-domain value in the env var automatically
-const _rawFrom = process.env.EMAIL_FROM || 'DIKLY <no-reply@dikly.sbs>';
-const FROM = _rawFrom.includes('kodex.it.com') || _rawFrom.includes('dikly.it.com')
-  ? 'DIKLY <no-reply@dikly.sbs>'
+// Always use the real Gmail address as FROM — no-reply@dikly.sbs has no mail server.
+const GMAIL_USER    = process.env.GMAIL_USER || 'nelsonkel78@gmail.com';
+const SUPPORT_EMAIL = GMAIL_USER;
+const _rawFrom      = process.env.EMAIL_FROM || `DIKLY <${GMAIL_USER}>`;
+const _safeFrom     = _rawFrom.includes('kodex.it.com') || _rawFrom.includes('dikly.it.com')
+  ? `DIKLY <${GMAIL_USER}>`
   : _rawFrom;
+// If EMAIL_FROM still points at no-reply@dikly.sbs, override with the real Gmail address.
+const FROM = _safeFrom.includes('no-reply@dikly.sbs') || _safeFrom.includes('no-reply@dikly')
+  ? `DIKLY <${GMAIL_USER}>`
+  : _safeFrom;
 
-const BASE_URL = process.env.APP_URL    || 'https://dikly.sbs';
+const BASE_URL = process.env.APP_URL || 'https://dikly.sbs';
 
 // ── Colour palette ────────────────────────────────────────────────────────────
 const C = {
@@ -137,7 +142,7 @@ async function sendViaGmail({ toEmail, toName, fromEmail, fromName, subject, htm
 
       socket.on('data', (data) => {
         const line = data.toString();
-        if (step === 0 && line.startsWith('220')) { send('EHLO dikly.sbs'); step++; }
+        if (step === 0 && line.startsWith('220')) { send('EHLO smtp.gmail.com'); step++; }
         else if (step === 1 && line.includes('250 ')) { send('AUTH PLAIN ' + auth); step++; }
         else if (step === 2 && line.startsWith('235')) { send(`MAIL FROM:<${fromEmail}>`); step++; }
         else if (step === 3 && line.startsWith('250')) { send(`RCPT TO:<${toEmail}>`); step++; }
@@ -198,11 +203,11 @@ async function sendViaMailerSend({ toEmail, toName, fromEmail, fromName, subject
 
 // ── Main send() -- tries Gmail first, falls back to MailerSend ─────────────────
 async function send({ to, subject, html, textBody }) {
-  const gmailUser = process.env.GMAIL_USER;
+  // GMAIL_USER is already resolved at module level with nelsonkel78@gmail.com fallback.
   const gmailPass = process.env.GMAIL_APP_PASSWORD;
   const mailerKey = process.env.MAILERSEND_API_KEY;
 
-  if (!gmailUser && !mailerKey) {
+  if (!gmailPass && !mailerKey) {
     console.log(`[EmailService] No credentials -- would send to ${to}: "${subject}"`);
     return { ok: true, dev: true };
   }
@@ -218,14 +223,14 @@ async function send({ to, subject, html, textBody }) {
   const cleanSubject = subject.replace(/[\u{1F000}-\u{1FFFF}]|[\u{2600}-\u{27FF}]/gu, '').trim();
 
   // Try Gmail SMTP first
-  if (gmailUser && gmailPass) {
+  if (GMAIL_USER && gmailPass) {
     try {
       const result = await sendViaGmail({
         toEmail: toParsed.email,
         toName: toParsed.name || toParsed.email,
-        fromEmail: gmailUser,
+        fromEmail: GMAIL_USER,
         fromName: fromParsed.name || 'DIKLY',
-        replyTo: gmailUser,
+        replyTo: GMAIL_USER,
         subject: cleanSubject,
         html,
         textBody,
@@ -244,9 +249,9 @@ async function send({ to, subject, html, textBody }) {
       const result = await sendViaMailerSend({
         toEmail: toParsed.email,
         toName: toParsed.name || toParsed.email,
-        fromEmail: gmailUser || fromParsed.email,
+        fromEmail: GMAIL_USER,
         fromName: fromParsed.name || 'DIKLY',
-        replyTo: gmailUser || null,
+        replyTo: GMAIL_USER,
         subject: cleanSubject,
         html,
         textBody,
@@ -483,7 +488,7 @@ async function sendPaymentFailed({ email, name, plan, institutionName }) {
       <a href="${BASE_URL}" class="btn btn-primary">Update Payment →</a>
     </div>
 
-    <p>If you believe this is an error, please contact your bank or try a different card. If the issue persists, contact us at <a href="mailto:support@dikly.sbs">support@dikly.sbs</a>.</p>
+    <p>If you believe this is an error, please contact your bank or try a different card. If the issue persists, contact us at <a href="mailto:${SUPPORT_EMAIL}">${SUPPORT_EMAIL}</a>.</p>
   `, `Payment failed -- action required`);
 
   return send({ to: email, subject: `⚠️ DIKLY: Payment failed -- action required`, html });
