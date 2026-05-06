@@ -4,6 +4,9 @@ const authenticate = require("../middleware/auth");
 const { requireRole, requireMode } = require("../middleware/role");
 const { requireActiveSubscription } = require("../middleware/subscription");
 const LeaveRequest = require("../models/LeaveRequest");
+const LeaveBalance  = require("../models/LeaveBalance");
+const LeavePolicy   = require("../models/LeavePolicy");
+const User          = require("../models/User");
 const AuditLog = require("../models/AuditLog");
 const { AUDIT_ACTIONS } = AuditLog;
 const notificationService = require("../services/notificationService");
@@ -33,14 +36,36 @@ router.post("/", ...mw, requireRole("employee", "manager", "admin", "superadmin"
     const end = new Date(endDate);
     if (end < start) return res.status(400).json({ error: "End date must be after start date" });
 
+    const days = workingDays(start, end);
     const leave = await LeaveRequest.create({
       company: req.user.company,
       employee: req.user._id,
       type, reason: reason || "",
       startDate: start,
       endDate: end,
-      days: workingDays(start, end),
+      days,
     });
+
+    // Increment pending in LeaveBalance (fire-and-forget)
+    LeavePolicy.findOne({ company: req.user.company, code: type.toUpperCase() })
+      .then(policy => {
+        if (!policy) return;
+        const year = start.getFullYear();
+        return LeaveBalance.findOneAndUpdate(
+          { company: req.user.company, employee: req.user._id, policy: policy._id, year },
+          { $inc: { pending: days } }
+        );
+      }).catch(() => {});
+
+    // Notify managers that a new leave request needs review (fire-and-forget)
+    User.find({ company: req.user.company, role: { $in: ["manager", "admin"] }, isActive: true })
+      .select("_id").lean()
+      .then(mgrs => {
+        if (mgrs.length) {
+          notificationService.notifyLeaveRequested(leave, mgrs.map(m => m._id));
+        }
+      }).catch(() => {});
+
     res.status(201).json({ leave });
   } catch (e) {
     res.status(500).json({ error: "Failed to submit leave request" });
@@ -69,6 +94,17 @@ router.patch("/:id/cancel", ...mw, async (req, res) => {
       { new: true }
     );
     if (!leave) return res.status(404).json({ error: "Leave request not found or cannot be cancelled" });
+
+    // Decrement pending in LeaveBalance (fire-and-forget)
+    LeavePolicy.findOne({ company: leave.company, code: leave.type.toUpperCase() })
+      .then(policy => {
+        if (!policy) return;
+        const year = new Date(leave.startDate).getFullYear();
+        return LeaveBalance.findOneAndUpdate(
+          { company: leave.company, employee: leave.employee, policy: policy._id, year },
+          { $inc: { pending: -leave.days } }
+        );
+      }).catch(() => {});
 
     // Audit + notify (fire-and-forget)
     AuditLog.record({
@@ -151,6 +187,20 @@ router.patch("/:id/review", ...mw, requireRole("admin", "manager", "superadmin")
       mode:          "corporate",
       req,
     });
+
+    // Update LeaveBalance: approved → used++, pending--; rejected → pending-- (fire-and-forget)
+    LeavePolicy.findOne({ company: leave.company, code: leave.type.toUpperCase() })
+      .then(policy => {
+        if (!policy) return;
+        const year = new Date(leave.startDate).getFullYear();
+        const inc = action === "approved"
+          ? { $inc: { used: leave.days, pending: -leave.days } }
+          : { $inc: { pending: -leave.days } };
+        return LeaveBalance.findOneAndUpdate(
+          { company: leave.company, employee: leave.employee._id || leave.employee, policy: policy._id, year },
+          inc
+        );
+      }).catch(() => {});
 
     // Notify employee (fire-and-forget)
     if (action === "approved") {

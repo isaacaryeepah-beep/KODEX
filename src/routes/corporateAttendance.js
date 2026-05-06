@@ -723,7 +723,7 @@ router.patch("/trust/:userId/reset", ...mw, canManage, async (req, res) => {
     await AuditLog.create({
       company:  req.user.company,
       actor:    req.user._id,
-      action:   AUDIT_ACTIONS?.UPDATED || "updated",
+      action:   AUDIT_ACTIONS.UPDATE,
       resource: "User",
       resourceId: user._id,
       resourceLabel: `Reset attendance trust for ${user.name}`,
@@ -782,7 +782,7 @@ router.patch("/clock-window", ...mw, canManage, async (req, res) => {
     await AuditLog.create({
       company:  req.user.company,
       actor:    req.user._id,
-      action:   AUDIT_ACTIONS?.UPDATED || "updated",
+      action:   AUDIT_ACTIONS.UPDATE,
       resource: "Company",
       resourceId: req.user.company,
       resourceLabel: "Updated clock-in/out time windows",
