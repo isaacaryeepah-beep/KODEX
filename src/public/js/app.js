@@ -1866,6 +1866,26 @@ async function loadUserData() {
     document.body.prepend(banner);
   }
 
+  // ── Paystack payment callback — verify after redirect back from payment page ──
+  const paystackRef = urlParams.get('reference') || urlParams.get('trxref');
+  if (paystackRef && token) {
+    window.history.replaceState({}, '', '/');
+    try {
+      const verifyData = await api(`/api/payments/paystack/verify?reference=${paystackRef}`);
+      if (verifyData?.subscriptionExpiry) {
+        // Update cached user so UI reflects new status immediately
+        if (currentUser) {
+          currentUser.subscriptionExpiry = verifyData.subscriptionExpiry;
+          currentUser.subscriptionStatus = 'active';
+        }
+        toastSuccess('Payment confirmed! Your subscription is now active.');
+      }
+    } catch (e) {
+      // Non-fatal — user may have already been verified or reference is stale
+      console.warn('[payment] Verify failed:', e.message);
+    }
+  }
+
   try {
     const data = await api('/api/auth/me');
     currentUser = data.user;
