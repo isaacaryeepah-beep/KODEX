@@ -144,6 +144,27 @@ async function handleChargeSuccess(data) {
   await company.save();
   console.log(`[webhook] Subscription activated for company ${companyId} until ${endDate.toISOString()}`);
 
+  // Also update the paying user's subscription fields so the portal reflects immediately
+  try {
+    const userId = meta.userId;
+    if (userId) {
+      await User.findByIdAndUpdate(userId, {
+        subscriptionExpiry: endDate,
+        subscriptionStatus: "active",
+        $inc: { periodsPaid: 1 },
+      });
+      console.log(`[webhook] Updated user ${userId} subscriptionExpiry to ${endDate.toISOString()}`);
+    } else {
+      // Fall back: update all admins of this company
+      await User.updateMany(
+        { company: companyId, role: { $in: ["admin", "superadmin"] } },
+        { subscriptionExpiry: endDate, subscriptionStatus: "active" }
+      );
+    }
+  } catch (e) {
+    console.error("[webhook] User subscription update failed:", e.message);
+  }
+
   // Send confirmation email
   try {
     const userId = meta.userId;
