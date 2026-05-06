@@ -16,6 +16,9 @@ module.exports = async function requireNoDeviceLock(req, res, next) {
     const user = await User.findById(req.user._id).select("accountDeviceLock role");
     if (!user) return res.status(401).json({ error: "Unauthorized" });
 
+    // Only students are subject to device lock
+    if (user.role !== 'student') return next();
+
     const lock = user.accountDeviceLock;
     if (!lock || !lock.isLocked) return next();
 
@@ -35,7 +38,7 @@ module.exports = async function requireNoDeviceLock(req, res, next) {
     const remainingHours = (remainingMs / 3600000).toFixed(1);
 
     return res.status(403).json({
-      error: `Your account is locked due to a new device login. You cannot access quizzes or meetings for ${remainingHours} hour(s). Contact your admin or HOD to unlock early.`,
+      error: `Your account is locked due to a new device login. You cannot mark attendance, access quizzes, or join meetings for ${remainingHours} hour(s). Contact your admin or HOD to unlock early.`,
       accountLocked: true,
       lockedUntil: lockExpiry.toISOString(),
       remainingMins,

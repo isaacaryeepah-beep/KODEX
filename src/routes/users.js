@@ -21,5 +21,7 @@ router.post("/:id/admin-reset-password", requireRole("admin", "superadmin", "man
 router.post("/change-password-after-reset", userController.changePasswordAfterReset);
 router.post("/:id/clear-device-lock", requireRole("admin", "superadmin", "manager"), companyIsolation, userController.clearDeviceLock);
 router.post("/:id/unlock-account-device", requireRole("admin", "superadmin", "manager", "hod", "lecturer"), companyIsolation, userController.unlockAccountDeviceLock);
+router.get("/:id/trusted-devices", requireRole("admin", "superadmin", "manager", "hod"), companyIsolation, userController.getTrustedDevices);
+router.delete("/:id/trusted-devices/:deviceId", requireRole("admin", "superadmin", "manager"), companyIsolation, userController.removeTrustedDevice);
 
 module.exports = router;

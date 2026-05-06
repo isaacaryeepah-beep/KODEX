@@ -677,45 +677,85 @@ exports.changePasswordAfterReset = async (req, res) => {
 };
 
 // ── Clear student device lock (admin action) ──────────────────────────────────
+// Clears the 6-hour quiz/meeting lock and resets the trusted-device list so the
+// student's next login device becomes the new trusted device.
 exports.clearDeviceLock = async (req, res) => {
   try {
     const user = await User.findOne({ _id: req.params.id, company: req.user.company, role: "student" });
     if (!user) return res.status(404).json({ error: "Student not found" });
 
-    user.deviceId = null;
+    // Reset device identity so the next login becomes the new trusted device
+    user.deviceId      = null;
+    user.trustedDevices = [];
 
-    // Also clear the 6-hour account-level device lock (snap-quiz / meeting gate)
+    // Clear quiz/meeting lock
     if (user.accountDeviceLock?.isLocked) {
       user.accountDeviceLock = {
-        isLocked: false,
-        lockedAt: user.accountDeviceLock.lockedAt,
-        lockedUntil: user.accountDeviceLock.lockedUntil,
+        isLocked:      false,
+        lockedAt:      user.accountDeviceLock.lockedAt,
+        lockedUntil:   user.accountDeviceLock.lockedUntil,
         triggerDevice: user.accountDeviceLock.triggerDevice,
-        knownDevice: user.accountDeviceLock.knownDevice,
-        unlockedBy: req.user._id,
-        unlockedAt: new Date(),
+        knownDevice:   user.accountDeviceLock.knownDevice,
+        unlockedBy:    req.user._id,
+        unlockedAt:    new Date(),
       };
     }
 
     await user.save({ validateBeforeSave: false });
 
-    console.log(`[DeviceLock] Cleared for student ${user.name} by ${req.user.name}`);
-    res.json({ message: `Device lock cleared for ${user.name}. They can now log in from a new device and access quizzes/meetings.` });
+    console.log(`[DeviceLock] Full reset for student ${user.name} by ${req.user.name}`);
+    res.json({ message: `Device lock and trusted-device list cleared for ${user.name}. Their next login will register a new trusted device.` });
   } catch (error) {
     console.error("Clear device lock error:", error);
     res.status(500).json({ error: "Failed to clear device lock" });
   }
 };
 
+// ── List trusted devices for a user (admin view) ─────────────────────────────
+exports.getTrustedDevices = async (req, res) => {
+  try {
+    const user = await User.findOne({ _id: req.params.id, company: req.user.company })
+      .select("name trustedDevices newDeviceLogs accountDeviceLock deviceId").lean();
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    res.json({
+      trustedDevices: user.trustedDevices || [],
+      newDeviceLogs:  user.newDeviceLogs  || [],
+      accountDeviceLock: user.accountDeviceLock || null,
+    });
+  } catch (error) {
+    console.error("Get trusted devices error:", error);
+    res.status(500).json({ error: "Failed to fetch device info" });
+  }
+};
+
+// ── Remove a specific trusted device (admin action) ───────────────────────────
+exports.removeTrustedDevice = async (req, res) => {
+  try {
+    const user = await User.findOne({ _id: req.params.id, company: req.user.company });
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    const { deviceId } = req.params;
+    const before = user.trustedDevices?.length || 0;
+    user.trustedDevices = (user.trustedDevices || []).filter(d => d.deviceId !== deviceId);
+    const removed = before - user.trustedDevices.length;
+
+    if (!removed) return res.status(404).json({ error: "Device not found in trusted list" });
+
+    if (user.deviceId === deviceId) user.deviceId = null;
+
+    await user.save({ validateBeforeSave: false });
+    console.log(`[TrustedDevices] Removed device ${deviceId} from ${user.name} by ${req.user.name}`);
+    res.json({ message: "Trusted device removed. User will be locked on next login from that device." });
+  } catch (error) {
+    console.error("Remove trusted device error:", error);
+    res.status(500).json({ error: "Failed to remove trusted device" });
+  }
+};
+
 // ── Unlock account device lock only (admin/HOD action) ──────────────────────
 exports.unlockAccountDeviceLock = async (req, res) => {
   try {
-    const requesterRole = req.user.role;
-    if (!["admin", "superadmin", "hod", "lecturer"].includes(requesterRole)) {
-      return res.status(403).json({ error: "Only admin or HOD can unlock accounts" });
-    }
-
-
     const user = await User.findOne({ _id: req.params.id, company: req.user.company });
     if (!user) return res.status(404).json({ error: "User not found" });
 

@@ -983,8 +983,15 @@ document.getElementById('login-btn').addEventListener('click', async () => {
     loadQuizList();
     show('quiz-list-screen');
 
-    if (data.user?.accountDeviceLock?.isLocked) {
-      toast('Account locked: new device detected. You cannot start quizzes or join meetings until an admin unlocks your account.', 'error');
+    if (data.newDeviceDetected) {
+      const mins = data.user?.accountDeviceLock?.remainingMins;
+      const errEl = document.getElementById('login-error-msg');
+      const msg = `New device detected. Your account has been locked for ${mins != null ? mins + ' minutes' : '6 hours'} as a security measure. Contact your administrator or HOD to unlock early.`;
+      if (errEl) { errEl.textContent = msg; errEl.style.display = 'block'; }
+      toast(msg, 'error');
+    } else if (data.user?.accountDeviceLock?.isLocked) {
+      const mins = data.user.accountDeviceLock.remainingMins;
+      toast(`Account locked (${mins != null ? mins + ' min remaining' : 'contact admin'}). Quiz/meeting access blocked.`, 'error');
     } else {
       toast('Signed in!', 'success');
     }

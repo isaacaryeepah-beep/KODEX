@@ -4,6 +4,7 @@ const { requireRole, requireMinRole } = require("../middleware/role");
 const { companyIsolation } = require("../middleware/companyIsolation");
 const { requireActiveSubscription } = require("../middleware/subscription");
 const { enforceLogoutRestriction } = require("../middleware/deviceValidation");
+const requireNoDeviceLock = require("../middleware/requireNoDeviceLock");
 const attendanceController = require("../controllers/attendanceController");
 const router = express.Router();
 
@@ -18,7 +19,7 @@ router.get("/my-attendance", attendanceController.getMyAttendance);
 router.get("/sign-in-status", attendanceController.getSignInStatus);
 router.post("/sign-in", requireRole("employee", "admin", "manager"), attendanceController.employeeSignIn);
 router.post("/sign-out", requireRole("employee", "admin", "manager"), attendanceController.employeeSignOut);
-router.post("/mark", requireRole("student", "employee"), enforceLogoutRestriction, attendanceController.markAttendance);
+router.post("/mark", requireRole("student", "employee"), requireNoDeviceLock, enforceLogoutRestriction, attendanceController.markAttendance);
 router.get("/:id/current-code", requireRole("lecturer", "admin", "superadmin"), companyIsolation, attendanceController.getCurrentCode);
 router.get("/:id/records", requireRole("lecturer", "hod", "admin", "superadmin", "manager"), companyIsolation, attendanceController.getSessionRecords);
 router.get("/:id", requireRole("lecturer", "hod", "admin", "superadmin", "manager"), companyIsolation, attendanceController.getSession);
