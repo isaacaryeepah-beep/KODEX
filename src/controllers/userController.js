@@ -715,6 +715,7 @@ exports.unlockAccountDeviceLock = async (req, res) => {
       return res.status(403).json({ error: "Only admin or HOD can unlock accounts" });
     }
 
+
     const user = await User.findOne({ _id: req.params.id, company: req.user.company });
     if (!user) return res.status(404).json({ error: "User not found" });
 

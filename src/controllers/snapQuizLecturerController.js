@@ -505,12 +505,25 @@ async function _autoGradeAttemptLecturer(attemptId, companyId) {
     let isCorrect = false;
     if (q.questionType === "mcq") {
       isCorrect = response.selectedOptionIndex === q.correctOptionIndex;
+    } else if (q.questionType === "mcq_multi") {
+      const c = new Set((q.correctOptionIndices || []).map(String));
+      const s = new Set((response.selectedOptionIndices || []).map(String));
+      isCorrect = c.size > 0 && c.size === s.size && [...c].every(v => s.has(v));
     } else if (q.questionType === "true_false") {
-      isCorrect = response.booleanAnswer === q.correctBoolean;
-    } else if (q.questionType === "fill_blank") {
+      isCorrect = response.selectedBoolean === q.correctBoolean;
+    } else if (q.questionType === "fill_blank" || q.questionType === "short_answer") {
       const typed = (response.textAnswer || "").trim().toLowerCase();
       const correct = (q.correctAnswerText || "").trim().toLowerCase();
-      isCorrect = typed.length > 0 && typed === correct;
+      isCorrect = typed.length > 0 && (
+        typed === correct ||
+        (q.acceptedAnswers || []).map(x => x.trim().toLowerCase()).includes(typed)
+      );
+    } else if (q.questionType === "numeric") {
+      const expected = q.numericAnswer?.value;
+      const tol = q.numericAnswer?.tolerance || 0;
+      if (expected != null && response.numericAnswer != null) {
+        isCorrect = Math.abs(response.numericAnswer - expected) <= tol;
+      }
     }
 
     const earnedMarks = isCorrect ? (q.marks || 1) : 0;

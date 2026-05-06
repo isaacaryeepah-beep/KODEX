@@ -33,8 +33,9 @@ router.post('/create',
   meetCtrl.createMeeting
 );
 
-router.get('/',  meetCtrl.listMeetings);
-router.get('/:id', meetCtrl.getMeeting);
+router.get('/',                  meetCtrl.listMeetings);
+router.get('/validate-token',    meetCtrl.validateMeetingToken);
+router.get('/:id',               meetCtrl.getMeeting);
 
 router.put('/:id/update',  loadMeeting, isOwner, meetCtrl.updateMeeting);
 router.post('/:id/start',  loadMeeting, isOwner, meetCtrl.startMeeting);
