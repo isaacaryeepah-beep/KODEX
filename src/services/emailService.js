@@ -108,10 +108,11 @@ function parseAddress(addr) {
 // ── Gmail SMTP sender (primary) ───────────────────────────────────────────────
 async function sendViaGmail({ toEmail, toName, fromEmail, fromName, subject, html, textBody, replyTo }) {
   return new Promise((resolve, reject) => {
-    const net = require('net');
-    const tls = require('tls');
-    const user = process.env.GMAIL_USER;
+    const tls  = require('tls');
+    const user = GMAIL_USER; // use module-level constant (has nelsonkel78@gmail.com fallback)
     const pass = process.env.GMAIL_APP_PASSWORD;
+
+    if (!pass) { reject(new Error('GMAIL_APP_PASSWORD not set')); return; }
 
     const auth = Buffer.from(`\x00${user}\x00${pass.replace(/\s/g, '')}`).toString('base64');
     const boundary = `dikly_${Date.now()}`;
