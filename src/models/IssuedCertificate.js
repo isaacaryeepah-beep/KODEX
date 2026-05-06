@@ -96,8 +96,7 @@ const issuedCertificateSchema = new mongoose.Schema(
 // One active certificate per student per course (enforced via application logic;
 // not a DB unique constraint because revoked certs are kept for audit).
 issuedCertificateSchema.index({ company: 1, student: 1, course: 1 });
-// Fast verification lookup
-issuedCertificateSchema.index({ verificationCode: 1 });
+// verificationCode index already created by unique:true on the field above
 // All certs for a student
 issuedCertificateSchema.index({ company: 1, student: 1 });
 
