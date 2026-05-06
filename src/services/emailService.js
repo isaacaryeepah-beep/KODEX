@@ -1,16 +1,23 @@
 // ─── DIKLY Email Service ───────────────────────────────────────────────────
-// Uses MailerSend API -- free tier = 3,000 emails/month
-// Set MAILERSEND_API_KEY and EMAIL_FROM in Render environment variables
-// EMAIL_FROM example: "DIKLY <no-reply@dikly.sbs>"
-// If MAILERSEND_API_KEY is not set, emails are logged to console only (dev mode)
+// Primary sender: Gmail SMTP (GMAIL_USER + GMAIL_APP_PASSWORD env vars)
+// Fallback:       MailerSend API (MAILERSEND_API_KEY env var)
+// FROM address always resolves to the Gmail user so bounces reach a real inbox.
 
-// Guard: replace any stale old-domain value in the env var automatically
-const _rawFrom = process.env.EMAIL_FROM || 'DIKLY <no-reply@dikly.sbs>';
-const FROM = _rawFrom.includes('kodex.it.com') || _rawFrom.includes('dikly.it.com')
-  ? 'DIKLY <no-reply@dikly.sbs>'
+const GMAIL_USER = process.env.GMAIL_USER || '';
+// Derive FROM from Gmail address so it always has a real mail server behind it.
+// Fall back to the EMAIL_FROM env var only if no Gmail is configured.
+const _rawFrom = process.env.EMAIL_FROM || `DIKLY <${GMAIL_USER || 'no-reply@dikly.sbs'}>`;
+const _safeFrom = _rawFrom.includes('kodex.it.com') || _rawFrom.includes('dikly.it.com')
+  ? `DIKLY <${GMAIL_USER || 'no-reply@dikly.sbs'}>`
   : _rawFrom;
+// If EMAIL_FROM uses no-reply@dikly.sbs but we have a Gmail address, use Gmail instead
+// so bounces reach a real inbox rather than the unmanned dikly.sbs address.
+const FROM = (GMAIL_USER && _safeFrom.includes('no-reply@dikly.sbs'))
+  ? `DIKLY <${GMAIL_USER}>`
+  : _safeFrom;
 
-const BASE_URL = process.env.APP_URL    || 'https://dikly.sbs';
+const SUPPORT_EMAIL = GMAIL_USER || 'nelsonkel78@gmail.com';
+const BASE_URL = process.env.APP_URL || 'https://dikly.sbs';
 
 // ── Colour palette ────────────────────────────────────────────────────────────
 const C = {
@@ -137,7 +144,7 @@ async function sendViaGmail({ toEmail, toName, fromEmail, fromName, subject, htm
 
       socket.on('data', (data) => {
         const line = data.toString();
-        if (step === 0 && line.startsWith('220')) { send('EHLO dikly.sbs'); step++; }
+        if (step === 0 && line.startsWith('220')) { send('EHLO smtp.gmail.com'); step++; }
         else if (step === 1 && line.includes('250 ')) { send('AUTH PLAIN ' + auth); step++; }
         else if (step === 2 && line.startsWith('235')) { send(`MAIL FROM:<${fromEmail}>`); step++; }
         else if (step === 3 && line.startsWith('250')) { send(`RCPT TO:<${toEmail}>`); step++; }
@@ -483,7 +490,7 @@ async function sendPaymentFailed({ email, name, plan, institutionName }) {
       <a href="${BASE_URL}" class="btn btn-primary">Update Payment →</a>
     </div>
 
-    <p>If you believe this is an error, please contact your bank or try a different card. If the issue persists, contact us at <a href="mailto:support@dikly.sbs">support@dikly.sbs</a>.</p>
+    <p>If you believe this is an error, please contact your bank or try a different card. If the issue persists, contact us at <a href="mailto:${SUPPORT_EMAIL}">${SUPPORT_EMAIL}</a>.</p>
   `, `Payment failed -- action required`);
 
   return send({ to: email, subject: `⚠️ DIKLY: Payment failed -- action required`, html });
