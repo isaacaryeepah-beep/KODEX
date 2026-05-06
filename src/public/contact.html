@@ -113,18 +113,21 @@
 
   <div class="card">
     <h2 style="margin-bottom:20px;">Send a Message</h2>
-    <form id="contact-form" onsubmit="handleContact(event)">
+    <form id="contact-form" action="https://formsubmit.co/Nelsonkel78@gmail.com" method="POST" onsubmit="handleContact(event)">
+      <input type="hidden" name="_subject" value="New enquiry from dikly.sbs">
+      <input type="hidden" name="_next" value="https://dikly.sbs/contact">
+      <input type="hidden" name="_captcha" value="false">
       <div class="form-group">
         <label for="cf-name">Your Name *</label>
-        <input id="cf-name" type="text" placeholder="Full name" required>
+        <input id="cf-name" name="name" type="text" placeholder="Full name" required>
       </div>
       <div class="form-group">
         <label for="cf-email">Email Address *</label>
-        <input id="cf-email" type="email" placeholder="you@example.com" required>
+        <input id="cf-email" name="email" type="email" placeholder="you@example.com" required>
       </div>
       <div class="form-group">
         <label for="cf-subject">Subject</label>
-        <select id="cf-subject">
+        <select id="cf-subject" name="subject">
           <option value="">— Select a topic —</option>
           <option value="demo">Request a demo</option>
           <option value="school">Set up DIKLY for my school / university</option>
@@ -136,10 +139,10 @@
       </div>
       <div class="form-group">
         <label for="cf-message">Message *</label>
-        <textarea id="cf-message" placeholder="Tell us a bit about your needs..." required></textarea>
+        <textarea id="cf-message" name="message" placeholder="Tell us a bit about your needs..." required></textarea>
       </div>
       <button type="submit" class="btn btn-primary">Send Message</button>
-      <div class="success-msg" id="contact-success">✅ Message sent! We'll be in touch soon.</div>
+      <div class="success-msg" id="contact-success">Message sent! We'll be in touch soon.</div>
     </form>
   </div>
 
@@ -151,16 +154,14 @@
 
 <script>
 function handleContact(e) {
-  e.preventDefault();
   const btn = e.target.querySelector('button[type=submit]');
   btn.textContent = 'Sending…';
   btn.disabled = true;
-  // Replace with your actual form endpoint (Formspree, EmailJS, etc.)
+  // FormSubmit will handle the POST; show success after a short delay
   setTimeout(() => {
     document.getElementById('contact-success').style.display = 'block';
     btn.style.display = 'none';
-    e.target.reset();
-  }, 800);
+  }, 600);
 }
 </script>
 
