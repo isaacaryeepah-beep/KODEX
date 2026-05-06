@@ -771,9 +771,9 @@ exports.login = async (req, res) => {
       });
     }
 
-    // ── New-device 6-hour lock (DIKLY snap-quiz / meeting gate) ──────────────
-    // If user already has an accountDeviceLock that is still active, enforce it.
-    if (user.accountDeviceLock?.isLocked && user.accountDeviceLock?.lockedUntil) {
+    // ── New-device 6-hour lock (students only) ───────────────────────────────
+    // If student already has an active accountDeviceLock, block login.
+    if (user.role === "student" && user.accountDeviceLock?.isLocked && user.accountDeviceLock?.lockedUntil) {
       const lockExpiry = new Date(user.accountDeviceLock.lockedUntil);
       if (lockExpiry > new Date()) {
         const remainingMs = lockExpiry - Date.now();
@@ -790,8 +790,8 @@ exports.login = async (req, res) => {
       }
     }
 
-    // Detect login from a new device fingerprint → trigger 6-hour lock
-    if (deviceId && user.deviceId && user.deviceId !== deviceId) {
+    // Detect login from a new device fingerprint → trigger 6-hour lock (students only)
+    if (user.role === "student" && deviceId && user.deviceId && user.deviceId !== deviceId) {
       const now = new Date();
       user.accountDeviceLock = {
         isLocked: true,

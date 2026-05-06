@@ -6813,15 +6813,23 @@ async function createAndStartMeeting() {
 async function startMeeting(id) {
   try {
     await api(`/api/zoom/${id}/start`, { method: 'POST' });
-    // Join as host — records attendance and returns jitsiConfig
-    const joinData = await api(`/api/zoom/${id}/join`, { method: 'POST' });
+    // Join as host — records attendance and returns roomName / jitsiConfig
+    const joinData    = await api(`/api/zoom/${id}/join`, { method: 'POST' });
     const jitsiConfig = joinData?.data?.jitsiConfig;
-    const fallbackUrl = joinData?.data?.secureJoinUrl || joinData?.joinUrl;
+    const legacyUrl   = joinData?.data?.secureJoinUrl || joinData?.joinUrl;
+    const roomName    = jitsiConfig?.roomName || joinData?.roomName;
     renderMeetings();
-    if (jitsiConfig?.roomName) {
-      showJitsiEmbed(jitsiConfig);
-    } else if (fallbackUrl) {
-      window.open(fallbackUrl, '_blank');
+    if (roomName) {
+      const embedConfig = jitsiConfig || {
+        roomName,
+        domain:      legacyUrl ? (() => { try { return new URL(legacyUrl).hostname; } catch(e) { return 'meet.jit.si'; } })() : 'meet.jit.si',
+        displayName: currentUser?.name  || '',
+        email:       currentUser?.email || '',
+        subject:     '',
+      };
+      showJitsiEmbed(embedConfig);
+    } else if (legacyUrl) {
+      window.open(legacyUrl, '_blank');
     }
   } catch (e) {
     toastError(e.message);
@@ -6831,11 +6839,22 @@ async function startMeeting(id) {
 async function joinMeeting(id) {
   try {
     const data = await api(`/api/zoom/${id}/join`, { method: 'POST' });
+    // meetingController returns jitsiConfig nested under data.data
+    // zoomController returns roomName + joinUrl at root level
     const jitsiConfig = data.data?.jitsiConfig;
     const secureUrl   = data.data?.secureJoinUrl;
     const legacyUrl   = data.joinUrl;
-    if (jitsiConfig?.roomName) {
-      showJitsiEmbed(jitsiConfig);
+    const roomName    = jitsiConfig?.roomName || data.roomName;
+
+    if (roomName) {
+      const embedConfig = jitsiConfig || {
+        roomName,
+        domain:      legacyUrl ? (() => { try { return new URL(legacyUrl).hostname; } catch(e) { return 'meet.jit.si'; } })() : 'meet.jit.si',
+        displayName: currentUser?.name  || '',
+        email:       currentUser?.email || '',
+        subject:     '',
+      };
+      showJitsiEmbed(embedConfig);
     } else if (secureUrl) {
       window.open(secureUrl, '_blank');
     } else if (legacyUrl) {

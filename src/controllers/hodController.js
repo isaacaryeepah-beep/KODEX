@@ -31,7 +31,7 @@ exports.listLockedStudents = async (req, res) => {
     const students = await User.find(filter)
       .select("name IndexNumber department lockReason lockedAt lockedBy failedLoginAttempts lastFailedLoginAt accountDeviceLock isLocked")
       .populate("lockedBy", "name role")
-      .sort({ lockedAt: -1 })
+      .sort({ lockedAt: -1, "accountDeviceLock.lockedAt": -1 })
       .lean();
 
     res.json({ students, count: students.length });
