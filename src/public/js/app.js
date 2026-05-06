@@ -2223,11 +2223,13 @@ function buildSidebar() {
 
   switch (role) {
     case 'admin':
+      links.push({ sep: true, label: 'MANAGE' });
       links.push({ id: 'approvals', label: 'Approvals', icon: approvalsIcon() });
       links.push({ id: 'search', label: 'Search', icon: svgIcon('<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>') });
       links.push({ id: 'users', label: 'Users', icon: usersIcon() });
       links.push({ id: 'sessions', label: 'Sessions', icon: sessionsIcon() });
       if (currentUser.company?.mode === 'academic') {
+        links.push({ sep: true, label: 'ACADEMIC' });
         links.push({ id: 'courses', label: 'Courses', icon: coursesIcon() });
         links.push({ id: 'hod-course-approvals', label: 'Course Approvals', icon: svgIcon('<path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>') });
         links.push({ id: 'quizzes', label: 'Quizzes', icon: quizzesIcon() });
@@ -2236,6 +2238,7 @@ function buildSidebar() {
         links.push({ id: 'programmes', label: 'Programmes', icon: svgIcon('<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>') });
       }
       if (currentUser.company?.mode === 'corporate') {
+        links.push({ sep: true, label: 'WORKFORCE' });
         links.push({ id: 'sign-in-out',    label: 'Sign In / Out',   icon: attendanceIcon() });
         links.push({ id: 'corp-attendance',label: 'Team Attendance', icon: svgIcon('<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/><polyline points="9 11 12 14 22 4"/>') });
         links.push({ id: 'shifts',         label: 'Shifts',          icon: svgIcon('<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>') });
@@ -2245,44 +2248,57 @@ function buildSidebar() {
         links.push({ id: 'announcements',  label: 'Announcements',   icon: svgIcon('<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>') });
         links.push({ id: 'audit-logs',     label: 'Audit Logs',      icon: svgIcon('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="10" y2="9"/>') });
       }
+      links.push({ sep: true, label: 'COMMUNICATE' });
       links.push({ id: 'messages', label: 'Messages', icon: svgIcon('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>') });
       links.push({ id: 'meetings', label: 'Meetings', icon: meetingsIcon() });
+      links.push({ sep: true, label: 'INSIGHTS' });
       links.push({ id: 'reports', label: 'Reports', icon: reportsIcon() });
+      links.push({ sep: true, label: 'SUPPORT' });
       links.push({ id: 'faq-center', label: 'FAQ Center', icon: svgIcon('<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>') });
       links.push({ id: 'subscription', label: 'Subscription', icon: subscriptionIcon() });
       break;
     case 'manager':
+      links.push({ sep: true, label: 'MANAGE' });
       links.push({ id: 'approvals', label: 'Approvals', icon: approvalsIcon() });
       links.push({ id: 'users', label: 'Users', icon: usersIcon() });
       if (currentUser.company?.mode === 'corporate') {
+        links.push({ sep: true, label: 'WORKFORCE' });
         links.push({ id: 'sign-in-out', label: 'Sign In / Out', icon: attendanceIcon() });
         links.push({ id: 'corp-attendance', label: 'Team Attendance', icon: svgIcon('<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/><polyline points="9 11 12 14 22 4"/>') });
         links.push({ id: 'shifts', label: 'Shifts', icon: svgIcon('<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>') });
         links.push({ id: 'leave-requests', label: 'Leave Requests', icon: svgIcon('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>') });
         links.push({ id: 'announcements', label: 'Announcements', icon: svgIcon('<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>') });
       }
+      links.push({ sep: true, label: 'COMMUNICATE' });
       links.push({ id: 'messages', label: 'Messages', icon: svgIcon('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>') });
       links.push({ id: 'meetings', label: 'Meetings', icon: meetingsIcon() });
+      links.push({ sep: true, label: 'INSIGHTS' });
       links.push({ id: 'reports', label: 'Reports', icon: reportsIcon() });
+      links.push({ sep: true, label: 'SUPPORT' });
       links.push({ id: 'faq-center', label: 'FAQ Center', icon: svgIcon('<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>') });
       links.push({ id: 'subscription', label: 'Subscription', icon: subscriptionIcon() });
       break;
     case 'hod':
+      links.push({ sep: true, label: 'DEPARTMENT' });
       links.push({ id: 'hod-overview',     label: 'Overview',       icon: dashboardIcon() });
       links.push({ id: 'hod-sessions',     label: 'Sessions',       icon: sessionsIcon() });
       links.push({ id: 'hod-courses',      label: 'Courses',        icon: coursesIcon() });
       links.push({ id: 'hod-lecturers',    label: 'Lecturers',      icon: svgIcon('<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>') });
       links.push({ id: 'hod-students',     label: 'Students',       icon: usersIcon() });
+      links.push({ sep: true, label: 'INSIGHTS' });
       links.push({ id: 'hod-performance',  label: 'Performance',    icon: svgIcon('<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>') });
       links.push({ id: 'hod-alerts',       label: 'Smart Alerts',   icon: svgIcon('<path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>') });
-      links.push({ id: 'hod-messaging',    label: 'Dept. Messaging', icon: svgIcon('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><line x1="9" y1="10" x2="15" y2="10"/><line x1="12" y1="7" x2="12" y2="13"/>') });
-      links.push({ id: 'meetings',         label: 'Meetings',       icon: meetingsIcon() });
       links.push({ id: 'hod-reports',      label: 'Reports',        icon: reportsIcon() });
+      links.push({ sep: true, label: 'COMMUNICATE' });
+      links.push({ id: 'hod-messaging',    label: 'Dept. Messaging', icon: svgIcon('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><line x1="9" y1="10" x2="15" y2="10"/><line x1="12" y1="7" x2="12" y2="13"/>') });
+      links.push({ id: 'messages',         label: 'Messages',       icon: svgIcon('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>') });
+      links.push({ id: 'meetings',         label: 'Meetings',       icon: meetingsIcon() });
+      links.push({ id: 'announcements',    label: 'Announcements',  icon: svgIcon('<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>') });
+      links.push({ sep: true, label: 'ADMIN' });
       links.push({ id: 'approvals',           label: 'Approvals',        icon: approvalsIcon() });
       links.push({ id: 'hod-course-approvals',label: 'Course Approvals', icon: svgIcon('<path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>') });
       links.push({ id: 'hod-unlock-students', label: 'Locked Students',  icon: svgIcon('<rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>') });
-      links.push({ id: 'announcements',    label: 'Announcements',  icon: svgIcon('<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>') });
-      links.push({ id: 'messages',         label: 'Messages',       icon: svgIcon('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>') });
+      links.push({ sep: true, label: 'SUPPORT' });
       links.push({ id: 'faq-center',       label: 'FAQ Center',     icon: svgIcon('<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>') });
       break;
     case 'lecturer':
@@ -2305,34 +2321,42 @@ function buildSidebar() {
       break;
     case 'employee':
       links.push({ id: 'emp-home',      label: 'Home',            icon: svgIcon('<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>') });
+      links.push({ sep: true, label: 'ATTENDANCE' });
       links.push({ id: 'sign-in-out',   label: 'Clock In / Out',  icon: attendanceIcon() });
       links.push({ id: 'my-attendance', label: 'My Attendance',   icon: sessionsIcon() });
       links.push({ id: 'my-shift',      label: 'My Shift',        icon: svgIcon('<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>') });
       links.push({ id: 'my-leaves',     label: 'Leave',           icon: svgIcon('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>') });
+      links.push({ sep: true, label: 'COMMUNICATE' });
       links.push({ id: 'emp-notifications', label: 'Notifications', icon: svgIcon('<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>') });
       links.push({ id: 'announcements', label: 'Announcements', icon: svgIcon('<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>') });
-      links.push({ id: 'my-performance', label: 'My Performance', icon: svgIcon('<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>') });
-      links.push({ id: 'emp-assistant', label: 'Assistant', icon: svgIcon('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><circle cx="12" cy="10" r="1"/><circle cx="8" cy="10" r="1"/><circle cx="16" cy="10" r="1"/>') });
       links.push({ id: 'messages',      label: 'Messages',        icon: svgIcon('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>') });
       links.push({ id: 'meetings',      label: 'Meetings',        icon: meetingsIcon() });
+      links.push({ sep: true, label: 'INSIGHTS' });
+      links.push({ id: 'my-performance', label: 'My Performance', icon: svgIcon('<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>') });
+      links.push({ id: 'reports',       label: 'Reports',         icon: reportsIcon() });
+      links.push({ sep: true, label: 'SUPPORT' });
+      links.push({ id: 'emp-assistant', label: 'Assistant', icon: svgIcon('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><circle cx="12" cy="10" r="1"/><circle cx="8" cy="10" r="1"/><circle cx="16" cy="10" r="1"/>') });
       links.push({ id: 'support',       label: 'Support',         icon: svgIcon('<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>') });
       links.push({ id: 'faq-center',    label: 'FAQ Center',      icon: svgIcon('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><line x1="9" y1="10" x2="15" y2="10"/><line x1="12" y1="7" x2="12" y2="13"/>') });
-      links.push({ id: 'reports',       label: 'Reports',         icon: reportsIcon() });
       break;
     case 'student':
+      links.push({ sep: true, label: 'ATTENDANCE' });
       links.push({ id: 'mark-attendance', label: 'Mark Attendance', icon: attendanceIcon() });
       links.push({ id: 'my-attendance', label: 'My Attendance', icon: sessionsIcon() });
+      links.push({ sep: true, label: 'ACADEMIC' });
       links.push({ id: 'courses', label: 'My Courses', icon: coursesIcon() });
-      links.push({ id: 'quizzes', label: 'Quizzes', icon: quizzesIcon() });
       links.push({ id: 'timetable', label: 'Schedule', icon: svgIcon('<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>') });
-      links.push({ id: 'quiz-history', label: 'My Results', icon: svgIcon('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/>') });
+      links.push({ id: 'quizzes', label: 'Quizzes', icon: quizzesIcon() });
       links.push({ id: 'assignments', label: 'Assignments / Quiz', icon: assignmentsIcon() });
       links.push({ id: 'gradebook', label: 'My Grades', icon: svgIcon('<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>') });
+      links.push({ id: 'quiz-history', label: 'My Results', icon: svgIcon('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/>') });
+      links.push({ sep: true, label: 'COMMUNICATE' });
       links.push({ id: 'messages', label: 'Messages', icon: svgIcon('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>') });
       links.push({ id: 'meetings', label: 'Meetings', icon: meetingsIcon() });
+      links.push({ id: 'announcements', label: 'Announcements', icon: svgIcon('<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>') });
+      links.push({ sep: true, label: 'SUPPORT' });
       links.push({ id: 'support', label: 'Support', icon: svgIcon('<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>') });
       links.push({ id: 'faq-center', label: 'FAQ Center', icon: svgIcon('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><line x1="9" y1="10" x2="15" y2="10"/><line x1="12" y1="7" x2="12" y2="13"/>') });
-      links.push({ id: 'announcements', label: 'Announcements', icon: svgIcon('<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>') });
       break;
     case 'superadmin':
       links.push({ id: 'superadmin-platform', label: 'Platform',   icon: svgIcon('<rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>') });
@@ -3431,11 +3455,35 @@ async function renderHodUnlockStudents() {
     // Gather unique departments for filter
     const depts = [...new Set(students.map(s => s.department).filter(Boolean))].sort();
 
+    // Helper: determine lock type badge for a student
+    function lockTypeBadge(s) {
+      const hasDeviceLock = s.accountDeviceLock?.isLocked && s.accountDeviceLock?.lockedUntil && new Date(s.accountDeviceLock.lockedUntil) > new Date();
+      const hasLoginLock  = s.isLocked;
+      if (hasDeviceLock && hasLoginLock) return `<span style="background:#fef3c7;color:#92400e;border:1px solid #fde68a;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700;">Login + Device</span>`;
+      if (hasDeviceLock)  return `<span style="background:#ede9fe;color:#6d28d9;border:1px solid #c4b5fd;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700;">New Device</span>`;
+      return `<span style="background:#fee2e2;color:#b91c1c;border:1px solid #fca5a5;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700;">Failed Login</span>`;
+    }
+
+    function lockReason(s) {
+      const hasDeviceLock = s.accountDeviceLock?.isLocked && s.accountDeviceLock?.lockedUntil && new Date(s.accountDeviceLock.lockedUntil) > new Date();
+      if (hasDeviceLock) {
+        const until = new Date(s.accountDeviceLock.lockedUntil);
+        return `New device login — locked until ${until.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})} ${until.toLocaleDateString()}`;
+      }
+      return s.lockReason || '—';
+    }
+
+    function lockedSince(s) {
+      const hasDeviceLock = s.accountDeviceLock?.isLocked && s.accountDeviceLock?.lockedUntil && new Date(s.accountDeviceLock.lockedUntil) > new Date();
+      if (hasDeviceLock && !s.isLocked) return s.accountDeviceLock.lockedUntil ? timeAgo(new Date(s.accountDeviceLock.lockedUntil).getTime() - 6*3600000) : '—';
+      return s.lockedAt ? timeAgo(s.lockedAt) : '—';
+    }
+
     content.innerHTML = `
       <div class="page-header" style="flex-wrap:wrap;gap:10px;">
         <div>
           <h2>Locked Student Accounts</h2>
-          <p>${students.length} locked account${students.length !== 1 ? 's' : ''} · Locked after 5 failed login attempts</p>
+          <p>${students.length} locked account${students.length !== 1 ? 's' : ''} · Failed logins &amp; new device locks</p>
         </div>
         ${students.length > 1 ? `<button class="btn btn-primary btn-sm" onclick="hodBulkUnlockSelected()" id="hod-bulk-btn" style="display:none;">Unlock Selected</button>` : ''}
       </div>
@@ -3459,9 +3507,9 @@ async function renderHodUnlockStudents() {
                   <th style="text-align:left;padding:10px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Student</th>
                   <th style="text-align:left;padding:10px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Index No.</th>
                   <th style="text-align:left;padding:10px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Department</th>
-                  <th style="text-align:left;padding:10px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Lock Reason</th>
+                  <th style="text-align:left;padding:10px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Lock Type</th>
+                  <th style="text-align:left;padding:10px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Reason / Expiry</th>
                   <th style="text-align:left;padding:10px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Locked</th>
-                  <th style="text-align:center;padding:10px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Attempts</th>
                   <th style="padding:10px 12px;"></th>
                 </tr>
               </thead>
@@ -3476,11 +3524,9 @@ async function renderHodUnlockStudents() {
                     <td style="padding:10px 12px;">
                       ${s.department ? `<span style="background:#ecfeff;color:#0891b2;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600;">${esc(s.department)}</span>` : '—'}
                     </td>
-                    <td style="padding:10px 12px;font-size:12px;color:var(--text-muted);max-width:220px;">${esc(s.lockReason || '—')}</td>
-                    <td style="padding:10px 12px;font-size:12px;color:var(--text-muted);white-space:nowrap;">${s.lockedAt ? timeAgo(s.lockedAt) : '—'}</td>
-                    <td style="padding:10px 12px;text-align:center;">
-                      <span style="background:#fee2e2;color:#b91c1c;border:1px solid #fca5a5;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700;">${s.failedLoginAttempts || 0}</span>
-                    </td>
+                    <td style="padding:10px 12px;">${lockTypeBadge(s)}</td>
+                    <td style="padding:10px 12px;font-size:12px;color:var(--text-muted);max-width:220px;">${esc(lockReason(s))}</td>
+                    <td style="padding:10px 12px;font-size:12px;color:var(--text-muted);white-space:nowrap;">${lockedSince(s)}</td>
                     <td style="padding:10px 12px;white-space:nowrap;">
                       <button class="btn btn-sm btn-primary" onclick="hodUnlockStudent('${s._id}','${esc(s.name).replace(/'/g,"\\'")}')">
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg>
