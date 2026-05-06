@@ -4,7 +4,12 @@
 // EMAIL_FROM example: "DIKLY <no-reply@dikly.sbs>"
 // If MAILERSEND_API_KEY is not set, emails are logged to console only (dev mode)
 
-const FROM     = process.env.EMAIL_FROM || 'DIKLY <no-reply@dikly.sbs>';
+// Guard: replace any stale old-domain value in the env var automatically
+const _rawFrom = process.env.EMAIL_FROM || 'DIKLY <no-reply@dikly.sbs>';
+const FROM = _rawFrom.includes('kodex.it.com') || _rawFrom.includes('dikly.it.com')
+  ? 'DIKLY <no-reply@dikly.sbs>'
+  : _rawFrom;
+
 const BASE_URL = process.env.APP_URL    || 'https://dikly.sbs';
 
 // ── Colour palette ────────────────────────────────────────────────────────────
