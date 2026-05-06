@@ -1,9 +1,15 @@
 User-agent: *
 Allow: /
+Allow: /about
+Allow: /founder
+Allow: /contact
+Allow: /privacy
+Allow: /terms
+
 Disallow: /api/
 Disallow: /superadmin
 Disallow: /snap-quiz.html
 Disallow: /proctor-dashboard.html
 Disallow: /assignments.html
 
-Sitemap: https://dikly.it.com/sitemap.xml
+Sitemap: https://dikly.sbs/sitemap.xml

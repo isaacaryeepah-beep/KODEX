@@ -146,6 +146,11 @@ app.get("/superadmin", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "superadmin.html"));
 });
 
+// Public brand / identity pages — served as real HTML (not SPA fallback)
+app.get("/about",   (req, res) => res.sendFile(path.join(__dirname, "public", "about.html")));
+app.get("/founder", (req, res) => res.sendFile(path.join(__dirname, "public", "founder.html")));
+app.get("/contact", (req, res) => res.sendFile(path.join(__dirname, "public", "contact.html")));
+
 app.use(express.static(path.join(__dirname, "public"), {
   setHeaders: (res) => {
     res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
