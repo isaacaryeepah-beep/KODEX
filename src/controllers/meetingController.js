@@ -271,10 +271,11 @@ exports.joinMeeting = async (req, res) => {
       subject:     meeting.title,
       password:    meeting.settings.enablePassword ? meeting.roomPassword : undefined,
       configOverwrite: {
-        startWithAudioMuted:    meeting.settings.muteOnJoin,
-        startWithVideoMuted:    false,
-        enableLobbyChat:        meeting.settings.enableLobby,
+        startWithAudioMuted:     meeting.settings.muteOnJoin,
+        startWithVideoMuted:     false,
+        enableLobbyChat:         meeting.settings.enableLobby,
         enableNoisyMicDetection: true,
+        disableDeepLinking:      true,
       },
       interfaceConfigOverwrite: {
         SHOW_JITSI_WATERMARK:      false,
