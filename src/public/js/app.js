@@ -371,7 +371,7 @@ async function attemptOfflineLogin(credentials) {
     // Verify password hash
     const enteredHash = await hashPassword(credentials.password);
     if (enteredHash !== profile.passwordHash) {
-      throw new Error('Incorrect password.');
+      throw new Error('Wrong email or password.');
     }
 
     // Return a fake login response matching the real API shape
@@ -1146,7 +1146,7 @@ function friendlyError(msg) {
   if (m.includes('too many requests'))            return 'Too many requests. Please slow down and try again.';
   if (m.includes('no offline profile'))           return 'You\'re offline. Please connect to the internet to login for the first time.';
   if (m.includes('offline session expired'))      return 'Offline session expired. Please connect to login again.';
-  if (m.includes('incorrect password'))           return 'Incorrect password. Please try again.';
+  if (m.includes('incorrect password'))           return 'Wrong email or password.';
   if (m.includes('network') || m.includes('fetch')) return 'Network error. Please check your connection.';
   return msg; // fallback: show as-is
 }
@@ -1191,10 +1191,9 @@ async function handleAdminLogin() {
     } else if (m.includes('network') || m.includes('fetch')) {
       showAdminError('Network error. Please check your connection and try again.');
     } else if (m.includes('invalid credentials') || m.includes('wrong') || m.includes('not authorized')) {
-      const portalLabel = selectedPortalType === 'admin-academic' ? 'Academic Admin' : 'Corporate Admin';
-      showAdminError(`Wrong email or password for the ${portalLabel} portal. Make sure you are using the correct portal for your role.`);
+      showAdminError('Wrong email or password.');
     } else {
-      showAdminError(msg || 'Wrong email or password. Please check your credentials.');
+      showAdminError(msg || 'Wrong email or password.');
     }
   }
 }
@@ -1268,7 +1267,7 @@ async function handleLecturerLogin() {
     } else if (m.includes('invalid credentials') || m.includes('not authorized')) {
       showLecturerError('Wrong email or password.');
     } else {
-      showLecturerError(msg || 'Wrong email or password. Please check your credentials.');
+      showLecturerError(msg || 'Wrong email or password.');
     }
   }
 }
@@ -1627,9 +1626,9 @@ async function handleEmployeeLogin() {
     } else if (m2.includes('network') || m2.includes('fetch')) {
       showEmployeeError('Network error. Please check your connection and try again.');
     } else if (m2.includes('invalid credentials') || m2.includes('not authorized')) {
-      showEmployeeError('Wrong email or password for the Employee portal. If you are a manager or admin, please use the correct portal.');
+      showEmployeeError('Wrong email or password.');
     } else {
-      showEmployeeError(msg2 || 'Wrong email or password. Please check your credentials.');
+      showEmployeeError(msg2 || 'Wrong email or password.');
     }
   }
 }
@@ -1700,9 +1699,9 @@ async function handleStudentLogin() {
     } else if (m3.includes('network') || m3.includes('fetch')) {
       showStudentError('Network error. Please check your connection and try again.');
     } else if (m3.includes('invalid credentials') || m3.includes('not authorized')) {
-      showStudentError('Wrong Student ID or password. If you are a lecturer or admin, please use the correct portal.');
+      showStudentError('Wrong Student ID or password.');
     } else {
-      showStudentError(msg3 || 'Wrong Student ID or password. Please check your credentials.');
+      showStudentError(msg3 || 'Wrong Student ID or password.');
     }
   }
 }
