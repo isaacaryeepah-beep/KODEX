@@ -101,7 +101,7 @@ function parseAddress(addr) {
 }
 
 // ── Gmail SMTP sender (primary) ───────────────────────────────────────────────
-async function sendViaGmail({ toEmail, toName, fromEmail, fromName, subject, html, textBody }) {
+async function sendViaGmail({ toEmail, toName, fromEmail, fromName, subject, html, textBody, replyTo }) {
   return new Promise((resolve, reject) => {
     const net = require('net');
     const tls = require('tls');
@@ -113,6 +113,7 @@ async function sendViaGmail({ toEmail, toName, fromEmail, fromName, subject, htm
     const msgBody = [
       `From: ${fromName} <${fromEmail}>`,
       `To: ${toName} <${toEmail}>`,
+      ...(replyTo ? [`Reply-To: ${replyTo}`] : []),
       `Subject: ${subject}`,
       `MIME-Version: 1.0`,
       `Content-Type: multipart/alternative; boundary="${boundary}"`,
@@ -154,13 +155,14 @@ async function sendViaGmail({ toEmail, toName, fromEmail, fromName, subject, htm
 }
 
 // ── MailerSend fallback ───────────────────────────────────────────────────────
-async function sendViaMailerSend({ toEmail, toName, fromEmail, fromName, subject, html, textBody }) {
+async function sendViaMailerSend({ toEmail, toName, fromEmail, fromName, subject, html, textBody, replyTo }) {
   const https = require('https');
   const apiKey = process.env.MAILERSEND_API_KEY;
 
   const payload = JSON.stringify({
     from: { email: fromEmail, name: fromName },
     to:   [{ email: toEmail, name: toName || toEmail }],
+    ...(replyTo ? { reply_to: { email: replyTo } } : {}),
     subject,
     html,
     text: textBody || subject,
@@ -223,6 +225,7 @@ async function send({ to, subject, html, textBody }) {
         toName: toParsed.name || toParsed.email,
         fromEmail: gmailUser,
         fromName: fromParsed.name || 'DIKLY',
+        replyTo: gmailUser,
         subject: cleanSubject,
         html,
         textBody,
@@ -234,14 +237,16 @@ async function send({ to, subject, html, textBody }) {
     }
   }
 
-  // Fallback to MailerSend
+  // Fallback to MailerSend — always send FROM the Gmail address if available,
+  // since no-reply@dikly.sbs is not a verified MailerSend sender domain.
   if (mailerKey) {
     try {
       const result = await sendViaMailerSend({
         toEmail: toParsed.email,
         toName: toParsed.name || toParsed.email,
-        fromEmail: fromParsed.email,
+        fromEmail: gmailUser || fromParsed.email,
         fromName: fromParsed.name || 'DIKLY',
+        replyTo: gmailUser || null,
         subject: cleanSubject,
         html,
         textBody,
