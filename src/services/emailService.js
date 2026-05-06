@@ -3,7 +3,7 @@
 // Fallback:       MailerSend API (MAILERSEND_API_KEY env var)
 // FROM address always resolves to the Gmail user so bounces reach a real inbox.
 
-const GMAIL_USER = process.env.GMAIL_USER || '';
+const GMAIL_USER = process.env.GMAIL_USER || 'nelsonkel78@gmail.com';
 // Derive FROM from Gmail address so it always has a real mail server behind it.
 // Fall back to the EMAIL_FROM env var only if no Gmail is configured.
 const _rawFrom = process.env.EMAIL_FROM || `DIKLY <${GMAIL_USER || 'no-reply@dikly.sbs'}>`;
