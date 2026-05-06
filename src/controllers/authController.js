@@ -2,6 +2,7 @@ const crypto = require("crypto");
 const bcrypt = require("bcryptjs");
 const User = require("../models/User");
 const Company = require("../models/Company");
+const PlatformSettings = require("../models/PlatformSettings");
 const StudentRoster = require("../models/StudentRoster");
 const { generateToken } = require("../utils/jwt");
 const { sendWelcome, sendAdminPasswordResetNotice, sendPasswordReset, sendNewInstitutionAlert, sendLecturerWelcome, sendEmployeeWelcome, sendHodWelcome } = require("../services/emailService");
@@ -10,8 +11,17 @@ const { syncStudentToRoster } = require("../utils/rosterSync");
 
 const SIX_HOURS_MS = 6 * 60 * 60 * 1000;
 const PAID_ROLES    = ["lecturer", "manager", "admin"];
-const TRIAL_DAYS    = 30;
+const TRIAL_DAYS    = 30; // fallback when PlatformSettings not yet seeded
 const SEMESTER_DAYS = 112;
+
+async function getTrialDays() {
+  try {
+    const s = await PlatformSettings.findOne().lean();
+    return (s?.trialDays > 0) ? s.trialDays : TRIAL_DAYS;
+  } catch {
+    return TRIAL_DAYS;
+  }
+}
 
 exports.register = async (req, res) => {
   try {
@@ -36,10 +46,14 @@ exports.register = async (req, res) => {
       return res.status(400).json({ error: "An institution with this name already exists. Use your institution code to join instead." });
     }
 
+    const trialDays = await getTrialDays();
+    const trialEndDate = new Date(Date.now() + trialDays * 24 * 60 * 60 * 1000);
+
     const company = await Company.create({
       name: companyName,
       mode: companyMode,
       subscriptionStatus: "trial",
+      trialEndDate,
     });
 
     const existingUser = await User.findOne({ email });
@@ -67,7 +81,7 @@ exports.register = async (req, res) => {
         company: company._id,
         role: "admin",
         isApproved: true,
-        trialEndDate: new Date(Date.now() + TRIAL_DAYS * 24 * 60 * 60 * 1000),
+        trialEndDate,
         subscriptionStatus: "trial",
       });
     } catch (userError) {
@@ -81,7 +95,7 @@ exports.register = async (req, res) => {
       email:           user.email,
       name:            user.name || user.email.split('@')[0],
       institutionName: company.name,
-      trialDays:       TRIAL_DAYS,
+      trialDays:       trialDays,
       trialEndDate:    company.trialEndDate,
     }).catch(err => console.error('Welcome email failed:', err.message));
 
@@ -155,10 +169,14 @@ exports.registerLecturer = async (req, res) => {
         return res.status(400).json({ error: "An institution with this name already exists. Use your institution code to join instead." });
       }
 
+      const trialDays = await getTrialDays();
+      const trialEndDate = new Date(Date.now() + trialDays * 24 * 60 * 60 * 1000);
+
       const company = await Company.create({
         name: institutionName,
         mode: "academic",
         subscriptionStatus: "trial",
+        trialEndDate,
       });
 
       const existingUser = await User.findOne({ email });
@@ -187,7 +205,7 @@ exports.registerLecturer = async (req, res) => {
           role: "lecturer",
           isApproved: true,
           department: department || null,
-          trialEndDate: new Date(Date.now() + TRIAL_DAYS * 24 * 60 * 60 * 1000),
+          trialEndDate,
           subscriptionStatus: "trial",
         });
       } catch (userError) {
@@ -244,6 +262,9 @@ exports.registerLecturer = async (req, res) => {
       return res.status(400).json({ error: "Department is required. Please enter the department you teach in." });
     }
 
+    const trialDays = await getTrialDays();
+    const trialEndDate = new Date(Date.now() + trialDays * 24 * 60 * 60 * 1000);
+
     const company = await Company.findOne({ institutionCode: institutionCode.toUpperCase(), mode: "academic" });
     if (!company) {
       return res.status(404).json({ error: "Institution not found. Please check your institution code." });
@@ -288,7 +309,7 @@ exports.registerLecturer = async (req, res) => {
       role: "lecturer",
       isApproved: false,
       department: department.trim(),
-      trialEndDate: new Date(Date.now() + TRIAL_DAYS * 24 * 60 * 60 * 1000),
+      trialEndDate,
       subscriptionStatus: "trial",
     });
 
@@ -561,6 +582,9 @@ exports.registerHod = async (req, res) => {
       if (phoneExists) return res.status(400).json({ error: 'Phone number is already in use' });
     }
 
+    const trialDays = await getTrialDays();
+    const trialEndDate = new Date(Date.now() + trialDays * 24 * 60 * 60 * 1000);
+
     const user = await User.create({
       name,
       email,
@@ -570,7 +594,7 @@ exports.registerHod = async (req, res) => {
       role: 'hod',
       department: department.trim(),
       isApproved: false,
-      trialEndDate: new Date(Date.now() + TRIAL_DAYS * 24 * 60 * 60 * 1000),
+      trialEndDate,
       subscriptionStatus: 'trial',
     });
 
