@@ -4865,7 +4865,7 @@ async function renderStudentDashboard(content) {
       <div style="font-size:22px;flex-shrink:0">\ud83d\udd12</div>
       <div>
         <div style="font-weight:700;color:#92400e;font-size:14px">Account Temporarily Locked \u2014 New Device Detected</div>
-        <div style="color:#78350f;font-size:13px;margin-top:4px">You logged in from a new device. Quizzes and meetings are blocked for <strong>${timeStr}</strong> (until ${until.toLocaleTimeString()}). Contact your admin or HOD to unlock early.</div>
+        <div style="color:#78350f;font-size:13px;margin-top:4px">You logged in from a new device. Attendance marking, quizzes, and meetings are blocked for <strong>${timeStr}</strong> (until ${until.toLocaleTimeString()}). Contact your admin or HOD to unlock early.</div>
       </div>
     </div>`;
   })() : '';
@@ -6798,7 +6798,7 @@ async function startMeeting(id) {
 
 async function joinMeeting(id) {
   try {
-    const data = await api(`/api/zoom/${id}/join`);
+    const data = await api(`/api/zoom/${id}/join`, { method: 'POST' });
     // New Jitsi meetings return data.data.secureJoinUrl; old Zoom meetings return data.joinUrl
     const secureUrl = data.data?.secureJoinUrl;
     const jitsiConfig = data.data?.jitsiConfig;
