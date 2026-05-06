@@ -742,7 +742,6 @@ exports.removeTrustedDevice = async (req, res) => {
 
     if (!removed) return res.status(404).json({ error: "Device not found in trusted list" });
 
-    // If the removed device was the current device, reset deviceId
     if (user.deviceId === deviceId) user.deviceId = null;
 
     await user.save({ validateBeforeSave: false });

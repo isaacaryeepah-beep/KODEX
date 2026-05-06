@@ -267,7 +267,7 @@ const userSchema = new mongoose.Schema(
       lastSeenAt:  { type: Date,   default: Date.now },
       ipAddress:   { type: String, default: null },
       userAgent:   { type: String, default: null },
-      platform:    { type: String, default: null }, // "mobile" | "tablet" | "desktop" | "unknown"
+      platform:    { type: String, default: null },
       _id: false,
     }],
 

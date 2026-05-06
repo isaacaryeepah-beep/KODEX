@@ -1029,6 +1029,7 @@ body[data-role="student"] .trial-expired-banner {
 
 .sidebar-nav {
   flex: 1;
+  min-height: 0;
   width: 100%;
   overflow-y: auto;
   overflow-x: hidden;
@@ -6050,6 +6051,7 @@ table tr:hover td { background: #f8fafc !important; }
 /* ── Nav container ── */
 .sidebar-nav {
   flex: 1 !important;
+  min-height: 0 !important;
   padding: 6px 10px 4px !important;
   gap: 1px !important;
   width: 100% !important;

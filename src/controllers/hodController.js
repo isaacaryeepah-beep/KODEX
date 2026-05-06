@@ -19,12 +19,19 @@ function hodDeptFilter(req, base = {}) {
 // ─── GET /api/hod/locked-students ────────────────────────────────────────────
 exports.listLockedStudents = async (req, res) => {
   try {
-    const filter = hodDeptFilter(req, { role: "student", isLocked: true });
+    const now = new Date();
+    const filter = hodDeptFilter(req, {
+      role: "student",
+      $or: [
+        { isLocked: true },
+        { "accountDeviceLock.isLocked": true, "accountDeviceLock.lockedUntil": { $gt: now } },
+      ],
+    });
 
     const students = await User.find(filter)
-      .select("name IndexNumber department lockReason lockedAt lockedBy failedLoginAttempts lastFailedLoginAt")
+      .select("name IndexNumber department lockReason lockedAt lockedBy failedLoginAttempts lastFailedLoginAt accountDeviceLock isLocked")
       .populate("lockedBy", "name role")
-      .sort({ lockedAt: -1 })
+      .sort({ lockedAt: -1, "accountDeviceLock.lockedAt": -1 })
       .lean();
 
     res.json({ students, count: students.length });
@@ -37,10 +44,14 @@ exports.listLockedStudents = async (req, res) => {
 // ─── PATCH /api/hod/unlock/:userId ───────────────────────────────────────────
 exports.unlockStudent = async (req, res) => {
   try {
+    const now = new Date();
     const filter = hodDeptFilter(req, {
-      _id:      req.params.userId,
-      role:     "student",
-      isLocked: true,
+      _id:  req.params.userId,
+      role: "student",
+      $or: [
+        { isLocked: true },
+        { "accountDeviceLock.isLocked": true, "accountDeviceLock.lockedUntil": { $gt: now } },
+      ],
     });
 
     const student = await User.findOne(filter);
@@ -56,6 +67,11 @@ exports.unlockStudent = async (req, res) => {
     student.lockedBy            = null;
     student.failedLoginAttempts = 0;
     student.lastFailedLoginAt   = null;
+    // Also clear device lock if active
+    if (student.accountDeviceLock?.isLocked) {
+      student.accountDeviceLock.isLocked    = false;
+      student.accountDeviceLock.lockedUntil = null;
+    }
     await student.save();
 
     // Audit trail
@@ -337,12 +353,26 @@ exports.bulkUnlockStudents = async (req, res) => {
       return res.status(400).json({ error: "Maximum 50 accounts per bulk unlock" });
     }
 
-    const filter   = hodDeptFilter(req, { _id: { $in: userIds }, role: "student", isLocked: true });
+    const now = new Date();
+    const filter = hodDeptFilter(req, {
+      _id: { $in: userIds },
+      role: "student",
+      $or: [
+        { isLocked: true },
+        { "accountDeviceLock.isLocked": true, "accountDeviceLock.lockedUntil": { $gt: now } },
+      ],
+    });
     const students = await User.find(filter).lean();
 
     await User.updateMany(
       { _id: { $in: students.map(s => s._id) } },
-      { $set: { isLocked: false, lockedAt: null, lockReason: null, lockedBy: null, failedLoginAttempts: 0, lastFailedLoginAt: null } }
+      {
+        $set: {
+          isLocked: false, lockedAt: null, lockReason: null, lockedBy: null,
+          failedLoginAttempts: 0, lastFailedLoginAt: null,
+          "accountDeviceLock.isLocked": false, "accountDeviceLock.lockedUntil": null,
+        },
+      }
     );
 
     await Promise.allSettled(students.map(s =>
