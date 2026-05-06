@@ -11015,7 +11015,6 @@ function renderContact() {
         <p style="font-size:13px;color:var(--text-light);margin-bottom:12px">Call us during business hours</p>
         <div style="display:flex;flex-direction:column;gap:6px">
           <a href="tel:+233559545339" class="btn btn-secondary btn-sm" style="text-decoration:none">0559545339</a>
-          <a href="tel:+233536143117" class="btn btn-secondary btn-sm" style="text-decoration:none">0536143117</a>
           <a href="tel:+233534707844" class="btn btn-secondary btn-sm" style="text-decoration:none">0534707844</a>
         </div>
       </div>
@@ -11026,7 +11025,6 @@ function renderContact() {
         <p style="font-size:13px;color:var(--text-light);margin-bottom:12px">Chat with us on WhatsApp</p>
         <div style="display:flex;flex-direction:column;gap:6px">
           <a href="https://wa.me/233559545339" target="_blank" class="btn btn-sm" style="background:#25d366;color:#fff;text-decoration:none">0559545339</a>
-          <a href="https://wa.me/233536143117" target="_blank" class="btn btn-sm" style="background:#25d366;color:#fff;text-decoration:none">0536143117</a>
           <a href="https://wa.me/233534707844" target="_blank" class="btn btn-sm" style="background:#25d366;color:#fff;text-decoration:none">0534707844</a>
         </div>
       </div>
