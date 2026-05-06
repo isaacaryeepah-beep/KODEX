@@ -894,7 +894,7 @@ exports.login = async (req, res) => {
     // deviceId is already set inside the trusted-device block above; only update here
     // when no fingerprint was provided (e.g. old clients or server-side calls)
     if (deviceId && !user.deviceId) user.deviceId = deviceId;
-    await user.save();
+    await user.save({ validateModifiedOnly: true });
 
     const token = generateToken(user._id);
 
