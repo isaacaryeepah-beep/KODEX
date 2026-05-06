@@ -856,40 +856,6 @@ exports.login = async (req, res) => {
       }
     }
 
-    // ── New-device 6-hour lock (students only) ───────────────────────────────
-    // If student already has an active accountDeviceLock, block login.
-    if (user.role === "student" && user.accountDeviceLock?.isLocked && user.accountDeviceLock?.lockedUntil) {
-      const lockExpiry = new Date(user.accountDeviceLock.lockedUntil);
-      if (lockExpiry > new Date()) {
-        const remainingMs = lockExpiry - Date.now();
-        const remainingMins = Math.ceil(remainingMs / 60000);
-        return res.status(403).json({
-          error: "Your account is temporarily locked due to a new device login. Please wait or contact your admin/HOD to unlock.",
-          accountLocked: true,
-          lockedUntil: lockExpiry.toISOString(),
-          remainingMins,
-        });
-      } else {
-        // Lock expired naturally — clear it
-        user.accountDeviceLock.isLocked = false;
-      }
-    }
-
-    // Detect login from a new device fingerprint → trigger 6-hour lock (students only)
-    if (user.role === "student" && deviceId && user.deviceId && user.deviceId !== deviceId) {
-      const now = new Date();
-      user.accountDeviceLock = {
-        isLocked: true,
-        lockedAt: now,
-        lockedUntil: new Date(now.getTime() + SIX_HOURS_MS),
-        triggerDevice: deviceId,
-        knownDevice: user.deviceId,
-        unlockedBy: null,
-        unlockedAt: null,
-      };
-      // Allow login but the quiz/meeting gate will block them
-    }
-
     user.lastLoginAt = new Date();
     // deviceId is already set inside the trusted-device block above; only update here
     // when no fingerprint was provided (e.g. old clients or server-side calls)
