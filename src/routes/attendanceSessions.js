@@ -12,7 +12,8 @@ router.use(authenticate);
 router.use(requireActiveSubscription);
 
 router.post("/start", requireRole("admin", "manager", "lecturer", "superadmin"), companyIsolation, attendanceController.startSession);
-router.post("/:id/stop", requireRole("admin", "manager", "lecturer", "superadmin"), companyIsolation, attendanceController.stopSession);
+// NOTE: POST /:id/stop is handled by sessionDashboard router (mounted at same prefix in server.js)
+// which returns richer summary data. This avoids a double-mount shadow.
 router.get("/", requireRole("manager", "lecturer", "admin", "superadmin", "hod"), companyIsolation, attendanceController.listSessions);
 router.get("/active", companyIsolation, attendanceController.getActiveSession);
 router.get("/my-attendance", attendanceController.getMyAttendance);
