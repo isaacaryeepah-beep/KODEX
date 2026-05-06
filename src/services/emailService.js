@@ -513,7 +513,7 @@ async function sendNewInstitutionAlert({ institutionName, adminName, adminEmail,
       <a href="${BASE_URL}/superadmin" class="btn btn-primary">Open Superadmin →</a>
     </div>
   `, `New institution: ${institutionName}`);
-  return send({ to: FROM, subject: `🎉 New institution on DIKLY: ${institutionName}`, html });
+  return send({ to: GMAIL_USER, subject: `🎉 New institution on DIKLY: ${institutionName}`, html });
 }
 
 
