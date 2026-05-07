@@ -1,0 +1,23 @@
+{
+  "name": "DIKLY – Smart Attendance & Assessment",
+  "short_name": "DIKLY",
+  "description": "Smart attendance, assessment, and academic management platform for schools and companies.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0f172a",
+  "theme_color": "#4f46e5",
+  "lang": "en",
+  "icons": [
+    {
+      "src": "/dikly-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["education", "productivity", "business"],
+  "screenshots": [],
+  "prefer_related_applications": false
+}
