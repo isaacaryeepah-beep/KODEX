@@ -11917,19 +11917,34 @@ function renderAbout() {
         </div>
       </div>
 
-      <!-- Founder card -->
+      <!-- Team card -->
       <div class="card" style="margin-bottom:16px">
-        <div style="font-weight:700;font-size:15px;margin-bottom:16px">Our Founder</div>
-        <div style="display:flex;align-items:center;gap:16px">
-          <div style="width:60px;height:60px;border-radius:50%;background:linear-gradient(135deg,#4f46e5,#7c3aed);display:flex;align-items:center;justify-content:center;flex-shrink:0">
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        <div style="font-weight:700;font-size:15px;margin-bottom:16px">Our Team</div>
+        <div style="display:flex;flex-direction:column;gap:20px">
+          <div style="display:flex;align-items:center;gap:16px">
+            <div style="width:60px;height:60px;border-radius:50%;background:linear-gradient(135deg,#4f46e5,#7c3aed);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+            </div>
+            <div>
+              <div style="font-weight:800;font-size:16px;color:var(--text-primary)">Isaac Kweku Aryeepah</div>
+              <div style="font-size:13px;color:#4f46e5;font-weight:600;margin-bottom:4px">Founder &amp; CEO, DIKLY Technologies</div>
+              <div style="font-size:13px;color:var(--text-light);line-height:1.6">
+                Visionary technologist and entrepreneur passionate about transforming how institutions
+                manage attendance, learning, and workforce operations across Africa.
+              </div>
+            </div>
           </div>
-          <div>
-            <div style="font-weight:800;font-size:16px;color:var(--text-primary)">Isaac Kweku Aryeepah</div>
-            <div style="font-size:13px;color:#4f46e5;font-weight:600;margin-bottom:4px">Founder &amp; CEO, DIKLY Technologies</div>
-            <div style="font-size:13px;color:var(--text-light);line-height:1.6">
-              Visionary technologist and entrepreneur passionate about transforming how institutions
-              manage attendance, learning, and workforce operations across Africa.
+          <div style="border-top:1px solid var(--border);padding-top:20px;display:flex;align-items:center;gap:16px">
+            <div style="width:60px;height:60px;border-radius:50%;background:linear-gradient(135deg,#0891b2,#0284c7);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+            </div>
+            <div>
+              <div style="font-weight:800;font-size:16px;color:var(--text-primary)">Dickson Akuoko Sarpong</div>
+              <div style="font-size:13px;color:#0891b2;font-weight:600;margin-bottom:4px">Manager, DIKLY Technologies</div>
+              <div style="font-size:13px;color:var(--text-light);line-height:1.6">
+                Driving operational excellence and strategic growth, ensuring DIKLY delivers
+                outstanding value to institutions and organisations across Africa.
+              </div>
             </div>
           </div>
         </div>
