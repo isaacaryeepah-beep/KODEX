@@ -232,8 +232,9 @@ router.get("/users/messageable", ...mw, async (req, res) => {
         }).select("_id name role department").lean();
         hodUsers = await User.find({
           company,
-          role:     "hod",
-          isActive: true,
+          role:       "hod",
+          isActive:   true,
+          ...(req.user.department ? { department: req.user.department } : { _id: null }),
         }).select("_id name role department").lean();
         // also include admin
         const admins = await User.find({
