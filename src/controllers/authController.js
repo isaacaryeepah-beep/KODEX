@@ -689,14 +689,16 @@ exports.login = async (req, res) => {
 
     const isMatch = await user.comparePassword(password);
     if (!isMatch) {
-      // Track failed attempts for student accounts; lock after 5 consecutive failures
-      if (user && user.role === 'student') {
+      // Track failed attempts for student/employee accounts; lock after 5 consecutive failures
+      if (user && ['student', 'employee'].includes(user.role)) {
         user.failedLoginAttempts = (user.failedLoginAttempts || 0) + 1;
         user.lastFailedLoginAt = new Date();
         if (user.failedLoginAttempts >= 5 && !user.isLocked) {
           user.isLocked = true;
           user.lockedAt = new Date();
-          user.lockReason = 'Account locked after 5 failed login attempts. Contact your department HOD.';
+          user.lockReason = user.role === 'employee'
+            ? 'Account locked after 5 failed login attempts. Contact your manager or admin.'
+            : 'Account locked after 5 failed login attempts. Contact your department HOD.';
         }
         await user.save().catch(() => {});
       }
