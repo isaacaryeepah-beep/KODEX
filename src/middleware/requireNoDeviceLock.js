@@ -16,8 +16,8 @@ module.exports = async function requireNoDeviceLock(req, res, next) {
     const user = await User.findById(req.user._id).select("accountDeviceLock role");
     if (!user) return res.status(401).json({ error: "Unauthorized" });
 
-    // Only students are subject to device lock
-    if (user.role !== 'student') return next();
+    // Only students and employees are subject to device lock
+    if (!['student', 'employee'].includes(user.role)) return next();
 
     const lock = user.accountDeviceLock;
     if (!lock || !lock.isLocked) return next();
