@@ -6,6 +6,21 @@ const API = window.location.hostname === 'localhost' || window.location.hostname
   ? ''
   : window.location.origin;
 
+// Median.co / Android WebView helper — opens external URLs in system browser,
+// internal URLs navigate within the WebView.
+function openUrl(url, forceExternal = false) {
+  const isMedian = typeof window.median !== 'undefined' || /gonative|median/i.test(navigator.userAgent);
+  const isInternal = url.startsWith('/') || url.startsWith(window.location.origin);
+  if (isMedian && !isInternal) {
+    // Let Median route external links through its external-browser bridge
+    window.location.href = url;
+  } else if (forceExternal || (!isMedian && !isInternal)) {
+    window.open(url, '_blank', 'noopener,noreferrer');
+  } else {
+    window.location.href = url;
+  }
+}
+
 // ═══════════════════════════════════════════════════════
 // TOAST NOTIFICATION SYSTEM
 // Usage: toast('Message')           → info (default)
