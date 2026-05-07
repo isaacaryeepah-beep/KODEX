@@ -6,6 +6,62 @@ const API = window.location.hostname === 'localhost' || window.location.hostname
   ? ''
   : window.location.origin;
 
+// Median.co / Android WebView helper — opens external URLs in system browser,
+// internal URLs navigate within the WebView.
+function openUrl(url, forceExternal = false) {
+  const isMedian = typeof window.median !== 'undefined' || /gonative|median/i.test(navigator.userAgent);
+  const isInternal = url.startsWith('/') || url.startsWith(window.location.origin);
+  if (isMedian && !isInternal) {
+    // Let Median route external links through its external-browser bridge
+    window.location.href = url;
+  } else if (forceExternal || (!isMedian && !isInternal)) {
+    window.open(url, '_blank', 'noopener,noreferrer');
+  } else {
+    window.location.href = url;
+  }
+}
+
+// Median.co / Android WebView compatible file download helper.
+// Android WebViews don't support blob-URL downloads via <a download> — we convert
+// to a base64 data URL which the OS download manager can handle.
+async function downloadBlob(blob, filename) {
+  const isMedian = typeof window.median !== 'undefined' || /gonative|median/i.test(navigator.userAgent);
+
+  if (isMedian) {
+    try {
+      // Try Median's native share bridge for PDFs first
+      if (blob.type === 'application/pdf' && window.median?.share?.sharePDF) {
+        const reader = new FileReader();
+        const dataUrl = await new Promise((res, rej) => {
+          reader.onload = () => res(reader.result); reader.onerror = rej;
+          reader.readAsDataURL(blob);
+        });
+        window.median.share.sharePDF({ base64: dataUrl.split(',')[1], filename });
+        return;
+      }
+      // Fallback: base64 data URL — Android can open/save these natively
+      const reader = new FileReader();
+      const dataUrl = await new Promise((res, rej) => {
+        reader.onload = () => res(reader.result); reader.onerror = rej;
+        reader.readAsDataURL(blob);
+      });
+      const a = document.createElement('a');
+      a.href = dataUrl; a.download = filename;
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    } catch (_) {
+      // Last resort: navigate to object URL
+      const url = URL.createObjectURL(blob);
+      window.location.href = url;
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+    }
+  } else {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+  }
+}
 // ═══════════════════════════════════════════════════════
 // TOAST NOTIFICATION SYSTEM
 // Usage: toast('Message')           → info (default)
@@ -1180,7 +1236,6 @@ async function handleAdminLogin() {
     showDashboard(data);
     requestPushPermission().catch(() => {});
   } catch (e) {
-    if (btn) { btn.textContent = 'Sign In'; btn.disabled = false; }
     const msg = e.message || '';
     const m = msg.toLowerCase();
 
@@ -1195,6 +1250,8 @@ async function handleAdminLogin() {
     } else {
       showAdminError(msg || 'Wrong email or password.');
     }
+  } finally {
+    if (btn) { btn.textContent = 'Sign In'; btn.disabled = false; }
   }
 }
 
@@ -1243,7 +1300,6 @@ async function handleLecturerLogin() {
       removeOfflineLoginNotice();
       data = await initiate2FA(credentials);
       if (data.user && !data.user.isApproved) {
-        if (btn) { btn.textContent = 'Sign In'; btn.disabled = false; }
         return showPendingApproval('Your account is pending admin approval. Please wait for your institution admin to approve your account.');
       }
       // Cache profile for future offline logins
@@ -1255,7 +1311,6 @@ async function handleLecturerLogin() {
     currentUser = data.user;
     showDashboard(data);
   } catch (e) {
-    if (btn) { btn.textContent = 'Sign In'; btn.disabled = false; }
     const msg = e.message || '';
     const m = msg.toLowerCase();
     if (m.includes('pending approval')) {
@@ -1269,6 +1324,8 @@ async function handleLecturerLogin() {
     } else {
       showLecturerError(msg || 'Wrong email or password.');
     }
+  } finally {
+    if (btn) { btn.textContent = 'Sign In'; btn.disabled = false; }
   }
 }
 
@@ -1540,8 +1597,9 @@ async function handleHodLogin() {
     currentUser = data.user;
     showDashboard(data);
   } catch (e) {
-    if (btn) { btn.textContent = 'Sign In'; btn.disabled = false; }
     showHodError(friendlyError(e.message) || 'Wrong Email or Password.');
+  } finally {
+    if (btn) { btn.textContent = 'Sign In'; btn.disabled = false; }
   }
 }
 
@@ -1618,7 +1676,6 @@ async function handleEmployeeLogin() {
     currentUser = data.user;
     showDashboard(data);
   } catch (e) {
-    if (btn) { btn.textContent = 'Sign In'; btn.disabled = false; }
     const msg2 = e.message || '';
     const m2 = msg2.toLowerCase();
     if (m2.includes('too many')) {
@@ -1630,6 +1687,8 @@ async function handleEmployeeLogin() {
     } else {
       showEmployeeError(msg2 || 'Wrong email or password.');
     }
+  } finally {
+    if (btn) { btn.textContent = 'Sign In'; btn.disabled = false; }
   }
 }
 
@@ -1689,7 +1748,6 @@ async function handleStudentLogin() {
     currentUser = data.user;
     showDashboard(data);
   } catch (e) {
-    if (btn) { btn.textContent = 'Sign In'; btn.disabled = false; }
     const msg3 = e.message || '';
     const m3 = msg3.toLowerCase();
     if (m3.includes('too many')) {
@@ -1703,6 +1761,8 @@ async function handleStudentLogin() {
     } else {
       showStudentError(msg3 || 'Wrong Student ID or password.');
     }
+  } finally {
+    if (btn) { btn.textContent = 'Sign In'; btn.disabled = false; }
   }
 }
 
@@ -2212,8 +2272,10 @@ function showDashboard(data) {
     }
 
     buildSidebar();
-  loadAnnBadge();
+    loadAnnBadge();
     applyBranding(); // async — applies colors/logo in background
+    // Show offline banner immediately when logged in via cached credentials
+    if (data?.offlineMode) showOfflineBanner(false);
     // If student arrived via QR scan link, go straight to mark-attendance to auto-submit
     if (new URLSearchParams(window.location.search).get('qr_token')) {
       navigateTo('mark-attendance');
@@ -2575,7 +2637,10 @@ async function renderDashboard() {
         content.innerHTML = `<div class="card"><p>Welcome to DIKLY!</p></div>`;
     }
   } catch (e) {
-    content.innerHTML = `<div class="card"><p>Welcome to ${getPortalName(role)}!</p></div>`;
+    const offline = !isOnline();
+    content.innerHTML = `<div class="card" style="text-align:center;padding:32px 20px">
+      ${offline ? '<div style="font-size:36px;margin-bottom:12px">📶</div><p style="font-weight:700;font-size:16px;color:#92400e">You\'re Offline</p><p style="color:#64748b;font-size:13px;margin-top:6px">Showing limited offline view. Some features require an internet connection.</p>' : `<p>Welcome to ${getPortalName(role)}!</p>`}
+    </div>`;
   }
 }
 
@@ -3328,9 +3393,7 @@ async function hodExportCSV(type) {
 
     const csv = [headers, ...rows].map(r => r.map(v => '"' + String(v).replace(/"/g, '""') + '"').join(',')).join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a'); a.href = url; a.download = filename; a.click();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    await downloadBlob(blob, filename);
     toastSuccess('CSV exported ✓');
   } catch(e) { toastError('Export failed: ' + e.message); }
 }
@@ -8171,12 +8234,7 @@ function exportQuizResultsCSV(quizId) {
   });
   const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
   const blob = new Blob([csv], { type: 'text/csv' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `${d.quiz.title.replace(/[^a-zA-Z0-9]/g,'_')}_results.csv`;
-  a.click();
-  URL.revokeObjectURL(url);
+  await downloadBlob(blob, `${d.quiz.title.replace(/[^a-zA-Z0-9]/g,'_')}_results.csv`);
   toastSuccess('CSV downloaded!');
 }
 
@@ -8962,10 +9020,7 @@ function downloadImportTemplate() {
     'Kwame Asante,IT/0001/23,0244123458,Information Technology,Diploma,200,A,Weekend,2,',
   ].join('\n');
   const blob = new Blob([csv], { type: 'text/csv' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = 'dikly_student_import_template.csv';
-  a.click();
+  await downloadBlob(blob, 'dikly_student_import_template.csv');
 }
 
 async function runBulkImport() {
@@ -9003,10 +9058,7 @@ async function runBulkImport() {
       data.students.forEach(s => rows.push([s.name, s.indexNumber, s.email, s.tempPassword, s.course, s.status]));
       const csvContent = rows.map(r => r.map(v => `"${(v||'').replace(/"/g,'""')}"`).join(',')).join('\n');
       const blob = new Blob([csvContent], { type: 'text/csv' });
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = 'dikly_import_results_' + new Date().toISOString().slice(0,10) + '.csv';
-      a.click();
+      await downloadBlob(blob, 'dikly_import_results_' + new Date().toISOString().slice(0,10) + '.csv');
     }
 
     renderUsers();
@@ -10754,14 +10806,7 @@ async function downloadReport(type, apiBase = 'reports', e) {
       throw new Error(errMsg);
     }
     const blob = await res.blob();
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${type}-report.pdf`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    await downloadBlob(blob, `${type}-report.pdf`);
   } catch (err) {
     toastError(err.message);
   } finally {
@@ -11503,10 +11548,7 @@ function exportGradeBookCSV(courseId, courseTitle) {
 
   const csv = [header, ...rows].map(r => r.map(c => '"' + String(c).replace(/"/g,'""') + '"').join(',')).join('\n');
   const blob = new Blob([csv], { type: 'text/csv' });
-  const url  = URL.createObjectURL(blob);
-  const a    = document.createElement('a');
-  a.href = url; a.download = courseTitle.replace(/[^a-z0-9]/gi,'_') + '_grades.csv';
-  a.click(); URL.revokeObjectURL(url);
+  await downloadBlob(blob, courseTitle.replace(/[^a-z0-9]/gi,'_') + '_grades.csv');
 }
 
 // ── Announcements (server-backed) ───────────────────────────────────────────
@@ -11822,12 +11864,7 @@ async function exportSessionCSV(sessionId, sessionTitle) {
 
     const csv = rows.map(row => row.map(v => '"' + String(v).replace(/"/g, '""')+'"').join(',')).join('\n');
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = (sessionTitle || 'attendance') + '_' + new Date().toISOString().slice(0,10) + '.csv';
-    document.body.appendChild(a); a.click(); document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    await downloadBlob(blob, (sessionTitle || 'attendance') + '_' + new Date().toISOString().slice(0,10) + '.csv');
   } catch(e) { toastError('Export failed: ' + e.message); }
 }
 
@@ -11838,36 +11875,83 @@ function renderAbout() {
   const content = document.getElementById('main-content');
   if (!content) return;
   content.innerHTML = `
-    <div class="page-header"><h2>About</h2><p>DIKLY Platform</p></div>
-    <div class="card" style="max-width:540px;text-align:center;padding:40px 32px">
-      <div style="width:72px;height:72px;border-radius:20px;background:linear-gradient(135deg,var(--primary),#6366f1);display:flex;align-items:center;justify-content:center;margin:0 auto 20px">
-        <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
-      </div>
-      <div style="font-size:26px;font-weight:800;margin-bottom:4px">DIKLY</div>
-      <div style="font-size:14px;color:var(--text-light);margin-bottom:4px">DIKLY Platform</div>
-      <div style="display:inline-block;background:var(--bg);border:1px solid var(--border);border-radius:999px;padding:4px 14px;font-size:12px;font-weight:600;color:var(--text-light);margin-bottom:28px">Version 1.0.0</div>
+    <div class="page-header">
+      <div><h2>About DIKLY</h2><p>Smart Attendance &amp; Academic Management</p></div>
+    </div>
 
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:28px;text-align:left">
-        ${[
-          ['🎓', 'Academic Mode', 'Courses, lecturers, students & proctored quizzes'],
-          ['🏢', 'Corporate Mode', 'Employee attendance, sign-in/out & reporting'],
-          ['📶', 'Offline Support', 'Mark & manage attendance without internet'],
-          ['🔒', 'Secure Proctoring', 'AI-powered face detection & integrity scoring'],
-          ['📊', 'Live Monitoring', 'Real-time attendance dashboard & CSV export'],
-          ['🔔', 'Announcements', 'Broadcast messages to your institution'],
-        ].map(([icon, title, desc]) => `
-          <div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:12px">
-            <div style="font-size:20px;margin-bottom:4px">${icon}</div>
-            <div style="font-weight:700;font-size:13px">${title}</div>
-            <div style="font-size:12px;color:var(--text-light);margin-top:2px">${desc}</div>
+    <div style="max-width:680px">
+
+      <!-- Hero card -->
+      <div class="card" style="text-align:center;padding:40px 32px;margin-bottom:16px">
+        <div style="width:80px;height:80px;border-radius:22px;background:linear-gradient(135deg,#4f46e5,#6366f1);display:flex;align-items:center;justify-content:center;margin:0 auto 20px;box-shadow:0 8px 24px rgba(79,70,229,.35)">
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+        </div>
+        <div style="font-size:30px;font-weight:900;letter-spacing:-0.5px;margin-bottom:4px">DIKLY</div>
+        <div style="font-size:15px;color:var(--text-light);margin-bottom:6px">by DIKLY Technologies</div>
+        <div style="display:inline-block;background:#ede9fe;color:#5b21b6;border-radius:999px;padding:4px 16px;font-size:12px;font-weight:700;margin-bottom:20px">Version 1.0.0</div>
+        <p style="font-size:14px;line-height:1.7;color:var(--text-light);max-width:460px;margin:0 auto">
+          DIKLY is an all-in-one smart attendance and academic management platform built for universities,
+          colleges, and corporate organisations across Africa. We make attendance effortless, assessments
+          secure, and institutional operations transparent.
+        </p>
+      </div>
+
+      <!-- Features grid -->
+      <div class="card" style="margin-bottom:16px">
+        <div style="font-weight:700;font-size:15px;margin-bottom:16px">What DIKLY Offers</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          ${[
+            ['🎓', 'Academic Management', 'Courses, lecturers, students & proctored quizzes'],
+            ['🏢', 'Corporate HR', 'Employee attendance, sign-in/out, leaves & reporting'],
+            ['📶', 'Offline Support', 'Mark attendance without internet — syncs automatically'],
+            ['🔒', 'Secure Proctoring', 'Camera monitoring & integrity scoring for assessments'],
+            ['📊', 'Live Dashboards', 'Real-time attendance stats, reports & CSV exports'],
+            ['🔔', 'Announcements', 'Broadcast messages across your entire institution'],
+          ].map(([icon, title, desc]) => `
+            <div style="background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:14px">
+              <div style="font-size:22px;margin-bottom:6px">${icon}</div>
+              <div style="font-weight:700;font-size:13px;margin-bottom:2px">${title}</div>
+              <div style="font-size:12px;color:var(--text-light);line-height:1.5">${desc}</div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+
+      <!-- Founder card -->
+      <div class="card" style="margin-bottom:16px">
+        <div style="font-weight:700;font-size:15px;margin-bottom:16px">Our Founder</div>
+        <div style="display:flex;align-items:center;gap:16px">
+          <div style="width:60px;height:60px;border-radius:50%;background:linear-gradient(135deg,#4f46e5,#7c3aed);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
           </div>
-        `).join('')}
+          <div>
+            <div style="font-weight:800;font-size:16px;color:var(--text-primary)">Isaac Kweku Aryeepah</div>
+            <div style="font-size:13px;color:#4f46e5;font-weight:600;margin-bottom:4px">Founder &amp; CEO, DIKLY Technologies</div>
+            <div style="font-size:13px;color:var(--text-light);line-height:1.6">
+              Visionary technologist and entrepreneur passionate about transforming how institutions
+              manage attendance, learning, and workforce operations across Africa.
+            </div>
+          </div>
+        </div>
       </div>
 
-      <div style="font-size:13px;color:var(--text-light);padding-top:20px;border-top:1px solid var(--border)">
-        Built by <strong style="color:var(--text-primary)">DIKLY</strong> &nbsp;·&nbsp;
-        <a href="mailto:nelsonkel78@gmail.com" style="color:var(--primary)">nelsonkel78@gmail.com</a><br>
-        <span style="font-size:12px">&copy; 2026 DIKLY. All rights reserved.</span>
+      <!-- Contact & legal -->
+      <div class="card" style="margin-bottom:16px">
+        <div style="font-weight:700;font-size:15px;margin-bottom:14px">Get in Touch</div>
+        <div style="font-size:13px;color:var(--text-light);line-height:2">
+          <div>📧 <a href="mailto:nelsonkel78@gmail.com" style="color:var(--primary)">nelsonkel78@gmail.com</a></div>
+          <div>🌐 <a href="https://dikly.sbs" onclick="openUrl('https://dikly.sbs')" style="color:var(--primary)">dikly.sbs</a></div>
+        </div>
+        <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border);display:flex;gap:12px;font-size:12px">
+          <a href="/terms" style="color:var(--primary);font-weight:600">Terms of Service</a>
+          <span style="color:var(--border)">·</span>
+          <a href="/privacy" style="color:var(--primary);font-weight:600">Privacy Policy</a>
+        </div>
+      </div>
+
+      <div style="text-align:center;font-size:12px;color:var(--text-light);padding:8px 0 24px">
+        &copy; 2026 DIKLY Technologies. All rights reserved.<br>
+        Founded by Isaac Kweku Aryeepah.
       </div>
     </div>
   `;
