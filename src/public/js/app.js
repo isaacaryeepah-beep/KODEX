@@ -74,23 +74,27 @@ const _notifSound = (() => {
   function playChime(type = 'message') {
     if (localStorage.getItem('dikly_sound_muted') === '1') return;
     try {
-      const ctx  = _getCtx();
-      const gain = ctx.createGain();
-      gain.connect(ctx.destination);
-      // Two-note chime: vary frequencies by type
+      const ctx   = _getCtx();
+      // Resume context if browser suspended it (autoplay policy)
+      if (ctx.state === 'suspended') ctx.resume();
       const notes = type === 'announcement'
         ? [880, 1100]   // higher pitch for announcements
         : [660, 880];   // softer for messages
+      // Each note gets its OWN gain node — sharing one causes the second
+      // note's gain automation to overwrite the first note's envelope.
       notes.forEach((freq, i) => {
+        const gain = ctx.createGain();
+        gain.connect(ctx.destination);
+        const t0 = ctx.currentTime + i * 0.18;
+        gain.gain.setValueAtTime(0, t0);
+        gain.gain.linearRampToValueAtTime(0.18, t0 + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.001, t0 + 0.38);
         const osc = ctx.createOscillator();
         osc.type = 'sine';
-        osc.frequency.setValueAtTime(freq, ctx.currentTime + i * 0.15);
-        gain.gain.setValueAtTime(0, ctx.currentTime + i * 0.15);
-        gain.gain.linearRampToValueAtTime(0.18, ctx.currentTime + i * 0.15 + 0.02);
-        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + i * 0.15 + 0.35);
+        osc.frequency.value = freq;
         osc.connect(gain);
-        osc.start(ctx.currentTime + i * 0.15);
-        osc.stop(ctx.currentTime + i * 0.15 + 0.35);
+        osc.start(t0);
+        osc.stop(t0 + 0.4);
       });
     } catch (_) {}
   }
@@ -117,23 +121,22 @@ const _notifSound = (() => {
 // Polls every 30 s for new messages and announcements, plays a chime when the
 // unread count rises above the last known value.
 let _notifPollTimer  = null;
-let _lastMsgUnread   = 0;
-let _lastAnnUnread   = 0;
+let _lastMsgUnread   = -1;  // -1 = not yet initialised; first run is a silent baseline
+let _lastAnnUnread   = -1;
 
 async function _pollNotifications() {
   if (!currentUser || !isOnline()) return;
+  const baseline = _lastMsgUnread === -1; // first run records counts without playing sound
   try {
-    // Messages — only roles that have messaging
-    if (!['student'].includes(currentUser.role) || true) {
+  // all roles poll for messages
       const md = await api('/api/messages/conversations').catch(() => null);
       if (md) {
         const total = (md.conversations || []).reduce((s, c) => s + (c.myUnreadCount || 0), 0);
-        if (total > _lastMsgUnread) _notifSound.playChime('message');
+        if (!baseline && total > _lastMsgUnread) _notifSound.playChime('message');
         _lastMsgUnread = total;
         // Update messages badge in sidebar
         _updateMsgBadge(total);
       }
-    }
   } catch (_) {}
   try {
     // Announcements
@@ -141,7 +144,7 @@ async function _pollNotifications() {
       const ad = await api('/api/announcements/unread-count').catch(() => null);
       if (ad) {
         const count = ad.count || 0;
-        if (count > _lastAnnUnread) {
+        if (!baseline && count > _lastAnnUnread) {
           _notifSound.playChime('announcement');
           // Refresh the ann-badge in the sidebar
           const badge = document.getElementById('ann-badge');
@@ -177,9 +180,9 @@ function _updateMsgBadge(total) {
 
 function startNotifPolling() {
   stopNotifPolling();
-  _lastMsgUnread = 0;
-  _lastAnnUnread = 0;
-  _pollNotifications(); // immediate first check (no sound — baseline)
+  _lastMsgUnread = -1; // reset so first run is a silent baseline
+  _lastAnnUnread = -1;
+  _pollNotifications();
   _notifPollTimer = setInterval(_pollNotifications, 30000);
 }
 
