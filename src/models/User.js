@@ -221,6 +221,9 @@ const userSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+    lastPaymentReference: { type: String, default: null },
+    lastPaymentAmount:    { type: Number, default: null },
+    lastPaymentDate:      { type: Date,   default: null },
     semestersPaid: {
       type: Number,
       default: 0,
