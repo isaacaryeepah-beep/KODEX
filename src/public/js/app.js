@@ -1462,7 +1462,6 @@ async function handleLecturerRegister() {
     const name = document.getElementById('lecturer-reg-name').value;
     const email = document.getElementById('lecturer-reg-email').value;
     const password = document.getElementById('lecturer-reg-password').value;
-    const regMode = document.getElementById('lecturer-reg-mode')?.value || 'join';
 
     if (!name || !email || !password) {
       return showLecturerError('Please fill in all fields');
@@ -1474,63 +1473,21 @@ async function handleLecturerRegister() {
     const dept = document.getElementById('lecturer-reg-dept')?.value?.trim();
     const phone = document.getElementById('lecturer-reg-phone')?.value?.trim();
     if (!dept) return showLecturerError('Please enter your department.');
-    let body = { name, email, password, department: dept };
+    const institutionCode = document.getElementById('lecturer-reg-code').value;
+    if (!institutionCode) return showLecturerError('Please enter the institution code');
+    const body = { name, email, password, department: dept, institutionCode };
     if (phone) body.phone = phone;
-    if (regMode === 'create') {
-      const institutionName = document.getElementById('lecturer-reg-institution').value;
-      if (!institutionName) return showLecturerError('Please enter your institution name');
-      body.institutionName = institutionName;
-    } else {
-      const institutionCode = document.getElementById('lecturer-reg-code').value;
-      if (!institutionCode) return showLecturerError('Please enter the institution code');
-      body.institutionCode = institutionCode;
-    }
 
     const data = await api('/api/auth/register-lecturer', { method: 'POST', body: JSON.stringify(body) });
 
-    if (data.token) {
-      // Created own institution — log them in immediately
-      token = data.token;
-      localStorage.setItem('token', token);
-      currentUser = data.user;
-      showDashboard(data);
-    } else {
-      const el = document.getElementById('lecturer-auth-error');
-      el.textContent = data.message || 'Registration successful! Your account is pending admin approval.';
-      el.style.display = 'block';
-      el.style.background = '#f0fdf4';
-      el.style.color = '#15803d';
-      showLecturerLogin();
-      document.getElementById('lecturer-auth-error').style.display = 'block';
-    }
+    const el = document.getElementById('lecturer-auth-error');
+    el.textContent = data.message || 'Registration successful! Your account is pending admin approval.';
+    el.style.display = 'block';
+    el.style.background = '#f0fdf4';
+    el.style.color = '#15803d';
+    showLecturerLogin();
   } catch (e) {
     showLecturerError(e.message || 'Registration failed');
-  }
-}
-
-function toggleLecturerRegMode() {
-  const mode = document.getElementById('lecturer-reg-mode').value;
-  const codeGroup = document.getElementById('lecturer-reg-code-group');
-  const instGroup = document.getElementById('lecturer-reg-inst-group');
-  const hint = document.getElementById('lecturer-reg-hint');
-  if (mode === 'create') {
-    codeGroup.classList.add('hidden');
-    instGroup.classList.remove('hidden');
-    hint.textContent = 'You will be the admin of your institution and can immediately start using the platform.';
-  } else {
-    codeGroup.classList.remove('hidden');
-    instGroup.classList.add('hidden');
-    hint.textContent = 'Your account will need HOD and admin approval before you can access the system.';
-    // Load departments for this institution when code is entered
-    const codeInput = document.getElementById('lecturer-reg-code');
-    if (codeInput && !codeInput._hodListener) {
-      codeInput._hodListener = true;
-      codeInput.addEventListener('blur', () => loadDeptDropdown(
-        codeInput.value.trim().toUpperCase(),
-        'lecturer-reg-dept',
-        'Department (must match an existing HOD)'
-      ));
-    }
   }
 }
 
