@@ -441,7 +441,7 @@ function selectPortal(t){document.addEventListener('DOMContentLoaded',function()
         </div>
         <button type="submit" class="btn btn-primary">Sign In</button>
         <div class="auth-footer">
-          <p class="auth-footer-row">New lecturer? <a onclick="showLecturerRegister()">Create or join an institution</a></p>
+          <p class="auth-footer-row">New lecturer? <a onclick="showLecturerRegister()">Join an institution</a></p>
           <p class="auth-footer-row auth-forgot"><a onclick="showLecturerForgot()">Forgot password?</a></p>
         </div>
       </form>
@@ -488,19 +488,8 @@ function selectPortal(t){document.addEventListener('DOMContentLoaded',function()
           <input type="password" id="lecturer-reg-password" placeholder="Min 8 characters">
         </div>
         <div class="form-group">
-          <label>Account Type</label>
-          <select id="lecturer-reg-mode" onchange="toggleLecturerRegMode()" style="width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;background:var(--bg-primary);color:var(--text-primary)">
-            <option value="join">Join an existing institution</option>
-            <option value="create">Create my own institution (Admin)</option>
-          </select>
-        </div>
-        <div id="lecturer-reg-code-group" class="form-group">
           <label>Institution Code</label>
           <input type="text" id="lecturer-reg-code" placeholder="e.g. ABC123" style="text-transform:uppercase">
-        </div>
-        <div id="lecturer-reg-inst-group" class="form-group hidden">
-          <label>Institution Name</label>
-          <input type="text" id="lecturer-reg-institution" placeholder="e.g. University of Ghana">
         </div>
         <div class="form-group">
           <label>Department</label>

@@ -162,101 +162,9 @@ exports.registerLecturer = async (req, res) => {
       return res.status(400).json({ error: "Password must be at least 8 characters" });
     }
 
-    // MODE A: Lecturer creates their own institution
-    if (institutionName && !institutionCode) {
-      const existingCompany = await Company.findOne({ name: institutionName });
-      if (existingCompany) {
-        return res.status(400).json({ error: "An institution with this name already exists. Use your institution code to join instead." });
-      }
-
-      const trialDays = await getTrialDays();
-      const trialEndDate = new Date(Date.now() + trialDays * 24 * 60 * 60 * 1000);
-
-      const company = await Company.create({
-        name: institutionName,
-        mode: "academic",
-        subscriptionStatus: "trial",
-        trialEndDate,
-      });
-
-      const existingUser = await User.findOne({ email });
-      if (existingUser) {
-        await Company.findByIdAndDelete(company._id);
-        return res.status(400).json({ error: "This email is already registered" });
-      }
-
-      if (req.body.phone) {
-        const normPhone = normalisePhone(req.body.phone);
-        const phoneExists = await User.findOne({ phone: normPhone, company: company._id });
-        if (phoneExists) {
-          await Company.findByIdAndDelete(company._id);
-          return res.status(400).json({ error: "Phone number is already in use" });
-        }
-      }
-
-      let user;
-      try {
-        user = await User.create({
-          email,
-          password,
-          name,
-          phone: req.body.phone ? normalisePhone(req.body.phone) : null,
-          company: company._id,
-          role: "admin",
-          isApproved: true,
-          department: department || null,
-          trialEndDate,
-          subscriptionStatus: "trial",
-        });
-      } catch (userError) {
-        await Company.findByIdAndDelete(company._id);
-        throw userError;
-      }
-
-      if (user.email) {
-        sendWelcome({
-          email:           user.email,
-          name:            user.name,
-          institutionName: company.name,
-          trialDays,
-          trialEndDate:    company.trialEndDate,
-        }).catch(err => console.error('Welcome email failed (Mode A):', err.message));
-      }
-
-      const token = generateToken(user._id);
-      return res.status(201).json({
-        token,
-        user: {
-          id: user._id,
-          email: user.email,
-          name: user.name,
-          role: user.role,
-          isApproved: user.isApproved,
-          mustChangePassword: user.mustChangePassword || false,
-          company: {
-            id: company._id,
-            name: company.name,
-            mode: company.mode,
-            institutionCode: company.institutionCode,
-          },
-        },
-        trial: {
-          active: company.isTrialActive,
-          daysRemaining: company.trialDaysRemaining,
-          timeRemaining: company.trialTimeRemaining,
-        },
-        subscription: {
-          active: company.subscriptionActive,
-          status: company.subscriptionStatus,
-          plan: company.subscriptionPlan,
-        },
-        message: "Institution created successfully. You are now the institution admin.",
-      });
-    }
-
-    // MODE B: Lecturer joins an existing institution
+    // Lecturer joins an existing institution
     if (!institutionCode) {
-      return res.status(400).json({ error: "Either institution name (to create) or institution code (to join) is required" });
+      return res.status(400).json({ error: "Institution code is required" });
     }
     if (!department?.trim()) {
       return res.status(400).json({ error: "Department is required. Please enter the department you teach in." });
@@ -677,14 +585,6 @@ exports.login = async (req, res) => {
       user = await User.findOne({ email, company: company._id, role: "employee" }).select("+password");
     } else if (email && loginRole === "lecturer") {
       user = await User.findOne({ email, role: "lecturer" }).select("+password");
-      // Fallback: founding admin who created their institution via the lecturer registration form
-      if (!user) {
-        const maybeAdmin = await User.findOne({ email, role: "admin" }).select("+password");
-        if (maybeAdmin) {
-          const foundCompany = await Company.findById(maybeAdmin.company).select("mode").lean();
-          if (foundCompany?.mode === "academic") user = maybeAdmin;
-        }
-      }
     } else if (email && loginRole === "hod") {
       user = await User.findOne({ email, role: "hod" }).select("+password");
     } else {
@@ -757,7 +657,7 @@ exports.login = async (req, res) => {
 
     const PORTAL_ALLOWED_ROLES = {
       admin:    ["admin", "manager"],
-      lecturer: ["lecturer", "admin"], // academic admins who created institution via lecturer form
+      lecturer: ["lecturer"],
       hod:      ["hod"],
       employee: ["employee"],
       student:  ["student"],
