@@ -202,7 +202,7 @@ exports.registerLecturer = async (req, res) => {
           name,
           phone: req.body.phone ? normalisePhone(req.body.phone) : null,
           company: company._id,
-          role: "lecturer",
+          role: "admin",
           isApproved: true,
           department: department || null,
           trialEndDate,
@@ -214,13 +214,13 @@ exports.registerLecturer = async (req, res) => {
       }
 
       if (user.email) {
-        sendLecturerWelcome({
-          email: user.email,
-          name: user.name,
+        sendWelcome({
+          email:           user.email,
+          name:            user.name,
           institutionName: company.name,
-          department: department || null,
-          isApproved: true,
-        }).catch(err => console.error('Lecturer welcome email failed:', err.message));
+          trialDays,
+          trialEndDate:    company.trialEndDate,
+        }).catch(err => console.error('Welcome email failed (Mode A):', err.message));
       }
 
       const token = generateToken(user._id);
@@ -250,7 +250,7 @@ exports.registerLecturer = async (req, res) => {
           status: company.subscriptionStatus,
           plan: company.subscriptionPlan,
         },
-        message: "Institution created successfully. You are now an approved lecturer.",
+        message: "Institution created successfully. You are now the institution admin.",
       });
     }
 
@@ -677,6 +677,14 @@ exports.login = async (req, res) => {
       user = await User.findOne({ email, company: company._id, role: "employee" }).select("+password");
     } else if (email && loginRole === "lecturer") {
       user = await User.findOne({ email, role: "lecturer" }).select("+password");
+      // Fallback: founding admin who created their institution via the lecturer registration form
+      if (!user) {
+        const maybeAdmin = await User.findOne({ email, role: "admin" }).select("+password");
+        if (maybeAdmin) {
+          const foundCompany = await Company.findById(maybeAdmin.company).select("mode").lean();
+          if (foundCompany?.mode === "academic") user = maybeAdmin;
+        }
+      }
     } else if (email && loginRole === "hod") {
       user = await User.findOne({ email, role: "hod" }).select("+password");
     } else {
@@ -749,7 +757,7 @@ exports.login = async (req, res) => {
 
     const PORTAL_ALLOWED_ROLES = {
       admin:    ["admin", "manager"],
-      lecturer: ["lecturer"],
+      lecturer: ["lecturer", "admin"], // academic admins who created institution via lecturer form
       hod:      ["hod"],
       employee: ["employee"],
       student:  ["student"],

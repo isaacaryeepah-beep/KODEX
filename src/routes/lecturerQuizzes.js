@@ -10,7 +10,7 @@ const router = express.Router();
 router.use(authenticate);
 router.use(requireMode("academic"));
 router.use(requireActiveSubscription);
-router.use(requireRole("lecturer", "hod", "superadmin"));
+router.use(requireRole("lecturer", "hod", "admin", "superadmin"));
 
 // HOD gets read-only access — block write operations
 router.use((req, res, next) => {
