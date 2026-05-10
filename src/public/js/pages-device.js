@@ -222,8 +222,8 @@ function _devPairedHTML(d) {
     ${_devWifiHTML(d)}
     <div class="dev-wifi-reconfigure-note">
       <strong>To change networks:</strong> access the device directly at its local IP
-      (e.g. <code>http://192.168.1.x</code>) while on the same network, or hold the
-      reset button for 5 s to re-enter setup mode and visit <code>192.168.4.1</code>.
+      on the same WiFi network, or hold the reset button for 5 s to re-enter setup
+      mode — then use the <strong>Setup Wizard</strong> to reconnect.
     </div>
   </div>
 
@@ -482,6 +482,8 @@ function _devHidePairing() {
   if (code) code.textContent = '——————';
   const intro = document.getElementById('dev-pairing-intro');
   if (intro) intro.style.display = 'block';
+  clearInterval(_devPollTimer);
+  clearInterval(_devExpiryTimer);
   clearInterval(_devDetectTimer);
   _devCurrentCode = '';
 }
@@ -644,11 +646,8 @@ async function _devCheckHotspot() {
     clearTimeout(t);
     statusEl.textContent = '✓ Device portal is reachable. It should have opened in a new tab.';
     statusEl.className = 'dev-detect-status dev-detect-ok';
-  } catch (e) {
-    const blocked = e.message && e.message.includes('NetworkError');
-    statusEl.textContent = e.name === 'AbortError' || blocked
-      ? 'Device not reachable yet. Make sure you\'re connected to the DIKLY-XXXXXX hotspot, then try again.'
-      : 'Not connected to the DIKLY hotspot. Connect to DIKLY-XXXXXX in WiFi settings first.';
+  } catch (_) {
+    statusEl.textContent = 'Device portal not reachable. Make sure you\'re connected to DIKLY-XXXXXX in your WiFi settings, then try again.';
     statusEl.className = 'dev-detect-status dev-detect-warn';
   } finally {
     btn.disabled = false;
