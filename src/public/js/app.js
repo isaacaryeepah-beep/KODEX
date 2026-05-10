@@ -59,6 +59,135 @@ async function downloadBlob(blob, filename) {
   setTimeout(() => URL.revokeObjectURL(url), 5000);
 }
 // ═══════════════════════════════════════════════════════
+// NOTIFICATION SOUND SYSTEM
+// Uses Web Audio API — no external audio files needed.
+// Plays a gentle two-tone chime when new messages or
+// announcements arrive. Respects a mute toggle stored
+// in localStorage so the user's preference survives reloads.
+// ═══════════════════════════════════════════════════════
+const _notifSound = (() => {
+  let _ctx = null;
+  function _getCtx() {
+    if (!_ctx) _ctx = new (window.AudioContext || window.webkitAudioContext)();
+    return _ctx;
+  }
+  function playChime(type = 'message') {
+    if (localStorage.getItem('dikly_sound_muted') === '1') return;
+    try {
+      const ctx  = _getCtx();
+      const gain = ctx.createGain();
+      gain.connect(ctx.destination);
+      // Two-note chime: vary frequencies by type
+      const notes = type === 'announcement'
+        ? [880, 1100]   // higher pitch for announcements
+        : [660, 880];   // softer for messages
+      notes.forEach((freq, i) => {
+        const osc = ctx.createOscillator();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, ctx.currentTime + i * 0.15);
+        gain.gain.setValueAtTime(0, ctx.currentTime + i * 0.15);
+        gain.gain.linearRampToValueAtTime(0.18, ctx.currentTime + i * 0.15 + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + i * 0.15 + 0.35);
+        osc.connect(gain);
+        osc.start(ctx.currentTime + i * 0.15);
+        osc.stop(ctx.currentTime + i * 0.15 + 0.35);
+      });
+    } catch (_) {}
+  }
+  function isMuted() { return localStorage.getItem('dikly_sound_muted') === '1'; }
+  function toggleMute() {
+    const muted = isMuted();
+    localStorage.setItem('dikly_sound_muted', muted ? '0' : '1');
+    _updateMuteBtn();
+    if (muted) playChime('message'); // preview sound when unmuting
+  }
+  function _updateMuteBtn() {
+    const btn = document.getElementById('sound-toggle-btn');
+    if (!btn) return;
+    const muted = isMuted();
+    btn.title = muted ? 'Sound off — click to enable' : 'Sound on — click to mute';
+    btn.innerHTML = muted
+      ? `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>`
+      : `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>`;
+  }
+  return { playChime, isMuted, toggleMute, updateBtn: _updateMuteBtn };
+})();
+
+// ── Notification polling ──────────────────────────────────────────────────────
+// Polls every 30 s for new messages and announcements, plays a chime when the
+// unread count rises above the last known value.
+let _notifPollTimer  = null;
+let _lastMsgUnread   = 0;
+let _lastAnnUnread   = 0;
+
+async function _pollNotifications() {
+  if (!currentUser || !isOnline()) return;
+  try {
+    // Messages — only roles that have messaging
+    if (!['student'].includes(currentUser.role) || true) {
+      const md = await api('/api/messages/conversations').catch(() => null);
+      if (md) {
+        const total = (md.conversations || []).reduce((s, c) => s + (c.myUnreadCount || 0), 0);
+        if (total > _lastMsgUnread) _notifSound.playChime('message');
+        _lastMsgUnread = total;
+        // Update messages badge in sidebar
+        _updateMsgBadge(total);
+      }
+    }
+  } catch (_) {}
+  try {
+    // Announcements
+    if (!['employee'].includes(currentUser.role)) {
+      const ad = await api('/api/announcements/unread-count').catch(() => null);
+      if (ad) {
+        const count = ad.count || 0;
+        if (count > _lastAnnUnread) {
+          _notifSound.playChime('announcement');
+          // Refresh the ann-badge in the sidebar
+          const badge = document.getElementById('ann-badge');
+          if (badge) {
+            badge.textContent = count > 99 ? '99+' : count;
+            badge.style.display = 'inline-block';
+          }
+        }
+        _lastAnnUnread = count;
+      }
+    }
+  } catch (_) {}
+}
+
+function _updateMsgBadge(total) {
+  let badge = document.getElementById('msg-nav-badge');
+  const msgLink = document.querySelector('#nav-messages');
+  if (!msgLink) return;
+  if (!badge) {
+    badge = document.createElement('span');
+    badge.id = 'msg-nav-badge';
+    badge.style.cssText = 'position:absolute;top:4px;right:4px;background:#ef4444;color:#fff;font-size:9px;font-weight:700;padding:1px 5px;border-radius:20px;min-width:14px;text-align:center;line-height:14px;';
+    msgLink.style.position = 'relative';
+    msgLink.appendChild(badge);
+  }
+  if (total > 0) {
+    badge.textContent = total > 99 ? '99+' : total;
+    badge.style.display = 'inline-block';
+  } else {
+    badge.style.display = 'none';
+  }
+}
+
+function startNotifPolling() {
+  stopNotifPolling();
+  _lastMsgUnread = 0;
+  _lastAnnUnread = 0;
+  _pollNotifications(); // immediate first check (no sound — baseline)
+  _notifPollTimer = setInterval(_pollNotifications, 30000);
+}
+
+function stopNotifPolling() {
+  if (_notifPollTimer) { clearInterval(_notifPollTimer); _notifPollTimer = null; }
+}
+
+// ═══════════════════════════════════════════════════════
 // TOAST NOTIFICATION SYSTEM
 // Usage: toast('Message')           → info (default)
 //        toast('Message', 'success') → green
@@ -1864,6 +1993,7 @@ async function handleStudentForgotPassword() {
 }
 
 async function handleLogout() {
+  stopNotifPolling();
   try {
     if (isOnline()) await api('/api/auth/logout', { method: 'POST' });
   } catch (e) {}
@@ -2266,6 +2396,8 @@ function showDashboard(data) {
 
     buildSidebar();
     loadAnnBadge();
+    startNotifPolling();
+    _notifSound.updateBtn();
     applyBranding(); // async — applies colors/logo in background
     // Show offline banner immediately when logged in via cached credentials
     if (data?.offlineMode) showOfflineBanner(false);
@@ -2469,6 +2601,8 @@ function buildSidebar() {
 function navigateTo(view) {
   // Clear live clock timer when leaving a clock page
   if (window._empClockTimer) { clearInterval(window._empClockTimer); window._empClockTimer = null; }
+  // Stop thread poll when leaving messages
+  if (view !== 'messages') _stopThreadPoll();
   currentView = view;
   document.querySelectorAll('.sidebar-nav a').forEach(a => a.classList.remove('active'));
   const navEl = document.getElementById(`nav-${view}`);
@@ -17952,8 +18086,44 @@ async function printMeetingAttendance(meetingId, title) {
 // DIKLY MESSAGING  (Phase 2: Facebook-style desktop UI)
 // ════════════════════════════════════════════════════════════════════════════
 
-let _activeConvoId  = null;
-let _msgSearchQuery = '';
+let _activeConvoId    = null;
+let _msgSearchQuery   = '';
+let _msgThreadPoll    = null;   // interval for refreshing the open thread
+let _msgThreadLastLen = 0;      // message count when thread was last rendered
+
+function _startThreadPoll(convoId) {
+  _stopThreadPoll();
+  _msgThreadPoll = setInterval(async () => {
+    if (!_activeConvoId || _activeConvoId !== convoId) { _stopThreadPoll(); return; }
+    try {
+      const data = await api(`/api/messages/conversations/${convoId}`);
+      const msgs = data.messages || [];
+      const myId = currentUser._id || currentUser.id;
+      if (msgs.length > _msgThreadLastLen) {
+        // New messages arrived — play sound only if the newest isn't ours
+        const newest = msgs[msgs.length - 1];
+        const senderId = newest.sender?._id || newest.sender;
+        if (String(senderId) !== String(myId)) {
+          _notifSound.playChime('message');
+        }
+        _msgThreadLastLen = msgs.length;
+        const body = document.getElementById('msg-thread-body');
+        if (body) {
+          body.innerHTML = msgs.map(m => _buildMsgRow(m, myId)).join('');
+          body.scrollTop = body.scrollHeight;
+        }
+        // Update unread badge in sidebar
+        await api(`/api/messages/conversations/${convoId}/read`, { method: 'PATCH' }).catch(() => {});
+        _loadConvoList().catch(() => {});
+      }
+    } catch (_) {}
+  }, 15000); // check every 15 s
+}
+
+function _stopThreadPoll() {
+  if (_msgThreadPoll) { clearInterval(_msgThreadPoll); _msgThreadPoll = null; }
+  _msgThreadLastLen = 0;
+}
 
 // ── Avatar color palette ──────────────────────────────────────────────────
 const MSG_AVATAR_COLORS = ['#2563eb','#7c3aed','#0891b2','#16a34a','#d97706','#db2777','#dc2626','#0f766e'];
@@ -18186,6 +18356,8 @@ async function openConvo(id, name, type) {
       body.innerHTML = msgs.map(m => _buildMsgRow(m, myId)).join('');
       body.scrollTop = body.scrollHeight;
     }
+    _msgThreadLastLen = msgs.length;
+    _startThreadPoll(id);
     // Refresh sidebar unread counts
     if (window._msgConvos) {
       const c = window._msgConvos.find(x => x._id === id);
@@ -18246,6 +18418,7 @@ function _buildBubbleContent(bodyText, attachment, isMine) {
 
 // ── Mobile back to list ───────────────────────────────────────────────────
 function _msgBackToList() {
+  _stopThreadPoll();
   _activeConvoId = null;
   const wrap = document.getElementById('msg-thread-wrap');
   wrap?.classList.remove('msg-thread-active');
