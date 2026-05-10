@@ -84,7 +84,7 @@ function _devNoPairedHTML() {
   <div class="dev-setup-banner-icon">⚡</div>
   <div>
     <div class="dev-setup-banner-title">First-time setup — follow these two steps</div>
-    <div class="dev-setup-banner-sub">Generate a pairing code here, then configure the ESP32 at 192.168.4.1.</div>
+    <div class="dev-setup-banner-sub">Generate a pairing code here, then use the Setup Wizard to configure your device.</div>
   </div>
 </div>
 
@@ -115,13 +115,14 @@ function _devNoPairedHTML() {
     </p>
     <ol class="dev-setup-steps-list">
       <li>Connect your phone or laptop to the <strong>DIKLY-XXXXXX</strong> hotspot (no internet needed).</li>
-      <li>On that same device, open <strong>http://192.168.4.1</strong> in a browser — the setup page loads automatically.</li>
+      <li>The Setup Wizard (shown after generating your code) will open the device portal for you — no need to type any IP address.</li>
       <li>Enter your <strong>Institution Code</strong>, the <strong>Pairing Code</strong> from Step 1, and your <strong>WiFi credentials</strong>.</li>
       <li>Tap <strong>Pair Device</strong>. The ESP32 reboots, connects to WiFi, and links to your account.</li>
     </ol>
-    <p style="font-size:12px;color:#94a3b8;margin:8px 0 0">
-      Note: 192.168.4.1 is only reachable while connected to the DIKLY hotspot — not from the internet.
-    </p>
+    <div class="dev-setup-tip">
+      <span class="dev-setup-tip-icon">💡</span>
+      The Setup Wizard opens the device portal automatically — just tap <strong>Open Device Portal</strong> after connecting to the hotspot.
+    </div>
   </div>
 
 </div>`;
@@ -221,8 +222,8 @@ function _devPairedHTML(d) {
     ${_devWifiHTML(d)}
     <div class="dev-wifi-reconfigure-note">
       <strong>To change networks:</strong> access the device directly at its local IP
-      (e.g. <code>http://192.168.1.x</code>) while on the same network, or hold the
-      reset button for 5 s to re-enter setup mode and visit <code>192.168.4.1</code>.
+      on the same WiFi network, or hold the reset button for 5 s to re-enter setup
+      mode — then use the <strong>Setup Wizard</strong> to reconnect.
     </div>
   </div>
 
@@ -286,19 +287,74 @@ function _devPairingModalHTML() {
   return `
 <!-- Pairing modal -->
 <div id="dev-pairing-modal" class="dev-modal-overlay" style="display:none">
-  <div class="dev-modal">
+  <div class="dev-modal dev-modal-wide">
     <div class="dev-modal-header">
       <h2 class="dev-modal-title">Pair Your Device</h2>
       <button class="dev-modal-close" onclick="_devHidePairing()">✕</button>
     </div>
     <div id="dev-pairing-body">
-      <p class="dev-modal-desc">Click <strong>Generate Code</strong> to get a pairing code. Enter it on your ESP32 captive portal to link it to your account.</p>
+      <p class="dev-modal-desc" id="dev-pairing-intro">Click <strong>Generate Code</strong> to get a pairing code. The Setup Wizard will then guide you through connecting your device.</p>
       <div id="dev-pairing-error" class="dev-modal-error" style="display:none"></div>
+
+      <!-- Code display -->
       <div id="dev-pairing-code-box" style="display:none" class="dev-pairing-code-box">
+        <div class="dev-pairing-code-label">Your Pairing Code</div>
         <div id="dev-pairing-code" class="dev-pairing-code">——————</div>
         <div id="dev-pairing-expires" class="dev-pairing-expires"></div>
-        <div id="dev-pairing-qr" style="margin-top:12px;text-align:center"></div>
       </div>
+
+      <!-- Connection wizard (shown after code is generated) -->
+      <div id="dev-conn-wizard" style="display:none" class="dev-conn-wizard">
+        <div class="dev-conn-wizard-title">Connect your device</div>
+
+        <!-- Step A: Connect to hotspot -->
+        <div class="dev-conn-step">
+          <div class="dev-conn-step-num">1</div>
+          <div class="dev-conn-step-body">
+            <div class="dev-conn-step-label">Connect to the DIKLY hotspot</div>
+            <div class="dev-hotspot-pill">
+              <span class="dev-hotspot-icon">📶</span>
+              <span class="dev-hotspot-name">DIKLY-XXXXXX</span>
+              <span class="dev-hotspot-note">no internet needed</span>
+            </div>
+            <div class="dev-conn-step-sub">Open WiFi settings on your phone or laptop, then select the <strong>DIKLY-XXXXXX</strong> network.</div>
+          </div>
+        </div>
+
+        <!-- Step B: Open device portal -->
+        <div class="dev-conn-step">
+          <div class="dev-conn-step-num">2</div>
+          <div class="dev-conn-step-body">
+            <div class="dev-conn-step-label">Open the device setup portal</div>
+            <div class="dev-conn-actions">
+              <button class="dev-btn dev-btn-primary dev-btn-open-portal" onclick="_devOpenSetupPage()">
+                <span class="dev-portal-btn-icon">→</span> Open Device Portal
+              </button>
+              <button class="dev-btn dev-btn-ghost dev-btn-sm" onclick="_devToggleQR()" id="dev-qr-toggle-btn">Show QR Code</button>
+            </div>
+            <div id="dev-conn-qr" class="dev-conn-qr" style="display:none">
+              <div class="dev-qr-loading">Generating QR…</div>
+            </div>
+            <div id="dev-detect-status" class="dev-detect-status" style="display:none"></div>
+            <button class="dev-btn dev-btn-ghost dev-btn-sm dev-detect-btn" onclick="_devCheckHotspot()" id="dev-detect-btn">
+              ⊙ Check connection
+            </button>
+          </div>
+        </div>
+
+        <!-- Step C: Wait -->
+        <div class="dev-conn-step dev-conn-step-last">
+          <div class="dev-conn-step-num dev-conn-step-num-done">3</div>
+          <div class="dev-conn-step-body">
+            <div class="dev-conn-step-label">Complete setup on the portal, then tap <strong>Pair Device</strong></div>
+            <div class="dev-conn-waiting">
+              <span class="dev-waiting-dot"></span>
+              <span id="dev-waiting-text">Waiting for device to pair…</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div style="margin-top:16px;display:flex;gap:10px;justify-content:flex-end">
         <button class="dev-btn dev-btn-ghost" onclick="_devHidePairing()">Cancel</button>
         <button class="dev-btn dev-btn-primary" id="dev-gen-code-btn" onclick="_devGenerateCode()">Generate Code</button>
@@ -351,8 +407,8 @@ function _devHelpHTML() {
       <ol class="dev-help-list">
         <li>Click <strong>Generate Pairing Code</strong> and note the 6-character code</li>
         <li>Power on the ESP32 — it broadcasts hotspot <code>DIKLY-XXXXXX</code></li>
-        <li>Connect your phone/laptop to that hotspot</li>
-        <li>Open <strong>192.168.4.1</strong> in your browser — setup page loads automatically</li>
+        <li>Connect your phone/laptop to the <code>DIKLY-XXXXXX</code> hotspot</li>
+        <li>Tap <strong>Open Device Portal</strong> in the Setup Wizard — the device setup page opens automatically</li>
         <li>Enter your <strong>Institution Code</strong>, the <strong>Pairing Code</strong>, and your <strong>WiFi credentials</strong></li>
         <li>Tap <strong>Pair Device</strong> — the ESP32 reboots and connects to WiFi</li>
         <li>Return here — device shows <strong>Online</strong> within ~30 seconds</li>
@@ -361,7 +417,8 @@ function _devHelpHTML() {
     <div class="dev-help-section">
       <p class="dev-help-title">Troubleshooting</p>
       <ul class="dev-help-list">
-        <li><strong>192.168.4.1 unreachable?</strong> Ensure you're connected to the <code>DIKLY-XXXXXX</code> hotspot, not your home WiFi</li>
+        <li><strong>Device portal won't open?</strong> Make sure you're connected to <code>DIKLY-XXXXXX</code>, not your home WiFi — then tap <strong>Open Device Portal</strong> again</li>
+        <li><strong>Portal blocked?</strong> Use the <strong>QR code</strong> option to open it on your phone instead</li>
         <li><strong>Wrong WiFi password?</strong> Hold the reset button 5 s to re-enter setup mode</li>
         <li><strong>Offline after connecting?</strong> Wait 30 s for first heartbeat; refresh if needed</li>
         <li><strong>Can't start session?</strong> Device must show <strong>Online</strong> first</li>
@@ -419,9 +476,19 @@ function _devHidePairing() {
   if (modal) modal.style.display = 'none';
   const box = document.getElementById('dev-pairing-code-box');
   if (box) box.style.display = 'none';
+  const wizard = document.getElementById('dev-conn-wizard');
+  if (wizard) wizard.style.display = 'none';
   const code = document.getElementById('dev-pairing-code');
   if (code) code.textContent = '——————';
+  const intro = document.getElementById('dev-pairing-intro');
+  if (intro) intro.style.display = 'block';
+  clearInterval(_devPollTimer);
+  clearInterval(_devExpiryTimer);
+  clearInterval(_devDetectTimer);
+  _devCurrentCode = '';
 }
+
+let _devCurrentCode = '';
 
 async function _devGenerateCode() {
   const btn   = document.getElementById('dev-gen-code-btn');
@@ -436,20 +503,33 @@ async function _devGenerateCode() {
     const json = await res.json();
     if (!res.ok) throw new Error(json.message || 'Failed');
 
+    _devCurrentCode = json.code;
+
+    // Show code box
     const box = document.getElementById('dev-pairing-code-box');
     const codeEl = document.getElementById('dev-pairing-code');
     const expiresEl = document.getElementById('dev-pairing-expires');
     if (box) box.style.display = 'block';
     if (codeEl) codeEl.textContent = json.code;
     if (expiresEl) {
-      const exp = new Date(json.expiresAt);
-      expiresEl.textContent = `Expires at ${exp.toLocaleTimeString()} (5 min)`;
-      _devStartExpiryCountdown(exp, expiresEl);
+      _devStartExpiryCountdown(new Date(json.expiresAt), expiresEl);
     }
 
-    // QR code
-    const qrEl = document.getElementById('dev-pairing-qr');
-    if (qrEl) qrEl.innerHTML = `<img src="https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent('DIKLY:' + json.code)}" alt="QR" style="border-radius:8px" />`;
+    // Hide intro text, show wizard
+    const intro = document.getElementById('dev-pairing-intro');
+    if (intro) intro.style.display = 'none';
+    const wizard = document.getElementById('dev-conn-wizard');
+    if (wizard) wizard.style.display = 'block';
+
+    // Reset QR state so it regenerates for the new code
+    const qrEl = document.getElementById('dev-conn-qr');
+    if (qrEl) { qrEl.style.display = 'none'; qrEl._loaded = false; }
+    const qrBtn = document.getElementById('dev-qr-toggle-btn');
+    if (qrBtn) qrBtn.textContent = 'Show QR Code';
+
+    // Clear any prior detect status
+    const detectEl = document.getElementById('dev-detect-status');
+    if (detectEl) detectEl.style.display = 'none';
 
     // Poll for device linked
     _devPollForLink(json.code);
@@ -491,11 +571,88 @@ function _devPollForLink(code) {
       if (json.data) {
         clearInterval(_devPollTimer);
         clearInterval(_devExpiryTimer);
-        _devHidePairing();
-        renderAttendanceDevice();
+        clearInterval(_devDetectTimer);
+        const wt = document.getElementById('dev-waiting-text');
+        if (wt) { wt.textContent = '✓ Device paired successfully!'; wt.style.color = '#16a34a'; }
+        setTimeout(() => { _devHidePairing(); renderAttendanceDevice(); }, 900);
       }
     } catch (_) {}
   }, 3000);
+}
+
+// ── setup portal helpers ──────────────────────────────────────────────────────
+
+function _devSetupURL() {
+  const params = new URLSearchParams({ code: _devCurrentCode });
+  const instCode = window.currentUser?.company?.institutionCode;
+  if (instCode) params.set('inst', instCode);
+  return `http://192.168.4.1/?${params.toString()}`;
+}
+
+function _devOpenSetupPage() {
+  if (!_devCurrentCode) return;
+  const url = _devSetupURL();
+  const w = window.open(url, '_blank');
+  if (!w) {
+    const el = document.getElementById('dev-detect-status');
+    if (el) {
+      el.textContent = 'Popup blocked by your browser. Use the QR code below or allow popups for this site.';
+      el.className = 'dev-detect-status dev-detect-warn';
+      el.style.display = 'block';
+    }
+    // Auto-show QR as fallback
+    const qrEl = document.getElementById('dev-conn-qr');
+    if (qrEl && qrEl.style.display === 'none') _devToggleQR();
+  }
+}
+
+function _devToggleQR() {
+  const qrEl = document.getElementById('dev-conn-qr');
+  const btn   = document.getElementById('dev-qr-toggle-btn');
+  if (!qrEl) return;
+  if (qrEl.style.display !== 'none') {
+    qrEl.style.display = 'none';
+    if (btn) btn.textContent = 'Show QR Code';
+    return;
+  }
+  qrEl.style.display = 'block';
+  if (btn) btn.textContent = 'Hide QR Code';
+  if (!qrEl._loaded) {
+    qrEl._loaded = true;
+    const url = _devSetupURL();
+    qrEl.innerHTML = `
+      <div class="dev-qr-wrap">
+        <img src="https://api.qrserver.com/v1/create-qr-code/?size=160x160&margin=2&data=${encodeURIComponent(url)}"
+             alt="Setup QR Code" class="dev-qr-img" />
+        <div class="dev-qr-caption">Scan with your phone while connected to <strong>DIKLY-XXXXXX</strong></div>
+      </div>`;
+  }
+}
+
+let _devDetectTimer = null;
+async function _devCheckHotspot() {
+  const statusEl = document.getElementById('dev-detect-status');
+  const btn      = document.getElementById('dev-detect-btn');
+  if (!statusEl || !btn) return;
+  btn.disabled = true;
+  btn.textContent = '⊙ Checking…';
+  statusEl.className = 'dev-detect-status dev-detect-checking';
+  statusEl.textContent = 'Checking if device is reachable…';
+  statusEl.style.display = 'block';
+  try {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 3000);
+    await fetch('http://192.168.4.1/status', { mode: 'no-cors', signal: ctrl.signal });
+    clearTimeout(t);
+    statusEl.textContent = '✓ Device portal is reachable. It should have opened in a new tab.';
+    statusEl.className = 'dev-detect-status dev-detect-ok';
+  } catch (_) {
+    statusEl.textContent = 'Device portal not reachable. Make sure you\'re connected to DIKLY-XXXXXX in your WiFi settings, then try again.';
+    statusEl.className = 'dev-detect-status dev-detect-warn';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '⊙ Check connection';
+  }
 }
 
 async function _devUnlink() {
@@ -874,11 +1031,60 @@ function _devCSS() {
 .dev-setup-step-badge--2 { background:#0ea5e9; }
 .dev-setup-hint { font-size:13px; color:#64748b; line-height:1.65; margin:0 0 14px; }
 .dev-setup-hint code { background:#f1f5f9; padding:1px 5px; border-radius:4px; font-size:12px; color:#334155; }
-.dev-setup-steps-list { font-size:13px; color:#475569; line-height:1.9; padding-left:18px; margin:0 0 14px; }
+.dev-setup-steps-list { font-size:13px; color:#475569; line-height:1.9; padding-left:18px; margin:0 0 12px; }
 .dev-setup-steps-list strong { color:#1e293b; }
 .dev-setup-steps-list code { background:#f1f5f9; padding:1px 5px; border-radius:4px; font-size:12px; color:#334155; }
+.dev-setup-tip { display:flex; align-items:flex-start; gap:7px; background:#f0fdf4; border:1px solid #bbf7d0; border-radius:10px; padding:10px 12px; font-size:12px; color:#166534; line-height:1.5; margin-top:auto; }
+.dev-setup-tip-icon { flex-shrink:0; font-size:14px; margin-top:1px; }
 .dev-wifi-reconfigure-note { margin-top:12px; padding:10px 14px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; font-size:12px; color:#475569; line-height:1.7; }
 .dev-wifi-reconfigure-note code { background:#e2e8f0; padding:1px 5px; border-radius:4px; font-family:monospace; }
+
+/* Pairing modal — wider to fit wizard */
+.dev-modal-wide { max-width:520px; }
+
+/* Pairing code label */
+.dev-pairing-code-label { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.5px; color:#94a3b8; margin-bottom:6px; }
+
+/* Connection wizard */
+.dev-conn-wizard { border-top:1px solid #f1f5f9; margin-top:16px; padding-top:16px; }
+.dev-conn-wizard-title { font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.6px; color:#94a3b8; margin-bottom:14px; }
+.dev-conn-step { display:flex; gap:12px; align-items:flex-start; margin-bottom:16px; }
+.dev-conn-step-last { margin-bottom:0; }
+.dev-conn-step-num { width:22px; height:22px; border-radius:50%; background:#6366f1; color:#fff; font-size:11px; font-weight:800; display:flex; align-items:center; justify-content:center; flex-shrink:0; margin-top:1px; }
+.dev-conn-step-num-done { background:#22c55e; }
+.dev-conn-step-body { flex:1; min-width:0; }
+.dev-conn-step-label { font-size:13px; font-weight:600; color:#1e293b; margin-bottom:8px; line-height:1.4; }
+.dev-conn-step-sub { font-size:12px; color:#64748b; line-height:1.55; margin-top:6px; }
+
+/* Hotspot pill */
+.dev-hotspot-pill { display:inline-flex; align-items:center; gap:8px; background:#0f172a; border-radius:10px; padding:8px 14px; }
+.dev-hotspot-icon { font-size:15px; }
+.dev-hotspot-name { font-size:13px; font-weight:800; color:#fff; font-family:monospace; letter-spacing:.5px; }
+.dev-hotspot-note { font-size:11px; color:#94a3b8; }
+
+/* Portal open button */
+.dev-conn-actions { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+.dev-btn-open-portal { padding:9px 18px; font-size:14px; }
+.dev-portal-btn-icon { font-size:16px; }
+
+/* QR */
+.dev-conn-qr { margin-top:12px; animation:dev-fade-in .2s ease; }
+.dev-qr-wrap { display:flex; flex-direction:column; align-items:center; gap:6px; }
+.dev-qr-img { border-radius:12px; border:3px solid #e2e8f0; }
+.dev-qr-loading { font-size:12px; color:#94a3b8; padding:12px 0; text-align:center; }
+.dev-qr-caption { font-size:11px; color:#64748b; text-align:center; max-width:200px; line-height:1.5; }
+
+/* Detect status */
+.dev-detect-status { border-radius:9px; padding:8px 12px; font-size:12px; line-height:1.5; margin-top:8px; }
+.dev-detect-checking { background:#f8fafc; color:#64748b; }
+.dev-detect-ok   { background:#f0fdf4; color:#15803d; }
+.dev-detect-warn { background:#fffbeb; color:#92400e; }
+.dev-detect-btn { margin-top:8px; font-size:11px; color:#94a3b8; border-color:#f1f5f9; }
+.dev-detect-btn:hover { color:#475569; }
+
+/* Waiting indicator */
+.dev-conn-waiting { display:flex; align-items:center; gap:8px; font-size:12px; color:#64748b; margin-top:4px; }
+.dev-waiting-dot { width:7px; height:7px; border-radius:50%; background:#6366f1; flex-shrink:0; animation:dev-pulse 1.5s ease-in-out infinite; }
 
 /* Empty state (fallback) */
 .dev-empty-state { text-align:center; padding:64px 24px; background:#fff; border-radius:20px; box-shadow:0 1px 4px rgba(0,0,0,.06); }
