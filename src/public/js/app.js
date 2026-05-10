@@ -7622,12 +7622,7 @@ async function renderQuizzes() {
   } else if (role === 'student') {
     await renderStudentQuizzes(content);
   } else if (role === 'admin' || role === 'superadmin') {
-    // Academic-mode admins (typically founding lecturers) can also create/manage quizzes
-    if (currentUser.company?.mode === 'academic') {
-      await renderLecturerQuizzes(content);
-    } else {
-      await renderAdminQuizzes(content);
-    }
+    await renderAdminQuizzes(content);
   } else {
     content.innerHTML = '<div class="card"><p>Quizzes are not available for your role.</p></div>';
   }
