@@ -1,17 +1,28 @@
 const User    = require("../models/User");
 const Company = require("../models/Company");
 const { syncStudentToRoster } = require("../utils/rosterSync");
-const { sendStudentWelcome } = require("../services/emailService");
+const { sendStudentWelcome, sendEmployeeWelcome } = require("../services/emailService");
+
+// Build the base query filter for the requesting user's role.
+// Uses req.companyFilter (set by companyIsolation middleware) so superadmin
+// gets an empty filter (sees all companies) while everyone else is scoped
+// to their own company.
+function _baseFilter(req) {
+  const filter = { ...req.companyFilter, isApproved: false, isActive: true };
+  if (req.user.role === "hod") {
+    // HOD sees pending lecturers and students in their own department only
+    filter.role = { $in: ["lecturer", "student"] };
+    if (req.user.department) filter.department = req.user.department;
+  } else if (req.user.role === "manager") {
+    // Manager sees pending employees in their company only
+    filter.role = "employee";
+  }
+  return filter;
+}
 
 exports.getPendingApprovals = async (req, res) => {
   try {
-    const filter = { company: req.user.company, isApproved: false, isActive: true };
-    if (req.user.role === "hod") {
-      // HOD sees pending lecturers AND students in their own department
-      filter.role = { $in: ["lecturer", "student"] };
-      if (req.user.department) filter.department = req.user.department;
-    }
-    const pending = await User.find(filter).populate("company", "name mode");
+    const pending = await User.find(_baseFilter(req)).populate("company", "name mode");
     res.json({ pending });
   } catch (error) {
     console.error("Get pending approvals error:", error);
@@ -21,11 +32,7 @@ exports.getPendingApprovals = async (req, res) => {
 
 exports.approveUser = async (req, res) => {
   try {
-    const filter = { _id: req.params.id, company: req.user.company, isApproved: false };
-    if (req.user.role === "hod") {
-      filter.role = { $in: ["lecturer", "student"] };
-      if (req.user.department) filter.department = req.user.department;
-    }
+    const filter = { _id: req.params.id, isApproved: false, ..._baseFilter(req) };
     const user = await User.findOne(filter);
     if (!user) {
       return res.status(404).json({ error: "User not found or already approved" });
@@ -33,12 +40,10 @@ exports.approveUser = async (req, res) => {
     user.isApproved = true;
     await user.save();
 
-    // For students: enroll in matching roster courses and send approval notification.
     if (user.role === "student") {
       syncStudentToRoster(user._id, user.company).catch(err =>
         console.error("[approveUser] rosterSync failed:", err.message)
       );
-
       if (user.email) {
         Company.findById(user.company).select("name").lean()
           .then(company => sendStudentWelcome({
@@ -47,10 +52,20 @@ exports.approveUser = async (req, res) => {
             institutionName: company?.name || "",
             IndexNumber: user.IndexNumber,
           }))
-          .catch(err => console.error("[approveUser] welcome email failed:", err.message));
+          .catch(err => console.error("[approveUser] student welcome email failed:", err.message));
+      }
+    } else if (user.role === "employee") {
+      if (user.email) {
+        Company.findById(user.company).select("name").lean()
+          .then(company => sendEmployeeWelcome({
+            email: user.email,
+            name: user.name,
+            companyName: company?.name || "",
+            employeeId: user.employeeId || "",
+          }))
+          .catch(err => console.error("[approveUser] employee welcome email failed:", err.message));
       }
     }
-
 
     res.json({ message: `${user.name} has been approved`, user });
   } catch (error) {
@@ -61,11 +76,7 @@ exports.approveUser = async (req, res) => {
 
 exports.rejectUser = async (req, res) => {
   try {
-    const filter = { _id: req.params.id, company: req.user.company, isApproved: false };
-    if (req.user.role === "hod") {
-      filter.role = { $in: ["lecturer", "student"] };
-      if (req.user.department) filter.department = req.user.department;
-    }
+    const filter = { _id: req.params.id, isApproved: false, ..._baseFilter(req) };
     const user = await User.findOne(filter);
     if (!user) {
       return res.status(404).json({ error: "User not found or already approved" });
