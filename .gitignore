@@ -1,3 +1,13 @@
 node_modules/
 .env
 *.log
+
+# Capacitor
+/android
+/ios
+/www/capacitor-*
+*.keystore
+*.jks
+keystore.properties
+google-services.json
+GoogleService-Info.plist

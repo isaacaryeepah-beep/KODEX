@@ -298,6 +298,32 @@ app.use("/api", deviceSessionRoutes);
 
 if (superadminRoutes) app.use("/api/superadmin", superadminRoutes);
 
+// ── Android App Links verification ──────────────────────────────────────────
+app.get('/.well-known/assetlinks.json', (req, res) => {
+  res.json([{
+    relation: ['delegate_permission/common.handle_all_urls'],
+    target: {
+      namespace: 'android_app',
+      package_name: 'sbs.dikly.attendance',
+      sha256_cert_fingerprints: [process.env.ANDROID_SHA256_FINGERPRINT || 'REPLACE_WITH_YOUR_KEYSTORE_SHA256'],
+    },
+  }]);
+});
+
+// ── iOS Universal Links verification ────────────────────────────────────────
+app.get('/.well-known/apple-app-site-association', (req, res) => {
+  res.set('Content-Type', 'application/json');
+  res.json({
+    applinks: {
+      apps: [],
+      details: [{
+        appID: (process.env.APPLE_TEAM_ID || 'REPLACE_WITH_TEAM_ID') + '.sbs.dikly.attendance',
+        paths: ['*'],
+      }],
+    },
+  });
+});
+
 // ── Fallback ─────────────────────────────────────────────────────────────────
 app.use((req, res) => {
   // Never serve HTML for /api routes — return JSON 404 so API clients get a

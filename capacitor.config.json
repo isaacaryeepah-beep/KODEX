@@ -1,0 +1,47 @@
+{
+  "appId": "sbs.dikly.attendance",
+  "appName": "DIKLY",
+  "webDir": "www",
+  "server": {
+    "url": "https://dikly.sbs",
+    "cleartext": false,
+    "allowNavigation": ["dikly.sbs", "*.dikly.sbs", "api.paystack.co"]
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 2500,
+      "launchAutoHide": true,
+      "backgroundColor": "#4f46e5",
+      "androidSplashResourceName": "splash",
+      "androidScaleType": "CENTER_CROP",
+      "showSpinner": false,
+      "splashFullScreen": true,
+      "splashImmersive": true
+    },
+    "StatusBar": {
+      "style": "DARK",
+      "backgroundColor": "#4f46e5",
+      "overlaysWebView": false
+    },
+    "PushNotifications": {
+      "presentationOptions": ["badge", "sound", "alert"]
+    },
+    "Keyboard": {
+      "resize": "body",
+      "style": "dark"
+    }
+  },
+  "android": {
+    "allowMixedContent": false,
+    "captureInput": true,
+    "webContentsDebuggingEnabled": false,
+    "loggingBehavior": "none",
+    "appendUserAgent": "DiklyApp/1.0 Android"
+  },
+  "ios": {
+    "contentInset": "automatic",
+    "scrollEnabled": true,
+    "allowsLinkPreview": false,
+    "appendUserAgent": "DiklyApp/1.0 iOS"
+  }
+}
