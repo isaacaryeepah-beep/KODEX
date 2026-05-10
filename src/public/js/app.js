@@ -2777,41 +2777,60 @@ async function renderDashboard() {
 async function renderApprovals() {
   const content = document.getElementById('main-content');
   if (!content) return;
+  content.innerHTML = '<div class="loading">Loading approvals…</div>';
   try {
     const data = await api('/api/approvals/pending');
     const pending = data.pending || [];
-    const isHod = currentUser.role === 'hod';
+    const role    = currentUser.role;
+    const isHod     = role === 'hod';
+    const isManager = role === 'manager';
+
+    const subtitle = isHod
+      ? `Lecturer &amp; student requests for <strong>${currentUser.department || 'your department'}</strong>`
+      : isManager
+        ? 'Employee registration requests pending your approval'
+        : 'Review and approve registration requests';
+
+    // HODs don't need a department column (all in same dept); managers don't need one either
+    const showDeptCol = !isHod && !isManager;
 
     content.innerHTML = `
       <div class="page-header">
         <div>
           <h2>Pending Approvals</h2>
-          <p>${isHod ? `Lecturer approval requests for <strong>${currentUser.department || 'your department'}</strong>` : 'Review and approve registration requests'}</p>
+          <p>${subtitle}</p>
         </div>
       </div>
       <div class="card">
         ${pending.length ? `
           <table>
-            <thead><tr><th>Name</th><th>Email / ID</th><th>Role</th>${!isHod ? '<th>Department</th>' : ''}<th>Registered</th><th>Actions</th></tr></thead>
+            <thead><tr>
+              <th>Name</th>
+              <th>Email / ID</th>
+              <th>Role</th>
+              ${showDeptCol ? '<th>Department</th>' : ''}
+              <th>Registered</th>
+              <th>Actions</th>
+            </tr></thead>
             <tbody>${pending.map(u => `
               <tr>
                 <td style="font-weight:500">${u.name}</td>
-                <td>${u.email || u.IndexNumber || u.indexNumber || 'N/A'}</td>
+                <td style="font-size:13px;color:var(--text-light)">${u.email || u.IndexNumber || u.indexNumber || 'N/A'}</td>
                 <td><span class="status-badge status-active">${u.role}</span></td>
-                ${!isHod ? `<td>${u.department ? `<span style="font-size:11px;padding:2px 7px;border-radius:20px;background:#ecfeff;color:#0891b2;font-weight:600;">${u.department}</span>` : '—'}</td>` : ''}
-                <td>${new Date(u.createdAt).toLocaleDateString()}</td>
+                ${showDeptCol ? `<td>${u.department ? `<span style="font-size:11px;padding:2px 7px;border-radius:20px;background:#ecfeff;color:#0891b2;font-weight:600;">${u.department}</span>` : '—'}</td>` : ''}
+                <td style="font-size:13px;color:var(--text-light)">${new Date(u.createdAt).toLocaleDateString()}</td>
                 <td style="white-space:nowrap">
-                  <button class="btn btn-sm" style="background:#22c55e;color:#fff" onclick="approveUser('${u._id}')">Approve</button>
-                  <button class="btn btn-danger btn-sm" onclick="rejectUser('${u._id}')">Reject</button>
+                  <button class="btn btn-sm" style="background:#22c55e;color:#fff;margin-right:6px" onclick="approveUser('${u._id}')">✓ Approve</button>
+                  <button class="btn btn-danger btn-sm" onclick="rejectUser('${u._id}')">✕ Reject</button>
                 </td>
               </tr>
             `).join('')}</tbody>
           </table>
-        ` : '<div class="empty-state"><p>No pending approval requests</p></div>'}
+        ` : `<div class="empty-state"><p>No pending approval requests — all caught up!</p></div>`}
       </div>
     `;
   } catch (e) {
-    content.innerHTML = `<div class="card"><p>Failed to load approvals: ${e.message}</p></div>`;
+    content.innerHTML = `<div class="card"><p style="color:#ef4444">Failed to load approvals: ${e.message}</p></div>`;
   }
 }
 
