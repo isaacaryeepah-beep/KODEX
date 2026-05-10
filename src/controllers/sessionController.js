@@ -15,7 +15,7 @@ exports.startSession = async (req, res) => {
   try {
     const { courseId, departmentId, classLevel, room, deviceId, title } = req.body;
     const createdBy = req.user._id;
-    const company   = req.user.companyId;
+    const company   = req.user.company;
 
     const device = await Device.findOne({ deviceId, companyId: company });
     if (!device) return res.status(404).json({ message: 'Device not found' });
