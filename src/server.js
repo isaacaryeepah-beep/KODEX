@@ -2,6 +2,7 @@ require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");
+const compression = require("compression");
 const path = require("path");
 const connectDB = require("./config/db");
 const authRoutes = require("./routes/auth");
@@ -55,6 +56,10 @@ const PORT = process.env.PORT || 5000;
 // network public-IP-match anti-cheat in markAttendance silently pass for
 // everyone including cheaters at home. Must be set before any route handler.
 app.set("trust proxy", true);
+
+// ── Gzip compression — reduces payload size by ~70% on mobile networks ────────
+app.use(compression({ level: 6 }));
+
 
 // ── Force HTTPS in production (Render sets RENDER env var) ───────────────────
 app.use((req, res, next) => {
@@ -151,12 +156,21 @@ app.get("/superadmin", (req, res) => {
 app.get("/about",   (req, res) => res.sendFile(path.join(__dirname, "public", "about.html")));
 app.get("/founder", (req, res) => res.sendFile(path.join(__dirname, "public", "founder.html")));
 app.get("/contact", (req, res) => res.sendFile(path.join(__dirname, "public", "contact.html")));
+app.get("/privacy", (req, res) => res.sendFile(path.join(__dirname, "public", "privacy.html")));
+app.get("/terms",   (req, res) => res.sendFile(path.join(__dirname, "public", "terms.html")));
 
 app.use(express.static(path.join(__dirname, "public"), {
-  setHeaders: (res) => {
-    res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
-    res.setHeader("Pragma", "no-cache");
-    res.setHeader("Expires", "0");
+  setHeaders: (res, filePath) => {
+    const ext = path.extname(filePath).toLowerCase();
+    // Cache static assets (JS, CSS, images, fonts) for 7 days — improves mobile load speed.
+    // HTML files stay no-cache so the SPA always gets the latest shell.
+    if (['.js', '.css', '.svg', '.png', '.jpg', '.jpeg', '.webp', '.woff', '.woff2'].includes(ext)) {
+      res.setHeader("Cache-Control", "public, max-age=604800, stale-while-revalidate=86400");
+    } else {
+      res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+      res.setHeader("Pragma", "no-cache");
+      res.setHeader("Expires", "0");
+    }
   },
 }));
 

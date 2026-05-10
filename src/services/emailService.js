@@ -3,20 +3,19 @@
 // Fallback:       MailerSend API (MAILERSEND_API_KEY env var)
 // FROM address always resolves to the Gmail user so bounces reach a real inbox.
 
-const GMAIL_USER = process.env.GMAIL_USER || 'nelsonkel78@gmail.com';
-// Derive FROM from Gmail address so it always has a real mail server behind it.
-// Fall back to the EMAIL_FROM env var only if no Gmail is configured.
-const _rawFrom = process.env.EMAIL_FROM || `DIKLY <${GMAIL_USER || 'no-reply@dikly.sbs'}>`;
-const _safeFrom = _rawFrom.includes('kodex.it.com') || _rawFrom.includes('dikly.it.com')
-  ? `DIKLY <${GMAIL_USER || 'no-reply@dikly.sbs'}>`
+// Always use the real Gmail address as FROM — no-reply@dikly.sbs has no mail server.
+const GMAIL_USER    = process.env.GMAIL_USER || 'nelsonkel78@gmail.com';
+const SUPPORT_EMAIL = GMAIL_USER;
+const _rawFrom      = process.env.EMAIL_FROM || `DIKLY <${GMAIL_USER}>`;
+const _safeFrom     = _rawFrom.includes('kodex.it.com') || _rawFrom.includes('dikly.it.com')
+  ? `DIKLY <${GMAIL_USER}>`
   : _rawFrom;
-// If EMAIL_FROM uses no-reply@dikly.sbs but we have a Gmail address, use Gmail instead
-// so bounces reach a real inbox rather than the unmanned dikly.sbs address.
-const FROM = (GMAIL_USER && _safeFrom.includes('no-reply@dikly.sbs'))
+// If EMAIL_FROM still points at no-reply@dikly.sbs, override with the real Gmail address.
+const FROM = _safeFrom.includes('no-reply@dikly.sbs') || _safeFrom.includes('no-reply@dikly')
   ? `DIKLY <${GMAIL_USER}>`
   : _safeFrom;
 
-const SUPPORT_EMAIL = GMAIL_USER || 'nelsonkel78@gmail.com';
+
 const BASE_URL = process.env.APP_URL || 'https://dikly.sbs';
 
 // ── Colour palette ────────────────────────────────────────────────────────────
@@ -110,10 +109,11 @@ function parseAddress(addr) {
 // ── Gmail SMTP sender (primary) ───────────────────────────────────────────────
 async function sendViaGmail({ toEmail, toName, fromEmail, fromName, subject, html, textBody, replyTo }) {
   return new Promise((resolve, reject) => {
-    const net = require('net');
-    const tls = require('tls');
-    const user = process.env.GMAIL_USER;
+    const tls  = require('tls');
+    const user = GMAIL_USER; // use module-level constant (has nelsonkel78@gmail.com fallback)
     const pass = process.env.GMAIL_APP_PASSWORD;
+
+    if (!pass) { reject(new Error('GMAIL_APP_PASSWORD not set')); return; }
 
     const auth = Buffer.from(`\x00${user}\x00${pass.replace(/\s/g, '')}`).toString('base64');
     const boundary = `dikly_${Date.now()}`;
@@ -205,11 +205,11 @@ async function sendViaMailerSend({ toEmail, toName, fromEmail, fromName, subject
 
 // ── Main send() -- tries Gmail first, falls back to MailerSend ─────────────────
 async function send({ to, subject, html, textBody }) {
-  const gmailUser = process.env.GMAIL_USER;
+  // GMAIL_USER is already resolved at module level with nelsonkel78@gmail.com fallback.
   const gmailPass = process.env.GMAIL_APP_PASSWORD;
   const mailerKey = process.env.MAILERSEND_API_KEY;
 
-  if (!gmailUser && !mailerKey) {
+  if (!gmailPass && !mailerKey) {
     console.log(`[EmailService] No credentials -- would send to ${to}: "${subject}"`);
     return { ok: true, dev: true };
   }
@@ -225,14 +225,14 @@ async function send({ to, subject, html, textBody }) {
   const cleanSubject = subject.replace(/[\u{1F000}-\u{1FFFF}]|[\u{2600}-\u{27FF}]/gu, '').trim();
 
   // Try Gmail SMTP first
-  if (gmailUser && gmailPass) {
+  if (GMAIL_USER && gmailPass) {
     try {
       const result = await sendViaGmail({
         toEmail: toParsed.email,
         toName: toParsed.name || toParsed.email,
-        fromEmail: gmailUser,
+        fromEmail: GMAIL_USER,
         fromName: fromParsed.name || 'DIKLY',
-        replyTo: gmailUser,
+        replyTo: GMAIL_USER,
         subject: cleanSubject,
         html,
         textBody,
@@ -251,9 +251,9 @@ async function send({ to, subject, html, textBody }) {
       const result = await sendViaMailerSend({
         toEmail: toParsed.email,
         toName: toParsed.name || toParsed.email,
-        fromEmail: gmailUser || fromParsed.email,
+        fromEmail: GMAIL_USER,
         fromName: fromParsed.name || 'DIKLY',
-        replyTo: gmailUser || null,
+        replyTo: GMAIL_USER,
         subject: cleanSubject,
         html,
         textBody,
@@ -514,7 +514,7 @@ async function sendNewInstitutionAlert({ institutionName, adminName, adminEmail,
       <a href="${BASE_URL}/superadmin" class="btn btn-primary">Open Superadmin →</a>
     </div>
   `, `New institution: ${institutionName}`);
-  return send({ to: FROM, subject: `🎉 New institution on DIKLY: ${institutionName}`, html });
+  return send({ to: GMAIL_USER, subject: `🎉 New institution on DIKLY: ${institutionName}`, html });
 }
 
 

@@ -2,7 +2,12 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="DIKLY">
+  <meta name="theme-color" content="#4f46e5">
 
   <!-- ── Primary SEO ───────────────────────────────────────────── -->
   <title>DIKLY — Smart Attendance & Education Management | DIKLY Technologies</title>
@@ -32,6 +37,7 @@
   <!-- ── Favicon ───────────────────────────────────────────────── -->
   <link rel="icon" type="image/svg+xml" href="/dikly-icon.svg">
   <link rel="apple-touch-icon" href="/dikly-icon.svg">
+  <link rel="manifest" href="/manifest.json">
 
   <!-- ── Structured Data ───────────────────────────────────────── -->
   <script type="application/ld+json">
@@ -497,8 +503,8 @@ function selectPortal(t){document.addEventListener('DOMContentLoaded',function()
           <input type="text" id="lecturer-reg-institution" placeholder="e.g. University of Ghana">
         </div>
         <div class="form-group">
-          <label>Department <span style="font-weight:400;color:var(--text-light)">(optional)</span></label>
-          <input type="text" id="lecturer-reg-dept" placeholder="e.g. Computer Science, Mathematics">
+          <label>Department</label>
+          <input type="text" id="lecturer-reg-dept" placeholder="e.g. Computer Science, Mathematics" required>
         </div>
         <div class="form-group">
           <label>Phone Number <span style="font-weight:400;color:var(--text-light)">(for SMS password reset)</span></label>

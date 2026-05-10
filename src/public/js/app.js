@@ -1341,12 +1341,9 @@ async function handleLecturerRegister() {
 
     const dept = document.getElementById('lecturer-reg-dept')?.value?.trim();
     const phone = document.getElementById('lecturer-reg-phone')?.value?.trim();
-    let body = { name, email, password };
-    if (dept) body.department = dept;
+    if (!dept) return showLecturerError('Please enter your department.');
+    let body = { name, email, password, department: dept };
     if (phone) body.phone = phone;
-    if (regMode === 'join' && !dept) {
-      return showLecturerError('Department is required when joining an institution.');
-    }
     if (regMode === 'create') {
       const institutionName = document.getElementById('lecturer-reg-institution').value;
       if (!institutionName) return showLecturerError('Please enter your institution name');
