@@ -689,7 +689,7 @@ exports.login = async (req, res) => {
 
     const isMatch = await user.comparePassword(password);
     if (!isMatch) {
-      // Track failed attempts for student/employee accounts; lock after 5 consecutive failures
+      // Track failed attempts for students and employees; lock after 5 consecutive failures
       if (user && ['student', 'employee'].includes(user.role)) {
         user.failedLoginAttempts = (user.failedLoginAttempts || 0) + 1;
         user.lastFailedLoginAt = new Date();

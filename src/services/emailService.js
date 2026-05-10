@@ -15,6 +15,7 @@ const FROM = _safeFrom.includes('no-reply@dikly.sbs') || _safeFrom.includes('no-
   ? `DIKLY <${GMAIL_USER}>`
   : _safeFrom;
 
+
 const BASE_URL = process.env.APP_URL || 'https://dikly.sbs';
 
 // ── Colour palette ────────────────────────────────────────────────────────────

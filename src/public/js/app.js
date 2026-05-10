@@ -6,61 +6,57 @@ const API = window.location.hostname === 'localhost' || window.location.hostname
   ? ''
   : window.location.origin;
 
-// Median.co / Android WebView helper — opens external URLs in system browser,
-// internal URLs navigate within the WebView.
-function openUrl(url, forceExternal = false) {
-  const isMedian = typeof window.median !== 'undefined' || /gonative|median/i.test(navigator.userAgent);
+// Opens external URLs in system browser. Uses Capacitor Browser plugin when
+// running inside the native app so the in-app WebView is not navigated away.
+async function openUrl(url, forceExternal = false) {
   const isInternal = url.startsWith('/') || url.startsWith(window.location.origin);
-  if (isMedian && !isInternal) {
-    // Let Median route external links through its external-browser bridge
-    window.location.href = url;
-  } else if (forceExternal || (!isMedian && !isInternal)) {
+  if (!isInternal || forceExternal) {
+    try {
+      if (window.Capacitor?.isNativePlatform?.() && window.Capacitor?.Plugins?.Browser) {
+        await window.Capacitor.Plugins.Browser.open({ url });
+        return;
+      }
+    } catch (_) {}
     window.open(url, '_blank', 'noopener,noreferrer');
   } else {
     window.location.href = url;
   }
 }
 
-// Median.co / Android WebView compatible file download helper.
-// Android WebViews don't support blob-URL downloads via <a download> — we convert
-// to a base64 data URL which the OS download manager can handle.
+// Downloads a blob as a file. Uses Capacitor Filesystem + Share plugins when
+// running inside the native app (iOS/Android), falls back to standard browser
+// anchor-click download for web.
 async function downloadBlob(blob, filename) {
-  const isMedian = typeof window.median !== 'undefined' || /gonative|median/i.test(navigator.userAgent);
-
-  if (isMedian) {
+  if (window.Capacitor?.isNativePlatform?.()) {
     try {
-      // Try Median's native share bridge for PDFs first
-      if (blob.type === 'application/pdf' && window.median?.share?.sharePDF) {
-        const reader = new FileReader();
-        const dataUrl = await new Promise((res, rej) => {
-          reader.onload = () => res(reader.result); reader.onerror = rej;
-          reader.readAsDataURL(blob);
-        });
-        window.median.share.sharePDF({ base64: dataUrl.split(',')[1], filename });
-        return;
-      }
-      // Fallback: base64 data URL — Android can open/save these natively
       const reader = new FileReader();
-      const dataUrl = await new Promise((res, rej) => {
-        reader.onload = () => res(reader.result); reader.onerror = rej;
+      const base64 = await new Promise((res, rej) => {
+        reader.onload  = () => res(reader.result.split(',')[1]);
+        reader.onerror = rej;
         reader.readAsDataURL(blob);
       });
-      const a = document.createElement('a');
-      a.href = dataUrl; a.download = filename;
-      document.body.appendChild(a); a.click(); document.body.removeChild(a);
-    } catch (_) {
-      // Last resort: navigate to object URL
-      const url = URL.createObjectURL(blob);
-      window.location.href = url;
-      setTimeout(() => URL.revokeObjectURL(url), 10000);
+      const result = await window.Capacitor.Plugins.Filesystem.writeFile({
+        path:      filename,
+        data:      base64,
+        directory: 'DOCUMENTS',
+        recursive: true,
+      });
+      await window.Capacitor.Plugins.Share.share({
+        title:      filename,
+        url:        result.uri,
+        dialogTitle: 'Save or share ' + filename,
+      });
+      return;
+    } catch (e) {
+      console.warn('[downloadBlob] Native failed, using browser fallback:', e.message);
     }
-  } else {
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = filename;
-    document.body.appendChild(a); a.click(); document.body.removeChild(a);
-    setTimeout(() => URL.revokeObjectURL(url), 5000);
   }
+  // Standard browser download
+  const url = URL.createObjectURL(blob);
+  const a   = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
 }
 // ═══════════════════════════════════════════════════════
 // TOAST NOTIFICATION SYSTEM
@@ -8213,7 +8209,7 @@ async function viewStudentQuizAnswers(quizId, attemptId, studentName) {
   }
 }
 
-function exportQuizResultsCSV(quizId) {
+async function exportQuizResultsCSV(quizId) {
   const d = window._quizResultsData;
   if (!d || d.quizId !== quizId) { toastWarning('Load the results first.'); return; }
   const rows = [['#','Name','Index/ID','Score','Max Score','Percentage','Status','Submitted At']];
@@ -9009,7 +9005,7 @@ function showBiErr(msg) {
   if (el) { el.textContent = msg; el.style.display = 'block'; }
 }
 
-function downloadImportTemplate() {
+async function downloadImportTemplate() {
   const csv = [
     'name,indexNumber,phone,department,programme,level,group,sessionType,semester,courseCode',
     'John Mensah,CS/0001/23,0244123456,Computer Science,BSc,100,A,Regular,1,CS101',
@@ -9705,7 +9701,7 @@ async function esp32Api(path, options = {}) {
 // Try to find ESP32 on local network
 async function discoverESP32() {
   // Always try 192.168.4.1 — the fixed AP gateway IP of the ESP32.
-  // Works in Median app (allows HTTP from HTTPS WebView).
+  // The Capacitor WebView allows HTTP requests to local network IPs.
   // Two-step: first /token (gets key in JSON body), then /status (confirms device).
   const candidates = ['192.168.4.1'];
   if (esp32IP && esp32IP !== '192.168.4.1') candidates.push(esp32IP);
@@ -11528,7 +11524,7 @@ function confirmDeleteManualEntry(courseId, entryId) {
 }
 
 // ── CSV Export ────────────────────────────────────────────────────────────────
-function exportGradeBookCSV(courseId, courseTitle) {
+async function exportGradeBookCSV(courseId, courseTitle) {
   const d = window._gbData;
   if (!d || !d.grades.length) { toastWarning('No grades to export'); return; }
 
