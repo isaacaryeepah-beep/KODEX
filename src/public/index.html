@@ -884,6 +884,9 @@ function selectPortal(t){document.addEventListener('DOMContentLoaded',function()
         <div class="sidebar-logo">
           <img src="/dikly-icon.svg" style="width:28px;height:28px;flex-shrink:0" alt="DIKLY">
           <span class="sidebar-logo-text">DIKLY</span>
+          <button id="sound-toggle-btn" onclick="_notifSound.toggleMute()" title="Sound on — click to mute" style="margin-left:auto;background:none;border:none;cursor:pointer;color:rgba(255,255,255,.7);padding:4px;border-radius:6px;display:flex;align-items:center;justify-content:center;transition:color .2s,background .2s" onmouseenter="this.style.color='#fff';this.style.background='rgba(255,255,255,.12)'" onmouseleave="this.style.color='rgba(255,255,255,.7)';this.style.background='none'">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+          </button>
         </div>
         <nav class="sidebar-nav" id="sidebar-nav"></nav>
       </div>
