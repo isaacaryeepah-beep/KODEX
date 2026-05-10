@@ -58,6 +58,19 @@ async function downloadBlob(blob, filename) {
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
   setTimeout(() => URL.revokeObjectURL(url), 5000);
 }
+
+function startNotifPolling() {
+  stopNotifPolling();
+  _lastMsgUnread = -1; // reset so first run is a silent baseline
+  _lastAnnUnread = -1;
+  _pollNotifications();
+  _notifPollTimer = setInterval(_pollNotifications, 30000);
+}
+
+function stopNotifPolling() {
+  if (_notifPollTimer) { clearInterval(_notifPollTimer); _notifPollTimer = null; }
+}
+
 // ═══════════════════════════════════════════════════════
 // TOAST NOTIFICATION SYSTEM
 // Usage: toast('Message')           → info (default)
@@ -1864,6 +1877,7 @@ async function handleStudentForgotPassword() {
 }
 
 async function handleLogout() {
+  stopNotifPolling();
   try {
     if (isOnline()) await api('/api/auth/logout', { method: 'POST' });
   } catch (e) {}
@@ -2266,6 +2280,8 @@ function showDashboard(data) {
 
     buildSidebar();
     loadAnnBadge();
+    startNotifPolling();
+    _notifSound.updateBtn();
     applyBranding(); // async — applies colors/logo in background
     // Show offline banner immediately when logged in via cached credentials
     if (data?.offlineMode) showOfflineBanner(false);
@@ -2469,6 +2485,8 @@ function buildSidebar() {
 function navigateTo(view) {
   // Clear live clock timer when leaving a clock page
   if (window._empClockTimer) { clearInterval(window._empClockTimer); window._empClockTimer = null; }
+  // Stop thread poll when leaving messages
+  if (view !== 'messages') _stopThreadPoll();
   currentView = view;
   document.querySelectorAll('.sidebar-nav a').forEach(a => a.classList.remove('active'));
   const navEl = document.getElementById(`nav-${view}`);
@@ -2640,41 +2658,60 @@ async function renderDashboard() {
 async function renderApprovals() {
   const content = document.getElementById('main-content');
   if (!content) return;
+  content.innerHTML = '<div class="loading">Loading approvals…</div>';
   try {
     const data = await api('/api/approvals/pending');
     const pending = data.pending || [];
-    const isHod = currentUser.role === 'hod';
+    const role    = currentUser.role;
+    const isHod     = role === 'hod';
+    const isManager = role === 'manager';
+
+    const subtitle = isHod
+      ? `Lecturer &amp; student requests for <strong>${currentUser.department || 'your department'}</strong>`
+      : isManager
+        ? 'Employee registration requests pending your approval'
+        : 'Review and approve registration requests';
+
+    // HODs don't need a department column (all in same dept); managers don't need one either
+    const showDeptCol = !isHod && !isManager;
 
     content.innerHTML = `
       <div class="page-header">
         <div>
           <h2>Pending Approvals</h2>
-          <p>${isHod ? `Lecturer approval requests for <strong>${currentUser.department || 'your department'}</strong>` : 'Review and approve registration requests'}</p>
+          <p>${subtitle}</p>
         </div>
       </div>
       <div class="card">
         ${pending.length ? `
           <table>
-            <thead><tr><th>Name</th><th>Email / ID</th><th>Role</th>${!isHod ? '<th>Department</th>' : ''}<th>Registered</th><th>Actions</th></tr></thead>
+            <thead><tr>
+              <th>Name</th>
+              <th>Email / ID</th>
+              <th>Role</th>
+              ${showDeptCol ? '<th>Department</th>' : ''}
+              <th>Registered</th>
+              <th>Actions</th>
+            </tr></thead>
             <tbody>${pending.map(u => `
               <tr>
                 <td style="font-weight:500">${u.name}</td>
-                <td>${u.email || u.IndexNumber || u.indexNumber || 'N/A'}</td>
+                <td style="font-size:13px;color:var(--text-light)">${u.email || u.IndexNumber || u.indexNumber || 'N/A'}</td>
                 <td><span class="status-badge status-active">${u.role}</span></td>
-                ${!isHod ? `<td>${u.department ? `<span style="font-size:11px;padding:2px 7px;border-radius:20px;background:#ecfeff;color:#0891b2;font-weight:600;">${u.department}</span>` : '—'}</td>` : ''}
-                <td>${new Date(u.createdAt).toLocaleDateString()}</td>
+                ${showDeptCol ? `<td>${u.department ? `<span style="font-size:11px;padding:2px 7px;border-radius:20px;background:#ecfeff;color:#0891b2;font-weight:600;">${u.department}</span>` : '—'}</td>` : ''}
+                <td style="font-size:13px;color:var(--text-light)">${new Date(u.createdAt).toLocaleDateString()}</td>
                 <td style="white-space:nowrap">
-                  <button class="btn btn-sm" style="background:#22c55e;color:#fff" onclick="approveUser('${u._id}')">Approve</button>
-                  <button class="btn btn-danger btn-sm" onclick="rejectUser('${u._id}')">Reject</button>
+                  <button class="btn btn-sm" style="background:#22c55e;color:#fff;margin-right:6px" onclick="approveUser('${u._id}')">✓ Approve</button>
+                  <button class="btn btn-danger btn-sm" onclick="rejectUser('${u._id}')">✕ Reject</button>
                 </td>
               </tr>
             `).join('')}</tbody>
           </table>
-        ` : '<div class="empty-state"><p>No pending approval requests</p></div>'}
+        ` : `<div class="empty-state"><p>No pending approval requests — all caught up!</p></div>`}
       </div>
     `;
   } catch (e) {
-    content.innerHTML = `<div class="card"><p>Failed to load approvals: ${e.message}</p></div>`;
+    content.innerHTML = `<div class="card"><p style="color:#ef4444">Failed to load approvals: ${e.message}</p></div>`;
   }
 }
 
@@ -7509,7 +7546,12 @@ async function renderQuizzes() {
   } else if (role === 'student') {
     await renderStudentQuizzes(content);
   } else if (role === 'admin' || role === 'superadmin') {
-    await renderAdminQuizzes(content);
+    // Academic-mode admins (typically founding lecturers) can also create/manage quizzes
+    if (currentUser.company?.mode === 'academic') {
+      await renderLecturerQuizzes(content);
+    } else {
+      await renderAdminQuizzes(content);
+    }
   } else {
     content.innerHTML = '<div class="card"><p>Quizzes are not available for your role.</p></div>';
   }
@@ -17952,8 +17994,44 @@ async function printMeetingAttendance(meetingId, title) {
 // DIKLY MESSAGING  (Phase 2: Facebook-style desktop UI)
 // ════════════════════════════════════════════════════════════════════════════
 
-let _activeConvoId  = null;
-let _msgSearchQuery = '';
+let _activeConvoId    = null;
+let _msgSearchQuery   = '';
+let _msgThreadPoll    = null;   // interval for refreshing the open thread
+let _msgThreadLastLen = 0;      // message count when thread was last rendered
+
+function _startThreadPoll(convoId) {
+  _stopThreadPoll();
+  _msgThreadPoll = setInterval(async () => {
+    if (!_activeConvoId || _activeConvoId !== convoId) { _stopThreadPoll(); return; }
+    try {
+      const data = await api(`/api/messages/conversations/${convoId}`);
+      const msgs = data.messages || [];
+      const myId = currentUser._id || currentUser.id;
+      if (msgs.length > _msgThreadLastLen) {
+        // New messages arrived — play sound only if the newest isn't ours
+        const newest = msgs[msgs.length - 1];
+        const senderId = newest.sender?._id || newest.sender;
+        if (String(senderId) !== String(myId)) {
+          _notifSound.playChime('message');
+        }
+        _msgThreadLastLen = msgs.length;
+        const body = document.getElementById('msg-thread-body');
+        if (body) {
+          body.innerHTML = msgs.map(m => _buildMsgRow(m, myId)).join('');
+          body.scrollTop = body.scrollHeight;
+        }
+        // Update unread badge in sidebar
+        await api(`/api/messages/conversations/${convoId}/read`, { method: 'PATCH' }).catch(() => {});
+        _loadConvoList().catch(() => {});
+      }
+    } catch (_) {}
+  }, 15000); // check every 15 s
+}
+
+function _stopThreadPoll() {
+  if (_msgThreadPoll) { clearInterval(_msgThreadPoll); _msgThreadPoll = null; }
+  _msgThreadLastLen = 0;
+}
 
 // ── Avatar color palette ──────────────────────────────────────────────────
 const MSG_AVATAR_COLORS = ['#2563eb','#7c3aed','#0891b2','#16a34a','#d97706','#db2777','#dc2626','#0f766e'];
@@ -18186,6 +18264,8 @@ async function openConvo(id, name, type) {
       body.innerHTML = msgs.map(m => _buildMsgRow(m, myId)).join('');
       body.scrollTop = body.scrollHeight;
     }
+    _msgThreadLastLen = msgs.length;
+    _startThreadPoll(id);
     // Refresh sidebar unread counts
     if (window._msgConvos) {
       const c = window._msgConvos.find(x => x._id === id);
@@ -18246,6 +18326,7 @@ function _buildBubbleContent(bodyText, attachment, isMine) {
 
 // ── Mobile back to list ───────────────────────────────────────────────────
 function _msgBackToList() {
+  _stopThreadPoll();
   _activeConvoId = null;
   const wrap = document.getElementById('msg-thread-wrap');
   wrap?.classList.remove('msg-thread-active');

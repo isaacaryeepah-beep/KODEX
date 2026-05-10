@@ -8,8 +8,8 @@ const router = express.Router();
 
 router.use(authenticate);
 
-router.get("/pending", requireRole("admin", "superadmin", "hod"), companyIsolation, approvalController.getPendingApprovals);
-router.patch("/:id/approve", requireRole("admin", "superadmin", "hod"), companyIsolation, approvalController.approveUser);
-router.delete("/:id/reject", requireRole("admin", "superadmin", "hod"), companyIsolation, approvalController.rejectUser);
+router.get("/pending", requireRole("admin", "superadmin", "hod", "manager"), companyIsolation, approvalController.getPendingApprovals);
+router.patch("/:id/approve", requireRole("admin", "superadmin", "hod", "manager"), companyIsolation, approvalController.approveUser);
+router.delete("/:id/reject", requireRole("admin", "superadmin", "hod", "manager"), companyIsolation, approvalController.rejectUser);
 
 module.exports = router;
