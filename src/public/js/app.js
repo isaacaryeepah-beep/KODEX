@@ -58,6 +58,125 @@ async function downloadBlob(blob, filename) {
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
   setTimeout(() => URL.revokeObjectURL(url), 5000);
 }
+// ═══════════════════════════════════════════════════════
+// NOTIFICATION SOUND SYSTEM
+// Uses Web Audio API — no external audio files needed.
+// Plays a gentle two-tone chime when new messages or
+// announcements arrive. Respects a mute toggle stored
+// in localStorage so the user's preference survives reloads.
+// ═══════════════════════════════════════════════════════
+const _notifSound = (() => {
+  let _ctx = null;
+  function _getCtx() {
+    if (!_ctx) _ctx = new (window.AudioContext || window.webkitAudioContext)();
+    return _ctx;
+  }
+  function playChime(type = 'message') {
+    if (localStorage.getItem('dikly_sound_muted') === '1') return;
+    try {
+      const ctx   = _getCtx();
+      // Resume context if browser suspended it (autoplay policy)
+      if (ctx.state === 'suspended') ctx.resume();
+      const notes = type === 'announcement'
+        ? [880, 1100]   // higher pitch for announcements
+        : [660, 880];   // softer for messages
+      // Each note gets its OWN gain node — sharing one causes the second
+      // note's gain automation to overwrite the first note's envelope.
+      notes.forEach((freq, i) => {
+        const gain = ctx.createGain();
+        gain.connect(ctx.destination);
+        const t0 = ctx.currentTime + i * 0.18;
+        gain.gain.setValueAtTime(0, t0);
+        gain.gain.linearRampToValueAtTime(0.18, t0 + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.001, t0 + 0.38);
+        const osc = ctx.createOscillator();
+        osc.type = 'sine';
+        osc.frequency.value = freq;
+        osc.connect(gain);
+        osc.start(t0);
+        osc.stop(t0 + 0.4);
+      });
+    } catch (_) {}
+  }
+  function isMuted() { return localStorage.getItem('dikly_sound_muted') === '1'; }
+  function toggleMute() {
+    const muted = isMuted();
+    localStorage.setItem('dikly_sound_muted', muted ? '0' : '1');
+    _updateMuteBtn();
+    if (muted) playChime('message'); // preview sound when unmuting
+  }
+  function _updateMuteBtn() {
+    const btn = document.getElementById('sound-toggle-btn');
+    if (!btn) return;
+    const muted = isMuted();
+    btn.title = muted ? 'Sound off — click to enable' : 'Sound on — click to mute';
+    btn.innerHTML = muted
+      ? `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>`
+      : `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>`;
+  }
+  return { playChime, isMuted, toggleMute, updateBtn: _updateMuteBtn };
+})();
+
+// ── Notification polling ──────────────────────────────────────────────────────
+// Polls every 30 s for new messages and announcements, plays a chime when the
+// unread count rises above the last known value.
+let _notifPollTimer  = null;
+let _lastMsgUnread   = -1;  // -1 = not yet initialised; first run is a silent baseline
+let _lastAnnUnread   = -1;
+
+async function _pollNotifications() {
+  if (!currentUser || !isOnline()) return;
+  const baseline = _lastMsgUnread === -1; // first run records counts without playing sound
+  try {
+  // all roles poll for messages
+      const md = await api('/api/messages/conversations').catch(() => null);
+      if (md) {
+        const total = (md.conversations || []).reduce((s, c) => s + (c.myUnreadCount || 0), 0);
+        if (!baseline && total > _lastMsgUnread) _notifSound.playChime('message');
+        _lastMsgUnread = total;
+        // Update messages badge in sidebar
+        _updateMsgBadge(total);
+      }
+  } catch (_) {}
+  try {
+    // Announcements
+    if (!['employee'].includes(currentUser.role)) {
+      const ad = await api('/api/announcements/unread-count').catch(() => null);
+      if (ad) {
+        const count = ad.count || 0;
+        if (!baseline && count > _lastAnnUnread) {
+          _notifSound.playChime('announcement');
+          // Refresh the ann-badge in the sidebar
+          const badge = document.getElementById('ann-badge');
+          if (badge) {
+            badge.textContent = count > 99 ? '99+' : count;
+            badge.style.display = 'inline-block';
+          }
+        }
+        _lastAnnUnread = count;
+      }
+    }
+  } catch (_) {}
+}
+
+function _updateMsgBadge(total) {
+  let badge = document.getElementById('msg-nav-badge');
+  const msgLink = document.querySelector('#nav-messages');
+  if (!msgLink) return;
+  if (!badge) {
+    badge = document.createElement('span');
+    badge.id = 'msg-nav-badge';
+    badge.style.cssText = 'position:absolute;top:4px;right:4px;background:#ef4444;color:#fff;font-size:9px;font-weight:700;padding:1px 5px;border-radius:20px;min-width:14px;text-align:center;line-height:14px;';
+    msgLink.style.position = 'relative';
+    msgLink.appendChild(badge);
+  }
+  if (total > 0) {
+    badge.textContent = total > 99 ? '99+' : total;
+    badge.style.display = 'inline-block';
+  } else {
+    badge.style.display = 'none';
+  }
+}
 
 function startNotifPolling() {
   stopNotifPolling();
