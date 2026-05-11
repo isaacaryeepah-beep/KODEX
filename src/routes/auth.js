@@ -28,4 +28,7 @@ router.post("/2fa/verify",             authenticate,          authController.ver
 
 router.get("/departments", authController.getDepartments);
 
+router.get("/my-devices",               authenticate, authController.getMyDevices);
+router.delete("/my-devices/:deviceId",  authenticate, authController.removeMyDevice);
+
 module.exports = router;
