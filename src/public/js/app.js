@@ -11083,7 +11083,78 @@ async function renderProfile() {
       </div>` : ''}
       <button class="btn btn-primary" onclick="saveProfile()" style="width:100%">Save Changes</button>
     </div>
+
+    <div class="card" style="max-width:520px;margin-top:20px">
+      <h3 style="font-size:14px;font-weight:700;margin-bottom:4px;color:var(--text-primary)">Signed-in Devices</h3>
+      <p style="font-size:12px;color:var(--text-muted);margin-bottom:16px">All devices that have logged into your account</p>
+      <div id="devices-list"><div style="color:var(--text-muted);font-size:13px">Loading devices…</div></div>
+    </div>
   `;
+  loadMyDevices();
+}
+
+async function loadMyDevices() {
+  const container = document.getElementById('devices-list');
+  if (!container) return;
+  try {
+    const data = await api('/api/auth/my-devices');
+    const devices = data.devices || [];
+    if (devices.length === 0) {
+      container.innerHTML = `<div style="color:var(--text-muted);font-size:13px;text-align:center;padding:12px 0">No devices found</div>`;
+      return;
+    }
+
+    const platformIcon = (p) => p === 'mobile' ? '📱' : p === 'tablet' ? '📟' : p === 'desktop' ? '💻' : '🖥️';
+    const timeAgo = (dateStr) => {
+      if (!dateStr) return 'Unknown';
+      const diff = Date.now() - new Date(dateStr).getTime();
+      const m = Math.floor(diff / 60000);
+      if (m < 1) return 'Just now';
+      if (m < 60) return `${m}m ago`;
+      const h = Math.floor(m / 60);
+      if (h < 24) return `${h}h ago`;
+      return `${Math.floor(h / 24)}d ago`;
+    };
+
+    container.innerHTML = devices.map(d => `
+      <div style="display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:10px;border:1.5px solid ${d.isCurrent ? 'var(--primary)' : 'var(--border)'};background:${d.isCurrent ? 'rgba(79,70,229,0.04)' : 'var(--bg)'};margin-bottom:10px">
+        <div style="font-size:28px;flex-shrink:0">${platformIcon(d.platform)}</div>
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;align-items:center;gap:8px;font-weight:600;font-size:13px">
+            ${d.platform ? d.platform.charAt(0).toUpperCase() + d.platform.slice(1) : 'Unknown device'}
+            ${d.isCurrent ? `<span style="font-size:10px;padding:2px 8px;border-radius:20px;background:var(--primary);color:#fff;font-weight:700">Current</span>` : ''}
+          </div>
+          <div style="font-size:11px;color:var(--text-muted);margin-top:2px">${d.ipAddress || 'IP unknown'} · Last seen ${timeAgo(d.lastSeenAt)}</div>
+          ${d.userAgent ? `<div style="font-size:10px;color:var(--text-muted);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${d.userAgent}</div>` : ''}
+        </div>
+        ${!d.isCurrent ? `<button onclick="removeDevice('${d.deviceId}')" style="flex-shrink:0;padding:6px 12px;border-radius:8px;border:1.5px solid #ef4444;background:transparent;color:#ef4444;font-size:12px;font-weight:600;cursor:pointer">Remove</button>` : ''}
+      </div>
+    `).join('');
+
+    // Show device lock warning if active
+    if (data.deviceLock?.isLocked && data.deviceLock?.lockedUntil) {
+      const until = new Date(data.deviceLock.lockedUntil);
+      const remainingH = ((until - Date.now()) / 3600000).toFixed(1);
+      container.insertAdjacentHTML('beforeend', `
+        <div style="margin-top:12px;padding:10px 14px;border-radius:8px;background:#fef2f2;border:1.5px solid #fca5a5;color:#b91c1c;font-size:13px">
+          ⚠️ Account locked due to new device login. Unlocks in ${remainingH}h (${until.toLocaleTimeString()}).
+        </div>
+      `);
+    }
+  } catch (e) {
+    container.innerHTML = `<div style="color:var(--text-muted);font-size:13px">Could not load devices.</div>`;
+  }
+}
+
+async function removeDevice(deviceId) {
+  if (!confirm('Remove this device from your trusted list?')) return;
+  try {
+    await api(`/api/auth/my-devices/${encodeURIComponent(deviceId)}`, { method: 'DELETE' });
+    showToast('Device removed', 'success');
+    loadMyDevices();
+  } catch (e) {
+    showToast('Failed to remove device', 'error');
+  }
 }
 
 async function toggle2FA(enable) {
