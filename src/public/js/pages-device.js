@@ -118,7 +118,7 @@ function _devNoPairedHTML() {
         <div class="dev-istep-icon-wrap dev-istep-num" id="dev-istep-2-icon">2</div>
         <div class="dev-istep-body">
           <div class="dev-istep-label">Connect to the device WiFi</div>
-          <div class="dev-istep-sub">Power on the ESP32, then join its hotspot</div>
+          <div class="dev-istep-sub" id="dev-istep-2-sub">Power on the ESP32, then join its hotspot</div>
           <div id="dev-istep-2-actions" style="display:none">
             <div class="dev-hotspot-chip">
               <span class="dev-hotspot-chip-icon">📶</span>
