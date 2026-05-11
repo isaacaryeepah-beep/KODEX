@@ -685,7 +685,7 @@ exports.login = async (req, res) => {
       }
     }
 
-    if (user.lastLogoutTime) {
+    if (['student', 'employee'].includes(user.role) && user.lastLogoutTime) {
       const timeSinceLogout = Date.now() - new Date(user.lastLogoutTime).getTime();
       if (timeSinceLogout < SIX_HOURS_MS && deviceId && user.deviceId && user.deviceId !== deviceId) {
         const remainingMs = SIX_HOURS_MS - timeSinceLogout;
