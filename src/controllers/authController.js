@@ -1508,3 +1508,68 @@ function _detectPlatform(ua) {
   if (/windows|macintosh|linux/.test(ua))    return 'desktop';
   return 'unknown';
 }
+
+// ── Device login history ──────────────────────────────────────────────────────
+exports.getMyDevices = async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id)
+      .select('trustedDevices newDeviceLogs accountDeviceLock deviceId role')
+      .lean();
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    const trusted = (user.trustedDevices || []).map(d => ({
+      deviceId:   d.deviceId,
+      platform:   d.platform || 'unknown',
+      ipAddress:  d.ipAddress || null,
+      userAgent:  d.userAgent || null,
+      firstSeenAt: d.firstSeenAt,
+      lastSeenAt:  d.lastSeenAt,
+      isCurrent:  d.deviceId === user.deviceId,
+    })).sort((a, b) => new Date(b.lastSeenAt) - new Date(a.lastSeenAt));
+
+    const alerts = (user.newDeviceLogs || []).map(d => ({
+      deviceId:   d.deviceId,
+      platform:   d.platform || 'unknown',
+      ipAddress:  d.ipAddress || null,
+      userAgent:  d.userAgent || null,
+      detectedAt: d.detectedAt,
+    })).sort((a, b) => new Date(b.detectedAt) - new Date(a.detectedAt));
+
+    res.json({
+      devices: trusted,
+      newDeviceAlerts: alerts,
+      deviceLock: ['student', 'employee'].includes(user.role)
+        ? {
+            isLocked:    user.accountDeviceLock?.isLocked || false,
+            lockedUntil: user.accountDeviceLock?.lockedUntil || null,
+          }
+        : null,
+    });
+  } catch (e) {
+    console.error('getMyDevices error:', e);
+    res.status(500).json({ error: 'Failed to fetch device history' });
+  }
+};
+
+exports.removeMyDevice = async (req, res) => {
+  try {
+    const { deviceId } = req.params;
+    const user = await User.findById(req.user._id).select('trustedDevices deviceId role');
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    const before = (user.trustedDevices || []).length;
+    user.trustedDevices = (user.trustedDevices || []).filter(d => d.deviceId !== deviceId);
+    if (user.trustedDevices.length === before) {
+      return res.status(404).json({ error: 'Device not found' });
+    }
+
+    // If removing the current device, clear deviceId too
+    if (user.deviceId === deviceId) user.deviceId = null;
+
+    await user.save({ validateModifiedOnly: true });
+    res.json({ ok: true, message: 'Device removed from trusted list' });
+  } catch (e) {
+    console.error('removeMyDevice error:', e);
+    res.status(500).json({ error: 'Failed to remove device' });
+  }
+};

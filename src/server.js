@@ -30,7 +30,7 @@ const searchRoutes = require("./routes/Search");
 const proctoredQuizRoutes = require("./routes/proctoredQuizzes");
 const assignmentRoutes  = require("./routes/assignments");
 const aiProxyRoutes     = require("./routes/aiProxy");
-const meetingRoutes     = require("./routes/meetingRoutes");   // ← NEW
+const meetingRoutes     = require("./routes/meetingRoutes");
 const sessionDashboardRoutes = require('./routes/sessionDashboard');
 const normalQuizLecturerRoutes = require("./routes/normalQuizLecturerRoutes");
 const normalQuizStudentRoutes  = require("./routes/normalQuizStudentRoutes");
@@ -43,25 +43,16 @@ const hodRoutes = require("./routes/hod");
 let superadminRoutes = null;
 try { superadminRoutes = require("./routes/superadmin"); } catch(_) { console.warn('superadmin routes not found — skipping'); }
 
-// ── Security middleware ───────────────────────────────────────────────────────
 const { loginLimiter, registerLimiter, passwordResetLimiter, apiLimiter } = require("./middleware/rateLimiter");
 const { sanitizeInputs } = require("./middleware/sanitize");
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// ── CRITICAL: trust Render's proxy ────────────────────────────────────────────
-// Without this, req.ip and X-Forwarded-For parsing are wrong, and every student
-// appears to come from Render's load balancer — which would make the same-
-// network public-IP-match anti-cheat in markAttendance silently pass for
-// everyone including cheaters at home. Must be set before any route handler.
 app.set("trust proxy", true);
 
-// ── Gzip compression — reduces payload size by ~70% on mobile networks ────────
 app.use(compression({ level: 6 }));
 
-
-// ── Force HTTPS in production (Render sets RENDER env var) ───────────────────
 app.use((req, res, next) => {
   const isProduction = process.env.NODE_ENV === 'production' || process.env.RENDER;
   if (isProduction && req.headers['x-forwarded-proto'] === 'http') {
@@ -70,7 +61,6 @@ app.use((req, res, next) => {
   next();
 });
 
-// ── Helmet: secure HTTP headers ───────────────────────────────────────────────
 app.use(helmet({
   contentSecurityPolicy: false,
   crossOriginEmbedderPolicy: false,
@@ -81,7 +71,6 @@ app.use(helmet({
   xssFilter: true,
 }));
 
-// ── CORS: only allow your own domain ─────────────────────────────────────────
 const allowedOrigins = [
   "https://dikly.sbs",
   "https://www.dikly.sbs",
@@ -91,7 +80,6 @@ const allowedOrigins = [
 
 app.use(cors({
   origin: (origin, callback) => {
-    // Allow requests with no origin (ESP32, Postman, mobile apps)
     if (!origin || allowedOrigins.includes(origin)) {
       return callback(null, true);
     } else {
@@ -111,8 +99,6 @@ app.use(cors({
   credentials: true,
 }));
 
-// ── Body parsing with safe limit ──────────────────────────────────────────────
-// ── Raw body for Paystack webhook signature verification ─────────────────────
 app.use((req, res, next) => {
   if (req.path === "/api/webhooks/paystack") {
     let raw = "";
@@ -130,7 +116,6 @@ app.use((req, res, next) => {
 
 app.use(express.json({ limit: "10mb" }));
 
-// ── Global email normalizer — always lowercase email before any controller sees it
 app.use((req, res, next) => {
   if (req.body && req.body.email) {
     req.body.email = req.body.email.trim().toLowerCase();
@@ -138,32 +123,27 @@ app.use((req, res, next) => {
   next();
 });
 
-// ── Global input sanitizer ───────────────────────────────────────────────────
 app.use(sanitizeInputs);
 
-// ── General API rate limit ───────────────────────────────────────────────────
 app.use("/api/", (req, res, next) => {
   if (req.path.includes('/snapshot') || req.path.includes('/health')) return next();
   return apiLimiter(req, res, next);
 });
 
-// Superadmin portal
 app.get("/superadmin", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "superadmin.html"));
 });
 
-// Public brand / identity pages — served as real HTML (not SPA fallback)
-app.get("/about",   (req, res) => res.sendFile(path.join(__dirname, "public", "about.html")));
-app.get("/founder", (req, res) => res.sendFile(path.join(__dirname, "public", "founder.html")));
-app.get("/contact", (req, res) => res.sendFile(path.join(__dirname, "public", "contact.html")));
-app.get("/privacy", (req, res) => res.sendFile(path.join(__dirname, "public", "privacy.html")));
-app.get("/terms",   (req, res) => res.sendFile(path.join(__dirname, "public", "terms.html")));
+app.get("/about",          (req, res) => res.sendFile(path.join(__dirname, "public", "about.html")));
+app.get("/founder",        (req, res) => res.sendFile(path.join(__dirname, "public", "founder.html")));
+app.get("/contact",        (req, res) => res.sendFile(path.join(__dirname, "public", "contact.html")));
+app.get("/privacy",        (req, res) => res.sendFile(path.join(__dirname, "public", "privacy.html")));
+app.get("/terms",          (req, res) => res.sendFile(path.join(__dirname, "public", "terms.html")));
+app.get("/delete-account", (req, res) => res.sendFile(path.join(__dirname, "public", "delete-account.html")));
 
 app.use(express.static(path.join(__dirname, "public"), {
   setHeaders: (res, filePath) => {
     const ext = path.extname(filePath).toLowerCase();
-    // Cache static assets (JS, CSS, images, fonts) for 7 days — improves mobile load speed.
-    // HTML files stay no-cache so the SPA always gets the latest shell.
     if (['.js', '.css', '.svg', '.png', '.jpg', '.jpeg', '.webp', '.woff', '.woff2'].includes(ext)) {
       res.setHeader("Cache-Control", "public, max-age=604800, stale-while-revalidate=86400");
     } else {
@@ -200,7 +180,6 @@ app.get("/health", (req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });
 });
 
-// ── Routes ───────────────────────────────────────────────────────────────────
 app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/attendance-sessions", attendanceSessionRoutes);
@@ -235,10 +214,9 @@ app.use("/api/search", searchRoutes);
 app.use("/api/proctor", proctoredQuizRoutes);
 app.use("/api/assignments", assignmentRoutes);
 app.use("/api/ai", aiProxyRoutes);
-app.use("/api/meetings", meetingRoutes);              // ← NEW
-app.use("/api/attendance-sessions", sessionDashboardRoutes); // session control dashboard
+app.use("/api/meetings", meetingRoutes);
+app.use("/api/attendance-sessions", sessionDashboardRoutes);
 
-// Student attendance mark (anti-cheat validated)
 const { markAttendance } = require('./controllers/sessionDashboardController');
 const authenticate = require('./middleware/auth');
 const { companyIsolation } = require('./middleware/companyIsolation');
@@ -312,7 +290,6 @@ app.use("/api", deviceSessionRoutes);
 
 if (superadminRoutes) app.use("/api/superadmin", superadminRoutes);
 
-// ── Android App Links verification ──────────────────────────────────────────
 app.get('/.well-known/assetlinks.json', (req, res) => {
   res.json([{
     relation: ['delegate_permission/common.handle_all_urls'],
@@ -324,7 +301,6 @@ app.get('/.well-known/assetlinks.json', (req, res) => {
   }]);
 });
 
-// ── iOS Universal Links verification ────────────────────────────────────────
 app.get('/.well-known/apple-app-site-association', (req, res) => {
   res.set('Content-Type', 'application/json');
   res.json({
@@ -338,10 +314,7 @@ app.get('/.well-known/apple-app-site-association', (req, res) => {
   });
 });
 
-// ── Fallback ─────────────────────────────────────────────────────────────────
 app.use((req, res) => {
-  // Never serve HTML for /api routes — return JSON 404 so API clients get a
-  // parseable error instead of the SPA shell.
   if (req.path.startsWith('/api')) {
     return res.status(404).json({ error: 'API route not found', path: req.path });
   }
@@ -354,13 +327,11 @@ app.use((req, res) => {
   }
 });
 
-// ── Error handler ────────────────────────────────────────────────────────────
 app.use((err, req, res, next) => {
   console.error("Unhandled error:", err);
   res.status(500).json({ error: "Internal server error" });
 });
 
-// ── Start server ─────────────────────────────────────────────────────────────
 const start = async () => {
   await connectDB();
 
@@ -386,9 +357,6 @@ const start = async () => {
     }
   }
 
-  // Drop any stale unique indexes on the assignments collection.
-  // An older schema version had unique({ company, course }) which blocks
-  // lecturers from creating more than one assignment per course.
   try {
     const mongoose = require("mongoose");
     const db = mongoose.connection.db;
@@ -396,7 +364,6 @@ const start = async () => {
     const aIdxs = await assignmentsCol.indexes();
     for (const idx of aIdxs) {
       if (idx.unique && idx.key && idx.key.company !== undefined && Object.keys(idx.key).length <= 3) {
-        // Only drop compound unique indexes — leave the default _id index alone.
         console.log(`Dropping stale unique assignment index: ${idx.name}`);
         await assignmentsCol.dropIndex(idx.name);
       }

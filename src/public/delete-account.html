@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Delete Account – DIKLY</title>
+  <link rel="icon" type="image/svg+xml" href="/dikly-icon.svg">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+           background: #f1f5f9; color: #0f172a; -webkit-font-smoothing: antialiased; }
+    .topbar { background: #4f46e5; color: #fff; padding: 16px 20px;
+              display: flex; align-items: center; gap: 12px; position: sticky; top: 0; z-index: 10; }
+    .back-btn { background: rgba(255,255,255,.2); border: none; color: #fff; border-radius: 8px;
+                padding: 8px 12px; font-size: 14px; font-weight: 600; cursor: pointer;
+                text-decoration: none; display: inline-block; }
+    .topbar h1 { font-size: 18px; font-weight: 700; }
+    .content { max-width: 760px; margin: 0 auto; padding: 24px 20px 48px; }
+    h2 { font-size: 22px; font-weight: 800; margin-bottom: 6px; color: #0f172a; }
+    .subtitle { font-size: 13px; color: #64748b; margin-bottom: 28px; }
+    h3 { font-size: 15px; font-weight: 700; color: #0f172a; margin: 24px 0 8px; }
+    p, li { font-size: 14px; line-height: 1.75; color: #475569; }
+    ul { padding-left: 20px; margin: 8px 0; }
+    .warning { background: #fef2f2; border: 1px solid #fecaca; border-radius: 12px;
+               padding: 16px 20px; margin: 20px 0; }
+    .warning p { color: #991b1b; font-weight: 600; }
+    .steps { background: #fff; border-radius: 12px; padding: 20px; margin: 20px 0;
+             border: 1px solid #e2e8f0; }
+    .step { display: flex; gap: 14px; margin-bottom: 16px; }
+    .step:last-child { margin-bottom: 0; }
+    .step-num { background: #4f46e5; color: #fff; border-radius: 50%; width: 28px; height: 28px;
+                display: flex; align-items: center; justify-content: center;
+                font-size: 13px; font-weight: 700; flex-shrink: 0; }
+    .step-text { font-size: 14px; color: #475569; line-height: 1.6; padding-top: 4px; }
+    .email-btn { display: inline-block; background: #4f46e5; color: #fff; padding: 12px 24px;
+                 border-radius: 10px; text-decoration: none; font-weight: 600; font-size: 14px;
+                 margin-top: 16px; }
+    table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 14px; }
+    th { background: #f8fafc; text-align: left; padding: 10px 14px; font-weight: 700;
+         color: #0f172a; border-bottom: 2px solid #e2e8f0; }
+    td { padding: 10px 14px; border-bottom: 1px solid #f1f5f9; color: #475569; }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <a href="/" class="back-btn">← Back</a>
+    <h1>Delete Account</h1>
+  </div>
+  <div class="content">
+    <h2>Request Account Deletion</h2>
+    <p class="subtitle">Last updated: May 2026</p>
+
+    <div class="warning">
+      <p>⚠️ Account deletion is permanent and cannot be undone.</p>
+    </div>
+
+    <h3>How to Delete Your Account</h3>
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-text">Send an email to <strong>support@dikly.sbs</strong> with the subject line: <em>"Account Deletion Request"</em></div>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-text">Include your registered email address and the name of your institution in the email.</div>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-text">We will verify your identity and process the deletion within <strong>7 business days</strong>. You will receive a confirmation email when complete.</div>
+      </div>
+    </div>
+
+    <a href="mailto:support@dikly.sbs?subject=Account%20Deletion%20Request" class="email-btn">
+      Email Us to Delete Account
+    </a>
+
+    <h3>What Gets Deleted</h3>
+    <table>
+      <tr><th>Data</th><th>Action</th></tr>
+      <tr><td>Your profile (name, email, password)</td><td>Permanently deleted</td></tr>
+      <tr><td>Your attendance records</td><td>Permanently deleted</td></tr>
+      <tr><td>Your quiz attempts and results</td><td>Permanently deleted</td></tr>
+      <tr><td>Your messages and announcements</td><td>Permanently deleted</td></tr>
+      <tr><td>Your device pairings</td><td>Permanently deleted</td></tr>
+    </table>
+
+    <h3>What Is Retained</h3>
+    <p>Institutional records required for compliance (e.g. attendance session logs created by lecturers) may be retained for up to 90 days before being purged, as required by your institution's data policy.</p>
+
+    <h3>Alternative: Delete via App</h3>
+    <p>If your institution administrator has enabled self-service account management, you may be able to request deletion directly from your profile settings within the DIKLY app.</p>
+  </div>
+</body>
+</html>
