@@ -38,7 +38,7 @@ jobs:
       - name: Generate app icons and splash screen
         run: |
           sudo apt-get install -y librsvg2-bin --quiet
-          pip install Pillow --quiet
+          pip install Pillow --quiet --break-system-packages
           rsvg-convert -w 1024 -h 1024 src/public/dikly-icon.svg -o /tmp/dikly-icon.png
           python3 - << 'PYEOF'
 import os, shutil
