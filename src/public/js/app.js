@@ -13200,12 +13200,11 @@ function toggleMobileSidebar() {
   if (isOpen) {
     closeMobileSidebar();
   } else {
-    // 'sidebar-force-open' class beats display:none !important via specificity
     sidebar.classList.add('sidebar-force-open');
     requestAnimationFrame(() => {
       sidebar.classList.add('open');
       overlay.classList.add('active');
-      // Lock .content — the real scroll container in this SPA (body never scrolls)
+      // Lock .content (the SPA scroll container) — body is never the scroller here
       const content = document.querySelector('.content');
       if (content) content.style.overflowY = 'hidden';
     });
@@ -13227,6 +13226,44 @@ function closeMobileSidebar() {
   const content = document.querySelector('.content');
   if (content) content.style.overflowY = '';
 }
+
+// ── iOS Safari scroll fix for mobile sidebar ──────────────────────────────────
+// On iOS, touch-scroll events on fixed elements propagate to the underlying page.
+// We intercept touchmove on the sidebar-nav and on the overlay separately:
+//   • sidebar-nav: allow scroll, but stop propagation so page doesn't move
+//   • overlay: block scroll entirely (tapping overlay closes sidebar)
+(function initSidebarScrollFix() {
+  let _touchStartY = 0;
+
+  document.addEventListener('touchstart', (e) => {
+    if (e.target.closest('.sidebar-nav')) {
+      _touchStartY = e.touches[0].clientY;
+    }
+  }, { passive: true });
+
+  document.addEventListener('touchmove', (e) => {
+    const nav = e.target.closest('.sidebar-nav');
+    if (nav) {
+      // Allow scroll within the nav, but stop it reaching the page
+      const atTop    = nav.scrollTop === 0;
+      const atBottom = nav.scrollTop + nav.clientHeight >= nav.scrollHeight;
+      const movingUp = e.touches[0].clientY < _touchStartY;   // finger going up = scroll down
+      const movingDn = e.touches[0].clientY > _touchStartY;   // finger going down = scroll up
+      if ((atTop && movingDn) || (atBottom && movingUp)) {
+        // At boundary — prevent rubber-banding into the page
+        e.preventDefault();
+      }
+      // Otherwise let the nav scroll naturally but stop propagation
+      e.stopPropagation();
+      return;
+    }
+    // Anywhere on the overlay (outside the sidebar) — block scroll entirely
+    if (e.target.closest('.sidebar-overlay') || e.target.closest('.sidebar-force-open')) {
+      const inSidebar = e.target.closest('.sidebar');
+      if (!inSidebar) e.preventDefault();
+    }
+  }, { passive: false });
+})();
 
 // Close sidebar when a nav item is tapped on mobile
 document.addEventListener('click', (e) => {
