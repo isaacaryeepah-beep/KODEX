@@ -47,9 +47,20 @@ jobs:
           src = Image.open('resources/icon.png').convert('RGBA')
           print(f'Source icon: {src.size[0]}x{src.size[1]}')
 
-          # Standard mipmap PNG icons
-          sizes = [('mipmap-mdpi',48),('mipmap-hdpi',72),('mipmap-xhdpi',96),('mipmap-xxhdpi',144),('mipmap-xxxhdpi',192)]
-          for folder, size in sizes:
+          # Remove ALL existing launcher drawable XMLs that would override our PNG
+          conflicts = [
+              'android/app/src/main/res/drawable/ic_launcher_foreground.xml',
+              'android/app/src/main/res/drawable/ic_launcher_background.xml',
+              'android/app/src/main/res/drawable-v24/ic_launcher_foreground.xml',
+              'android/app/src/main/res/drawable-v24/ic_launcher_background.xml',
+          ]
+          for f in conflicts:
+              if os.path.exists(f):
+                  os.remove(f)
+                  print(f'  Removed conflicting: {f}')
+
+          # Mipmap PNG icons for all densities
+          for folder, size in [('mipmap-mdpi',48),('mipmap-hdpi',72),('mipmap-xhdpi',96),('mipmap-xxhdpi',144),('mipmap-xxxhdpi',192)]:
               out = f'android/app/src/main/res/{folder}'
               os.makedirs(out, exist_ok=True)
               img = src.resize((size, size), Image.LANCZOS)
@@ -60,9 +71,9 @@ jobs:
                   bg.paste(img)
               bg.save(f'{out}/ic_launcher.png')
               bg.save(f'{out}/ic_launcher_round.png')
-              print(f'  {folder}: {size}px')
+              print(f'  {folder}: {size}px done')
 
-          # Adaptive icon foreground (432x432 with icon centred)
+          # Adaptive icon foreground PNG (432x432, icon centred with padding)
           fg_size = 432
           icon_size = int(fg_size * 0.75)
           offset = (fg_size - icon_size) // 2
@@ -71,9 +82,9 @@ jobs:
           fg.paste(icon, (offset, offset), icon)
           os.makedirs('android/app/src/main/res/drawable', exist_ok=True)
           fg.save('android/app/src/main/res/drawable/ic_launcher_foreground.png')
-          print('  Adaptive foreground: done')
+          print('  Adaptive foreground PNG saved')
 
-          # Solid white background for adaptive icon
+          # White background for adaptive icon
           with open('android/app/src/main/res/drawable/ic_launcher_background.xml', 'w') as f:
               f.write('<?xml version="1.0" encoding="utf-8"?>\n'
                       '<shape xmlns:android="http://schemas.android.com/apk/res/android">\n'
