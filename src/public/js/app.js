@@ -6877,7 +6877,7 @@ async function showCreateMeetingModal() {
     courses = d.courses || d || [];
   } catch(e) { courses = []; }
 
-  const courseOptions = `<option value="">— No specific course —</option>` +
+  const courseOptions = `<option value="">— Select a course —</option>` +
     courses.map(c => `<option value="${c._id}">${esc(c.title)}${c.level?' · L'+c.level:''}${c.group?' · Grp '+c.group:''}</option>`).join('');
   // default scheduled start = now+5min, end = now+65min
   const now = new Date();
@@ -6914,7 +6914,7 @@ async function showCreateMeetingModal() {
         </div>
 
         <div class="form-group">
-          <label>Course <span style="color:var(--text-muted);font-weight:400;font-size:12px">(optional)</span></label>
+          <label>Course *</label>
           <select id="meeting-course" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
             ${courseOptions}
           </select>
@@ -6949,6 +6949,7 @@ async function createMeeting() {
   if (!title) { errEl.textContent = 'Please enter a meeting title.'; errEl.style.display = 'block'; return; }
   if (!start || !end) { errEl.textContent = 'Please set a start and end time.'; errEl.style.display = 'block'; return; }
   if (new Date(end) <= new Date(start)) { errEl.textContent = 'End time must be after start time.'; errEl.style.display = 'block'; return; }
+  if (!courseId) { errEl.textContent = 'Please select a course.'; errEl.style.display = 'block'; return; }
 
   const schedBtn = document.querySelector('.modal .btn-primary');
   if (schedBtn) { schedBtn.textContent = 'Scheduling…'; schedBtn.disabled = true; }
@@ -6972,11 +6973,17 @@ async function createMeeting() {
 }
 
 async function createAndStartMeeting() {
-  const title = document.getElementById('meeting-title').value.trim();
-  const errEl = document.getElementById('meeting-error');
-  const btn   = document.getElementById('start-meeting-btn');
+  const title    = document.getElementById('meeting-title').value.trim();
+  const courseId = document.getElementById('meeting-course')?.value || '';
+  const errEl    = document.getElementById('meeting-error');
+  const btn      = document.getElementById('start-meeting-btn');
   if (!title) {
     errEl.textContent = 'Please enter a meeting title.';
+    errEl.style.display = 'block';
+    return;
+  }
+  if (!courseId) {
+    errEl.textContent = 'Please select a course.';
     errEl.style.display = 'block';
     return;
   }
@@ -6988,6 +6995,7 @@ async function createAndStartMeeting() {
       title,
       scheduledStart: now.toISOString().slice(0,16),
       scheduledEnd: end.toISOString().slice(0,16),
+      courseId,
     }) });
     closeModal();
     await startMeeting(data.meeting._id);
@@ -7103,6 +7111,13 @@ function showJitsiEmbed(config) {
 function _initJitsiEmbed(config, domain) {
   const container = document.getElementById('jitsi-embed-container');
   if (!container) return;
+  const moderatorButtons = config.isModerator
+    ? ['microphone','camera','closedcaptions','desktop','chat','raisehand',
+       'tileview','select-background','mute-everyone','kick-participant',
+       'participants-pane','security','hangup']
+    : ['microphone','camera','closedcaptions','desktop',
+       'chat','raisehand','tileview','select-background','hangup'];
+
   window._jitsiApi = new JitsiMeetExternalAPI(domain, {
     roomName: config.roomName,
     width: '100%',
@@ -7123,10 +7138,7 @@ function _initJitsiEmbed(config, domain) {
       MOBILE_APP_PROMO:          false,
       SHOW_JITSI_WATERMARK:      false,
       SHOW_WATERMARK_FOR_GUESTS: false,
-      TOOLBAR_BUTTONS: [
-        'microphone','camera','closedcaptions','desktop',
-        'chat','raisehand','tileview','select-background','hangup',
-      ],
+      TOOLBAR_BUTTONS: moderatorButtons,
       ...(config.interfaceConfigOverwrite || {}),
     },
   });

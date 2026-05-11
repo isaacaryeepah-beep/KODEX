@@ -263,6 +263,9 @@ exports.joinMeeting = async (req, res) => {
     const meetingToken = generateMeetingToken(user._id.toString(), meeting._id.toString(), deviceId);
 
     // Build Jitsi embed config
+    const isCreator = meeting.creatorId?.toString() === user._id.toString();
+    const isModerator = isCreator || ['lecturer', 'admin', 'superadmin'].includes(user.role);
+
     const config = {
       roomName:    meeting.roomName,
       domain:      JITSI_DOMAIN,
@@ -270,6 +273,7 @@ exports.joinMeeting = async (req, res) => {
       email:       user.email,
       subject:     meeting.title,
       password:    meeting.settings.enablePassword ? meeting.roomPassword : undefined,
+      isModerator,
       configOverwrite: {
         startWithAudioMuted:     meeting.settings.muteOnJoin,
         startWithVideoMuted:     false,
