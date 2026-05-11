@@ -26,6 +26,9 @@ const enforceLogoutRestriction = (req, res, next) => {
     return res.status(401).json({ error: "Authentication required" });
   }
 
+  // Only students and employees are subject to the 6-hour post-logout restriction
+  if (!['student', 'employee'].includes(req.user.role)) return next();
+
   if (req.user.lastLogoutTime) {
     const timeSinceLogout = Date.now() - new Date(req.user.lastLogoutTime).getTime();
     if (timeSinceLogout < SIX_HOURS_MS) {
