@@ -36,11 +36,11 @@ jobs:
       - name: Generate app icons
         run: |
           if [ -f resources/icon.png ]; then
-            echo "Found resources/icon.png — generating icons..."
+            echo "Found resources/icon.png - generating icons..."
             npm install -g @capacitor/assets
             npx @capacitor/assets generate --android
           else
-            echo "No resources/icon.png found — using default icon"
+            echo "No resources/icon.png found - using default icon"
           fi
 
       - name: Ensure strings.xml exists
