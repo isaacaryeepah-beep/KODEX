@@ -37,17 +37,21 @@ jobs:
 
       - name: Generate app icons
         run: |
-          if [ ! -f resources/icon.png ]; then
-            echo "No icon found, using defaults"
-            exit 0
-          fi
-          pip install Pillow --quiet
+          pip install Pillow cairosvg --quiet
           cat > /tmp/gen_icons.py << 'PYEOF'
-          import os
+          import os, io
           from PIL import Image, ImageDraw
+          import cairosvg
 
-          src = Image.open('resources/icon.png').convert('RGBA')
-          print(f'Source: {src.size[0]}x{src.size[1]}')
+          # Always generate from SVG so no binary asset needed in repo
+          SVG_PATH = 'src/public/dikly-icon.svg'
+          if not os.path.exists(SVG_PATH):
+              print('SVG icon not found — skipping icon generation')
+              exit(0)
+
+          png_data = cairosvg.svg2png(url=SVG_PATH, output_width=1024, output_height=1024)
+          src = Image.open(io.BytesIO(png_data)).convert('RGBA')
+          print(f'Source from SVG: {src.size[0]}x{src.size[1]}')
 
           # Remove white background via flood fill from all four corners
           for corner in [(0, 0), (src.width-1, 0), (0, src.height-1), (src.width-1, src.height-1)]:
@@ -110,18 +114,20 @@ jobs:
 
       - name: Generate splash screen
         run: |
-          pip install Pillow --quiet
+          pip install Pillow cairosvg --quiet
           python3 - << 'PYEOF'
-import os
-from PIL import Image, ImageDraw
+import os, io
+from PIL import Image
+import cairosvg
 
-# 1920x1920 purple background with centered icon
 size = 1920
 bg_color = (79, 70, 229)  # #4f46e5
 splash = Image.new('RGBA', (size, size), bg_color)
 
-if os.path.exists('resources/icon.png'):
-    icon = Image.open('resources/icon.png').convert('RGBA')
+SVG_PATH = 'src/public/dikly-icon.svg'
+if os.path.exists(SVG_PATH):
+    png_data = cairosvg.svg2png(url=SVG_PATH, output_width=1024, output_height=1024)
+    icon = Image.open(io.BytesIO(png_data)).convert('RGBA')
     icon_size = int(size * 0.35)
     icon = icon.resize((icon_size, icon_size), Image.LANCZOS)
     offset = (size - icon_size) // 2
