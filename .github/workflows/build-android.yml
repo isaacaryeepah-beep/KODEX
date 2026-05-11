@@ -42,53 +42,53 @@ jobs:
           pip install Pillow --quiet
           cat > /tmp/gen_icons.py << 'PYEOF'
           import os
-          from PIL import Image
+          from PIL import Image, ImageDraw
 
           src = Image.open('resources/icon.png').convert('RGBA')
-          print(f'Source icon: {src.size[0]}x{src.size[1]}')
+          print(f'Source: {src.size[0]}x{src.size[1]}')
 
-          # Remove ALL existing launcher drawable XMLs that would override our PNG
-          conflicts = [
+          # Remove white background via flood fill from all four corners
+          for corner in [(0, 0), (src.width-1, 0), (0, src.height-1), (src.width-1, src.height-1)]:
+              if src.getpixel(corner)[3] > 0:  # only if not already transparent
+                  ImageDraw.floodfill(src, corner, (0, 0, 0, 0), thresh=30)
+          print('  Background removed')
+
+          # Remove conflicting default Capacitor drawable XMLs
+          for f in [
               'android/app/src/main/res/drawable/ic_launcher_foreground.xml',
               'android/app/src/main/res/drawable/ic_launcher_background.xml',
               'android/app/src/main/res/drawable-v24/ic_launcher_foreground.xml',
               'android/app/src/main/res/drawable-v24/ic_launcher_background.xml',
-          ]
-          for f in conflicts:
+          ]:
               if os.path.exists(f):
                   os.remove(f)
-                  print(f'  Removed conflicting: {f}')
+                  print(f'  Removed: {f}')
 
-          # Mipmap PNG icons for all densities
+          # Mipmap PNG icons — transparent background, just the D
           for folder, size in [('mipmap-mdpi',48),('mipmap-hdpi',72),('mipmap-xhdpi',96),('mipmap-xxhdpi',144),('mipmap-xxxhdpi',192)]:
               out = f'android/app/src/main/res/{folder}'
               os.makedirs(out, exist_ok=True)
-              img = src.resize((size, size), Image.LANCZOS)
-              bg = Image.new('RGB', (size, size), (255, 255, 255))
-              if img.mode == 'RGBA':
-                  bg.paste(img, mask=img.split()[3])
-              else:
-                  bg.paste(img)
-              bg.save(f'{out}/ic_launcher.png')
-              bg.save(f'{out}/ic_launcher_round.png')
-              print(f'  {folder}: {size}px done')
+              resized = src.resize((size, size), Image.LANCZOS)
+              resized.save(f'{out}/ic_launcher.png')
+              resized.save(f'{out}/ic_launcher_round.png')
+              print(f'  {folder}: {size}px')
 
-          # Adaptive icon foreground PNG (432x432, icon centred with padding)
+          # Adaptive icon foreground — D on transparent, centred
           fg_size = 432
-          icon_size = int(fg_size * 0.75)
+          icon_size = int(fg_size * 0.8)
           offset = (fg_size - icon_size) // 2
           fg = Image.new('RGBA', (fg_size, fg_size), (0, 0, 0, 0))
           icon = src.resize((icon_size, icon_size), Image.LANCZOS)
-          fg.paste(icon, (offset, offset), icon)
+          fg.paste(icon, (offset, offset), icon.split()[3])
           os.makedirs('android/app/src/main/res/drawable', exist_ok=True)
           fg.save('android/app/src/main/res/drawable/ic_launcher_foreground.png')
-          print('  Adaptive foreground PNG saved')
+          print('  Adaptive foreground saved')
 
-          # White background for adaptive icon
+          # Transparent background so only the D shows
           with open('android/app/src/main/res/drawable/ic_launcher_background.xml', 'w') as f:
               f.write('<?xml version="1.0" encoding="utf-8"?>\n'
                       '<shape xmlns:android="http://schemas.android.com/apk/res/android">\n'
-                      '    <solid android:color="#FFFFFF"/>\n'
+                      '    <solid android:color="#00000000"/>\n'
                       '</shape>\n')
 
           # Adaptive icon XML (Android 8+)
@@ -102,7 +102,7 @@ jobs:
               with open(f'android/app/src/main/res/mipmap-anydpi-v26/{name}', 'w') as f:
                   f.write(xml)
 
-          print('All icons generated successfully!')
+          print('All icons generated!')
           PYEOF
           python3 /tmp/gen_icons.py
 
