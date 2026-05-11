@@ -11088,6 +11088,12 @@ async function renderProfile() {
         <p style="font-size:12px;color:var(--text-muted);margin-bottom:16px">All devices that have logged into your account</p>
         <div id="devices-list"><div style="color:var(--text-muted);font-size:13px">Loading devices…</div></div>
       </div>
+
+      <div style="margin-top:28px;padding-top:24px;border-top:1px solid var(--border)">
+        <h3 style="font-size:14px;font-weight:700;margin-bottom:4px;color:#ef4444">Danger Zone</h3>
+        <p style="font-size:12px;color:var(--text-muted);margin-bottom:14px">Permanently delete your account and all associated data.</p>
+        <a href="/delete-account" target="_blank" style="display:inline-block;padding:10px 20px;border-radius:8px;border:1.5px solid #ef4444;color:#ef4444;font-size:13px;font-weight:600;text-decoration:none;background:transparent">Delete Account</a>
+      </div>
     </div>
   `;
   loadMyDevices();
