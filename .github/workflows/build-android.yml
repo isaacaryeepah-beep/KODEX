@@ -49,17 +49,19 @@ jobs:
               print('SVG icon not found — skipping icon generation')
               exit(0)
 
-          png_data = cairosvg.svg2png(url=SVG_PATH, output_width=1024, output_height=1024)
-          src = Image.open(io.BytesIO(png_data)).convert('RGBA')
-          print(f'Source from SVG: {src.size[0]}x{src.size[1]}')
+          png_data = cairosvg.svg2png(url=SVG_PATH, output_width=900, output_height=900)
+          d_icon = Image.open(io.BytesIO(png_data)).convert('RGBA')
+          print(f'Source from SVG: {d_icon.size[0]}x{d_icon.size[1]}')
 
-          # Remove white background via flood fill from all four corners
-          for corner in [(0, 0), (src.width-1, 0), (0, src.height-1), (src.width-1, src.height-1)]:
-              if src.getpixel(corner)[3] > 0:  # only if not already transparent
-                  ImageDraw.floodfill(src, corner, (0, 0, 0, 0), thresh=30)
-          print('  Background removed')
+          # Compose D on white 1024x1024 square (no rounding) — matches the logo image
+          def make_icon(target_size):
+              bg = Image.new('RGBA', (target_size, target_size), (255, 255, 255, 255))
+              d = d_icon.resize((target_size, target_size), Image.LANCZOS)
+              bg.paste(d, (0, 0), d.split()[3])
+              return bg.convert('RGB')
 
-          # Remove conflicting default Capacitor drawable XMLs
+          # Remove conflicting default Capacitor drawable XMLs and adaptive icon folder
+          import shutil
           for f in [
               'android/app/src/main/res/drawable/ic_launcher_foreground.xml',
               'android/app/src/main/res/drawable/ic_launcher_background.xml',
@@ -69,44 +71,21 @@ jobs:
               if os.path.exists(f):
                   os.remove(f)
                   print(f'  Removed: {f}')
+          # Remove adaptive icon folder so system uses legacy PNGs only
+          if os.path.exists('android/app/src/main/res/mipmap-anydpi-v26'):
+              shutil.rmtree('android/app/src/main/res/mipmap-anydpi-v26')
+              print('  Removed mipmap-anydpi-v26 (no adaptive icon)')
 
-          # Mipmap PNG icons — transparent background, just the D
+          # Mipmap PNG icons — D on white square background
           for folder, size in [('mipmap-mdpi',48),('mipmap-hdpi',72),('mipmap-xhdpi',96),('mipmap-xxhdpi',144),('mipmap-xxxhdpi',192)]:
               out = f'android/app/src/main/res/{folder}'
               os.makedirs(out, exist_ok=True)
-              resized = src.resize((size, size), Image.LANCZOS)
-              resized.save(f'{out}/ic_launcher.png')
-              resized.save(f'{out}/ic_launcher_round.png')
+              ico = make_icon(size)
+              ico.save(f'{out}/ic_launcher.png')
+              ico.save(f'{out}/ic_launcher_round.png')
               print(f'  {folder}: {size}px')
 
-          # Adaptive icon foreground — D on transparent, centred
-          fg_size = 432
-          icon_size = int(fg_size * 0.8)
-          offset = (fg_size - icon_size) // 2
-          fg = Image.new('RGBA', (fg_size, fg_size), (0, 0, 0, 0))
-          icon = src.resize((icon_size, icon_size), Image.LANCZOS)
-          fg.paste(icon, (offset, offset), icon.split()[3])
-          os.makedirs('android/app/src/main/res/drawable', exist_ok=True)
-          fg.save('android/app/src/main/res/drawable/ic_launcher_foreground.png')
-          print('  Adaptive foreground saved')
-
-          # Transparent background so only the D shows
-          with open('android/app/src/main/res/drawable/ic_launcher_background.xml', 'w') as f:
-              f.write('<?xml version="1.0" encoding="utf-8"?>\n'
-                      '<shape xmlns:android="http://schemas.android.com/apk/res/android">\n'
-                      '    <solid android:color="#00000000"/>\n'
-                      '</shape>\n')
-
-          # Adaptive icon XML (Android 8+)
-          xml = ('<?xml version="1.0" encoding="utf-8"?>\n'
-                 '<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">\n'
-                 '    <background android:drawable="@drawable/ic_launcher_background"/>\n'
-                 '    <foreground android:drawable="@drawable/ic_launcher_foreground"/>\n'
-                 '</adaptive-icon>\n')
-          os.makedirs('android/app/src/main/res/mipmap-anydpi-v26', exist_ok=True)
-          for name in ('ic_launcher.xml', 'ic_launcher_round.xml'):
-              with open(f'android/app/src/main/res/mipmap-anydpi-v26/{name}', 'w') as f:
-                  f.write(xml)
+          print('Legacy square icons generated — no adaptive icon (avoids forced rounding)')
 
           print('All icons generated!')
           PYEOF
