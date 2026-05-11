@@ -1,8 +1,7 @@
 // Run on Render shell: node scripts/create-demo-user.js
-// Creates a demo student account for Google Play reviewers.
+// Creates a demo lecturer account for Google Play reviewers.
 
 require('dotenv').config();
-const mongoose = require('mongoose');
 const connectDB = require('../src/config/db');
 const User = require('../src/models/User');
 const Company = require('../src/models/Company');
@@ -24,11 +23,12 @@ async function main() {
   // Remove any stale demo account first
   await User.deleteOne({ email: DEMO_EMAIL, company: company._id });
 
+  // Must be lecturer — students require IndexNumber which reviewers won't have
   const demo = new User({
     name:       'Google Play Reviewer',
     email:      DEMO_EMAIL,
     password:   DEMO_PASSWORD,
-    role:       'student',
+    role:       'lecturer',
     company:    company._id,
     isApproved: true,
     isActive:   true,
@@ -39,7 +39,7 @@ async function main() {
   console.log('Demo account created:');
   console.log('  Email   :', DEMO_EMAIL);
   console.log('  Password:', DEMO_PASSWORD);
-  console.log('  Role    : student');
+  console.log('  Role    : lecturer');
   console.log('  Company :', company.name);
   console.log('');
   console.log('Enter these credentials in the Google Play App access form.');
