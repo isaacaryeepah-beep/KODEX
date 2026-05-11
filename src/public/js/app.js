@@ -13199,7 +13199,9 @@ function toggleMobileSidebar() {
     requestAnimationFrame(() => {
       sidebar.classList.add('open');
       overlay.classList.add('active');
-      document.body.style.overflow = 'hidden';
+      // Lock .content — the real scroll container in this SPA (body never scrolls)
+      const content = document.querySelector('.content');
+      if (content) content.style.overflowY = 'hidden';
     });
   }
 }
@@ -13209,7 +13211,6 @@ function closeMobileSidebar() {
   const overlay = document.getElementById('sidebar-overlay');
   if (sidebar) {
     sidebar.classList.remove('open');
-    // Remove force-show class after transition completes
     setTimeout(() => {
       if (!sidebar.classList.contains('open')) {
         sidebar.classList.remove('sidebar-force-open');
@@ -13217,7 +13218,8 @@ function closeMobileSidebar() {
     }, 300);
   }
   if (overlay) overlay.classList.remove('active');
-  document.body.style.overflow = '';
+  const content = document.querySelector('.content');
+  if (content) content.style.overflowY = '';
 }
 
 // Close sidebar when a nav item is tapped on mobile
