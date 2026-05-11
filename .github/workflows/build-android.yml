@@ -35,86 +35,57 @@ jobs:
       - name: Add Android platform
         run: npx cap add android
 
-      - name: Generate app icons
+      - name: Generate app icons and splash screen
         run: |
-          pip install Pillow cairosvg --quiet
-          cat > /tmp/gen_icons.py << 'PYEOF'
-          import os, io
-          from PIL import Image, ImageDraw
-          import cairosvg
-
-          # Always generate from SVG so no binary asset needed in repo
-          SVG_PATH = 'src/public/dikly-icon.svg'
-          if not os.path.exists(SVG_PATH):
-              print('SVG icon not found — skipping icon generation')
-              exit(0)
-
-          png_data = cairosvg.svg2png(url=SVG_PATH, output_width=900, output_height=900)
-          d_icon = Image.open(io.BytesIO(png_data)).convert('RGBA')
-          print(f'Source from SVG: {d_icon.size[0]}x{d_icon.size[1]}')
-
-          # Compose D on white 1024x1024 square (no rounding) — matches the logo image
-          def make_icon(target_size):
-              bg = Image.new('RGBA', (target_size, target_size), (255, 255, 255, 255))
-              d = d_icon.resize((target_size, target_size), Image.LANCZOS)
-              bg.paste(d, (0, 0), d.split()[3])
-              return bg.convert('RGB')
-
-          # Remove conflicting default Capacitor drawable XMLs and adaptive icon folder
-          import shutil
-          for f in [
-              'android/app/src/main/res/drawable/ic_launcher_foreground.xml',
-              'android/app/src/main/res/drawable/ic_launcher_background.xml',
-              'android/app/src/main/res/drawable-v24/ic_launcher_foreground.xml',
-              'android/app/src/main/res/drawable-v24/ic_launcher_background.xml',
-          ]:
-              if os.path.exists(f):
-                  os.remove(f)
-                  print(f'  Removed: {f}')
-          # Remove adaptive icon folder so system uses legacy PNGs only
-          if os.path.exists('android/app/src/main/res/mipmap-anydpi-v26'):
-              shutil.rmtree('android/app/src/main/res/mipmap-anydpi-v26')
-              print('  Removed mipmap-anydpi-v26 (no adaptive icon)')
-
-          # Mipmap PNG icons — D on white square background
-          for folder, size in [('mipmap-mdpi',48),('mipmap-hdpi',72),('mipmap-xhdpi',96),('mipmap-xxhdpi',144),('mipmap-xxxhdpi',192)]:
-              out = f'android/app/src/main/res/{folder}'
-              os.makedirs(out, exist_ok=True)
-              ico = make_icon(size)
-              ico.save(f'{out}/ic_launcher.png')
-              ico.save(f'{out}/ic_launcher_round.png')
-              print(f'  {folder}: {size}px')
-
-          print('Legacy square icons generated — no adaptive icon (avoids forced rounding)')
-
-          print('All icons generated!')
-          PYEOF
-          python3 /tmp/gen_icons.py
-
-      - name: Generate splash screen
-        run: |
-          pip install Pillow cairosvg --quiet
+          sudo apt-get install -y librsvg2-bin --quiet
+          pip install Pillow --quiet
+          rsvg-convert -w 1024 -h 1024 src/public/dikly-icon.svg -o /tmp/dikly-icon.png
           python3 - << 'PYEOF'
-import os, io
+import os, shutil
 from PIL import Image
-import cairosvg
 
-size = 1920
-bg_color = (79, 70, 229)  # #4f46e5
-splash = Image.new('RGBA', (size, size), bg_color)
+d_icon = Image.open('/tmp/dikly-icon.png').convert('RGBA')
+print(f'Icon loaded: {d_icon.size}')
 
-SVG_PATH = 'src/public/dikly-icon.svg'
-if os.path.exists(SVG_PATH):
-    png_data = cairosvg.svg2png(url=SVG_PATH, output_width=1024, output_height=1024)
-    icon = Image.open(io.BytesIO(png_data)).convert('RGBA')
-    icon_size = int(size * 0.35)
-    icon = icon.resize((icon_size, icon_size), Image.LANCZOS)
-    offset = (size - icon_size) // 2
-    splash.paste(icon, (offset, offset), icon.split()[3])
-    print(f'Icon placed at {offset},{offset} size {icon_size}px')
+def make_icon(target_size):
+    bg = Image.new('RGB', (target_size, target_size), (255, 255, 255))
+    d = d_icon.resize((target_size, target_size), Image.LANCZOS)
+    bg.paste(d, (0, 0), d.split()[3])
+    return bg
 
+# Remove conflicting Capacitor XML drawables
+for f in [
+    'android/app/src/main/res/drawable/ic_launcher_foreground.xml',
+    'android/app/src/main/res/drawable/ic_launcher_background.xml',
+    'android/app/src/main/res/drawable-v24/ic_launcher_foreground.xml',
+    'android/app/src/main/res/drawable-v24/ic_launcher_background.xml',
+]:
+    if os.path.exists(f):
+        os.remove(f)
+
+# Remove adaptive icon folder — legacy PNGs avoid forced rounding on Android 8+
+if os.path.exists('android/app/src/main/res/mipmap-anydpi-v26'):
+    shutil.rmtree('android/app/src/main/res/mipmap-anydpi-v26')
+    print('Removed adaptive icon folder')
+
+# Mipmap launcher icons — D on white square
+for folder, size in [('mipmap-mdpi',48),('mipmap-hdpi',72),('mipmap-xhdpi',96),('mipmap-xxhdpi',144),('mipmap-xxxhdpi',192)]:
+    out = f'android/app/src/main/res/{folder}'
+    os.makedirs(out, exist_ok=True)
+    ico = make_icon(size)
+    ico.save(f'{out}/ic_launcher.png')
+    ico.save(f'{out}/ic_launcher_round.png')
+    print(f'  {folder}: {size}px')
+
+# Splash screen — purple background with centered D logo
+splash_size = 1920
+splash = Image.new('RGB', (splash_size, splash_size), (79, 70, 229))
+icon_size = int(splash_size * 0.35)
+icon = d_icon.resize((icon_size, icon_size), Image.LANCZOS)
+offset = (splash_size - icon_size) // 2
+splash.paste(icon, (offset, offset), icon.split()[3])
 os.makedirs('android/app/src/main/res/drawable', exist_ok=True)
-splash.convert('RGB').save('android/app/src/main/res/drawable/splash.png')
+splash.save('android/app/src/main/res/drawable/splash.png')
 print('Splash screen saved!')
 PYEOF
 
@@ -137,23 +108,18 @@ PYEOF
       - name: Sync Capacitor to Android
         run: npx cap sync android
 
-      - name: Bump targetSdkVersion to 35
+      - name: Bump targetSdkVersion to 35 and set versionCode
         run: |
-          # Capacitor stores SDK versions in variables.gradle — require at least one digit
           if [ -f android/variables.gradle ]; then
             sed -i -E 's/compileSdkVersion = [0-9]+/compileSdkVersion = 35/' android/variables.gradle
             sed -i -E 's/targetSdkVersion = [0-9]+/targetSdkVersion = 35/' android/variables.gradle
-            echo "--- variables.gradle after patch ---"
             grep -E 'compileSdkVersion|targetSdkVersion' android/variables.gradle
           fi
-          # Patch app/build.gradle only where a literal number follows — use [0-9]+ not [0-9]*
           sed -i -E 's/compileSdkVersion[[:space:]]+[0-9]+/compileSdkVersion 35/' android/app/build.gradle
           sed -i -E 's/compileSdk[[:space:]]+[0-9]+/compileSdk 35/' android/app/build.gradle
           sed -i -E 's/targetSdkVersion[[:space:]]+[0-9]+/targetSdkVersion 35/' android/app/build.gradle
           sed -i -E 's/targetSdk[[:space:]]+[0-9]+/targetSdk 35/' android/app/build.gradle
-          echo "--- app/build.gradle SDK versions after patch ---"
           grep -E 'compileSdk|targetSdk' android/app/build.gradle || true
-          # Use run_number as versionCode so it always increments
           sed -i -E "s/versionCode[[:space:]]+[0-9]+/versionCode ${{ github.run_number }}/" android/app/build.gradle
           echo "versionCode set to: ${{ github.run_number }}"
 
