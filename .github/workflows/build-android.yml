@@ -35,13 +35,65 @@ jobs:
 
       - name: Generate app icons
         run: |
-          if [ -f resources/icon.png ]; then
-            echo "Found resources/icon.png - generating icons..."
-            npm install -g @capacitor/assets
-            npx @capacitor/assets generate --android
-          else
-            echo "No resources/icon.png found - using default icon"
+          if [ ! -f resources/icon.png ]; then
+            echo "No icon found, using defaults"
+            exit 0
           fi
+          pip install Pillow --quiet
+          cat > /tmp/gen_icons.py << 'PYEOF'
+          import os
+          from PIL import Image
+
+          src = Image.open('resources/icon.png').convert('RGBA')
+          print(f'Source icon: {src.size[0]}x{src.size[1]}')
+
+          # Standard mipmap PNG icons
+          sizes = [('mipmap-mdpi',48),('mipmap-hdpi',72),('mipmap-xhdpi',96),('mipmap-xxhdpi',144),('mipmap-xxxhdpi',192)]
+          for folder, size in sizes:
+              out = f'android/app/src/main/res/{folder}'
+              os.makedirs(out, exist_ok=True)
+              img = src.resize((size, size), Image.LANCZOS)
+              bg = Image.new('RGB', (size, size), (255, 255, 255))
+              if img.mode == 'RGBA':
+                  bg.paste(img, mask=img.split()[3])
+              else:
+                  bg.paste(img)
+              bg.save(f'{out}/ic_launcher.png')
+              bg.save(f'{out}/ic_launcher_round.png')
+              print(f'  {folder}: {size}px')
+
+          # Adaptive icon foreground (432x432 with icon centred)
+          fg_size = 432
+          icon_size = int(fg_size * 0.75)
+          offset = (fg_size - icon_size) // 2
+          fg = Image.new('RGBA', (fg_size, fg_size), (0, 0, 0, 0))
+          icon = src.resize((icon_size, icon_size), Image.LANCZOS)
+          fg.paste(icon, (offset, offset), icon)
+          os.makedirs('android/app/src/main/res/drawable', exist_ok=True)
+          fg.save('android/app/src/main/res/drawable/ic_launcher_foreground.png')
+          print('  Adaptive foreground: done')
+
+          # Solid white background for adaptive icon
+          with open('android/app/src/main/res/drawable/ic_launcher_background.xml', 'w') as f:
+              f.write('<?xml version="1.0" encoding="utf-8"?>\n'
+                      '<shape xmlns:android="http://schemas.android.com/apk/res/android">\n'
+                      '    <solid android:color="#FFFFFF"/>\n'
+                      '</shape>\n')
+
+          # Adaptive icon XML (Android 8+)
+          xml = ('<?xml version="1.0" encoding="utf-8"?>\n'
+                 '<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">\n'
+                 '    <background android:drawable="@drawable/ic_launcher_background"/>\n'
+                 '    <foreground android:drawable="@drawable/ic_launcher_foreground"/>\n'
+                 '</adaptive-icon>\n')
+          os.makedirs('android/app/src/main/res/mipmap-anydpi-v26', exist_ok=True)
+          for name in ('ic_launcher.xml', 'ic_launcher_round.xml'):
+              with open(f'android/app/src/main/res/mipmap-anydpi-v26/{name}', 'w') as f:
+                  f.write(xml)
+
+          print('All icons generated successfully!')
+          PYEOF
+          python3 /tmp/gen_icons.py
 
       - name: Ensure strings.xml exists
         run: |
