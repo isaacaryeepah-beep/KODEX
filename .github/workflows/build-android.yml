@@ -127,6 +127,15 @@ jobs:
       - name: Sync Capacitor to Android
         run: npx cap sync android
 
+      - name: Bump targetSdkVersion to 35
+        run: |
+          sed -i 's/compileSdkVersion [0-9]*/compileSdkVersion 35/' android/app/build.gradle
+          sed -i 's/compileSdk [0-9]*/compileSdk 35/' android/app/build.gradle
+          sed -i 's/targetSdkVersion [0-9]*/targetSdkVersion 35/' android/app/build.gradle
+          sed -i 's/targetSdk [0-9]*/targetSdk 35/' android/app/build.gradle
+          echo "--- build.gradle SDK versions after patch ---"
+          grep -E 'compileSdk|targetSdk' android/app/build.gradle
+
       - name: Make Gradle wrapper executable
         run: chmod +x android/gradlew
 

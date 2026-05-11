@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { width: 1080px; height: 1920px; overflow: hidden; background: #f1f5f9;
+         font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+  .screen { width: 1080px; height: 1920px; display: flex; flex-direction: column;
+            background: linear-gradient(160deg, #1e1b4b 0%, #4f46e5 60%, #6366f1 100%); }
+  .top { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 80px 40px 60px; }
+  .logo { width: 140px; height: 140px; background: #fff; border-radius: 36px;
+          display: flex; align-items: center; justify-content: center; margin-bottom: 32px;
+          box-shadow: 0 8px 40px rgba(0,0,0,0.3); }
+  .logo-d { font-size: 80px; font-weight: 900; color: #4f46e5; }
+  .brand { font-size: 56px; font-weight: 900; color: #fff; letter-spacing: -2px; margin-bottom: 12px; }
+  .sub { font-size: 26px; color: rgba(255,255,255,0.65); text-align: center; line-height: 1.4; }
+  .card { background: #fff; border-radius: 40px 40px 0 0; padding: 60px 64px 80px;
+          box-shadow: 0 -8px 40px rgba(0,0,0,0.15); }
+  .label { font-size: 22px; font-weight: 700; color: #374151; margin-bottom: 12px; margin-top: 32px; }
+  .label:first-child { margin-top: 0; }
+  .input { width: 100%; height: 90px; border: 2px solid #e5e7eb; border-radius: 20px;
+           background: #f9fafb; font-size: 28px; padding: 0 32px; color: #374151;
+           display: flex; align-items: center; }
+  .input.filled { border-color: #4f46e5; color: #1f2937; }
+  .input span { color: #9ca3af; }
+  .btn { width: 100%; height: 100px; background: #4f46e5; border-radius: 24px;
+         display: flex; align-items: center; justify-content: center;
+         font-size: 32px; font-weight: 800; color: #fff; margin-top: 48px;
+         box-shadow: 0 8px 24px rgba(79,70,229,0.4); }
+  .forgot { text-align: center; margin-top: 32px; font-size: 24px; color: #6366f1; font-weight: 600; }
+  .divider { display: flex; align-items: center; gap: 20px; margin: 40px 0; }
+  .divider-line { flex: 1; height: 2px; background: #e5e7eb; }
+  .divider-text { font-size: 22px; color: #9ca3af; }
+  .signin-text { text-align: center; font-size: 24px; color: #6b7280; margin-top: 20px; }
+  .signin-text b { color: #4f46e5; }
+  .statusbar { height: 60px; background: transparent; display: flex; align-items: center;
+               justify-content: space-between; padding: 0 48px; }
+  .time { font-size: 28px; font-weight: 700; color: #fff; }
+  .icons { display: flex; gap: 16px; align-items: center; }
+  .icon { width: 32px; height: 32px; background: rgba(255,255,255,0.8); border-radius: 6px; }
+</style>
+</head>
+<body>
+<div class="screen">
+  <div class="statusbar">
+    <div class="time">9:41</div>
+    <div class="icons">
+      <div class="icon"></div><div class="icon"></div><div class="icon"></div>
+    </div>
+  </div>
+  <div class="top">
+    <div class="logo"><div class="logo-d">D</div></div>
+    <div class="brand">DIKLY</div>
+    <div class="sub">Smart Attendance &amp; Learning<br>Management</div>
+  </div>
+  <div class="card">
+    <div class="label">Email address</div>
+    <div class="input filled">john.doe@university.edu</div>
+    <div class="label">Password</div>
+    <div class="input"><span>••••••••••</span></div>
+    <div class="btn">Sign In</div>
+    <div class="forgot">Forgot password?</div>
+    <div class="divider">
+      <div class="divider-line"></div>
+      <div class="divider-text">New to DIKLY?</div>
+      <div class="divider-line"></div>
+    </div>
+    <div class="signin-text">Contact your institution admin to<br>create your account</div>
+  </div>
+</div>
+</body>
+</html>
