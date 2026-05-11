@@ -11096,6 +11096,7 @@ async function renderProfile() {
 async function loadMyDevices() {
   const container = document.getElementById('devices-list');
   if (!container) return;
+  const esc = (s) => s == null ? '' : String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   try {
     const data = await api('/api/auth/my-devices');
     const devices = data.devices || [];
@@ -11121,15 +11122,19 @@ async function loadMyDevices() {
         <div style="font-size:28px;flex-shrink:0">${platformIcon(d.platform)}</div>
         <div style="flex:1;min-width:0">
           <div style="display:flex;align-items:center;gap:8px;font-weight:600;font-size:13px">
-            ${d.platform ? d.platform.charAt(0).toUpperCase() + d.platform.slice(1) : 'Unknown device'}
+            ${d.platform ? esc(d.platform.charAt(0).toUpperCase() + d.platform.slice(1)) : 'Unknown device'}
             ${d.isCurrent ? `<span style="font-size:10px;padding:2px 8px;border-radius:20px;background:var(--primary);color:#fff;font-weight:700">Current</span>` : ''}
           </div>
-          <div style="font-size:11px;color:var(--text-muted);margin-top:2px">${d.ipAddress || 'IP unknown'} · Last seen ${timeAgo(d.lastSeenAt)}</div>
-          ${d.userAgent ? `<div style="font-size:10px;color:var(--text-muted);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${d.userAgent}</div>` : ''}
+          <div style="font-size:11px;color:var(--text-muted);margin-top:2px">${esc(d.ipAddress) || 'IP unknown'} · Last seen ${timeAgo(d.lastSeenAt)}</div>
+          ${d.userAgent ? `<div style="font-size:10px;color:var(--text-muted);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(d.userAgent)}</div>` : ''}
         </div>
-        ${!d.isCurrent ? `<button onclick="removeDevice('${d.deviceId}')" style="flex-shrink:0;padding:6px 12px;border-radius:8px;border:1.5px solid #ef4444;background:transparent;color:#ef4444;font-size:12px;font-weight:600;cursor:pointer">Remove</button>` : ''}
+        ${!d.isCurrent ? `<button data-device-id="${esc(d.deviceId)}" class="remove-device-btn" style="flex-shrink:0;padding:6px 12px;border-radius:8px;border:1.5px solid #ef4444;background:transparent;color:#ef4444;font-size:12px;font-weight:600;cursor:pointer">Remove</button>` : ''}
       </div>
     `).join('');
+
+    container.querySelectorAll('.remove-device-btn').forEach(btn => {
+      btn.addEventListener('click', () => removeDevice(btn.dataset.deviceId));
+    });
 
     // Show device lock warning if active
     if (data.deviceLock?.isLocked && data.deviceLock?.lockedUntil) {
