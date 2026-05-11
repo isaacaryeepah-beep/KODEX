@@ -862,11 +862,11 @@ async function api(path, options = {}) {
     const data = await res.json();
     if (!res.ok) {
       // Subscription gate — redirect lecturer to subscription page automatically
-      if (res.status === 403 && data.subscriptionRequired) {
+      if (res.status === 403 && (data.subscriptionExpired || data.subscriptionRequired)) {
         showSubscriptionGate(data.message);
-        throw new Error(data.error || 'Subscription required');
+        throw new Error(data.message || data.error || 'Subscription required');
       }
-      const err = new Error(data.error || 'Request failed');
+      const err = new Error(data.message || data.error || 'Request failed');
       err.status = res.status;
       err.data   = data;
       throw err;
