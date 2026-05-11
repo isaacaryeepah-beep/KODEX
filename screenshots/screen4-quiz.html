@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { width: 1080px; height: 1920px; overflow: hidden; background: #f1f5f9;
+         font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+  .header { background: linear-gradient(135deg, #1e1b4b, #4f46e5); padding: 60px 56px 48px; }
+  .statusbar { display: flex; justify-content: space-between; margin-bottom: 24px; }
+  .time { font-size: 28px; font-weight: 700; color: #fff; }
+  .page-title { font-size: 48px; font-weight: 900; color: #fff; margin-bottom: 8px; }
+  .page-sub { font-size: 24px; color: rgba(255,255,255,0.7); }
+  .timer-row { display: flex; justify-content: space-between; align-items: center; margin-top: 24px; }
+  .timer { background: rgba(255,255,255,0.2); border-radius: 20px; padding: 14px 28px;
+           font-size: 36px; font-weight: 900; color: #fff; }
+  .progress-info { font-size: 24px; color: rgba(255,255,255,0.8); }
+  .progress-bar { height: 8px; background: rgba(255,255,255,0.2); border-radius: 4px; margin-top: 20px; }
+  .progress-fill { height: 100%; width: 40%; background: #a5f3fc; border-radius: 4px; }
+  .body { padding: 40px; }
+  .question-card { background: #fff; border-radius: 28px; padding: 48px;
+                   box-shadow: 0 4px 24px rgba(0,0,0,0.08); margin-bottom: 28px; }
+  .q-num { font-size: 22px; font-weight: 700; color: #6366f1; margin-bottom: 16px;
+           text-transform: uppercase; letter-spacing: 2px; }
+  .q-text { font-size: 32px; font-weight: 700; color: #0f172a; line-height: 1.5; }
+  .options { display: flex; flex-direction: column; gap: 20px; margin-top: 40px; }
+  .option { border: 3px solid #e2e8f0; border-radius: 20px; padding: 32px 36px;
+            display: flex; align-items: center; gap: 24px; cursor: pointer; transition: all 0.2s; }
+  .option.selected { border-color: #4f46e5; background: #eef2ff; }
+  .option.correct { border-color: #059669; background: #d1fae5; }
+  .opt-letter { width: 56px; height: 56px; border-radius: 14px; background: #f1f5f9;
+                display: flex; align-items: center; justify-content: center;
+                font-size: 26px; font-weight: 800; color: #64748b; flex-shrink: 0; }
+  .option.selected .opt-letter { background: #4f46e5; color: #fff; }
+  .option.correct .opt-letter { background: #059669; color: #fff; }
+  .opt-text { font-size: 28px; color: #0f172a; font-weight: 500; }
+  .next-btn { width: 100%; height: 100px; background: #4f46e5; border-radius: 24px;
+              display: flex; align-items: center; justify-content: center;
+              font-size: 30px; font-weight: 800; color: #fff; margin-top: 8px;
+              box-shadow: 0 8px 24px rgba(79,70,229,0.3); }
+  .score-card { background: linear-gradient(135deg, #059669, #10b981); border-radius: 28px;
+                padding: 48px; text-align: center; margin-bottom: 28px;
+                box-shadow: 0 4px 24px rgba(5,150,105,0.2); }
+  .score-label { font-size: 24px; color: rgba(255,255,255,0.8); margin-bottom: 8px; }
+  .score-val { font-size: 80px; font-weight: 900; color: #fff; }
+  .score-sub { font-size: 26px; color: rgba(255,255,255,0.8); margin-top: 8px; }
+</style>
+</head>
+<body>
+  <div class="header">
+    <div class="statusbar"><div class="time">9:41</div></div>
+    <div class="page-title">Snap Quiz ⚡</div>
+    <div class="page-sub">CS301 · Data Structures</div>
+    <div class="timer-row">
+      <div class="timer">⏱ 06:42</div>
+      <div class="progress-info">Question 2 of 5</div>
+    </div>
+    <div class="progress-bar"><div class="progress-fill"></div></div>
+  </div>
+  <div class="body">
+    <div class="question-card">
+      <div class="q-num">Question 2</div>
+      <div class="q-text">What is the time complexity of searching for an element in a balanced Binary Search Tree?</div>
+      <div class="options">
+        <div class="option">
+          <div class="opt-letter">A</div>
+          <div class="opt-text">O(n)</div>
+        </div>
+        <div class="option selected">
+          <div class="opt-letter">B</div>
+          <div class="opt-text">O(log n)</div>
+        </div>
+        <div class="option">
+          <div class="opt-letter">C</div>
+          <div class="opt-text">O(n²)</div>
+        </div>
+        <div class="option">
+          <div class="opt-letter">D</div>
+          <div class="opt-text">O(1)</div>
+        </div>
+      </div>
+    </div>
+    <div class="next-btn">Next Question →</div>
+  </div>
+</body>
+</html>
