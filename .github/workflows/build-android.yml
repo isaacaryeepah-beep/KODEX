@@ -129,18 +129,18 @@ jobs:
 
       - name: Bump targetSdkVersion to 35
         run: |
-          # Capacitor stores SDK versions in variables.gradle
+          # Capacitor stores SDK versions in variables.gradle — require at least one digit
           if [ -f android/variables.gradle ]; then
-            sed -i 's/compileSdkVersion = [0-9]*/compileSdkVersion = 35/' android/variables.gradle
-            sed -i 's/targetSdkVersion = [0-9]*/targetSdkVersion = 35/' android/variables.gradle
+            sed -i -E 's/compileSdkVersion = [0-9]+/compileSdkVersion = 35/' android/variables.gradle
+            sed -i -E 's/targetSdkVersion = [0-9]+/targetSdkVersion = 35/' android/variables.gradle
             echo "--- variables.gradle after patch ---"
             grep -E 'compileSdkVersion|targetSdkVersion' android/variables.gradle
           fi
-          # Also patch app/build.gradle in case it has inline values
-          sed -i 's/compileSdkVersion [0-9]*/compileSdkVersion 35/' android/app/build.gradle
-          sed -i 's/compileSdk [0-9]*/compileSdk 35/' android/app/build.gradle
-          sed -i 's/targetSdkVersion [0-9]*/targetSdkVersion 35/' android/app/build.gradle
-          sed -i 's/targetSdk [0-9]*/targetSdk 35/' android/app/build.gradle
+          # Patch app/build.gradle only where a literal number follows — use [0-9]+ not [0-9]*
+          sed -i -E 's/compileSdkVersion[[:space:]]+[0-9]+/compileSdkVersion 35/' android/app/build.gradle
+          sed -i -E 's/compileSdk[[:space:]]+[0-9]+/compileSdk 35/' android/app/build.gradle
+          sed -i -E 's/targetSdkVersion[[:space:]]+[0-9]+/targetSdkVersion 35/' android/app/build.gradle
+          sed -i -E 's/targetSdk[[:space:]]+[0-9]+/targetSdk 35/' android/app/build.gradle
           echo "--- app/build.gradle SDK versions after patch ---"
           grep -E 'compileSdk|targetSdk' android/app/build.gradle || true
 
