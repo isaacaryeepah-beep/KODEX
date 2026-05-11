@@ -701,9 +701,10 @@ exports.login = async (req, res) => {
     // ── Trusted-device check (students & employees only) ────────────────────
     // Login is always allowed. The 6-hour lock only blocks quiz/meeting/attendance
     // access (enforced by requireNoDeviceLock middleware), not the login itself.
-    // Non-student/non-employee roles (lecturers, HODs, admins) are never locked.
     const now = new Date();
-    if (deviceId && ['student', 'employee'].includes(user.role)) {
+    const isLockableRole = ['student', 'employee'].includes(user.role);
+
+    if (deviceId) {
       if (!Array.isArray(user.trustedDevices)) user.trustedDevices = [];
 
       // Lazy migration: seed trustedDevices from legacy single deviceId field
@@ -727,8 +728,8 @@ exports.login = async (req, res) => {
         td.ipAddress  = req.ip || null;
         td.userAgent  = req.headers["user-agent"] || null;
 
-        // Auto-clear an expired lock
-        if (user.accountDeviceLock?.isLocked) {
+        // Auto-clear an expired lock (students/employees only)
+        if (isLockableRole && user.accountDeviceLock?.isLocked) {
           const expiry = user.accountDeviceLock.lockedUntil
             ? new Date(user.accountDeviceLock.lockedUntil) : null;
           if (!expiry || expiry <= now) {
@@ -737,7 +738,7 @@ exports.login = async (req, res) => {
         }
 
       } else if (user.trustedDevices.length === 0) {
-        // First device ever — add silently, no lock
+        // First device ever — add silently, no lock for any role
         user.trustedDevices.push({
           deviceId,
           firstSeenAt: now,
@@ -748,7 +749,7 @@ exports.login = async (req, res) => {
         });
 
       } else {
-        // New device on an existing account — add to whitelist and lock
+        // New device on existing account — track for all roles
         user.trustedDevices.push({
           deviceId,
           firstSeenAt: now,
@@ -768,20 +769,22 @@ exports.login = async (req, res) => {
           detectedAt: now,
         });
 
-        // Set 6-hour quiz/meeting lock (login is still allowed)
-        user.accountDeviceLock = {
-          isLocked:      true,
-          lockedAt:      now,
-          lockedUntil:   new Date(now.getTime() + SIX_HOURS_MS),
-          triggerDevice: deviceId,
-          knownDevice:   user.deviceId || null,
-          unlockedBy:    null,
-          unlockedAt:    null,
-        };
+        // 6-hour quiz/meeting lock — students and employees only
+        if (isLockableRole) {
+          user.accountDeviceLock = {
+            isLocked:      true,
+            lockedAt:      now,
+            lockedUntil:   new Date(now.getTime() + SIX_HOURS_MS),
+            triggerDevice: deviceId,
+            knownDevice:   user.deviceId || null,
+            unlockedBy:    null,
+            unlockedAt:    null,
+          };
+        }
       }
 
       user.deviceId = deviceId;
-    } else if (['student', 'employee'].includes(user.role) && user.accountDeviceLock?.isLocked) {
+    } else if (isLockableRole && user.accountDeviceLock?.isLocked) {
       // No deviceId sent — auto-clear expired lock for students/employees
       const expiry = user.accountDeviceLock.lockedUntil
         ? new Date(user.accountDeviceLock.lockedUntil) : null;
