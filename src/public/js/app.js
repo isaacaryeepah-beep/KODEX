@@ -7344,7 +7344,7 @@ function _renderCoursesHTML(content, courses, isOffline) {
       course.lecturerId?.name ? `<span>👨‍🏫 ${esc(course.lecturerId.name)}</span>` : '',
       course.level  ? `<span style="background:#ede9fe;color:#7c3aed;padding:2px 7px;border-radius:20px;font-weight:700;">Level ${esc(String(course.level))}</span>` : '',
       course.group  ? `<span style="background:#ecfdf5;color:#059669;padding:2px 7px;border-radius:20px;font-weight:600;">Group ${esc(course.group)}</span>` : '',
-      `<span>👥 ${course.enrolledStudents?.length || 0} enrolled</span>`,
+      `<span>👥 ${course.rosterCount ?? course.enrolledStudents?.length ?? 0} enrolled</span>`,
     ].filter(Boolean).join('');
 
     let actions = '';
@@ -11332,7 +11332,7 @@ async function renderStudentGradeBook(content) {
                 <div style="font-weight:700;font-size:15px;margin-bottom:4px;">${c.title}</div>
                 <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">${c.code} · ${c.lecturerId?.name || 'N/A'}</div>
                 <div style="display:flex;justify-content:space-between;align-items:center;">
-                  <span style="font-size:12px;color:var(--text-light);">${c.enrolledStudents?.length || 0} students</span>
+                  <span style="font-size:12px;color:var(--text-light);">${c.rosterCount ?? c.enrolledStudents?.length ?? 0} students</span>
                   <span class="btn btn-sm btn-primary" style="pointer-events:none;">View Grades →</span>
                 </div>
               </div>`).join('')}
@@ -11444,7 +11444,7 @@ async function renderLecturerGradeBook(content) {
                 <div style="font-weight:700;font-size:15px;margin-bottom:4px;">${c.title}</div>
                 <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">${c.code} · ${c.lecturerId?.name || 'N/A'}</div>
                 <div style="display:flex;justify-content:space-between;align-items:center;">
-                  <span style="font-size:12px;color:var(--text-light);">${c.enrolledStudents?.length || 0} students</span>
+                  <span style="font-size:12px;color:var(--text-light);">${c.rosterCount ?? c.enrolledStudents?.length ?? 0} students</span>
                   <span class="btn btn-sm btn-primary" style="pointer-events:none;">Open →</span>
                 </div>
               </div>`).join('')}

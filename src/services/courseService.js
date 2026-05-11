@@ -128,6 +128,20 @@ async function listCourses(userRole, userId, companyId, queryParams, userDepartm
     Course.countDocuments(query),
   ]);
 
+  // Batch-fetch roster counts so the card shows the real enrolled number
+  if (courses.length) {
+    const courseIds = courses.map(c => c._id);
+    const rosterCounts = await StudentRoster.aggregate([
+      { $match: { course: { $in: courseIds } } },
+      { $group: { _id: '$course', count: { $sum: 1 } } },
+    ]);
+    const countMap = {};
+    for (const r of rosterCounts) countMap[r._id.toString()] = r.count;
+    for (const c of courses) {
+      c.rosterCount = countMap[c._id.toString()] || c.enrolledStudents?.length || 0;
+    }
+  }
+
   return {
     courses,
     pagination: {
