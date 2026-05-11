@@ -11082,12 +11082,12 @@ async function renderProfile() {
         </div>
       </div>` : ''}
       <button class="btn btn-primary" onclick="saveProfile()" style="width:100%">Save Changes</button>
-    </div>
 
-    <div class="card" style="max-width:520px;margin-top:20px">
-      <h3 style="font-size:14px;font-weight:700;margin-bottom:4px;color:var(--text-primary)">Signed-in Devices</h3>
-      <p style="font-size:12px;color:var(--text-muted);margin-bottom:16px">All devices that have logged into your account</p>
-      <div id="devices-list"><div style="color:var(--text-muted);font-size:13px">Loading devices…</div></div>
+      <div style="margin-top:28px;padding-top:24px;border-top:1px solid var(--border)">
+        <h3 style="font-size:14px;font-weight:700;margin-bottom:4px;color:var(--text-primary)">Signed-in Devices</h3>
+        <p style="font-size:12px;color:var(--text-muted);margin-bottom:16px">All devices that have logged into your account</p>
+        <div id="devices-list"><div style="color:var(--text-muted);font-size:13px">Loading devices…</div></div>
+      </div>
     </div>
   `;
   loadMyDevices();
