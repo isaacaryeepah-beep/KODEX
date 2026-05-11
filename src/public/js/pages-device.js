@@ -120,17 +120,37 @@ function _devNoPairedHTML() {
           <div class="dev-istep-label">Connect to the device WiFi</div>
           <div class="dev-istep-sub" id="dev-istep-2-sub">Power on the ESP32, then join its hotspot</div>
           <div id="dev-istep-2-actions" style="display:none">
-            <div class="dev-hotspot-chip">
-              <span class="dev-hotspot-chip-icon">📶</span>
-              <div>
-                <div class="dev-hotspot-chip-ssid">DIKLY-XXXXXX</div>
-                <div class="dev-hotspot-chip-note">No password needed · look in WiFi settings</div>
-              </div>
-            </div>
+            <ol class="dev-wifi-steps">
+              <li>
+                <span class="dev-wifi-step-num">1</span>
+                <div class="dev-wifi-step-body">
+                  <strong>Power on the ESP32</strong> device — its LED will blink.
+                </div>
+              </li>
+              <li>
+                <span class="dev-wifi-step-num">2</span>
+                <div class="dev-wifi-step-body">
+                  Open <strong>WiFi settings</strong> on this device and connect to:
+                  <div class="dev-hotspot-chip">
+                    <span class="dev-hotspot-chip-icon">📶</span>
+                    <div>
+                      <div class="dev-hotspot-chip-ssid">DIKLY-XXXXXX</div>
+                      <div class="dev-hotspot-chip-note">No password needed · your internet will pause briefly</div>
+                    </div>
+                  </div>
+                </div>
+              </li>
+              <li>
+                <span class="dev-wifi-step-num">3</span>
+                <div class="dev-wifi-step-body">
+                  Come back here and tap <strong>Open Setup Portal</strong>. The portal opens with your code already filled in — just enter your classroom WiFi password and tap <strong>Pair Device</strong>.
+                </div>
+              </li>
+            </ol>
             <button class="dev-btn dev-btn-primary dev-btn-portal" onclick="_devOpenSetupPage()">
               Open Setup Portal →
             </button>
-            <p class="dev-istep-portal-note">Once connected to the DIKLY WiFi, tap above. The portal auto-fills your code — just enter your classroom WiFi password and tap <strong>Pair Device</strong>.</p>
+            <p class="dev-istep-portal-note">⚠️ The portal only works while you're connected to the DIKLY WiFi.</p>
           </div>
         </div>
       </div>
@@ -1019,14 +1039,18 @@ function _devCSS() {
 .dev-inline-expires { font-size:12px; color:#94a3b8; margin-top:4px; }
 .dev-inline-code-hint { font-size:11px; color:#94a3b8; margin-top:6px; }
 
-/* Step 2 actions */
-.dev-istep-wifi-actions { margin-top:12px; }
-.dev-hotspot-chip { display:flex; align-items:center; gap:12px; background:#0f172a; border-radius:12px; padding:12px 16px; margin-bottom:14px; }
+/* Step 2 actions — numbered WiFi checklist */
+.dev-wifi-steps { list-style:none; margin:12px 0 16px; padding:0; display:flex; flex-direction:column; gap:14px; }
+.dev-wifi-steps li { display:flex; gap:12px; align-items:flex-start; }
+.dev-wifi-step-num { width:22px; height:22px; border-radius:50%; background:#6366f1; color:#fff; font-size:11px; font-weight:800; display:flex; align-items:center; justify-content:center; flex-shrink:0; margin-top:2px; }
+.dev-wifi-step-body { font-size:13px; color:#475569; line-height:1.6; flex:1; }
+.dev-wifi-step-body strong { color:#1e293b; }
+.dev-hotspot-chip { display:flex; align-items:center; gap:12px; background:#0f172a; border-radius:12px; padding:12px 16px; margin-top:10px; }
 .dev-hotspot-chip-icon { font-size:20px; flex-shrink:0; }
 .dev-hotspot-chip-ssid { font-size:15px; font-weight:800; color:#fff; font-family:monospace; letter-spacing:.5px; }
 .dev-hotspot-chip-note { font-size:11px; color:#94a3b8; margin-top:2px; }
 .dev-btn-portal { width:100%; justify-content:center; padding:13px; font-size:15px; border-radius:12px; }
-.dev-istep-portal-note { font-size:12px; color:#64748b; line-height:1.6; margin-top:10px; }
+.dev-istep-portal-note { font-size:12px; color:#92400e; background:#fffbeb; border:1px solid #fde68a; border-radius:8px; padding:8px 12px; margin-top:10px; line-height:1.5; }
 
 /* Main connect button */
 .dev-btn-connect-main { width:100%; justify-content:center; padding:14px; font-size:16px; border-radius:12px; }
