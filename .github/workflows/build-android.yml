@@ -1,0 +1,67 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 18
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Accept Android SDK licenses
+        run: yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
+
+      - name: Install Node dependencies
+        run: npm ci
+
+      - name: Add Android platform
+        run: npx cap add android
+
+      - name: Ensure strings.xml exists
+        run: |
+          mkdir -p android/app/src/main/res/values
+          if [ ! -f android/app/src/main/res/values/strings.xml ]; then
+            cat > android/app/src/main/res/values/strings.xml << 'STREOF'
+          <?xml version='1.0' encoding='utf-8'?>
+          <resources>
+              <string name="app_name">DIKLY</string>
+              <string name="title_activity_main">DIKLY</string>
+              <string name="package_name">sbs.dikly.attendance</string>
+              <string name="custom_url_scheme">sbs.dikly.attendance</string>
+              <string name="capacitor_server_url">https://dikly.sbs</string>
+          </resources>
+          STREOF
+          fi
+
+      - name: Sync Capacitor to Android
+        run: npx cap sync android
+
+      - name: Make Gradle wrapper executable
+        run: chmod +x android/gradlew
+
+      - name: Build Debug APK
+        run: cd android && ./gradlew assembleDebug --no-daemon --stacktrace
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: DIKLY-debug
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 30
