@@ -139,15 +139,14 @@ jobs:
           retention-days: 30
 
       - name: Decode release keystore
-        if: ${{ env.KEYSTORE_BASE64 != '' }}
+        if: ${{ secrets.KEYSTORE_BASE64 != '' }}
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
         run: echo "$KEYSTORE_BASE64" | base64 -d > /tmp/release.jks
 
       - name: Build Release AAB (signed)
-        if: ${{ env.KEYSTORE_BASE64 != '' }}
+        if: ${{ secrets.KEYSTORE_BASE64 != '' }}
         env:
-          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
@@ -160,9 +159,7 @@ jobs:
             -Pandroid.injected.signing.key.password="$KEY_PASSWORD"
 
       - name: Upload Release AAB artifact
-        if: ${{ env.KEYSTORE_BASE64 != '' }}
-        env:
-          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+        if: ${{ secrets.KEYSTORE_BASE64 != '' }}
         uses: actions/upload-artifact@v4
         with:
           name: DIKLY-release
