@@ -1008,13 +1008,19 @@ exports.forgotPassword = async (req, res) => {
     let message = "Password reset code generated. Please contact your lecturer to get the reset code.";
     if (user.email) {
       const companyData = await Company.findById(user.company).select("name").lean().catch(() => null);
-      sendPasswordReset({
+      const emailResult = await sendPasswordReset({
         email: user.email,
         name: user.name,
         resetCode: code,
         role: "student",
         institutionName: companyData?.name || "",
-      }).catch(err => console.error("[ForgotPassword] Email failed:", err.message));
+      }).catch(err => ({ ok: false, error: err.message }));
+
+      if (!emailResult || emailResult.ok === false) {
+        const detail = emailResult?.error ? ` (${emailResult.error})` : '';
+        console.error(`[ForgotPassword] Email failed for ${user.email}:${detail}`);
+        return res.status(500).json({ error: `Failed to send reset code. Please try again or contact your institution.` });
+      }
       message = "A reset code has been sent to your email address.";
     }
 
@@ -1384,13 +1390,19 @@ exports.send2FACode = async (req, res) => {
     user.twoFactorExpires = new Date(Date.now() + 10 * 60 * 1000);
     await user.save({ validateBeforeSave: false });
 
-    sendPasswordReset({
+    const emailResult = await sendPasswordReset({
       email: user.email,
       name: user.name,
       resetCode: code,
       role: user.role,
       institutionName: "Two-Factor Authentication",
-    }).catch(err => console.error("2FA email failed:", err.message));
+    }).catch(err => ({ ok: false, error: err.message }));
+
+    if (!emailResult || emailResult.ok === false) {
+      const detail = emailResult?.error ? ` (${emailResult.error})` : '';
+      console.error(`[2FA] Email failed for ${user.email}:${detail}`);
+      return res.status(500).json({ error: "Failed to send 2FA code. Please try again." });
+    }
 
     res.json({ ok: true, message: "2FA code sent to your email" });
   } catch(e) {

@@ -42,43 +42,16 @@ exports.startSession = async (req, res) => {
       return res.status(404).json({ error: "Company not found or inactive" });
     }
 
-    // ── STRICT device check — always enforced, no bypass ──
-    // The lecturer's paired ESP32 must be powered on and actively sending
-    // heartbeats before any attendance session can start. The Device model
-    // is the single source of truth — there is no "company-level" device.
-    const device  = await _resolveSessionDevice(req.user);
+    // ── Device check — ESP32 preferred, software-only fallback ──────────────
+    // If a paired ESP32 is online, it is used for QR rotation and network
+    // proximity enforcement. If no device is paired or it is offline, the
+    // session starts in software-only mode: the rotating code is generated
+    // server-side and the network proximity check is skipped.
+    const device    = await _resolveSessionDevice(req.user);
     const freshness = _deviceFreshness(device, DEVICE_ONLINE_WINDOW_MS);
+    const deviceMode = device && freshness.online ? 'esp32' : 'software';
 
-    console.log(`[SESSION START] company=${company.name} deviceRegistered=${!!device} deviceOnline=${freshness.online} secondsAgo=${freshness.secondsAgo}`);
-
-    if (!device) {
-      return res.status(503).json({
-        error: "ESP32 device not paired",
-        message: req.user.role === 'lecturer'
-          ? "You haven't paired a classroom device yet. Open the Attendance Device page, generate a pairing code, and enter it on your ESP32."
-          : "No classroom device is paired for this institution. A lecturer must pair an ESP32 from the Attendance Device page.",
-        deviceStatus: { online: false, registered: false },
-      });
-    }
-
-    if (!freshness.online) {
-      const lastSeenMsg = freshness.lastSeenAt
-        ? `Last seen ${freshness.secondsAgo}s ago.`
-        : "Device has never sent a heartbeat.";
-      return res.status(503).json({
-        error: "ESP32 device is offline",
-        message: `The DIKLY classroom device is not responding. ${lastSeenMsg} Power it on and wait a few seconds, then try again.`,
-        deviceStatus: {
-          online:      false,
-          registered:  true,
-          deviceId:    device.deviceId,
-          lastSeenAt:  freshness.lastSeenAt,
-          secondsAgo:  freshness.secondsAgo,
-        },
-      });
-    }
-
-    console.log(`[SESSION START] ✓ Device ${device.deviceId} online (${freshness.secondsAgo}s ago) — allowing start for ${company.name}`);
+    console.log(`[SESSION START] company=${company.name} deviceRegistered=${!!device} deviceOnline=${freshness.online} mode=${deviceMode}`);
     // ── End device check ──────────────────────────────────
 
     const activeFilter = { company: companyId, status: "active" };
@@ -134,7 +107,7 @@ exports.startSession = async (req, res) => {
       createdBy: req.user._id,
       title: req.body.title || "",
       course: courseRef,
-      deviceId: device.deviceId,
+      deviceId: deviceMode === 'esp32' ? device.deviceId : null,
       esp32Seed: SEED,
       durationSeconds: DURATION,
       status: "active",
@@ -377,9 +350,7 @@ exports.getCurrentCode = async (req, res) => {
       return res.status(400).json({ error: "Session is not active." });
     }
     if (!session.esp32Seed) {
-      return res.status(400).json({
-        error: "This session has no rotating code configured. Start it from the ESP32 classroom device.",
-      });
+      return res.status(400).json({ error: "This session has no rotating code configured." });
     }
 
     const { currentCodeForSession } = require("../services/attendanceCodeService");
@@ -483,62 +454,51 @@ exports.markAttendance = async (req, res) => {
       return res.status(404).json({ error: "No active session found. The manager needs to start a session first." });
     }
 
-    // ── Strict device proximity enforcement ──────────────────────────────────
-    // Physical presence is required. All three conditions must pass:
-    //   1. Session must be bound to a paired device (set at startSession).
-    //   2. That device must be online (heartbeat within 15 s).
-    //   3. Student's IP must exactly match one of the IPs the ESP32 has
-    //      reached the server from in the last 10 minutes.
-    // No exceptions — empty deviceIps means the device hasn't reported yet,
-    // which is also a hard block.
-    if (!session.deviceId) {
-      return res.status(403).json({
-        error: 'This session has no classroom device. Ask your lecturer to start a new session from a paired device.',
-        esp32Required: true,
-      });
-    }
+    // ── Device proximity enforcement (ESP32 sessions only) ───────────────────
+    // Sessions started with a paired ESP32 enforce physical presence via
+    // network-IP matching. Sessions in software-only mode (deviceId = null)
+    // skip this block — code validity is the only proof of presence.
+    if (session.deviceId) {
+      const sessionDevice = await Device.findOne({ deviceId: session.deviceId, companyId: req.user.company });
 
-    const sessionDevice = await Device.findOne({ deviceId: session.deviceId, companyId: req.user.company });
+      if (!sessionDevice) {
+        return res.status(503).json({
+          error: 'The classroom device for this session is no longer paired.',
+          esp32Required: true,
+        });
+      }
 
-    if (!sessionDevice) {
-      return res.status(503).json({
-        error: 'The classroom device for this session is no longer paired.',
-        esp32Required: true,
-      });
-    }
+      const fresh = _deviceFreshness(sessionDevice, DEVICE_MARK_WINDOW_MS);
+      if (!fresh.online) {
+        return res.status(503).json({
+          error: 'The classroom device is offline. Ask your lecturer to power it on.',
+          esp32Required: true,
+          esp32Offline: true,
+          secondsAgo:    fresh.secondsAgo,
+        });
+      }
 
-    const fresh = _deviceFreshness(sessionDevice, DEVICE_MARK_WINDOW_MS);
-    if (!fresh.online) {
-      return res.status(503).json({
-        error: 'The classroom device is offline. Ask your lecturer to power it on.',
-        esp32Required: true,
-        esp32Offline: true,
-        secondsAgo:    fresh.secondsAgo,
-      });
-    }
+      const studentIp = (req.ip || '').replace(/^::ffff:/, '');
+      const TEN_MIN_AGO = Date.now() - 10 * 60 * 1000;
+      const deviceIps = (sessionDevice.recentPublicIps || [])
+        .filter(e => e.seenAt && new Date(e.seenAt).getTime() > TEN_MIN_AGO)
+        .map(e => e.ip);
 
-    // req.ip is set correctly by Express when trust proxy is enabled (server.js).
-    const studentIp = (req.ip || '').replace(/^::ffff:/, '');
+      if (deviceIps.length === 0) {
+        return res.status(503).json({
+          error: 'The classroom device has not reported its network yet. Wait a few seconds and try again.',
+          esp32Required: true,
+          networkNotReady: true,
+        });
+      }
 
-    const TEN_MIN_AGO = Date.now() - 10 * 60 * 1000;
-    const deviceIps = (sessionDevice.recentPublicIps || [])
-      .filter(e => e.seenAt && new Date(e.seenAt).getTime() > TEN_MIN_AGO)
-      .map(e => e.ip);
-
-    if (deviceIps.length === 0) {
-      return res.status(503).json({
-        error: 'The classroom device has not reported its network yet. Wait a few seconds and try again.',
-        esp32Required: true,
-        networkNotReady: true,
-      });
-    }
-
-    if (!deviceIps.includes(studentIp)) {
-      console.warn(`[MARK] Blocked ${req.user.name}: IP ${studentIp} not in device IPs [${deviceIps.join(', ')}]`);
-      return res.status(403).json({
-        error: 'You must be connected to the classroom WiFi to mark attendance.',
-        networkMismatch: true,
-      });
+      if (!deviceIps.includes(studentIp)) {
+        console.warn(`[MARK] Blocked ${req.user.name}: IP ${studentIp} not in device IPs [${deviceIps.join(', ')}]`);
+        return res.status(403).json({
+          error: 'You must be connected to the classroom WiFi to mark attendance.',
+          networkMismatch: true,
+        });
+      }
     }
 
     // Anyone marking against a course-linked session must be enrolled in that course.
