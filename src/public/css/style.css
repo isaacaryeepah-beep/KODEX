@@ -1582,6 +1582,13 @@ input[type="checkbox"] {
     left: 0 !important;
     box-shadow: 4px 0 30px rgba(0,0,0,.15) !important;
   }
+  /* Let the sidebar container scroll; nav expands to full height */
+  .sidebar-nav {
+    flex: none !important;
+    overflow: visible !important;
+    min-height: auto !important;
+    height: auto !important;
+  }
   /* Show labels in mobile drawer */
   .sidebar-nav a {
     width: 100% !important;
