@@ -108,6 +108,31 @@ jobs:
           PYEOF
           python3 /tmp/gen_icons.py
 
+      - name: Generate splash screen
+        run: |
+          pip install Pillow --quiet
+          python3 - << 'PYEOF'
+import os
+from PIL import Image, ImageDraw
+
+# 1920x1920 purple background with centered icon
+size = 1920
+bg_color = (79, 70, 229)  # #4f46e5
+splash = Image.new('RGBA', (size, size), bg_color)
+
+if os.path.exists('resources/icon.png'):
+    icon = Image.open('resources/icon.png').convert('RGBA')
+    icon_size = int(size * 0.35)
+    icon = icon.resize((icon_size, icon_size), Image.LANCZOS)
+    offset = (size - icon_size) // 2
+    splash.paste(icon, (offset, offset), icon.split()[3])
+    print(f'Icon placed at {offset},{offset} size {icon_size}px')
+
+os.makedirs('android/app/src/main/res/drawable', exist_ok=True)
+splash.convert('RGB').save('android/app/src/main/res/drawable/splash.png')
+print('Splash screen saved!')
+PYEOF
+
       - name: Ensure strings.xml exists
         run: |
           mkdir -p android/app/src/main/res/values
