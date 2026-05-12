@@ -1376,20 +1376,31 @@ let QS = { quizzes: [], currentQuizId: null, snapQuizzes: [], activeSubTab: 'reg
 async function renderQuizzesPanel() {
   const isLec = ['lecturer','admin','superadmin'].includes(S.role);
   $('page-root').innerHTML = `<div class="loading">Loading quizzes…</div>`;
-  try {
-    if (isLec) {
-      await renderLecturerQuizzes();
-    } else {
+  if (isLec) {
+    // Default to Snap Quizzes tab — that's the primary quiz workflow here
+    await renderLecturerSnapQuizzes();
+  } else {
+    try {
       await renderStudentQuizzes();
+    } catch(e) {
+      $('page-root').innerHTML = `<p style="color:#dc2626;padding:16px">${e.message}</p>`;
     }
-  } catch(e) {
-    $('page-root').innerHTML = `<p style="color:#dc2626;padding:16px">${e.message}</p>`;
   }
 }
 
 // ── LECTURER QUIZ LIST ────────────────────────────────────────────────────
 async function renderLecturerQuizzes() {
-  const d = await api('GET', '/api/lecturer/quizzes?source=assignment');
+  let d;
+  try {
+    d = await api('GET', '/api/lecturer/quizzes?source=assignment');
+  } catch(e) {
+    $('page-root').innerHTML = `
+      ${_qzTabNavHTML('regular')}
+      <div style="padding:20px;background:#fef2f2;border:1px solid #fecaca;border-radius:10px;color:#991b1b;font-size:13px">
+        Could not load proctored quizzes: ${e.message}
+      </div>`;
+    return;
+  }
   QS.quizzes = d.quizzes || [];
   const now = new Date();
 
