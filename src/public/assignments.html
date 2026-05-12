@@ -1964,64 +1964,92 @@ async function openSnapQuestionsPanel(quizId) {
     const questions = qsd.questions || [];
 
     $('page-root').innerHTML = `
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:18px;flex-wrap:wrap">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;flex-wrap:wrap">
         <button class="btn btn-secondary btn-sm" onclick="renderLecturerSnapQuizzes()">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
           Back to Snap Quizzes
         </button>
-        <div style="flex:1">
-          <h2 style="font-size:18px;font-weight:700;margin:0">${quiz.title}</h2>
-          <p style="color:var(--text-light);font-size:13px;margin:2px 0 0">Type: ${(quiz.quizType||'exam').replace('_',' ')} · ${quiz.timeLimitMinutes}min · Total marks: <strong>${quiz.totalMarks||0}</strong> · Status: <strong>${quiz.status}</strong></p>
+        <div>
+          <h2 style="font-size:19px;font-weight:700;letter-spacing:-.3px">${quiz.title}</h2>
+          <p style="color:var(--text-light);font-size:13px">${(quiz.quizType||'exam').replace('_',' ')} · ${quiz.timeLimitMinutes}min · Total marks: <strong>${quiz.totalMarks||0}</strong> · Status: <strong>${quiz.status}</strong></p>
         </div>
-        ${quiz.status==='draft' ? `<button class="btn btn-secondary btn-sm" onclick="snapQuizAction('${quizId}','publish')">Publish</button>` : ''}
-        ${quiz.status==='published' ? `<button class="btn btn-sm" style="background:#f0fdf4;color:#166534;border:1px solid #bbf7d0" onclick="snapQuizAction('${quizId}','open')">Open</button>` : ''}
-        ${quiz.status==='open' ? `<button class="btn btn-sm" style="background:#fff7ed;color:#c2410c;border:1px solid #fed7aa" onclick="snapQuizAction('${quizId}','close')">Close</button>` : ''}
+        <div style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap">
+          ${quiz.status==='draft'     ? `<button class="btn btn-secondary btn-sm" onclick="snapQuizAction('${quizId}','publish')">Publish</button>` : ''}
+          ${quiz.status==='published' ? `<button class="btn btn-sm" style="background:#f0fdf4;color:#166534;border:1px solid #bbf7d0" onclick="snapQuizAction('${quizId}','open')">Open</button>` : ''}
+          ${quiz.status==='open'      ? `<button class="btn btn-sm" style="background:#fff7ed;color:#c2410c;border:1px solid #fed7aa" onclick="snapQuizAction('${quizId}','close')">Close</button>` : ''}
+        </div>
       </div>
 
-      <!-- Add question form -->
-      <div class="card" style="margin-bottom:22px">
-        <div class="section-sub" style="margin-bottom:12px">Add Question</div>
-        <div class="fg"><label>Question Text <span class="req">*</span></label><textarea id="sq-q-text" rows="2" placeholder="Type the question here…"></textarea></div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
-          <div class="fg"><label>Option A <span class="req">*</span></label><input id="sq-opt-0" placeholder="Option A"/></div>
-          <div class="fg"><label>Option B <span class="req">*</span></label><input id="sq-opt-1" placeholder="Option B"/></div>
-          <div class="fg"><label>Option C</label><input id="sq-opt-2" placeholder="Option C (optional)"/></div>
-          <div class="fg"><label>Option D</label><input id="sq-opt-3" placeholder="Option D (optional)"/></div>
+      <!-- Quiz ID card -->
+      <div style="background:linear-gradient(135deg,#0f172a,#1e293b);border-radius:12px;padding:16px 20px;margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+        <div>
+          <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#38bdf8;margin-bottom:5px">Quiz ID — for Exam Portal</div>
+          <div style="font-size:13px;font-family:monospace;color:#e2e8f0;background:#0f172a;padding:8px 13px;border-radius:7px;border:1px solid #334155;word-break:break-all">${quizId}</div>
+          <div style="font-size:11px;color:#64748b;margin-top:5px">Paste into Exam Portal → snap-quiz.html</div>
+        </div>
+        <button class="btn btn-sm" style="background:#0ea5e9;color:#fff;flex-shrink:0" onclick="navigator.clipboard.writeText('${quizId}').then(()=>toast('✓ Quiz ID copied','ok'))">📋 Copy ID</button>
+      </div>
+
+      <!-- Add Question Form -->
+      <div class="card" style="margin-bottom:16px">
+        <div style="font-size:14px;font-weight:700;margin-bottom:14px;display:flex;align-items:center;gap:8px">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          Add New Question
+        </div>
+        <div style="margin-bottom:14px">
+          <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:5px;display:block">Question Text <span style="color:#dc2626">*</span></label>
+          <textarea id="sq-q-text" rows="3" placeholder="Enter the question…" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;font-family:inherit;resize:vertical;outline:none" onfocus="this.style.borderColor='var(--primary)'" onblur="this.style.borderColor='var(--border)'"></textarea>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
-          <div class="fg">
-            <label>Correct Answer <span class="req">*</span></label>
-            <select id="sq-correct">
-              <option value="0">A</option>
-              <option value="1">B</option>
-              <option value="2">C</option>
-              <option value="3">D</option>
-            </select>
-          </div>
-          <div class="fg"><label>Marks</label><input id="sq-q-marks" type="number" min="1" value="1"/></div>
+          ${['A','B','C','D'].map((l,i) => `
+          <div>
+            <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:5px;display:block">Option ${l}${i < 2 ? ' <span style="color:#dc2626">*</span>' : ''}</label>
+            <input type="text" id="sq-opt-${i}" placeholder="Option ${l}…" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;font-family:inherit;outline:none" onfocus="this.style.borderColor='var(--primary)'" onblur="this.style.borderColor='var(--border)'"/>
+          </div>`).join('')}
         </div>
-        <button class="btn btn-primary" onclick="submitSnapQuizQuestion('${quizId}')">＋ Add Question</button>
+        <div style="margin-bottom:14px">
+          <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:8px;display:block">Correct Answer <span style="color:#dc2626">*</span></label>
+          <div style="display:flex;gap:14px;flex-wrap:wrap">
+            ${['A','B','C','D'].map((l,i) => `
+            <label style="display:flex;align-items:center;gap:5px;font-size:13px;cursor:pointer;font-weight:500">
+              <input type="radio" name="sq-correct" value="${i}" ${i===0?'checked':''} style="accent-color:var(--primary)"/> ${l}
+            </label>`).join('')}
+          </div>
+        </div>
+        <div>
+          <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:5px;display:block">Marks</label>
+          <input type="number" id="sq-q-marks" value="1" min="1" style="width:72px;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;font-family:inherit;outline:none"/>
+        </div>
+        <div id="sq-q-error" style="color:#dc2626;font-size:13px;font-weight:500;margin-top:10px;display:none"></div>
+        <button class="btn btn-primary" style="margin-top:14px" onclick="submitSnapQuizQuestion('${quizId}')">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Add Question
+        </button>
       </div>
 
       <!-- Questions list -->
-      <div id="snap-q-list">
-        ${!questions.length ? `<div style="color:var(--text-muted);font-size:13px;text-align:center;padding:20px">No questions yet — add one above.</div>` :
-          questions.map((q, i) => `
-            <div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:10px">
-              <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px">
-                <div style="flex:1">
-                  <div style="font-size:13px;font-weight:600;margin-bottom:8px"><span style="color:var(--primary);margin-right:6px">${i+1}.</span>${q.questionText}</div>
-                  <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px">
-                    ${(q.options||[]).map((opt, idx) => `
-                      <div style="font-size:12px;padding:5px 9px;border-radius:6px;${idx===q.correctOptionIndex ? 'background:#f0fdf4;color:#166534;border:1px solid #bbf7d0;font-weight:600' : 'background:var(--bg);color:var(--text-light);border:1px solid var(--border)'}">
-                        ${['A','B','C','D'][idx]}. ${opt}
-                      </div>`).join('')}
+      <div class="card">
+        <div style="font-size:14px;font-weight:700;margin-bottom:14px;display:flex;align-items:center;gap:8px">
+          Questions
+          <span style="background:var(--bg);border:1px solid var(--border);padding:1px 8px;border-radius:20px;font-size:11px;color:var(--text-muted);font-weight:400">${questions.length}</span>
+        </div>
+        <div id="snap-q-list">
+          ${!questions.length
+            ? `<div style="text-align:center;padding:28px;color:var(--text-muted);font-size:13px;border:1.5px dashed var(--border);border-radius:8px">No questions yet — add your first question above</div>`
+            : questions.map((q, i) => `
+              <div style="padding:14px;border:1.5px solid var(--border);border-radius:10px;margin-bottom:10px">
+                <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
+                  <div style="flex:1">
+                    <div style="font-weight:600;font-size:14px;margin-bottom:8px">Q${i+1}. <span style="font-size:10px;padding:2px 7px;border-radius:20px;font-weight:600;background:#f0f9ff;color:#0369a1;margin-right:4px">SINGLE</span>${q.questionText}</div>
+                    <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px">
+                      ${(q.options||[]).map((opt,oi) => `<span style="padding:4px 10px;border-radius:6px;font-size:12px;font-weight:500;${oi===q.correctOptionIndex?'background:#f0fdf4;color:#166534;border:1px solid #bbf7d0;':'background:var(--bg);color:var(--text-light);border:1px solid var(--border);'}">${String.fromCharCode(65+oi)}) ${opt}${oi===q.correctOptionIndex?' ✓':''}</span>`).join('')}
+                    </div>
+                    <div style="font-size:11px;color:var(--text-muted);font-weight:600">${q.marks||1} mark${(q.marks||1)!==1?'s':''}</div>
                   </div>
-                  <div style="font-size:11px;color:var(--text-muted);margin-top:6px">Marks: ${q.marks||1}</div>
+                  <button class="btn btn-sm" style="background:#fef2f2;color:#dc2626;border:1px solid #fecaca;flex-shrink:0" onclick="deleteSnapQuizQ('${quizId}','${q._id}')">Delete</button>
                 </div>
-                <button class="btn btn-sm" style="background:#fef2f2;color:#dc2626;border:1px solid #fecaca;flex-shrink:0" onclick="deleteSnapQuizQ('${quizId}','${q._id}')">Delete</button>
-              </div>
-            </div>`).join('')}
+              </div>`).join('')}
+        </div>
       </div>
     `;
   } catch(e) {
@@ -2032,12 +2060,17 @@ async function openSnapQuestionsPanel(quizId) {
 async function submitSnapQuizQuestion(quizId) {
   const questionText = document.getElementById('sq-q-text')?.value.trim();
   const opts = [0,1,2,3].map(i => document.getElementById(`sq-opt-${i}`)?.value.trim()).filter(Boolean);
-  const correctOptionIndex = parseInt(document.getElementById('sq-correct')?.value, 10);
+  const correctRadio = document.querySelector('input[name="sq-correct"]:checked');
+  const correctOptionIndex = correctRadio ? parseInt(correctRadio.value, 10) : 0;
   const marks = parseInt(document.getElementById('sq-q-marks')?.value, 10) || 1;
+  const errEl = document.getElementById('sq-q-error');
 
-  if (!questionText) return toast('Question text is required', 'err');
-  if (opts.length < 2) return toast('At least 2 options are required', 'err');
-  if (correctOptionIndex >= opts.length) return toast('Correct answer option does not exist', 'err');
+  const showErr = (msg) => { if(errEl){ errEl.textContent=msg; errEl.style.display='block'; } else toast(msg,'err'); };
+
+  if (!questionText) return showErr('Question text is required');
+  if (opts.length < 2) return showErr('At least 2 options are required (A and B)');
+  if (correctOptionIndex >= opts.length) return showErr('Correct answer option does not exist — fill in that option first');
+  if (errEl) errEl.style.display = 'none';
 
   try {
     await api('POST', `/api/lecturer/snap-quizzes/${quizId}/questions`, {
@@ -2050,7 +2083,7 @@ async function submitSnapQuizQuestion(quizId) {
     toast('Question added', 'ok');
     await openSnapQuestionsPanel(quizId);
   } catch(e) {
-    toast(e.message || 'Failed to add question', 'err');
+    showErr(e.message || 'Failed to add question');
   }
 }
 
