@@ -1940,6 +1940,116 @@ async function submitCreateSnapQuiz() {
   }
 }
 
+// ── SNAP QUIZ MATH HELPERS ────────────────────────────────────────────────────
+function sqRenderMath(container) {
+  if (!window.MathJax) return;
+  try {
+    const el = container || document.body;
+    if (MathJax.typesetPromise) MathJax.typesetPromise([el]).catch(() => {});
+    else if (MathJax.Hub) MathJax.Hub.Queue(['Typeset', MathJax.Hub, el]);
+  } catch(e) {}
+}
+function sqUpdateMathPreview(inputId, previewId) {
+  const input = document.getElementById(inputId);
+  const preview = document.getElementById(previewId);
+  if (!input || !preview) return;
+  const val = input.value.trim();
+  if (!val || (!val.includes('\\(') && !val.includes('\\[') && !val.includes('$'))) {
+    preview.style.display = 'none'; return;
+  }
+  preview.style.display = 'block';
+  preview.innerHTML = '<span style="font-size:10px;color:#6b7280;font-weight:600">PREVIEW: </span>' + val;
+  sqRenderMath(preview);
+}
+function sqInsertMath(targetId, sym) {
+  const el = document.getElementById(targetId);
+  if (!el) return;
+  const s = el.selectionStart, e = el.selectionEnd;
+  el.value = el.value.slice(0, s) + sym + el.value.slice(e);
+  el.selectionStart = el.selectionEnd = s + sym.length;
+  el.focus();
+}
+function sqWrapMath(targetId) {
+  const el = document.getElementById(targetId);
+  if (!el) return;
+  const s = el.selectionStart, e = el.selectionEnd;
+  const sel = el.value.slice(s, e);
+  const wrap = sel ? '\\(' + sel + '\\)' : '\\(  \\)';
+  el.value = el.value.slice(0, s) + wrap + el.value.slice(e);
+  el.selectionStart = el.selectionEnd = sel ? s + wrap.length : s + 3;
+  el.focus();
+}
+function sqGetMathToolbar(targetId) {
+  const syms = [
+    { label: '\\( \\)', tip: 'Wrap in math', action: `sqWrapMath('${targetId}')` },
+    { label: 'x²',  tip: 'Superscript',     sym: '^{2}' },
+    { label: 'xₙ',  tip: 'Subscript',        sym: '_{n}' },
+    { label: '√',   tip: 'Square root',      sym: '\\sqrt{}' },
+    { label: '∛',   tip: 'Cube root',        sym: '\\sqrt[3]{}' },
+    { label: 'a/b', tip: 'Fraction',         sym: '\\frac{}{}' },
+    { label: '∑',   tip: 'Summation',        sym: '\\sum_{}^{}' },
+    { label: '∫',   tip: 'Integral',         sym: '\\int_{}^{}' },
+    { label: 'π',   tip: 'Pi',               sym: '\\pi' },
+    { label: '∞',   tip: 'Infinity',         sym: '\\infty' },
+    { label: '±',   tip: 'Plus-minus',       sym: '\\pm' },
+    { label: '≤',   tip: 'Less or equal',    sym: '\\leq' },
+    { label: '≥',   tip: 'Greater or equal', sym: '\\geq' },
+    { label: '≠',   tip: 'Not equal',        sym: '\\neq' },
+    { label: 'α',   tip: 'Alpha',            sym: '\\alpha' },
+    { label: 'β',   tip: 'Beta',             sym: '\\beta' },
+    { label: 'θ',   tip: 'Theta',            sym: '\\theta' },
+    { label: 'Δ',   tip: 'Delta',            sym: '\\Delta' },
+    { label: '×',   tip: 'Multiply',         sym: '\\times' },
+    { label: '÷',   tip: 'Divide',           sym: '\\div' },
+  ];
+  return `<div style="margin-bottom:8px">
+    <div style="font-size:11px;color:#6b7280;margin-bottom:4px;font-weight:600">MATH SYMBOLS — click to insert</div>
+    <div style="display:flex;flex-wrap:wrap;gap:4px">
+      ${syms.map(s => s.action
+        ? `<button type="button" title="${s.tip}" onclick="${s.action}" style="padding:3px 8px;border:1px solid #d1d5db;border-radius:5px;background:#f9fafb;font-size:12px;cursor:pointer;font-family:inherit">${s.label}</button>`
+        : `<button type="button" title="${s.tip}" onclick="sqInsertMath('${targetId}','${s.sym}')" style="padding:3px 8px;border:1px solid #d1d5db;border-radius:5px;background:#f9fafb;font-size:12px;cursor:pointer;font-family:inherit">${s.label}</button>`
+      ).join('')}
+    </div>
+  </div>`;
+}
+
+// ── SNAP QUIZ TYPE TOGGLE ────────────────────────────────────────────────────
+function sqToggleType(type) {
+  const isSingle = type === 'mcq';
+  const isMulti  = type === 'mcq_multi';
+  const isFill   = type === 'fill_blank';
+  const optsEl   = document.getElementById('sq-opts-wrap');
+  const singleEl = document.getElementById('sq-single-wrap');
+  const multiEl  = document.getElementById('sq-multi-wrap');
+  const fillEl   = document.getElementById('sq-fill-wrap');
+  if (optsEl)   optsEl.style.display   = isFill   ? 'none' : 'block';
+  if (singleEl) singleEl.style.display = isSingle ? 'block' : 'none';
+  if (multiEl)  multiEl.style.display  = isMulti  ? 'block' : 'none';
+  if (fillEl)   fillEl.style.display   = isFill   ? 'block' : 'none';
+  const hint = document.getElementById('sq-type-hint');
+  if (hint) hint.textContent = isSingle
+    ? 'One correct answer — student picks one option.'
+    : isMulti
+    ? 'Multiple correct answers — student must select all correct options.'
+    : 'Student types their answer — matched against accepted answers.';
+  const active   = 'display:flex;align-items:center;gap:6px;cursor:pointer;padding:7px 14px;border:2px solid var(--primary);border-radius:8px;background:var(--primary);color:#fff;font-size:13px;font-weight:600';
+  const inactive = 'display:flex;align-items:center;gap:6px;cursor:pointer;padding:7px 14px;border:2px solid var(--border);border-radius:8px;background:var(--card);color:var(--text-light);font-size:13px;font-weight:600';
+  const lblS = document.getElementById('sq-lbl-single');
+  const lblM = document.getElementById('sq-lbl-multi');
+  const lblF = document.getElementById('sq-lbl-fill');
+  if (lblS) lblS.style.cssText = isSingle ? active : inactive;
+  if (lblM) lblM.style.cssText = isMulti  ? active : inactive;
+  if (lblF) lblF.style.cssText = isFill   ? active : inactive;
+}
+function sqCbChange(i) {
+  const cb  = document.getElementById('sq-cb-' + i);
+  const lbl = document.getElementById('sq-cblbl-' + i);
+  if (!cb || !lbl) return;
+  lbl.style.borderColor = cb.checked ? 'var(--primary)' : 'var(--border)';
+  lbl.style.background  = cb.checked ? '#ede9fe' : 'var(--card)';
+  lbl.style.color       = cb.checked ? '#7c3aed' : 'var(--text-light)';
+}
+
 // ── SNAP QUIZ QUESTION BUILDER ────────────────────────────────────────────
 async function openSnapQuestionsPanel(quizId) {
   QS.currentSnapQuizId = quizId;
@@ -1968,49 +2078,126 @@ async function openSnapQuestionsPanel(quizId) {
       </div>
 
       <!-- Add question form -->
-      <div class="card" style="margin-bottom:22px">
-        <div class="section-sub" style="margin-bottom:12px">Add Question</div>
-        <div class="fg"><label>Question Text <span class="req">*</span></label><textarea id="sq-q-text" rows="2" placeholder="Type the question here…"></textarea></div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
-          <div class="fg"><label>Option A <span class="req">*</span></label><input id="sq-opt-0" placeholder="Option A"/></div>
-          <div class="fg"><label>Option B <span class="req">*</span></label><input id="sq-opt-1" placeholder="Option B"/></div>
-          <div class="fg"><label>Option C</label><input id="sq-opt-2" placeholder="Option C (optional)"/></div>
-          <div class="fg"><label>Option D</label><input id="sq-opt-3" placeholder="Option D (optional)"/></div>
-        </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
-          <div class="fg">
-            <label>Correct Answer <span class="req">*</span></label>
-            <select id="sq-correct">
-              <option value="0">A</option>
-              <option value="1">B</option>
-              <option value="2">C</option>
-              <option value="3">D</option>
-            </select>
+      <div class="card" style="margin-bottom:16px">
+        <div style="font-size:14px;font-weight:700;margin-bottom:14px;display:flex;align-items:center;gap:8px;justify-content:space-between;flex-wrap:wrap">
+          <div style="display:flex;align-items:center;gap:8px">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            Add New Question
           </div>
-          <div class="fg"><label>Marks</label><input id="sq-q-marks" type="number" min="1" value="1"/></div>
+          <button class="btn btn-sm" style="background:linear-gradient(135deg,#7c3aed,#4f46e5);color:#fff;font-weight:600;display:flex;align-items:center;gap:5px;border:none" onclick="openAIGeneratePanel('${quizId}', true)">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+            ✨ AI Generate Questions
+          </button>
         </div>
-        <button class="btn btn-primary" onclick="submitSnapQuizQuestion('${quizId}')">＋ Add Question</button>
+        <!-- Question Type -->
+        <div style="margin-bottom:14px">
+          <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:7px;display:block">Question Type</label>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <label id="sq-lbl-single" style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:7px 14px;border:2px solid var(--primary);border-radius:8px;background:var(--primary);color:#fff;font-size:13px;font-weight:600">
+              <input type="radio" name="sq-type" value="mcq" checked onchange="sqToggleType('mcq')" style="accent-color:#fff"> Single Answer
+            </label>
+            <label id="sq-lbl-multi" style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:7px 14px;border:2px solid var(--border);border-radius:8px;background:var(--card);color:var(--text-light);font-size:13px;font-weight:600">
+              <input type="radio" name="sq-type" value="mcq_multi" onchange="sqToggleType('mcq_multi')" style="accent-color:var(--primary)"> Multiple Answers
+            </label>
+            <label id="sq-lbl-fill" style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:7px 14px;border:2px solid var(--border);border-radius:8px;background:var(--card);color:var(--text-light);font-size:13px;font-weight:600">
+              <input type="radio" name="sq-type" value="fill_blank" onchange="sqToggleType('fill_blank')" style="accent-color:var(--primary)"> Fill In
+            </label>
+          </div>
+          <p id="sq-type-hint" style="font-size:12px;color:var(--text-muted);margin-top:5px">One correct answer — student picks one option.</p>
+        </div>
+        <!-- Question Text -->
+        <div style="margin-bottom:8px">
+          <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:5px;display:block">Question Text <span style="color:#dc2626">*</span></label>
+          ${sqGetMathToolbar('sq-q-text')}
+          <textarea id="sq-q-text" rows="3" placeholder="Enter the question…" oninput="sqUpdateMathPreview('sq-q-text','sq-q-preview')" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;font-family:inherit;resize:vertical;outline:none" onfocus="this.style.borderColor='var(--primary)'" onblur="this.style.borderColor='var(--border)'"></textarea>
+          <div id="sq-q-preview" style="display:none;background:#f8f9fa;border:1px solid var(--border);border-radius:6px;padding:8px 12px;margin-top:4px;font-size:14px"></div>
+        </div>
+        <!-- Options -->
+        <div id="sq-opts-wrap" style="margin-bottom:14px">
+          <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:7px;display:block">Options</label>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+            ${['A','B','C','D'].map((l,i) => `
+            <div>
+              <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:5px;display:block">Option ${l}${i < 2 ? ' <span style="color:#dc2626">*</span>' : ''}</label>
+              <input type="text" id="sq-opt-${i}" placeholder="Option ${l}…" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;font-family:inherit;outline:none" onfocus="this.style.borderColor='var(--primary)'" onblur="this.style.borderColor='var(--border)'"/>
+            </div>`).join('')}
+          </div>
+        </div>
+        <!-- Correct Answer — Single -->
+        <div id="sq-single-wrap" style="margin-bottom:14px">
+          <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:8px;display:block">Correct Answer <span style="color:#dc2626">*</span></label>
+          <div style="display:flex;gap:14px;flex-wrap:wrap">
+            ${['A','B','C','D'].map((l,i) => `
+            <label style="display:flex;align-items:center;gap:5px;font-size:13px;cursor:pointer;font-weight:500">
+              <input type="radio" name="sq-correct" value="${i}" style="accent-color:var(--primary)"/> ${l}
+            </label>`).join('')}
+          </div>
+        </div>
+        <!-- Correct Answer — Multiple -->
+        <div id="sq-multi-wrap" style="display:none;margin-bottom:14px">
+          <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:8px;display:block">Correct Answers <span style="color:#dc2626">*</span> <span style="font-weight:400;color:var(--text-muted)">(check all that apply)</span></label>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            ${['A','B','C','D'].map((l,i) => `
+            <label id="sq-cblbl-${i}" style="display:flex;align-items:center;gap:5px;padding:6px 12px;border:1.5px solid var(--border);border-radius:7px;cursor:pointer;font-size:13px;font-weight:500;transition:all .15s">
+              <input type="checkbox" value="${i}" id="sq-cb-${i}" name="sq-multi-correct" onchange="sqCbChange(${i})" style="accent-color:var(--primary)"> ${l}
+            </label>`).join('')}
+          </div>
+        </div>
+        <!-- Correct Answer — Fill In -->
+        <div id="sq-fill-wrap" style="display:none;margin-bottom:14px">
+          <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:5px;display:block">Correct Answer <span style="color:#dc2626">*</span></label>
+          <input type="text" id="sq-fill-answer" placeholder="Primary correct answer…" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;font-family:inherit;outline:none;margin-bottom:8px" onfocus="this.style.borderColor='var(--primary)'" onblur="this.style.borderColor='var(--border)'"/>
+          <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:5px;display:block">Accepted Answers <span style="font-weight:400;color:var(--text-muted)">(comma-separated alternatives)</span></label>
+          <input type="text" id="sq-fill-accepted" placeholder="e.g. photosynthesis, Photosynthesis, photo synthesis" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;font-family:inherit;outline:none" onfocus="this.style.borderColor='var(--primary)'" onblur="this.style.borderColor='var(--border)'"/>
+        </div>
+        <!-- Marks -->
+        <div style="margin-bottom:14px">
+          <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:5px;display:block">Marks</label>
+          <input type="number" id="sq-q-marks" value="1" min="1" style="width:72px;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;font-family:inherit;outline:none"/>
+        </div>
+        <div id="sq-q-error" style="color:#dc2626;font-size:13px;font-weight:500;margin-top:10px;display:none"></div>
+        <button class="btn btn-primary" style="margin-top:14px;width:100%" onclick="submitSnapQuizQuestion('${quizId}')">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Add Question
+        </button>
       </div>
 
       <!-- Questions list -->
-      <div id="snap-q-list">
-        ${!questions.length ? `<div style="color:var(--text-muted);font-size:13px;text-align:center;padding:20px">No questions yet — add one above.</div>` :
-          questions.map((q, i) => `
-            <div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:10px">
-              <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px">
-                <div style="flex:1">
-                  <div style="font-size:13px;font-weight:600;margin-bottom:8px"><span style="color:var(--primary);margin-right:6px">${i+1}.</span>${q.questionText}</div>
-                  <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px">
-                    ${(q.options||[]).map((opt, idx) => `
-                      <div style="font-size:12px;padding:5px 9px;border-radius:6px;${idx===q.correctOptionIndex ? 'background:#f0fdf4;color:#166534;border:1px solid #bbf7d0;font-weight:600' : 'background:var(--bg);color:var(--text-light);border:1px solid var(--border)'}">
-                        ${['A','B','C','D'][idx]}. ${opt}
-                      </div>`).join('')}
+      <div class="card">
+        <div style="font-size:14px;font-weight:700;margin-bottom:14px;display:flex;align-items:center;gap:8px">
+          Questions
+          <span style="background:var(--bg);border:1px solid var(--border);padding:1px 8px;border-radius:20px;font-size:11px;color:var(--text-muted);font-weight:400">${questions.length}</span>
+        </div>
+        <div id="snap-q-list">
+          ${!questions.length
+            ? `<div style="text-align:center;padding:28px;color:var(--text-muted);font-size:13px;border:1.5px dashed var(--border);border-radius:8px">No questions yet — add your first question above</div>`
+            : questions.map((q, i) => {
+                const qtype = q.questionType;
+                const typeColors = { mcq: '#0369a1', mcq_multi: '#7c3aed', fill_blank: '#059669' };
+                const typeLabels = { mcq: 'SINGLE', mcq_multi: 'MULTI', fill_blank: 'FILL IN' };
+                const typeBgs    = { mcq: '#f0f9ff', mcq_multi: '#f5f3ff', fill_blank: '#f0fdf4' };
+                const typeTag = `<span style="font-size:10px;padding:2px 7px;border-radius:20px;font-weight:600;background:${typeBgs[qtype]||'#f3f4f6'};color:${typeColors[qtype]||'#374151'};margin-left:6px">${typeLabels[qtype]||qtype.toUpperCase()}</span>`;
+                const correctSet = qtype === 'mcq_multi'
+                  ? new Set(q.correctOptionIndices || [])
+                  : qtype === 'mcq'
+                  ? new Set(q.correctOptionIndex != null ? [q.correctOptionIndex] : [])
+                  : new Set();
+                return `<div style="padding:14px;border:1.5px solid var(--border);border-radius:10px;margin-bottom:10px">
+                  <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
+                    <div style="flex:1">
+                      <div style="font-weight:600;font-size:14px;margin-bottom:8px">Q${i+1}.${typeTag} ${q.questionText}</div>
+                      ${qtype === 'fill_blank'
+                        ? `<div style="font-size:12px;color:#059669;padding:5px 10px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;display:inline-block">✓ ${q.correctAnswerText||''}</div>`
+                        : `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px">
+                          ${(q.options||[]).map((o,oi) => `<span style="padding:4px 10px;border-radius:6px;font-size:12px;font-weight:500;${correctSet.has(oi)?'background:#f0fdf4;color:#166534;border:1px solid #bbf7d0;':'background:var(--bg);color:var(--text-light);border:1px solid var(--border);'}">${String.fromCharCode(65+oi)}) ${o}${correctSet.has(oi)?' ✓':''}</span>`).join('')}
+                        </div>`}
+                      <div style="font-size:11px;color:var(--text-muted);font-weight:600;margin-top:4px">${q.marks||1} mark${(q.marks||1)!==1?'s':''}</div>
+                    </div>
+                    <button class="btn btn-sm" style="background:#fef2f2;color:#dc2626;border:1px solid #fecaca;flex-shrink:0" onclick="deleteSnapQuizQ('${quizId}','${q._id}')">Delete</button>
                   </div>
-                  <div style="font-size:11px;color:var(--text-muted);margin-top:6px">Marks: ${q.marks||1}</div>
-                </div>
-                <button class="btn btn-sm" style="background:#fef2f2;color:#dc2626;border:1px solid #fecaca;flex-shrink:0" onclick="deleteSnapQuizQ('${quizId}','${q._id}')">Delete</button>
-              </div>
-            </div>`).join('')}
+                </div>`;
+              }).join('')}
+        </div>
       </div>
     `;
   } catch(e) {
@@ -2020,26 +2207,63 @@ async function openSnapQuestionsPanel(quizId) {
 
 async function submitSnapQuizQuestion(quizId) {
   const questionText = document.getElementById('sq-q-text')?.value.trim();
-  const opts = [0,1,2,3].map(i => document.getElementById(`sq-opt-${i}`)?.value.trim()).filter(Boolean);
-  const correctOptionIndex = parseInt(document.getElementById('sq-correct')?.value, 10);
   const marks = parseInt(document.getElementById('sq-q-marks')?.value, 10) || 1;
+  const errEl = document.getElementById('sq-q-error');
+  const qtype = document.querySelector('input[name="sq-type"]:checked')?.value || 'mcq';
+  if (errEl) errEl.style.display = 'none';
 
-  if (!questionText) return toast('Question text is required', 'err');
-  if (opts.length < 2) return toast('At least 2 options are required', 'err');
-  if (correctOptionIndex >= opts.length) return toast('Correct answer option does not exist', 'err');
+  if (!questionText) {
+    if (errEl) { errEl.textContent = 'Question text is required.'; errEl.style.display = 'block'; }
+    return;
+  }
+
+  let body;
+  if (qtype === 'fill_blank') {
+    const correctAnswerText = document.getElementById('sq-fill-answer')?.value.trim();
+    if (!correctAnswerText) {
+      if (errEl) { errEl.textContent = 'Correct answer is required.'; errEl.style.display = 'block'; }
+      return;
+    }
+    const acceptedRaw = document.getElementById('sq-fill-accepted')?.value || '';
+    const acceptedAnswers = acceptedRaw.split(',').map(s => s.trim()).filter(Boolean);
+    body = { questionType: 'fill_blank', questionText, correctAnswerText, acceptedAnswers, marks };
+  } else if (qtype === 'mcq_multi') {
+    const opts = [0,1,2,3].map(i => document.getElementById(`sq-opt-${i}`)?.value.trim()).filter(Boolean);
+    if (opts.length < 2) {
+      if (errEl) { errEl.textContent = 'At least 2 options are required.'; errEl.style.display = 'block'; }
+      return;
+    }
+    const correctOptionIndices = [...document.querySelectorAll('input[name="sq-multi-correct"]:checked')].map(c => parseInt(c.value)).filter(i => i < opts.length);
+    if (!correctOptionIndices.length) {
+      if (errEl) { errEl.textContent = 'Select at least one correct answer.'; errEl.style.display = 'block'; }
+      return;
+    }
+    body = { questionType: 'mcq_multi', questionText, options: opts, correctOptionIndices, marks };
+  } else {
+    const opts = [0,1,2,3].map(i => document.getElementById(`sq-opt-${i}`)?.value.trim()).filter(Boolean);
+    if (opts.length < 2) {
+      if (errEl) { errEl.textContent = 'At least 2 options are required.'; errEl.style.display = 'block'; }
+      return;
+    }
+    const correctEl = document.querySelector('input[name="sq-correct"]:checked');
+    if (!correctEl) {
+      if (errEl) { errEl.textContent = 'Please select the correct answer.'; errEl.style.display = 'block'; }
+      return;
+    }
+    const correctOptionIndex = parseInt(correctEl.value);
+    if (correctOptionIndex >= opts.length) {
+      if (errEl) { errEl.textContent = 'Correct answer must match a filled option.'; errEl.style.display = 'block'; }
+      return;
+    }
+    body = { questionType: 'mcq', questionText, options: opts, correctOptionIndex, marks };
+  }
 
   try {
-    await api('POST', `/api/lecturer/snap-quizzes/${quizId}/questions`, {
-      questionType: 'single',
-      questionText,
-      options: opts,
-      correctOptionIndex,
-      marks,
-    });
-    toast('Question added', 'ok');
+    await api('POST', `/api/lecturer/snap-quizzes/${quizId}/questions`, body);
+    toast('Question added!', 'ok');
     await openSnapQuestionsPanel(quizId);
   } catch(e) {
-    toast(e.message || 'Failed to add question', 'err');
+    if (errEl) { errEl.textContent = e.message || 'Failed to add question'; errEl.style.display = 'block'; }
   }
 }
 
@@ -2103,13 +2327,14 @@ init();
 //  AI QUESTION GENERATION (proxied via /api/ai/generate-questions)
 // ══════════════════════════════════════════════════════════════════════════
 
-function openAIGeneratePanel(quizId) {
+function openAIGeneratePanel(quizId, isSnapQuiz) {
   const existing = document.getElementById('ai-gen-overlay');
   if (existing) existing.remove();
 
   const overlay = document.createElement('div');
   overlay.id = 'ai-gen-overlay';
   overlay.dataset.quizId = quizId || '__assignment__';
+  overlay.dataset.snapQuiz = isSnapQuiz ? '1' : '';
   overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:400;display:flex;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(4px)';
   overlay.innerHTML = `
     <div style="background:var(--card);border-radius:16px;width:100%;max-width:520px;max-height:90vh;overflow-y:auto;box-shadow:0 25px 80px rgba(0,0,0,.25);animation:slideIn .25s cubic-bezier(.16,1,.3,1)">
@@ -2359,6 +2584,9 @@ async function runAIGenerate(quizId) {
 }
 
 async function addAIQuestionsToQuiz(quizId) {
+  const overlay = document.getElementById('ai-gen-overlay');
+  const isSnapQuiz = overlay?.dataset.snapQuiz === '1';
+
   if (quizId === '__assignment__') {
     // Assignment mode — inject into S.qDrafts
     const btn = document.getElementById('ai-add-btn');
@@ -2376,7 +2604,7 @@ async function addAIQuestionsToQuiz(quizId) {
         modelAnswer: ''
       });
     });
-    document.getElementById('ai-gen-overlay')?.remove();
+    overlay?.remove();
     toast(_aiGeneratedQuestions.length + ' question' + (_aiGeneratedQuestions.length !== 1 ? 's' : '') + ' added to assignment!', 'ok');
     renderQDrafts();
     setTimeout(() => {
@@ -2388,11 +2616,43 @@ async function addAIQuestionsToQuiz(quizId) {
     }, 60);
     return;
   }
-  // Quiz mode — post to API
+
   const btn = document.getElementById('ai-add-btn');
   if (!_aiGeneratedQuestions.length) return;
   btn.disabled = true; btn.textContent = 'Adding…';
   let added = 0, failed = 0;
+
+  if (isSnapQuiz) {
+    // Snap quiz mode — post to snap quiz API with correct field names
+    for (const q of _aiGeneratedQuestions) {
+      try {
+        const body = {
+          questionText: q.questionText,
+          options: q.options,
+          marks: q.marks || 1,
+          explanation: q.explanation || null,
+        };
+        if (q.questionType === 'multiple') {
+          body.questionType = 'mcq_multi';
+          body.correctOptionIndices = q.correctAnswers;
+        } else {
+          body.questionType = 'mcq';
+          body.correctOptionIndex = q.correctAnswers[0];
+        }
+        await api('POST', '/api/lecturer/snap-quizzes/' + quizId + '/questions', body);
+        added++;
+      } catch(e) { failed++; }
+    }
+    overlay?.remove();
+    toast(added + ' question' + (added !== 1 ? 's' : '') + ' added!' + (failed ? ' (' + failed + ' failed)' : ''), added > 0 ? 'ok' : 'err');
+    await openSnapQuestionsPanel(quizId);
+    if (window.MathJax && MathJax.typesetPromise) {
+      MathJax.typesetPromise([document.getElementById('snap-q-list')]).catch(() => {});
+    }
+    return;
+  }
+
+  // Regular quiz mode — post to quiz API
   for (const q of _aiGeneratedQuestions) {
     try {
       const body = {
@@ -2408,7 +2668,7 @@ async function addAIQuestionsToQuiz(quizId) {
       added++;
     } catch(e) { failed++; }
   }
-  document.getElementById('ai-gen-overlay')?.remove();
+  overlay?.remove();
   toast(added + ' question' + (added !== 1 ? 's' : '') + ' added!' + (failed ? ' (' + failed + ' failed)' : ''), added > 0 ? 'ok' : 'err');
   await openQuizQuestionsPanel(quizId);
   if (window.MathJax && MathJax.typesetPromise) {
