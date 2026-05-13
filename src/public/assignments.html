@@ -2635,6 +2635,11 @@ async function addAIQuestionsToQuiz(quizId) {
         if (q.questionType === 'multiple') {
           body.questionType = 'mcq_multi';
           body.correctOptionIndices = q.correctAnswers;
+        } else if (q.questionType === 'fill_blank') {
+          body.questionType = 'fill_blank';
+          body.correctAnswerText = q.correctAnswerText || '';
+          body.acceptedAnswers = q.acceptedAnswers || [];
+          delete body.options;
         } else {
           body.questionType = 'mcq';
           body.correctOptionIndex = q.correctAnswers[0];
