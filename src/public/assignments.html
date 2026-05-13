@@ -1992,9 +1992,15 @@ async function openSnapQuestionsPanel(quizId) {
 
       <!-- Add Question Form -->
       <div class="card" style="margin-bottom:16px">
-        <div style="font-size:14px;font-weight:700;margin-bottom:14px;display:flex;align-items:center;gap:8px">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-          Add New Question
+        <div style="font-size:14px;font-weight:700;margin-bottom:14px;display:flex;align-items:center;gap:8px;justify-content:space-between;flex-wrap:wrap">
+          <div style="display:flex;align-items:center;gap:8px">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            Add New Question
+          </div>
+          <button class="btn btn-sm" style="background:linear-gradient(135deg,#7c3aed,#4f46e5);color:#fff;font-weight:600;display:flex;align-items:center;gap:5px;border:none" onclick="openAIGeneratePanel('${quizId}', true)">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+            ✨ AI Generate Questions
+          </button>
         </div>
         <div style="margin-bottom:14px">
           <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:5px;display:block">Question Text <span style="color:#dc2626">*</span></label>
@@ -2147,13 +2153,14 @@ init();
 //  AI QUESTION GENERATION (proxied via /api/ai/generate-questions)
 // ══════════════════════════════════════════════════════════════════════════
 
-function openAIGeneratePanel(quizId) {
+function openAIGeneratePanel(quizId, isSnapQuiz) {
   const existing = document.getElementById('ai-gen-overlay');
   if (existing) existing.remove();
 
   const overlay = document.createElement('div');
   overlay.id = 'ai-gen-overlay';
   overlay.dataset.quizId = quizId || '__assignment__';
+  overlay.dataset.snapQuiz = isSnapQuiz ? '1' : '';
   overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:400;display:flex;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(4px)';
   overlay.innerHTML = `
     <div style="background:var(--card);border-radius:16px;width:100%;max-width:520px;max-height:90vh;overflow-y:auto;box-shadow:0 25px 80px rgba(0,0,0,.25);animation:slideIn .25s cubic-bezier(.16,1,.3,1)">
@@ -2433,30 +2440,51 @@ async function addAIQuestionsToQuiz(quizId) {
     return;
   }
   // Quiz mode — post to API
+  const overlay = document.getElementById('ai-gen-overlay');
+  const isSnapQuiz = overlay?.dataset.snapQuiz === '1';
   const btn = document.getElementById('ai-add-btn');
   if (!_aiGeneratedQuestions.length) return;
   btn.disabled = true; btn.textContent = 'Adding…';
   let added = 0, failed = 0;
   for (const q of _aiGeneratedQuestions) {
     try {
-      const body = {
-        questionText: q.questionText,
-        options: q.options,
-        questionType: q.questionType,
-        marks: q.marks || 1,
-        explanation: q.explanation || null,
-      };
-      if (q.questionType === 'multiple') { body.correctAnswers = q.correctAnswers; }
-      else { body.correctAnswer = q.correctAnswers[0]; }
-      await api('POST', '/api/lecturer/quizzes/' + quizId + '/questions', body);
+      let body, endpoint;
+      if (isSnapQuiz) {
+        // Snap quiz uses correctOptionIndex (number), not correctAnswer array
+        const correctOptionIndex = q.correctAnswers?.[0] ?? 0;
+        body = {
+          questionType: 'single',
+          questionText: q.questionText,
+          options: q.options,
+          correctOptionIndex,
+          marks: q.marks || 1,
+        };
+        endpoint = '/api/lecturer/snap-quizzes/' + quizId + '/questions';
+      } else {
+        body = {
+          questionText: q.questionText,
+          options: q.options,
+          questionType: q.questionType,
+          marks: q.marks || 1,
+          explanation: q.explanation || null,
+        };
+        if (q.questionType === 'multiple') { body.correctAnswers = q.correctAnswers; }
+        else { body.correctAnswer = q.correctAnswers[0]; }
+        endpoint = '/api/lecturer/quizzes/' + quizId + '/questions';
+      }
+      await api('POST', endpoint, body);
       added++;
     } catch(e) { failed++; }
   }
   document.getElementById('ai-gen-overlay')?.remove();
   toast(added + ' question' + (added !== 1 ? 's' : '') + ' added!' + (failed ? ' (' + failed + ' failed)' : ''), added > 0 ? 'ok' : 'err');
-  await openQuizQuestionsPanel(quizId);
-  if (window.MathJax && MathJax.typesetPromise) {
-    MathJax.typesetPromise([document.getElementById('qz-list')]).catch(() => {});
+  if (isSnapQuiz) {
+    await openSnapQuestionsPanel(quizId);
+  } else {
+    await openQuizQuestionsPanel(quizId);
+    if (window.MathJax && MathJax.typesetPromise) {
+      MathJax.typesetPromise([document.getElementById('qz-list')]).catch(() => {});
+    }
   }
 }
 
