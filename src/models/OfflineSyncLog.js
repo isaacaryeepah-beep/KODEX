@@ -22,11 +22,13 @@ const eventSchema = new mongoose.Schema(
     id: {
       type: String,
       required: true,
+      maxlength: 128,
     },
     type: {
       type: String,
       required: true,
       trim: true,
+      maxlength: 64,
     },
     severity: {
       type: String,
@@ -62,6 +64,7 @@ const chunkSchema = new mongoose.Schema(
     uploadId: {
       type: String,
       required: true,
+      maxlength: 128,
     },
     storedAt: {
       type: Date,

@@ -16,9 +16,9 @@ const path     = require("path");
 const fs       = require("fs");
 const multer   = require("multer");
 
-const authenticate  = require("../middleware/auth");
-const { requireRole } = require("../middleware/role");
-const ctrl          = require("../controllers/offlineSyncController");
+const authenticate          = require("../middleware/auth");
+const { beaconLimiter }     = require("../middleware/rateLimiter");
+const ctrl                  = require("../controllers/offlineSyncController");
 
 const router = express.Router();
 
@@ -29,10 +29,8 @@ const router = express.Router();
 const UPLOAD_ROOT       = path.join(__dirname, "../../uploads");
 const RECORDINGS_ROOT   = path.join(UPLOAD_ROOT, "recordings");
 
-// Ensure the base recordings directory exists at startup.
-if (!fs.existsSync(RECORDINGS_ROOT)) {
-  fs.mkdirSync(RECORDINGS_ROOT, { recursive: true });
-}
+// Ensure the base recordings directory exists at startup (mkdirSync is idempotent with recursive).
+fs.mkdirSync(RECORDINGS_ROOT, { recursive: true });
 
 const ALLOWED_VIDEO_MIMES = new Set(["video/webm", "video/mp4"]);
 
@@ -58,10 +56,7 @@ const chunkStorage = multer.diskStorage({
     const safeName  = attemptId.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 64);
     const dest      = path.join(RECORDINGS_ROOT, safeName);
 
-    if (!fs.existsSync(dest)) {
-      fs.mkdirSync(dest, { recursive: true });
-    }
-
+    fs.mkdirSync(dest, { recursive: true });
     cb(null, dest);
   },
 
@@ -128,6 +123,7 @@ router.post(
 // Content-Type: text/plain.  The global express.json() parser is bypassed.
 router.post(
   "/:attemptId/beacon",
+  beaconLimiter,
   express.text({ type: "*/*", limit: "64kb" }),
   ctrl.handleBeacon
 );

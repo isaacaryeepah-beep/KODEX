@@ -1,9 +1,18 @@
 const mongoose = require('mongoose');
-const origConnect = mongoose.connect.bind(mongoose);
+
+// Stub out the database connection so the server starts without MongoDB.
 mongoose.connect = async () => mongoose;
+
+const origModel = mongoose.model.bind(mongoose);
 mongoose.model = function(name, schema, ...rest) {
-  try { return origConnect.constructor.prototype.model.call(mongoose, name, schema, ...rest); } catch(e) { try { return mongoose.models[name]; } catch { return {}; } }
+  try {
+    return origModel(name, schema, ...rest);
+  } catch(e) {
+    // Model may already be registered (re-require) — return the cached version.
+    return mongoose.models[name] || origModel(name);
+  }
 };
+
 process.env.MONGO_URI  = 'mongodb://localhost:27017/stub';
 process.env.JWT_SECRET = 'test-secret-key';
 process.env.PORT       = '3099';

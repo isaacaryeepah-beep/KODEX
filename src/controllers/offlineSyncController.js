@@ -15,7 +15,11 @@
 const path = require("path");
 const fs   = require("fs");
 
-const OfflineSyncLog = require("../models/OfflineSyncLog");
+const OfflineSyncLog    = require("../models/OfflineSyncLog");
+const SnapQuizAttempt   = require("../models/SnapQuizAttempt");
+
+// Maximum events accepted in a single syncEvents POST to prevent O(n²) dedup.
+const MAX_EVENTS_PER_REQUEST = 500;
 
 // SnapQuizViolationLog is optional — only import if the model file exists.
 let SnapQuizViolationLog = null;
@@ -26,15 +30,58 @@ try {
 }
 
 // ---------------------------------------------------------------------------
-// Helper — derive client IP respecting reverse-proxy headers
+// Helper — derive client IP (trust proxy is configured globally in server.js)
 // ---------------------------------------------------------------------------
 
 function clientIp(req) {
-  const forwarded = req.headers["x-forwarded-for"];
-  if (forwarded) {
-    return forwarded.split(",")[0].trim();
+  return req.ip || req.socket?.remoteAddress || null;
+}
+
+// ---------------------------------------------------------------------------
+// Helper — verify the calling user owns the attempt (or is lecturer/admin)
+// Returns the attempt document on success, or sends a 403/404 and returns null.
+// ---------------------------------------------------------------------------
+
+async function verifyAttemptAccess(req, res) {
+  const { attemptId } = req.params;
+  const user = req.user;
+
+  // Superadmins/admins may access any attempt.
+  if (user.role === "superadmin" || user.role === "admin") return true;
+
+  let attempt;
+  try {
+    attempt = await SnapQuizAttempt.findById(attemptId)
+      .select("student quiz company")
+      .lean();
+  } catch (_) {
+    res.status(400).json({ error: "Invalid attemptId" });
+    return null;
   }
-  return req.socket?.remoteAddress || req.ip || null;
+
+  if (!attempt) {
+    res.status(404).json({ error: "Attempt not found" });
+    return null;
+  }
+
+  // Student: must own the attempt.
+  if (user.role === "student") {
+    if (attempt.student.toString() !== user._id.toString()) {
+      res.status(403).json({ error: "Access denied" });
+      return null;
+    }
+    return attempt;
+  }
+
+  // Lecturers/managers: must belong to the same company as the attempt.
+  const userCompany   = (user.company || "").toString();
+  const attemptCompany = (attempt.company || "").toString();
+  if (!userCompany || userCompany !== attemptCompany) {
+    res.status(403).json({ error: "Access denied" });
+    return null;
+  }
+
+  return attempt;
 }
 
 // ---------------------------------------------------------------------------
@@ -58,6 +105,15 @@ function extFromMime(mime) {
 exports.syncEvents = async (req, res) => {
   try {
     const { attemptId } = req.params;
+
+    if (!attemptId) {
+      return res.status(400).json({ error: "attemptId is required" });
+    }
+
+    // Ownership check — student must own the attempt; lecturer must share company.
+    const access = await verifyAttemptAccess(req, res);
+    if (!access) return;
+
     const {
       events      = [],
       integrityScore,
@@ -69,8 +125,19 @@ exports.syncEvents = async (req, res) => {
       return res.status(400).json({ error: "events must be an array" });
     }
 
-    if (!attemptId) {
-      return res.status(400).json({ error: "attemptId is required" });
+    if (events.length > MAX_EVENTS_PER_REQUEST) {
+      return res.status(400).json({
+        error: `Too many events in one request (max ${MAX_EVENTS_PER_REQUEST})`,
+      });
+    }
+
+    // Validate integrityScore type to avoid Mongoose CastError → 500.
+    if (
+      integrityScore !== undefined &&
+      integrityScore !== null &&
+      typeof integrityScore !== "number"
+    ) {
+      return res.status(400).json({ error: "integrityScore must be a number" });
     }
 
     // Load existing document (if any) so we can dedup by event.id.
@@ -84,7 +151,7 @@ exports.syncEvents = async (req, res) => {
     let   duplicates = 0;
 
     for (const ev of events) {
-      if (!ev || !ev.id) continue; // malformed — skip silently
+      if (!ev || !ev.id || typeof ev.id !== "string" || ev.id.length > 128) continue;
       if (existingIds.has(ev.id)) {
         duplicates++;
         continue;
@@ -200,6 +267,19 @@ exports.syncEvents = async (req, res) => {
 exports.syncChunk = async (req, res) => {
   try {
     const { attemptId } = req.params;
+
+    if (!attemptId) {
+      if (req.file) fs.unlink(req.file.path, () => {});
+      return res.status(400).json({ error: "attemptId is required" });
+    }
+
+    // Ownership check — must happen before we accept the uploaded file.
+    const access = await verifyAttemptAccess(req, res);
+    if (!access) {
+      if (req.file) fs.unlink(req.file.path, () => {});
+      return;
+    }
+
     const {
       chunkIndex,
       uploadId,
@@ -208,11 +288,14 @@ exports.syncChunk = async (req, res) => {
       mimeType,
     } = req.body;
 
-    if (!attemptId) {
-      return res.status(400).json({ error: "attemptId is required" });
-    }
     if (uploadId === undefined || uploadId === null || uploadId === "") {
+      if (req.file) fs.unlink(req.file.path, () => {});
       return res.status(400).json({ error: "uploadId is required" });
+    }
+
+    if (typeof uploadId !== "string" || uploadId.length > 128) {
+      if (req.file) fs.unlink(req.file.path, () => {});
+      return res.status(400).json({ error: "uploadId invalid" });
     }
 
     const parsedIndex    = parseInt(chunkIndex, 10);
@@ -297,9 +380,10 @@ exports.handleBeacon = async (req, res) => {
       receivedAt: new Date(),
     };
 
+    // $slice keeps the array bounded; older entries are dropped first.
     await OfflineSyncLog.findOneAndUpdate(
       { attemptId },
-      { $push: { beaconEvents: beaconEntry } },
+      { $push: { beaconEvents: { $each: [beaconEntry], $slice: -200 } } },
       { upsert: true }
     );
   } catch (err) {
@@ -322,13 +406,19 @@ exports.getSyncStatus = async (req, res) => {
       return res.status(400).json({ error: "attemptId is required" });
     }
 
+    const access = await verifyAttemptAccess(req, res);
+    if (!access) return;
+
     const syncLog = await OfflineSyncLog.findOne({ attemptId })
-      .select("attemptId status integrityScore events chunks syncHistory")
+      .select("attemptId status integrityScore events chunks syncHistory deviceInfo")
       .lean();
 
     if (!syncLog) {
       return res.status(404).json({ error: "No sync log found for this attemptId" });
     }
+
+    // Strip client IPs from syncHistory — not needed by the UI.
+    const syncHistory = (syncLog.syncHistory || []).map(({ ip: _ip, ...rest }) => rest);
 
     return res.status(200).json({
       attemptId:      syncLog.attemptId,
@@ -336,7 +426,10 @@ exports.getSyncStatus = async (req, res) => {
       integrityScore: syncLog.integrityScore,
       eventsCount:    syncLog.events  ? syncLog.events.length  : 0,
       chunksCount:    syncLog.chunks  ? syncLog.chunks.length  : 0,
-      syncHistory:    syncLog.syncHistory || [],
+      events:         syncLog.events  || [],
+      chunks:         (syncLog.chunks || []).map(c => ({ ...c, filePath: undefined })),
+      deviceInfo:     syncLog.deviceInfo || null,
+      syncHistory,
     });
   } catch (err) {
     console.error("[offlineSync] getSyncStatus error:", err);

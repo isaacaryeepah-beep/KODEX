@@ -303,11 +303,20 @@ exports.createQuestion = async (req, res) => {
       .sort({ orderIndex: -1 }).select("orderIndex").lean();
     const orderIndex = req.body.orderIndex ?? (last ? last.orderIndex + 1 : 0);
 
+    const ALLOWED_CREATE_FIELDS = [
+      "questionType","questionText","media","options","optionMedia",
+      "correctOptionIndex","correctOptionIndices","correctBoolean",
+      "correctAnswerText","acceptedAnswers","numericAnswer","modelAnswer",
+      "marks","allowPartialMarks","mathsDrawing","explanation","isActive",
+    ];
+    const safeBody = {};
+    ALLOWED_CREATE_FIELDS.forEach(f => { if (req.body[f] !== undefined) safeBody[f] = req.body[f]; });
+
     const question = await SnapQuizQuestion.create({
+      ...safeBody,
       quiz:      quiz._id,
       company:   req.companyId,
       createdBy: req.user._id,
-      ...req.body,
       orderIndex,
     });
 
