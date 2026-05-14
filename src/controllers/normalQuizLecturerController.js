@@ -28,8 +28,9 @@ const NormalQuizQuestion = require("../models/NormalQuizQuestion");
 const NormalQuizAttempt  = require("../models/NormalQuizAttempt");
 const NormalQuizResponse = require("../models/NormalQuizResponse");
 const NormalQuizResult   = require("../models/NormalQuizResult");
+const { autoGradeAttempt: _autoGradeAttempt } = require("../services/quizGradingService");
 const { QUIZ_STATUSES }  = require("../models/NormalQuiz");
-const { GRADING_STATUSES } = require("../models/NormalQuizAttempt");
+const { GRADING_STATUSES, ATTEMPT_STATUSES } = require("../models/NormalQuizAttempt");
 
 // ─── Quiz CRUD ───────────────────────────────────────────────────────────────
 
@@ -205,12 +206,75 @@ exports.closeQuiz = async (req, res) => {
       return res.status(409).json({ error: "Only published quizzes can be closed" });
     }
 
+    const now = new Date();
+
+    // Force-submit all in-progress attempts so students cannot submit after close.
+    const activeAttempts = await NormalQuizAttempt.find({
+      quiz:   quiz._id,
+      status: ATTEMPT_STATUSES.IN_PROGRESS,
+    }).select("_id company quiz startedAt");
+
+    if (activeAttempts.length > 0) {
+      await NormalQuizAttempt.updateMany(
+        { _id: { $in: activeAttempts.map(a => a._id) } },
+        { $set: { status: ATTEMPT_STATUSES.AUTO_SUBMITTED, submittedAt: now } }
+      );
+
+      // Auto-grade each force-submitted attempt.
+      await Promise.all(activeAttempts.map(async (a) => {
+        try {
+          const { rawScore, maxScore, hasManual } = await _autoGradeAttempt(a._id, a.company);
+          const quizDoc  = await NormalQuiz.findById(a.quiz).select("passMark autoReleaseResults").lean();
+          const pct      = maxScore > 0 ? (rawScore / maxScore) * 100 : 0;
+          const isPassed = quizDoc?.passMark != null ? rawScore >= quizDoc.passMark : null;
+          const gradingStatus = hasManual ? GRADING_STATUSES.PARTIALLY_GRADED : GRADING_STATUSES.AUTO_GRADED;
+          const updatedAttempt = await NormalQuizAttempt.findByIdAndUpdate(
+            a._id,
+            {
+              $set: {
+                rawScore,
+                maxScore,
+                percentageScore: Math.round(pct * 100) / 100,
+                isPassed,
+                timeSpentSeconds: Math.round((now - a.startedAt) / 1000),
+                gradingStatus,
+                ...(hasManual ? {} : { gradedAt: now }),
+              },
+            },
+            { new: true }
+          );
+          if (updatedAttempt) {
+            await NormalQuizResult.findOneAndUpdate(
+              { quiz: updatedAttempt.quiz, student: updatedAttempt.student, company: updatedAttempt.company },
+              {
+                $set: {
+                  countedAttemptId: updatedAttempt._id,
+                  rawScore,
+                  maxScore,
+                  percentageScore: updatedAttempt.percentageScore,
+                  isPassed,
+                  gradingStatus,
+                  computedAt: now,
+                  isReleased: quizDoc?.autoReleaseResults && !hasManual,
+                  releasedAt: quizDoc?.autoReleaseResults && !hasManual ? now : null,
+                },
+                $inc: { totalAttempts: 1, completedAttempts: 1 },
+              },
+              { upsert: true }
+            );
+          }
+        } catch (gradeErr) {
+          console.error("[closeQuiz] grading error for attempt", a._id, gradeErr);
+        }
+      }));
+    }
+
     quiz.status    = QUIZ_STATUSES.CLOSED;
-    quiz.closedAt  = new Date();
+    quiz.closedAt  = now;
     quiz.updatedBy = req.user._id;
     await quiz.save();
 
-    return res.json({ quiz });
+    return res.json({ quiz, autoSubmittedCount: activeAttempts.length });
   } catch (err) {
     console.error("[closeQuiz]", err);
     return res.status(500).json({ error: "Internal server error" });
@@ -540,6 +604,24 @@ exports.gradeBulk = async (req, res) => {
     const { grades } = req.body;
     if (!Array.isArray(grades) || grades.length === 0) {
       return res.status(400).json({ error: "grades array is required" });
+    }
+
+    // Validate earnedMarks ceiling for each response — same guard as gradeResponse.
+    const responseIds = grades.map(g => g.responseId).filter(Boolean);
+    const existing    = await NormalQuizResponse.find(
+      { _id: { $in: responseIds }, attempt: req.params.attemptId, company: req.companyId },
+      { maxMarks: 1 }
+    ).lean();
+    const maxMap = Object.fromEntries(existing.map(r => [r._id.toString(), r.maxMarks ?? 1]));
+
+    for (const { responseId, earnedMarks } of grades) {
+      if (typeof earnedMarks !== "number") {
+        return res.status(400).json({ error: "earnedMarks must be a number" });
+      }
+      const cap = maxMap[responseId?.toString()];
+      if (cap !== undefined && (earnedMarks < 0 || earnedMarks > cap)) {
+        return res.status(400).json({ error: `earnedMarks for response ${responseId} must be 0–${cap}` });
+      }
     }
 
     const now = new Date();

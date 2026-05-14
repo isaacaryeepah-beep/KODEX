@@ -78,7 +78,8 @@ exports.startProctoredSession = async (req, res) => {
     if (!mongoose.Types.ObjectId.isValid(quizId)) {
       return res.status(400).json({ error: "Invalid quiz ID" });
     }
-    if (!consentGiven) {
+    // consentGiven must be the boolean true — any other truthy value (string "true", 1) is rejected.
+    if (consentGiven !== true) {
       return res.status(400).json({ error: "Consent is required to proceed" });
     }
     if (!deviceFingerprint) {
@@ -257,7 +258,9 @@ exports.startProctoredSession = async (req, res) => {
 
 exports.logEvent = async (req, res) => {
   try {
-    const { sessionToken, eventType, duration, metadata } = req.body;
+    const { eventType, duration, metadata } = req.body;
+    // Prefer X-Session-Token header; fall back to body for legacy clients.
+    const sessionToken = req.headers["x-session-token"] || req.body.sessionToken;
 
     if (!sessionToken || !eventType) {
       return res.status(400).json({ error: "sessionToken and eventType required" });
@@ -358,8 +361,8 @@ exports.logEvent = async (req, res) => {
 
 exports.uploadSnapshot = async (req, res) => {
   try {
-    const { sessionToken, imageData, type, faceDetected, faceCount, faceCentered, faceScore } =
-      req.body;
+    const { imageData, type, faceDetected, faceCount, faceCentered, faceScore } = req.body;
+    const sessionToken = req.headers["x-session-token"] || req.body.sessionToken;
 
     if (!sessionToken || !imageData || !type) {
       return res.status(400).json({ error: "sessionToken, imageData, and type required" });
@@ -421,7 +424,8 @@ exports.uploadSnapshot = async (req, res) => {
 exports.submitProctoredQuiz = async (req, res) => {
   try {
     const { id: quizId } = req.params;
-    const { sessionToken, answers } = req.body;
+    const { answers } = req.body;
+    const sessionToken = req.headers["x-session-token"] || req.body.sessionToken;
 
     if (!mongoose.Types.ObjectId.isValid(quizId)) {
       return res.status(400).json({ error: "Invalid quiz ID" });
@@ -449,11 +453,20 @@ exports.submitProctoredQuiz = async (req, res) => {
     if (!attempt) return res.status(400).json({ error: "No attempt found" });
     if (attempt.isSubmitted) return res.status(409).json({ error: "Already submitted" });
 
+    // Server-side time-limit enforcement.
+    if (quiz.timeLimit && attempt.startedAt) {
+      const deadlineMs = new Date(attempt.startedAt).getTime() + quiz.timeLimit * 60 * 1000;
+      if (Date.now() > deadlineMs + 30_000) { // 30s grace for network latency
+        return res.status(403).json({ error: "Submission rejected: time limit has expired" });
+      }
+    }
+
     if (!Array.isArray(answers)) {
       return res.status(400).json({ error: "Answers must be an array" });
     }
 
-    const questions = await Question.find({ quiz: quizId });
+    // Scope questions to this quiz specifically (company is already verified via quiz lookup above).
+    const questions = await Question.find({ quiz: quiz._id });
     const questionMap = {};
     questions.forEach((q) => (questionMap[q._id.toString()] = q));
 

@@ -7111,12 +7111,18 @@ function showJitsiEmbed(config) {
 function _initJitsiEmbed(config, domain) {
   const container = document.getElementById('jitsi-embed-container');
   if (!container) return;
-  const moderatorButtons = config.isModerator
-    ? ['microphone','camera','closedcaptions','desktop','chat','raisehand',
-       'tileview','select-background','mute-everyone','kick-participant',
-       'participants-pane','security','hangup']
-    : ['microphone','camera','closedcaptions','desktop',
-       'chat','raisehand','tileview','select-background','hangup'];
+  const moderatorButtons = [
+    'microphone','camera','closedcaptions','desktop','chat','raisehand',
+    'tileview','select-background','mute-everyone','kick-participant',
+    'participants-pane','security','hangup',
+  ];
+  const participantButtons = [
+    'microphone','camera','closedcaptions','desktop',
+    'chat','raisehand','tileview','select-background','hangup',
+  ];
+  // isModerator is always determined server-side; toolbar is set last so it
+  // can never be overridden by a stale value in interfaceConfigOverwrite.
+  const toolbarButtons = config.isModerator ? moderatorButtons : participantButtons;
 
   window._jitsiApi = new JitsiMeetExternalAPI(domain, {
     roomName: config.roomName,
@@ -7138,8 +7144,8 @@ function _initJitsiEmbed(config, domain) {
       MOBILE_APP_PROMO:          false,
       SHOW_JITSI_WATERMARK:      false,
       SHOW_WATERMARK_FOR_GUESTS: false,
-      TOOLBAR_BUTTONS: moderatorButtons,
       ...(config.interfaceConfigOverwrite || {}),
+      TOOLBAR_BUTTONS: toolbarButtons, // always last — isModerator owns this
     },
   });
   window._jitsiApi.addEventListeners({
