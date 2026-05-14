@@ -187,16 +187,15 @@ window.addEventListener('load', () => loadMLLibs().catch(() => {}));
   /* ═══════════════════════════════════════════════════════════════
      CONSENT SCREEN
   ═══════════════════════════════════════════════════════════════ */
-  .consent-list { list-style: none; margin: 20px 0; display: flex; flex-direction: column; gap: 12px; }
-  .consent-list li { display: flex; gap: 12px; font-size: 13px; color: var(--muted); line-height: 1.5; }
-  .consent-list li .icon { font-size: 18px; flex-shrink: 0; margin-top: -1px; }
+  /* consent screen — scrollable card on small screens */
+  #consent-screen .card { max-height: 92vh; overflow-y: auto; }
 
-  .consent-check { display: flex; align-items: flex-start; gap: 12px; margin: 20px 0; cursor: pointer; }
+  .consent-check { display: flex; align-items: flex-start; gap: 12px; cursor: pointer; }
   .consent-check input[type="checkbox"] {
-    width: 20px; height: 20px; flex-shrink: 0; margin-top: 2px;
+    width: 20px; height: 20px; flex-shrink: 0; margin-top: 3px;
     accent-color: var(--accent); cursor: pointer;
   }
-  .consent-check span { font-size: 13px; color: var(--muted); line-height: 1.5; }
+  .consent-check span { font-size: 13px; color: var(--text); line-height: 1.55; }
 
   /* ═══════════════════════════════════════════════════════════════
      CAMERA SETUP SCREEN
@@ -610,23 +609,59 @@ window.addEventListener('load', () => loadMLLibs().catch(() => {}));
      SCREEN 3: CONSENT
 ────────────────────────────────────────────────────────────────────────── -->
 <div id="consent-screen" class="screen hidden">
-  <div class="card" style="max-width:500px">
-    <h2>🔐 Exam Consent & Rules</h2>
-    <p style="margin-top:8px">By proceeding, you agree to the following monitoring conditions for this proctored exam:</p>
-    <ul class="consent-list">
-      <li><span class="icon">📷</span> <span>Your camera will be active throughout the exam for identity verification and face monitoring.</span></li>
-      <li><span class="icon">🔒</span> <span>This exam is locked to your current device. Switching to another device will block access.</span></li>
-      <li><span class="icon">👁️</span> <span>Tab switching, app backgrounding, and screen minimization are detected and logged.</span></li>
-      <li><span class="icon">⚠️</span> <span>Repeated violations may result in automatic exam termination.</span></li>
-      <li><span class="icon">📊</span> <span>Your face snapshots and activity logs are stored securely for integrity review.</span></li>
-      <li><span class="icon">🗑️</span> <span>Data is retained for 90 days after the exam window closes.</span></li>
-    </ul>
-    <label class="consent-check">
+  <div class="card" style="max-width:580px;width:100%">
+
+    <!-- Header -->
+    <div style="display:flex;align-items:center;gap:14px;margin-bottom:18px">
+      <div style="width:46px;height:46px;border-radius:12px;background:#fef2f2;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:22px;border:1.5px solid #fecaca">🔐</div>
+      <div>
+        <h2 style="margin:0;font-size:19px;font-weight:800;color:var(--text)">Exam Rules &amp; Consent</h2>
+        <p id="consent-quiz-title" style="margin:3px 0 0;font-size:13px;color:var(--muted);font-weight:500"></p>
+      </div>
+    </div>
+
+    <!-- Warning banner -->
+    <div style="background:#fef2f2;border:1.5px solid #fecaca;border-radius:10px;padding:12px 16px;margin-bottom:22px;display:flex;gap:12px;align-items:flex-start">
+      <span style="font-size:18px;flex-shrink:0;margin-top:1px">⚠️</span>
+      <p style="margin:0;font-size:13px;color:#b91c1c;line-height:1.5;font-weight:500">Read all rules carefully. Violations are <strong>logged and reported</strong> to your lecturer. Repeated offences will result in <strong>automatic exam termination</strong>.</p>
+    </div>
+
+    <!-- Dynamic rules (populated by populateConsentScreen) -->
+    <p style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);margin:0 0 10px">Exam Conditions</p>
+    <div id="consent-rules-list" style="display:flex;flex-direction:column;gap:8px;margin-bottom:22px"></div>
+
+    <!-- Academic integrity (always shown) -->
+    <div style="border-top:1px solid var(--border);padding-top:18px;margin-bottom:18px">
+      <p style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);margin:0 0 10px">Academic Integrity</p>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <div style="display:flex;gap:12px;padding:10px 14px;background:var(--card);border:1.5px solid var(--border);border-radius:10px;align-items:flex-start">
+          <span style="font-size:17px;flex-shrink:0;margin-top:1px">🤖</span>
+          <span style="font-size:13px;color:var(--text);line-height:1.5">AI tools (ChatGPT, Copilot, Gemini, etc.) are <strong>strictly prohibited</strong> during this exam.</span>
+        </div>
+        <div style="display:flex;gap:12px;padding:10px 14px;background:var(--card);border:1.5px solid var(--border);border-radius:10px;align-items:flex-start">
+          <span style="font-size:17px;flex-shrink:0;margin-top:1px">🚫</span>
+          <span style="font-size:13px;color:var(--text);line-height:1.5">Collaboration with other students — verbal, written, or digital — is <strong>not allowed</strong>.</span>
+        </div>
+        <div style="display:flex;gap:12px;padding:10px 14px;background:var(--card);border:1.5px solid var(--border);border-radius:10px;align-items:flex-start">
+          <span style="font-size:17px;flex-shrink:0;margin-top:1px">📤</span>
+          <span style="font-size:13px;color:var(--text);line-height:1.5">Sharing, photographing, or distributing exam questions is a <strong>violation of academic policy</strong> and may result in disciplinary action.</span>
+        </div>
+        <div style="display:flex;gap:12px;padding:10px 14px;background:var(--card);border:1.5px solid var(--border);border-radius:10px;align-items:flex-start">
+          <span style="font-size:17px;flex-shrink:0;margin-top:1px">📚</span>
+          <span style="font-size:13px;color:var(--text);line-height:1.5">Unauthorised external resources (websites, notes, textbooks) are <strong>not permitted</strong> unless explicitly stated by your lecturer.</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Agreement checkbox -->
+    <label class="consent-check" style="background:#f8fafc;border:1.5px solid var(--border);border-radius:10px;padding:14px 16px;margin:0;cursor:pointer">
       <input type="checkbox" id="consent-checkbox" />
-      <span>I have read and agree to the above monitoring conditions and data usage policy.</span>
+      <span style="font-size:13px;color:var(--text);line-height:1.55;font-weight:500">I have read and fully understand all the rules above. I agree to comply and accept that violations may result in exam termination and an integrity report submitted to my lecturer.</span>
     </label>
-    <button class="btn btn-primary" id="proceed-camera-btn" disabled>Continue to Camera Setup</button>
-    <button class="btn btn-ghost" id="back-to-list-btn" style="margin-top:10px">← Back</button>
+
+    <button class="btn btn-primary" id="proceed-camera-btn" disabled style="margin-top:16px;width:100%;padding:14px">Continue to Camera Setup →</button>
+    <button class="btn btn-ghost" id="back-to-list-btn" style="margin-top:10px;width:100%">← Back to Quiz List</button>
+
     <p style="margin-top:16px;font-size:11px;text-align:center;color:var(--slate)">
       ⚠️ Mobile browser limitations: screen lock detection may vary by device. For maximum enforcement, use the DIKLY app.
     </p>
@@ -1097,6 +1132,7 @@ async function loadQuizList() {
         if (quiz.isSubmitted) return toast('You have already completed this quiz', 'warn');
         if (!quiz.canAttempt) return toast(`Quiz is ${quiz.status}`, 'warn');
         state.selectedQuiz = quiz;
+        populateConsentScreen(quiz);
         show('consent-screen');
       });
     });
@@ -1109,6 +1145,86 @@ async function loadQuizList() {
 // ══════════════════════════════════════════════════════════════════
 //  CONSENT
 // ══════════════════════════════════════════════════════════════════
+function populateConsentScreen(quiz) {
+  const titleEl = document.getElementById('consent-quiz-title');
+  if (titleEl) titleEl.textContent = quiz.title || 'Untitled Quiz';
+
+  const cb = document.getElementById('consent-checkbox');
+  if (cb) cb.checked = false;
+  const btn = document.getElementById('proceed-camera-btn');
+  if (btn) btn.disabled = true;
+
+  const list = document.getElementById('consent-rules-list');
+  if (!list) return;
+
+  const rules = [];
+  const rule = (icon, text, severity = 'normal') => {
+    const bg     = severity === 'high' ? '#fef2f2' : severity === 'warn' ? '#fffbeb' : 'var(--card)';
+    const border = severity === 'high' ? '#fecaca' : severity === 'warn' ? '#fde68a' : 'var(--border)';
+    const color  = severity === 'high' ? '#b91c1c' : severity === 'warn' ? '#92400e' : 'var(--text)';
+    rules.push(`<div style="display:flex;gap:12px;padding:10px 14px;background:${bg};border:1.5px solid ${border};border-radius:10px;align-items:flex-start">
+      <span style="font-size:17px;flex-shrink:0;margin-top:1px">${icon}</span>
+      <span style="font-size:13px;color:${color};line-height:1.55">${text}</span>
+    </div>`);
+  };
+
+  // Time limit — always shown
+  const mins = quiz.timeLimitMinutes || quiz.timeLimit;
+  if (mins) rule('⏱', `This exam has a <strong>${mins}-minute time limit</strong>. The timer starts immediately when you begin and cannot be paused.`, 'warn');
+
+  // Tab / focus enforcement
+  if (quiz.terminateOnTabSwitch) {
+    rule('🚫', '<strong>Switching tabs or opening another app will immediately terminate your exam.</strong> You must remain on this page for the entire duration.', 'high');
+  } else if (quiz.terminateOnFocusLost) {
+    rule('👁', 'Minimising this window or switching applications is detected and logged as a violation.', 'warn');
+  } else {
+    rule('👁', 'Tab switching and navigation away from this page are monitored and logged.', 'normal');
+  }
+
+  // Fullscreen
+  if (quiz.requireFullscreen) {
+    rule('⛶', '<strong>Fullscreen mode is required.</strong> Exiting fullscreen will be logged as a violation and may terminate your exam.', 'warn');
+  }
+
+  // Auto-termination threshold
+  if (quiz.maxViolationsBeforeTermination > 0) {
+    rule('⚠️', `Your exam will be <strong>automatically submitted</strong> after <strong>${quiz.maxViolationsBeforeTermination} violation${quiz.maxViolationsBeforeTermination !== 1 ? 's' : ''}</strong>. Every incident is logged and reviewed by your lecturer.`, 'high');
+  }
+
+  // Session lock
+  if (quiz.enforceSessionLock !== false) {
+    rule('🔒', 'This exam is locked to your current device and browser session. Opening it in another tab or on another device will invalidate your session immediately.', 'normal');
+  }
+
+  // Copy/paste + right-click
+  if (quiz.preventCopyPaste) rule('📋', 'Copy and paste are <strong>disabled</strong> in this exam window. All answers must be typed directly.', 'normal');
+  if (quiz.preventRightClick) rule('🖱', 'Right-clicking is disabled during the exam.', 'normal');
+
+  // Camera / proctoring
+  if (quiz.proctoringEnabled) {
+    rule('📷', 'Your <strong>camera must be active</strong> throughout this exam. You must remain clearly visible and facing your screen at all times.', 'high');
+
+    if (quiz.snapshotIntervalSeconds > 0) {
+      rule('🖼', `Webcam snapshots are captured every <strong>${quiz.snapshotIntervalSeconds} second${quiz.snapshotIntervalSeconds !== 1 ? 's' : ''}</strong> and stored securely for integrity review.`, 'normal');
+    }
+
+    if (quiz.aiProctoringEnabled || ['ai', 'hybrid'].includes(quiz.monitoringMode)) {
+      rule('🤖', 'AI will analyse your webcam feed in real time — detecting face absence, multiple people in frame, mobile phone use, and suspicious eye-gaze direction.', 'warn');
+    }
+
+    if (['human', 'hybrid'].includes(quiz.monitoringMode)) {
+      rule('👁', 'A <strong>human moderator may be watching your webcam feed live</strong>. Any suspicious behaviour will be flagged and recorded immediately.', 'high');
+    }
+  }
+
+  // Noise detection
+  if ((quiz.noiseDetectionThreshold ?? 0) > 0) {
+    rule('🎙', 'Microphone monitoring is active. Unusual noise levels are detected and logged as violations.', 'warn');
+  }
+
+  list.innerHTML = rules.join('');
+}
+
 document.getElementById('consent-checkbox').addEventListener('change', function () {
   document.getElementById('proceed-camera-btn').disabled = !this.checked;
 });
