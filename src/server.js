@@ -51,7 +51,7 @@ const PORT = process.env.PORT || 5000;
 
 app.set("trust proxy", true);
 
-app.use(compression({ level: 6 }));
+app.use(compression({ level: 4, threshold: 1024 }));
 
 app.use((req, res, next) => {
   const isProduction = process.env.NODE_ENV === 'production' || process.env.RENDER;

@@ -272,6 +272,7 @@ const snapQuizSchema = new mongoose.Schema(
 snapQuizSchema.index({ company: 1, course: 1, createdBy: 1, status: 1 });
 snapQuizSchema.index({ company: 1, course: 1, isPublished: 1, isActive: 1 });
 snapQuizSchema.index({ company: 1, startTime: 1, endTime: 1, status: 1 });
+snapQuizSchema.index({ company: 1, createdBy: 1, createdAt: -1 });
 
 // ---------------------------------------------------------------------------
 // Virtuals

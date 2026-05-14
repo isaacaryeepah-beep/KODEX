@@ -439,8 +439,8 @@ async function init(){
     if(S.user.company?.name) { const cn=$('company-name'); if(cn) cn.textContent='— '+S.user.company.name; }
 
     if(isLecturer){
-      await loadCourses();
-      await renderLecturerPage();
+      // Fetch courses and render page concurrently — assignments load inside renderLecturerPage
+      await Promise.all([loadCourses(), renderLecturerPage()]);
     } else {
       await renderStudentPage();
     }

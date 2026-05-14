@@ -233,6 +233,8 @@ normalQuizSchema.index({ company: 1, course: 1, createdBy: 1, status: 1 });
 normalQuizSchema.index({ company: 1, course: 1, isPublished: 1, isActive: 1 });
 // Quiz window queries: find quizzes open right now.
 normalQuizSchema.index({ company: 1, startTime: 1, endTime: 1 });
+// Sorted lecturer list (most recent first).
+normalQuizSchema.index({ company: 1, createdBy: 1, createdAt: -1 });
 
 // ---------------------------------------------------------------------------
 // Virtuals
