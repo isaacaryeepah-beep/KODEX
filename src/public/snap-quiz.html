@@ -11,6 +11,10 @@
 <link rel="icon" type="image/svg+xml" href="/dikly-icon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<!-- Offline AI Monitor + Recorder (loaded sync — needed before exam starts) -->
+<script src="/js/offline-monitor.js"></script>
+<script src="/js/offline-recorder.js"></script>
+
 <!-- TF loaded async so it never blocks login UI wiring -->
 <script>
 function loadMLLibs() {
@@ -510,6 +514,26 @@ window.addEventListener('load', () => loadMLLibs().catch(() => {}));
      TOAST NOTIFICATION
 ────────────────────────────────────────────────────────────────────────── -->
 <div id="toast"></div>
+
+<!-- ─────────────────────────────────────────────────────────────────────────
+     OFFLINE INDICATOR (top bar pill shown when network is lost)
+────────────────────────────────────────────────────────────────────────── -->
+<div id="offline-indicator" style="display:none;position:fixed;top:10px;left:50%;transform:translateX(-50%);z-index:10000;background:#1e293b;color:#f8fafc;padding:7px 16px;border-radius:20px;font-size:12px;font-weight:600;letter-spacing:.4px;gap:8px;align-items:center;box-shadow:0 4px 20px rgba(0,0,0,.5)">
+  <span style="width:8px;height:8px;border-radius:50%;background:#ef4444;display:inline-block;animation:pulse 1.2s infinite"></span>
+  &nbsp;OFFLINE — events saved locally
+</div>
+
+<!-- ─────────────────────────────────────────────────────────────────────────
+     STORAGE WARNING OVERLAY
+────────────────────────────────────────────────────────────────────────── -->
+<div id="storage-warning" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.7);align-items:center;justify-content:center">
+  <div style="background:#fff;border-radius:16px;padding:28px 24px;max-width:340px;width:90%;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,.4)">
+    <div style="font-size:36px;margin-bottom:12px">💾</div>
+    <h3 style="margin:0 0 8px;font-size:17px;font-weight:800;color:#1e293b">Storage Running Low</h3>
+    <p id="storage-warning-msg" style="margin:0 0 20px;font-size:13px;color:#475569;line-height:1.5">Your device storage is low. Camera recording has been paused to protect your quiz session.</p>
+    <button onclick="document.getElementById('storage-warning').style.display='none'" class="btn btn-primary" style="width:100%">I Understand</button>
+  </div>
+</div>
 
 <!-- ─────────────────────────────────────────────────────────────────────────
      SCREEN 1: LOGIN
@@ -1464,6 +1488,68 @@ document.getElementById('capture-start-btn').addEventListener('click', async () 
     document.body.classList.add('exam-active');
     state.examActive = true;
 
+    // ── Offline AI Monitor ────────────────────────────────────────
+    await OfflineMonitor.init({
+      attemptId: state.attempt._id,
+      quizId:    state.selectedQuiz._id,
+      token:     state.token,
+      settings:  state.selectedQuiz,
+    }).catch(err => console.warn('[OfflineMonitor] init failed:', err.message));
+
+    // Register BackgroundSync with service worker (silently degrades if unavailable)
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.ready.then(reg => {
+        reg.active?.postMessage({ type: 'REGISTER_SYNC' });
+      }).catch(() => {});
+    }
+
+    // ── Offline Recorder (only when proctoringEnabled) ───────────
+    if (state.selectedQuiz?.proctoringEnabled && state.cameraStream) {
+      OfflineRecorder.start(state.cameraStream, {
+        attemptId: state.attempt._id,
+        onStoragePause: ({ freeMB }) => {
+          const msg = document.getElementById('storage-warning-msg');
+          if (msg) msg.textContent = `Storage critically low (${freeMB} MB free). Camera recording paused to protect your answers.`;
+          document.getElementById('storage-warning').style.display = 'flex';
+        },
+      }).catch(err => console.warn('[OfflineRecorder] start failed:', err.message));
+    }
+
+    // ── SW message → trigger sync when background sync fires ─────
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.addEventListener('message', (e) => {
+        if (e.data?.type === 'DIKLY_BG_SYNC') {
+          OfflineMonitor.sync(state.token).catch(() => {});
+          OfflineRecorder.uploadAll(state.attempt._id, state.token).catch(() => {});
+        }
+      });
+    }
+
+    // ── Storage pressure UI ───────────────────────────────────────
+    window.addEventListener('dikly:storage-low', (e) => {
+      const mb = e.detail?.freeMB;
+      toast(`⚠️ Storage low (${mb} MB). Recordings may stop soon.`, 'warn');
+    });
+    window.addEventListener('dikly:storage-critical', (e) => {
+      const mb = e.detail?.freeMB;
+      const msg = document.getElementById('storage-warning-msg');
+      if (msg) msg.textContent = `Only ${mb} MB of storage remaining. Recording has been paused.`;
+      document.getElementById('storage-warning').style.display = 'flex';
+    });
+
+    // ── Offline / online indicator ────────────────────────────────
+    const offInd = document.getElementById('offline-indicator');
+    const _updateOnlineStatus = () => {
+      if (offInd) offInd.style.display = navigator.onLine ? 'none' : 'flex';
+      if (navigator.onLine) {
+        OfflineMonitor.sync(state.token).catch(() => {});
+        OfflineRecorder.uploadAll(state.attempt._id, state.token).catch(() => {});
+      }
+    };
+    window.addEventListener('online',  _updateOnlineStatus);
+    window.addEventListener('offline', _updateOnlineStatus);
+    _updateOnlineStatus();
+
     startTimer();
     startProctoring();
     renderQuestion();
@@ -1689,6 +1775,10 @@ async function logEvent(eventType, metadata = {}) {
   if (!state.sessionToken || !state.attempt?._id) return;
   const sessionHeader = { 'x-session-token': state.sessionToken };
   const baseUrl = `/api/student/snap-quizzes/quizzes/${state.selectedQuiz._id}/attempts/${state.attempt._id}`;
+
+  // ── Offline-first: store locally regardless of network ────────────
+  OfflineMonitor.logEvent(eventType, metadata).catch(() => {});
+
   try {
     if (eventType === 'heartbeat') {
       const hbRes = await api('POST', `${baseUrl}/heartbeat`, {}, sessionHeader);
@@ -1722,7 +1812,9 @@ async function logEvent(eventType, metadata = {}) {
     }
 
     if (res.violationCount != null) state.totalViolations = res.violationCount;
-  } catch { /* don't crash exam */ }
+  } catch {
+    // Network call failed — event is already stored offline, will sync later
+  }
 }
 
 function showViolationWarning(level) {
@@ -2051,6 +2143,17 @@ function stopExamCleanup() {
     state.audioContext.close().catch(() => {});
     state.audioContext = null;
   }
+
+  // ── Offline Monitor: final sync + stop ──────────────────────────
+  OfflineRecorder.stop().catch(() => {});
+  OfflineMonitor.sync(state.token).then(() => {
+    OfflineRecorder.uploadAll(state.attempt?._id, state.token).catch(() => {});
+    OfflineMonitor.stop();
+    OfflineMonitor.cleanupExpired(14).catch(() => {});
+    OfflineRecorder.deleteExpired(7).catch(() => {});
+  }).catch(() => {
+    OfflineMonitor.stop();
+  });
 }
 
 document.getElementById('v-close-btn').addEventListener('click', () => {

@@ -646,6 +646,7 @@ function renderDetail(data) {
       <button class="tab-btn active" onclick="switchTab(this,'tab-timeline')">📋 Violation Timeline</button>
       <button class="tab-btn" onclick="switchTab(this,'tab-breakdown')">📊 Breakdown</button>
       <button class="tab-btn" onclick="switchTab(this,'tab-snapshots')">📷 Snapshots${flaggedSnaps.length>0?` <span style="background:var(--red);color:#fff;border-radius:9px;padding:1px 6px;font-size:10px">${flaggedSnaps.length}</span>`:''}</button>
+      <button class="tab-btn" onclick="switchTab(this,'tab-offline');loadOfflineSync('${a._id}')">📡 Offline AI</button>
     </div>
 
     <div id="tab-timeline">${timelineHtml}</div>
@@ -661,16 +662,125 @@ function renderDetail(data) {
         ${snapsHtml}
       </div>
     </div>
+    <div id="tab-offline" style="display:none">
+      <div class="detail-card" id="offline-sync-panel">
+        <div style="text-align:center;padding:32px;color:var(--muted)">Click <strong>Offline AI</strong> tab to load offline data…</div>
+      </div>
+    </div>
   `;
 }
 
 function switchTab(btn, targetId) {
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
-  ['tab-timeline','tab-breakdown','tab-snapshots'].forEach(id => {
+  ['tab-timeline','tab-breakdown','tab-snapshots','tab-offline'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.style.display = id === targetId ? '' : 'none';
   });
+}
+
+// ── Offline AI Sync Panel ─────────────────────────────────────────────────
+async function loadOfflineSync(attemptId) {
+  const panel = document.getElementById('offline-sync-panel');
+  if (!panel) return;
+  panel.innerHTML = '<div style="text-align:center;padding:32px;color:var(--muted)">Loading offline data…</div>';
+
+  try {
+    const data = await api('GET', `/api/offline-sync/${attemptId}/status`);
+
+    const sevColor  = { low: '#16a34a', medium: '#d97706', high: '#dc2626' };
+    const sevBg     = { low: '#f0fdf4', medium: '#fffbeb', high: '#fef2f2' };
+    const sevIcon   = { low: 'ℹ️', medium: '⚠️', high: '🔴' };
+
+    // Device info section
+    const di = data.deviceInfo || {};
+    const deviceHtml = `
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px">
+        ${[
+          ['Browser', di.ua?.split('/')[0] || '—'],
+          ['Platform', di.platform || '—'],
+          ['Screen', di.screen || '—'],
+          ['Language', di.language || '—'],
+          ['CPU Cores', di.cores || '—'],
+          ['RAM', di.memory ? di.memory + ' GB' : '—'],
+          ['Connection', di.connection || '—'],
+          ['Capacitor', di.capacitor ? '✅ Yes (' + (di.platform_cap || 'app') + ')' : '❌ Web'],
+          ['Timezone', di.timezone || '—'],
+        ].map(([k, v]) => `<div style="background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:8px 10px"><div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px">${k}</div><div style="font-size:12px;font-weight:600;color:var(--text);word-break:break-all">${v}</div></div>`).join('')}
+      </div>`;
+
+    // Events timeline
+    const events = data.events || [];
+    const timelineHtml = events.length === 0
+      ? '<div style="text-align:center;padding:20px;color:var(--muted);font-size:13px">No offline events recorded.</div>'
+      : events.map(ev => `
+          <div style="display:flex;gap:12px;align-items:flex-start;padding:10px 0;border-bottom:1px solid var(--border)">
+            <div style="flex-shrink:0;width:28px;height:28px;border-radius:50%;background:${sevBg[ev.severity]};display:flex;align-items:center;justify-content:center;font-size:14px">${sevIcon[ev.severity]}</div>
+            <div style="flex:1;min-width:0">
+              <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+                <span style="font-size:12px;font-weight:700;color:${sevColor[ev.severity]}">${ev.type.replace(/_/g,' ').toUpperCase()}</span>
+                <span style="font-size:11px;color:var(--dim);flex-shrink:0">${new Date(ev.timestamp||ev.isoTime).toLocaleTimeString()}</span>
+              </div>
+              <div style="font-size:11px;color:var(--muted);margin-top:2px">Integrity at time: <strong>${ev.integrityAt ?? '—'}</strong>/100 · Severity: <strong style="color:${sevColor[ev.severity]}">${ev.severity}</strong></div>
+              ${Object.keys(ev.metadata||{}).length ? `<div style="font-size:11px;color:var(--dim);margin-top:3px;font-family:monospace">${JSON.stringify(ev.metadata).slice(0,120)}</div>` : ''}
+            </div>
+          </div>`).join('');
+
+    // Sync history
+    const syncHist = (data.syncHistory || []).slice(-5).reverse();
+    const syncHistHtml = syncHist.length === 0
+      ? '<div style="font-size:12px;color:var(--muted)">No sync history yet.</div>'
+      : syncHist.map(s => `<div style="font-size:12px;color:var(--muted);margin-bottom:4px">📡 ${new Date(s.syncedAt).toLocaleString()} — ${s.eventsCount} events, ${s.chunksCount} chunks uploaded from ${s.ip||'unknown'}</div>`).join('');
+
+    // Recording chunks
+    const chunks = data.chunks || [];
+    const chunksHtml = chunks.length === 0
+      ? '<div style="font-size:12px;color:var(--muted)">No recordings uploaded.</div>'
+      : chunks.map((c, i) => `
+        <div style="display:flex;align-items:center;gap:10px;padding:8px;border:1px solid var(--border);border-radius:8px;margin-bottom:6px">
+          <span style="font-size:18px">🎥</span>
+          <div style="flex:1">
+            <div style="font-size:12px;font-weight:600">Chunk ${c.chunkIndex + 1} · ${Math.round((c.durationMs||0)/1000)}s · ${c.mimeType?.split(';')[0]||'video'}</div>
+            <div style="font-size:11px;color:var(--muted)">${new Date(c.storedAt).toLocaleTimeString()}</div>
+          </div>
+          ${c.filePath ? `<a href="/api/offline-sync/${attemptId}/chunk/${i}" target="_blank" style="font-size:11px;color:var(--primary);font-weight:600">View</a>` : ''}
+        </div>`).join('');
+
+    // High-severity quick summary
+    const highEvents = events.filter(e => e.severity === 'high');
+    const summaryBg  = highEvents.length > 5 ? '#fef2f2' : highEvents.length > 0 ? '#fffbeb' : '#f0fdf4';
+    const summaryCol = highEvents.length > 5 ? '#b91c1c' : highEvents.length > 0 ? '#92400e' : '#14532d';
+
+    panel.innerHTML = `
+      <div class="sec-title" style="margin-top:0">📡 Offline AI Monitor Report</div>
+
+      <!-- Summary bar -->
+      <div style="background:${summaryBg};border:1.5px solid ${summaryCol}22;border-radius:10px;padding:12px 16px;margin-bottom:18px;display:flex;gap:16px;flex-wrap:wrap;align-items:center">
+        <div><span style="font-size:22px;font-weight:900;color:${summaryCol}">${data.integrityScore ?? 100}</span><span style="font-size:11px;color:var(--muted)">/100 integrity</span></div>
+        <div style="font-size:12px;color:${summaryCol}"><strong>${events.length}</strong> total events · <strong>${highEvents.length}</strong> high-severity</div>
+        <div style="font-size:12px;color:var(--muted)">Status: <strong>${data.status || 'pending'}</strong> · ${chunks.length} recording chunk${chunks.length !== 1 ? 's' : ''}</div>
+        <div style="font-size:11px;color:var(--dim);margin-left:auto">Beacon events: ${data.beaconEvents || 0}</div>
+      </div>
+
+      <!-- Device info -->
+      <div class="sec-title">Device Information</div>
+      ${deviceHtml}
+
+      <!-- Recordings -->
+      <div class="sec-title">Camera Recordings (${chunks.length} chunks)</div>
+      <div style="margin-bottom:18px">${chunksHtml}</div>
+
+      <!-- Event timeline -->
+      <div class="sec-title">Offline Event Timeline (${events.length} events)</div>
+      <div style="max-height:400px;overflow-y:auto;margin-bottom:18px">${timelineHtml}</div>
+
+      <!-- Sync history -->
+      <div class="sec-title">Sync History</div>
+      <div style="margin-bottom:4px">${syncHistHtml}</div>
+    `;
+  } catch(e) {
+    panel.innerHTML = `<div style="text-align:center;padding:32px;color:var(--red)">Failed to load offline data: ${e.message}</div>`;
+  }
 }
 
 // ── Force Submit ──────────────────────────────────────────────────────────────
