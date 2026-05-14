@@ -27,7 +27,12 @@ const adminReportRoutes = require("./routes/adminReports");
 const adminDashboardRoutes = require("./routes/adminDashboard");
 const jitsiRoutes = require("./routes/jitsi");
 const searchRoutes = require("./routes/Search");
-const proctoredQuizRoutes = require("./routes/proctoredQuizzes");
+// Legacy proctored quiz system — superseded by SnapQuiz (proctoringEnabled=true).
+// Kept for historical data access. Set LEGACY_PROCTOR_DISABLED=true to retire.
+let proctoredQuizRoutes = null;
+if (!process.env.LEGACY_PROCTOR_DISABLED) {
+  try { proctoredQuizRoutes = require("./routes/proctoredQuizzes"); } catch(_) {}
+}
 const assignmentRoutes  = require("./routes/assignments");
 const aiProxyRoutes     = require("./routes/aiProxy");
 const meetingRoutes     = require("./routes/meetingRoutes");
@@ -134,6 +139,7 @@ app.get("/superadmin", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "superadmin.html"));
 });
 
+app.get("/anticheat",      (req, res) => res.sendFile(path.join(__dirname, "public", "anticheat-dashboard.html")));
 app.get("/about",          (req, res) => res.sendFile(path.join(__dirname, "public", "about.html")));
 app.get("/founder",        (req, res) => res.sendFile(path.join(__dirname, "public", "founder.html")));
 app.get("/contact",        (req, res) => res.sendFile(path.join(__dirname, "public", "contact.html")));
@@ -211,7 +217,13 @@ app.use("/api/admin/reports", adminReportRoutes);
 app.use("/api/jitsi", jitsiRoutes);
 app.use("/api/admin", adminDashboardRoutes);
 app.use("/api/search", searchRoutes);
-app.use("/api/proctor", proctoredQuizRoutes);
+if (proctoredQuizRoutes) {
+  app.use("/api/proctor", proctoredQuizRoutes);
+} else {
+  app.use("/api/proctor", (req, res) => res.status(410).json({
+    error: "The legacy proctored quiz system has been retired. Use /api/student/snap-quizzes instead.",
+  }));
+}
 app.use("/api/assignments", assignmentRoutes);
 app.use("/api/ai", aiProxyRoutes);
 app.use("/api/meetings", meetingRoutes);

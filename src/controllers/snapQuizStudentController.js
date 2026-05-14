@@ -33,6 +33,7 @@ const Meeting                = require("../models/Meeting");
 const { ATTEMPT_STATUSES, GRADING_STATUSES } = require("../models/SnapQuizAttempt");
 const { QUESTION_TYPES, MANUAL_GRADE_TYPES } = require("../models/SnapQuizQuestion");
 const { VIOLATION_TYPES, VIOLATION_SEVERITIES, ACTIONS_TAKEN } = require("../models/SnapQuizViolationLog");
+const { autoGradeAttempt } = require("../services/quizGradingService");
 
 // ─── Quiz discovery ───────────────────────────────────────────────────────────
 
@@ -805,77 +806,8 @@ async function _terminateSession(attempt, reason) {
   await _upsertResult(attempt, quiz, true);
 }
 
-async function _autoGradeAttempt(attemptId, companyId) {
-  const responses   = await SnapQuizResponse.find({ attempt: attemptId }).lean();
-  const questionIds = responses.map(r => r.question);
-  const questions   = await SnapQuizQuestion.find({ _id: { $in: questionIds } }).lean();
-  const qMap        = {};
-  questions.forEach(q => { qMap[q._id.toString()] = q; });
-
-  let rawScore = 0, maxScore = 0, hasManual = false;
-  const ops = [];
-
-  for (const response of responses) {
-    const q = qMap[response.question.toString()];
-    if (!q) continue;
-    maxScore += q.marks || 1;
-
-    if (MANUAL_GRADE_TYPES.has(q.questionType)) {
-      hasManual = true;
-      ops.push({ updateOne: { filter: { _id: response._id }, update: { $set: { gradingStatus: "pending_manual" } } } });
-      continue;
-    }
-
-    const { isCorrect, earnedMarks } = _scoreResponse(response, q);
-    rawScore += earnedMarks;
-    ops.push({
-      updateOne: {
-        filter: { _id: response._id },
-        update: { $set: { isCorrect, earnedMarks, isAutoGraded: true, gradingStatus: "auto_graded" } },
-      },
-    });
-  }
-
-  if (ops.length) await SnapQuizResponse.bulkWrite(ops);
-  return { rawScore, maxScore, hasManual };
-}
-
-function _scoreResponse(response, question) {
-  const marks = question.marks || 1;
-  let isCorrect = false;
-
-  switch (question.questionType) {
-    case QUESTION_TYPES.MCQ:
-      isCorrect = response.selectedOptionIndex === question.correctOptionIndex;
-      break;
-    case QUESTION_TYPES.MCQ_MULTI: {
-      const c = new Set((question.correctOptionIndices || []).map(String));
-      const s = new Set((response.selectedOptionIndices || []).map(String));
-      isCorrect = c.size === s.size && [...c].every(v => s.has(v));
-      break;
-    }
-    case QUESTION_TYPES.TRUE_FALSE:
-      isCorrect = response.selectedBoolean === question.correctBoolean;
-      break;
-    case QUESTION_TYPES.SHORT_ANSWER:
-    case QUESTION_TYPES.FILL_BLANK: {
-      const a = (response.textAnswer || "").trim().toLowerCase();
-      const c = (question.correctAnswerText || "").trim().toLowerCase();
-      isCorrect = a === c || (question.acceptedAnswers || []).map(x => x.trim().toLowerCase()).includes(a);
-      break;
-    }
-    case QUESTION_TYPES.NUMERIC: {
-      const expected = question.numericAnswer?.value;
-      const tol      = question.numericAnswer?.tolerance || 0;
-      if (expected != null && response.numericAnswer != null) {
-        isCorrect = Math.abs(response.numericAnswer - expected) <= tol;
-      }
-      break;
-    }
-    default: isCorrect = false;
-  }
-  return { isCorrect, earnedMarks: isCorrect ? marks : 0 };
-}
+// Grading delegated to shared service — see src/services/quizGradingService.js
+const _autoGradeAttempt = autoGradeAttempt;
 
 async function _upsertResult(attempt, quiz, wasTerminated = false) {
   const now = new Date();

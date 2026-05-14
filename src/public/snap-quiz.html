@@ -789,6 +789,9 @@ const state = {
   faceCheckInterval: null,
   snapshotInterval: null,
   heartbeatInterval: null,
+  noiseInterval: null,
+  audioStream: null,
+  audioContext: null,
   backgroundStart: null,
   lastFaceState: 'green',
   deviceFingerprint: null,
@@ -1487,6 +1490,46 @@ function startProctoring() {
       }
     });
   });
+
+  // ── Noise / audio detection ───────────────────────────────────
+  // Only active when quiz has a non-zero noise threshold (AI or hybrid mode).
+  const noiseThreshold = state.selectedQuiz?.noiseDetectionThreshold ?? 40;
+  if (noiseThreshold > 0) {
+    startNoiseDetection(noiseThreshold);
+  }
+}
+
+async function startNoiseDetection(threshold) {
+  try {
+    const micStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+    const audioCtx  = new (window.AudioContext || window.webkitAudioContext)();
+    const source    = audioCtx.createMediaStreamSource(micStream);
+    const analyser  = audioCtx.createAnalyser();
+    analyser.fftSize = 256;
+    source.connect(analyser);
+
+    state.audioStream  = micStream;
+    state.audioContext = audioCtx;
+
+    // Cooldown: only log one noise violation per 15-second window.
+    let lastNoiseLog = 0;
+
+    state.noiseInterval = setInterval(() => {
+      if (!state.examActive) return;
+      const data = new Uint8Array(analyser.frequencyBinCount);
+      analyser.getByteFrequencyData(data);
+      const avg = data.reduce((s, v) => s + v, 0) / data.length;
+      if (avg > threshold) {
+        const now = Date.now();
+        if (now - lastNoiseLog > 15000) {
+          lastNoiseLog = now;
+          logEvent('audio_detected', { level: Math.round(avg), threshold }).catch(console.warn);
+        }
+      }
+    }, 3000);
+  } catch {
+    // Microphone permission denied or unavailable — degrade silently.
+  }
 }
 
 function handleVisibilityChange() {
@@ -1880,9 +1923,18 @@ function stopExamCleanup() {
   clearInterval(state.faceCheckInterval);
   clearInterval(state.snapshotInterval);
   clearInterval(state.heartbeatInterval);
+  clearInterval(state.noiseInterval);
   document.removeEventListener('visibilitychange', handleVisibilityChange);
   document.removeEventListener('copy', handleCopy);
   document.removeEventListener('cut', handleCopy);
+  if (state.audioStream) {
+    state.audioStream.getTracks().forEach(t => t.stop());
+    state.audioStream = null;
+  }
+  if (state.audioContext) {
+    state.audioContext.close().catch(() => {});
+    state.audioContext = null;
+  }
 }
 
 document.getElementById('v-close-btn').addEventListener('click', () => {
