@@ -862,11 +862,11 @@ async function api(path, options = {}) {
     const data = await res.json();
     if (!res.ok) {
       // Subscription gate — redirect lecturer to subscription page automatically
-      if (res.status === 403 && data.subscriptionRequired) {
+      if (res.status === 403 && (data.subscriptionExpired || data.subscriptionRequired)) {
         showSubscriptionGate(data.message);
-        throw new Error(data.error || 'Subscription required');
+        throw new Error(data.message || data.error || 'Subscription required');
       }
-      const err = new Error(data.error || 'Request failed');
+      const err = new Error(data.message || data.error || 'Request failed');
       err.status = res.status;
       err.data   = data;
       throw err;
@@ -6877,7 +6877,7 @@ async function showCreateMeetingModal() {
     courses = d.courses || d || [];
   } catch(e) { courses = []; }
 
-  const courseOptions = `<option value="">— No specific course —</option>` +
+  const courseOptions = `<option value="">— Select a course —</option>` +
     courses.map(c => `<option value="${c._id}">${esc(c.title)}${c.level?' · L'+c.level:''}${c.group?' · Grp '+c.group:''}</option>`).join('');
   // default scheduled start = now+5min, end = now+65min
   const now = new Date();
@@ -6914,7 +6914,7 @@ async function showCreateMeetingModal() {
         </div>
 
         <div class="form-group">
-          <label>Course <span style="color:var(--text-muted);font-weight:400;font-size:12px">(optional)</span></label>
+          <label>Course *</label>
           <select id="meeting-course" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
             ${courseOptions}
           </select>
@@ -6949,6 +6949,7 @@ async function createMeeting() {
   if (!title) { errEl.textContent = 'Please enter a meeting title.'; errEl.style.display = 'block'; return; }
   if (!start || !end) { errEl.textContent = 'Please set a start and end time.'; errEl.style.display = 'block'; return; }
   if (new Date(end) <= new Date(start)) { errEl.textContent = 'End time must be after start time.'; errEl.style.display = 'block'; return; }
+  if (!courseId) { errEl.textContent = 'Please select a course.'; errEl.style.display = 'block'; return; }
 
   const schedBtn = document.querySelector('.modal .btn-primary');
   if (schedBtn) { schedBtn.textContent = 'Scheduling…'; schedBtn.disabled = true; }
@@ -6972,11 +6973,17 @@ async function createMeeting() {
 }
 
 async function createAndStartMeeting() {
-  const title = document.getElementById('meeting-title').value.trim();
-  const errEl = document.getElementById('meeting-error');
-  const btn   = document.getElementById('start-meeting-btn');
+  const title    = document.getElementById('meeting-title').value.trim();
+  const courseId = document.getElementById('meeting-course')?.value || '';
+  const errEl    = document.getElementById('meeting-error');
+  const btn      = document.getElementById('start-meeting-btn');
   if (!title) {
     errEl.textContent = 'Please enter a meeting title.';
+    errEl.style.display = 'block';
+    return;
+  }
+  if (!courseId) {
+    errEl.textContent = 'Please select a course.';
     errEl.style.display = 'block';
     return;
   }
@@ -6988,6 +6995,7 @@ async function createAndStartMeeting() {
       title,
       scheduledStart: now.toISOString().slice(0,16),
       scheduledEnd: end.toISOString().slice(0,16),
+      courseId,
     }) });
     closeModal();
     await startMeeting(data.meeting._id);
@@ -7103,6 +7111,13 @@ function showJitsiEmbed(config) {
 function _initJitsiEmbed(config, domain) {
   const container = document.getElementById('jitsi-embed-container');
   if (!container) return;
+  const moderatorButtons = config.isModerator
+    ? ['microphone','camera','closedcaptions','desktop','chat','raisehand',
+       'tileview','select-background','mute-everyone','kick-participant',
+       'participants-pane','security','hangup']
+    : ['microphone','camera','closedcaptions','desktop',
+       'chat','raisehand','tileview','select-background','hangup'];
+
   window._jitsiApi = new JitsiMeetExternalAPI(domain, {
     roomName: config.roomName,
     width: '100%',
@@ -7123,10 +7138,7 @@ function _initJitsiEmbed(config, domain) {
       MOBILE_APP_PROMO:          false,
       SHOW_JITSI_WATERMARK:      false,
       SHOW_WATERMARK_FOR_GUESTS: false,
-      TOOLBAR_BUTTONS: [
-        'microphone','camera','closedcaptions','desktop',
-        'chat','raisehand','tileview','select-background','hangup',
-      ],
+      TOOLBAR_BUTTONS: moderatorButtons,
       ...(config.interfaceConfigOverwrite || {}),
     },
   });
@@ -7332,7 +7344,7 @@ function _renderCoursesHTML(content, courses, isOffline) {
       course.lecturerId?.name ? `<span>👨‍🏫 ${esc(course.lecturerId.name)}</span>` : '',
       course.level  ? `<span style="background:#ede9fe;color:#7c3aed;padding:2px 7px;border-radius:20px;font-weight:700;">Level ${esc(String(course.level))}</span>` : '',
       course.group  ? `<span style="background:#ecfdf5;color:#059669;padding:2px 7px;border-radius:20px;font-weight:600;">Group ${esc(course.group)}</span>` : '',
-      `<span>👥 ${course.enrolledStudents?.length || 0} enrolled</span>`,
+      `<span>👥 ${course.rosterCount ?? course.enrolledStudents?.length ?? 0} enrolled</span>`,
     ].filter(Boolean).join('');
 
     let actions = '';
@@ -11088,6 +11100,12 @@ async function renderProfile() {
         <p style="font-size:12px;color:var(--text-muted);margin-bottom:16px">All devices that have logged into your account</p>
         <div id="devices-list"><div style="color:var(--text-muted);font-size:13px">Loading devices…</div></div>
       </div>
+
+      <div style="margin-top:28px;padding-top:24px;border-top:1px solid var(--border)">
+        <h3 style="font-size:14px;font-weight:700;margin-bottom:4px;color:#ef4444">Danger Zone</h3>
+        <p style="font-size:12px;color:var(--text-muted);margin-bottom:14px">Permanently delete your account and all associated data.</p>
+        <a href="/delete-account" target="_blank" style="display:inline-block;padding:10px 20px;border-radius:8px;border:1.5px solid #ef4444;color:#ef4444;font-size:13px;font-weight:600;text-decoration:none;background:transparent">Delete Account</a>
+      </div>
     </div>
   `;
   loadMyDevices();
@@ -11314,7 +11332,7 @@ async function renderStudentGradeBook(content) {
                 <div style="font-weight:700;font-size:15px;margin-bottom:4px;">${c.title}</div>
                 <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">${c.code} · ${c.lecturerId?.name || 'N/A'}</div>
                 <div style="display:flex;justify-content:space-between;align-items:center;">
-                  <span style="font-size:12px;color:var(--text-light);">${c.enrolledStudents?.length || 0} students</span>
+                  <span style="font-size:12px;color:var(--text-light);">${c.rosterCount ?? c.enrolledStudents?.length ?? 0} students</span>
                   <span class="btn btn-sm btn-primary" style="pointer-events:none;">View Grades →</span>
                 </div>
               </div>`).join('')}
@@ -11426,7 +11444,7 @@ async function renderLecturerGradeBook(content) {
                 <div style="font-weight:700;font-size:15px;margin-bottom:4px;">${c.title}</div>
                 <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">${c.code} · ${c.lecturerId?.name || 'N/A'}</div>
                 <div style="display:flex;justify-content:space-between;align-items:center;">
-                  <span style="font-size:12px;color:var(--text-light);">${c.enrolledStudents?.length || 0} students</span>
+                  <span style="font-size:12px;color:var(--text-light);">${c.rosterCount ?? c.enrolledStudents?.length ?? 0} students</span>
                   <span class="btn btn-sm btn-primary" style="pointer-events:none;">Open →</span>
                 </div>
               </div>`).join('')}
@@ -13194,12 +13212,13 @@ function toggleMobileSidebar() {
   if (isOpen) {
     closeMobileSidebar();
   } else {
-    // 'sidebar-force-open' class beats display:none !important via specificity
     sidebar.classList.add('sidebar-force-open');
     requestAnimationFrame(() => {
       sidebar.classList.add('open');
       overlay.classList.add('active');
-      document.body.style.overflow = 'hidden';
+      // Lock .content (the SPA scroll container) — body is never the scroller here
+      const content = document.querySelector('.content');
+      if (content) content.style.overflowY = 'hidden';
     });
   }
 }
@@ -13209,7 +13228,6 @@ function closeMobileSidebar() {
   const overlay = document.getElementById('sidebar-overlay');
   if (sidebar) {
     sidebar.classList.remove('open');
-    // Remove force-show class after transition completes
     setTimeout(() => {
       if (!sidebar.classList.contains('open')) {
         sidebar.classList.remove('sidebar-force-open');
@@ -13217,8 +13235,47 @@ function closeMobileSidebar() {
     }, 300);
   }
   if (overlay) overlay.classList.remove('active');
-  document.body.style.overflow = '';
+  const content = document.querySelector('.content');
+  if (content) content.style.overflowY = '';
 }
+
+// ── iOS Safari scroll fix for mobile sidebar ──────────────────────────────────
+// On iOS, touch-scroll events on fixed elements propagate to the underlying page.
+// We intercept touchmove on the sidebar-nav and on the overlay separately:
+//   • sidebar-nav: allow scroll, but stop propagation so page doesn't move
+//   • overlay: block scroll entirely (tapping overlay closes sidebar)
+(function initSidebarScrollFix() {
+  let _touchStartY = 0;
+
+  document.addEventListener('touchstart', (e) => {
+    if (e.target.closest('.sidebar-nav')) {
+      _touchStartY = e.touches[0].clientY;
+    }
+  }, { passive: true });
+
+  document.addEventListener('touchmove', (e) => {
+    const nav = e.target.closest('.sidebar-nav');
+    if (nav) {
+      // Allow scroll within the nav, but stop it reaching the page
+      const atTop    = nav.scrollTop === 0;
+      const atBottom = nav.scrollTop + nav.clientHeight >= nav.scrollHeight;
+      const movingUp = e.touches[0].clientY < _touchStartY;   // finger going up = scroll down
+      const movingDn = e.touches[0].clientY > _touchStartY;   // finger going down = scroll up
+      if ((atTop && movingDn) || (atBottom && movingUp)) {
+        // At boundary — prevent rubber-banding into the page
+        e.preventDefault();
+      }
+      // Otherwise let the nav scroll naturally but stop propagation
+      e.stopPropagation();
+      return;
+    }
+    // Anywhere on the overlay (outside the sidebar) — block scroll entirely
+    if (e.target.closest('.sidebar-overlay') || e.target.closest('.sidebar-force-open')) {
+      const inSidebar = e.target.closest('.sidebar');
+      if (!inSidebar) e.preventDefault();
+    }
+  }, { passive: false });
+})();
 
 // Close sidebar when a nav item is tapped on mobile
 document.addEventListener('click', (e) => {

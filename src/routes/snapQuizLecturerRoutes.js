@@ -64,6 +64,7 @@ router.use(lecturerOrHod);
 
 const ownsQuiz = requireAssessmentOwnership(SnapQuiz, {
   getAssessmentId: (req) => req.params.quizId,
+  skipCourseCheck: true, // Courses are assigned via Course.lecturerId, not CourseLecturerAssignment
 });
 
 // ─── Quiz CRUD ────────────────────────────────────────────────────────────────
