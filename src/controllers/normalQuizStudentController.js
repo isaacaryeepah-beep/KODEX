@@ -23,7 +23,8 @@
  */
 
 const mongoose = require("mongoose");
-const NormalQuiz         = require("../models/NormalQuiz");
+const NormalQuiz                       = require("../models/NormalQuiz");
+const { QUIZ_STATUSES }                = require("../models/NormalQuiz");
 const NormalQuizQuestion = require("../models/NormalQuizQuestion");
 const NormalQuizAttempt  = require("../models/NormalQuizAttempt");
 const NormalQuizResponse = require("../models/NormalQuizResponse");
@@ -246,14 +247,30 @@ exports.saveResponses = async (req, res) => {
       return res.status(404).json({ error: "Active attempt not found or already submitted" });
     }
 
+    // Enforce server-side expiry on every save — prevents storing new answers after time is up.
+    if (attempt.expiresAt && new Date() > attempt.expiresAt) {
+      attempt.status      = ATTEMPT_STATUSES.AUTO_SUBMITTED;
+      attempt.submittedAt = new Date();
+      await attempt.save();
+      return res.status(410).json({ error: "Session has expired and been auto-submitted" });
+    }
+
     const { responses } = req.body;
     if (!Array.isArray(responses) || responses.length === 0) {
       return res.status(400).json({ error: "responses array is required" });
     }
 
+    // Fetch authoritative marks and questionType from the DB — never trust the client.
+    const questionIds = [...new Set(responses.map(r => r.questionId).filter(Boolean))];
+    const questions   = await NormalQuizQuestion.find(
+      { _id: { $in: questionIds }, quiz: attempt.quiz, isActive: true },
+      { marks: 1, questionType: 1 }
+    ).lean();
+    const qMap = Object.fromEntries(questions.map(q => [q._id.toString(), q]));
+
     const now = new Date();
     const bulkOps = responses.map(r => {
-      const answerFields = _extractAnswerFields(r);
+      const q = qMap[r.questionId?.toString()];
       return {
         updateOne: {
           filter: {
@@ -263,7 +280,7 @@ exports.saveResponses = async (req, res) => {
           },
           update: {
             $set: {
-              ...answerFields,
+              ..._extractAnswerFields(r),
               lastUpdatedAt:    now,
               isFlagged:        r.isFlagged ?? false,
               isSkipped:        r.isSkipped ?? false,
@@ -273,8 +290,8 @@ exports.saveResponses = async (req, res) => {
               quiz:            attempt.quiz,
               student:         req.user._id,
               company:         req.companyId,
-              questionType:    r.questionType,
-              maxMarks:        r.maxMarks || 1,
+              questionType:    q?.questionType ?? r.questionType,
+              maxMarks:        q?.marks        ?? 1,  // server-side authoritative value
               firstAnsweredAt: now,
             },
           },
@@ -303,9 +320,30 @@ exports.submitAttempt = async (req, res) => {
       return res.status(404).json({ error: "Active attempt not found or already submitted" });
     }
 
-    const now        = new Date();
-    const startedAt  = attempt.startedAt || now;
-    const timeSpent  = Math.round((now.getTime() - startedAt.getTime()) / 1000);
+    const now       = new Date();
+    const startedAt = attempt.startedAt || now;
+
+    // Server-side time-limit enforcement — auto-submit if the clock has run out.
+    if (attempt.expiresAt && now > attempt.expiresAt) {
+      attempt.status           = ATTEMPT_STATUSES.AUTO_SUBMITTED;
+      attempt.submittedAt      = now;
+      attempt.timeSpentSeconds = Math.round((now.getTime() - startedAt.getTime()) / 1000);
+      await attempt.save();
+      const { rawScore, maxScore, hasManual } = await _autoGradeAttempt(attempt._id, req.companyId);
+      const quiz      = await NormalQuiz.findById(attempt.quiz).select("passMark autoReleaseResults").lean();
+      const pct       = maxScore > 0 ? (rawScore / maxScore) * 100 : 0;
+      attempt.rawScore        = rawScore;
+      attempt.maxScore        = maxScore;
+      attempt.percentageScore = Math.round(pct * 100) / 100;
+      attempt.isPassed        = quiz?.passMark != null ? rawScore >= quiz.passMark : null;
+      attempt.gradingStatus   = hasManual ? GRADING_STATUSES.PARTIALLY_GRADED : GRADING_STATUSES.AUTO_GRADED;
+      if (!hasManual) attempt.gradedAt = now;
+      await attempt.save();
+      await _upsertResult(attempt, quiz);
+      return res.status(410).json({ error: "Session has expired and been auto-submitted" });
+    }
+
+    const timeSpent = Math.round((now.getTime() - startedAt.getTime()) / 1000);
 
     attempt.status           = ATTEMPT_STATUSES.SUBMITTED;
     attempt.submittedAt      = now;
@@ -491,13 +529,25 @@ exports.logEvents = async (req, res) => {
 
 /** Load an in-progress attempt owned by the current student. */
 async function _loadActiveAttempt(req) {
-  return NormalQuizAttempt.findOne({
+  const attempt = await NormalQuizAttempt.findOne({
     _id:     req.params.attemptId,
     quiz:    req.params.quizId,
     student: req.user._id,
     company: req.companyId,
     status:  ATTEMPT_STATUSES.IN_PROGRESS,
   });
+  if (!attempt) return null;
+
+  // Reject if the quiz has been closed since the attempt started.
+  const quiz = await NormalQuiz.findOne(
+    { _id: attempt.quiz, company: req.companyId },
+    { status: 1 }
+  ).lean();
+  if (!quiz || quiz.status === QUIZ_STATUSES.CLOSED || quiz.status === QUIZ_STATUSES.ARCHIVED) {
+    return null;
+  }
+
+  return attempt;
 }
 
 /**

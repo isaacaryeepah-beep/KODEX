@@ -449,11 +449,20 @@ exports.submitProctoredQuiz = async (req, res) => {
     if (!attempt) return res.status(400).json({ error: "No attempt found" });
     if (attempt.isSubmitted) return res.status(409).json({ error: "Already submitted" });
 
+    // Server-side time-limit enforcement.
+    if (quiz.timeLimit && attempt.startedAt) {
+      const deadlineMs = new Date(attempt.startedAt).getTime() + quiz.timeLimit * 60 * 1000;
+      if (Date.now() > deadlineMs + 30_000) { // 30s grace for network latency
+        return res.status(403).json({ error: "Submission rejected: time limit has expired" });
+      }
+    }
+
     if (!Array.isArray(answers)) {
       return res.status(400).json({ error: "Answers must be an array" });
     }
 
-    const questions = await Question.find({ quiz: quizId });
+    // Scope questions to this quiz specifically (company is already verified via quiz lookup above).
+    const questions = await Question.find({ quiz: quiz._id });
     const questionMap = {};
     questions.forEach((q) => (questionMap[q._id.toString()] = q));
 
