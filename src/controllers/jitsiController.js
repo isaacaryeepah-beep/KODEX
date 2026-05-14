@@ -3,7 +3,7 @@ const JitsiMeeting = require("../models/JitsiMeeting");
 const JitsiAttendance = require("../models/JitsiAttendance");
 const Company = require("../models/Company");
 
-const JITSI_DOMAIN = "meet.jit.si";
+const JITSI_DOMAIN = process.env.JITSI_DOMAIN || "meet.jit.si";
 
 exports.createMeeting = async (req, res) => {
   try {
@@ -112,9 +112,41 @@ exports.joinMeeting = async (req, res) => {
       return res.status(400).json({ error: "Meeting has already ended" });
     }
 
-    const joinUrl = `https://${JITSI_DOMAIN}/${roomName}`;
+    const isModerator = ['lecturer', 'admin', 'superadmin'].includes(req.user?.role);
 
-    res.json({ joinUrl });
+    const moderatorToolbar = [
+      'microphone','camera','closedcaptions','desktop','chat','raisehand',
+      'tileview','select-background','mute-everyone','kick-participant',
+      'participants-pane','security','hangup',
+    ];
+    const participantToolbar = [
+      'microphone','camera','closedcaptions','desktop',
+      'chat','raisehand','tileview','select-background','hangup',
+    ];
+
+    const jitsiConfig = {
+      roomName,
+      domain:      JITSI_DOMAIN,
+      displayName: req.user?.name  || req.user?.email || '',
+      email:       req.user?.email || '',
+      isModerator,
+      configOverwrite: {
+        startWithAudioMuted:     true,
+        startWithVideoMuted:     false,
+        enableNoisyMicDetection: true,
+        disableDeepLinking:      true,
+      },
+      interfaceConfigOverwrite: {
+        SHOW_JITSI_WATERMARK:      false,
+        SHOW_WATERMARK_FOR_GUESTS: false,
+        TOOLBAR_BUTTONS: isModerator ? moderatorToolbar : participantToolbar,
+      },
+    };
+
+    res.json({
+      joinUrl: `https://${JITSI_DOMAIN}/${roomName}`,
+      data: { jitsiConfig },
+    });
   } catch (error) {
     console.error("Jitsi join meeting error:", error);
     res.status(500).json({ error: "Failed to join meeting" });
