@@ -11,6 +11,10 @@
 <link rel="icon" type="image/svg+xml" href="/dikly-icon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<!-- Offline AI Monitor + Recorder (loaded sync — needed before exam starts) -->
+<script src="/js/offline-monitor.js"></script>
+<script src="/js/offline-recorder.js"></script>
+
 <!-- TF loaded async so it never blocks login UI wiring -->
 <script>
 function loadMLLibs() {
@@ -187,16 +191,15 @@ window.addEventListener('load', () => loadMLLibs().catch(() => {}));
   /* ═══════════════════════════════════════════════════════════════
      CONSENT SCREEN
   ═══════════════════════════════════════════════════════════════ */
-  .consent-list { list-style: none; margin: 20px 0; display: flex; flex-direction: column; gap: 12px; }
-  .consent-list li { display: flex; gap: 12px; font-size: 13px; color: var(--muted); line-height: 1.5; }
-  .consent-list li .icon { font-size: 18px; flex-shrink: 0; margin-top: -1px; }
+  /* consent screen — scrollable card on small screens */
+  #consent-screen .card { max-height: 92vh; overflow-y: auto; }
 
-  .consent-check { display: flex; align-items: flex-start; gap: 12px; margin: 20px 0; cursor: pointer; }
+  .consent-check { display: flex; align-items: flex-start; gap: 12px; cursor: pointer; }
   .consent-check input[type="checkbox"] {
-    width: 20px; height: 20px; flex-shrink: 0; margin-top: 2px;
+    width: 20px; height: 20px; flex-shrink: 0; margin-top: 3px;
     accent-color: var(--accent); cursor: pointer;
   }
-  .consent-check span { font-size: 13px; color: var(--muted); line-height: 1.5; }
+  .consent-check span { font-size: 13px; color: var(--text); line-height: 1.55; }
 
   /* ═══════════════════════════════════════════════════════════════
      CAMERA SETUP SCREEN
@@ -513,6 +516,26 @@ window.addEventListener('load', () => loadMLLibs().catch(() => {}));
 <div id="toast"></div>
 
 <!-- ─────────────────────────────────────────────────────────────────────────
+     OFFLINE INDICATOR (top bar pill shown when network is lost)
+────────────────────────────────────────────────────────────────────────── -->
+<div id="offline-indicator" style="display:none;position:fixed;top:10px;left:50%;transform:translateX(-50%);z-index:10000;background:#1e293b;color:#f8fafc;padding:7px 16px;border-radius:20px;font-size:12px;font-weight:600;letter-spacing:.4px;gap:8px;align-items:center;box-shadow:0 4px 20px rgba(0,0,0,.5)">
+  <span style="width:8px;height:8px;border-radius:50%;background:#ef4444;display:inline-block;animation:pulse 1.2s infinite"></span>
+  &nbsp;OFFLINE — events saved locally
+</div>
+
+<!-- ─────────────────────────────────────────────────────────────────────────
+     STORAGE WARNING OVERLAY
+────────────────────────────────────────────────────────────────────────── -->
+<div id="storage-warning" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.7);align-items:center;justify-content:center">
+  <div style="background:#fff;border-radius:16px;padding:28px 24px;max-width:340px;width:90%;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,.4)">
+    <div style="font-size:36px;margin-bottom:12px">💾</div>
+    <h3 style="margin:0 0 8px;font-size:17px;font-weight:800;color:#1e293b">Storage Running Low</h3>
+    <p id="storage-warning-msg" style="margin:0 0 20px;font-size:13px;color:#475569;line-height:1.5">Your device storage is low. Camera recording has been paused to protect your quiz session.</p>
+    <button onclick="document.getElementById('storage-warning').style.display='none'" class="btn btn-primary" style="width:100%">I Understand</button>
+  </div>
+</div>
+
+<!-- ─────────────────────────────────────────────────────────────────────────
      SCREEN 1: LOGIN
 ────────────────────────────────────────────────────────────────────────── -->
 <div id="login-screen" class="screen">
@@ -610,23 +633,59 @@ window.addEventListener('load', () => loadMLLibs().catch(() => {}));
      SCREEN 3: CONSENT
 ────────────────────────────────────────────────────────────────────────── -->
 <div id="consent-screen" class="screen hidden">
-  <div class="card" style="max-width:500px">
-    <h2>🔐 Exam Consent & Rules</h2>
-    <p style="margin-top:8px">By proceeding, you agree to the following monitoring conditions for this proctored exam:</p>
-    <ul class="consent-list">
-      <li><span class="icon">📷</span> <span>Your camera will be active throughout the exam for identity verification and face monitoring.</span></li>
-      <li><span class="icon">🔒</span> <span>This exam is locked to your current device. Switching to another device will block access.</span></li>
-      <li><span class="icon">👁️</span> <span>Tab switching, app backgrounding, and screen minimization are detected and logged.</span></li>
-      <li><span class="icon">⚠️</span> <span>Repeated violations may result in automatic exam termination.</span></li>
-      <li><span class="icon">📊</span> <span>Your face snapshots and activity logs are stored securely for integrity review.</span></li>
-      <li><span class="icon">🗑️</span> <span>Data is retained for 90 days after the exam window closes.</span></li>
-    </ul>
-    <label class="consent-check">
+  <div class="card" style="max-width:580px;width:100%">
+
+    <!-- Header -->
+    <div style="display:flex;align-items:center;gap:14px;margin-bottom:18px">
+      <div style="width:46px;height:46px;border-radius:12px;background:#fef2f2;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:22px;border:1.5px solid #fecaca">🔐</div>
+      <div>
+        <h2 style="margin:0;font-size:19px;font-weight:800;color:var(--text)">Exam Rules &amp; Consent</h2>
+        <p id="consent-quiz-title" style="margin:3px 0 0;font-size:13px;color:var(--muted);font-weight:500"></p>
+      </div>
+    </div>
+
+    <!-- Warning banner -->
+    <div style="background:#fef2f2;border:1.5px solid #fecaca;border-radius:10px;padding:12px 16px;margin-bottom:22px;display:flex;gap:12px;align-items:flex-start">
+      <span style="font-size:18px;flex-shrink:0;margin-top:1px">⚠️</span>
+      <p style="margin:0;font-size:13px;color:#b91c1c;line-height:1.5;font-weight:500">Read all rules carefully. Violations are <strong>logged and reported</strong> to your lecturer. Repeated offences will result in <strong>automatic exam termination</strong>.</p>
+    </div>
+
+    <!-- Dynamic rules (populated by populateConsentScreen) -->
+    <p style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);margin:0 0 10px">Exam Conditions</p>
+    <div id="consent-rules-list" style="display:flex;flex-direction:column;gap:8px;margin-bottom:22px"></div>
+
+    <!-- Academic integrity (always shown) -->
+    <div style="border-top:1px solid var(--border);padding-top:18px;margin-bottom:18px">
+      <p style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);margin:0 0 10px">Academic Integrity</p>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <div style="display:flex;gap:12px;padding:10px 14px;background:var(--card);border:1.5px solid var(--border);border-radius:10px;align-items:flex-start">
+          <span style="font-size:17px;flex-shrink:0;margin-top:1px">🤖</span>
+          <span style="font-size:13px;color:var(--text);line-height:1.5">AI tools (ChatGPT, Copilot, Gemini, etc.) are <strong>strictly prohibited</strong> during this exam.</span>
+        </div>
+        <div style="display:flex;gap:12px;padding:10px 14px;background:var(--card);border:1.5px solid var(--border);border-radius:10px;align-items:flex-start">
+          <span style="font-size:17px;flex-shrink:0;margin-top:1px">🚫</span>
+          <span style="font-size:13px;color:var(--text);line-height:1.5">Collaboration with other students — verbal, written, or digital — is <strong>not allowed</strong>.</span>
+        </div>
+        <div style="display:flex;gap:12px;padding:10px 14px;background:var(--card);border:1.5px solid var(--border);border-radius:10px;align-items:flex-start">
+          <span style="font-size:17px;flex-shrink:0;margin-top:1px">📤</span>
+          <span style="font-size:13px;color:var(--text);line-height:1.5">Sharing, photographing, or distributing exam questions is a <strong>violation of academic policy</strong> and may result in disciplinary action.</span>
+        </div>
+        <div style="display:flex;gap:12px;padding:10px 14px;background:var(--card);border:1.5px solid var(--border);border-radius:10px;align-items:flex-start">
+          <span style="font-size:17px;flex-shrink:0;margin-top:1px">📚</span>
+          <span style="font-size:13px;color:var(--text);line-height:1.5">Unauthorised external resources (websites, notes, textbooks) are <strong>not permitted</strong> unless explicitly stated by your lecturer.</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Agreement checkbox -->
+    <label class="consent-check" style="background:#f8fafc;border:1.5px solid var(--border);border-radius:10px;padding:14px 16px;margin:0;cursor:pointer">
       <input type="checkbox" id="consent-checkbox" />
-      <span>I have read and agree to the above monitoring conditions and data usage policy.</span>
+      <span style="font-size:13px;color:var(--text);line-height:1.55;font-weight:500">I have read and fully understand all the rules above. I agree to comply and accept that violations may result in exam termination and an integrity report submitted to my lecturer.</span>
     </label>
-    <button class="btn btn-primary" id="proceed-camera-btn" disabled>Continue to Camera Setup</button>
-    <button class="btn btn-ghost" id="back-to-list-btn" style="margin-top:10px">← Back</button>
+
+    <button class="btn btn-primary" id="proceed-camera-btn" disabled style="margin-top:16px;width:100%;padding:14px">Continue to Camera Setup →</button>
+    <button class="btn btn-ghost" id="back-to-list-btn" style="margin-top:10px;width:100%">← Back to Quiz List</button>
+
     <p style="margin-top:16px;font-size:11px;text-align:center;color:var(--slate)">
       ⚠️ Mobile browser limitations: screen lock detection may vary by device. For maximum enforcement, use the DIKLY app.
     </p>
@@ -789,6 +848,9 @@ const state = {
   faceCheckInterval: null,
   snapshotInterval: null,
   heartbeatInterval: null,
+  noiseInterval: null,
+  audioStream: null,
+  audioContext: null,
   backgroundStart: null,
   lastFaceState: 'green',
   deviceFingerprint: null,
@@ -1094,6 +1156,7 @@ async function loadQuizList() {
         if (quiz.isSubmitted) return toast('You have already completed this quiz', 'warn');
         if (!quiz.canAttempt) return toast(`Quiz is ${quiz.status}`, 'warn');
         state.selectedQuiz = quiz;
+        populateConsentScreen(quiz);
         show('consent-screen');
       });
     });
@@ -1106,6 +1169,86 @@ async function loadQuizList() {
 // ══════════════════════════════════════════════════════════════════
 //  CONSENT
 // ══════════════════════════════════════════════════════════════════
+function populateConsentScreen(quiz) {
+  const titleEl = document.getElementById('consent-quiz-title');
+  if (titleEl) titleEl.textContent = quiz.title || 'Untitled Quiz';
+
+  const cb = document.getElementById('consent-checkbox');
+  if (cb) cb.checked = false;
+  const btn = document.getElementById('proceed-camera-btn');
+  if (btn) btn.disabled = true;
+
+  const list = document.getElementById('consent-rules-list');
+  if (!list) return;
+
+  const rules = [];
+  const rule = (icon, text, severity = 'normal') => {
+    const bg     = severity === 'high' ? '#fef2f2' : severity === 'warn' ? '#fffbeb' : 'var(--card)';
+    const border = severity === 'high' ? '#fecaca' : severity === 'warn' ? '#fde68a' : 'var(--border)';
+    const color  = severity === 'high' ? '#b91c1c' : severity === 'warn' ? '#92400e' : 'var(--text)';
+    rules.push(`<div style="display:flex;gap:12px;padding:10px 14px;background:${bg};border:1.5px solid ${border};border-radius:10px;align-items:flex-start">
+      <span style="font-size:17px;flex-shrink:0;margin-top:1px">${icon}</span>
+      <span style="font-size:13px;color:${color};line-height:1.55">${text}</span>
+    </div>`);
+  };
+
+  // Time limit — always shown
+  const mins = quiz.timeLimitMinutes || quiz.timeLimit;
+  if (mins) rule('⏱', `This exam has a <strong>${mins}-minute time limit</strong>. The timer starts immediately when you begin and cannot be paused.`, 'warn');
+
+  // Tab / focus enforcement
+  if (quiz.terminateOnTabSwitch) {
+    rule('🚫', '<strong>Switching tabs or opening another app will immediately terminate your exam.</strong> You must remain on this page for the entire duration.', 'high');
+  } else if (quiz.terminateOnFocusLost) {
+    rule('👁', 'Minimising this window or switching applications is detected and logged as a violation.', 'warn');
+  } else {
+    rule('👁', 'Tab switching and navigation away from this page are monitored and logged.', 'normal');
+  }
+
+  // Fullscreen
+  if (quiz.requireFullscreen) {
+    rule('⛶', '<strong>Fullscreen mode is required.</strong> Exiting fullscreen will be logged as a violation and may terminate your exam.', 'warn');
+  }
+
+  // Auto-termination threshold
+  if (quiz.maxViolationsBeforeTermination > 0) {
+    rule('⚠️', `Your exam will be <strong>automatically submitted</strong> after <strong>${quiz.maxViolationsBeforeTermination} violation${quiz.maxViolationsBeforeTermination !== 1 ? 's' : ''}</strong>. Every incident is logged and reviewed by your lecturer.`, 'high');
+  }
+
+  // Session lock
+  if (quiz.enforceSessionLock !== false) {
+    rule('🔒', 'This exam is locked to your current device and browser session. Opening it in another tab or on another device will invalidate your session immediately.', 'normal');
+  }
+
+  // Copy/paste + right-click
+  if (quiz.preventCopyPaste) rule('📋', 'Copy and paste are <strong>disabled</strong> in this exam window. All answers must be typed directly.', 'normal');
+  if (quiz.preventRightClick) rule('🖱', 'Right-clicking is disabled during the exam.', 'normal');
+
+  // Camera / proctoring
+  if (quiz.proctoringEnabled) {
+    rule('📷', 'Your <strong>camera must be active</strong> throughout this exam. You must remain clearly visible and facing your screen at all times.', 'high');
+
+    if (quiz.snapshotIntervalSeconds > 0) {
+      rule('🖼', `Webcam snapshots are captured every <strong>${quiz.snapshotIntervalSeconds} second${quiz.snapshotIntervalSeconds !== 1 ? 's' : ''}</strong> and stored securely for integrity review.`, 'normal');
+    }
+
+    if (quiz.aiProctoringEnabled || ['ai', 'hybrid'].includes(quiz.monitoringMode)) {
+      rule('🤖', 'AI will analyse your webcam feed in real time — detecting face absence, multiple people in frame, mobile phone use, and suspicious eye-gaze direction.', 'warn');
+    }
+
+    if (['human', 'hybrid'].includes(quiz.monitoringMode)) {
+      rule('👁', 'A <strong>human moderator may be watching your webcam feed live</strong>. Any suspicious behaviour will be flagged and recorded immediately.', 'high');
+    }
+  }
+
+  // Noise detection
+  if ((quiz.noiseDetectionThreshold ?? 0) > 0) {
+    rule('🎙', 'Microphone monitoring is active. Unusual noise levels are detected and logged as violations.', 'warn');
+  }
+
+  list.innerHTML = rules.join('');
+}
+
 document.getElementById('consent-checkbox').addEventListener('change', function () {
   document.getElementById('proceed-camera-btn').disabled = !this.checked;
 });
@@ -1345,6 +1488,68 @@ document.getElementById('capture-start-btn').addEventListener('click', async () 
     document.body.classList.add('exam-active');
     state.examActive = true;
 
+    // ── Offline AI Monitor ────────────────────────────────────────
+    await OfflineMonitor.init({
+      attemptId: state.attempt._id,
+      quizId:    state.selectedQuiz._id,
+      token:     state.token,
+      settings:  state.selectedQuiz,
+    }).catch(err => console.warn('[OfflineMonitor] init failed:', err.message));
+
+    // Register BackgroundSync with service worker (silently degrades if unavailable)
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.ready.then(reg => {
+        reg.active?.postMessage({ type: 'REGISTER_SYNC' });
+      }).catch(() => {});
+    }
+
+    // ── Offline Recorder (only when proctoringEnabled) ───────────
+    if (state.selectedQuiz?.proctoringEnabled && state.cameraStream) {
+      OfflineRecorder.start(state.cameraStream, {
+        attemptId: state.attempt._id,
+        onStoragePause: ({ freeMB }) => {
+          const msg = document.getElementById('storage-warning-msg');
+          if (msg) msg.textContent = `Storage critically low (${freeMB} MB free). Camera recording paused to protect your answers.`;
+          document.getElementById('storage-warning').style.display = 'flex';
+        },
+      }).catch(err => console.warn('[OfflineRecorder] start failed:', err.message));
+    }
+
+    // ── SW message → trigger sync when background sync fires ─────
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.addEventListener('message', (e) => {
+        if (e.data?.type === 'DIKLY_BG_SYNC') {
+          OfflineMonitor.sync(state.token).catch(() => {});
+          OfflineRecorder.uploadAll(state.attempt._id, state.token).catch(() => {});
+        }
+      });
+    }
+
+    // ── Storage pressure UI ───────────────────────────────────────
+    window.addEventListener('dikly:storage-low', (e) => {
+      const mb = e.detail?.freeMB;
+      toast(`⚠️ Storage low (${mb} MB). Recordings may stop soon.`, 'warn');
+    });
+    window.addEventListener('dikly:storage-critical', (e) => {
+      const mb = e.detail?.freeMB;
+      const msg = document.getElementById('storage-warning-msg');
+      if (msg) msg.textContent = `Only ${mb} MB of storage remaining. Recording has been paused.`;
+      document.getElementById('storage-warning').style.display = 'flex';
+    });
+
+    // ── Offline / online indicator ────────────────────────────────
+    const offInd = document.getElementById('offline-indicator');
+    const _updateOnlineStatus = () => {
+      if (offInd) offInd.style.display = navigator.onLine ? 'none' : 'flex';
+      if (navigator.onLine) {
+        OfflineMonitor.sync(state.token).catch(() => {});
+        OfflineRecorder.uploadAll(state.attempt._id, state.token).catch(() => {});
+      }
+    };
+    window.addEventListener('online',  _updateOnlineStatus);
+    window.addEventListener('offline', _updateOnlineStatus);
+    _updateOnlineStatus();
+
     startTimer();
     startProctoring();
     renderQuestion();
@@ -1487,6 +1692,46 @@ function startProctoring() {
       }
     });
   });
+
+  // ── Noise / audio detection ───────────────────────────────────
+  // Only active when quiz has a non-zero noise threshold (AI or hybrid mode).
+  const noiseThreshold = state.selectedQuiz?.noiseDetectionThreshold ?? 40;
+  if (noiseThreshold > 0) {
+    startNoiseDetection(noiseThreshold);
+  }
+}
+
+async function startNoiseDetection(threshold) {
+  try {
+    const micStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+    const audioCtx  = new (window.AudioContext || window.webkitAudioContext)();
+    const source    = audioCtx.createMediaStreamSource(micStream);
+    const analyser  = audioCtx.createAnalyser();
+    analyser.fftSize = 256;
+    source.connect(analyser);
+
+    state.audioStream  = micStream;
+    state.audioContext = audioCtx;
+
+    // Cooldown: only log one noise violation per 15-second window.
+    let lastNoiseLog = 0;
+
+    state.noiseInterval = setInterval(() => {
+      if (!state.examActive) return;
+      const data = new Uint8Array(analyser.frequencyBinCount);
+      analyser.getByteFrequencyData(data);
+      const avg = data.reduce((s, v) => s + v, 0) / data.length;
+      if (avg > threshold) {
+        const now = Date.now();
+        if (now - lastNoiseLog > 15000) {
+          lastNoiseLog = now;
+          logEvent('audio_detected', { level: Math.round(avg), threshold }).catch(console.warn);
+        }
+      }
+    }, 3000);
+  } catch {
+    // Microphone permission denied or unavailable — degrade silently.
+  }
 }
 
 function handleVisibilityChange() {
@@ -1530,6 +1775,10 @@ async function logEvent(eventType, metadata = {}) {
   if (!state.sessionToken || !state.attempt?._id) return;
   const sessionHeader = { 'x-session-token': state.sessionToken };
   const baseUrl = `/api/student/snap-quizzes/quizzes/${state.selectedQuiz._id}/attempts/${state.attempt._id}`;
+
+  // ── Offline-first: store locally regardless of network ────────────
+  OfflineMonitor.logEvent(eventType, metadata).catch(() => {});
+
   try {
     if (eventType === 'heartbeat') {
       const hbRes = await api('POST', `${baseUrl}/heartbeat`, {}, sessionHeader);
@@ -1563,7 +1812,9 @@ async function logEvent(eventType, metadata = {}) {
     }
 
     if (res.violationCount != null) state.totalViolations = res.violationCount;
-  } catch { /* don't crash exam */ }
+  } catch {
+    // Network call failed — event is already stored offline, will sync later
+  }
 }
 
 function showViolationWarning(level) {
@@ -1880,9 +2131,29 @@ function stopExamCleanup() {
   clearInterval(state.faceCheckInterval);
   clearInterval(state.snapshotInterval);
   clearInterval(state.heartbeatInterval);
+  clearInterval(state.noiseInterval);
   document.removeEventListener('visibilitychange', handleVisibilityChange);
   document.removeEventListener('copy', handleCopy);
   document.removeEventListener('cut', handleCopy);
+  if (state.audioStream) {
+    state.audioStream.getTracks().forEach(t => t.stop());
+    state.audioStream = null;
+  }
+  if (state.audioContext) {
+    state.audioContext.close().catch(() => {});
+    state.audioContext = null;
+  }
+
+  // ── Offline Monitor: final sync + stop ──────────────────────────
+  OfflineRecorder.stop().catch(() => {});
+  OfflineMonitor.sync(state.token).then(() => {
+    OfflineRecorder.uploadAll(state.attempt?._id, state.token).catch(() => {});
+    OfflineMonitor.stop();
+    OfflineMonitor.cleanupExpired(14).catch(() => {});
+    OfflineRecorder.deleteExpired(7).catch(() => {});
+  }).catch(() => {
+    OfflineMonitor.stop();
+  });
 }
 
 document.getElementById('v-close-btn').addEventListener('click', () => {

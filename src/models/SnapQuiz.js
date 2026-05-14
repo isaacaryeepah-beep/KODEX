@@ -233,6 +233,21 @@ const snapQuizSchema = new mongoose.Schema(
     archivedAt:   { type: Date, default: null },
     archivedBy:   { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
 
+    // ── Monitoring mode ───────────────────────────────────────────────────
+    // none   → standard anti-cheat flags only (default)
+    // ai     → AI snapshot analysis + face/phone/gaze detection
+    // human  → live moderator views webcam + screen share via WebRTC
+    // hybrid → AI pre-screens; human moderator reviews flagged events
+    monitoringMode: {
+      type: String,
+      enum: ["none", "ai", "human", "hybrid"],
+      default: "none",
+    },
+    humanMonitors: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
+    maxConcurrentMonitors: { type: Number, default: 5, min: 1 },
+    // Noise threshold (0–255 Web Audio API scale). Violations above this are logged.
+    noiseDetectionThreshold: { type: Number, default: 40, min: 0, max: 255 },
+
     // ── Meeting tie-in (Phase 3: DIKLY spec) ─────────────────────────────
     // When set, students can only start/continue this quiz while the linked
     // meeting is in 'live' status. Acts as an in-class proctoring gate.
@@ -272,6 +287,7 @@ const snapQuizSchema = new mongoose.Schema(
 snapQuizSchema.index({ company: 1, course: 1, createdBy: 1, status: 1 });
 snapQuizSchema.index({ company: 1, course: 1, isPublished: 1, isActive: 1 });
 snapQuizSchema.index({ company: 1, startTime: 1, endTime: 1, status: 1 });
+snapQuizSchema.index({ company: 1, createdBy: 1, createdAt: -1 });
 
 // ---------------------------------------------------------------------------
 // Virtuals

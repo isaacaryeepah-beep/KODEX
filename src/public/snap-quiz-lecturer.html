@@ -251,6 +251,7 @@ html, body { height:100%; background:var(--bg); color:var(--text); font-family:v
       <div style="display:flex;gap:6px">
         <button class="btn btn-primary btn-sm" style="flex:1" onclick="loadStudents()">↻ Refresh</button>
         <button class="btn btn-ghost btn-sm" style="flex:1" onclick="openProctorDashboard()">🛰 Proctor View</button>
+        <button class="btn btn-ghost btn-sm" style="flex:1" onclick="openAnticheatDashboard()">🛡 Anti-Cheat</button>
       </div>
     </div>
 
@@ -369,8 +370,9 @@ async function loadQuizList() {
     const quizzes = data.quizzes || [];
     const sel = document.getElementById('quiz-select');
     const statusIcon = s => s === 'open' ? '🟢' : s === 'closed' ? '🔴' : s === 'published' ? '🔵' : '⚪';
+    const monIcon = m => m === 'ai' ? '🤖' : m === 'human' ? '👁' : m === 'hybrid' ? '⚡' : '';
     sel.innerHTML = '<option value="">— Select a Snap Quiz —</option>' +
-      quizzes.map(q => `<option value="${q._id}">${statusIcon(q.status)} ${q.title}</option>`).join('');
+      quizzes.map(q => `<option value="${q._id}">${statusIcon(q.status)} ${monIcon(q.monitoringMode)} ${q.title}</option>`).join('');
 
     // Auto-select if URL has ?quizId=
     const qid = new URLSearchParams(location.search).get('quizId');
@@ -616,6 +618,13 @@ function openProctorDashboard() {
   const url = currentQuizId
     ? `/proctor-dashboard.html?quizId=${currentQuizId}`
     : '/proctor-dashboard.html';
+  window.open(url, '_blank');
+}
+
+function openAnticheatDashboard() {
+  const url = currentQuizId
+    ? `/anticheat?quizId=${currentQuizId}`
+    : '/anticheat';
   window.open(url, '_blank');
 }
 </script>

@@ -1,16 +1,21 @@
 // ════════════════════════════════════════════════════════════════════
-//  DIKLY Service Worker -- Offline Support
-//  Caches the app shell so it loads offline
-//  API requests are NOT cached here (handled in app.js with localStorage)
+//  DIKLY Service Worker -- Offline Support + Background Sync
+//  Caches the app shell so it loads offline.
+//  Handles BackgroundSync for offline monitor event uploads.
 // ════════════════════════════════════════════════════════════════════
 
-const CACHE_NAME = 'dikly-v6';
+const CACHE_NAME  = 'dikly-v7';
+const SYNC_TAG    = 'dikly-offline-sync';
+const BEACON_TAG  = 'dikly-beacon-sync';
 
 // App shell files to cache on install
 const SHELL_FILES = [
   '/',
   '/index.html',
+  '/snap-quiz.html',
   '/js/app.js',
+  '/js/offline-monitor.js',
+  '/js/offline-recorder.js',
   '/css/style.css',
 ];
 
@@ -118,6 +123,31 @@ self.addEventListener('push', event => {
   event.waitUntil(
     self.registration.showNotification(data.title || 'DIKLY', options)
   );
+});
+
+// ── Background Sync: offline event queue ─────────────────────────────────────
+// Triggered by OfflineMonitor via registration.sync.register(SYNC_TAG).
+// Notifies all controlled clients to run their sync() function.
+self.addEventListener('sync', event => {
+  if (event.tag === SYNC_TAG || event.tag === BEACON_TAG) {
+    event.waitUntil(
+      self.clients.matchAll({ includeUncontrolled: true, type: 'window' }).then(clients => {
+        clients.forEach(client => client.postMessage({ type: 'DIKLY_BG_SYNC' }));
+      })
+    );
+  }
+});
+
+// ── Message handler: client → SW communication ────────────────────────────────
+self.addEventListener('message', event => {
+  if (event.data?.type === 'REGISTER_SYNC') {
+    self.registration.sync.register(SYNC_TAG).catch(() => {
+      // BackgroundSync not available — client handles via 'online' event instead
+    });
+  }
+  if (event.data?.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
 });
 
 self.addEventListener('notificationclick', event => {

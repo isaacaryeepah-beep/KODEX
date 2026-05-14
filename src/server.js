@@ -27,7 +27,12 @@ const adminReportRoutes = require("./routes/adminReports");
 const adminDashboardRoutes = require("./routes/adminDashboard");
 const jitsiRoutes = require("./routes/jitsi");
 const searchRoutes = require("./routes/Search");
-const proctoredQuizRoutes = require("./routes/proctoredQuizzes");
+// Legacy proctored quiz system — superseded by SnapQuiz (proctoringEnabled=true).
+// Kept for historical data access. Set LEGACY_PROCTOR_DISABLED=true to retire.
+let proctoredQuizRoutes = null;
+if (!process.env.LEGACY_PROCTOR_DISABLED) {
+  try { proctoredQuizRoutes = require("./routes/proctoredQuizzes"); } catch(_) {}
+}
 const assignmentRoutes  = require("./routes/assignments");
 const aiProxyRoutes     = require("./routes/aiProxy");
 const meetingRoutes     = require("./routes/meetingRoutes");
@@ -36,6 +41,7 @@ const normalQuizLecturerRoutes = require("./routes/normalQuizLecturerRoutes");
 const normalQuizStudentRoutes  = require("./routes/normalQuizStudentRoutes");
 const snapQuizLecturerRoutes        = require("./routes/snapQuizLecturerRoutes");
 const snapQuizStudentRoutes         = require("./routes/snapQuizStudentRoutes");
+const offlineSyncRoutes             = require("./routes/offlineSync");
 const assignmentLecturerRoutes      = require("./routes/assignmentLecturerRoutes");
 const assignmentStudentRoutes       = require("./routes/assignmentStudentRoutes");
 const aiGeneratorRoutes             = require("./routes/aiGeneratorRoutes");
@@ -51,7 +57,7 @@ const PORT = process.env.PORT || 5000;
 
 app.set("trust proxy", true);
 
-app.use(compression({ level: 6 }));
+app.use(compression({ level: 4, threshold: 1024 }));
 
 app.use((req, res, next) => {
   const isProduction = process.env.NODE_ENV === 'production' || process.env.RENDER;
@@ -134,6 +140,7 @@ app.get("/superadmin", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "superadmin.html"));
 });
 
+app.get("/anticheat",      (req, res) => res.sendFile(path.join(__dirname, "public", "anticheat-dashboard.html")));
 app.get("/about",          (req, res) => res.sendFile(path.join(__dirname, "public", "about.html")));
 app.get("/founder",        (req, res) => res.sendFile(path.join(__dirname, "public", "founder.html")));
 app.get("/contact",        (req, res) => res.sendFile(path.join(__dirname, "public", "contact.html")));
@@ -198,6 +205,7 @@ app.use("/api/student/quizzes", studentQuizRoutes);
 app.use("/api/student/normal-quizzes", normalQuizStudentRoutes);
 app.use("/api/lecturer/snap-quizzes",  snapQuizLecturerRoutes);
 app.use("/api/student/snap-quizzes",   snapQuizStudentRoutes);
+app.use("/api/offline-sync",           offlineSyncRoutes);
 app.use("/api/lecturer/assignments",   assignmentLecturerRoutes);
 app.use("/api/student/assignments",    assignmentStudentRoutes);
 app.use("/api/lecturer/ai-generator",  aiGeneratorRoutes);
@@ -211,7 +219,13 @@ app.use("/api/admin/reports", adminReportRoutes);
 app.use("/api/jitsi", jitsiRoutes);
 app.use("/api/admin", adminDashboardRoutes);
 app.use("/api/search", searchRoutes);
-app.use("/api/proctor", proctoredQuizRoutes);
+if (proctoredQuizRoutes) {
+  app.use("/api/proctor", proctoredQuizRoutes);
+} else {
+  app.use("/api/proctor", (req, res) => res.status(410).json({
+    error: "The legacy proctored quiz system has been retired. Use /api/student/snap-quizzes instead.",
+  }));
+}
 app.use("/api/assignments", assignmentRoutes);
 app.use("/api/ai", aiProxyRoutes);
 app.use("/api/meetings", meetingRoutes);

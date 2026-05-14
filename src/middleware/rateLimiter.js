@@ -81,4 +81,11 @@ const apiLimiter = createRateLimiter({
   message: 'Too many requests from this IP. Please slow down.',
 });
 
-module.exports = { loginLimiter, registerLimiter, passwordResetLimiter, apiLimiter };
+// Beacon (unauthenticated): max 60 pings per 10 minutes per IP
+const beaconLimiter = createRateLimiter({
+  windowMs: 10 * 60 * 1000,
+  max: 60,
+  message: 'Too many beacon requests.',
+});
+
+module.exports = { loginLimiter, registerLimiter, passwordResetLimiter, apiLimiter, beaconLimiter };

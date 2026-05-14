@@ -27,6 +27,7 @@ const SnapQuizProctoringEvent = require("../models/SnapQuizProctoringEvent");
 const SnapQuizResult         = require("../models/SnapQuizResult");
 const { SNAP_QUIZ_STATUSES } = require("../models/SnapQuiz");
 const { ATTEMPT_STATUSES, GRADING_STATUSES } = require("../models/SnapQuizAttempt");
+const { autoGradeAttempt } = require("../services/quizGradingService");
 
 // ─── Quiz CRUD ───────────────────────────────────────────────────────────────
 
@@ -46,10 +47,15 @@ exports.createQuiz = async (req, res) => {
       requireFullscreen, preventCopyPaste, preventRightClick, preventPrintScreen,
       showViolationWarnings,
       proctoringEnabled, snapshotIntervalSeconds, aiProctoringEnabled,
+      monitoringMode, humanMonitors, maxConcurrentMonitors, noiseDetectionThreshold,
       showResultAfterSubmission, showAnswersAfterSubmission,
       showAnswersAfterClose, autoReleaseResults,
       randomizeQuestions, randomizeOptions,
     } = req.body;
+
+    // Derive proctoring flags from monitoringMode if not explicitly set.
+    const resolvedProctoringEnabled   = proctoringEnabled   ?? (["ai","hybrid"].includes(monitoringMode));
+    const resolvedAiProctoringEnabled = aiProctoringEnabled ?? (["ai","hybrid"].includes(monitoringMode));
 
     const quiz = await SnapQuiz.create({
       company:   req.companyId,
@@ -64,7 +70,12 @@ exports.createQuiz = async (req, res) => {
       terminateOnTabSwitch, terminateOnFocusLost, terminateOnFullscreenExit,
       requireFullscreen, preventCopyPaste, preventRightClick, preventPrintScreen,
       showViolationWarnings,
-      proctoringEnabled, snapshotIntervalSeconds, aiProctoringEnabled,
+      proctoringEnabled: resolvedProctoringEnabled,
+      snapshotIntervalSeconds,
+      aiProctoringEnabled: resolvedAiProctoringEnabled,
+      monitoringMode: monitoringMode || "none",
+      humanMonitors:  humanMonitors  || [],
+      maxConcurrentMonitors, noiseDetectionThreshold,
       showResultAfterSubmission, showAnswersAfterSubmission,
       showAnswersAfterClose, autoReleaseResults,
       randomizeQuestions, randomizeOptions,
@@ -143,6 +154,7 @@ exports.updateQuiz = async (req, res) => {
       "requireFullscreen","preventCopyPaste","preventRightClick","preventPrintScreen",
       "showViolationWarnings",
       "proctoringEnabled","snapshotIntervalSeconds","aiProctoringEnabled",
+      "monitoringMode","humanMonitors","maxConcurrentMonitors","noiseDetectionThreshold",
       "showResultAfterSubmission","showAnswersAfterSubmission",
       "showAnswersAfterClose","autoReleaseResults",
       "randomizeQuestions","randomizeOptions",
@@ -291,11 +303,20 @@ exports.createQuestion = async (req, res) => {
       .sort({ orderIndex: -1 }).select("orderIndex").lean();
     const orderIndex = req.body.orderIndex ?? (last ? last.orderIndex + 1 : 0);
 
+    const ALLOWED_CREATE_FIELDS = [
+      "questionType","questionText","media","options","optionMedia",
+      "correctOptionIndex","correctOptionIndices","correctBoolean",
+      "correctAnswerText","acceptedAnswers","numericAnswer","modelAnswer",
+      "marks","allowPartialMarks","mathsDrawing","explanation","isActive",
+    ];
+    const safeBody = {};
+    ALLOWED_CREATE_FIELDS.forEach(f => { if (req.body[f] !== undefined) safeBody[f] = req.body[f]; });
+
     const question = await SnapQuizQuestion.create({
+      ...safeBody,
       quiz:      quiz._id,
       company:   req.companyId,
       createdBy: req.user._id,
-      ...req.body,
       orderIndex,
     });
 
@@ -480,60 +501,8 @@ exports.forceSubmitAttempt = async (req, res) => {
   }
 };
 
-async function _autoGradeAttemptLecturer(attemptId, companyId) {
-  const responses   = await SnapQuizResponse.find({ attempt: attemptId }).lean();
-  const questionIds = responses.map(r => r.question);
-  const questions   = await SnapQuizQuestion.find({ _id: { $in: questionIds } }).lean();
-  const qMap = {};
-  questions.forEach(q => { qMap[q._id.toString()] = q; });
-
-  let rawScore = 0, maxScore = 0, hasManual = false;
-  const ops = [];
-
-  for (const response of responses) {
-    const q = qMap[response.question.toString()];
-    if (!q) continue;
-    maxScore += q.marks || 1;
-
-    const manualTypes = new Set(["long_answer", "essay", "file_upload"]);
-    if (manualTypes.has(q.questionType)) {
-      hasManual = true;
-      ops.push({ updateOne: { filter: { _id: response._id }, update: { $set: { gradingStatus: "pending_manual" } } } });
-      continue;
-    }
-
-    let isCorrect = false;
-    if (q.questionType === "mcq") {
-      isCorrect = response.selectedOptionIndex === q.correctOptionIndex;
-    } else if (q.questionType === "mcq_multi") {
-      const c = new Set((q.correctOptionIndices || []).map(String));
-      const s = new Set((response.selectedOptionIndices || []).map(String));
-      isCorrect = c.size > 0 && c.size === s.size && [...c].every(v => s.has(v));
-    } else if (q.questionType === "true_false") {
-      isCorrect = response.selectedBoolean === q.correctBoolean;
-    } else if (q.questionType === "fill_blank" || q.questionType === "short_answer") {
-      const typed = (response.textAnswer || "").trim().toLowerCase();
-      const correct = (q.correctAnswerText || "").trim().toLowerCase();
-      isCorrect = typed.length > 0 && (
-        typed === correct ||
-        (q.acceptedAnswers || []).map(x => x.trim().toLowerCase()).includes(typed)
-      );
-    } else if (q.questionType === "numeric") {
-      const expected = q.numericAnswer?.value;
-      const tol = q.numericAnswer?.tolerance || 0;
-      if (expected != null && response.numericAnswer != null) {
-        isCorrect = Math.abs(response.numericAnswer - expected) <= tol;
-      }
-    }
-
-    const earnedMarks = isCorrect ? (q.marks || 1) : 0;
-    rawScore += earnedMarks;
-    ops.push({ updateOne: { filter: { _id: response._id }, update: { $set: { isCorrect, earnedMarks, isAutoGraded: true, gradingStatus: "auto_graded" } } } });
-  }
-
-  if (ops.length) await SnapQuizResponse.bulkWrite(ops);
-  return { rawScore, maxScore, hasManual };
-}
+// Grading delegated to shared service — see src/services/quizGradingService.js
+const _autoGradeAttemptLecturer = autoGradeAttempt;
 
 // ─── Violation log ────────────────────────────────────────────────────────────
 

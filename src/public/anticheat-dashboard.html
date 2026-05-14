@@ -1,0 +1,799 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>DIKLY — Anti-Cheat Review Dashboard</title>
+<link rel="icon" type="image/svg+xml" href="/dikly-icon.svg">
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #f8fafc; --surface: #ffffff; --border: #e2e8f0;
+  --text: #0f172a; --muted: #64748b; --dim: #94a3b8;
+  --primary: #0ea5e9; --primary-d: #0284c7;
+  --green: #16a34a; --yellow: #d97706; --red: #dc2626; --orange: #ea580c;
+  --purple: #7c3aed;
+  --font: 'Plus Jakarta Sans', sans-serif; --mono: 'Space Mono', monospace;
+  --radius: 12px;
+}
+html, body { height: 100%; background: var(--bg); color: var(--text); font-family: var(--font); }
+
+/* Topbar */
+.topbar {
+  position: sticky; top: 0; z-index: 100;
+  background: var(--surface); border-bottom: 1px solid var(--border);
+  padding: 13px 20px; display: flex; align-items: center; gap: 12px;
+  box-shadow: 0 1px 6px rgba(0,0,0,.06);
+}
+.topbar-logo { font-weight: 800; font-size: 16px; letter-spacing: -.3px; }
+.topbar-logo span { color: var(--primary); }
+.topbar-title { font-size: 14px; font-weight: 700; color: var(--text); }
+.topbar-right { margin-left: auto; display: flex; gap: 8px; align-items: center; }
+
+/* Login overlay */
+#login-overlay {
+  position: fixed; inset: 0; background: var(--bg); z-index: 200;
+  display: flex; align-items: center; justify-content: center; padding: 24px;
+}
+.login-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 16px; padding: 36px 32px; width: 100%; max-width: 400px;
+  box-shadow: 0 8px 32px rgba(0,0,0,.08);
+}
+.login-card h2 { font-size: 22px; font-weight: 800; margin-bottom: 4px; }
+.login-card p  { color: var(--muted); font-size: 13px; margin-bottom: 24px; }
+
+/* Forms */
+.fg { margin-bottom: 12px; }
+.fg label { display: block; font-size: 11px; font-weight: 700; color: var(--muted); margin-bottom: 5px; text-transform: uppercase; letter-spacing: .4px; }
+.fg input, .fg select {
+  width: 100%; padding: 10px 13px; border: 1.5px solid var(--border);
+  border-radius: 9px; font-family: var(--font); font-size: 13px; outline: none;
+  background: var(--surface); color: var(--text); transition: border-color .15s;
+}
+.fg input:focus, .fg select:focus { border-color: var(--primary); }
+
+/* Buttons */
+.btn {
+  display: inline-flex; align-items: center; gap: 6px; justify-content: center;
+  padding: 9px 18px; border: none; border-radius: 9px; font-family: var(--font);
+  font-size: 13px; font-weight: 700; cursor: pointer; transition: all .15s;
+  white-space: nowrap;
+}
+.btn-primary { background: var(--primary); color: #fff; }
+.btn-primary:hover { background: var(--primary-d); }
+.btn-ghost { background: transparent; border: 1.5px solid var(--border); color: var(--text); }
+.btn-ghost:hover { background: var(--bg); }
+.btn-danger { background: var(--red); color: #fff; }
+.btn-sm { padding: 6px 13px; font-size: 12px; border-radius: 7px; }
+.btn:disabled { opacity: .4; cursor: not-allowed; }
+
+/* Layout */
+.layout { display: flex; min-height: calc(100vh - 50px); }
+.sidebar {
+  width: 300px; flex-shrink: 0; border-right: 1px solid var(--border);
+  background: var(--surface); display: flex; flex-direction: column;
+  position: sticky; top: 50px; height: calc(100vh - 50px); overflow-y: auto;
+}
+.main { flex: 1; overflow-y: auto; padding: 20px; min-width: 0; }
+
+/* Sidebar controls */
+.sidebar-section { padding: 14px 16px; border-bottom: 1px solid var(--border); }
+.sidebar-section h4 { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 10px; }
+
+/* Summary cards */
+.summary-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 20px; }
+.sum-card {
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 16px 14px; text-align: center;
+}
+.sum-card .val { font-size: 26px; font-weight: 800; font-family: var(--mono); }
+.sum-card .lbl { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; margin-top: 4px; }
+
+/* Risk bar */
+.risk-bar { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.risk-label { font-size: 12px; font-weight: 600; width: 110px; flex-shrink: 0; }
+.risk-track { flex: 1; height: 8px; background: var(--border); border-radius: 4px; overflow: hidden; }
+.risk-fill { height: 100%; border-radius: 4px; transition: width .4s; }
+
+/* Student list */
+.stu-list { flex: 1; overflow-y: auto; }
+.stu-item {
+  display: flex; align-items: center; gap: 10px; padding: 10px 16px;
+  border-bottom: 1px solid var(--border); cursor: pointer; transition: background .12s;
+}
+.stu-item:hover { background: var(--bg); }
+.stu-item.active { background: #f0f9ff; border-left: 3px solid var(--primary); }
+.stu-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+.risk-high { background: var(--red); box-shadow: 0 0 0 3px rgba(220,38,38,.15); }
+.risk-med  { background: var(--yellow); box-shadow: 0 0 0 3px rgba(215,119,0,.15); }
+.risk-low  { background: var(--green); box-shadow: 0 0 0 3px rgba(22,163,74,.15); }
+.risk-none { background: var(--dim); }
+
+/* Badges */
+.badge {
+  display: inline-block; padding: 3px 9px; border-radius: 20px;
+  font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .4px;
+}
+.b-red    { background: #fee2e2; color: var(--red); }
+.b-yellow { background: #fef3c7; color: var(--yellow); }
+.b-green  { background: #dcfce7; color: var(--green); }
+.b-blue   { background: #dbeafe; color: #1d4ed8; }
+.b-grey   { background: #f1f5f9; color: var(--muted); }
+.b-purple { background: #ede9fe; color: var(--purple); }
+.b-orange { background: #fff7ed; color: var(--orange); }
+
+/* Detail card */
+.detail-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 20px; margin-bottom: 14px;
+}
+.detail-card h3 { font-size: 16px; font-weight: 800; margin-bottom: 4px; }
+.detail-meta { font-size: 12px; color: var(--muted); margin-bottom: 12px; }
+
+/* Timeline */
+.timeline { display: flex; flex-direction: column; gap: 6px; }
+.t-item {
+  display: flex; gap: 12px; align-items: flex-start;
+  padding: 10px 14px; background: var(--surface);
+  border: 1px solid var(--border); border-radius: 10px;
+  position: relative;
+}
+.t-item.sev-critical { border-left: 3px solid var(--red); }
+.t-item.sev-high     { border-left: 3px solid var(--orange); }
+.t-item.sev-medium   { border-left: 3px solid var(--yellow); }
+.t-item.sev-info     { border-left: 3px solid var(--dim); }
+.t-icon { font-size: 18px; flex-shrink: 0; width: 28px; text-align: center; }
+.t-type { font-size: 13px; font-weight: 700; text-transform: capitalize; }
+.t-time { font-size: 11px; color: var(--muted); margin-top: 2px; }
+.t-detail { font-size: 12px; color: var(--muted); margin-top: 3px; }
+.t-action { margin-left: auto; flex-shrink: 0; }
+
+/* Snapshot grid */
+.snap-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 8px; margin-bottom: 14px;
+}
+.snap-cell {
+  position: relative; aspect-ratio: 4/3; border-radius: 9px; overflow: hidden;
+  border: 2px solid var(--border); background: #0f172a;
+}
+.snap-cell.flagged { border-color: var(--red); }
+.snap-cell.warned  { border-color: var(--yellow); }
+.snap-cell img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.snap-cell-label {
+  position: absolute; bottom: 0; left: 0; right: 0;
+  padding: 4px 6px; background: rgba(0,0,0,.6); color: #fff; font-size: 10px;
+}
+.snap-cell-flags {
+  position: absolute; top: 5px; right: 5px; display: flex; gap: 3px; flex-wrap: wrap;
+}
+.snap-flag { font-size: 11px; background: rgba(0,0,0,.7); padding: 1px 4px; border-radius: 4px; color: #fbbf24; }
+
+/* Stats row */
+.stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 14px; }
+.stat-box { background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 12px 10px; text-align: center; }
+.stat-box .sv { font-size: 22px; font-weight: 800; font-family: var(--mono); }
+.stat-box .sk { font-size: 10px; color: var(--dim); margin-top: 4px; text-transform: uppercase; letter-spacing: .3px; }
+
+/* Section title */
+.sec-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .6px; color: var(--muted); margin-bottom: 8px; margin-top: 16px; }
+
+/* Placeholder */
+.placeholder { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 280px; color: var(--dim); gap: 10px; text-align: center; }
+.placeholder .icon { font-size: 36px; }
+.placeholder p { font-size: 14px; }
+
+/* Toast */
+#toast {
+  position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+  background: var(--text); color: #fff; padding: 9px 18px; border-radius: 9px;
+  font-size: 13px; font-weight: 600; z-index: 1000; pointer-events: none;
+  opacity: 0; transition: opacity .2s;
+}
+#toast.show { opacity: 1; }
+#toast.err  { background: var(--red); }
+#toast.ok   { background: var(--green); }
+
+/* Tabs */
+.tab-bar { display: flex; gap: 2px; border-bottom: 1px solid var(--border); margin-bottom: 14px; }
+.tab-btn {
+  padding: 9px 16px; font-family: var(--font); font-size: 13px; font-weight: 600;
+  border: none; background: none; cursor: pointer; color: var(--muted);
+  border-bottom: 2px solid transparent; transition: all .15s; margin-bottom: -1px;
+}
+.tab-btn.active { color: var(--primary); border-bottom-color: var(--primary); }
+
+/* Err box */
+.err-box { background: #fef2f2; border: 1px solid #fca5a5; border-radius: 8px; padding: 10px 14px; font-size: 13px; color: var(--red); margin-top: 10px; display: none; }
+
+@media (max-width: 768px) {
+  .layout { flex-direction: column; }
+  .sidebar { width: 100%; height: auto; position: static; }
+  .stats-row { grid-template-columns: repeat(2, 1fr); }
+  .summary-grid { grid-template-columns: repeat(2, 1fr); }
+}
+</style>
+</head>
+<body>
+
+<!-- Login overlay -->
+<div id="login-overlay">
+  <div class="login-card">
+    <h2>DIKLY<span style="color:var(--primary)">.</span></h2>
+    <p>Anti-Cheat Review Dashboard — sign in to continue</p>
+    <div class="fg">
+      <label>Email</label>
+      <input type="email" id="l-email" placeholder="lecturer@school.edu" />
+    </div>
+    <div class="fg">
+      <label>Password</label>
+      <input type="password" id="l-pass" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()" />
+    </div>
+    <button class="btn btn-primary" style="width:100%;margin-top:6px" onclick="doLogin()" id="login-btn">Sign In</button>
+    <div class="err-box" id="login-err"></div>
+  </div>
+</div>
+
+<!-- Topbar -->
+<div class="topbar">
+  <div class="topbar-logo">DIKLY<span>.</span></div>
+  <div class="topbar-title">Anti-Cheat Dashboard</div>
+  <div class="topbar-right">
+    <span id="user-name" style="font-size:13px;color:var(--muted)"></span>
+    <button class="btn btn-ghost btn-sm" onclick="doLogout()">Sign out</button>
+  </div>
+</div>
+
+<div class="layout">
+  <!-- Sidebar -->
+  <div class="sidebar">
+    <div class="sidebar-section">
+      <h4>Quiz</h4>
+      <select id="quiz-select" onchange="selectQuiz(this.value)" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-family:var(--font);font-size:13px;outline:none;color:var(--text)">
+        <option value="">— Select a Snap Quiz —</option>
+      </select>
+    </div>
+
+    <div class="sidebar-section">
+      <h4>Risk Overview</h4>
+      <div id="risk-overview">
+        <div class="risk-bar"><div class="risk-label" style="color:var(--red)">High Risk</div><div class="risk-track"><div class="risk-fill" id="risk-fill-high" style="background:var(--red);width:0%"></div></div><span id="risk-n-high" style="font-size:12px;font-weight:700;width:24px;text-align:right">0</span></div>
+        <div class="risk-bar"><div class="risk-label" style="color:var(--yellow)">Medium Risk</div><div class="risk-track"><div class="risk-fill" id="risk-fill-med" style="background:var(--yellow);width:0%"></div></div><span id="risk-n-med" style="font-size:12px;font-weight:700;width:24px;text-align:right">0</span></div>
+        <div class="risk-bar"><div class="risk-label" style="color:var(--green)">Low Risk</div><div class="risk-track"><div class="risk-fill" id="risk-fill-low" style="background:var(--green);width:0%"></div></div><span id="risk-n-low" style="font-size:12px;font-weight:700;width:24px;text-align:right">0</span></div>
+      </div>
+    </div>
+
+    <div class="sidebar-section" style="display:flex;gap:6px">
+      <select id="filter-status" onchange="applyFilters()" style="flex:1;padding:7px 10px;border:1.5px solid var(--border);border-radius:7px;font-family:var(--font);font-size:12px;outline:none">
+        <option value="">All statuses</option>
+        <option value="active">Active</option>
+        <option value="submitted">Submitted</option>
+        <option value="terminated">Terminated</option>
+        <option value="auto_submitted">Auto-submitted</option>
+      </select>
+      <select id="filter-risk" onchange="applyFilters()" style="flex:1;padding:7px 10px;border:1.5px solid var(--border);border-radius:7px;font-family:var(--font);font-size:12px;outline:none">
+        <option value="">All risks</option>
+        <option value="high">High</option>
+        <option value="medium">Medium</option>
+        <option value="low">Low</option>
+      </select>
+    </div>
+
+    <input type="text" id="stu-search" placeholder="Search student…" oninput="applyFilters()"
+      style="margin:10px 12px;padding:8px 12px;border:1.5px solid var(--border);border-radius:8px;font-family:var(--font);font-size:13px;outline:none;width:calc(100% - 24px)" />
+
+    <div class="stu-list" id="stu-list">
+      <div class="placeholder" style="height:200px">
+        <div class="icon">📋</div>
+        <p>Select a quiz to begin</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main panel -->
+  <div class="main" id="main-panel">
+    <div class="placeholder">
+      <div class="icon">🛡️</div>
+      <p>Select a quiz and a student to review their anti-cheat log</p>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const API = '';
+let authToken   = localStorage.getItem('dikly_ac_token') || '';
+let currentUser = JSON.parse(localStorage.getItem('dikly_ac_user') || 'null');
+let currentQuizId  = '';
+let attemptsAll    = [];
+let filteredAttempts = [];
+let selectedAttemptId = null;
+let autoRefreshTimer  = null;
+
+// ── Violation display config ─────────────────────────────────────────────────
+const V_ICON = {
+  tab_switch:'🔀', focus_lost:'📵', fullscreen_exit:'🖥️', copy_paste:'📋',
+  right_click:'🖱️', print_screen:'📸', multiple_windows:'🪟', devtools_open:'🔧',
+  session_conflict:'⚡', heartbeat_missed:'💔', face_not_visible:'😶',
+  multiple_faces:'👥', audio_detected:'🔊', motion_detected:'📡',
+  phone_detected:'📱', head_turn:'↩️', face_off_center:'👀', other:'⚠️',
+};
+const V_LABEL = t => (t || '').replace(/_/g, ' ');
+
+// ── API helper ───────────────────────────────────────────────────────────────
+async function api(method, path, body) {
+  const opts = { method, headers: { 'Content-Type': 'application/json', 'X-Request-Time': Date.now().toString() } };
+  if (authToken) opts.headers['Authorization'] = `Bearer ${authToken}`;
+  if (body) opts.body = JSON.stringify(body);
+  const res  = await fetch(API + path, opts);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || data.message || `HTTP ${res.status}`);
+  return data;
+}
+
+// ── Toast ────────────────────────────────────────────────────────────────────
+let toastTimer;
+function toast(msg, type = '') {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'show' + (type ? ' ' + type : '');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { el.className = ''; }, 3500);
+}
+
+// ── Auth ─────────────────────────────────────────────────────────────────────
+async function doLogin() {
+  const email    = document.getElementById('l-email').value.trim();
+  const password = document.getElementById('l-pass').value;
+  const btn      = document.getElementById('login-btn');
+  const errEl    = document.getElementById('login-err');
+  if (!email || !password) { errEl.textContent = 'Email and password required'; errEl.style.display = 'block'; return; }
+  btn.textContent = 'Signing in…'; btn.disabled = true; errEl.style.display = 'none';
+  try {
+    const data = await api('POST', '/api/auth/login', { email, password, loginRole: 'lecturer' });
+    authToken   = data.token;
+    currentUser = data.user;
+    localStorage.setItem('dikly_ac_token', authToken);
+    localStorage.setItem('dikly_ac_user', JSON.stringify(currentUser));
+    onLogin();
+  } catch(e) {
+    errEl.textContent = e.message || 'Login failed'; errEl.style.display = 'block';
+    btn.textContent = 'Sign In'; btn.disabled = false;
+  }
+}
+
+function doLogout() {
+  authToken = ''; currentUser = null;
+  localStorage.removeItem('dikly_ac_token');
+  localStorage.removeItem('dikly_ac_user');
+  location.reload();
+}
+
+function onLogin() {
+  document.getElementById('login-overlay').style.display = 'none';
+  document.getElementById('user-name').textContent = currentUser?.name || '';
+  loadQuizList();
+}
+
+if (authToken && currentUser) onLogin();
+
+// ── Quiz list ────────────────────────────────────────────────────────────────
+async function loadQuizList() {
+  try {
+    const data = await api('GET', '/api/lecturer/snap-quizzes');
+    const quizzes = data.quizzes || [];
+    const sel = document.getElementById('quiz-select');
+    const icon = s => s === 'open' ? '🟢' : s === 'closed' ? '🔴' : s === 'published' ? '🔵' : '⚪';
+    sel.innerHTML = '<option value="">— Select a Snap Quiz —</option>' +
+      quizzes.map(q => `<option value="${q._id}">${icon(q.status)} ${q.title}</option>`).join('');
+
+    // Auto-select from URL
+    const qid = new URLSearchParams(location.search).get('quizId');
+    if (qid && quizzes.find(q => q._id === qid)) { sel.value = qid; selectQuiz(qid); }
+  } catch(e) { toast('Failed to load quizzes: ' + e.message, 'err'); }
+}
+
+// ── Select quiz ──────────────────────────────────────────────────────────────
+async function selectQuiz(id) {
+  currentQuizId = id;
+  clearInterval(autoRefreshTimer);
+  if (!id) return;
+  await loadAttempts();
+  autoRefreshTimer = setInterval(loadAttempts, 20000);
+}
+
+async function loadAttempts() {
+  if (!currentQuizId) return;
+  try {
+    const [attData, violData] = await Promise.all([
+      api('GET', `/api/lecturer/snap-quizzes/${currentQuizId}/attempts?limit=300`),
+      api('GET', `/api/lecturer/snap-quizzes/${currentQuizId}/violations?limit=500`),
+    ]);
+    attemptsAll = attData.attempts || [];
+
+    // Enrich each attempt with violation counts from the full log
+    const vmap = {};
+    for (const v of (violData.violations || [])) {
+      const aid = v.attempt?.toString() || '';
+      if (!vmap[aid]) vmap[aid] = { total: 0, critical: 0, high: 0 };
+      vmap[aid].total++;
+      if (v.severity === 'critical') vmap[aid].critical++;
+      if (v.severity === 'high')     vmap[aid].high++;
+    }
+    attemptsAll.forEach(a => {
+      a._vData = vmap[a._id?.toString()] || { total: 0, critical: 0, high: 0 };
+    });
+
+    applyFilters();
+    renderRiskOverview();
+  } catch(e) { toast('Error: ' + e.message, 'err'); }
+}
+
+function riskLevel(a) {
+  if (a.status === 'terminated') return 'high';
+  const v = a._vData || {};
+  if (v.critical >= 1 || a.faceFailCount >= 5 || a.violationCount >= 5) return 'high';
+  if (v.total >= 2 || a.faceWarnCount >= 2 || a.violationCount >= 2)   return 'medium';
+  if (v.total >= 1 || a.faceWarnCount >= 1 || a.violationCount >= 1)   return 'low';
+  return 'none';
+}
+
+function renderRiskOverview() {
+  const counts = { high: 0, medium: 0, low: 0, none: 0 };
+  attemptsAll.forEach(a => counts[riskLevel(a)]++);
+  const total = attemptsAll.length || 1;
+  document.getElementById('risk-fill-high').style.width = (counts.high / total * 100) + '%';
+  document.getElementById('risk-fill-med').style.width  = (counts.medium / total * 100) + '%';
+  document.getElementById('risk-fill-low').style.width  = (counts.low / total * 100) + '%';
+  document.getElementById('risk-n-high').textContent = counts.high;
+  document.getElementById('risk-n-med').textContent  = counts.medium;
+  document.getElementById('risk-n-low').textContent  = counts.low;
+}
+
+function applyFilters() {
+  const statusF = document.getElementById('filter-status')?.value || '';
+  const riskF   = document.getElementById('filter-risk')?.value   || '';
+  const search  = (document.getElementById('stu-search')?.value  || '').toLowerCase();
+
+  filteredAttempts = attemptsAll.filter(a => {
+    if (statusF && a.status !== statusF) return false;
+    if (riskF   && riskLevel(a) !== riskF) return false;
+    if (search) {
+      const name = (a.student?.name || '').toLowerCase();
+      const id   = (a.student?.studentId || a.student?.email || '').toLowerCase();
+      if (!name.includes(search) && !id.includes(search)) return false;
+    }
+    return true;
+  });
+
+  renderStudentList(filteredAttempts);
+}
+
+// ── Student list ─────────────────────────────────────────────────────────────
+function renderStudentList(attempts) {
+  const list = document.getElementById('stu-list');
+  if (!attempts.length) {
+    list.innerHTML = '<div class="placeholder" style="height:180px"><div class="icon">🔍</div><p>No students match the filter</p></div>';
+    return;
+  }
+
+  // Sort: highest risk first, then by violation count desc
+  const order = { high: 0, medium: 1, low: 2, none: 3 };
+  const sorted = [...attempts].sort((a, b) => {
+    const ra = order[riskLevel(a)], rb = order[riskLevel(b)];
+    if (ra !== rb) return ra - rb;
+    return (b.violationCount || 0) - (a.violationCount || 0);
+  });
+
+  const dotClass = a => {
+    const r = riskLevel(a);
+    return r === 'high' ? 'risk-high' : r === 'medium' ? 'risk-med' : r === 'low' ? 'risk-low' : 'risk-none';
+  };
+
+  list.innerHTML = sorted.map(a => `
+    <div class="stu-item ${selectedAttemptId === a._id ? 'active' : ''}"
+      onclick="selectAttempt('${a._id}')"
+      data-id="${a._id}">
+      <div class="stu-dot ${dotClass(a)}"></div>
+      <div style="flex:1;min-width:0;overflow:hidden">
+        <div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${a.student?.name || 'Student'}</div>
+        <div style="font-size:11px;color:var(--muted)">${a.student?.studentId || a.student?.email || '—'}</div>
+      </div>
+      <div style="text-align:right;flex-shrink:0">
+        <div style="font-size:13px;font-weight:800;color:${(a.violationCount||0)>4?'var(--red)':(a.violationCount||0)>1?'var(--yellow)':'var(--green)'}">${a.violationCount||0}v</div>
+        <div style="font-size:10px;color:var(--muted)">${a.status}</div>
+      </div>
+    </div>`).join('');
+}
+
+// ── Select attempt ───────────────────────────────────────────────────────────
+async function selectAttempt(id) {
+  selectedAttemptId = id;
+  document.querySelectorAll('.stu-item').forEach(el => el.classList.toggle('active', el.dataset.id === id));
+  await loadAttemptDetail(id);
+}
+
+async function loadAttemptDetail(attemptId) {
+  if (!currentQuizId || !attemptId) return;
+  const panel = document.getElementById('main-panel');
+  panel.innerHTML = '<div class="placeholder"><div class="icon">⏳</div><p>Loading…</p></div>';
+  try {
+    const data = await api('GET', `/api/lecturer/snap-quizzes/${currentQuizId}/attempts/${attemptId}`);
+    renderDetail(data);
+  } catch(e) {
+    panel.innerHTML = `<div class="detail-card"><p style="color:var(--red)">Error: ${e.message}</p></div>`;
+  }
+}
+
+function renderDetail(data) {
+  const a = data.attempt;
+  const violations = (data.violations || []).slice().reverse();
+  const snapshots  = data.proctoringEvents || [];
+  const panel = document.getElementById('main-panel');
+
+  const statusBadge = () => {
+    const map = {
+      active:        '<span class="badge b-blue">● Active</span>',
+      submitted:     '<span class="badge b-green">Submitted</span>',
+      auto_submitted:'<span class="badge b-yellow">Auto-submitted</span>',
+      terminated:    '<span class="badge b-red">⛔ Terminated</span>',
+      abandoned:     '<span class="badge b-grey">Abandoned</span>',
+    };
+    return map[a.status] || `<span class="badge b-grey">${a.status}</span>`;
+  };
+
+  // Violation breakdown by type
+  const vTypeCounts = {};
+  violations.forEach(v => {
+    vTypeCounts[v.violationType] = (vTypeCounts[v.violationType] || 0) + 1;
+  });
+
+  const vBreakdownHtml = Object.entries(vTypeCounts)
+    .sort((a, b) => b[1] - a[1])
+    .map(([type, cnt]) => `
+      <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)">
+        <span style="font-size:16px">${V_ICON[type]||'⚠️'}</span>
+        <span style="flex:1;font-size:13px;font-weight:600;text-transform:capitalize">${V_LABEL(type)}</span>
+        <span style="font-size:13px;font-weight:800;font-family:var(--mono);color:${cnt>2?'var(--red)':cnt>1?'var(--yellow)':'var(--muted)'}">${cnt}</span>
+      </div>`).join('') || '<p style="color:var(--muted);font-size:13px">No violations recorded</p>';
+
+  // Snapshots
+  const flaggedSnaps = snapshots.filter(s => s.aiFlags?.length > 0);
+  const snapsHtml = snapshots.length === 0 ? '<p style="color:var(--muted);font-size:13px">No snapshots</p>' :
+    `<div class="snap-grid">
+      ${snapshots.slice(0, 12).map(s => {
+        const thumb = s.thumbnailUrl || s.imageUrl;
+        const flagged = (s.aiFlags || []).length > 0;
+        return thumb ? `
+          <div class="snap-cell ${flagged ? 'flagged' : ''}">
+            <img src="${thumb}" alt="snap" onerror="this.parentElement.style.display='none'"/>
+            <div class="snap-cell-label">${new Date(s.capturedAt).toLocaleTimeString()}</div>
+            ${flagged ? `<div class="snap-cell-flags">${s.aiFlags.slice(0,2).map(f=>`<span class="snap-flag">${f.flagType.replace(/_/g,' ')}</span>`).join('')}</div>` : ''}
+          </div>` : '';
+      }).join('')}
+    </div>`;
+
+  // Timeline
+  const timelineHtml = violations.length === 0
+    ? `<div style="padding:12px;background:#f0fdf4;border-radius:10px;color:var(--green);font-size:13px;font-weight:600;border:1px solid #bbf7d0">✓ No violations recorded — clean session</div>`
+    : `<div class="timeline">${violations.slice(0, 60).map(v => {
+        const sev = v.severity || 'info';
+        const sevBadge = sev === 'critical' ? 'b-red' : sev === 'high' ? 'b-orange' : sev === 'medium' ? 'b-yellow' : 'b-grey';
+        return `
+          <div class="t-item sev-${sev}">
+            <span class="t-icon">${V_ICON[v.violationType] || '⚠️'}</span>
+            <div style="flex:1;min-width:0">
+              <div class="t-type">${V_LABEL(v.violationType)}</div>
+              <div class="t-time">${new Date(v.occurredAt).toLocaleTimeString()} · #${v.violationNumber || '?'}</div>
+              ${v.detail ? `<div class="t-detail">${JSON.stringify(v.detail).slice(0, 120)}</div>` : ''}
+            </div>
+            <div class="t-action" style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
+              <span class="badge ${sevBadge}">${sev}</span>
+              ${v.actionTaken ? `<span style="font-size:10px;color:var(--muted)">${v.actionTaken.replace(/_/g,' ')}</span>` : ''}
+            </div>
+          </div>`;
+      }).join('')}</div>`;
+
+  panel.innerHTML = `
+    <!-- Header -->
+    <div class="detail-card">
+      <div style="display:flex;align-items:flex-start;gap:12px;flex-wrap:wrap">
+        <div style="flex:1">
+          <h3>${a.student?.name || 'Student'}</h3>
+          <div class="detail-meta">${a.student?.studentId || a.student?.email || '—'} · Attempt #${a.attemptNumber ?? 1}</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+            ${statusBadge()}
+            ${a.terminationReason ? `<span style="font-size:12px;color:var(--red)">${a.terminationReason.replace(/_/g,' ')}</span>` : ''}
+          </div>
+          <div style="margin-top:8px;font-size:12px;color:var(--muted)">
+            Started: ${a.startedAt ? new Date(a.startedAt).toLocaleString() : '—'}
+            ${a.submittedAt ? ` · Submitted: ${new Date(a.submittedAt).toLocaleString()}` : ''}
+            · IP: ${a.ipAddress || '—'} · ${a.platform || 'unknown'}
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          ${a.status === 'active' ? `<button class="btn btn-danger btn-sm" onclick="forceSubmitAttempt('${a._id}')">⛔ Force Submit</button>` : ''}
+          <button class="btn btn-ghost btn-sm" onclick="loadAttemptDetail('${a._id}')">↻ Refresh</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Stats -->
+    <div class="stats-row">
+      <div class="stat-box">
+        <div class="sv" style="color:${(a.violationCount||0)>4?'var(--red)':(a.violationCount||0)>1?'var(--yellow)':'var(--green)'}">${a.violationCount||0}</div>
+        <div class="sk">Violations</div>
+      </div>
+      <div class="stat-box">
+        <div class="sv" style="color:${(a.faceFailCount||0)>=5?'var(--red)':(a.faceFailCount||0)>0?'var(--yellow)':'var(--green)'}">${a.faceFailCount||0}</div>
+        <div class="sk">Face Fails</div>
+      </div>
+      <div class="stat-box">
+        <div class="sv">${a.tabSwitchCount||0}</div>
+        <div class="sk">Tab Switches</div>
+      </div>
+      <div class="stat-box">
+        <div class="sv">${snapshots.length}</div>
+        <div class="sk">Snapshots</div>
+      </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="tab-bar">
+      <button class="tab-btn active" onclick="switchTab(this,'tab-timeline')">📋 Violation Timeline</button>
+      <button class="tab-btn" onclick="switchTab(this,'tab-breakdown')">📊 Breakdown</button>
+      <button class="tab-btn" onclick="switchTab(this,'tab-snapshots')">📷 Snapshots${flaggedSnaps.length>0?` <span style="background:var(--red);color:#fff;border-radius:9px;padding:1px 6px;font-size:10px">${flaggedSnaps.length}</span>`:''}</button>
+      <button class="tab-btn" onclick="switchTab(this,'tab-offline');loadOfflineSync('${a._id}')">📡 Offline AI</button>
+    </div>
+
+    <div id="tab-timeline">${timelineHtml}</div>
+    <div id="tab-breakdown" style="display:none">
+      <div class="detail-card">
+        <div class="sec-title">Violation Breakdown by Type</div>
+        ${vBreakdownHtml}
+      </div>
+    </div>
+    <div id="tab-snapshots" style="display:none">
+      <div class="detail-card" style="padding:14px">
+        <div class="sec-title" style="margin-top:0">All Snapshots (${snapshots.length}${flaggedSnaps.length>0?`, ${flaggedSnaps.length} flagged`:''})</div>
+        ${snapsHtml}
+      </div>
+    </div>
+    <div id="tab-offline" style="display:none">
+      <div class="detail-card" id="offline-sync-panel">
+        <div style="text-align:center;padding:32px;color:var(--muted)">Click <strong>Offline AI</strong> tab to load offline data…</div>
+      </div>
+    </div>
+  `;
+}
+
+function switchTab(btn, targetId) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  ['tab-timeline','tab-breakdown','tab-snapshots','tab-offline'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = id === targetId ? '' : 'none';
+  });
+}
+
+// ── Offline AI Sync Panel ─────────────────────────────────────────────────
+async function loadOfflineSync(attemptId) {
+  const panel = document.getElementById('offline-sync-panel');
+  if (!panel) return;
+  panel.innerHTML = '<div style="text-align:center;padding:32px;color:var(--muted)">Loading offline data…</div>';
+
+  try {
+    const data = await api('GET', `/api/offline-sync/${attemptId}/status`);
+
+    const sevColor  = { low: '#16a34a', medium: '#d97706', high: '#dc2626' };
+    const sevBg     = { low: '#f0fdf4', medium: '#fffbeb', high: '#fef2f2' };
+    const sevIcon   = { low: 'ℹ️', medium: '⚠️', high: '🔴' };
+
+    // Device info section
+    const di = data.deviceInfo || {};
+    const deviceHtml = `
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px">
+        ${[
+          ['Browser', di.ua?.split('/')[0] || '—'],
+          ['Platform', di.platform || '—'],
+          ['Screen', di.screen || '—'],
+          ['Language', di.language || '—'],
+          ['CPU Cores', di.cores || '—'],
+          ['RAM', di.memory ? di.memory + ' GB' : '—'],
+          ['Connection', di.connection || '—'],
+          ['Capacitor', di.capacitor ? '✅ Yes (' + (di.platform_cap || 'app') + ')' : '❌ Web'],
+          ['Timezone', di.timezone || '—'],
+        ].map(([k, v]) => `<div style="background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:8px 10px"><div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px">${k}</div><div style="font-size:12px;font-weight:600;color:var(--text);word-break:break-all">${v}</div></div>`).join('')}
+      </div>`;
+
+    // Events timeline
+    const events = data.events || [];
+    const timelineHtml = events.length === 0
+      ? '<div style="text-align:center;padding:20px;color:var(--muted);font-size:13px">No offline events recorded.</div>'
+      : events.map(ev => `
+          <div style="display:flex;gap:12px;align-items:flex-start;padding:10px 0;border-bottom:1px solid var(--border)">
+            <div style="flex-shrink:0;width:28px;height:28px;border-radius:50%;background:${sevBg[ev.severity]};display:flex;align-items:center;justify-content:center;font-size:14px">${sevIcon[ev.severity]}</div>
+            <div style="flex:1;min-width:0">
+              <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+                <span style="font-size:12px;font-weight:700;color:${sevColor[ev.severity]}">${ev.type.replace(/_/g,' ').toUpperCase()}</span>
+                <span style="font-size:11px;color:var(--dim);flex-shrink:0">${new Date(ev.timestamp||ev.isoTime).toLocaleTimeString()}</span>
+              </div>
+              <div style="font-size:11px;color:var(--muted);margin-top:2px">Integrity at time: <strong>${ev.integrityAt ?? '—'}</strong>/100 · Severity: <strong style="color:${sevColor[ev.severity]}">${ev.severity}</strong></div>
+              ${Object.keys(ev.metadata||{}).length ? `<div style="font-size:11px;color:var(--dim);margin-top:3px;font-family:monospace">${JSON.stringify(ev.metadata).slice(0,120)}</div>` : ''}
+            </div>
+          </div>`).join('');
+
+    // Sync history
+    const syncHist = (data.syncHistory || []).slice(-5).reverse();
+    const syncHistHtml = syncHist.length === 0
+      ? '<div style="font-size:12px;color:var(--muted)">No sync history yet.</div>'
+      : syncHist.map(s => `<div style="font-size:12px;color:var(--muted);margin-bottom:4px">📡 ${new Date(s.syncedAt).toLocaleString()} — ${s.eventsCount} events, ${s.chunksCount} chunks uploaded from ${s.ip||'unknown'}</div>`).join('');
+
+    // Recording chunks
+    const chunks = data.chunks || [];
+    const chunksHtml = chunks.length === 0
+      ? '<div style="font-size:12px;color:var(--muted)">No recordings uploaded.</div>'
+      : chunks.map((c, i) => `
+        <div style="display:flex;align-items:center;gap:10px;padding:8px;border:1px solid var(--border);border-radius:8px;margin-bottom:6px">
+          <span style="font-size:18px">🎥</span>
+          <div style="flex:1">
+            <div style="font-size:12px;font-weight:600">Chunk ${c.chunkIndex + 1} · ${Math.round((c.durationMs||0)/1000)}s · ${c.mimeType?.split(';')[0]||'video'}</div>
+            <div style="font-size:11px;color:var(--muted)">${new Date(c.storedAt).toLocaleTimeString()}</div>
+          </div>
+          ${c.filePath ? `<a href="/api/offline-sync/${attemptId}/chunk/${i}" target="_blank" style="font-size:11px;color:var(--primary);font-weight:600">View</a>` : ''}
+        </div>`).join('');
+
+    // High-severity quick summary
+    const highEvents = events.filter(e => e.severity === 'high');
+    const summaryBg  = highEvents.length > 5 ? '#fef2f2' : highEvents.length > 0 ? '#fffbeb' : '#f0fdf4';
+    const summaryCol = highEvents.length > 5 ? '#b91c1c' : highEvents.length > 0 ? '#92400e' : '#14532d';
+
+    panel.innerHTML = `
+      <div class="sec-title" style="margin-top:0">📡 Offline AI Monitor Report</div>
+
+      <!-- Summary bar -->
+      <div style="background:${summaryBg};border:1.5px solid ${summaryCol}22;border-radius:10px;padding:12px 16px;margin-bottom:18px;display:flex;gap:16px;flex-wrap:wrap;align-items:center">
+        <div><span style="font-size:22px;font-weight:900;color:${summaryCol}">${data.integrityScore ?? 100}</span><span style="font-size:11px;color:var(--muted)">/100 integrity</span></div>
+        <div style="font-size:12px;color:${summaryCol}"><strong>${events.length}</strong> total events · <strong>${highEvents.length}</strong> high-severity</div>
+        <div style="font-size:12px;color:var(--muted)">Status: <strong>${data.status || 'pending'}</strong> · ${chunks.length} recording chunk${chunks.length !== 1 ? 's' : ''}</div>
+        <div style="font-size:11px;color:var(--dim);margin-left:auto">Beacon events: ${data.beaconEvents || 0}</div>
+      </div>
+
+      <!-- Device info -->
+      <div class="sec-title">Device Information</div>
+      ${deviceHtml}
+
+      <!-- Recordings -->
+      <div class="sec-title">Camera Recordings (${chunks.length} chunks)</div>
+      <div style="margin-bottom:18px">${chunksHtml}</div>
+
+      <!-- Event timeline -->
+      <div class="sec-title">Offline Event Timeline (${events.length} events)</div>
+      <div style="max-height:400px;overflow-y:auto;margin-bottom:18px">${timelineHtml}</div>
+
+      <!-- Sync history -->
+      <div class="sec-title">Sync History</div>
+      <div style="margin-bottom:4px">${syncHistHtml}</div>
+    `;
+  } catch(e) {
+    panel.innerHTML = `<div style="text-align:center;padding:32px;color:var(--red)">Failed to load offline data: ${e.message}</div>`;
+  }
+}
+
+// ── Force Submit ──────────────────────────────────────────────────────────────
+async function forceSubmitAttempt(attemptId) {
+  if (!confirm('Force-submit this student\'s exam? Their current answers will be auto-graded.')) return;
+  try {
+    const reason = prompt('Reason for force-submit (optional):') || 'Force-submitted via anti-cheat dashboard';
+    await api('POST', `/api/lecturer/snap-quizzes/${currentQuizId}/attempts/${attemptId}/force-submit`, { reason });
+    toast('Exam force-submitted and graded', 'ok');
+    await loadAttemptDetail(attemptId);
+    await loadAttempts();
+  } catch(e) { toast('Error: ' + e.message, 'err'); }
+}
+</script>
+</body>
+</html>
