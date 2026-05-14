@@ -73,7 +73,7 @@ router.post("/quizzes/:quizId/attempts/:attemptId/submit",         snapQuizSecur
 
 // ─── Anti-cheat enforcement ───────────────────────────────────────────────────
 
-router.post("/quizzes/:quizId/attempts/:attemptId/violations",     ctrl.reportViolation);
+router.post("/quizzes/:quizId/attempts/:attemptId/violations",     snapQuizSecurityValidator, ctrl.reportViolation);
 
 // ─── Proctoring ───────────────────────────────────────────────────────────────
 

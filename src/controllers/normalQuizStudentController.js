@@ -122,6 +122,19 @@ exports.startAttempt = async (req, res) => {
     if (!quiz) {
       return res.status(404).json({ error: "Quiz not found" });
     }
+
+    // Enrollment check — if the quiz is tied to a course, the student must be enrolled.
+    if (quiz.course) {
+      const Course = require("../models/Course");
+      const enrolled = await Course.exists({
+        _id:              quiz.course,
+        company:          req.companyId,
+        enrolledStudents: req.user._id,
+      });
+      if (!enrolled) {
+        return res.status(403).json({ error: "You are not enrolled in the course for this quiz" });
+      }
+    }
     if (!quiz.isOpen && !(quiz.startTime == null && quiz.endTime == null)) {
       // isOpen is a virtual — recalculate since we used .lean()
       const now = new Date();

@@ -3,13 +3,21 @@ const User = require("../models/User");
 
 const authenticate = async (req, res, next) => {
   try {
-    // Accept token from Authorization header OR query string (for file downloads)
+    // Accept token from Authorization header. Query-string tokens are only
+    // allowed on file-download paths where setting a header is impossible
+    // (e.g. /api/.../export, /api/.../download, /api/.../csv).
     const authHeader = req.headers.authorization;
     let token;
     if (authHeader && authHeader.startsWith("Bearer ")) {
       token = authHeader.split(" ")[1];
     } else if (req.query.token) {
-      token = req.query.token;
+      const path = req.originalUrl || req.url || "";
+      const isDownload = /\/(export|download|csv|pdf|report|attachment)/i.test(path);
+      if (isDownload) {
+        token = req.query.token;
+      } else {
+        return res.status(401).json({ error: "No token provided" });
+      }
     } else {
       return res.status(401).json({ error: "No token provided" });
     }
