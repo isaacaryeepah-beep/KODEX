@@ -11,7 +11,10 @@
 const OfflineRecorder = (() => {
   'use strict';
 
-  const DB_NAME      = 'dikly-offline-v2';
+  // Separate DB from OfflineMonitor — sharing the same name + version causes
+  // the onupgradeneeded callback for rec_chunks to be skipped when the monitor
+  // opens first (DB already at v1, no upgrade fires).
+  const DB_NAME      = 'dikly-recorder-v1';
   const DB_VERSION   = 1;
   const S_CHUNKS     = 'rec_chunks';
   const CHUNK_MS     = 30_000;          // 30-second chunks

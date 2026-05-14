@@ -291,11 +291,15 @@ const OfflineMonitor = (() => {
   // Force exit attempt
   function _onBeforeUnload() {
     if (!_session) return;
-    // sendBeacon works when page is unloading
-    navigator.sendBeacon?.(
-      `/api/offline-sync/${_session.attemptId}/beacon`,
-      JSON.stringify({ type: 'force_exit_attempt', ts: Date.now(), attemptId: _session.attemptId })
-    );
+    // sendBeacon with a Blob so the server receives Content-Type: application/json.
+    // A raw string defaults to text/plain and many JSON body parsers ignore it.
+    try {
+      const blob = new Blob(
+        [JSON.stringify({ type: 'force_exit_attempt', ts: Date.now(), attemptId: _session.attemptId })],
+        { type: 'application/json' }
+      );
+      navigator.sendBeacon?.(`/api/offline-sync/${_session.attemptId}/beacon`, blob);
+    } catch { /* ignore — page is unloading */ }
   }
 
   // Screenshot / PrintScreen

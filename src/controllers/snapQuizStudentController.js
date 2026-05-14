@@ -85,17 +85,12 @@ exports.listQuizzes = async (req, res) => {
  */
 exports.listAllQuizzes = async (req, res) => {
   try {
-    const enrolledCourses = await Course.find({
-      companyId: req.companyId,
-      enrolledStudents: req.user._id,
-    }).select("_id").lean();
-
-    const courseIds = enrolledCourses.map(c => c._id);
-
+    // Show all published quizzes for this company.
+    // Enrollment is enforced at startAttempt — not here — so students can
+    // see what's available even if their lecturer hasn't enrolled them yet.
     const showAll = req.query.showAll === "true";
     const filter = {
       company:     req.companyId,
-      course:      { $in: courseIds },
       isPublished: true,
       isActive:    true,
     };
