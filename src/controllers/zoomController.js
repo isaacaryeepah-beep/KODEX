@@ -4,7 +4,7 @@ const User = require("../models/User");
 const AttendanceSession = require("../models/AttendanceSession");
 const AttendanceRecord = require("../models/AttendanceRecord");
 
-const JITSI_DOMAIN = "meet.jit.si";
+const JITSI_DOMAIN = process.env.JITSI_DOMAIN || "meet.jit.si";
 
 exports.createMeeting = async (req, res) => {
   try {
@@ -251,11 +251,45 @@ exports.joinMeeting = async (req, res) => {
       }
     }
 
+    const isCreator    = meeting.createdBy?.toString() === req.user._id.toString();
+    const isModerator  = isCreator || ['lecturer', 'admin', 'superadmin'].includes(req.user.role);
+
+    const moderatorToolbar = [
+      'microphone','camera','closedcaptions','desktop','chat','raisehand',
+      'tileview','select-background','mute-everyone','kick-participant',
+      'participants-pane','security','hangup',
+    ];
+    const participantToolbar = [
+      'microphone','camera','closedcaptions','desktop',
+      'chat','raisehand','tileview','select-background','hangup',
+    ];
+
+    const jitsiConfig = {
+      roomName:    meeting.roomName,
+      domain:      JITSI_DOMAIN,
+      displayName: req.user.name  || req.user.email,
+      email:       req.user.email || '',
+      subject:     meeting.title  || '',
+      isModerator,
+      configOverwrite: {
+        startWithAudioMuted:     true,
+        startWithVideoMuted:     false,
+        enableNoisyMicDetection: true,
+        disableDeepLinking:      true,
+      },
+      interfaceConfigOverwrite: {
+        SHOW_JITSI_WATERMARK:      false,
+        SHOW_WATERMARK_FOR_GUESTS: false,
+        TOOLBAR_BUTTONS: isModerator ? moderatorToolbar : participantToolbar,
+      },
+    };
+
     res.json({
-      message: existingAttendee ? "Already joined" : "Joined meeting successfully",
-      joinUrl: meeting.joinUrl,
+      message:  existingAttendee ? "Already joined" : "Joined meeting successfully",
+      joinUrl:  meeting.joinUrl,
       roomName: meeting.roomName,
-      status: existingAttendee ? existingAttendee.status : (new Date() > new Date(meeting.scheduledStart) ? "late" : "joined"),
+      status:   existingAttendee ? existingAttendee.status : (new Date() > new Date(meeting.scheduledStart) ? "late" : "joined"),
+      data: { jitsiConfig },
     });
   } catch (error) {
     console.error("Join meeting error:", error);
