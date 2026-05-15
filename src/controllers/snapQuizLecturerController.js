@@ -233,27 +233,65 @@ exports.closeQuiz = async (req, res) => {
       return res.status(409).json({ error: "Only published or open quizzes can be closed" });
     }
 
-    // Force-submit all remaining active attempts.
+    // Force-submit all remaining active attempts and auto-grade each one.
     const activeAttempts = await SnapQuizAttempt.find({
       quiz:   quiz._id,
       status: "active",
-    }).select("_id");
+    }).select("_id company quiz startedAt");
 
+    const now = new Date();
     if (activeAttempts.length > 0) {
+      // Mark all as auto_submitted first so no further responses can be saved.
       const ids = activeAttempts.map(a => a._id);
       await SnapQuizAttempt.updateMany(
         { _id: { $in: ids } },
-        {
-          $set: {
-            status:      "auto_submitted",
-            submittedAt: new Date(),
-          },
-        }
+        { $set: { status: "auto_submitted", submittedAt: now } }
       );
+
+      // Auto-grade each attempt and upsert its result document.
+      const { passMark, autoReleaseResults } = quiz;
+      await Promise.all(activeAttempts.map(async (a) => {
+        try {
+          const { rawScore, maxScore, hasManual } = await _autoGradeAttemptLecturer(a._id, a.company);
+          const pct      = maxScore > 0 ? (rawScore / maxScore) * 100 : 0;
+          const isPassed = passMark != null ? rawScore >= passMark : null;
+          await SnapQuizAttempt.updateOne({ _id: a._id }, {
+            $set: {
+              rawScore,
+              maxScore,
+              percentageScore: Math.round(pct * 100) / 100,
+              isPassed,
+              timeSpentSeconds: Math.round((now - a.startedAt) / 1000),
+              gradingStatus: hasManual ? "partially_graded" : "auto_graded",
+              ...(hasManual ? {} : { gradedAt: now }),
+            },
+          });
+          // Upsert result document so the grade book has an entry.
+          await SnapQuizResult.findOneAndUpdate(
+            { quiz: a.quiz, student: (await SnapQuizAttempt.findById(a._id).select("student").lean())?.student, company: a.company },
+            {
+              $set: {
+                attempt:         a._id,
+                rawScore,
+                maxScore,
+                percentageScore: Math.round(pct * 100) / 100,
+                isPassed,
+                gradingStatus:   hasManual ? "partially_graded" : "auto_graded",
+                isReleased:      autoReleaseResults || false,
+                releasedAt:      autoReleaseResults ? now : null,
+              },
+              $setOnInsert: { createdAt: now },
+            },
+            { upsert: true }
+          );
+        } catch (gradeErr) {
+          console.error("[snapQuiz closeQuiz] grading error for attempt", a._id, gradeErr);
+        }
+      }));
     }
 
     quiz.status    = SNAP_QUIZ_STATUSES.CLOSED;
-    quiz.closedAt  = new Date();
+    quiz.closedAt  = now;
     quiz.updatedBy = req.user._id;
     await quiz.save();
 
@@ -615,6 +653,24 @@ exports.gradeBulk = async (req, res) => {
     const { grades } = req.body;
     if (!Array.isArray(grades) || grades.length === 0) {
       return res.status(400).json({ error: "grades array is required" });
+    }
+
+    // Validate earnedMarks ceiling for each response — same guard as gradeResponse.
+    const responseIds = grades.map(g => g.responseId).filter(Boolean);
+    const existing    = await SnapQuizResponse.find(
+      { _id: { $in: responseIds }, attempt: req.params.attemptId, company: req.companyId },
+      { maxMarks: 1 }
+    ).lean();
+    const maxMap = Object.fromEntries(existing.map(r => [r._id.toString(), r.maxMarks ?? 1]));
+
+    for (const { responseId, earnedMarks } of grades) {
+      if (typeof earnedMarks !== "number") {
+        return res.status(400).json({ error: "earnedMarks must be a number" });
+      }
+      const cap = maxMap[responseId?.toString()];
+      if (cap !== undefined && (earnedMarks < 0 || earnedMarks > cap)) {
+        return res.status(400).json({ error: `earnedMarks for response ${responseId} must be 0–${cap}` });
+      }
     }
 
     const now = new Date();

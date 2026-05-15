@@ -220,10 +220,11 @@ exports.startAttempt = async (req, res) => {
       status: ATTEMPT_STATUSES.ACTIVE,
     });
     if (activeAttempt) {
+      // Do NOT echo the sessionToken — the client must use the one it received
+      // when the attempt was originally started.
       return res.status(409).json({
         error:    "You already have an active session for this quiz",
         attemptId: activeAttempt._id,
-        sessionToken: activeAttempt.sessionToken,
       });
     }
 
@@ -393,30 +394,41 @@ exports.saveResponses = async (req, res) => {
       return res.status(400).json({ error: "responses array is required" });
     }
 
+    // Fetch authoritative marks and questionType from the DB — never trust the client.
+    const questionIds = [...new Set(responses.map(r => r.questionId).filter(Boolean))];
+    const questions   = await SnapQuizQuestion.find(
+      { _id: { $in: questionIds }, quiz: attempt.quiz, isActive: true },
+      { marks: 1, questionType: 1 }
+    ).lean();
+    const qMap = Object.fromEntries(questions.map(q => [q._id.toString(), q]));
+
     const now = new Date();
-    const ops = responses.map(r => ({
-      updateOne: {
-        filter: { attempt: attempt._id, question: r.questionId, company: req.companyId },
-        update: {
-          $set: {
-            ..._extractAnswerFields(r),
-            lastUpdatedAt:    now,
-            isFlagged:        r.isFlagged ?? false,
-            isSkipped:        r.isSkipped ?? false,
-            timeSpentSeconds: r.timeSpentSeconds ?? null,
+    const ops = responses.map(r => {
+      const q = qMap[r.questionId?.toString()];
+      return {
+        updateOne: {
+          filter: { attempt: attempt._id, question: r.questionId, company: req.companyId },
+          update: {
+            $set: {
+              ..._extractAnswerFields(r),
+              lastUpdatedAt:    now,
+              isFlagged:        r.isFlagged ?? false,
+              isSkipped:        r.isSkipped ?? false,
+              timeSpentSeconds: r.timeSpentSeconds ?? null,
+            },
+            $setOnInsert: {
+              quiz:            attempt.quiz,
+              student:         req.user._id,
+              company:         req.companyId,
+              questionType:    q?.questionType ?? r.questionType,
+              maxMarks:        q?.marks        ?? 1,  // server-side authoritative value
+              firstAnsweredAt: now,
+            },
           },
-          $setOnInsert: {
-            quiz:            attempt.quiz,
-            student:         req.user._id,
-            company:         req.companyId,
-            questionType:    r.questionType,
-            maxMarks:        r.maxMarks || 1,
-            firstAnsweredAt: now,
-          },
+          upsert: true,
         },
-        upsert: true,
-      },
-    }));
+      };
+    });
     await SnapQuizResponse.bulkWrite(ops);
 
     return res.json({ message: "Responses saved" });
@@ -437,7 +449,15 @@ exports.submitAttempt = async (req, res) => {
       return res.status(404).json({ error: "Active session not found" });
     }
 
-    const now       = new Date();
+    const now = new Date();
+
+    // Enforce server-side expiry — if the timer has already expired, treat as
+    // auto-submit so the student cannot gain extra time by delaying this call.
+    if (attempt.expiresAt && now > attempt.expiresAt) {
+      await _autoSubmit(attempt);
+      return res.status(410).json({ error: "Session has expired and been auto-submitted" });
+    }
+
     const timeSpent = Math.round((now - attempt.startedAt) / 1000);
 
     attempt.status           = ATTEMPT_STATUSES.SUBMITTED;
@@ -743,12 +763,14 @@ async function _loadLockedAttempt(req) {
   });
   if (!attempt) return null;
 
-  // Session-lock check.
+  // Session-lock check — token is REQUIRED when the attempt has one.
+  // Omitting the header is treated the same as sending the wrong token.
   const token = req.headers["x-session-token"];
-  if (token && attempt.sessionToken && token !== attempt.sessionToken) {
-    // Session conflict — log and terminate.
-    await _terminateSession(attempt, "Session conflict: duplicate tab or device detected");
-    return null;
+  if (attempt.sessionToken) {
+    if (!token || token !== attempt.sessionToken) {
+      await _terminateSession(attempt, "Session conflict: duplicate tab or device detected");
+      return null;
+    }
   }
 
   return attempt;

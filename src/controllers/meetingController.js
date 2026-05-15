@@ -266,6 +266,16 @@ exports.joinMeeting = async (req, res) => {
     const isCreator = meeting.creatorId?.toString() === user._id.toString();
     const isModerator = isCreator || ['lecturer', 'admin', 'superadmin'].includes(user.role);
 
+    const moderatorToolbar = [
+      'microphone','camera','closedcaptions','desktop','chat','raisehand',
+      'tileview','select-background','mute-everyone','kick-participant',
+      'participants-pane','security','hangup',
+    ];
+    const participantToolbar = [
+      'microphone','camera','closedcaptions','desktop',
+      'chat','raisehand','tileview','select-background','hangup',
+    ];
+
     const config = {
       roomName:    meeting.roomName,
       domain:      JITSI_DOMAIN,
@@ -284,11 +294,7 @@ exports.joinMeeting = async (req, res) => {
       interfaceConfigOverwrite: {
         SHOW_JITSI_WATERMARK:      false,
         SHOW_WATERMARK_FOR_GUESTS: false,
-        TOOLBAR_BUTTONS: [
-          'microphone','camera','closedcaptions','desktop',
-          'chat','raisehand','tileview','select-background',
-          'hangup'
-        ]
+        TOOLBAR_BUTTONS: isModerator ? moderatorToolbar : participantToolbar,
       }
     };
 
