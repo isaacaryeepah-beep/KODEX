@@ -2104,7 +2104,7 @@ async function openSnapQuestionsPanel(quizId) {
                         ? `<span style="padding:4px 10px;border-radius:6px;font-size:12px;font-weight:500;background:#f0fdf4;color:#166534;border:1px solid #bbf7d0">✓ ${q.correctAnswerText||''}${q.acceptedAnswers?.length?' <span style="color:#6b7280;font-weight:400">(also: '+q.acceptedAnswers.join(', ')+')</span>':''}</span>`
                         : (q.options||[]).map((opt,oi) => {
                             const correct = q.questionType==='multiple'
-                              ? (q.correctAnswers||[]).includes(oi)
+                              ? (q.correctOptionIndices||[]).includes(oi)
                               : oi===q.correctOptionIndex;
                             return `<span style="padding:4px 10px;border-radius:6px;font-size:12px;font-weight:500;${correct?'background:#f0fdf4;color:#166534;border:1px solid #bbf7d0;':'background:var(--bg);color:var(--text-light);border:1px solid var(--border);'}">${String.fromCharCode(65+oi)}) ${opt}${correct?' ✓':''}</span>`;
                           }).join('')}
@@ -2146,9 +2146,9 @@ async function submitSnapQuizQuestion(quizId) {
     const opts = [0,1,2,3].map(i => document.getElementById(`sq-opt-${i}`)?.value.trim()).filter(Boolean);
     if (opts.length < 2) return showErr('At least 2 options are required (A and B)');
     if (isMulti) {
-      const correctAnswers = [...document.querySelectorAll('input[name="sq-multi-correct"]:checked')].map(c => parseInt(c.value)).filter(i => i < opts.length);
-      if (correctAnswers.length === 0) return showErr('Select at least one correct answer');
-      body = { questionText, questionType: 'multiple', options: opts, correctAnswers, marks };
+      const correctOptionIndices = [...document.querySelectorAll('input[name="sq-multi-correct"]:checked')].map(c => parseInt(c.value)).filter(i => i < opts.length);
+      if (correctOptionIndices.length === 0) return showErr('Select at least one correct answer');
+      body = { questionText, questionType: 'multiple', options: opts, correctOptionIndices, marks };
     } else {
       const correctRadio = document.querySelector('input[name="sq-correct"]:checked');
       const correctOptionIndex = correctRadio ? parseInt(correctRadio.value, 10) : 0;
