@@ -13423,7 +13423,8 @@ function buildBottomNav(role) {
     'hod-students': 'Students', 'hod-reports': 'Reports',
     'sign-in-out': 'Sign In/Out', 'my-attendance': 'Attendance',
     'mark-attendance': 'Attendance', subscription: 'Subscribe',
-    announcements: 'Notices', assignments: 'Assignments',
+    announcements: 'Notices', assignments: 'Assignment',
+    quizzes: 'Snap Quiz',
   };
 
   const priority = PRIORITY[role] || ['dashboard', 'sessions', 'reports'];
