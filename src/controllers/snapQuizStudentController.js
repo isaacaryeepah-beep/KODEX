@@ -609,9 +609,7 @@ exports.reportViolation = async (req, res) => {
     const causedTermination = newCount >= maxViolations && isCriticalType;
     const actionTaken = causedTermination
       ? ACTIONS_TAKEN.TERMINATED
-      : isCriticalType
-        ? (quiz?.showViolationWarnings ? ACTIONS_TAKEN.WARNED : ACTIONS_TAKEN.COUNTED)
-        : ACTIONS_TAKEN.LOGGED;
+      : ACTIONS_TAKEN.WARNED;
 
     // Log the violation.
     await SnapQuizViolationLog.create({
@@ -638,6 +636,7 @@ exports.reportViolation = async (req, res) => {
       acknowledged:               true,
       warned:                     actionTaken === ACTIONS_TAKEN.WARNED,
       terminated:                 causedTermination,
+      critical:                   isCriticalType,
       violationCount:             newCount,
       remainingBeforeTermination: Math.max(0, maxViolations - newCount),
     });
@@ -953,7 +952,7 @@ async function _buildQuestionsForAttempt(attempt, quiz) {
 
 function _isCriticalViolation(type) {
   return [
-    "tab_switch", "focus_lost", "fullscreen_exit",
+    "tab_switch", "fullscreen_exit",
     "copy_paste", "right_click", "print_screen",
     "session_conflict", "devtools_open", "multiple_windows",
     "phone_detected", "head_turn", "multiple_faces",

@@ -1928,6 +1928,22 @@ function setProctorStatus(color, text, camEl, dot, textEl) {
 
 async function logEvent(eventType, metadata = {}) {
   if (!state.sessionToken || !state.attempt?._id) return;
+
+  // ── Rate-limit: same violation type can only count once every 3 s ─
+  if (eventType !== 'heartbeat') {
+    const now = Date.now();
+    if (!state._lastViolationTime) state._lastViolationTime = {};
+    const last = state._lastViolationTime[eventType] || 0;
+    if (now - last < 3000) return;
+    state._lastViolationTime[eventType] = now;
+  }
+
+  // ── Don't count new violations while a warning is showing ─────────
+  if (eventType !== 'heartbeat') {
+    const overlay = document.getElementById('violation-overlay');
+    if (overlay && overlay.classList.contains('show')) return;
+  }
+
   const sessionHeader = { 'x-session-token': state.sessionToken };
   const baseUrl = `/api/student/snap-quizzes/quizzes/${state.selectedQuiz._id}/attempts/${state.attempt._id}`;
 
@@ -1965,7 +1981,11 @@ async function logEvent(eventType, metadata = {}) {
     if (res.terminated) {
       terminateExam(eventType);
     } else if (res.warned) {
-      showViolationWarning(res.violationCount);
+      if (res.critical) {
+        showViolationWarning(res.violationCount);
+      } else {
+        showNonCriticalWarning(eventType);
+      }
     }
 
     if (res.violationCount != null) state.totalViolations = res.violationCount;
@@ -1976,11 +1996,33 @@ async function logEvent(eventType, metadata = {}) {
 }
 
 function showViolationWarning(level) {
+  const maxViolations = 4;
+  const remaining = maxViolations - level;
+  const isFinal = remaining === 1;
+  const msg = isFinal
+    ? 'This is your <strong>final warning</strong>. One more violation will immediately terminate your exam.'
+    : `You have <strong>${remaining} warning${remaining !== 1 ? 's' : ''}</strong> remaining before your exam is terminated.`;
+  const overlay = document.getElementById('violation-overlay');
+  overlay.innerHTML = `
+    <div class="violation-icon">${isFinal ? '🚨' : '⚠️'}</div>
+    <div class="violation-title" style="color:${isFinal ? '#dc2626' : '#1e293b'}">Warning ${level} of ${maxViolations - 1}</div>
+    <div class="violation-msg" style="color:#475569">A proctoring violation was detected. ${msg}</div>
+    <button class="btn btn-primary" style="max-width:280px" onclick="this.closest('#violation-overlay').classList.remove('show')">I understand</button>
+  `;
+  overlay.classList.add('show');
+}
+
+function showNonCriticalWarning(eventType) {
+  const labels = {
+    focus_lost:  'Window Focus Lost',
+    other:       'Suspicious Activity',
+  };
+  const label = labels[eventType] || 'Violation Detected';
   const overlay = document.getElementById('violation-overlay');
   overlay.innerHTML = `
     <div class="violation-icon">⚠️</div>
-    <div class="violation-title" style="color:#1e293b">Warning #${level}</div>
-    <div class="violation-msg" style="color:#475569">Repeated violations detected. Your exam may be terminated if this continues.</div>
+    <div class="violation-title" style="color:#1e293b">${label}</div>
+    <div class="violation-msg" style="color:#475569">This incident has been recorded and will be reviewed by your lecturer. Please stay focused on your exam.</div>
     <button class="btn btn-primary" style="max-width:280px" onclick="this.closest('#violation-overlay').classList.remove('show')">I understand</button>
   `;
   overlay.classList.add('show');
