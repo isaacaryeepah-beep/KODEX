@@ -1770,14 +1770,17 @@ function startProctoring() {
     }, 3000);
   }
 
-  // ── Periodic snapshots — use quiz's configured interval ───────
-  const snapMs = Math.max(10, quiz.snapshotIntervalSeconds || 30) * 1000;
-  state.snapshotInterval = setInterval(async () => {
-    if (!state.examActive) return;
-    const { count, detected, centered } = await detectFaces(examVideo);
-    const img = captureFrame(examVideo);
-    uploadSnapshot(img, 'periodic', detected, count, centered).catch(console.warn);
-  }, snapMs);
+  // ── Periodic snapshots — only when proctoringEnabled and interval > 0 ──
+  const snapSecs = quiz.proctoringEnabled && quiz.snapshotIntervalSeconds > 0
+    ? quiz.snapshotIntervalSeconds : 0;
+  if (snapSecs > 0) {
+    state.snapshotInterval = setInterval(async () => {
+      if (!state.examActive) return;
+      const { count, detected, centered } = await detectFaces(examVideo);
+      const img = captureFrame(examVideo);
+      uploadSnapshot(img, 'periodic', detected, count, centered).catch(console.warn);
+    }, Math.max(10, snapSecs) * 1000);
+  }
 
   // ── Visibility change (tab / app switch) ─────────────────────
   document.addEventListener('visibilitychange', handleVisibilityChange);
