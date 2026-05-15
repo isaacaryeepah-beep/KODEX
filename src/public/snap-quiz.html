@@ -1840,7 +1840,7 @@ function handleVisibilityChange() {
   if (!state.examActive) return;
   if (document.visibilityState === 'hidden') {
     state.backgroundStart = Date.now();
-    logEvent('app_background').catch(console.warn);
+    logEvent('tab_switch').catch(console.warn);
   } else {
     const duration = state.backgroundStart ? (Date.now() - state.backgroundStart) / 1000 : 0;
     state.backgroundStart = null;
@@ -1858,7 +1858,7 @@ function handleVisibilityChange() {
 function handleCopy(e) {
   if (state.examActive) {
     e.preventDefault();
-    logEvent('copy_attempt').catch(console.warn);
+    logEvent('copy_paste').catch(console.warn);
     toast('⚠️ Copying is not allowed during the exam', 'warn');
   }
 }
@@ -1884,15 +1884,18 @@ async function logEvent(eventType, metadata = {}) {
   try {
     if (eventType === 'heartbeat') {
       const hbRes = await api('POST', `${baseUrl}/heartbeat`, {}, sessionHeader);
-      if (hbRes?.terminated || hbRes?.meetingEnded) {
+      if (hbRes?.terminated || hbRes?.meetingEnded || hbRes?.expired) {
         clearInterval(state.heartbeatInterval);
         clearInterval(state.faceCheckInterval);
         state.examActive = false;
         const overlay = document.getElementById('violation-overlay');
+        let msg = 'Your exam session was terminated.';
+        if (hbRes.meetingEnded) msg = 'The live session has ended. Your exam has been automatically submitted.';
+        else if (hbRes.expired)  msg = 'Your exam time has expired. Your answers have been automatically submitted.';
         overlay.innerHTML = `
           <div class="violation-icon">🔴</div>
           <div class="violation-title" style="color:#1e293b">Exam Session Ended</div>
-          <div class="violation-msg" style="color:#475569">${hbRes.meetingEnded ? 'The live session has ended. Your exam has been automatically submitted.' : 'Your exam session was terminated.'}</div>
+          <div class="violation-msg" style="color:#475569">${msg}</div>
           <button class="btn btn-ghost" style="max-width:280px" onclick="document.getElementById('violation-overlay').classList.remove('show');show('quiz-list-screen')">Return to Dashboard</button>
         `;
         overlay.classList.add('show');
@@ -1906,7 +1909,6 @@ async function logEvent(eventType, metadata = {}) {
       ...metadata,
     }, sessionHeader);
 
-    // Apply enforcement from server response
     if (res.terminated) {
       terminateExam(eventType);
     } else if (res.warned) {
@@ -1914,8 +1916,23 @@ async function logEvent(eventType, metadata = {}) {
     }
 
     if (res.violationCount != null) state.totalViolations = res.violationCount;
-  } catch {
-    // Network call failed — event is already stored offline, will sync later
+  } catch (err) {
+    // If the session was explicitly terminated server-side, notify student
+    if (eventType === 'heartbeat' && err.message && err.message.toLowerCase().includes('session')) {
+      clearInterval(state.heartbeatInterval);
+      clearInterval(state.faceCheckInterval);
+      state.examActive = false;
+      const overlay = document.getElementById('violation-overlay');
+      overlay.innerHTML = `
+        <div class="violation-icon">🔴</div>
+        <div class="violation-title" style="color:#1e293b">Session Ended</div>
+        <div class="violation-msg" style="color:#475569">Your exam session could not be verified. This may be due to a duplicate login on another device.</div>
+        <button class="btn btn-ghost" style="max-width:280px" onclick="document.getElementById('violation-overlay').classList.remove('show');show('quiz-list-screen')">Return to Dashboard</button>
+      `;
+      overlay.classList.add('show');
+      return;
+    }
+    // Network error — event stored offline, will sync later
   }
 }
 
@@ -2088,6 +2105,39 @@ function renderQuestion() {
 
   const letters = ['A','B','C','D','E','F'];
   const saved = state.answers[q._id];
+  const qType = q.questionType || 'mcq';
+
+  let optionsHtml = '';
+  if (qType === 'fill_blank') {
+    const savedText = typeof saved === 'string' ? saved.replace(/"/g, '&quot;') : '';
+    optionsHtml = `
+      <div style="margin-top:16px">
+        <label style="display:block;font-size:13px;color:#64748b;margin-bottom:6px;font-weight:600">Your Answer</label>
+        <input id="fill-answer-input" type="text" value="${savedText}"
+          placeholder="Type your answer here…"
+          style="width:100%;box-sizing:border-box;padding:12px 14px;border:2px solid #e2e8f0;border-radius:10px;font-size:15px;outline:none;color:#1e293b;background:#fff" />
+      </div>`;
+  } else if (qType === 'mcq_multi') {
+    const savedArr = Array.isArray(saved) ? saved : [];
+    optionsHtml = '<div class="options-list">' +
+      (q.options || []).map((opt, i) => {
+        const sel = savedArr.includes(i);
+        return `<div class="option-item${sel ? ' selected' : ''}" data-idx="${i}" style="cursor:pointer">
+          <div class="option-letter" style="border-radius:5px;font-size:12px">${letters[i]}</div>
+          <div class="option-text" style="flex:1">${opt}</div>
+          <div style="font-size:18px;color:${sel ? '#22c55e' : '#d1d5db'};margin-left:8px">${sel ? '✓' : '○'}</div>
+        </div>`;
+      }).join('') +
+    '</div>';
+  } else {
+    optionsHtml = '<div class="options-list">' +
+      (q.options || []).map((opt, i) => `
+        <div class="option-item${saved === i ? ' selected' : ''}" data-idx="${i}">
+          <div class="option-letter">${letters[i]}</div>
+          <div class="option-text">${opt}</div>
+        </div>`).join('') +
+    '</div>';
+  }
 
   container.innerHTML = `
     <div class="question-card">
@@ -2096,37 +2146,36 @@ function renderQuestion() {
         <span class="q-marks">${q.marks} pt${q.marks !== 1 ? 's' : ''}</span>
       </div>
       <div class="q-text">${q.questionText}</div>
-      <div class="options-list">
-        ${q.options.map((opt, i) => `
-          <div class="option-item ${saved === i ? 'selected' : ''}" data-idx="${i}">
-            <div class="option-letter">${letters[i]}</div>
-            <div class="option-text">${opt}</div>
-          </div>
-        `).join('')}
-      </div>
-    </div>
-  `;
+      ${optionsHtml}
+    </div>`;
 
-  container.querySelectorAll('.option-item').forEach(item => {
-    item.addEventListener('click', () => {
-      const idx = parseInt(item.dataset.idx);
-      state.answers[q._id] = idx;
-      // Save to backend (fire and forget)
-      saveAnswer(q._id, idx);
-      renderQuestion();
+  if (qType === 'fill_blank') {
+    const inp = container.querySelector('#fill-answer-input');
+    if (inp) inp.addEventListener('input', () => { state.answers[q._id] = inp.value; });
+  } else if (qType === 'mcq_multi') {
+    container.querySelectorAll('.option-item').forEach(item => {
+      item.addEventListener('click', () => {
+        const idx = parseInt(item.dataset.idx);
+        const arr = Array.isArray(state.answers[q._id]) ? [...state.answers[q._id]] : [];
+        const pos = arr.indexOf(idx);
+        if (pos >= 0) arr.splice(pos, 1); else arr.push(idx);
+        state.answers[q._id] = arr;
+        renderQuestion();
+      });
     });
-  });
+  } else {
+    container.querySelectorAll('.option-item').forEach(item => {
+      item.addEventListener('click', () => {
+        state.answers[q._id] = parseInt(item.dataset.idx);
+        renderQuestion();
+      });
+    });
+  }
 
-  // Update next/skip button
   const nextBtn = document.getElementById('next-btn');
   const isLast = state.currentIdx === state.questions.length - 1;
   nextBtn.textContent = isLast ? 'Submit Exam' : 'Next Question';
   nextBtn.className = isLast ? 'btn btn-danger' : 'btn btn-primary';
-}
-
-async function saveAnswer(questionId, selectedAnswer) {
-  // Stored locally; final submit sends all answers
-  // (Could also POST per-question for auto-save robustness)
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -2173,9 +2222,30 @@ async function submitExam() {
   btn.disabled = true; btn.textContent = 'Submitting…';
 
   try {
-    const answers = Object.entries(state.answers).map(([questionId, selectedAnswer]) => ({
-      questionId, selectedAnswer,
-    }));
+    // Build a response object per question using the correct field names the server expects
+    const qMap = Object.fromEntries(state.questions.map(q => [q._id, q]));
+    const responses = Object.entries(state.answers)
+      .filter(([, ans]) => ans !== undefined && ans !== null && ans !== '')
+      .map(([questionId, ans]) => {
+        const q = qMap[questionId];
+        const qType = q?.questionType || 'mcq';
+        if (qType === 'fill_blank') {
+          return { questionId, textAnswer: String(ans) };
+        } else if (qType === 'mcq_multi') {
+          return { questionId, selectedOptionIndices: Array.isArray(ans) ? ans : [] };
+        } else {
+          return { questionId, selectedOptionIndex: typeof ans === 'number' ? ans : parseInt(ans) };
+        }
+      });
+
+    // Save all answers before finalising (server grades from saved responses)
+    if (responses.length > 0) {
+      await api('PUT',
+        `/api/student/snap-quizzes/quizzes/${state.selectedQuiz._id}/attempts/${state.attempt._id}/responses`,
+        { responses },
+        { 'x-session-token': state.sessionToken }
+      ).catch(err => console.warn('[submitExam] saveResponses failed:', err.message));
+    }
 
     // Capture end snapshot
     const examVideo = document.getElementById('exam-video');

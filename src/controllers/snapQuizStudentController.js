@@ -952,9 +952,10 @@ function _isCriticalViolation(type, quiz) {
   if (type === "fullscreen_exit" && quiz.terminateOnFullscreenExit) return true;
   if (type === "session_conflict") return true;
   if (type === "copy_paste"      && quiz.preventCopyPaste)          return true;
-  // Default: treat all known types as critical unless specifically configured
+  // Proctoring violations always count toward termination threshold
   return [
     "tab_switch","session_conflict","devtools_open","multiple_windows",
+    "phone_detected","head_turn","multiple_faces",
   ].includes(type);
 }
 
