@@ -4253,7 +4253,7 @@ async function renderLecturerDashboard(content) {
     <div class="quick-actions">
       <button class="btn btn-primary btn-sm" onclick="navigateTo('sessions'); showStartSessionModal()">${sessionsIcon()} Start Session</button>
       <button class="btn btn-secondary btn-sm" onclick="navigateTo('courses'); setTimeout(showCreateCourseModal, 300)">${coursesIcon()} Create Course</button>
-      <button class="btn btn-secondary btn-sm" onclick="navigateTo('quizzes'); setTimeout(renderProctoredQuizzes, 100); setTimeout(showCreateQuizModal, 400)">${quizzesIcon()} Create Quiz</button>
+      <button class="btn btn-secondary btn-sm" onclick="renderProctoredQuizzes(); setTimeout(showCreateQuizModal, 300)">${quizzesIcon()} Create Quiz</button>
     </div>
     <div class="card">
       <div class="card-title">Recent Sessions</div>
@@ -7636,41 +7636,17 @@ async function renderQuizzes() {
   const content = document.getElementById('main-content');
   if (!content) return;
   const role = currentUser.role;
-  const snapUrl = (role === 'student') ? '/snap-quiz.html' : '/snap-quiz-lecturer.html';
-
-  content.innerHTML = `
-    <div class="page-header" style="margin-bottom:28px">
-      <div>
-        <h2 style="font-size:22px;font-weight:800;letter-spacing:-.5px;color:#0f172a;margin-bottom:4px">Proctored / Snap Quiz</h2>
-        <p style="color:#64748b;font-size:13px">Select a quiz type to continue</p>
-      </div>
-    </div>
-    <div style="display:flex;gap:20px;flex-wrap:wrap;max-width:680px">
-
-      <div onclick="renderProctoredQuizzes()" style="flex:1;min-width:260px;background:var(--card);border:2px solid var(--border);border-radius:14px;padding:28px 24px;cursor:pointer;transition:border-color .18s,box-shadow .18s"
-           onmouseenter="this.style.borderColor='var(--primary)';this.style.boxShadow='0 6px 24px rgba(99,102,241,.13)'"
-           onmouseleave="this.style.borderColor='var(--border)';this.style.boxShadow=''">
-        <div style="width:52px;height:52px;border-radius:14px;background:linear-gradient(135deg,#6366f1,#4f46e5);display:flex;align-items:center;justify-content:center;margin-bottom:16px">
-          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-        </div>
-        <div style="font-size:17px;font-weight:700;color:var(--text);margin-bottom:8px">Proctored Quiz</div>
-        <p style="font-size:13px;color:var(--text-muted);line-height:1.65;margin:0 0 20px">Traditional timed exams with questions, auto-grading, and full grade management.</p>
-        <button class="btn btn-primary" style="width:100%;pointer-events:none">Open Proctored Quiz</button>
-      </div>
-
-      <div onclick="window.location.href='${snapUrl}'" style="flex:1;min-width:260px;background:var(--card);border:2px solid var(--border);border-radius:14px;padding:28px 24px;cursor:pointer;transition:border-color .18s,box-shadow .18s"
-           onmouseenter="this.style.borderColor='#7c3aed';this.style.boxShadow='0 6px 24px rgba(124,58,237,.13)'"
-           onmouseleave="this.style.borderColor='var(--border)';this.style.boxShadow=''">
-        <div style="width:52px;height:52px;border-radius:14px;background:linear-gradient(135deg,#7c3aed,#6d28d9);display:flex;align-items:center;justify-content:center;margin-bottom:16px">
-          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
-        </div>
-        <div style="font-size:17px;font-weight:700;color:var(--text);margin-bottom:8px">Snap Quiz</div>
-        <p style="font-size:13px;color:var(--text-muted);line-height:1.65;margin:0 0 20px">Live exam-style quizzes with anti-cheat proctoring, camera monitoring, and real-time control.</p>
-        <button class="btn btn-secondary" style="width:100%;background:linear-gradient(135deg,#7c3aed,#6d28d9);color:#fff;border:none;pointer-events:none">Open Snap Quiz</button>
-      </div>
-
-    </div>
-  `;
+  // Lecturer and student go directly to Snap Quiz portal
+  if (role === 'student') {
+    window.location.href = '/snap-quiz.html';
+    return;
+  }
+  if (role === 'lecturer') {
+    window.location.href = '/snap-quiz-lecturer.html';
+    return;
+  }
+  // Admin / superadmin keep the proctored quiz overview
+  await renderAdminQuizzes(content);
 }
 
 async function renderProctoredQuizzes() {
