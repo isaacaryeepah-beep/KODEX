@@ -1233,7 +1233,7 @@ async function loadQuizList() {
           <div>
             <div style="font-size:11px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px">${q.course?.code || 'Course'}</div>
             <div style="font-size:16px;font-weight:700;margin-bottom:4px">${q.title}</div>
-            <div style="font-size:12px;color:var(--slate)">${q.questionCount} questions · ${q.timeLimit} min</div>
+            <div style="font-size:12px;color:var(--slate)">${q.questionCount || 0} questions · ${q.timeLimitMinutes || q.timeLimit || '?'} min</div>
             <div style="font-size:11px;color:var(--muted);margin-top:3px">
               ${new Date(q.startTime).toLocaleString()} → ${new Date(q.endTime).toLocaleString()}
             </div>

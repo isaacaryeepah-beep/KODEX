@@ -53,25 +53,50 @@ exports.listQuizzes = async (req, res) => {
       .lean();
 
     // Attach attempt count for this student.
-    const quizIds = quizzes.map(q => q._id);
-    const counts  = await SnapQuizAttempt.aggregate([
-      {
-        $match: {
+    const quizIds   = quizzes.map(q => q._id);
+    const studentId = new mongoose.Types.ObjectId(req.user._id);
+    const companyId = new mongoose.Types.ObjectId(req.companyId);
+
+    const [allCounts, submittedCounts, qCounts] = await Promise.all([
+      SnapQuizAttempt.aggregate([
+        { $match: { quiz: { $in: quizIds }, student: studentId, company: companyId } },
+        { $group: { _id: "$quiz", count: { $sum: 1 } } },
+      ]),
+      SnapQuizAttempt.aggregate([
+        { $match: {
           quiz:    { $in: quizIds },
-          student: new mongoose.Types.ObjectId(req.user._id),
-          company: new mongoose.Types.ObjectId(req.companyId),
-        },
-      },
-      { $group: { _id: "$quiz", count: { $sum: 1 } } },
+          student: studentId,
+          company: companyId,
+          status:  { $in: [ATTEMPT_STATUSES.SUBMITTED, ATTEMPT_STATUSES.AUTO_SUBMITTED, ATTEMPT_STATUSES.TERMINATED] },
+        }},
+        { $group: { _id: "$quiz", count: { $sum: 1 } } },
+      ]),
+      SnapQuizQuestion.aggregate([
+        { $match: { quiz: { $in: quizIds }, isActive: { $ne: false } } },
+        { $group: { _id: "$quiz", count: { $sum: 1 } } },
+      ]),
     ]);
-    const countMap = {};
-    counts.forEach(c => { countMap[c._id.toString()] = c.count; });
+
+    const attemptMap   = {};
+    const submittedMap = {};
+    const qCountMap    = {};
+    allCounts.forEach(c       => { attemptMap[c._id.toString()]   = c.count; });
+    submittedCounts.forEach(c => { submittedMap[c._id.toString()] = c.count; });
+    qCounts.forEach(c         => { qCountMap[c._id.toString()]    = c.count; });
 
     return res.json({
-      quizzes: quizzes.map(q => ({
-        ...q,
-        myAttemptCount: countMap[q._id.toString()] || 0,
-      })),
+      quizzes: quizzes.map(q => {
+        const id          = q._id.toString();
+        const isSubmitted = (submittedMap[id] || 0) > 0;
+        const canAttempt  = q.status === "open" && !isSubmitted;
+        return {
+          ...q,
+          questionCount:  qCountMap[id] || 0,
+          myAttemptCount: attemptMap[id] || 0,
+          isSubmitted,
+          canAttempt,
+        };
+      }),
     });
   } catch (err) {
     console.error("[snapQuiz student listQuizzes]", err);
@@ -106,21 +131,50 @@ exports.listAllQuizzes = async (req, res) => {
       .lean();
 
     const quizIds = quizzes.map(q => q._id);
-    const counts  = await SnapQuizAttempt.aggregate([
-      {
-        $match: {
+    const studentId = new mongoose.Types.ObjectId(req.user._id);
+    const companyId = new mongoose.Types.ObjectId(req.companyId);
+
+    // Attempt counts (any status)
+    const [allCounts, submittedCounts, qCounts] = await Promise.all([
+      SnapQuizAttempt.aggregate([
+        { $match: { quiz: { $in: quizIds }, student: studentId, company: companyId } },
+        { $group: { _id: "$quiz", count: { $sum: 1 } } },
+      ]),
+      SnapQuizAttempt.aggregate([
+        { $match: {
           quiz:    { $in: quizIds },
-          student: new mongoose.Types.ObjectId(req.user._id),
-          company: new mongoose.Types.ObjectId(req.companyId),
-        },
-      },
-      { $group: { _id: "$quiz", count: { $sum: 1 } } },
+          student: studentId,
+          company: companyId,
+          status:  { $in: [ATTEMPT_STATUSES.SUBMITTED, ATTEMPT_STATUSES.AUTO_SUBMITTED, ATTEMPT_STATUSES.TERMINATED] },
+        }},
+        { $group: { _id: "$quiz", count: { $sum: 1 } } },
+      ]),
+      SnapQuizQuestion.aggregate([
+        { $match: { quiz: { $in: quizIds }, isActive: { $ne: false } } },
+        { $group: { _id: "$quiz", count: { $sum: 1 } } },
+      ]),
     ]);
-    const countMap = {};
-    counts.forEach(c => { countMap[c._id.toString()] = c.count; });
+
+    const attemptMap   = {};
+    const submittedMap = {};
+    const qCountMap    = {};
+    allCounts.forEach(c      => { attemptMap[c._id.toString()]   = c.count; });
+    submittedCounts.forEach(c => { submittedMap[c._id.toString()] = c.count; });
+    qCounts.forEach(c         => { qCountMap[c._id.toString()]    = c.count; });
 
     return res.json({
-      quizzes: quizzes.map(q => ({ ...q, myAttemptCount: countMap[q._id.toString()] || 0 })),
+      quizzes: quizzes.map(q => {
+        const id          = q._id.toString();
+        const isSubmitted = (submittedMap[id] || 0) > 0;
+        const canAttempt  = q.status === "open" && !isSubmitted;
+        return {
+          ...q,
+          questionCount:  qCountMap[id] || 0,
+          myAttemptCount: attemptMap[id] || 0,
+          isSubmitted,
+          canAttempt,
+        };
+      }),
     });
   } catch (err) {
     console.error("[snapQuiz student listAllQuizzes]", err);
