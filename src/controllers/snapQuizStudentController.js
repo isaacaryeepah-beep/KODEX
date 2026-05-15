@@ -950,13 +950,8 @@ async function _buildQuestionsForAttempt(attempt, quiz) {
   }).filter(Boolean);
 }
 
-function _isCriticalViolation(type) {
-  return [
-    "tab_switch", "fullscreen_exit",
-    "copy_paste", "right_click", "print_screen",
-    "session_conflict", "devtools_open", "multiple_windows",
-    "phone_detected", "head_turn", "multiple_faces",
-  ].includes(type);
+function _isCriticalViolation(_type) {
+  return true; // every violation counts toward the termination limit
 }
 
 function _violationFieldInc(type) {
