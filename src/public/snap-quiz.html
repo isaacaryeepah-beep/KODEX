@@ -1006,9 +1006,10 @@ const state = {
   sessionToken: null,
   attempt: null,
   questions: [],
-  answers: {},       // questionId → selectedIndex
+  answers: {},       // questionId → selectedIndex | indices[] | text
   currentIdx: 0,
   timerInterval: null,
+  autoSaveInterval: null,
   timerSeconds: 0,
   cameraStream: null,
   faceModel: null,
@@ -1025,6 +1026,11 @@ const state = {
   totalViolations: 0,
   warningsIssued: 0,
   examActive: false,
+  // named listener refs so they can be removed on cleanup
+  _handleFullscreen: null,
+  _handleBlur: null,
+  _handleContextMenu: null,
+  _handleKeydown: null,
 };
 
 // ══════════════════════════════════════════════════════════════════
@@ -1560,6 +1566,8 @@ document.getElementById('capture-start-btn').addEventListener('click', async () 
     state.questions = data.questions;
     state.answers = {};
     state.currentIdx = 0;
+    // Merge authoritative quiz settings from server response over the listing data
+    if (data.quiz) Object.assign(state.selectedQuiz, data.quiz);
     // Calculate remaining time from server-provided expiresAt
     const expiresAt = data.attempt?.expiresAt ? new Date(data.attempt.expiresAt) : null;
     const timeLimitMinutes = data.quiz?.timeLimitMinutes || 30;
@@ -1690,77 +1698,89 @@ function startTimer() {
 //  PROCTORING ENGINE
 // ══════════════════════════════════════════════════════════════════
 function startProctoring() {
+  const quiz = state.selectedQuiz;
   const examVideo = document.getElementById('exam-video');
 
-  // ── Heartbeat every 10s ──────────────────────────────────────
+  // ── Heartbeat — use quiz's configured interval (default 30 s) ──
+  const hbMs = Math.max(10, quiz.heartbeatIntervalSeconds || 30) * 1000;
   state.heartbeatInterval = setInterval(() => {
     logEvent('heartbeat').catch(console.warn);
-  }, 10000);
+  }, hbMs);
 
-  // ── Face + Head-turn + Phone monitoring every 3s ─────────────
+  // ── Auto-save answers every 60 s so a crash doesn't lose work ──
+  state.autoSaveInterval = setInterval(() => {
+    if (state.examActive) saveAnswer();
+  }, 60000);
+
+  // ── Face + Head-turn + Phone monitoring (only when proctoringEnabled) ──
   state.criticalStrikesThisSession = 0;
-  state.faceCheckInterval = setInterval(async () => {
-    if (!state.examActive) return;
-    const { count, detected, centered, headTurn } = await detectFaces(examVideo);
-    const phoneDetected = detectPhoneInFrame(examVideo);
-    const floatingCam = document.getElementById('floating-cam');
-    const dot = document.getElementById('ps-dot');
-    const text = document.getElementById('ps-text');
-    const camInd = document.getElementById('cam-indicator');
+  if (quiz.proctoringEnabled) {
+    state.faceCheckInterval = setInterval(async () => {
+      if (!state.examActive) return;
+      const { count, detected, centered, headTurn } = await detectFaces(examVideo);
+      const phoneDetected = detectPhoneInFrame(examVideo);
+      const floatingCam = document.getElementById('floating-cam');
+      const dot = document.getElementById('ps-dot');
+      const text = document.getElementById('ps-text');
+      const camInd = document.getElementById('cam-indicator');
 
-    if (phoneDetected) {
-      setProctorStatus('red', '🚫 Phone!', floatingCam, dot, text);
-      camInd.className = 'red';
-      state.criticalStrikesThisSession++;
-      showProctorStrikeWarning('phone_detected', state.criticalStrikesThisSession);
-      logEvent('phone_detected').catch(console.warn);
+      if (phoneDetected) {
+        setProctorStatus('red', '🚫 Phone!', floatingCam, dot, text);
+        camInd.className = 'red';
+        state.criticalStrikesThisSession++;
+        showProctorStrikeWarning('phone_detected', state.criticalStrikesThisSession);
+        logEvent('phone_detected').catch(console.warn);
 
-    } else if (headTurn) {
-      setProctorStatus('red', '⚠ Head turn!', floatingCam, dot, text);
-      camInd.className = 'red';
-      state.criticalStrikesThisSession++;
-      showProctorStrikeWarning('head_turn', state.criticalStrikesThisSession);
-      logEvent('head_turn').catch(console.warn);
+      } else if (headTurn) {
+        setProctorStatus('red', '⚠ Head turn!', floatingCam, dot, text);
+        camInd.className = 'red';
+        state.criticalStrikesThisSession++;
+        showProctorStrikeWarning('head_turn', state.criticalStrikesThisSession);
+        logEvent('head_turn').catch(console.warn);
 
-    } else if (count > 1) {
-      setProctorStatus('red', '⚠ Multiple faces', floatingCam, dot, text);
-      camInd.className = 'red';
-      state.criticalStrikesThisSession++;
-      showProctorStrikeWarning('multiple_faces', state.criticalStrikesThisSession);
-      logEvent('multiple_faces', { count }).catch(console.warn);
+      } else if (count > 1) {
+        setProctorStatus('red', '⚠ Multiple faces', floatingCam, dot, text);
+        camInd.className = 'red';
+        state.criticalStrikesThisSession++;
+        showProctorStrikeWarning('multiple_faces', state.criticalStrikesThisSession);
+        logEvent('multiple_faces', { count }).catch(console.warn);
 
-    } else if (!detected) {
-      setProctorStatus('red', '⚠ No face', floatingCam, dot, text);
-      camInd.className = 'red';
-      logEvent('face_missing').catch(console.warn);
+      } else if (!detected) {
+        setProctorStatus('red', '⚠ No face', floatingCam, dot, text);
+        camInd.className = 'red';
+        logEvent('face_missing').catch(console.warn);
 
-    } else if (!centered) {
-      setProctorStatus('yellow', '⚠ Off-center', floatingCam, dot, text);
-      camInd.className = '';
-      if (state.lastFaceState !== 'yellow') logEvent('face_off_center').catch(console.warn);
+      } else if (!centered) {
+        setProctorStatus('yellow', '⚠ Off-center', floatingCam, dot, text);
+        camInd.className = '';
+        if (state.lastFaceState !== 'yellow') logEvent('face_off_center').catch(console.warn);
 
-    } else {
-      setProctorStatus('green', '✓ Face OK', floatingCam, dot, text);
-      camInd.className = '';
-      if (state.lastFaceState !== 'green') logEvent('face_detected').catch(console.warn);
-    }
+      } else {
+        setProctorStatus('green', '✓ Face OK', floatingCam, dot, text);
+        camInd.className = '';
+        if (state.lastFaceState !== 'green') logEvent('face_detected').catch(console.warn);
+      }
 
-    // 2-strike auto-submit
-    if (state.criticalStrikesThisSession >= 2) {
-      state.criticalStrikesThisSession = 0; // reset to avoid repeat triggers
-      showAutoSubmitCountdown();
-    }
+      if (state.criticalStrikesThisSession >= 2) {
+        state.criticalStrikesThisSession = 0;
+        showAutoSubmitCountdown();
+      }
 
-    state.lastFaceState = phoneDetected || headTurn || count > 1 ? 'red' : !detected ? 'red' : !centered ? 'yellow' : 'green';
-  }, 3000);
+      state.lastFaceState = phoneDetected || headTurn || count > 1 ? 'red' : !detected ? 'red' : !centered ? 'yellow' : 'green';
+    }, 3000);
+  }
 
-  // ── Periodic snapshots every 30s ─────────────────────────────
-  state.snapshotInterval = setInterval(async () => {
-    if (!state.examActive) return;
-    const { count, detected, centered } = await detectFaces(examVideo);
-    const img = captureFrame(examVideo);
-    uploadSnapshot(img, 'periodic', detected, count, centered).catch(console.warn);
-  }, 30000);
+  // ── Periodic snapshots — only when proctoringEnabled and interval > 0 ──
+  const snapSecs = quiz.proctoringEnabled && quiz.snapshotIntervalSeconds > 0
+    ? quiz.snapshotIntervalSeconds : 0;
+  if (snapSecs > 0) {
+    state.snapshotInterval = setInterval(async () => {
+      if (!state.examActive) return;
+      const { count, detected, centered } = await detectFaces(examVideo);
+      const img = captureFrame(examVideo);
+      uploadSnapshot(img, 'periodic', detected, count, centered).catch(console.warn);
+    }, Math.max(10, snapSecs) * 1000);
+  }
 
   // ── Visibility change (tab / app switch) ─────────────────────
   document.addEventListener('visibilitychange', handleVisibilityChange);
@@ -1795,9 +1815,53 @@ function startProctoring() {
     });
   });
 
+  // ── Fullscreen enforcement ────────────────────────────────────
+  if (quiz.requireFullscreen) {
+    document.documentElement.requestFullscreen().catch(() => {});
+    state._handleFullscreen = () => {
+      if (!document.fullscreenElement && state.examActive) {
+        logEvent('fullscreen_exit').catch(console.warn);
+        toast(quiz.terminateOnFullscreenExit
+          ? '⛔ Fullscreen required — exiting may terminate your exam'
+          : '⚠️ Please return to fullscreen to continue', 'warn');
+      }
+    };
+    document.addEventListener('fullscreenchange', state._handleFullscreen);
+  }
+
+  // ── Focus / window-blur enforcement ──────────────────────────
+  if (quiz.terminateOnFocusLost) {
+    state._handleBlur = () => {
+      if (state.examActive) logEvent('focus_lost').catch(console.warn);
+    };
+    window.addEventListener('blur', state._handleBlur);
+  }
+
+  // ── Right-click prevention ────────────────────────────────────
+  if (quiz.preventRightClick) {
+    state._handleContextMenu = (e) => {
+      if (state.examActive) {
+        e.preventDefault();
+        logEvent('right_click').catch(console.warn);
+      }
+    };
+    document.addEventListener('contextmenu', state._handleContextMenu);
+  }
+
+  // ── Print-screen prevention ───────────────────────────────────
+  if (quiz.preventPrintScreen) {
+    state._handleKeydown = (e) => {
+      if (state.examActive && (e.key === 'PrintScreen' || e.code === 'PrintScreen' || e.keyCode === 44)) {
+        e.preventDefault();
+        logEvent('print_screen').catch(console.warn);
+        toast('⚠️ Screenshots are not allowed during this exam', 'warn');
+      }
+    };
+    document.addEventListener('keydown', state._handleKeydown);
+  }
+
   // ── Noise / audio detection ───────────────────────────────────
-  // Only active when quiz has a non-zero noise threshold (AI or hybrid mode).
-  const noiseThreshold = state.selectedQuiz?.noiseDetectionThreshold ?? 40;
+  const noiseThreshold = quiz.noiseDetectionThreshold ?? 40;
   if (noiseThreshold > 0) {
     startNoiseDetection(noiseThreshold);
   }
@@ -1840,7 +1904,7 @@ function handleVisibilityChange() {
   if (!state.examActive) return;
   if (document.visibilityState === 'hidden') {
     state.backgroundStart = Date.now();
-    logEvent('app_background').catch(console.warn);
+    logEvent('tab_switch').catch(console.warn);
   } else {
     const duration = state.backgroundStart ? (Date.now() - state.backgroundStart) / 1000 : 0;
     state.backgroundStart = null;
@@ -1858,7 +1922,7 @@ function handleVisibilityChange() {
 function handleCopy(e) {
   if (state.examActive) {
     e.preventDefault();
-    logEvent('copy_attempt').catch(console.warn);
+    logEvent('copy_paste').catch(console.warn);
     toast('⚠️ Copying is not allowed during the exam', 'warn');
   }
 }
@@ -1884,15 +1948,18 @@ async function logEvent(eventType, metadata = {}) {
   try {
     if (eventType === 'heartbeat') {
       const hbRes = await api('POST', `${baseUrl}/heartbeat`, {}, sessionHeader);
-      if (hbRes?.terminated || hbRes?.meetingEnded) {
+      if (hbRes?.terminated || hbRes?.meetingEnded || hbRes?.expired) {
         clearInterval(state.heartbeatInterval);
         clearInterval(state.faceCheckInterval);
         state.examActive = false;
         const overlay = document.getElementById('violation-overlay');
+        let msg = 'Your exam session was terminated.';
+        if (hbRes.meetingEnded) msg = 'The live session has ended. Your exam has been automatically submitted.';
+        else if (hbRes.expired)  msg = 'Your exam time has expired. Your answers have been automatically submitted.';
         overlay.innerHTML = `
           <div class="violation-icon">🔴</div>
           <div class="violation-title" style="color:#1e293b">Exam Session Ended</div>
-          <div class="violation-msg" style="color:#475569">${hbRes.meetingEnded ? 'The live session has ended. Your exam has been automatically submitted.' : 'Your exam session was terminated.'}</div>
+          <div class="violation-msg" style="color:#475569">${msg}</div>
           <button class="btn btn-ghost" style="max-width:280px" onclick="document.getElementById('violation-overlay').classList.remove('show');show('quiz-list-screen')">Return to Dashboard</button>
         `;
         overlay.classList.add('show');
@@ -1906,7 +1973,6 @@ async function logEvent(eventType, metadata = {}) {
       ...metadata,
     }, sessionHeader);
 
-    // Apply enforcement from server response
     if (res.terminated) {
       terminateExam(eventType);
     } else if (res.warned) {
@@ -1914,8 +1980,23 @@ async function logEvent(eventType, metadata = {}) {
     }
 
     if (res.violationCount != null) state.totalViolations = res.violationCount;
-  } catch {
-    // Network call failed — event is already stored offline, will sync later
+  } catch (err) {
+    // If the session was explicitly terminated server-side, notify student
+    if (eventType === 'heartbeat' && err.message && err.message.toLowerCase().includes('session')) {
+      clearInterval(state.heartbeatInterval);
+      clearInterval(state.faceCheckInterval);
+      state.examActive = false;
+      const overlay = document.getElementById('violation-overlay');
+      overlay.innerHTML = `
+        <div class="violation-icon">🔴</div>
+        <div class="violation-title" style="color:#1e293b">Session Ended</div>
+        <div class="violation-msg" style="color:#475569">Your exam session could not be verified. This may be due to a duplicate login on another device.</div>
+        <button class="btn btn-ghost" style="max-width:280px" onclick="document.getElementById('violation-overlay').classList.remove('show');show('quiz-list-screen')">Return to Dashboard</button>
+      `;
+      overlay.classList.add('show');
+      return;
+    }
+    // Network error — event stored offline, will sync later
   }
 }
 
@@ -2019,13 +2100,18 @@ function terminateExam(reason) {
 
   const overlay = document.getElementById('violation-overlay');
   const reasonMap = {
-    multiple_faces: 'Multiple faces were detected in the camera frame.',
+    multiple_faces:  'Multiple faces were detected in the camera frame.',
     camera_disabled: 'Your camera was disabled during the exam.',
-    app_background: 'You left the exam for too long.',
-    tab_switch: 'Repeated tab switching was detected.',
+    app_background:  'You left the exam for too long.',
+    tab_switch:      'Repeated tab switching was detected.',
+    focus_lost:      'Repeated window switching or minimising was detected.',
+    fullscreen_exit: 'Fullscreen mode was exited.',
     identity_mismatch: 'Identity verification failed.',
-    phone_detected: 'A phone was detected in the camera frame.',
-    head_turn: 'Repeated head turning away from screen was detected.',
+    phone_detected:  'A phone was detected in the camera frame.',
+    head_turn:       'Repeated head turning away from screen was detected.',
+    right_click:     'Right-clicking was detected during the exam.',
+    print_screen:    'A screenshot attempt was detected.',
+    copy_paste:      'Copy/paste was used during the exam.',
   };
   overlay.innerHTML = `
     <div class="violation-icon">⛔</div>
@@ -2088,6 +2174,39 @@ function renderQuestion() {
 
   const letters = ['A','B','C','D','E','F'];
   const saved = state.answers[q._id];
+  const qType = q.questionType || 'mcq';
+
+  let optionsHtml = '';
+  if (qType === 'fill_blank') {
+    const savedText = typeof saved === 'string' ? saved.replace(/"/g, '&quot;') : '';
+    optionsHtml = `
+      <div style="margin-top:16px">
+        <label style="display:block;font-size:13px;color:#64748b;margin-bottom:6px;font-weight:600">Your Answer</label>
+        <input id="fill-answer-input" type="text" value="${savedText}"
+          placeholder="Type your answer here…"
+          style="width:100%;box-sizing:border-box;padding:12px 14px;border:2px solid #e2e8f0;border-radius:10px;font-size:15px;outline:none;color:#1e293b;background:#fff" />
+      </div>`;
+  } else if (qType === 'mcq_multi') {
+    const savedArr = Array.isArray(saved) ? saved : [];
+    optionsHtml = '<div class="options-list">' +
+      (q.options || []).map((opt, i) => {
+        const sel = savedArr.includes(i);
+        return `<div class="option-item${sel ? ' selected' : ''}" data-idx="${i}" style="cursor:pointer">
+          <div class="option-letter" style="border-radius:5px;font-size:12px">${letters[i]}</div>
+          <div class="option-text" style="flex:1">${opt}</div>
+          <div style="font-size:18px;color:${sel ? '#22c55e' : '#d1d5db'};margin-left:8px">${sel ? '✓' : '○'}</div>
+        </div>`;
+      }).join('') +
+    '</div>';
+  } else {
+    optionsHtml = '<div class="options-list">' +
+      (q.options || []).map((opt, i) => `
+        <div class="option-item${saved === i ? ' selected' : ''}" data-idx="${i}">
+          <div class="option-letter">${letters[i]}</div>
+          <div class="option-text">${opt}</div>
+        </div>`).join('') +
+    '</div>';
+  }
 
   container.innerHTML = `
     <div class="question-card">
@@ -2096,37 +2215,56 @@ function renderQuestion() {
         <span class="q-marks">${q.marks} pt${q.marks !== 1 ? 's' : ''}</span>
       </div>
       <div class="q-text">${q.questionText}</div>
-      <div class="options-list">
-        ${q.options.map((opt, i) => `
-          <div class="option-item ${saved === i ? 'selected' : ''}" data-idx="${i}">
-            <div class="option-letter">${letters[i]}</div>
-            <div class="option-text">${opt}</div>
-          </div>
-        `).join('')}
-      </div>
-    </div>
-  `;
+      ${optionsHtml}
+    </div>`;
 
-  container.querySelectorAll('.option-item').forEach(item => {
-    item.addEventListener('click', () => {
-      const idx = parseInt(item.dataset.idx);
-      state.answers[q._id] = idx;
-      // Save to backend (fire and forget)
-      saveAnswer(q._id, idx);
-      renderQuestion();
+  if (qType === 'fill_blank') {
+    const inp = container.querySelector('#fill-answer-input');
+    if (inp) inp.addEventListener('input', () => { state.answers[q._id] = inp.value; });
+  } else if (qType === 'mcq_multi') {
+    container.querySelectorAll('.option-item').forEach(item => {
+      item.addEventListener('click', () => {
+        const idx = parseInt(item.dataset.idx);
+        const arr = Array.isArray(state.answers[q._id]) ? [...state.answers[q._id]] : [];
+        const pos = arr.indexOf(idx);
+        if (pos >= 0) arr.splice(pos, 1); else arr.push(idx);
+        state.answers[q._id] = arr;
+        renderQuestion();
+      });
     });
-  });
+  } else {
+    container.querySelectorAll('.option-item').forEach(item => {
+      item.addEventListener('click', () => {
+        state.answers[q._id] = parseInt(item.dataset.idx);
+        renderQuestion();
+      });
+    });
+  }
 
-  // Update next/skip button
   const nextBtn = document.getElementById('next-btn');
   const isLast = state.currentIdx === state.questions.length - 1;
   nextBtn.textContent = isLast ? 'Submit Exam' : 'Next Question';
   nextBtn.className = isLast ? 'btn btn-danger' : 'btn btn-primary';
 }
 
-async function saveAnswer(questionId, selectedAnswer) {
-  // Stored locally; final submit sends all answers
-  // (Could also POST per-question for auto-save robustness)
+// Fire-and-forget save of all current answers to the server
+function saveAnswer() {
+  if (!state.attempt?._id || !state.sessionToken) return;
+  const qMap = Object.fromEntries(state.questions.map(q => [String(q._id), q]));
+  const responses = Object.entries(state.answers)
+    .filter(([, ans]) => ans !== undefined && ans !== null && ans !== '')
+    .map(([questionId, ans]) => {
+      const qt = qMap[questionId]?.questionType || 'mcq';
+      if (qt === 'fill_blank')  return { questionId, textAnswer: String(ans) };
+      if (qt === 'mcq_multi')   return { questionId, selectedOptionIndices: Array.isArray(ans) ? ans : [] };
+      return { questionId, selectedOptionIndex: typeof ans === 'number' ? ans : parseInt(ans) };
+    });
+  if (!responses.length) return;
+  api('PUT',
+    `/api/student/snap-quizzes/quizzes/${state.selectedQuiz._id}/attempts/${state.attempt._id}/responses`,
+    { responses },
+    { 'x-session-token': state.sessionToken }
+  ).catch(() => {});
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -2134,6 +2272,7 @@ async function saveAnswer(questionId, selectedAnswer) {
 // ══════════════════════════════════════════════════════════════════
 document.getElementById('next-btn').addEventListener('click', () => {
   if (state.currentIdx < state.questions.length - 1) {
+    saveAnswer(); // persist progress before moving
     state.currentIdx++;
     renderQuestion();
     document.getElementById('exam-body').scrollTop = 0;
@@ -2144,6 +2283,7 @@ document.getElementById('next-btn').addEventListener('click', () => {
 
 document.getElementById('skip-btn').addEventListener('click', () => {
   if (state.currentIdx < state.questions.length - 1) {
+    saveAnswer(); // persist progress before skipping
     state.currentIdx++;
     renderQuestion();
     document.getElementById('exam-body').scrollTop = 0;
@@ -2173,9 +2313,30 @@ async function submitExam() {
   btn.disabled = true; btn.textContent = 'Submitting…';
 
   try {
-    const answers = Object.entries(state.answers).map(([questionId, selectedAnswer]) => ({
-      questionId, selectedAnswer,
-    }));
+    // Build a response object per question using the correct field names the server expects
+    const qMap = Object.fromEntries(state.questions.map(q => [q._id, q]));
+    const responses = Object.entries(state.answers)
+      .filter(([, ans]) => ans !== undefined && ans !== null && ans !== '')
+      .map(([questionId, ans]) => {
+        const q = qMap[questionId];
+        const qType = q?.questionType || 'mcq';
+        if (qType === 'fill_blank') {
+          return { questionId, textAnswer: String(ans) };
+        } else if (qType === 'mcq_multi') {
+          return { questionId, selectedOptionIndices: Array.isArray(ans) ? ans : [] };
+        } else {
+          return { questionId, selectedOptionIndex: typeof ans === 'number' ? ans : parseInt(ans) };
+        }
+      });
+
+    // Save all answers before finalising (server grades from saved responses)
+    if (responses.length > 0) {
+      await api('PUT',
+        `/api/student/snap-quizzes/quizzes/${state.selectedQuiz._id}/attempts/${state.attempt._id}/responses`,
+        { responses },
+        { 'x-session-token': state.sessionToken }
+      ).catch(err => console.warn('[submitExam] saveResponses failed:', err.message));
+    }
 
     // Capture end snapshot
     const examVideo = document.getElementById('exam-video');
@@ -2234,9 +2395,27 @@ function stopExamCleanup() {
   clearInterval(state.snapshotInterval);
   clearInterval(state.heartbeatInterval);
   clearInterval(state.noiseInterval);
+  clearInterval(state.autoSaveInterval);
   document.removeEventListener('visibilitychange', handleVisibilityChange);
   document.removeEventListener('copy', handleCopy);
   document.removeEventListener('cut', handleCopy);
+  if (state._handleFullscreen) {
+    document.removeEventListener('fullscreenchange', state._handleFullscreen);
+    state._handleFullscreen = null;
+  }
+  if (state._handleBlur) {
+    window.removeEventListener('blur', state._handleBlur);
+    state._handleBlur = null;
+  }
+  if (state._handleContextMenu) {
+    document.removeEventListener('contextmenu', state._handleContextMenu);
+    state._handleContextMenu = null;
+  }
+  if (state._handleKeydown) {
+    document.removeEventListener('keydown', state._handleKeydown);
+    state._handleKeydown = null;
+  }
+  if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
   if (state.audioStream) {
     state.audioStream.getTracks().forEach(t => t.stop());
     state.audioStream = null;

@@ -356,15 +356,21 @@ exports.startAttempt = async (req, res) => {
         status:       attempt.status,
       },
       quiz: {
-        timeLimitMinutes:              quiz.timeLimitMinutes,
-        heartbeatIntervalSeconds:      quiz.heartbeatIntervalSeconds,
+        timeLimitMinutes:               quiz.timeLimitMinutes,
+        heartbeatIntervalSeconds:       quiz.heartbeatIntervalSeconds,
+        heartbeatTimeoutSeconds:        quiz.heartbeatTimeoutSeconds,
         maxViolationsBeforeTermination: quiz.maxViolationsBeforeTermination,
-        preventCopyPaste:              quiz.preventCopyPaste,
-        preventRightClick:             quiz.preventRightClick,
-        requireFullscreen:             quiz.requireFullscreen,
-        showViolationWarnings:         quiz.showViolationWarnings,
-        proctoringEnabled:             quiz.proctoringEnabled,
-        snapshotIntervalSeconds:       quiz.snapshotIntervalSeconds,
+        terminateOnTabSwitch:           quiz.terminateOnTabSwitch,
+        terminateOnFocusLost:           quiz.terminateOnFocusLost,
+        terminateOnFullscreenExit:      quiz.terminateOnFullscreenExit,
+        preventCopyPaste:               quiz.preventCopyPaste,
+        preventRightClick:              quiz.preventRightClick,
+        preventPrintScreen:             quiz.preventPrintScreen,
+        requireFullscreen:              quiz.requireFullscreen,
+        showViolationWarnings:          quiz.showViolationWarnings,
+        proctoringEnabled:              quiz.proctoringEnabled,
+        snapshotIntervalSeconds:        quiz.snapshotIntervalSeconds,
+        noiseDetectionThreshold:        quiz.noiseDetectionThreshold,
       },
       questions,
     });
@@ -572,7 +578,7 @@ exports.reportViolation = async (req, res) => {
     }
 
     const quiz = await SnapQuiz.findById(attempt.quiz)
-      .select("maxViolationsBeforeTermination terminateOnTabSwitch terminateOnFocusLost terminateOnFullscreenExit showViolationWarnings")
+      .select("maxViolationsBeforeTermination terminateOnTabSwitch terminateOnFocusLost terminateOnFullscreenExit showViolationWarnings preventCopyPaste preventRightClick preventPrintScreen")
       .lean();
 
     const { violationType, occurredAt, detail, snapshotUrl } = req.body;
@@ -947,14 +953,17 @@ async function _buildQuestionsForAttempt(attempt, quiz) {
 
 function _isCriticalViolation(type, quiz) {
   if (!quiz) return true;
+  // Quiz-configured violations — only critical when the quiz setting is enabled
   if (type === "tab_switch"      && quiz.terminateOnTabSwitch)      return true;
   if (type === "focus_lost"      && quiz.terminateOnFocusLost)      return true;
   if (type === "fullscreen_exit" && quiz.terminateOnFullscreenExit) return true;
-  if (type === "session_conflict") return true;
   if (type === "copy_paste"      && quiz.preventCopyPaste)          return true;
-  // Default: treat all known types as critical unless specifically configured
+  if (type === "right_click"     && quiz.preventRightClick)         return true;
+  if (type === "print_screen"    && quiz.preventPrintScreen)        return true;
+  // Always-critical: security and proctoring events (not configurable)
   return [
-    "tab_switch","session_conflict","devtools_open","multiple_windows",
+    "session_conflict", "devtools_open", "multiple_windows",
+    "phone_detected", "head_turn", "multiple_faces",
   ].includes(type);
 }
 
