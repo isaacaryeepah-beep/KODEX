@@ -14,7 +14,7 @@
 
 const User = require("../models/User");
 
-const MAX_CLOCK_DRIFT_MS = 5 * 60 * 1000; // 5 minutes
+const MAX_CLOCK_DRIFT_MS = 30 * 60 * 1000; // 30 minutes — generous tolerance for student devices
 
 module.exports = async function snapQuizSecurityValidator(req, res, next) {
   try {
@@ -42,14 +42,16 @@ module.exports = async function snapQuizSecurityValidator(req, res, next) {
     }
 
     // 3. Request timestamp drift check (optional — client sends X-Request-Time)
+    // Log excessive drift for audit purposes but never hard-block a student —
+    // device clocks are often out of sync and shouldn't prevent exam access.
     const clientTime = req.headers["x-request-time"];
     if (clientTime) {
       const ts = parseInt(clientTime, 10);
-      if (!isNaN(ts) && Math.abs(Date.now() - ts) > MAX_CLOCK_DRIFT_MS) {
-        return res.status(400).json({
-          error: "Request timestamp is too old or too far in the future. Sync your device clock.",
-          clockDrift: true,
-        });
+      const drift = isNaN(ts) ? 0 : Math.abs(Date.now() - ts);
+      if (!isNaN(ts) && drift > MAX_CLOCK_DRIFT_MS) {
+        console.warn(
+          `[snapQuizSecurityValidator] Large clock drift for user ${req.user._id}: ${Math.round(drift / 1000)}s`
+        );
       }
     }
 
