@@ -1367,7 +1367,7 @@ function switchTab(tab) {
 // ══════════════════════════════════════════════════════════════════════════
 //  QUIZZES PANEL (inside assignments.html)
 // ══════════════════════════════════════════════════════════════════════════
-let QS = { quizzes: [], currentQuizId: null, snapQuizzes: [], activeSubTab: 'regular' };
+let QS = { quizzes: [], currentQuizId: null, snapQuizzes: [], activeSubTab: 'regular', attachedMedia: null };
 
 async function renderQuizzesPanel() {
   const isLec = ['lecturer','admin','superadmin'].includes(S.role);
@@ -1930,6 +1930,7 @@ async function submitCreateSnapQuiz() {
 // ── SNAP QUIZ QUESTION BUILDER ────────────────────────────────────────────
 async function openSnapQuestionsPanel(quizId) {
   QS.currentSnapQuizId = quizId;
+  QS.attachedMedia = null;
   $('page-root').innerHTML = `<div class="loading">Loading questions…</div>`;
   try {
     const [qd, qsd] = await Promise.all([
@@ -1974,10 +1975,16 @@ async function openSnapQuestionsPanel(quizId) {
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
             Add New Question
           </div>
-          <button class="btn btn-sm" style="background:linear-gradient(135deg,#7c3aed,#4f46e5);color:#fff;font-weight:600;display:flex;align-items:center;gap:5px;border:none" onclick="openAIGeneratePanel('${quizId}', true)">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
-            ✨ AI Generate Questions
-          </button>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            <button class="btn btn-sm" style="background:#f0fdf4;color:#166534;border:1px solid #bbf7d0;font-weight:600;display:flex;align-items:center;gap:5px" onclick="openBulkImportModal('${quizId}')">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              Upload Questions
+            </button>
+            <button class="btn btn-sm" style="background:linear-gradient(135deg,#7c3aed,#4f46e5);color:#fff;font-weight:600;display:flex;align-items:center;gap:5px;border:none" onclick="openAIGeneratePanel('${quizId}', true)">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+              ✨ AI Generate
+            </button>
+          </div>
         </div>
         <!-- Question Type -->
         <div style="margin-bottom:18px">
@@ -2006,6 +2013,25 @@ async function openSnapQuestionsPanel(quizId) {
           <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:5px;display:block">Question Text <span style="color:#dc2626">*</span></label>
           ${_sqMathBar}
           <textarea id="sq-q-text" rows="3" placeholder="Enter the question…" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-top:none;border-radius:0 0 8px 8px;font-size:14px;font-family:inherit;resize:vertical;outline:none;box-sizing:border-box" onfocus="this.style.borderColor='var(--primary)'" onblur="this.style.borderColor='var(--border)'"></textarea>
+        </div>
+        <!-- Image / Diagram attachment -->
+        <div style="margin-bottom:14px">
+          <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:8px;display:block">Attach Image / Diagram <span style="font-size:10px;font-weight:400;text-transform:none;color:#9ca3af">(optional)</span></label>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+            <label style="display:flex;align-items:center;gap:5px;padding:7px 12px;border:1.5px solid var(--border);border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;color:var(--text-light);background:var(--bg)">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+              Upload Image
+              <input type="file" accept="image/*" style="display:none" onchange="sqAttachImage(event)">
+            </label>
+            <button type="button" style="display:flex;align-items:center;gap:5px;padding:7px 12px;border:1.5px solid var(--border);border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;color:var(--text-light);background:var(--bg)" onclick="openDrawingModal()">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg>
+              Draw Diagram
+            </button>
+          </div>
+          <div id="sq-media-preview" style="position:relative;display:none">
+            <img id="sq-media-img" style="max-width:100%;max-height:220px;border-radius:8px;border:1.5px solid var(--border);object-fit:contain;display:block" src="" alt="attached">
+            <button type="button" onclick="sqRemoveMedia()" style="position:absolute;top:6px;right:6px;width:24px;height:24px;border-radius:50%;background:rgba(0,0,0,.6);color:#fff;border:none;cursor:pointer;font-size:12px;line-height:1;display:flex;align-items:center;justify-content:center">✕</button>
+          </div>
         </div>
         <!-- Options (MCQ) -->
         <div id="sq-options-section" style="margin-bottom:14px">
@@ -2085,6 +2111,7 @@ async function openSnapQuestionsPanel(quizId) {
                             return `<span style="padding:4px 10px;border-radius:6px;font-size:12px;font-weight:500;${correct?'background:#f0fdf4;color:#166534;border:1px solid #bbf7d0;':'background:var(--bg);color:var(--text-light);border:1px solid var(--border);'}">${String.fromCharCode(65+oi)}) ${opt}${correct?' ✓':''}</span>`;
                           }).join('')}
                     </div>
+                    ${q.media?.length ? `<img src="${q.media[0].url}" style="max-width:100%;max-height:140px;border-radius:6px;border:1px solid var(--border);object-fit:contain;display:block;margin-bottom:6px" alt="diagram">` : ''}
                     <div style="font-size:11px;color:var(--text-muted);font-weight:600">${q.marks||1} mark${(q.marks||1)!==1?'s':''}</div>
                   </div>
                   <button class="btn btn-sm" style="background:#fef2f2;color:#dc2626;border:1px solid #fecaca;flex-shrink:0" onclick="deleteSnapQuizQ('${quizId}','${q._id}')">Delete</button>
@@ -2132,9 +2159,13 @@ async function submitSnapQuizQuestion(quizId) {
       body = { questionText, questionType: 'mcq', options: opts, correctOptionIndex, marks };
     }
   }
+  if (QS.attachedMedia) {
+    body.media = [{ type: 'image', url: QS.attachedMedia, altText: 'Question diagram' }];
+  }
 
   try {
     await api('POST', `/api/lecturer/snap-quizzes/${quizId}/questions`, body);
+    QS.attachedMedia = null;
     toast('Question added', 'ok');
     await openSnapQuestionsPanel(quizId);
   } catch(e) {
@@ -2176,6 +2207,319 @@ function sqCbChange(i) {
   lbl.style.borderColor = cb.checked ? 'var(--primary)' : '#e5e7eb';
   lbl.style.background  = cb.checked ? '#ede9fe' : '#fff';
   lbl.style.color       = cb.checked ? '#7c3aed' : '#374151';
+}
+
+// ── Image attachment helpers ────────────────────────────────────────────────
+function sqAttachImage(evt) {
+  const file = evt.target.files?.[0];
+  if (!file) return;
+  if (file.size > 5 * 1024 * 1024) { toast('Image must be under 5 MB', 'err'); return; }
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    QS.attachedMedia = e.target.result;
+    const preview = document.getElementById('sq-media-preview');
+    const img     = document.getElementById('sq-media-img');
+    if (preview && img) { img.src = QS.attachedMedia; preview.style.display = 'block'; }
+  };
+  reader.readAsDataURL(file);
+}
+function sqRemoveMedia() {
+  QS.attachedMedia = null;
+  const preview = document.getElementById('sq-media-preview');
+  if (preview) preview.style.display = 'none';
+}
+function sqSetDrawing(dataUrl) {
+  QS.attachedMedia = dataUrl;
+  const preview = document.getElementById('sq-media-preview');
+  const img     = document.getElementById('sq-media-img');
+  if (preview && img) { img.src = dataUrl; preview.style.display = 'block'; }
+}
+
+// ── Drawing Tool Modal ──────────────────────────────────────────────────────
+function openDrawingModal() {
+  const existing = document.getElementById('drawing-modal-wrap');
+  if (existing) existing.remove();
+  const wrap = document.createElement('div');
+  wrap.id = 'drawing-modal-wrap';
+  wrap.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:400;display:flex;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(3px)';
+  wrap.innerHTML = `
+    <div style="background:#fff;border-radius:14px;width:100%;max-width:680px;max-height:95vh;display:flex;flex-direction:column;box-shadow:0 24px 64px rgba(0,0,0,.3)">
+      <div style="padding:14px 18px;border-bottom:1px solid #e5e7eb;display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
+        <span style="font-size:15px;font-weight:700">Draw Diagram</span>
+        <button onclick="document.getElementById('drawing-modal-wrap').remove()" style="width:28px;height:28px;border-radius:7px;border:1px solid #e5e7eb;background:#f9fafb;cursor:pointer;font-size:14px">✕</button>
+      </div>
+      <!-- Toolbar -->
+      <div style="padding:10px 14px;border-bottom:1px solid #e5e7eb;display:flex;align-items:center;gap:8px;flex-wrap:wrap;flex-shrink:0;background:#f8fafc">
+        <div style="display:flex;gap:4px">
+          ${[['pen','✏️','Pen'],['eraser','⬜','Eraser'],['line','╱','Line'],['rect','□','Rect'],['circle','○','Circle'],['text','T','Text']].map(([t,ic,lb]) =>
+            `<button id="dtool-${t}" onclick="dwSetTool('${t}')" title="${lb}" style="width:34px;height:34px;border-radius:7px;border:1px solid #e5e7eb;background:#fff;cursor:pointer;font-size:14px;transition:all .15s">${ic}</button>`
+          ).join('')}
+        </div>
+        <div style="width:1px;height:28px;background:#e5e7eb"></div>
+        <div style="display:flex;gap:4px;align-items:center">
+          ${['#1e293b','#dc2626','#2563eb','#16a34a','#d97706','#7c3aed','#0891b2','#ec4899','#ffffff'].map(c =>
+            `<button onclick="dwSetColor('${c}')" style="width:22px;height:22px;border-radius:50%;background:${c};border:2px solid #e5e7eb;cursor:pointer;transition:transform .1s" title="${c}"></button>`
+          ).join('')}
+          <input type="color" id="dw-custom-color" value="#1e293b" style="width:28px;height:28px;padding:0;border:1px solid #e5e7eb;border-radius:6px;cursor:pointer;background:none" onchange="dwSetColor(this.value)" title="Custom color">
+        </div>
+        <div style="width:1px;height:28px;background:#e5e7eb"></div>
+        <div style="display:flex;align-items:center;gap:6px">
+          <label style="font-size:11px;color:#6b7280;font-weight:600">Size</label>
+          <input type="range" id="dw-size" min="1" max="20" value="3" style="width:70px" oninput="dwSetSize(this.value)">
+          <span id="dw-size-lbl" style="font-size:11px;color:#374151;font-weight:600;min-width:16px">3</span>
+        </div>
+        <div style="margin-left:auto;display:flex;gap:6px">
+          <button onclick="dwUndo()" style="padding:5px 10px;border:1px solid #e5e7eb;border-radius:7px;background:#fff;cursor:pointer;font-size:12px;font-weight:600">↩ Undo</button>
+          <button onclick="dwClear()" style="padding:5px 10px;border:1px solid #fecaca;border-radius:7px;background:#fef2f2;color:#dc2626;cursor:pointer;font-size:12px;font-weight:600">Clear</button>
+        </div>
+      </div>
+      <!-- Canvas -->
+      <div style="flex:1;overflow:auto;background:#f1f5f9;display:flex;align-items:center;justify-content:center;padding:12px;min-height:280px">
+        <canvas id="dw-canvas" width="600" height="380" style="background:#fff;border-radius:6px;border:1px solid #e5e7eb;cursor:crosshair;touch-action:none;max-width:100%;display:block"></canvas>
+      </div>
+      <!-- Footer -->
+      <div style="padding:12px 18px;border-top:1px solid #e5e7eb;display:flex;justify-content:flex-end;gap:8px;flex-shrink:0">
+        <button onclick="document.getElementById('drawing-modal-wrap').remove()" style="padding:9px 18px;border:1px solid #e5e7eb;border-radius:8px;background:#fff;cursor:pointer;font-size:13px;font-weight:600">Cancel</button>
+        <button onclick="dwUseDrawing()" style="padding:9px 18px;border:none;border-radius:8px;background:var(--primary);color:#fff;cursor:pointer;font-size:13px;font-weight:700">Use Drawing</button>
+      </div>
+    </div>`;
+  document.body.appendChild(wrap);
+  dwInit();
+}
+
+let _dw = { tool:'pen', color:'#1e293b', size:3, drawing:false, startX:0, startY:0, snap:null, history:[] };
+function dwInit() {
+  const canvas = document.getElementById('dw-canvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  _dw.ctx = ctx;
+  _dw.canvas = canvas;
+  _dw.history = [];
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  dwSetTool('pen');
+
+  const getPos = (e) => {
+    const r = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / r.width;
+    const scaleY = canvas.height / r.height;
+    const src = e.touches ? e.touches[0] : e;
+    return { x: (src.clientX - r.left) * scaleX, y: (src.clientY - r.top) * scaleY };
+  };
+
+  const onStart = (e) => {
+    e.preventDefault();
+    const { x, y } = getPos(e);
+    _dw.drawing = true;
+    _dw.startX = x; _dw.startY = y;
+    _dw.history.push(ctx.getImageData(0, 0, canvas.width, canvas.height));
+    if (_dw.tool === 'pen' || _dw.tool === 'eraser') {
+      ctx.beginPath(); ctx.moveTo(x, y);
+    } else if (_dw.tool === 'text') {
+      const txt = prompt('Enter text:');
+      if (txt) { ctx.font = `${Math.max(14,_dw.size*4)}px sans-serif`; ctx.fillStyle = _dw.color; ctx.fillText(txt, x, y); }
+      _dw.drawing = false;
+    }
+  };
+  const onMove = (e) => {
+    if (!_dw.drawing) return;
+    e.preventDefault();
+    const { x, y } = getPos(e);
+    if (_dw.tool === 'pen') {
+      ctx.strokeStyle = _dw.color; ctx.lineWidth = _dw.size; ctx.lineCap = 'round';
+      ctx.lineTo(x, y); ctx.stroke();
+    } else if (_dw.tool === 'eraser') {
+      ctx.strokeStyle = '#fff'; ctx.lineWidth = _dw.size * 3; ctx.lineCap = 'round';
+      ctx.lineTo(x, y); ctx.stroke();
+    } else {
+      if (_dw.snap) ctx.putImageData(_dw.snap, 0, 0);
+      else { _dw.snap = _dw.history[_dw.history.length - 1]; }
+      ctx.strokeStyle = _dw.color; ctx.lineWidth = _dw.size; ctx.lineCap = 'round';
+      if (_dw.tool === 'line') {
+        ctx.beginPath(); ctx.moveTo(_dw.startX, _dw.startY); ctx.lineTo(x, y); ctx.stroke();
+      } else if (_dw.tool === 'rect') {
+        ctx.strokeRect(_dw.startX, _dw.startY, x - _dw.startX, y - _dw.startY);
+      } else if (_dw.tool === 'circle') {
+        const rx = (x - _dw.startX) / 2, ry = (y - _dw.startY) / 2;
+        ctx.beginPath(); ctx.ellipse(_dw.startX + rx, _dw.startY + ry, Math.abs(rx), Math.abs(ry), 0, 0, 2*Math.PI); ctx.stroke();
+      }
+    }
+  };
+  const onEnd = () => { _dw.drawing = false; _dw.snap = null; };
+
+  canvas.addEventListener('mousedown', onStart);
+  canvas.addEventListener('mousemove', onMove);
+  canvas.addEventListener('mouseup', onEnd);
+  canvas.addEventListener('mouseleave', onEnd);
+  canvas.addEventListener('touchstart', onStart, { passive: false });
+  canvas.addEventListener('touchmove', onMove, { passive: false });
+  canvas.addEventListener('touchend', onEnd);
+}
+function dwSetTool(t) {
+  _dw.tool = t;
+  document.querySelectorAll('[id^="dtool-"]').forEach(b => {
+    b.style.background = b.id === `dtool-${t}` ? '#0f172a' : '#fff';
+    b.style.color      = b.id === `dtool-${t}` ? '#fff'    : '#374151';
+    b.style.borderColor= b.id === `dtool-${t}` ? '#0f172a' : '#e5e7eb';
+  });
+}
+function dwSetColor(c) {
+  _dw.color = c;
+  document.querySelectorAll('[onclick^="dwSetColor"]').forEach(b => b.style.transform = '');
+  event?.target && (event.target.style.transform = 'scale(1.35)');
+}
+function dwSetSize(v) {
+  _dw.size = parseInt(v);
+  const lbl = document.getElementById('dw-size-lbl');
+  if (lbl) lbl.textContent = v;
+}
+function dwUndo() {
+  if (!_dw.history.length) return;
+  _dw.ctx.putImageData(_dw.history.pop(), 0, 0);
+}
+function dwClear() {
+  _dw.history.push(_dw.ctx.getImageData(0, 0, _dw.canvas.width, _dw.canvas.height));
+  _dw.ctx.fillStyle = '#fff'; _dw.ctx.fillRect(0, 0, _dw.canvas.width, _dw.canvas.height);
+}
+function dwUseDrawing() {
+  const canvas = document.getElementById('dw-canvas');
+  if (!canvas) return;
+  const dataUrl = canvas.toDataURL('image/png');
+  sqSetDrawing(dataUrl);
+  document.getElementById('drawing-modal-wrap')?.remove();
+  toast('Diagram attached', 'ok');
+}
+
+// ── Bulk Import Modal ───────────────────────────────────────────────────────
+function openBulkImportModal(quizId) {
+  const existing = document.getElementById('bulk-import-modal-wrap');
+  if (existing) existing.remove();
+  const wrap = document.createElement('div');
+  wrap.id = 'bulk-import-modal-wrap';
+  wrap.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:400;display:flex;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(3px)';
+  wrap.innerHTML = `
+    <div style="background:#fff;border-radius:14px;width:100%;max-width:600px;max-height:90vh;display:flex;flex-direction:column;box-shadow:0 24px 64px rgba(0,0,0,.3);overflow:hidden">
+      <div style="padding:16px 20px;border-bottom:1px solid #e5e7eb;display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
+        <span style="font-size:15px;font-weight:700">Upload Questions</span>
+        <button onclick="document.getElementById('bulk-import-modal-wrap').remove()" style="width:28px;height:28px;border-radius:7px;border:1px solid #e5e7eb;background:#f9fafb;cursor:pointer;font-size:14px">✕</button>
+      </div>
+      <div style="padding:20px;overflow-y:auto;flex:1">
+        <p style="font-size:13px;color:#374151;margin:0 0 12px">Upload a <strong>CSV</strong> or <strong>JSON</strong> file to import multiple questions at once.</p>
+        <details style="margin-bottom:16px;background:#f8fafc;border:1px solid #e5e7eb;border-radius:8px;padding:10px 14px">
+          <summary style="cursor:pointer;font-size:12px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.5px">Format guide</summary>
+          <div style="margin-top:10px;font-size:12px;color:#374151;line-height:1.7">
+            <strong>CSV columns:</strong> <code>type, question, optionA, optionB, optionC, optionD, correct, marks</code><br>
+            <code>type</code>: <code>mcq</code> | <code>mcq_multi</code> | <code>fill_blank</code><br>
+            <code>correct</code>: <code>A</code> | <code>B</code> | <code>C</code> | <code>D</code> (comma-separated for multi, e.g. <code>A,C</code>)<br><br>
+            <strong>JSON:</strong> array of objects with same fields.<br>
+            <a href="data:text/plain,type,question,optionA,optionB,optionC,optionD,correct,marks%0Amcq,What is 2+2?,3,4,5,6,B,1%0Afill_blank,The capital of France is ____,,,,,Paris,2" download="sample.csv" style="color:#2563eb;font-size:12px">⬇ Download sample CSV</a>
+          </div>
+        </details>
+        <label style="display:block;border:2px dashed #cbd5e1;border-radius:10px;padding:24px;text-align:center;cursor:pointer;background:#f8fafc;transition:border-color .2s" id="bulk-drop-zone" ondragover="event.preventDefault();this.style.borderColor='#6366f1'" ondragleave="this.style.borderColor='#cbd5e1'" ondrop="bulkHandleDrop(event,'${quizId}')">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="margin:0 auto 8px;display:block"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          <p style="font-size:13px;font-weight:600;color:#374151;margin:0 0 4px">Drop file here or click to browse</p>
+          <p style="font-size:12px;color:#9ca3af;margin:0">Supports .csv and .json</p>
+          <input type="file" accept=".csv,.json" style="display:none" id="bulk-file-input" onchange="bulkParseFile(this.files[0],'${quizId}')">
+        </label>
+        <div id="bulk-preview" style="margin-top:14px"></div>
+      </div>
+      <div style="padding:12px 20px;border-top:1px solid #e5e7eb;display:flex;justify-content:flex-end;gap:8px;flex-shrink:0">
+        <button onclick="document.getElementById('bulk-import-modal-wrap').remove()" style="padding:9px 18px;border:1px solid #e5e7eb;border-radius:8px;background:#fff;cursor:pointer;font-size:13px;font-weight:600">Cancel</button>
+        <button id="bulk-import-btn" onclick="bulkImportQuestions('${quizId}')" disabled style="padding:9px 18px;border:none;border-radius:8px;background:#cbd5e1;color:#64748b;cursor:not-allowed;font-size:13px;font-weight:700" title="Parse a file first">Import Questions</button>
+      </div>
+    </div>`;
+  document.body.appendChild(wrap);
+  document.getElementById('bulk-drop-zone')?.addEventListener('click', () => document.getElementById('bulk-file-input')?.click());
+}
+
+let _bulkParsed = [];
+function bulkHandleDrop(e, quizId) {
+  e.preventDefault();
+  document.getElementById('bulk-drop-zone').style.borderColor = '#cbd5e1';
+  const file = e.dataTransfer?.files?.[0];
+  if (file) bulkParseFile(file, quizId);
+}
+function bulkParseFile(file, quizId) {
+  if (!file) return;
+  const ext = file.name.split('.').pop().toLowerCase();
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      let rows = [];
+      if (ext === 'json') {
+        rows = JSON.parse(e.target.result);
+        if (!Array.isArray(rows)) rows = rows.questions || [];
+      } else {
+        const lines = e.target.result.trim().split('\n');
+        const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g,'').toLowerCase());
+        rows = lines.slice(1).filter(l => l.trim()).map(line => {
+          const vals = line.match(/(".*?"|[^,]+|(?<=,)(?=,)|(?<=,)$|^(?=,))/g) || line.split(',');
+          const clean = vals.map(v => v.trim().replace(/^"|"$/g,''));
+          const obj = {};
+          headers.forEach((h, i) => obj[h] = clean[i] || '');
+          return obj;
+        });
+      }
+      _bulkParsed = rows.map(r => bulkNormalise(r)).filter(Boolean);
+      bulkShowPreview(_bulkParsed);
+    } catch(err) {
+      document.getElementById('bulk-preview').innerHTML = `<p style="color:#dc2626;font-size:13px">Parse error: ${err.message}</p>`;
+    }
+  };
+  reader.readAsText(file);
+}
+function bulkNormalise(r) {
+  const type = (r.type||r.questionType||'mcq').toLowerCase().trim();
+  const questionText = (r.question||r.questionText||'').trim();
+  if (!questionText) return null;
+  const marks = parseInt(r.marks||r.mark||1) || 1;
+  if (type === 'fill_blank') {
+    return { questionType:'fill_blank', questionText, correctAnswerText:(r.correct||r.answer||'').trim(), acceptedAnswers:[], marks };
+  }
+  const opts = ['optionA','optionB','optionC','optionD'].map(k => (r[k]||'').trim()).filter(Boolean);
+  if (!opts.length) opts.push(...['a','b','c','d'].map(k => (r[k]||'').trim()).filter(Boolean));
+  const correctRaw = (r.correct||r.correctAnswer||'A').toUpperCase().trim();
+  const letterToIdx = {'A':0,'B':1,'C':2,'D':3};
+  if (type === 'mcq_multi') {
+    const correctOptionIndices = correctRaw.split(',').map(s => letterToIdx[s.trim()]).filter(n => n !== undefined);
+    return { questionType:'mcq_multi', questionText, options:opts, correctOptionIndices, marks };
+  }
+  const correctOptionIndex = letterToIdx[correctRaw[0]] ?? 0;
+  return { questionType:'mcq', questionText, options:opts, correctOptionIndex, marks };
+}
+function bulkShowPreview(rows) {
+  const preview = document.getElementById('bulk-preview');
+  const btn     = document.getElementById('bulk-import-btn');
+  if (!rows.length) {
+    preview.innerHTML = `<p style="color:#dc2626;font-size:13px">No valid questions found. Check the format guide above.</p>`;
+    if (btn) { btn.disabled = true; btn.style.background='#cbd5e1'; btn.style.color='#64748b'; btn.style.cursor='not-allowed'; }
+    return;
+  }
+  preview.innerHTML = `
+    <div style="font-size:12px;font-weight:700;color:#374151;margin-bottom:8px">${rows.length} question${rows.length!==1?'s':''} found — preview:</div>
+    <div style="display:flex;flex-direction:column;gap:6px;max-height:260px;overflow-y:auto">
+      ${rows.map((q,i) => `
+        <div style="background:#f8fafc;border:1px solid #e5e7eb;border-radius:8px;padding:10px 12px;font-size:12px">
+          <div style="font-weight:600;margin-bottom:4px;color:#374151">Q${i+1}. <span style="font-size:10px;padding:1px 6px;border-radius:20px;font-weight:700;background:#ede9fe;color:#7c3aed">${q.questionType}</span> ${q.questionText}</div>
+          ${q.options?.length ? `<div style="color:#6b7280">${q.options.map((o,oi)=>`${String.fromCharCode(65+oi)}) ${o}`).join(' · ')}</div>` : `<div style="color:#6b7280">Answer: ${q.correctAnswerText}</div>`}
+        </div>`).join('')}
+    </div>`;
+  if (btn) { btn.disabled = false; btn.style.background='var(--primary)'; btn.style.color='#fff'; btn.style.cursor='pointer'; }
+}
+async function bulkImportQuestions(quizId) {
+  if (!_bulkParsed.length) return;
+  const btn = document.getElementById('bulk-import-btn');
+  if (btn) { btn.disabled = true; btn.textContent = `Importing…`; }
+  let ok = 0, fail = 0;
+  for (const q of _bulkParsed) {
+    try {
+      await api('POST', `/api/lecturer/snap-quizzes/${quizId}/questions`, q);
+      ok++;
+    } catch { fail++; }
+  }
+  document.getElementById('bulk-import-modal-wrap')?.remove();
+  toast(`${ok} question${ok!==1?'s':''} imported${fail?` (${fail} failed)`:''}`, ok ? 'ok' : 'err');
+  if (ok) await openSnapQuestionsPanel(quizId);
 }
 
 function sqInsertMath(targetId, sym) {
