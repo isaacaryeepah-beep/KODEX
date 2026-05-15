@@ -33,8 +33,9 @@ const mongoose = require("mongoose");
 
 const SNAP_QUIZ_TYPES = Object.freeze({
   EXAM:       "exam",        // formal examination
-  CLASS_TEST: "class_test",  // short in-class test
   MID_TERM:   "mid_term",    // mid-semester assessment
+  QUIZ:       "quiz",        // regular quiz
+  CLASS_TEST: "class_test",  // short in-class test
   FINAL:      "final",       // final examination
   MOCK:       "mock",        // practice under exam conditions
 });

@@ -1827,7 +1827,7 @@ async function renderLecturerSnapQuizzes() {
             ${QS.snapQuizzes.map(q => `
               <tr style="border-bottom:1px solid var(--border)">
                 <td style="padding:12px 16px;font-weight:600">${q.title}</td>
-                <td style="padding:12px 16px;color:var(--text-light);text-transform:capitalize">${(q.quizType||'exam').replace('_',' ')}</td>
+                <td style="padding:12px 16px;color:var(--text-light);text-transform:capitalize">${({'mid_term':'Mid-Semester Exams','exam':'Exams','quiz':'Quiz','class_test':'Class Test','final':'Final','mock':'Mock'}[q.quizType]||q.quizType||'Exams')}</td>
                 <td style="padding:12px 16px">${snapBadge(q.status)}</td>
                 <td style="padding:12px 16px;font-size:12px">${q.totalMarks||0} marks · ${q.timeLimitMinutes}min</td>
                 <td style="padding:12px 16px;font-size:12px;color:var(--text-light)">${fmtDate(q.startTime)} → ${fmtDate(q.endTime)}</td>
@@ -1871,11 +1871,9 @@ function openCreateSnapQuizModal() {
           <div class="fg">
             <label>Quiz Type</label>
             <select id="sq-type">
-              <option value="exam">Exam</option>
-              <option value="class_test">Class Test</option>
-              <option value="mid_term">Mid-Term</option>
-              <option value="final">Final</option>
-              <option value="mock">Mock</option>
+              <option value="mid_term">Mid-Semester Exams</option>
+              <option value="exam">Exams</option>
+              <option value="quiz">Quiz</option>
             </select>
           </div>
           <div class="fg"><label>Time Limit (minutes) <span class="req">*</span></label><input id="sq-time" type="number" min="1" placeholder="e.g. 60"/></div>
@@ -1972,7 +1970,7 @@ async function openSnapQuestionsPanel(quizId) {
         </button>
         <div>
           <h2 style="font-size:19px;font-weight:700;letter-spacing:-.3px">${quiz.title}</h2>
-          <p style="color:var(--text-light);font-size:13px">${(quiz.quizType||'exam').replace('_',' ')} · ${quiz.timeLimitMinutes}min · Total marks: <strong>${quiz.totalMarks||0}</strong> · Status: <strong>${quiz.status}</strong></p>
+          <p style="color:var(--text-light);font-size:13px">${({'mid_term':'Mid-Semester Exams','exam':'Exams','quiz':'Quiz','class_test':'Class Test','final':'Final','mock':'Mock'}[quiz.quizType]||quiz.quizType||'Exams')} · ${quiz.timeLimitMinutes}min · Total marks: <strong>${quiz.totalMarks||0}</strong> · Status: <strong>${quiz.status}</strong></p>
         </div>
         <div style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap">
           ${quiz.status==='draft'     ? `<button class="btn btn-secondary btn-sm" onclick="snapQuizAction('${quizId}','publish')">Publish</button>` : ''}
