@@ -392,7 +392,9 @@ exports.heartbeat = async (req, res) => {
   try {
     const attempt = await _loadLockedAttempt(req);
     if (!attempt) {
-      return res.status(404).json({ error: "Active session not found" });
+      // Return a graceful terminated response rather than 404 so the client
+      // handles it via the success path (not the error catch block).
+      return res.json({ terminated: true, reason: "session_conflict" });
     }
 
     // Check server-side expiry.
