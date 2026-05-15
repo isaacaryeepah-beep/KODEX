@@ -7636,13 +7636,9 @@ async function renderQuizzes() {
   const content = document.getElementById('main-content');
   if (!content) return;
   const role = currentUser.role;
-  // Lecturer and student go directly to Snap Quiz portal
-  if (role === 'student') {
-    window.location.href = '/snap-quiz.html';
-    return;
-  }
-  if (role === 'lecturer') {
-    window.location.href = '/snap-quiz-lecturer.html';
+  // Lecturer and student: open the quizzes panel in assignments.html
+  if (role === 'student' || role === 'lecturer') {
+    window.location.href = '/assignments.html?tab=quizzes';
     return;
   }
   // Admin / superadmin keep the proctored quiz overview
