@@ -604,9 +604,9 @@ exports.reportViolation = async (req, res) => {
       );
     }
 
-    // Check termination threshold.
-    const maxViolations = quiz?.maxViolationsBeforeTermination || 0;
-    const causedTermination = maxViolations > 0 && newCount >= maxViolations && isCriticalType;
+    // Check termination threshold — strictly 4 critical violations.
+    const maxViolations = 4;
+    const causedTermination = newCount >= maxViolations && isCriticalType;
     const actionTaken = causedTermination
       ? ACTIONS_TAKEN.TERMINATED
       : isCriticalType
@@ -639,9 +639,7 @@ exports.reportViolation = async (req, res) => {
       warned:                     actionTaken === ACTIONS_TAKEN.WARNED,
       terminated:                 causedTermination,
       violationCount:             newCount,
-      remainingBeforeTermination: maxViolations > 0
-        ? Math.max(0, maxViolations - newCount)
-        : null,
+      remainingBeforeTermination: Math.max(0, maxViolations - newCount),
     });
   } catch (err) {
     console.error("[snapQuiz student reportViolation]", err);
