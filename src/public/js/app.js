@@ -7837,17 +7837,20 @@ async function showAddQuestionsView(quizId) {
         <div class="form-group" style="margin-bottom:16px;">
           <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#6b7280;display:block;margin-bottom:8px;">Question Type</label>
           <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;">
-            <label id="aq-lbl-single" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;cursor:pointer;padding:12px 6px;border:2px solid var(--primary);border-radius:10px;background:var(--primary);color:#fff;font-size:12px;font-weight:700;text-align:center;line-height:1.3;">
+            <label id="aq-lbl-single" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;cursor:pointer;padding:16px 10px;border:2px solid #0f172a;border-radius:12px;background:#0f172a;color:#fff;font-size:12px;font-weight:700;text-align:center;line-height:1.3;">
               <input type="radio" name="aq-type" value="single" checked onchange="aqToggleType('single')" style="display:none;">
-              <span style="font-size:18px;">🔘</span>Single Answer
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4" fill="currentColor" stroke="none"/></svg>
+              SINGLE ANSWER
             </label>
-            <label id="aq-lbl-multi" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;cursor:pointer;padding:12px 6px;border:2px solid #e5e7eb;border-radius:10px;background:var(--card);color:#374151;font-size:12px;font-weight:700;text-align:center;line-height:1.3;">
+            <label id="aq-lbl-multi" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;cursor:pointer;padding:16px 10px;border:2px solid #e5e7eb;border-radius:12px;background:#fff;color:#374151;font-size:12px;font-weight:700;text-align:center;line-height:1.3;">
               <input type="radio" name="aq-type" value="multiple" onchange="aqToggleType('multiple')" style="display:none;">
-              <span style="font-size:18px;">☑️</span>Multi Answer
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><polyline points="9 12 11 14 15 10"/></svg>
+              MULTI ANSWER
             </label>
-            <label id="aq-lbl-fill" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;cursor:pointer;padding:12px 6px;border:2px solid #e5e7eb;border-radius:10px;background:var(--card);color:#374151;font-size:12px;font-weight:700;text-align:center;line-height:1.3;">
+            <label id="aq-lbl-fill" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;cursor:pointer;padding:16px 10px;border:2px solid #e5e7eb;border-radius:12px;background:#fff;color:#374151;font-size:12px;font-weight:700;text-align:center;line-height:1.3;">
               <input type="radio" name="aq-type" value="fill" onchange="aqToggleType('fill')" style="display:none;">
-              <span style="font-size:18px;">✏️</span>Fill In
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="2" x2="22" y2="6"/><path d="M7.5 20.5L19 9l-4-4L3.5 16.5 2 22z"/></svg>
+              FILL IN
             </label>
           </div>
           <p id="aq-type-hint" style="font-size:12px;color:#9ca3af;margin-top:8px;">One correct answer — student picks one option.</p>
@@ -7968,8 +7971,8 @@ function aqToggleType(type) {
     : isFill
       ? 'Fill in the blank — student types their answer.'
       : 'One correct answer — student picks one option.';
-  const primStyle = 'display:flex;align-items:center;gap:6px;cursor:pointer;padding:8px 16px;border:2px solid var(--primary);border-radius:8px;background:var(--primary);color:#fff;font-size:13px;font-weight:600;';
-  const secStyle  = 'display:flex;align-items:center;gap:6px;cursor:pointer;padding:8px 16px;border:2px solid #e5e7eb;border-radius:8px;background:#fff;color:#374151;font-size:13px;font-weight:600;';
+  const primStyle = 'display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;cursor:pointer;padding:16px 10px;border:2px solid #0f172a;border-radius:12px;background:#0f172a;color:#fff;font-size:12px;font-weight:700;text-align:center;line-height:1.3;';
+  const secStyle  = 'display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;cursor:pointer;padding:16px 10px;border:2px solid #e5e7eb;border-radius:12px;background:#fff;color:#374151;font-size:12px;font-weight:700;text-align:center;line-height:1.3;';
   document.getElementById('aq-lbl-single').style.cssText = (!isMulti && !isFill) ? primStyle : secStyle;
   document.getElementById('aq-lbl-multi').style.cssText  = isMulti ? primStyle : secStyle;
   document.getElementById('aq-lbl-fill').style.cssText   = isFill  ? primStyle : secStyle;
