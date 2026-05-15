@@ -309,6 +309,11 @@ exports.submitAttempt = async (req, res) => {
         // Explain questions require manual grading — never auto-mark
         isCorrect = false;
         pendingManualGrade = true;
+      } else if (question.questionType === "multiple") {
+        const correctArr = Array.isArray(question.correctAnswer) ? [...question.correctAnswer].sort() : [];
+        const selectedArr = Array.isArray(ans.selectedAnswer) ? [...ans.selectedAnswer].sort() : [];
+        isCorrect = correctArr.length > 0 && correctArr.length === selectedArr.length &&
+          correctArr.every((v, i) => v === selectedArr[i]);
       } else {
         isCorrect = question.correctAnswer === ans.selectedAnswer;
       }

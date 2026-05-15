@@ -8503,6 +8503,23 @@ async function startStudentQuiz(quizId) {
                     onfocus="this.style.borderColor='#6366f1'" onblur="this.style.borderColor='#d1d5db'">
                   <p style="font-size:11px;color:#9ca3af;margin-top:5px;">Spelling counts — answer is not case-sensitive.</p>
                 </div>`
+              : q.questionType === 'explain'
+              ? `<div style="margin-top:6px;">
+                  <textarea id="sq-explain-${q._id}" rows="5" placeholder="Type your answer here…"
+                    style="width:100%;padding:11px 14px;border:1.5px solid #d1d5db;border-radius:8px;font-size:14px;font-family:inherit;outline:none;transition:border-color .15s;resize:vertical;box-sizing:border-box;"
+                    onfocus="this.style.borderColor='#6366f1'" onblur="this.style.borderColor='#d1d5db'"></textarea>
+                  <p style="font-size:11px;color:#9ca3af;margin-top:5px;">This question will be manually graded by your instructor.</p>
+                </div>`
+              : q.questionType === 'multiple'
+              ? `<div style="display:flex;flex-direction:column;gap:8px;">
+                  <p style="font-size:11px;color:#6b7280;margin:0 0 4px;">Select all that apply.</p>
+                  ${q.options.map((opt, oi) => `
+                    <label style="display:flex;align-items:center;gap:8px;padding:10px;border:1px solid #e5e7eb;border-radius:8px;cursor:pointer;transition:background 0.15s;" onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background=''">
+                      <input type="checkbox" name="sq-${q._id}" value="${oi}" style="accent-color:#3b82f6;width:16px;height:16px;">
+                      <span><strong>${String.fromCharCode(65 + oi)}.</strong> ${opt}</span>
+                    </label>
+                  `).join('')}
+                </div>`
               : `<div style="display:flex;flex-direction:column;gap:8px;">
               ${q.options.map((opt, oi) => `
                 <label style="display:flex;align-items:center;gap:8px;padding:10px;border:1px solid #e5e7eb;border-radius:8px;cursor:pointer;transition:background 0.15s;" onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background=''">
@@ -8566,6 +8583,14 @@ async function submitStudentQuiz(quizId) {
     if (q.questionType === 'fill') {
       const input = document.getElementById(`sq-fill-${q._id}`);
       return { questionId: q._id, selectedAnswer: null, selectedAnswerText: input ? input.value.trim() : '' };
+    }
+    if (q.questionType === 'explain') {
+      const textarea = document.getElementById(`sq-explain-${q._id}`);
+      return { questionId: q._id, selectedAnswer: null, selectedAnswerText: textarea ? textarea.value.trim() : '' };
+    }
+    if (q.questionType === 'multiple') {
+      const checked = Array.from(document.querySelectorAll(`input[name="sq-${q._id}"]:checked`)).map(el => parseInt(el.value));
+      return { questionId: q._id, selectedAnswer: checked, selectedAnswerText: null };
     }
     const selected = document.querySelector(`input[name="sq-${q._id}"]:checked`);
     return { questionId: q._id, selectedAnswer: selected ? parseInt(selected.value) : -1, selectedAnswerText: null };
@@ -8634,8 +8659,33 @@ async function viewStudentResult(quizId) {
                     </div>
                     ${!a.isCorrect ? `<div style="padding:8px 12px;border-radius:6px;border:1px solid #22c55e;background:#f0fdf4;color:#15803d;">← Correct answer: <strong>${q.correctAnswerText || ''}</strong></div>` : ''}
                   </div>`
+                : q.questionType === 'explain'
+                ? `<div style="display:flex;flex-direction:column;gap:6px;font-size:13px;">
+                    <div style="padding:8px 12px;border-radius:6px;border:1px solid #e5e7eb;background:#f9fafb;">
+                      Your answer: <em>${a.selectedAnswerText || '(no answer)'}</em>
+                    </div>
+                    ${a.pendingManualGrade ? `<div style="padding:6px 12px;border-radius:6px;background:#fffbeb;border:1px solid #fde68a;color:#92400e;font-size:12px;">⏳ Awaiting manual grading by instructor</div>` : ''}
+                  </div>`
+                : q.questionType === 'multiple'
+                ? `<div style="display:flex;flex-direction:column;gap:6px;">
+                  ${(q.options || []).map((opt, oi) => {
+                    const correctArr = Array.isArray(q.correctAnswer) ? q.correctAnswer : [];
+                    const selectedArr = Array.isArray(a.selectedAnswer) ? a.selectedAnswer : [];
+                    const isCorrectOpt = correctArr.includes(oi);
+                    const isSelectedOpt = selectedArr.includes(oi);
+                    let style = 'padding:8px 12px;border-radius:6px;border:1px solid #e5e7eb;';
+                    if (isCorrectOpt) style += 'background:#f0fdf4;border-color:#22c55e;color:#15803d;';
+                    if (isSelectedOpt && !isCorrectOpt) style += 'background:#fef2f2;border-color:#ef4444;color:#dc2626;';
+                    return `<div style="${style}">
+                      <strong>${String.fromCharCode(65 + oi)}.</strong> ${opt}
+                      ${isCorrectOpt ? ' ✓ Correct' : ''}
+                      ${isSelectedOpt && !isCorrectOpt ? ' ✗ Your selection' : ''}
+                      ${isSelectedOpt && isCorrectOpt ? ' ✓ Your selection' : ''}
+                    </div>`;
+                  }).join('')}
+                </div>`
                 : `<div style="display:flex;flex-direction:column;gap:6px;">
-                ${q.options.map((opt, oi) => {
+                ${(q.options || []).map((opt, oi) => {
                   let style = 'padding:8px 12px;border-radius:6px;border:1px solid #e5e7eb;';
                   if (oi === q.correctAnswer) style += 'background:#f0fdf4;border-color:#22c55e;color:#15803d;';
                   if (oi === a.selectedAnswer && !a.isCorrect) style += 'background:#fef2f2;border-color:#ef4444;color:#dc2626;';
