@@ -1908,11 +1908,10 @@ function handleVisibilityChange() {
   } else {
     const duration = state.backgroundStart ? (Date.now() - state.backgroundStart) / 1000 : 0;
     state.backgroundStart = null;
-    // Send duration with foreground so server can enforce the >10s rule
-    logEvent('app_foreground', { duration }).catch(console.warn);
-    // Also enforce locally for immediate UX feedback
     if (duration > 10) {
-      terminateExam('app_background');
+      // Long absence: send a second tab_switch violation so it counts more heavily
+      logEvent('tab_switch', { duration }).catch(console.warn);
+      toast('⚠️ Returning after ' + Math.round(duration) + 's away. Additional violation logged.', 'warn');
     } else if (duration > 3) {
       toast('⚠️ Returning after ' + Math.round(duration) + 's away. Violations logged.', 'warn');
     }
@@ -1949,13 +1948,13 @@ async function logEvent(eventType, metadata = {}) {
     if (eventType === 'heartbeat') {
       const hbRes = await api('POST', `${baseUrl}/heartbeat`, {}, sessionHeader);
       if (hbRes?.terminated || hbRes?.meetingEnded || hbRes?.expired) {
-        clearInterval(state.heartbeatInterval);
-        clearInterval(state.faceCheckInterval);
+        stopExamCleanup();
         state.examActive = false;
         const overlay = document.getElementById('violation-overlay');
         let msg = 'Your exam session was terminated.';
         if (hbRes.meetingEnded) msg = 'The live session has ended. Your exam has been automatically submitted.';
         else if (hbRes.expired)  msg = 'Your exam time has expired. Your answers have been automatically submitted.';
+        else if (hbRes.reason === 'session_conflict') msg = 'Your exam session was ended. If you opened the exam in another tab or device, please close it and contact your instructor.';
         overlay.innerHTML = `
           <div class="violation-icon">🔴</div>
           <div class="violation-title" style="color:#1e293b">Exam Session Ended</div>
@@ -1981,22 +1980,8 @@ async function logEvent(eventType, metadata = {}) {
 
     if (res.violationCount != null) state.totalViolations = res.violationCount;
   } catch (err) {
-    // If the session was explicitly terminated server-side, notify student
-    if (eventType === 'heartbeat' && err.message && err.message.toLowerCase().includes('session')) {
-      clearInterval(state.heartbeatInterval);
-      clearInterval(state.faceCheckInterval);
-      state.examActive = false;
-      const overlay = document.getElementById('violation-overlay');
-      overlay.innerHTML = `
-        <div class="violation-icon">🔴</div>
-        <div class="violation-title" style="color:#1e293b">Session Ended</div>
-        <div class="violation-msg" style="color:#475569">Your exam session could not be verified. This may be due to a duplicate login on another device.</div>
-        <button class="btn btn-ghost" style="max-width:280px" onclick="document.getElementById('violation-overlay').classList.remove('show');show('quiz-list-screen')">Return to Dashboard</button>
-      `;
-      overlay.classList.add('show');
-      return;
-    }
     // Network error — event stored offline, will sync later
+    if (eventType === 'heartbeat') console.warn('[heartbeat] failed, will retry next interval:', err.message);
   }
 }
 
