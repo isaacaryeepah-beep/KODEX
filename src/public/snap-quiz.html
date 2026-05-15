@@ -1981,7 +1981,11 @@ async function logEvent(eventType, metadata = {}) {
     if (res.terminated) {
       terminateExam(eventType);
     } else if (res.warned) {
-      showViolationWarning(res.violationCount);
+      if (res.critical) {
+        showViolationWarning(res.violationCount);
+      } else {
+        showNonCriticalWarning(eventType);
+      }
     }
 
     if (res.violationCount != null) state.totalViolations = res.violationCount;
@@ -2003,6 +2007,22 @@ function showViolationWarning(level) {
     <div class="violation-icon">${isFinal ? '🚨' : '⚠️'}</div>
     <div class="violation-title" style="color:${isFinal ? '#dc2626' : '#1e293b'}">Warning ${level} of ${maxViolations - 1}</div>
     <div class="violation-msg" style="color:#475569">A proctoring violation was detected. ${msg}</div>
+    <button class="btn btn-primary" style="max-width:280px" onclick="this.closest('#violation-overlay').classList.remove('show')">I understand</button>
+  `;
+  overlay.classList.add('show');
+}
+
+function showNonCriticalWarning(eventType) {
+  const labels = {
+    focus_lost:  'Window Focus Lost',
+    other:       'Suspicious Activity',
+  };
+  const label = labels[eventType] || 'Violation Detected';
+  const overlay = document.getElementById('violation-overlay');
+  overlay.innerHTML = `
+    <div class="violation-icon">⚠️</div>
+    <div class="violation-title" style="color:#1e293b">${label}</div>
+    <div class="violation-msg" style="color:#475569">This incident has been recorded and will be reviewed by your lecturer. Please stay focused on your exam.</div>
     <button class="btn btn-primary" style="max-width:280px" onclick="this.closest('#violation-overlay').classList.remove('show')">I understand</button>
   `;
   overlay.classList.add('show');
