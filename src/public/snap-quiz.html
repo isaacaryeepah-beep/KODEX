@@ -1006,9 +1006,10 @@ const state = {
   sessionToken: null,
   attempt: null,
   questions: [],
-  answers: {},       // questionId → selectedIndex
+  answers: {},       // questionId → selectedIndex | indices[] | text
   currentIdx: 0,
   timerInterval: null,
+  autoSaveInterval: null,
   timerSeconds: 0,
   cameraStream: null,
   faceModel: null,
@@ -1025,6 +1026,11 @@ const state = {
   totalViolations: 0,
   warningsIssued: 0,
   examActive: false,
+  // named listener refs so they can be removed on cleanup
+  _handleFullscreen: null,
+  _handleBlur: null,
+  _handleContextMenu: null,
+  _handleKeydown: null,
 };
 
 // ══════════════════════════════════════════════════════════════════
@@ -1560,6 +1566,8 @@ document.getElementById('capture-start-btn').addEventListener('click', async () 
     state.questions = data.questions;
     state.answers = {};
     state.currentIdx = 0;
+    // Merge authoritative quiz settings from server response over the listing data
+    if (data.quiz) Object.assign(state.selectedQuiz, data.quiz);
     // Calculate remaining time from server-provided expiresAt
     const expiresAt = data.attempt?.expiresAt ? new Date(data.attempt.expiresAt) : null;
     const timeLimitMinutes = data.quiz?.timeLimitMinutes || 30;
@@ -1690,77 +1698,86 @@ function startTimer() {
 //  PROCTORING ENGINE
 // ══════════════════════════════════════════════════════════════════
 function startProctoring() {
+  const quiz = state.selectedQuiz;
   const examVideo = document.getElementById('exam-video');
 
-  // ── Heartbeat every 10s ──────────────────────────────────────
+  // ── Heartbeat — use quiz's configured interval (default 30 s) ──
+  const hbMs = Math.max(10, quiz.heartbeatIntervalSeconds || 30) * 1000;
   state.heartbeatInterval = setInterval(() => {
     logEvent('heartbeat').catch(console.warn);
-  }, 10000);
+  }, hbMs);
 
-  // ── Face + Head-turn + Phone monitoring every 3s ─────────────
+  // ── Auto-save answers every 60 s so a crash doesn't lose work ──
+  state.autoSaveInterval = setInterval(() => {
+    if (state.examActive) saveAnswer();
+  }, 60000);
+
+  // ── Face + Head-turn + Phone monitoring (only when proctoringEnabled) ──
   state.criticalStrikesThisSession = 0;
-  state.faceCheckInterval = setInterval(async () => {
-    if (!state.examActive) return;
-    const { count, detected, centered, headTurn } = await detectFaces(examVideo);
-    const phoneDetected = detectPhoneInFrame(examVideo);
-    const floatingCam = document.getElementById('floating-cam');
-    const dot = document.getElementById('ps-dot');
-    const text = document.getElementById('ps-text');
-    const camInd = document.getElementById('cam-indicator');
+  if (quiz.proctoringEnabled) {
+    state.faceCheckInterval = setInterval(async () => {
+      if (!state.examActive) return;
+      const { count, detected, centered, headTurn } = await detectFaces(examVideo);
+      const phoneDetected = detectPhoneInFrame(examVideo);
+      const floatingCam = document.getElementById('floating-cam');
+      const dot = document.getElementById('ps-dot');
+      const text = document.getElementById('ps-text');
+      const camInd = document.getElementById('cam-indicator');
 
-    if (phoneDetected) {
-      setProctorStatus('red', '🚫 Phone!', floatingCam, dot, text);
-      camInd.className = 'red';
-      state.criticalStrikesThisSession++;
-      showProctorStrikeWarning('phone_detected', state.criticalStrikesThisSession);
-      logEvent('phone_detected').catch(console.warn);
+      if (phoneDetected) {
+        setProctorStatus('red', '🚫 Phone!', floatingCam, dot, text);
+        camInd.className = 'red';
+        state.criticalStrikesThisSession++;
+        showProctorStrikeWarning('phone_detected', state.criticalStrikesThisSession);
+        logEvent('phone_detected').catch(console.warn);
 
-    } else if (headTurn) {
-      setProctorStatus('red', '⚠ Head turn!', floatingCam, dot, text);
-      camInd.className = 'red';
-      state.criticalStrikesThisSession++;
-      showProctorStrikeWarning('head_turn', state.criticalStrikesThisSession);
-      logEvent('head_turn').catch(console.warn);
+      } else if (headTurn) {
+        setProctorStatus('red', '⚠ Head turn!', floatingCam, dot, text);
+        camInd.className = 'red';
+        state.criticalStrikesThisSession++;
+        showProctorStrikeWarning('head_turn', state.criticalStrikesThisSession);
+        logEvent('head_turn').catch(console.warn);
 
-    } else if (count > 1) {
-      setProctorStatus('red', '⚠ Multiple faces', floatingCam, dot, text);
-      camInd.className = 'red';
-      state.criticalStrikesThisSession++;
-      showProctorStrikeWarning('multiple_faces', state.criticalStrikesThisSession);
-      logEvent('multiple_faces', { count }).catch(console.warn);
+      } else if (count > 1) {
+        setProctorStatus('red', '⚠ Multiple faces', floatingCam, dot, text);
+        camInd.className = 'red';
+        state.criticalStrikesThisSession++;
+        showProctorStrikeWarning('multiple_faces', state.criticalStrikesThisSession);
+        logEvent('multiple_faces', { count }).catch(console.warn);
 
-    } else if (!detected) {
-      setProctorStatus('red', '⚠ No face', floatingCam, dot, text);
-      camInd.className = 'red';
-      logEvent('face_missing').catch(console.warn);
+      } else if (!detected) {
+        setProctorStatus('red', '⚠ No face', floatingCam, dot, text);
+        camInd.className = 'red';
+        logEvent('face_missing').catch(console.warn);
 
-    } else if (!centered) {
-      setProctorStatus('yellow', '⚠ Off-center', floatingCam, dot, text);
-      camInd.className = '';
-      if (state.lastFaceState !== 'yellow') logEvent('face_off_center').catch(console.warn);
+      } else if (!centered) {
+        setProctorStatus('yellow', '⚠ Off-center', floatingCam, dot, text);
+        camInd.className = '';
+        if (state.lastFaceState !== 'yellow') logEvent('face_off_center').catch(console.warn);
 
-    } else {
-      setProctorStatus('green', '✓ Face OK', floatingCam, dot, text);
-      camInd.className = '';
-      if (state.lastFaceState !== 'green') logEvent('face_detected').catch(console.warn);
-    }
+      } else {
+        setProctorStatus('green', '✓ Face OK', floatingCam, dot, text);
+        camInd.className = '';
+        if (state.lastFaceState !== 'green') logEvent('face_detected').catch(console.warn);
+      }
 
-    // 2-strike auto-submit
-    if (state.criticalStrikesThisSession >= 2) {
-      state.criticalStrikesThisSession = 0; // reset to avoid repeat triggers
-      showAutoSubmitCountdown();
-    }
+      if (state.criticalStrikesThisSession >= 2) {
+        state.criticalStrikesThisSession = 0;
+        showAutoSubmitCountdown();
+      }
 
-    state.lastFaceState = phoneDetected || headTurn || count > 1 ? 'red' : !detected ? 'red' : !centered ? 'yellow' : 'green';
-  }, 3000);
+      state.lastFaceState = phoneDetected || headTurn || count > 1 ? 'red' : !detected ? 'red' : !centered ? 'yellow' : 'green';
+    }, 3000);
+  }
 
-  // ── Periodic snapshots every 30s ─────────────────────────────
+  // ── Periodic snapshots — use quiz's configured interval ───────
+  const snapMs = Math.max(10, quiz.snapshotIntervalSeconds || 30) * 1000;
   state.snapshotInterval = setInterval(async () => {
     if (!state.examActive) return;
     const { count, detected, centered } = await detectFaces(examVideo);
     const img = captureFrame(examVideo);
     uploadSnapshot(img, 'periodic', detected, count, centered).catch(console.warn);
-  }, 30000);
+  }, snapMs);
 
   // ── Visibility change (tab / app switch) ─────────────────────
   document.addEventListener('visibilitychange', handleVisibilityChange);
@@ -1795,9 +1812,53 @@ function startProctoring() {
     });
   });
 
+  // ── Fullscreen enforcement ────────────────────────────────────
+  if (quiz.requireFullscreen) {
+    document.documentElement.requestFullscreen().catch(() => {});
+    state._handleFullscreen = () => {
+      if (!document.fullscreenElement && state.examActive) {
+        logEvent('fullscreen_exit').catch(console.warn);
+        toast(quiz.terminateOnFullscreenExit
+          ? '⛔ Fullscreen required — exiting may terminate your exam'
+          : '⚠️ Please return to fullscreen to continue', 'warn');
+      }
+    };
+    document.addEventListener('fullscreenchange', state._handleFullscreen);
+  }
+
+  // ── Focus / window-blur enforcement ──────────────────────────
+  if (quiz.terminateOnFocusLost) {
+    state._handleBlur = () => {
+      if (state.examActive) logEvent('focus_lost').catch(console.warn);
+    };
+    window.addEventListener('blur', state._handleBlur);
+  }
+
+  // ── Right-click prevention ────────────────────────────────────
+  if (quiz.preventRightClick) {
+    state._handleContextMenu = (e) => {
+      if (state.examActive) {
+        e.preventDefault();
+        logEvent('right_click').catch(console.warn);
+      }
+    };
+    document.addEventListener('contextmenu', state._handleContextMenu);
+  }
+
+  // ── Print-screen prevention ───────────────────────────────────
+  if (quiz.preventPrintScreen) {
+    state._handleKeydown = (e) => {
+      if (state.examActive && (e.key === 'PrintScreen' || e.code === 'PrintScreen' || e.keyCode === 44)) {
+        e.preventDefault();
+        logEvent('print_screen').catch(console.warn);
+        toast('⚠️ Screenshots are not allowed during this exam', 'warn');
+      }
+    };
+    document.addEventListener('keydown', state._handleKeydown);
+  }
+
   // ── Noise / audio detection ───────────────────────────────────
-  // Only active when quiz has a non-zero noise threshold (AI or hybrid mode).
-  const noiseThreshold = state.selectedQuiz?.noiseDetectionThreshold ?? 40;
+  const noiseThreshold = quiz.noiseDetectionThreshold ?? 40;
   if (noiseThreshold > 0) {
     startNoiseDetection(noiseThreshold);
   }
@@ -2036,13 +2097,18 @@ function terminateExam(reason) {
 
   const overlay = document.getElementById('violation-overlay');
   const reasonMap = {
-    multiple_faces: 'Multiple faces were detected in the camera frame.',
+    multiple_faces:  'Multiple faces were detected in the camera frame.',
     camera_disabled: 'Your camera was disabled during the exam.',
-    app_background: 'You left the exam for too long.',
-    tab_switch: 'Repeated tab switching was detected.',
+    app_background:  'You left the exam for too long.',
+    tab_switch:      'Repeated tab switching was detected.',
+    focus_lost:      'Repeated window switching or minimising was detected.',
+    fullscreen_exit: 'Fullscreen mode was exited.',
     identity_mismatch: 'Identity verification failed.',
-    phone_detected: 'A phone was detected in the camera frame.',
-    head_turn: 'Repeated head turning away from screen was detected.',
+    phone_detected:  'A phone was detected in the camera frame.',
+    head_turn:       'Repeated head turning away from screen was detected.',
+    right_click:     'Right-clicking was detected during the exam.',
+    print_screen:    'A screenshot attempt was detected.',
+    copy_paste:      'Copy/paste was used during the exam.',
   };
   overlay.innerHTML = `
     <div class="violation-icon">⛔</div>
@@ -2178,11 +2244,32 @@ function renderQuestion() {
   nextBtn.className = isLast ? 'btn btn-danger' : 'btn btn-primary';
 }
 
+// Fire-and-forget save of all current answers to the server
+function saveAnswer() {
+  if (!state.attempt?._id || !state.sessionToken) return;
+  const qMap = Object.fromEntries(state.questions.map(q => [String(q._id), q]));
+  const responses = Object.entries(state.answers)
+    .filter(([, ans]) => ans !== undefined && ans !== null && ans !== '')
+    .map(([questionId, ans]) => {
+      const qt = qMap[questionId]?.questionType || 'mcq';
+      if (qt === 'fill_blank')  return { questionId, textAnswer: String(ans) };
+      if (qt === 'mcq_multi')   return { questionId, selectedOptionIndices: Array.isArray(ans) ? ans : [] };
+      return { questionId, selectedOptionIndex: typeof ans === 'number' ? ans : parseInt(ans) };
+    });
+  if (!responses.length) return;
+  api('PUT',
+    `/api/student/snap-quizzes/quizzes/${state.selectedQuiz._id}/attempts/${state.attempt._id}/responses`,
+    { responses },
+    { 'x-session-token': state.sessionToken }
+  ).catch(() => {});
+}
+
 // ══════════════════════════════════════════════════════════════════
 //  NAVIGATION
 // ══════════════════════════════════════════════════════════════════
 document.getElementById('next-btn').addEventListener('click', () => {
   if (state.currentIdx < state.questions.length - 1) {
+    saveAnswer(); // persist progress before moving
     state.currentIdx++;
     renderQuestion();
     document.getElementById('exam-body').scrollTop = 0;
@@ -2193,6 +2280,7 @@ document.getElementById('next-btn').addEventListener('click', () => {
 
 document.getElementById('skip-btn').addEventListener('click', () => {
   if (state.currentIdx < state.questions.length - 1) {
+    saveAnswer(); // persist progress before skipping
     state.currentIdx++;
     renderQuestion();
     document.getElementById('exam-body').scrollTop = 0;
@@ -2304,9 +2392,27 @@ function stopExamCleanup() {
   clearInterval(state.snapshotInterval);
   clearInterval(state.heartbeatInterval);
   clearInterval(state.noiseInterval);
+  clearInterval(state.autoSaveInterval);
   document.removeEventListener('visibilitychange', handleVisibilityChange);
   document.removeEventListener('copy', handleCopy);
   document.removeEventListener('cut', handleCopy);
+  if (state._handleFullscreen) {
+    document.removeEventListener('fullscreenchange', state._handleFullscreen);
+    state._handleFullscreen = null;
+  }
+  if (state._handleBlur) {
+    window.removeEventListener('blur', state._handleBlur);
+    state._handleBlur = null;
+  }
+  if (state._handleContextMenu) {
+    document.removeEventListener('contextmenu', state._handleContextMenu);
+    state._handleContextMenu = null;
+  }
+  if (state._handleKeydown) {
+    document.removeEventListener('keydown', state._handleKeydown);
+    state._handleKeydown = null;
+  }
+  if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
   if (state.audioStream) {
     state.audioStream.getTracks().forEach(t => t.stop());
     state.audioStream = null;
