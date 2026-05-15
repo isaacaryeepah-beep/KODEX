@@ -2398,7 +2398,7 @@ function buildSidebar() {
         links.push({ sep: true, label: 'ACADEMIC' });
         links.push({ id: 'courses', label: 'Courses', icon: coursesIcon() });
         links.push({ id: 'hod-course-approvals', label: 'Course Approvals', icon: svgIcon('<path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>') });
-        links.push({ id: 'quizzes', label: 'Proctored / Snap Quiz', icon: quizzesIcon() });
+        links.push({ id: 'quizzes', label: 'Quiz Monitor', icon: quizzesIcon() });
         links.push({ id: 'gradebook', label: 'Grade Book', icon: svgIcon('<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>') });
         links.push({ id: 'announcements', label: 'Announcements', icon: svgIcon('<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>') });
         links.push({ id: 'programmes', label: 'Programmes', icon: svgIcon('<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>') });
@@ -2474,7 +2474,7 @@ function buildSidebar() {
       links.push({ sep: true, label: 'CONTENT' });
       links.push({ id: 'search', label: 'Search', icon: svgIcon('<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>') });
       links.push({ id: 'courses', label: 'Courses', icon: coursesIcon() });
-      links.push({ id: 'quizzes', label: 'Proctored / Snap Quiz', icon: quizzesIcon() });
+      links.push({ id: 'quizzes', label: 'Quiz Monitor', icon: quizzesIcon() });
       links.push({ id: 'timetable', label: 'Schedule', icon: svgIcon('<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>') });
       links.push({ id: 'question-bank', label: 'Question Bank', icon: svgIcon('<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>') });
       links.push({ id: 'assignments', label: 'Assignment', icon: assignmentsIcon() });
@@ -2517,7 +2517,7 @@ function buildSidebar() {
       links.push({ sep: true, label: 'ACADEMIC' });
       links.push({ id: 'courses', label: 'My Courses', icon: coursesIcon() });
       links.push({ id: 'timetable', label: 'Schedule', icon: svgIcon('<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>') });
-      links.push({ id: 'quizzes', label: 'Proctored / Snap Quiz', icon: quizzesIcon() });
+      links.push({ id: 'quizzes', label: 'Quiz Monitor', icon: quizzesIcon() });
       links.push({ id: 'assignments', label: 'Assignment', icon: assignmentsIcon() });
       links.push({ id: 'gradebook', label: 'My Grades', icon: svgIcon('<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>') });
       links.push({ id: 'quiz-history', label: 'My Results', icon: svgIcon('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/>') });
@@ -3413,7 +3413,7 @@ async function renderHodQuizzes() {
 
     content.innerHTML = `
       <div class="page-header">
-        <div><h2>Proctored / Snap Quiz</h2><p>All quizzes in the ${currentUser.department || 'department'}</p></div>
+        <div><h2>Quiz Monitor</h2><p>All quizzes in the ${currentUser.department || 'department'}</p></div>
       </div>
 
       <div class="stats-grid" style="margin-bottom:20px;">
@@ -5139,7 +5139,7 @@ async function renderStudentDashboard(content) {
       <button class="btn btn-primary btn-sm" onclick="navigateTo('mark-attendance')">Mark Attendance</button>
       <button class="btn btn-secondary btn-sm" onclick="navigateTo('my-attendance')">View History</button>
       <button class="btn btn-secondary btn-sm" onclick="navigateTo('courses')">My Courses</button>
-      <button class="btn btn-secondary btn-sm" onclick="navigateTo('quizzes')">Proctored / Snap Quiz</button>
+      <button class="btn btn-secondary btn-sm" onclick="navigateTo('quizzes')">Quiz Monitor</button>
       <button class="btn btn-secondary btn-sm" onclick="generateAttendanceReportCard()">📋 Report Card</button>
     </div>
     
@@ -7725,7 +7725,7 @@ async function renderLecturerQuizzes(content) {
     content.innerHTML = `
       <div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;margin-bottom:20px">
         <div>
-          <h2 style="font-size:22px;font-weight:800;letter-spacing:-.5px;color:#0f172a;margin-bottom:2px">Proctored / Snap Quiz</h2>
+          <h2 style="font-size:22px;font-weight:800;letter-spacing:-.5px;color:#0f172a;margin-bottom:2px">Quiz Monitor</h2>
           <p style="color:#64748b;font-size:13px">Create and manage proctored quizzes for your students</p>
         </div>
         <button class="btn btn-primary" onclick="showCreateQuizModal()" style="display:flex;align-items:center;gap:6px">
@@ -8475,7 +8475,7 @@ async function renderStudentQuizzes(content, showAll) {
 
     content.innerHTML = `
       <div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;margin-bottom:16px;">
-        <div><h2>Proctored / Snap Quiz</h2><p>Your scheduled proctored and snap quizzes</p></div>
+        <div><h2>Quiz Monitor</h2><p>Your scheduled proctored and snap quizzes</p></div>
       </div>
       <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;font-weight:500;margin-bottom:16px;padding:10px 14px;background:var(--card);border-radius:8px;border:1px solid var(--border);">
         <input type="checkbox" ${showAll ? 'checked' : ''} onchange="renderStudentQuizzes(document.getElementById('main-content'), this.checked)" style="accent-color:var(--primary);width:15px;height:15px;">
@@ -8730,7 +8730,7 @@ async function renderAdminQuizzes(content) {
     const data = await api('/api/admin/quizzes');
     const quizzes = data.quizzes || [];
     content.innerHTML = `
-      <div class="page-header"><h2>Proctored / Snap Quiz</h2><p>Overview of all quizzes across all lecturers</p></div>
+      <div class="page-header"><h2>Quiz Monitor</h2><p>Overview of all quizzes across all lecturers</p></div>
 
       <!-- Duplicate finder tool -->
       <div class="card" style="margin-bottom:16px;border:2px solid #fde68a;background:#fffbeb">
@@ -13424,7 +13424,7 @@ function buildBottomNav(role) {
     'sign-in-out': 'Sign In/Out', 'my-attendance': 'Attendance',
     'mark-attendance': 'Attendance', subscription: 'Subscribe',
     announcements: 'Notices', assignments: 'Assignment',
-    quizzes: 'Snap Quiz',
+    quizzes: 'Quiz Monitor',
   };
 
   const priority = PRIORITY[role] || ['dashboard', 'sessions', 'reports'];
