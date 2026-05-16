@@ -198,6 +198,16 @@ const companySchema = new mongoose.Schema(
       type: String,
       default: "",
     },
+    // ── Jitsi Integration ─────────────────────────────────────
+    // roomPrefix scopes all meeting rooms to this institution, preventing
+    // cross-institution room name collisions on shared Jitsi deployments.
+    // Auto-generated from slug during institution registration.
+    jitsi: {
+      roomPrefix: { type: String, default: null },
+      // Reserved for future per-institution Jitsi domain overrides.
+      domain:     { type: String, default: null },
+    },
+
     // ── White-label Branding ──────────────────────────────────
     branding: {
       logoUrl:        { type: String, default: "" },
@@ -250,6 +260,11 @@ companySchema.pre("save", async function () {
   }
   if (!this.bleLocationId) {
     this.bleLocationId = `BLE-${crypto.randomBytes(8).toString("hex").toUpperCase()}`;
+  }
+  if (!this.jitsi || !this.jitsi.roomPrefix) {
+    const base = this.slug || String(this._id).slice(-8);
+    if (!this.jitsi) this.jitsi = {};
+    this.jitsi.roomPrefix = `dikly-${base}`;
   }
 });
 

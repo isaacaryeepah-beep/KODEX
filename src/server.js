@@ -346,7 +346,10 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: "Internal server error" });
 });
 
+const { validateJitsiConfig } = require('./services/jitsiConfigValidator');
+
 const start = async () => {
+  validateJitsiConfig();
   await connectDB();
 
   try {
