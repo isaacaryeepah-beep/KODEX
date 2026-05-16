@@ -8,24 +8,40 @@ const PAYSTACK_BASE_URL   = "https://api.paystack.co";
 const PAYSTACK_SECRET_KEY = process.env.PAYSTACK_SECRET_KEY;
 
 // ── Pricing defaults (overridden by PlatformSettings) ────────────────────────
-const PLAN_DAYS = { semester: 112, monthly: 30 };
-const PLAN_MODE = { semester: "academic", monthly: "corporate" };
+const PLAN_DAYS = { semester: 112, monthly: 30, student_semester: 112, employee_monthly: 30 };
+const PLAN_MODE = { semester: "academic", monthly: "corporate", student_semester: "student", employee_monthly: "employee" };
 
 async function getSettings() {
   let s = await PlatformSettings.findOne().lean();
-  if (!s) s = { trialDays: 30, academicPrice: 300, corporatePrice: 150, currency: 'GHS' };
+  if (!s) s = { trialDays: 30, academicPrice: 300, corporatePrice: 150, studentTrialDays: 45, studentSemesterPrice: 20, employeeMonthlyPrice: 15, currency: 'GHS' };
   return s;
 }
 
 function buildPlan(planId, settings) {
-  const days  = PLAN_DAYS[planId];
-  const mode  = PLAN_MODE[planId];
-  const price = planId === 'monthly' ? settings.corporatePrice : settings.academicPrice;
-  const cur   = settings.currency || 'GHS';
-  const label = planId === 'monthly'
-    ? `${cur} ${price} / month`
-    : `${cur} ${price} / semester`;
+  const days = PLAN_DAYS[planId];
+  const mode = PLAN_MODE[planId];
+  const cur  = settings.currency || 'GHS';
+  let price, label;
+  if (planId === 'student_semester') {
+    price = settings.studentSemesterPrice ?? 20;
+    label = `${cur} ${price} / semester`;
+  } else if (planId === 'employee_monthly') {
+    price = settings.employeeMonthlyPrice ?? 15;
+    label = `${cur} ${price} / month`;
+  } else if (planId === 'monthly') {
+    price = settings.corporatePrice;
+    label = `${cur} ${price} / month`;
+  } else {
+    price = settings.academicPrice;
+    label = `${cur} ${price} / semester`;
+  }
   return { price, days, label, mode };
+}
+
+function planIdForRole(role, companyMode) {
+  if (role === 'student')  return 'student_semester';
+  if (role === 'employee') return 'employee_monthly';
+  return companyMode === 'corporate' ? 'monthly' : 'semester';
 }
 
 // ── Helper ────────────────────────────────────────────────────────────────────
@@ -43,7 +59,7 @@ exports.getPlans = async (req, res) => {
       getSettings(),
     ]);
     const mode   = company?.mode || "academic";
-    const planId = mode === "corporate" ? "monthly" : "semester";
+    const planId = planIdForRole(req.user.role, mode);
     const plan   = buildPlan(planId, settings);
 
     return res.json({
@@ -60,41 +76,63 @@ exports.getPlans = async (req, res) => {
 exports.getSubscriptionStatus = async (req, res) => {
   try {
     const user = await User.findById(req.user._id)
-      .select("trialEndDate subscriptionExpiry subscriptionStatus periodsPaid semestersPaid role createdAt")
+      .select("trialEndDate subscriptionExpiry subscriptionStatus periodsPaid semestersPaid role createdAt company")
       .lean();
     if (!user) return res.status(404).json({ error: "User not found" });
 
-    const now      = Date.now();
-    const PAID_ROLES = ["lecturer", "manager", "admin"];
+    const now = Date.now();
+    const ALL_PAID = ["lecturer", "manager", "admin", "student", "employee"];
 
-    if (!PAID_ROLES.includes(user.role)) {
-      return res.json({ userTrial: { status: "free", daysLeft: null, message: "Free role — no subscription needed" } });
+    if (!ALL_PAID.includes(user.role)) {
+      return res.json({ userTrial: { status: "free", daysLeft: null } });
     }
 
+    const settings   = await getSettings();
+    const subEnd     = user.subscriptionExpiry ? new Date(user.subscriptionExpiry) : null;
+    const inSub      = !!(subEnd && subEnd > now);
+    const periodsPaid = user.periodsPaid || user.semestersPaid || 0;
+
+    if (user.role === 'student') {
+      const trialEnd = user.trialEndDate
+        ? new Date(user.trialEndDate)
+        : new Date(new Date(user.createdAt).getTime() + (settings.studentTrialDays || 45) * 24 * 60 * 60 * 1000);
+      const inTrial = trialEnd > now;
+      const status  = inSub ? 'active' : inTrial ? 'trial' : 'expired';
+      const daysLeft = inSub ? Math.ceil((subEnd - now) / 86400000)
+                     : inTrial ? Math.ceil((trialEnd - now) / 86400000) : 0;
+      return res.json({ userTrial: { status, daysLeft, trialEndDate: trialEnd, subscriptionExpiry: subEnd, periodsPaid, plan: 'student_semester', price: settings.studentSemesterPrice || 20, currency: settings.currency || 'GHS' } });
+    }
+
+    if (user.role === 'employee') {
+      if (inSub) {
+        const daysLeft = Math.ceil((subEnd - now) / 86400000);
+        return res.json({ userTrial: { status: 'active', daysLeft, subscriptionExpiry: subEnd, periodsPaid, plan: 'employee_monthly', price: settings.employeeMonthlyPrice || 15, currency: settings.currency || 'GHS' } });
+      }
+      // Check company trial/subscription
+      let companyActive = false, companyDays = 0;
+      if (user.company) {
+        try {
+          const co = await Company.findById(user.company).select('subscriptionActive trialEndDate').lean();
+          if (co) {
+            const cEnd = co.trialEndDate ? new Date(co.trialEndDate) : null;
+            companyActive = !!(co.subscriptionActive || (cEnd && cEnd > now));
+            if (cEnd && cEnd > now && !co.subscriptionActive) companyDays = Math.ceil((cEnd - now) / 86400000);
+          }
+        } catch(_) {}
+      }
+      const status   = companyActive ? 'trial' : 'expired';
+      const daysLeft = companyActive ? companyDays : 0;
+      return res.json({ userTrial: { status, daysLeft, subscriptionExpiry: subEnd, periodsPaid, plan: 'employee_monthly', price: settings.employeeMonthlyPrice || 15, currency: settings.currency || 'GHS', coveredByCompany: companyActive } });
+    }
+
+    // lecturer / manager / admin (original)
     const trialEnd = user.trialEndDate
       ? new Date(user.trialEndDate)
       : new Date(new Date(user.createdAt).getTime() + 30 * 24 * 60 * 60 * 1000);
-
-    const subEnd   = user.subscriptionExpiry ? new Date(user.subscriptionExpiry) : null;
-    const inTrial  = trialEnd > now;
-    const inSub    = subEnd && subEnd > now;
-
-    let status, daysLeft;
-    if (inSub) {
-      status   = "active";
-      daysLeft = Math.ceil((subEnd - now) / (1000 * 60 * 60 * 24));
-    } else if (inTrial) {
-      status   = "trial";
-      daysLeft = Math.ceil((trialEnd - now) / (1000 * 60 * 60 * 24));
-    } else {
-      status   = "expired";
-      daysLeft = 0;
-    }
-
-    const periodsPaid = user.periodsPaid || user.semestersPaid || 0;
-    return res.json({
-      userTrial: { status, daysLeft, trialEndDate: trialEnd, subscriptionExpiry: subEnd, periodsPaid },
-    });
+    const inTrial = trialEnd > now;
+    const status  = inSub ? 'active' : inTrial ? 'trial' : 'expired';
+    const daysLeft = inSub ? Math.ceil((subEnd - now) / 86400000) : inTrial ? Math.ceil((trialEnd - now) / 86400000) : 0;
+    return res.json({ userTrial: { status, daysLeft, trialEndDate: trialEnd, subscriptionExpiry: subEnd, periodsPaid } });
   } catch (e) {
     console.error("Subscription status error:", e.message);
     return res.status(500).json({ error: "Failed to get subscription status" });
@@ -118,30 +156,25 @@ exports.initializePaystackSubscription = async (req, res) => {
       return res.status(500).json({ error: "PAYSTACK_SECRET_KEY is not set in environment variables" });
     }
 
-    // Determine correct plan from company mode + live pricing
     const [company, settings] = await Promise.all([
       Company.findById(req.user.company).select("mode").lean(),
       getSettings(),
     ]);
     const mode         = company?.mode || "academic";
-    const expectedPlan = mode === "corporate" ? "monthly" : "semester";
-
-    if (plan !== expectedPlan) {
-      return res.status(400).json({
-        error: `Invalid plan for ${mode} institutions. Use "${expectedPlan}".`,
-      });
+    const user         = req.user;
+    const ALLOWED_ROLES = ["lecturer", "manager", "admin", "student", "employee"];
+    if (!ALLOWED_ROLES.includes(user.role)) {
+      return res.status(403).json({ error: "Your role does not require a subscription." });
     }
 
+    const expectedPlan = planIdForRole(user.role, mode);
+    if (plan !== expectedPlan) {
+      return res.status(400).json({ error: `Use plan "${expectedPlan}" for your account type.` });
+    }
     if (!PLAN_DAYS[plan]) {
       return res.status(400).json({ error: "Invalid plan." });
     }
-
     const planInfo = buildPlan(plan, settings);
-    const user     = req.user;
-    const PAID_ROLES = ["lecturer", "manager", "admin"];
-    if (!PAID_ROLES.includes(user.role)) {
-      return res.status(403).json({ error: "Your role does not require a subscription." });
-    }
 
     const email = user.email;
     if (!email) {
@@ -218,7 +251,6 @@ exports.verifyPaystackSubscription = async (req, res) => {
 
     const meta = data.metadata || {};
 
-    // Accept both semester (academic) and monthly (corporate) plans
     if (meta.purpose !== "user_subscription" || !PLAN_DAYS[meta.plan]) {
       return res.status(400).json({ error: "Invalid payment purpose or unknown plan" });
     }
@@ -226,8 +258,9 @@ exports.verifyPaystackSubscription = async (req, res) => {
     const settings = await getSettings();
     const planInfo  = buildPlan(meta.plan, settings);
 
+    // Allow ±1 pesewa rounding tolerance
     const expectedPesewas = planInfo.price * 100;
-    if (Number(data.amount) !== expectedPesewas) {
+    if (Math.abs(Number(data.amount) - expectedPesewas) > 1) {
       return res.status(400).json({
         error:    "Amount mismatch — payment not applied",
         paid:     data.amount / 100,
@@ -307,7 +340,6 @@ exports.paystackWebhook = async (req, res) => {
 
     const meta = event.data?.metadata || {};
 
-    // Accept both semester (academic) and monthly (corporate) plans
     if (meta.purpose !== "user_subscription" || !PLAN_DAYS[meta.plan]) {
       return res.status(200).json({ received: true });
     }
