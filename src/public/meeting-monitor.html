@@ -1,0 +1,1152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>DIKLY — Live Meeting Monitor</title>
+<link rel="icon" type="image/svg+xml" href="/dikly-icon.svg">
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --navy: #0f172a; --navy2: #1e293b; --navy3: #334155; --slate: #64748b;
+  --muted: #94a3b8; --white: #f8fafc; --accent: #38bdf8;
+  --green: #22c55e; --yellow: #eab308; --red: #ef4444;
+  --font-mono: 'Space Mono', monospace; --font-sans: 'Plus Jakarta Sans', sans-serif;
+}
+html, body { height: 100%; background: var(--navy); color: var(--white); font-family: var(--font-sans); overflow: hidden; }
+
+/* ── Topbar ─────────────────────────────────────────────────────────── */
+.topbar {
+  background: var(--navy2); border-bottom: 1px solid var(--navy3);
+  padding: 12px 18px; padding-top: calc(12px + env(safe-area-inset-top));
+  display: flex; align-items: center; justify-content: space-between;
+  flex-wrap: wrap; gap: 8px; min-height: 62px;
+}
+.topbar-left { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.topbar-brand { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.topbar-brand .live-badge {
+  display: flex; align-items: center; gap: 6px;
+  background: rgba(239,68,68,.15); border: 1px solid rgba(239,68,68,.3);
+  border-radius: 6px; padding: 4px 10px;
+  font-size: 11px; font-weight: 700; color: var(--red); letter-spacing: .4px;
+  white-space: nowrap;
+}
+.live-dot {
+  width: 7px; height: 7px; border-radius: 50%; background: var(--red);
+  box-shadow: 0 0 0 0 rgba(239,68,68,.6);
+  animation: live-pulse 2s infinite; display: inline-block; flex-shrink: 0;
+}
+@keyframes live-pulse {
+  0%   { box-shadow: 0 0 0 0 rgba(239,68,68,.6); }
+  70%  { box-shadow: 0 0 0 6px rgba(239,68,68,0); }
+  100% { box-shadow: 0 0 0 0 rgba(239,68,68,0); }
+}
+.topbar-title { min-width: 0; }
+.topbar-title h1 { font-size: 16px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 280px; }
+.topbar-title p  { font-size: 11px; color: var(--slate); margin-top: 1px; font-family: var(--font-mono); }
+
+/* Stats pills */
+.stats-pills { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.stat-pill {
+  display: flex; align-items: center; gap: 5px;
+  padding: 5px 11px; border-radius: 20px; font-size: 11px; font-weight: 700;
+  border: 1px solid var(--navy3); background: var(--navy); white-space: nowrap;
+  font-family: var(--font-mono);
+}
+.stat-pill .pill-val { font-size: 13px; }
+.stat-pill.flagged-pill { border-color: rgba(239,68,68,.4); color: var(--red); }
+.stat-pill.cam-pill    { border-color: rgba(234,179,8,.4); color: var(--yellow); }
+
+.topbar-actions { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; flex-shrink: 0; }
+
+.btn {
+  padding: 8px 16px; border-radius: 8px; border: none; cursor: pointer;
+  font-family: var(--font-sans); font-size: 12px; font-weight: 700;
+  touch-action: manipulation; display: inline-flex; align-items: center; gap: 5px;
+  transition: opacity 0.15s, background 0.15s;
+}
+.btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.btn-primary  { background: linear-gradient(135deg, var(--accent), #0ea5e9); color: var(--navy); }
+.btn-ghost    { background: transparent; border: 1.5px solid var(--navy3); color: var(--white); }
+.btn-ghost:hover:not(:disabled) { background: var(--navy3); }
+.btn-danger   { background: rgba(239,68,68,.15); border: 1.5px solid rgba(239,68,68,.35); color: var(--red); }
+.btn-danger:hover:not(:disabled) { background: rgba(239,68,68,.25); }
+.btn-warn     { background: rgba(234,179,8,.12); border: 1.5px solid rgba(234,179,8,.3); color: var(--yellow); }
+.btn-warn:hover:not(:disabled) { background: rgba(234,179,8,.22); }
+.btn-lock-active { background: rgba(56,189,248,.12); border: 1.5px solid rgba(56,189,248,.35); color: var(--accent); }
+
+/* ── Main layout ─────────────────────────────────────────────────────── */
+.main {
+  display: flex; height: calc(100vh - 62px);
+  overflow: hidden;
+}
+
+/* Jitsi area */
+.jitsi-area {
+  flex: 2; min-width: 0; background: #000;
+  display: flex; flex-direction: column; position: relative;
+}
+#jitsi-container {
+  flex: 1; width: 100%; position: relative;
+}
+#jitsi-container iframe {
+  width: 100%; height: 100%; border: none; display: block;
+}
+.jitsi-placeholder {
+  width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;
+  flex-direction: column; gap: 14px; color: var(--slate); text-align: center; padding: 24px;
+}
+.jitsi-placeholder .icon { font-size: 52px; opacity: .4; }
+.jitsi-placeholder p { font-size: 14px; line-height: 1.6; max-width: 280px; }
+
+/* ── Right panel ─────────────────────────────────────────────────────── */
+.right-panel {
+  width: 360px; min-width: 280px; max-width: 420px;
+  background: var(--navy2); border-left: 1px solid var(--navy3);
+  display: flex; flex-direction: column; overflow: hidden;
+}
+
+.panel-header {
+  padding: 12px 14px; border-bottom: 1px solid var(--navy3);
+  display: flex; align-items: center; justify-content: space-between; flex-shrink: 0;
+}
+.panel-header h3 {
+  font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .8px;
+  color: var(--slate); display: flex; align-items: center; gap: 7px;
+}
+.panel-search {
+  padding: 8px 12px; background: var(--navy); border: 1.5px solid var(--navy3);
+  border-radius: 8px; color: var(--white); font-family: var(--font-sans); font-size: 12px;
+  outline: none; width: 100%; display: block;
+}
+.panel-search:focus { border-color: var(--accent); }
+.panel-search-wrap { padding: 8px 10px; border-bottom: 1px solid var(--navy3); flex-shrink: 0; }
+
+/* Participant list */
+.participant-list {
+  flex: 1; overflow-y: auto; min-height: 0;
+}
+
+/* Participant card */
+.p-card {
+  padding: 10px 12px; border-bottom: 1px solid rgba(51,65,85,0.4);
+  border-left: 3px solid transparent;
+  transition: background 0.12s, border-color 0.15s;
+  position: relative;
+}
+.p-card:hover { background: rgba(255,255,255,0.03); }
+.p-card.flagged { border-left-color: var(--red); background: rgba(239,68,68,.04); }
+.p-card.kicked  { opacity: .5; }
+
+.p-card-top { display: flex; align-items: center; gap: 9px; }
+.p-avatar {
+  width: 36px; height: 36px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px; font-weight: 800; flex-shrink: 0;
+  color: var(--navy);
+}
+.p-info { flex: 1; min-width: 0; }
+.p-name { font-size: 13px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; gap: 6px; }
+.p-role-badge {
+  font-size: 9px; font-weight: 700; padding: 1px 6px; border-radius: 4px;
+  text-transform: uppercase; letter-spacing: .3px; flex-shrink: 0;
+}
+.role-student  { background: rgba(56,189,248,.12); color: var(--accent); border: 1px solid rgba(56,189,248,.25); }
+.role-lecturer { background: rgba(34,197,94,.12);  color: var(--green);  border: 1px solid rgba(34,197,94,.25); }
+.role-guest    { background: rgba(100,116,139,.12); color: var(--muted); border: 1px solid rgba(100,116,139,.25); }
+
+.p-status-row { display: flex; align-items: center; gap: 6px; margin-top: 3px; }
+.p-status-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.p-status-dot.green  { background: var(--green); box-shadow: 0 0 4px var(--green); }
+.p-status-dot.yellow { background: var(--yellow); }
+.p-status-dot.red    { background: var(--red); animation: blink 1.2s infinite; }
+.p-status-dot.gray   { background: var(--slate); }
+@keyframes blink { 50% { opacity: 0.2; } }
+
+.p-status-label { font-size: 10px; color: var(--slate); font-family: var(--font-mono); }
+
+.p-media-icons { display: flex; align-items: center; gap: 5px; margin-left: auto; }
+.p-icon { font-size: 13px; opacity: .35; }
+.p-icon.active { opacity: 1; }
+.p-icon.off    { opacity: 1; filter: brightness(0.6); }
+
+/* Connection quality bar */
+.conn-bar { display: flex; gap: 2px; align-items: flex-end; height: 12px; margin-left: 2px; }
+.conn-bar span {
+  width: 4px; border-radius: 1px; background: var(--navy3);
+  display: block;
+}
+.conn-bar span:nth-child(1) { height: 4px; }
+.conn-bar span:nth-child(2) { height: 7px; }
+.conn-bar span:nth-child(3) { height: 11px; }
+.conn-bar.good span  { background: var(--green); }
+.conn-bar.fair span:nth-child(1), .conn-bar.fair span:nth-child(2) { background: var(--yellow); }
+.conn-bar.poor span:nth-child(1) { background: var(--red); }
+
+.p-tab-badge {
+  font-size: 9px; font-weight: 700; padding: 1px 6px; border-radius: 4px;
+  background: rgba(234,179,8,.15); color: var(--yellow);
+  border: 1px solid rgba(234,179,8,.3);
+}
+
+/* Card actions row */
+.p-actions { display: flex; gap: 4px; margin-top: 7px; }
+.p-action-btn {
+  flex: 1; padding: 4px 0; border-radius: 6px; border: 1px solid var(--navy3);
+  background: transparent; color: var(--muted); font-size: 11px; font-weight: 600;
+  cursor: pointer; transition: background 0.12s, color 0.12s; font-family: var(--font-sans);
+  display: flex; align-items: center; justify-content: center; gap: 3px;
+}
+.p-action-btn:hover { background: var(--navy3); color: var(--white); }
+.p-action-btn.flag-btn:hover { background: rgba(239,68,68,.15); border-color: rgba(239,68,68,.4); color: var(--red); }
+.p-action-btn.warn-btn:hover { background: rgba(234,179,8,.15);  border-color: rgba(234,179,8,.4);  color: var(--yellow); }
+.p-action-btn.kick-btn:hover { background: rgba(239,68,68,.12);  border-color: rgba(239,68,68,.3);  color: var(--red); }
+.p-action-btn.unflag-btn { border-color: rgba(239,68,68,.4); color: var(--red); }
+.p-action-btn.unflag-btn:hover { background: rgba(239,68,68,.15); }
+
+/* ── Event log ───────────────────────────────────────────────────────── */
+.event-log-section { border-top: 1px solid var(--navy3); flex-shrink: 0; max-height: 240px; display: flex; flex-direction: column; }
+.event-log-header {
+  padding: 8px 12px 6px; font-size: 10px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .8px; color: var(--slate); border-bottom: 1px solid var(--navy3);
+  display: flex; align-items: center; justify-content: space-between; flex-shrink: 0;
+}
+.event-log-list { overflow-y: auto; flex: 1; }
+.log-entry {
+  display: flex; gap: 9px; padding: 7px 12px; border-bottom: 1px solid rgba(51,65,85,.25);
+  font-size: 11px; align-items: flex-start;
+}
+.log-entry:last-child { border-bottom: none; }
+.log-time { color: var(--slate); font-family: var(--font-mono); font-size: 10px; white-space: nowrap; flex-shrink: 0; margin-top: 1px; }
+.log-msg  { flex: 1; line-height: 1.4; }
+.log-entry.ev-join    { border-left: 2px solid var(--green); }
+.log-entry.ev-leave   { border-left: 2px solid var(--slate); }
+.log-entry.ev-flag    { border-left: 2px solid var(--red); }
+.log-entry.ev-warn    { border-left: 2px solid var(--yellow); }
+.log-entry.ev-kick    { border-left: 2px solid var(--red); }
+.log-entry.ev-lock    { border-left: 2px solid var(--accent); }
+.log-entry.ev-system  { border-left: 2px solid var(--navy3); }
+
+/* ── Loading / Error / Banner ─────────────────────────────────────────── */
+.full-overlay {
+  position: fixed; inset: 0; z-index: 500;
+  display: flex; align-items: center; justify-content: center; flex-direction: column;
+  background: var(--navy); gap: 16px; text-align: center; padding: 24px;
+}
+.full-overlay .icon { font-size: 52px; margin-bottom: 4px; }
+.full-overlay h2 { font-size: 20px; font-weight: 800; }
+.full-overlay p  { font-size: 14px; color: var(--slate); max-width: 320px; line-height: 1.6; margin-top: 4px; }
+
+.spinner {
+  width: 36px; height: 36px; border: 3px solid var(--navy3);
+  border-top-color: var(--accent); border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Loading skeleton for participant list */
+.skel-card { padding: 10px 12px; border-bottom: 1px solid rgba(51,65,85,0.3); }
+.skel-line {
+  background: linear-gradient(90deg, var(--navy3) 25%, rgba(51,65,85,.5) 50%, var(--navy3) 75%);
+  background-size: 200% 100%; animation: shimmer 1.4s infinite;
+  border-radius: 4px; height: 10px; margin-bottom: 6px;
+}
+@keyframes shimmer { to { background-position: -200% 0; } }
+.skel-circle {
+  width: 36px; height: 36px; border-radius: 50%;
+  background: var(--navy3); flex-shrink: 0;
+  animation: shimmer 1.4s infinite;
+  background-size: 200% 100%;
+  background-image: linear-gradient(90deg, var(--navy3) 25%, rgba(51,65,85,.5) 50%, var(--navy3) 75%);
+}
+
+/* Meeting-ended banner */
+#ended-banner {
+  display: none; position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(15,23,42,.92); z-index: 10;
+  align-items: center; justify-content: center; flex-direction: column; gap: 14px;
+  text-align: center; padding: 24px;
+}
+#ended-banner h2 { font-size: 22px; font-weight: 800; color: var(--red); }
+#ended-banner p  { font-size: 14px; color: var(--muted); }
+
+/* ── Toast ───────────────────────────────────────────────────────────── */
+#toast {
+  position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+  background: var(--navy2); border: 1px solid var(--navy3); border-radius: 8px;
+  padding: 10px 20px; font-size: 13px; font-weight: 600; white-space: nowrap;
+  z-index: 800; opacity: 0; pointer-events: none; transition: opacity 0.3s;
+  box-shadow: 0 8px 28px rgba(0,0,0,.5); max-width: 90vw; white-space: normal; text-align: center;
+}
+#toast.show { opacity: 1; }
+#toast.error   { border-color: var(--red);    color: var(--red); }
+#toast.success { border-color: var(--green);  color: var(--green); }
+#toast.info    { border-color: var(--accent); color: var(--accent); }
+
+/* ── Warn modal ──────────────────────────────────────────────────────── */
+#warn-modal-backdrop {
+  position: fixed; inset: 0; background: rgba(0,0,0,.6); z-index: 700;
+  display: none; align-items: center; justify-content: center;
+}
+#warn-modal-backdrop.open { display: flex; }
+#warn-modal {
+  background: var(--navy2); border: 1px solid var(--navy3); border-radius: 12px;
+  padding: 24px; width: 380px; max-width: 92vw;
+}
+#warn-modal h3 { font-size: 15px; font-weight: 800; margin-bottom: 12px; }
+#warn-modal textarea {
+  width: 100%; padding: 10px 12px; background: var(--navy); border: 1.5px solid var(--navy3);
+  border-radius: 8px; color: var(--white); font-family: var(--font-sans); font-size: 13px;
+  outline: none; resize: vertical; min-height: 80px;
+}
+#warn-modal textarea:focus { border-color: var(--accent); }
+#warn-modal .modal-actions { display: flex; gap: 8px; margin-top: 12px; justify-content: flex-end; }
+
+/* ── Responsive ──────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  html, body { overflow: auto; }
+  .main { flex-direction: column; height: auto; overflow: visible; }
+  .jitsi-area { min-height: 50vw; height: 56vw; }
+  .right-panel { width: 100%; max-width: 100%; border-left: none; border-top: 1px solid var(--navy3); max-height: none; }
+  .participant-list { max-height: 60vh; }
+  .topbar { min-height: auto; }
+  .topbar-title h1 { font-size: 14px; max-width: 180px; }
+  .stats-pills { display: none; }
+}
+@media (max-width: 480px) {
+  .topbar-actions .btn span { display: none; }
+  .topbar-actions .btn { padding: 8px 10px; }
+}
+</style>
+</head>
+<body>
+
+<!-- Toast -->
+<div id="toast"></div>
+
+<!-- Warn modal -->
+<div id="warn-modal-backdrop">
+  <div id="warn-modal">
+    <h3>Send Warning</h3>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:10px">Message will be displayed to the participant in the meeting.</p>
+    <textarea id="warn-message" placeholder="Enter warning message…"></textarea>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeWarnModal()">Cancel</button>
+      <button class="btn btn-warn" onclick="submitWarn()">Send Warning</button>
+    </div>
+  </div>
+</div>
+
+<!-- Loading overlay -->
+<div class="full-overlay" id="loading-overlay">
+  <div class="spinner"></div>
+  <h2>Loading Meeting</h2>
+  <p>Connecting to live meeting data…</p>
+</div>
+
+<!-- Error overlay (hidden by default) -->
+<div class="full-overlay" id="error-overlay" style="display:none">
+  <div class="icon" id="error-icon">⚠️</div>
+  <h2 id="error-title">Something went wrong</h2>
+  <p id="error-msg">An unexpected error occurred.</p>
+  <button class="btn btn-ghost" onclick="window.history.back()" style="margin-top:8px">← Go Back</button>
+</div>
+
+<!-- TOP BAR -->
+<div class="topbar" id="topbar" style="display:none">
+  <div class="topbar-left">
+    <div class="topbar-brand">
+      <div class="live-badge">
+        <span class="live-dot" id="live-dot-topbar"></span>
+        DIKLY LIVE
+      </div>
+    </div>
+    <div class="topbar-title">
+      <h1 id="meeting-title">Live Meeting</h1>
+      <p id="meeting-meta">Meeting Monitor</p>
+    </div>
+  </div>
+
+  <div class="stats-pills" id="stats-pills">
+    <div class="stat-pill"><span>Total</span><span class="pill-val" id="stat-total">—</span></div>
+    <div class="stat-pill"><span style="color:var(--green)">Connected</span><span class="pill-val" id="stat-connected" style="color:var(--green)">—</span></div>
+    <div class="stat-pill flagged-pill"><span>Flagged</span><span class="pill-val" id="stat-flagged">—</span></div>
+    <div class="stat-pill cam-pill"><span>Cam Off</span><span class="pill-val" id="stat-camoff">—</span></div>
+  </div>
+
+  <div class="topbar-actions">
+    <button class="btn btn-ghost" id="lock-btn" onclick="toggleLock()" style="display:none">
+      <span id="lock-icon">🔒</span><span id="lock-label">Lock Room</span>
+    </button>
+    <button class="btn btn-danger" id="end-btn" onclick="endMeeting()">
+      <span>⏹</span><span>End Meeting</span>
+    </button>
+    <button class="btn btn-ghost" onclick="window.history.back()" style="padding:8px 12px">← Back</button>
+  </div>
+</div>
+
+<!-- MAIN -->
+<div class="main" id="main-layout" style="display:none">
+
+  <!-- LEFT: Jitsi embed -->
+  <div class="jitsi-area">
+    <div id="jitsi-container">
+      <div class="jitsi-placeholder" id="jitsi-placeholder">
+        <div class="icon">📹</div>
+        <p>Loading meeting room…</p>
+      </div>
+    </div>
+    <!-- Meeting ended overlay -->
+    <div id="ended-banner" style="display:none;position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(15,23,42,.92);z-index:10;display:none;align-items:center;justify-content:center;flex-direction:column;gap:14px;text-align:center;padding:24px">
+      <div style="font-size:48px">🔴</div>
+      <h2 style="font-size:22px;font-weight:800;color:var(--red)">Meeting Ended</h2>
+      <p style="font-size:14px;color:var(--muted)">This meeting has been terminated.</p>
+      <button class="btn btn-ghost" onclick="window.history.back()">← Return to Dashboard</button>
+    </div>
+  </div>
+
+  <!-- RIGHT: Participant panel -->
+  <div class="right-panel">
+    <!-- Header -->
+    <div class="panel-header">
+      <h3><span class="live-dot" style="background:var(--green);box-shadow:0 0 0 0 rgba(34,197,94,.6);animation:live-pulse-green 2s infinite"></span> Active Participants</h3>
+      <span id="participant-count" style="font-size:11px;color:var(--slate);font-family:var(--font-mono)">0</span>
+    </div>
+
+    <!-- Search -->
+    <div class="panel-search-wrap">
+      <input class="panel-search" id="participant-search" type="text" placeholder="Search participants…" oninput="filterParticipants(this.value)" />
+    </div>
+
+    <!-- Participant list -->
+    <div class="participant-list" id="participant-list">
+      <!-- Skeleton loading -->
+      <div id="plist-skeleton">
+        <div class="skel-card"><div style="display:flex;gap:9px;align-items:center"><div class="skel-circle"></div><div style="flex:1"><div class="skel-line" style="width:60%"></div><div class="skel-line" style="width:40%"></div></div></div></div>
+        <div class="skel-card"><div style="display:flex;gap:9px;align-items:center"><div class="skel-circle"></div><div style="flex:1"><div class="skel-line" style="width:70%"></div><div class="skel-line" style="width:45%"></div></div></div></div>
+        <div class="skel-card"><div style="display:flex;gap:9px;align-items:center"><div class="skel-circle"></div><div style="flex:1"><div class="skel-line" style="width:55%"></div><div class="skel-line" style="width:35%"></div></div></div></div>
+      </div>
+    </div>
+
+    <!-- Event log -->
+    <div class="event-log-section">
+      <div class="event-log-header">
+        <span>Event Log</span>
+        <button onclick="clearEventLog()" style="background:none;border:none;color:var(--slate);font-size:11px;cursor:pointer;font-family:var(--font-sans)">Clear</button>
+      </div>
+      <div class="event-log-list" id="event-log-list">
+        <div style="padding:12px;text-align:center;color:var(--slate);font-size:12px">No events yet</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+@keyframes live-pulse-green {
+  0%   { box-shadow: 0 0 0 0 rgba(34,197,94,.6); }
+  70%  { box-shadow: 0 0 0 6px rgba(34,197,94,0); }
+  100% { box-shadow: 0 0 0 0 rgba(34,197,94,0); }
+}
+</style>
+
+<script>
+'use strict';
+
+// ── Config ────────────────────────────────────────────────────────────
+const API = '';
+const params      = new URLSearchParams(location.search);
+const authToken   = params.get('token') || localStorage.getItem('dikly_token') || '';
+const meetingId   = params.get('meeting') || '';
+
+// ── State ─────────────────────────────────────────────────────────────
+let participants   = {};   // uid → participant object
+let meetingData    = null;
+let isLocked       = false;
+let meetingEnded   = false;
+let sseSource      = null;
+let heartbeatTimer = null;
+let jitsiAPI       = null;
+let warnTargetUid  = null;
+let eventLog       = [];
+let searchQuery    = '';
+
+// avatar colours (deterministic by initials)
+const AVATAR_COLORS = ['#0ea5e9','#8b5cf6','#ec4899','#f97316','#14b8a6','#6366f1','#84cc16','#f59e0b'];
+function avatarColor(name) {
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) & 0xffffffff;
+  return AVATAR_COLORS[Math.abs(h) % AVATAR_COLORS.length];
+}
+function initials(name = '') {
+  return name.split(' ').filter(Boolean).map(w => w[0]).join('').toUpperCase().slice(0, 2) || '?';
+}
+
+// ── Toast ─────────────────────────────────────────────────────────────
+let toastTimer;
+function toast(msg, type = '') {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'show' + (type ? ' ' + type : '');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { el.classList.remove('show'); }, 3500);
+}
+
+// ── Error / Loading ───────────────────────────────────────────────────
+function showError(icon, title, msg) {
+  document.getElementById('loading-overlay').style.display = 'none';
+  document.getElementById('error-icon').textContent = icon;
+  document.getElementById('error-title').textContent = title;
+  document.getElementById('error-msg').textContent = msg;
+  document.getElementById('error-overlay').style.display = 'flex';
+}
+
+function hideLoading() {
+  document.getElementById('loading-overlay').style.display = 'none';
+  document.getElementById('topbar').style.display = '';
+  document.getElementById('main-layout').style.display = '';
+}
+
+// ── API helper ────────────────────────────────────────────────────────
+async function apiFetch(method, path, body) {
+  const opts = {
+    method,
+    headers: { 'Authorization': `Bearer ${authToken}`, 'Content-Type': 'application/json' }
+  };
+  if (body !== undefined) opts.body = JSON.stringify(body);
+  const res = await fetch(API + path, opts);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const err = new Error(data.error || data.message || `HTTP ${res.status}`);
+    err.status = res.status;
+    throw err;
+  }
+  return data;
+}
+
+// ── Stats ─────────────────────────────────────────────────────────────
+function updateStats() {
+  const list   = Object.values(participants);
+  const total  = list.length;
+  const conn   = list.filter(p => p.status === 'connected').length;
+  const flagged = list.filter(p => p.flagged).length;
+  const camOff = list.filter(p => p.cameraOff).length;
+
+  document.getElementById('stat-total').textContent     = total;
+  document.getElementById('stat-connected').textContent = conn;
+  document.getElementById('stat-flagged').textContent   = flagged;
+  document.getElementById('stat-camoff').textContent    = camOff;
+  document.getElementById('participant-count').textContent = total + ' participant' + (total === 1 ? '' : 's');
+}
+
+// ── Participant rendering ─────────────────────────────────────────────
+function statusDotClass(p) {
+  if (p.status === 'kicked')        return 'red';
+  if (p.status === 'disconnected')  return 'yellow';
+  if (p.status === 'waiting')       return 'gray';
+  return 'green';
+}
+
+function statusLabel(p) {
+  const map = { connected: 'Connected', disconnected: 'Disconnected', kicked: 'Kicked', waiting: 'Waiting' };
+  return map[p.status] || p.status || 'Unknown';
+}
+
+function connBarClass(quality) {
+  if (!quality || quality === 'good') return 'good';
+  if (quality === 'fair')             return 'fair';
+  return 'poor';
+}
+
+function roleClass(role) {
+  if (!role || role === 'student') return 'role-student';
+  if (role === 'lecturer' || role === 'instructor') return 'role-lecturer';
+  return 'role-guest';
+}
+
+function roleName(role) {
+  if (!role || role === 'student') return 'Student';
+  if (role === 'lecturer' || role === 'instructor') return 'Lecturer';
+  return 'Guest';
+}
+
+function renderParticipantCard(p) {
+  const col     = avatarColor(p.name || 'X');
+  const ini     = initials(p.name);
+  const dotCls  = statusDotClass(p);
+  const connCls = connBarClass(p.connectionQuality);
+  const rClass  = roleClass(p.role);
+  const rName   = roleName(p.role);
+
+  const camIcon    = p.cameraOff   ? '<span class="p-icon off" title="Camera Off">📹</span>'    : '<span class="p-icon active" title="Camera On">📹</span>';
+  const micIcon    = p.micMuted    ? '<span class="p-icon off" title="Mic Muted">🎙️</span>'     : '<span class="p-icon active" title="Mic Active">🎙️</span>';
+  const screenIcon = p.screenShare ? '<span class="p-icon active" title="Screen Sharing" style="filter:hue-rotate(180deg)">🖥️</span>' : '<span class="p-icon" title="No Screen Share">🖥️</span>';
+  const tabBadge   = (p.tabSwitches > 0) ? `<span class="p-tab-badge">${p.tabSwitches} tab${p.tabSwitches > 1 ? 's' : ''}</span>` : '';
+
+  const flagBtn   = p.flagged
+    ? `<button class="p-action-btn unflag-btn" onclick="unflagParticipant('${p.uid}',event)" title="Remove flag">🚩 Unflag</button>`
+    : `<button class="p-action-btn flag-btn"   onclick="flagParticipant('${p.uid}',event)"   title="Flag participant">🚩 Flag</button>`;
+
+  const warnBtn = `<button class="p-action-btn warn-btn" onclick="openWarnModal('${p.uid}',event)" title="Send warning">⚠️ Warn</button>`;
+  const kickBtn = p.status !== 'kicked'
+    ? `<button class="p-action-btn kick-btn" onclick="kickParticipant('${p.uid}',event)" title="Kick from meeting">✖ Kick</button>`
+    : `<button class="p-action-btn" disabled style="opacity:.3;cursor:not-allowed">✖ Kicked</button>`;
+
+  return `
+    <div class="p-card ${p.flagged ? 'flagged' : ''} ${p.status === 'kicked' ? 'kicked' : ''}" data-uid="${p.uid}" id="pcard-${p.uid}">
+      <div class="p-card-top">
+        <div class="p-avatar" style="background:${col}">${ini}</div>
+        <div class="p-info">
+          <div class="p-name">
+            <span>${escHtml(p.name || 'Unknown')}</span>
+            <span class="p-role-badge ${rClass}">${rName}</span>
+          </div>
+          <div class="p-status-row">
+            <div class="p-status-dot ${dotCls}"></div>
+            <span class="p-status-label">${statusLabel(p)}</span>
+            <div class="conn-bar ${connCls}" title="Connection: ${p.connectionQuality || 'good'}">
+              <span></span><span></span><span></span>
+            </div>
+            ${tabBadge}
+          </div>
+        </div>
+        <div class="p-media-icons">
+          ${camIcon}${micIcon}${screenIcon}
+        </div>
+      </div>
+      <div class="p-actions">
+        ${flagBtn}${warnBtn}${kickBtn}
+      </div>
+    </div>
+  `;
+}
+
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function renderParticipantList() {
+  const list    = Object.values(participants);
+  const query   = searchQuery.toLowerCase();
+  const visible = query ? list.filter(p => (p.name || '').toLowerCase().includes(query) || (p.role || '').toLowerCase().includes(query)) : list;
+
+  const container = document.getElementById('participant-list');
+  const skeleton  = document.getElementById('plist-skeleton');
+  if (skeleton) skeleton.remove();
+
+  if (!visible.length) {
+    container.innerHTML = `<div style="padding:24px;text-align:center;color:var(--slate);font-size:13px">${query ? 'No participants match your search' : 'No participants yet'}</div>`;
+    updateStats();
+    return;
+  }
+
+  // Sort: connected first, then by name
+  visible.sort((a, b) => {
+    const order = { connected: 0, waiting: 1, disconnected: 2, kicked: 3 };
+    const ao = order[a.status] ?? 1, bo = order[b.status] ?? 1;
+    if (ao !== bo) return ao - bo;
+    return (a.name || '').localeCompare(b.name || '');
+  });
+
+  container.innerHTML = visible.map(renderParticipantCard).join('');
+  updateStats();
+}
+
+function filterParticipants(q) {
+  searchQuery = q;
+  renderParticipantList();
+}
+
+// ── Update single participant card in-place ───────────────────────────
+function patchParticipantCard(uid) {
+  const p    = participants[uid];
+  const card = document.getElementById('pcard-' + uid);
+  if (!card || !p) {
+    renderParticipantList();
+    return;
+  }
+  const tmp = document.createElement('div');
+  tmp.innerHTML = renderParticipantCard(p);
+  const newCard = tmp.firstElementChild;
+  card.replaceWith(newCard);
+}
+
+// ── Apply full snapshot ───────────────────────────────────────────────
+function applySnapshot(list) {
+  participants = {};
+  (list || []).forEach(p => { participants[p.uid] = p; });
+  renderParticipantList();
+}
+
+// ── Event log ─────────────────────────────────────────────────────────
+const EV_TYPE_CLASS = {
+  join: 'ev-join', leave: 'ev-leave', flag: 'ev-flag', warn: 'ev-warn',
+  kick: 'ev-kick', lock: 'ev-lock', unlock: 'ev-lock', system: 'ev-system',
+};
+
+function addEvent(type, msg) {
+  const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  eventLog.unshift({ type, msg, time: now });
+  if (eventLog.length > 50) eventLog.length = 50;
+  renderEventLog();
+}
+
+function renderEventLog() {
+  const list = document.getElementById('event-log-list');
+  if (!eventLog.length) {
+    list.innerHTML = '<div style="padding:12px;text-align:center;color:var(--slate);font-size:12px">No events yet</div>';
+    return;
+  }
+  list.innerHTML = eventLog.map(ev => `
+    <div class="log-entry ${EV_TYPE_CLASS[ev.type] || 'ev-system'}">
+      <span class="log-time">${ev.time}</span>
+      <span class="log-msg">${escHtml(ev.msg)}</span>
+    </div>`).join('');
+}
+
+function clearEventLog() {
+  eventLog = [];
+  renderEventLog();
+}
+
+// ── Actions ───────────────────────────────────────────────────────────
+async function flagParticipant(uid, e) {
+  if (e) e.stopPropagation();
+  const p = participants[uid];
+  if (!p) return;
+  try {
+    await apiFetch('POST', `/api/meetings/${meetingId}/participants/${uid}/flag`, { reason: 'Flagged by invigilator' });
+    participants[uid] = { ...p, flagged: true };
+    patchParticipantCard(uid);
+    updateStats();
+    addEvent('flag', `${p.name} was flagged`);
+    toast(`${p.name} flagged`, 'info');
+  } catch (err) {
+    toast('Flag failed: ' + err.message, 'error');
+  }
+}
+
+async function unflagParticipant(uid, e) {
+  if (e) e.stopPropagation();
+  const p = participants[uid];
+  if (!p) return;
+  try {
+    await apiFetch('POST', `/api/meetings/${meetingId}/participants/${uid}/unflag`);
+    participants[uid] = { ...p, flagged: false };
+    patchParticipantCard(uid);
+    updateStats();
+    addEvent('flag', `${p.name} flag removed`);
+    toast(`${p.name} unflagged`, 'success');
+  } catch (err) {
+    toast('Unflag failed: ' + err.message, 'error');
+  }
+}
+
+function openWarnModal(uid, e) {
+  if (e) e.stopPropagation();
+  warnTargetUid = uid;
+  const p = participants[uid];
+  document.getElementById('warn-modal').querySelector('h3').textContent = `Warn: ${p ? p.name : 'Participant'}`;
+  document.getElementById('warn-message').value = '';
+  document.getElementById('warn-modal-backdrop').classList.add('open');
+  setTimeout(() => document.getElementById('warn-message').focus(), 80);
+}
+
+function closeWarnModal() {
+  document.getElementById('warn-modal-backdrop').classList.remove('open');
+  warnTargetUid = null;
+}
+
+async function submitWarn() {
+  const uid = warnTargetUid;
+  if (!uid) return;
+  const msg = document.getElementById('warn-message').value.trim();
+  if (!msg) { toast('Enter a warning message', 'error'); return; }
+  const p = participants[uid];
+  try {
+    await apiFetch('POST', `/api/meetings/${meetingId}/participants/${uid}/warn`, { message: msg });
+    addEvent('warn', `Warning sent to ${p ? p.name : uid}: "${msg}"`);
+    toast(`Warning sent to ${p ? p.name : uid}`, 'success');
+    closeWarnModal();
+  } catch (err) {
+    toast('Warn failed: ' + err.message, 'error');
+  }
+}
+
+async function kickParticipant(uid, e) {
+  if (e) e.stopPropagation();
+  const p = participants[uid];
+  if (!confirm(`Remove ${p ? p.name : 'this participant'} from the meeting?`)) return;
+  try {
+    await apiFetch('POST', `/api/meetings/${meetingId}/participants/${uid}/kick`);
+    participants[uid] = { ...p, status: 'kicked' };
+    patchParticipantCard(uid);
+    updateStats();
+    addEvent('kick', `${p ? p.name : uid} was kicked`);
+    toast(`${p ? p.name : uid} removed from meeting`, 'info');
+  } catch (err) {
+    toast('Kick failed: ' + err.message, 'error');
+  }
+}
+
+// ── Lock/Unlock ───────────────────────────────────────────────────────
+async function toggleLock() {
+  if (meetingEnded) return;
+  const action = isLocked ? 'unlock' : 'lock';
+  try {
+    await apiFetch('POST', `/api/meetings/${meetingId}/${action}`);
+    isLocked = !isLocked;
+    updateLockUI();
+    addEvent('lock', isLocked ? 'Room locked — no new participants can join' : 'Room unlocked');
+    toast(isLocked ? 'Room locked' : 'Room unlocked', 'info');
+  } catch (err) {
+    toast('Action failed: ' + err.message, 'error');
+  }
+}
+
+function updateLockUI() {
+  const btn   = document.getElementById('lock-btn');
+  const icon  = document.getElementById('lock-icon');
+  const label = document.getElementById('lock-label');
+  if (!btn) return;
+  if (isLocked) {
+    btn.classList.add('btn-lock-active');
+    btn.classList.remove('btn-ghost');
+    icon.textContent  = '🔓';
+    label.textContent = 'Unlock Room';
+  } else {
+    btn.classList.remove('btn-lock-active');
+    btn.classList.add('btn-ghost');
+    icon.textContent  = '🔒';
+    label.textContent = 'Lock Room';
+  }
+}
+
+// ── End Meeting ───────────────────────────────────────────────────────
+async function endMeeting() {
+  if (meetingEnded) return;
+  if (!confirm('End this meeting for ALL participants? This cannot be undone.')) return;
+  try {
+    await apiFetch('POST', `/api/meetings/${meetingId}/end`);
+    handleMeetingEnded();
+  } catch (err) {
+    toast('Failed to end meeting: ' + err.message, 'error');
+  }
+}
+
+function handleMeetingEnded() {
+  meetingEnded = true;
+  const banner = document.getElementById('ended-banner');
+  if (banner) { banner.style.display = 'flex'; }
+  document.getElementById('end-btn').disabled  = true;
+  document.getElementById('lock-btn').disabled = true;
+  addEvent('system', 'Meeting ended');
+  toast('Meeting has ended', 'info');
+  stopHeartbeat();
+  if (sseSource) { sseSource.close(); sseSource = null; }
+}
+
+// ── SSE ───────────────────────────────────────────────────────────────
+function connectSSE() {
+  if (sseSource) { sseSource.close(); }
+  const url = `${API}/api/meetings/${meetingId}/monitor/stream?token=${encodeURIComponent(authToken)}`;
+  sseSource = new EventSource(url);
+
+  sseSource.addEventListener('snapshot', e => {
+    try {
+      const payload = JSON.parse(e.data);
+      applySnapshot(payload.participants || payload);
+    } catch {}
+  });
+
+  sseSource.addEventListener('participant_status', e => {
+    try {
+      const p = JSON.parse(e.data);
+      if (!p || !p.uid) return;
+      const existing = participants[p.uid] || {};
+      participants[p.uid] = { ...existing, ...p };
+      patchParticipantCard(p.uid);
+      updateStats();
+    } catch {}
+  });
+
+  sseSource.addEventListener('participant_flagged', e => {
+    try {
+      const d = JSON.parse(e.data);
+      if (!d || !d.uid) return;
+      if (participants[d.uid]) {
+        participants[d.uid].flagged = d.flagged !== false;
+        patchParticipantCard(d.uid);
+        updateStats();
+        addEvent('flag', `${participants[d.uid].name} ${d.flagged !== false ? 'flagged' : 'unflagged'}`);
+      }
+    } catch {}
+  });
+
+  sseSource.addEventListener('warning_sent', e => {
+    try {
+      const d = JSON.parse(e.data);
+      const name = (d && d.uid && participants[d.uid]) ? participants[d.uid].name : (d && d.uid ? d.uid : 'Participant');
+      addEvent('warn', `Warning sent to ${name}` + (d && d.message ? `: "${d.message}"` : ''));
+    } catch {}
+  });
+
+  sseSource.addEventListener('participant_kicked', e => {
+    try {
+      const d = JSON.parse(e.data);
+      if (!d || !d.uid) return;
+      const p = participants[d.uid];
+      if (p) {
+        participants[d.uid] = { ...p, status: 'kicked' };
+        patchParticipantCard(d.uid);
+        updateStats();
+        addEvent('kick', `${p.name} was removed from the meeting`);
+      }
+    } catch {}
+  });
+
+  sseSource.addEventListener('participant_joined', e => {
+    try {
+      const p = JSON.parse(e.data);
+      if (!p || !p.uid) return;
+      participants[p.uid] = { ...participants[p.uid], ...p };
+      renderParticipantList();
+      addEvent('join', `${p.name || p.uid} joined the meeting`);
+    } catch {}
+  });
+
+  sseSource.addEventListener('participant_left', e => {
+    try {
+      const d = JSON.parse(e.data);
+      if (!d || !d.uid) return;
+      const p = participants[d.uid];
+      if (p) {
+        participants[d.uid] = { ...p, status: 'disconnected' };
+        patchParticipantCard(d.uid);
+        updateStats();
+        addEvent('leave', `${p.name} left the meeting`);
+      }
+    } catch {}
+  });
+
+  sseSource.addEventListener('room_locked', e => {
+    try {
+      const d = JSON.parse(e.data);
+      isLocked = d && d.locked !== false;
+      updateLockUI();
+      addEvent('lock', isLocked ? 'Room locked' : 'Room unlocked');
+    } catch {}
+  });
+
+  sseSource.addEventListener('meeting_ended', () => {
+    handleMeetingEnded();
+  });
+
+  sseSource.onerror = () => {
+    // SSE will auto-reconnect; do nothing except log
+  };
+}
+
+// ── Heartbeat ─────────────────────────────────────────────────────────
+function startHeartbeat() {
+  stopHeartbeat();
+  heartbeatTimer = setInterval(async () => {
+    if (meetingEnded) { stopHeartbeat(); return; }
+    try {
+      await apiFetch('POST', `/api/meetings/${meetingId}/participants/status`, {
+        cameraOff: false,
+        micMuted: false,
+        connectionQuality: 'good'
+      });
+    } catch {}
+  }, 10000);
+}
+
+function stopHeartbeat() {
+  if (heartbeatTimer) { clearInterval(heartbeatTimer); heartbeatTimer = null; }
+}
+
+// ── Jitsi embed ───────────────────────────────────────────────────────
+function loadJitsi(jitsiConfig, jitsiToken, selfHosted) {
+  const domain = jitsiConfig.domain || jitsiConfig.serverUrl || 'meet.jit.si';
+  const cleanDomain = domain.replace(/^https?:\/\//, '').replace(/\/$/, '');
+  const scriptSrc   = `https://${cleanDomain}/external_api.js`;
+
+  const script = document.createElement('script');
+  script.src   = scriptSrc;
+  script.onerror = () => {
+    document.getElementById('jitsi-placeholder').innerHTML = `
+      <div class="icon">⚠️</div>
+      <p>Could not load Jitsi video embed. The meeting is still active — use a separate browser tab to join.</p>`;
+  };
+  script.onload = () => {
+    try {
+      const container = document.getElementById('jitsi-container');
+      const opts = {
+        roomName:      jitsiConfig.roomName || meetingId,
+        width:         '100%',
+        height:        '100%',
+        parentNode:    container,
+        userInfo:      { displayName: jitsiConfig.displayName || 'Invigilator' },
+        configOverwrite: Object.assign({
+          startWithAudioMuted: false,
+          startWithVideoMuted: false,
+          enableWelcomePage:   false,
+          prejoinPageEnabled:  false,
+        }, jitsiConfig.configOverwrite || {}),
+        interfaceConfigOverwrite: Object.assign({
+          TOOLBAR_BUTTONS: [
+            'microphone','camera','closedcaptions','desktop','fullscreen',
+            'fodeviceselection','hangup','chat','recording','raisehand',
+            'videoquality','filmstrip','invite','feedback','stats','shortcuts',
+            'tileview','select-background','mute-everyone','security'
+          ],
+          SHOW_JITSI_WATERMARK:     false,
+          SHOW_WATERMARK_FOR_GUESTS: false,
+        }, jitsiConfig.interfaceConfigOverwrite || {}),
+      };
+
+      if (selfHosted && jitsiToken) {
+        opts.jwt = jitsiToken;
+      }
+
+      // Remove placeholder
+      const placeholder = document.getElementById('jitsi-placeholder');
+      if (placeholder) placeholder.remove();
+
+      jitsiAPI = new window.JitsiMeetExternalAPI(cleanDomain, opts);
+
+      jitsiAPI.addEventListener('audioMuteStatusChanged', ({ muted }) => {
+        apiFetch('POST', `/api/meetings/${meetingId}/participants/status`, {
+          micMuted: muted, cameraOff: false, connectionQuality: 'good'
+        }).catch(() => {});
+      });
+
+      jitsiAPI.addEventListener('videoMuteStatusChanged', ({ muted }) => {
+        apiFetch('POST', `/api/meetings/${meetingId}/participants/status`, {
+          cameraOff: muted, micMuted: false, connectionQuality: 'good'
+        }).catch(() => {});
+      });
+
+      jitsiAPI.addEventListener('participantJoined', ({ id, displayName }) => {
+        addEvent('join', `${displayName || id} joined`);
+      });
+
+      jitsiAPI.addEventListener('participantLeft', ({ id }) => {
+        const p = Object.values(participants).find(pp => pp.jitsiId === id || pp.uid === id);
+        addEvent('leave', `${p ? p.name : id} left`);
+      });
+
+      jitsiAPI.addEventListener('participantKickedOut', ({ kicked }) => {
+        addEvent('kick', `Participant ${kicked.id} was kicked`);
+      });
+
+      jitsiAPI.addEventListener('readyToClose', () => {
+        if (!meetingEnded) handleMeetingEnded();
+      });
+
+    } catch (err) {
+      const placeholder = document.getElementById('jitsi-placeholder');
+      if (placeholder) placeholder.innerHTML = `
+        <div class="icon">⚠️</div>
+        <p>Jitsi embed failed to start: ${escHtml(err.message)}</p>`;
+    }
+  };
+  document.head.appendChild(script);
+}
+
+// ── Initial data load ─────────────────────────────────────────────────
+async function init() {
+  if (!authToken) {
+    showError('🔒', 'Not Signed In', 'No authentication token found. Please log in from the main portal first.');
+    return;
+  }
+  if (!meetingId) {
+    showError('❌', 'No Meeting ID', 'Please provide a ?meeting= parameter in the URL.');
+    return;
+  }
+
+  // Load monitor data (this also enforces moderator access — 403 if not a moderator)
+  try {
+    const data = await apiFetch('GET', `/api/meetings/${meetingId}/monitor`);
+    const { meeting, participants: pList, stats } = data.data || data;
+
+    meetingData = meeting || {};
+    isLocked    = !!(meetingData.locked || meetingData.isLocked);
+
+    // Populate header
+    document.getElementById('meeting-title').textContent = meetingData.title || meetingData.name || 'Live Meeting';
+    document.getElementById('meeting-meta').textContent  = [
+      meetingData.code && `Code: ${meetingData.code}`,
+      meetingData.course && meetingData.course.name,
+      meetingData.startTime && `Started ${new Date(meetingData.startTime).toLocaleTimeString()}`,
+    ].filter(Boolean).join(' · ') || 'Live Meeting Monitor';
+
+    document.getElementById('lock-btn').style.display = '';
+    updateLockUI();
+
+    applySnapshot(pList || []);
+
+    // Check if already ended
+    if (meetingData.status === 'ended' || meetingData.ended) {
+      handleMeetingEnded();
+    }
+  } catch (err) {
+    if (err.status === 403 || err.status === 401) {
+      showError('🚫', 'Not Authorised', 'You do not have permission to monitor this meeting.');
+      return;
+    } else if (err.status === 404) {
+      showError('🔍', 'Meeting Not Found', 'This meeting could not be found.');
+      return;
+    }
+    // Non-fatal — show with empty state
+    document.getElementById('meeting-title').textContent = 'Live Meeting';
+    document.getElementById('meeting-meta').textContent  = 'Monitor · ID: ' + meetingId;
+    document.getElementById('lock-btn').style.display = '';
+    renderParticipantList();
+    addEvent('system', 'Warning: could not load initial meeting data — ' + err.message);
+  }
+
+  // Load Jitsi embed
+  try {
+    const jd = await apiFetch('GET', `/api/meetings/${meetingId}/join`);
+    const { jitsiConfig, jitsiToken, selfHosted } = jd.data || jd;
+    if (jitsiConfig) loadJitsi(jitsiConfig, jitsiToken, selfHosted);
+    else throw new Error('No jitsiConfig in response');
+  } catch (err) {
+    document.getElementById('jitsi-placeholder').innerHTML = `
+      <div class="icon">📹</div>
+      <p>Live video embed is unavailable. Participants can still join via their own link.</p>
+      <p style="font-size:12px;color:var(--navy3);margin-top:8px">${escHtml(err.message)}</p>`;
+  }
+
+  // Show the page
+  hideLoading();
+  addEvent('system', 'Monitor session started');
+
+  // Connect SSE and heartbeat
+  if (!meetingEnded) {
+    connectSSE();
+    startHeartbeat();
+  }
+}
+
+// ── Keyboard shortcuts ────────────────────────────────────────────────
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    if (document.getElementById('warn-modal-backdrop').classList.contains('open')) {
+      closeWarnModal();
+    }
+  }
+});
+
+// Click outside warn modal to close
+document.getElementById('warn-modal-backdrop').addEventListener('click', function(e) {
+  if (e.target === this) closeWarnModal();
+});
+
+// ── Boot ──────────────────────────────────────────────────────────────
+init();
+</script>
+</body>
+</html>
