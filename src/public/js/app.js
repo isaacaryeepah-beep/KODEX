@@ -7052,17 +7052,27 @@ async function startMeeting(id) {
   }
 }
 
+const PROCTORED_TYPES = ['proctored_quiz', 'snap_quiz', 'oral_exam', 'live_assessment'];
+
 async function joinMeeting(id) {
   try {
     const data        = await api(`/api/meetings/${id}/join`);
     const d           = data.data || data;
     const jitsiConfig = d.jitsiConfig;
     const jitsiToken  = d.jitsiToken;
+    const isMod       = d.isModerator;
+    const meetingType = d.meeting?.meetingType || '';
 
-    if (jitsiConfig?.roomName) {
-      showJitsiEmbed(jitsiConfig, jitsiToken);
-    } else {
+    if (!jitsiConfig?.roomName) {
       toastError('No Jitsi config returned — contact your admin');
+      return;
+    }
+
+    const needsProctoring = PROCTORED_TYPES.includes(meetingType) && !isMod;
+    if (needsProctoring) {
+      showProctoredJoinStaging(id, jitsiConfig, jitsiToken);
+    } else {
+      showJitsiEmbed(jitsiConfig, jitsiToken);
     }
   } catch (e) {
     const msg = e.message || 'Failed to join meeting';
@@ -7077,6 +7087,202 @@ async function joinMeeting(id) {
     }
     renderMeetings();
   }
+}
+
+// ── PROCTORING HELPERS ────────────────────────────────────────────────────────
+
+let _antiCheatMeetingId  = null;
+let _antiCheatListeners  = {};
+let _antiCheatFullscreen = false;
+
+function _postProctoringEvent(meetingId, type, metadata) {
+  const tok = localStorage.getItem('dikly_token');
+  if (!tok || !meetingId) return;
+  fetch(`/api/meetings/${meetingId}/proctoring/event`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${tok}` },
+    body: JSON.stringify({ type, metadata: metadata || null }),
+  }).catch(() => {});
+}
+
+function startMeetingAntiCheat(meetingId) {
+  stopMeetingAntiCheat();
+  _antiCheatMeetingId = meetingId;
+
+  _antiCheatListeners.visibility = () => {
+    if (document.hidden) _postProctoringEvent(meetingId, 'tab_switch', null);
+  };
+  _antiCheatListeners.fullscreen = () => {
+    const inFS = !!(document.fullscreenElement || document.webkitFullscreenElement);
+    if (_antiCheatFullscreen && !inFS) _postProctoringEvent(meetingId, 'fullscreen_exit', null);
+    if (!_antiCheatFullscreen && inFS) _postProctoringEvent(meetingId, 'fullscreen_enter', null);
+    _antiCheatFullscreen = inFS;
+  };
+
+  document.addEventListener('visibilitychange', _antiCheatListeners.visibility);
+  document.addEventListener('fullscreenchange', _antiCheatListeners.fullscreen);
+  document.addEventListener('webkitfullscreenchange', _antiCheatListeners.fullscreen);
+
+  _postProctoringEvent(meetingId, 'session_start', null);
+}
+
+function stopMeetingAntiCheat() {
+  if (_antiCheatListeners.visibility) {
+    document.removeEventListener('visibilitychange', _antiCheatListeners.visibility);
+  }
+  if (_antiCheatListeners.fullscreen) {
+    document.removeEventListener('fullscreenchange', _antiCheatListeners.fullscreen);
+    document.removeEventListener('webkitfullscreenchange', _antiCheatListeners.fullscreen);
+  }
+  _antiCheatListeners  = {};
+  _antiCheatMeetingId  = null;
+  _antiCheatFullscreen = false;
+}
+
+function showProctoredJoinStaging(meetingId, jitsiConfig, jitsiToken) {
+  document.getElementById('proctored-staging-overlay')?.remove();
+
+  const overlay = document.createElement('div');
+  overlay.id = 'proctored-staging-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:10000;background:#0f172a;display:flex;align-items:center;justify-content:center;';
+  overlay.innerHTML = `
+    <div style="background:#1e293b;border-radius:16px;padding:32px;max-width:440px;width:90%;box-shadow:0 25px 60px rgba(0,0,0,0.5);">
+      <div style="text-align:center;margin-bottom:24px;">
+        <div style="font-size:36px;margin-bottom:8px;">🔒</div>
+        <h2 style="color:#f1f5f9;margin:0 0 6px;font-size:18px;font-weight:700;">Proctored Session Check</h2>
+        <p style="color:#94a3b8;margin:0;font-size:13px;">Complete all checks before joining</p>
+      </div>
+
+      <div id="staging-checklist" style="display:flex;flex-direction:column;gap:10px;margin-bottom:24px;">
+        <div id="check-camera" class="staging-check" style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:10px;background:#0f172a;">
+          <span id="check-camera-icon" style="font-size:18px;">⏳</span>
+          <span style="color:#cbd5e1;font-size:13px;flex:1;">Camera access</span>
+          <span id="check-camera-status" style="font-size:11px;color:#64748b;">Checking…</span>
+        </div>
+        <div id="check-mic" class="staging-check" style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:10px;background:#0f172a;">
+          <span id="check-mic-icon" style="font-size:18px;">⏳</span>
+          <span style="color:#cbd5e1;font-size:13px;flex:1;">Microphone access</span>
+          <span id="check-mic-status" style="font-size:11px;color:#64748b;">Checking…</span>
+        </div>
+        <div id="check-anticheat" class="staging-check" style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:10px;background:#0f172a;">
+          <span id="check-anticheat-icon" style="font-size:18px;">⏳</span>
+          <span style="color:#cbd5e1;font-size:13px;flex:1;">Anti-cheat monitoring</span>
+          <span id="check-anticheat-status" style="font-size:11px;color:#64748b;">Pending…</span>
+        </div>
+      </div>
+
+      <div id="staging-preview" style="display:none;margin-bottom:16px;border-radius:10px;overflow:hidden;background:#000;aspect-ratio:16/9;max-height:180px;">
+        <video id="staging-video" autoplay muted playsinline style="width:100%;height:100%;object-fit:cover;"></video>
+      </div>
+
+      <div id="staging-error" style="display:none;background:#7f1d1d;border-radius:8px;padding:10px 14px;color:#fca5a5;font-size:12px;margin-bottom:16px;"></div>
+
+      <div style="display:flex;gap:10px;">
+        <button id="staging-cancel-btn" onclick="document.getElementById('proctored-staging-overlay').remove();renderMeetings();"
+          style="flex:1;background:#334155;color:#cbd5e1;border:none;padding:11px;border-radius:9px;font-weight:600;cursor:pointer;font-size:14px;">
+          Cancel
+        </button>
+        <button id="staging-join-btn" disabled
+          style="flex:2;background:#3b82f6;color:#fff;border:none;padding:11px;border-radius:9px;font-weight:700;cursor:pointer;font-size:14px;opacity:0.5;"
+          onclick="_proctoredConfirmJoin('${meetingId}')">
+          Join Session
+        </button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  // Store config so the confirm handler can reach it
+  overlay._jitsiConfig = jitsiConfig;
+  overlay._jitsiToken  = jitsiToken;
+
+  _runStagingChecks(meetingId);
+}
+
+async function _runStagingChecks(meetingId) {
+  let cameraOk = false;
+  let micOk    = false;
+  let stream   = null;
+
+  const setCheck = (id, ok, label) => {
+    const icon   = document.getElementById(`check-${id}-icon`);
+    const status = document.getElementById(`check-${id}-status`);
+    const row    = document.getElementById(`check-${id}`);
+    if (!icon) return;
+    icon.textContent   = ok ? '✅' : '❌';
+    status.textContent = label;
+    row.style.background = ok ? 'rgba(34,197,94,0.08)' : 'rgba(239,68,68,0.08)';
+  };
+
+  // Camera check
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+    cameraOk = true;
+    micOk    = true;
+    setCheck('camera', true, 'Allowed');
+    setCheck('mic',    true, 'Allowed');
+
+    const preview = document.getElementById('staging-preview');
+    const video   = document.getElementById('staging-video');
+    if (preview && video) {
+      video.srcObject = stream;
+      preview.style.display = 'block';
+    }
+  } catch (err) {
+    const errEl = document.getElementById('staging-error');
+    if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+      setCheck('camera', false, 'Denied');
+      setCheck('mic',    false, 'Denied');
+      if (errEl) {
+        errEl.style.display = 'block';
+        errEl.textContent = 'Camera and microphone access was denied. Please allow access in your browser settings and try again.';
+      }
+    } else if (err.name === 'NotFoundError') {
+      setCheck('camera', false, 'Not found');
+      setCheck('mic',    false, 'Not found');
+      if (errEl) {
+        errEl.style.display = 'block';
+        errEl.textContent = 'No camera or microphone detected. Connect a device and try again.';
+      }
+    } else {
+      setCheck('camera', false, err.message);
+      setCheck('mic',    false, err.message);
+      if (errEl) { errEl.style.display = 'block'; errEl.textContent = err.message; }
+    }
+  }
+
+  // Anti-cheat check (always succeeds — just activating monitoring)
+  setCheck('anticheat', true, 'Active');
+
+  // Enable join button only if both camera and mic are OK
+  if (cameraOk && micOk) {
+    const btn = document.getElementById('staging-join-btn');
+    if (btn) { btn.disabled = false; btn.style.opacity = '1'; }
+  }
+
+  // Stop preview stream when overlay is removed so camera light turns off
+  const overlay = document.getElementById('proctored-staging-overlay');
+  if (overlay && stream) {
+    overlay._previewStream = stream;
+  }
+}
+
+function _proctoredConfirmJoin(meetingId) {
+  const overlay = document.getElementById('proctored-staging-overlay');
+  if (!overlay) return;
+
+  // Stop preview stream
+  if (overlay._previewStream) {
+    overlay._previewStream.getTracks().forEach(t => t.stop());
+    overlay._previewStream = null;
+  }
+
+  const jitsiConfig = overlay._jitsiConfig;
+  const jitsiToken  = overlay._jitsiToken;
+  overlay.remove();
+
+  startMeetingAntiCheat(meetingId);
+  showJitsiEmbed(jitsiConfig, jitsiToken);
 }
 
 function showJitsiEmbed(config, jitsiToken) {
@@ -7164,6 +7370,7 @@ function _initJitsiEmbed(config, domain, jitsiToken) {
 }
 
 function leaveJitsiMeeting() {
+  stopMeetingAntiCheat();
   if (window._jitsiApi) { try { window._jitsiApi.dispose(); } catch(e) {} window._jitsiApi = null; }
   document.getElementById('jitsi-room-overlay')?.remove();
   renderMeetings();

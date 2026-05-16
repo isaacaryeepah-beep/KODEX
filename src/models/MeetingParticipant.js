@@ -30,8 +30,22 @@ const participantSchema = new mongoose.Schema({
   connectionQuality: { type: String, enum: ['good','poor','critical','unknown'], default: 'unknown' },
 
   // Anti-cheat counters
-  tabSwitchCount: { type: Number, default: 0 },
-  reconnectCount: { type: Number, default: 0 },
+  tabSwitchCount:      { type: Number, default: 0 },
+  reconnectCount:      { type: Number, default: 0 },
+  fullscreenExitCount: { type: Number, default: 0 },
+  networkDropCount:    { type: Number, default: 0 },
+
+  // Proctoring risk score (0–100, computed from events)
+  riskScore:           { type: Number, default: 0, min: 0, max: 100 },
+  faceDetectionStatus: { type: String, enum: ['ok','no_face','multiple_faces','unknown'], default: 'unknown' },
+
+  // Last 5 screenshot thumbnails captured during session
+  recentScreenshots: [{
+    url:         String,
+    thumbnailUrl:String,
+    capturedAt:  { type: Date, default: Date.now },
+    _id:         false,
+  }],
 
   // Moderation
   isFlagged: { type: Boolean, default: false },

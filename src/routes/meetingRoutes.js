@@ -2,9 +2,10 @@
 const express = require('express');
 const router  = express.Router();
 
-const meetCtrl      = require('../controllers/meetingController');
-const attendCtrl    = require('../controllers/meetingAttendanceController');
-const monitorCtrl   = require('../controllers/meetingMonitorController');
+const meetCtrl       = require('../controllers/meetingController');
+const attendCtrl     = require('../controllers/meetingAttendanceController');
+const monitorCtrl    = require('../controllers/meetingMonitorController');
+const proctoringCtrl = require('../controllers/proctoringController');
 
 const authenticate        = require('../middleware/auth');
 const { companyIsolation } = require('../middleware/companyIsolation');
@@ -69,6 +70,14 @@ router.post('/:id/participants/:uid/flag',   loadMeeting, isModerator, monitorCt
 router.post('/:id/participants/:uid/unflag', loadMeeting, isModerator, monitorCtrl.unflagParticipant);
 router.post('/:id/participants/:uid/warn',   loadMeeting, isModerator, monitorCtrl.sendWarning);
 router.post('/:id/participants/:uid/kick',   loadMeeting, isModerator, monitorCtrl.kickParticipant);
+
+// ─── PROCTORING ───────────────────────────────────────────────────────────────
+// Student posts a monitoring event (tab switch, fullscreen exit, face detection, etc.)
+router.post('/:id/proctoring/event',            proctoringCtrl.postEvent);
+// Invigilator gets detailed event log + screenshots for one participant
+router.get('/:id/proctoring/student/:uid',      loadMeeting, isModerator, proctoringCtrl.getStudentDetail);
+// Invigilator gets session-level analytics (risk distribution, event counts)
+router.get('/:id/proctoring/analytics',         loadMeeting, isModerator, proctoringCtrl.getAnalytics);
 
 // ─── ATTENDANCE ───────────────────────────────────────────────────────────────
 router.post('/:id/attendance/join',  loadMeeting, requireNoDeviceLock, canJoin, attendCtrl.joinAttendance);
