@@ -586,7 +586,7 @@ exports.reportViolation = async (req, res) => {
     const { violationType, occurredAt, detail, snapshotUrl } = req.body;
 
     // Determine severity and whether this type is enforced.
-    const isCriticalType = _isCriticalViolation(violationType, quiz);
+    const isCriticalType = _isCriticalViolation(violationType);
     const severity = isCriticalType
       ? VIOLATION_SEVERITIES.CRITICAL
       : VIOLATION_SEVERITIES.INFO;
@@ -604,14 +604,12 @@ exports.reportViolation = async (req, res) => {
       );
     }
 
-    // Check termination threshold.
-    const maxViolations = quiz?.maxViolationsBeforeTermination || 0;
-    const causedTermination = maxViolations > 0 && newCount >= maxViolations && isCriticalType;
+    // Check termination threshold — strictly 4 critical violations.
+    const maxViolations = 4;
+    const causedTermination = newCount >= maxViolations && isCriticalType;
     const actionTaken = causedTermination
       ? ACTIONS_TAKEN.TERMINATED
-      : isCriticalType
-        ? (quiz?.showViolationWarnings ? ACTIONS_TAKEN.WARNED : ACTIONS_TAKEN.COUNTED)
-        : ACTIONS_TAKEN.LOGGED;
+      : ACTIONS_TAKEN.WARNED;
 
     // Log the violation.
     await SnapQuizViolationLog.create({
@@ -638,10 +636,9 @@ exports.reportViolation = async (req, res) => {
       acknowledged:               true,
       warned:                     actionTaken === ACTIONS_TAKEN.WARNED,
       terminated:                 causedTermination,
+      critical:                   isCriticalType,
       violationCount:             newCount,
-      remainingBeforeTermination: maxViolations > 0
-        ? Math.max(0, maxViolations - newCount)
-        : null,
+      remainingBeforeTermination: Math.max(0, maxViolations - newCount),
     });
   } catch (err) {
     console.error("[snapQuiz student reportViolation]", err);

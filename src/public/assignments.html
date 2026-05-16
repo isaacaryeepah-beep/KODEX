@@ -3,6 +3,8 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
+<meta http-equiv="Pragma" content="no-cache"/>
 <title>Assignments — DIKLY</title>
   <link rel="icon" type="image/svg+xml" href="/dikly-icon.svg">
 <link rel="stylesheet" href="/css/style.css"/>
@@ -12,6 +14,7 @@ window.MathJax = { tex: { inlineMath: [['\\(','\\)']], displayMath: [['\\[','\\]
 <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js"></script>
 <style>
 /* ── Local styles for assignment-specific UI ── */
+@keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.5;transform:scale(1.4)} }
 
 /* Main shell reuses style.css layout classes:
    #dashboard-page, .topbar, .main-layout, .sidebar, .sidebar-nav,
@@ -229,19 +232,10 @@ window.MathJax = { tex: { inlineMath: [['\\(','\\)']], displayMath: [['\\[','\\]
 
     <div style="height:1px; background:rgba(255,255,255,.1); margin:8px 16px;"></div>
 
-    <div class="sidebar-section-title">Navigation</div>
     <nav class="sidebar-nav" id="sidebar-nav">
       <a onclick="location.href='/index.html'">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
         <span>Dashboard</span>
-      </a>
-      <a class="active" onclick="switchTab('assignments')" id="nav-assignments">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
-        <span>Assignments</span>
-      </a>
-      <a onclick="switchTab('quizzes')" id="nav-quizzes">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c0 2 4 3 6 3s6-1 6-3v-5"/></svg>
-        <span>Quizzes</span>
       </a>
     </nav>
   </aside>
@@ -331,7 +325,7 @@ window.MathJax = { tex: { inlineMath: [['\\(','\\)']], displayMath: [['\\[','\\]
   </div>
   <div class="drawer-foot">
     <button class="btn btn-secondary" onclick="closeDrawers()">Cancel</button>
-    <button class="btn btn-primary" id="save-btn" onclick="saveAssignment()">
+    <button class="btn btn-primary btn-block" id="save-btn" onclick="saveAssignment()">
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
       Save Assignment
     </button>
@@ -356,7 +350,7 @@ window.MathJax = { tex: { inlineMath: [['\\(','\\)']], displayMath: [['\\[','\\]
   <div class="drawer-body" id="stu-body"><div class="loading">Loading…</div></div>
   <div class="drawer-foot" id="stu-foot" style="display:none">
     <button class="btn btn-secondary" onclick="closeDrawers()">Close</button>
-    <button class="btn btn-primary" id="stu-submit-btn" onclick="submitAssignment()">
+    <button class="btn btn-primary btn-block" id="stu-submit-btn" onclick="submitAssignment()">
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
       Submit Assignment
     </button>
@@ -438,11 +432,14 @@ async function init(){
     $('portal-title').textContent=isLecturer?'Lecturer Portal':'Student Portal';
     if(S.user.company?.name) { const cn=$('company-name'); if(cn) cn.textContent='— '+S.user.company.name; }
 
+    const tabParam = new URLSearchParams(location.search).get('tab');
     if(isLecturer){
       await loadCourses();
-      await renderLecturerPage();
+      if(tabParam === 'quizzes') await renderQuizzesPanel();
+      else await renderLecturerPage();
     } else {
-      await renderStudentPage();
+      if(tabParam === 'quizzes') await renderQuizzesPanel();
+      else await renderStudentPage();
     }
   } catch(e){
     if(e.message.includes('401')||e.message.toLowerCase().includes('token')){ logout(); return; }
@@ -992,7 +989,7 @@ async function openGrade(subId, asgnId, max, cur) {
     </div>
     <div style="padding:12px 20px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end;position:sticky;bottom:0;background:var(--card);border-radius:0 0 14px 14px;">
       <button class="btn btn-secondary" onclick="document.getElementById('grade-overlay').remove()">Cancel</button>
-      <button class="btn btn-primary" onclick="submitGradeModal('${subId}','${asgnId}',${max})">Save Grade</button>
+      <button class="btn btn-primary btn-block" onclick="submitGradeModal('${subId}','${asgnId}',${max})">Save Grade</button>
     </div>
   </div>`;
   document.body.appendChild(ol);
@@ -1371,7 +1368,7 @@ function switchTab(tab) {
 // ══════════════════════════════════════════════════════════════════════════
 //  QUIZZES PANEL (inside assignments.html)
 // ══════════════════════════════════════════════════════════════════════════
-let QS = { quizzes: [], currentQuizId: null, snapQuizzes: [], activeSubTab: 'regular' };
+let QS = { quizzes: [], currentQuizId: null, snapQuizzes: [], activeSubTab: 'regular', attachedMedia: null };
 
 async function renderQuizzesPanel() {
   const isLec = ['lecturer','admin','superadmin'].includes(S.role);
@@ -1423,48 +1420,33 @@ async function renderLecturerQuizzes() {
         <p style="color:var(--text-light);font-size:13px;max-width:270px;margin:0 auto 18px">Create your first proctored quiz for students</p>
         <button class="btn btn-primary" onclick="openCreateQuizModal()">＋ Create Quiz</button>
       </div>` : `
-    <div class="card" style="padding:0;overflow:hidden">
-      <table style="width:100%;border-collapse:collapse;font-size:13px">
-        <thead>
-          <tr style="background:var(--bg)">
-            <th style="padding:11px 16px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text-muted);border-bottom:1.5px solid var(--border)">Title</th>
-            <th style="padding:11px 16px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text-muted);border-bottom:1.5px solid var(--border)">Course</th>
-            <th style="padding:11px 16px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text-muted);border-bottom:1.5px solid var(--border)">Questions</th>
-            <th style="padding:11px 16px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text-muted);border-bottom:1.5px solid var(--border)">Status</th>
-            <th style="padding:11px 16px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text-muted);border-bottom:1.5px solid var(--border)">Time Window</th>
-            <th style="padding:11px 16px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text-muted);border-bottom:1.5px solid var(--border)">Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${QS.quizzes.map(q => {
-            const start = new Date(q.startTime), end = new Date(q.endTime);
-            const isLive = now >= start && now <= end;
-            const isClosed = now > end;
-            const statusBadge = isLive
-              ? `<span style="background:#f0fdf4;color:#166534;border:1px solid #bbf7d0;padding:3px 8px;border-radius:20px;font-size:11px;font-weight:600">● Live</span>`
-              : isClosed
-              ? `<span style="background:#fef2f2;color:#991b1b;border:1px solid #fecaca;padding:3px 8px;border-radius:20px;font-size:11px;font-weight:600">Closed</span>`
-              : `<span style="background:var(--bg);color:var(--text-light);border:1px solid var(--border);padding:3px 8px;border-radius:20px;font-size:11px;font-weight:600">Scheduled</span>`;
-            return `<tr style="border-bottom:1px solid var(--border)">
-              <td style="padding:12px 16px;font-weight:600">${q.title}</td>
-              <td style="padding:12px 16px;color:var(--text-light)">${q.course?.code || 'N/A'}</td>
-              <td style="padding:12px 16px">${q.questionCount || 0}</td>
-              <td style="padding:12px 16px">${statusBadge}</td>
-              <td style="padding:12px 16px;font-size:12px;color:var(--text-light)">${fmtDate(q.startTime)} → ${fmtDate(q.endTime)}</td>
-              <td style="padding:12px 16px">
-                <div style="display:flex;gap:6px;flex-wrap:wrap">
-                  <button class="btn btn-primary btn-sm" onclick="openQuizQuestionsPanel('${q._id}')">
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-                    Questions
-                  </button>
-                  <button class="btn btn-secondary btn-sm" onclick="copyQuizIdInline('${q._id}')">📋 ID</button>
-                  <button class="btn btn-sm" style="background:#fef2f2;color:#dc2626;border:1px solid #fecaca" onclick="deleteQuizInline('${q._id}')">Delete</button>
-                </div>
-              </td>
-            </tr>`;
-          }).join('')}
-        </tbody>
-      </table>
+    <div style="display:flex;flex-direction:column;gap:10px">
+      ${QS.quizzes.map(q => {
+        const start = new Date(q.startTime), end = new Date(q.endTime);
+        const isLive = now >= start && now <= end;
+        const isClosed = now > end;
+        const statusBadge = isLive
+          ? `<span style="background:#f0fdf4;color:#166534;border:1px solid #bbf7d0;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600">● Live</span>`
+          : isClosed
+          ? `<span style="background:#fef2f2;color:#991b1b;border:1px solid #fecaca;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600">Closed</span>`
+          : `<span style="background:var(--bg);color:var(--text-light);border:1px solid var(--border);padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600">Scheduled</span>`;
+        return `<div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px 16px">
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:8px">
+            <div style="font-size:15px;font-weight:700;color:var(--text);line-height:1.3">${q.title}</div>
+            ${statusBadge}
+          </div>
+          <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:12px;font-size:12px;color:var(--text-muted)">
+            <span>📚 ${q.course?.code || 'N/A'}</span>
+            <span>❓ ${q.questionCount || 0} questions</span>
+            <span>🕐 ${fmtDate(q.startTime)} → ${fmtDate(q.endTime)}</span>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn btn-primary btn-sm" onclick="openQuizQuestionsPanel('${q._id}')">Questions</button>
+            <button class="btn btn-secondary btn-sm" onclick="copyQuizIdInline('${q._id}')">📋 Copy ID</button>
+            <button class="btn btn-sm" style="background:#fef2f2;color:#dc2626;border:1px solid #fecaca" onclick="deleteQuizInline('${q._id}')">Delete</button>
+          </div>
+        </div>`;
+      }).join('')}
     </div>`}
   `;
 }
@@ -1719,7 +1701,7 @@ function openCreateQuizModal() {
       </div>
       <div style="padding:14px 24px;border-top:1px solid var(--border);display:flex;gap:10px;justify-content:flex-end">
         <button class="btn btn-secondary" onclick="document.getElementById('qz-modal-overlay').remove()">Cancel</button>
-        <button class="btn btn-primary" onclick="submitCreateQuiz()">
+        <button class="btn btn-primary btn-block" onclick="submitCreateQuiz()">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
           Create Quiz
         </button>
@@ -1768,13 +1750,14 @@ async function submitCreateQuiz() {
 
 // ── QUIZ SUB-TAB HELPERS ──────────────────────────────────────────────────
 function _qzTabNavHTML(active) {
-  const s = (isActive) => isActive
-    ? 'background:var(--card);color:var(--text);box-shadow:0 1px 4px rgba(0,0,0,.08)'
-    : 'background:transparent;color:var(--text-muted)';
+  const tab = (id, label, icon) => {
+    const on = active === id;
+    return `<button onclick="switchQuizSubTab('${id}')" style="display:flex;align-items:center;gap:7px;padding:9px 18px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;border:none;transition:all .18s;white-space:nowrap;${on?'background:#fff;color:#1e293b;box-shadow:0 1px 6px rgba(0,0,0,.10);':'background:transparent;color:#64748b;'}">${icon}${label}</button>`;
+  };
   return `
-    <div style="display:flex;gap:4px;margin-bottom:22px;background:var(--bg);padding:4px;border-radius:10px;border:1px solid var(--border)">
-      <button onclick="switchQuizSubTab('regular')" style="flex:1;padding:8px 14px;border-radius:7px;font-size:13px;font-weight:600;cursor:pointer;border:none;transition:all .2s;${s(active==='regular')}">Proctored Quizzes</button>
-      <button onclick="switchQuizSubTab('snap')"    style="flex:1;padding:8px 14px;border-radius:7px;font-size:13px;font-weight:600;cursor:pointer;border:none;transition:all .2s;${s(active==='snap')}">Snap Quizzes</button>
+    <div style="display:flex;gap:3px;margin-bottom:24px;background:#f1f5f9;padding:4px;border-radius:11px;width:fit-content">
+      ${tab('regular','Proctored Quizzes','<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="opacity:.7"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>')}
+      ${tab('snap','Snap Quizzes','<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="opacity:.7"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>')}
     </div>`;
 }
 
@@ -1799,50 +1782,101 @@ async function renderLecturerSnapQuizzes() {
       archived:  `<span style="background:var(--bg);color:var(--text-muted);border:1px solid var(--border);padding:3px 8px;border-radius:20px;font-size:11px;font-weight:600">Archived</span>`,
     }[s] || `<span>${s}</span>`);
 
+    const statusMeta = {
+      draft:     { dot:'#94a3b8', label:'Draft',     bg:'#f8fafc', border:'#e2e8f0', text:'#475569' },
+      published: { dot:'#f59e0b', label:'Published', bg:'#fffbeb', border:'#fde68a', text:'#92400e' },
+      open:      { dot:'#22c55e', label:'Live',      bg:'#f0fdf4', border:'#86efac', text:'#166534' },
+      closed:    { dot:'#ef4444', label:'Closed',    bg:'#fef2f2', border:'#fecaca', text:'#991b1b' },
+      archived:  { dot:'#cbd5e1', label:'Archived',  bg:'#f8fafc', border:'#e2e8f0', text:'#94a3b8' },
+    };
+    const typeLabel = {'mid_term':'Mid-Semester','exam':'Final Exam','quiz':'Quiz','class_test':'Class Test','final':'Finals','mock':'Mock Exam'};
+
     $('page-root').innerHTML = `
       ${_qzTabNavHTML('snap')}
-      <div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:24px">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:22px">
         <div>
-          <h2 style="font-size:21px;font-weight:700;letter-spacing:-.4px;margin-bottom:2px">Snap Quizzes</h2>
-          <p style="color:var(--text-light);font-size:13px">Timed exam-style quizzes with anti-cheat for the exam portal</p>
+          <h2 style="font-size:20px;font-weight:800;letter-spacing:-.5px;margin:0 0 3px;color:#0f172a">Snap Quizzes</h2>
+          <p style="color:#64748b;font-size:13px;margin:0">Timed exams with anti-cheat enforcement for the student portal</p>
         </div>
-        <button class="btn btn-primary" onclick="openCreateSnapQuizModal()">
+        <button onclick="openCreateSnapQuizModal()" style="display:inline-flex;align-items:center;gap:7px;padding:9px 18px;background:#1e293b;color:#fff;border:none;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer;letter-spacing:-.1px;transition:background .15s" onmouseover="this.style.background='#0f172a'" onmouseout="this.style.background='#1e293b'">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
           New Snap Quiz
         </button>
       </div>
       ${!QS.snapQuizzes.length ? `
-        <div style="text-align:center;padding:60px 20px;background:var(--card);border-radius:12px;border:1px solid var(--border)">
-          <div style="font-size:44px;opacity:.3;margin-bottom:14px">⚡</div>
-          <h3 style="font-size:18px;font-weight:700;margin-bottom:6px;color:var(--text)">No snap quizzes yet</h3>
-          <p style="color:var(--text-light);font-size:13px;max-width:270px;margin:0 auto 18px;line-height:1.6">Create your first timed snap quiz — students take it through the exam portal</p>
-          <button class="btn btn-primary" onclick="openCreateSnapQuizModal()">＋ New Snap Quiz</button>
+        <div style="text-align:center;padding:64px 20px;background:#fff;border-radius:16px;border:1.5px dashed #e2e8f0">
+          <div style="width:56px;height:56px;background:#f1f5f9;border-radius:16px;display:flex;align-items:center;justify-content:center;margin:0 auto 16px;font-size:26px">⚡</div>
+          <h3 style="font-size:17px;font-weight:700;margin:0 0 6px;color:#0f172a">No snap quizzes yet</h3>
+          <p style="color:#64748b;font-size:13px;max-width:260px;margin:0 auto 20px;line-height:1.6">Create your first snap quiz — students take it through the secure exam portal</p>
+          <button onclick="openCreateSnapQuizModal()" style="display:inline-flex;align-items:center;gap:6px;padding:9px 20px;background:#1e293b;color:#fff;border:none;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            New Snap Quiz
+          </button>
         </div>` : `
-      <div class="card" style="padding:0;overflow:hidden">
-        <table style="width:100%;border-collapse:collapse;font-size:13px">
-          <thead><tr style="background:var(--bg)">
-            ${['Title','Type','Status','Marks / Time','Window','Actions'].map(h => `<th style="padding:11px 16px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text-muted);border-bottom:1.5px solid var(--border)">${h}</th>`).join('')}
-          </tr></thead>
-          <tbody>
-            ${QS.snapQuizzes.map(q => `
-              <tr style="border-bottom:1px solid var(--border)">
-                <td style="padding:12px 16px;font-weight:600">${q.title}</td>
-                <td style="padding:12px 16px;color:var(--text-light);text-transform:capitalize">${({'mid_term':'Mid-Semester Exams','exam':'Exams','quiz':'Quiz','class_test':'Class Test','final':'Final','mock':'Mock'}[q.quizType]||q.quizType||'Exams')}</td>
-                <td style="padding:12px 16px">${snapBadge(q.status)}</td>
-                <td style="padding:12px 16px;font-size:12px">${q.totalMarks||0} marks · ${q.timeLimitMinutes}min</td>
-                <td style="padding:12px 16px;font-size:12px;color:var(--text-light)">${fmtDate(q.startTime)} → ${fmtDate(q.endTime)}</td>
-                <td style="padding:12px 16px">
-                  <div style="display:flex;gap:6px;flex-wrap:wrap">
-                    <button class="btn btn-primary btn-sm" onclick="openSnapQuestionsPanel('${q._id}')">Questions</button>
-                    ${q.status==='draft'     ? `<button class="btn btn-secondary btn-sm" onclick="snapQuizAction('${q._id}','publish')">Publish</button>` : ''}
-                    ${q.status==='published' ? `<button class="btn btn-sm" style="background:#f0fdf4;color:#166534;border:1px solid #bbf7d0" onclick="snapQuizAction('${q._id}','open')">Open</button>` : ''}
-                    ${q.status==='open'      ? `<button class="btn btn-sm" style="background:#fff7ed;color:#c2410c;border:1px solid #fed7aa" onclick="snapQuizAction('${q._id}','close')">Close</button>` : ''}
-                    <button class="btn btn-sm" style="background:#fef2f2;color:#dc2626;border:1px solid #fecaca" onclick="deleteSnapQuizInline('${q._id}')">Delete</button>
-                  </div>
-                </td>
-              </tr>`).join('')}
-          </tbody>
-        </table>
+      <div style="display:flex;flex-direction:column;gap:12px">
+        ${QS.snapQuizzes.map(q => {
+          const sm = statusMeta[q.status] || statusMeta.draft;
+          const tl = typeLabel[q.quizType] || q.quizType || 'Exam';
+          const qCount = q.questionCount || 0;
+          return `
+          <div style="background:#fff;border:1.5px solid #e8edf3;border-radius:14px;overflow:hidden;transition:box-shadow .15s" onmouseover="this.style.boxShadow='0 4px 20px rgba(0,0,0,.08)'" onmouseout="this.style.boxShadow='none'">
+            <div style="padding:16px 18px">
+              <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:10px">
+                <div style="flex:1;min-width:0">
+                  <div style="font-size:16px;font-weight:700;color:#0f172a;line-height:1.3;margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${q.title}</div>
+                  <div style="font-size:12px;color:#64748b;font-weight:500">${tl}</div>
+                </div>
+                <span style="flex-shrink:0;display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:20px;font-size:11px;font-weight:700;background:${sm.bg};color:${sm.text};border:1px solid ${sm.border}">
+                  <span style="width:6px;height:6px;border-radius:50%;background:${sm.dot};display:inline-block${q.status==='open'?';animation:pulse 2s infinite':''}"></span>
+                  ${sm.label}
+                </span>
+              </div>
+              <div style="display:flex;flex-wrap:wrap;gap:6px">
+                <span style="display:inline-flex;align-items:center;gap:4px;padding:4px 10px;background:#f8fafc;border:1px solid #e8edf3;border-radius:20px;font-size:11px;color:#475569;font-weight:500">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                  ${q.timeLimitMinutes} min
+                </span>
+                <span style="display:inline-flex;align-items:center;gap:4px;padding:4px 10px;background:#f8fafc;border:1px solid #e8edf3;border-radius:20px;font-size:11px;color:#475569;font-weight:500">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                  ${q.totalMarks||0} marks
+                </span>
+                ${qCount ? `<span style="display:inline-flex;align-items:center;gap:4px;padding:4px 10px;background:#f8fafc;border:1px solid #e8edf3;border-radius:20px;font-size:11px;color:#475569;font-weight:500">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                  ${qCount} question${qCount!==1?'s':''}
+                </span>` : ''}
+                <span style="display:inline-flex;align-items:center;gap:4px;padding:4px 10px;background:#f8fafc;border:1px solid #e8edf3;border-radius:20px;font-size:11px;color:#475569;font-weight:500">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                  ${fmtDate(q.startTime)} → ${fmtDate(q.endTime)}
+                </span>
+              </div>
+            </div>
+            <div style="padding:10px 18px 14px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;border-top:1px solid #f1f5f9">
+              <button onclick="openSnapQuestionsPanel('${q._id}')" style="display:inline-flex;align-items:center;gap:5px;padding:7px 14px;background:#1e293b;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;transition:background .15s" onmouseover="this.style.background='#0f172a'" onmouseout="this.style.background='#1e293b'">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+                Questions
+              </button>
+              ${q.status==='draft' ? `
+                <button onclick="snapQuizAction('${q._id}','publish')" style="display:inline-flex;align-items:center;gap:5px;padding:7px 14px;background:#f8fafc;color:#1e293b;border:1.5px solid #e2e8f0;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;transition:all .15s" onmouseover="this.style.background='#f1f5f9'" onmouseout="this.style.background='#f8fafc'">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></polyline></svg>
+                  Publish
+                </button>` : ''}
+              ${q.status==='published' ? `
+                <button onclick="snapQuizAction('${q._id}','open')" style="display:inline-flex;align-items:center;gap:5px;padding:7px 14px;background:#f0fdf4;color:#166534;border:1.5px solid #86efac;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;transition:all .15s" onmouseover="this.style.background='#dcfce7'" onmouseout="this.style.background='#f0fdf4'">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                  Open to Students
+                </button>` : ''}
+              ${q.status==='open' ? `
+                <button onclick="snapQuizAction('${q._id}','close')" style="display:inline-flex;align-items:center;gap:5px;padding:7px 14px;background:#fff7ed;color:#c2410c;border:1.5px solid #fed7aa;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;transition:all .15s" onmouseover="this.style.background='#ffedd5'" onmouseout="this.style.background='#fff7ed'">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>
+                  Close
+                </button>` : ''}
+              <button onclick="deleteSnapQuizInline('${q._id}')" style="display:inline-flex;align-items:center;gap:5px;padding:7px 12px;background:transparent;color:#94a3b8;border:1.5px solid #e2e8f0;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;margin-left:auto;transition:all .15s" onmouseover="this.style.background='#fef2f2';this.style.color='#dc2626';this.style.borderColor='#fecaca'" onmouseout="this.style.background='transparent';this.style.color='#94a3b8';this.style.borderColor='#e2e8f0'">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+                Delete
+              </button>
+            </div>
+          </div>`;
+        }).join('')}
       </div>`}
     `;
   } catch(e) {
@@ -1894,7 +1928,7 @@ function openCreateSnapQuizModal() {
       </div>
       <div style="padding:14px 22px;border-top:1px solid var(--border);display:flex;gap:10px;justify-content:flex-end">
         <button class="btn btn-secondary" onclick="document.getElementById('snap-quiz-modal-wrap').remove()">Cancel</button>
-        <button class="btn btn-primary" id="sq-submit-btn" onclick="submitCreateSnapQuiz()">Create Snap Quiz</button>
+        <button class="btn btn-primary btn-block" id="sq-submit-btn" onclick="submitCreateSnapQuiz()">Create Snap Quiz</button>
       </div>
     </div>`;
   document.body.appendChild(el);
@@ -1952,6 +1986,7 @@ async function submitCreateSnapQuiz() {
 // ── SNAP QUIZ QUESTION BUILDER ────────────────────────────────────────────
 async function openSnapQuestionsPanel(quizId) {
   QS.currentSnapQuizId = quizId;
+  QS.attachedMedia = null;
   $('page-root').innerHTML = `<div class="loading">Loading questions…</div>`;
   try {
     const [qd, qsd] = await Promise.all([
@@ -1996,10 +2031,16 @@ async function openSnapQuestionsPanel(quizId) {
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
             Add New Question
           </div>
-          <button class="btn btn-sm" style="background:linear-gradient(135deg,#7c3aed,#4f46e5);color:#fff;font-weight:600;display:flex;align-items:center;gap:5px;border:none" onclick="openAIGeneratePanel('${quizId}', true)">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
-            ✨ AI Generate Questions
-          </button>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            <button class="btn btn-sm" style="background:#f0fdf4;color:#166534;border:1px solid #bbf7d0;font-weight:600;display:flex;align-items:center;gap:5px" onclick="openBulkImportModal('${quizId}')">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              Upload Questions
+            </button>
+            <button class="btn btn-sm" style="background:linear-gradient(135deg,#7c3aed,#4f46e5);color:#fff;font-weight:600;display:flex;align-items:center;gap:5px;border:none" onclick="openAIGeneratePanel('${quizId}', true)">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+              ✨ AI Generate
+            </button>
+          </div>
         </div>
         <!-- Question Type -->
         <div style="margin-bottom:18px">
@@ -2028,6 +2069,25 @@ async function openSnapQuestionsPanel(quizId) {
           <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:5px;display:block">Question Text <span style="color:#dc2626">*</span></label>
           ${_sqMathBar}
           <textarea id="sq-q-text" rows="3" placeholder="Enter the question…" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-top:none;border-radius:0 0 8px 8px;font-size:14px;font-family:inherit;resize:vertical;outline:none;box-sizing:border-box" onfocus="this.style.borderColor='var(--primary)'" onblur="this.style.borderColor='var(--border)'"></textarea>
+        </div>
+        <!-- Image / Diagram attachment -->
+        <div style="margin-bottom:14px">
+          <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:8px;display:block">Attach Image / Diagram <span style="font-size:10px;font-weight:400;text-transform:none;color:#9ca3af">(optional)</span></label>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+            <label style="display:flex;align-items:center;gap:5px;padding:7px 12px;border:1.5px solid var(--border);border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;color:var(--text-light);background:var(--bg)">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+              Upload Image
+              <input type="file" accept="image/*" style="display:none" onchange="sqAttachImage(event)">
+            </label>
+            <button type="button" style="display:flex;align-items:center;gap:5px;padding:7px 12px;border:1.5px solid var(--border);border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;color:var(--text-light);background:var(--bg)" onclick="openDrawingModal()">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg>
+              Draw Diagram
+            </button>
+          </div>
+          <div id="sq-media-preview" style="position:relative;display:none">
+            <img id="sq-media-img" style="max-width:100%;max-height:220px;border-radius:8px;border:1.5px solid var(--border);object-fit:contain;display:block" src="" alt="attached">
+            <button type="button" onclick="sqRemoveMedia()" style="position:absolute;top:6px;right:6px;width:24px;height:24px;border-radius:50%;background:rgba(0,0,0,.6);color:#fff;border:none;cursor:pointer;font-size:12px;line-height:1;display:flex;align-items:center;justify-content:center">✕</button>
+          </div>
         </div>
         <!-- Options (MCQ) -->
         <div id="sq-options-section" style="margin-bottom:14px">
@@ -2107,6 +2167,7 @@ async function openSnapQuestionsPanel(quizId) {
                             return `<span style="padding:4px 10px;border-radius:6px;font-size:12px;font-weight:500;${correct?'background:#f0fdf4;color:#166534;border:1px solid #bbf7d0;':'background:var(--bg);color:var(--text-light);border:1px solid var(--border);'}">${String.fromCharCode(65+oi)}) ${opt}${correct?' ✓':''}</span>`;
                           }).join('')}
                     </div>
+                    ${q.media?.length ? `<img src="${q.media[0].url}" style="max-width:100%;max-height:140px;border-radius:6px;border:1px solid var(--border);object-fit:contain;display:block;margin-bottom:6px" alt="diagram">` : ''}
                     <div style="font-size:11px;color:var(--text-muted);font-weight:600">${q.marks||1} mark${(q.marks||1)!==1?'s':''}</div>
                   </div>
                   <button class="btn btn-sm" style="background:#fef2f2;color:#dc2626;border:1px solid #fecaca;flex-shrink:0" onclick="deleteSnapQuizQ('${quizId}','${q._id}')">Delete</button>
@@ -2154,9 +2215,13 @@ async function submitSnapQuizQuestion(quizId) {
       body = { questionText, questionType: 'mcq', options: opts, correctOptionIndex, marks };
     }
   }
+  if (QS.attachedMedia) {
+    body.media = [{ type: 'image', url: QS.attachedMedia, altText: 'Question diagram' }];
+  }
 
   try {
     await api('POST', `/api/lecturer/snap-quizzes/${quizId}/questions`, body);
+    QS.attachedMedia = null;
     toast('Question added', 'ok');
     await openSnapQuestionsPanel(quizId);
   } catch(e) {
@@ -2198,6 +2263,319 @@ function sqCbChange(i) {
   lbl.style.borderColor = cb.checked ? 'var(--primary)' : '#e5e7eb';
   lbl.style.background  = cb.checked ? '#ede9fe' : '#fff';
   lbl.style.color       = cb.checked ? '#7c3aed' : '#374151';
+}
+
+// ── Image attachment helpers ────────────────────────────────────────────────
+function sqAttachImage(evt) {
+  const file = evt.target.files?.[0];
+  if (!file) return;
+  if (file.size > 5 * 1024 * 1024) { toast('Image must be under 5 MB', 'err'); return; }
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    QS.attachedMedia = e.target.result;
+    const preview = document.getElementById('sq-media-preview');
+    const img     = document.getElementById('sq-media-img');
+    if (preview && img) { img.src = QS.attachedMedia; preview.style.display = 'block'; }
+  };
+  reader.readAsDataURL(file);
+}
+function sqRemoveMedia() {
+  QS.attachedMedia = null;
+  const preview = document.getElementById('sq-media-preview');
+  if (preview) preview.style.display = 'none';
+}
+function sqSetDrawing(dataUrl) {
+  QS.attachedMedia = dataUrl;
+  const preview = document.getElementById('sq-media-preview');
+  const img     = document.getElementById('sq-media-img');
+  if (preview && img) { img.src = dataUrl; preview.style.display = 'block'; }
+}
+
+// ── Drawing Tool Modal ──────────────────────────────────────────────────────
+function openDrawingModal() {
+  const existing = document.getElementById('drawing-modal-wrap');
+  if (existing) existing.remove();
+  const wrap = document.createElement('div');
+  wrap.id = 'drawing-modal-wrap';
+  wrap.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:400;display:flex;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(3px)';
+  wrap.innerHTML = `
+    <div style="background:#fff;border-radius:14px;width:100%;max-width:680px;max-height:95vh;display:flex;flex-direction:column;box-shadow:0 24px 64px rgba(0,0,0,.3)">
+      <div style="padding:14px 18px;border-bottom:1px solid #e5e7eb;display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
+        <span style="font-size:15px;font-weight:700">Draw Diagram</span>
+        <button onclick="document.getElementById('drawing-modal-wrap').remove()" style="width:28px;height:28px;border-radius:7px;border:1px solid #e5e7eb;background:#f9fafb;cursor:pointer;font-size:14px">✕</button>
+      </div>
+      <!-- Toolbar -->
+      <div style="padding:10px 14px;border-bottom:1px solid #e5e7eb;display:flex;align-items:center;gap:8px;flex-wrap:wrap;flex-shrink:0;background:#f8fafc">
+        <div style="display:flex;gap:4px">
+          ${[['pen','✏️','Pen'],['eraser','⬜','Eraser'],['line','╱','Line'],['rect','□','Rect'],['circle','○','Circle'],['text','T','Text']].map(([t,ic,lb]) =>
+            `<button id="dtool-${t}" onclick="dwSetTool('${t}')" title="${lb}" style="width:34px;height:34px;border-radius:7px;border:1px solid #e5e7eb;background:#fff;cursor:pointer;font-size:14px;transition:all .15s">${ic}</button>`
+          ).join('')}
+        </div>
+        <div style="width:1px;height:28px;background:#e5e7eb"></div>
+        <div style="display:flex;gap:4px;align-items:center">
+          ${['#1e293b','#dc2626','#2563eb','#16a34a','#d97706','#7c3aed','#0891b2','#ec4899','#ffffff'].map(c =>
+            `<button onclick="dwSetColor('${c}')" style="width:22px;height:22px;border-radius:50%;background:${c};border:2px solid #e5e7eb;cursor:pointer;transition:transform .1s" title="${c}"></button>`
+          ).join('')}
+          <input type="color" id="dw-custom-color" value="#1e293b" style="width:28px;height:28px;padding:0;border:1px solid #e5e7eb;border-radius:6px;cursor:pointer;background:none" onchange="dwSetColor(this.value)" title="Custom color">
+        </div>
+        <div style="width:1px;height:28px;background:#e5e7eb"></div>
+        <div style="display:flex;align-items:center;gap:6px">
+          <label style="font-size:11px;color:#6b7280;font-weight:600">Size</label>
+          <input type="range" id="dw-size" min="1" max="20" value="3" style="width:70px" oninput="dwSetSize(this.value)">
+          <span id="dw-size-lbl" style="font-size:11px;color:#374151;font-weight:600;min-width:16px">3</span>
+        </div>
+        <div style="margin-left:auto;display:flex;gap:6px">
+          <button onclick="dwUndo()" style="padding:5px 10px;border:1px solid #e5e7eb;border-radius:7px;background:#fff;cursor:pointer;font-size:12px;font-weight:600">↩ Undo</button>
+          <button onclick="dwClear()" style="padding:5px 10px;border:1px solid #fecaca;border-radius:7px;background:#fef2f2;color:#dc2626;cursor:pointer;font-size:12px;font-weight:600">Clear</button>
+        </div>
+      </div>
+      <!-- Canvas -->
+      <div style="flex:1;overflow:auto;background:#f1f5f9;display:flex;align-items:center;justify-content:center;padding:12px;min-height:280px">
+        <canvas id="dw-canvas" width="600" height="380" style="background:#fff;border-radius:6px;border:1px solid #e5e7eb;cursor:crosshair;touch-action:none;max-width:100%;display:block"></canvas>
+      </div>
+      <!-- Footer -->
+      <div style="padding:12px 18px;border-top:1px solid #e5e7eb;display:flex;justify-content:flex-end;gap:8px;flex-shrink:0">
+        <button onclick="document.getElementById('drawing-modal-wrap').remove()" style="padding:9px 18px;border:1px solid #e5e7eb;border-radius:8px;background:#fff;cursor:pointer;font-size:13px;font-weight:600">Cancel</button>
+        <button onclick="dwUseDrawing()" style="padding:9px 18px;border:none;border-radius:8px;background:var(--primary);color:#fff;cursor:pointer;font-size:13px;font-weight:700">Use Drawing</button>
+      </div>
+    </div>`;
+  document.body.appendChild(wrap);
+  dwInit();
+}
+
+let _dw = { tool:'pen', color:'#1e293b', size:3, drawing:false, startX:0, startY:0, snap:null, history:[] };
+function dwInit() {
+  const canvas = document.getElementById('dw-canvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  _dw.ctx = ctx;
+  _dw.canvas = canvas;
+  _dw.history = [];
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  dwSetTool('pen');
+
+  const getPos = (e) => {
+    const r = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / r.width;
+    const scaleY = canvas.height / r.height;
+    const src = e.touches ? e.touches[0] : e;
+    return { x: (src.clientX - r.left) * scaleX, y: (src.clientY - r.top) * scaleY };
+  };
+
+  const onStart = (e) => {
+    e.preventDefault();
+    const { x, y } = getPos(e);
+    _dw.drawing = true;
+    _dw.startX = x; _dw.startY = y;
+    _dw.history.push(ctx.getImageData(0, 0, canvas.width, canvas.height));
+    if (_dw.tool === 'pen' || _dw.tool === 'eraser') {
+      ctx.beginPath(); ctx.moveTo(x, y);
+    } else if (_dw.tool === 'text') {
+      const txt = prompt('Enter text:');
+      if (txt) { ctx.font = `${Math.max(14,_dw.size*4)}px sans-serif`; ctx.fillStyle = _dw.color; ctx.fillText(txt, x, y); }
+      _dw.drawing = false;
+    }
+  };
+  const onMove = (e) => {
+    if (!_dw.drawing) return;
+    e.preventDefault();
+    const { x, y } = getPos(e);
+    if (_dw.tool === 'pen') {
+      ctx.strokeStyle = _dw.color; ctx.lineWidth = _dw.size; ctx.lineCap = 'round';
+      ctx.lineTo(x, y); ctx.stroke();
+    } else if (_dw.tool === 'eraser') {
+      ctx.strokeStyle = '#fff'; ctx.lineWidth = _dw.size * 3; ctx.lineCap = 'round';
+      ctx.lineTo(x, y); ctx.stroke();
+    } else {
+      if (_dw.snap) ctx.putImageData(_dw.snap, 0, 0);
+      else { _dw.snap = _dw.history[_dw.history.length - 1]; }
+      ctx.strokeStyle = _dw.color; ctx.lineWidth = _dw.size; ctx.lineCap = 'round';
+      if (_dw.tool === 'line') {
+        ctx.beginPath(); ctx.moveTo(_dw.startX, _dw.startY); ctx.lineTo(x, y); ctx.stroke();
+      } else if (_dw.tool === 'rect') {
+        ctx.strokeRect(_dw.startX, _dw.startY, x - _dw.startX, y - _dw.startY);
+      } else if (_dw.tool === 'circle') {
+        const rx = (x - _dw.startX) / 2, ry = (y - _dw.startY) / 2;
+        ctx.beginPath(); ctx.ellipse(_dw.startX + rx, _dw.startY + ry, Math.abs(rx), Math.abs(ry), 0, 0, 2*Math.PI); ctx.stroke();
+      }
+    }
+  };
+  const onEnd = () => { _dw.drawing = false; _dw.snap = null; };
+
+  canvas.addEventListener('mousedown', onStart);
+  canvas.addEventListener('mousemove', onMove);
+  canvas.addEventListener('mouseup', onEnd);
+  canvas.addEventListener('mouseleave', onEnd);
+  canvas.addEventListener('touchstart', onStart, { passive: false });
+  canvas.addEventListener('touchmove', onMove, { passive: false });
+  canvas.addEventListener('touchend', onEnd);
+}
+function dwSetTool(t) {
+  _dw.tool = t;
+  document.querySelectorAll('[id^="dtool-"]').forEach(b => {
+    b.style.background = b.id === `dtool-${t}` ? '#0f172a' : '#fff';
+    b.style.color      = b.id === `dtool-${t}` ? '#fff'    : '#374151';
+    b.style.borderColor= b.id === `dtool-${t}` ? '#0f172a' : '#e5e7eb';
+  });
+}
+function dwSetColor(c) {
+  _dw.color = c;
+  document.querySelectorAll('[onclick^="dwSetColor"]').forEach(b => b.style.transform = '');
+  event?.target && (event.target.style.transform = 'scale(1.35)');
+}
+function dwSetSize(v) {
+  _dw.size = parseInt(v);
+  const lbl = document.getElementById('dw-size-lbl');
+  if (lbl) lbl.textContent = v;
+}
+function dwUndo() {
+  if (!_dw.history.length) return;
+  _dw.ctx.putImageData(_dw.history.pop(), 0, 0);
+}
+function dwClear() {
+  _dw.history.push(_dw.ctx.getImageData(0, 0, _dw.canvas.width, _dw.canvas.height));
+  _dw.ctx.fillStyle = '#fff'; _dw.ctx.fillRect(0, 0, _dw.canvas.width, _dw.canvas.height);
+}
+function dwUseDrawing() {
+  const canvas = document.getElementById('dw-canvas');
+  if (!canvas) return;
+  const dataUrl = canvas.toDataURL('image/png');
+  sqSetDrawing(dataUrl);
+  document.getElementById('drawing-modal-wrap')?.remove();
+  toast('Diagram attached', 'ok');
+}
+
+// ── Bulk Import Modal ───────────────────────────────────────────────────────
+function openBulkImportModal(quizId) {
+  const existing = document.getElementById('bulk-import-modal-wrap');
+  if (existing) existing.remove();
+  const wrap = document.createElement('div');
+  wrap.id = 'bulk-import-modal-wrap';
+  wrap.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:400;display:flex;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(3px)';
+  wrap.innerHTML = `
+    <div style="background:#fff;border-radius:14px;width:100%;max-width:600px;max-height:90vh;display:flex;flex-direction:column;box-shadow:0 24px 64px rgba(0,0,0,.3);overflow:hidden">
+      <div style="padding:16px 20px;border-bottom:1px solid #e5e7eb;display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
+        <span style="font-size:15px;font-weight:700">Upload Questions</span>
+        <button onclick="document.getElementById('bulk-import-modal-wrap').remove()" style="width:28px;height:28px;border-radius:7px;border:1px solid #e5e7eb;background:#f9fafb;cursor:pointer;font-size:14px">✕</button>
+      </div>
+      <div style="padding:20px;overflow-y:auto;flex:1">
+        <p style="font-size:13px;color:#374151;margin:0 0 12px">Upload a <strong>CSV</strong> or <strong>JSON</strong> file to import multiple questions at once.</p>
+        <details style="margin-bottom:16px;background:#f8fafc;border:1px solid #e5e7eb;border-radius:8px;padding:10px 14px">
+          <summary style="cursor:pointer;font-size:12px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.5px">Format guide</summary>
+          <div style="margin-top:10px;font-size:12px;color:#374151;line-height:1.7">
+            <strong>CSV columns:</strong> <code>type, question, optionA, optionB, optionC, optionD, correct, marks</code><br>
+            <code>type</code>: <code>mcq</code> | <code>mcq_multi</code> | <code>fill_blank</code><br>
+            <code>correct</code>: <code>A</code> | <code>B</code> | <code>C</code> | <code>D</code> (comma-separated for multi, e.g. <code>A,C</code>)<br><br>
+            <strong>JSON:</strong> array of objects with same fields.<br>
+            <a href="data:text/plain,type,question,optionA,optionB,optionC,optionD,correct,marks%0Amcq,What is 2+2?,3,4,5,6,B,1%0Afill_blank,The capital of France is ____,,,,,Paris,2" download="sample.csv" style="color:#2563eb;font-size:12px">⬇ Download sample CSV</a>
+          </div>
+        </details>
+        <label style="display:block;border:2px dashed #cbd5e1;border-radius:10px;padding:24px;text-align:center;cursor:pointer;background:#f8fafc;transition:border-color .2s" id="bulk-drop-zone" ondragover="event.preventDefault();this.style.borderColor='#6366f1'" ondragleave="this.style.borderColor='#cbd5e1'" ondrop="bulkHandleDrop(event,'${quizId}')">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="margin:0 auto 8px;display:block"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          <p style="font-size:13px;font-weight:600;color:#374151;margin:0 0 4px">Drop file here or click to browse</p>
+          <p style="font-size:12px;color:#9ca3af;margin:0">Supports .csv and .json</p>
+          <input type="file" accept=".csv,.json" style="display:none" id="bulk-file-input" onchange="bulkParseFile(this.files[0],'${quizId}')">
+        </label>
+        <div id="bulk-preview" style="margin-top:14px"></div>
+      </div>
+      <div style="padding:12px 20px;border-top:1px solid #e5e7eb;display:flex;justify-content:flex-end;gap:8px;flex-shrink:0">
+        <button onclick="document.getElementById('bulk-import-modal-wrap').remove()" style="padding:9px 18px;border:1px solid #e5e7eb;border-radius:8px;background:#fff;cursor:pointer;font-size:13px;font-weight:600">Cancel</button>
+        <button id="bulk-import-btn" onclick="bulkImportQuestions('${quizId}')" disabled style="padding:9px 18px;border:none;border-radius:8px;background:#cbd5e1;color:#64748b;cursor:not-allowed;font-size:13px;font-weight:700" title="Parse a file first">Import Questions</button>
+      </div>
+    </div>`;
+  document.body.appendChild(wrap);
+  document.getElementById('bulk-drop-zone')?.addEventListener('click', () => document.getElementById('bulk-file-input')?.click());
+}
+
+let _bulkParsed = [];
+function bulkHandleDrop(e, quizId) {
+  e.preventDefault();
+  document.getElementById('bulk-drop-zone').style.borderColor = '#cbd5e1';
+  const file = e.dataTransfer?.files?.[0];
+  if (file) bulkParseFile(file, quizId);
+}
+function bulkParseFile(file, quizId) {
+  if (!file) return;
+  const ext = file.name.split('.').pop().toLowerCase();
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      let rows = [];
+      if (ext === 'json') {
+        rows = JSON.parse(e.target.result);
+        if (!Array.isArray(rows)) rows = rows.questions || [];
+      } else {
+        const lines = e.target.result.trim().split('\n');
+        const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g,'').toLowerCase());
+        rows = lines.slice(1).filter(l => l.trim()).map(line => {
+          const vals = line.match(/(".*?"|[^,]+|(?<=,)(?=,)|(?<=,)$|^(?=,))/g) || line.split(',');
+          const clean = vals.map(v => v.trim().replace(/^"|"$/g,''));
+          const obj = {};
+          headers.forEach((h, i) => obj[h] = clean[i] || '');
+          return obj;
+        });
+      }
+      _bulkParsed = rows.map(r => bulkNormalise(r)).filter(Boolean);
+      bulkShowPreview(_bulkParsed);
+    } catch(err) {
+      document.getElementById('bulk-preview').innerHTML = `<p style="color:#dc2626;font-size:13px">Parse error: ${err.message}</p>`;
+    }
+  };
+  reader.readAsText(file);
+}
+function bulkNormalise(r) {
+  const type = (r.type||r.questionType||'mcq').toLowerCase().trim();
+  const questionText = (r.question||r.questionText||'').trim();
+  if (!questionText) return null;
+  const marks = parseInt(r.marks||r.mark||1) || 1;
+  if (type === 'fill_blank') {
+    return { questionType:'fill_blank', questionText, correctAnswerText:(r.correct||r.answer||'').trim(), acceptedAnswers:[], marks };
+  }
+  const opts = ['optionA','optionB','optionC','optionD'].map(k => (r[k]||'').trim()).filter(Boolean);
+  if (!opts.length) opts.push(...['a','b','c','d'].map(k => (r[k]||'').trim()).filter(Boolean));
+  const correctRaw = (r.correct||r.correctAnswer||'A').toUpperCase().trim();
+  const letterToIdx = {'A':0,'B':1,'C':2,'D':3};
+  if (type === 'mcq_multi') {
+    const correctOptionIndices = correctRaw.split(',').map(s => letterToIdx[s.trim()]).filter(n => n !== undefined);
+    return { questionType:'mcq_multi', questionText, options:opts, correctOptionIndices, marks };
+  }
+  const correctOptionIndex = letterToIdx[correctRaw[0]] ?? 0;
+  return { questionType:'mcq', questionText, options:opts, correctOptionIndex, marks };
+}
+function bulkShowPreview(rows) {
+  const preview = document.getElementById('bulk-preview');
+  const btn     = document.getElementById('bulk-import-btn');
+  if (!rows.length) {
+    preview.innerHTML = `<p style="color:#dc2626;font-size:13px">No valid questions found. Check the format guide above.</p>`;
+    if (btn) { btn.disabled = true; btn.style.background='#cbd5e1'; btn.style.color='#64748b'; btn.style.cursor='not-allowed'; }
+    return;
+  }
+  preview.innerHTML = `
+    <div style="font-size:12px;font-weight:700;color:#374151;margin-bottom:8px">${rows.length} question${rows.length!==1?'s':''} found — preview:</div>
+    <div style="display:flex;flex-direction:column;gap:6px;max-height:260px;overflow-y:auto">
+      ${rows.map((q,i) => `
+        <div style="background:#f8fafc;border:1px solid #e5e7eb;border-radius:8px;padding:10px 12px;font-size:12px">
+          <div style="font-weight:600;margin-bottom:4px;color:#374151">Q${i+1}. <span style="font-size:10px;padding:1px 6px;border-radius:20px;font-weight:700;background:#ede9fe;color:#7c3aed">${q.questionType}</span> ${q.questionText}</div>
+          ${q.options?.length ? `<div style="color:#6b7280">${q.options.map((o,oi)=>`${String.fromCharCode(65+oi)}) ${o}`).join(' · ')}</div>` : `<div style="color:#6b7280">Answer: ${q.correctAnswerText}</div>`}
+        </div>`).join('')}
+    </div>`;
+  if (btn) { btn.disabled = false; btn.style.background='var(--primary)'; btn.style.color='#fff'; btn.style.cursor='pointer'; }
+}
+async function bulkImportQuestions(quizId) {
+  if (!_bulkParsed.length) return;
+  const btn = document.getElementById('bulk-import-btn');
+  if (btn) { btn.disabled = true; btn.textContent = `Importing…`; }
+  let ok = 0, fail = 0;
+  for (const q of _bulkParsed) {
+    try {
+      await api('POST', `/api/lecturer/snap-quizzes/${quizId}/questions`, q);
+      ok++;
+    } catch { fail++; }
+  }
+  document.getElementById('bulk-import-modal-wrap')?.remove();
+  toast(`${ok} question${ok!==1?'s':''} imported${fail?` (${fail} failed)`:''}`, ok ? 'ok' : 'err');
+  if (ok) await openSnapQuestionsPanel(quizId);
 }
 
 function sqInsertMath(targetId, sym) {
