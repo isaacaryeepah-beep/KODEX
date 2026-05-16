@@ -42,6 +42,7 @@ async function sendSms({ to, message }) {
       hostname: 'sms.arkesel.com',
       path:     '/api/v2/sms/send',
       method:   'POST',
+      timeout:  8000,
       headers: {
         'api-key':        apiKey,
         'Content-Type':   'application/json',
@@ -66,6 +67,11 @@ async function sendSms({ to, message }) {
         }
       });
     });
+    req.on('timeout', () => {
+      req.destroy();
+      console.error('[SMS] ❌ Request timed out');
+      resolve({ ok: false, error: 'timeout' });
+    });
     req.on('error', (err) => {
       console.error('[SMS] ❌ Request error:', err.message);
       resolve({ ok: false, error: err.message });
@@ -75,10 +81,14 @@ async function sendSms({ to, message }) {
   });
 }
 
-// Send OTP reset code
+// Send OTP reset code — fire-and-forget so the caller responds immediately
 async function sendOtp({ phone, code, name }) {
   const message = `DIKLY: Hi ${name}, your verification code is ${code}. Valid for 1 hour.`;
-  return sendSms({ to: phone, message });
+  // Don't await — dispatch in background so the HTTP response isn't held up
+  sendSms({ to: phone, message }).then(r => {
+    if (!r.ok && !r.dev) console.error('[SMS] OTP delivery failed:', r.error);
+  });
+  return { ok: true, queued: true };
 }
 
 module.exports = { sendOtp, sendSms, normalisePhone };
