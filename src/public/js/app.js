@@ -7192,16 +7192,12 @@ async function cancelMeeting(id) {
 }
 
 async function openMeetingMonitor(id) {
-  try {
-    // Get a meeting token for the monitor page
-    const data       = await api(`/api/meetings/${id}/join`);
-    const d          = data.data || data;
-    const token      = d.meetingToken || localStorage.getItem('dikly_token');
-    const monitorUrl = `/meeting-monitor.html?meeting=${id}&token=${encodeURIComponent(token)}`;
-    window.open(monitorUrl, '_blank', 'noopener');
-  } catch (e) {
-    toastError('Could not open monitor: ' + e.message);
-  }
+  // Pass the DIKLY access token (not the short-lived meeting token) so the
+  // monitor page can authenticate all of its API calls.
+  const accessToken = localStorage.getItem('dikly_token') || localStorage.getItem('token') || '';
+  if (!accessToken) { toastError('Not authenticated — please log in again.'); return; }
+  const monitorUrl = `/meeting-monitor.html?meeting=${encodeURIComponent(id)}&token=${encodeURIComponent(accessToken)}`;
+  window.open(monitorUrl, '_blank', 'noopener');
 }
 
 async function viewMeetingDetail(id) {

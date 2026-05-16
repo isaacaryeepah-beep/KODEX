@@ -12,8 +12,11 @@ const authenticate = async (req, res, next) => {
       token = authHeader.split(" ")[1];
     } else if (req.query.token) {
       const path = req.originalUrl || req.url || "";
+      // Query-param token allowed for download paths and SSE streams
+      // (both cases cannot send an Authorization header)
       const isDownload = /\/(export|download|csv|pdf|report|attachment)/i.test(path);
-      if (isDownload) {
+      const isStream   = /\/(monitor\/stream|participant-stream)/.test(path);
+      if (isDownload || isStream) {
         token = req.query.token;
       } else {
         return res.status(401).json({ error: "No token provided" });

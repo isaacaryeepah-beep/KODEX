@@ -160,7 +160,8 @@ exports.updateParticipantStatus = async (req, res) => {
     }
 
     p.lastSeenAt = new Date();
-    p.status     = 'connected';
+    // Never un-kick a kicked participant via a status ping
+    if (p.status !== 'kicked') p.status = 'connected';
     if (cameraOff         !== undefined) p.cameraOff         = cameraOff;
     if (micMuted          !== undefined) p.micMuted          = micMuted;
     if (screenSharing     !== undefined) p.screenSharing     = screenSharing;

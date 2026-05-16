@@ -1066,21 +1066,7 @@ async function init() {
     return;
   }
 
-  // Validate token first
-  try {
-    await apiFetch('GET', `/api/meetings/${meetingId}/validate-token?token=${encodeURIComponent(authToken)}`);
-  } catch (err) {
-    if (err.status === 403 || err.status === 401) {
-      showError('🚫', 'Not Authorised', 'You do not have permission to monitor this meeting. Please check your credentials.');
-    } else if (err.status === 404) {
-      showError('🔍', 'Meeting Not Found', 'The meeting you are looking for does not exist or has been removed.');
-    } else {
-      // Non-fatal — proceed anyway (token validation might not be required)
-    }
-    if (err.status === 403 || err.status === 401 || err.status === 404) return;
-  }
-
-  // Load monitor data
+  // Load monitor data (this also enforces moderator access — 403 if not a moderator)
   try {
     const data = await apiFetch('GET', `/api/meetings/${meetingId}/monitor`);
     const { meeting, participants: pList, stats } = data.data || data;
