@@ -37,37 +37,30 @@ const authenticate = async (req, res, next) => {
 
     req.user = user;
 
-    // Block expired lecturers/managers/admins on every API request.
-    // Admins are included so an expired institution actually locks the
-    // account — but the gate still shows the Pay button so they can renew.
-    const PAID_ROLES = ['lecturer', 'manager', 'admin'];
-    // NOTE: req.path is RELATIVE to the router's mount point (e.g. "/paystack/initialize"
-    // inside routes/payments.js), so we have to test against req.originalUrl which is
-    // the full URL path. Otherwise the exemption never matches and expired lecturers
-    // get 403'd even on the Paystack initialize call — making it impossible to pay.
     const EXEMPT = ['/api/payments', '/api/auth/logout', '/api/auth/login', '/api/auth/me'];
-    if (PAID_ROLES.includes(user.role)) {
-      const fullPath = (req.originalUrl || req.url || '').split('?')[0];
-      const isExempt = EXEMPT.some(p => fullPath.startsWith(p));
-      if (!isExempt) {
-        const now = Date.now();
+    const fullPath = (req.originalUrl || req.url || '').split('?')[0];
+    const isExempt = EXEMPT.some(p => fullPath.startsWith(p));
+
+    if (!isExempt) {
+      const now = Date.now();
+
+      // ── Lecturers / managers / admins ─────────────────────────────────────
+      // Blocked when personal trial AND personal subscription AND company access all expired.
+      if (['lecturer', 'manager', 'admin'].includes(user.role)) {
         const trialEnd = user.trialEndDate
           ? new Date(user.trialEndDate)
-          : new Date(new Date(user.createdAt).getTime() + 30*24*60*60*1000);
+          : new Date(new Date(user.createdAt).getTime() + 30 * 24 * 60 * 60 * 1000);
         const subEnd = user.subscriptionExpiry ? new Date(user.subscriptionExpiry) : null;
         const personalActive = (trialEnd > now) || (subEnd && subEnd > now);
 
-        // Also let them through if their COMPANY still has access (paid by
-        // someone else, e.g. an institution-wide subscription). Only block
-        // when BOTH personal and company access are gone.
         let companyActive = false;
         if (!personalActive && user.company) {
           try {
             const Company = require('../models/Company');
-            const company = await Company.findById(user.company).select('hasAccess subscriptionActive isTrialActive trialEndDate').lean();
-            if (company) {
-              const cTrialEnd = company.trialEndDate ? new Date(company.trialEndDate) : null;
-              companyActive = !!(company.hasAccess || company.subscriptionActive || (cTrialEnd && cTrialEnd > now));
+            const co = await Company.findById(user.company).select('hasAccess subscriptionActive trialEndDate').lean();
+            if (co) {
+              const cEnd = co.trialEndDate ? new Date(co.trialEndDate) : null;
+              companyActive = !!(co.hasAccess || co.subscriptionActive || (cEnd && cEnd > now));
             }
           } catch (_) {}
         }
@@ -78,6 +71,57 @@ const authenticate = async (req, res, next) => {
             message: 'Your free trial has ended. Please subscribe to continue using DIKLY.',
             subscriptionExpired: true,
             userSubscription: true,
+          });
+        }
+      }
+
+      // ── Students ───────────────────────────────────────────────────────────
+      // Each student gets a personal 45-day trial from account creation,
+      // then must pay ₵20/semester individually.
+      if (user.role === 'student') {
+        const trialEnd = user.trialEndDate
+          ? new Date(user.trialEndDate)
+          : new Date(new Date(user.createdAt).getTime() + 45 * 24 * 60 * 60 * 1000);
+        const subEnd = user.subscriptionExpiry ? new Date(user.subscriptionExpiry) : null;
+        const active = (trialEnd > now) || (subEnd && subEnd > now);
+
+        if (!active) {
+          return res.status(403).json({
+            error: 'Subscription expired',
+            message: 'Your 45-day free trial has ended. Pay ₵20 to continue for the semester.',
+            subscriptionExpired: true,
+            userSubscription: true,
+            role: 'student',
+          });
+        }
+      }
+
+      // ── Employees ──────────────────────────────────────────────────────────
+      // Covered by company trial/subscription while it is active.
+      // After that, each employee must pay ₵15/month individually.
+      if (user.role === 'employee') {
+        const subEnd = user.subscriptionExpiry ? new Date(user.subscriptionExpiry) : null;
+        const personalActive = subEnd && subEnd > now;
+
+        let companyActive = false;
+        if (!personalActive && user.company) {
+          try {
+            const Company = require('../models/Company');
+            const co = await Company.findById(user.company).select('subscriptionActive trialEndDate').lean();
+            if (co) {
+              const cEnd = co.trialEndDate ? new Date(co.trialEndDate) : null;
+              companyActive = !!(co.subscriptionActive || (cEnd && cEnd > now));
+            }
+          } catch (_) {}
+        }
+
+        if (!personalActive && !companyActive) {
+          return res.status(403).json({
+            error: 'Subscription expired',
+            message: 'The company trial has ended. Pay ₵15/month to continue access.',
+            subscriptionExpired: true,
+            userSubscription: true,
+            role: 'employee',
           });
         }
       }

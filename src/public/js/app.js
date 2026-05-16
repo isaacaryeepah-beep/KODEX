@@ -898,9 +898,8 @@ async function apiUpload(urlPath, formData, method = 'POST') {
 
 let _subGateFired = false;
 function showSubscriptionGate(message) {
-  // Roles that never pay — ignore subscription gates
-  const freeRoles = ['employee', 'student', 'hod'];
-  if (currentUser && freeRoles.includes(currentUser.role)) return;
+  // HODs never pay — ignore subscription gates for them
+  if (currentUser && currentUser.role === 'hod') return;
 
   // If the user already has an active personal subscription, suppress the gate.
   // This fires when multiple parallel API calls return 403 before the middleware
@@ -2199,15 +2198,7 @@ function showDashboard(data) {
     showForceChangePassword();
     return;
   }
-  // Hard-hide subscription banners for students — they never need a subscription
-  if (currentUser?.role === 'student') {
-    const tb  = document.getElementById('trial-banner');
-    const teb = document.getElementById('trial-expired-banner');
-    if (tb)  { tb.style.display  = 'none'; tb.innerHTML  = ''; }
-    if (teb) { teb.style.display = 'none'; teb.innerHTML = ''; }
-    currentUserTrial = null;     // never cache subscription state for students
-  } else if (data?.userTrial) {
-    // Cache userTrial so showSubscriptionGate can check active subscription status
+  if (data?.userTrial) {
     currentUserTrial = data.userTrial;
   }
   try {
@@ -2251,8 +2242,8 @@ function showDashboard(data) {
     // ── Per-user subscription banner (lecturer / manager / admin) ──────────
     // userTrial comes from authController and is always based on the individual
     // user's trialEndDate + subscriptionExpiry — NOT the company trial.
-    const PAID_FE = ['lecturer', 'manager', 'admin'];
-    const isSubRole = (role === 'employee' || role === 'student' || role === 'hod');
+    const PAID_FE = ['lecturer', 'manager', 'admin', 'student', 'employee'];
+    const isSubRole = (role === 'hod'); // only HODs are fully free now
     const userTrial = data.userTrial || null;
 
     const _bannerEl   = document.getElementById('trial-banner');
@@ -2260,16 +2251,24 @@ function showDashboard(data) {
     const _hideBoth   = () => { _bannerEl.style.display = 'none'; _expiredEl.style.display = 'none'; };
     const _dayLabel   = n => `${n} day${n !== 1 ? 's' : ''}`;
 
-    if (isSubRole) {
+    // HODs are fully free — no banners needed
+    if (role === 'hod') {
       _hideBoth();
-    } else if (PAID_FE.includes(role) && userTrial) {
+    } else if ((PAID_FE.includes(role) || role === 'student' || role === 'employee') && userTrial) {
       const daysLeft = userTrial.daysLeft || 0;
       const status   = userTrial.status;
 
+      const _isStudent  = role === 'student';
+      const _isEmployee = role === 'employee';
+      const _trialLabel = _isStudent ? `${daysLeft <= 3 ? 'Trial Ending' : 'Free Trial'} (45-day)`
+                        : _isEmployee ? 'Company Trial'
+                        : daysLeft <= 3 ? 'Trial Ending Soon' : '30-Day Free Trial';
+      const _planTitle  = _isStudent ? 'Semester Plan Active'
+                        : _isEmployee ? 'Monthly Plan Active'
+                        : (currentUser?.company?.mode === 'corporate' ? 'Monthly Plan Active' : 'Semester Plan Active');
+
       if (status === 'active') {
-        const _subMode   = currentUser?.company?.mode || 'academic';
-        const _planTitle = _subMode === 'corporate' ? 'Monthly Plan Active' : 'Semester Plan Active';
-        const _planDays  = _subMode === 'corporate' ? 30 : 112;
+        const _planDays    = (_isStudent || (!_isEmployee && currentUser?.company?.mode !== 'corporate')) ? 112 : 30;
         const _displayDays = Math.min(daysLeft, _planDays);
         _expiredEl.style.display = 'none';
         _bannerEl.className = 'trial-banner sub--active';
@@ -2295,14 +2294,14 @@ function showDashboard(data) {
           <div class="sub-banner-left">
             <div class="sub-banner-icon sub-banner-icon--${urgent ? 'urgent' : 'trial'}">${urgent ? '⚠' : '⏳'}</div>
             <div class="sub-banner-text">
-              <span class="sub-banner-title">${urgent ? 'Trial Ending Soon' : '30-Day Free Trial'}</span>
+              <span class="sub-banner-title">${_trialLabel}</span>
               <span class="sub-banner-sep">·</span>
               <span class="sub-banner-detail">${_dayLabel(daysLeft)} remaining</span>
             </div>
           </div>
           <div class="sub-banner-right">
             <div class="sub-banner-pill">${urgent ? 'Expiring' : 'Trial'}</div>
-            <button class="sub-banner-cta" onclick="navigateTo('subscription')">${urgent ? 'Upgrade Now' : 'Upgrade'}</button>
+            ${!_isEmployee ? `<button class="sub-banner-cta" onclick="navigateTo('subscription')">${urgent ? 'Subscribe Now' : 'Subscribe'}</button>` : ''}
           </div>`;
         _bannerEl.style.display = 'flex';
 
@@ -2313,23 +2312,23 @@ function showDashboard(data) {
           <div class="sub-banner-left">
             <div class="sub-banner-icon sub-banner-icon--expired">✕</div>
             <div class="sub-banner-text">
-              <span class="sub-banner-title">Trial Expired</span>
+              <span class="sub-banner-title">${_isStudent ? 'Trial Expired' : _isEmployee ? 'Company Trial Ended' : 'Trial Expired'}</span>
               <span class="sub-banner-sep">·</span>
               <span class="sub-banner-detail" id="sub-expired-label">Subscribe to continue via Paystack</span>
             </div>
           </div>
           <div class="sub-banner-right">
-            <button class="sub-banner-cta" onclick="paySubscription()">Subscribe Now</button>
+            <button class="sub-banner-cta" onclick="navigateTo('subscription')">Subscribe Now</button>
           </div>`;
         _expiredEl.style.display = 'flex';
         // Populate live price asynchronously
         api('/api/payments/plans').then(pd => {
           const el = document.getElementById('sub-expired-label');
           if (!el) return;
-          const lp = pd?.plans?.[0];
+          const lp  = pd?.plans?.[0];
           const cur = lp?.currency === 'GHS' ? '₵' : (lp?.currency || '₵');
-          const amt = lp?.price ?? ((currentUser?.company?.mode === 'corporate') ? 150 : 300);
-          const per = currentUser?.company?.mode === 'corporate' ? '/month' : '/semester';
+          const amt = lp?.price ?? (_isStudent ? 20 : _isEmployee ? 15 : 300);
+          const per = lp?.id?.includes('month') ? '/month' : '/semester';
           el.textContent = `Subscribe to continue — ${cur}${amt}${per} via Paystack`;
         }).catch(() => {});
       }
@@ -10576,9 +10575,14 @@ async function markAttendance() {
 
 async function paySubscription() {
   try {
-    // Determine plan from company mode; fallback by role so managers never pay for semester plan
-    const mode   = currentUser?.company?.mode || (currentUser?.role === 'manager' ? 'corporate' : 'academic');
-    const planId = mode === 'corporate' ? 'monthly' : 'semester';
+    const role = currentUser?.role;
+    let planId;
+    if (role === 'student')       planId = 'student_semester';
+    else if (role === 'employee') planId = 'employee_monthly';
+    else {
+      const mode = currentUser?.company?.mode || (role === 'manager' ? 'corporate' : 'academic');
+      planId = mode === 'corporate' ? 'monthly' : 'semester';
+    }
 
     // Show loading state on button
     const btn = document.querySelector('[onclick="paySubscription()"]');
@@ -10607,15 +10611,14 @@ async function renderSubscription() {
   const content = document.getElementById('main-content');
   if (!content) return;
 
-  // Employees and students do not pay — show informational message and stop
-  const freeRoles = ['employee', 'student'];
-  if (currentUser && freeRoles.includes(currentUser.role)) {
+  // HODs are fully free
+  if (currentUser && currentUser.role === 'hod') {
     content.innerHTML = `
       <div class="page-header"><h2>Subscription</h2><p>Your access plan</p></div>
       <div class="card" style="max-width:480px;padding:32px;text-align:center">
         <div style="font-size:40px;margin-bottom:12px">✅</div>
         <h3 style="margin-bottom:8px">No Payment Required</h3>
-        <p style="color:var(--text-muted)">Your access is managed by your company admin. You do not need a personal subscription.</p>
+        <p style="color:var(--text-muted)">Your access is managed by your institution. You do not need a personal subscription.</p>
       </div>`;
     return;
   }
@@ -10626,31 +10629,44 @@ async function renderSubscription() {
       api('/api/payments/plans').catch(() => null),
     ]);
     const ut      = meData.userTrial || {};
-    const status    = ut.status   || 'expired';
-    const rawDays   = ut.daysLeft || 0;
-    // Determine plan based on company mode; fallback by role so managers never see semester plan
-    const mode       = currentUser?.company?.mode || (currentUser?.role === 'manager' ? 'corporate' : 'academic');
-    const isCorp     = mode === 'corporate';
-    // Cap displayed days at plan maximum — corporate is strictly 30 days per period
-    const _planMax  = isCorp ? 30 : 112;
-    const daysLeft  = Math.min(rawDays, _planMax);
-    const expiry   = ut.subscriptionExpiry
+    const status  = ut.status   || 'expired';
+    const rawDays = ut.daysLeft || 0;
+    const role    = currentUser?.role;
+    const isStudent  = role === 'student';
+    const isEmployee = role === 'employee';
+    const mode       = currentUser?.company?.mode || (role === 'manager' ? 'corporate' : 'academic');
+    const isCorp     = isEmployee || mode === 'corporate';
+    const _planMax   = (isStudent || (!isCorp)) ? 112 : 30;
+    const daysLeft   = Math.min(rawDays, _planMax);
+    const expiry     = ut.subscriptionExpiry
       ? new Date(ut.subscriptionExpiry).toLocaleDateString('en-GB', { day:'numeric', month:'long', year:'numeric' })
       : '—';
 
-    // Use live price from API; fall back to defaults if unavailable
-    const livePlan    = plansData?.plans?.[0];
-    const liveCur     = plansData?.plans?.[0]?.currency || 'GHS';
-    const liveAmt     = livePlan?.price ?? (isCorp ? 150 : 300);
-    const liveSym     = liveCur === 'GHS' ? '₵' : liveCur + ' ';
+    const livePlan   = plansData?.plans?.[0];
+    const liveCur    = livePlan?.currency || 'GHS';
+    const liveAmt    = livePlan?.price ?? (isStudent ? 20 : isEmployee ? 15 : isCorp ? 150 : 300);
+    const liveSym    = liveCur === 'GHS' ? '₵' : liveCur + ' ';
 
-    const planName   = isCorp ? 'Monthly Plan'    : 'Semester Plan';
+    const planName   = isStudent  ? 'Student Semester Plan'
+                     : isEmployee ? 'Employee Monthly Plan'
+                     : isCorp     ? 'Monthly Plan' : 'Semester Plan';
     const planPrice  = `${liveSym}${liveAmt}`;
-    const planPeriod = isCorp ? '30 days / month' : '1 semester (16 weeks)';
-    const planId     = isCorp ? 'monthly'         : 'semester';
-    const planLabel  = isCorp ? `${liveSym}${liveAmt} / month` : `${liveSym}${liveAmt} / semester`;
-    const planFeatures = isCorp
-      ? ['Full platform access', 'Attendance & clock in/out management', 'Leave &amp; expense management', 'Performance tracking &amp; reporting', 'Renew any time — days stack up']
+    const planPeriod = (isStudent || (!isCorp)) ? '1 semester (16 weeks)' : '30 days / month';
+    const planId     = isStudent  ? 'student_semester'
+                     : isEmployee ? 'employee_monthly'
+                     : isCorp     ? 'monthly' : 'semester';
+    const planLabel  = (isStudent || (!isCorp)) ? `${liveSym}${liveAmt} / semester` : `${liveSym}${liveAmt} / month`;
+    const trialNote  = isStudent
+      ? `You received a 45-day free trial on account creation. After it ends, subscribe for ${liveSym}${liveAmt}/semester to keep access.`
+      : isEmployee
+      ? `Employees are covered by the company trial while it is active. After it ends, subscribe for ${liveSym}${liveAmt}/month individually.`
+      : null;
+    const planFeatures = isStudent
+      ? ['Full student portal access', 'Attend classes &amp; mark attendance', 'Take quizzes &amp; assignments', 'View grades &amp; results', 'Access the secure exam portal']
+      : isEmployee
+      ? ['Full employee portal access', 'Clock in/out &amp; attendance tracking', 'Leave &amp; expense management', 'Performance tracking', 'Internal messaging &amp; announcements']
+      : isCorp
+      ? ['Full platform access', 'Attendance &amp; clock in/out management', 'Leave &amp; expense management', 'Performance tracking &amp; reporting', 'Renew any time — days stack up']
       : ['Full platform access', 'Attendance marking &amp; session management', 'Assessment creation &amp; grading', 'Grade book &amp; reports', 'Renew any time — days stack up'];
 
     const statusColor = status === 'active' ? 'var(--success)' : status === 'trial' ? '#f59e0b' : 'var(--danger)';
@@ -10706,9 +10722,17 @@ async function renderSubscription() {
             ⚠️ Your subscription has expired. Renew to continue using DIKLY.
           </div>` : ''}
 
-        ${status === 'trial' ? `
+        ${trialNote ? `
+          <div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;padding:12px 14px;margin-bottom:16px;font-size:13px;color:#0369a1">
+            ℹ️ ${trialNote}
+          </div>` : ''}
+
+        ${status === 'trial' && !trialNote ? `
           <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:12px 14px;margin-bottom:16px;font-size:13px;color:#92400e">
             ⏳ 30-day free trial active — <strong>${daysLeft} days</strong> left. Subscribe before it ends to avoid interruption.
+          </div>` : status === 'trial' && isStudent ? `
+          <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:12px 14px;margin-bottom:16px;font-size:13px;color:#92400e">
+            ⏳ 45-day free trial active — <strong>${daysLeft} days</strong> left. Subscribe before it ends to keep access.
           </div>` : ''}
 
         <button class="btn btn-primary" style="width:100%;padding:14px;font-size:15px;font-weight:600;letter-spacing:0.3px;border-radius:10px"
