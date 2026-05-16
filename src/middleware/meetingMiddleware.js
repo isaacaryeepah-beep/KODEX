@@ -107,5 +107,26 @@ exports.canJoin = async (req, res, next) => {
     if (meeting.allowedTeams.includes(user.team)) return next();
   }
 
+  // Invigilators can also join
+  const invigilators = (meeting.invigilators || []).map(String);
+  if (invigilators.includes(user._id.toString())) return next();
+
   return res.status(403).json({ message: 'You are not assigned to this meeting.' });
+};
+
+// ─── IS MODERATOR GUARD ───────────────────────────────────────────────────────
+// Passes for: meeting creator, invigilators, and admin/superadmin/hod
+exports.isModerator = (req, res, next) => {
+  const meeting = req.meeting;
+  const user    = req.user;
+  const role    = (user.role || '').toLowerCase();
+
+  const isAdmin       = ['admin', 'superadmin', 'hod'].includes(role);
+  const isCreator     = meeting.creatorId.toString() === user._id.toString();
+  const isInvigilator = (meeting.invigilators || []).some(i => i.toString() === user._id.toString());
+
+  if (!isAdmin && !isCreator && !isInvigilator) {
+    return res.status(403).json({ message: 'Moderator or invigilator access required.' });
+  }
+  next();
 };

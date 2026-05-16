@@ -5071,14 +5071,14 @@ async function renderStudentDashboard(content) {
     api('/api/attendance-sessions/my-attendance?limit=5').catch(() => ({ records: [], pagination: { total: 0 } })),
     api('/api/courses').catch(() => ({ courses: [] })),
     api('/api/student/quizzes').catch(() => ({ quizzes: [] })),
-    api('/api/zoom').catch(() => ({ meetings: [] })),
+    api('/api/meetings').catch(() => ({ data: [] })),
     api('/api/attendance-sessions/active').catch(() => ({ session: null })),
   ]);
 
   const totalCheckins = attendance.pagination.total;
   const enrolledCourses = coursesData.courses.length;
   const quizzesTaken = quizzesData.quizzes.length;
-  const upcomingMeetings = meetingsData.meetings.filter(m => m.status === 'scheduled');
+  const upcomingMeetings = (meetingsData.data || meetingsData.meetings || []).filter(m => m.status === 'scheduled');
   const activeSession = activeSessionData.session;
   const attendanceRate = totalCheckins > 0 ? Math.round((attendance.records.filter(r => r.status === 'present').length / attendance.records.length) * 100) : 0;
 
@@ -6783,7 +6783,7 @@ async function renderMeetings() {
   const content = document.getElementById('main-content');
   if (!content) return;
   try {
-    const data = await api('/api/zoom');
+    const data = await api('/api/meetings');
     const canCreate = ['manager', 'lecturer'].includes(currentUser.role);
     const canManageExisting = ['manager', 'lecturer', 'admin', 'superadmin', 'hod'].includes(currentUser.role);
 
@@ -6796,30 +6796,44 @@ async function renderMeetings() {
            + ' · ' + d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
     }
 
+    const MEETING_TYPE_LABELS = {
+      meeting: 'Meeting', lecture: 'Lecture', proctored_quiz: 'Proctored Quiz',
+      snap_quiz: 'Snap Quiz', oral_exam: 'Oral Exam',
+      staff_conference: 'Staff Conference', live_assessment: 'Live Assessment',
+    };
+
     function meetingCard(m) {
-      const isLive      = m.status === 'live' || m.status === 'active';
+      const isLive      = m.status === 'live';
       const isScheduled = m.status === 'scheduled';
       const isEnded     = ['ended', 'completed', 'cancelled'].includes(m.status);
-      const isCreator   = m.createdBy?._id === currentUser._id;
-      const isAdmin     = ['admin', 'superadmin'].includes(currentUser.role);
-      const canControl  = canManageExisting && (isCreator || isAdmin);
+      // Support both old (createdBy) and new (creatorId) field shapes
+      const hostId   = m.creatorId?._id || m.creatorId || m.createdBy?._id;
+      const hostName = m.creatorId?.name || m.createdBy?.name || 'Unknown';
+      const isCreator   = String(hostId) === String(currentUser._id);
+      const isAdmin     = ['admin', 'superadmin', 'hod'].includes(currentUser.role);
+      const isInvigil   = (m.invigilators || []).some(i => String(i._id || i) === String(currentUser._id));
+      const canControl  = canManageExisting && (isCreator || isAdmin || isInvigil);
+      const durationMin = m.scheduledStart && m.scheduledEnd
+        ? Math.round((new Date(m.scheduledEnd) - new Date(m.scheduledStart)) / 60000)
+        : (m.duration || '—');
 
       const borderColor = isLive ? '#22c55e' : isScheduled ? '#3b82f6' : '#e5e7eb';
-      const statusBadgeStyle = isLive ? 'background:#dcfce7;color:#15803d;' : isScheduled ? 'background:#dbeafe;color:#1d4ed8;' : isEnded && m.status==='cancelled' ? 'background:#fee2e2;color:#b91c1c;' : 'background:#f3f4f6;color:#6b7280;';
+      const statusBadgeStyle = isLive ? 'background:#dcfce7;color:#15803d;' : isScheduled ? 'background:#dbeafe;color:#1d4ed8;' : m.status==='cancelled' ? 'background:#fee2e2;color:#b91c1c;' : 'background:#f3f4f6;color:#6b7280;';
       const statusText = isLive ? '● LIVE' : isScheduled ? 'Scheduled' : m.status === 'cancelled' ? 'Cancelled' : 'Ended';
-      const safeName = (m.title || '').replace(/'/g, "\\'");
+      const typeLabel  = MEETING_TYPE_LABELS[m.meetingType] || '';
+      const safeName   = (m.title || '').replace(/'/g, "\\'");
 
       return `<div style="background:#fff;border-radius:14px;box-shadow:0 1px 6px rgba(0,0,0,0.07);padding:16px;border:1px solid #f1f5f9;border-left:4px solid ${borderColor};margin-bottom:0;">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:10px;">
           <div style="flex:1;min-width:0;">
             <div style="font-weight:700;font-size:15px;color:#0f172a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(m.title)}</div>
-            ${m.course ? `<div style="font-size:11px;font-weight:600;color:#7c3aed;margin-top:2px;">${esc(m.course.title||'')}</div>` : ''}
+            ${typeLabel ? `<div style="font-size:10px;font-weight:700;color:#7c3aed;margin-top:2px;text-transform:uppercase;letter-spacing:.5px;">${typeLabel}</div>` : ''}
           </div>
           <span style="${statusBadgeStyle}padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700;flex-shrink:0;">${statusText}</span>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:12px;font-size:12px;color:#64748b;">
-          <div><div style="font-weight:600;color:#0f172a;">Host</div>${esc(m.createdBy?.name||'Unknown')}</div>
-          <div><div style="font-weight:600;color:#0f172a;">Duration</div>${m.duration} min</div>
+          <div><div style="font-weight:600;color:#0f172a;">Host</div>${esc(hostName)}</div>
+          <div><div style="font-weight:600;color:#0f172a;">Duration</div>${durationMin} min</div>
           <div style="grid-column:1/-1;"><div style="font-weight:600;color:#0f172a;">Start</div>${fmtDate(m.scheduledStart)}</div>
         </div>
         <div style="display:flex;gap:6px;flex-wrap:wrap;">
@@ -6827,6 +6841,7 @@ async function renderMeetings() {
           ${isLive && isDeviceLocked ? `<span style="background:#fef3c7;color:#92400e;padding:8px 12px;border-radius:9px;font-size:12px;font-weight:600;">🔒 Locked</span>` : ''}
           ${isScheduled && !canControl ? `<span style="background:#eff6ff;color:#1d4ed8;padding:8px 12px;border-radius:9px;font-size:12px;font-weight:600;">Not Live Yet</span>` : ''}
           ${canControl && isScheduled ? `<button style="flex:1;background:#3b82f6;color:#fff;border:none;padding:10px 14px;border-radius:9px;font-weight:700;cursor:pointer;font-size:14px;min-width:90px;" onclick="startMeeting('${m._id}')">▶ Start</button>` : ''}
+          ${canControl && isLive ? `<button style="background:#0ea5e9;color:#fff;border:none;padding:10px 14px;border-radius:9px;font-weight:700;cursor:pointer;" onclick="openMeetingMonitor('${m._id}')">👁 Monitor</button>` : ''}
           ${canControl && isLive ? `<button style="background:#ef4444;color:#fff;border:none;padding:10px 14px;border-radius:9px;font-weight:700;cursor:pointer;" onclick="endMeeting('${m._id}')">■ End</button>` : ''}
           ${canControl && (isScheduled || isLive) ? `<button style="background:#f1f5f9;color:#374151;border:none;padding:10px 14px;border-radius:9px;font-weight:600;cursor:pointer;" onclick="cancelMeeting('${m._id}')">Cancel</button>` : ''}
           <button style="background:#f1f5f9;color:#374151;border:none;padding:10px 14px;border-radius:9px;font-weight:600;cursor:pointer;" onclick="viewMeetingDetail('${m._id}')">Details</button>
@@ -6835,7 +6850,7 @@ async function renderMeetings() {
       </div>`;
     }
 
-    const meetings = data.meetings || [];
+    const meetings = data.data || data.meetings || [];
     const live      = meetings.filter(m => m.status === 'live' || m.status === 'active');
     const scheduled = meetings.filter(m => m.status === 'scheduled');
     const past      = meetings.filter(m => ['ended', 'completed', 'cancelled'].includes(m.status));
@@ -6913,11 +6928,25 @@ async function showCreateMeetingModal() {
           <textarea id="meeting-desc" rows="2" placeholder="What is this meeting about?" style="resize:vertical;"></textarea>
         </div>
 
-        <div class="form-group">
-          <label>Course *</label>
-          <select id="meeting-course" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
-            ${courseOptions}
-          </select>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+          <div class="form-group">
+            <label>Meeting Type</label>
+            <select id="meeting-type" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
+              <option value="meeting">General Meeting</option>
+              <option value="lecture">Lecture</option>
+              <option value="proctored_quiz">Proctored Quiz</option>
+              <option value="snap_quiz">Snap Quiz</option>
+              <option value="oral_exam">Oral Exam</option>
+              <option value="staff_conference">Staff Conference</option>
+              <option value="live_assessment">Live Assessment</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Course</label>
+            <select id="meeting-course" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
+              ${courseOptions}
+            </select>
+          </div>
         </div>
 
         <div id="meeting-error" style="color:#ef4444;margin:8px 0;display:none;font-size:13px;"></div>
@@ -6939,28 +6968,29 @@ async function showCreateMeetingModal() {
 }
 
 async function createMeeting() {
-  const title = document.getElementById('meeting-title')?.value.trim();
-  const start = document.getElementById('meeting-start')?.value;
-  const end   = document.getElementById('meeting-end')?.value;
-  const desc  = document.getElementById('meeting-desc')?.value.trim();
-  const courseId = document.getElementById('meeting-course')?.value || undefined;
-  const errEl = document.getElementById('meeting-error');
+  const title      = document.getElementById('meeting-title')?.value.trim();
+  const start      = document.getElementById('meeting-start')?.value;
+  const end        = document.getElementById('meeting-end')?.value;
+  const desc       = document.getElementById('meeting-desc')?.value.trim();
+  const courseId   = document.getElementById('meeting-course')?.value || undefined;
+  const meetingType = document.getElementById('meeting-type')?.value || 'meeting';
+  const errEl      = document.getElementById('meeting-error');
 
   if (!title) { errEl.textContent = 'Please enter a meeting title.'; errEl.style.display = 'block'; return; }
   if (!start || !end) { errEl.textContent = 'Please set a start and end time.'; errEl.style.display = 'block'; return; }
   if (new Date(end) <= new Date(start)) { errEl.textContent = 'End time must be after start time.'; errEl.style.display = 'block'; return; }
-  if (!courseId) { errEl.textContent = 'Please select a course.'; errEl.style.display = 'block'; return; }
 
   const schedBtn = document.querySelector('.modal .btn-primary');
   if (schedBtn) { schedBtn.textContent = 'Scheduling…'; schedBtn.disabled = true; }
 
   try {
-    await api('/api/zoom', { method: 'POST', body: JSON.stringify({
-      title,
+    await api('/api/meetings/create', { method: 'POST', body: JSON.stringify({
+      title, meetingType,
       scheduledStart: start,
-      scheduledEnd: end,
-      description: desc || undefined,
-      courseId: courseId || undefined,
+      scheduledEnd:   end,
+      description:    desc || undefined,
+      linkedCourseId: courseId || undefined,
+      openToCompany:  !courseId,
     }) });
     closeModal();
     renderMeetings();
@@ -6973,17 +7003,13 @@ async function createMeeting() {
 }
 
 async function createAndStartMeeting() {
-  const title    = document.getElementById('meeting-title').value.trim();
-  const courseId = document.getElementById('meeting-course')?.value || '';
-  const errEl    = document.getElementById('meeting-error');
-  const btn      = document.getElementById('start-meeting-btn');
+  const title       = document.getElementById('meeting-title').value.trim();
+  const courseId    = document.getElementById('meeting-course')?.value || '';
+  const meetingType = document.getElementById('meeting-type')?.value || 'meeting';
+  const errEl       = document.getElementById('meeting-error');
+  const btn         = document.getElementById('start-meeting-btn');
   if (!title) {
     errEl.textContent = 'Please enter a meeting title.';
-    errEl.style.display = 'block';
-    return;
-  }
-  if (!courseId) {
-    errEl.textContent = 'Please select a course.';
     errEl.style.display = 'block';
     return;
   }
@@ -6991,16 +7017,17 @@ async function createAndStartMeeting() {
   const now = new Date();
   const end = new Date(now.getTime() + 60 * 60 * 1000);
   try {
-    const data = await api('/api/zoom', { method: 'POST', body: JSON.stringify({
-      title,
+    const data = await api('/api/meetings/create', { method: 'POST', body: JSON.stringify({
+      title, meetingType,
       scheduledStart: now.toISOString().slice(0,16),
-      scheduledEnd: end.toISOString().slice(0,16),
-      courseId,
+      scheduledEnd:   end.toISOString().slice(0,16),
+      linkedCourseId: courseId || undefined,
+      openToCompany:  !courseId,
     }) });
     closeModal();
-    await startMeeting(data.meeting._id);
+    await startMeeting((data.data || data.meeting)?._id);
   } catch(e) {
-    if (btn) { btn.textContent = '🎥 Start Meeting'; btn.disabled = false; }
+    if (btn) { btn.textContent = 'Start Now'; btn.disabled = false; }
     errEl.textContent = e.message;
     errEl.style.display = 'block';
   }
@@ -7008,24 +7035,17 @@ async function createAndStartMeeting() {
 
 async function startMeeting(id) {
   try {
-    await api(`/api/zoom/${id}/start`, { method: 'POST' });
-    // Join as host — records attendance and returns roomName / jitsiConfig
-    const joinData    = await api(`/api/zoom/${id}/join`, { method: 'POST' });
-    const jitsiConfig = joinData?.data?.jitsiConfig;
-    const legacyUrl   = joinData?.data?.secureJoinUrl || joinData?.joinUrl;
-    const roomName    = jitsiConfig?.roomName || joinData?.roomName;
+    const startData   = await api(`/api/meetings/${id}/start`, { method: 'POST' });
+    const sd          = startData.data || startData;
+    const jitsiConfig = sd.jitsiConfig;
+    const jitsiToken  = sd.jitsiToken;
+    const monitorUrl  = sd.monitorUrl;
     renderMeetings();
-    if (roomName) {
-      const embedConfig = jitsiConfig || {
-        roomName,
-        domain:      legacyUrl ? (() => { try { return new URL(legacyUrl).hostname; } catch(e) { return 'meet.jit.si'; } })() : 'meet.jit.si',
-        displayName: currentUser?.name  || '',
-        email:       currentUser?.email || '',
-        subject:     '',
-      };
-      showJitsiEmbed(embedConfig);
-    } else if (legacyUrl) {
-      window.open(legacyUrl, '_blank');
+    if (jitsiConfig?.roomName) {
+      showJitsiEmbed(jitsiConfig, jitsiToken);
+      if (monitorUrl) {
+        toastSuccess('Meeting started! Open the monitor to watch participants.');
+      }
     }
   } catch (e) {
     toastError(e.message);
@@ -7034,29 +7054,15 @@ async function startMeeting(id) {
 
 async function joinMeeting(id) {
   try {
-    const data = await api(`/api/zoom/${id}/join`, { method: 'POST' });
-    // meetingController returns jitsiConfig nested under data.data
-    // zoomController returns roomName + joinUrl at root level
-    const jitsiConfig = data.data?.jitsiConfig;
-    const secureUrl   = data.data?.secureJoinUrl;
-    const legacyUrl   = data.joinUrl;
-    const roomName    = jitsiConfig?.roomName || data.roomName;
+    const data        = await api(`/api/meetings/${id}/join`);
+    const d           = data.data || data;
+    const jitsiConfig = d.jitsiConfig;
+    const jitsiToken  = d.jitsiToken;
 
-    if (roomName) {
-      const embedConfig = jitsiConfig || {
-        roomName,
-        domain:      legacyUrl ? (() => { try { return new URL(legacyUrl).hostname; } catch(e) { return 'meet.jit.si'; } })() : 'meet.jit.si',
-        displayName: currentUser?.name  || '',
-        email:       currentUser?.email || '',
-        subject:     '',
-      };
-      showJitsiEmbed(embedConfig);
-    } else if (secureUrl) {
-      window.open(secureUrl, '_blank');
-    } else if (legacyUrl) {
-      window.open(legacyUrl, '_blank');
+    if (jitsiConfig?.roomName) {
+      showJitsiEmbed(jitsiConfig, jitsiToken);
     } else {
-      toastError('No join URL available');
+      toastError('No Jitsi config returned — contact your admin');
     }
   } catch (e) {
     const msg = e.message || 'Failed to join meeting';
@@ -7073,7 +7079,7 @@ async function joinMeeting(id) {
   }
 }
 
-function showJitsiEmbed(config) {
+function showJitsiEmbed(config, jitsiToken) {
   document.getElementById('jitsi-room-overlay')?.remove();
   if (window._jitsiApi) { try { window._jitsiApi.dispose(); } catch(e) {} window._jitsiApi = null; }
 
@@ -7094,11 +7100,11 @@ function showJitsiEmbed(config) {
 
   const domain = config.domain || 'meet.jit.si';
   if (window.JitsiMeetExternalAPI) {
-    _initJitsiEmbed(config, domain);
+    _initJitsiEmbed(config, domain, jitsiToken);
   } else {
     const script = document.createElement('script');
     script.src = `https://${domain}/external_api.js`;
-    script.onload = () => _initJitsiEmbed(config, domain);
+    script.onload = () => _initJitsiEmbed(config, domain, jitsiToken);
     script.onerror = () => {
       toastError('Could not load embedded meeting. Opening in new tab instead.');
       overlay.remove();
@@ -7108,36 +7114,34 @@ function showJitsiEmbed(config) {
   }
 }
 
-function _initJitsiEmbed(config, domain) {
+function _initJitsiEmbed(config, domain, jitsiToken) {
   const container = document.getElementById('jitsi-embed-container');
   if (!container) return;
-  const moderatorButtons = [
-    'microphone','camera','closedcaptions','desktop','chat','raisehand',
-    'tileview','select-background','mute-everyone','kick-participant',
-    'participants-pane','security','hangup',
-  ];
-  const participantButtons = [
-    'microphone','camera','closedcaptions','desktop',
-    'chat','raisehand','tileview','select-background','hangup',
-  ];
-  // isModerator is always determined server-side; toolbar is set last so it
-  // can never be overridden by a stale value in interfaceConfigOverwrite.
-  const toolbarButtons = config.isModerator ? moderatorButtons : participantButtons;
 
-  window._jitsiApi = new JitsiMeetExternalAPI(domain, {
-    roomName: config.roomName,
-    width: '100%',
-    height: '100%',
+  // Toolbar buttons are always determined server-side (isModerator flag)
+  const toolbarButtons = config.interfaceConfigOverwrite?.TOOLBAR_BUTTONS
+    || (config.isModerator
+      ? ['microphone','camera','closedcaptions','desktop','chat','raisehand',
+         'tileview','select-background','mute-everyone','kick-participant',
+         'participants-pane','security','settings','hangup']
+      : ['microphone','camera','chat','raisehand','tileview','select-background','desktop','hangup']);
+
+  const options = {
+    roomName:   config.roomName,
+    width:      '100%',
+    height:     '100%',
     parentNode: container,
     userInfo: {
       displayName: config.displayName || currentUser?.name || '',
       email:       config.email       || currentUser?.email || '',
     },
     configOverwrite: {
-      startWithAudioMuted:     config.configOverwrite?.startWithAudioMuted ?? true,
-      startWithVideoMuted:     false,
-      enableNoisyMicDetection: true,
-      disableDeepLinking:      true,
+      startWithAudioMuted:       config.configOverwrite?.startWithAudioMuted ?? true,
+      startWithVideoMuted:       false,
+      enableNoisyMicDetection:   true,
+      disableDeepLinking:        true,
+      enableWelcomePage:         false,
+      prejoinPageEnabled:        false,
       ...(config.configOverwrite || {}),
     },
     interfaceConfigOverwrite: {
@@ -7145,12 +7149,17 @@ function _initJitsiEmbed(config, domain) {
       SHOW_JITSI_WATERMARK:      false,
       SHOW_WATERMARK_FOR_GUESTS: false,
       ...(config.interfaceConfigOverwrite || {}),
-      TOOLBAR_BUTTONS: toolbarButtons, // always last — isModerator owns this
+      TOOLBAR_BUTTONS: toolbarButtons,
     },
-  });
+  };
+
+  // Attach Jitsi JWT when self-hosted auth is enabled
+  if (jitsiToken) options.jwt = jitsiToken;
+
+  window._jitsiApi = new JitsiMeetExternalAPI(domain, options);
   window._jitsiApi.addEventListeners({
-    readyToClose:          () => leaveJitsiMeeting(),
-    videoConferenceLeft:   () => leaveJitsiMeeting(),
+    readyToClose:        () => leaveJitsiMeeting(),
+    videoConferenceLeft: () => leaveJitsiMeeting(),
   });
 }
 
@@ -7163,8 +7172,10 @@ function leaveJitsiMeeting() {
 async function endMeeting(id) {
   if (!confirm('End this meeting? All participants will be marked as left.')) return;
   try {
-    await api(`/api/zoom/${id}/end`, { method: 'POST' });
+    await api(`/api/meetings/${id}/end`, { method: 'POST' });
+    leaveJitsiMeeting();
     renderMeetings();
+    toastSuccess('Meeting ended.');
   } catch (e) {
     toastError(e.message);
   }
@@ -7173,10 +7184,23 @@ async function endMeeting(id) {
 async function cancelMeeting(id) {
   if (!confirm('Cancel this meeting?')) return;
   try {
-    await api(`/api/zoom/${id}/cancel`, { method: 'POST' });
+    await api(`/api/meetings/${id}/cancel`, { method: 'POST' });
     renderMeetings();
   } catch (e) {
     toastError(e.message);
+  }
+}
+
+async function openMeetingMonitor(id) {
+  try {
+    // Get a meeting token for the monitor page
+    const data       = await api(`/api/meetings/${id}/join`);
+    const d          = data.data || data;
+    const token      = d.meetingToken || localStorage.getItem('dikly_token');
+    const monitorUrl = `/meeting-monitor.html?meeting=${id}&token=${encodeURIComponent(token)}`;
+    window.open(monitorUrl, '_blank', 'noopener');
+  } catch (e) {
+    toastError('Could not open monitor: ' + e.message);
   }
 }
 
@@ -7185,7 +7209,7 @@ async function viewMeetingDetail(id) {
   if (!content) return;
   content.innerHTML = '<div class="card"><p>Loading meeting details...</p></div>';
   try {
-    const data = await api(`/api/zoom/${id}`);
+    const data = await api(`/api/meetings/${id}`);
     const m = data.meeting;
     const isCreator = m.createdBy?._id === currentUser._id;
     const isAdmin = ['admin', 'superadmin'].includes(currentUser.role);
@@ -10497,8 +10521,8 @@ async function showJitsiJoin() {
   if (!area) return;
   let meetingsHtml = '<p style="color:var(--text-light);font-size:13px">Loading meetings...</p>';
   try {
-    const data = await api('/api/zoom');
-    const available = data.meetings.filter(m => m.status === 'scheduled' || m.status === 'active');
+    const data = await api('/api/meetings');
+    const available = (data.data || data.meetings || []).filter(m => m.status === 'scheduled' || m.status === 'live');
     if (available.length > 0) {
       meetingsHtml = available.map(m => `
         <div style="display:flex;align-items:center;justify-content:space-between;padding:12px;border:1px solid var(--border);border-radius:8px;margin-bottom:8px">
@@ -10524,10 +10548,12 @@ async function showJitsiJoin() {
   `;
 }
 
-async function submitJitsiJoin(meetingId, joinUrl) {
+async function submitJitsiJoin(meetingId) {
   try {
-    await api(`/api/zoom/${meetingId}/join`, { method: 'POST' });
-    if (joinUrl) window.open(joinUrl, '_blank');
+    const data       = await api(`/api/meetings/${meetingId}/join`);
+    const d          = data.data || data;
+    const jitsiToken = d.jitsiToken;
+    if (d.jitsiConfig?.roomName) showJitsiEmbed(d.jitsiConfig, jitsiToken);
     toastSuccess('Attendance marked via meeting join!');
     navigateTo('mark-attendance');
   } catch (e) {
@@ -18211,9 +18237,9 @@ async function viewMeetingAttendance(meetingId, title) {
   container.innerHTML = '<div class="modal-overlay" onclick="closeModal(event)"><div class="modal" onclick="event.stopPropagation()" style="max-width:700px;width:95%"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px"><h3 style="margin:0">Meeting Attendance</h3><button onclick="closeModal()" style="background:none;border:none;font-size:20px;cursor:pointer">×</button></div><div id="meeting-attendance-body"><div class="loading">Loading...</div></div></div></div>';
 
   try {
-    const data = await api('/api/zoom/' + meetingId + '/attendance');
-    const attendance = data.attendance || [];
-    const total = data.total || 0;
+    const data = await api('/api/meetings/' + meetingId + '/attendance');
+    const attendance = (data.data || data.attendance || []);
+    const total = data.total || attendance.length;
     const statusColor = { present: '#22c55e', partial: '#f59e0b', absent: '#ef4444' };
 
     let rows = '';
@@ -18230,7 +18256,7 @@ async function viewMeetingAttendance(meetingId, title) {
     }
 
     const token = localStorage.getItem('token') || localStorage.getItem('dikly_token') || '';
-    const csvUrl = '/api/zoom/' + meetingId + '/attendance/csv?token=' + token;
+    const csvUrl = '/api/meetings/' + meetingId + '/attendance/pdf?token=' + token;
 
     let tableHtml = attendance.length
       ? '<table style="width:100%"><thead><tr><th>Name</th><th>Email / Index</th><th>Joined</th><th>Left</th><th>Duration</th><th>Status</th></tr></thead><tbody>' + rows + '</tbody></table>'
@@ -18252,8 +18278,8 @@ async function viewMeetingAttendance(meetingId, title) {
 
 async function printMeetingAttendance(meetingId, title) {
   try {
-    const data = await api('/api/zoom/' + meetingId + '/attendance');
-    const attendance = data.attendance || [];
+    const data = await api('/api/meetings/' + meetingId + '/attendance');
+    const attendance = (data.data || data.attendance || []);
     const statusColor = { present: '#22c55e', partial: '#f59e0b', absent: '#ef4444' };
 
     let rows = '';
