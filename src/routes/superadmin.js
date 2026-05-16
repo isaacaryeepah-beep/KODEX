@@ -581,12 +581,15 @@ router.get("/settings", async (req, res) => {
 // ── POST /api/superadmin/settings ─────────────────────────────────────────────
 router.post("/settings", async (req, res) => {
   try {
-    const { trialDays, academicPrice, corporatePrice, currency } = req.body;
+    const { trialDays, academicPrice, corporatePrice, currency, studentTrialDays, studentSemesterPrice, employeeMonthlyPrice } = req.body;
     const allowed = {};
-    if (trialDays      != null) allowed.trialDays      = Math.max(1, Number(trialDays));
-    if (academicPrice  != null) allowed.academicPrice  = Math.max(0, Number(academicPrice));
-    if (corporatePrice != null) allowed.corporatePrice = Math.max(0, Number(corporatePrice));
-    if (currency       != null) allowed.currency       = String(currency).slice(0, 10);
+    if (trialDays            != null) allowed.trialDays            = Math.max(1, Number(trialDays));
+    if (academicPrice        != null) allowed.academicPrice        = Math.max(0, Number(academicPrice));
+    if (corporatePrice       != null) allowed.corporatePrice       = Math.max(0, Number(corporatePrice));
+    if (currency             != null) allowed.currency             = String(currency).slice(0, 10);
+    if (studentTrialDays     != null) allowed.studentTrialDays     = Math.max(1, Number(studentTrialDays));
+    if (studentSemesterPrice != null) allowed.studentSemesterPrice = Math.max(0, Number(studentSemesterPrice));
+    if (employeeMonthlyPrice != null) allowed.employeeMonthlyPrice = Math.max(0, Number(employeeMonthlyPrice));
     const s = await PlatformSettings.findOneAndUpdate({}, { $set: allowed }, { upsert: true, new: true });
     res.json(s);
   } catch (err) {

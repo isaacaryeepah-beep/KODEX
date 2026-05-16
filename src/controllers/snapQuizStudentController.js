@@ -950,8 +950,20 @@ async function _buildQuestionsForAttempt(attempt, quiz) {
   }).filter(Boolean);
 }
 
-function _isCriticalViolation(_type) {
-  return true; // every violation counts toward the termination limit
+function _isCriticalViolation(type, quiz) {
+  if (!quiz) return true;
+  // Quiz-configured violations — only critical when the quiz setting is enabled
+  if (type === "tab_switch"      && quiz.terminateOnTabSwitch)      return true;
+  if (type === "focus_lost"      && quiz.terminateOnFocusLost)      return true;
+  if (type === "fullscreen_exit" && quiz.terminateOnFullscreenExit) return true;
+  if (type === "copy_paste"      && quiz.preventCopyPaste)          return true;
+  if (type === "right_click"     && quiz.preventRightClick)         return true;
+  if (type === "print_screen"    && quiz.preventPrintScreen)        return true;
+  // Always-critical: security and proctoring events (not configurable)
+  return [
+    "session_conflict", "devtools_open", "multiple_windows",
+    "phone_detected", "head_turn", "multiple_faces",
+  ].includes(type);
 }
 
 function _violationFieldInc(type) {

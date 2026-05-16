@@ -10,9 +10,11 @@ const { sendOtp, normalisePhone } = require("../services/smsService");
 const { syncStudentToRoster } = require("../utils/rosterSync");
 
 const SIX_HOURS_MS = 6 * 60 * 60 * 1000;
-const PAID_ROLES    = ["lecturer", "manager", "admin"];
-const TRIAL_DAYS    = 30; // fallback when PlatformSettings not yet seeded
-const SEMESTER_DAYS = 112;
+const PAID_ROLES         = ["lecturer", "manager", "admin"];
+const ALL_PAID_ROLES     = ["lecturer", "manager", "admin", "student", "employee"];
+const TRIAL_DAYS         = 30;
+const STUDENT_TRIAL_DAYS = 45;
+const SEMESTER_DAYS      = 112;
 
 async function getTrialDays() {
   try {
@@ -21,6 +23,53 @@ async function getTrialDays() {
   } catch {
     return TRIAL_DAYS;
   }
+}
+
+async function getStudentTrialDays() {
+  try {
+    const s = await PlatformSettings.findOne().lean();
+    return (s?.studentTrialDays > 0) ? s.studentTrialDays : STUDENT_TRIAL_DAYS;
+  } catch {
+    return STUDENT_TRIAL_DAYS;
+  }
+}
+
+function computeUserTrial(user, company, fallbackTrialDays) {
+  const now = Date.now();
+  const subEnd = user.subscriptionExpiry ? new Date(user.subscriptionExpiry) : null;
+  const inSub  = !!(subEnd && subEnd > now);
+
+  if (user.role === 'student') {
+    const trialEnd = user.trialEndDate
+      ? new Date(user.trialEndDate)
+      : new Date(new Date(user.createdAt).getTime() + STUDENT_TRIAL_DAYS * 24 * 60 * 60 * 1000);
+    const inTrial = trialEnd > now;
+    const activeEnd = inSub ? subEnd : inTrial ? trialEnd : null;
+    const daysLeft = activeEnd ? Math.max(0, Math.ceil((activeEnd - now) / 86400000)) : 0;
+    return { daysLeft, activeEnd, status: inSub ? 'active' : inTrial ? 'trial' : 'expired', isSubscribed: inSub, plan: 'student_semester' };
+  }
+
+  if (user.role === 'employee') {
+    if (inSub) {
+      const daysLeft = Math.max(0, Math.ceil((subEnd - now) / 86400000));
+      return { daysLeft, activeEnd: subEnd, status: 'active', isSubscribed: true, plan: 'employee_monthly' };
+    }
+    // Fall back to company trial
+    const cEnd = company?.trialEndDate ? new Date(company.trialEndDate) : null;
+    const cActive = !!(company?.subscriptionActive || (cEnd && cEnd > now));
+    const daysLeft = cActive
+      ? (company?.subscriptionActive ? 999 : Math.max(0, Math.ceil((cEnd - now) / 86400000)))
+      : 0;
+    return { daysLeft, activeEnd: cEnd, status: cActive ? 'trial' : 'expired', isSubscribed: false, plan: 'employee_monthly', coveredByCompany: cActive };
+  }
+
+  // lecturer / manager / admin (original logic)
+  const trialEnd = user.trialEndDate
+    ? new Date(user.trialEndDate)
+    : new Date(new Date(user.createdAt).getTime() + (fallbackTrialDays || TRIAL_DAYS) * 24 * 60 * 60 * 1000);
+  const activeEnd = inSub ? subEnd : trialEnd;
+  const daysLeft  = Math.max(0, Math.ceil((activeEnd - now) / 86400000));
+  return { daysLeft, activeEnd, status: inSub ? 'active' : trialEnd > now ? 'trial' : 'expired', isSubscribed: inSub };
 }
 
 exports.register = async (req, res) => {
@@ -330,6 +379,9 @@ exports.registerStudent = async (req, res) => {
     const emailExists = await User.findOne({ email, company: company._id });
     if (emailExists) return res.status(400).json({ error: "Email address is already in use" });
 
+    const studentTrialDays = await getStudentTrialDays();
+    const studentTrialEnd  = new Date(Date.now() + studentTrialDays * 24 * 60 * 60 * 1000);
+
     const user = await User.create({
       name,
       IndexNumber: IndexNumber.trim().toUpperCase(),
@@ -345,6 +397,8 @@ exports.registerStudent = async (req, res) => {
       studentGroup: studentGroup ? studentGroup.trim().toUpperCase() : null,
       sessionType: sessionType ? sessionType.trim() : null,
       semester: semester ? semester.trim() : null,
+      trialEndDate:       studentTrialEnd,
+      subscriptionStatus: 'trial',
     });
 
     // Welcome email is sent when the account is approved, not at registration.
@@ -846,21 +900,7 @@ exports.login = async (req, res) => {
         status: company.subscriptionStatus,
         plan: company.subscriptionPlan,
       } : null,
-      userTrial: PAID_ROLES.includes(user.role) ? (() => {
-        const now = Date.now();
-        const trialEnd = user.trialEndDate
-          ? new Date(user.trialEndDate)
-          : new Date(new Date(user.createdAt).getTime() + TRIAL_DAYS * 24 * 60 * 60 * 1000);
-        const subEnd = user.subscriptionExpiry ? new Date(user.subscriptionExpiry) : null;
-        const activeEnd = (subEnd && subEnd > now) ? subEnd : trialEnd;
-        const daysLeft = Math.ceil((activeEnd - now) / (1000 * 60 * 60 * 24));
-        return {
-          daysLeft,
-          activeEnd,
-          status: subEnd && subEnd > now ? 'active' : trialEnd > now ? 'trial' : 'expired',
-          isSubscribed: !!(subEnd && subEnd > now),
-        };
-      })() : null,
+      userTrial: ALL_PAID_ROLES.includes(user.role) ? computeUserTrial(user, company, await getTrialDays()) : null,
     });
   } catch (error) {
     console.error("Login error:", error);
@@ -913,21 +953,7 @@ exports.getMe = async (req, res) => {
         status: company.subscriptionStatus,
         plan: company.subscriptionPlan,
       } : null,
-      userTrial: PAID_ROLES.includes(user.role) ? (() => {
-        const now = Date.now();
-        const trialEnd = user.trialEndDate
-          ? new Date(user.trialEndDate)
-          : new Date(new Date(user.createdAt).getTime() + TRIAL_DAYS * 24 * 60 * 60 * 1000);
-        const subEnd = user.subscriptionExpiry ? new Date(user.subscriptionExpiry) : null;
-        const activeEnd = (subEnd && subEnd > now) ? subEnd : trialEnd;
-        const daysLeft = Math.ceil((activeEnd - now) / (1000 * 60 * 60 * 24));
-        return {
-          daysLeft,
-          activeEnd,
-          status: subEnd && subEnd > now ? 'active' : trialEnd > now ? 'trial' : 'expired',
-          isSubscribed: !!(subEnd && subEnd > now),
-        };
-      })() : null,
+      userTrial: ALL_PAID_ROLES.includes(user.role) ? computeUserTrial(user, company, await getTrialDays()) : null,
     });
   } catch (error) {
     console.error("Get me error:", error);

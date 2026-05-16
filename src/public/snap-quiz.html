@@ -1815,40 +1815,50 @@ function startProctoring() {
     });
   });
 
-  // ── Fullscreen enforcement (always on) ───────────────────────
-  document.documentElement.requestFullscreen().catch(() => {});
-  state._handleFullscreen = () => {
-    if (!document.fullscreenElement && state.examActive) {
-      logEvent('fullscreen_exit').catch(console.warn);
-      toast('⛔ Fullscreen is required — exiting may terminate your exam', 'warn');
-    }
-  };
-  document.addEventListener('fullscreenchange', state._handleFullscreen);
+  // ── Fullscreen enforcement ────────────────────────────────────
+  if (quiz.requireFullscreen) {
+    document.documentElement.requestFullscreen().catch(() => {});
+    state._handleFullscreen = () => {
+      if (!document.fullscreenElement && state.examActive) {
+        logEvent('fullscreen_exit').catch(console.warn);
+        toast(quiz.terminateOnFullscreenExit
+          ? '⛔ Fullscreen required — exiting may terminate your exam'
+          : '⚠️ Please return to fullscreen to continue', 'warn');
+      }
+    };
+    document.addEventListener('fullscreenchange', state._handleFullscreen);
+  }
 
-  // ── Focus / window-blur enforcement (always on) ───────────────
-  state._handleBlur = () => {
-    if (state.examActive) logEvent('focus_lost').catch(console.warn);
-  };
-  window.addEventListener('blur', state._handleBlur);
+  // ── Focus / window-blur enforcement ──────────────────────────
+  if (quiz.terminateOnFocusLost) {
+    state._handleBlur = () => {
+      if (state.examActive) logEvent('focus_lost').catch(console.warn);
+    };
+    window.addEventListener('blur', state._handleBlur);
+  }
 
-  // ── Right-click prevention (always on) ───────────────────────
-  state._handleContextMenu = (e) => {
-    if (state.examActive) {
-      e.preventDefault();
-      logEvent('right_click').catch(console.warn);
-    }
-  };
-  document.addEventListener('contextmenu', state._handleContextMenu);
+  // ── Right-click prevention ────────────────────────────────────
+  if (quiz.preventRightClick) {
+    state._handleContextMenu = (e) => {
+      if (state.examActive) {
+        e.preventDefault();
+        logEvent('right_click').catch(console.warn);
+      }
+    };
+    document.addEventListener('contextmenu', state._handleContextMenu);
+  }
 
-  // ── Print-screen prevention (always on) ──────────────────────
-  state._handleKeydown = (e) => {
-    if (state.examActive && (e.key === 'PrintScreen' || e.code === 'PrintScreen' || e.keyCode === 44)) {
-      e.preventDefault();
-      logEvent('print_screen').catch(console.warn);
-      toast('⚠️ Screenshots are not allowed during this exam', 'warn');
-    }
-  };
-  document.addEventListener('keydown', state._handleKeydown);
+  // ── Print-screen prevention ───────────────────────────────────
+  if (quiz.preventPrintScreen) {
+    state._handleKeydown = (e) => {
+      if (state.examActive && (e.key === 'PrintScreen' || e.code === 'PrintScreen' || e.keyCode === 44)) {
+        e.preventDefault();
+        logEvent('print_screen').catch(console.warn);
+        toast('⚠️ Screenshots are not allowed during this exam', 'warn');
+      }
+    };
+    document.addEventListener('keydown', state._handleKeydown);
+  }
 
   // ── Noise / audio detection ───────────────────────────────────
   const noiseThreshold = quiz.noiseDetectionThreshold ?? 40;
