@@ -1,8 +1,11 @@
-// ─── DIKLY SMS Service (Arkesel) ─────────────────────────────────────────────
-// Docs: https://developers.arkesel.com
-// Env vars needed in Render:
-//   ARKESEL_API_KEY  -- your API key from arkesel.com dashboard
-//   SMS_SENDER_ID    -- e.g. "DIKLY" (max 11 chars, no spaces)
+'use strict';
+// ─── DIKLY SMS Service ────────────────────────────────────────────────────────
+// Supports Arkesel and mNotify. Switch provider via env var:
+//   SMS_PROVIDER=arkesel   (default)
+//   SMS_PROVIDER=mnotify
+//
+// Arkesel env vars:   ARKESEL_API_KEY, SMS_SENDER_ID
+// mNotify env vars:   MNOTIFY_API_KEY, SMS_SENDER_ID
 // ─────────────────────────────────────────────────────────────────────────────
 
 const https = require('https');
@@ -16,26 +19,14 @@ function normalisePhone(raw) {
   return p;
 }
 
-// Send a raw SMS
-async function sendSms({ to, message }) {
+// ── Arkesel provider ──────────────────────────────────────────────────────────
+function _sendArkesel(phone, message) {
   const apiKey   = process.env.ARKESEL_API_KEY;
   const senderId = process.env.SMS_SENDER_ID || 'DIKLY';
-  const phone    = normalisePhone(to);
 
-  if (!apiKey) {
-    console.log(`[SMS] DEV MODE -- to:${phone} msg:"${message}"`);
-    return { ok: true, dev: true };
-  }
-  if (!phone) {
-    console.error('[SMS] Invalid phone number:', to);
-    return { ok: false, error: 'Invalid phone number' };
-  }
+  if (!apiKey) return Promise.resolve({ ok: true, dev: true });
 
-  const payload = JSON.stringify({
-    sender:     senderId,
-    message,
-    recipients: [phone],
-  });
+  const payload = JSON.stringify({ sender: senderId, message, recipients: [phone] });
 
   return new Promise((resolve) => {
     const req = https.request({
@@ -55,36 +46,97 @@ async function sendSms({ to, message }) {
         try {
           const json = JSON.parse(body);
           if (json.status === 'success') {
-            console.log(`[SMS] ✅ Sent to ${phone}`);
+            console.log(`[SMS/Arkesel] ✅ Sent to ${phone}`);
             resolve({ ok: true });
           } else {
-            console.error(`[SMS] ❌ Arkesel error:`, JSON.stringify(json));
+            console.error('[SMS/Arkesel] ❌', JSON.stringify(json));
             resolve({ ok: false, error: json.message || body });
           }
-        } catch (e) {
-          console.error('[SMS] ❌ Parse error:', body);
+        } catch {
+          console.error('[SMS/Arkesel] ❌ Parse error:', body);
           resolve({ ok: false, error: body });
         }
       });
     });
-    req.on('timeout', () => {
-      req.destroy();
-      console.error('[SMS] ❌ Request timed out');
-      resolve({ ok: false, error: 'timeout' });
-    });
-    req.on('error', (err) => {
-      console.error('[SMS] ❌ Request error:', err.message);
-      resolve({ ok: false, error: err.message });
-    });
+    req.on('timeout', () => { req.destroy(); resolve({ ok: false, error: 'timeout' }); });
+    req.on('error',   (e) => resolve({ ok: false, error: e.message }));
     req.write(payload);
     req.end();
   });
 }
 
-// Send OTP reset code — fire-and-forget so the caller responds immediately
+// ── mNotify provider ──────────────────────────────────────────────────────────
+// Docs: https://developers.mnotify.com/docs
+// API key from: https://app.mnotify.com/dashboard/account/api
+function _sendMnotify(phone, message) {
+  const apiKey   = process.env.MNOTIFY_API_KEY;
+  const senderId = process.env.SMS_SENDER_ID || 'DIKLY';
+
+  if (!apiKey) return Promise.resolve({ ok: true, dev: true });
+
+  const params = new URLSearchParams({
+    key:       apiKey,
+    to:        phone,
+    msg:       message,
+    sender_id: senderId,
+  });
+
+  return new Promise((resolve) => {
+    const req = https.request({
+      hostname: 'apps.mnotify.net',
+      path:     `/smsapi?${params.toString()}`,
+      method:   'GET',
+      timeout:  8000,
+    }, (res) => {
+      let body = '';
+      res.on('data', c => body += c);
+      res.on('end', () => {
+        // mNotify returns "1000" on success, "1001"–"1006" on error
+        const code = body.trim();
+        if (code === '1000') {
+          console.log(`[SMS/mNotify] ✅ Sent to ${phone}`);
+          resolve({ ok: true });
+        } else {
+          const errors = {
+            '1002': 'Invalid number', '1003': 'You do not have enough units',
+            '1004': 'Invalid API key', '1005': 'Invalid Sender ID',
+            '1006': 'Invalid Schedule time', '1007': 'Message too long',
+          };
+          const msg = errors[code] || `mNotify error code ${code}`;
+          console.error(`[SMS/mNotify] ❌ ${msg}`);
+          resolve({ ok: false, error: msg });
+        }
+      });
+    });
+    req.on('timeout', () => { req.destroy(); resolve({ ok: false, error: 'timeout' }); });
+    req.on('error',   (e) => resolve({ ok: false, error: e.message }));
+    req.end();
+  });
+}
+
+// ── Unified send ──────────────────────────────────────────────────────────────
+async function sendSms({ to, message }) {
+  const phone    = normalisePhone(to);
+  const provider = (process.env.SMS_PROVIDER || 'arkesel').toLowerCase();
+  const hasKey   = provider === 'mnotify' ? !!process.env.MNOTIFY_API_KEY : !!process.env.ARKESEL_API_KEY;
+
+  if (!hasKey) {
+    console.log(`[SMS] DEV MODE (${provider}) -- to:${phone} msg:"${message}"`);
+    return { ok: true, dev: true };
+  }
+  if (!phone) {
+    console.error('[SMS] Invalid phone number:', to);
+    return { ok: false, error: 'Invalid phone number' };
+  }
+
+  return provider === 'mnotify'
+    ? _sendMnotify(phone, message)
+    : _sendArkesel(phone, message);
+}
+
+// ── OTP helper — fire-and-forget so caller responds immediately ───────────────
 async function sendOtp({ phone, code, name }) {
   const message = `DIKLY: Hi ${name}, your verification code is ${code}. Valid for 1 hour.`;
-  // Don't await — dispatch in background so the HTTP response isn't held up
   sendSms({ to: phone, message }).then(r => {
     if (!r.ok && !r.dev) console.error('[SMS] OTP delivery failed:', r.error);
   });
