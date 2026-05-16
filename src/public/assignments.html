@@ -14,6 +14,7 @@ window.MathJax = { tex: { inlineMath: [['\\(','\\)']], displayMath: [['\\[','\\]
 <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js"></script>
 <style>
 /* ── Local styles for assignment-specific UI ── */
+@keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.5;transform:scale(1.4)} }
 
 /* Main shell reuses style.css layout classes:
    #dashboard-page, .topbar, .main-layout, .sidebar, .sidebar-nav,
@@ -324,7 +325,7 @@ window.MathJax = { tex: { inlineMath: [['\\(','\\)']], displayMath: [['\\[','\\]
   </div>
   <div class="drawer-foot">
     <button class="btn btn-secondary" onclick="closeDrawers()">Cancel</button>
-    <button class="btn btn-primary" id="save-btn" onclick="saveAssignment()">
+    <button class="btn btn-primary btn-block" id="save-btn" onclick="saveAssignment()">
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
       Save Assignment
     </button>
@@ -349,7 +350,7 @@ window.MathJax = { tex: { inlineMath: [['\\(','\\)']], displayMath: [['\\[','\\]
   <div class="drawer-body" id="stu-body"><div class="loading">Loading…</div></div>
   <div class="drawer-foot" id="stu-foot" style="display:none">
     <button class="btn btn-secondary" onclick="closeDrawers()">Close</button>
-    <button class="btn btn-primary" id="stu-submit-btn" onclick="submitAssignment()">
+    <button class="btn btn-primary btn-block" id="stu-submit-btn" onclick="submitAssignment()">
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
       Submit Assignment
     </button>
@@ -988,7 +989,7 @@ async function openGrade(subId, asgnId, max, cur) {
     </div>
     <div style="padding:12px 20px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end;position:sticky;bottom:0;background:var(--card);border-radius:0 0 14px 14px;">
       <button class="btn btn-secondary" onclick="document.getElementById('grade-overlay').remove()">Cancel</button>
-      <button class="btn btn-primary" onclick="submitGradeModal('${subId}','${asgnId}',${max})">Save Grade</button>
+      <button class="btn btn-primary btn-block" onclick="submitGradeModal('${subId}','${asgnId}',${max})">Save Grade</button>
     </div>
   </div>`;
   document.body.appendChild(ol);
@@ -1700,7 +1701,7 @@ function openCreateQuizModal() {
       </div>
       <div style="padding:14px 24px;border-top:1px solid var(--border);display:flex;gap:10px;justify-content:flex-end">
         <button class="btn btn-secondary" onclick="document.getElementById('qz-modal-overlay').remove()">Cancel</button>
-        <button class="btn btn-primary" onclick="submitCreateQuiz()">
+        <button class="btn btn-primary btn-block" onclick="submitCreateQuiz()">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
           Create Quiz
         </button>
@@ -1749,13 +1750,14 @@ async function submitCreateQuiz() {
 
 // ── QUIZ SUB-TAB HELPERS ──────────────────────────────────────────────────
 function _qzTabNavHTML(active) {
-  const s = (isActive) => isActive
-    ? 'background:var(--card);color:var(--text);box-shadow:0 1px 4px rgba(0,0,0,.08)'
-    : 'background:transparent;color:var(--text-muted)';
+  const tab = (id, label, icon) => {
+    const on = active === id;
+    return `<button onclick="switchQuizSubTab('${id}')" style="display:flex;align-items:center;gap:7px;padding:9px 18px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;border:none;transition:all .18s;white-space:nowrap;${on?'background:#fff;color:#1e293b;box-shadow:0 1px 6px rgba(0,0,0,.10);':'background:transparent;color:#64748b;'}">${icon}${label}</button>`;
+  };
   return `
-    <div style="display:flex;gap:4px;margin-bottom:22px;background:var(--bg);padding:4px;border-radius:10px;border:1px solid var(--border)">
-      <button onclick="switchQuizSubTab('regular')" style="flex:1;padding:8px 14px;border-radius:7px;font-size:13px;font-weight:600;cursor:pointer;border:none;transition:all .2s;${s(active==='regular')}">Proctored Quizzes</button>
-      <button onclick="switchQuizSubTab('snap')"    style="flex:1;padding:8px 14px;border-radius:7px;font-size:13px;font-weight:600;cursor:pointer;border:none;transition:all .2s;${s(active==='snap')}">Snap Quizzes</button>
+    <div style="display:flex;gap:3px;margin-bottom:24px;background:#f1f5f9;padding:4px;border-radius:11px;width:fit-content">
+      ${tab('regular','Proctored Quizzes','<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="opacity:.7"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>')}
+      ${tab('snap','Snap Quizzes','<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="opacity:.7"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>')}
     </div>`;
 }
 
@@ -1780,44 +1782,98 @@ async function renderLecturerSnapQuizzes() {
       archived:  `<span style="background:var(--bg);color:var(--text-muted);border:1px solid var(--border);padding:3px 8px;border-radius:20px;font-size:11px;font-weight:600">Archived</span>`,
     }[s] || `<span>${s}</span>`);
 
+    const statusMeta = {
+      draft:     { dot:'#94a3b8', label:'Draft',     bg:'#f8fafc', border:'#e2e8f0', text:'#475569' },
+      published: { dot:'#f59e0b', label:'Published', bg:'#fffbeb', border:'#fde68a', text:'#92400e' },
+      open:      { dot:'#22c55e', label:'Live',      bg:'#f0fdf4', border:'#86efac', text:'#166534' },
+      closed:    { dot:'#ef4444', label:'Closed',    bg:'#fef2f2', border:'#fecaca', text:'#991b1b' },
+      archived:  { dot:'#cbd5e1', label:'Archived',  bg:'#f8fafc', border:'#e2e8f0', text:'#94a3b8' },
+    };
+    const typeLabel = {'mid_term':'Mid-Semester','exam':'Final Exam','quiz':'Quiz','class_test':'Class Test','final':'Finals','mock':'Mock Exam'};
+
     $('page-root').innerHTML = `
       ${_qzTabNavHTML('snap')}
-      <div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:24px">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:22px">
         <div>
-          <h2 style="font-size:21px;font-weight:700;letter-spacing:-.4px;margin-bottom:2px">Snap Quizzes</h2>
-          <p style="color:var(--text-light);font-size:13px">Timed exam-style quizzes with anti-cheat for the exam portal</p>
+          <h2 style="font-size:20px;font-weight:800;letter-spacing:-.5px;margin:0 0 3px;color:#0f172a">Snap Quizzes</h2>
+          <p style="color:#64748b;font-size:13px;margin:0">Timed exams with anti-cheat enforcement for the student portal</p>
         </div>
-        <button class="btn btn-primary" onclick="openCreateSnapQuizModal()">
+        <button onclick="openCreateSnapQuizModal()" style="display:inline-flex;align-items:center;gap:7px;padding:9px 18px;background:#1e293b;color:#fff;border:none;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer;letter-spacing:-.1px;transition:background .15s" onmouseover="this.style.background='#0f172a'" onmouseout="this.style.background='#1e293b'">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
           New Snap Quiz
         </button>
       </div>
       ${!QS.snapQuizzes.length ? `
-        <div style="text-align:center;padding:60px 20px;background:var(--card);border-radius:12px;border:1px solid var(--border)">
-          <div style="font-size:44px;opacity:.3;margin-bottom:14px">⚡</div>
-          <h3 style="font-size:18px;font-weight:700;margin-bottom:6px;color:var(--text)">No snap quizzes yet</h3>
-          <p style="color:var(--text-light);font-size:13px;max-width:270px;margin:0 auto 18px;line-height:1.6">Create your first timed snap quiz — students take it through the exam portal</p>
-          <button class="btn btn-primary" onclick="openCreateSnapQuizModal()">＋ New Snap Quiz</button>
+        <div style="text-align:center;padding:64px 20px;background:#fff;border-radius:16px;border:1.5px dashed #e2e8f0">
+          <div style="width:56px;height:56px;background:#f1f5f9;border-radius:16px;display:flex;align-items:center;justify-content:center;margin:0 auto 16px;font-size:26px">⚡</div>
+          <h3 style="font-size:17px;font-weight:700;margin:0 0 6px;color:#0f172a">No snap quizzes yet</h3>
+          <p style="color:#64748b;font-size:13px;max-width:260px;margin:0 auto 20px;line-height:1.6">Create your first snap quiz — students take it through the secure exam portal</p>
+          <button onclick="openCreateSnapQuizModal()" style="display:inline-flex;align-items:center;gap:6px;padding:9px 20px;background:#1e293b;color:#fff;border:none;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            New Snap Quiz
+          </button>
         </div>` : `
-      <div style="display:flex;flex-direction:column;gap:10px">
+      <div style="display:flex;flex-direction:column;gap:12px">
         ${QS.snapQuizzes.map(q => {
-          const type = {'mid_term':'Mid-Semester Exams','exam':'Exams','quiz':'Quiz','class_test':'Class Test','final':'Final','mock':'Mock'}[q.quizType]||q.quizType||'Exams';
-          return `<div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px 16px">
-            <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:6px">
-              <div style="font-size:15px;font-weight:700;color:var(--text);line-height:1.3">${q.title}</div>
-              ${snapBadge(q.status)}
+          const sm = statusMeta[q.status] || statusMeta.draft;
+          const tl = typeLabel[q.quizType] || q.quizType || 'Exam';
+          const qCount = q.questionCount || 0;
+          return `
+          <div style="background:#fff;border:1.5px solid #e8edf3;border-radius:14px;overflow:hidden;transition:box-shadow .15s" onmouseover="this.style.boxShadow='0 4px 20px rgba(0,0,0,.08)'" onmouseout="this.style.boxShadow='none'">
+            <div style="padding:16px 18px">
+              <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:10px">
+                <div style="flex:1;min-width:0">
+                  <div style="font-size:16px;font-weight:700;color:#0f172a;line-height:1.3;margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${q.title}</div>
+                  <div style="font-size:12px;color:#64748b;font-weight:500">${tl}</div>
+                </div>
+                <span style="flex-shrink:0;display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:20px;font-size:11px;font-weight:700;background:${sm.bg};color:${sm.text};border:1px solid ${sm.border}">
+                  <span style="width:6px;height:6px;border-radius:50%;background:${sm.dot};display:inline-block${q.status==='open'?';animation:pulse 2s infinite':''}"></span>
+                  ${sm.label}
+                </span>
+              </div>
+              <div style="display:flex;flex-wrap:wrap;gap:6px">
+                <span style="display:inline-flex;align-items:center;gap:4px;padding:4px 10px;background:#f8fafc;border:1px solid #e8edf3;border-radius:20px;font-size:11px;color:#475569;font-weight:500">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                  ${q.timeLimitMinutes} min
+                </span>
+                <span style="display:inline-flex;align-items:center;gap:4px;padding:4px 10px;background:#f8fafc;border:1px solid #e8edf3;border-radius:20px;font-size:11px;color:#475569;font-weight:500">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                  ${q.totalMarks||0} marks
+                </span>
+                ${qCount ? `<span style="display:inline-flex;align-items:center;gap:4px;padding:4px 10px;background:#f8fafc;border:1px solid #e8edf3;border-radius:20px;font-size:11px;color:#475569;font-weight:500">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                  ${qCount} question${qCount!==1?'s':''}
+                </span>` : ''}
+                <span style="display:inline-flex;align-items:center;gap:4px;padding:4px 10px;background:#f8fafc;border:1px solid #e8edf3;border-radius:20px;font-size:11px;color:#475569;font-weight:500">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                  ${fmtDate(q.startTime)} → ${fmtDate(q.endTime)}
+                </span>
+              </div>
             </div>
-            <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:12px;font-size:12px;color:var(--text-muted)">
-              <span>📋 ${type}</span>
-              <span>🏅 ${q.totalMarks||0} marks · ${q.timeLimitMinutes}min</span>
-              <span>🕐 ${fmtDate(q.startTime)} → ${fmtDate(q.endTime)}</span>
-            </div>
-            <div style="display:flex;gap:8px;flex-wrap:wrap">
-              <button class="btn btn-primary btn-sm" onclick="openSnapQuestionsPanel('${q._id}')">Questions</button>
-              ${q.status==='draft'     ? `<button class="btn btn-secondary btn-sm" onclick="snapQuizAction('${q._id}','publish')">Publish</button>` : ''}
-              ${q.status==='published' ? `<button class="btn btn-sm" style="background:#f0fdf4;color:#166534;border:1px solid #bbf7d0" onclick="snapQuizAction('${q._id}','open')">Open</button>` : ''}
-              ${q.status==='open'      ? `<button class="btn btn-sm" style="background:#fff7ed;color:#c2410c;border:1px solid #fed7aa" onclick="snapQuizAction('${q._id}','close')">Close</button>` : ''}
-              <button class="btn btn-sm" style="background:#fef2f2;color:#dc2626;border:1px solid #fecaca" onclick="deleteSnapQuizInline('${q._id}')">Delete</button>
+            <div style="padding:10px 18px 14px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;border-top:1px solid #f1f5f9">
+              <button onclick="openSnapQuestionsPanel('${q._id}')" style="display:inline-flex;align-items:center;gap:5px;padding:7px 14px;background:#1e293b;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;transition:background .15s" onmouseover="this.style.background='#0f172a'" onmouseout="this.style.background='#1e293b'">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+                Questions
+              </button>
+              ${q.status==='draft' ? `
+                <button onclick="snapQuizAction('${q._id}','publish')" style="display:inline-flex;align-items:center;gap:5px;padding:7px 14px;background:#f8fafc;color:#1e293b;border:1.5px solid #e2e8f0;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;transition:all .15s" onmouseover="this.style.background='#f1f5f9'" onmouseout="this.style.background='#f8fafc'">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></polyline></svg>
+                  Publish
+                </button>` : ''}
+              ${q.status==='published' ? `
+                <button onclick="snapQuizAction('${q._id}','open')" style="display:inline-flex;align-items:center;gap:5px;padding:7px 14px;background:#f0fdf4;color:#166534;border:1.5px solid #86efac;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;transition:all .15s" onmouseover="this.style.background='#dcfce7'" onmouseout="this.style.background='#f0fdf4'">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                  Open to Students
+                </button>` : ''}
+              ${q.status==='open' ? `
+                <button onclick="snapQuizAction('${q._id}','close')" style="display:inline-flex;align-items:center;gap:5px;padding:7px 14px;background:#fff7ed;color:#c2410c;border:1.5px solid #fed7aa;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;transition:all .15s" onmouseover="this.style.background='#ffedd5'" onmouseout="this.style.background='#fff7ed'">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>
+                  Close
+                </button>` : ''}
+              <button onclick="deleteSnapQuizInline('${q._id}')" style="display:inline-flex;align-items:center;gap:5px;padding:7px 12px;background:transparent;color:#94a3b8;border:1.5px solid #e2e8f0;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;margin-left:auto;transition:all .15s" onmouseover="this.style.background='#fef2f2';this.style.color='#dc2626';this.style.borderColor='#fecaca'" onmouseout="this.style.background='transparent';this.style.color='#94a3b8';this.style.borderColor='#e2e8f0'">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+                Delete
+              </button>
             </div>
           </div>`;
         }).join('')}
@@ -1872,7 +1928,7 @@ function openCreateSnapQuizModal() {
       </div>
       <div style="padding:14px 22px;border-top:1px solid var(--border);display:flex;gap:10px;justify-content:flex-end">
         <button class="btn btn-secondary" onclick="document.getElementById('snap-quiz-modal-wrap').remove()">Cancel</button>
-        <button class="btn btn-primary" id="sq-submit-btn" onclick="submitCreateSnapQuiz()">Create Snap Quiz</button>
+        <button class="btn btn-primary btn-block" id="sq-submit-btn" onclick="submitCreateSnapQuiz()">Create Snap Quiz</button>
       </div>
     </div>`;
   document.body.appendChild(el);
