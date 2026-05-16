@@ -1,0 +1,174 @@
+# Self-Hosted Jitsi Stack for DIKLY
+# ─────────────────────────────────────────────────────────────────────────────
+# Deploy on a dedicated VM or the same server as DIKLY.
+# Required env vars (create a .env file alongside this file):
+#
+#   JITSI_DOMAIN            your Jitsi hostname  (e.g. meet.yourdomain.com)
+#   JITSI_APP_ID            must match DIKLY's JITSI_APP_ID  (e.g. dikly)
+#   JITSI_APP_SECRET        must match DIKLY's JITSI_APP_SECRET
+#   JICOFO_AUTH_PASSWORD    strong random password for Jicofo XMPP auth
+#   JICOFO_COMPONENT_SECRET strong random secret for Jicofo component
+#   JVB_AUTH_PASSWORD       strong random password for JVB XMPP auth
+#   JVB_ADVERTISE_IPS       public IP of this server (required if behind NAT)
+#   LETSENCRYPT_EMAIL       email for Let's Encrypt cert (when ENABLE_LETSENCRYPT=1)
+#
+# Quick start:
+#   cp .env.example .env          # fill in the values above
+#   mkdir -p jitsi-config
+#   docker compose -f docker-compose.jitsi.yml up -d
+# ─────────────────────────────────────────────────────────────────────────────
+
+version: '3.8'
+
+services:
+
+  # ── Jitsi Web (React frontend served over HTTPS) ──────────────────────────
+  web:
+    image: jitsi/web:stable-9584
+    restart: unless-stopped
+    ports:
+      - '${HTTP_PORT:-80}:80'
+      - '${HTTPS_PORT:-443}:443'
+    environment:
+      # JWT authentication — guests are blocked, every join requires a DIKLY token
+      - AUTH_TYPE=jwt
+      - ENABLE_AUTH=1
+      - ENABLE_GUESTS=0
+      - ENABLE_LOBBY=${ENABLE_LOBBY:-1}
+      - JWT_APP_ID=${JITSI_APP_ID}
+      - JWT_APP_SECRET=${JITSI_APP_SECRET}
+      # Public URL and XMPP domain routing
+      - PUBLIC_URL=https://${JITSI_DOMAIN}
+      - XMPP_DOMAIN=${JITSI_DOMAIN}
+      - XMPP_AUTH_DOMAIN=auth.${JITSI_DOMAIN}
+      - XMPP_BOSH_URL_BASE=https://${JITSI_DOMAIN}
+      - XMPP_MUC_DOMAIN=conference.${JITSI_DOMAIN}
+      # TLS — set ENABLE_LETSENCRYPT=1 to auto-provision a cert via certbot
+      - ENABLE_LETSENCRYPT=${ENABLE_LETSENCRYPT:-0}
+      - LETSENCRYPT_DOMAIN=${JITSI_DOMAIN}
+      - LETSENCRYPT_EMAIL=${LETSENCRYPT_EMAIL:-}
+      - TZ=${TZ:-Africa/Accra}
+    volumes:
+      - ${CONFIG:-./jitsi-config}/web:/config:Z
+      - ${CONFIG:-./jitsi-config}/web/letsencrypt:/etc/letsencrypt:Z
+    networks:
+      - jitsi-net
+    depends_on:
+      - prosody
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://localhost/']
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ── Prosody (XMPP server — enforces JWT, manages lobby, MUC) ─────────────
+  prosody:
+    image: jitsi/prosody:stable-9584
+    restart: unless-stopped
+    expose:
+      - '5222'   # XMPP client-to-server
+      - '5269'   # XMPP server-to-server
+      - '5347'   # Jicofo component connection
+      - '5280'   # BOSH / WebSocket
+    environment:
+      - AUTH_TYPE=jwt
+      - ENABLE_AUTH=1
+      - ENABLE_GUESTS=0
+      - ENABLE_LOBBY=${ENABLE_LOBBY:-1}
+      # JWT plugin — must match DIKLY's JITSI_APP_ID / JITSI_APP_SECRET exactly
+      - JWT_APP_ID=${JITSI_APP_ID}
+      - JWT_APP_SECRET=${JITSI_APP_SECRET}
+      - JWT_ACCEPTED_ISSUERS=${JITSI_APP_ID}
+      - JWT_ACCEPTED_AUDIENCES=${JITSI_APP_ID}
+      - JWT_ALLOW_EMPTY=0
+      # XMPP domain topology
+      - XMPP_DOMAIN=${JITSI_DOMAIN}
+      - XMPP_AUTH_DOMAIN=auth.${JITSI_DOMAIN}
+      - XMPP_GUEST_DOMAIN=guest.${JITSI_DOMAIN}
+      - XMPP_MUC_DOMAIN=conference.${JITSI_DOMAIN}
+      - XMPP_INTERNAL_MUC_DOMAIN=internal.auth.${JITSI_DOMAIN}
+      # Jicofo and JVB credentials
+      - JICOFO_COMPONENT_SECRET=${JICOFO_COMPONENT_SECRET}
+      - JICOFO_AUTH_USER=focus
+      - JICOFO_AUTH_PASSWORD=${JICOFO_AUTH_PASSWORD}
+      - JVB_AUTH_USER=jvb
+      - JVB_AUTH_PASSWORD=${JVB_AUTH_PASSWORD}
+      - TZ=${TZ:-Africa/Accra}
+    volumes:
+      - ${CONFIG:-./jitsi-config}/prosody/config:/config:Z
+      - ${CONFIG:-./jitsi-config}/prosody/prosody-plugins-custom:/prosody-plugins-custom:Z
+    networks:
+      jitsi-net:
+        aliases:
+          - ${JITSI_DOMAIN}
+          - auth.${JITSI_DOMAIN}
+          - conference.${JITSI_DOMAIN}
+          - internal.auth.${JITSI_DOMAIN}
+          - guest.${JITSI_DOMAIN}
+
+  # ── Jicofo (conference focus — JWT role enforcement, room control) ────────
+  jicofo:
+    image: jitsi/jicofo:stable-9584
+    restart: unless-stopped
+    environment:
+      - AUTH_TYPE=jwt
+      - ENABLE_AUTH=1
+      - XMPP_DOMAIN=${JITSI_DOMAIN}
+      - XMPP_AUTH_DOMAIN=auth.${JITSI_DOMAIN}
+      - XMPP_INTERNAL_MUC_DOMAIN=internal.auth.${JITSI_DOMAIN}
+      - XMPP_MUC_DOMAIN=conference.${JITSI_DOMAIN}
+      - JICOFO_XMPP_USER=focus
+      - JICOFO_AUTH_PASSWORD=${JICOFO_AUTH_PASSWORD}
+      - JICOFO_COMPONENT_SECRET=${JICOFO_COMPONENT_SECRET}
+      # REST API — DIKLY connects to this for server-side participant kick
+      - JICOFO_ENABLE_REST=1
+      - JICOFO_REST_HOST=0.0.0.0
+      - JICOFO_REST_PORT=8888
+      - TZ=${TZ:-Africa/Accra}
+    # Expose REST only on loopback — set JITSI_JICOFO_URL=http://127.0.0.1:8888 in DIKLY
+    ports:
+      - '127.0.0.1:${JICOFO_REST_PORT:-8888}:8888'
+    volumes:
+      - ${CONFIG:-./jitsi-config}/jicofo:/config:Z
+    depends_on:
+      - prosody
+    networks:
+      - jitsi-net
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://localhost:8888/about/health']
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+
+  # ── JVB (Jitsi Video Bridge — handles all media streams) ─────────────────
+  jvb:
+    image: jitsi/jvb:stable-9584
+    restart: unless-stopped
+    ports:
+      - '${JVB_PORT:-10000}:10000/udp'   # RTP media (primary, UDP)
+      - '${JVB_TCP_PORT:-4443}:4443'     # RTP media (TCP fallback for restrictive networks)
+    environment:
+      - XMPP_AUTH_DOMAIN=auth.${JITSI_DOMAIN}
+      - XMPP_INTERNAL_MUC_DOMAIN=internal.auth.${JITSI_DOMAIN}
+      - XMPP_SERVER=prosody
+      - JVB_AUTH_USER=jvb
+      - JVB_AUTH_PASSWORD=${JVB_AUTH_PASSWORD}
+      - JVB_BREWERY_MUC=jvbbrewery
+      - JVB_PORT=${JVB_PORT:-10000}
+      - JVB_TCP_HARVESTER_DISABLED=false
+      - JVB_TCP_PORT=${JVB_TCP_PORT:-4443}
+      - PUBLIC_URL=https://${JITSI_DOMAIN}
+      # Set this to your server's public IP when behind NAT or on cloud VMs
+      - JVB_ADVERTISE_IPS=${JVB_ADVERTISE_IPS:-}
+      - TZ=${TZ:-Africa/Accra}
+    volumes:
+      - ${CONFIG:-./jitsi-config}/jvb:/config:Z
+    depends_on:
+      - prosody
+    networks:
+      - jitsi-net
+
+networks:
+  jitsi-net:
+    driver: bridge

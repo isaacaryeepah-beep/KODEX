@@ -10,46 +10,52 @@ function isSelfHosted() {
 }
 
 /**
- * Generate a Jitsi JWT for Prosody mod_auth_token (self-hosted Jitsi).
- * Returns null when JITSI_APP_SECRET is not set — falls back to public Jitsi.
+ * Generate a Prosody mod_auth_token-compatible JWT for a DIKLY user.
  *
  * Token scope is locked to the specific roomName so it cannot be reused
- * across rooms. Moderator flag is always determined server-side from the user's
- * role — the client never controls this claim.
+ * across rooms. The moderator flag is always set server-side from the user's
+ * DIKLY role — the client never controls this claim.
+ *
+ * Returns null when not in self-hosted mode (no JITSI_APP_SECRET set).
  */
 exports.generateJitsiToken = function (user, roomName, isModerator, durationMinutes = 240) {
   if (!isSelfHosted()) return null;
 
-  const now = Math.floor(Date.now() / 1000);
+  try {
+    const now = Math.floor(Date.now() / 1000);
 
-  const payload = {
-    iss:  JITSI_APP_ID,
-    sub:  JITSI_DOMAIN,
-    aud:  JITSI_APP_ID,
-    room: roomName,
-    exp:  now + durationMinutes * 60,
-    nbf:  now - 30,
-    context: {
-      user: {
-        id:        user._id.toString(),
-        name:      user.name || user.email || 'Participant',
-        email:     user.email || '',
-        avatar:    '',
-        moderator: isModerator,
+    const payload = {
+      iss:  JITSI_APP_ID,
+      sub:  JITSI_DOMAIN,
+      aud:  JITSI_APP_ID,
+      room: roomName,
+      exp:  now + durationMinutes * 60,
+      nbf:  now - 30,
+      context: {
+        user: {
+          id:        String(user._id),
+          name:      user.name || user.email || 'Participant',
+          email:     user.email || '',
+          avatar:    '',
+          moderator: Boolean(isModerator),
+        },
+        features: {
+          livestreaming:   false,
+          recording:       false,
+          screensharing:   true,
+          'outbound-call': false,
+        },
       },
-      features: {
-        livestreaming:    false,
-        recording:        false,
-        screensharing:    true,
-        'outbound-call':  false,
-      },
-    },
-  };
+    };
 
-  return jwt.sign(payload, JITSI_APP_SECRET, {
-    algorithm: 'HS256',
-    header: { kid: JITSI_APP_ID, alg: 'HS256' },
-  });
+    return jwt.sign(payload, JITSI_APP_SECRET, {
+      algorithm: 'HS256',
+      header: { kid: JITSI_APP_ID, alg: 'HS256' },
+    });
+  } catch (err) {
+    console.error('[Jitsi] Token generation failed:', err.message);
+    return null;
+  }
 };
 
 exports.isSelfHosted = isSelfHosted;

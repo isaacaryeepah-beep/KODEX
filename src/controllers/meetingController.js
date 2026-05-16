@@ -234,7 +234,7 @@ exports.startMeeting = async (req, res) => {
         meetingToken,
         selfHosted:  isSelfHosted(),
         jitsiConfig: buildJitsiConfig(meeting, req.user, true),
-        monitorUrl:  `${APP_BASE_URL}/meeting-monitor.html?meeting=${meeting._id}&token=${meetingToken}`,
+        monitorUrl:  `${APP_BASE_URL}/meeting-monitor.html?meeting=${meeting._id}`,
       },
     });
   } catch (err) { res.status(500).json({ error: err.message }); }

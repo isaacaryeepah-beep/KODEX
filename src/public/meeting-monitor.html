@@ -307,16 +307,26 @@ html, body { height: 100%; background: var(--navy); color: var(--white); font-fa
 @media (max-width: 768px) {
   html, body { overflow: auto; }
   .main { flex-direction: column; height: auto; overflow: visible; }
-  .jitsi-area { min-height: 50vw; height: 56vw; }
+  /* On mobile the Jitsi area sits above the participant list */
+  .jitsi-area { min-height: 52vw; height: 58vw; flex: none; }
   .right-panel { width: 100%; max-width: 100%; border-left: none; border-top: 1px solid var(--navy3); max-height: none; }
-  .participant-list { max-height: 60vh; }
+  .participant-list { max-height: 55vh; }
   .topbar { min-height: auto; }
-  .topbar-title h1 { font-size: 14px; max-width: 180px; }
-  .stats-pills { display: none; }
+  .topbar-title h1 { font-size: 14px; max-width: 160px; }
+  /* Collapse stat pills into a compact 2-col grid below the topbar */
+  .stats-pills { display: grid; grid-template-columns: repeat(3, auto); gap: 4px; width: 100%; }
+  .stat-pill { justify-content: center; font-size: 10px; padding: 4px 8px; }
 }
 @media (max-width: 480px) {
   .topbar-actions .btn span { display: none; }
-  .topbar-actions .btn { padding: 8px 10px; }
+  .topbar-actions .btn { padding: 8px 10px; min-width: 36px; justify-content: center; }
+  /* Full-width Jitsi on phone portrait */
+  .jitsi-area { height: 56vw; }
+  /* Event log more compact */
+  .event-log-section { max-height: 180px; }
+  /* Participant actions as 2 rows on very small screens */
+  .p-actions { flex-wrap: wrap; }
+  .p-action-btn { min-width: calc(50% - 2px); flex: none; }
 }
 </style>
 </head>
@@ -456,7 +466,7 @@ html, body { height: 100%; background: var(--navy); color: var(--white); font-fa
 // ── Config ────────────────────────────────────────────────────────────
 const API = '';
 const params      = new URLSearchParams(location.search);
-const authToken   = params.get('token') || localStorage.getItem('dikly_token') || '';
+const authToken   = localStorage.getItem('dikly_token') || '';
 const meetingId   = params.get('meeting') || '';
 
 // ── State ─────────────────────────────────────────────────────────────
@@ -466,6 +476,8 @@ let isLocked       = false;
 let meetingEnded   = false;
 let sseSource      = null;
 let heartbeatTimer = null;
+let _sseBackoff    = 1000;   // ms — doubles on each failure, capped at 30s
+let _sseRetryTimer = null;
 let jitsiAPI       = null;
 let warnTargetUid  = null;
 let eventLog       = [];
@@ -843,6 +855,7 @@ function handleMeetingEnded() {
   addEvent('system', 'Meeting ended');
   toast('Meeting has ended', 'info');
   stopHeartbeat();
+  if (_sseRetryTimer) { clearTimeout(_sseRetryTimer); _sseRetryTimer = null; }
   if (sseSource) { sseSource.close(); sseSource = null; }
 }
 
@@ -853,6 +866,7 @@ function connectSSE() {
   sseSource = new EventSource(url);
 
   sseSource.addEventListener('snapshot', e => {
+    _sseBackoff = 1000; // reset backoff on successful connection
     try {
       const payload = JSON.parse(e.data);
       applySnapshot(payload.participants || payload);
@@ -943,7 +957,18 @@ function connectSSE() {
   });
 
   sseSource.onerror = () => {
-    // SSE will auto-reconnect; do nothing except log
+    if (meetingEnded) return;
+    if (_sseRetryTimer) return; // retry already scheduled
+    if (sseSource) { sseSource.close(); sseSource = null; }
+    const delaySec = Math.round(_sseBackoff / 1000);
+    addEvent('system', `Monitor stream lost — reconnecting in ${delaySec}s…`);
+    _sseRetryTimer = setTimeout(() => {
+      _sseRetryTimer = null;
+      if (!meetingEnded) {
+        connectSSE();
+        _sseBackoff = Math.min(_sseBackoff * 2, 30000);
+      }
+    }, _sseBackoff);
   };
 }
 
