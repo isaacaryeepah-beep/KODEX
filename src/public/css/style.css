@@ -615,7 +615,6 @@ body {
 .btn-primary {
   background: var(--primary);
   color: white;
-  width: 100%;
   box-shadow: 0 1px 3px rgba(37,99,235,.3);
 }
 
@@ -650,6 +649,7 @@ body {
 .btn-success:hover { background: #15803d; transform: translateY(-1px); }
 
 .btn-sm { padding: 4px 10px; font-size: 11px; border-radius: 5px; }
+.btn-block { width: 100%; }
 
 /* Portal-specific buttons */
 .btn-employee {
