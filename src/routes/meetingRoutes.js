@@ -29,7 +29,9 @@ router.get('/upcoming',    meetCtrl.upcomingMeetings);
 router.get('/live',        meetCtrl.liveMeetings);
 router.get('/my-meetings', meetCtrl.myMeetings);
 router.get('/validate-token', meetCtrl.validateMeetingToken);
-router.get('/',            meetCtrl.listMeetings);
+// Jitsi infrastructure health: verifies JWT generation + BOSH reachability
+router.get('/jitsi/health',  meetCtrl.jitsiHealth);
+router.get('/',              meetCtrl.listMeetings);
 
 // ─── CREATE ───────────────────────────────────────────────────────────────────
 router.post('/create', canCreateMeeting, requireActiveSubscription, meetCtrl.createMeeting);

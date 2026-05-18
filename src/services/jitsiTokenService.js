@@ -2,26 +2,22 @@
 const jwt = require('jsonwebtoken');
 
 // ── Required configuration — no fallbacks, no public Jitsi ───────────────────
-// These must be set in .env. The server will refuse to start if they are missing.
 const JITSI_DOMAIN     = process.env.JITSI_DOMAIN;
 const JITSI_APP_ID     = process.env.JITSI_APP_ID;
 const JITSI_APP_SECRET = process.env.JITSI_APP_SECRET;
 
 const MISSING = ['JITSI_DOMAIN', 'JITSI_APP_ID', 'JITSI_APP_SECRET'].filter(k => !process.env[k]);
 if (MISSING.length) {
-  const msg = `[Jitsi] FATAL: Required environment variables not set: ${MISSING.join(', ')}. ` +
-    'The platform cannot use self-hosted Jitsi without these. Set them in .env and restart.';
+  const msg = `[Jitsi] FATAL: Required env vars not set: ${MISSING.join(', ')}. Set them in .env and restart.`;
   console.error(msg);
-  // Throw so the process exits immediately rather than serving broken meeting joins
   throw new Error(msg);
 }
 
+console.log(`[Jitsi] ✓ Configured — domain=${JITSI_DOMAIN}  app_id=${JITSI_APP_ID}`);
+
 /**
  * Generate a Prosody mod_auth_token-compatible JWT for a DIKLY user.
- *
- * Token scope is locked to the specific roomName so it cannot be reused
- * across rooms. The moderator flag is always set server-side — the client
- * never controls this claim.
+ * The moderator flag is always set server-side — the client never controls it.
  */
 exports.generateJitsiToken = function (user, roomName, isModerator, durationMinutes = 240) {
   const now = Math.floor(Date.now() / 1000);
@@ -50,10 +46,17 @@ exports.generateJitsiToken = function (user, roomName, isModerator, durationMinu
     },
   };
 
-  return jwt.sign(payload, JITSI_APP_SECRET, {
+  const token = jwt.sign(payload, JITSI_APP_SECRET, {
     algorithm: 'HS256',
     header: { kid: JITSI_APP_ID, alg: 'HS256' },
   });
+
+  console.log(
+    `[Jitsi] JWT issued — room=${roomName}  user=${user.email || user._id}` +
+    `  moderator=${isModerator}  exp=${new Date((now + durationMinutes * 60) * 1000).toISOString()}`
+  );
+
+  return token;
 };
 
 exports.JITSI_DOMAIN  = JITSI_DOMAIN;

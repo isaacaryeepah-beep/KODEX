@@ -5,7 +5,7 @@ const MeetingParticipant = require('../models/MeetingParticipant');
 const User               = require('../models/User');
 const { generateRoomName }                             = require('../utils/generateRoomName');
 const { generateMeetingToken, verifyMeetingToken }     = require('../utils/jwt');
-const { generateJitsiToken, JITSI_DOMAIN } = require('../services/jitsiTokenService');
+const { generateJitsiToken, JITSI_DOMAIN, JITSI_APP_ID } = require('../services/jitsiTokenService');
 const { broadcastMonitor }                             = require('./meetingMonitorController');
 const { runPreflight, handleReconnect }                 = require('../services/sessionPreflight');
 
@@ -268,6 +268,8 @@ exports.startMeeting = async (req, res) => {
     meeting.actualStart = new Date();
     await meeting.save();
 
+    console.log(`[Meeting:start] id=${meeting._id} room=${meeting.roomName} host=${req.user.email || req.user._id} role=${req.user.role}`);
+
     const jitsiToken  = generateJitsiToken(req.user, meeting.roomName, true);
     const meetingToken = generateMeetingToken(req.user._id.toString(), meeting._id.toString(), req.user.deviceId || null);
 
@@ -407,8 +409,11 @@ exports.joinMeeting = async (req, res) => {
 
     const isMod = isMeetingModerator(meeting, user);
 
+    console.log(`[Meeting:join] id=${meeting._id} room=${meeting.roomName} user=${user.email || user._id} role=${user.role} moderator=${isMod} locked=${meeting.isLocked}`);
+
     // Locked rooms: only moderators can still enter
     if (meeting.isLocked && !isMod) {
+      console.log(`[Meeting:join] BLOCKED — room locked, user=${user.email || user._id}`);
       return res.status(403).json({ error: 'The room is locked. No new participants can join at this time.' });
     }
 
@@ -482,6 +487,62 @@ exports.validateMeetingToken = async (req, res) => {
       },
     });
   } catch (err) { res.status(500).json({ error: err.message }); }
+};
+
+// ─── JITSI HEALTH ────────────────────────────────────────────────────────────
+// GET /api/meetings/jitsi/health — verifies JWT generation and Jitsi reachability.
+// Requires authentication so only logged-in users can probe this.
+exports.jitsiHealth = async (req, res) => {
+  const https = require('https');
+  const result = {
+    domain:    JITSI_DOMAIN,
+    app_id:    JITSI_APP_ID,
+    token_ok:  false,
+    jitsi_reachable: false,
+    xmpp_bosh_ok:    false,
+    token_payload: null,
+    error: null,
+  };
+
+  // 1. Verify token generation works
+  try {
+    const tok = generateJitsiToken(req.user, 'dikly_health_probe', false, 1);
+    const decoded = require('jsonwebtoken').decode(tok);
+    result.token_ok = true;
+    result.token_payload = {
+      iss:  decoded.iss,
+      sub:  decoded.sub,
+      aud:  decoded.aud,
+      room: decoded.room,
+      moderator: decoded.context?.user?.moderator,
+      exp: new Date(decoded.exp * 1000).toISOString(),
+    };
+  } catch (e) {
+    result.error = 'JWT generation failed: ' + e.message;
+    console.error('[Jitsi:health] JWT error:', e.message);
+    return res.status(500).json(result);
+  }
+
+  // 2. Check Jitsi web is reachable (BOSH endpoint returns 200 or 400 — both mean it's up)
+  await new Promise(resolve => {
+    const req2 = https.get(`https://${JITSI_DOMAIN}/http-bind`, r => {
+      result.jitsi_reachable = true;
+      result.xmpp_bosh_ok    = r.statusCode < 500;
+      console.log(`[Jitsi:health] BOSH status=${r.statusCode}`);
+      r.resume();
+      resolve();
+    });
+    req2.on('error', e => {
+      result.error = `Jitsi unreachable: ${e.message}`;
+      console.error('[Jitsi:health] BOSH error:', e.message);
+      resolve();
+    });
+    req2.setTimeout(5000, () => { req2.destroy(); resolve(); });
+  });
+
+  const ok = result.token_ok && result.jitsi_reachable;
+  console.log(`[Jitsi:health] ${ok ? '✓ OK' : '✗ FAILED'} — domain=${JITSI_DOMAIN} bosh=${result.xmpp_bosh_ok}`);
+  res.status(ok ? 200 : 502).json(result);
 };
 
 // ─── DELETE ───────────────────────────────────────────────────────────────────
