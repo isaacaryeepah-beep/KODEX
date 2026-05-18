@@ -425,12 +425,17 @@ async function fetchMeetingInfo() {
       headers: { Authorization: 'Bearer ' + AUTH_TOKEN },
     });
     if (!r.ok) throw new Error('HTTP ' + r.status);
-    const data = await r.json();
-    meetingData = data;
-    jitsiUrl    = data.jitsiUrl || data.jitsiRoomUrl || data.roomUrl;
-    document.getElementById('meetingTitle').textContent    = data.meeting?.title || 'Meeting';
-    document.getElementById('meetingSubtitle').textContent = data.meeting?.meetingType
-      ? data.meeting.meetingType.replace(/_/g, ' ')
+    const body    = await r.json();
+    meetingData   = body.data; // { meeting, jitsiConfig, jitsiToken, selfHosted, isModerator, monitorUrl }
+    // Build Jitsi URL from jitsiConfig (roomName + domain) + JWT
+    const cfg = meetingData?.jitsiConfig;
+    if (cfg?.domain && cfg?.roomName) {
+      jitsiUrl = `https://${cfg.domain}/${cfg.roomName}`;
+      if (meetingData.jitsiToken) jitsiUrl += `?jwt=${meetingData.jitsiToken}`;
+    }
+    document.getElementById('meetingTitle').textContent    = meetingData?.meeting?.title || 'Meeting';
+    document.getElementById('meetingSubtitle').textContent = meetingData?.meeting?.meetingType
+      ? meetingData.meeting.meetingType.replace(/_/g, ' ')
       : 'Session';
     return true;
   } catch (e) {
@@ -639,10 +644,10 @@ function dismissOverlay() {
 
 function reportViolation(type) {
   if (!MEETING_ID || !AUTH_TOKEN) return;
-  fetch(`${API_BASE}/api/meetings/${MEETING_ID}/proctoring-event`, {
+  fetch(`${API_BASE}/api/meetings/${MEETING_ID}/proctoring/event`, {
     method:  'POST',
     headers: { Authorization: 'Bearer ' + AUTH_TOKEN, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ eventType: type, timestamp: new Date().toISOString() }),
+    body: JSON.stringify({ type, timestamp: new Date().toISOString() }),
   }).catch(() => {});
 }
 
@@ -695,9 +700,9 @@ async function joinMeeting() {
 
   if (jitsiUrl) {
     window.location.href = jitsiUrl;
-  } else if (meetingData?.jitsiToken && meetingData?.roomName) {
-    const domain = meetingData.jitsiDomain || 'meet.jit.si';
-    window.location.href = `https://${domain}/${meetingData.roomName}#jitsi_meet_external_api_id=dikly&jwt=${meetingData.jitsiToken}`;
+  } else if (meetingData?.jitsiToken && meetingData?.jitsiConfig?.roomName) {
+    const domain = meetingData.jitsiConfig.domain || 'meet.jit.si';
+    window.location.href = `https://${domain}/${meetingData.jitsiConfig.roomName}?jwt=${meetingData.jitsiToken}`;
   } else {
     btn.disabled = false;
     document.getElementById('joinBtnText').textContent = '🚀 Join Meeting';
