@@ -694,19 +694,32 @@ async function joinMeeting() {
   btn.disabled = true;
   document.getElementById('joinBtnText').innerHTML = '<div class="spinner"></div> Opening room…';
 
-  // Stop camera preview (Jitsi will re-request)
+  // Stop camera preview — student-meeting.html will re-request via Jitsi
   stopCameraStream();
   stopMicAnalyser();
 
-  if (jitsiUrl) {
-    window.location.href = jitsiUrl;
-  } else if (meetingData?.jitsiToken && meetingData?.jitsiConfig?.roomName) {
-    const domain = meetingData.jitsiConfig.domain || 'meet.jit.si';
-    window.location.href = `https://${domain}/${meetingData.jitsiConfig.roomName}?jwt=${meetingData.jitsiToken}`;
-  } else {
+  if (!meetingData) {
     btn.disabled = false;
     document.getElementById('joinBtnText').textContent = '🚀 Join Meeting';
-    alert('Could not determine the meeting URL. Please go back and try again.');
+    alert('Session data missing. Please refresh and try again.');
+    return;
+  }
+
+  // Persist session data so student-meeting.html can skip the extra API call
+  try {
+    sessionStorage.setItem('dikly_jitsi_session', JSON.stringify({
+      meetingId:   MEETING_ID,
+      authToken:   AUTH_TOKEN,
+      jitsiConfig: meetingData.jitsiConfig,
+      jitsiToken:  meetingData.jitsiToken,
+    }));
+  } catch (_) {}
+
+  // Moderators get the lecturer page; everyone else gets the student page
+  if (meetingData.isModerator) {
+    window.location.href = `/lecturer-meeting?meeting=${MEETING_ID}`;
+  } else {
+    window.location.href = `/student-meeting?meeting=${MEETING_ID}`;
   }
 }
 

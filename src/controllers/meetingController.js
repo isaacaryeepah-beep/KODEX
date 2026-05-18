@@ -67,26 +67,46 @@ function buildJitsiConfig(meeting, user, isMod) {
     subject:     meeting.title,
     isModerator: isMod,
     configOverwrite: {
-      startWithAudioMuted: meeting.settings?.muteOnJoin ?? true,
-      // Lecture-mode: student cameras off by default; lecturer camera on
+      // Moderators join with audio+video on; students muted by default
+      startWithAudioMuted: isMod ? false : (meeting.settings?.muteOnJoin ?? true),
       startWithVideoMuted: isLecture ? !isMod : false,
       enableLobbyChat:           meeting.settings?.enableLobby ?? false,
       enableNoisyMicDetection:   true,
       disableDeepLinking:        true,
       enableWelcomePage:         false,
+      // Prejoin is always disabled — moderators use lecturer-meeting.html,
+      // students use session-preflight.html which calls our own checks first.
       prejoinPageEnabled:        false,
       disableThirdPartyRequests: true,
+      applicationName:           'DIKLY',
       // Adaptive bitrate for low-bandwidth educational environments
-      channelLastN:       isLecture ? 4 : -1,  // only decode N most active feeds
-      adaptiveLastN:      true,
+      channelLastN:    isLecture ? 4 : -1,
+      adaptiveLastN:   true,
       ...lectureConstraints,
       ...lecturerConstraints,
     },
     interfaceConfigOverwrite: {
+      // ── White-label: remove all Jitsi branding ──────────────────────────
       SHOW_JITSI_WATERMARK:      false,
       SHOW_WATERMARK_FOR_GUESTS: false,
+      SHOW_BRAND_WATERMARK:      false,
+      SHOW_POWERED_BY:           false,
+      DISPLAY_WELCOME_PAGE_CONTENT: false,
+      DISPLAY_WELCOME_PAGE_TOOLBAR_ADDITIONAL_CONTENT: false,
+      JITSI_WATERMARK_LINK:      '',
+      BRAND_WATERMARK_LINK:      '',
+      DEFAULT_LOGO_URL:          '',
       MOBILE_APP_PROMO:          false,
-      TOOLBAR_BUTTONS: isMod ? moderatorButtons : participantButtons,
+      // ── DIKLY branding ──────────────────────────────────────────────────
+      NATIVE_APP_NAME:           'DIKLY',
+      PROVIDER_NAME:             'DIKLY',
+      APP_NAME:                  'DIKLY Classes',
+      DEFAULT_BACKGROUND:        '#0a0c10',
+      HIDE_INVITE_MORE_HEADER:   true,
+      SETTINGS_SECTIONS:         ['devices', 'language'],
+      TOOLBAR_TIMEOUT:           isMod ? 4000 : 3000,
+      INITIAL_TOOLBAR_TIMEOUT:   20000,
+      TOOLBAR_BUTTONS:           isMod ? moderatorButtons : participantButtons,
     },
   };
 }
@@ -396,18 +416,24 @@ exports.joinMeeting = async (req, res) => {
     const jitsiToken  = generateJitsiToken(user, meeting.roomName, isMod);
     const meetingToken = generateMeetingToken(user._id.toString(), meeting._id.toString(), user.deviceId || null);
 
+    const jitsiConfig = buildJitsiConfig(meeting, user, isMod);
+
     res.json({
       success: true,
       data: {
         meeting,
-        jitsiConfig:  buildJitsiConfig(meeting, user, isMod),
+        jitsiConfig,
         jitsiToken,
         meetingToken,
-        selfHosted:   isSelfHosted(),
-        isModerator:  isMod,
-        monitorUrl:   isMod
+        selfHosted:  isSelfHosted(),
+        isModerator: isMod,
+        monitorUrl:  isMod
           ? `${MONITOR_BASE_URL}/monitor?meeting=${meeting._id}`
           : null,
+        // Client-side routing hint: open this URL for the embedded meeting experience
+        embedUrl: isMod
+          ? `${APP_BASE_URL}/lecturer-meeting?meeting=${meeting._id}`
+          : `${APP_BASE_URL}/session-preflight?meeting=${meeting._id}`,
       },
     });
   } catch (err) { res.status(500).json({ error: err.message }); }

@@ -162,9 +162,17 @@ app.get('/monitor', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'monitor.html'));
 });
 
-// Student session preflight / validation screen
+// Student session preflight / validation screen (runs before Jitsi)
 app.get('/session-preflight', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'session-preflight.html'));
+});
+
+// Embedded meeting pages (Jitsi External API — no Jitsi UI chrome)
+app.get('/lecturer-meeting', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'lecturer-meeting.html'));
+});
+app.get('/student-meeting', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'student-meeting.html'));
 });
 
 app.get("/anticheat",      (req, res) => res.sendFile(path.join(__dirname, "public", "anticheat-dashboard.html")));
