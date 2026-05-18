@@ -370,9 +370,10 @@
     .modal-btn.secondary { background: var(--card); border: 1px solid var(--border); color: var(--text); }
 
     /* ── Responsive ── */
-    @media (max-width: 480px) {
-      /* On mobile: hide labels and secondary controls from the floating bar */
+    @media (max-width: 540px) {
       .ctrl-label          { display: none; }
+      /* On mobile keep: mic, cam, mute-all, lock, more, end */
+      #ctrlShare,
       #ctrlRecord,
       #ctrlTile,
       #ctrlDashboard       { display: none; }
@@ -380,10 +381,9 @@
       #moreDrawer          { display: block; }
       #participantBadge    { display: none; }
       #monitorBarBtn       { display: none; }
-      /* Tighten the ctrl button on mobile */
-      .ctrl-btn { padding: 0 13px; }
+      .ctrl-btn { padding: 0 13px; min-width: 46px; }
     }
-    @media (min-width: 481px) {
+    @media (min-width: 541px) {
       #ctrlMoreBtn { display: none; }
     }
   </style>
@@ -455,12 +455,25 @@
 <div id="ctrlBar">
   <div id="ctrlInner">
 
+    <!-- Lecturer's own A/V controls — always visible, replaces Jitsi toolbar -->
+    <button class="ctrl-btn" id="micBtn" onclick="toggleMic()">
+      <span class="ctrl-icon" id="micIcon">🎤</span><span class="ctrl-label" id="micLabel">Mic</span>
+    </button>
+
+    <button class="ctrl-btn" id="camBtn" onclick="toggleCam()">
+      <span class="ctrl-icon" id="camIcon">📷</span><span class="ctrl-label" id="camLabel">Camera</span>
+    </button>
+
+    <button class="ctrl-btn" id="ctrlShare" onclick="toggleShare()">
+      <span class="ctrl-icon">🖥️</span><span class="ctrl-label">Share</span>
+    </button>
+
     <button class="ctrl-btn" id="muteAllBtn" onclick="muteAll()">
       <span class="ctrl-icon">🔇</span><span class="ctrl-label">Mute All</span>
     </button>
 
     <button class="ctrl-btn" id="lockBtn" onclick="toggleLock()">
-      <span class="ctrl-icon" id="lockIcon">🔓</span><span class="ctrl-label" id="lockLabel">Lock Room</span>
+      <span class="ctrl-icon" id="lockIcon">🔓</span><span class="ctrl-label" id="lockLabel">Lock</span>
     </button>
 
     <!-- Secondary (hidden on mobile, in More drawer) -->
@@ -480,7 +493,7 @@
     </button>
 
     <button class="ctrl-btn danger" id="endBtn" onclick="showEndModal()">
-      <span class="ctrl-icon">⏹</span><span class="ctrl-label">End Class</span>
+      <span class="ctrl-icon">⏹</span><span class="ctrl-label">End</span>
     </button>
 
   </div>
@@ -491,6 +504,9 @@
   <div class="drawer-handle"></div>
   <div class="drawer-section-label">More Controls</div>
   <div class="drawer-grid">
+    <button class="drawer-btn" id="drawerShare" onclick="toggleShare();closeDrawer()">
+      <span>🖥️</span> Share Screen
+    </button>
     <button class="drawer-btn" id="drawerRecord" onclick="toggleRecording();closeDrawer()">
       <span>⏺</span><span id="drawerRecLabel">Record</span>
     </button>
@@ -499,9 +515,6 @@
     </button>
     <button class="drawer-btn" onclick="openMonitor();closeDrawer()">
       <span>📊</span> Dashboard
-    </button>
-    <button class="drawer-btn" onclick="openMonitor();closeDrawer()">
-      <span>👁</span> Monitor
     </button>
   </div>
   <div class="drawer-stat" id="drawerParticipants">👥 — participants</div>
@@ -543,6 +556,9 @@ let participantCount = 0;
 let isEnding         = false;
 let barHidden        = false;
 let joined           = false;
+let audioMuted       = false;
+let videoMuted       = false;
+let screenSharing    = false;
 let reconnectAttempts = 0;
 const MAX_RECONNECT   = 5;
 
@@ -618,6 +634,8 @@ function initJitsi() {
       p2p:                       { enabled: false },
       subject:                   cfg.subject,
       applicationName:           'DIKLY',
+      hideConferenceSubject:     true,
+      hideConferenceTimer:       true,
     },
     interfaceConfigOverwrite: {
       ...cfg.interfaceConfigOverwrite,
@@ -632,8 +650,14 @@ function initJitsi() {
       DEFAULT_BACKGROUND:        '#0a0c10',
       HIDE_INVITE_MORE_HEADER:   true,
       AUTHENTICATION_ENABLE:     false,
+      // Hide Jitsi's own toolbar — DIKLY's ctrlBar provides all controls
+      TOOLBAR_BUTTONS:           [],
+      TOOLBAR_TIMEOUT:           0,
+      INITIAL_TOOLBAR_TIMEOUT:   0,
     },
   });
+
+  observeIframeCreation();
 
   api.addEventListener('videoConferenceJoined', onJoined);
   api.addEventListener('videoConferenceLeft',   onLeft);
@@ -642,6 +666,25 @@ function initJitsi() {
   api.addEventListener('recordingStatusChanged', onRecordingChange);
   api.addEventListener('tileViewChanged',        onTileChange);
   api.addEventListener('connectionFailed',       () => { if (!isEnding) scheduleReconnect(); });
+  api.addEventListener('conferenceJoinFailed',   () => { if (!isEnding) showError('Could not join meeting. Check server config.'); });
+
+  api.addEventListener('audioMuteStatusChanged', (data) => {
+    audioMuted = data.muted;
+    document.getElementById('micIcon').textContent  = audioMuted ? '🔇' : '🎤';
+    document.getElementById('micLabel').textContent = audioMuted ? 'Unmute' : 'Mute';
+    document.getElementById('micBtn').className     = `ctrl-btn${audioMuted ? ' danger' : ''}`;
+  });
+  api.addEventListener('videoMuteStatusChanged', (data) => {
+    videoMuted = data.muted;
+    document.getElementById('camIcon').textContent  = videoMuted ? '📵' : '📷';
+    document.getElementById('camLabel').textContent = videoMuted ? 'Start Cam' : 'Stop Cam';
+    document.getElementById('camBtn').className     = `ctrl-btn${videoMuted ? ' danger' : ''}`;
+  });
+  api.addEventListener('screenSharingStatusChanged', (data) => {
+    screenSharing = data.on;
+    document.getElementById('ctrlShare').className  = `ctrl-btn${screenSharing ? ' active' : ''}`;
+    document.getElementById('drawerShare').className = `drawer-btn${screenSharing ? ' active' : ''}`;
+  });
 }
 
 function onJoined() {
@@ -684,7 +727,6 @@ function onTileChange(data) {
   document.getElementById('drawerTile').className = `drawer-btn${data.enabled ? ' active' : ''}`;
 }
 
-// Fix iframe fill + iOS permissions
 function fixIframe() {
   try {
     const iframe = document.querySelector('#jitsiMount iframe');
@@ -696,6 +738,15 @@ function fixIframe() {
       'position:absolute!important;inset:0!important;' +
       'width:100%!important;height:100%!important;border:none!important;display:block!important;';
   } catch (_) {}
+}
+
+function observeIframeCreation() {
+  const mount = document.getElementById('jitsiMount');
+  const obs = new MutationObserver(() => {
+    const iframe = mount.querySelector('iframe');
+    if (iframe) { fixIframe(); obs.disconnect(); }
+  });
+  obs.observe(mount, { childList: true, subtree: true });
 }
 
 // ── Reconnect ─────────────────────────────────────────────────────────────────
@@ -726,6 +777,9 @@ function scheduleReconnect() {
 }
 
 // ── Lecturer controls ─────────────────────────────────────────────────────────
+function toggleMic()   { if (api) api.executeCommand('toggleAudio'); }
+function toggleCam()   { if (api) api.executeCommand('toggleVideo'); }
+function toggleShare() { if (api) api.executeCommand('toggleShareScreen'); }
 function muteAll()     { if (api) { api.executeCommand('muteEveryone'); flashBtn('muteAllBtn'); } }
 function toggleTile()  { if (api) api.executeCommand('toggleTileView'); }
 

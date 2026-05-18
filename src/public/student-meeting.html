@@ -390,6 +390,8 @@ function initJitsi() {
       p2p:                       { enabled: false },
       subject:                   cfg.subject,
       applicationName:           'DIKLY',
+      hideConferenceSubject:     true,
+      hideConferenceTimer:       true,
     },
     interfaceConfigOverwrite: {
       ...cfg.interfaceConfigOverwrite,
@@ -403,8 +405,12 @@ function initJitsi() {
       APP_NAME:                  'DIKLY Classes',
       DEFAULT_BACKGROUND:        '#0a0c10',
       AUTHENTICATION_ENABLE:     false,
+      TOOLBAR_TIMEOUT:           2000,
+      INITIAL_TOOLBAR_TIMEOUT:   5000,
     },
   });
+
+  observeIframeCreation();
 
   api.addEventListener('videoConferenceJoined', () => {
     joined = true;
@@ -426,10 +432,12 @@ function initJitsi() {
     if (joined) scheduleReconnect();
     else showError('Could not connect to class server. Check your internet and try again.');
   });
+
+  api.addEventListener('conferenceJoinFailed', () => {
+    showError('Could not join class. The session may have ended or your token expired.');
+  });
 }
 
-// Fix: after Jitsi creates the iframe, force it to fill the container
-// and grant iOS camera/mic permissions.
 function fixIframe() {
   try {
     const iframe = document.querySelector('#jitsiMount iframe');
@@ -437,11 +445,21 @@ function fixIframe() {
     iframe.setAttribute('allow',
       'camera; microphone; display-capture; fullscreen; autoplay; clipboard-write');
     iframe.setAttribute('allowfullscreen', '');
-    // Belt-and-suspenders: force dimensions via inline style in addition to CSS
     iframe.style.cssText =
       'position:absolute!important;inset:0!important;' +
       'width:100%!important;height:100%!important;border:none!important;display:block!important;';
   } catch (_) {}
+}
+
+// Apply fixIframe immediately when Jitsi injects the iframe into the DOM,
+// not just after videoConferenceJoined (which fires much later).
+function observeIframeCreation() {
+  const mount = document.getElementById('jitsiMount');
+  const obs = new MutationObserver(() => {
+    const iframe = mount.querySelector('iframe');
+    if (iframe) { fixIframe(); obs.disconnect(); }
+  });
+  obs.observe(mount, { childList: true, subtree: true });
 }
 
 // ── Reconnect ─────────────────────────────────────────────────────────────────
@@ -476,22 +494,14 @@ function scheduleReconnect() {
 // ── Anti-cheat ────────────────────────────────────────────────────────────────
 function activateAnticheat() {
   anticheatOn = true;
+  // visibilitychange is reliable across all platforms (tab switch, app switch on mobile).
+  // window.blur is intentionally omitted — on iOS Safari it fires when the camera/mic
+  // permission dialog opens, triggering a false violation before the student has done anything.
   document.addEventListener('visibilitychange', () => {
     if (!anticheatOn || !joined) return;
     if (document.hidden)
       triggerViolation('tab_switch', 'Tab Switch Detected',
         'You left the class tab. This has been logged and reported to your lecturer.');
-  });
-  window.addEventListener('blur', () => {
-    if (!anticheatOn || !joined || document.hidden) return;
-    triggerViolation('window_blur', 'Window Focus Lost',
-      'The class window lost focus. This has been logged.');
-  });
-  document.addEventListener('fullscreenchange', () => {
-    if (!anticheatOn || !joined) return;
-    if (!(document.fullscreenElement || document.webkitFullscreenElement))
-      triggerViolation('fullscreen_exit', 'Fullscreen Exited',
-        'You exited fullscreen. This may affect your session record.');
   });
 }
 
