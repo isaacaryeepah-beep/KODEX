@@ -5,7 +5,7 @@ const MeetingParticipant = require('../models/MeetingParticipant');
 const User               = require('../models/User');
 const { generateRoomName }                             = require('../utils/generateRoomName');
 const { generateMeetingToken, verifyMeetingToken }     = require('../utils/jwt');
-const { generateJitsiToken, JITSI_DOMAIN } = require('../services/jitsiTokenService');
+const { generateJitsiToken, JITSI_DOMAIN, JITSI_APP_ID } = require('../services/jitsiTokenService');
 const { broadcastMonitor }                             = require('./meetingMonitorController');
 const { runPreflight, handleReconnect }                 = require('../services/sessionPreflight');
 
