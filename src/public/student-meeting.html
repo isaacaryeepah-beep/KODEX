@@ -6,17 +6,15 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="format-detection" content="telephone=no" />
-  <title>DIKLY — Joining Class</title>
+  <title>DIKLY — Class</title>
   <style>
     *, *::before, *::after {
-      box-sizing: border-box;
-      margin: 0; padding: 0;
+      box-sizing: border-box; margin: 0; padding: 0;
       -webkit-tap-highlight-color: transparent;
     }
 
     :root {
       --bg:      #0a0c10;
-      --surface: #12151c;
       --card:    #1a1e28;
       --border:  #2a2f3d;
       --accent:  #3b82f6;
@@ -24,58 +22,81 @@
       --warning: #f59e0b;
       --text:    #e2e8f0;
       --muted:   #6b7280;
-      --radius:  12px;
-      /* iOS safe areas — fall back to 0px on non-notch devices */
       --sat: env(safe-area-inset-top,    0px);
       --sab: env(safe-area-inset-bottom, 0px);
       --sal: env(safe-area-inset-left,   0px);
       --sar: env(safe-area-inset-right,  0px);
-      /* bar-content = logical height of the visible bar row */
-      --bar-content: 46px;
-      /* bar-h = total fixed height including status-bar area */
-      --bar-h: calc(var(--bar-content) + var(--sat));
+      /* Logical height of the DIKLY overlay bar (below status bar) */
+      --bar-logic: 44px;
+      --bar-h: calc(var(--bar-logic) + var(--sat));
     }
 
-    /* ── iOS viewport + scroll-bounce fix ─────────────────────────────── */
     html {
-      /* Fills available height incl. address bar on iOS < 15 */
       height: -webkit-fill-available;
       -webkit-text-size-adjust: 100%;
       text-size-adjust: 100%;
     }
+    /* position:fixed prevents iOS rubber-band scroll */
     body {
-      /* position:fixed is the most reliable way to kill rubber-band scroll on iOS */
-      position: fixed;
-      top: 0; left: 0; right: 0; bottom: 0;
-      width: 100%; height: 100%;
-      background: var(--bg);
+      position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+      background: #000;
       color: var(--text);
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
       overflow: hidden;
       overscroll-behavior: none;
-      -webkit-overflow-scrolling: touch;
     }
 
-    /* ── Top bar ── */
+    /* ─────────────────────────────────────────────────────────────────
+       Jitsi iframe fills ENTIRE viewport — bars float on top (z-index).
+       Reason: with top-offset the iframe height chain breaks on iOS
+       Safari (100% of a position:fixed element doesn't resolve), causing
+       the blank lower half visible in the screenshot.
+    ───────────────────────────────────────────────────────────────── */
+    #jitsiWrap {
+      position: fixed;
+      inset: 0;            /* top:0 left:0 right:0 bottom:0 */
+      z-index: 1;
+      background: #000;
+    }
+    #jitsiMount {
+      position: absolute;
+      inset: 0;
+    }
+    /* Force Jitsi's dynamically-created iframe to fill the container.
+       Jitsi sets inline width/height="100%" — !important beats them. */
+    #jitsiMount iframe {
+      position: absolute !important;
+      inset: 0 !important;
+      width:  100% !important;
+      height: 100% !important;
+      border: none !important;
+      display: block !important;
+    }
+
+    /* ── DIKLY top bar — floats above the iframe ── */
     #topBar {
       position: fixed;
       top: 0; left: 0; right: 0;
-      z-index: 100;
-      /* Push content below status bar on iPhone */
-      padding-top: var(--sat);
-      background: rgba(10,12,16,.92);
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
-      border-bottom: 1px solid var(--border);
+      z-index: 200;
+      /* Content sits below safe-area (notch/Dynamic Island) */
+      padding-top:   var(--sat);
+      padding-left:  calc(12px + var(--sal));
+      padding-right: calc(12px + var(--sar));
+      background: linear-gradient(
+        to bottom,
+        rgba(10,12,16,.95) 0%,
+        rgba(10,12,16,.7)  80%,
+        transparent 100%
+      );
+      /* Extra height so the gradient fades out nicely */
+      padding-bottom: 12px;
     }
-    #topBarInner {
-      height: var(--bar-content);
+    #topBarRow {
+      height: var(--bar-logic);
       display: flex;
       align-items: center;
-      gap: 10px;
-      padding: 0 calc(14px + var(--sar)) 0 calc(14px + var(--sal));
+      gap: 8px;
     }
-
     .logo-chip {
       width: 28px; height: 28px; flex-shrink: 0;
       background: var(--accent); border-radius: 7px;
@@ -83,179 +104,131 @@
       font-weight: 800; font-size: 13px; color: #fff;
     }
     #meetingTitle {
-      font-weight: 600; font-size: 13px;
+      font-size: 13px; font-weight: 600;
       white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
       flex: 1; min-width: 0;
+      text-shadow: 0 1px 4px rgba(0,0,0,.8);
     }
     .live-badge {
       flex-shrink: 0;
-      background: rgba(239,68,68,.12);
-      border: 1px solid rgba(239,68,68,.3);
-      color: #f87171; border-radius: 99px;
-      padding: 3px 9px; font-size: 10px; font-weight: 600;
       display: flex; align-items: center; gap: 4px;
+      background: rgba(239,68,68,.2);
+      border: 1px solid rgba(239,68,68,.5);
+      color: #fca5a5;
+      border-radius: 99px;
+      padding: 3px 8px; font-size: 10px; font-weight: 700;
     }
     .live-dot {
-      width: 6px; height: 6px; border-radius: 50%;
-      background: var(--danger);
+      width: 5px; height: 5px; border-radius: 50%;
+      background: #ef4444;
       animation: pulse 1.4s ease-in-out infinite;
     }
-    @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .4; } }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.35} }
+    @keyframes spin   { to { transform: rotate(360deg); } }
 
-    /* ── Jitsi embed — fills everything below the top bar ── */
-    #jitsiWrap {
-      position: fixed;
-      top: var(--bar-h);
-      left: 0; right: 0; bottom: 0;
-      background: #000;
-    }
-    #jitsiMount {
-      width: 100%; height: 100%;
-    }
-    /* Force the Jitsi-created iframe to fill its container */
-    #jitsiMount iframe {
-      width: 100% !important;
-      height: 100% !important;
-      border: none;
-      display: block;
-    }
-
-    /* ── Loading overlay ── */
+    /* ── Full-screen loading overlay ── */
     #loadOverlay {
-      position: fixed; inset: 0; z-index: 999;
+      position: fixed; inset: 0; z-index: 500;
       background: var(--bg);
       display: flex; flex-direction: column;
       align-items: center; justify-content: center;
       gap: 18px;
-      padding: 32px 24px;
-      padding-top:    calc(var(--sat) + 32px);
-      padding-bottom: calc(var(--sab) + 32px);
+      padding: 40px 28px;
+      padding-top:    calc(var(--sat) + 40px);
+      padding-bottom: calc(var(--sab) + 40px);
     }
     #loadOverlay.hidden { display: none; }
-
     .load-logo {
-      width: 60px; height: 60px;
-      background: var(--accent); border-radius: 16px;
+      width: 64px; height: 64px;
+      background: var(--accent); border-radius: 18px;
       display: grid; place-items: center;
-      font-weight: 800; font-size: 30px; color: #fff;
-      box-shadow: 0 0 40px rgba(59,130,246,.35);
+      font-weight: 800; font-size: 32px; color: #fff;
+      box-shadow: 0 0 48px rgba(59,130,246,.4);
     }
-    .load-title {
-      font-size: 20px; font-weight: 700;
-      letter-spacing: -.3px; text-align: center;
-    }
-    .load-sub {
-      font-size: 13px; color: var(--muted);
-      text-align: center; line-height: 1.5;
-    }
-    @keyframes spin { to { transform: rotate(360deg); } }
+    .load-title  { font-size: 20px; font-weight: 700; letter-spacing: -.3px; }
+    .load-sub    { font-size: 13px; color: var(--muted); text-align: center; line-height: 1.5; }
     .spinner {
       width: 26px; height: 26px;
-      border: 2.5px solid var(--border);
-      border-top-color: var(--accent);
-      border-radius: 50%;
-      animation: spin .8s linear infinite;
-      flex-shrink: 0;
+      border: 2.5px solid var(--border); border-top-color: var(--accent);
+      border-radius: 50%; animation: spin .8s linear infinite;
+    }
+
+    /* ── Reconnecting overlay (full-screen, sits above Jitsi dialog) ── */
+    #reconnectOverlay {
+      display: none;
+      position: fixed; inset: 0; z-index: 490;
+      background: rgba(10,12,16,.92);
+      flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 16px; text-align: center;
+      padding: 40px 28px;
+      padding-top:    calc(var(--sat) + 40px);
+      padding-bottom: calc(var(--sab) + 40px);
+    }
+    #reconnectOverlay.visible { display: flex; }
+    .reconnect-icon  { font-size: 44px; line-height: 1; }
+    .reconnect-title { font-size: 18px; font-weight: 700; }
+    .reconnect-sub   { font-size: 13px; color: var(--muted); max-width: 280px; line-height: 1.6; }
+    .reconnect-count {
+      font-size: 12px; font-weight: 600;
+      color: var(--warning);
+      background: rgba(245,158,11,.12);
+      padding: 4px 14px; border-radius: 99px;
     }
 
     /* ── Error overlay ── */
     #errorOverlay {
-      position: fixed; inset: 0; z-index: 999;
+      position: fixed; inset: 0; z-index: 500;
       background: var(--bg);
       display: none; flex-direction: column;
       align-items: center; justify-content: center;
       gap: 16px; text-align: center;
-      padding: 32px 28px;
-      padding-top:    calc(var(--sat) + 32px);
-      padding-bottom: calc(var(--sab) + 32px);
+      padding: 40px 28px;
+      padding-top:    calc(var(--sat) + 40px);
+      padding-bottom: calc(var(--sab) + 40px);
     }
     #errorOverlay.visible { display: flex; }
-
     .err-icon  { font-size: 52px; line-height: 1; }
-    .err-title {
-      font-size: 20px; font-weight: 700; color: var(--danger);
-    }
-    .err-msg   {
-      font-size: 14px; color: var(--muted);
-      max-width: 320px; line-height: 1.65;
-    }
-    .err-actions {
-      display: flex; flex-direction: column; gap: 10px;
-      width: 100%; max-width: 280px;
-      margin-top: 4px;
-    }
+    .err-title { font-size: 20px; font-weight: 700; color: var(--danger); }
+    .err-msg   { font-size: 14px; color: var(--muted); max-width: 300px; line-height: 1.65; }
+    .err-actions { display: flex; flex-direction: column; gap: 10px; width: 100%; max-width: 260px; }
     .err-btn {
-      width: 100%; padding: 15px 20px;
-      border-radius: var(--radius); border: none;
+      width: 100%; padding: 15px;
+      border-radius: 12px; border: none;
       font-size: 15px; font-weight: 600; cursor: pointer;
-      touch-action: manipulation;
-      transition: opacity .15s, transform .1s;
+      touch-action: manipulation; transition: opacity .15s;
     }
-    .err-btn:active { opacity: .8; transform: scale(.98); }
+    .err-btn:active { opacity: .8; }
     .err-btn.primary   { background: var(--accent); color: #fff; }
-    .err-btn.secondary {
-      background: var(--card);
-      border: 1px solid var(--border);
-      color: var(--text);
-    }
+    .err-btn.secondary { background: var(--card); border: 1px solid var(--border); color: var(--text); }
 
-    /* ── Violation overlay ── */
+    /* ── Violation overlay (anti-cheat) ── */
     #violationOverlay {
       display: none;
       position: fixed; inset: 0; z-index: 9999;
       background: rgba(0,0,0,.97);
       align-items: center; justify-content: center;
-      flex-direction: column; gap: 16px;
-      text-align: center;
-      padding: 32px 28px;
-      padding-top:    calc(var(--sat) + 32px);
-      padding-bottom: calc(var(--sab) + 32px);
+      flex-direction: column; gap: 16px; text-align: center;
+      padding: 40px 28px;
+      padding-top:    calc(var(--sat) + 40px);
+      padding-bottom: calc(var(--sab) + 40px);
     }
     #violationOverlay.visible { display: flex; }
-
     .viol-icon  { font-size: 52px; line-height: 1; }
     .viol-title { font-size: 22px; font-weight: 700; color: var(--danger); }
-    .viol-msg   {
-      font-size: 14px; color: var(--muted);
-      max-width: 340px; line-height: 1.65;
-    }
+    .viol-msg   { font-size: 14px; color: var(--muted); max-width: 320px; line-height: 1.65; }
     .viol-count {
-      font-size: 28px; font-weight: 800; color: var(--warning);
-      background: rgba(245,158,11,.12);
-      padding: 8px 24px; border-radius: 10px;
+      font-size: 26px; font-weight: 800; color: var(--warning);
+      background: rgba(245,158,11,.12); padding: 8px 24px; border-radius: 10px;
     }
     .viol-resume {
-      width: 100%; max-width: 260px;
-      padding: 16px 20px;
-      border-radius: var(--radius); border: none;
+      width: 100%; max-width: 240px;
+      padding: 16px; border-radius: 12px; border: none;
       background: var(--danger); color: #fff;
       font-size: 15px; font-weight: 600; cursor: pointer;
       touch-action: manipulation;
-      margin-top: 4px;
-      transition: opacity .15s;
     }
     .viol-resume:active { opacity: .85; }
-
-    /* ── Reconnect toast ── */
-    #reconnectToast {
-      position: fixed;
-      /* sit just below the top bar */
-      top: calc(var(--bar-h) + 10px);
-      left: 50%; transform: translateX(-50%);
-      z-index: 200;
-      background: var(--warning); color: #000;
-      padding: 8px 18px; border-radius: 99px;
-      font-size: 12px; font-weight: 700;
-      white-space: nowrap;
-      display: none; align-items: center; gap: 8px;
-      box-shadow: 0 4px 20px rgba(0,0,0,.4);
-      pointer-events: none;
-    }
-    #reconnectToast.visible { display: flex; }
-
-    /* ── Prevent horizontal overflow ── */
-    * { max-width: 100%; }
-    img, video, iframe { max-width: 100%; }
   </style>
 </head>
 <body>
@@ -266,6 +239,15 @@
   <div class="load-title">DIKLY Classes</div>
   <div class="spinner"></div>
   <div class="load-sub" id="loadStatus">Connecting to class…</div>
+</div>
+
+<!-- Reconnecting (replaces Jitsi's own disconnected dialog) -->
+<div id="reconnectOverlay">
+  <div class="reconnect-icon">📡</div>
+  <div class="reconnect-title">Reconnecting…</div>
+  <div class="reconnect-sub" id="reconnectSub">Connection interrupted. Attempting to reconnect you to the class.</div>
+  <div class="reconnect-count" id="reconnectCount">Attempt 1 of 4</div>
+  <div class="spinner"></div>
 </div>
 
 <!-- Error -->
@@ -279,31 +261,25 @@
   </div>
 </div>
 
-<!-- Violation overlay (anti-cheat) -->
+<!-- Anti-cheat violation -->
 <div id="violationOverlay">
   <div class="viol-icon">⚠️</div>
   <div class="viol-title" id="violTitle">Tab Switch Detected</div>
-  <div class="viol-msg"   id="violMsg">You left the class window. This has been logged and reported to your lecturer.</div>
+  <div class="viol-msg"   id="violMsg">You left the class window. This has been logged.</div>
   <div class="viol-count" id="violCount">0 violations</div>
   <button class="viol-resume" onclick="dismissViolation()">Return to Class</button>
 </div>
 
-<!-- Reconnect toast -->
-<div id="reconnectToast">
-  <div class="spinner" style="width:13px;height:13px;border-width:2px"></div>
-  Reconnecting…
-</div>
-
-<!-- Top bar -->
+<!-- DIKLY top bar — floats above Jitsi iframe -->
 <div id="topBar">
-  <div id="topBarInner">
+  <div id="topBarRow">
     <div class="logo-chip">D</div>
     <div id="meetingTitle">Class Session</div>
     <div class="live-badge"><div class="live-dot"></div>LIVE</div>
   </div>
 </div>
 
-<!-- Jitsi embed -->
+<!-- Jitsi embed — fills full screen, bars overlay it -->
 <div id="jitsiWrap">
   <div id="jitsiMount"></div>
 </div>
@@ -328,9 +304,8 @@ const API_BASE = (() => {
   const h = location.hostname;
   if (h === 'localhost' || h === '127.0.0.1') return '';
   const parts = h.split('.');
-  if (['app','student','monitor'].includes(parts[0])) {
+  if (['app','student','monitor'].includes(parts[0]))
     return location.protocol + '//api.' + parts.slice(1).join('.');
-  }
   return '';
 })();
 
@@ -342,58 +317,33 @@ let anticheatOn    = false;
 let reconnectTimer = null;
 let reconnectCount = 0;
 const MAX_RECONNECT = 4;
-
-// ── iOS: keep --bar-h CSS var in sync with visual viewport ───────────────────
-// Handles keyboard appearance and orientation changes correctly on iOS Safari.
-function patchViewport() {
-  const sat = parseInt(
-    getComputedStyle(document.documentElement).getPropertyValue('--sat') || '0'
-  );
-  // nothing to patch — CSS env() handles it, but trigger a reflow if needed
-  document.documentElement.style.setProperty('--vh', window.innerHeight * 0.01 + 'px');
-}
-window.addEventListener('resize', patchViewport, { passive: true });
-window.addEventListener('orientationchange', patchViewport, { passive: true });
-if (window.visualViewport) {
-  window.visualViewport.addEventListener('resize', patchViewport, { passive: true });
-}
-patchViewport();
+let joined         = false;
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
 (async () => {
   if (!MEETING_ID) return showError('No meeting ID provided.');
   if (!AUTH_TOKEN)  return showError('Not authenticated. Please log in to DIKLY.');
-
-  // Check for pre-fetched session data from preflight
-  let prefetched = null;
-  try {
-    const sd = JSON.parse(sessionStorage.getItem('dikly_jitsi_session') || 'null');
-    if (sd?.meetingId === MEETING_ID) prefetched = sd;
-  } catch (_) {}
-
   setStatus('Loading class details…');
   try {
     const r = await fetch(`${API_BASE}/api/meetings/${MEETING_ID}/join`, {
       headers: { Authorization: 'Bearer ' + AUTH_TOKEN },
     });
     if (!r.ok) {
-      const body = await r.json().catch(() => ({}));
-      throw new Error(body.error || body.message || 'HTTP ' + r.status);
+      const b = await r.json().catch(() => ({}));
+      throw new Error(b.error || b.message || 'HTTP ' + r.status);
     }
-    const body  = await r.json();
-    sessionData  = body.data;
+    const body = await r.json();
+    sessionData = body.data;
 
     if (sessionData?.isModerator) {
       window.location.replace(`/lecturer-meeting?meeting=${MEETING_ID}`);
       return;
     }
-
     document.getElementById('meetingTitle').textContent =
       sessionData.meeting?.title || 'Class Session';
 
-    if (!sessionData.jitsiToken) {
-      return showError('Session token missing. Please return to the preflight check and try again.');
-    }
+    if (!sessionData.jitsiToken)
+      return showError('Session token missing. Please go back and retry the preflight check.');
 
     setStatus('Starting class room…');
     await loadJitsiAPI(sessionData.jitsiConfig.domain);
@@ -409,9 +359,9 @@ function loadJitsiAPI(domain) {
   return new Promise((resolve, reject) => {
     if (window.JitsiMeetExternalAPI) return resolve();
     const s = document.createElement('script');
-    s.src = `https://${domain}/external_api.js`;
+    s.src     = `https://${domain}/external_api.js`;
     s.onload  = resolve;
-    s.onerror = () => reject(new Error(`Cannot connect to class server (${domain})`));
+    s.onerror = () => reject(new Error(`Cannot reach class server (${domain})`));
     document.head.appendChild(s);
   });
 }
@@ -419,9 +369,10 @@ function loadJitsiAPI(domain) {
 // ── Init Jitsi ────────────────────────────────────────────────────────────────
 function initJitsi() {
   if (api) { try { api.dispose(); } catch (_) {} api = null; }
-
   const cfg = sessionData.jitsiConfig;
-
+  // Start observing BEFORE the constructor so the MutationObserver is ready
+  // when Jitsi synchronously injects the iframe during construction.
+  observeIframeCreation();
   api = new JitsiMeetExternalAPI(cfg.domain, {
     roomName:   cfg.roomName,
     jwt:        sessionData.jitsiToken,
@@ -431,16 +382,23 @@ function initJitsi() {
     userInfo:   { displayName: cfg.displayName, email: cfg.email || '' },
     configOverwrite: {
       ...cfg.configOverwrite,
-      startWithAudioMuted:       true,
+      // Server config already sets these correctly per meeting type; we force
+      // audio muted but leave video to whatever the server decided (lecture =
+      // students start with video off, regular meeting = video on).
+      startWithAudioMuted:       cfg.configOverwrite?.startWithAudioMuted ?? true,
+      startWithVideoMuted:       cfg.configOverwrite?.startWithVideoMuted ?? true,
       prejoinPageEnabled:        false,
       prejoinConfig:             { enabled: false },
       enableWelcomePage:         false,
+      enableClosePage:           false,
       disableDeepLinking:        true,
       disableThirdPartyRequests: true,
       tokenAuthUrl:              false,
       p2p:                       { enabled: false },
       subject:                   cfg.subject,
       applicationName:           'DIKLY',
+      hideConferenceSubject:     true,
+      hideConferenceTimer:       true,
     },
     interfaceConfigOverwrite: {
       ...cfg.interfaceConfigOverwrite,
@@ -454,23 +412,21 @@ function initJitsi() {
       APP_NAME:                  'DIKLY Classes',
       DEFAULT_BACKGROUND:        '#0a0c10',
       AUTHENTICATION_ENABLE:     false,
+      TOOLBAR_TIMEOUT:           2000,
+      INITIAL_TOOLBAR_TIMEOUT:   5000,
     },
   });
+  // Also call immediately: if the iframe was injected synchronously during the
+  // constructor (which Jitsi does), the observer callback runs as a microtask
+  // AFTER this line, so this belt-and-suspenders call catches the sync case.
+  fixIframe();
 
   api.addEventListener('videoConferenceJoined', () => {
+    joined = true;
     hide('loadOverlay');
+    hideReconnectOverlay();
     reconnectCount = 0;
-    hideReconnectToast();
-    // Grant camera/mic permissions on iOS by ensuring the iframe has the
-    // correct allow attribute — Jitsi External API creates the iframe without it.
-    try {
-      const iframe = document.querySelector('#jitsiMount iframe');
-      if (iframe) {
-        iframe.setAttribute('allow',
-          'camera; microphone; display-capture; fullscreen; autoplay; clipboard-write');
-        iframe.setAttribute('allowfullscreen', '');
-      }
-    } catch (_) {}
+    fixIframe();
   });
 
   api.addEventListener('videoConferenceLeft', (data) => {
@@ -478,29 +434,60 @@ function initJitsi() {
       showError('You were removed from this class by the moderator.');
       return;
     }
-    scheduleReconnect();
+    if (joined) scheduleReconnect();
   });
 
-  api.addEventListener('connectionFailed', scheduleReconnect);
+  api.addEventListener('connectionFailed', () => {
+    if (joined) scheduleReconnect();
+    else showError('Could not connect to class server. Check your internet and try again.');
+  });
+
+  api.addEventListener('conferenceJoinFailed', () => {
+    showError('Could not join class. The session may have ended or your token expired.');
+  });
+}
+
+function fixIframe() {
+  try {
+    const iframe = document.querySelector('#jitsiMount iframe');
+    if (!iframe) return;
+    iframe.setAttribute('allow',
+      'camera; microphone; display-capture; fullscreen; autoplay; clipboard-write');
+    iframe.setAttribute('allowfullscreen', '');
+    iframe.style.cssText =
+      'position:absolute!important;inset:0!important;' +
+      'width:100%!important;height:100%!important;border:none!important;display:block!important;';
+  } catch (_) {}
+}
+
+// Apply fixIframe immediately when Jitsi injects the iframe into the DOM,
+// not just after videoConferenceJoined (which fires much later).
+function observeIframeCreation() {
+  const mount = document.getElementById('jitsiMount');
+  const obs = new MutationObserver(() => {
+    const iframe = mount.querySelector('iframe');
+    if (iframe) { fixIframe(); obs.disconnect(); }
+  });
+  obs.observe(mount, { childList: true, subtree: true });
 }
 
 // ── Reconnect ─────────────────────────────────────────────────────────────────
 function scheduleReconnect() {
   if (reconnectCount >= MAX_RECONNECT) {
-    showError('Connection to the class was lost. Please refresh the page.');
+    hideReconnectOverlay();
+    showError('Connection lost. Please refresh the page to rejoin.');
     return;
   }
   reconnectCount++;
-  showReconnectToast();
+  showReconnectOverlay(reconnectCount);
   clearTimeout(reconnectTimer);
+  const delay = Math.min(2000 * reconnectCount, 8000);
   reconnectTimer = setTimeout(async () => {
     try {
-      // Notify server of reconnect for monitoring
       await fetch(`${API_BASE}/api/meetings/${MEETING_ID}/reconnect`, {
-        method: 'POST',
+        method:  'POST',
         headers: { Authorization: 'Bearer ' + AUTH_TOKEN, 'Content-Type': 'application/json' },
       });
-      // Refresh session data (and JWT) so long meetings don't hit token expiry
       const r = await fetch(`${API_BASE}/api/meetings/${MEETING_ID}/join`, {
         headers: { Authorization: 'Bearer ' + AUTH_TOKEN },
       });
@@ -510,68 +497,64 @@ function scheduleReconnect() {
       }
     } catch (_) {}
     initJitsi();
-  }, Math.min(2000 * reconnectCount, 8000));
+  }, delay);
 }
 
 // ── Anti-cheat ────────────────────────────────────────────────────────────────
 function activateAnticheat() {
   anticheatOn = true;
+  // visibilitychange is reliable across all platforms (tab switch, app switch on mobile).
+  // window.blur is intentionally omitted — on iOS Safari it fires when the camera/mic
+  // permission dialog opens, triggering a false violation before the student has done anything.
   document.addEventListener('visibilitychange', () => {
-    if (!anticheatOn) return;
-    if (document.hidden) triggerViolation('tab_switch', 'Tab Switch Detected',
-      'You left the class tab. This event has been logged and reported to your lecturer.');
-  });
-  window.addEventListener('blur', () => {
-    if (!anticheatOn || document.hidden) return;
-    triggerViolation('window_blur', 'Window Focus Lost',
-      'The class window lost focus. This has been logged.');
-  });
-  document.addEventListener('fullscreenchange', () => {
-    if (!anticheatOn) return;
-    if (!(document.fullscreenElement || document.webkitFullscreenElement)) {
-      triggerViolation('fullscreen_exit', 'Fullscreen Exited',
-        'You exited fullscreen. This may affect your session record.');
-    }
+    if (!anticheatOn || !joined) return;
+    if (document.hidden)
+      triggerViolation('tab_switch', 'Tab Switch Detected',
+        'You left the class tab. This has been logged and reported to your lecturer.');
   });
 }
 
 function triggerViolation(type, title, msg) {
   violations++;
   reportViolation(type);
-  document.getElementById('violTitle').textContent  = title;
-  document.getElementById('violMsg').textContent    = msg;
-  document.getElementById('violCount').textContent  = violations + (violations === 1 ? ' violation' : ' violations');
+  document.getElementById('violTitle').textContent = title;
+  document.getElementById('violMsg').textContent   = msg;
+  document.getElementById('violCount').textContent =
+    violations + (violations === 1 ? ' violation' : ' violations');
   document.getElementById('violationOverlay').classList.add('visible');
 }
-
 function dismissViolation() {
   document.getElementById('violationOverlay').classList.remove('visible');
-  try {
-    if (!document.fullscreenElement) {
-      document.documentElement.requestFullscreen?.();
-    }
-  } catch (_) {}
+  try { if (!document.fullscreenElement) document.documentElement.requestFullscreen?.(); } catch (_) {}
 }
-
 function reportViolation(type) {
   if (!MEETING_ID || !AUTH_TOKEN) return;
   fetch(`${API_BASE}/api/meetings/${MEETING_ID}/proctoring/event`, {
-    method:  'POST',
+    method: 'POST',
     headers: { Authorization: 'Bearer ' + AUTH_TOKEN, 'Content-Type': 'application/json' },
-    body:    JSON.stringify({ type }),
+    body:   JSON.stringify({ type }),
   }).catch(() => {});
 }
 
 // ── UI helpers ────────────────────────────────────────────────────────────────
 function setStatus(msg) { document.getElementById('loadStatus').textContent = msg; }
+
 function showError(msg) {
   hide('loadOverlay');
+  hideReconnectOverlay();
   document.getElementById('errMsg').textContent = msg;
   document.getElementById('errorOverlay').classList.add('visible');
 }
 function hide(id) { document.getElementById(id).classList.add('hidden'); }
-function showReconnectToast() { document.getElementById('reconnectToast').classList.add('visible'); }
-function hideReconnectToast() { document.getElementById('reconnectToast').classList.remove('visible'); }
+
+function showReconnectOverlay(attempt) {
+  document.getElementById('reconnectCount').textContent =
+    `Attempt ${attempt} of ${MAX_RECONNECT}`;
+  document.getElementById('reconnectOverlay').classList.add('visible');
+}
+function hideReconnectOverlay() {
+  document.getElementById('reconnectOverlay').classList.remove('visible');
+}
 </script>
 </body>
 </html>
