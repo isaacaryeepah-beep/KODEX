@@ -1,4 +1,11 @@
 require("dotenv").config();
+
+// ── Jitsi configuration guard — fail fast before binding to any port ──────────
+// Importing the service here triggers its startup check. If JITSI_DOMAIN,
+// JITSI_APP_ID, or JITSI_APP_SECRET are missing the service throws and the
+// process exits with a clear error rather than serving broken meeting joins.
+require('./services/jitsiTokenService');
+
 const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");

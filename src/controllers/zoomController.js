@@ -4,7 +4,7 @@ const User = require("../models/User");
 const AttendanceSession = require("../models/AttendanceSession");
 const AttendanceRecord = require("../models/AttendanceRecord");
 
-const JITSI_DOMAIN = process.env.JITSI_DOMAIN || "meet.jit.si";
+const { JITSI_DOMAIN } = require('../services/jitsiTokenService');
 
 exports.createMeeting = async (req, res) => {
   try {

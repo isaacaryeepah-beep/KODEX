@@ -3,7 +3,7 @@ const JitsiMeeting = require("../models/JitsiMeeting");
 const JitsiAttendance = require("../models/JitsiAttendance");
 const Company = require("../models/Company");
 
-const JITSI_DOMAIN = process.env.JITSI_DOMAIN || "meet.jit.si";
+const { JITSI_DOMAIN } = require('../services/jitsiTokenService');
 
 exports.createMeeting = async (req, res) => {
   try {

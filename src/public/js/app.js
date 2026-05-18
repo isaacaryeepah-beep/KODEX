@@ -4223,7 +4223,7 @@ async function renderLecturerDashboard(content) {
     return d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
   };
   const _fmtTime = iso => new Date(iso).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
-  const _joinUrl  = m => `https://meet.jit.si/${m.roomName}`;
+  const _joinUrl  = m => `/lecturer-meeting?meeting=${m._id}`;
 
   const _meetingStatusMeta = m => {
     if (m.status === 'live') return { label: 'Live', cls: 'sched-status--live' };
@@ -7304,7 +7304,11 @@ function showJitsiEmbed(config, jitsiToken) {
   `;
   document.body.appendChild(overlay);
 
-  const domain = config.domain || 'meet.jit.si';
+  const domain = config.domain;
+  if (!domain) {
+    console.error('[Jitsi] No domain in jitsiConfig — check JITSI_DOMAIN server env var');
+    return;
+  }
   if (window.JitsiMeetExternalAPI) {
     _initJitsiEmbed(config, domain, jitsiToken);
   } else {

@@ -5,7 +5,7 @@ const MeetingParticipant = require('../models/MeetingParticipant');
 const User               = require('../models/User');
 const { generateRoomName }                             = require('../utils/generateRoomName');
 const { generateMeetingToken, verifyMeetingToken }     = require('../utils/jwt');
-const { generateJitsiToken, isSelfHosted, JITSI_DOMAIN } = require('../services/jitsiTokenService');
+const { generateJitsiToken, JITSI_DOMAIN } = require('../services/jitsiTokenService');
 const { broadcastMonitor }                             = require('./meetingMonitorController');
 const { runPreflight, handleReconnect }                 = require('../services/sessionPreflight');
 
@@ -280,7 +280,6 @@ exports.startMeeting = async (req, res) => {
         settings:    meeting.settings,
         jitsiToken,
         meetingToken,
-        selfHosted:  isSelfHosted(),
         jitsiConfig: buildJitsiConfig(meeting, req.user, true),
         monitorUrl:  `${APP_BASE_URL}/meeting-monitor.html?meeting=${meeting._id}`,
       },
@@ -415,7 +414,6 @@ exports.joinMeeting = async (req, res) => {
 
     const jitsiToken  = generateJitsiToken(user, meeting.roomName, isMod);
     const meetingToken = generateMeetingToken(user._id.toString(), meeting._id.toString(), user.deviceId || null);
-
     const jitsiConfig = buildJitsiConfig(meeting, user, isMod);
 
     res.json({
@@ -425,12 +423,10 @@ exports.joinMeeting = async (req, res) => {
         jitsiConfig,
         jitsiToken,
         meetingToken,
-        selfHosted:  isSelfHosted(),
         isModerator: isMod,
         monitorUrl:  isMod
           ? `${MONITOR_BASE_URL}/monitor?meeting=${meeting._id}`
           : null,
-        // Client-side routing hint: open this URL for the embedded meeting experience
         embedUrl: isMod
           ? `${APP_BASE_URL}/lecturer-meeting?meeting=${meeting._id}`
           : `${APP_BASE_URL}/session-preflight?meeting=${meeting._id}`,
