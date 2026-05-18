@@ -78,12 +78,22 @@ app.use(helmet({
 }));
 
 const allowedOrigins = [
+  // dikly.live (legacy + Jitsi meet subdomain)
   "https://dikly.live",
   "https://www.dikly.live",
   "https://app.dikly.live",
   "https://monitor.dikly.live",
   "https://api.dikly.live",
   "https://admin.dikly.live",
+  "https://meet.dikly.live",
+  // dikly.sbs (primary platform domains)
+  "https://dikly.sbs",
+  "https://www.dikly.sbs",
+  "https://app.dikly.sbs",
+  "https://monitor.dikly.sbs",
+  "https://api.dikly.sbs",
+  "https://admin.dikly.sbs",
+  // local development
   "http://localhost:3000",
   "http://localhost:5000",
 ];
@@ -150,6 +160,11 @@ app.get("/superadmin", (req, res) => {
 // Standalone proctoring monitor dashboard
 app.get('/monitor', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'monitor.html'));
+});
+
+// Student session preflight / validation screen
+app.get('/session-preflight', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'session-preflight.html'));
 });
 
 app.get("/anticheat",      (req, res) => res.sendFile(path.join(__dirname, "public", "anticheat-dashboard.html")));

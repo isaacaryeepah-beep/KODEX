@@ -1,0 +1,735 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Session Preflight — DIKLY</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0a0c10;
+      --surface:   #12151c;
+      --card:      #1a1e28;
+      --border:    #2a2f3d;
+      --accent:    #3b82f6;
+      --accent-dim:#1d4ed8;
+      --success:   #22c55e;
+      --warning:   #f59e0b;
+      --danger:    #ef4444;
+      --muted:     #6b7280;
+      --text:      #e2e8f0;
+      --text-sub:  #94a3b8;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      padding: 24px 16px 40px;
+    }
+
+    /* ── Header ── */
+    .header {
+      width: 100%;
+      max-width: 680px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 28px;
+    }
+    .logo {
+      width: 40px; height: 40px;
+      background: var(--accent);
+      border-radius: 10px;
+      display: grid; place-items: center;
+      font-weight: 800; font-size: 18px; color: #fff;
+      flex-shrink: 0;
+    }
+    .header-text h1 { font-size: 20px; font-weight: 700; }
+    .header-text p  { font-size: 13px; color: var(--text-sub); margin-top: 2px; }
+
+    /* ── Meeting info banner ── */
+    .meeting-banner {
+      width: 100%; max-width: 680px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px 18px;
+      margin-bottom: 20px;
+      display: flex; align-items: center; gap: 14px;
+    }
+    .meeting-icon {
+      width: 38px; height: 38px;
+      background: rgba(59,130,246,.15);
+      border-radius: 9px;
+      display: grid; place-items: center;
+      font-size: 18px; flex-shrink: 0;
+    }
+    .meeting-title { font-weight: 600; font-size: 15px; }
+    .meeting-sub   { font-size: 12px; color: var(--text-sub); margin-top: 3px; }
+
+    /* ── Progress bar ── */
+    .progress-wrap {
+      width: 100%; max-width: 680px;
+      margin-bottom: 20px;
+    }
+    .progress-label {
+      display: flex; justify-content: space-between;
+      font-size: 12px; color: var(--text-sub); margin-bottom: 8px;
+    }
+    .progress-track {
+      height: 6px; background: var(--border); border-radius: 99px; overflow: hidden;
+    }
+    .progress-fill {
+      height: 100%; width: 0%;
+      background: linear-gradient(90deg, var(--accent), #60a5fa);
+      border-radius: 99px;
+      transition: width .4s ease;
+    }
+
+    /* ── Steps container ── */
+    .steps { width: 100%; max-width: 680px; display: flex; flex-direction: column; gap: 10px; }
+
+    /* ── Step card ── */
+    .step-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px 16px;
+      display: flex; align-items: center; gap: 14px;
+      transition: border-color .3s, background .3s;
+    }
+    .step-card.active  { border-color: var(--accent); background: rgba(59,130,246,.05); }
+    .step-card.passed  { border-color: var(--success); }
+    .step-card.warning { border-color: var(--warning); }
+    .step-card.failed  { border-color: var(--danger); }
+
+    .step-icon {
+      width: 36px; height: 36px; flex-shrink: 0;
+      border-radius: 50%; display: grid; place-items: center;
+      font-size: 16px; font-weight: 700;
+      background: var(--border); color: var(--muted);
+      transition: background .3s, color .3s;
+    }
+    .step-card.active  .step-icon { background: var(--accent);  color: #fff; }
+    .step-card.passed  .step-icon { background: var(--success); color: #fff; }
+    .step-card.warning .step-icon { background: var(--warning); color: #fff; }
+    .step-card.failed  .step-icon { background: var(--danger);  color: #fff; }
+
+    .step-body { flex: 1; min-width: 0; }
+    .step-name { font-size: 14px; font-weight: 600; }
+    .step-desc { font-size: 12px; color: var(--text-sub); margin-top: 2px; }
+    .step-detail {
+      font-size: 12px; margin-top: 6px; padding: 6px 10px;
+      border-radius: 6px; display: none;
+    }
+    .step-card.active  .step-detail,
+    .step-card.passed  .step-detail,
+    .step-card.warning .step-detail,
+    .step-card.failed  .step-detail { display: block; }
+    .step-card.active  .step-detail { background: rgba(59,130,246,.1);  color: #93c5fd; }
+    .step-card.passed  .step-detail { background: rgba(34,197,94,.1);   color: #86efac; }
+    .step-card.warning .step-detail { background: rgba(245,158,11,.1);  color: #fcd34d; }
+    .step-card.failed  .step-detail { background: rgba(239,68,68,.1);   color: #fca5a5; }
+
+    .step-badge {
+      font-size: 11px; font-weight: 600; padding: 3px 8px;
+      border-radius: 99px; flex-shrink: 0; white-space: nowrap;
+    }
+    .badge-pending  { background: var(--border); color: var(--muted); }
+    .badge-checking { background: rgba(59,130,246,.2); color: #60a5fa; }
+    .badge-passed   { background: rgba(34,197,94,.2);  color: #4ade80; }
+    .badge-warning  { background: rgba(245,158,11,.2); color: #fbbf24; }
+    .badge-failed   { background: rgba(239,68,68,.2);  color: #f87171; }
+
+    /* Camera preview */
+    .cam-preview-wrap {
+      margin-top: 8px; border-radius: 8px; overflow: hidden;
+      max-height: 0; transition: max-height .4s ease;
+    }
+    .cam-preview-wrap.visible { max-height: 160px; }
+    #camPreview {
+      width: 100%; max-height: 140px;
+      object-fit: cover; border-radius: 8px;
+      display: block; background: #000;
+    }
+
+    /* Audio meter */
+    .audio-meter-wrap { margin-top: 8px; }
+    .audio-label { font-size: 11px; color: var(--text-sub); margin-bottom: 4px; }
+    .audio-meter {
+      height: 8px; background: var(--border); border-radius: 99px; overflow: hidden;
+    }
+    .audio-fill {
+      height: 100%; width: 0%;
+      background: linear-gradient(90deg, var(--success), #86efac);
+      border-radius: 99px; transition: width .1s;
+    }
+
+    /* Internet speed */
+    .latency-display {
+      font-size: 20px; font-weight: 700; color: var(--accent);
+      margin-top: 4px;
+    }
+
+    /* ── Warnings panel ── */
+    .warnings-panel {
+      width: 100%; max-width: 680px;
+      background: rgba(245,158,11,.08);
+      border: 1px solid rgba(245,158,11,.3);
+      border-radius: 12px;
+      padding: 14px 16px;
+      margin-top: 14px;
+      display: none;
+    }
+    .warnings-panel.visible { display: block; }
+    .warnings-title {
+      font-size: 13px; font-weight: 600; color: var(--warning);
+      margin-bottom: 8px; display: flex; align-items: center; gap: 6px;
+    }
+    .warnings-list { list-style: none; display: flex; flex-direction: column; gap: 5px; }
+    .warnings-list li {
+      font-size: 12px; color: #fcd34d;
+      padding: 5px 8px; background: rgba(245,158,11,.1); border-radius: 6px;
+    }
+
+    /* ── Actions ── */
+    .actions {
+      width: 100%; max-width: 680px;
+      margin-top: 20px; display: flex; gap: 12px; flex-wrap: wrap;
+    }
+    .btn {
+      padding: 12px 24px; border-radius: 10px; border: none;
+      font-size: 14px; font-weight: 600; cursor: pointer;
+      transition: opacity .2s, transform .1s;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .btn:active { transform: scale(.98); }
+    .btn:disabled { opacity: .4; cursor: not-allowed; }
+    .btn-primary { background: var(--accent); color: #fff; flex: 1; justify-content: center; }
+    .btn-primary:hover:not(:disabled) { background: var(--accent-dim); }
+    .btn-secondary { background: var(--card); color: var(--text); border: 1px solid var(--border); }
+    .btn-secondary:hover:not(:disabled) { background: var(--border); }
+
+    /* ── Anti-cheat overlay ── */
+    #anticheatOverlay {
+      display: none;
+      position: fixed; inset: 0; z-index: 9999;
+      background: rgba(0,0,0,.97);
+      align-items: center; justify-content: center;
+      flex-direction: column; gap: 16px; text-align: center; padding: 24px;
+    }
+    #anticheatOverlay.visible { display: flex; }
+    .overlay-icon { font-size: 56px; }
+    .overlay-title { font-size: 22px; font-weight: 700; color: var(--danger); }
+    .overlay-msg   { font-size: 14px; color: var(--text-sub); max-width: 380px; line-height: 1.6; }
+    .overlay-counter {
+      font-size: 32px; font-weight: 800; color: var(--warning);
+      background: rgba(245,158,11,.1); padding: 8px 24px; border-radius: 10px;
+    }
+    .overlay-resume {
+      padding: 10px 28px; border-radius: 10px;
+      background: var(--danger); color: #fff;
+      border: none; font-size: 14px; font-weight: 600; cursor: pointer;
+      margin-top: 8px;
+    }
+
+    /* Spinner */
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spinner {
+      width: 16px; height: 16px;
+      border: 2px solid rgba(255,255,255,.3);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+    }
+
+    /* Fullscreen request */
+    .fullscreen-prompt {
+      margin-top: 8px; font-size: 12px;
+      background: rgba(59,130,246,.1); color: #93c5fd;
+      padding: 6px 10px; border-radius: 6px; display: none;
+    }
+    .fullscreen-prompt.visible { display: block; }
+
+    @media (max-width: 480px) {
+      .actions { flex-direction: column; }
+      .btn-primary { flex: unset; width: 100%; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- Anti-cheat overlay (tab switch / fullscreen exit during meeting) -->
+<div id="anticheatOverlay">
+  <div class="overlay-icon">⚠️</div>
+  <div class="overlay-title" id="overlayTitle">Tab Switch Detected</div>
+  <div class="overlay-msg" id="overlayMsg">You left the meeting window. This event has been logged and reported to your invigilator.</div>
+  <div class="overlay-counter" id="overlayCounter">0 violations</div>
+  <button class="overlay-resume" id="overlayResumeBtn" onclick="dismissOverlay()">Return to Meeting</button>
+</div>
+
+<!-- Main content -->
+<div class="header">
+  <div class="logo">D</div>
+  <div class="header-text">
+    <h1>Session Preflight</h1>
+    <p>Checking your device before the meeting starts</p>
+  </div>
+</div>
+
+<div class="meeting-banner" id="meetingBanner">
+  <div class="meeting-icon">📋</div>
+  <div>
+    <div class="meeting-title" id="meetingTitle">Loading meeting…</div>
+    <div class="meeting-sub"  id="meetingSubtitle">Please wait</div>
+  </div>
+</div>
+
+<div class="progress-wrap">
+  <div class="progress-label">
+    <span id="progressLabel">Starting checks…</span>
+    <span id="progressPct">0%</span>
+  </div>
+  <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+</div>
+
+<div class="steps" id="stepsContainer">
+  <!-- Rendered by JS -->
+</div>
+
+<div class="warnings-panel" id="warningsPanel">
+  <div class="warnings-title">⚠️ Warnings detected — you may still proceed</div>
+  <ul class="warnings-list" id="warningsList"></ul>
+</div>
+
+<div class="actions">
+  <button class="btn btn-secondary" id="retryBtn" onclick="startChecks()" style="display:none">
+    🔄 Retry
+  </button>
+  <button class="btn btn-primary" id="joinBtn" disabled onclick="joinMeeting()">
+    <span id="joinBtnText">Preparing…</span>
+  </button>
+</div>
+
+<script>
+// ── Config ────────────────────────────────────────────────────────────────────
+const params      = new URLSearchParams(location.search);
+const MEETING_ID  = params.get('meeting') || params.get('id') || '';
+const AUTH_TOKEN  = params.get('token') || localStorage.getItem('token') || localStorage.getItem('jwt_token') || '';
+// Derive API base from current hostname dynamically (no hardcoded domain)
+const API_BASE    = (() => {
+  const h = location.hostname;
+  if (h === 'localhost' || h === '127.0.0.1') return '';
+  // api.dikly.sbs / api.dikly.live pattern
+  const parts = h.split('.');
+  if (parts[0] === 'app' || parts[0] === 'monitor' || parts[0] === 'admin') {
+    return location.protocol + '//api.' + parts.slice(1).join('.');
+  }
+  return '';
+})();
+
+// ── Step definitions ──────────────────────────────────────────────────────────
+const STEPS = [
+  { id: 'compat',      icon: '🔍', name: 'Browser Compatibility',   desc: 'Checking WebRTC and media API support' },
+  { id: 'camera',      icon: '📷', name: 'Camera Access',           desc: 'Requesting camera permission and preview' },
+  { id: 'microphone',  icon: '🎙️', name: 'Microphone Check',       desc: 'Requesting microphone and testing audio level' },
+  { id: 'internet',    icon: '🌐', name: 'Internet Stability',      desc: 'Measuring connection latency' },
+  { id: 'fullscreen',  icon: '⛶',  name: 'Fullscreen Mode',         desc: 'Enforcing fullscreen for exam integrity' },
+  { id: 'anticheat',   icon: '🛡️', name: 'Anti-Cheat Activation',  desc: 'Setting up tab-switch and focus monitors' },
+  { id: 'monitoring',  icon: '👁️', name: 'Monitoring Init',        desc: 'Registering session with the proctor server' },
+  { id: 'ready',       icon: '✅', name: 'Ready to Join',           desc: 'All checks complete — opening meeting room' },
+];
+
+// ── State ─────────────────────────────────────────────────────────────────────
+let stepStates    = {};   // stepId → { status, detail }
+let warnings      = [];
+let meetingData   = null;
+let jitsiUrl      = null;
+let camStream     = null;
+let micStream     = null;
+let audioCtx      = null;
+let analyser      = null;
+let animFrame     = null;
+let violations    = 0;
+let anticheatReady = false;
+
+// ── DOM helpers ───────────────────────────────────────────────────────────────
+function getCard(id) { return document.getElementById('step-' + id); }
+
+function renderSteps() {
+  const container = document.getElementById('stepsContainer');
+  container.innerHTML = STEPS.map(s => `
+    <div class="step-card" id="step-${s.id}" data-step="${s.id}">
+      <div class="step-icon" id="icon-${s.id}">${s.icon}</div>
+      <div class="step-body">
+        <div class="step-name">${s.name}</div>
+        <div class="step-desc">${s.desc}</div>
+        <div class="step-detail" id="detail-${s.id}"></div>
+        ${s.id === 'camera'     ? '<div class="cam-preview-wrap" id="camWrap"><video id="camPreview" autoplay muted playsinline></video></div>' : ''}
+        ${s.id === 'microphone' ? '<div class="audio-meter-wrap" id="audioMeter" style="display:none"><div class="audio-label">Mic level</div><div class="audio-meter"><div class="audio-fill" id="audioFill"></div></div></div>' : ''}
+        ${s.id === 'internet'   ? '<div class="latency-display" id="latencyVal" style="display:none">—</div>' : ''}
+        ${s.id === 'fullscreen' ? '<div class="fullscreen-prompt" id="fsPrompt">Click "Enable Fullscreen" to continue, or it will be attempted automatically.</div>' : ''}
+      </div>
+      <div class="step-badge badge-pending" id="badge-${s.id}">Pending</div>
+    </div>
+  `).join('');
+}
+
+function setStep(id, status, detail) {
+  stepStates[id] = { status, detail };
+  const card  = getCard(id);
+  const badge = document.getElementById('badge-' + id);
+  const det   = document.getElementById('detail-' + id);
+  if (!card) return;
+  card.className = 'step-card ' + (status === 'checking' ? 'active' : status);
+  badge.className = 'step-badge badge-' + (status === 'checking' ? 'checking' : status);
+  badge.textContent = status === 'checking' ? 'Checking…'
+    : status === 'passed'  ? '✓ Passed'
+    : status === 'warning' ? '⚠ Warning'
+    : status === 'failed'  ? '✗ Failed'
+    : 'Pending';
+  if (detail && det) det.textContent = detail;
+}
+
+function setProgress(n, label) {
+  const pct = Math.round((n / STEPS.length) * 100);
+  document.getElementById('progressFill').style.width = pct + '%';
+  document.getElementById('progressPct').textContent  = pct + '%';
+  if (label) document.getElementById('progressLabel').textContent = label;
+}
+
+function addWarning(msg) {
+  warnings.push(msg);
+  const li = document.createElement('li');
+  li.textContent = msg;
+  document.getElementById('warningsList').appendChild(li);
+  document.getElementById('warningsPanel').classList.add('visible');
+}
+
+// ── Fetch meeting info ────────────────────────────────────────────────────────
+async function fetchMeetingInfo() {
+  if (!MEETING_ID) {
+    document.getElementById('meetingTitle').textContent = 'No meeting ID provided';
+    document.getElementById('meetingSubtitle').textContent = 'Check the link you were given';
+    return false;
+  }
+  try {
+    const r = await fetch(`${API_BASE}/api/meetings/${MEETING_ID}/join`, {
+      headers: { Authorization: 'Bearer ' + AUTH_TOKEN },
+    });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const data = await r.json();
+    meetingData = data;
+    jitsiUrl    = data.jitsiUrl || data.jitsiRoomUrl || data.roomUrl;
+    document.getElementById('meetingTitle').textContent    = data.meeting?.title || 'Meeting';
+    document.getElementById('meetingSubtitle').textContent = data.meeting?.meetingType
+      ? data.meeting.meetingType.replace(/_/g, ' ')
+      : 'Session';
+    return true;
+  } catch (e) {
+    document.getElementById('meetingTitle').textContent    = 'Unable to load meeting';
+    document.getElementById('meetingSubtitle').textContent = e.message;
+    return false;
+  }
+}
+
+// ── Step runners ──────────────────────────────────────────────────────────────
+async function checkCompat() {
+  setStep('compat', 'checking', 'Checking browser APIs…');
+  await sleep(300);
+  const issues = [];
+  if (!navigator.mediaDevices?.getUserMedia) issues.push('getUserMedia not supported');
+  if (!window.RTCPeerConnection)             issues.push('WebRTC not supported');
+  if (!document.documentElement.requestFullscreen &&
+      !document.documentElement.webkitRequestFullscreen) issues.push('Fullscreen API unavailable');
+  if (issues.length) {
+    setStep('compat', 'warning', 'Some APIs missing: ' + issues.join('; '));
+    issues.forEach(i => addWarning('Browser: ' + i));
+  } else {
+    setStep('compat', 'passed', 'WebRTC, MediaDevices and Fullscreen APIs ready');
+  }
+}
+
+async function checkCamera() {
+  setStep('camera', 'checking', 'Requesting camera permission…');
+  try {
+    camStream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } });
+    const video = document.getElementById('camPreview');
+    video.srcObject = camStream;
+    document.getElementById('camWrap').classList.add('visible');
+    setStep('camera', 'passed', 'Camera access granted — preview active');
+  } catch (e) {
+    setStep('camera', 'warning', 'Camera denied: ' + e.message);
+    addWarning('Camera access denied — proctoring may flag you');
+  }
+}
+
+async function checkMic() {
+  setStep('microphone', 'checking', 'Requesting microphone permission…');
+  try {
+    micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    document.getElementById('audioMeter').style.display = 'block';
+    audioCtx  = new (window.AudioContext || window.webkitAudioContext)();
+    analyser  = audioCtx.createAnalyser();
+    analyser.fftSize = 256;
+    const src = audioCtx.createMediaStreamSource(micStream);
+    src.connect(analyser);
+    const buf  = new Uint8Array(analyser.frequencyBinCount);
+    const fill = document.getElementById('audioFill');
+    let peak   = 0;
+    const tick = () => {
+      analyser.getByteFrequencyData(buf);
+      const avg = buf.reduce((a, b) => a + b, 0) / buf.length;
+      const pct = Math.min(100, (avg / 128) * 100);
+      fill.style.width = pct + '%';
+      if (pct > peak) peak = pct;
+      animFrame = requestAnimationFrame(tick);
+    };
+    tick();
+    await sleep(1500);
+    cancelAnimationFrame(animFrame);
+    if (peak < 2) {
+      setStep('microphone', 'warning', 'Microphone detected but no audio input found');
+      addWarning('Microphone: very low or silent — check your mic');
+    } else {
+      setStep('microphone', 'passed', `Microphone active — peak level ${Math.round(peak)}%`);
+    }
+    stopMicAnalyser();
+  } catch (e) {
+    setStep('microphone', 'warning', 'Microphone denied: ' + e.message);
+    addWarning('Microphone access denied — audio monitoring disabled');
+  }
+}
+
+async function checkInternet() {
+  setStep('internet', 'checking', 'Measuring connection latency…');
+  const latencies = [];
+  const endpoint  = API_BASE + '/health';
+  for (let i = 0; i < 3; i++) {
+    try {
+      const t0 = performance.now();
+      await fetch(endpoint, { cache: 'no-store' });
+      latencies.push(performance.now() - t0);
+    } catch { latencies.push(9999); }
+    await sleep(200);
+  }
+  const avg = Math.round(latencies.reduce((a, b) => a + b, 0) / latencies.length);
+  const el = document.getElementById('latencyVal');
+  el.style.display = 'block';
+  el.textContent   = avg + ' ms avg';
+  if (avg > 1500) {
+    setStep('internet', 'warning', `High latency (${avg}ms) — unstable connection may cause issues`);
+    addWarning(`Network latency ${avg}ms — consider a better connection`);
+  } else {
+    setStep('internet', 'passed', `Connection stable — ${avg}ms average latency`);
+  }
+}
+
+async function checkFullscreen() {
+  setStep('fullscreen', 'checking', 'Requesting fullscreen mode…');
+  document.getElementById('fsPrompt').classList.add('visible');
+  try {
+    const el = document.documentElement;
+    if (el.requestFullscreen)             await el.requestFullscreen();
+    else if (el.webkitRequestFullscreen)  await el.webkitRequestFullscreen();
+    await sleep(400);
+    const inFS = !!(document.fullscreenElement || document.webkitFullscreenElement);
+    if (inFS) {
+      setStep('fullscreen', 'passed', 'Fullscreen mode active — exam environment secured');
+    } else {
+      setStep('fullscreen', 'warning', 'Fullscreen not active — exiting will be logged');
+      addWarning('Fullscreen mode inactive — exiting will trigger a proctoring event');
+    }
+  } catch (e) {
+    setStep('fullscreen', 'warning', 'Fullscreen request failed: ' + e.message);
+    addWarning('Fullscreen request failed — exit events will still be monitored');
+  }
+  document.getElementById('fsPrompt').classList.remove('visible');
+}
+
+async function activateAnticheat() {
+  setStep('anticheat', 'checking', 'Activating tab-switch and focus monitoring…');
+  await sleep(400);
+
+  document.addEventListener('visibilitychange', onVisibilityChange);
+  document.addEventListener('fullscreenchange',  onFullscreenChange);
+  document.addEventListener('webkitfullscreenchange', onFullscreenChange);
+  window.addEventListener('blur', onWindowBlur);
+
+  anticheatReady = true;
+  setStep('anticheat', 'passed', 'Tab switch, window blur and fullscreen exit monitors active');
+}
+
+async function initMonitoring() {
+  setStep('monitoring', 'checking', 'Registering with proctor server…');
+  if (!MEETING_ID || !AUTH_TOKEN) {
+    setStep('monitoring', 'warning', 'No meeting ID or auth token — monitoring skipped');
+    addWarning('Monitoring could not be initialised (missing credentials)');
+    return;
+  }
+  try {
+    const r = await fetch(`${API_BASE}/api/meetings/${MEETING_ID}/preflight`, {
+      method:  'POST',
+      headers: { Authorization: 'Bearer ' + AUTH_TOKEN, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        checks: {
+          camera:     stepStates.camera?.status,
+          microphone: stepStates.microphone?.status,
+          internet:   stepStates.internet?.status,
+          fullscreen: stepStates.fullscreen?.status,
+        },
+        userAgent: navigator.userAgent,
+        platform:  navigator.platform,
+      }),
+    });
+    if (!r.ok && r.status !== 409) {
+      const body = await r.json().catch(() => ({}));
+      throw new Error(body.message || 'HTTP ' + r.status);
+    }
+    setStep('monitoring', 'passed', 'Session registered with proctor — invigilator notified');
+  } catch (e) {
+    setStep('monitoring', 'warning', 'Monitoring server unreachable: ' + e.message);
+    addWarning('Proctor server could not be reached — session may not be monitored');
+  }
+}
+
+// ── Anti-cheat handlers ───────────────────────────────────────────────────────
+function onVisibilityChange() {
+  if (!anticheatReady) return;
+  if (document.hidden) triggerViolation('tab_switch', 'Tab Switch Detected', 'You left the meeting tab. This event has been logged.');
+}
+
+function onWindowBlur() {
+  if (!anticheatReady) return;
+  if (document.hidden) return; // already caught by visibilitychange
+  triggerViolation('window_blur', 'Window Focus Lost', 'You clicked outside the meeting window. This event has been logged.');
+}
+
+function onFullscreenChange() {
+  if (!anticheatReady) return;
+  const inFS = !!(document.fullscreenElement || document.webkitFullscreenElement);
+  if (!inFS) triggerViolation('fullscreen_exit', 'Fullscreen Exited', 'You exited fullscreen mode. This event has been logged and may affect your score.');
+}
+
+function triggerViolation(type, title, msg) {
+  violations++;
+  reportViolation(type);
+  document.getElementById('overlayTitle').textContent   = title;
+  document.getElementById('overlayMsg').textContent     = msg;
+  document.getElementById('overlayCounter').textContent = violations + (violations === 1 ? ' violation' : ' violations');
+  document.getElementById('anticheatOverlay').classList.add('visible');
+}
+
+function dismissOverlay() {
+  document.getElementById('anticheatOverlay').classList.remove('visible');
+  // Re-request fullscreen on resume
+  try {
+    if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+      document.documentElement.requestFullscreen?.() || document.documentElement.webkitRequestFullscreen?.();
+    }
+  } catch (_) {}
+}
+
+function reportViolation(type) {
+  if (!MEETING_ID || !AUTH_TOKEN) return;
+  fetch(`${API_BASE}/api/meetings/${MEETING_ID}/proctoring-event`, {
+    method:  'POST',
+    headers: { Authorization: 'Bearer ' + AUTH_TOKEN, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ eventType: type, timestamp: new Date().toISOString() }),
+  }).catch(() => {});
+}
+
+// ── Main check sequence ───────────────────────────────────────────────────────
+async function startChecks() {
+  warnings = [];
+  document.getElementById('warningsList').innerHTML = '';
+  document.getElementById('warningsPanel').classList.remove('visible');
+  document.getElementById('retryBtn').style.display = 'none';
+  document.getElementById('joinBtn').disabled = true;
+  document.getElementById('joinBtnText').textContent = 'Checking…';
+
+  STEPS.forEach(s => setStep(s.id, 'pending', ''));
+
+  setProgress(0, 'Starting checks…');
+
+  const steps = [
+    { fn: checkCompat,       label: 'Checking browser…' },
+    { fn: checkCamera,       label: 'Checking camera…' },
+    { fn: checkMic,          label: 'Checking microphone…' },
+    { fn: checkInternet,     label: 'Testing internet…' },
+    { fn: checkFullscreen,   label: 'Enabling fullscreen…' },
+    { fn: activateAnticheat, label: 'Activating anti-cheat…' },
+    { fn: initMonitoring,    label: 'Connecting to proctor…' },
+  ];
+
+  let i = 0;
+  for (const { fn, label } of steps) {
+    setProgress(i, label);
+    await fn();
+    i++;
+  }
+
+  setStep('ready', 'passed', 'All checks complete — click "Join Meeting" to enter');
+  setProgress(STEPS.length, 'Ready!');
+  document.getElementById('joinBtnText').textContent = '🚀 Join Meeting';
+  document.getElementById('joinBtn').disabled = false;
+  document.getElementById('retryBtn').style.display = 'inline-flex';
+}
+
+// ── Join ──────────────────────────────────────────────────────────────────────
+async function joinMeeting() {
+  const btn = document.getElementById('joinBtn');
+  btn.disabled = true;
+  document.getElementById('joinBtnText').innerHTML = '<div class="spinner"></div> Opening room…';
+
+  // Stop camera preview (Jitsi will re-request)
+  stopCameraStream();
+  stopMicAnalyser();
+
+  if (jitsiUrl) {
+    window.location.href = jitsiUrl;
+  } else if (meetingData?.jitsiToken && meetingData?.roomName) {
+    const domain = meetingData.jitsiDomain || 'meet.jit.si';
+    window.location.href = `https://${domain}/${meetingData.roomName}#jitsi_meet_external_api_id=dikly&jwt=${meetingData.jitsiToken}`;
+  } else {
+    btn.disabled = false;
+    document.getElementById('joinBtnText').textContent = '🚀 Join Meeting';
+    alert('Could not determine the meeting URL. Please go back and try again.');
+  }
+}
+
+// ── Cleanup ───────────────────────────────────────────────────────────────────
+function stopCameraStream() {
+  if (camStream) { camStream.getTracks().forEach(t => t.stop()); camStream = null; }
+}
+function stopMicAnalyser() {
+  if (animFrame) { cancelAnimationFrame(animFrame); animFrame = null; }
+  if (audioCtx)  { audioCtx.close().catch(() => {}); audioCtx = null; }
+  if (micStream) { micStream.getTracks().forEach(t => t.stop()); micStream = null; }
+}
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+// ── Boot ──────────────────────────────────────────────────────────────────────
+(async () => {
+  renderSteps();
+
+  // Load meeting info first (non-blocking for checks)
+  const loaded = await fetchMeetingInfo();
+  if (!loaded) {
+    document.getElementById('joinBtnText').textContent = 'Meeting unavailable';
+    return;
+  }
+
+  await startChecks();
+})();
+</script>
+</body>
+</html>
