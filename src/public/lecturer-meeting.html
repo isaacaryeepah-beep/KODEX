@@ -3,9 +3,16 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="format-detection" content="telephone=no" />
   <title>DIKLY — Class in Progress</title>
   <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0; padding: 0;
+      -webkit-tap-highlight-color: transparent;
+    }
 
     :root {
       --bg:       #0a0c10;
@@ -18,30 +25,58 @@
       --danger:   #ef4444;
       --text:     #e2e8f0;
       --muted:    #6b7280;
-      --bar-h:    52px;
-      --ctrl-h:   60px;
+      --radius:   12px;
+      /* iOS safe areas */
+      --sat: env(safe-area-inset-top,    0px);
+      --sab: env(safe-area-inset-bottom, 0px);
+      --sal: env(safe-area-inset-left,   0px);
+      --sar: env(safe-area-inset-right,  0px);
+      /* bar sizes */
+      --bar-content:  52px;
+      --bar-h:        calc(var(--bar-content) + var(--sat));
+      --ctrl-content: 62px;
+      --ctrl-h:       calc(var(--ctrl-content) + var(--sab));
     }
 
-    html, body {
-      height: 100%; width: 100%;
+    /* ── iOS viewport + bounce fix ── */
+    html {
+      height: -webkit-fill-available;
+      -webkit-text-size-adjust: 100%;
+      text-size-adjust: 100%;
+    }
+    body {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      width: 100%; height: 100%;
       background: var(--bg);
       color: var(--text);
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       overflow: hidden;
+      overscroll-behavior: none;
     }
 
     /* ── Top bar ── */
     #topBar {
-      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
-      height: var(--bar-h);
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      z-index: 100;
+      padding-top: var(--sat);
       background: rgba(10,12,16,.92);
       backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
       border-bottom: 1px solid var(--border);
-      display: flex; align-items: center; gap: 10px;
-      padding: 0 14px;
       transition: opacity .3s;
     }
     #topBar.hidden { opacity: 0; pointer-events: none; }
+
+    #topBarInner {
+      height: var(--bar-content);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 0 calc(12px + var(--sar)) 0 calc(12px + var(--sal));
+      min-width: 0;
+    }
 
     .logo-chip {
       width: 32px; height: 32px; flex-shrink: 0;
@@ -52,14 +87,15 @@
     #meetingTitle {
       font-weight: 600; font-size: 14px;
       white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-      max-width: 220px; flex: 1;
+      flex: 1; min-width: 0;
     }
     #liveBadge {
       flex-shrink: 0;
       display: flex; align-items: center; gap: 5px;
-      background: rgba(239,68,68,.15); border: 1px solid rgba(239,68,68,.3);
+      background: rgba(239,68,68,.15);
+      border: 1px solid rgba(239,68,68,.3);
       color: #f87171; border-radius: 99px;
-      padding: 2px 8px; font-size: 11px; font-weight: 600;
+      padding: 3px 9px; font-size: 11px; font-weight: 600;
     }
     .live-dot {
       width: 7px; height: 7px; border-radius: 50%;
@@ -68,26 +104,35 @@
     }
     @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .4; } }
 
+    #recIndicator {
+      flex-shrink: 0;
+      display: none; align-items: center; gap: 4px;
+      background: rgba(239,68,68,.2);
+      border: 1px solid rgba(239,68,68,.4);
+      color: #f87171; border-radius: 99px;
+      padding: 3px 8px; font-size: 11px; font-weight: 600;
+    }
+    #recIndicator.visible { display: flex; }
+
+    /* Hidden on ≤ 480px, accessible via More sheet */
     #participantBadge {
       flex-shrink: 0;
       background: var(--card); border: 1px solid var(--border);
-      border-radius: 99px; padding: 2px 9px;
+      border-radius: 99px; padding: 3px 9px;
       font-size: 11px; color: var(--muted);
-      cursor: default;
     }
-
     .bar-btn {
       flex-shrink: 0;
-      height: 30px; padding: 0 10px;
+      height: 32px; padding: 0 10px;
       background: var(--card); border: 1px solid var(--border);
       border-radius: 8px; color: var(--text);
       font-size: 12px; font-weight: 500;
       cursor: pointer; display: flex; align-items: center; gap: 5px;
-      transition: background .2s;
+      touch-action: manipulation;
+      transition: background .15s;
     }
-    .bar-btn:hover { background: var(--border); }
-    .bar-btn.danger { background: rgba(239,68,68,.15); border-color: rgba(239,68,68,.3); color: #f87171; }
-    .bar-btn.danger:hover { background: rgba(239,68,68,.25); }
+    .bar-btn:hover   { background: var(--border); }
+    .bar-btn:active  { opacity: .75; }
 
     /* ── Jitsi container ── */
     #jitsiWrap {
@@ -95,46 +140,146 @@
       top: var(--bar-h);
       left: 0; right: 0;
       bottom: var(--ctrl-h);
-    }
-    #jitsiMount {
-      width: 100%; height: 100%;
       background: #000;
     }
+    #jitsiMount { width: 100%; height: 100%; }
     #jitsiMount iframe {
       width: 100% !important;
       height: 100% !important;
       border: none;
+      display: block;
     }
 
     /* ── Bottom controls bar ── */
     #ctrlBar {
-      position: fixed; bottom: 0; left: 0; right: 0; z-index: 100;
-      height: var(--ctrl-h);
-      background: rgba(10,12,16,.92);
+      position: fixed;
+      bottom: 0; left: 0; right: 0;
+      z-index: 100;
+      padding-bottom: var(--sab);
+      background: rgba(10,12,16,.94);
       backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
       border-top: 1px solid var(--border);
-      display: flex; align-items: center; justify-content: center;
-      gap: 10px; padding: 0 12px;
+    }
+    #ctrlBarInner {
+      height: var(--ctrl-content);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 0 calc(10px + var(--sar)) 0 calc(10px + var(--sal));
     }
 
     .ctrl-btn {
-      height: 40px; min-width: 40px; padding: 0 14px;
-      border-radius: 10px; border: 1px solid var(--border);
-      background: var(--card); color: var(--text);
+      height: 44px;
+      min-width: 44px;
+      padding: 0 14px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: var(--card);
+      color: var(--text);
       font-size: 12px; font-weight: 600;
-      cursor: pointer; display: flex; align-items: center; gap: 7px;
+      cursor: pointer;
+      display: flex; align-items: center; gap: 7px;
+      touch-action: manipulation;
       transition: background .15s, transform .1s;
       white-space: nowrap;
+      flex-shrink: 0;
     }
-    .ctrl-btn:active { transform: scale(.97); }
-    .ctrl-btn:hover  { background: var(--border); }
-    .ctrl-btn.active { background: rgba(59,130,246,.2); border-color: var(--accent); color: #60a5fa; }
-    .ctrl-btn.danger { background: rgba(239,68,68,.15); border-color: rgba(239,68,68,.3); color: #f87171; }
-    .ctrl-btn.danger:hover { background: rgba(239,68,68,.25); }
-    .ctrl-btn.success { background: rgba(34,197,94,.15); border-color: rgba(34,197,94,.3); color: #4ade80; }
-
-    .ctrl-icon { font-size: 16px; flex-shrink: 0; }
+    .ctrl-btn:active  { transform: scale(.95); }
+    .ctrl-btn:hover   { background: var(--border); }
+    .ctrl-btn.active  {
+      background: rgba(59,130,246,.2);
+      border-color: var(--accent);
+      color: #60a5fa;
+    }
+    .ctrl-btn.danger  {
+      background: rgba(239,68,68,.15);
+      border-color: rgba(239,68,68,.3);
+      color: #f87171;
+    }
+    .ctrl-btn.danger:hover  { background: rgba(239,68,68,.25); }
+    .ctrl-btn.success {
+      background: rgba(34,197,94,.15);
+      border-color: rgba(34,197,94,.3);
+      color: #4ade80;
+    }
+    .ctrl-icon  { font-size: 17px; flex-shrink: 0; line-height: 1; }
     .ctrl-label { display: inline; }
+
+    /* ── Mobile More drawer ── */
+    /* Drawer sits above the ctrl bar; slides up on mobile */
+    #moreDrawer {
+      position: fixed;
+      bottom: var(--ctrl-h);
+      left: 0; right: 0;
+      z-index: 99;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-bottom: none;
+      border-radius: 16px 16px 0 0;
+      padding: 16px calc(16px + var(--sar)) 12px calc(16px + var(--sal));
+      transform: translateY(100%);
+      transition: transform .25s cubic-bezier(0.32, 0.72, 0, 1);
+      display: none;
+    }
+    #moreDrawer.open { transform: translateY(0); }
+
+    .drawer-handle {
+      width: 36px; height: 4px;
+      background: var(--border);
+      border-radius: 99px;
+      margin: 0 auto 14px;
+    }
+    .drawer-title {
+      font-size: 11px; font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      margin-bottom: 10px;
+    }
+    .drawer-row {
+      display: flex; gap: 8px;
+      flex-wrap: wrap;
+    }
+    .drawer-btn {
+      flex: 1 1 calc(50% - 4px);
+      min-width: 120px;
+      height: 50px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: var(--card);
+      color: var(--text);
+      font-size: 13px; font-weight: 600;
+      cursor: pointer;
+      display: flex; align-items: center; gap: 8px;
+      padding: 0 14px;
+      touch-action: manipulation;
+      transition: background .15s;
+    }
+    .drawer-btn:active { opacity: .75; }
+    .drawer-btn.active {
+      background: rgba(59,130,246,.2);
+      border-color: var(--accent);
+      color: #60a5fa;
+    }
+    .drawer-stat {
+      flex: 1 1 100%;
+      padding: 10px 14px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      font-size: 13px;
+      color: var(--muted);
+      margin-top: 4px;
+    }
+
+    /* Scrim closes the drawer when tapping outside */
+    #drawerScrim {
+      display: none;
+      position: fixed; inset: 0; z-index: 98;
+    }
+    #drawerScrim.visible { display: block; }
 
     /* ── Loading overlay ── */
     #loadOverlay {
@@ -143,20 +288,25 @@
       display: flex; flex-direction: column;
       align-items: center; justify-content: center;
       gap: 20px;
+      padding: 32px 24px;
+      padding-top:    calc(var(--sat) + 32px);
+      padding-bottom: calc(var(--sab) + 32px);
     }
     #loadOverlay.hidden { display: none; }
+
     .load-logo {
-      width: 56px; height: 56px;
-      background: var(--accent); border-radius: 14px;
+      width: 60px; height: 60px;
+      background: var(--accent); border-radius: 16px;
       display: grid; place-items: center;
-      font-weight: 800; font-size: 28px; color: #fff;
+      font-weight: 800; font-size: 30px; color: #fff;
+      box-shadow: 0 0 40px rgba(59,130,246,.35);
     }
     .load-title  { font-size: 20px; font-weight: 700; }
     .load-status { font-size: 13px; color: var(--muted); }
     @keyframes spin { to { transform: rotate(360deg); } }
     .spinner {
       width: 28px; height: 28px;
-      border: 3px solid var(--border);
+      border: 2.5px solid var(--border);
       border-top-color: var(--accent);
       border-radius: 50%;
       animation: spin .8s linear infinite;
@@ -168,46 +318,126 @@
       background: var(--bg);
       display: none; flex-direction: column;
       align-items: center; justify-content: center;
-      gap: 14px; text-align: center; padding: 24px;
+      gap: 16px; text-align: center;
+      padding: 32px 28px;
+      padding-top:    calc(var(--sat) + 32px);
+      padding-bottom: calc(var(--sab) + 32px);
     }
     #errorOverlay.visible { display: flex; }
-    .err-icon  { font-size: 48px; }
+    .err-icon  { font-size: 52px; line-height: 1; }
     .err-title { font-size: 20px; font-weight: 700; color: var(--danger); }
-    .err-msg   { font-size: 13px; color: var(--muted); max-width: 360px; line-height: 1.6; }
-    .err-btn   {
-      padding: 10px 24px; background: var(--accent); color: #fff;
-      border: none; border-radius: 10px; font-size: 13px; font-weight: 600;
-      cursor: pointer; margin-top: 6px;
+    .err-msg   {
+      font-size: 14px; color: var(--muted);
+      max-width: 340px; line-height: 1.65;
+    }
+    .err-actions {
+      display: flex; flex-direction: column; gap: 10px;
+      width: 100%; max-width: 280px;
+      margin-top: 4px;
+    }
+    .err-btn {
+      width: 100%; padding: 15px 20px;
+      border-radius: var(--radius); border: none;
+      font-size: 15px; font-weight: 600; cursor: pointer;
+      touch-action: manipulation;
+      transition: opacity .15s;
+    }
+    .err-btn:active { opacity: .8; }
+    .err-btn.primary   { background: var(--accent); color: #fff; }
+    .err-btn.secondary {
+      background: var(--card);
+      border: 1px solid var(--border);
+      color: var(--text);
     }
 
     /* ── Reconnect toast ── */
     #reconnectToast {
-      position: fixed; top: 68px; left: 50%; transform: translateX(-50%);
-      z-index: 200; background: var(--warning); color: #000;
+      position: fixed;
+      top: calc(var(--bar-h) + 10px);
+      left: 50%; transform: translateX(-50%);
+      z-index: 200;
+      background: var(--warning); color: #000;
       padding: 8px 18px; border-radius: 99px;
-      font-size: 12px; font-weight: 600;
+      font-size: 12px; font-weight: 700;
+      white-space: nowrap;
       display: none; align-items: center; gap: 8px;
+      box-shadow: 0 4px 20px rgba(0,0,0,.4);
+      pointer-events: none;
     }
     #reconnectToast.visible { display: flex; }
 
-    /* ── Recording indicator ── */
-    #recIndicator {
-      display: none; align-items: center; gap: 5px;
-      background: rgba(239,68,68,.2); border: 1px solid rgba(239,68,68,.4);
-      color: #f87171; border-radius: 99px;
-      padding: 2px 9px; font-size: 11px; font-weight: 600;
-      flex-shrink: 0;
+    /* ── End meeting confirmation modal ── */
+    #endModal {
+      display: none;
+      position: fixed; inset: 0; z-index: 9000;
+      background: rgba(0,0,0,.7);
+      align-items: flex-end;
+      justify-content: center;
+      padding-bottom: var(--sab);
     }
-    #recIndicator.visible { display: flex; }
+    #endModal.visible { display: flex; }
+    .modal-sheet {
+      width: 100%; max-width: 480px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 20px 20px 0 0;
+      padding: 20px 20px calc(16px + var(--sab));
+      padding-left:  calc(20px + var(--sal));
+      padding-right: calc(20px + var(--sar));
+      display: flex; flex-direction: column; gap: 12px;
+      animation: slideUp .25s cubic-bezier(0.32,0.72,0,1);
+    }
+    @keyframes slideUp {
+      from { transform: translateY(100%); }
+      to   { transform: translateY(0); }
+    }
+    .modal-handle {
+      width: 36px; height: 4px; background: var(--border);
+      border-radius: 99px; margin: 0 auto -4px;
+    }
+    .modal-title {
+      font-size: 17px; font-weight: 700; text-align: center;
+      margin-top: 4px;
+    }
+    .modal-body {
+      font-size: 14px; color: var(--muted);
+      text-align: center; line-height: 1.6;
+    }
+    .modal-actions { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; }
+    .modal-btn {
+      width: 100%; padding: 16px;
+      border-radius: var(--radius); border: none;
+      font-size: 15px; font-weight: 600; cursor: pointer;
+      touch-action: manipulation;
+      transition: opacity .15s;
+    }
+    .modal-btn:active { opacity: .8; }
+    .modal-btn.danger     { background: var(--danger); color: #fff; }
+    .modal-btn.secondary  {
+      background: var(--card);
+      border: 1px solid var(--border);
+      color: var(--text);
+    }
 
-    /* ── Mobile ── */
-    @media (max-width: 600px) {
-      :root { --bar-h: 48px; --ctrl-h: 70px; }
-      #meetingTitle { max-width: 120px; }
-      .ctrl-label   { display: none; }
-      .ctrl-btn     { min-width: 44px; padding: 0 10px; }
-      #ctrlBar      { gap: 6px; flex-wrap: wrap; }
+    /* ── Responsive: desktop shows all buttons inline; mobile shows 3 + More ── */
+    @media (max-width: 480px) {
+      #participantBadge { display: none; }
+      #monitorBarBtn    { display: none; }
+      #ctrlRecord,
+      #ctrlTile,
+      #ctrlDashboard    { display: none; }
+      #ctrlMoreBtn      { display: flex; }
+      #moreDrawer       { display: block; }
+      .ctrl-label       { display: none; }
+      .ctrl-btn         { padding: 0 12px; }
+      #meetingTitle     { max-width: 130px; }
     }
+    /* On wider screens, hide the More button and drawer trigger */
+    @media (min-width: 481px) {
+      #ctrlMoreBtn { display: none; }
+    }
+    /* Prevent horizontal overflow */
+    * { max-width: 100%; }
   </style>
 </head>
 <body>
@@ -225,8 +455,10 @@
   <div class="err-icon">⚠️</div>
   <div class="err-title">Cannot Join Meeting</div>
   <div class="err-msg" id="errMsg">Something went wrong. Please try again.</div>
-  <button class="err-btn" onclick="location.reload()">Retry</button>
-  <button class="err-btn" style="background:var(--card);border:1px solid var(--border);color:var(--text)" onclick="history.back()">Go Back</button>
+  <div class="err-actions">
+    <button class="err-btn primary"   onclick="location.reload()">Retry</button>
+    <button class="err-btn secondary" onclick="history.back()">Go Back</button>
+  </div>
 </div>
 
 <!-- Reconnect toast -->
@@ -235,15 +467,33 @@
   Reconnecting…
 </div>
 
+<!-- End meeting modal (replaces confirm() for mobile) -->
+<div id="endModal">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-title">End Class?</div>
+    <div class="modal-body">
+      This will end the meeting for <strong>all participants</strong>. This action cannot be undone.
+    </div>
+    <div class="modal-actions">
+      <button class="modal-btn danger"    onclick="endMeeting()">End Class for Everyone</button>
+      <button class="modal-btn secondary" onclick="hideEndModal()">Cancel</button>
+    </div>
+  </div>
+</div>
+
 <!-- Top bar -->
 <div id="topBar">
-  <div class="logo-chip">D</div>
-  <div id="meetingTitle">Loading…</div>
-  <div id="liveBadge"><div class="live-dot"></div>LIVE</div>
-  <div id="recIndicator"><div class="live-dot" style="background:#ef4444"></div>REC</div>
-  <div id="participantBadge">👥 —</div>
-  <button class="bar-btn" id="monitorBtn" onclick="openMonitor()" title="Open proctoring monitor">👁 Monitor</button>
-  <button class="bar-btn" id="toggleBarBtn" onclick="toggleBar()" title="Hide controls">⊟</button>
+  <div id="topBarInner">
+    <div class="logo-chip">D</div>
+    <div id="meetingTitle">Loading…</div>
+    <div id="liveBadge"><div class="live-dot"></div>LIVE</div>
+    <div id="recIndicator"><div class="live-dot" style="background:#ef4444"></div>REC</div>
+    <!-- Hidden on mobile via @media -->
+    <div id="participantBadge">👥 —</div>
+    <button class="bar-btn" id="monitorBarBtn" onclick="openMonitor()">👁 Monitor</button>
+    <button class="bar-btn" onclick="toggleBar()" id="toggleBarBtn" title="Hide controls">⊟</button>
+  </div>
 </div>
 
 <!-- Jitsi embed -->
@@ -253,25 +503,60 @@
 
 <!-- Bottom controls bar -->
 <div id="ctrlBar">
-  <button class="ctrl-btn" id="muteAllBtn" onclick="muteAll()" title="Mute all participants">
-    <span class="ctrl-icon">🔇</span><span class="ctrl-label">Mute All</span>
-  </button>
-  <button class="ctrl-btn" id="lockBtn" onclick="toggleLock()" title="Lock/unlock room">
-    <span class="ctrl-icon" id="lockIcon">🔓</span><span class="ctrl-label" id="lockLabel">Lock Room</span>
-  </button>
-  <button class="ctrl-btn" id="recBtn" onclick="toggleRecording()" title="Start/stop recording">
-    <span class="ctrl-icon">⏺</span><span class="ctrl-label" id="recLabel">Record</span>
-  </button>
-  <button class="ctrl-btn" id="tileBtn" onclick="toggleTile()" title="Toggle tile view">
-    <span class="ctrl-icon">⊞</span><span class="ctrl-label">Tile View</span>
-  </button>
-  <button class="ctrl-btn" onclick="openMonitor()" title="Proctoring dashboard">
-    <span class="ctrl-icon">📊</span><span class="ctrl-label">Dashboard</span>
-  </button>
-  <button class="ctrl-btn danger" id="endBtn" onclick="confirmEnd()" title="End meeting for everyone">
-    <span class="ctrl-icon">⏹</span><span class="ctrl-label">End Class</span>
-  </button>
+  <div id="ctrlBarInner">
+    <!-- Primary controls: always visible -->
+    <button class="ctrl-btn" id="muteAllBtn" onclick="muteAll()">
+      <span class="ctrl-icon">🔇</span><span class="ctrl-label">Mute All</span>
+    </button>
+    <button class="ctrl-btn" id="lockBtn" onclick="toggleLock()">
+      <span class="ctrl-icon" id="lockIcon">🔓</span><span class="ctrl-label" id="lockLabel">Lock Room</span>
+    </button>
+
+    <!-- Secondary controls: hidden on mobile, shown via More drawer -->
+    <button class="ctrl-btn" id="ctrlRecord" onclick="toggleRecording()">
+      <span class="ctrl-icon">⏺</span><span class="ctrl-label" id="recLabel">Record</span>
+    </button>
+    <button class="ctrl-btn" id="ctrlTile" onclick="toggleTile()">
+      <span class="ctrl-icon">⊞</span><span class="ctrl-label">Tile View</span>
+    </button>
+    <button class="ctrl-btn" id="ctrlDashboard" onclick="openMonitor()">
+      <span class="ctrl-icon">📊</span><span class="ctrl-label">Dashboard</span>
+    </button>
+
+    <!-- More button: shown only on mobile -->
+    <button class="ctrl-btn" id="ctrlMoreBtn" onclick="toggleMoreDrawer()">
+      <span class="ctrl-icon">⋯</span><span class="ctrl-label">More</span>
+    </button>
+
+    <!-- End Class: always visible -->
+    <button class="ctrl-btn danger" id="endBtn" onclick="showEndModal()">
+      <span class="ctrl-icon">⏹</span><span class="ctrl-label">End Class</span>
+    </button>
+  </div>
 </div>
+
+<!-- Mobile More drawer -->
+<div id="moreDrawer">
+  <div class="drawer-handle"></div>
+  <div class="drawer-title">More Controls</div>
+  <div class="drawer-row">
+    <button class="drawer-btn" id="drawerRecord" onclick="toggleRecording(); closeMoreDrawer()">
+      <span>⏺</span> <span id="drawerRecLabel">Record</span>
+    </button>
+    <button class="drawer-btn" id="drawerTile" onclick="toggleTile(); closeMoreDrawer()">
+      <span>⊞</span> Tile View
+    </button>
+    <button class="drawer-btn" onclick="openMonitor(); closeMoreDrawer()">
+      <span>📊</span> Dashboard
+    </button>
+    <button class="drawer-btn" onclick="openMonitor(); closeMoreDrawer()">
+      <span>👁</span> Monitor
+    </button>
+  </div>
+  <div class="drawer-stat" id="drawerParticipants">👥 — participants</div>
+</div>
+<!-- Scrim: tap to close drawer -->
+<div id="drawerScrim" onclick="closeMoreDrawer()"></div>
 
 <script>
 // ── Config ────────────────────────────────────────────────────────────────────
@@ -298,6 +583,17 @@ let isEnding     = false;
 let barHidden    = false;
 let reconnectAttempts = 0;
 const MAX_RECONNECT   = 5;
+
+// ── iOS viewport fix ──────────────────────────────────────────────────────────
+function patchViewport() {
+  document.documentElement.style.setProperty('--vh', window.innerHeight * 0.01 + 'px');
+}
+window.addEventListener('resize', patchViewport, { passive: true });
+window.addEventListener('orientationchange', patchViewport, { passive: true });
+if (window.visualViewport) {
+  window.visualViewport.addEventListener('resize', patchViewport, { passive: true });
+}
+patchViewport();
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
 (async () => {
@@ -337,7 +633,7 @@ const MAX_RECONNECT   = 5;
   }
 })();
 
-// ── Load Jitsi External API script ───────────────────────────────────────────
+// ── Load Jitsi External API ───────────────────────────────────────────────────
 function loadJitsiAPI(domain) {
   return new Promise((resolve, reject) => {
     if (window.JitsiMeetExternalAPI) return resolve();
@@ -349,7 +645,7 @@ function loadJitsiAPI(domain) {
   });
 }
 
-// ── Initialise the embedded meeting ──────────────────────────────────────────
+// ── Init Jitsi ────────────────────────────────────────────────────────────────
 function initJitsi() {
   if (api) { try { api.dispose(); } catch (_) {} api = null; }
 
@@ -401,8 +697,8 @@ function initJitsi() {
   api.addEventListener('participantLeft',       onParticipantChange);
   api.addEventListener('recordingStatusChanged', onRecordingChange);
   api.addEventListener('tileViewChanged',        onTileChange);
-  api.addEventListener('connectionEstablished',  () => hideReconnectToast());
-  api.addEventListener('connectionFailed',       () => scheduleReconnect());
+  api.addEventListener('connectionEstablished',  hideReconnectToast);
+  api.addEventListener('connectionFailed',       scheduleReconnect);
 }
 
 // ── Event handlers ────────────────────────────────────────────────────────────
@@ -410,17 +706,24 @@ function onJoined() {
   hide('loadOverlay');
   reconnectAttempts = 0;
   hideReconnectToast();
-  // Announce that monitoring is available
   postBackend('start');
+  // Ensure iframe has correct permissions on iOS
+  try {
+    const iframe = document.querySelector('#jitsiMount iframe');
+    if (iframe) {
+      iframe.setAttribute('allow',
+        'camera; microphone; display-capture; fullscreen; autoplay; clipboard-write');
+      iframe.setAttribute('allowfullscreen', '');
+    }
+  } catch (_) {}
 }
 
-async function onLeft(data) {
+function onLeft(data) {
   if (isEnding) return;
   if (data?.reason === 'kicked') {
     showError('You were removed from the meeting.');
     return;
   }
-  // Unexpected leave — attempt reconnect
   scheduleReconnect();
 }
 
@@ -428,19 +731,27 @@ function onParticipantChange() {
   try {
     const info = api.getParticipantsInfo();
     participantCount = info.length;
-    document.getElementById('participantBadge').textContent = `👥 ${participantCount}`;
+    const label = `👥 ${participantCount}`;
+    document.getElementById('participantBadge').textContent = label;
+    document.getElementById('drawerParticipants').textContent =
+      `👥 ${participantCount} participant${participantCount !== 1 ? 's' : ''} connected`;
   } catch (_) {}
 }
 
 function onRecordingChange(data) {
   isRecording = data.on;
-  document.getElementById('recLabel').textContent        = isRecording ? 'Stop Rec' : 'Record';
-  document.getElementById('recBtn').className            = `ctrl-btn ${isRecording ? 'success' : ''}`;
-  document.getElementById('recIndicator').className      = `${isRecording ? 'visible' : ''}`;
+  const label  = isRecording ? 'Stop Rec' : 'Record';
+  const cls    = `ctrl-btn ${isRecording ? 'success' : ''}`;
+  document.getElementById('recLabel').textContent          = label;
+  document.getElementById('drawerRecLabel').textContent    = label;
+  document.getElementById('ctrlRecord').className          = cls;
+  document.getElementById('drawerRecord').className        = `drawer-btn${isRecording ? ' active' : ''}`;
+  document.getElementById('recIndicator').className        = isRecording ? 'visible' : '';
 }
 
 function onTileChange(data) {
-  document.getElementById('tileBtn').className = `ctrl-btn ${data.enabled ? 'active' : ''}`;
+  document.getElementById('ctrlTile').className    = `ctrl-btn ${data.enabled ? 'active' : ''}`;
+  document.getElementById('drawerTile').className  = `drawer-btn${data.enabled ? ' active' : ''}`;
 }
 
 // ── Reconnect ─────────────────────────────────────────────────────────────────
@@ -507,7 +818,7 @@ function toggleTile() {
 function toggleBar() {
   barHidden = !barHidden;
   document.getElementById('topBar').classList.toggle('hidden', barHidden);
-  document.getElementById('ctrlBar').style.display = barHidden ? 'none' : '';
+  document.getElementById('ctrlBar').style.visibility = barHidden ? 'hidden' : '';
   document.getElementById('jitsiWrap').style.top    = barHidden ? '0' : 'var(--bar-h)';
   document.getElementById('jitsiWrap').style.bottom = barHidden ? '0' : 'var(--ctrl-h)';
   document.getElementById('toggleBarBtn').textContent = barHidden ? '⊞' : '⊟';
@@ -518,24 +829,39 @@ function openMonitor() {
   if (url) window.open(url, '_blank', 'noopener');
 }
 
-function confirmEnd() {
-  if (!confirm('End the class for all participants?')) return;
-  endMeeting();
+// ── End meeting (uses custom modal instead of confirm()) ──────────────────────
+function showEndModal() {
+  document.getElementById('endModal').classList.add('visible');
+}
+function hideEndModal() {
+  document.getElementById('endModal').classList.remove('visible');
 }
 
 async function endMeeting() {
+  hideEndModal();
   isEnding = true;
-  try {
-    await postBackend('end');
-  } catch (_) {}
+  try { await postBackend('end'); } catch (_) {}
   if (api) {
-    // endConference ends for all participants (moderator-only, Jitsi ≥ 9000)
-    // Fall back to hangup for older deployments
     try { api.executeCommand('endConference'); }
     catch (_) { try { api.executeCommand('hangup'); } catch (__) {} }
     setTimeout(() => { try { api.dispose(); } catch (_) {} }, 1500);
   }
   setTimeout(() => { window.location.href = APP_BASE || '/'; }, 2000);
+}
+
+// Close modal if tapping the backdrop
+document.getElementById('endModal').addEventListener('click', function(e) {
+  if (e.target === this) hideEndModal();
+});
+
+// ── Mobile More drawer ────────────────────────────────────────────────────────
+function toggleMoreDrawer() {
+  const open = document.getElementById('moreDrawer').classList.toggle('open');
+  document.getElementById('drawerScrim').classList.toggle('visible', open);
+}
+function closeMoreDrawer() {
+  document.getElementById('moreDrawer').classList.remove('open');
+  document.getElementById('drawerScrim').classList.remove('visible');
 }
 
 // ── Backend calls ─────────────────────────────────────────────────────────────
@@ -576,7 +902,6 @@ function flashBtn(id) {
   setTimeout(() => btn.classList.remove('active'), 1200);
 }
 
-// Compute APP_BASE for end-of-meeting redirect
 const APP_BASE = (() => {
   const h = location.hostname;
   if (h === 'localhost' || h === '127.0.0.1') return 'http://' + h + ':5000';
