@@ -52,7 +52,8 @@
     "pdf-parse": "^1.1.1",
     "pdfkit": "^0.17.2",
     "resend": "^4.0.0",
-    "uuid": "^9.0.0"
+    "uuid": "^9.0.0",
+    "ws": "^8.20.1"
   },
   "devDependencies": {
     "@capacitor/cli": "^6.0.0",

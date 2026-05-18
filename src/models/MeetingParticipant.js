@@ -52,6 +52,11 @@ const participantSchema = new mongoose.Schema({
   flags:     [flagSchema],
   warnings:  [warningSchema],
 
+  // Preflight / monitoring init
+  preflightAt:      { type: Date, default: null },
+  monitoringActive: { type: Boolean, default: false },
+  lastReconnectAt:  { type: Date, default: null },
+
   // Lifecycle
   status: {
     type: String,

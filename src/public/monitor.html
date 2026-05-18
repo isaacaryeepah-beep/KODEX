@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DIKLY Monitor — Live Proctoring Dashboard</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #0f1117;
+      --surface: #1a1d27;
+      --border: #2a2d3e;
+      --text: #e2e8f0;
+      --muted: #94a3b8;
+      --accent: #3b82f6;
+      --danger: #ef4444;
+      --warn: #f59e0b;
+      --ok: #22c55e;
+      --radius: 8px;
+    }
+    body { background: var(--bg); color: var(--text); font-family: system-ui, sans-serif; min-height: 100vh; }
+
+    /* ── Header ── */
+    header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 12px 24px; background: var(--surface); border-bottom: 1px solid var(--border);
+    }
+    .logo { font-weight: 700; font-size: 1.1rem; color: var(--accent); }
+    .meeting-title { font-size: 0.9rem; color: var(--muted); }
+    #conn-status {
+      font-size: 0.8rem; padding: 4px 10px; border-radius: 20px;
+      background: var(--border); color: var(--muted);
+    }
+    #conn-status.live { background: #14532d; color: var(--ok); }
+    #conn-status.error { background: #450a0a; color: var(--danger); }
+
+    /* ── Stats bar ── */
+    .stats {
+      display: flex; gap: 16px; padding: 12px 24px; flex-wrap: wrap;
+      background: var(--surface); border-bottom: 1px solid var(--border);
+    }
+    .stat { font-size: 0.85rem; }
+    .stat span { font-weight: 700; font-size: 1rem; }
+    .stat.danger span { color: var(--danger); }
+    .stat.warn span   { color: var(--warn); }
+    .stat.ok span     { color: var(--ok); }
+
+    /* ── Invigilation mode ── */
+    .mode-bar {
+      display: flex; align-items: center; gap: 12px; padding: 8px 24px;
+      background: #0c1225; border-bottom: 1px solid var(--border); font-size: 0.85rem;
+    }
+    .mode-bar label { color: var(--muted); }
+    .mode-btn {
+      padding: 4px 14px; border-radius: 20px; border: 1px solid var(--border);
+      background: transparent; color: var(--muted); cursor: pointer; font-size: 0.8rem;
+    }
+    .mode-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+    /* ── Grid ── */
+    #grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 12px; padding: 16px 24px;
+    }
+
+    /* ── Participant card ── */
+    .card {
+      background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+      padding: 14px; display: flex; flex-direction: column; gap: 8px;
+      transition: border-color 0.2s;
+    }
+    .card.flagged { border-color: var(--danger); }
+    .card.disconnected { opacity: 0.55; }
+    .card-top { display: flex; justify-content: space-between; align-items: flex-start; }
+    .card-name { font-weight: 600; font-size: 0.95rem; }
+    .card-role { font-size: 0.75rem; color: var(--muted); }
+    .badge {
+      font-size: 0.7rem; padding: 2px 8px; border-radius: 12px;
+      background: var(--border); color: var(--muted); white-space: nowrap;
+    }
+    .badge.connected    { background: #14532d; color: var(--ok); }
+    .badge.waiting      { background: #451a03; color: var(--warn); }
+    .badge.disconnected { background: #1c1c1c; color: var(--muted); }
+    .badge.kicked       { background: #450a0a; color: var(--danger); }
+
+    .card-flags { display: flex; gap: 6px; flex-wrap: wrap; }
+    .flag-chip {
+      font-size: 0.72rem; padding: 2px 8px; border-radius: 12px;
+      background: #1e1b4b; color: #818cf8;
+    }
+    .flag-chip.alert { background: #450a0a; color: #fca5a5; }
+
+    .card-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; font-size: 0.78rem; color: var(--muted); }
+    .card-stats .val { color: var(--text); }
+    .card-stats .bad { color: var(--warn); }
+    .card-stats .critical { color: var(--danger); }
+
+    .risk-bar-wrap { display: flex; align-items: center; gap: 6px; font-size: 0.75rem; }
+    .risk-bar { flex: 1; height: 4px; background: var(--border); border-radius: 2px; }
+    .risk-fill { height: 100%; border-radius: 2px; background: var(--ok); transition: width 0.3s; }
+    .risk-fill.medium { background: var(--warn); }
+    .risk-fill.high   { background: var(--danger); }
+
+    .card-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
+    .btn {
+      padding: 4px 10px; border-radius: 6px; border: none; cursor: pointer;
+      font-size: 0.75rem; font-weight: 500;
+    }
+    .btn-warn { background: #451a03; color: var(--warn); }
+    .btn-warn:hover { background: #78350f; }
+    .btn-flag { background: #1e1b4b; color: #818cf8; }
+    .btn-flag:hover { background: #312e81; }
+    .btn-kick { background: #450a0a; color: var(--danger); }
+    .btn-kick:hover { background: #7f1d1d; }
+
+    /* ── Events log ── */
+    #log-panel {
+      position: fixed; bottom: 0; right: 0; width: 340px;
+      background: var(--surface); border-top: 1px solid var(--border);
+      border-left: 1px solid var(--border); font-size: 0.78rem; max-height: 220px;
+      display: flex; flex-direction: column;
+    }
+    #log-header {
+      padding: 6px 12px; background: var(--border); font-weight: 600;
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    #log { overflow-y: auto; flex: 1; padding: 8px; }
+    .log-entry { padding: 3px 0; border-bottom: 1px solid var(--border); color: var(--muted); }
+    .log-entry .ts { color: var(--border); margin-right: 4px; }
+    .log-entry.alert { color: var(--warn); }
+    .log-entry.danger { color: var(--danger); }
+
+    /* ── Auth gate ── */
+    #auth-gate {
+      position: fixed; inset: 0; background: var(--bg);
+      display: flex; align-items: center; justify-content: center; z-index: 99;
+    }
+    .auth-box {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 32px 40px; text-align: center; width: 360px;
+    }
+    .auth-box h2 { margin-bottom: 16px; font-size: 1.2rem; }
+    .auth-box input {
+      width: 100%; padding: 10px 14px; border-radius: var(--radius);
+      border: 1px solid var(--border); background: var(--bg); color: var(--text);
+      margin-bottom: 12px; font-size: 0.9rem;
+    }
+    .auth-box button {
+      width: 100%; padding: 10px; background: var(--accent); color: #fff;
+      border: none; border-radius: var(--radius); cursor: pointer; font-size: 0.95rem;
+      font-weight: 600;
+    }
+    .auth-error { color: var(--danger); font-size: 0.82rem; margin-top: 8px; }
+  </style>
+</head>
+<body>
+
+<!-- Auth gate -->
+<div id="auth-gate">
+  <div class="auth-box">
+    <div class="logo" style="font-size:1.4rem;margin-bottom:8px;">DIKLY</div>
+    <h2>Monitor Login</h2>
+    <input id="auth-email" type="email" placeholder="Email" autocomplete="username" />
+    <input id="auth-pass"  type="password" placeholder="Password" autocomplete="current-password" />
+    <button id="auth-btn">Sign In</button>
+    <div class="auth-error" id="auth-error"></div>
+  </div>
+</div>
+
+<!-- Main dashboard (hidden until authenticated) -->
+<div id="app" style="display:none">
+  <header>
+    <span class="logo">DIKLY Monitor</span>
+    <span class="meeting-title" id="meeting-label">Loading…</span>
+    <span id="conn-status">Connecting…</span>
+  </header>
+
+  <div class="stats">
+    <div class="stat ok">Connected: <span id="st-connected">0</span></div>
+    <div class="stat">Total: <span id="st-total">0</span></div>
+    <div class="stat warn">Disconnected: <span id="st-disconnected">0</span></div>
+    <div class="stat danger">Flagged: <span id="st-flagged">0</span></div>
+    <div class="stat">Camera off: <span id="st-camera">0</span></div>
+    <div class="stat">Mic muted: <span id="st-mic">0</span></div>
+  </div>
+
+  <div class="mode-bar">
+    <label>Invigilation mode:</label>
+    <button class="mode-btn active" data-mode="ai">AI</button>
+    <button class="mode-btn"        data-mode="human">Human</button>
+    <button class="mode-btn"        data-mode="hybrid">AI + Human</button>
+  </div>
+
+  <div id="grid"></div>
+</div>
+
+<!-- Activity log panel -->
+<div id="log-panel" style="display:none">
+  <div id="log-header">Activity Log <span id="log-count" style="color:var(--muted);font-weight:400">0 events</span></div>
+  <div id="log"></div>
+</div>
+
+<script>
+  // ── State ─────────────────────────────────────────────────────────────────
+  const params    = new URLSearchParams(location.search);
+  const meetingId = params.get('meeting');
+  let token       = null;
+  let ws          = null;
+  let participants = {};
+  let logCount    = 0;
+  let invigMode   = 'ai';
+
+  const API = '/api';
+
+  // ── Auth ──────────────────────────────────────────────────────────────────
+  document.getElementById('auth-btn').addEventListener('click', async () => {
+    const email = document.getElementById('auth-email').value.trim();
+    const pass  = document.getElementById('auth-pass').value;
+    document.getElementById('auth-error').textContent = '';
+    try {
+      const r = await fetch(`${API}/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password: pass }),
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || 'Login failed');
+      token = d.token;
+      document.getElementById('auth-gate').style.display = 'none';
+      document.getElementById('app').style.display = 'block';
+      document.getElementById('log-panel').style.display = 'flex';
+      init();
+    } catch (e) {
+      document.getElementById('auth-error').textContent = e.message;
+    }
+  });
+
+  // ── Initialise ────────────────────────────────────────────────────────────
+  async function init() {
+    if (!meetingId) {
+      document.getElementById('meeting-label').textContent = 'No meeting ID in URL';
+      return;
+    }
+
+    // Fetch initial snapshot
+    try {
+      const r = await fetch(`${API}/meetings/${meetingId}/monitor`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error);
+      document.getElementById('meeting-label').textContent = d.data.meeting.title || meetingId;
+      for (const p of d.data.participants) {
+        participants[p.user?._id || p._id] = p;
+      }
+      render();
+    } catch (e) {
+      addLog('Error loading snapshot: ' + e.message, 'danger');
+    }
+
+    connectWs();
+    connectSse();
+  }
+
+  // ── WebSocket connection ──────────────────────────────────────────────────
+  function connectWs() {
+    const wsUrl = `wss://${location.host}/ws/monitor?token=${encodeURIComponent(token)}`;
+    ws = new WebSocket(wsUrl);
+
+    ws.onopen = () => {
+      ws.send(JSON.stringify({ type: 'subscribe', meetingId }));
+      setStatus('live', 'WS Live');
+    };
+    ws.onmessage = e => {
+      try {
+        const { type, payload } = JSON.parse(e.data);
+        handleEvent(type, payload);
+      } catch (_) {}
+    };
+    ws.onclose = () => {
+      setStatus('error', 'WS Disconnected');
+      setTimeout(connectWs, 5000);
+    };
+    ws.onerror = () => setStatus('error', 'WS Error');
+  }
+
+  // ── SSE fallback (supplemental) ───────────────────────────────────────────
+  function connectSse() {
+    const sse = new EventSource(`${API}/meetings/${meetingId}/monitor/stream?token=${encodeURIComponent(token)}`);
+    sse.addEventListener('snapshot', e => {
+      try {
+        const list = JSON.parse(e.data);
+        participants = {};
+        for (const p of list) participants[p.user?._id || p._id] = p;
+        render();
+      } catch (_) {}
+    });
+    const events = [
+      'participant_status','participant_flagged','warning_sent',
+      'participant_kicked','participant_preflight','participant_reconnected',
+    ];
+    events.forEach(ev => sse.addEventListener(ev, e => {
+      try { handleEvent(ev, JSON.parse(e.data)); } catch (_) {}
+    }));
+    sse.onerror = () => {};
+  }
+
+  // ── Event handler ─────────────────────────────────────────────────────────
+  function handleEvent(type, payload) {
+    const uid = payload?.userId;
+    if (uid && participants[uid]) {
+      Object.assign(participants[uid], payload);
+    }
+
+    const logMsg = {
+      participant_status:       `Status update: ${uid}`,
+      participant_flagged:      payload?.isFlagged ? `⚑ Flagged: ${uid}` : `Unflagged: ${uid}`,
+      warning_sent:             `⚠ Warning sent to ${uid}: ${payload?.message}`,
+      participant_kicked:       `✕ Kicked: ${uid}`,
+      participant_preflight:    `→ Preflight: ${payload?.name || uid}`,
+      participant_reconnected:  `↩ Reconnected: ${uid} (#${payload?.reconnectCount})`,
+    }[type];
+
+    if (logMsg) {
+      const cls = type === 'participant_kicked' ? 'danger' :
+                  type === 'participant_flagged' && payload?.isFlagged ? 'alert' : '';
+      addLog(logMsg, cls);
+    }
+
+    render();
+  }
+
+  // ── Render participant grid ───────────────────────────────────────────────
+  function render() {
+    const list = Object.values(participants);
+    const grid = document.getElementById('grid');
+    grid.innerHTML = '';
+
+    let connected = 0, disconnected = 0, flagged = 0, cameraOff = 0, micMuted = 0;
+
+    for (const p of list) {
+      const uid    = p.user?._id || p._id || p.userId;
+      const name   = p.user?.name || p.name || 'Unknown';
+      const role   = p.user?.role || p.role || '';
+      const status = p.status || 'unknown';
+      const risk   = p.riskScore || 0;
+      const riskCls = risk >= 70 ? 'high' : risk >= 40 ? 'medium' : '';
+
+      if (status === 'connected') connected++;
+      if (status === 'disconnected') disconnected++;
+      if (p.isFlagged) flagged++;
+      if (p.cameraOff) cameraOff++;
+      if (p.micMuted)  micMuted++;
+
+      const card = document.createElement('div');
+      card.className = `card ${p.isFlagged ? 'flagged' : ''} ${status === 'disconnected' ? 'disconnected' : ''}`;
+      card.dataset.uid = uid;
+
+      card.innerHTML = `
+        <div class="card-top">
+          <div>
+            <div class="card-name">${esc(name)}</div>
+            <div class="card-role">${esc(role)}</div>
+          </div>
+          <span class="badge ${status}">${status}</span>
+        </div>
+        <div class="card-flags">
+          ${p.cameraOff   ? '<span class="flag-chip alert">Camera off</span>' : ''}
+          ${p.micMuted    ? '<span class="flag-chip">Mic muted</span>' : ''}
+          ${p.screenSharing ? '<span class="flag-chip">Sharing screen</span>' : ''}
+          ${(p.tabSwitchCount||0) > 0 ? `<span class="flag-chip alert">Tabs: ${p.tabSwitchCount}</span>` : ''}
+          ${(p.reconnectCount||0) > 0 ? `<span class="flag-chip">Reconnects: ${p.reconnectCount}</span>` : ''}
+          ${p.faceDetectionStatus === 'no_face' ? '<span class="flag-chip alert">No face</span>' : ''}
+          ${p.faceDetectionStatus === 'multiple_faces' ? '<span class="flag-chip alert">Multi-face</span>' : ''}
+        </div>
+        <div class="risk-bar-wrap">
+          <span style="color:var(--muted)">Risk</span>
+          <div class="risk-bar"><div class="risk-fill ${riskCls}" style="width:${risk}%"></div></div>
+          <span style="color:var(--muted)">${risk}%</span>
+        </div>
+        <div class="card-stats">
+          <span>Quality</span><span class="val ${p.connectionQuality === 'poor' ? 'bad' : p.connectionQuality === 'critical' ? 'critical' : ''}">${p.connectionQuality || '—'}</span>
+          <span>Joined</span><span class="val">${p.joinedAt ? new Date(p.joinedAt).toLocaleTimeString() : '—'}</span>
+        </div>
+        <div class="card-actions">
+          <button class="btn btn-warn" onclick="sendWarning('${uid}')">Warn</button>
+          <button class="btn btn-flag" onclick="toggleFlag('${uid}', ${!p.isFlagged})">${p.isFlagged ? 'Unflag' : 'Flag'}</button>
+          ${status !== 'kicked' ? `<button class="btn btn-kick" onclick="kickParticipant('${uid}')">Kick</button>` : ''}
+        </div>
+      `;
+      grid.appendChild(card);
+    }
+
+    document.getElementById('st-connected').textContent    = connected;
+    document.getElementById('st-total').textContent        = list.length;
+    document.getElementById('st-disconnected').textContent = disconnected;
+    document.getElementById('st-flagged').textContent      = flagged;
+    document.getElementById('st-camera').textContent       = cameraOff;
+    document.getElementById('st-mic').textContent          = micMuted;
+  }
+
+  // ── Moderator actions ─────────────────────────────────────────────────────
+  async function apiPost(path, body) {
+    const r = await fetch(`${API}/meetings/${meetingId}${path}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify(body),
+    });
+    return r.json();
+  }
+
+  async function sendWarning(uid) {
+    const msg = prompt('Warning message (shown to student):');
+    if (!msg) return;
+    await apiPost(`/participants/${uid}/warn`, { message: msg });
+    addLog(`⚠ Warning sent to ${uid}`, 'alert');
+  }
+
+  async function toggleFlag(uid, flag) {
+    await apiPost(`/participants/${uid}/${flag ? 'flag' : 'unflag'}`, {});
+    if (participants[uid]) participants[uid].isFlagged = flag;
+    render();
+  }
+
+  async function kickParticipant(uid) {
+    if (!confirm('Remove this participant from the session?')) return;
+    await apiPost(`/participants/${uid}/kick`, {});
+    if (participants[uid]) participants[uid].status = 'kicked';
+    addLog(`✕ Kicked: ${uid}`, 'danger');
+    render();
+  }
+
+  // ── Invigilation mode ─────────────────────────────────────────────────────
+  document.querySelectorAll('.mode-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      invigMode = btn.dataset.mode;
+      await apiPost('/invigilation-mode', { mode: invigMode }).catch(() => {});
+      addLog(`Mode switched → ${invigMode}`);
+    });
+  });
+
+  // ── Helpers ───────────────────────────────────────────────────────────────
+  function setStatus(cls, text) {
+    const el = document.getElementById('conn-status');
+    el.className = cls;
+    el.textContent = text;
+  }
+
+  function addLog(msg, cls = '') {
+    logCount++;
+    document.getElementById('log-count').textContent = logCount + ' events';
+    const el = document.createElement('div');
+    el.className = `log-entry ${cls}`;
+    const ts = new Date().toLocaleTimeString();
+    el.innerHTML = `<span class="ts">${ts}</span>${esc(msg)}`;
+    const log = document.getElementById('log');
+    log.prepend(el);
+    if (log.children.length > 200) log.removeChild(log.lastChild);
+  }
+
+  function esc(s) {
+    return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+</script>
+</body>
+</html>

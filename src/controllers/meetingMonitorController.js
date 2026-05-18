@@ -14,11 +14,18 @@ function sseWrite(res, event, data) {
   try { res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`); } catch(_) {}
 }
 
-// Broadcast to all monitor dashboards watching a meeting
+// Broadcast to all monitor dashboards watching a meeting (SSE + WebSocket)
 function broadcastMonitor(meetingId, event, data) {
+  // SSE clients
   const clients = monitorClients.get(String(meetingId));
-  if (!clients) return;
-  for (const res of clients) sseWrite(res, event, data);
+  if (clients) {
+    for (const res of clients) sseWrite(res, event, data);
+  }
+  // WebSocket clients (lazy-require to avoid circular dependency at module load)
+  try {
+    const monitorWs = require('../services/monitorWs');
+    monitorWs.broadcast(meetingId, event, data);
+  } catch (_) {}
 }
 
 // Push an event to a specific participant's event stream

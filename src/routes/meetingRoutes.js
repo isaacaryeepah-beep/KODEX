@@ -54,6 +54,12 @@ router.post('/:id/invigilators/remove', loadMeeting, isOwner, meetCtrl.removeInv
 // ─── JOIN ─────────────────────────────────────────────────────────────────────
 router.get('/:id/join', loadMeeting, requireNoDeviceLock, canJoin, meetCtrl.joinMeeting);
 
+// ─── PREFLIGHT (monitoring init before Jitsi join) ────────────────────────────
+router.post('/:id/preflight', loadMeeting, requireNoDeviceLock, canJoin, meetCtrl.preflightMeeting);
+
+// ─── RECONNECT (monitoring restore after Jitsi reconnect) ─────────────────────
+router.post('/:id/reconnect', meetCtrl.reconnectMeeting);
+
 // ─── LIVE MONITORING (SSE + polling) ─────────────────────────────────────────
 // Monitor dashboard data (moderators/invigilators only — enforced inside controller)
 router.get('/:id/monitor',        monitorCtrl.getMonitorData);
