@@ -426,7 +426,7 @@ async function fetchMeetingInfo() {
     });
     if (!r.ok) throw new Error('HTTP ' + r.status);
     const body    = await r.json();
-    meetingData   = body.data; // { meeting, jitsiConfig, jitsiToken, selfHosted, isModerator, monitorUrl }
+    meetingData   = body.data;
     // Build Jitsi URL from jitsiConfig (roomName + domain) + JWT
     const cfg = meetingData?.jitsiConfig;
     if (cfg?.domain && cfg?.roomName) {

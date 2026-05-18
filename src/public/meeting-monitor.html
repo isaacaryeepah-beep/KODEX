@@ -1228,7 +1228,7 @@ async function init() {
     ].filter(Boolean).join(' · ') || 'Monitoring Dashboard';
 
     // Build Jitsi room URL for "Video Room" button
-    const domain = process?.env?.JITSI_DOMAIN || meetingData.domain || 'meet.jit.si';
+    const domain = meetingData.domain;
     if (meetingData.roomName) {
       jitsiRoomUrl = `https://${domain}/${meetingData.roomName}`;
       document.getElementById('jitsi-btn').style.display = '';
