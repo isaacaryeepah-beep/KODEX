@@ -455,6 +455,14 @@ function scheduleReconnect() {
   setTimeout(async () => {
     try {
       await postBackend('reconnect');
+      // Refresh session data to get a fresh JWT for long-running meetings
+      const r = await fetch(`${API_BASE}/api/meetings/${MEETING_ID}/join`, {
+        headers: { Authorization: 'Bearer ' + AUTH_TOKEN },
+      });
+      if (r.ok) {
+        const body = await r.json();
+        if (body.data?.jitsiToken) sessionData = body.data;
+      }
       initJitsi();
     } catch (_) {
       scheduleReconnect();

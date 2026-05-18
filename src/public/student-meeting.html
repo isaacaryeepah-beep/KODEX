@@ -356,10 +356,19 @@ function scheduleReconnect() {
   clearTimeout(reconnectTimer);
   reconnectTimer = setTimeout(async () => {
     try {
+      // Notify server of reconnect for monitoring
       await fetch(`${API_BASE}/api/meetings/${MEETING_ID}/reconnect`, {
         method: 'POST',
         headers: { Authorization: 'Bearer ' + AUTH_TOKEN, 'Content-Type': 'application/json' },
       });
+      // Refresh session data (and JWT) so long meetings don't hit token expiry
+      const r = await fetch(`${API_BASE}/api/meetings/${MEETING_ID}/join`, {
+        headers: { Authorization: 'Bearer ' + AUTH_TOKEN },
+      });
+      if (r.ok) {
+        const body = await r.json();
+        if (body.data?.jitsiToken) sessionData = body.data;
+      }
     } catch (_) {}
     initJitsi();
   }, Math.min(2000 * reconnectCount, 8000));

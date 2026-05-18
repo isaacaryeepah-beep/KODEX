@@ -77,6 +77,11 @@ function buildJitsiConfig(meeting, user, isMod) {
       // Prejoin is always disabled — moderators use lecturer-meeting.html,
       // students use session-preflight.html which calls our own checks first.
       prejoinPageEnabled:        false,
+      prejoinConfig:             { enabled: false },
+      // Kills popup-based XMPP auth fallback; JWT passed directly is the only auth method.
+      tokenAuthUrl:              false,
+      // Force all media through JVB so proctoring sees every stream.
+      p2p:                       { enabled: false },
       disableThirdPartyRequests: true,
       applicationName:           'DIKLY',
       // Adaptive bitrate for low-bandwidth educational environments
@@ -103,6 +108,7 @@ function buildJitsiConfig(meeting, user, isMod) {
       APP_NAME:                  'DIKLY Classes',
       DEFAULT_BACKGROUND:        '#0a0c10',
       HIDE_INVITE_MORE_HEADER:   true,
+      AUTHENTICATION_ENABLE:     false,
       SETTINGS_SECTIONS:         ['devices', 'language'],
       TOOLBAR_TIMEOUT:           isMod ? 4000 : 3000,
       INITIAL_TOOLBAR_TIMEOUT:   20000,
