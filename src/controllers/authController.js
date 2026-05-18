@@ -4,10 +4,36 @@ const User = require("../models/User");
 const Company = require("../models/Company");
 const PlatformSettings = require("../models/PlatformSettings");
 const StudentRoster = require("../models/StudentRoster");
+const MeetingIdentity = require("../models/MeetingIdentity");
 const { generateToken } = require("../utils/jwt");
 const { sendWelcome, sendAdminPasswordResetNotice, sendPasswordReset, sendNewInstitutionAlert, sendLecturerWelcome, sendEmployeeWelcome, sendHodWelcome } = require("../services/emailService");
 const { sendOtp, normalisePhone } = require("../services/smsService");
 const { syncStudentToRoster } = require("../utils/rosterSync");
+
+const MODERATOR_ROLES = ['admin', 'lecturer', 'manager', 'hod', 'superadmin'];
+
+async function createMeetingIdentity(user, companyId) {
+  try {
+    const initials = (user.name || '')
+      .split(' ')
+      .filter(Boolean)
+      .slice(0, 2)
+      .map(w => w[0].toUpperCase())
+      .join('');
+    await MeetingIdentity.create({
+      userId:      user._id,
+      company:     companyId,
+      displayName: user.name,
+      role:        user.role,
+      isModerator: MODERATOR_ROLES.includes(user.role),
+      jitsiUserId: `${user.role}_${user._id}`,
+      initials,
+    });
+  } catch (e) {
+    // Non-fatal — identity can be created lazily on first join
+    console.error('[MeetingIdentity] auto-create failed:', e.message);
+  }
+}
 
 const SIX_HOURS_MS = 6 * 60 * 60 * 1000;
 const PAID_ROLES         = ["lecturer", "manager", "admin"];
@@ -139,6 +165,9 @@ exports.register = async (req, res) => {
     }
 
     const token = generateToken(user._id);
+
+    // Auto-create Jitsi meeting identity for the new admin
+    await createMeetingIdentity(user, company._id);
 
     sendWelcome({
       email:           user.email,
@@ -273,6 +302,9 @@ exports.registerLecturer = async (req, res) => {
     try {
       await User.updateOne({ _id: hod._id }, { $inc: { pendingApprovals: 1 } });
     } catch (_) {}
+
+    // Auto-create Jitsi meeting identity for the new lecturer
+    await createMeetingIdentity(user, company._id);
 
     if (user.email) {
       sendLecturerWelcome({
@@ -559,6 +591,9 @@ exports.registerHod = async (req, res) => {
       trialEndDate,
       subscriptionStatus: 'trial',
     });
+
+    // Auto-create Jitsi meeting identity for the new HOD
+    await createMeetingIdentity(user, company._id);
 
     if (user.email) {
       sendHodWelcome({
