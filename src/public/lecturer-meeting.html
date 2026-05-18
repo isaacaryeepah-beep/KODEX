@@ -463,7 +463,7 @@ function toggleLock() {
   isLocked = !isLocked;
   updateLockUI();
   postBackend(isLocked ? 'lock' : 'unlock');
-  if (api) api.executeCommand(isLocked ? 'toggleLobby' : 'toggleLobby'); // toggle lobby as lock proxy
+  if (api) api.executeCommand('toggleLobby');
 }
 
 function updateLockUI() {
@@ -511,7 +511,10 @@ async function endMeeting() {
     await postBackend('end');
   } catch (_) {}
   if (api) {
-    api.executeCommand('endConference');
+    // endConference ends for all participants (moderator-only, Jitsi ≥ 9000)
+    // Fall back to hangup for older deployments
+    try { api.executeCommand('endConference'); }
+    catch (_) { try { api.executeCommand('hangup'); } catch (__) {} }
     setTimeout(() => { try { api.dispose(); } catch (_) {} }, 1500);
   }
   setTimeout(() => { window.location.href = APP_BASE || '/'; }, 2000);
