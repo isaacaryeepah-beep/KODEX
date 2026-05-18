@@ -378,7 +378,7 @@ exports.joinMeeting = async (req, res) => {
         selfHosted:   isSelfHosted(),
         isModerator:  isMod,
         monitorUrl:   isMod
-          ? `${APP_BASE_URL}/meeting-monitor.html?meeting=${meeting._id}&token=${meetingToken}`
+          ? `${APP_BASE_URL}/meeting-monitor.html?meeting=${meeting._id}`
           : null,
       },
     });

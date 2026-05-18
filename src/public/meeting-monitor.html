@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-<title>DIKLY — Live Meeting Monitor</title>
+<title>DIKLY — Proctoring Dashboard</title>
 <link rel="icon" type="image/svg+xml" href="/dikly-icon.svg">
 <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
 <style>
@@ -11,7 +11,7 @@
 :root {
   --navy: #0f172a; --navy2: #1e293b; --navy3: #334155; --slate: #64748b;
   --muted: #94a3b8; --white: #f8fafc; --accent: #38bdf8;
-  --green: #22c55e; --yellow: #eab308; --red: #ef4444;
+  --green: #22c55e; --yellow: #eab308; --orange: #f97316; --red: #ef4444;
   --font-mono: 'Space Mono', monospace; --font-sans: 'Plus Jakarta Sans', sans-serif;
 }
 html, body { height: 100%; background: var(--navy); color: var(--white); font-family: var(--font-sans); overflow: hidden; }
@@ -19,49 +19,46 @@ html, body { height: 100%; background: var(--navy); color: var(--white); font-fa
 /* ── Topbar ─────────────────────────────────────────────────────────── */
 .topbar {
   background: var(--navy2); border-bottom: 1px solid var(--navy3);
-  padding: 12px 18px; padding-top: calc(12px + env(safe-area-inset-top));
+  padding: 10px 16px; padding-top: calc(10px + env(safe-area-inset-top));
   display: flex; align-items: center; justify-content: space-between;
-  flex-wrap: wrap; gap: 8px; min-height: 62px;
+  flex-wrap: wrap; gap: 8px; min-height: 58px; flex-shrink: 0;
 }
-.topbar-left { display: flex; align-items: center; gap: 12px; min-width: 0; }
-.topbar-brand { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
-.topbar-brand .live-badge {
+.topbar-left { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.live-badge {
   display: flex; align-items: center; gap: 6px;
   background: rgba(239,68,68,.15); border: 1px solid rgba(239,68,68,.3);
-  border-radius: 6px; padding: 4px 10px;
-  font-size: 11px; font-weight: 700; color: var(--red); letter-spacing: .4px;
-  white-space: nowrap;
+  border-radius: 6px; padding: 4px 10px; white-space: nowrap;
+  font-size: 11px; font-weight: 700; color: var(--red); letter-spacing: .4px; flex-shrink: 0;
 }
 .live-dot {
   width: 7px; height: 7px; border-radius: 50%; background: var(--red);
-  box-shadow: 0 0 0 0 rgba(239,68,68,.6);
-  animation: live-pulse 2s infinite; display: inline-block; flex-shrink: 0;
+  animation: pulse-red 2s infinite; display: inline-block;
 }
-@keyframes live-pulse {
+@keyframes pulse-red {
   0%   { box-shadow: 0 0 0 0 rgba(239,68,68,.6); }
   70%  { box-shadow: 0 0 0 6px rgba(239,68,68,0); }
   100% { box-shadow: 0 0 0 0 rgba(239,68,68,0); }
 }
 .topbar-title { min-width: 0; }
-.topbar-title h1 { font-size: 16px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 280px; }
+.topbar-title h1 { font-size: 15px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 260px; }
 .topbar-title p  { font-size: 11px; color: var(--slate); margin-top: 1px; font-family: var(--font-mono); }
 
-/* Stats pills */
-.stats-pills { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.stats-pills { display: flex; gap: 5px; align-items: center; flex-wrap: wrap; }
 .stat-pill {
-  display: flex; align-items: center; gap: 5px;
-  padding: 5px 11px; border-radius: 20px; font-size: 11px; font-weight: 700;
+  display: flex; align-items: center; gap: 5px; padding: 4px 10px;
+  border-radius: 20px; font-size: 11px; font-weight: 700;
   border: 1px solid var(--navy3); background: var(--navy); white-space: nowrap;
   font-family: var(--font-mono);
 }
-.stat-pill .pill-val { font-size: 13px; }
-.stat-pill.flagged-pill { border-color: rgba(239,68,68,.4); color: var(--red); }
-.stat-pill.cam-pill    { border-color: rgba(234,179,8,.4); color: var(--yellow); }
+.stat-pill .pv { font-size: 13px; }
+.stat-pill.flag-pill  { border-color: rgba(239,68,68,.4);  color: var(--red);    }
+.stat-pill.risk-pill  { border-color: rgba(249,115,22,.4); color: var(--orange); }
+.stat-pill.cam-pill   { border-color: rgba(234,179,8,.4);  color: var(--yellow); }
 
-.topbar-actions { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; flex-shrink: 0; }
+.topbar-actions { display: flex; gap: 5px; align-items: center; flex-wrap: wrap; flex-shrink: 0; }
 
 .btn {
-  padding: 8px 16px; border-radius: 8px; border: none; cursor: pointer;
+  padding: 7px 14px; border-radius: 8px; border: none; cursor: pointer;
   font-family: var(--font-sans); font-size: 12px; font-weight: 700;
   touch-action: manipulation; display: inline-flex; align-items: center; gap: 5px;
   transition: opacity 0.15s, background 0.15s;
@@ -74,170 +71,211 @@ html, body { height: 100%; background: var(--navy); color: var(--white); font-fa
 .btn-danger:hover:not(:disabled) { background: rgba(239,68,68,.25); }
 .btn-warn     { background: rgba(234,179,8,.12); border: 1.5px solid rgba(234,179,8,.3); color: var(--yellow); }
 .btn-warn:hover:not(:disabled) { background: rgba(234,179,8,.22); }
+.btn-jitsi    { background: rgba(56,189,248,.1); border: 1.5px solid rgba(56,189,248,.3); color: var(--accent); }
+.btn-jitsi:hover { background: rgba(56,189,248,.2); }
 .btn-lock-active { background: rgba(56,189,248,.12); border: 1.5px solid rgba(56,189,248,.35); color: var(--accent); }
 
 /* ── Main layout ─────────────────────────────────────────────────────── */
 .main {
-  display: flex; height: calc(100vh - 62px);
-  overflow: hidden;
+  display: flex; flex: 1; min-height: 0;
+  height: calc(100vh - 58px); overflow: hidden;
 }
 
-/* Jitsi area */
-.jitsi-area {
-  flex: 2; min-width: 0; background: #000;
-  display: flex; flex-direction: column; position: relative;
+/* ── Student Grid Panel (left, 60%) ──────────────────────────────────── */
+.student-grid-panel {
+  flex: 3; min-width: 0; display: flex; flex-direction: column;
+  border-right: 1px solid var(--navy3);
 }
-#jitsi-container {
-  flex: 1; width: 100%; position: relative;
-}
-#jitsi-container iframe {
-  width: 100%; height: 100%; border: none; display: block;
-}
-.jitsi-placeholder {
-  width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;
-  flex-direction: column; gap: 14px; color: var(--slate); text-align: center; padding: 24px;
-}
-.jitsi-placeholder .icon { font-size: 52px; opacity: .4; }
-.jitsi-placeholder p { font-size: 14px; line-height: 1.6; max-width: 280px; }
-
-/* ── Right panel ─────────────────────────────────────────────────────── */
-.right-panel {
-  width: 360px; min-width: 280px; max-width: 420px;
-  background: var(--navy2); border-left: 1px solid var(--navy3);
-  display: flex; flex-direction: column; overflow: hidden;
-}
-
 .panel-header {
-  padding: 12px 14px; border-bottom: 1px solid var(--navy3);
-  display: flex; align-items: center; justify-content: space-between; flex-shrink: 0;
+  padding: 10px 12px; border-bottom: 1px solid var(--navy3);
+  display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; gap: 8px;
 }
 .panel-header h3 {
   font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .8px;
-  color: var(--slate); display: flex; align-items: center; gap: 7px;
+  color: var(--slate); display: flex; align-items: center; gap: 7px; white-space: nowrap;
+}
+.live-dot-green {
+  width: 7px; height: 7px; border-radius: 50%; background: var(--green);
+  animation: pulse-green 2s infinite; display: inline-block;
+}
+@keyframes pulse-green {
+  0%   { box-shadow: 0 0 0 0 rgba(34,197,94,.6); }
+  70%  { box-shadow: 0 0 0 6px rgba(34,197,94,0); }
+  100% { box-shadow: 0 0 0 0 rgba(34,197,94,0); }
 }
 .panel-search {
-  padding: 8px 12px; background: var(--navy); border: 1.5px solid var(--navy3);
-  border-radius: 8px; color: var(--white); font-family: var(--font-sans); font-size: 12px;
-  outline: none; width: 100%; display: block;
+  padding: 6px 10px; background: var(--navy); border: 1.5px solid var(--navy3);
+  border-radius: 7px; color: var(--white); font-family: var(--font-sans); font-size: 12px;
+  outline: none; flex: 1; max-width: 220px;
 }
 .panel-search:focus { border-color: var(--accent); }
-.panel-search-wrap { padding: 8px 10px; border-bottom: 1px solid var(--navy3); flex-shrink: 0; }
 
-/* Participant list */
-.participant-list {
-  flex: 1; overflow-y: auto; min-height: 0;
+.student-grid {
+  flex: 1; overflow-y: auto; padding: 10px;
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px;
+  align-content: start;
 }
 
-/* Participant card */
-.p-card {
-  padding: 10px 12px; border-bottom: 1px solid rgba(51,65,85,0.4);
-  border-left: 3px solid transparent;
-  transition: background 0.12s, border-color 0.15s;
+/* ── Student Card ───────────────────────────────────────────────────── */
+.s-card {
+  background: var(--navy2); border: 1.5px solid var(--navy3); border-radius: 10px;
+  padding: 10px; cursor: pointer; transition: border-color 0.15s, background 0.12s;
   position: relative;
 }
-.p-card:hover { background: rgba(255,255,255,0.03); }
-.p-card.flagged { border-left-color: var(--red); background: rgba(239,68,68,.04); }
-.p-card.kicked  { opacity: .5; }
+.s-card:hover { border-color: var(--accent); background: #1a2942; }
+.s-card.selected { border-color: var(--accent); background: rgba(56,189,248,.06); }
+.s-card.flagged { border-left-color: var(--red) !important; background: rgba(239,68,68,.04); }
+.s-card.kicked  { opacity: .45; }
 
-.p-card-top { display: flex; align-items: center; gap: 9px; }
-.p-avatar {
-  width: 36px; height: 36px; border-radius: 50%;
+.s-card-top { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 7px; }
+.s-avatar {
+  width: 34px; height: 34px; border-radius: 50%; flex-shrink: 0;
   display: flex; align-items: center; justify-content: center;
-  font-size: 13px; font-weight: 800; flex-shrink: 0;
-  color: var(--navy);
+  font-size: 12px; font-weight: 800; color: var(--navy);
 }
-.p-info { flex: 1; min-width: 0; }
-.p-name { font-size: 13px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; gap: 6px; }
-.p-role-badge {
-  font-size: 9px; font-weight: 700; padding: 1px 6px; border-radius: 4px;
-  text-transform: uppercase; letter-spacing: .3px; flex-shrink: 0;
+.s-info { flex: 1; min-width: 0; }
+.s-name { font-size: 12px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.s-role { font-size: 9px; padding: 1px 5px; border-radius: 3px; text-transform: uppercase; letter-spacing: .3px; margin-top: 2px; display: inline-block; }
+.role-student  { background: rgba(56,189,248,.12); color: var(--accent);  border: 1px solid rgba(56,189,248,.2); }
+.role-lecturer { background: rgba(34,197,94,.12);  color: var(--green);   border: 1px solid rgba(34,197,94,.2); }
+.role-other    { background: rgba(100,116,139,.12); color: var(--muted); border: 1px solid rgba(100,116,139,.2); }
+
+/* Risk score badge */
+.s-risk {
+  font-size: 11px; font-weight: 800; padding: 2px 7px; border-radius: 20px;
+  flex-shrink: 0; font-family: var(--font-mono);
 }
-.role-student  { background: rgba(56,189,248,.12); color: var(--accent); border: 1px solid rgba(56,189,248,.25); }
-.role-lecturer { background: rgba(34,197,94,.12);  color: var(--green);  border: 1px solid rgba(34,197,94,.25); }
-.role-guest    { background: rgba(100,116,139,.12); color: var(--muted); border: 1px solid rgba(100,116,139,.25); }
+.risk-safe     { background: rgba(34,197,94,.15);  color: var(--green);  border: 1px solid rgba(34,197,94,.3); }
+.risk-medium   { background: rgba(234,179,8,.15);  color: var(--yellow); border: 1px solid rgba(234,179,8,.3); }
+.risk-high     { background: rgba(249,115,22,.15); color: var(--orange); border: 1px solid rgba(249,115,22,.3); }
+.risk-critical { background: rgba(239,68,68,.15);  color: var(--red);    border: 1px solid rgba(239,68,68,.3); animation: risk-blink 1.5s infinite; }
+@keyframes risk-blink { 50% { opacity: .55; } }
 
-.p-status-row { display: flex; align-items: center; gap: 6px; margin-top: 3px; }
-.p-status-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
-.p-status-dot.green  { background: var(--green); box-shadow: 0 0 4px var(--green); }
-.p-status-dot.yellow { background: var(--yellow); }
-.p-status-dot.red    { background: var(--red); animation: blink 1.2s infinite; }
-.p-status-dot.gray   { background: var(--slate); }
-@keyframes blink { 50% { opacity: 0.2; } }
+.s-status-row { display: flex; align-items: center; gap: 5px; margin-bottom: 5px; }
+.s-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.s-dot.green  { background: var(--green); }
+.s-dot.yellow { background: var(--yellow); }
+.s-dot.red    { background: var(--red); animation: blink 1.2s infinite; }
+.s-dot.gray   { background: var(--slate); }
+@keyframes blink { 50% { opacity: .2; } }
+.s-status-label { font-size: 10px; color: var(--slate); font-family: var(--font-mono); }
 
-.p-status-label { font-size: 10px; color: var(--slate); font-family: var(--font-mono); }
-
-.p-media-icons { display: flex; align-items: center; gap: 5px; margin-left: auto; }
-.p-icon { font-size: 13px; opacity: .35; }
-.p-icon.active { opacity: 1; }
-.p-icon.off    { opacity: 1; filter: brightness(0.6); }
-
-/* Connection quality bar */
-.conn-bar { display: flex; gap: 2px; align-items: flex-end; height: 12px; margin-left: 2px; }
-.conn-bar span {
-  width: 4px; border-radius: 1px; background: var(--navy3);
-  display: block;
+.s-indicators { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 4px; }
+.s-chip {
+  font-size: 9px; font-weight: 700; padding: 1px 5px; border-radius: 4px;
+  border: 1px solid var(--navy3); color: var(--muted); white-space: nowrap;
+  display: flex; align-items: center; gap: 3px;
 }
-.conn-bar span:nth-child(1) { height: 4px; }
-.conn-bar span:nth-child(2) { height: 7px; }
-.conn-bar span:nth-child(3) { height: 11px; }
-.conn-bar.good span  { background: var(--green); }
-.conn-bar.fair span:nth-child(1), .conn-bar.fair span:nth-child(2) { background: var(--yellow); }
-.conn-bar.poor span:nth-child(1) { background: var(--red); }
+.s-chip.alert { border-color: rgba(234,179,8,.4); color: var(--yellow); background: rgba(234,179,8,.07); }
+.s-chip.danger { border-color: rgba(239,68,68,.4); color: var(--red);    background: rgba(239,68,68,.07); }
+.s-chip.flag  { border-color: rgba(239,68,68,.5); color: var(--red);    background: rgba(239,68,68,.1); font-weight: 800; }
 
-.p-tab-badge {
-  font-size: 9px; font-weight: 700; padding: 1px 6px; border-radius: 4px;
-  background: rgba(234,179,8,.15); color: var(--yellow);
-  border: 1px solid rgba(234,179,8,.3);
+.s-last-event { font-size: 10px; color: var(--slate); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 2px; }
+
+/* ── Detail Panel (right, 40%) ───────────────────────────────────────── */
+.detail-panel {
+  width: 360px; min-width: 280px; max-width: 420px; flex-shrink: 0;
+  background: var(--navy2); display: flex; flex-direction: column; overflow: hidden;
 }
-
-/* Card actions row */
-.p-actions { display: flex; gap: 4px; margin-top: 7px; }
-.p-action-btn {
-  flex: 1; padding: 4px 0; border-radius: 6px; border: 1px solid var(--navy3);
-  background: transparent; color: var(--muted); font-size: 11px; font-weight: 600;
-  cursor: pointer; transition: background 0.12s, color 0.12s; font-family: var(--font-sans);
-  display: flex; align-items: center; justify-content: center; gap: 3px;
+.detail-empty {
+  flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 12px; color: var(--slate); text-align: center; padding: 24px;
 }
-.p-action-btn:hover { background: var(--navy3); color: var(--white); }
-.p-action-btn.flag-btn:hover { background: rgba(239,68,68,.15); border-color: rgba(239,68,68,.4); color: var(--red); }
-.p-action-btn.warn-btn:hover { background: rgba(234,179,8,.15);  border-color: rgba(234,179,8,.4);  color: var(--yellow); }
-.p-action-btn.kick-btn:hover { background: rgba(239,68,68,.12);  border-color: rgba(239,68,68,.3);  color: var(--red); }
-.p-action-btn.unflag-btn { border-color: rgba(239,68,68,.4); color: var(--red); }
-.p-action-btn.unflag-btn:hover { background: rgba(239,68,68,.15); }
+.detail-empty .icon { font-size: 40px; opacity: .3; }
+.detail-empty p { font-size: 13px; line-height: 1.5; }
 
-/* ── Event log ───────────────────────────────────────────────────────── */
-.event-log-section { border-top: 1px solid var(--navy3); flex-shrink: 0; max-height: 240px; display: flex; flex-direction: column; }
-.event-log-header {
-  padding: 8px 12px 6px; font-size: 10px; font-weight: 700; text-transform: uppercase;
+.detail-content { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+.detail-header {
+  padding: 12px 14px; border-bottom: 1px solid var(--navy3); flex-shrink: 0;
+  display: flex; align-items: center; gap: 10px;
+}
+.detail-avatar {
+  width: 40px; height: 40px; border-radius: 50%; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px; font-weight: 800; color: var(--navy);
+}
+.detail-info { flex: 1; min-width: 0; }
+.detail-name { font-size: 14px; font-weight: 800; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.detail-sub  { font-size: 11px; color: var(--slate); margin-top: 2px; }
+
+/* Risk bar */
+.risk-bar-wrap { padding: 10px 14px; border-bottom: 1px solid var(--navy3); flex-shrink: 0; }
+.risk-bar-label { display: flex; justify-content: space-between; font-size: 10px; color: var(--slate); margin-bottom: 5px; font-family: var(--font-mono); }
+.risk-bar-track { height: 6px; background: var(--navy3); border-radius: 3px; overflow: hidden; }
+.risk-bar-fill  { height: 100%; border-radius: 3px; transition: width .4s, background .4s; }
+
+/* Detail stats grid */
+.detail-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 10px 14px; border-bottom: 1px solid var(--navy3); flex-shrink: 0; }
+.d-stat { background: var(--navy); border-radius: 7px; padding: 7px 10px; }
+.d-stat-label { font-size: 9px; color: var(--slate); text-transform: uppercase; letter-spacing: .5px; }
+.d-stat-value { font-size: 14px; font-weight: 800; margin-top: 2px; font-family: var(--font-mono); }
+
+/* Detail event timeline */
+.detail-timeline { flex: 1; overflow-y: auto; min-height: 0; }
+.tl-entry {
+  display: flex; gap: 9px; padding: 7px 14px; border-bottom: 1px solid rgba(51,65,85,.3);
+  font-size: 11px; align-items: flex-start;
+}
+.tl-time { color: var(--slate); font-family: var(--font-mono); font-size: 10px; white-space: nowrap; flex-shrink: 0; margin-top: 1px; }
+.tl-icon { flex-shrink: 0; font-size: 12px; margin-top: 0px; }
+.tl-msg  { flex: 1; line-height: 1.4; color: var(--white); }
+.tl-sev-high     { border-left: 2px solid var(--red); }
+.tl-sev-medium   { border-left: 2px solid var(--yellow); }
+.tl-sev-low      { border-left: 2px solid var(--slate); }
+.tl-sev-info     { border-left: 2px solid var(--navy3); }
+.tl-empty { padding: 16px 14px; color: var(--slate); font-size: 12px; text-align: center; }
+
+/* Detail actions */
+.detail-actions {
+  padding: 10px 14px; border-top: 1px solid var(--navy3);
+  display: flex; gap: 6px; flex-shrink: 0;
+}
+.detail-actions .btn { flex: 1; justify-content: center; font-size: 11px; padding: 7px 0; }
+
+/* ── Global event log (bottom strip) ─────────────────────────────────── */
+.global-log {
+  position: fixed; bottom: 0; left: 0; right: 0; height: 150px;
+  background: var(--navy2); border-top: 1px solid var(--navy3);
+  display: flex; flex-direction: column; z-index: 200; transform: translateY(100%);
+  transition: transform 0.25s;
+}
+.global-log.open { transform: translateY(0); }
+.global-log-toggle {
+  position: fixed; bottom: 0; right: 20px; z-index: 201;
+  background: var(--navy3); border: 1px solid var(--navy3); border-bottom: none;
+  padding: 4px 12px; border-radius: 6px 6px 0 0; font-size: 11px;
+  font-weight: 700; color: var(--muted); cursor: pointer; font-family: var(--font-sans);
+}
+.log-header {
+  padding: 6px 12px; font-size: 10px; font-weight: 700; text-transform: uppercase;
   letter-spacing: .8px; color: var(--slate); border-bottom: 1px solid var(--navy3);
   display: flex; align-items: center; justify-content: space-between; flex-shrink: 0;
 }
-.event-log-list { overflow-y: auto; flex: 1; }
+.log-list { overflow-y: auto; flex: 1; }
 .log-entry {
-  display: flex; gap: 9px; padding: 7px 12px; border-bottom: 1px solid rgba(51,65,85,.25);
+  display: flex; gap: 9px; padding: 5px 12px; border-bottom: 1px solid rgba(51,65,85,.25);
   font-size: 11px; align-items: flex-start;
 }
-.log-entry:last-child { border-bottom: none; }
 .log-time { color: var(--slate); font-family: var(--font-mono); font-size: 10px; white-space: nowrap; flex-shrink: 0; margin-top: 1px; }
 .log-msg  { flex: 1; line-height: 1.4; }
-.log-entry.ev-join    { border-left: 2px solid var(--green); }
-.log-entry.ev-leave   { border-left: 2px solid var(--slate); }
-.log-entry.ev-flag    { border-left: 2px solid var(--red); }
-.log-entry.ev-warn    { border-left: 2px solid var(--yellow); }
-.log-entry.ev-kick    { border-left: 2px solid var(--red); }
-.log-entry.ev-lock    { border-left: 2px solid var(--accent); }
-.log-entry.ev-system  { border-left: 2px solid var(--navy3); }
+.log-entry.ev-join   { border-left: 2px solid var(--green); }
+.log-entry.ev-leave  { border-left: 2px solid var(--slate); }
+.log-entry.ev-flag   { border-left: 2px solid var(--red); }
+.log-entry.ev-warn   { border-left: 2px solid var(--yellow); }
+.log-entry.ev-kick   { border-left: 2px solid var(--red); }
+.log-entry.ev-lock   { border-left: 2px solid var(--accent); }
+.log-entry.ev-proctor{ border-left: 2px solid var(--orange); }
+.log-entry.ev-system { border-left: 2px solid var(--navy3); }
 
-/* ── Loading / Error / Banner ─────────────────────────────────────────── */
+/* ── Overlays ────────────────────────────────────────────────────────── */
 .full-overlay {
   position: fixed; inset: 0; z-index: 500;
   display: flex; align-items: center; justify-content: center; flex-direction: column;
   background: var(--navy); gap: 16px; text-align: center; padding: 24px;
 }
-.full-overlay .icon { font-size: 52px; margin-bottom: 4px; }
+.full-overlay .icon { font-size: 48px; margin-bottom: 4px; }
 .full-overlay h2 { font-size: 20px; font-weight: 800; }
 .full-overlay p  { font-size: 14px; color: var(--slate); max-width: 320px; line-height: 1.6; margin-top: 4px; }
-
 .spinner {
   width: 36px; height: 36px; border: 3px solid var(--navy3);
   border-top-color: var(--accent); border-radius: 50%;
@@ -245,35 +283,17 @@ html, body { height: 100%; background: var(--navy); color: var(--white); font-fa
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-/* Loading skeleton for participant list */
-.skel-card { padding: 10px 12px; border-bottom: 1px solid rgba(51,65,85,0.3); }
-.skel-line {
-  background: linear-gradient(90deg, var(--navy3) 25%, rgba(51,65,85,.5) 50%, var(--navy3) 75%);
-  background-size: 200% 100%; animation: shimmer 1.4s infinite;
-  border-radius: 4px; height: 10px; margin-bottom: 6px;
-}
-@keyframes shimmer { to { background-position: -200% 0; } }
-.skel-circle {
-  width: 36px; height: 36px; border-radius: 50%;
-  background: var(--navy3); flex-shrink: 0;
-  animation: shimmer 1.4s infinite;
-  background-size: 200% 100%;
-  background-image: linear-gradient(90deg, var(--navy3) 25%, rgba(51,65,85,.5) 50%, var(--navy3) 75%);
-}
-
-/* Meeting-ended banner */
+/* Meeting ended banner */
 #ended-banner {
-  display: none; position: absolute; top: 0; left: 0; right: 0; bottom: 0;
-  background: rgba(15,23,42,.92); z-index: 10;
-  align-items: center; justify-content: center; flex-direction: column; gap: 14px;
-  text-align: center; padding: 24px;
+  display: none; position: fixed; inset: 0; z-index: 400;
+  background: rgba(15,23,42,.93); align-items: center; justify-content: center;
+  flex-direction: column; gap: 14px; text-align: center; padding: 24px;
 }
-#ended-banner h2 { font-size: 22px; font-weight: 800; color: var(--red); }
-#ended-banner p  { font-size: 14px; color: var(--muted); }
+#ended-banner.show { display: flex; }
 
 /* ── Toast ───────────────────────────────────────────────────────────── */
 #toast {
-  position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+  position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
   background: var(--navy2); border: 1px solid var(--navy3); border-radius: 8px;
   padding: 10px 20px; font-size: 13px; font-weight: 600; white-space: nowrap;
   z-index: 800; opacity: 0; pointer-events: none; transition: opacity 0.3s;
@@ -303,30 +323,39 @@ html, body { height: 100%; background: var(--navy); color: var(--white); font-fa
 #warn-modal textarea:focus { border-color: var(--accent); }
 #warn-modal .modal-actions { display: flex; gap: 8px; margin-top: 12px; justify-content: flex-end; }
 
+/* Skeleton */
+.skel-card { padding: 10px 12px; border-bottom: 1px solid rgba(51,65,85,0.3); }
+.skel-line {
+  background: linear-gradient(90deg, var(--navy3) 25%, rgba(51,65,85,.5) 50%, var(--navy3) 75%);
+  background-size: 200% 100%; animation: shimmer 1.4s infinite;
+  border-radius: 4px; height: 10px; margin-bottom: 6px;
+}
+@keyframes shimmer { to { background-position: -200% 0; } }
+.skel-circle {
+  width: 34px; height: 34px; border-radius: 50%; background: var(--navy3);
+  flex-shrink: 0; animation: shimmer 1.4s infinite; background-size: 200% 100%;
+  background-image: linear-gradient(90deg, var(--navy3) 25%, rgba(51,65,85,.5) 50%, var(--navy3) 75%);
+}
+
 /* ── Responsive ──────────────────────────────────────────────────────── */
+@media (max-width: 900px) {
+  .student-grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
+  .detail-panel { width: 300px; }
+}
 @media (max-width: 768px) {
   html, body { overflow: auto; }
-  .main { flex-direction: column; height: auto; overflow: visible; }
-  /* On mobile the Jitsi area sits above the participant list */
-  .jitsi-area { min-height: 52vw; height: 58vw; flex: none; }
-  .right-panel { width: 100%; max-width: 100%; border-left: none; border-top: 1px solid var(--navy3); max-height: none; }
-  .participant-list { max-height: 55vh; }
-  .topbar { min-height: auto; }
-  .topbar-title h1 { font-size: 14px; max-width: 160px; }
-  /* Collapse stat pills into a compact 2-col grid below the topbar */
-  .stats-pills { display: grid; grid-template-columns: repeat(3, auto); gap: 4px; width: 100%; }
-  .stat-pill { justify-content: center; font-size: 10px; padding: 4px 8px; }
+  .main { flex-direction: column; height: auto; overflow: visible; min-height: calc(100vh - 58px); }
+  .student-grid-panel { flex: none; border-right: none; border-bottom: 1px solid var(--navy3); }
+  .student-grid { max-height: 50vh; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+  .detail-panel { width: 100%; max-width: 100%; min-width: 0; max-height: 60vh; }
+  .stats-pills { display: grid; grid-template-columns: repeat(3, auto); gap: 4px; }
+  .topbar-title h1 { font-size: 13px; max-width: 140px; }
 }
 @media (max-width: 480px) {
   .topbar-actions .btn span { display: none; }
-  .topbar-actions .btn { padding: 8px 10px; min-width: 36px; justify-content: center; }
-  /* Full-width Jitsi on phone portrait */
-  .jitsi-area { height: 56vw; }
-  /* Event log more compact */
-  .event-log-section { max-height: 180px; }
-  /* Participant actions as 2 rows on very small screens */
-  .p-actions { flex-wrap: wrap; }
-  .p-action-btn { min-width: calc(50% - 2px); flex: none; }
+  .topbar-actions .btn { padding: 7px 10px; min-width: 34px; justify-content: center; }
+  .detail-actions { flex-wrap: wrap; }
+  .detail-actions .btn { min-width: calc(50% - 3px); }
 }
 </style>
 </head>
@@ -339,7 +368,7 @@ html, body { height: 100%; background: var(--navy); color: var(--white); font-fa
 <div id="warn-modal-backdrop">
   <div id="warn-modal">
     <h3>Send Warning</h3>
-    <p style="font-size:13px;color:var(--muted);margin-bottom:10px">Message will be displayed to the participant in the meeting.</p>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:10px">Message will appear instantly in the student's session.</p>
     <textarea id="warn-message" placeholder="Enter warning message…"></textarea>
     <div class="modal-actions">
       <button class="btn btn-ghost" onclick="closeWarnModal()">Cancel</button>
@@ -351,11 +380,11 @@ html, body { height: 100%; background: var(--navy); color: var(--white); font-fa
 <!-- Loading overlay -->
 <div class="full-overlay" id="loading-overlay">
   <div class="spinner"></div>
-  <h2>Loading Meeting</h2>
-  <p>Connecting to live meeting data…</p>
+  <h2>Loading Session</h2>
+  <p>Connecting to live monitoring data…</p>
 </div>
 
-<!-- Error overlay (hidden by default) -->
+<!-- Error overlay -->
 <div class="full-overlay" id="error-overlay" style="display:none">
   <div class="icon" id="error-icon">⚠️</div>
   <h2 id="error-title">Something went wrong</h2>
@@ -363,127 +392,159 @@ html, body { height: 100%; background: var(--navy); color: var(--white); font-fa
   <button class="btn btn-ghost" onclick="window.history.back()" style="margin-top:8px">← Go Back</button>
 </div>
 
+<!-- Meeting ended banner -->
+<div id="ended-banner">
+  <div style="font-size:48px">🔴</div>
+  <h2 style="font-size:22px;font-weight:800;color:var(--red)">Session Ended</h2>
+  <p style="font-size:14px;color:var(--muted)">This meeting has been terminated.</p>
+  <button class="btn btn-ghost" onclick="window.history.back()" style="margin-top:4px">← Return to Dashboard</button>
+</div>
+
 <!-- TOP BAR -->
 <div class="topbar" id="topbar" style="display:none">
   <div class="topbar-left">
-    <div class="topbar-brand">
-      <div class="live-badge">
-        <span class="live-dot" id="live-dot-topbar"></span>
-        DIKLY LIVE
-      </div>
-    </div>
+    <div class="live-badge"><span class="live-dot"></span>DIKLY LIVE</div>
     <div class="topbar-title">
-      <h1 id="meeting-title">Live Meeting</h1>
-      <p id="meeting-meta">Meeting Monitor</p>
+      <h1 id="meeting-title">Proctoring Dashboard</h1>
+      <p id="meeting-meta">Live Monitoring</p>
     </div>
   </div>
 
   <div class="stats-pills" id="stats-pills">
-    <div class="stat-pill"><span>Total</span><span class="pill-val" id="stat-total">—</span></div>
-    <div class="stat-pill"><span style="color:var(--green)">Connected</span><span class="pill-val" id="stat-connected" style="color:var(--green)">—</span></div>
-    <div class="stat-pill flagged-pill"><span>Flagged</span><span class="pill-val" id="stat-flagged">—</span></div>
-    <div class="stat-pill cam-pill"><span>Cam Off</span><span class="pill-val" id="stat-camoff">—</span></div>
+    <div class="stat-pill"><span>Total</span><span class="pv" id="stat-total">—</span></div>
+    <div class="stat-pill"><span style="color:var(--green)">Live</span><span class="pv" id="stat-connected" style="color:var(--green)">—</span></div>
+    <div class="stat-pill flag-pill"><span>Flagged</span><span class="pv" id="stat-flagged">—</span></div>
+    <div class="stat-pill risk-pill"><span>High Risk</span><span class="pv" id="stat-highrisk">—</span></div>
+    <div class="stat-pill cam-pill"><span>Cam Off</span><span class="pv" id="stat-camoff">—</span></div>
   </div>
 
   <div class="topbar-actions">
+    <button class="btn btn-jitsi" id="jitsi-btn" onclick="openJitsiRoom()" style="display:none">
+      <span>📹</span><span>Video Room</span>
+    </button>
     <button class="btn btn-ghost" id="lock-btn" onclick="toggleLock()" style="display:none">
       <span id="lock-icon">🔒</span><span id="lock-label">Lock Room</span>
     </button>
     <button class="btn btn-danger" id="end-btn" onclick="endMeeting()">
-      <span>⏹</span><span>End Meeting</span>
+      <span>⏹</span><span>End</span>
     </button>
-    <button class="btn btn-ghost" onclick="window.history.back()" style="padding:8px 12px">← Back</button>
+    <button class="btn btn-ghost" onclick="window.history.back()" style="padding:7px 10px">←</button>
   </div>
 </div>
 
-<!-- MAIN -->
+<!-- MAIN: Student grid + Detail panel -->
 <div class="main" id="main-layout" style="display:none">
 
-  <!-- LEFT: Jitsi embed -->
-  <div class="jitsi-area">
-    <div id="jitsi-container">
-      <div class="jitsi-placeholder" id="jitsi-placeholder">
-        <div class="icon">📹</div>
-        <p>Loading meeting room…</p>
-      </div>
+  <!-- LEFT: Student grid -->
+  <div class="student-grid-panel">
+    <div class="panel-header">
+      <h3><span class="live-dot-green"></span> Participants
+        <span id="participant-count" style="font-weight:400;color:var(--muted);font-size:10px;font-family:var(--font-mono)"></span>
+      </h3>
+      <input class="panel-search" id="search-input" type="text"
+        placeholder="Search…" oninput="filterStudents(this.value)" />
     </div>
-    <!-- Meeting ended overlay -->
-    <div id="ended-banner" style="display:none;position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(15,23,42,.92);z-index:10;display:none;align-items:center;justify-content:center;flex-direction:column;gap:14px;text-align:center;padding:24px">
-      <div style="font-size:48px">🔴</div>
-      <h2 style="font-size:22px;font-weight:800;color:var(--red)">Meeting Ended</h2>
-      <p style="font-size:14px;color:var(--muted)">This meeting has been terminated.</p>
-      <button class="btn btn-ghost" onclick="window.history.back()">← Return to Dashboard</button>
+    <div class="student-grid" id="student-grid">
+      <!-- Skeleton -->
+      <div id="grid-skeleton" style="grid-column:1/-1">
+        <div class="skel-card" style="border-radius:10px;margin-bottom:4px"><div style="display:flex;gap:8px;align-items:center"><div class="skel-circle"></div><div style="flex:1"><div class="skel-line" style="width:65%"></div><div class="skel-line" style="width:40%"></div></div></div></div>
+        <div class="skel-card" style="border-radius:10px;margin-bottom:4px"><div style="display:flex;gap:8px;align-items:center"><div class="skel-circle"></div><div style="flex:1"><div class="skel-line" style="width:55%"></div><div class="skel-line" style="width:35%"></div></div></div></div>
+        <div class="skel-card" style="border-radius:10px"><div style="display:flex;gap:8px;align-items:center"><div class="skel-circle"></div><div style="flex:1"><div class="skel-line" style="width:70%"></div><div class="skel-line" style="width:42%"></div></div></div></div>
+      </div>
     </div>
   </div>
 
-  <!-- RIGHT: Participant panel -->
-  <div class="right-panel">
-    <!-- Header -->
-    <div class="panel-header">
-      <h3><span class="live-dot" style="background:var(--green);box-shadow:0 0 0 0 rgba(34,197,94,.6);animation:live-pulse-green 2s infinite"></span> Active Participants</h3>
-      <span id="participant-count" style="font-size:11px;color:var(--slate);font-family:var(--font-mono)">0</span>
+  <!-- RIGHT: Detail panel -->
+  <div class="detail-panel" id="detail-panel">
+    <div class="detail-empty" id="detail-empty">
+      <div class="icon">👁️</div>
+      <p>Select a participant<br>to view their monitoring details.</p>
     </div>
-
-    <!-- Search -->
-    <div class="panel-search-wrap">
-      <input class="panel-search" id="participant-search" type="text" placeholder="Search participants…" oninput="filterParticipants(this.value)" />
-    </div>
-
-    <!-- Participant list -->
-    <div class="participant-list" id="participant-list">
-      <!-- Skeleton loading -->
-      <div id="plist-skeleton">
-        <div class="skel-card"><div style="display:flex;gap:9px;align-items:center"><div class="skel-circle"></div><div style="flex:1"><div class="skel-line" style="width:60%"></div><div class="skel-line" style="width:40%"></div></div></div></div>
-        <div class="skel-card"><div style="display:flex;gap:9px;align-items:center"><div class="skel-circle"></div><div style="flex:1"><div class="skel-line" style="width:70%"></div><div class="skel-line" style="width:45%"></div></div></div></div>
-        <div class="skel-card"><div style="display:flex;gap:9px;align-items:center"><div class="skel-circle"></div><div style="flex:1"><div class="skel-line" style="width:55%"></div><div class="skel-line" style="width:35%"></div></div></div></div>
+    <div class="detail-content" id="detail-content" style="display:none">
+      <div class="detail-header">
+        <div class="detail-avatar" id="d-avatar"></div>
+        <div class="detail-info">
+          <div class="detail-name" id="d-name"></div>
+          <div class="detail-sub" id="d-sub"></div>
+        </div>
+        <div id="d-risk-badge" class="s-risk"></div>
+        <button onclick="clearSelection()" style="background:none;border:none;color:var(--slate);cursor:pointer;font-size:18px;padding:0 2px;line-height:1;">✕</button>
       </div>
-    </div>
-
-    <!-- Event log -->
-    <div class="event-log-section">
-      <div class="event-log-header">
-        <span>Event Log</span>
-        <button onclick="clearEventLog()" style="background:none;border:none;color:var(--slate);font-size:11px;cursor:pointer;font-family:var(--font-sans)">Clear</button>
+      <div class="risk-bar-wrap">
+        <div class="risk-bar-label">
+          <span>Risk Score</span>
+          <span id="d-risk-label">0 / 100</span>
+        </div>
+        <div class="risk-bar-track"><div class="risk-bar-fill" id="d-risk-fill" style="width:0%"></div></div>
       </div>
-      <div class="event-log-list" id="event-log-list">
-        <div style="padding:12px;text-align:center;color:var(--slate);font-size:12px">No events yet</div>
+      <div class="detail-stats">
+        <div class="d-stat">
+          <div class="d-stat-label">Status</div>
+          <div class="d-stat-value" id="d-status" style="font-size:12px">—</div>
+        </div>
+        <div class="d-stat">
+          <div class="d-stat-label">Tab Switches</div>
+          <div class="d-stat-value" id="d-tabs">0</div>
+        </div>
+        <div class="d-stat">
+          <div class="d-stat-label">Fullscreen Exits</div>
+          <div class="d-stat-value" id="d-fs">0</div>
+        </div>
+        <div class="d-stat">
+          <div class="d-stat-label">Face Detection</div>
+          <div class="d-stat-value" id="d-face" style="font-size:11px">—</div>
+        </div>
+      </div>
+      <div class="detail-timeline" id="d-timeline">
+        <div class="tl-empty">Loading events…</div>
+      </div>
+      <div class="detail-actions">
+        <button class="btn btn-warn"   id="d-warn-btn" onclick="openWarnModal(selectedUid,null)">⚠️ Warn</button>
+        <button class="btn btn-ghost"  id="d-flag-btn" onclick="toggleFlag(selectedUid)">🚩 Flag</button>
+        <button class="btn btn-danger" id="d-kick-btn" onclick="kickParticipant(selectedUid,null)">✕ Kick</button>
       </div>
     </div>
   </div>
 </div>
 
-<style>
-@keyframes live-pulse-green {
-  0%   { box-shadow: 0 0 0 0 rgba(34,197,94,.6); }
-  70%  { box-shadow: 0 0 0 6px rgba(34,197,94,0); }
-  100% { box-shadow: 0 0 0 0 rgba(34,197,94,0); }
-}
-</style>
+<!-- Global event log toggle + panel -->
+<button class="global-log-toggle" onclick="toggleGlobalLog()" id="log-toggle-btn">📋 Event Log</button>
+<div class="global-log" id="global-log">
+  <div class="log-header">
+    <span>Global Event Log</span>
+    <button onclick="clearEventLog()" style="background:none;border:none;color:var(--slate);font-size:11px;cursor:pointer;font-family:var(--font-sans)">Clear</button>
+  </div>
+  <div class="log-list" id="event-log-list">
+    <div style="padding:10px;text-align:center;color:var(--slate);font-size:12px">No events yet</div>
+  </div>
+</div>
 
 <script>
 'use strict';
 
-// ── Config ────────────────────────────────────────────────────────────
-const API = '';
-const params      = new URLSearchParams(location.search);
-const authToken   = localStorage.getItem('dikly_token') || '';
-const meetingId   = params.get('meeting') || '';
+const API       = '';
+const params    = new URLSearchParams(location.search);
+const authToken = localStorage.getItem('dikly_token') || '';
+const meetingId = params.get('meeting') || '';
 
 // ── State ─────────────────────────────────────────────────────────────
 let participants   = {};   // uid → participant object
+let studentEvents  = {};   // uid → [{type,severity,ts,msg}] last 30 per student
 let meetingData    = null;
 let isLocked       = false;
 let meetingEnded   = false;
+let selectedUid    = null;
 let sseSource      = null;
 let heartbeatTimer = null;
-let _sseBackoff    = 1000;   // ms — doubles on each failure, capped at 30s
+let _sseBackoff    = 1000;
 let _sseRetryTimer = null;
-let jitsiAPI       = null;
 let warnTargetUid  = null;
 let eventLog       = [];
 let searchQuery    = '';
+let jitsiRoomUrl   = null;
+let logOpen        = false;
 
-// avatar colours (deterministic by initials)
+// avatar colours (deterministic from name)
 const AVATAR_COLORS = ['#0ea5e9','#8b5cf6','#ec4899','#f97316','#14b8a6','#6366f1','#84cc16','#f59e0b'];
 function avatarColor(name) {
   let h = 0;
@@ -491,329 +552,505 @@ function avatarColor(name) {
   return AVATAR_COLORS[Math.abs(h) % AVATAR_COLORS.length];
 }
 function initials(name = '') {
-  return name.split(' ').filter(Boolean).map(w => w[0]).join('').toUpperCase().slice(0, 2) || '?';
+  return name.split(' ').filter(Boolean).map(w => w[0]).join('').toUpperCase().slice(0,2) || '?';
+}
+function escHtml(s) {
+  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
 // ── Toast ─────────────────────────────────────────────────────────────
-let toastTimer;
+let _toastTimer;
 function toast(msg, type = '') {
   const el = document.getElementById('toast');
   el.textContent = msg;
   el.className = 'show' + (type ? ' ' + type : '');
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => { el.classList.remove('show'); }, 3500);
-}
-
-// ── Error / Loading ───────────────────────────────────────────────────
-function showError(icon, title, msg) {
-  document.getElementById('loading-overlay').style.display = 'none';
-  document.getElementById('error-icon').textContent = icon;
-  document.getElementById('error-title').textContent = title;
-  document.getElementById('error-msg').textContent = msg;
-  document.getElementById('error-overlay').style.display = 'flex';
-}
-
-function hideLoading() {
-  document.getElementById('loading-overlay').style.display = 'none';
-  document.getElementById('topbar').style.display = '';
-  document.getElementById('main-layout').style.display = '';
+  clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(() => { el.className = ''; }, 3000);
 }
 
 // ── API helper ────────────────────────────────────────────────────────
 async function apiFetch(method, path, body) {
-  const opts = {
-    method,
-    headers: { 'Authorization': `Bearer ${authToken}`, 'Content-Type': 'application/json' }
-  };
-  if (body !== undefined) opts.body = JSON.stringify(body);
+  const opts = { method, headers: { 'Authorization': `Bearer ${authToken}`, 'Content-Type': 'application/json' } };
+  if (body) opts.body = JSON.stringify(body);
   const res = await fetch(API + path, opts);
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    const err = new Error(data.error || data.message || `HTTP ${res.status}`);
-    err.status = res.status;
-    throw err;
-  }
+  if (!res.ok) { const err = new Error(data.error || `HTTP ${res.status}`); err.status = res.status; throw err; }
   return data;
 }
 
-// ── Stats ─────────────────────────────────────────────────────────────
-function updateStats() {
-  const list   = Object.values(participants);
-  const total  = list.length;
-  const conn   = list.filter(p => p.status === 'connected').length;
-  const flagged = list.filter(p => p.flagged).length;
-  const camOff = list.filter(p => p.cameraOff).length;
-
-  document.getElementById('stat-total').textContent     = total;
-  document.getElementById('stat-connected').textContent = conn;
-  document.getElementById('stat-flagged').textContent   = flagged;
-  document.getElementById('stat-camoff').textContent    = camOff;
-  document.getElementById('participant-count').textContent = total + ' participant' + (total === 1 ? '' : 's');
+// ── Error / Loading helpers ───────────────────────────────────────────
+function showError(icon, title, msg) {
+  document.getElementById('loading-overlay').style.display = 'none';
+  document.getElementById('main-layout').style.display     = 'none';
+  document.getElementById('topbar').style.display          = 'none';
+  const ov = document.getElementById('error-overlay');
+  ov.style.display = 'flex';
+  document.getElementById('error-icon').textContent  = icon;
+  document.getElementById('error-title').textContent = title;
+  document.getElementById('error-msg').textContent   = msg;
+}
+function hideLoading() {
+  document.getElementById('loading-overlay').style.display = 'none';
+  document.getElementById('main-layout').style.display     = 'flex';
+  document.getElementById('topbar').style.display          = '';
+  document.getElementById('main-layout').style.display     = 'flex';
 }
 
-// ── Participant rendering ─────────────────────────────────────────────
+// ── Risk helpers ──────────────────────────────────────────────────────
+function riskLevel(score) {
+  if (score <= 30) return 'safe';
+  if (score <= 60) return 'medium';
+  if (score <= 80) return 'high';
+  return 'critical';
+}
+function riskColor(score) {
+  if (score <= 30) return '#22c55e';
+  if (score <= 60) return '#eab308';
+  if (score <= 80) return '#f97316';
+  return '#ef4444';
+}
+function riskLabel(score) { return `${score}/100`; }
+
+// ── Stats update ──────────────────────────────────────────────────────
+function updateStats() {
+  const all  = Object.values(participants);
+  const con  = all.filter(p => p.status === 'connected').length;
+  const flagged = all.filter(p => p.flagged).length;
+  const camOff  = all.filter(p => p.cameraOff).length;
+  const highRisk = all.filter(p => (p.riskScore || 0) > 60).length;
+  document.getElementById('stat-total').textContent     = all.length;
+  document.getElementById('stat-connected').textContent = con;
+  document.getElementById('stat-flagged').textContent   = flagged;
+  document.getElementById('stat-highrisk').textContent  = highRisk;
+  document.getElementById('stat-camoff').textContent    = camOff;
+  document.getElementById('participant-count').textContent = `(${all.length})`;
+}
+
+// ── Student grid rendering ────────────────────────────────────────────
 function statusDotClass(p) {
-  if (p.status === 'kicked')        return 'red';
-  if (p.status === 'disconnected')  return 'yellow';
-  if (p.status === 'waiting')       return 'gray';
+  if (p.status === 'kicked')       return 'red';
+  if (p.status === 'disconnected') return 'yellow';
+  if (p.status === 'waiting')      return 'gray';
   return 'green';
 }
-
 function statusLabel(p) {
-  const map = { connected: 'Connected', disconnected: 'Disconnected', kicked: 'Kicked', waiting: 'Waiting' };
-  return map[p.status] || p.status || 'Unknown';
+  return { connected:'Connected', disconnected:'Disconnected', kicked:'Kicked', waiting:'Waiting' }[p.status] || p.status;
+}
+function roleClass(r) {
+  if (!r || r === 'student')  return 'role-student';
+  if (['lecturer','hod','instructor'].includes(r)) return 'role-lecturer';
+  return 'role-other';
+}
+function roleName(r) {
+  if (!r || r === 'student')  return 'Student';
+  if (['lecturer','hod','instructor'].includes(r)) return 'Lecturer';
+  return r || 'Guest';
 }
 
-function connBarClass(quality) {
-  if (!quality || quality === 'good') return 'good';
-  if (quality === 'fair')             return 'fair';
-  return 'poor';
-}
+function buildStudentCard(p) {
+  const col  = avatarColor(p.name || 'X');
+  const ini  = initials(p.name);
+  const dot  = statusDotClass(p);
+  const rl   = riskLevel(p.riskScore || 0);
+  const rLbl = riskLabel(p.riskScore || 0);
+  const rClass = roleClass(p.role);
+  const rName  = roleName(p.role);
 
-function roleClass(role) {
-  if (!role || role === 'student') return 'role-student';
-  if (role === 'lecturer' || role === 'instructor') return 'role-lecturer';
-  return 'role-guest';
-}
+  const tabChip = (p.tabSwitches || p.tabSwitchCount || 0) > 0
+    ? `<span class="s-chip alert">🔁 ${p.tabSwitches || p.tabSwitchCount} tab${(p.tabSwitches||p.tabSwitchCount)>1?'s':''}</span>` : '';
+  const fsChip  = (p.fullscreenExitCount || 0) > 0
+    ? `<span class="s-chip alert">⛶ ${p.fullscreenExitCount} exit${p.fullscreenExitCount>1?'s':''}</span>` : '';
+  const camChip = p.cameraOff
+    ? `<span class="s-chip danger">📹 Off</span>` : '';
+  const micChip = p.micMuted
+    ? `<span class="s-chip">🎙️ Muted</span>` : '';
+  const flagChip = p.flagged
+    ? `<span class="s-chip flag">⚑ Flagged</span>` : '';
+  const faceChip = p.faceDetectionStatus === 'no_face'
+    ? `<span class="s-chip danger">🚫 No Face</span>`
+    : p.faceDetectionStatus === 'multiple_faces'
+    ? `<span class="s-chip danger">👥 Multi-Face</span>` : '';
 
-function roleName(role) {
-  if (!role || role === 'student') return 'Student';
-  if (role === 'lecturer' || role === 'instructor') return 'Lecturer';
-  return 'Guest';
-}
-
-function renderParticipantCard(p) {
-  const col     = avatarColor(p.name || 'X');
-  const ini     = initials(p.name);
-  const dotCls  = statusDotClass(p);
-  const connCls = connBarClass(p.connectionQuality);
-  const rClass  = roleClass(p.role);
-  const rName   = roleName(p.role);
-
-  const camIcon    = p.cameraOff   ? '<span class="p-icon off" title="Camera Off">📹</span>'    : '<span class="p-icon active" title="Camera On">📹</span>';
-  const micIcon    = p.micMuted    ? '<span class="p-icon off" title="Mic Muted">🎙️</span>'     : '<span class="p-icon active" title="Mic Active">🎙️</span>';
-  const screenIcon = p.screenShare ? '<span class="p-icon active" title="Screen Sharing" style="filter:hue-rotate(180deg)">🖥️</span>' : '<span class="p-icon" title="No Screen Share">🖥️</span>';
-  const tabBadge   = (p.tabSwitches > 0) ? `<span class="p-tab-badge">${p.tabSwitches} tab${p.tabSwitches > 1 ? 's' : ''}</span>` : '';
-
-  const flagBtn   = p.flagged
-    ? `<button class="p-action-btn unflag-btn" onclick="unflagParticipant('${p.uid}',event)" title="Remove flag">🚩 Unflag</button>`
-    : `<button class="p-action-btn flag-btn"   onclick="flagParticipant('${p.uid}',event)"   title="Flag participant">🚩 Flag</button>`;
-
-  const warnBtn = `<button class="p-action-btn warn-btn" onclick="openWarnModal('${p.uid}',event)" title="Send warning">⚠️ Warn</button>`;
-  const kickBtn = p.status !== 'kicked'
-    ? `<button class="p-action-btn kick-btn" onclick="kickParticipant('${p.uid}',event)" title="Kick from meeting">✖ Kick</button>`
-    : `<button class="p-action-btn" disabled style="opacity:.3;cursor:not-allowed">✖ Kicked</button>`;
+  const lastEv = studentEvents[p.uid] && studentEvents[p.uid][0]
+    ? studentEvents[p.uid][0].msg : '';
 
   return `
-    <div class="p-card ${p.flagged ? 'flagged' : ''} ${p.status === 'kicked' ? 'kicked' : ''}" data-uid="${p.uid}" id="pcard-${p.uid}">
-      <div class="p-card-top">
-        <div class="p-avatar" style="background:${col}">${ini}</div>
-        <div class="p-info">
-          <div class="p-name">
-            <span>${escHtml(p.name || 'Unknown')}</span>
-            <span class="p-role-badge ${rClass}">${rName}</span>
-          </div>
-          <div class="p-status-row">
-            <div class="p-status-dot ${dotCls}"></div>
-            <span class="p-status-label">${statusLabel(p)}</span>
-            <div class="conn-bar ${connCls}" title="Connection: ${p.connectionQuality || 'good'}">
-              <span></span><span></span><span></span>
-            </div>
-            ${tabBadge}
-          </div>
+    <div class="s-card${p.flagged?' flagged':''}${p.status==='kicked'?' kicked':''}${selectedUid===p.uid?' selected':''}"
+         id="scard-${p.uid}" onclick="selectStudent('${p.uid}')">
+      <div class="s-card-top">
+        <div class="s-avatar" style="background:${escHtml(col)}">${escHtml(ini)}</div>
+        <div class="s-info">
+          <div class="s-name">${escHtml(p.name || 'Unknown')}</div>
+          <span class="s-role ${rClass}">${escHtml(rName)}</span>
         </div>
-        <div class="p-media-icons">
-          ${camIcon}${micIcon}${screenIcon}
-        </div>
+        <span class="s-risk risk-${rl}">${escHtml(rLbl)}</span>
       </div>
-      <div class="p-actions">
-        ${flagBtn}${warnBtn}${kickBtn}
+      <div class="s-status-row">
+        <span class="s-dot ${dot}"></span>
+        <span class="s-status-label">${escHtml(statusLabel(p))}</span>
       </div>
-    </div>
-  `;
+      <div class="s-indicators">
+        ${tabChip}${fsChip}${camChip}${micChip}${faceChip}${flagChip}
+      </div>
+      ${lastEv ? `<div class="s-last-event" title="${escHtml(lastEv)}">${escHtml(lastEv)}</div>` : ''}
+    </div>`;
 }
 
-function escHtml(s) {
-  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
+function renderStudentGrid() {
+  const grid = document.getElementById('student-grid');
+  const skel = document.getElementById('grid-skeleton');
+  if (skel) skel.remove();
 
-function renderParticipantList() {
-  const list    = Object.values(participants);
-  const query   = searchQuery.toLowerCase();
-  const visible = query ? list.filter(p => (p.name || '').toLowerCase().includes(query) || (p.role || '').toLowerCase().includes(query)) : list;
+  const all = Object.values(participants);
+  const q   = (searchQuery || '').toLowerCase();
+  const filtered = q ? all.filter(p => (p.name||'').toLowerCase().includes(q)) : all;
 
-  const container = document.getElementById('participant-list');
-  const skeleton  = document.getElementById('plist-skeleton');
-  if (skeleton) skeleton.remove();
-
-  if (!visible.length) {
-    container.innerHTML = `<div style="padding:24px;text-align:center;color:var(--slate);font-size:13px">${query ? 'No participants match your search' : 'No participants yet'}</div>`;
-    updateStats();
+  if (!filtered.length) {
+    grid.innerHTML = `<div style="grid-column:1/-1;padding:24px;text-align:center;color:var(--slate);font-size:13px">
+      ${all.length ? 'No participants match your search.' : 'No participants have joined yet.'}
+    </div>`;
     return;
   }
 
-  // Sort: connected first, then by name
-  visible.sort((a, b) => {
-    const order = { connected: 0, waiting: 1, disconnected: 2, kicked: 3 };
-    const ao = order[a.status] ?? 1, bo = order[b.status] ?? 1;
-    if (ao !== bo) return ao - bo;
-    return (a.name || '').localeCompare(b.name || '');
+  // Sort: connected first, then by risk score descending
+  filtered.sort((a,b) => {
+    const sa = a.status === 'connected' ? 1 : 0;
+    const sb = b.status === 'connected' ? 1 : 0;
+    if (sa !== sb) return sb - sa;
+    return (b.riskScore||0) - (a.riskScore||0);
   });
 
-  container.innerHTML = visible.map(renderParticipantCard).join('');
+  grid.innerHTML = filtered.map(buildStudentCard).join('');
+}
+
+function patchStudentCard(uid) {
+  const el = document.getElementById(`scard-${uid}`);
+  if (!el) return;
+  const p = participants[uid];
+  if (!p) { el.remove(); return; }
+  el.outerHTML = buildStudentCard(p);
+}
+
+function filterStudents(q) {
+  searchQuery = q;
+  renderStudentGrid();
+}
+
+// ── Apply initial snapshot ────────────────────────────────────────────
+function applySnapshot(rows) {
+  participants = {};
+  for (const row of rows) {
+    const uid = row.userId || row.user?._id || row._id;
+    if (!uid) continue;
+    participants[String(uid)] = {
+      uid:               String(uid),
+      name:              row.user?.name || row.name || 'Unknown',
+      role:              row.user?.role || row.role || 'student',
+      status:            row.status || 'connected',
+      cameraOff:         row.cameraOff || false,
+      micMuted:          row.micMuted  || false,
+      screenSharing:     row.screenSharing || false,
+      connectionQuality: row.connectionQuality || 'unknown',
+      tabSwitchCount:    row.tabSwitchCount || 0,
+      fullscreenExitCount: row.fullscreenExitCount || 0,
+      networkDropCount:  row.networkDropCount || 0,
+      isFlagged:         row.isFlagged || false,
+      flagged:           row.isFlagged || false,
+      riskScore:         row.riskScore || 0,
+      faceDetectionStatus: row.faceDetectionStatus || 'unknown',
+      lastSeenAt:        row.lastSeenAt,
+    };
+  }
+  renderStudentGrid();
   updateStats();
 }
 
-function filterParticipants(q) {
-  searchQuery = q;
-  renderParticipantList();
+// ── Student detail panel ──────────────────────────────────────────────
+function selectStudent(uid) {
+  selectedUid = uid;
+  // Deselect old card
+  document.querySelectorAll('.s-card.selected').forEach(el => el.classList.remove('selected'));
+  const card = document.getElementById(`scard-${uid}`);
+  if (card) card.classList.add('selected');
+
+  renderDetailPanel(uid);
+  loadStudentEvents(uid);
 }
 
-// ── Update single participant card in-place ───────────────────────────
-function patchParticipantCard(uid) {
-  const p    = participants[uid];
-  const card = document.getElementById('pcard-' + uid);
-  if (!card || !p) {
-    renderParticipantList();
+function clearSelection() {
+  selectedUid = null;
+  document.querySelectorAll('.s-card.selected').forEach(el => el.classList.remove('selected'));
+  document.getElementById('detail-empty').style.display   = '';
+  document.getElementById('detail-content').style.display = 'none';
+}
+
+function renderDetailPanel(uid) {
+  const p = participants[uid];
+  if (!p) return;
+  document.getElementById('detail-empty').style.display   = 'none';
+  document.getElementById('detail-content').style.display = 'flex';
+
+  const col = avatarColor(p.name || 'X');
+  const ini = initials(p.name);
+  const rl  = riskLevel(p.riskScore || 0);
+  const rc  = riskColor(p.riskScore || 0);
+
+  document.getElementById('d-avatar').style.background  = col;
+  document.getElementById('d-avatar').textContent       = ini;
+  document.getElementById('d-name').textContent         = p.name || 'Unknown';
+  document.getElementById('d-sub').textContent          = `${roleName(p.role)} · ${statusLabel(p)}`;
+  document.getElementById('d-risk-badge').textContent   = riskLabel(p.riskScore || 0);
+  document.getElementById('d-risk-badge').className     = `s-risk risk-${rl}`;
+  document.getElementById('d-risk-label').textContent   = `${p.riskScore || 0} / 100`;
+  document.getElementById('d-risk-fill').style.width    = `${p.riskScore || 0}%`;
+  document.getElementById('d-risk-fill').style.background = rc;
+
+  document.getElementById('d-status').textContent = (p.cameraOff ? '📹 Off' : '📹 On') + ' · ' + (p.micMuted ? '🎙️ Muted' : '🎙️ Active');
+  document.getElementById('d-tabs').textContent   = p.tabSwitchCount || 0;
+  document.getElementById('d-fs').textContent     = p.fullscreenExitCount || 0;
+  const faceMap = { ok: '✓ OK', no_face: '⚠️ None', multiple_faces: '⚠️ Multiple', unknown: '— Unknown' };
+  document.getElementById('d-face').textContent   = faceMap[p.faceDetectionStatus] || '—';
+
+  // Update kick button state
+  const kickBtn = document.getElementById('d-kick-btn');
+  if (kickBtn) { kickBtn.disabled = p.status === 'kicked'; }
+
+  // Flag button label
+  const flagBtn = document.getElementById('d-flag-btn');
+  if (flagBtn) { flagBtn.textContent = p.flagged ? '🚩 Unflag' : '🚩 Flag'; }
+
+  renderStudentTimeline(uid);
+}
+
+function renderStudentTimeline(uid) {
+  const tl  = document.getElementById('d-timeline');
+  const evs = studentEvents[uid] || [];
+
+  if (!evs.length) {
+    tl.innerHTML = '<div class="tl-empty">No events recorded for this participant.</div>';
     return;
   }
-  const tmp = document.createElement('div');
-  tmp.innerHTML = renderParticipantCard(p);
-  const newCard = tmp.firstElementChild;
-  card.replaceWith(newCard);
-}
 
-// ── Apply full snapshot ───────────────────────────────────────────────
-function applySnapshot(list) {
-  participants = {};
-  (list || []).forEach(p => { participants[p.uid] = p; });
-  renderParticipantList();
-}
-
-// ── Event log ─────────────────────────────────────────────────────────
-const EV_TYPE_CLASS = {
-  join: 'ev-join', leave: 'ev-leave', flag: 'ev-flag', warn: 'ev-warn',
-  kick: 'ev-kick', lock: 'ev-lock', unlock: 'ev-lock', system: 'ev-system',
-};
-
-function addEvent(type, msg) {
-  const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-  eventLog.unshift({ type, msg, time: now });
-  if (eventLog.length > 50) eventLog.length = 50;
-  renderEventLog();
-}
-
-function renderEventLog() {
-  const list = document.getElementById('event-log-list');
-  if (!eventLog.length) {
-    list.innerHTML = '<div style="padding:12px;text-align:center;color:var(--slate);font-size:12px">No events yet</div>';
-    return;
-  }
-  list.innerHTML = eventLog.map(ev => `
-    <div class="log-entry ${EV_TYPE_CLASS[ev.type] || 'ev-system'}">
-      <span class="log-time">${ev.time}</span>
-      <span class="log-msg">${escHtml(ev.msg)}</span>
+  tl.innerHTML = evs.map(ev => `
+    <div class="tl-entry tl-sev-${ev.severity || 'info'}">
+      <span class="tl-time">${ev.time}</span>
+      <span class="tl-icon">${eventIcon(ev.type)}</span>
+      <span class="tl-msg">${escHtml(ev.msg)}</span>
     </div>`).join('');
 }
 
-function clearEventLog() {
-  eventLog = [];
-  renderEventLog();
+function eventIcon(type) {
+  const icons = {
+    tab_switch: '🔁', fullscreen_exit: '⛶', fullscreen_enter: '⛶',
+    face_not_detected: '🚫', multiple_faces: '👥', camera_off: '📹',
+    camera_on: '📹', mic_off: '🎙️', screen_share_started: '🖥️',
+    network_drop: '📡', reconnect: '🔄', suspicious_activity: '⚠️',
+    screenshot: '📷', session_start: '▶️',
+    join: '✓', leave: '↩', flag: '🚩', warn: '⚠️', kick: '✕', system: 'ℹ',
+  };
+  return icons[type] || 'ℹ';
 }
 
-// ── Actions ───────────────────────────────────────────────────────────
-async function flagParticipant(uid, e) {
-  if (e) e.stopPropagation();
-  const p = participants[uid];
-  if (!p) return;
+function eventMessage(type, metadata) {
+  const msgs = {
+    tab_switch:          'Left the session tab',
+    fullscreen_exit:     'Exited fullscreen',
+    fullscreen_enter:    'Entered fullscreen',
+    face_not_detected:   'Face not detected',
+    multiple_faces:      'Multiple faces detected',
+    camera_off:          'Camera turned off',
+    camera_on:           'Camera turned on',
+    mic_off:             'Microphone muted',
+    screen_share_started:'Started screen sharing',
+    network_drop:        'Network disconnection',
+    reconnect:           'Reconnected to session',
+    suspicious_activity: 'Suspicious activity detected',
+    screenshot:          'Screenshot captured',
+    session_start:       'Session started',
+  };
+  return msgs[type] || type;
+}
+
+async function loadStudentEvents(uid) {
   try {
-    await apiFetch('POST', `/api/meetings/${meetingId}/participants/${uid}/flag`, { reason: 'Flagged by invigilator' });
-    participants[uid] = { ...p, flagged: true };
-    patchParticipantCard(uid);
-    updateStats();
-    addEvent('flag', `${p.name} was flagged`);
-    toast(`${p.name} flagged`, 'info');
-  } catch (err) {
-    toast('Flag failed: ' + err.message, 'error');
-  }
+    const data = await apiFetch('GET', `/api/meetings/${meetingId}/proctoring/student/${uid}`);
+    const evs  = (data.data?.events || []).map(e => ({
+      type:     e.type,
+      severity: e.severity,
+      msg:      eventMessage(e.type, e.metadata),
+      time:     new Date(e.timestamp).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit', second:'2-digit' }),
+    }));
+    studentEvents[uid] = evs;
+    if (selectedUid === uid) renderStudentTimeline(uid);
+  } catch (_) {}
 }
 
-async function unflagParticipant(uid, e) {
-  if (e) e.stopPropagation();
-  const p = participants[uid];
-  if (!p) return;
-  try {
-    await apiFetch('POST', `/api/meetings/${meetingId}/participants/${uid}/unflag`);
-    participants[uid] = { ...p, flagged: false };
-    patchParticipantCard(uid);
-    updateStats();
-    addEvent('flag', `${p.name} flag removed`);
-    toast(`${p.name} unflagged`, 'success');
-  } catch (err) {
-    toast('Unflag failed: ' + err.message, 'error');
-  }
+// ── SSE ───────────────────────────────────────────────────────────────
+function connectSSE() {
+  if (sseSource) sseSource.close();
+  if (_sseRetryTimer) { clearTimeout(_sseRetryTimer); _sseRetryTimer = null; }
+
+  const url = `${API}/api/meetings/${meetingId}/monitor/stream?token=${encodeURIComponent(authToken)}`;
+  sseSource = new EventSource(url);
+
+  sseSource.addEventListener('snapshot', e => {
+    _sseBackoff = 1000; // reset backoff on successful connection
+    try {
+      const payload = JSON.parse(e.data);
+      applySnapshot(Array.isArray(payload) ? payload : (payload.participants || []));
+    } catch (_) {}
+  });
+
+  sseSource.addEventListener('participant_status', e => {
+    try {
+      const d = JSON.parse(e.data);
+      if (!d?.userId) return;
+      const uid = d.userId;
+      const existing = participants[uid] || { uid };
+      participants[uid] = {
+        ...existing,
+        cameraOff:          d.cameraOff         ?? existing.cameraOff,
+        micMuted:           d.micMuted          ?? existing.micMuted,
+        screenSharing:      d.screenSharing     ?? existing.screenSharing,
+        connectionQuality:  d.connectionQuality ?? existing.connectionQuality,
+        tabSwitchCount:     d.tabSwitchCount    ?? existing.tabSwitchCount,
+        lastSeenAt:         d.lastSeenAt        ?? existing.lastSeenAt,
+        isFlagged:          d.isFlagged         ?? existing.isFlagged,
+        flagged:            d.isFlagged         ?? existing.flagged,
+        status:             existing.status !== 'kicked' ? 'connected' : 'kicked',
+      };
+      patchStudentCard(uid);
+      updateStats();
+      if (selectedUid === uid) renderDetailPanel(uid);
+    } catch (_) {}
+  });
+
+  sseSource.addEventListener('proctoring_event', e => {
+    try {
+      const d = JSON.parse(e.data);
+      if (!d?.userId) return;
+      const uid = d.userId;
+      const p   = participants[uid];
+      if (p) {
+        if (d.riskScore          !== undefined) p.riskScore           = d.riskScore;
+        if (d.tabSwitchCount     !== undefined) p.tabSwitchCount      = d.tabSwitchCount;
+        if (d.fullscreenExitCount!== undefined) p.fullscreenExitCount = d.fullscreenExitCount;
+        if (d.faceDetectionStatus!== undefined) p.faceDetectionStatus = d.faceDetectionStatus;
+      }
+
+      // Prepend to per-student event list
+      const evEntry = {
+        type:     d.type,
+        severity: d.severity,
+        msg:      eventMessage(d.type, d.metadata),
+        time:     new Date(d.timestamp || Date.now()).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit', second:'2-digit' }),
+      };
+      if (!studentEvents[uid]) studentEvents[uid] = [];
+      studentEvents[uid].unshift(evEntry);
+      if (studentEvents[uid].length > 30) studentEvents[uid].length = 30;
+
+      patchStudentCard(uid);
+      updateStats();
+      if (selectedUid === uid) renderDetailPanel(uid);
+
+      const name = p?.name || uid;
+      const sevClass = d.severity === 'high' || d.severity === 'critical' ? 'ev-flag' : 'ev-proctor';
+      addEvent(sevClass, `${name}: ${eventMessage(d.type)}`);
+    } catch (_) {}
+  });
+
+  sseSource.addEventListener('participant_flagged', e => {
+    try {
+      const d = JSON.parse(e.data);
+      if (!d?.userId) return;
+      const uid = d.userId;
+      if (participants[uid]) {
+        participants[uid].isFlagged = d.isFlagged !== false;
+        participants[uid].flagged   = d.isFlagged !== false;
+        patchStudentCard(uid);
+        updateStats();
+        if (selectedUid === uid) renderDetailPanel(uid);
+        addEvent('ev-flag', `${participants[uid].name} ${d.isFlagged !== false ? 'flagged' : 'unflagged'}`);
+      }
+    } catch (_) {}
+  });
+
+  sseSource.addEventListener('warning_sent', e => {
+    try {
+      const d = JSON.parse(e.data);
+      const name = (d?.userId && participants[d.userId]) ? participants[d.userId].name : (d?.userId || 'Participant');
+      addEvent('ev-warn', `Warning sent to ${name}` + (d?.message ? `: "${d.message}"` : ''));
+    } catch (_) {}
+  });
+
+  sseSource.addEventListener('participant_kicked', e => {
+    try {
+      const d = JSON.parse(e.data);
+      if (!d?.userId) return;
+      const uid = d.userId;
+      if (participants[uid]) {
+        participants[uid].status = 'kicked';
+        patchStudentCard(uid);
+        updateStats();
+        if (selectedUid === uid) renderDetailPanel(uid);
+        addEvent('ev-kick', `${participants[uid].name} was removed from the session`);
+      }
+    } catch (_) {}
+  });
+
+  sseSource.addEventListener('room_locked', e => {
+    try {
+      const d = JSON.parse(e.data);
+      isLocked = !!(d?.isLocked !== false);
+      updateLockUI();
+      addEvent('ev-lock', isLocked ? 'Room locked — no new participants' : 'Room unlocked');
+    } catch (_) {}
+  });
+
+  sseSource.addEventListener('meeting_ended', () => {
+    handleMeetingEnded();
+  });
+
+  sseSource.onerror = () => {
+    if (meetingEnded) return;
+    if (_sseRetryTimer) return;
+    if (sseSource) { sseSource.close(); sseSource = null; }
+    const s = Math.round(_sseBackoff / 1000);
+    addEvent('ev-system', `Monitor stream lost — reconnecting in ${s}s…`);
+    _sseRetryTimer = setTimeout(() => {
+      _sseRetryTimer = null;
+      if (!meetingEnded) {
+        connectSSE();
+        _sseBackoff = Math.min(_sseBackoff * 2, 30000);
+      }
+    }, _sseBackoff);
+  };
 }
 
-function openWarnModal(uid, e) {
-  if (e) e.stopPropagation();
-  warnTargetUid = uid;
-  const p = participants[uid];
-  document.getElementById('warn-modal').querySelector('h3').textContent = `Warn: ${p ? p.name : 'Participant'}`;
-  document.getElementById('warn-message').value = '';
-  document.getElementById('warn-modal-backdrop').classList.add('open');
-  setTimeout(() => document.getElementById('warn-message').focus(), 80);
+// ── Heartbeat ─────────────────────────────────────────────────────────
+function startHeartbeat() {
+  stopHeartbeat();
+  heartbeatTimer = setInterval(async () => {
+    if (meetingEnded) { stopHeartbeat(); return; }
+    try {
+      await apiFetch('POST', `/api/meetings/${meetingId}/participants/status`, {
+        cameraOff: false, micMuted: false, connectionQuality: 'good',
+      });
+    } catch (_) {}
+  }, 10000);
 }
+function stopHeartbeat() { clearInterval(heartbeatTimer); heartbeatTimer = null; }
 
-function closeWarnModal() {
-  document.getElementById('warn-modal-backdrop').classList.remove('open');
-  warnTargetUid = null;
-}
-
-async function submitWarn() {
-  const uid = warnTargetUid;
-  if (!uid) return;
-  const msg = document.getElementById('warn-message').value.trim();
-  if (!msg) { toast('Enter a warning message', 'error'); return; }
-  const p = participants[uid];
-  try {
-    await apiFetch('POST', `/api/meetings/${meetingId}/participants/${uid}/warn`, { message: msg });
-    addEvent('warn', `Warning sent to ${p ? p.name : uid}: "${msg}"`);
-    toast(`Warning sent to ${p ? p.name : uid}`, 'success');
-    closeWarnModal();
-  } catch (err) {
-    toast('Warn failed: ' + err.message, 'error');
-  }
-}
-
-async function kickParticipant(uid, e) {
-  if (e) e.stopPropagation();
-  const p = participants[uid];
-  if (!confirm(`Remove ${p ? p.name : 'this participant'} from the meeting?`)) return;
-  try {
-    await apiFetch('POST', `/api/meetings/${meetingId}/participants/${uid}/kick`);
-    participants[uid] = { ...p, status: 'kicked' };
-    patchParticipantCard(uid);
-    updateStats();
-    addEvent('kick', `${p ? p.name : uid} was kicked`);
-    toast(`${p ? p.name : uid} removed from meeting`, 'info');
-  } catch (err) {
-    toast('Kick failed: ' + err.message, 'error');
-  }
-}
-
-// ── Lock/Unlock ───────────────────────────────────────────────────────
-async function toggleLock() {
-  if (meetingEnded) return;
-  const action = isLocked ? 'unlock' : 'lock';
-  try {
-    await apiFetch('POST', `/api/meetings/${meetingId}/${action}`);
-    isLocked = !isLocked;
-    updateLockUI();
-    addEvent('lock', isLocked ? 'Room locked — no new participants can join' : 'Room unlocked');
-    toast(isLocked ? 'Room locked' : 'Room unlocked', 'info');
-  } catch (err) {
-    toast('Action failed: ' + err.message, 'error');
-  }
+// ── Meeting lifecycle ─────────────────────────────────────────────────
+function handleMeetingEnded() {
+  meetingEnded = true;
+  stopHeartbeat();
+  if (_sseRetryTimer) { clearTimeout(_sseRetryTimer); _sseRetryTimer = null; }
+  if (sseSource) { sseSource.close(); sseSource = null; }
+  document.getElementById('ended-banner').classList.add('show');
+  document.getElementById('end-btn').disabled  = true;
+  document.getElementById('lock-btn').disabled = true;
+  addEvent('ev-system', 'Meeting ended');
 }
 
 function updateLockUI() {
@@ -834,343 +1071,211 @@ function updateLockUI() {
   }
 }
 
-// ── End Meeting ───────────────────────────────────────────────────────
-async function endMeeting() {
+// ── Global event log ──────────────────────────────────────────────────
+function addEvent(type, msg) {
+  const now = new Date().toLocaleTimeString([], { hour:'2-digit', minute:'2-digit', second:'2-digit' });
+  eventLog.unshift({ type, msg, time: now });
+  if (eventLog.length > 80) eventLog.length = 80;
+  renderEventLog();
+}
+
+function renderEventLog() {
+  const list = document.getElementById('event-log-list');
+  if (!eventLog.length) {
+    list.innerHTML = '<div style="padding:10px;text-align:center;color:var(--slate);font-size:12px">No events yet</div>';
+    return;
+  }
+  list.innerHTML = eventLog.map(ev => `
+    <div class="log-entry ${ev.type}">
+      <span class="log-time">${ev.time}</span>
+      <span class="log-msg">${escHtml(ev.msg)}</span>
+    </div>`).join('');
+}
+
+function clearEventLog() { eventLog = []; renderEventLog(); }
+
+function toggleGlobalLog() {
+  logOpen = !logOpen;
+  document.getElementById('global-log').classList.toggle('open', logOpen);
+  document.getElementById('log-toggle-btn').textContent = logOpen ? '✕ Close Log' : '📋 Event Log';
+}
+
+// ── Jitsi video room (opens separately) ──────────────────────────────
+function openJitsiRoom() {
+  if (jitsiRoomUrl) window.open(jitsiRoomUrl, '_blank');
+}
+
+// ── Actions ───────────────────────────────────────────────────────────
+async function toggleFlag(uid) {
+  const p = participants[uid];
+  if (!p) return;
+  if (p.flagged) {
+    await unflagParticipant(uid, null);
+  } else {
+    await flagParticipant(uid, null);
+  }
+}
+
+async function flagParticipant(uid, e) {
+  if (e) e.stopPropagation();
+  const p = participants[uid];
+  if (!p) return;
+  try {
+    await apiFetch('POST', `/api/meetings/${meetingId}/participants/${uid}/flag`, { reason: 'Flagged by invigilator' });
+    participants[uid] = { ...p, flagged: true, isFlagged: true };
+    patchStudentCard(uid);
+    updateStats();
+    if (selectedUid === uid) renderDetailPanel(uid);
+    addEvent('ev-flag', `${p.name} was flagged`);
+    toast(`${p.name} flagged`, 'info');
+  } catch (err) { toast('Flag failed: ' + err.message, 'error'); }
+}
+
+async function unflagParticipant(uid, e) {
+  if (e) e.stopPropagation();
+  const p = participants[uid];
+  if (!p) return;
+  try {
+    await apiFetch('POST', `/api/meetings/${meetingId}/participants/${uid}/unflag`);
+    participants[uid] = { ...p, flagged: false, isFlagged: false };
+    patchStudentCard(uid);
+    updateStats();
+    if (selectedUid === uid) renderDetailPanel(uid);
+    addEvent('ev-flag', `${p.name} flag removed`);
+    toast(`${p.name} unflagged`, 'success');
+  } catch (err) { toast('Unflag failed: ' + err.message, 'error'); }
+}
+
+function openWarnModal(uid, e) {
+  if (e) e.stopPropagation();
+  warnTargetUid = uid;
+  const p = participants[uid];
+  document.getElementById('warn-modal').querySelector('h3').textContent = `Warn: ${p ? p.name : 'Participant'}`;
+  document.getElementById('warn-message').value = '';
+  document.getElementById('warn-modal-backdrop').classList.add('open');
+  setTimeout(() => document.getElementById('warn-message').focus(), 80);
+}
+function closeWarnModal() {
+  document.getElementById('warn-modal-backdrop').classList.remove('open');
+  warnTargetUid = null;
+}
+async function submitWarn() {
+  const uid = warnTargetUid;
+  if (!uid) return;
+  const msg = document.getElementById('warn-message').value.trim();
+  if (!msg) { toast('Enter a warning message', 'error'); return; }
+  const p = participants[uid];
+  try {
+    await apiFetch('POST', `/api/meetings/${meetingId}/participants/${uid}/warn`, { message: msg });
+    addEvent('ev-warn', `Warning sent to ${p ? p.name : uid}: "${msg}"`);
+    toast(`Warning sent to ${p ? p.name : uid}`, 'success');
+    closeWarnModal();
+  } catch (err) { toast('Warn failed: ' + err.message, 'error'); }
+}
+
+async function kickParticipant(uid, e) {
+  if (e) e.stopPropagation();
+  const p = participants[uid];
+  if (!confirm(`Remove ${p ? p.name : 'this participant'} from the session?`)) return;
+  try {
+    await apiFetch('POST', `/api/meetings/${meetingId}/participants/${uid}/kick`);
+    participants[uid] = { ...p, status: 'kicked' };
+    patchStudentCard(uid);
+    updateStats();
+    if (selectedUid === uid) renderDetailPanel(uid);
+    addEvent('ev-kick', `${p ? p.name : uid} was removed`);
+    toast(`${p ? p.name : uid} removed`, 'info');
+  } catch (err) { toast('Kick failed: ' + err.message, 'error'); }
+}
+
+async function toggleLock() {
   if (meetingEnded) return;
-  if (!confirm('End this meeting for ALL participants? This cannot be undone.')) return;
+  const action = isLocked ? 'unlock' : 'lock';
+  try {
+    await apiFetch('POST', `/api/meetings/${meetingId}/${action}`);
+    isLocked = !isLocked;
+    updateLockUI();
+    addEvent('ev-lock', isLocked ? 'Room locked' : 'Room unlocked');
+    toast(isLocked ? 'Room locked' : 'Room unlocked', 'info');
+  } catch (err) { toast('Failed: ' + err.message, 'error'); }
+}
+
+async function endMeeting() {
+  if (!confirm('End this session? All participants will be marked as left.')) return;
   try {
     await apiFetch('POST', `/api/meetings/${meetingId}/end`);
     handleMeetingEnded();
-  } catch (err) {
-    toast('Failed to end meeting: ' + err.message, 'error');
-  }
+    toast('Session ended.', 'info');
+  } catch (err) { toast('Failed to end meeting: ' + err.message, 'error'); }
 }
 
-function handleMeetingEnded() {
-  meetingEnded = true;
-  const banner = document.getElementById('ended-banner');
-  if (banner) { banner.style.display = 'flex'; }
-  document.getElementById('end-btn').disabled  = true;
-  document.getElementById('lock-btn').disabled = true;
-  addEvent('system', 'Meeting ended');
-  toast('Meeting has ended', 'info');
-  stopHeartbeat();
-  if (_sseRetryTimer) { clearTimeout(_sseRetryTimer); _sseRetryTimer = null; }
-  if (sseSource) { sseSource.close(); sseSource = null; }
-}
-
-// ── SSE ───────────────────────────────────────────────────────────────
-function connectSSE() {
-  if (sseSource) { sseSource.close(); }
-  const url = `${API}/api/meetings/${meetingId}/monitor/stream?token=${encodeURIComponent(authToken)}`;
-  sseSource = new EventSource(url);
-
-  sseSource.addEventListener('snapshot', e => {
-    _sseBackoff = 1000; // reset backoff on successful connection
-    try {
-      const payload = JSON.parse(e.data);
-      applySnapshot(payload.participants || payload);
-    } catch {}
-  });
-
-  sseSource.addEventListener('participant_status', e => {
-    try {
-      const p = JSON.parse(e.data);
-      if (!p || !p.uid) return;
-      const existing = participants[p.uid] || {};
-      participants[p.uid] = { ...existing, ...p };
-      patchParticipantCard(p.uid);
-      updateStats();
-    } catch {}
-  });
-
-  sseSource.addEventListener('participant_flagged', e => {
-    try {
-      const d = JSON.parse(e.data);
-      if (!d || !d.uid) return;
-      if (participants[d.uid]) {
-        participants[d.uid].flagged = d.flagged !== false;
-        patchParticipantCard(d.uid);
-        updateStats();
-        addEvent('flag', `${participants[d.uid].name} ${d.flagged !== false ? 'flagged' : 'unflagged'}`);
-      }
-    } catch {}
-  });
-
-  sseSource.addEventListener('warning_sent', e => {
-    try {
-      const d = JSON.parse(e.data);
-      const name = (d && d.uid && participants[d.uid]) ? participants[d.uid].name : (d && d.uid ? d.uid : 'Participant');
-      addEvent('warn', `Warning sent to ${name}` + (d && d.message ? `: "${d.message}"` : ''));
-    } catch {}
-  });
-
-  sseSource.addEventListener('participant_kicked', e => {
-    try {
-      const d = JSON.parse(e.data);
-      if (!d || !d.uid) return;
-      const p = participants[d.uid];
-      if (p) {
-        participants[d.uid] = { ...p, status: 'kicked' };
-        patchParticipantCard(d.uid);
-        updateStats();
-        addEvent('kick', `${p.name} was removed from the meeting`);
-      }
-    } catch {}
-  });
-
-  sseSource.addEventListener('participant_joined', e => {
-    try {
-      const p = JSON.parse(e.data);
-      if (!p || !p.uid) return;
-      participants[p.uid] = { ...participants[p.uid], ...p };
-      renderParticipantList();
-      addEvent('join', `${p.name || p.uid} joined the meeting`);
-    } catch {}
-  });
-
-  sseSource.addEventListener('participant_left', e => {
-    try {
-      const d = JSON.parse(e.data);
-      if (!d || !d.uid) return;
-      const p = participants[d.uid];
-      if (p) {
-        participants[d.uid] = { ...p, status: 'disconnected' };
-        patchParticipantCard(d.uid);
-        updateStats();
-        addEvent('leave', `${p.name} left the meeting`);
-      }
-    } catch {}
-  });
-
-  sseSource.addEventListener('room_locked', e => {
-    try {
-      const d = JSON.parse(e.data);
-      isLocked = d && d.locked !== false;
-      updateLockUI();
-      addEvent('lock', isLocked ? 'Room locked' : 'Room unlocked');
-    } catch {}
-  });
-
-  sseSource.addEventListener('meeting_ended', () => {
-    handleMeetingEnded();
-  });
-
-  sseSource.onerror = () => {
-    if (meetingEnded) return;
-    if (_sseRetryTimer) return; // retry already scheduled
-    if (sseSource) { sseSource.close(); sseSource = null; }
-    const delaySec = Math.round(_sseBackoff / 1000);
-    addEvent('system', `Monitor stream lost — reconnecting in ${delaySec}s…`);
-    _sseRetryTimer = setTimeout(() => {
-      _sseRetryTimer = null;
-      if (!meetingEnded) {
-        connectSSE();
-        _sseBackoff = Math.min(_sseBackoff * 2, 30000);
-      }
-    }, _sseBackoff);
-  };
-}
-
-// ── Heartbeat ─────────────────────────────────────────────────────────
-function startHeartbeat() {
-  stopHeartbeat();
-  heartbeatTimer = setInterval(async () => {
-    if (meetingEnded) { stopHeartbeat(); return; }
-    try {
-      await apiFetch('POST', `/api/meetings/${meetingId}/participants/status`, {
-        cameraOff: false,
-        micMuted: false,
-        connectionQuality: 'good'
-      });
-    } catch {}
-  }, 10000);
-}
-
-function stopHeartbeat() {
-  if (heartbeatTimer) { clearInterval(heartbeatTimer); heartbeatTimer = null; }
-}
-
-// ── Jitsi embed ───────────────────────────────────────────────────────
-function loadJitsi(jitsiConfig, jitsiToken, selfHosted) {
-  const domain = jitsiConfig.domain || jitsiConfig.serverUrl || 'meet.jit.si';
-  const cleanDomain = domain.replace(/^https?:\/\//, '').replace(/\/$/, '');
-  const scriptSrc   = `https://${cleanDomain}/external_api.js`;
-
-  const script = document.createElement('script');
-  script.src   = scriptSrc;
-  script.onerror = () => {
-    document.getElementById('jitsi-placeholder').innerHTML = `
-      <div class="icon">⚠️</div>
-      <p>Could not load Jitsi video embed. The meeting is still active — use a separate browser tab to join.</p>`;
-  };
-  script.onload = () => {
-    try {
-      const container = document.getElementById('jitsi-container');
-      const opts = {
-        roomName:      jitsiConfig.roomName || meetingId,
-        width:         '100%',
-        height:        '100%',
-        parentNode:    container,
-        userInfo:      { displayName: jitsiConfig.displayName || 'Invigilator' },
-        configOverwrite: Object.assign({
-          startWithAudioMuted: false,
-          startWithVideoMuted: false,
-          enableWelcomePage:   false,
-          prejoinPageEnabled:  false,
-        }, jitsiConfig.configOverwrite || {}),
-        interfaceConfigOverwrite: Object.assign({
-          TOOLBAR_BUTTONS: [
-            'microphone','camera','closedcaptions','desktop','fullscreen',
-            'fodeviceselection','hangup','chat','recording','raisehand',
-            'videoquality','filmstrip','invite','feedback','stats','shortcuts',
-            'tileview','select-background','mute-everyone','security'
-          ],
-          SHOW_JITSI_WATERMARK:     false,
-          SHOW_WATERMARK_FOR_GUESTS: false,
-        }, jitsiConfig.interfaceConfigOverwrite || {}),
-      };
-
-      if (selfHosted && jitsiToken) {
-        opts.jwt = jitsiToken;
-      }
-
-      // Remove placeholder
-      const placeholder = document.getElementById('jitsi-placeholder');
-      if (placeholder) placeholder.remove();
-
-      jitsiAPI = new window.JitsiMeetExternalAPI(cleanDomain, opts);
-
-      jitsiAPI.addEventListener('audioMuteStatusChanged', ({ muted }) => {
-        apiFetch('POST', `/api/meetings/${meetingId}/participants/status`, {
-          micMuted: muted, cameraOff: false, connectionQuality: 'good'
-        }).catch(() => {});
-      });
-
-      jitsiAPI.addEventListener('videoMuteStatusChanged', ({ muted }) => {
-        apiFetch('POST', `/api/meetings/${meetingId}/participants/status`, {
-          cameraOff: muted, micMuted: false, connectionQuality: 'good'
-        }).catch(() => {});
-      });
-
-      jitsiAPI.addEventListener('participantJoined', ({ id, displayName }) => {
-        addEvent('join', `${displayName || id} joined`);
-      });
-
-      jitsiAPI.addEventListener('participantLeft', ({ id }) => {
-        const p = Object.values(participants).find(pp => pp.jitsiId === id || pp.uid === id);
-        addEvent('leave', `${p ? p.name : id} left`);
-      });
-
-      jitsiAPI.addEventListener('participantKickedOut', ({ kicked }) => {
-        addEvent('kick', `Participant ${kicked.id} was kicked`);
-      });
-
-      jitsiAPI.addEventListener('readyToClose', () => {
-        if (!meetingEnded) handleMeetingEnded();
-      });
-
-    } catch (err) {
-      const placeholder = document.getElementById('jitsi-placeholder');
-      if (placeholder) placeholder.innerHTML = `
-        <div class="icon">⚠️</div>
-        <p>Jitsi embed failed to start: ${escHtml(err.message)}</p>`;
-    }
-  };
-  document.head.appendChild(script);
-}
-
-// ── Initial data load ─────────────────────────────────────────────────
+// ── Init ──────────────────────────────────────────────────────────────
 async function init() {
-  if (!authToken) {
-    showError('🔒', 'Not Signed In', 'No authentication token found. Please log in from the main portal first.');
-    return;
-  }
-  if (!meetingId) {
-    showError('❌', 'No Meeting ID', 'Please provide a ?meeting= parameter in the URL.');
-    return;
-  }
+  if (!meetingId) return showError('⚠️', 'Invalid Link', 'No meeting ID in URL.');
+  if (!authToken) return showError('🔒', 'Not Signed In', 'Please log in to DIKLY first.');
 
-  // Load monitor data (this also enforces moderator access — 403 if not a moderator)
+  // Load meeting + participant snapshot
   try {
     const data = await apiFetch('GET', `/api/meetings/${meetingId}/monitor`);
-    const { meeting, participants: pList, stats } = data.data || data;
+    const d    = data.data || data;
+    meetingData = d.meeting || d;
 
-    meetingData = meeting || {};
-    isLocked    = !!(meetingData.locked || meetingData.isLocked);
-
-    // Populate header
-    document.getElementById('meeting-title').textContent = meetingData.title || meetingData.name || 'Live Meeting';
+    document.getElementById('meeting-title').textContent =
+      meetingData.title || 'Live Meeting';
     document.getElementById('meeting-meta').textContent  = [
-      meetingData.code && `Code: ${meetingData.code}`,
-      meetingData.course && meetingData.course.name,
-      meetingData.startTime && `Started ${new Date(meetingData.startTime).toLocaleTimeString()}`,
-    ].filter(Boolean).join(' · ') || 'Live Meeting Monitor';
+      meetingData.meetingType ? meetingData.meetingType.replace(/_/g,' ') : null,
+      meetingData.actualStart ? `Started ${new Date(meetingData.actualStart).toLocaleTimeString()}` : null,
+    ].filter(Boolean).join(' · ') || 'Monitoring Dashboard';
 
+    // Build Jitsi room URL for "Video Room" button
+    const domain = process?.env?.JITSI_DOMAIN || meetingData.domain || 'meet.jit.si';
+    if (meetingData.roomName) {
+      jitsiRoomUrl = `https://${domain}/${meetingData.roomName}`;
+      document.getElementById('jitsi-btn').style.display = '';
+    }
+
+    isLocked = !!meetingData.isLocked;
     document.getElementById('lock-btn').style.display = '';
     updateLockUI();
 
-    applySnapshot(pList || []);
+    applySnapshot(d.participants || []);
 
-    // Check if already ended
-    if (meetingData.status === 'ended' || meetingData.ended) {
-      handleMeetingEnded();
-    }
+    if (meetingData.status === 'ended') handleMeetingEnded();
   } catch (err) {
     if (err.status === 403 || err.status === 401) {
-      showError('🚫', 'Not Authorised', 'You do not have permission to monitor this meeting.');
-      return;
-    } else if (err.status === 404) {
-      showError('🔍', 'Meeting Not Found', 'This meeting could not be found.');
-      return;
+      return showError('🚫', 'Not Authorised', 'You do not have permission to monitor this session.');
     }
-    // Non-fatal — show with empty state
+    if (err.status === 404) {
+      return showError('🔍', 'Meeting Not Found', 'This session could not be found.');
+    }
+    // Non-fatal — show empty dashboard
     document.getElementById('meeting-title').textContent = 'Live Meeting';
     document.getElementById('meeting-meta').textContent  = 'Monitor · ID: ' + meetingId;
-    document.getElementById('lock-btn').style.display = '';
-    renderParticipantList();
-    addEvent('system', 'Warning: could not load initial meeting data — ' + err.message);
+    document.getElementById('lock-btn').style.display    = '';
+    renderStudentGrid();
+    addEvent('ev-system', 'Could not load initial data — ' + err.message);
   }
 
-  // Load Jitsi embed
-  try {
-    const jd = await apiFetch('GET', `/api/meetings/${meetingId}/join`);
-    const { jitsiConfig, jitsiToken, selfHosted } = jd.data || jd;
-    if (jitsiConfig) loadJitsi(jitsiConfig, jitsiToken, selfHosted);
-    else throw new Error('No jitsiConfig in response');
-  } catch (err) {
-    document.getElementById('jitsi-placeholder').innerHTML = `
-      <div class="icon">📹</div>
-      <p>Live video embed is unavailable. Participants can still join via their own link.</p>
-      <p style="font-size:12px;color:var(--navy3);margin-top:8px">${escHtml(err.message)}</p>`;
-  }
-
-  // Show the page
   hideLoading();
-  addEvent('system', 'Monitor session started');
+  addEvent('ev-system', 'Monitor session started');
 
-  // Connect SSE and heartbeat
   if (!meetingEnded) {
     connectSSE();
     startHeartbeat();
   }
 }
 
-// ── Keyboard shortcuts ────────────────────────────────────────────────
+// Keyboard shortcuts
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') {
-    if (document.getElementById('warn-modal-backdrop').classList.contains('open')) {
-      closeWarnModal();
-    }
+    if (document.getElementById('warn-modal-backdrop').classList.contains('open')) closeWarnModal();
+    else clearSelection();
   }
 });
-
-// Click outside warn modal to close
-document.getElementById('warn-modal-backdrop').addEventListener('click', function(e) {
-  if (e.target === this) closeWarnModal();
+document.getElementById('warn-modal-backdrop').addEventListener('click', function(ev) {
+  if (ev.target === this) closeWarnModal();
 });
 
-// ── Boot ──────────────────────────────────────────────────────────────
 init();
 </script>
 </body>
