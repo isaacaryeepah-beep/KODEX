@@ -1,0 +1,573 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>DIKLY — Class in Progress</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:       #0a0c10;
+      --surface:  #12151c;
+      --card:     #1a1e28;
+      --border:   #2a2f3d;
+      --accent:   #3b82f6;
+      --success:  #22c55e;
+      --warning:  #f59e0b;
+      --danger:   #ef4444;
+      --text:     #e2e8f0;
+      --muted:    #6b7280;
+      --bar-h:    52px;
+      --ctrl-h:   60px;
+    }
+
+    html, body {
+      height: 100%; width: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      overflow: hidden;
+    }
+
+    /* ── Top bar ── */
+    #topBar {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+      height: var(--bar-h);
+      background: rgba(10,12,16,.92);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; gap: 10px;
+      padding: 0 14px;
+      transition: opacity .3s;
+    }
+    #topBar.hidden { opacity: 0; pointer-events: none; }
+
+    .logo-chip {
+      width: 32px; height: 32px; flex-shrink: 0;
+      background: var(--accent); border-radius: 8px;
+      display: grid; place-items: center;
+      font-weight: 800; font-size: 15px; color: #fff;
+    }
+    #meetingTitle {
+      font-weight: 600; font-size: 14px;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      max-width: 220px; flex: 1;
+    }
+    #liveBadge {
+      flex-shrink: 0;
+      display: flex; align-items: center; gap: 5px;
+      background: rgba(239,68,68,.15); border: 1px solid rgba(239,68,68,.3);
+      color: #f87171; border-radius: 99px;
+      padding: 2px 8px; font-size: 11px; font-weight: 600;
+    }
+    .live-dot {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: var(--danger);
+      animation: pulse 1.4s ease-in-out infinite;
+    }
+    @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .4; } }
+
+    #participantBadge {
+      flex-shrink: 0;
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 99px; padding: 2px 9px;
+      font-size: 11px; color: var(--muted);
+      cursor: default;
+    }
+
+    .bar-btn {
+      flex-shrink: 0;
+      height: 30px; padding: 0 10px;
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 8px; color: var(--text);
+      font-size: 12px; font-weight: 500;
+      cursor: pointer; display: flex; align-items: center; gap: 5px;
+      transition: background .2s;
+    }
+    .bar-btn:hover { background: var(--border); }
+    .bar-btn.danger { background: rgba(239,68,68,.15); border-color: rgba(239,68,68,.3); color: #f87171; }
+    .bar-btn.danger:hover { background: rgba(239,68,68,.25); }
+
+    /* ── Jitsi container ── */
+    #jitsiWrap {
+      position: fixed;
+      top: var(--bar-h);
+      left: 0; right: 0;
+      bottom: var(--ctrl-h);
+    }
+    #jitsiMount {
+      width: 100%; height: 100%;
+      background: #000;
+    }
+    #jitsiMount iframe {
+      width: 100% !important;
+      height: 100% !important;
+      border: none;
+    }
+
+    /* ── Bottom controls bar ── */
+    #ctrlBar {
+      position: fixed; bottom: 0; left: 0; right: 0; z-index: 100;
+      height: var(--ctrl-h);
+      background: rgba(10,12,16,.92);
+      backdrop-filter: blur(12px);
+      border-top: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: center;
+      gap: 10px; padding: 0 12px;
+    }
+
+    .ctrl-btn {
+      height: 40px; min-width: 40px; padding: 0 14px;
+      border-radius: 10px; border: 1px solid var(--border);
+      background: var(--card); color: var(--text);
+      font-size: 12px; font-weight: 600;
+      cursor: pointer; display: flex; align-items: center; gap: 7px;
+      transition: background .15s, transform .1s;
+      white-space: nowrap;
+    }
+    .ctrl-btn:active { transform: scale(.97); }
+    .ctrl-btn:hover  { background: var(--border); }
+    .ctrl-btn.active { background: rgba(59,130,246,.2); border-color: var(--accent); color: #60a5fa; }
+    .ctrl-btn.danger { background: rgba(239,68,68,.15); border-color: rgba(239,68,68,.3); color: #f87171; }
+    .ctrl-btn.danger:hover { background: rgba(239,68,68,.25); }
+    .ctrl-btn.success { background: rgba(34,197,94,.15); border-color: rgba(34,197,94,.3); color: #4ade80; }
+
+    .ctrl-icon { font-size: 16px; flex-shrink: 0; }
+    .ctrl-label { display: inline; }
+
+    /* ── Loading overlay ── */
+    #loadOverlay {
+      position: fixed; inset: 0; z-index: 999;
+      background: var(--bg);
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 20px;
+    }
+    #loadOverlay.hidden { display: none; }
+    .load-logo {
+      width: 56px; height: 56px;
+      background: var(--accent); border-radius: 14px;
+      display: grid; place-items: center;
+      font-weight: 800; font-size: 28px; color: #fff;
+    }
+    .load-title  { font-size: 20px; font-weight: 700; }
+    .load-status { font-size: 13px; color: var(--muted); }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spinner {
+      width: 28px; height: 28px;
+      border: 3px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin .8s linear infinite;
+    }
+
+    /* ── Error overlay ── */
+    #errorOverlay {
+      position: fixed; inset: 0; z-index: 999;
+      background: var(--bg);
+      display: none; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 14px; text-align: center; padding: 24px;
+    }
+    #errorOverlay.visible { display: flex; }
+    .err-icon  { font-size: 48px; }
+    .err-title { font-size: 20px; font-weight: 700; color: var(--danger); }
+    .err-msg   { font-size: 13px; color: var(--muted); max-width: 360px; line-height: 1.6; }
+    .err-btn   {
+      padding: 10px 24px; background: var(--accent); color: #fff;
+      border: none; border-radius: 10px; font-size: 13px; font-weight: 600;
+      cursor: pointer; margin-top: 6px;
+    }
+
+    /* ── Reconnect toast ── */
+    #reconnectToast {
+      position: fixed; top: 68px; left: 50%; transform: translateX(-50%);
+      z-index: 200; background: var(--warning); color: #000;
+      padding: 8px 18px; border-radius: 99px;
+      font-size: 12px; font-weight: 600;
+      display: none; align-items: center; gap: 8px;
+    }
+    #reconnectToast.visible { display: flex; }
+
+    /* ── Recording indicator ── */
+    #recIndicator {
+      display: none; align-items: center; gap: 5px;
+      background: rgba(239,68,68,.2); border: 1px solid rgba(239,68,68,.4);
+      color: #f87171; border-radius: 99px;
+      padding: 2px 9px; font-size: 11px; font-weight: 600;
+      flex-shrink: 0;
+    }
+    #recIndicator.visible { display: flex; }
+
+    /* ── Mobile ── */
+    @media (max-width: 600px) {
+      :root { --bar-h: 48px; --ctrl-h: 70px; }
+      #meetingTitle { max-width: 120px; }
+      .ctrl-label   { display: none; }
+      .ctrl-btn     { min-width: 44px; padding: 0 10px; }
+      #ctrlBar      { gap: 6px; flex-wrap: wrap; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- Loading screen -->
+<div id="loadOverlay">
+  <div class="load-logo">D</div>
+  <div class="load-title">DIKLY Classes</div>
+  <div class="spinner"></div>
+  <div class="load-status" id="loadStatus">Connecting to meeting…</div>
+</div>
+
+<!-- Error screen -->
+<div id="errorOverlay">
+  <div class="err-icon">⚠️</div>
+  <div class="err-title">Cannot Join Meeting</div>
+  <div class="err-msg" id="errMsg">Something went wrong. Please try again.</div>
+  <button class="err-btn" onclick="location.reload()">Retry</button>
+  <button class="err-btn" style="background:var(--card);border:1px solid var(--border);color:var(--text)" onclick="history.back()">Go Back</button>
+</div>
+
+<!-- Reconnect toast -->
+<div id="reconnectToast">
+  <div class="spinner" style="width:14px;height:14px;border-width:2px"></div>
+  Reconnecting…
+</div>
+
+<!-- Top bar -->
+<div id="topBar">
+  <div class="logo-chip">D</div>
+  <div id="meetingTitle">Loading…</div>
+  <div id="liveBadge"><div class="live-dot"></div>LIVE</div>
+  <div id="recIndicator"><div class="live-dot" style="background:#ef4444"></div>REC</div>
+  <div id="participantBadge">👥 —</div>
+  <button class="bar-btn" id="monitorBtn" onclick="openMonitor()" title="Open proctoring monitor">👁 Monitor</button>
+  <button class="bar-btn" id="toggleBarBtn" onclick="toggleBar()" title="Hide controls">⊟</button>
+</div>
+
+<!-- Jitsi embed -->
+<div id="jitsiWrap">
+  <div id="jitsiMount"></div>
+</div>
+
+<!-- Bottom controls bar -->
+<div id="ctrlBar">
+  <button class="ctrl-btn" id="muteAllBtn" onclick="muteAll()" title="Mute all participants">
+    <span class="ctrl-icon">🔇</span><span class="ctrl-label">Mute All</span>
+  </button>
+  <button class="ctrl-btn" id="lockBtn" onclick="toggleLock()" title="Lock/unlock room">
+    <span class="ctrl-icon" id="lockIcon">🔓</span><span class="ctrl-label" id="lockLabel">Lock Room</span>
+  </button>
+  <button class="ctrl-btn" id="recBtn" onclick="toggleRecording()" title="Start/stop recording">
+    <span class="ctrl-icon">⏺</span><span class="ctrl-label" id="recLabel">Record</span>
+  </button>
+  <button class="ctrl-btn" id="tileBtn" onclick="toggleTile()" title="Toggle tile view">
+    <span class="ctrl-icon">⊞</span><span class="ctrl-label">Tile View</span>
+  </button>
+  <button class="ctrl-btn" onclick="openMonitor()" title="Proctoring dashboard">
+    <span class="ctrl-icon">📊</span><span class="ctrl-label">Dashboard</span>
+  </button>
+  <button class="ctrl-btn danger" id="endBtn" onclick="confirmEnd()" title="End meeting for everyone">
+    <span class="ctrl-icon">⏹</span><span class="ctrl-label">End Class</span>
+  </button>
+</div>
+
+<script>
+// ── Config ────────────────────────────────────────────────────────────────────
+const params     = new URLSearchParams(location.search);
+const MEETING_ID = params.get('meeting') || params.get('id') || '';
+const AUTH_TOKEN = params.get('token') || localStorage.getItem('token') || localStorage.getItem('jwt_token') || '';
+const API_BASE   = (() => {
+  const h = location.hostname;
+  if (h === 'localhost' || h === '127.0.0.1') return '';
+  const parts = h.split('.');
+  if (['app','monitor','admin','lecturer'].includes(parts[0])) {
+    return location.protocol + '//api.' + parts.slice(1).join('.');
+  }
+  return '';
+})();
+
+// ── State ─────────────────────────────────────────────────────────────────────
+let api          = null;
+let sessionData  = null;
+let isRecording  = false;
+let isLocked     = false;
+let participantCount = 0;
+let isEnding     = false;
+let barHidden    = false;
+let reconnectAttempts = 0;
+const MAX_RECONNECT   = 5;
+
+// ── Boot ──────────────────────────────────────────────────────────────────────
+(async () => {
+  if (!MEETING_ID) return showError('No meeting ID provided. Check the link you were given.');
+  if (!AUTH_TOKEN)  return showError('Not authenticated. Please log in to DIKLY first.');
+
+  setStatus('Loading meeting details…');
+  try {
+    const r = await fetch(`${API_BASE}/api/meetings/${MEETING_ID}/join`, {
+      headers: { Authorization: 'Bearer ' + AUTH_TOKEN },
+    });
+    if (!r.ok) {
+      const body = await r.json().catch(() => ({}));
+      throw new Error(body.error || body.message || 'HTTP ' + r.status);
+    }
+    const body = await r.json();
+    sessionData  = body.data;
+
+    if (!sessionData?.isModerator) {
+      return showError('This page is for class hosts only. Students should use the regular join link.');
+    }
+
+    document.getElementById('meetingTitle').textContent =
+      sessionData.meeting?.title || 'Class Session';
+    isLocked = sessionData.meeting?.isLocked || false;
+    updateLockUI();
+
+    setStatus('Starting meeting room…');
+    await loadJitsiAPI(sessionData.jitsiConfig.domain);
+    initJitsi();
+  } catch (e) {
+    showError(e.message);
+  }
+})();
+
+// ── Load Jitsi External API script ───────────────────────────────────────────
+function loadJitsiAPI(domain) {
+  return new Promise((resolve, reject) => {
+    if (window.JitsiMeetExternalAPI) return resolve();
+    const script = document.createElement('script');
+    script.src = `https://${domain}/external_api.js`;
+    script.onload  = resolve;
+    script.onerror = () => reject(new Error(`Could not load Jitsi from ${domain}. Check your network or Jitsi server.`));
+    document.head.appendChild(script);
+  });
+}
+
+// ── Initialise the embedded meeting ──────────────────────────────────────────
+function initJitsi() {
+  if (api) { try { api.dispose(); } catch (_) {} api = null; }
+
+  const cfg = sessionData.jitsiConfig;
+
+  api = new JitsiMeetExternalAPI(cfg.domain, {
+    roomName:   cfg.roomName,
+    jwt:        sessionData.jitsiToken,
+    width:      '100%',
+    height:     '100%',
+    parentNode: document.getElementById('jitsiMount'),
+    userInfo: {
+      displayName: cfg.displayName,
+      email:       cfg.email || '',
+    },
+    configOverwrite: {
+      ...cfg.configOverwrite,
+      // Lecturer always starts unmuted with camera on
+      startWithAudioMuted: false,
+      startWithVideoMuted: false,
+      prejoinPageEnabled:  false,
+      subject:             cfg.subject,
+    },
+    interfaceConfigOverwrite: {
+      ...cfg.interfaceConfigOverwrite,
+      // Ensure no Jitsi chrome leaks through
+      SHOW_JITSI_WATERMARK:      false,
+      SHOW_WATERMARK_FOR_GUESTS: false,
+      SHOW_BRAND_WATERMARK:      false,
+      SHOW_POWERED_BY:           false,
+      MOBILE_APP_PROMO:          false,
+      NATIVE_APP_NAME:           'DIKLY',
+      PROVIDER_NAME:             'DIKLY',
+      APP_NAME:                  'DIKLY Classes',
+      DEFAULT_BACKGROUND:        '#0a0c10',
+      HIDE_INVITE_MORE_HEADER:   true,
+    },
+  });
+
+  api.addEventListener('videoConferenceJoined', onJoined);
+  api.addEventListener('videoConferenceLeft',   onLeft);
+  api.addEventListener('participantJoined',     onParticipantChange);
+  api.addEventListener('participantLeft',       onParticipantChange);
+  api.addEventListener('recordingStatusChanged', onRecordingChange);
+  api.addEventListener('tileViewChanged',        onTileChange);
+  api.addEventListener('connectionEstablished',  () => hideReconnectToast());
+  api.addEventListener('connectionFailed',       () => scheduleReconnect());
+}
+
+// ── Event handlers ────────────────────────────────────────────────────────────
+function onJoined() {
+  hide('loadOverlay');
+  reconnectAttempts = 0;
+  hideReconnectToast();
+  // Announce that monitoring is available
+  postBackend('start');
+}
+
+async function onLeft(data) {
+  if (isEnding) return;
+  if (data?.reason === 'kicked') {
+    showError('You were removed from the meeting.');
+    return;
+  }
+  // Unexpected leave — attempt reconnect
+  scheduleReconnect();
+}
+
+function onParticipantChange() {
+  try {
+    const info = api.getParticipantsInfo();
+    participantCount = info.length;
+    document.getElementById('participantBadge').textContent = `👥 ${participantCount}`;
+  } catch (_) {}
+}
+
+function onRecordingChange(data) {
+  isRecording = data.on;
+  document.getElementById('recLabel').textContent        = isRecording ? 'Stop Rec' : 'Record';
+  document.getElementById('recBtn').className            = `ctrl-btn ${isRecording ? 'success' : ''}`;
+  document.getElementById('recIndicator').className      = `${isRecording ? 'visible' : ''}`;
+}
+
+function onTileChange(data) {
+  document.getElementById('tileBtn').className = `ctrl-btn ${data.enabled ? 'active' : ''}`;
+}
+
+// ── Reconnect ─────────────────────────────────────────────────────────────────
+function scheduleReconnect() {
+  if (reconnectAttempts >= MAX_RECONNECT) {
+    showError('Connection lost after ' + MAX_RECONNECT + ' reconnect attempts. Please refresh the page.');
+    return;
+  }
+  reconnectAttempts++;
+  showReconnectToast();
+  const delay = Math.min(2000 * reconnectAttempts, 10000);
+  setTimeout(async () => {
+    try {
+      await postBackend('reconnect');
+      initJitsi();
+    } catch (_) {
+      scheduleReconnect();
+    }
+  }, delay);
+}
+
+// ── Lecturer controls ─────────────────────────────────────────────────────────
+function muteAll() {
+  if (!api) return;
+  api.executeCommand('muteEveryone');
+  flashBtn('muteAllBtn');
+}
+
+function toggleLock() {
+  isLocked = !isLocked;
+  updateLockUI();
+  postBackend(isLocked ? 'lock' : 'unlock');
+  if (api) api.executeCommand('toggleLobby');
+}
+
+function updateLockUI() {
+  document.getElementById('lockIcon').textContent  = isLocked ? '🔒' : '🔓';
+  document.getElementById('lockLabel').textContent = isLocked ? 'Unlock' : 'Lock Room';
+  document.getElementById('lockBtn').className     = `ctrl-btn ${isLocked ? 'active' : ''}`;
+}
+
+function toggleRecording() {
+  if (!api) return;
+  if (isRecording) {
+    api.executeCommand('stopRecording', 'file');
+  } else {
+    api.executeCommand('startRecording', { mode: 'file' });
+  }
+}
+
+function toggleTile() {
+  if (!api) return;
+  api.executeCommand('toggleTileView');
+}
+
+function toggleBar() {
+  barHidden = !barHidden;
+  document.getElementById('topBar').classList.toggle('hidden', barHidden);
+  document.getElementById('ctrlBar').style.display = barHidden ? 'none' : '';
+  document.getElementById('jitsiWrap').style.top    = barHidden ? '0' : 'var(--bar-h)';
+  document.getElementById('jitsiWrap').style.bottom = barHidden ? '0' : 'var(--ctrl-h)';
+  document.getElementById('toggleBarBtn').textContent = barHidden ? '⊞' : '⊟';
+}
+
+function openMonitor() {
+  const url = sessionData?.monitorUrl;
+  if (url) window.open(url, '_blank', 'noopener');
+}
+
+function confirmEnd() {
+  if (!confirm('End the class for all participants?')) return;
+  endMeeting();
+}
+
+async function endMeeting() {
+  isEnding = true;
+  try {
+    await postBackend('end');
+  } catch (_) {}
+  if (api) {
+    // endConference ends for all participants (moderator-only, Jitsi ≥ 9000)
+    // Fall back to hangup for older deployments
+    try { api.executeCommand('endConference'); }
+    catch (_) { try { api.executeCommand('hangup'); } catch (__) {} }
+    setTimeout(() => { try { api.dispose(); } catch (_) {} }, 1500);
+  }
+  setTimeout(() => { window.location.href = APP_BASE || '/'; }, 2000);
+}
+
+// ── Backend calls ─────────────────────────────────────────────────────────────
+async function postBackend(action) {
+  const routes = {
+    start:     `/api/meetings/${MEETING_ID}/preflight`,
+    reconnect: `/api/meetings/${MEETING_ID}/reconnect`,
+    lock:      `/api/meetings/${MEETING_ID}/lock`,
+    unlock:    `/api/meetings/${MEETING_ID}/unlock`,
+    end:       `/api/meetings/${MEETING_ID}/end`,
+  };
+  const url = routes[action];
+  if (!url) return;
+  return fetch(API_BASE + url, {
+    method:  'POST',
+    headers: { Authorization: 'Bearer ' + AUTH_TOKEN, 'Content-Type': 'application/json' },
+  });
+}
+
+// ── UI helpers ────────────────────────────────────────────────────────────────
+function setStatus(msg) { document.getElementById('loadStatus').textContent = msg; }
+
+function showError(msg) {
+  hide('loadOverlay');
+  document.getElementById('errMsg').textContent = msg;
+  document.getElementById('errorOverlay').classList.add('visible');
+}
+
+function hide(id) { document.getElementById(id).classList.add('hidden'); }
+
+function showReconnectToast() { document.getElementById('reconnectToast').classList.add('visible'); }
+function hideReconnectToast() { document.getElementById('reconnectToast').classList.remove('visible'); }
+
+function flashBtn(id) {
+  const btn = document.getElementById(id);
+  if (!btn) return;
+  btn.classList.add('active');
+  setTimeout(() => btn.classList.remove('active'), 1200);
+}
+
+// Compute APP_BASE for end-of-meeting redirect
+const APP_BASE = (() => {
+  const h = location.hostname;
+  if (h === 'localhost' || h === '127.0.0.1') return 'http://' + h + ':5000';
+  const parts = h.split('.');
+  if (['lecturer', 'app', 'admin'].includes(parts[0])) {
+    return location.protocol + '//' + h.replace(/^[^.]+\./, 'app.');
+  }
+  return location.protocol + '//' + h;
+})();
+</script>
+</body>
+</html>
