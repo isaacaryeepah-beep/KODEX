@@ -72,6 +72,7 @@ router.get('/:id/participant-stream', monitorCtrl.participantStream);
 router.post('/:id/participants/status', monitorCtrl.updateParticipantStatus);
 
 // ─── MODERATOR ACTIONS ON PARTICIPANTS ────────────────────────────────────────
+router.post('/:id/invigilation-mode',        monitorCtrl.setInvigilationMode);
 router.post('/:id/participants/:uid/flag',   loadMeeting, isModerator, monitorCtrl.flagParticipant);
 router.post('/:id/participants/:uid/unflag', loadMeeting, isModerator, monitorCtrl.unflagParticipant);
 router.post('/:id/participants/:uid/warn',   loadMeeting, isModerator, monitorCtrl.sendWarning);

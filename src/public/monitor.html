@@ -285,25 +285,38 @@
     ws.onerror = () => setStatus('error', 'WS Error');
   }
 
-  // ── SSE fallback (supplemental) ───────────────────────────────────────────
+  // ── SSE fallback (supplemental, with reconnection) ───────────────────────
+  let _sseRef = null;
+  let _sseRetry = 2000;
+
   function connectSse() {
-    const sse = new EventSource(`${API}/meetings/${meetingId}/monitor/stream?token=${encodeURIComponent(token)}`);
-    sse.addEventListener('snapshot', e => {
+    if (_sseRef) { try { _sseRef.close(); } catch(_) {} }
+    _sseRef = new EventSource(`${API}/meetings/${meetingId}/monitor/stream?token=${encodeURIComponent(token)}`);
+
+    _sseRef.addEventListener('snapshot', e => {
       try {
         const list = JSON.parse(e.data);
         participants = {};
         for (const p of list) participants[p.user?._id || p._id] = p;
         render();
+        _sseRetry = 2000;
       } catch (_) {}
     });
+
     const events = [
       'participant_status','participant_flagged','warning_sent',
       'participant_kicked','participant_preflight','participant_reconnected',
     ];
-    events.forEach(ev => sse.addEventListener(ev, e => {
+    events.forEach(ev => _sseRef.addEventListener(ev, e => {
       try { handleEvent(ev, JSON.parse(e.data)); } catch (_) {}
     }));
-    sse.onerror = () => {};
+
+    _sseRef.onerror = () => {
+      _sseRef.close();
+      // Exponential backoff, cap at 30s
+      _sseRetry = Math.min(_sseRetry * 2, 30000);
+      setTimeout(connectSse, _sseRetry);
+    };
   }
 
   // ── Event handler ─────────────────────────────────────────────────────────

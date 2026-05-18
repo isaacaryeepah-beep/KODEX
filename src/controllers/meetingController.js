@@ -7,6 +7,7 @@ const { generateRoomName }                             = require('../utils/gener
 const { generateMeetingToken, verifyMeetingToken }     = require('../utils/jwt');
 const { generateJitsiToken, isSelfHosted, JITSI_DOMAIN } = require('../services/jitsiTokenService');
 const { broadcastMonitor }                             = require('./meetingMonitorController');
+const { runPreflight, handleReconnect }                 = require('../services/sessionPreflight');
 
 const APP_BASE_URL     = process.env.APP_BASE_URL     || 'https://dikly.live';
 const MONITOR_BASE_URL = process.env.MONITOR_BASE_URL || 'https://monitor.dikly.live';
@@ -417,7 +418,6 @@ exports.joinMeeting = async (req, res) => {
 // Initialises monitoring and device validation before the student enters Jitsi.
 exports.preflightMeeting = async (req, res) => {
   try {
-    const { runPreflight } = require('../services/sessionPreflight');
     const result = await runPreflight(req.params.id, req.user);
     res.json(result);
   } catch (err) {
@@ -430,7 +430,6 @@ exports.preflightMeeting = async (req, res) => {
 // Called by the client when Jitsi reconnects so monitoring can be restored.
 exports.reconnectMeeting = async (req, res) => {
   try {
-    const { handleReconnect } = require('../services/sessionPreflight');
     const result = await handleReconnect(req.params.id, req.user);
     res.json(result);
   } catch (err) {

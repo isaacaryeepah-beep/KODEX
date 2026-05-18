@@ -220,7 +220,9 @@ exports.flagParticipant = async (req, res) => {
 // ── POST /api/meetings/:id/participants/:uid/warn ─────────────────────────────
 exports.sendWarning = async (req, res) => {
   try {
-    const { message = 'Your behaviour has been noted by an invigilator. Please follow exam rules.' } = req.body;
+    const raw = req.body.message || 'Your behaviour has been noted by an invigilator. Please follow exam rules.';
+    const message = String(raw).trim().slice(0, 500);
+    if (!message) return res.status(400).json({ error: 'Warning message cannot be empty' });
     const p = await MeetingParticipant.findOne({ meeting: req.params.id, user: req.params.uid, company: req.user.company });
     if (!p) return res.status(404).json({ error: 'Participant not found' });
     p.warnings.push({ message, sentBy: req.user._id, isRead: false });
@@ -271,5 +273,25 @@ exports.unflagParticipant = async (req, res) => {
     await p.save();
     broadcastMonitor(req.params.id, 'participant_flagged', { userId: req.params.uid, isFlagged: false });
     res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+};
+
+// ── POST /api/meetings/:id/invigilation-mode ──────────────────────────────────
+exports.setInvigilationMode = async (req, res) => {
+  try {
+    const VALID_MODES = ['ai', 'human', 'hybrid'];
+    const { mode } = req.body;
+    if (!VALID_MODES.includes(mode)) {
+      return res.status(400).json({ error: `mode must be one of: ${VALID_MODES.join(', ')}` });
+    }
+    const meeting = await Meeting.findOne({ _id: req.params.id, company: req.user.company, isActive: true });
+    if (!meeting) return res.status(404).json({ error: 'Meeting not found' });
+    if (!isMeetingModerator(meeting, req.user)) {
+      return res.status(403).json({ error: 'Only moderators can change invigilation mode' });
+    }
+    meeting.invigilationMode = mode;
+    await meeting.save();
+    broadcastMonitor(req.params.id, 'invigilation_mode_changed', { mode });
+    res.json({ success: true, mode });
   } catch (err) { res.status(500).json({ error: err.message }); }
 };
