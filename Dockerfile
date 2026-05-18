@@ -2,14 +2,17 @@ FROM node:20-alpine
 
 WORKDIR /app
 
+# Install curl for healthcheck
+RUN apk add --no-cache curl
+
+# Copy dependency manifests and install production deps only
 COPY package*.json ./
 RUN npm ci --omit=dev
 
-COPY src ./src
+# Copy application source and any other needed files
+COPY src/ ./src/
 
-ENV NODE_ENV=production
-ENV PORT=5000
-
+# Expose application port
 EXPOSE 5000
 
 CMD ["node", "src/server.js"]

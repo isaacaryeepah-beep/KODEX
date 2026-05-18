@@ -2,6 +2,7 @@
 const MeetingParticipant = require('../models/MeetingParticipant');
 const ProctoringEvent    = require('../models/ProctoringEvent');
 const { broadcastMonitor } = require('./meetingMonitorController');
+const { broadcastMonitorWs } = require('../services/monitorWs');
 
 // Risk weight added to participant.riskScore per event type
 const RISK_WEIGHTS = {
@@ -71,7 +72,7 @@ exports.postEvent = async (req, res) => {
       await p.save();
 
       // Push to all monitor dashboards watching this meeting
-      broadcastMonitor(mid, 'proctoring_event', {
+      const proctoringPayload = {
         userId:              String(userId),
         type, severity,
         metadata:            metadata || null,
@@ -81,7 +82,9 @@ exports.postEvent = async (req, res) => {
         fullscreenExitCount: p.fullscreenExitCount,
         networkDropCount:    p.networkDropCount,
         faceDetectionStatus: p.faceDetectionStatus,
-      });
+      };
+      broadcastMonitor(mid, 'proctoring_event', proctoringPayload);
+      broadcastMonitorWs(mid, 'proctoring_event', proctoringPayload);
     }
 
     res.json({ success: true });

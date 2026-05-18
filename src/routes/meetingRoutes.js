@@ -6,6 +6,7 @@ const meetCtrl       = require('../controllers/meetingController');
 const attendCtrl     = require('../controllers/meetingAttendanceController');
 const monitorCtrl    = require('../controllers/meetingMonitorController');
 const proctoringCtrl = require('../controllers/proctoringController');
+const preflight      = require('../services/sessionPreflight');
 
 const authenticate        = require('../middleware/auth');
 const { companyIsolation } = require('../middleware/companyIsolation');
@@ -55,6 +56,11 @@ router.post('/:id/participants/:uid/mute',    loadMeeting, isModerator, meetCtrl
 router.post('/:id/invigilators/add',    loadMeeting, isOwner, meetCtrl.addInvigilator);
 router.post('/:id/invigilators/remove', loadMeeting, isOwner, meetCtrl.removeInvigilator);
 
+// ─── PRE-FLIGHT (monitoring initialises BEFORE Jitsi join) ───────────────────
+// Students must POST here first; monitoring activates, then join is returned
+router.post('/:id/preflight',  preflight.runPreflight);
+router.post('/:id/reconnect',  preflight.handleReconnect);
+
 // ─── JOIN ─────────────────────────────────────────────────────────────────────
 router.get('/:id/join', loadMeeting, requireNoDeviceLock, canJoin, meetCtrl.joinMeeting);
 
@@ -69,6 +75,8 @@ router.post('/:id/reconnect', meetCtrl.reconnectMeeting);
 router.get('/:id/monitor',        monitorCtrl.getMonitorData);
 // SSE stream for monitor dashboard
 router.get('/:id/monitor/stream', monitorCtrl.monitorStream);
+// Invigilation mode switch (ai | human | hybrid)
+router.post('/:id/monitor/invigilation-mode', loadMeeting, isModerator, monitorCtrl.setInvigilationMode);
 // SSE stream for individual participant (receives warnings/kicks)
 router.get('/:id/participant-stream', monitorCtrl.participantStream);
 

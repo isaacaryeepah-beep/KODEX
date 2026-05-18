@@ -1,0 +1,687 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DIKLY — Live Monitor</title>
+<style>
+  :root {
+    --bg:       #0d1117;
+    --surface:  #161b22;
+    --border:   #21262d;
+    --text:     #e6edf3;
+    --muted:    #8b949e;
+    --green:    #3fb950;
+    --yellow:   #d29922;
+    --orange:   #f0883e;
+    --red:      #f85149;
+    --blue:     #58a6ff;
+    --purple:   #bc8cff;
+    --radius:   8px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 14px; }
+  a { color: var(--blue); text-decoration: none; }
+
+  /* ── Layout ── */
+  .layout { display: grid; grid-template-rows: 56px 1fr; height: 100vh; }
+  .topbar { background: var(--surface); border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 16px; padding: 0 20px; }
+  .topbar .logo { font-weight: 700; font-size: 16px; letter-spacing: .5px; color: var(--blue); }
+  .topbar .meeting-title { font-size: 13px; color: var(--muted); flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .topbar .conn-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--red); flex-shrink: 0; }
+  .topbar .conn-dot.live { background: var(--green); box-shadow: 0 0 6px var(--green); }
+  .topbar .btn { padding: 6px 14px; border-radius: var(--radius); border: 1px solid var(--border); background: transparent; color: var(--text); cursor: pointer; font-size: 13px; }
+  .topbar .btn:hover { background: var(--border); }
+  .topbar .btn.danger { border-color: var(--red); color: var(--red); }
+  .topbar .btn.danger:hover { background: rgba(248,81,73,.1); }
+
+  .main { display: grid; grid-template-columns: 1fr 320px; overflow: hidden; }
+
+  /* ── Participant grid ── */
+  .participants-panel { overflow-y: auto; padding: 16px; }
+  .stats-row { display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+  .stat { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 16px; min-width: 80px; }
+  .stat .val { font-size: 22px; font-weight: 700; }
+  .stat .lbl { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; margin-top: 2px; }
+  .stat.green .val { color: var(--green); }
+  .stat.red .val   { color: var(--red); }
+  .stat.yellow .val { color: var(--yellow); }
+  .stat.orange .val { color: var(--orange); }
+
+  .section-header { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .7px; color: var(--muted); margin-bottom: 10px; display: flex; align-items: center; gap: 8px; }
+  .section-header .count { background: var(--border); color: var(--text); border-radius: 10px; padding: 1px 7px; font-size: 11px; }
+
+  .p-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
+
+  .p-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 12px;
+    cursor: pointer;
+    transition: border-color .15s;
+    position: relative;
+  }
+  .p-card:hover { border-color: var(--blue); }
+  .p-card.flagged { border-color: var(--red); }
+  .p-card.high-risk { border-color: var(--orange); }
+  .p-card.disconnected { opacity: .5; }
+  .p-card .p-name { font-weight: 600; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .p-card .p-role { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .p-card .p-badges { display: flex; gap: 4px; margin-top: 8px; flex-wrap: wrap; }
+  .badge { font-size: 10px; padding: 2px 6px; border-radius: 4px; font-weight: 600; }
+  .badge.cam-off   { background: rgba(248,81,73,.15); color: var(--red); }
+  .badge.mic-off   { background: rgba(139,148,158,.1); color: var(--muted); }
+  .badge.flagged   { background: rgba(248,81,73,.2);  color: var(--red); }
+  .badge.screenshare { background: rgba(88,166,255,.15); color: var(--blue); }
+  .badge.disconnected { background: rgba(139,148,158,.1); color: var(--muted); }
+  .badge.waiting   { background: rgba(210,153,34,.1); color: var(--yellow); }
+  .p-card .risk-bar { height: 3px; background: var(--border); border-radius: 2px; margin-top: 8px; }
+  .p-card .risk-fill { height: 100%; border-radius: 2px; transition: width .5s; }
+  .p-card .risk-label { font-size: 10px; color: var(--muted); margin-top: 3px; }
+
+  /* ── Side panel ── */
+  .side-panel { background: var(--surface); border-left: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; }
+  .tabs { display: flex; border-bottom: 1px solid var(--border); }
+  .tab { flex: 1; padding: 10px; text-align: center; font-size: 12px; font-weight: 600; cursor: pointer; color: var(--muted); border-bottom: 2px solid transparent; transition: .15s; }
+  .tab.active { color: var(--blue); border-bottom-color: var(--blue); }
+  .tab-content { flex: 1; overflow-y: auto; padding: 12px; display: none; }
+  .tab-content.active { display: block; }
+
+  /* ── Event log ── */
+  .event-item { display: flex; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 12px; align-items: flex-start; }
+  .event-item:last-child { border-bottom: none; }
+  .event-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; margin-top: 3px; }
+  .dot-high   { background: var(--red); }
+  .dot-medium { background: var(--orange); }
+  .dot-low    { background: var(--yellow); }
+  .dot-info   { background: var(--blue); }
+  .event-body .ev-name { font-weight: 600; }
+  .event-body .ev-user { color: var(--muted); }
+  .event-body .ev-time { color: var(--muted); font-size: 10px; margin-top: 1px; }
+
+  /* ── Alert log ── */
+  .alert-item { background: rgba(248,81,73,.08); border: 1px solid rgba(248,81,73,.25); border-radius: var(--radius); padding: 8px 10px; margin-bottom: 8px; font-size: 12px; }
+  .alert-item .al-title { font-weight: 600; color: var(--red); }
+  .alert-item .al-body  { color: var(--muted); margin-top: 3px; }
+
+  /* ── Detail drawer ── */
+  .drawer { position: fixed; right: 0; top: 0; bottom: 0; width: 380px; background: var(--surface); border-left: 1px solid var(--border); z-index: 100; transform: translateX(100%); transition: transform .25s; display: flex; flex-direction: column; }
+  .drawer.open { transform: translateX(0); }
+  .drawer-header { padding: 16px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+  .drawer-header h3 { font-size: 15px; font-weight: 700; }
+  .drawer-close { background: none; border: none; color: var(--muted); font-size: 20px; cursor: pointer; }
+  .drawer-body { flex: 1; overflow-y: auto; padding: 16px; }
+  .detail-row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+  .detail-row .lbl { color: var(--muted); }
+  .drawer-actions { padding: 16px; border-top: 1px solid var(--border); display: flex; gap: 8px; }
+  .drawer-actions .btn { flex: 1; padding: 8px; border-radius: var(--radius); border: 1px solid var(--border); background: transparent; color: var(--text); cursor: pointer; font-size: 13px; }
+  .drawer-actions .btn.warn { border-color: var(--yellow); color: var(--yellow); }
+  .drawer-actions .btn.kick { border-color: var(--red); color: var(--red); }
+  .drawer-actions .btn:hover { opacity: .8; }
+
+  /* ── Invigilation toggle ── */
+  .invig-switch { display: flex; gap: 8px; margin-bottom: 12px; }
+  .invig-btn { flex: 1; padding: 8px; border-radius: var(--radius); border: 1px solid var(--border); background: transparent; color: var(--muted); cursor: pointer; font-size: 12px; font-weight: 600; transition: .15s; }
+  .invig-btn.active.ai   { background: rgba(88,166,255,.15); border-color: var(--blue); color: var(--blue); }
+  .invig-btn.active.human { background: rgba(63,185,80,.15); border-color: var(--green); color: var(--green); }
+  .invig-btn.active.hybrid { background: rgba(188,140,255,.15); border-color: var(--purple); color: var(--purple); }
+
+  /* ── Login screen ── */
+  #login-screen { position: fixed; inset: 0; background: var(--bg); display: flex; align-items: center; justify-content: center; z-index: 200; }
+  .login-box { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 32px; width: 360px; }
+  .login-box h2 { font-size: 20px; font-weight: 700; margin-bottom: 4px; }
+  .login-box .sub { color: var(--muted); font-size: 13px; margin-bottom: 24px; }
+  .login-box input { width: 100%; padding: 10px 12px; border-radius: var(--radius); border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 14px; margin-bottom: 12px; }
+  .login-box input:focus { outline: none; border-color: var(--blue); }
+  .login-box .submit { width: 100%; padding: 10px; border-radius: var(--radius); border: none; background: var(--blue); color: #fff; font-size: 14px; font-weight: 600; cursor: pointer; }
+  .login-box .err { color: var(--red); font-size: 12px; margin-top: 8px; display: none; }
+
+  /* ── Empty states ── */
+  .empty { text-align: center; color: var(--muted); padding: 40px 20px; font-size: 13px; }
+
+  /* ── Responsive ── */
+  @media (max-width: 768px) {
+    .main { grid-template-columns: 1fr; }
+    .side-panel { display: none; }
+    .p-grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
+    .drawer { width: 100%; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Login screen -->
+<div id="login-screen">
+  <div class="login-box">
+    <h2>DIKLY Monitor</h2>
+    <p class="sub">Sign in to access the live invigilation dashboard</p>
+    <input type="email" id="li-email" placeholder="Email address" autocomplete="username" />
+    <input type="password" id="li-pass" placeholder="Password" autocomplete="current-password" />
+    <button class="submit" onclick="doLogin()">Sign In</button>
+    <p class="err" id="li-err"></p>
+  </div>
+</div>
+
+<!-- Main layout (hidden until logged in) -->
+<div class="layout" id="main-layout" style="display:none">
+
+  <!-- Top bar -->
+  <div class="topbar">
+    <span class="logo">DIKLY</span>
+    <span class="meeting-title" id="meeting-title">Loading…</span>
+    <div class="conn-dot" id="ws-dot" title="WebSocket connection"></div>
+    <span style="font-size:11px;color:var(--muted)" id="ws-status">Connecting…</span>
+    <button class="btn" onclick="toggleInvigModal()">Invigilation Mode</button>
+    <button class="btn danger" onclick="confirmEndSession()" id="end-btn" style="display:none">End Session</button>
+    <button class="btn" onclick="logout()" style="margin-left:auto">Sign Out</button>
+  </div>
+
+  <div class="main">
+
+    <!-- Left: participant grid -->
+    <div class="participants-panel">
+
+      <!-- Stats row -->
+      <div class="stats-row">
+        <div class="stat green"><div class="val" id="st-connected">0</div><div class="lbl">Online</div></div>
+        <div class="stat red"><div class="val" id="st-disconnected">0</div><div class="lbl">Offline</div></div>
+        <div class="stat yellow"><div class="val" id="st-waiting">0</div><div class="lbl">Waiting</div></div>
+        <div class="stat orange"><div class="val" id="st-flagged">0</div><div class="lbl">Flagged</div></div>
+        <div class="stat"><div class="val" id="st-total">0</div><div class="lbl">Total</div></div>
+        <div class="stat red"><div class="val" id="st-camera-off">0</div><div class="lbl">Cam Off</div></div>
+      </div>
+
+      <!-- Invigilation mode selector -->
+      <div class="invig-switch" id="invig-switch" style="display:none">
+        <button class="invig-btn active ai" id="invig-ai"     onclick="setInvig('ai')">AI Monitor</button>
+        <button class="invig-btn hybrid"   id="invig-hybrid"  onclick="setInvig('hybrid')">AI + Human</button>
+        <button class="invig-btn human"    id="invig-human"   onclick="setInvig('human')">Human Only</button>
+      </div>
+
+      <!-- Participant cards -->
+      <div class="section-header">
+        Participants <span class="count" id="p-count">0</span>
+      </div>
+      <div class="p-grid" id="p-grid">
+        <div class="empty" id="p-empty">No participants yet. Waiting for students to join…</div>
+      </div>
+    </div>
+
+    <!-- Right: event log / alerts -->
+    <div class="side-panel">
+      <div class="tabs">
+        <div class="tab active" onclick="switchTab('events')">Events</div>
+        <div class="tab" onclick="switchTab('alerts')">Alerts <span id="alert-badge" style="display:none;background:var(--red);color:#fff;border-radius:8px;padding:0 5px;font-size:10px;margin-left:3px">0</span></div>
+        <div class="tab" onclick="switchTab('session')">Session</div>
+      </div>
+      <div class="tab-content active" id="tab-events">
+        <div id="event-log"><div class="empty">Waiting for events…</div></div>
+      </div>
+      <div class="tab-content" id="tab-alerts">
+        <div id="alert-log"><div class="empty">No alerts yet.</div></div>
+      </div>
+      <div class="tab-content" id="tab-session">
+        <div id="session-info"><div class="empty">Loading session data…</div></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- Participant detail drawer -->
+<div class="drawer" id="detail-drawer">
+  <div class="drawer-header">
+    <h3 id="drawer-name">Participant</h3>
+    <button class="drawer-close" onclick="closeDrawer()">✕</button>
+  </div>
+  <div class="drawer-body" id="drawer-body"></div>
+  <div class="drawer-actions">
+    <button class="btn warn" onclick="sendWarning()">⚠ Warn</button>
+    <button class="btn warn" onclick="flagParticipant()">🚩 Flag</button>
+    <button class="btn kick" onclick="kickParticipant()">✕ Kick</button>
+  </div>
+</div>
+
+<script>
+// ── State ──────────────────────────────────────────────────────────────────
+const API  = '/api';
+const WS_PATH = '/ws/monitor';
+let token      = localStorage.getItem('dikly_monitor_token') || '';
+let meetingId  = new URLSearchParams(location.search).get('meeting') || '';
+let ws         = null;
+let wsRetries  = 0;
+let participants = {};
+let alerts     = [];
+let eventLog   = [];
+let selectedPid = null;
+let invigilationMode = 'ai';
+let isModerator = false;
+
+// ── Auth ───────────────────────────────────────────────────────────────────
+async function doLogin() {
+  const email = document.getElementById('li-email').value.trim().toLowerCase();
+  const pass  = document.getElementById('li-pass').value;
+  const err   = document.getElementById('li-err');
+  err.style.display = 'none';
+  try {
+    const r = await fetch(`${API}/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password: pass }),
+    });
+    const d = await r.json();
+    if (!r.ok) { err.textContent = d.error || 'Login failed'; err.style.display = 'block'; return; }
+    token = d.token;
+    localStorage.setItem('dikly_monitor_token', token);
+    isModerator = ['lecturer','admin','superadmin','hod','manager'].includes(d.user?.role || '');
+    bootstrap();
+  } catch(e) { err.textContent = 'Network error'; err.style.display = 'block'; }
+}
+
+function logout() {
+  localStorage.removeItem('dikly_monitor_token');
+  token = '';
+  if (ws) ws.close();
+  location.reload();
+}
+
+// ── Bootstrap ─────────────────────────────────────────────────────────────
+function bootstrap() {
+  if (!token) return;
+
+  // Auto-detect meeting from URL if not set
+  const params = new URLSearchParams(location.search);
+  meetingId = params.get('meeting') || meetingId;
+
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('main-layout').style.display  = 'grid';
+
+  if (isModerator) {
+    document.getElementById('end-btn').style.display = '';
+    document.getElementById('invig-switch').style.display = 'flex';
+  }
+
+  if (meetingId) {
+    loadMeetingData();
+    connectWs();
+  } else {
+    document.getElementById('meeting-title').textContent = 'No meeting selected — add ?meeting=<id> to URL';
+  }
+}
+
+// ── Meeting data (initial snapshot) ───────────────────────────────────────
+async function loadMeetingData() {
+  try {
+    const r = await apiFetch(`${API}/meetings/${meetingId}/monitor`);
+    const d = await r.json();
+    if (!r.ok) return;
+    document.getElementById('meeting-title').textContent = d.data?.meeting?.title || 'Live Session';
+    if (d.data?.participants) {
+      d.data.participants.forEach(p => { participants[p.user?._id || p._id] = p; });
+      renderGrid();
+    }
+    renderSessionInfo(d.data);
+  } catch(e) { console.warn('[monitor] load error', e); }
+}
+
+// ── WebSocket ──────────────────────────────────────────────────────────────
+function connectWs() {
+  const wsProto = location.protocol === 'https:' ? 'wss' : 'ws';
+  const wsUrl   = `${wsProto}://${location.host}${WS_PATH}?token=${encodeURIComponent(token)}`;
+  ws = new WebSocket(wsUrl);
+
+  ws.onopen = () => {
+    wsRetries = 0;
+    setWsStatus(true);
+    ws.send(JSON.stringify({ type: 'subscribe', meetingId }));
+  };
+
+  ws.onmessage = (e) => {
+    try { handleWsEvent(JSON.parse(e.data)); } catch(_) {}
+  };
+
+  ws.onclose = () => {
+    setWsStatus(false);
+    // Exponential backoff reconnect
+    const delay = Math.min(30000, 1000 * Math.pow(2, wsRetries++));
+    setTimeout(connectWs, delay);
+  };
+
+  ws.onerror = () => { ws.close(); };
+}
+
+function setWsStatus(live) {
+  document.getElementById('ws-dot').className = 'conn-dot' + (live ? ' live' : '');
+  document.getElementById('ws-status').textContent = live ? 'Live' : 'Reconnecting…';
+}
+
+function handleWsEvent(msg) {
+  const { event, data } = msg;
+  if (!event) return;
+
+  switch (event) {
+    case 'subscribed': break;
+
+    case 'participant_status':
+    case 'participant_join':
+    case 'participant_reconnect':
+      if (data?.userId) {
+        participants[data.userId] = { ...(participants[data.userId] || {}), ...data };
+        renderGrid();
+      }
+      logEvent(event, data);
+      break;
+
+    case 'proctoring_event':
+      if (data?.userId) {
+        const p = participants[data.userId] || {};
+        if (data.riskScore !== undefined) p.riskScore = data.riskScore;
+        if (data.type === 'camera_off')       p.cameraOff = true;
+        if (data.type === 'camera_on')        p.cameraOff = false;
+        if (data.type === 'face_not_detected') p.faceDetectionStatus = 'no_face';
+        if (data.type === 'multiple_faces')    p.faceDetectionStatus = 'multiple_faces';
+        participants[data.userId] = p;
+        renderCard(data.userId);
+      }
+      logEvent(event, data);
+      checkHighRiskAlert(data);
+      break;
+
+    case 'participant_flagged':
+      if (data?.userId) {
+        const p = participants[data.userId] || {};
+        p.isFlagged = true;
+        participants[data.userId] = p;
+        renderCard(data.userId);
+        pushAlert({ title: `🚩 ${data.userName || 'Student'} flagged`, body: data.reason || '' });
+      }
+      break;
+
+    case 'participant_kicked':
+      if (data?.userId) {
+        participants[data.userId] = { ...(participants[data.userId] || {}), status: 'kicked' };
+        renderCard(data.userId);
+      }
+      logEvent('kick', data);
+      break;
+
+    case 'warning_sent':
+      logEvent('warning', data);
+      break;
+  }
+}
+
+// ── Render ─────────────────────────────────────────────────────────────────
+function renderGrid() {
+  const grid  = document.getElementById('p-grid');
+  const empty = document.getElementById('p-empty');
+  const ids   = Object.keys(participants);
+  document.getElementById('p-count').textContent = ids.length;
+  document.getElementById('p-empty').style.display = ids.length ? 'none' : '';
+
+  ids.forEach(uid => {
+    if (!document.getElementById(`pc-${uid}`)) {
+      const card = document.createElement('div');
+      card.id = `pc-${uid}`;
+      card.className = 'p-card';
+      card.onclick = () => openDrawer(uid);
+      grid.appendChild(card);
+    }
+    updateCardEl(uid);
+  });
+
+  updateStats();
+}
+
+function renderCard(uid) {
+  if (document.getElementById(`pc-${uid}`)) updateCardEl(uid);
+  updateStats();
+}
+
+function updateCardEl(uid) {
+  const p   = participants[uid];
+  const el  = document.getElementById(`pc-${uid}`);
+  if (!el || !p) return;
+
+  const risk  = p.riskScore || 0;
+  const rCol  = risk >= 70 ? 'var(--red)' : risk >= 40 ? 'var(--orange)' : 'var(--green)';
+  const name  = p.user?.name || p.name || uid.slice(-6);
+  const role  = p.user?.role || p.role || '';
+  const status = p.status || 'connected';
+
+  el.className = `p-card ${p.isFlagged ? 'flagged' : ''} ${risk >= 70 ? 'high-risk' : ''} ${status === 'disconnected' ? 'disconnected' : ''}`;
+
+  let badges = '';
+  if (p.cameraOff)    badges += '<span class="badge cam-off">Cam Off</span>';
+  if (p.micMuted)     badges += '<span class="badge mic-off">Mic Off</span>';
+  if (p.screenSharing) badges += '<span class="badge screenshare">Screen Share</span>';
+  if (p.isFlagged)    badges += '<span class="badge flagged">Flagged</span>';
+  if (status === 'disconnected') badges += '<span class="badge disconnected">Offline</span>';
+  if (status === 'waiting')      badges += '<span class="badge waiting">Waiting</span>';
+  if (p.faceDetectionStatus === 'no_face')        badges += '<span class="badge cam-off">No Face</span>';
+  if (p.faceDetectionStatus === 'multiple_faces') badges += '<span class="badge flagged">Multi Face</span>';
+
+  el.innerHTML = `
+    <div class="p-name">${esc(name)}</div>
+    <div class="p-role">${esc(role)}${p.tabSwitchCount ? ` · ${p.tabSwitchCount} tab switch` : ''}</div>
+    <div class="p-badges">${badges || '<span class="badge mic-off">No flags</span>'}</div>
+    <div class="risk-bar"><div class="risk-fill" style="width:${risk}%;background:${rCol}"></div></div>
+    <div class="risk-label">Risk: <strong style="color:${rCol}">${risk}/100</strong></div>
+  `;
+}
+
+function updateStats() {
+  const ps = Object.values(participants);
+  document.getElementById('st-total').textContent       = ps.length;
+  document.getElementById('st-connected').textContent   = ps.filter(p => p.status === 'connected').length;
+  document.getElementById('st-disconnected').textContent = ps.filter(p => p.status === 'disconnected').length;
+  document.getElementById('st-waiting').textContent     = ps.filter(p => p.status === 'waiting').length;
+  document.getElementById('st-flagged').textContent     = ps.filter(p => p.isFlagged).length;
+  document.getElementById('st-camera-off').textContent  = ps.filter(p => p.cameraOff).length;
+}
+
+// ── Event log ──────────────────────────────────────────────────────────────
+const EVENT_LABELS = {
+  tab_switch: 'Tab Switch', fullscreen_exit: 'Fullscreen Exit',
+  face_not_detected: 'Face Not Detected', multiple_faces: 'Multiple Faces Detected',
+  camera_off: 'Camera Off', camera_on: 'Camera On',
+  reconnect: 'Reconnected', network_drop: 'Network Drop',
+  session_start: 'Session Start', kick: 'Participant Kicked',
+  warning: 'Warning Sent', participant_status: 'Status Update',
+  proctoring_event: 'Proctoring Event',
+};
+
+const SEVERITY_DOT = { high: 'dot-high', medium: 'dot-medium', low: 'dot-low', info: 'dot-info' };
+
+function logEvent(type, data) {
+  eventLog.unshift({ type, data, ts: Date.now() });
+  if (eventLog.length > 200) eventLog.pop();
+
+  const log = document.getElementById('event-log');
+  if (log.querySelector('.empty')) log.innerHTML = '';
+
+  const sev  = data?.severity || 'info';
+  const name = data?.userName || (data?.userId ? data.userId.slice(-6) : '');
+  const label = EVENT_LABELS[data?.type || type] || type;
+  const time  = new Date().toLocaleTimeString();
+
+  const item = document.createElement('div');
+  item.className = 'event-item';
+  item.innerHTML = `
+    <div class="event-dot ${SEVERITY_DOT[sev] || 'dot-info'}"></div>
+    <div class="event-body">
+      <div class="ev-name">${esc(label)}</div>
+      ${name ? `<div class="ev-user">${esc(name)}</div>` : ''}
+      <div class="ev-time">${time}</div>
+    </div>
+  `;
+  log.insertBefore(item, log.firstChild);
+  // Keep log length
+  while (log.children.length > 150) log.removeChild(log.lastChild);
+}
+
+// ── Alerts ─────────────────────────────────────────────────────────────────
+function pushAlert(alert) {
+  alerts.unshift(alert);
+  const log = document.getElementById('alert-log');
+  if (log.querySelector('.empty')) log.innerHTML = '';
+
+  const item = document.createElement('div');
+  item.className = 'alert-item';
+  item.innerHTML = `<div class="al-title">${esc(alert.title)}</div><div class="al-body">${esc(alert.body)}</div>`;
+  log.insertBefore(item, log.firstChild);
+
+  const badge = document.getElementById('alert-badge');
+  badge.style.display = '';
+  badge.textContent = alerts.length;
+}
+
+function checkHighRiskAlert(data) {
+  const type = data?.type;
+  if (['multiple_faces','suspicious_activity'].includes(type)) {
+    pushAlert({ title: `⚠ ${data.userName || 'Student'} — ${EVENT_LABELS[type] || type}`, body: `Risk score: ${data.riskScore || '?'}` });
+  }
+}
+
+// ── Session info ───────────────────────────────────────────────────────────
+function renderSessionInfo(data) {
+  const m = data?.meeting;
+  if (!m) return;
+  const el = document.getElementById('session-info');
+  el.innerHTML = `
+    <div class="detail-row"><span class="lbl">Title</span><span>${esc(m.title || '')}</span></div>
+    <div class="detail-row"><span class="lbl">Type</span><span>${esc(m.meetingType || '')}</span></div>
+    <div class="detail-row"><span class="lbl">Status</span><span>${esc(m.status || '')}</span></div>
+    <div class="detail-row"><span class="lbl">Room</span><span style="font-size:11px;word-break:break-all">${esc(m.roomName || '')}</span></div>
+    <div class="detail-row"><span class="lbl">Started</span><span>${m.actualStart ? new Date(m.actualStart).toLocaleString() : 'Not started'}</span></div>
+    <div class="detail-row"><span class="lbl">Scheduled End</span><span>${m.scheduledEnd ? new Date(m.scheduledEnd).toLocaleString() : ''}</span></div>
+    <div class="detail-row"><span class="lbl">Proctoring</span><span>${m.settings?.proctoringEnabled ? '✅ On' : '—'}</span></div>
+    <div class="detail-row"><span class="lbl">Lobby</span><span>${m.settings?.enableLobby ? '✅ On' : '—'}</span></div>
+  `;
+}
+
+// ── Tabs ───────────────────────────────────────────────────────────────────
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach((t, i) => {
+    t.classList.toggle('active', ['events','alerts','session'][i] === name);
+  });
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+  document.getElementById(`tab-${name}`).classList.add('active');
+  if (name === 'alerts') { document.getElementById('alert-badge').style.display = 'none'; }
+}
+
+// ── Detail drawer ──────────────────────────────────────────────────────────
+function openDrawer(uid) {
+  selectedPid = uid;
+  const p = participants[uid] || {};
+  const name = p.user?.name || p.name || uid.slice(-6);
+  document.getElementById('drawer-name').textContent = name;
+
+  const risk = p.riskScore || 0;
+  const rCol = risk >= 70 ? 'var(--red)' : risk >= 40 ? 'var(--orange)' : 'var(--green)';
+  document.getElementById('drawer-body').innerHTML = `
+    <div class="detail-row"><span class="lbl">Name</span><span>${esc(name)}</span></div>
+    <div class="detail-row"><span class="lbl">Role</span><span>${esc(p.user?.role || p.role || '')}</span></div>
+    <div class="detail-row"><span class="lbl">Status</span><span>${esc(p.status || 'unknown')}</span></div>
+    <div class="detail-row"><span class="lbl">Risk Score</span><span style="color:${rCol};font-weight:700">${risk}/100</span></div>
+    <div class="detail-row"><span class="lbl">Tab Switches</span><span>${p.tabSwitchCount || 0}</span></div>
+    <div class="detail-row"><span class="lbl">Fullscreen Exits</span><span>${p.fullscreenExitCount || 0}</span></div>
+    <div class="detail-row"><span class="lbl">Reconnects</span><span>${p.reconnectCount || 0}</span></div>
+    <div class="detail-row"><span class="lbl">Face Status</span><span>${esc(p.faceDetectionStatus || 'unknown')}</span></div>
+    <div class="detail-row"><span class="lbl">Camera</span><span>${p.cameraOff ? '❌ Off' : '✅ On'}</span></div>
+    <div class="detail-row"><span class="lbl">Mic</span><span>${p.micMuted ? '🔇 Muted' : '🎙 On'}</span></div>
+    <div class="detail-row"><span class="lbl">Screen Share</span><span>${p.screenSharing ? '🖥 Active' : '—'}</span></div>
+    <div class="detail-row"><span class="lbl">Flagged</span><span>${p.isFlagged ? '🚩 Yes' : 'No'}</span></div>
+    <div class="detail-row"><span class="lbl">Joined</span><span>${p.joinedAt ? new Date(p.joinedAt).toLocaleString() : '—'}</span></div>
+    <div class="detail-row"><span class="lbl">Last Seen</span><span>${p.lastSeenAt ? new Date(p.lastSeenAt).toLocaleString() : '—'}</span></div>
+  `;
+  document.getElementById('detail-drawer').classList.add('open');
+}
+
+function closeDrawer() {
+  document.getElementById('detail-drawer').classList.remove('open');
+  selectedPid = null;
+}
+
+// ── Moderator actions ──────────────────────────────────────────────────────
+async function sendWarning() {
+  if (!selectedPid) return;
+  const msg = prompt('Warning message to send to this participant:');
+  if (!msg) return;
+  await apiFetch(`${API}/meetings/${meetingId}/participants/${selectedPid}/warn`, {
+    method: 'POST', body: JSON.stringify({ message: msg }),
+  });
+}
+
+async function flagParticipant() {
+  if (!selectedPid) return;
+  const reason = prompt('Reason for flagging this participant:');
+  if (!reason) return;
+  await apiFetch(`${API}/meetings/${meetingId}/participants/${selectedPid}/flag`, {
+    method: 'POST', body: JSON.stringify({ reason }),
+  });
+}
+
+async function kickParticipant() {
+  if (!selectedPid) return;
+  if (!confirm('Remove this participant from the session?')) return;
+  await apiFetch(`${API}/meetings/${meetingId}/participants/${selectedPid}/kick`, { method: 'POST' });
+  closeDrawer();
+}
+
+async function confirmEndSession() {
+  if (!confirm('End this session for all participants?')) return;
+  await apiFetch(`${API}/meetings/${meetingId}/end`, { method: 'POST' });
+}
+
+// ── Invigilation mode ──────────────────────────────────────────────────────
+function setInvig(mode) {
+  invigilationMode = mode;
+  ['ai','hybrid','human'].forEach(m => {
+    const btn = document.getElementById(`invig-${m}`);
+    btn.className = `invig-btn ${m === mode ? 'active ' + m : ''}`;
+  });
+  // Notify backend (best-effort)
+  if (meetingId) {
+    apiFetch(`${API}/meetings/${meetingId}/monitor/invigilation-mode`, {
+      method: 'POST', body: JSON.stringify({ mode }),
+    }).catch(() => {});
+  }
+}
+
+function toggleInvigModal() {
+  const sw = document.getElementById('invig-switch');
+  sw.style.display = sw.style.display === 'none' ? 'flex' : 'none';
+}
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+function apiFetch(url, opts = {}) {
+  return fetch(url, {
+    ...opts,
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+      ...(opts.headers || {}),
+    },
+  });
+}
+
+function esc(s) {
+  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ── Init ───────────────────────────────────────────────────────────────────
+if (token) {
+  // Validate stored token
+  fetch(`${API}/auth/me`, { headers: { Authorization: `Bearer ${token}` } })
+    .then(r => r.ok ? r.json() : Promise.reject())
+    .then(d => {
+      isModerator = ['lecturer','admin','superadmin','hod','manager'].includes(d.user?.role || d.role || '');
+      bootstrap();
+    })
+    .catch(() => { localStorage.removeItem('dikly_monitor_token'); token = ''; });
+}
+</script>
+</body>
+</html>
