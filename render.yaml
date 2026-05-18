@@ -10,3 +10,72 @@ services:
         value: production
       - key: PORT
         generateValue: false
+
+      # ── Platform URLs ──────────────────────────────────────────────────────
+      - key: APP_BASE_URL
+        value: https://app.dikly.sbs
+      - key: API_BASE_URL
+        value: https://api.dikly.sbs
+      - key: MONITOR_BASE_URL
+        value: https://monitor.dikly.sbs
+      - key: ADMIN_BASE_URL
+        value: https://admin.dikly.sbs
+
+      # ── Jitsi Self-Hosted (REQUIRED) ───────────────────────────────────────
+      # All three must match the values in docker-compose.jitsi.yml on the
+      # Jitsi server. If any are missing the server will refuse to start.
+      - key: JITSI_DOMAIN
+        value: meet.dikly.live
+      - key: JITSI_APP_ID
+        value: dikly
+      # Set JITSI_APP_SECRET in the Render dashboard — value must match
+      # JWT_APP_SECRET in docker-compose.jitsi.yml on the Jitsi server.
+      # Generated secret: 923d0107901df52344b7deba13b7fc6cecda59b1846ac690cdbb0cb940722bfb
+      - key: JITSI_APP_SECRET
+        sync: false
+      # Jicofo REST — only reachable if Jitsi is on the same server as DIKLY.
+      # Leave unset if Jitsi runs on a separate VM.
+      - key: JITSI_JICOFO_URL
+        sync: false
+
+      # ── Database ───────────────────────────────────────────────────────────
+      - key: MONGODB_URI
+        sync: false
+      - key: REDIS_URL
+        sync: false
+
+      # ── Auth Tokens ────────────────────────────────────────────────────────
+      - key: JWT_SECRET
+        sync: false
+      - key: JWT_EXPIRES_IN
+        value: 7d
+      - key: MEETING_TOKEN_SECRET
+        sync: false
+
+      # ── Email ──────────────────────────────────────────────────────────────
+      - key: MAILERSEND_API_KEY
+        sync: false
+      - key: GMAIL_USER
+        sync: false
+      - key: GMAIL_APP_PASSWORD
+        sync: false
+
+      # ── SMS ────────────────────────────────────────────────────────────────
+      - key: SMS_PROVIDER
+        value: arkesel
+      - key: SMS_SENDER_ID
+        value: DIKLY
+      - key: ARKESEL_API_KEY
+        sync: false
+      - key: MNOTIFY_API_KEY
+        sync: false
+
+      # ── Payments ───────────────────────────────────────────────────────────
+      - key: PAYSTACK_SECRET_KEY
+        sync: false
+      - key: PAYSTACK_PUBLIC_KEY
+        sync: false
+
+      # ── AI ─────────────────────────────────────────────────────────────────
+      - key: ANTHROPIC_API_KEY
+        sync: false
