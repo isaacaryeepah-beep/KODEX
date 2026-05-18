@@ -22,13 +22,13 @@ version: '3.8'
 
 services:
 
-  # ── Jitsi Web (React frontend served over HTTPS) ──────────────────────────
+  # ── Jitsi Web (React frontend — HTTP only, nginx terminates SSL) ──────────
   web:
     image: jitsi/web:stable-9584
     restart: unless-stopped
     ports:
-      - '${HTTP_PORT:-80}:80'
-      - '${HTTPS_PORT:-443}:443'
+      # Bind only to localhost — nginx proxies https://meet.dikly.live → here
+      - '127.0.0.1:${HTTP_PORT:-8080}:80'
     environment:
       # JWT authentication — guests are blocked, every join requires a DIKLY token
       - AUTH_TYPE=jwt
@@ -43,10 +43,9 @@ services:
       - XMPP_AUTH_DOMAIN=auth.${JITSI_DOMAIN}
       - XMPP_BOSH_URL_BASE=https://${JITSI_DOMAIN}
       - XMPP_MUC_DOMAIN=conference.${JITSI_DOMAIN}
-      # TLS — set ENABLE_LETSENCRYPT=1 to auto-provision a cert via certbot
-      - ENABLE_LETSENCRYPT=${ENABLE_LETSENCRYPT:-0}
-      - LETSENCRYPT_DOMAIN=${JITSI_DOMAIN}
-      - LETSENCRYPT_EMAIL=${LETSENCRYPT_EMAIL:-}
+      # SSL handled by nginx — disable Jitsi's built-in TLS
+      - DISABLE_HTTPS=1
+      - ENABLE_LETSENCRYPT=0
       - TZ=${TZ:-Africa/Accra}
     volumes:
       - ${CONFIG:-./jitsi-config}/web:/config:Z
