@@ -370,6 +370,9 @@ function loadJitsiAPI(domain) {
 function initJitsi() {
   if (api) { try { api.dispose(); } catch (_) {} api = null; }
   const cfg = sessionData.jitsiConfig;
+  // Start observing BEFORE the constructor so the MutationObserver is ready
+  // when Jitsi synchronously injects the iframe during construction.
+  observeIframeCreation();
   api = new JitsiMeetExternalAPI(cfg.domain, {
     roomName:   cfg.roomName,
     jwt:        sessionData.jitsiToken,
@@ -379,7 +382,11 @@ function initJitsi() {
     userInfo:   { displayName: cfg.displayName, email: cfg.email || '' },
     configOverwrite: {
       ...cfg.configOverwrite,
-      startWithAudioMuted:       true,
+      // Server config already sets these correctly per meeting type; we force
+      // audio muted but leave video to whatever the server decided (lecture =
+      // students start with video off, regular meeting = video on).
+      startWithAudioMuted:       cfg.configOverwrite?.startWithAudioMuted ?? true,
+      startWithVideoMuted:       cfg.configOverwrite?.startWithVideoMuted ?? true,
       prejoinPageEnabled:        false,
       prejoinConfig:             { enabled: false },
       enableWelcomePage:         false,
@@ -409,8 +416,10 @@ function initJitsi() {
       INITIAL_TOOLBAR_TIMEOUT:   5000,
     },
   });
-
-  observeIframeCreation();
+  // Also call immediately: if the iframe was injected synchronously during the
+  // constructor (which Jitsi does), the observer callback runs as a microtask
+  // AFTER this line, so this belt-and-suspenders call catches the sync case.
+  fixIframe();
 
   api.addEventListener('videoConferenceJoined', () => {
     joined = true;
