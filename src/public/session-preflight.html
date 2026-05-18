@@ -2,10 +2,17 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black" />
+  <meta name="format-detection" content="telephone=no" />
   <title>Session Preflight — DIKLY</title>
   <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0; padding: 0;
+      -webkit-tap-highlight-color: transparent;
+    }
 
     :root {
       --bg:        #0a0c10;
@@ -20,71 +27,98 @@
       --muted:     #6b7280;
       --text:      #e2e8f0;
       --text-sub:  #94a3b8;
+      --radius:    12px;
+      /* iOS safe areas */
+      --sat: env(safe-area-inset-top,    0px);
+      --sab: env(safe-area-inset-bottom, 0px);
+      --sal: env(safe-area-inset-left,   0px);
+      --sar: env(safe-area-inset-right,  0px);
+      /* Fixed sticky bar height at bottom */
+      --action-bar: 80px;
     }
 
+    /* ── Scrollable page (unlike the meeting pages, preflight needs scroll) ── */
+    html {
+      -webkit-text-size-adjust: 100%;
+      text-size-adjust: 100%;
+      scroll-behavior: smooth;
+    }
     body {
       background: var(--bg);
       color: var(--text);
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: flex-start;
-      padding: 24px 16px 40px;
+      /* Allow scroll but prevent horizontal overflow */
+      overflow-x: hidden;
+      overflow-y: auto;
+      overscroll-behavior-x: none;
+      -webkit-overflow-scrolling: touch;
+      /* Reserve space for sticky action bar */
+      padding-bottom: calc(var(--action-bar) + var(--sab) + 16px);
+      /* iOS address bar safe top */
+      padding-top: var(--sat);
+    }
+
+    /* ── Prevent any element from overflowing horizontally ── */
+    * { max-width: 100%; }
+    img, video { max-width: 100%; height: auto; }
+
+    /* ── Page wrapper ── */
+    .page {
+      width: 100%;
+      max-width: 680px;
+      margin: 0 auto;
+      padding: 20px calc(16px + var(--sar)) 0 calc(16px + var(--sal));
     }
 
     /* ── Header ── */
     .header {
-      width: 100%;
-      max-width: 680px;
       display: flex;
       align-items: center;
       gap: 12px;
-      margin-bottom: 28px;
+      margin-bottom: 24px;
     }
     .logo {
-      width: 40px; height: 40px;
+      width: 42px; height: 42px; flex-shrink: 0;
       background: var(--accent);
-      border-radius: 10px;
+      border-radius: 11px;
       display: grid; place-items: center;
-      font-weight: 800; font-size: 18px; color: #fff;
-      flex-shrink: 0;
+      font-weight: 800; font-size: 19px; color: #fff;
+      box-shadow: 0 0 24px rgba(59,130,246,.3);
     }
-    .header-text h1 { font-size: 20px; font-weight: 700; }
+    .header-text h1 { font-size: 19px; font-weight: 700; }
     .header-text p  { font-size: 13px; color: var(--text-sub); margin-top: 2px; }
 
     /* ── Meeting info banner ── */
     .meeting-banner {
-      width: 100%; max-width: 680px;
       background: var(--card);
       border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 14px 18px;
-      margin-bottom: 20px;
-      display: flex; align-items: center; gap: 14px;
+      border-radius: var(--radius);
+      padding: 14px 16px;
+      margin-bottom: 18px;
+      display: flex; align-items: center; gap: 12px;
     }
     .meeting-icon {
-      width: 38px; height: 38px;
+      width: 40px; height: 40px; flex-shrink: 0;
       background: rgba(59,130,246,.15);
-      border-radius: 9px;
+      border-radius: 10px;
       display: grid; place-items: center;
-      font-size: 18px; flex-shrink: 0;
+      font-size: 18px;
     }
-    .meeting-title { font-weight: 600; font-size: 15px; }
-    .meeting-sub   { font-size: 12px; color: var(--text-sub); margin-top: 3px; }
+    .meeting-info { min-width: 0; flex: 1; }
+    .meeting-title {
+      font-weight: 600; font-size: 15px;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .meeting-sub { font-size: 12px; color: var(--text-sub); margin-top: 3px; }
 
     /* ── Progress bar ── */
-    .progress-wrap {
-      width: 100%; max-width: 680px;
-      margin-bottom: 20px;
-    }
+    .progress-wrap { margin-bottom: 18px; }
     .progress-label {
       display: flex; justify-content: space-between;
       font-size: 12px; color: var(--text-sub); margin-bottom: 8px;
     }
     .progress-track {
-      height: 6px; background: var(--border); border-radius: 99px; overflow: hidden;
+      height: 5px; background: var(--border); border-radius: 99px; overflow: hidden;
     }
     .progress-fill {
       height: 100%; width: 0%;
@@ -94,28 +128,30 @@
     }
 
     /* ── Steps container ── */
-    .steps { width: 100%; max-width: 680px; display: flex; flex-direction: column; gap: 10px; }
+    .steps { display: flex; flex-direction: column; gap: 8px; }
 
     /* ── Step card ── */
     .step-card {
       background: var(--card);
       border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 14px 16px;
-      display: flex; align-items: center; gap: 14px;
+      border-radius: var(--radius);
+      padding: 13px 14px;
+      display: flex; align-items: flex-start; gap: 12px;
       transition: border-color .3s, background .3s;
     }
     .step-card.active  { border-color: var(--accent); background: rgba(59,130,246,.05); }
     .step-card.passed  { border-color: var(--success); }
     .step-card.warning { border-color: var(--warning); }
-    .step-card.failed  { border-color: var(--danger); }
+    .step-card.failed  { border-color: var(--danger);  }
 
     .step-icon {
       width: 36px; height: 36px; flex-shrink: 0;
       border-radius: 50%; display: grid; place-items: center;
-      font-size: 16px; font-weight: 700;
+      font-size: 15px; font-weight: 700;
       background: var(--border); color: var(--muted);
       transition: background .3s, color .3s;
+      /* align icon with first line of text */
+      margin-top: 1px;
     }
     .step-card.active  .step-icon { background: var(--accent);  color: #fff; }
     .step-card.passed  .step-icon { background: var(--success); color: #fff; }
@@ -123,11 +159,12 @@
     .step-card.failed  .step-icon { background: var(--danger);  color: #fff; }
 
     .step-body { flex: 1; min-width: 0; }
-    .step-name { font-size: 14px; font-weight: 600; }
-    .step-desc { font-size: 12px; color: var(--text-sub); margin-top: 2px; }
+    .step-row  { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+    .step-name { font-size: 14px; font-weight: 600; flex: 1; min-width: 0; }
+    .step-desc { font-size: 12px; color: var(--text-sub); margin-top: 2px; line-height: 1.4; }
     .step-detail {
-      font-size: 12px; margin-top: 6px; padding: 6px 10px;
-      border-radius: 6px; display: none;
+      font-size: 12px; margin-top: 7px; padding: 7px 10px;
+      border-radius: 7px; display: none; line-height: 1.5;
     }
     .step-card.active  .step-detail,
     .step-card.passed  .step-detail,
@@ -153,9 +190,9 @@
       margin-top: 8px; border-radius: 8px; overflow: hidden;
       max-height: 0; transition: max-height .4s ease;
     }
-    .cam-preview-wrap.visible { max-height: 160px; }
+    .cam-preview-wrap.visible { max-height: 200px; }
     #camPreview {
-      width: 100%; max-height: 140px;
+      width: 100%; max-height: 180px;
       object-fit: cover; border-radius: 8px;
       display: block; background: #000;
     }
@@ -164,7 +201,7 @@
     .audio-meter-wrap { margin-top: 8px; }
     .audio-label { font-size: 11px; color: var(--text-sub); margin-bottom: 4px; }
     .audio-meter {
-      height: 8px; background: var(--border); border-radius: 99px; overflow: hidden;
+      height: 7px; background: var(--border); border-radius: 99px; overflow: hidden;
     }
     .audio-fill {
       height: 100%; width: 0%;
@@ -172,20 +209,28 @@
       border-radius: 99px; transition: width .1s;
     }
 
-    /* Internet speed */
+    /* Internet latency */
     .latency-display {
-      font-size: 20px; font-weight: 700; color: var(--accent);
-      margin-top: 4px;
+      font-size: 22px; font-weight: 700; color: var(--accent);
+      margin-top: 5px;
     }
+
+    /* Fullscreen prompt */
+    .fullscreen-prompt {
+      margin-top: 7px; font-size: 12px;
+      background: rgba(59,130,246,.1); color: #93c5fd;
+      padding: 7px 10px; border-radius: 7px; display: none;
+      line-height: 1.5;
+    }
+    .fullscreen-prompt.visible { display: block; }
 
     /* ── Warnings panel ── */
     .warnings-panel {
-      width: 100%; max-width: 680px;
       background: rgba(245,158,11,.08);
       border: 1px solid rgba(245,158,11,.3);
-      border-radius: 12px;
+      border-radius: var(--radius);
       padding: 14px 16px;
-      margin-top: 14px;
+      margin-top: 12px;
       display: none;
     }
     .warnings-panel.visible { display: block; }
@@ -196,25 +241,48 @@
     .warnings-list { list-style: none; display: flex; flex-direction: column; gap: 5px; }
     .warnings-list li {
       font-size: 12px; color: #fcd34d;
-      padding: 5px 8px; background: rgba(245,158,11,.1); border-radius: 6px;
+      padding: 6px 10px;
+      background: rgba(245,158,11,.1);
+      border-radius: 6px;
+      line-height: 1.4;
     }
 
-    /* ── Actions ── */
-    .actions {
-      width: 100%; max-width: 680px;
-      margin-top: 20px; display: flex; gap: 12px; flex-wrap: wrap;
+    /* ── Sticky action bar at the bottom of the screen ── */
+    #actionBar {
+      position: fixed;
+      bottom: 0; left: 0; right: 0;
+      z-index: 50;
+      background: rgba(10,12,16,.96);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border-top: 1px solid var(--border);
+      /* Push content above home bar on iPhone */
+      padding: 10px calc(16px + var(--sar)) calc(10px + var(--sab)) calc(16px + var(--sal));
     }
+    .action-row { display: flex; gap: 10px; }
+
     .btn {
-      padding: 12px 24px; border-radius: 10px; border: none;
-      font-size: 14px; font-weight: 600; cursor: pointer;
+      padding: 15px 20px;
+      border-radius: var(--radius); border: none;
+      font-size: 15px; font-weight: 600; cursor: pointer;
+      touch-action: manipulation;
       transition: opacity .2s, transform .1s;
-      display: flex; align-items: center; gap: 8px;
+      display: flex; align-items: center; justify-content: center;
+      gap: 8px; white-space: nowrap;
     }
-    .btn:active { transform: scale(.98); }
-    .btn:disabled { opacity: .4; cursor: not-allowed; }
-    .btn-primary { background: var(--accent); color: #fff; flex: 1; justify-content: center; }
+    .btn:active { transform: scale(.97); }
+    .btn:disabled { opacity: .4; cursor: not-allowed; transform: none; }
+    .btn-primary   {
+      background: var(--accent); color: #fff;
+      flex: 1;
+      box-shadow: 0 4px 20px rgba(59,130,246,.3);
+    }
     .btn-primary:hover:not(:disabled) { background: var(--accent-dim); }
-    .btn-secondary { background: var(--card); color: var(--text); border: 1px solid var(--border); }
+    .btn-secondary {
+      background: var(--card); color: var(--text);
+      border: 1px solid var(--border);
+      flex-shrink: 0;
+    }
     .btn-secondary:hover:not(:disabled) { background: var(--border); }
 
     /* ── Anti-cheat overlay ── */
@@ -223,22 +291,34 @@
       position: fixed; inset: 0; z-index: 9999;
       background: rgba(0,0,0,.97);
       align-items: center; justify-content: center;
-      flex-direction: column; gap: 16px; text-align: center; padding: 24px;
+      flex-direction: column; gap: 16px; text-align: center;
+      padding: 32px 28px;
+      padding-top:    calc(var(--sat) + 32px);
+      padding-bottom: calc(var(--sab) + 32px);
     }
     #anticheatOverlay.visible { display: flex; }
-    .overlay-icon { font-size: 56px; }
+    .overlay-icon  { font-size: 56px; line-height: 1; }
     .overlay-title { font-size: 22px; font-weight: 700; color: var(--danger); }
-    .overlay-msg   { font-size: 14px; color: var(--text-sub); max-width: 380px; line-height: 1.6; }
+    .overlay-msg   {
+      font-size: 14px; color: var(--text-sub);
+      max-width: 360px; line-height: 1.65;
+    }
     .overlay-counter {
-      font-size: 32px; font-weight: 800; color: var(--warning);
-      background: rgba(245,158,11,.1); padding: 8px 24px; border-radius: 10px;
+      font-size: 30px; font-weight: 800; color: var(--warning);
+      background: rgba(245,158,11,.12);
+      padding: 8px 24px; border-radius: 10px;
     }
     .overlay-resume {
-      padding: 10px 28px; border-radius: 10px;
+      width: 100%; max-width: 260px;
+      padding: 16px 20px;
+      border-radius: var(--radius);
       background: var(--danger); color: #fff;
-      border: none; font-size: 14px; font-weight: 600; cursor: pointer;
-      margin-top: 8px;
+      border: none; font-size: 15px; font-weight: 600; cursor: pointer;
+      touch-action: manipulation;
+      margin-top: 4px;
+      transition: opacity .15s;
     }
+    .overlay-resume:active { opacity: .85; }
 
     /* Spinner */
     @keyframes spin { to { transform: rotate(360deg); } }
@@ -248,86 +328,87 @@
       border-top-color: #fff;
       border-radius: 50%;
       animation: spin .7s linear infinite;
+      flex-shrink: 0;
     }
 
-    /* Fullscreen request */
-    .fullscreen-prompt {
-      margin-top: 8px; font-size: 12px;
-      background: rgba(59,130,246,.1); color: #93c5fd;
-      padding: 6px 10px; border-radius: 6px; display: none;
-    }
-    .fullscreen-prompt.visible { display: block; }
-
-    @media (max-width: 480px) {
-      .actions { flex-direction: column; }
-      .btn-primary { flex: unset; width: 100%; }
+    /* ── Responsive tweaks ── */
+    @media (max-width: 400px) {
+      .header-text h1 { font-size: 17px; }
+      .btn { font-size: 14px; padding: 14px 16px; }
     }
   </style>
 </head>
 <body>
 
-<!-- Anti-cheat overlay (tab switch / fullscreen exit during meeting) -->
+<!-- Anti-cheat overlay -->
 <div id="anticheatOverlay">
   <div class="overlay-icon">⚠️</div>
   <div class="overlay-title" id="overlayTitle">Tab Switch Detected</div>
   <div class="overlay-msg" id="overlayMsg">You left the meeting window. This event has been logged and reported to your invigilator.</div>
   <div class="overlay-counter" id="overlayCounter">0 violations</div>
-  <button class="overlay-resume" id="overlayResumeBtn" onclick="dismissOverlay()">Return to Meeting</button>
+  <button class="overlay-resume" onclick="dismissOverlay()">Return to Meeting</button>
 </div>
 
-<!-- Main content -->
-<div class="header">
-  <div class="logo">D</div>
-  <div class="header-text">
-    <h1>Session Preflight</h1>
-    <p>Checking your device before the meeting starts</p>
+<!-- Sticky action bar -->
+<div id="actionBar">
+  <div class="action-row">
+    <button class="btn btn-secondary" id="retryBtn" onclick="startChecks()" style="display:none">
+      🔄 Retry
+    </button>
+    <button class="btn btn-primary" id="joinBtn" disabled onclick="joinMeeting()">
+      <span id="joinBtnText">Preparing…</span>
+    </button>
   </div>
 </div>
 
-<div class="meeting-banner" id="meetingBanner">
-  <div class="meeting-icon">📋</div>
-  <div>
-    <div class="meeting-title" id="meetingTitle">Loading meeting…</div>
-    <div class="meeting-sub"  id="meetingSubtitle">Please wait</div>
+<!-- Scrollable page content -->
+<div class="page">
+
+  <div class="header">
+    <div class="logo">D</div>
+    <div class="header-text">
+      <h1>Session Preflight</h1>
+      <p>Checking your device before the meeting</p>
+    </div>
   </div>
-</div>
 
-<div class="progress-wrap">
-  <div class="progress-label">
-    <span id="progressLabel">Starting checks…</span>
-    <span id="progressPct">0%</span>
+  <div class="meeting-banner" id="meetingBanner">
+    <div class="meeting-icon">📋</div>
+    <div class="meeting-info">
+      <div class="meeting-title" id="meetingTitle">Loading meeting…</div>
+      <div class="meeting-sub"  id="meetingSubtitle">Please wait</div>
+    </div>
   </div>
-  <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
-</div>
 
-<div class="steps" id="stepsContainer">
-  <!-- Rendered by JS -->
-</div>
+  <div class="progress-wrap">
+    <div class="progress-label">
+      <span id="progressLabel">Starting checks…</span>
+      <span id="progressPct">0%</span>
+    </div>
+    <div class="progress-track">
+      <div class="progress-fill" id="progressFill"></div>
+    </div>
+  </div>
 
-<div class="warnings-panel" id="warningsPanel">
-  <div class="warnings-title">⚠️ Warnings detected — you may still proceed</div>
-  <ul class="warnings-list" id="warningsList"></ul>
-</div>
+  <div class="steps" id="stepsContainer">
+    <!-- Rendered by JS -->
+  </div>
 
-<div class="actions">
-  <button class="btn btn-secondary" id="retryBtn" onclick="startChecks()" style="display:none">
-    🔄 Retry
-  </button>
-  <button class="btn btn-primary" id="joinBtn" disabled onclick="joinMeeting()">
-    <span id="joinBtnText">Preparing…</span>
-  </button>
-</div>
+  <div class="warnings-panel" id="warningsPanel">
+    <div class="warnings-title">⚠️ Warnings detected — you may still proceed</div>
+    <ul class="warnings-list" id="warningsList"></ul>
+  </div>
+
+</div><!-- .page -->
 
 <script>
 // ── Config ────────────────────────────────────────────────────────────────────
 const params      = new URLSearchParams(location.search);
 const MEETING_ID  = params.get('meeting') || params.get('id') || '';
 const AUTH_TOKEN  = params.get('token') || localStorage.getItem('token') || localStorage.getItem('jwt_token') || '';
-// Derive API base from current hostname dynamically (no hardcoded domain)
 const API_BASE    = (() => {
   const h = location.hostname;
   if (h === 'localhost' || h === '127.0.0.1') return '';
-  // api.dikly.sbs / api.dikly.live pattern
   const parts = h.split('.');
   if (parts[0] === 'app' || parts[0] === 'monitor' || parts[0] === 'admin') {
     return location.protocol + '//api.' + parts.slice(1).join('.');
@@ -348,7 +429,7 @@ const STEPS = [
 ];
 
 // ── State ─────────────────────────────────────────────────────────────────────
-let stepStates    = {};   // stepId → { status, detail }
+let stepStates    = {};
 let warnings      = [];
 let meetingData   = null;
 let jitsiUrl      = null;
@@ -369,15 +450,19 @@ function renderSteps() {
     <div class="step-card" id="step-${s.id}" data-step="${s.id}">
       <div class="step-icon" id="icon-${s.id}">${s.icon}</div>
       <div class="step-body">
-        <div class="step-name">${s.name}</div>
-        <div class="step-desc">${s.desc}</div>
+        <div class="step-row">
+          <div>
+            <div class="step-name">${s.name}</div>
+            <div class="step-desc">${s.desc}</div>
+          </div>
+          <div class="step-badge badge-pending" id="badge-${s.id}">Pending</div>
+        </div>
         <div class="step-detail" id="detail-${s.id}"></div>
         ${s.id === 'camera'     ? '<div class="cam-preview-wrap" id="camWrap"><video id="camPreview" autoplay muted playsinline></video></div>' : ''}
         ${s.id === 'microphone' ? '<div class="audio-meter-wrap" id="audioMeter" style="display:none"><div class="audio-label">Mic level</div><div class="audio-meter"><div class="audio-fill" id="audioFill"></div></div></div>' : ''}
         ${s.id === 'internet'   ? '<div class="latency-display" id="latencyVal" style="display:none">—</div>' : ''}
         ${s.id === 'fullscreen' ? '<div class="fullscreen-prompt" id="fsPrompt">Click "Enable Fullscreen" to continue, or it will be attempted automatically.</div>' : ''}
       </div>
-      <div class="step-badge badge-pending" id="badge-${s.id}">Pending</div>
     </div>
   `).join('');
 }
@@ -390,12 +475,16 @@ function setStep(id, status, detail) {
   if (!card) return;
   card.className = 'step-card ' + (status === 'checking' ? 'active' : status);
   badge.className = 'step-badge badge-' + (status === 'checking' ? 'checking' : status);
-  badge.textContent = status === 'checking' ? 'Checking…'
-    : status === 'passed'  ? '✓ Passed'
-    : status === 'warning' ? '⚠ Warning'
-    : status === 'failed'  ? '✗ Failed'
-    : 'Pending';
+  badge.textContent =
+    status === 'checking' ? 'Checking…' :
+    status === 'passed'   ? '✓ Passed'  :
+    status === 'warning'  ? '⚠ Warning' :
+    status === 'failed'   ? '✗ Failed'  : 'Pending';
   if (detail && det) det.textContent = detail;
+  // Scroll active step into view on mobile
+  if (status === 'checking') {
+    setTimeout(() => card.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 100);
+  }
 }
 
 function setProgress(n, label) {
@@ -416,7 +505,7 @@ function addWarning(msg) {
 // ── Fetch meeting info ────────────────────────────────────────────────────────
 async function fetchMeetingInfo() {
   if (!MEETING_ID) {
-    document.getElementById('meetingTitle').textContent = 'No meeting ID provided';
+    document.getElementById('meetingTitle').textContent    = 'No meeting ID provided';
     document.getElementById('meetingSubtitle').textContent = 'Check the link you were given';
     return false;
   }
@@ -427,7 +516,6 @@ async function fetchMeetingInfo() {
     if (!r.ok) throw new Error('HTTP ' + r.status);
     const body    = await r.json();
     meetingData   = body.data;
-    // Build Jitsi URL from jitsiConfig (roomName + domain) + JWT
     const cfg = meetingData?.jitsiConfig;
     if (cfg?.domain && cfg?.roomName) {
       jitsiUrl = `https://${cfg.domain}/${cfg.roomName}`;
@@ -562,12 +650,10 @@ async function checkFullscreen() {
 async function activateAnticheat() {
   setStep('anticheat', 'checking', 'Activating tab-switch and focus monitoring…');
   await sleep(400);
-
   document.addEventListener('visibilitychange', onVisibilityChange);
   document.addEventListener('fullscreenchange',  onFullscreenChange);
   document.addEventListener('webkitfullscreenchange', onFullscreenChange);
   window.addEventListener('blur', onWindowBlur);
-
   anticheatReady = true;
   setStep('anticheat', 'passed', 'Tab switch, window blur and fullscreen exit monitors active');
 }
@@ -608,19 +694,19 @@ async function initMonitoring() {
 // ── Anti-cheat handlers ───────────────────────────────────────────────────────
 function onVisibilityChange() {
   if (!anticheatReady) return;
-  if (document.hidden) triggerViolation('tab_switch', 'Tab Switch Detected', 'You left the meeting tab. This event has been logged.');
+  if (document.hidden) triggerViolation('tab_switch', 'Tab Switch Detected',
+    'You left the meeting tab. This event has been logged.');
 }
-
 function onWindowBlur() {
-  if (!anticheatReady) return;
-  if (document.hidden) return; // already caught by visibilitychange
-  triggerViolation('window_blur', 'Window Focus Lost', 'You clicked outside the meeting window. This event has been logged.');
+  if (!anticheatReady || document.hidden) return;
+  triggerViolation('window_blur', 'Window Focus Lost',
+    'You clicked outside the meeting window. This event has been logged.');
 }
-
 function onFullscreenChange() {
   if (!anticheatReady) return;
   const inFS = !!(document.fullscreenElement || document.webkitFullscreenElement);
-  if (!inFS) triggerViolation('fullscreen_exit', 'Fullscreen Exited', 'You exited fullscreen mode. This event has been logged and may affect your score.');
+  if (!inFS) triggerViolation('fullscreen_exit', 'Fullscreen Exited',
+    'You exited fullscreen mode. This event has been logged and may affect your score.');
 }
 
 function triggerViolation(type, title, msg) {
@@ -634,10 +720,10 @@ function triggerViolation(type, title, msg) {
 
 function dismissOverlay() {
   document.getElementById('anticheatOverlay').classList.remove('visible');
-  // Re-request fullscreen on resume
   try {
     if (!document.fullscreenElement && !document.webkitFullscreenElement) {
-      document.documentElement.requestFullscreen?.() || document.documentElement.webkitRequestFullscreen?.();
+      document.documentElement.requestFullscreen?.() ||
+      document.documentElement.webkitRequestFullscreen?.();
     }
   } catch (_) {}
 }
@@ -661,7 +747,6 @@ async function startChecks() {
   document.getElementById('joinBtnText').textContent = 'Checking…';
 
   STEPS.forEach(s => setStep(s.id, 'pending', ''));
-
   setProgress(0, 'Starting checks…');
 
   const steps = [
@@ -681,11 +766,14 @@ async function startChecks() {
     i++;
   }
 
-  setStep('ready', 'passed', 'All checks complete — click "Join Meeting" to enter');
+  setStep('ready', 'passed', 'All checks complete — tap "Join Meeting" to enter');
   setProgress(STEPS.length, 'Ready!');
   document.getElementById('joinBtnText').textContent = '🚀 Join Meeting';
   document.getElementById('joinBtn').disabled = false;
   document.getElementById('retryBtn').style.display = 'inline-flex';
+
+  // Scroll join button into viewport so user can see it's ready
+  document.getElementById('joinBtn').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
 // ── Join ──────────────────────────────────────────────────────────────────────
@@ -694,7 +782,6 @@ async function joinMeeting() {
   btn.disabled = true;
   document.getElementById('joinBtnText').innerHTML = '<div class="spinner"></div> Opening room…';
 
-  // Stop camera preview — student-meeting.html will re-request via Jitsi
   stopCameraStream();
   stopMicAnalyser();
 
@@ -705,7 +792,6 @@ async function joinMeeting() {
     return;
   }
 
-  // Persist session data so student-meeting.html can skip the extra API call
   try {
     sessionStorage.setItem('dikly_jitsi_session', JSON.stringify({
       meetingId:   MEETING_ID,
@@ -715,7 +801,6 @@ async function joinMeeting() {
     }));
   } catch (_) {}
 
-  // Moderators get the lecturer page; everyone else gets the student page
   if (meetingData.isModerator) {
     window.location.href = `/lecturer-meeting?meeting=${MEETING_ID}`;
   } else {
@@ -738,14 +823,11 @@ function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 // ── Boot ──────────────────────────────────────────────────────────────────────
 (async () => {
   renderSteps();
-
-  // Load meeting info first (non-blocking for checks)
   const loaded = await fetchMeetingInfo();
   if (!loaded) {
     document.getElementById('joinBtnText').textContent = 'Meeting unavailable';
     return;
   }
-
   await startChecks();
 })();
 </script>
