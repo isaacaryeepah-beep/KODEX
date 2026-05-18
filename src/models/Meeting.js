@@ -55,7 +55,8 @@ const meetingSchema = new mongoose.Schema({
   roomPassword: { type: String, default: null },
 
   // Room control
-  isLocked: { type: Boolean, default: false }, // when true, no new joins allowed
+  isLocked:         { type: Boolean, default: false },
+  invigilationMode: { type: String, enum: ['ai', 'human', 'hybrid'], default: 'ai' },
 
   // Status
   status:   { type: String, enum: ['scheduled','live','ended','cancelled'], default: 'scheduled' },

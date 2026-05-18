@@ -78,8 +78,12 @@ app.use(helmet({
 }));
 
 const allowedOrigins = [
-  "https://dikly.sbs",
-  "https://www.dikly.sbs",
+  "https://dikly.live",
+  "https://www.dikly.live",
+  "https://app.dikly.live",
+  "https://monitor.dikly.live",
+  "https://api.dikly.live",
+  "https://admin.dikly.live",
   "http://localhost:3000",
   "http://localhost:5000",
 ];
@@ -136,8 +140,16 @@ app.use("/api/", (req, res, next) => {
   return apiLimiter(req, res, next);
 });
 
+// Docker / load-balancer health check
+app.get('/health', (req, res) => res.json({ status: 'ok', ts: Date.now() }));
+
 app.get("/superadmin", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "superadmin.html"));
+});
+
+// Standalone proctoring monitor dashboard
+app.get('/monitor', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'monitor.html'));
 });
 
 app.get("/anticheat",      (req, res) => res.sendFile(path.join(__dirname, "public", "anticheat-dashboard.html")));
@@ -183,9 +195,6 @@ app.get("/api", (req, res) => {
   });
 });
 
-app.get("/health", (req, res) => {
-  res.json({ status: "ok", timestamp: new Date().toISOString() });
-});
 
 app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
@@ -391,8 +400,17 @@ const start = async () => {
     }
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
+  const httpServer = app.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on port ${PORT}`);
+
+    // Attach WebSocket monitoring server
+    try {
+      const monitorWs = require('./services/monitorWs');
+      monitorWs.attachToServer(httpServer);
+      console.log('[MonitorWS] WebSocket monitoring server attached');
+    } catch (e) {
+      console.error('[MonitorWS] Failed to attach:', e.message);
+    }
 
     try {
       const { startScheduler } = require("./services/emailScheduler");

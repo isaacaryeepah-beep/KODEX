@@ -7,8 +7,10 @@ const { generateRoomName }                             = require('../utils/gener
 const { generateMeetingToken, verifyMeetingToken }     = require('../utils/jwt');
 const { generateJitsiToken, isSelfHosted, JITSI_DOMAIN } = require('../services/jitsiTokenService');
 const { broadcastMonitor }                             = require('./meetingMonitorController');
+const { runPreflight, handleReconnect }                 = require('../services/sessionPreflight');
 
-const APP_BASE_URL    = process.env.APP_BASE_URL || 'https://dikly.sbs';
+const APP_BASE_URL     = process.env.APP_BASE_URL     || 'https://dikly.live';
+const MONITOR_BASE_URL = process.env.MONITOR_BASE_URL || 'https://monitor.dikly.live';
 const MODERATOR_ROLES = ['lecturer', 'manager', 'admin', 'superadmin', 'hod'];
 
 function isModeratorRole(role) {
@@ -25,6 +27,8 @@ function isMeetingModerator(meeting, user) {
 }
 
 function buildJitsiConfig(meeting, user, isMod) {
+  const isLecture = meeting.meetingType === 'lecture';
+
   const moderatorButtons = [
     'microphone','camera','closedcaptions','desktop','chat','raisehand',
     'tileview','select-background','mute-everyone','kick-participant',
@@ -37,6 +41,24 @@ function buildJitsiConfig(meeting, user, isMod) {
     participantButtons.splice(3, 0, 'desktop');
   }
 
+  // Lecture-mode bandwidth constraints — students mostly watch/listen
+  const lectureConstraints = isLecture && !isMod ? {
+    constraints: {
+      video: { height: { ideal: 180, max: 360 } },
+    },
+    startBitrate: 200,
+    disableSimulcast: false,
+    enableLayerSuspension: true,
+  } : {};
+
+  const lecturerConstraints = isLecture && isMod ? {
+    constraints: {
+      video: { height: { ideal: 720, max: 1080 } },
+    },
+    startBitrate: 800,
+    disableSimulcast: false,
+  } : {};
+
   return {
     roomName:    meeting.roomName,
     domain:      JITSI_DOMAIN,
@@ -45,14 +67,20 @@ function buildJitsiConfig(meeting, user, isMod) {
     subject:     meeting.title,
     isModerator: isMod,
     configOverwrite: {
-      startWithAudioMuted:       meeting.settings?.muteOnJoin ?? true,
-      startWithVideoMuted:       false,
+      startWithAudioMuted: meeting.settings?.muteOnJoin ?? true,
+      // Lecture-mode: student cameras off by default; lecturer camera on
+      startWithVideoMuted: isLecture ? !isMod : false,
       enableLobbyChat:           meeting.settings?.enableLobby ?? false,
       enableNoisyMicDetection:   true,
       disableDeepLinking:        true,
       enableWelcomePage:         false,
       prejoinPageEnabled:        false,
       disableThirdPartyRequests: true,
+      // Adaptive bitrate for low-bandwidth educational environments
+      channelLastN:       isLecture ? 4 : -1,  // only decode N most active feeds
+      adaptiveLastN:      true,
+      ...lectureConstraints,
+      ...lecturerConstraints,
     },
     interfaceConfigOverwrite: {
       SHOW_JITSI_WATERMARK:      false,
@@ -378,11 +406,35 @@ exports.joinMeeting = async (req, res) => {
         selfHosted:   isSelfHosted(),
         isModerator:  isMod,
         monitorUrl:   isMod
-          ? `${APP_BASE_URL}/meeting-monitor.html?meeting=${meeting._id}`
+          ? `${MONITOR_BASE_URL}/monitor?meeting=${meeting._id}`
           : null,
       },
     });
   } catch (err) { res.status(500).json({ error: err.message }); }
+};
+
+// ─── PREFLIGHT ────────────────────────────────────────────────────────────────
+// POST /api/meetings/:id/preflight
+// Initialises monitoring and device validation before the student enters Jitsi.
+exports.preflightMeeting = async (req, res) => {
+  try {
+    const result = await runPreflight(req.params.id, req.user);
+    res.json(result);
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message });
+  }
+};
+
+// ─── RECONNECT ────────────────────────────────────────────────────────────────
+// POST /api/meetings/:id/reconnect
+// Called by the client when Jitsi reconnects so monitoring can be restored.
+exports.reconnectMeeting = async (req, res) => {
+  try {
+    const result = await handleReconnect(req.params.id, req.user);
+    res.json(result);
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message });
+  }
 };
 
 // ─── VALIDATE TOKEN ───────────────────────────────────────────────────────────
