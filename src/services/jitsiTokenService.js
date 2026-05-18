@@ -5,6 +5,10 @@ const JITSI_DOMAIN     = process.env.JITSI_DOMAIN     || 'meet.jit.si';
 const JITSI_APP_ID     = process.env.JITSI_APP_ID     || 'dikly';
 const JITSI_APP_SECRET = process.env.JITSI_APP_SECRET;
 
+if (!JITSI_APP_SECRET) {
+  console.error('[Jitsi] CRITICAL: JITSI_APP_SECRET is not set. All meeting joins will fail with auth popups. Set this env var and restart.');
+}
+
 function isSelfHosted() {
   return !!(JITSI_APP_SECRET && JITSI_DOMAIN !== 'meet.jit.si');
 }
@@ -16,10 +20,13 @@ function isSelfHosted() {
  * across rooms. The moderator flag is always set server-side from the user's
  * DIKLY role — the client never controls this claim.
  *
- * Returns null when not in self-hosted mode (no JITSI_APP_SECRET set).
+ * Returns null only if JITSI_APP_SECRET is not configured.
  */
 exports.generateJitsiToken = function (user, roomName, isModerator, durationMinutes = 240) {
-  if (!isSelfHosted()) return null;
+  if (!JITSI_APP_SECRET) {
+    console.error('[Jitsi] Cannot generate token: JITSI_APP_SECRET not set');
+    return null;
+  }
 
   try {
     const now = Math.floor(Date.now() / 1000);

@@ -325,6 +325,10 @@ const MAX_RECONNECT   = 5;
     isLocked = sessionData.meeting?.isLocked || false;
     updateLockUI();
 
+    if (!sessionData.jitsiToken) {
+      return showError('Meeting authentication token missing. Ensure JITSI_APP_SECRET is configured on the server.');
+    }
+
     setStatus('Starting meeting room…');
     await loadJitsiAPI(sessionData.jitsiConfig.domain);
     initJitsi();
@@ -363,15 +367,20 @@ function initJitsi() {
     },
     configOverwrite: {
       ...cfg.configOverwrite,
-      // Lecturer always starts unmuted with camera on
-      startWithAudioMuted: false,
-      startWithVideoMuted: false,
-      prejoinPageEnabled:  false,
-      subject:             cfg.subject,
+      startWithAudioMuted:       false,
+      startWithVideoMuted:       false,
+      prejoinPageEnabled:        false,
+      prejoinConfig:             { enabled: false },
+      enableWelcomePage:         false,
+      disableDeepLinking:        true,
+      disableThirdPartyRequests: true,
+      tokenAuthUrl:              false,
+      p2p:                       { enabled: false },
+      subject:                   cfg.subject,
+      applicationName:           'DIKLY',
     },
     interfaceConfigOverwrite: {
       ...cfg.interfaceConfigOverwrite,
-      // Ensure no Jitsi chrome leaks through
       SHOW_JITSI_WATERMARK:      false,
       SHOW_WATERMARK_FOR_GUESTS: false,
       SHOW_BRAND_WATERMARK:      false,
@@ -382,6 +391,7 @@ function initJitsi() {
       APP_NAME:                  'DIKLY Classes',
       DEFAULT_BACKGROUND:        '#0a0c10',
       HIDE_INVITE_MORE_HEADER:   true,
+      AUTHENTICATION_ENABLE:     false,
     },
   });
 
