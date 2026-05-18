@@ -262,6 +262,10 @@ const MAX_RECONNECT = 4;
     document.getElementById('meetingTitle').textContent =
       sessionData.meeting?.title || 'Class Session';
 
+    if (!sessionData.jitsiToken) {
+      return showError('Session token missing. Please return to the preflight check and try again.');
+    }
+
     setStatus('Starting class room…');
     await loadJitsiAPI(sessionData.jitsiConfig.domain);
     initJitsi();
@@ -298,10 +302,16 @@ function initJitsi() {
     userInfo:   { displayName: cfg.displayName, email: cfg.email || '' },
     configOverwrite: {
       ...cfg.configOverwrite,
-      // Students start muted; camera policy follows meeting settings
-      startWithAudioMuted: true,
-      prejoinPageEnabled:  false,
-      subject:             cfg.subject,
+      startWithAudioMuted:       true,
+      prejoinPageEnabled:        false,
+      prejoinConfig:             { enabled: false },
+      enableWelcomePage:         false,
+      disableDeepLinking:        true,
+      disableThirdPartyRequests: true,
+      tokenAuthUrl:              false,
+      p2p:                       { enabled: false },
+      subject:                   cfg.subject,
+      applicationName:           'DIKLY',
     },
     interfaceConfigOverwrite: {
       ...cfg.interfaceConfigOverwrite,
@@ -314,6 +324,7 @@ function initJitsi() {
       PROVIDER_NAME:             'DIKLY',
       APP_NAME:                  'DIKLY Classes',
       DEFAULT_BACKGROUND:        '#0a0c10',
+      AUTHENTICATION_ENABLE:     false,
     },
   });
 
