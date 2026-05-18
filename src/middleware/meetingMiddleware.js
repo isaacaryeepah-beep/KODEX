@@ -1,7 +1,7 @@
 const Meeting = require('../models/Meeting');
+const Company = require('../models/Company');
 
-const CREATOR_ROLES  = ['lecturer', 'manager'];
-const ACADEMIC_ROLES = ['lecturer', 'student', 'hod', 'academic_admin'];
+const CREATOR_ROLES   = ['lecturer', 'manager', 'admin', 'superadmin', 'hod'];
 const CORPORATE_ROLES = ['manager', 'employee', 'corporate_admin'];
 
 // ─── SUBSCRIPTION CHECK ───────────────────────────────────────────────────────
@@ -24,18 +24,33 @@ exports.requireActiveSubscription = (req, res, next) => {
 exports.canCreateMeeting = (req, res, next) => {
   const role = req.user.role?.toLowerCase();
   if (!CREATOR_ROLES.includes(role)) {
-    return res.status(403).json({ message: 'Only lecturers and managers can create meetings. Admins can view and manage existing meetings.' });
+    return res.status(403).json({ message: 'You do not have permission to create meetings.' });
   }
   next();
 };
 
 // ─── MODE GUARD ───────────────────────────────────────────────────────────────
-// Attaches req.meetingMode based on user role
-exports.attachMode = (req, res, next) => {
-  const role = req.user.role?.toLowerCase();
-  if (CORPORATE_ROLES.includes(role)) req.meetingMode = 'corporate';
-  else req.meetingMode = 'academic';
-  next();
+// Attaches req.meetingMode — corporate roles get 'corporate', everything else
+// gets the company's own mode (DB lookup for admin/hod/superadmin).
+exports.attachMode = async (req, res, next) => {
+  try {
+    const role = req.user.role?.toLowerCase();
+    if (CORPORATE_ROLES.includes(role)) {
+      req.meetingMode = 'corporate';
+      return next();
+    }
+    // For admin/hod/superadmin, use the company's registered mode
+    if (['admin', 'superadmin', 'hod'].includes(role) && req.user.company) {
+      const co = await Company.findById(req.user.company).select('mode').lean();
+      req.meetingMode = co?.mode || 'academic';
+      return next();
+    }
+    req.meetingMode = 'academic';
+    next();
+  } catch (_) {
+    req.meetingMode = 'academic';
+    next();
+  }
 };
 
 // ─── MEETING OWNERSHIP GUARD ─────────────────────────────────────────────────
