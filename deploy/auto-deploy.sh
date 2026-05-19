@@ -30,6 +30,11 @@ CHANGED=$(git diff --name-only HEAD origin/main)
 
 git pull --ff-only origin main >> "$LOG" 2>&1
 
+# Ensure init scripts are always executable (git core.fileMode=false can strip +x)
+chmod +x "$REPO/jitsi-config/jvb/11-patch.sh" \
+         "$REPO/jitsi-config/prosody/11-prosody-ws-ping.sh" \
+         "$REPO/deploy/auto-deploy.sh" 2>/dev/null || true
+
 log "Pulled. Changed files:"
 echo "$CHANGED" | while read -r f; do log "  $f"; done
 
