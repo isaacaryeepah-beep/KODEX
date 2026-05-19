@@ -33,9 +33,29 @@ config.deeplinking = { disabled: true };
 // P2P disabled — all media flows through JVB for proctoring visibility.
 config.p2p = { enabled: false };
 
-// TURN credentials are injected automatically by Prosody's turncredentials module
-// using the TURN_SECRET from the .env file. No static credentials needed here.
-config.iceTransportPolicy = 'all';
+// Static TURN credentials — HMAC-SHA1, expire ~2036.
+// Regen: source /root/KODEX/.env && EXPIRY=$(($(date +%s)+315360000)) &&
+//   UN="${EXPIRY}:dikly" && printf "%s" "$UN" | openssl dgst -sha1 -hmac "$TURN_SECRET" -binary | base64 -w0
+config.iceServers = [
+  {
+    urls: [
+      'turns:meet.dikly.live:5349',
+      'turn:meet.dikly.live:3478?transport=tcp',
+      'turn:meet.dikly.live:3478',
+    ],
+    username:   '2094567176:dikly',
+    credential: 'a3T5VHdqy/4Tw/ylSQSrt5J9cPg=',
+  },
+];
+
+// Mobile: relay-only — skip direct UDP (LTE carrier kills it after ~60s).
+// Desktop: try all paths, fall back to TURN automatically.
+if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent) ||
+    (navigator.maxTouchPoints > 1 && /Macintosh/i.test(navigator.userAgent))) {
+  config.iceTransportPolicy = 'relay';
+} else {
+  config.iceTransportPolicy = 'all';
+}
 
 config.enableIceRestart = true;
 config.useIPv6 = false;
