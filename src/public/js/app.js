@@ -7082,7 +7082,7 @@ async function _joinMeetingMobile(roomUrl) {
       // NotFoundError, OverconstrainedError, etc. — navigate anyway; Jitsi will show its own error
     }
   }
-  window.location.href = roomUrl;
+  window.location.href = roomUrl + '#config.deeplinking.disabled=true';
 }
 
 async function joinMeeting(id) {
@@ -7322,7 +7322,7 @@ function _proctoredConfirmJoin(meetingId) {
   if (_isMobile) {
     // Permission was already granted during staging checks — navigate directly
     const roomUrl = `https://${jitsiConfig.domain}/${jitsiConfig.roomName}${jitsiToken ? '?jwt=' + jitsiToken : ''}`;
-    window.location.href = roomUrl;
+    window.location.href = roomUrl + '#config.deeplinking.disabled=true';
     return;
   }
 

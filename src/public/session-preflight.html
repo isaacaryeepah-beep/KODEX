@@ -799,7 +799,7 @@ async function joinMeeting() {
     || (navigator.maxTouchPoints > 1 && /Macintosh/i.test(navigator.userAgent));
   if (_isMobile && meetingData.jitsiConfig?.roomName && meetingData.jitsiToken) {
     const cfg = meetingData.jitsiConfig;
-    window.location.href = `https://${cfg.domain}/${cfg.roomName}?jwt=${meetingData.jitsiToken}`;
+    window.location.href = `https://${cfg.domain}/${cfg.roomName}?jwt=${meetingData.jitsiToken}#config.deeplinking.disabled=true`;
     return;
   }
 

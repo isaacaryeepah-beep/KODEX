@@ -602,7 +602,7 @@ const MAX_JOIN_INITS = 3;
       || (navigator.maxTouchPoints > 1 && /Macintosh/i.test(navigator.userAgent));
     if (_isMobile) {
       const cfg = sessionData.jitsiConfig;
-      window.location.replace(`https://${cfg.domain}/${cfg.roomName}?jwt=${sessionData.jitsiToken}`);
+      window.location.replace(`https://${cfg.domain}/${cfg.roomName}?jwt=${sessionData.jitsiToken}#config.deeplinking.disabled=true`);
       return;
     }
 

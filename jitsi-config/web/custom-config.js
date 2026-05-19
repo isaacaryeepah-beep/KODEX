@@ -92,6 +92,8 @@ config.applicationName = 'DIKLY';
 config.defaultRemoteDisplayName = 'Participant';
 config.defaultLocalDisplayName = 'Me';
 config.disableDeepLinking = true;
+// Disable Jitsi's "not available on mobile" gate — allow mobile browsers to join directly
+config.deeplinking = { disabled: true };
 // Jitsi 9584+: toolbar buttons moved from interface_config to config.
 // Default to empty — the DIKLY External API embed sets the correct per-role list.
 config.toolbarButtons = [];
