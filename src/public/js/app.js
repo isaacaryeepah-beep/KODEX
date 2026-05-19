@@ -7496,8 +7496,8 @@ async function viewMeetingDetail(id) {
   content.innerHTML = '<div class="card"><p>Loading meeting details...</p></div>';
   try {
     const data = await api(`/api/meetings/${id}`);
-    const m = data.meeting;
-    const isCreator = m.createdBy?._id === currentUser._id;
+    const m = data.data || data.meeting || data;
+    const isCreator = m.creatorId?._id?.toString() === currentUser._id || m.creatorId?.toString() === currentUser._id || m.createdBy?._id === currentUser._id;
     const isAdmin = ['admin', 'superadmin'].includes(currentUser.role);
     const canManage = ['manager', 'lecturer', 'admin', 'superadmin'].includes(currentUser.role) && (isCreator || isAdmin);
 
@@ -7510,7 +7510,7 @@ async function viewMeetingDetail(id) {
       <div class="page-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;">
         <div>
           <h2>${m.title}</h2>
-          <p>Hosted by ${m.createdBy?.name || 'Unknown'} <span class="status-badge" style="${statusStyle(m.status)}">${m.status.charAt(0).toUpperCase() + m.status.slice(1)}</span></p>
+          <p>Hosted by ${m.creatorId?.name || m.createdBy?.name || 'Unknown'} <span class="status-badge" style="${statusStyle(m.status)}">${m.status.charAt(0).toUpperCase() + m.status.slice(1)}</span></p>
         </div>
         <button class="btn btn-secondary btn-sm" onclick="renderMeetings()">Back to Meetings</button>
       </div>
@@ -7525,8 +7525,8 @@ async function viewMeetingDetail(id) {
           ${m.inviteLink ? `<p><strong>Invite Link:</strong> <a href="${m.inviteLink}" target="_blank" style="color:#16a34a;word-break:break-all;font-weight:600">▶ ${m.inviteLink}</a></p>` : ''}
           ${canManage ? `<button class="btn btn-sm" style="background:#0ea5e9;color:#fff;margin-top:4px" onclick="showInviteLinkForm('${m._id}', \`${m.inviteLink || ''}\`)">🔗 ${m.inviteLink ? 'Update' : 'Add'} Invite Link</button>` : ''}
           <div style="margin-top:12px;">
-            ${m.status === 'active' || m.status === 'live' ? `<button class="btn btn-success btn-sm" onclick="joinMeeting('${m._id}')">Join Meeting</button>` : ''}
-            ${canManage && m.status === 'active' ? `<button class="btn btn-danger btn-sm" style="margin-left:4px;" onclick="endMeeting('${m._id}')">End Meeting</button>` : ''}
+            ${m.status === 'live' || m.status === 'active' ? `<button class="btn btn-success btn-sm" onclick="joinMeeting('${m._id}')">Join Meeting</button>` : ''}
+            ${canManage && (m.status === 'live' || m.status === 'active') ? `<button class="btn btn-danger btn-sm" style="margin-left:4px;" onclick="endMeeting('${m._id}')">End Meeting</button>` : ''}
           </div>
         </div>
         <div class="card">
