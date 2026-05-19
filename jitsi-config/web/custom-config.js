@@ -9,18 +9,22 @@ config.enableClosePage = false;
 config.tokenAuthUrl = false;
 
 // ── XMPP connection endpoints ─────────────────────────────────────────────────
-// Mobile (LTE/carrier NAT): BOSH (HTTP long-polling) — no persistent TCP/WS
-// to drop when the carrier kills idle connections after ~60 s.
-// Desktop: WebSocket for lower latency, with keep-alive pings.
+// Mobile (LTE/carrier NAT): force BOSH (HTTP long-polling).
+// WebSocket connections are killed by carrier NAT after ~60s idle.
+// Setting serviceUrl to an https:// URL makes lib-jitsi-meet use BOSH
+// regardless of what config.websocket says.
 var _isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) ||
   (navigator.maxTouchPoints > 1 && /Macintosh/i.test(navigator.userAgent));
 
 if (_isMobile) {
-  config.websocket = null;   // explicitly disable WebSocket on mobile
-  config.bosh = 'https://meet.dikly.live/http-bind';
+  config.serviceUrl       = 'https://meet.dikly.live/http-bind';
+  config.bosh             = 'https://meet.dikly.live/http-bind';
+  config.websocket        = '';   // empty string → falsy → WS path skipped
+  config.websocketKeepAlive = -1; // disable keepalive (not needed for BOSH)
 } else {
-  config.websocket = 'wss://meet.dikly.live/xmpp-websocket';
-  config.bosh = 'https://meet.dikly.live/http-bind';
+  config.serviceUrl       = 'wss://meet.dikly.live/xmpp-websocket';
+  config.websocket        = 'wss://meet.dikly.live/xmpp-websocket';
+  config.bosh             = 'https://meet.dikly.live/http-bind';
   config.websocketKeepAlive = 20000;
   config.websocketKeepAliveUrl = 'https://meet.dikly.live/http-bind?keepalive=true';
 }
@@ -50,14 +54,11 @@ config.iceServers = [
   },
 ];
 
-// Mobile: relay-only — skip direct UDP (LTE carrier kills it after ~60 s).
-// Desktop: try all paths, fall back to TURN automatically.
-if (_isMobile) {
-  config.iceTransportPolicy = 'relay';
-  config.stunServers = [];
-} else {
-  config.iceTransportPolicy = 'all';
-}
+// Use 'all' on both mobile and desktop — let ICE try direct UDP first,
+// fall back to TURN automatically. 'relay' was too strict: if TURN has
+// any issue, there is zero fallback and the call never connects.
+config.iceTransportPolicy = 'all';
+config.stunServers = [];
 
 config.enableIceRestart = true;
 config.useIPv6 = false;
