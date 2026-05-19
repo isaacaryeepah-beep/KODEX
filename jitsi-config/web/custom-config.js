@@ -9,10 +9,18 @@ config.enableClosePage = false;
 config.tokenAuthUrl = false;
 
 // ── Explicit XMPP connection endpoints ───────────────────────────────────────
-config.websocket = 'wss://meet.dikly.live/xmpp-websocket';
-config.bosh = 'https://meet.dikly.live/http-bind';
-config.websocketKeepAlive = 20000;
-config.websocketKeepAliveUrl = 'https://meet.dikly.live/http-bind?keepalive=true';
+// Mobile (LTE/carrier NAT): use BOSH (HTTP polling) — no persistent TCP connection
+// to drop. Desktop: use WebSocket for lower latency.
+if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent) ||
+    (navigator.maxTouchPoints > 1 && /Macintosh/i.test(navigator.userAgent))) {
+  config.websocket = '';
+  config.bosh = 'https://meet.dikly.live/http-bind';
+} else {
+  config.websocket = 'wss://meet.dikly.live/xmpp-websocket';
+  config.bosh = 'https://meet.dikly.live/http-bind';
+  config.websocketKeepAlive = 20000;
+  config.websocketKeepAliveUrl = 'https://meet.dikly.live/http-bind?keepalive=true';
+}
 
 // ── Colibri WebSocket (JVB media bridge) ─────────────────────────────────────
 config.useNewBandwidthAllocationStrategy = true;
