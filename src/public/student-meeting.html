@@ -133,13 +133,8 @@
 const _params    = new URLSearchParams(location.search);
 const MEETING_ID = _params.get('meeting') || _params.get('id') || '';
 
-function getApiBase() {
-  const h = location.hostname;
-  if (h === 'localhost' || h === '127.0.0.1') return '';
-  const parts = h.split('.');
-  const root  = parts.length >= 3 ? parts.slice(-2).join('.') : h;
-  return location.protocol + '//api.' + root;
-}
+// API is served from the same origin as the frontend (same Express server).
+function getApiBase() { return ''; }
 
 function getAuthToken() {
   const urlToken = _params.get('token');
