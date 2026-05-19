@@ -55,22 +55,23 @@ config.useIPv6 = false;
 
 // ── Mobile / Safari media ─────────────────────────────────────────────────────
 config.forceJVB121Ratio = -1;
-config.enableLayerSuspension = true;
+config.enableLayerSuspension = false;
 config.requireDisplayName = false;
 config.pcStatsInterval = 10000;
 // Safari needs explicit codec order — VP8 is universally supported.
 config.videoQuality = {
   codecPreferenceOrder: ['VP8', 'H264'],
-  maxBitratesVideo: { low: 200000, standard: 500000, high: 1500000 },
+  maxBitratesVideo: { low: 200000, standard: 500000, high: 1200000 },
 };
+config.resolution = 360;
+config.constraints = { video: { height: { ideal: 360, max: 720 } } };
 
 // ── 200+ participant optimisations ───────────────────────────────────────────
 config.channelLastN = -1;
 config.adaptiveLastN = true;
-config.disableSimulcast = false;
+config.disableSimulcast = true;
 config.enableTcc = true;
 config.enableRemb = true;
-config.constraints = { video: { height: { ideal: 360, max: 720 } } };
 
 // ── White-label ───────────────────────────────────────────────────────────────
 config.applicationName = 'DIKLY';
