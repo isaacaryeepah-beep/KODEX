@@ -39,6 +39,7 @@ config.p2p = { enabled: false };
 config.iceServers = [
   {
     urls: [
+      'turns:meet.dikly.live:5349',
       'turn:meet.dikly.live:3478?transport=tcp',
       'turn:meet.dikly.live:3478',
     ],
@@ -52,12 +53,17 @@ config.iceServers = [
 if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent) ||
     (navigator.maxTouchPoints > 1 && /Macintosh/i.test(navigator.userAgent))) {
   config.iceTransportPolicy = 'relay';
+  // Don't waste ICE gathering time on STUN — relay mode discards those candidates anyway.
+  config.stunServers = [];
 } else {
   config.iceTransportPolicy = 'all';
 }
 
 config.enableIceRestart = true;
 config.useIPv6 = false;
+// Shorten ICE disconnection detection so reconnect kicks in faster on LTE drops.
+config.iceUnmuteDelay            = 1500;
+config.iceFailed                 = false;  // let JVB drive ICE restart, not the client
 
 // ── Mobile / Safari media ─────────────────────────────────────────────────────
 config.forceJVB121Ratio = -1;

@@ -387,6 +387,32 @@ let joinWatchdog   = null;
 let joinInits      = 0;
 const MAX_JOIN_INITS = 3;
 
+// ── Mobile room URL ───────────────────────────────────────────────────────────
+// Embed critical ICE/TURN settings in the hash fragment so they apply even when
+// Safari has cached an older version of custom-config.js on the Jitsi server.
+function buildMobileRoomUrl(cfg, jwt) {
+  const host = cfg.domain;
+  const iceServers = JSON.stringify([{
+    urls: [
+      `turns:${host}:5349`,
+      `turn:${host}:3478?transport=tcp`,
+      `turn:${host}:3478`,
+    ],
+    username:   '2094567176:dikly',
+    credential: 'a3T5VHdqy/4Tw/ylSQSrt5J9cPg=',
+  }]);
+  const hash = [
+    'config.prejoinPageEnabled=false',
+    'config.disableDeepLinking=true',
+    'config.p2p.enabled=false',
+    'config.enableIceRestart=true',
+    'config.iceTransportPolicy=relay',
+    'config.stunServers=' + encodeURIComponent('[]'),
+    'config.iceServers=' + encodeURIComponent(iceServers),
+  ].join('&');
+  return `https://${host}/${cfg.roomName}?jwt=${jwt}#${hash}`;
+}
+
 // ── Boot ──────────────────────────────────────────────────────────────────────
 (async () => {
   if (!MEETING_ID) return showError('No meeting ID provided.');
@@ -418,7 +444,7 @@ const MAX_JOIN_INITS = 3;
     // External API channel when permission is granted inside an iframe.
     if (isMobileDevice()) {
       const cfg = sessionData.jitsiConfig;
-      const roomUrl = `https://${cfg.domain}/${cfg.roomName}?jwt=${sessionData.jitsiToken}#config.deeplinking.disabled=true`;
+      const roomUrl = buildMobileRoomUrl(cfg, sessionData.jitsiToken);
       hide('loadOverlay');
       prepareMobileJoin(roomUrl);
       return;
