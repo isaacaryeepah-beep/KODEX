@@ -1,4 +1,5 @@
 'use strict';
+const crypto             = require('crypto');
 const Meeting            = require('../models/Meeting');
 const MeetingAttendance  = require('../models/MeetingAttendance');
 const MeetingParticipant = require('../models/MeetingParticipant');
@@ -9,9 +10,10 @@ const { generateJitsiToken, JITSI_DOMAIN, JITSI_APP_ID } = require('../services/
 const { broadcastMonitor }                             = require('./meetingMonitorController');
 const { runPreflight, handleReconnect }                 = require('../services/sessionPreflight');
 
-const APP_BASE_URL     = process.env.APP_BASE_URL     || 'https://dikly.live';
-const MONITOR_BASE_URL = process.env.MONITOR_BASE_URL || 'https://monitor.dikly.live';
-const MODERATOR_ROLES = ['lecturer', 'manager', 'admin', 'superadmin', 'hod'];
+const APP_BASE_URL     = process.env.APP_BASE_URL     || 'https://app.dikly.sbs';
+const MONITOR_BASE_URL = process.env.MONITOR_BASE_URL || 'https://monitor.dikly.sbs';
+const TURN_SECRET      = process.env.TURN_SECRET      || '';
+const MODERATOR_ROLES  = ['lecturer', 'manager', 'admin', 'superadmin', 'hod'];
 
 function isModeratorRole(role) {
   return MODERATOR_ROLES.includes((role || '').toLowerCase());
@@ -119,6 +121,67 @@ function buildJitsiConfig(meeting, user, isMod) {
       TOOLBAR_BUTTONS:           isMod ? moderatorButtons : participantButtons,
     },
   };
+}
+
+// ─── BUILD JITSI MEETING URL ──────────────────────────────────────────────────
+// Returns the complete https://meet.../room?jwt=...#config.* URL.
+// All critical settings are embedded in the hash fragment so they apply even
+// when the Jitsi server's custom-config.js is cached by the client browser.
+function buildJitsiMeetingUrl(meeting, user, isMod) {
+  const token = generateJitsiToken(user, meeting.roomName, isMod);
+
+  // Fresh 24-hour TURN credentials signed server-side with TURN_SECRET.
+  // Generated here so they're always current and never stale in client cache.
+  const expiry    = Math.floor(Date.now() / 1000) + 86400;
+  const turnUser  = `${expiry}:${user._id}`;
+  const turnCred  = TURN_SECRET
+    ? crypto.createHmac('sha1', TURN_SECRET).update(turnUser).digest('base64')
+    : null;
+
+  const iceServers = turnCred ? [{
+    urls: [
+      `turns:${JITSI_DOMAIN}:5349`,
+      `turn:${JITSI_DOMAIN}:3478?transport=tcp`,
+      `turn:${JITSI_DOMAIN}:3478`,
+    ],
+    username:   turnUser,
+    credential: turnCred,
+  }] : [];
+
+  // Per-role toolbar — moderators get full controls, participants get minimal set.
+  const moderatorToolbar = [
+    'microphone','camera','desktop','chat','raisehand',
+    'tileview','select-background','mute-everyone',
+    'kick-participant','participants-pane','hangup',
+  ];
+  const participantToolbar = ['microphone','camera','chat','raisehand','tileview','hangup'];
+  if (meeting.settings?.screenShareEnabled && !isMod) {
+    participantToolbar.splice(2, 0, 'desktop');
+  }
+
+  const startAudioMuted = isMod ? false : (meeting.settings?.muteOnJoin ?? true);
+  const startVideoMuted = (meeting.meetingType === 'lecture') ? !isMod : false;
+
+  const hashParts = [
+    'config.prejoinPageEnabled=false',
+    'config.disableDeepLinking=true',
+    'config.p2p.enabled=false',
+    'config.enableIceRestart=true',
+    'config.disableThirdPartyRequests=true',
+    `config.startWithAudioMuted=${startAudioMuted}`,
+    `config.startWithVideoMuted=${startVideoMuted}`,
+    `config.toolbarButtons=${encodeURIComponent(JSON.stringify(isMod ? moderatorToolbar : participantToolbar))}`,
+  ];
+
+  if (iceServers.length) {
+    hashParts.push(
+      'config.iceTransportPolicy=relay',
+      'config.stunServers=' + encodeURIComponent('[]'),
+      `config.iceServers=${encodeURIComponent(JSON.stringify(iceServers))}`,
+    );
+  }
+
+  return `https://${JITSI_DOMAIN}/${meeting.roomName}?jwt=${token}#${hashParts.join('&')}`;
 }
 
 // ─── CREATE ───────────────────────────────────────────────────────────────────
@@ -280,13 +343,15 @@ exports.startMeeting = async (req, res) => {
 
     console.log(`[Meeting:start] id=${meeting._id} room=${meeting.roomName} host=${req.user.email || req.user._id} role=${req.user.role}`);
 
-    const jitsiToken  = generateJitsiToken(req.user, meeting.roomName, true);
+    const jitsiToken   = generateJitsiToken(req.user, meeting.roomName, true);
     const meetingToken = generateMeetingToken(req.user._id.toString(), meeting._id.toString(), req.user.deviceId || null);
+    const meetingUrl   = buildJitsiMeetingUrl(meeting, req.user, true);
 
     res.json({
       success: true, message: 'Meeting started',
       data: {
         roomName:    meeting.roomName,
+        meetingUrl,
         joinUrl:     `https://${JITSI_DOMAIN}/${meeting.roomName}`,
         password:    meeting.roomPassword,
         settings:    meeting.settings,
@@ -435,14 +500,16 @@ exports.joinMeeting = async (req, res) => {
       return res.status(403).json({ error: 'The room is locked. No new participants can join at this time.' });
     }
 
-    const jitsiToken  = generateJitsiToken(user, meeting.roomName, isMod);
+    const jitsiToken   = generateJitsiToken(user, meeting.roomName, isMod);
     const meetingToken = generateMeetingToken(user._id.toString(), meeting._id.toString(), user.deviceId || null);
-    const jitsiConfig = buildJitsiConfig(meeting, user, isMod);
+    const jitsiConfig  = buildJitsiConfig(meeting, user, isMod);
+    const meetingUrl   = buildJitsiMeetingUrl(meeting, user, isMod);
 
     res.json({
       success: true,
       data: {
         meeting,
+        meetingUrl,
         jitsiConfig,
         jitsiToken,
         meetingToken,
