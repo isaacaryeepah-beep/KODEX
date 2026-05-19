@@ -128,17 +128,9 @@
 const _params    = new URLSearchParams(location.search);
 const MEETING_ID = _params.get('meeting') || _params.get('id') || '';
 
-// ── API base detection ────────────────────────────────────────────────────────
-// Derive api.<root-domain> from the current hostname, regardless of whether
-// we're on app.dikly.sbs, dikly.sbs, or localhost.
-function getApiBase() {
-  const h = location.hostname;
-  if (h === 'localhost' || h === '127.0.0.1') return '';
-  const parts = h.split('.');
-  // root domain = last two segments (e.g. "dikly.sbs")
-  const root = parts.length >= 3 ? parts.slice(-2).join('.') : h;
-  return location.protocol + '//api.' + root;
-}
+// API is served from the same origin as the frontend (same Express server).
+// Always use relative URLs so this works on any domain/port.
+function getApiBase() { return ''; }
 
 // ── Auth token ────────────────────────────────────────────────────────────────
 function getAuthToken() {
