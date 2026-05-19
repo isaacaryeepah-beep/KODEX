@@ -1,0 +1,37 @@
+name: Deploy to VPS
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: 194.163.172.76
+          username: root
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            set -e
+            cd /root/KODEX
+
+            # Pull latest code
+            git fetch origin main
+            git checkout jitsi-config/web/custom-config.js
+            git reset --hard origin/main
+
+            # Restart DIKLY app
+            docker restart kodex-app-1
+
+            # Restart Jitsi web (picks up new custom-config.js)
+            docker restart kodex-web-1
+
+            # Restart coturn only if docker-compose.jitsi.yml changed
+            git diff HEAD~1 --name-only 2>/dev/null | grep -q docker-compose.jitsi.yml \
+              && docker compose -f docker-compose.jitsi.yml restart coturn \
+              || true
+
+            echo "Deploy complete"
