@@ -14,9 +14,9 @@ config.tokenAuthUrl = false;
 // WebSocket is preferred; BOSH is the fallback for restricted networks.
 config.websocket = 'wss://meet.dikly.live/xmpp-websocket';
 config.bosh = 'https://meet.dikly.live/http-bind';
-// Longer keepalive for mobile users who switch between wifi/LTE mid-session.
-// 30s is aggressive enough to detect a dead connection but forgiving for handoffs.
-config.websocketKeepAlive = 30000;
+// 20s keepalive: fast enough to detect a dead connection on a network handoff
+// (WiFi→LTE or LTE→WiFi) without false-positives on slow mobile connections.
+config.websocketKeepAlive = 20000;
 config.websocketKeepAliveUrl = 'https://meet.dikly.live/http-bind?keepalive=true';
 
 // ── Colibri WebSocket (JVB media bridge) ─────────────────────────────────────
@@ -25,26 +25,34 @@ config.useNewBandwidthAllocationStrategy = true;
 // ── ICE / STUN / NAT traversal ───────────────────────────────────────────────
 // P2P disabled — all media must flow through JVB so proctoring sees all streams
 config.p2p = { enabled: false };
-// Google public STUN only — no Coturn is running on this server
+// STUN servers — used for JVB srflx (server-reflexive) ICE candidates.
+// TURN credentials for relay are delivered automatically by Prosody's
+// turncredentials module over XMPP — no explicit config.turnServers needed here.
 config.stunServers = [
+  { urls: 'stun:meet.dikly.live:3478' },  // self-hosted coturn (also serves as STUN)
   { urls: 'stun:stun.l.google.com:19302' },
   { urls: 'stun:stun1.l.google.com:19302' },
 ];
 
-// ── Mobile / Safari compatibility ────────────────────────────────────────────
+// ── Mobile / Safari connectivity ─────────────────────────────────────────────
 config.forceJVB121Ratio = -1;
 config.enableLayerSuspension = true;
 // Do not require display name — students join with names from their DIKLY profile
 config.requireDisplayName = false;
 // Disable IPv6 to avoid ICE candidate ordering issues on mobile networks
 config.useIPv6 = false;
+// Prefer TURN over TCP when UDP is unavailable (common on mobile LTE).
+// coturn listens on 3478/TCP so this reliably reaches clients behind carrier NAT.
 config.useTurnUdp = false;
-// Gather all ICE candidate types (host, srflx, relay) — 'relay' requires TURN
-// which we don't have, but 'all' ensures the JVB TCP fallback (port 4443) is used
-// when UDP 10000 is blocked, which is common on mobile LTE and corporate networks.
+// Gather all ICE candidate types: host, srflx (via STUN), relay (via TURN).
+// 'relay' candidates require coturn — now available.
 config.iceTransportPolicy = 'all';
+// ICE restart: when a mobile device switches networks (WiFi↔LTE), the existing
+// ICE connection is broken. With enableIceRestart=true Jitsi re-negotiates ICE
+// automatically instead of showing "disconnected" forever.
+config.enableIceRestart = true;
 // Increase ICE candidate gathering timeout so slow mobile networks have time
-// to discover the TCP fallback candidate before ICE fails.
+// to discover the TCP/TURN fallback before ICE fails.
 config.pcStatsInterval = 10000;
 // Safari needs explicit codec order — VP8 is universally supported
 config.videoQuality = {
