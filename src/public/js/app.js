@@ -6779,9 +6779,32 @@ async function deleteUserPermanently(id, btnOrName) {
   }
 }
 
+async function createInstantMeeting() {
+  try {
+    const now = new Date();
+    const end = new Date(now.getTime() + 60 * 60000);
+    const data = await api('/api/meetings/create', {
+      method: 'POST',
+      body: JSON.stringify({
+        title: 'Instant Meeting',
+        meetingType: 'meeting',
+        scheduledStart: now.toISOString(),
+        scheduledEnd: end.toISOString(),
+        openToCompany: true,
+      }),
+    });
+    const id = (data.data || data)._id;
+    if (!id) throw new Error('No meeting ID returned');
+    window.location.href = `/lecturer-meeting?meeting=${encodeURIComponent(id)}`;
+  } catch (e) {
+    toastError(e.message || 'Could not create meeting');
+  }
+}
+
 async function renderMeetings() {
   const content = document.getElementById('main-content');
   if (!content) return;
+  content.innerHTML = '<div style="padding:32px;text-align:center;color:var(--text-muted);">Loading meetings…</div>';
   try {
     const data = await api('/api/meetings');
     const canCreate = ['manager', 'lecturer'].includes(currentUser.role);
@@ -6791,15 +6814,28 @@ async function renderMeetings() {
     const isDeviceLocked = devLock?.isLocked && devLock?.lockedUntil && new Date(devLock.lockedUntil) > new Date();
 
     function fmtDate(dt) {
+      if (!dt) return '—';
       const d = new Date(dt);
       return d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })
            + ' · ' + d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+    }
+
+    function fmtDuration(start, end) {
+      if (!start || !end) return '—';
+      const min = Math.round((new Date(end) - new Date(start)) / 60000);
+      if (min < 60) return `${min}m`;
+      const h = Math.floor(min / 60), m = min % 60;
+      return m ? `${h}h ${m}m` : `${h}h`;
     }
 
     const MEETING_TYPE_LABELS = {
       meeting: 'Meeting', lecture: 'Lecture', proctored_quiz: 'Proctored Quiz',
       snap_quiz: 'Snap Quiz', oral_exam: 'Oral Exam',
       staff_conference: 'Staff Conference', live_assessment: 'Live Assessment',
+    };
+    const MEETING_TYPE_ICONS = {
+      lecture: '🎓', meeting: '🎥', proctored_quiz: '📝',
+      snap_quiz: '⚡', oral_exam: '🗣️', staff_conference: '👔', live_assessment: '📋',
     };
 
     function meetingCard(m) {
@@ -7025,7 +7061,9 @@ async function createAndStartMeeting() {
       openToCompany:  !courseId,
     }) });
     closeModal();
-    await startMeeting((data.data || data.meeting)?._id);
+    const newId = (data.data || data.meeting || data)?._id;
+    if (!newId) throw new Error('No meeting ID returned');
+    window.location.href = `/lecturer-meeting?meeting=${encodeURIComponent(newId)}`;
   } catch(e) {
     if (btn) { btn.textContent = 'Start Now'; btn.disabled = false; }
     errEl.textContent = e.message;
@@ -7033,29 +7071,8 @@ async function createAndStartMeeting() {
   }
 }
 
-async function startMeeting(id) {
-  try {
-    const startData   = await api(`/api/meetings/${id}/start`, { method: 'POST' });
-    const sd          = startData.data || startData;
-    const jitsiConfig = sd.jitsiConfig;
-    const jitsiToken  = sd.jitsiToken;
-    const monitorUrl  = sd.monitorUrl;
-
-    if (!jitsiConfig?.roomName) { toastError('No meeting room returned — contact your admin'); return; }
-
-    const roomUrl = `https://${jitsiConfig.domain}/${jitsiConfig.roomName}${jitsiToken ? '?jwt=' + jitsiToken : ''}`;
-
-    if (_isMobile) {
-      await _joinMeetingMobile(roomUrl);
-      return;
-    }
-
-    renderMeetings();
-    showJitsiEmbed(jitsiConfig, jitsiToken);
-    if (monitorUrl) toastSuccess('Meeting started! Open the monitor to watch participants.');
-  } catch (e) {
-    toastError(e.message);
-  }
+function startMeeting(id) {
+  window.location.href = `/lecturer-meeting?meeting=${encodeURIComponent(id)}`;
 }
 
 const PROCTORED_TYPES = ['proctored_quiz', 'snap_quiz', 'oral_exam', 'live_assessment'];
@@ -7085,46 +7102,8 @@ async function _joinMeetingMobile(roomUrl) {
   window.location.href = roomUrl + '#config.deeplinking.disabled=true';
 }
 
-async function joinMeeting(id) {
-  try {
-    const data        = await api(`/api/meetings/${id}/join`);
-    const d           = data.data || data;
-    const jitsiConfig = d.jitsiConfig;
-    const jitsiToken  = d.jitsiToken;
-    const isMod       = d.isModerator;
-    const meetingType = d.meeting?.meetingType || '';
-
-    if (!jitsiConfig?.roomName) {
-      toastError('No Jitsi config returned — contact your admin');
-      return;
-    }
-
-    const roomUrl = `https://${jitsiConfig.domain}/${jitsiConfig.roomName}${jitsiToken ? '?jwt=' + jitsiToken : ''}`;
-
-    if (_isMobile) {
-      await _joinMeetingMobile(roomUrl);
-      return;
-    }
-
-    const needsProctoring = PROCTORED_TYPES.includes(meetingType) && !isMod;
-    if (needsProctoring) {
-      showProctoredJoinStaging(id, jitsiConfig, jitsiToken);
-    } else {
-      showJitsiEmbed(jitsiConfig, jitsiToken);
-    }
-  } catch (e) {
-    const msg = e.message || 'Failed to join meeting';
-    if (msg.includes('locked') || msg.includes('device')) {
-      toastError('🔒 ' + msg);
-    } else if (msg.includes('not started') || msg.includes('not currently live')) {
-      toastError('Meeting is not live yet. Wait for the host to start.');
-    } else if (msg.includes('ended')) {
-      toastError('This meeting has ended.');
-    } else {
-      toastError(msg);
-    }
-    renderMeetings();
-  }
+function joinMeeting(id) {
+  window.location.href = `/student-meeting?meeting=${encodeURIComponent(id)}`;
 }
 
 // ── PROCTORING HELPERS ────────────────────────────────────────────────────────
