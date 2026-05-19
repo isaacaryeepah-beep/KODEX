@@ -318,6 +318,10 @@ let reconnectTimer = null;
 let reconnectCount = 0;
 const MAX_RECONNECT = 4;
 let joined         = false;
+// iOS join watchdog — see startJoinWatchdog()
+let joinWatchdog   = null;
+let joinInits      = 0;
+const MAX_JOIN_INITS = 3;
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
 (async () => {
@@ -399,6 +403,9 @@ function initJitsi() {
       applicationName:           'DIKLY',
       hideConferenceSubject:     true,
       hideConferenceTimer:       true,
+      // Jitsi 9584+: TOOLBAR_BUTTONS moved from interfaceConfigOverwrite to configOverwrite.
+      // Students keep basic controls; moderators control the rest from the DIKLY ctrlBar.
+      toolbarButtons:            ['microphone','camera','chat','raisehand','tileview','hangup'],
     },
     interfaceConfigOverwrite: {
       ...cfg.interfaceConfigOverwrite,
@@ -420,9 +427,12 @@ function initJitsi() {
   // constructor (which Jitsi does), the observer callback runs as a microtask
   // AFTER this line, so this belt-and-suspenders call catches the sync case.
   fixIframe();
+  startJoinWatchdog();
 
   api.addEventListener('videoConferenceJoined', () => {
     joined = true;
+    clearTimeout(joinWatchdog);
+    joinInits = 0;
     hide('loadOverlay');
     hideReconnectOverlay();
     reconnectCount = 0;
@@ -470,6 +480,30 @@ function observeIframeCreation() {
   });
   obs.observe(mount, { childList: true, subtree: true });
 }
+
+// ── iOS watchdog + bfcache recovery ──────────────────────────────────────────
+function startJoinWatchdog() {
+  clearTimeout(joinWatchdog);
+  if (joinInits >= MAX_JOIN_INITS) return;
+  // iOS Safari can reload the Jitsi iframe when camera/mic permission is granted,
+  // breaking the External API postMessage channel silently. If videoConferenceJoined
+  // hasn't fired within 60s, the channel is likely broken — reinit.
+  joinWatchdog = setTimeout(() => {
+    if (!joined) {
+      joinInits++;
+      initJitsi();
+    }
+  }, 60000);
+}
+
+// When iOS Safari restores a page from bfcache (back-forward cache),
+// the Jitsi External API state is stale — reinit so the meeting reconnects.
+window.addEventListener('pageshow', (evt) => {
+  if (evt.persisted && api) {
+    joined = false;
+    setTimeout(initJitsi, 300);
+  }
+});
 
 // ── Reconnect ─────────────────────────────────────────────────────────────────
 function scheduleReconnect() {

@@ -561,6 +561,11 @@ let videoMuted       = false;
 let screenSharing    = false;
 let reconnectAttempts = 0;
 const MAX_RECONNECT   = 5;
+// iOS Safari reloads the Jitsi iframe when camera/mic permission is granted,
+// breaking the External API channel. Watchdog reinits if joined doesn't fire.
+let joinWatchdog    = null;
+let joinInits       = 0;
+const MAX_JOIN_INITS = 3;
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
 (async () => {
@@ -637,6 +642,9 @@ function initJitsi() {
       applicationName:           'DIKLY',
       hideConferenceSubject:     true,
       hideConferenceTimer:       true,
+      // Jitsi 9584+: toolbar control moved from interfaceConfigOverwrite to configOverwrite.
+      // TOOLBAR_BUTTONS in interfaceConfigOverwrite is a no-op on newer builds.
+      toolbarButtons:            [],
     },
     interfaceConfigOverwrite: {
       ...cfg.interfaceConfigOverwrite,
@@ -651,13 +659,14 @@ function initJitsi() {
       DEFAULT_BACKGROUND:        '#0a0c10',
       HIDE_INVITE_MORE_HEADER:   true,
       AUTHENTICATION_ENABLE:     false,
-      // Hide Jitsi's own toolbar — DIKLY's ctrlBar provides all controls
+      // Jitsi <9584: hide toolbar via interfaceConfigOverwrite
       TOOLBAR_BUTTONS:           [],
       TOOLBAR_TIMEOUT:           0,
       INITIAL_TOOLBAR_TIMEOUT:   0,
     },
   });
   fixIframe();
+  startJoinWatchdog();
 
   api.addEventListener('videoConferenceJoined', onJoined);
   api.addEventListener('videoConferenceLeft',   onLeft);
@@ -689,12 +698,37 @@ function initJitsi() {
 
 function onJoined() {
   joined = true;
+  clearTimeout(joinWatchdog);
+  joinInits = 0;
   hide('loadOverlay');
   hideReconnectOverlay();
   reconnectAttempts = 0;
   postBackend('start');
   fixIframe();
 }
+
+function startJoinWatchdog() {
+  clearTimeout(joinWatchdog);
+  if (joinInits >= MAX_JOIN_INITS) return;
+  // iOS Safari can reload the Jitsi iframe when camera/mic permission is granted,
+  // breaking the External API postMessage channel silently. If videoConferenceJoined
+  // hasn't fired within 60s, the channel is likely broken — reinit.
+  joinWatchdog = setTimeout(() => {
+    if (!joined) {
+      joinInits++;
+      initJitsi();
+    }
+  }, 60000);
+}
+
+// When iOS Safari restores a page from bfcache (back-forward cache),
+// the Jitsi External API state is stale — reinit so the meeting reconnects.
+window.addEventListener('pageshow', (evt) => {
+  if (evt.persisted && api && !isEnding) {
+    joined = false;
+    setTimeout(initJitsi, 300);
+  }
+});
 
 function onLeft(data) {
   if (isEnding) return;
