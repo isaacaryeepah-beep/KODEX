@@ -1,5 +1,4 @@
 'use strict';
-const crypto             = require('crypto');
 const Meeting            = require('../models/Meeting');
 const MeetingAttendance  = require('../models/MeetingAttendance');
 const MeetingParticipant = require('../models/MeetingParticipant');
@@ -12,7 +11,6 @@ const { runPreflight, handleReconnect }                 = require('../services/s
 
 const APP_BASE_URL     = process.env.APP_BASE_URL     || 'https://app.dikly.sbs';
 const MONITOR_BASE_URL = process.env.MONITOR_BASE_URL || 'https://monitor.dikly.sbs';
-const TURN_SECRET      = process.env.TURN_SECRET      || '';
 const MODERATOR_ROLES  = ['lecturer', 'manager', 'admin', 'superadmin', 'hod'];
 
 function isModeratorRole(role) {
@@ -124,31 +122,14 @@ function buildJitsiConfig(meeting, user, isMod) {
 }
 
 // ─── BUILD JITSI MEETING URL ──────────────────────────────────────────────────
-// Returns the complete https://meet.../room?jwt=...#config.* URL.
-// All critical settings are embedded in the hash fragment so they apply even
-// when the Jitsi server's custom-config.js is cached by the client browser.
+// Returns https://meet.../room?jwt=...#config.* URL.
+// TURN/ICE config is intentionally NOT included in the hash — embedding large
+// JSON in the fragment produces URLs that iOS Safari and carrier NAT proxies
+// silently truncate, stripping TURN credentials. custom-config.js on the Jitsi
+// server handles TURN and relay-only policy for mobile via UA detection.
 function buildJitsiMeetingUrl(meeting, user, isMod) {
   const token = generateJitsiToken(user, meeting.roomName, isMod);
 
-  // Fresh 24-hour TURN credentials signed server-side with TURN_SECRET.
-  // Generated here so they're always current and never stale in client cache.
-  const expiry    = Math.floor(Date.now() / 1000) + 86400;
-  const turnUser  = `${expiry}:${user._id}`;
-  const turnCred  = TURN_SECRET
-    ? crypto.createHmac('sha1', TURN_SECRET).update(turnUser).digest('base64')
-    : null;
-
-  const iceServers = turnCred ? [{
-    urls: [
-      `turns:${JITSI_DOMAIN}:5349`,
-      `turn:${JITSI_DOMAIN}:3478?transport=tcp`,
-      `turn:${JITSI_DOMAIN}:3478`,
-    ],
-    username:   turnUser,
-    credential: turnCred,
-  }] : [];
-
-  // Per-role toolbar — moderators get full controls, participants get minimal set.
   const moderatorToolbar = [
     'microphone','camera','desktop','chat','raisehand',
     'tileview','select-background','mute-everyone',
@@ -172,14 +153,6 @@ function buildJitsiMeetingUrl(meeting, user, isMod) {
     `config.startWithVideoMuted=${startVideoMuted}`,
     `config.toolbarButtons=${encodeURIComponent(JSON.stringify(isMod ? moderatorToolbar : participantToolbar))}`,
   ];
-
-  if (iceServers.length) {
-    hashParts.push(
-      'config.iceTransportPolicy=relay',
-      'config.stunServers=' + encodeURIComponent('[]'),
-      `config.iceServers=${encodeURIComponent(JSON.stringify(iceServers))}`,
-    );
-  }
 
   return `https://${JITSI_DOMAIN}/${meeting.roomName}?jwt=${token}#${hashParts.join('&')}`;
 }
