@@ -165,7 +165,7 @@ services:
     volumes:
       - ${CONFIG:-./jitsi-config}/prosody/config:/config:Z
       - ${CONFIG:-./jitsi-config}/prosody/prosody-plugins-custom:/prosody-plugins-custom:Z
-      - ${CONFIG:-./jitsi-config}/prosody/11-prosody-ws-ping.sh:/etc/cont-init.d/11-prosody-ws-ping:ro
+      - ${CONFIG:-./jitsi-config}/prosody/11-prosody-ws-ping.sh:/etc/cont-init.d/11-prosody-ws-ping
     networks:
       jitsi-net:
         aliases:
@@ -248,7 +248,7 @@ services:
       - ${CONFIG:-./jitsi-config}/jvb:/config:Z
       # Post-init patch: runs after 10-config generates jvb.conf, fixes
       # websockets.enabled, server-id, and advertise-private-candidates.
-      - ${CONFIG:-./jitsi-config}/jvb/11-patch.sh:/etc/cont-init.d/11-patch:ro
+      - ${CONFIG:-./jitsi-config}/jvb/11-patch.sh:/etc/cont-init.d/11-patch
     depends_on:
       - prosody
     networks:
