@@ -14,6 +14,9 @@ jobs:
           host: 194.163.172.76
           username: root
           key: ${{ secrets.VPS_SSH_KEY }}
+          port: 22
+          timeout: 30s
+          command_timeout: 10m
           script: |
             set -e
             cd /root/KODEX
