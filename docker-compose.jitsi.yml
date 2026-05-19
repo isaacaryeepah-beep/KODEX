@@ -46,6 +46,7 @@ services:
   coturn:
     image: coturn/coturn:4.6
     network_mode: host
+    user: root
     restart: unless-stopped
     volumes:
       # Mount full letsencrypt dir so symlinks in live/ resolve to archive/ inside container.
