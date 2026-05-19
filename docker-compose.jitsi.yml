@@ -165,6 +165,7 @@ services:
     volumes:
       - ${CONFIG:-./jitsi-config}/prosody/config:/config:Z
       - ${CONFIG:-./jitsi-config}/prosody/prosody-plugins-custom:/prosody-plugins-custom:Z
+      - ${CONFIG:-./jitsi-config}/prosody/11-prosody-ws-ping.sh:/etc/cont-init.d/11-prosody-ws-ping:ro
     networks:
       jitsi-net:
         aliases:
