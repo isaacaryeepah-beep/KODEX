@@ -39,6 +39,7 @@ config.p2p = { enabled: false };
 config.iceServers = [
   {
     urls: [
+      'turns:meet.dikly.live:5349',
       'turn:meet.dikly.live:3478?transport=tcp',
       'turn:meet.dikly.live:3478',
     ],
