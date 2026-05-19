@@ -7324,12 +7324,21 @@ function showJitsiEmbed(config, jitsiToken) {
   }
 }
 
+let _jitsiJoined      = false;
+let _jitsiWatchdog    = null;
+let _jitsiWatchdogHits = 0;
+const _JITSI_MAX_INITS = 3;
+
 function _initJitsiEmbed(config, domain, jitsiToken) {
   const container = document.getElementById('jitsi-embed-container');
   if (!container) return;
 
-  // Toolbar buttons are always determined server-side (isModerator flag)
-  const toolbarButtons = config.interfaceConfigOverwrite?.TOOLBAR_BUTTONS
+  if (window._jitsiApi) { try { window._jitsiApi.dispose(); } catch(e) {} window._jitsiApi = null; }
+
+  // Toolbar buttons: prefer server-provided configOverwrite.toolbarButtons (Jitsi 9584+),
+  // fall back to interfaceConfigOverwrite.TOOLBAR_BUTTONS (older builds), then hard-coded defaults.
+  const toolbarButtons = config.configOverwrite?.toolbarButtons
+    || config.interfaceConfigOverwrite?.TOOLBAR_BUTTONS
     || (config.isModerator
       ? ['microphone','camera','closedcaptions','desktop','chat','raisehand',
          'tileview','select-background','mute-everyone','kick-participant',
@@ -7353,6 +7362,9 @@ function _initJitsiEmbed(config, domain, jitsiToken) {
       enableWelcomePage:         false,
       prejoinPageEnabled:        false,
       ...(config.configOverwrite || {}),
+      // Always enforce these regardless of what server sends
+      toolbarButtons,
+      disableWatermark: true,
     },
     interfaceConfigOverwrite: {
       MOBILE_APP_PROMO:          false,
@@ -7366,15 +7378,37 @@ function _initJitsiEmbed(config, domain, jitsiToken) {
   // Attach Jitsi JWT when self-hosted auth is enabled
   if (jitsiToken) options.jwt = jitsiToken;
 
+  _jitsiJoined = false;
   window._jitsiApi = new JitsiMeetExternalAPI(domain, options);
   window._jitsiApi.addEventListeners({
-    readyToClose:        () => leaveJitsiMeeting(),
-    videoConferenceLeft: () => leaveJitsiMeeting(),
+    readyToClose:          () => leaveJitsiMeeting(),
+    videoConferenceLeft:   () => leaveJitsiMeeting(),
+    videoConferenceJoined: () => {
+      _jitsiJoined = true;
+      clearTimeout(_jitsiWatchdog);
+      _jitsiWatchdogHits = 0;
+    },
   });
+
+  // iOS Safari reloads the cross-origin iframe after granting camera/mic permission,
+  // which silently breaks the External API. Reinit if videoConferenceJoined hasn't
+  // fired within 20 seconds (max 3 attempts).
+  clearTimeout(_jitsiWatchdog);
+  if (_jitsiWatchdogHits < _JITSI_MAX_INITS) {
+    _jitsiWatchdog = setTimeout(() => {
+      if (!_jitsiJoined && document.getElementById('jitsi-embed-container')) {
+        _jitsiWatchdogHits++;
+        _initJitsiEmbed(config, domain, jitsiToken);
+      }
+    }, 20000);
+  }
 }
 
 function leaveJitsiMeeting() {
   stopMeetingAntiCheat();
+  clearTimeout(_jitsiWatchdog);
+  _jitsiJoined = false;
+  _jitsiWatchdogHits = 0;
   if (window._jitsiApi) { try { window._jitsiApi.dispose(); } catch(e) {} window._jitsiApi = null; }
   document.getElementById('jitsi-room-overlay')?.remove();
   renderMeetings();
