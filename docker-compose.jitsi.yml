@@ -48,9 +48,9 @@ services:
     network_mode: host
     restart: unless-stopped
     volumes:
-      # Let's Encrypt cert — required for TURNS (TURN over TLS on port 5349).
-      # certbot manages renewal; coturn reads the files directly from the host.
-      - /etc/letsencrypt/live/${JITSI_DOMAIN}:/certs:ro
+      # Cert for TURNS (TURN over TLS on 5349). The LE cert is stored under dikly.live
+      # because certbot used that as the primary domain. The cert covers all subdomains.
+      - /etc/letsencrypt/live/dikly.live:/certs:ro
     command: >
       -n
       --log-file=stdout
