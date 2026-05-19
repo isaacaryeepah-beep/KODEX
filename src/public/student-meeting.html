@@ -202,6 +202,51 @@
     .err-btn.primary   { background: var(--accent); color: #fff; }
     .err-btn.secondary { background: var(--card); border: 1px solid var(--border); color: var(--text); }
 
+    /* ── Permission screen (mobile only, shown before redirect) ── */
+    #permScreen {
+      display: none;
+      position: fixed; inset: 0; z-index: 600;
+      background: var(--bg);
+      flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 20px; text-align: center;
+      padding: 40px 32px;
+      padding-top:    calc(var(--sat) + 60px);
+      padding-bottom: calc(var(--sab) + 40px);
+    }
+    #permScreen.visible { display: flex; }
+    .perm-icon {
+      width: 72px; height: 72px;
+      background: rgba(59,130,246,.15);
+      border: 2px solid rgba(59,130,246,.3);
+      border-radius: 22px;
+      display: grid; place-items: center;
+      font-size: 34px; line-height: 1;
+    }
+    .perm-title { font-size: 22px; font-weight: 700; }
+    .perm-body  { font-size: 15px; color: var(--muted); max-width: 300px; line-height: 1.65; }
+    .perm-btn {
+      width: 100%; max-width: 300px;
+      padding: 17px; border-radius: 14px; border: none;
+      background: var(--accent); color: #fff;
+      font-size: 16px; font-weight: 700;
+      cursor: pointer; touch-action: manipulation;
+      transition: opacity .15s; margin-top: 8px;
+    }
+    .perm-btn:active { opacity: .85; }
+    .perm-hint { font-size: 12px; color: var(--muted); max-width: 280px; line-height: 1.5; }
+    #permDenied { display: none; }
+    #permDenied.visible { display: flex; flex-direction: column; align-items: center; gap: 14px; }
+    .perm-denied-title { font-size: 18px; font-weight: 700; color: var(--danger); }
+    .perm-denied-body  { font-size: 14px; color: var(--muted); max-width: 300px; line-height: 1.6; }
+    .perm-secondary-btn {
+      padding: 14px 28px; border-radius: 12px;
+      border: 1px solid var(--border);
+      background: var(--card); color: var(--text);
+      font-size: 14px; font-weight: 600; cursor: pointer;
+      touch-action: manipulation;
+    }
+
     /* ── Violation overlay (anti-cheat) ── */
     #violationOverlay {
       display: none;
@@ -232,6 +277,25 @@
   </style>
 </head>
 <body>
+
+<!-- Permission screen (mobile — shown before redirect to Jitsi) -->
+<div id="permScreen">
+  <div class="perm-icon">🎥</div>
+  <div class="perm-title">Ready to Join?</div>
+  <div class="perm-body">DIKLY needs your camera and microphone to join this class.</div>
+  <button class="perm-btn" id="permBtn" onclick="requestPermissions()">Allow &amp; Join Class</button>
+  <div class="perm-hint">A browser permission prompt will appear — tap <strong>Allow</strong> on both.</div>
+
+  <div id="permDenied">
+    <div class="perm-denied-title">Permission Required</div>
+    <div class="perm-denied-body">
+      Camera and microphone access are required to attend class.<br>
+      Open your browser Settings → Site permissions → allow Camera &amp; Microphone for this site, then try again.
+    </div>
+    <button class="perm-secondary-btn" onclick="requestPermissions()">Try Again</button>
+    <button class="perm-secondary-btn" onclick="history.back()">Go Back</button>
+  </div>
+</div>
 
 <!-- Loading -->
 <div id="loadOverlay">
@@ -349,13 +413,14 @@ const MAX_JOIN_INITS = 3;
     if (!sessionData.jitsiToken)
       return showError('Session token missing. Please go back and retry the preflight check.');
 
-    // On iOS Safari and Android, redirect to the real Jitsi URL with JWT
-    // instead of embedding an iframe (see lecturer-meeting.html comment).
-    const _isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)
-      || (navigator.maxTouchPoints > 1 && /Macintosh/i.test(navigator.userAgent));
-    if (_isMobile) {
+    // Mobile: request camera/mic in THIS context BEFORE redirecting to Jitsi.
+    // Requesting here prevents the iOS Safari iframe reload that breaks the
+    // External API channel when permission is granted inside an iframe.
+    if (isMobileDevice()) {
       const cfg = sessionData.jitsiConfig;
-      window.location.replace(`https://${cfg.domain}/${cfg.roomName}?jwt=${sessionData.jitsiToken}#config.deeplinking.disabled=true`);
+      const roomUrl = `https://${cfg.domain}/${cfg.roomName}?jwt=${sessionData.jitsiToken}#config.deeplinking.disabled=true`;
+      hide('loadOverlay');
+      prepareMobileJoin(roomUrl);
       return;
     }
 
@@ -367,6 +432,35 @@ const MAX_JOIN_INITS = 3;
     showError(e.message);
   }
 })();
+
+// ── Mobile detection ─────────────────────────────────────────────────────────
+function isMobileDevice() {
+  return /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)
+    || (navigator.maxTouchPoints > 1 && /Macintosh/i.test(navigator.userAgent))
+    || (typeof window.orientation !== 'undefined');
+}
+
+// ── Mobile permission + redirect flow ────────────────────────────────────────
+let _pendingRoomUrl = '';
+function prepareMobileJoin(roomUrl) {
+  _pendingRoomUrl = roomUrl;
+  document.getElementById('permScreen').classList.add('visible');
+}
+async function requestPermissions() {
+  document.getElementById('permBtn').disabled = true;
+  document.getElementById('permBtn').textContent = 'Requesting…';
+  document.getElementById('permDenied').classList.remove('visible');
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+    stream.getTracks().forEach(t => t.stop());
+    document.getElementById('permBtn').textContent = 'Joining class…';
+    setTimeout(() => { window.location.href = _pendingRoomUrl; }, 400);
+  } catch (err) {
+    document.getElementById('permBtn').disabled = false;
+    document.getElementById('permBtn').textContent = 'Allow & Join Class';
+    document.getElementById('permDenied').classList.add('visible');
+  }
+}
 
 // ── Load External API ─────────────────────────────────────────────────────────
 function loadJitsiAPI(domain) {
@@ -396,16 +490,14 @@ function initJitsi() {
     userInfo:   { displayName: cfg.displayName, email: cfg.email || '' },
     configOverwrite: {
       ...cfg.configOverwrite,
-      // Server config already sets these correctly per meeting type; we force
-      // audio muted but leave video to whatever the server decided (lecture =
-      // students start with video off, regular meeting = video on).
-      startWithAudioMuted:       cfg.configOverwrite?.startWithAudioMuted ?? true,
-      startWithVideoMuted:       cfg.configOverwrite?.startWithVideoMuted ?? true,
+      startWithAudioMuted:       cfg.configOverwrite?.startWithAudioMuted ?? false,
+      startWithVideoMuted:       cfg.configOverwrite?.startWithVideoMuted ?? false,
       prejoinPageEnabled:        false,
       prejoinConfig:             { enabled: false },
       enableWelcomePage:         false,
       enableClosePage:           false,
       disableDeepLinking:        true,
+      deeplinking:               { disabled: true },
       disableThirdPartyRequests: true,
       tokenAuthUrl:              false,
       p2p:                       { enabled: false },
@@ -413,8 +505,10 @@ function initJitsi() {
       applicationName:           'DIKLY',
       hideConferenceSubject:     true,
       hideConferenceTimer:       true,
-      // Jitsi 9584+: TOOLBAR_BUTTONS moved from interfaceConfigOverwrite to configOverwrite.
-      // Students keep basic controls; moderators control the rest from the DIKLY ctrlBar.
+      disableSimulcast:          true,
+      enableLayerSuspension:     false,
+      resolution:                360,
+      constraints:               { video: { height: { ideal: 360, max: 720 } } },
       toolbarButtons:            ['microphone','camera','chat','raisehand','tileview','hangup'],
     },
     interfaceConfigOverwrite: {

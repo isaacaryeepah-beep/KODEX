@@ -103,7 +103,7 @@ services:
       - TURN_HOST=${JITSI_DOMAIN}
       - TURN_PORT=3478
       - TURN_SECRET=${TURN_SECRET}
-      - TURN_TLS=0
+      - TURN_TLS=1
       - TZ=${TZ:-Africa/Accra}
     volumes:
       - ${CONFIG:-./jitsi-config}/web:/config:Z
@@ -159,7 +159,7 @@ services:
       - TURN_HOST=${JITSI_DOMAIN}
       - TURN_PORT=3478
       - TURN_SECRET=${TURN_SECRET}
-      - TURN_TLS=0
+      - TURN_TLS=1
       - TZ=${TZ:-Africa/Accra}
     volumes:
       - ${CONFIG:-./jitsi-config}/prosody/config:/config:Z
@@ -240,7 +240,7 @@ services:
       - JVB_ADVERTISE_IPS=${JVB_ADVERTISE_IPS:?JVB_ADVERTISE_IPS must be set to the server public IP}
       - PUBLIC_URL=https://${JITSI_DOMAIN}
       # Colibri WebSocket — enables wss://meet.dikly.live/colibri-ws/<id>/...
-      - COLIBRI_WEBSOCKET_ENABLED=1
+      - COLIBRI_WEBSOCKET_ENABLED=true
       - TZ=${TZ:-Africa/Accra}
     volumes:
       - ${CONFIG:-./jitsi-config}/jvb:/config:Z
