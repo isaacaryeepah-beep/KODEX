@@ -5,11 +5,16 @@
 # entries alive on LTE without needing any client-side BOSH config.
 set -e
 
-CFG_DIR=/config/conf.avail
-if [ ! -d "${CFG_DIR}" ]; then
-  echo "[prosody-ws-ping] no conf.avail dir, skipping"
+# Try conf.avail first (some builds), fall back to conf.d
+if [ -d /config/conf.avail ]; then
+  CFG_DIR=/config/conf.avail
+elif [ -d /config/conf.d ]; then
+  CFG_DIR=/config/conf.d
+else
+  echo "[prosody-ws-ping] no conf dir found, skipping"
   exit 0
 fi
+echo "[prosody-ws-ping] scanning ${CFG_DIR}"
 
 for f in "${CFG_DIR}"/*.cfg.lua; do
   [ -f "$f" ] || continue
