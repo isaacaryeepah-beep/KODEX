@@ -6,98 +6,77 @@ config.prejoinPageEnabled = false;
 config.prejoinConfig = { enabled: false };
 config.enableWelcomePage = false;
 config.enableClosePage = false;
-// Kills popup-based XMPP auth fallback — JWT in URL is the only auth method
 config.tokenAuthUrl = false;
 
 // ── Explicit XMPP connection endpoints ───────────────────────────────────────
-// These must point to the nginx-proxied paths on this server.
-// WebSocket is preferred; BOSH is the fallback for restricted networks.
 config.websocket = 'wss://meet.dikly.live/xmpp-websocket';
 config.bosh = 'https://meet.dikly.live/http-bind';
-// 20s keepalive: fast enough to detect a dead connection on a network handoff
-// (WiFi→LTE or LTE→WiFi) without false-positives on slow mobile connections.
 config.websocketKeepAlive = 20000;
 config.websocketKeepAliveUrl = 'https://meet.dikly.live/http-bind?keepalive=true';
 
 // ── Colibri WebSocket (JVB media bridge) ─────────────────────────────────────
 config.useNewBandwidthAllocationStrategy = true;
 
-// ── ICE / STUN / NAT traversal ───────────────────────────────────────────────
-// P2P disabled — all media must flow through JVB so proctoring sees all streams
+// ── Mobile gate bypass ───────────────────────────────────────────────────────
+// Prevents Jitsi's "Video chat isn't available on mobile" blocking page.
+config.disableDeepLinking = true;
+config.deeplinking = { disabled: true };
+
+// ── ICE / STUN / TURN ────────────────────────────────────────────────────────
+// P2P disabled — all media flows through JVB for proctoring visibility.
 config.p2p = { enabled: false };
-// STUN + TURN — coturn on port 3478 serves both.
-// HMAC credentials below are time-limited (expire 2036) and generated from TURN_SECRET.
-// To regenerate: source /root/KODEX/.env && EXPIRY=$(($(date +%s)+315360000)) &&
-//   USERNAME="${EXPIRY}:dikly" && CREDENTIAL=$(printf "%s" "$USERNAME" |
-//   openssl dgst -sha1 -hmac "$TURN_SECRET" -binary | base64 -w0)
+
+// TURN credentials — HMAC-SHA1, expire 2036.
+// Regen: source /root/KODEX/.env && EXPIRY=$(($(date +%s)+315360000)) &&
+//   UN="${EXPIRY}:dikly" && printf "%s" "$UN" | openssl dgst -sha1 -hmac "$TURN_SECRET" -binary | base64 -w0
 config.iceServers = [
   {
     urls: [
-      'turn:meet.dikly.live:3478?transport=tcp',
-      'turn:meet.dikly.live:3478',
+      'turns:meet.dikly.live:5349',             // TURN over TLS — works through strict carrier NAT
+      'turn:meet.dikly.live:3478?transport=tcp', // TURN over TCP fallback
+      'turn:meet.dikly.live:3478',               // TURN over UDP
     ],
-    username: '2094545587:dikly',
+    username:   '2094545587:dikly',
     credential: 'TBvg/uVn1JrbVHMnjaDaq4Na8sM=',
   },
-  { urls: 'stun:stun.l.google.com:19302' },
-  { urls: 'stun:stun1.l.google.com:19302' },
 ];
 
-// ── Mobile / Safari connectivity ─────────────────────────────────────────────
+// On mobile (LTE/carrier NAT) force relay-only ICE so the browser goes straight
+// to TURN rather than wasting time on host/srflx candidates that always fail.
+if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent) ||
+    (navigator.maxTouchPoints > 1 && /Macintosh/i.test(navigator.userAgent))) {
+  config.iceTransportPolicy = 'relay';
+} else {
+  config.iceTransportPolicy = 'all';
+}
+
+config.enableIceRestart = true;
+config.useIPv6 = false;
+
+// ── Mobile / Safari media ─────────────────────────────────────────────────────
 config.forceJVB121Ratio = -1;
 config.enableLayerSuspension = true;
-// Do not require display name — students join with names from their DIKLY profile
 config.requireDisplayName = false;
-// Disable IPv6 to avoid ICE candidate ordering issues on mobile networks
-config.useIPv6 = false;
-// Prefer TURN over TCP when UDP is unavailable (common on mobile LTE).
-// coturn listens on 3478/TCP so this reliably reaches clients behind carrier NAT.
-config.useTurnUdp = false;
-// Gather all ICE candidate types: host, srflx (via STUN), relay (via TURN).
-// 'relay' candidates require coturn — now available.
-config.iceTransportPolicy = 'all';
-// ICE restart: when a mobile device switches networks (WiFi↔LTE), the existing
-// ICE connection is broken. With enableIceRestart=true Jitsi re-negotiates ICE
-// automatically instead of showing "disconnected" forever.
-config.enableIceRestart = true;
-// Increase ICE candidate gathering timeout so slow mobile networks have time
-// to discover the TCP/TURN fallback before ICE fails.
 config.pcStatsInterval = 10000;
-// Safari needs explicit codec order — VP8 is universally supported
+// Safari needs explicit codec order — VP8 is universally supported.
 config.videoQuality = {
   codecPreferenceOrder: ['VP8', 'H264'],
-  maxBitratesVideo: {
-    low:    200000,
-    standard: 500000,
-    high:  1500000,
-  },
+  maxBitratesVideo: { low: 200000, standard: 500000, high: 1500000 },
 };
 
 // ── 200+ participant optimisations ───────────────────────────────────────────
-// Limit active video tiles rendered simultaneously (saves CPU/memory for all clients)
 config.channelLastN = -1;
 config.adaptiveLastN = true;
-// Simulcast: upstream 3 qualities, JVB picks the right one per receiver
 config.disableSimulcast = false;
-// Enable bandwidth estimation for adaptive quality
 config.enableTcc = true;
 config.enableRemb = true;
-// Reduce default resolution cap for large meetings (overridden per-role in buildJitsiConfig)
-config.constraints = {
-  video: { height: { ideal: 360, max: 720 } },
-};
+config.constraints = { video: { height: { ideal: 360, max: 720 } } };
 
 // ── White-label ───────────────────────────────────────────────────────────────
 config.applicationName = 'DIKLY';
 config.defaultRemoteDisplayName = 'Participant';
 config.defaultLocalDisplayName = 'Me';
-config.disableDeepLinking = true;
-// Disable Jitsi's "not available on mobile" gate — allow mobile browsers to join directly
-config.deeplinking = { disabled: true };
-// Jitsi 9584+: toolbar buttons moved from interface_config to config.
-// Default to empty — the DIKLY External API embed sets the correct per-role list.
 config.toolbarButtons = [];
-// Hide all Jitsi branding — belt-and-suspenders alongside interfaceConfigOverwrite
 config.disableWatermark = true;
 
 // ── Privacy / analytics ───────────────────────────────────────────────────────
