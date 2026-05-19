@@ -144,8 +144,8 @@ services:
     networks:
       - jitsi-net
     healthcheck:
-      # /about/health was removed in newer Jicofo builds — use TCP port check instead
-      test: ['CMD', 'nc', '-z', 'localhost', '8888']
+      # nc not available in JVM image; use bash TCP redirect to check port 8888
+      test: ['CMD-SHELL', 'bash -c "</dev/tcp/localhost/8888" 2>/dev/null']
       interval: 30s
       timeout: 5s
       retries: 5
