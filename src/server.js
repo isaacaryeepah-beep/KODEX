@@ -171,14 +171,19 @@ app.get('/monitor', (req, res) => {
 
 // Student session preflight / validation screen (runs before Jitsi)
 app.get('/session-preflight', (req, res) => {
+  // Permissions-Policy allows this page to delegate camera/mic to cross-origin iframes.
+  // Without it, iOS Safari may reload or block the Jitsi iframe when permissions are granted.
+  res.setHeader('Permissions-Policy', 'camera=*, microphone=*, display-capture=*');
   res.sendFile(path.join(__dirname, 'public', 'session-preflight.html'));
 });
 
 // Embedded meeting pages (Jitsi External API — no Jitsi UI chrome)
 app.get('/lecturer-meeting', (req, res) => {
+  res.setHeader('Permissions-Policy', 'camera=*, microphone=*, display-capture=*');
   res.sendFile(path.join(__dirname, 'public', 'lecturer-meeting.html'));
 });
 app.get('/student-meeting', (req, res) => {
+  res.setHeader('Permissions-Policy', 'camera=*, microphone=*, display-capture=*');
   res.sendFile(path.join(__dirname, 'public', 'student-meeting.html'));
 });
 

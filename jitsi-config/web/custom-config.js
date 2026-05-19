@@ -75,6 +75,11 @@ config.applicationName = 'DIKLY';
 config.defaultRemoteDisplayName = 'Participant';
 config.defaultLocalDisplayName = 'Me';
 config.disableDeepLinking = true;
+// Jitsi 9584+: toolbar buttons moved from interface_config to config.
+// Default to empty — the DIKLY External API embed sets the correct per-role list.
+config.toolbarButtons = [];
+// Hide all Jitsi branding — belt-and-suspenders alongside interfaceConfigOverwrite
+config.disableWatermark = true;
 
 // ── Privacy / analytics ───────────────────────────────────────────────────────
 config.disableThirdPartyRequests = true;

@@ -144,11 +144,12 @@ services:
     networks:
       - jitsi-net
     healthcheck:
-      test: ['CMD', 'curl', '-sf', 'http://localhost:8888/about/health']
+      # /about/health was removed in newer Jicofo builds — use TCP port check instead
+      test: ['CMD', 'nc', '-z', 'localhost', '8888']
       interval: 30s
-      timeout: 10s
+      timeout: 5s
       retries: 5
-      start_period: 20s
+      start_period: 30s
 
   # ── JVB (Jitsi Video Bridge — all media streams) ─────────────────────────
   jvb:
