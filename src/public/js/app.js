@@ -7040,19 +7040,50 @@ async function startMeeting(id) {
     const jitsiConfig = sd.jitsiConfig;
     const jitsiToken  = sd.jitsiToken;
     const monitorUrl  = sd.monitorUrl;
-    renderMeetings();
-    if (jitsiConfig?.roomName) {
-      showJitsiEmbed(jitsiConfig, jitsiToken);
-      if (monitorUrl) {
-        toastSuccess('Meeting started! Open the monitor to watch participants.');
-      }
+
+    if (!jitsiConfig?.roomName) { toastError('No meeting room returned — contact your admin'); return; }
+
+    const roomUrl = `https://${jitsiConfig.domain}/${jitsiConfig.roomName}${jitsiToken ? '?jwt=' + jitsiToken : ''}`;
+
+    if (_isMobile) {
+      await _joinMeetingMobile(roomUrl);
+      return;
     }
+
+    renderMeetings();
+    showJitsiEmbed(jitsiConfig, jitsiToken);
+    if (monitorUrl) toastSuccess('Meeting started! Open the monitor to watch participants.');
   } catch (e) {
     toastError(e.message);
   }
 }
 
 const PROCTORED_TYPES = ['proctored_quiz', 'snap_quiz', 'oral_exam', 'live_assessment'];
+
+// True on iPhone, iPad (incl. desktop-mode iPad), and Android browsers.
+// On mobile we navigate directly to the Jitsi URL instead of embedding an iframe,
+// because iOS Safari reloads cross-origin iframes after granting camera/mic permission
+// which silently breaks the External API and leaves the meeting stuck on a black screen.
+const _isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)
+  || (navigator.maxTouchPoints > 1 && /Macintosh/i.test(navigator.userAgent));
+
+// Mobile join: pre-request camera/mic so the user understands why (and iOS remembers the
+// choice for the DIKLY domain), then navigate to the real Jitsi room in the same tab.
+async function _joinMeetingMobile(roomUrl) {
+  if (navigator.mediaDevices?.getUserMedia) {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      stream.getTracks().forEach(t => t.stop()); // release camera/mic immediately; Jitsi re-acquires
+    } catch (err) {
+      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+        toastError('Camera and microphone access are required to join the meeting.');
+        return;
+      }
+      // NotFoundError, OverconstrainedError, etc. — navigate anyway; Jitsi will show its own error
+    }
+  }
+  window.location.href = roomUrl;
+}
 
 async function joinMeeting(id) {
   try {
@@ -7065,6 +7096,13 @@ async function joinMeeting(id) {
 
     if (!jitsiConfig?.roomName) {
       toastError('No Jitsi config returned — contact your admin');
+      return;
+    }
+
+    const roomUrl = `https://${jitsiConfig.domain}/${jitsiConfig.roomName}${jitsiToken ? '?jwt=' + jitsiToken : ''}`;
+
+    if (_isMobile) {
+      await _joinMeetingMobile(roomUrl);
       return;
     }
 
@@ -7280,6 +7318,13 @@ function _proctoredConfirmJoin(meetingId) {
   const jitsiConfig = overlay._jitsiConfig;
   const jitsiToken  = overlay._jitsiToken;
   overlay.remove();
+
+  if (_isMobile) {
+    // Permission was already granted during staging checks — navigate directly
+    const roomUrl = `https://${jitsiConfig.domain}/${jitsiConfig.roomName}${jitsiToken ? '?jwt=' + jitsiToken : ''}`;
+    window.location.href = roomUrl;
+    return;
+  }
 
   startMeetingAntiCheat(meetingId);
   showJitsiEmbed(jitsiConfig, jitsiToken);
@@ -10791,11 +10836,22 @@ async function showJitsiJoin() {
 
 async function submitJitsiJoin(meetingId) {
   try {
-    const data       = await api(`/api/meetings/${meetingId}/join`);
-    const d          = data.data || data;
-    const jitsiToken = d.jitsiToken;
-    if (d.jitsiConfig?.roomName) showJitsiEmbed(d.jitsiConfig, jitsiToken);
+    const data        = await api(`/api/meetings/${meetingId}/join`);
+    const d           = data.data || data;
+    const jitsiToken  = d.jitsiToken;
+    const jitsiConfig = d.jitsiConfig;
+
+    if (!jitsiConfig?.roomName) { toastError('No meeting room returned.'); return; }
+
     toastSuccess('Attendance marked via meeting join!');
+
+    if (_isMobile) {
+      const roomUrl = `https://${jitsiConfig.domain}/${jitsiConfig.roomName}${jitsiToken ? '?jwt=' + jitsiToken : ''}`;
+      await _joinMeetingMobile(roomUrl);
+      return;
+    }
+
+    showJitsiEmbed(jitsiConfig, jitsiToken);
     navigateTo('mark-attendance');
   } catch (e) {
     toastError(e.message);

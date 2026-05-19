@@ -594,6 +594,18 @@ const MAX_JOIN_INITS = 3;
     if (!sessionData.jitsiToken)
       return showError('Meeting token missing. Ensure JITSI_APP_SECRET is configured on the server.');
 
+    // On iOS Safari and Android, embedding Jitsi in an iframe is unreliable:
+    // iOS reloads cross-origin iframes after granting camera/mic permission,
+    // silently breaking the External API channel and leaving a black screen.
+    // Solution: redirect to the real Jitsi URL with JWT in the same tab.
+    const _isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)
+      || (navigator.maxTouchPoints > 1 && /Macintosh/i.test(navigator.userAgent));
+    if (_isMobile) {
+      const cfg = sessionData.jitsiConfig;
+      window.location.replace(`https://${cfg.domain}/${cfg.roomName}?jwt=${sessionData.jitsiToken}`);
+      return;
+    }
+
     setStatus('Starting meeting room…');
     await loadJitsiAPI(sessionData.jitsiConfig.domain);
     initJitsi();
