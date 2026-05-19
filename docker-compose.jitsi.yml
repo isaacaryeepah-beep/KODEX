@@ -245,6 +245,9 @@ services:
       - TZ=${TZ:-Africa/Accra}
     volumes:
       - ${CONFIG:-./jitsi-config}/jvb:/config:Z
+      # Post-init patch: runs after 10-config generates jvb.conf, fixes
+      # websockets.enabled, server-id, and advertise-private-candidates.
+      - ${CONFIG:-./jitsi-config}/jvb/11-patch.sh:/etc/cont-init.d/11-patch:ro
     depends_on:
       - prosody
     networks:
