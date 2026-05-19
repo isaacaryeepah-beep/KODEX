@@ -14,7 +14,9 @@ config.tokenAuthUrl = false;
 // WebSocket is preferred; BOSH is the fallback for restricted networks.
 config.websocket = 'wss://meet.dikly.live/xmpp-websocket';
 config.bosh = 'https://meet.dikly.live/http-bind';
-config.websocketKeepAlive = 10000;
+// Longer keepalive for mobile users who switch between wifi/LTE mid-session.
+// 30s is aggressive enough to detect a dead connection but forgiving for handoffs.
+config.websocketKeepAlive = 30000;
 config.websocketKeepAliveUrl = 'https://meet.dikly.live/http-bind?keepalive=true';
 
 // ── Colibri WebSocket (JVB media bridge) ─────────────────────────────────────
@@ -30,15 +32,20 @@ config.stunServers = [
 ];
 
 // ── Mobile / Safari compatibility ────────────────────────────────────────────
-// Force TCP fallback for networks that block UDP (common on mobile/corporate)
 config.forceJVB121Ratio = -1;
 config.enableLayerSuspension = true;
 // Do not require display name — students join with names from their DIKLY profile
 config.requireDisplayName = false;
 // Disable IPv6 to avoid ICE candidate ordering issues on mobile networks
 config.useIPv6 = false;
-// Prefer TCP ICE candidates on mobile / Safari where UDP is often blocked
 config.useTurnUdp = false;
+// Gather all ICE candidate types (host, srflx, relay) — 'relay' requires TURN
+// which we don't have, but 'all' ensures the JVB TCP fallback (port 4443) is used
+// when UDP 10000 is blocked, which is common on mobile LTE and corporate networks.
+config.iceTransportPolicy = 'all';
+// Increase ICE candidate gathering timeout so slow mobile networks have time
+// to discover the TCP fallback candidate before ICE fails.
+config.pcStatsInterval = 10000;
 // Safari needs explicit codec order — VP8 is universally supported
 config.videoQuality = {
   codecPreferenceOrder: ['VP8', 'H264'],

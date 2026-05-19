@@ -117,6 +117,9 @@ services:
     environment:
       - AUTH_TYPE=jwt
       - ENABLE_AUTH=1
+      # Without XMPP_SERVER Jicofo defaults to xmpp.meet.jitsi and fails DNS.
+      # Set it to the prosody service name so Docker resolves it internally.
+      - XMPP_SERVER=prosody
       - XMPP_DOMAIN=${JITSI_DOMAIN}
       - XMPP_AUTH_DOMAIN=auth.${JITSI_DOMAIN}
       - XMPP_INTERNAL_MUC_DOMAIN=internal.auth.${JITSI_DOMAIN}
