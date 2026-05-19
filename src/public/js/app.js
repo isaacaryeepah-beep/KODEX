@@ -5151,7 +5151,7 @@ async function renderStudentDashboard(content) {
               <div style="font-weight:600;font-size:14px">${m.title}</div>
               <div style="font-size:12px;color:var(--text-light)">${new Date(m.scheduledStart).toLocaleString()} — ${m.duration} min</div>
             </div>
-            ${m.joinUrl ? `<a href="${m.joinUrl}" target="_blank" class="btn btn-success btn-sm">Join</a>` : ''}
+            ${m._id ? `<button class="btn btn-success btn-sm" onclick="joinMeeting('${m._id}')">Join</button>` : ''}
           </div>
         `).join('')}
       </div>
@@ -7442,7 +7442,7 @@ async function viewMeetingDetail(id) {
           <p><strong>End:</strong> ${new Date(m.scheduledEnd).toLocaleString()}</p>
           <p><strong>Duration:</strong> ${m.duration} minutes</p>
           ${m.course ? `<p><strong>Course:</strong> ${m.course.code} - ${m.course.title}</p>` : ''}
-          <p><strong>Join Link:</strong> <a href="${m.joinUrl}" target="_blank" style="color:#3b82f6;word-break:break-all;">${m.joinUrl}</a></p>
+          <p><strong>Join Link:</strong> <a href="${canManage ? '/lecturer-meeting?meeting=' + m._id : '/session-preflight?meeting=' + m._id}" target="_blank" style="color:#3b82f6;word-break:break-all;">${window.location.origin}${canManage ? '/lecturer-meeting?meeting=' + m._id : '/session-preflight?meeting=' + m._id}</a></p>
           ${m.inviteLink ? `<p><strong>Invite Link:</strong> <a href="${m.inviteLink}" target="_blank" style="color:#16a34a;word-break:break-all;font-weight:600">▶ ${m.inviteLink}</a></p>` : ''}
           ${canManage ? `<button class="btn btn-sm" style="background:#0ea5e9;color:#fff;margin-top:4px" onclick="showInviteLinkForm('${m._id}', \`${m.inviteLink || ''}\`)">🔗 ${m.inviteLink ? 'Update' : 'Add'} Invite Link</button>` : ''}
           <div style="margin-top:12px;">
@@ -10738,7 +10738,7 @@ async function showJitsiJoin() {
             <div style="font-size:12px;color:var(--text-light)">${new Date(m.scheduledStart).toLocaleString()} — ${m.duration} min</div>
             <span class="status-badge" style="${m.status === 'active' ? 'background:#22c55e;color:#fff;' : 'background:#3b82f6;color:#fff;'}font-size:11px;margin-top:4px;">${m.status === 'active' ? 'Live' : 'Scheduled'}</span>
           </div>
-          <button class="btn btn-success btn-sm" onclick="submitJitsiJoin('${m._id}', '${m.joinUrl || ''}')">Join & Mark</button>
+          <button class="btn btn-success btn-sm" onclick="submitJitsiJoin('${m._id}')">Join & Mark</button>
         </div>
       `).join('');
     } else {
