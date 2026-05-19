@@ -6873,7 +6873,8 @@ async function renderMeetings() {
           <div style="grid-column:1/-1;"><div style="font-weight:600;color:#0f172a;">Start</div>${fmtDate(m.scheduledStart)}</div>
         </div>
         <div style="display:flex;gap:6px;flex-wrap:wrap;">
-          ${isLive && !isDeviceLocked ? `<button style="flex:1;background:#22c55e;color:#fff;border:none;padding:10px 14px;border-radius:9px;font-weight:700;cursor:pointer;font-size:14px;min-width:90px;" onclick="joinMeeting('${m._id}')">▶ Join</button>` : ''}
+          ${isLive && !canControl && !isDeviceLocked ? `<button style="flex:1;background:#22c55e;color:#fff;border:none;padding:10px 14px;border-radius:9px;font-weight:700;cursor:pointer;font-size:14px;min-width:90px;" onclick="joinMeeting('${m._id}')">▶ Join</button>` : ''}
+          ${isLive && canControl ? `<button style="flex:1;background:#22c55e;color:#fff;border:none;padding:10px 14px;border-radius:9px;font-weight:700;cursor:pointer;font-size:14px;min-width:90px;" onclick="startMeeting('${m._id}')">▶ Rejoin</button>` : ''}
           ${isLive && isDeviceLocked ? `<span style="background:#fef3c7;color:#92400e;padding:8px 12px;border-radius:9px;font-size:12px;font-weight:600;">🔒 Locked</span>` : ''}
           ${isScheduled && !canControl ? `<span style="background:#eff6ff;color:#1d4ed8;padding:8px 12px;border-radius:9px;font-size:12px;font-weight:600;">Not Live Yet</span>` : ''}
           ${canControl && isScheduled ? `<button style="flex:1;background:#3b82f6;color:#fff;border:none;padding:10px 14px;border-radius:9px;font-weight:700;cursor:pointer;font-size:14px;min-width:90px;" onclick="startMeeting('${m._id}')">▶ Start</button>` : ''}
