@@ -25,24 +25,8 @@ config.deeplinking = { disabled: true };
 // P2P disabled — all media flows through JVB for proctoring visibility.
 config.p2p = { enabled: false };
 
-// TURN credentials — HMAC-SHA1, expire 2036.
-// Regen: source /root/KODEX/.env && EXPIRY=$(($(date +%s)+315360000)) &&
-//   UN="${EXPIRY}:dikly" && printf "%s" "$UN" | openssl dgst -sha1 -hmac "$TURN_SECRET" -binary | base64 -w0
-config.iceServers = [
-  {
-    urls: [
-      'turns:meet.dikly.live:5349',
-      'turn:meet.dikly.live:3478?transport=tcp',
-      'turn:meet.dikly.live:3478',
-    ],
-    username:   '2094545587:dikly',
-    credential: 'TBvg/uVn1JrbVHMnjaDaq4Na8sM=',
-  },
-];
-
-// Use 'all' on all devices — try direct JVB connection (10000/UDP, 4443/TCP) first,
-// fall back to TURN relay automatically. 'relay'-only was causing disconnections when
-// coturn had any transient issue, with no fallback path.
+// TURN credentials are injected automatically by Prosody's turncredentials module
+// using the TURN_SECRET from the .env file. No static credentials needed here.
 config.iceTransportPolicy = 'all';
 
 config.enableIceRestart = true;
