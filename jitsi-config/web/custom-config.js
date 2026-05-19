@@ -25,11 +25,20 @@ config.useNewBandwidthAllocationStrategy = true;
 // ── ICE / STUN / NAT traversal ───────────────────────────────────────────────
 // P2P disabled — all media must flow through JVB so proctoring sees all streams
 config.p2p = { enabled: false };
-// STUN servers — used for JVB srflx (server-reflexive) ICE candidates.
-// TURN credentials for relay are delivered automatically by Prosody's
-// turncredentials module over XMPP — no explicit config.turnServers needed here.
-config.stunServers = [
-  { urls: 'stun:meet.dikly.live:3478' },  // self-hosted coturn (also serves as STUN)
+// STUN + TURN — coturn on port 3478 serves both.
+// HMAC credentials below are time-limited (expire 2036) and generated from TURN_SECRET.
+// To regenerate: source /root/KODEX/.env && EXPIRY=$(($(date +%s)+315360000)) &&
+//   USERNAME="${EXPIRY}:dikly" && CREDENTIAL=$(printf "%s" "$USERNAME" |
+//   openssl dgst -sha1 -hmac "$TURN_SECRET" -binary | base64 -w0)
+config.iceServers = [
+  {
+    urls: [
+      'turn:meet.dikly.live:3478?transport=tcp',
+      'turn:meet.dikly.live:3478',
+    ],
+    username: '2094545587:dikly',
+    credential: 'TBvg/uVn1JrbVHMnjaDaq4Na8sM=',
+  },
   { urls: 'stun:stun.l.google.com:19302' },
   { urls: 'stun:stun1.l.google.com:19302' },
 ];
