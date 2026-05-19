@@ -406,18 +406,26 @@ exports.joinMeeting = async (req, res) => {
     const meeting = req.meeting;
     const user    = req.user;
 
+    const isMod = isMeetingModerator(meeting, user);
+
     if (meeting.status === 'scheduled') {
-      return res.status(403).json({
-        error: 'Meeting has not started yet.',
-        status: 'scheduled',
-        scheduledStart: meeting.scheduledStart,
-      });
+      if (isMod) {
+        // Moderators implicitly start the meeting on first join — no separate /start call needed.
+        meeting.status      = 'live';
+        meeting.actualStart = new Date();
+        await meeting.save();
+        console.log(`[Meeting:join] auto-started id=${meeting._id} by moderator=${user.email || user._id}`);
+      } else {
+        return res.status(403).json({
+          error: 'Meeting has not started yet.',
+          status: 'scheduled',
+          scheduledStart: meeting.scheduledStart,
+        });
+      }
     }
     if (meeting.status !== 'live') {
       return res.status(403).json({ error: `Meeting is ${meeting.status}.`, status: meeting.status });
     }
-
-    const isMod = isMeetingModerator(meeting, user);
 
     console.log(`[Meeting:join] id=${meeting._id} room=${meeting.roomName} user=${user.email || user._id} role=${user.role} moderator=${isMod} locked=${meeting.isLocked}`);
 
