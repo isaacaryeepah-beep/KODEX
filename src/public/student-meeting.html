@@ -349,6 +349,16 @@ const MAX_JOIN_INITS = 3;
     if (!sessionData.jitsiToken)
       return showError('Session token missing. Please go back and retry the preflight check.');
 
+    // On iOS Safari and Android, redirect to the real Jitsi URL with JWT
+    // instead of embedding an iframe (see lecturer-meeting.html comment).
+    const _isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)
+      || (navigator.maxTouchPoints > 1 && /Macintosh/i.test(navigator.userAgent));
+    if (_isMobile) {
+      const cfg = sessionData.jitsiConfig;
+      window.location.replace(`https://${cfg.domain}/${cfg.roomName}?jwt=${sessionData.jitsiToken}`);
+      return;
+    }
+
     setStatus('Starting class room…');
     await loadJitsiAPI(sessionData.jitsiConfig.domain);
     initJitsi();

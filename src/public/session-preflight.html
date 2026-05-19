@@ -792,6 +792,17 @@ async function joinMeeting() {
     return;
   }
 
+  // On iOS Safari / Android: permission was already granted during the camera/mic
+  // preflight checks above. Navigate directly to the Jitsi room URL so Safari
+  // opens it as a full page — embedding via iframe triggers an iOS reload loop.
+  const _isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)
+    || (navigator.maxTouchPoints > 1 && /Macintosh/i.test(navigator.userAgent));
+  if (_isMobile && meetingData.jitsiConfig?.roomName && meetingData.jitsiToken) {
+    const cfg = meetingData.jitsiConfig;
+    window.location.href = `https://${cfg.domain}/${cfg.roomName}?jwt=${meetingData.jitsiToken}`;
+    return;
+  }
+
   try {
     sessionStorage.setItem('dikly_jitsi_session', JSON.stringify({
       meetingId:   MEETING_ID,
