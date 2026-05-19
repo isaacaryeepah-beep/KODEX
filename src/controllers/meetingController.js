@@ -89,6 +89,10 @@ function buildJitsiConfig(meeting, user, isMod) {
       adaptiveLastN:   true,
       ...lectureConstraints,
       ...lecturerConstraints,
+      // Jitsi 9584+: toolbar config moved from interfaceConfigOverwrite to configOverwrite
+      toolbarButtons: isMod ? moderatorButtons : participantButtons,
+      // Hide Jitsi watermark via configOverwrite (interfaceConfigOverwrite ignored in 9584)
+      disableWatermark: true,
     },
     interfaceConfigOverwrite: {
       // ── White-label: remove all Jitsi branding ──────────────────────────
