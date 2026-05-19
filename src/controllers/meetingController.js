@@ -1,4 +1,5 @@
 'use strict';
+const crypto             = require('crypto');
 const Meeting            = require('../models/Meeting');
 const MeetingAttendance  = require('../models/MeetingAttendance');
 const MeetingParticipant = require('../models/MeetingParticipant');
