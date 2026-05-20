@@ -80,8 +80,6 @@ services:
       --denied-peer-ip=198.18.0.0-198.19.255.255
       --denied-peer-ip=240.0.0.0-255.255.255.255
       --cipher-list=HIGH:!aNULL:!eNULL:!EXPORT:!DES:!RC4:!MD5:!PSK
-    mem_limit: 512m
-    memswap_limit: 512m
     healthcheck:
       test: ['CMD-SHELL', 'ss -ulnp | grep -q :3478 || exit 1']
       interval: 30s
