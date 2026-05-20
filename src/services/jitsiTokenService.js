@@ -8,18 +8,19 @@ const JITSI_APP_SECRET = process.env.JITSI_APP_SECRET;
 
 const MISSING = ['JITSI_DOMAIN', 'JITSI_APP_ID', 'JITSI_APP_SECRET'].filter(k => !process.env[k]);
 if (MISSING.length) {
-  const msg = `[Jitsi] FATAL: Required env vars not set: ${MISSING.join(', ')}. Set them in .env and restart.`;
-  console.error(msg);
-  throw new Error(msg);
+  console.warn(`[Jitsi] WARNING: Jitsi env vars not set: ${MISSING.join(', ')}. Jitsi meetings disabled — GetStream will be used instead.`);
+} else {
+  console.log(`[Jitsi] ✓ Configured — domain=${JITSI_DOMAIN}  app_id=${JITSI_APP_ID}`);
 }
-
-console.log(`[Jitsi] ✓ Configured — domain=${JITSI_DOMAIN}  app_id=${JITSI_APP_ID}`);
 
 /**
  * Generate a Prosody mod_auth_token-compatible JWT for a DIKLY user.
  * The moderator flag is always set server-side — the client never controls it.
  */
+exports.jitsiConfigured = MISSING.length === 0;
+
 exports.generateJitsiToken = function (user, roomName, isModerator, durationMinutes = 240) {
+  if (MISSING.length) throw new Error('Jitsi is not configured. Set JITSI_DOMAIN, JITSI_APP_ID and JITSI_APP_SECRET.');
   const now = Math.floor(Date.now() / 1000);
 
   const payload = {
