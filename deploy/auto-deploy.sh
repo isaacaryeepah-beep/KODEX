@@ -14,6 +14,12 @@ NGINX_CONF=/etc/nginx/sites-available/jitsi
 
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" >> "$LOG"; }
 
+# Rotate log if it exceeds 10 MB — keeps the deploy log from growing unbounded.
+if [ -f "$LOG" ] && [ "$(stat -c%s "$LOG" 2>/dev/null || echo 0)" -gt 10485760 ]; then
+    mv "$LOG" "${LOG}.1"
+    gzip -f "${LOG}.1" &
+fi
+
 # Prevent overlapping cron runs
 if [ -f "$LOCK" ]; then
     PID=$(cat "$LOCK")
