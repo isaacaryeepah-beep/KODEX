@@ -21,6 +21,37 @@ if (_isMobile) {
   config.bosh             = 'https://meet.dikly.live/http-bind';
   config.websocket        = '';   // empty string → falsy → WS path skipped
   config.websocketKeepAlive = -1; // disable keepalive (not needed for BOSH)
+
+  // Colibri WebSocket (JVB media bridge) has idleTimeoutMs=0 in this JVB build —
+  // no built-in ping frames. Carrier NAT kills any idle WebSocket after ~60s.
+  // Fix: intercept WebSocket creation and send a Colibri PingRequest every 25s.
+  // JVB responds with PingResponse, generating bidirectional traffic that resets
+  // the carrier NAT timer before it can expire.
+  (function () {
+    var NativeWS = window.WebSocket;
+    function PatchedWS(url, protocols) {
+      var ws = protocols !== undefined ? new NativeWS(url, protocols) : new NativeWS(url);
+      if (typeof url === 'string' && url.indexOf('/colibri-ws/') !== -1) {
+        var timer;
+        ws.addEventListener('open', function () {
+          timer = setInterval(function () {
+            if (ws.readyState === 1) {
+              try { ws.send('{"colibriClass":"PingRequest"}'); } catch (e) {}
+            }
+          }, 25000);
+        });
+        ws.addEventListener('close', function () { clearInterval(timer); });
+        ws.addEventListener('error', function () { clearInterval(timer); });
+      }
+      return ws;
+    }
+    PatchedWS.prototype = NativeWS.prototype;
+    PatchedWS.CONNECTING = NativeWS.CONNECTING;
+    PatchedWS.OPEN       = NativeWS.OPEN;
+    PatchedWS.CLOSING    = NativeWS.CLOSING;
+    PatchedWS.CLOSED     = NativeWS.CLOSED;
+    window.WebSocket = PatchedWS;
+  }());
 } else {
   config.serviceUrl       = 'wss://meet.dikly.live/xmpp-websocket';
   config.websocket        = 'wss://meet.dikly.live/xmpp-websocket';

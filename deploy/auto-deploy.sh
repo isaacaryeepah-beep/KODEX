@@ -42,9 +42,11 @@ echo "$CHANGED" | while read -r f; do log "  $f"; done
 
 RESTART_JITSI=0
 RESTART_APP=0
+RELOAD_NGINX=0
 
 echo "$CHANGED" | grep -qE '^(docker-compose\.jitsi\.yml|jitsi-config/)' && RESTART_JITSI=1
 echo "$CHANGED" | grep -qE '^(docker-compose\.yml|src/|Dockerfile)' && RESTART_APP=1
+echo "$CHANGED" | grep -qE '^deploy/nginx-jitsi\.conf' && RELOAD_NGINX=1
 
 # Jitsi stack changes
 if [ "$RESTART_JITSI" = "1" ]; then
@@ -62,6 +64,14 @@ if [ "$RESTART_APP" = "1" ]; then
     $COMPOSE_APP build app >> "$LOG" 2>&1
     $COMPOSE_APP up -d --force-recreate app >> "$LOG" 2>&1
     log "App container restarted."
+fi
+
+# nginx config changes
+if [ "$RELOAD_NGINX" = "1" ]; then
+    log "nginx config changed — updating and reloading…"
+    cp "$REPO/deploy/nginx-jitsi.conf" /etc/nginx/sites-available/jitsi
+    nginx -t >> "$LOG" 2>&1 && systemctl reload nginx >> "$LOG" 2>&1
+    log "nginx reloaded."
 fi
 
 log "Deploy complete."
