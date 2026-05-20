@@ -266,10 +266,6 @@ services:
       - PUBLIC_URL=https://${JITSI_DOMAIN}
       # Colibri WebSocket — enables wss://meet.dikly.live/colibri-ws/<id>/...
       - COLIBRI_WEBSOCKET_ENABLED=true
-      # JVM heap — the image startup script reads JVB_JAVA_XMX (just the number, adds 'm').
-      # JAVA_SYS_PROPS carries -D properties, not -Xmx flags; the script hardcodes -Xmx3072m
-      # before JAVA_SYS_PROPS so a duplicate -Xmx in JAVA_SYS_PROPS has no effect.
-      - JVB_JAVA_XMX=1500
       - TZ=${TZ:-Africa/Accra}
     volumes:
       - ${CONFIG:-./jitsi-config}/jvb:/config:Z
@@ -280,8 +276,10 @@ services:
       - prosody
     networks:
       - jitsi-net
-    mem_limit: 2g
-    memswap_limit: 2g
+    # JVM heap inside JVB is hardcoded to 3072m in this image version.
+    # mem_limit must stay above that — set to 4g to give JVM headroom above its heap ceiling.
+    mem_limit: 4g
+    memswap_limit: 4g
     healthcheck:
       # curl is not in the JVM image; check that JVB's Colibri WebSocket port is open.
       test: ['CMD-SHELL', 'bash -c "</dev/tcp/localhost/9090" 2>/dev/null']
