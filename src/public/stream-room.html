@@ -282,6 +282,13 @@ const BASE_URL = location.origin;
 
 if (!callId || !token || !userId || !apiKey) { showError('Missing parameters. Please go back.'); throw 0; }
 
+// KODEX auth token (for backend API calls) — different from the GetStream token in the URL
+function getKodexToken() {
+  return localStorage.getItem('token') || localStorage.getItem('jwt_token') ||
+         localStorage.getItem('auth_token') || sessionStorage.getItem('token') || '';
+}
+const kodexToken = getKodexToken();
+
 document.getElementById('callTitle').textContent = title;
 if (isMod) document.getElementById('callScreen').classList.add('is-mod');
 
@@ -324,7 +331,9 @@ if (camOn) await safe(() => call.camera.enable());
 // ── Chat ──────────────────────────────────────────────────────────────────────
 try {
   chatClient = StreamChat.getInstance(apiKey);
-  await chatClient.connectUser({ id: userId, name: userName }, token);
+  // getInstance returns a singleton — guard against re-connecting an already-connected client
+  if (chatClient.userID && chatClient.userID !== userId) await chatClient.disconnectUser();
+  if (!chatClient.userID) await chatClient.connectUser({ id: userId, name: userName }, token);
   channel = chatClient.channel('messaging', callId, { name: title });
   await channel.watch();
   // Render existing messages
@@ -388,7 +397,7 @@ window.muteAll = async () => {
   try {
     await fetch(`${BASE_URL}/api/meetings/${meetingId}/mute-all`, {
       method: 'POST',
-      headers: { Authorization: 'Bearer ' + token },
+      headers: { Authorization: 'Bearer ' + kodexToken },
     });
   } catch (_) {}
 };
@@ -397,7 +406,7 @@ window.muteParticipant = async (uid) => {
   try {
     await fetch(`${BASE_URL}/api/meetings/${meetingId}/participants/${uid}/mute`, {
       method: 'POST',
-      headers: { Authorization: 'Bearer ' + token },
+      headers: { Authorization: 'Bearer ' + kodexToken },
     });
   } catch (_) {}
 };
@@ -407,7 +416,7 @@ window.kickParticipant = async (uid) => {
   try {
     await fetch(`${BASE_URL}/api/meetings/${meetingId}/participants/${uid}/kick`, {
       method: 'POST',
-      headers: { Authorization: 'Bearer ' + token },
+      headers: { Authorization: 'Bearer ' + kodexToken },
     });
   } catch (_) {}
 };
@@ -477,8 +486,8 @@ function buildTile(p) {
     <div class="tile-menu">
       <button class="tile-menu-btn" onclick="toggleTileMenu(this)">⋯</button>
       <div class="tile-menu-popup">
-        <button onclick="muteParticipant('${p.userId}')">🔇 Mute</button>
-        <button class="danger" onclick="kickParticipant('${p.userId}')">✕ Remove</button>
+        <button onclick="muteParticipant(${JSON.stringify(p.userId||'')})">🔇 Mute</button>
+        <button class="danger" onclick="kickParticipant(${JSON.stringify(p.userId||'')})">✕ Remove</button>
       </div>
     </div>` : '';
   tile.innerHTML = `

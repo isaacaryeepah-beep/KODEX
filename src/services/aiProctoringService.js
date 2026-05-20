@@ -38,7 +38,7 @@ async function analyzeSnapshot(imageBase64) {
 
   try {
     const response = await client.messages.create({
-      model:      'claude-haiku-4-5-20251001',
+      model:      'claude-haiku-4-5',
       max_tokens: 250,
       messages: [{
         role: 'user',
@@ -56,7 +56,16 @@ async function analyzeSnapshot(imageBase64) {
     });
 
     const raw = response.content[0]?.text?.trim() || '{}';
-    return JSON.parse(raw);
+    const result = JSON.parse(raw);
+    // Validate expected shape; fall back to safe defaults for any missing booleans
+    return {
+      facePresent:        typeof result.facePresent        === 'boolean' ? result.facePresent        : true,
+      faceCount:          typeof result.faceCount          === 'number'  ? result.faceCount          : 1,
+      lookingAway:        typeof result.lookingAway        === 'boolean' ? result.lookingAway        : false,
+      phoneVisible:       typeof result.phoneVisible       === 'boolean' ? result.phoneVisible       : false,
+      suspiciousActivity: typeof result.suspiciousActivity === 'boolean' ? result.suspiciousActivity : false,
+      notes:              result.notes || '',
+    };
   } catch (err) {
     console.error('[AIProctoringService] analyzeSnapshot error:', err.message);
     return {

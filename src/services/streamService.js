@@ -16,10 +16,19 @@ function getClient() {
   return new StreamClient(STREAM_API_KEY, STREAM_API_SECRET);
 }
 
-// Works for both video and chat (unified auth)
+// Works for both video and chat (unified auth).
+// node-sdk v0.4.x uses generateUserToken({ user_id, exp }); older builds expose createToken(userId, exp).
 function generateStreamToken(userId) {
   const client = getClient();
-  return client.generateUserToken({ user_id: String(userId), exp: Math.floor(Date.now() / 1000) + 7200 });
+  const uid = String(userId);
+  const exp = Math.floor(Date.now() / 1000) + 7200;
+  if (typeof client.generateUserToken === 'function') {
+    return client.generateUserToken({ user_id: uid, exp });
+  }
+  if (typeof client.createToken === 'function') {
+    return client.createToken(uid, exp);
+  }
+  throw new Error('GetStream SDK: no token generation method found (generateUserToken / createToken).');
 }
 
 async function createStreamCall(callId, hostUserId = null) {

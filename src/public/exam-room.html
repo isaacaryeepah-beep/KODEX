@@ -158,9 +158,19 @@ async function init() {
   document.addEventListener('fullscreenchange', onFullscreenChange);
   document.addEventListener('webkitfullscreenchange', onFullscreenChange);
 
-  // Tab/focus detection
+  // Tab/focus detection — visibilitychange is sufficient; blur fires on any focus loss
+  // (e.g. clicking an iframe) and would double-count alongside visibilitychange.
   document.addEventListener('visibilitychange', onVisibilityChange);
-  window.addEventListener('blur', () => submitEvent('tab_switch', { message: 'Window lost focus' }));
+
+  // Abandon session if student closes the tab/navigates away without submitting
+  window.addEventListener('pagehide', () => {
+    if (sessionId && !submitting) {
+      navigator.sendBeacon(`${API}/exam/sessions/${sessionId}/end`, new Blob(
+        [JSON.stringify({})],
+        { type: 'application/json' }
+      ));
+    }
+  });
 
   startTimer();
   scheduleSnapshot();
@@ -180,22 +190,25 @@ async function captureAndSubmit() {
   const track = camStream.getVideoTracks()[0];
   if (!track || track.readyState !== 'live') return;
 
-  try {
-    const canvas = document.createElement('canvas');
-    canvas.width = 320; canvas.height = 240;
-    const ctx = canvas.getContext('2d');
-    // Draw from video track via ImageCapture or VideoFrame fallback
-    const imageCapture = new ImageCapture(track);
-    const bitmap = await imageCapture.grabFrame();
-    ctx.drawImage(bitmap, 0, 0, 320, 240);
-    bitmap.close();
-    const imageData = canvas.toDataURL('image/jpeg', 0.6).split(',')[1];
-    const result = await apiFetch(`/exam/sessions/${sessionId}/snapshot`, 'POST', { imageData });
-    updateRisk(result.data.riskScore, result.data.newViolations || []);
-  } catch (e) {
-    // ImageCapture may not be supported — fallback
-    try { await captureFromVideoElement(); } catch (_) {}
+  // Use ImageCapture API when available (Chrome/Edge); fall back to video element (Firefox/Safari)
+  if (typeof ImageCapture !== 'undefined') {
+    try {
+      const canvas = document.createElement('canvas');
+      canvas.width = 320; canvas.height = 240;
+      const ctx = canvas.getContext('2d');
+      const imageCapture = new ImageCapture(track);
+      const bitmap = await imageCapture.grabFrame();
+      ctx.drawImage(bitmap, 0, 0, 320, 240);
+      bitmap.close();
+      const imageData = canvas.toDataURL('image/jpeg', 0.6).split(',')[1];
+      const result = await apiFetch(`/exam/sessions/${sessionId}/snapshot`, 'POST', { imageData });
+      updateRisk(result.data.riskScore, result.data.newViolations || []);
+      return;
+    } catch (e) {
+      // fall through to video element fallback
+    }
   }
+  try { await captureFromVideoElement(); } catch (_) {}
 }
 
 async function captureFromVideoElement() {

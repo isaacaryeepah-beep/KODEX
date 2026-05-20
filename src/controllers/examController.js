@@ -1,4 +1,5 @@
 'use strict';
+const mongoose         = require('mongoose');
 const ExamSession      = require('../models/ExamSession');
 const Meeting          = require('../models/Meeting');
 const { analyzeSnapshot, detectViolations, generateReport, riskFor, severityFor } = require('../services/aiProctoringService');
@@ -11,6 +12,7 @@ exports.startSession = async (req, res) => {
   try {
     const { meetingId } = req.body;
     if (!meetingId) return res.status(400).json({ error: 'meetingId is required' });
+    if (!mongoose.isValidObjectId(meetingId)) return res.status(400).json({ error: 'Invalid meetingId' });
 
     const meeting = await Meeting.findOne({ _id: meetingId, company: req.user.company, isActive: true });
     if (!meeting) return res.status(404).json({ error: 'Meeting not found' });
@@ -125,6 +127,7 @@ exports.getReport = async (req, res) => {
 exports.listSessions = async (req, res) => {
   try {
     if (!isMod(req.user.role)) return res.status(403).json({ error: 'Moderators only' });
+    if (!mongoose.isValidObjectId(req.params.meetingId)) return res.status(400).json({ error: 'Invalid meetingId' });
 
     const sessions = await ExamSession.find({ meeting: req.params.meetingId, company: req.user.company })
       .populate('student', 'name email')
