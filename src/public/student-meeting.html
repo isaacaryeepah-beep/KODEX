@@ -7,257 +7,377 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="format-detection" content="telephone=no" />
   <meta http-equiv="Cache-Control" content="no-store" />
-  <title>Joining Class — DIKLY</title>
+  <title>Joining Class — Dikly</title>
   <style>
-    *, *::before, *::after {
-      box-sizing: border-box; margin: 0; padding: 0;
-      -webkit-tap-highlight-color: transparent;
-    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
     :root {
-      --bg:      #0a0c10;
-      --card:    #1a1e28;
-      --border:  #2a2f3d;
-      --accent:  #3b82f6;
-      --danger:  #ef4444;
+      --bg: #080b12;
+      --surface: #0f1420;
+      --card: #151c2e;
+      --border: rgba(255,255,255,.07);
+      --accent: #4f6ef7;
+      --accent2: #7c3aed;
+      --green: #10b981;
       --warning: #f59e0b;
-      --text:    #e2e8f0;
-      --muted:   #6b7280;
-      --sat: env(safe-area-inset-top,    0px);
+      --danger: #ef4444;
+      --text: #f1f5f9;
+      --muted: #64748b;
+      --sat: env(safe-area-inset-top, 0px);
       --sab: env(safe-area-inset-bottom, 0px);
     }
-    html {
-      height: -webkit-fill-available;
-      -webkit-text-size-adjust: 100%;
-      text-size-adjust: 100%;
-    }
+    html { height: -webkit-fill-available; -webkit-text-size-adjust: 100%; }
     body {
-      position: fixed; inset: 0;
+      min-height: 100vh;
+      min-height: -webkit-fill-available;
       background: var(--bg);
       color: var(--text);
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      display: flex; align-items: center; justify-content: center;
-      padding:
-        calc(var(--sat) + 28px)
-        28px
-        calc(var(--sab) + 28px);
+      font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, sans-serif;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      padding: calc(var(--sat) + 24px) 20px calc(var(--sab) + 24px);
+      overflow: hidden; position: relative;
+    }
+    body::before {
+      content: '';
+      position: fixed; inset: 0;
+      background:
+        radial-gradient(ellipse 80% 60% at 20% 20%, rgba(79,110,247,.10) 0%, transparent 60%),
+        radial-gradient(ellipse 60% 50% at 80% 80%, rgba(124,58,237,.08) 0%, transparent 60%);
+      pointer-events: none;
     }
 
-    .screen {
-      width: 100%; max-width: 380px;
-      display: flex; flex-direction: column;
-      align-items: center; gap: 20px;
-      text-align: center;
-    }
-    .logo {
-      width: 72px; height: 72px; border-radius: 20px;
-      background: var(--accent);
+    .wrap { width: 100%; max-width: 420px; display: flex; flex-direction: column; align-items: center; gap: 0; position: relative; z-index: 1; }
+
+    /* ── SHARED ── */
+    .brand { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
+    .brand-logo {
+      width: 44px; height: 44px; border-radius: 12px;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
       display: grid; place-items: center;
-      font-size: 34px; font-weight: 800; color: #fff;
-      box-shadow: 0 0 56px rgba(59,130,246,.35);
+      font-weight: 800; font-size: 20px; color: #fff;
+      box-shadow: 0 8px 32px rgba(79,110,247,.4);
+    }
+    .brand-name { font-size: 20px; font-weight: 700; letter-spacing: -.3px; }
+
+    .card {
+      width: 100%;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 24px;
+      padding: 28px 24px;
+      display: flex; flex-direction: column; gap: 20px;
+      box-shadow: 0 24px 64px rgba(0,0,0,.4), inset 0 1px 0 rgba(255,255,255,.06);
+    }
+
+    /* ── LOADING ── */
+    #loadScreen { display: flex; flex-direction: column; align-items: center; gap: 28px; width: 100%; }
+
+    .join-badge {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: rgba(79,110,247,.12); border: 1px solid rgba(79,110,247,.25);
+      color: #818cf8; font-size: 12px; font-weight: 600;
+      padding: 4px 10px; border-radius: 20px;
+      letter-spacing: .3px; text-transform: uppercase;
+      align-self: flex-start;
+    }
+
+    .meeting-title { font-size: 22px; font-weight: 700; letter-spacing: -.3px; line-height: 1.2; }
+
+    .host-info { display: flex; align-items: center; gap: 10px; }
+    .host-avatar {
+      width: 32px; height: 32px; border-radius: 10px;
+      background: linear-gradient(135deg, #6366f1, #8b5cf6);
+      display: grid; place-items: center; font-size: 13px; font-weight: 700; color: #fff;
       flex-shrink: 0;
     }
-    .title  { font-size: 22px; font-weight: 700; letter-spacing: -.3px; }
-    .status { font-size: 14px; color: var(--muted); line-height: 1.5; min-height: 22px; }
+    .host-meta { display: flex; flex-direction: column; }
+    .host-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
+    .host-name { font-size: 14px; font-weight: 600; }
 
-    .spinner {
-      width: 32px; height: 32px;
-      border: 3px solid var(--border);
-      border-top-color: var(--accent);
-      border-radius: 50%;
-      animation: spin .85s linear infinite;
+    .divider { height: 1px; background: var(--border); }
+
+    .progress-area { display: flex; flex-direction: column; gap: 10px; }
+    .progress-label { display: flex; justify-content: space-between; align-items: center; }
+    .status-text { font-size: 14px; color: var(--muted); }
+    .progress-bar { height: 3px; background: rgba(255,255,255,.06); border-radius: 99px; overflow: hidden; }
+    .progress-fill {
+      height: 100%; border-radius: 99px;
+      background: linear-gradient(90deg, var(--accent), var(--accent2));
+      transition: width .5s cubic-bezier(.4,0,.2,1);
+      width: 0%;
     }
+
     @keyframes spin { to { transform: rotate(360deg); } }
-
-    .err-icon  { font-size: 52px; line-height: 1; }
-    .err-title { font-size: 20px; font-weight: 700; color: var(--danger); }
-    .err-msg   { font-size: 14px; color: var(--muted); max-width: 300px; line-height: 1.65; }
-
-    .warn-icon  { font-size: 52px; line-height: 1; }
-    .warn-title { font-size: 20px; font-weight: 700; color: var(--warning); }
-    .warn-msg   { font-size: 14px; color: var(--muted); max-width: 300px; line-height: 1.65; }
-
-    .actions {
-      display: flex; flex-direction: column; gap: 10px;
-      width: 100%;
+    .spinner {
+      width: 36px; height: 36px; border-radius: 50%;
+      border: 3px solid rgba(79,110,247,.15);
+      border-top-color: var(--accent);
+      animation: spin .8s linear infinite;
+      align-self: center;
     }
+
+    /* ── WAIT STATE ── */
+    #waitScreen {
+      display: none; flex-direction: column; align-items: center; gap: 28px; width: 100%;
+    }
+    .wait-card {
+      border-color: rgba(245,158,11,.15) !important;
+    }
+    .wait-icon-wrap {
+      width: 64px; height: 64px; border-radius: 20px;
+      background: rgba(245,158,11,.1);
+      display: grid; place-items: center;
+      font-size: 32px; align-self: center;
+      animation: float 3s ease-in-out infinite;
+    }
+    @keyframes float { 0%,100% { transform:translateY(0); } 50% { transform:translateY(-6px); } }
+
+    .wait-title { font-size: 20px; font-weight: 700; text-align: center; }
+    .wait-msg { font-size: 14px; color: var(--muted); line-height: 1.65; text-align: center; }
+
+    .countdown-wrap {
+      display: flex; flex-direction: column; align-items: center; gap: 6px;
+      padding: 14px; background: rgba(245,158,11,.06);
+      border: 1px solid rgba(245,158,11,.15); border-radius: 14px;
+    }
+    .countdown-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
+    .countdown-timer { font-size: 28px; font-weight: 800; color: #fcd34d; font-variant-numeric: tabular-nums; letter-spacing: -.5px; }
+
+    /* ── ERROR STATE ── */
+    #errorScreen { display: none; flex-direction: column; align-items: center; gap: 28px; width: 100%; }
+    .error-card { border-color: rgba(239,68,68,.15) !important; text-align: center; }
+    .error-icon-wrap {
+      width: 64px; height: 64px; border-radius: 20px;
+      background: rgba(239,68,68,.1);
+      display: grid; place-items: center; font-size: 28px; align-self: center;
+    }
+    .error-title { font-size: 20px; font-weight: 700; text-align: center; }
+    .error-msg { font-size: 14px; color: var(--muted); line-height: 1.65; }
+
+    /* ── BUTTONS ── */
+    .actions { display: flex; flex-direction: column; gap: 10px; width: 100%; }
     .btn {
-      width: 100%; padding: 16px;
-      border-radius: 12px; border: none;
-      font-size: 15px; font-weight: 600;
-      cursor: pointer; touch-action: manipulation;
-      transition: opacity .15s;
+      width: 100%; padding: 15px; border-radius: 14px; border: none;
+      font-size: 15px; font-weight: 600; cursor: pointer;
+      touch-action: manipulation; transition: transform .1s, opacity .1s;
+      font-family: inherit;
     }
-    .btn:active { opacity: .8; }
-    .btn-primary   { background: var(--accent); color: #fff; }
-    .btn-warning   { background: rgba(245,158,11,.2); border: 1px solid rgba(245,158,11,.4); color: #fcd34d; }
-    .btn-secondary { background: var(--card); border: 1px solid var(--border); color: var(--text); }
+    .btn:active { transform: scale(.98); opacity: .9; }
+    .btn-primary {
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      color: #fff; box-shadow: 0 4px 20px rgba(79,110,247,.35);
+    }
+    .btn-warning {
+      background: rgba(245,158,11,.1);
+      border: 1px solid rgba(245,158,11,.25);
+      color: #fcd34d;
+    }
+    .btn-ghost {
+      background: rgba(255,255,255,.04);
+      border: 1px solid var(--border); color: var(--muted);
+    }
   </style>
 </head>
 <body>
+<div class="wrap">
 
-<!-- Loading -->
-<div class="screen" id="loadScreen">
-  <div class="logo">D</div>
-  <div class="title">DIKLY Classes</div>
-  <div class="spinner"></div>
-  <div class="status" id="status">Connecting to class…</div>
-</div>
-
-<!-- Not started yet (scheduled state) -->
-<div class="screen" id="waitScreen" style="display:none">
-  <div class="warn-icon">⏳</div>
-  <div class="warn-title">Class Not Started</div>
-  <div class="warn-msg" id="waitMsg">
-    Your lecturer hasn't started this class yet. Wait for them to open the room.
+  <!-- LOADING -->
+  <div id="loadScreen">
+    <div class="brand">
+      <div class="brand-logo">D</div>
+      <span class="brand-name">Dikly</span>
+    </div>
+    <div class="card">
+      <div class="join-badge">Joining Class</div>
+      <div class="meeting-title" id="meetingTitle">Connecting to class…</div>
+      <div class="host-info" id="hostInfo" style="display:none">
+        <div class="host-avatar" id="hostAvatar">?</div>
+        <div class="host-meta">
+          <span class="host-label">Lecturer</span>
+          <span class="host-name" id="hostName">—</span>
+        </div>
+      </div>
+      <div class="divider"></div>
+      <div class="progress-area">
+        <div class="progress-label">
+          <span class="status-text" id="statusText">Verifying your access</span>
+        </div>
+        <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+      </div>
+      <div class="spinner"></div>
+    </div>
   </div>
-  <div class="actions">
-    <button class="btn btn-warning" onclick="retryWait()">Check Again</button>
-    <button class="btn btn-secondary" onclick="history.back()">Go Back</button>
-  </div>
-</div>
 
-<!-- Error -->
-<div class="screen" id="errorScreen" style="display:none">
-  <div class="err-icon">⚠️</div>
-  <div class="err-title">Cannot Join Class</div>
-  <div class="err-msg" id="errMsg">Something went wrong.</div>
-  <div class="actions">
-    <button class="btn btn-primary"   onclick="init()">Try Again</button>
-    <button class="btn btn-secondary" onclick="history.back()">Go Back</button>
+  <!-- WAITING FOR LECTURER -->
+  <div id="waitScreen">
+    <div class="brand">
+      <div class="brand-logo">D</div>
+      <span class="brand-name">Dikly</span>
+    </div>
+    <div class="card wait-card">
+      <div class="wait-icon-wrap">⏳</div>
+      <div class="wait-title">Waiting for Lecturer</div>
+      <div class="wait-msg" id="waitMsg">
+        Your lecturer hasn't opened the room yet.<br>You'll be admitted automatically when they start.
+      </div>
+      <div class="countdown-wrap" id="countdownWrap">
+        <span class="countdown-label">Checking again in</span>
+        <span class="countdown-timer" id="countdownTimer">20s</span>
+      </div>
+    </div>
+    <div class="actions">
+      <button class="btn btn-warning" onclick="retryNow()">Check Now</button>
+      <button class="btn btn-ghost" onclick="history.back()">Go Back</button>
+    </div>
   </div>
-</div>
 
+  <!-- ERROR -->
+  <div id="errorScreen">
+    <div class="brand">
+      <div class="brand-logo">D</div>
+      <span class="brand-name">Dikly</span>
+    </div>
+    <div class="card error-card">
+      <div class="error-icon-wrap">⚠️</div>
+      <div class="error-title">Cannot Join Class</div>
+      <div class="error-msg" id="errMsg">Something went wrong.</div>
+    </div>
+    <div class="actions">
+      <button class="btn btn-primary" onclick="init()">Try Again</button>
+      <button class="btn btn-ghost" onclick="history.back()">Go Back</button>
+    </div>
+  </div>
+
+</div>
 <script>
 'use strict';
 
-const _params    = new URLSearchParams(location.search);
-const MEETING_ID = _params.get('meeting') || _params.get('id') || '';
-
-// API is served from the same origin as the frontend (same Express server).
-function getApiBase() { return ''; }
+const _p = new URLSearchParams(location.search);
+const MEETING_ID = _p.get('meeting') || _p.get('id') || '';
 
 function getAuthToken() {
-  const urlToken = _params.get('token');
+  const urlToken = _p.get('token');
   if (urlToken) return urlToken;
   try {
     const s = JSON.parse(sessionStorage.getItem('dikly_jitsi_session') || 'null');
     if (s?.meetingId === MEETING_ID && s.authToken) return s.authToken;
   } catch (_) {}
-  return (
-    localStorage.getItem('token') ||
-    localStorage.getItem('jwt_token') ||
-    localStorage.getItem('auth_token') ||
-    sessionStorage.getItem('token') ||
-    ''
-  );
+  return localStorage.getItem('token') || localStorage.getItem('jwt_token') ||
+         localStorage.getItem('auth_token') || sessionStorage.getItem('token') || '';
 }
 
-const API_BASE   = getApiBase();
 const AUTH_TOKEN = getAuthToken();
-
 let _retryTimer = null;
+let _countdownTimer = null;
+
+function setStatus(msg, pct) {
+  document.getElementById('statusText').textContent = msg;
+  if (pct !== undefined) document.getElementById('progressFill').style.width = pct + '%';
+}
 
 async function init() {
-  clearTimeout(_retryTimer);
-  document.getElementById('loadScreen').style.display  = 'flex';
-  document.getElementById('errorScreen').style.display = 'none';
-  document.getElementById('waitScreen').style.display  = 'none';
+  clearTimers();
+  show('loadScreen');
+  setStatus('Verifying your access…', 10);
 
-  if (!MEETING_ID) {
-    return showError('No meeting ID provided. Please go back and try again.');
-  }
-  if (!AUTH_TOKEN) {
-    return showError('Your session has expired. Please log in to DIKLY and try again.');
-  }
+  if (!MEETING_ID) return showError('No meeting ID provided. Please go back and try again.');
+  if (!AUTH_TOKEN) return showError('Your session has expired. Please log in to Dikly and try again.');
 
-  setStatus('Connecting to class…');
+  await delay(300);
+  setStatus('Connecting to server…', 35);
 
   try {
-    const r = await fetch(`${API_BASE}/api/meetings/${MEETING_ID}/join`, {
+    const r = await fetch(`/api/meetings/${MEETING_ID}/join`, {
       headers: { Authorization: 'Bearer ' + AUTH_TOKEN },
     });
     const body = await r.json().catch(() => ({}));
 
     if (!r.ok) {
-      if (body.status === 'scheduled') {
-        return showWait(body.scheduledStart);
-      }
-      if (body.status === 'ended' || body.status === 'cancelled') {
-        return showError('This class has ended or been cancelled.');
-      }
+      if (body.status === 'scheduled') return showWait(body.scheduledStart, body.hostName);
+      if (body.status === 'ended' || body.status === 'cancelled') return showError('This class has ended or been cancelled.');
       throw new Error(body.error || body.message || `Server error (${r.status})`);
     }
 
     const data = body.data || body;
 
-    // If this user is actually a moderator, hand off to the lecturer page
     if (data.isModerator) {
       window.location.replace(`/lecturer-meeting?meeting=${MEETING_ID}`);
       return;
     }
 
-    const meetingUrl = data.meetingUrl;
-    if (!meetingUrl) {
-      return showError('The server did not return a meeting URL. Please contact support.');
+    // Show meeting info
+    if (data.title) document.getElementById('meetingTitle').textContent = data.title;
+    if (data.hostName) {
+      document.getElementById('hostName').textContent = data.hostName;
+      document.getElementById('hostAvatar').textContent = data.hostName.charAt(0).toUpperCase();
+      document.getElementById('hostInfo').style.display = 'flex';
     }
 
-    setStatus('Launching secure classroom…');
+    setStatus('Launching secure classroom…', 80);
 
-    // Fire-and-forget: register participant in the monitoring system before leaving.
-    // We don't await these — the redirect should not be blocked by monitoring calls.
-    fetch(`${API_BASE}/api/meetings/${MEETING_ID}/preflight`, {
-      method:  'POST',
-      headers: { Authorization: 'Bearer ' + AUTH_TOKEN, 'Content-Type': 'application/json' },
+    fetch(`/api/meetings/${MEETING_ID}/preflight`, {
+      method: 'POST', headers: { Authorization: 'Bearer ' + AUTH_TOKEN, 'Content-Type': 'application/json' },
     }).catch(() => {});
 
-    fetch(`${API_BASE}/api/meetings/${MEETING_ID}/attendance/join`, {
-      method:  'POST',
-      headers: { Authorization: 'Bearer ' + AUTH_TOKEN, 'Content-Type': 'application/json' },
+    fetch(`/api/meetings/${MEETING_ID}/attendance/join`, {
+      method: 'POST', headers: { Authorization: 'Bearer ' + AUTH_TOKEN, 'Content-Type': 'application/json' },
     }).catch(() => {});
 
-    // Full-page redirect to meet.dikly.live — camera/mic permissions are
-    // requested by Jitsi on that domain, not here, avoiding Safari reload loops.
-    setTimeout(() => { window.location.href = meetingUrl; }, 350);
+    setStatus('Opening classroom…', 100);
+    await delay(400);
+    window.location.href = data.meetingUrl;
 
   } catch (err) {
     showError(err.message || 'Unexpected error. Please check your connection and try again.');
   }
 }
 
-// Poll every 15 seconds while waiting for the lecturer to open the room
-function retryWait() {
-  document.getElementById('waitScreen').style.display = 'none';
-  document.getElementById('loadScreen').style.display = 'flex';
-  setStatus('Checking again…');
-  init();
-}
-
-// ── UI helpers ────────────────────────────────────────────────────────────────
-function setStatus(msg) {
-  document.getElementById('status').textContent = msg;
-}
-
-function showWait(scheduledStart) {
-  document.getElementById('loadScreen').style.display = 'none';
-  let msg = 'Your lecturer hasn\'t opened the room yet. Wait for them to start the class.';
+function showWait(scheduledStart, hostName) {
+  show('waitScreen');
+  let msg = 'Your lecturer hasn\'t opened the room yet.\nYou\'ll be admitted automatically when they start.';
   if (scheduledStart) {
     const d = new Date(scheduledStart);
-    msg += ` Scheduled for ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}.`;
+    msg += `\n\nScheduled for ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}.`;
   }
   document.getElementById('waitMsg').textContent = msg;
-  document.getElementById('waitScreen').style.display = 'flex';
-  // Auto-retry after 20 seconds so student doesn't have to tap
-  _retryTimer = setTimeout(init, 20000);
+  startCountdown(20);
 }
+
+function startCountdown(seconds) {
+  clearTimers();
+  let remaining = seconds;
+  const el = document.getElementById('countdownTimer');
+  el.textContent = remaining + 's';
+  _countdownTimer = setInterval(() => {
+    remaining--;
+    el.textContent = remaining + 's';
+    if (remaining <= 0) {
+      clearInterval(_countdownTimer);
+      init();
+    }
+  }, 1000);
+}
+
+function retryNow() { clearTimers(); init(); }
 
 function showError(msg) {
-  clearTimeout(_retryTimer);
-  document.getElementById('loadScreen').style.display = 'none';
+  clearTimers();
+  show('errorScreen');
   document.getElementById('errMsg').textContent = msg;
-  document.getElementById('errorScreen').style.display = 'flex';
 }
 
-// ── Run ───────────────────────────────────────────────────────────────────────
+function show(id) {
+  ['loadScreen', 'waitScreen', 'errorScreen'].forEach(s => {
+    document.getElementById(s).style.display = s === id ? 'flex' : 'none';
+  });
+}
+
+function clearTimers() {
+  clearTimeout(_retryTimer);
+  clearInterval(_countdownTimer);
+}
+
+function delay(ms) { return new Promise(r => setTimeout(r, ms)); }
+
 init();
 </script>
 </body>
