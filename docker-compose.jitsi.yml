@@ -80,6 +80,13 @@ services:
       --denied-peer-ip=198.18.0.0-198.19.255.255
       --denied-peer-ip=240.0.0.0-255.255.255.255
       --cipher-list=HIGH:!aNULL:!eNULL:!EXPORT:!DES:!RC4:!MD5:!PSK
+    mem_limit: 512m
+    memswap_limit: 512m
+    healthcheck:
+      test: ['CMD-SHELL', 'ss -ulnp | grep -q :3478 || exit 1']
+      interval: 30s
+      timeout: 5s
+      retries: 3
 
   # ── Jitsi Web (React frontend — HTTP only, nginx terminates SSL) ──────────
   web:
@@ -178,6 +185,8 @@ services:
       - ${CONFIG:-./jitsi-config}/prosody/config:/config:Z
       - ${CONFIG:-./jitsi-config}/prosody/prosody-plugins-custom:/prosody-plugins-custom:Z
       - ${CONFIG:-./jitsi-config}/prosody/11-prosody-ws-ping.sh:/etc/cont-init.d/11-prosody-ws-ping
+    mem_limit: 512m
+    memswap_limit: 512m
     networks:
       jitsi-net:
         aliases:
@@ -220,6 +229,8 @@ services:
       - prosody
     networks:
       - jitsi-net
+    mem_limit: 512m
+    memswap_limit: 512m
     healthcheck:
       # nc not available in JVM image; use bash TCP redirect to check port 8888
       test: ['CMD-SHELL', 'bash -c "</dev/tcp/localhost/8888" 2>/dev/null']
@@ -255,6 +266,9 @@ services:
       - PUBLIC_URL=https://${JITSI_DOMAIN}
       # Colibri WebSocket — enables wss://meet.dikly.live/colibri-ws/<id>/...
       - COLIBRI_WEBSOCKET_ENABLED=true
+      # JVM heap — cap at 1.5 GB so JVB doesn't OOM the VPS under load.
+      # G1GC reduces GC pause spikes that cause brief audio/video freezes.
+      - JAVA_SYS_PROPS=-Xmx1500m -Xms256m -XX:+UseG1GC -XX:MaxGCPauseMillis=100 -XX:+HeapDumpOnOutOfMemoryError
       - TZ=${TZ:-Africa/Accra}
     volumes:
       - ${CONFIG:-./jitsi-config}/jvb:/config:Z
@@ -265,6 +279,14 @@ services:
       - prosody
     networks:
       - jitsi-net
+    mem_limit: 2g
+    memswap_limit: 2g
+    healthcheck:
+      test: ['CMD-SHELL', 'curl -sf http://localhost:9090/about/health || exit 1']
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
 
 networks:
   jitsi-net:

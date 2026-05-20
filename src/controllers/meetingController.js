@@ -184,7 +184,7 @@ exports.createMeeting = async (req, res) => {
     }
 
     const roomPassword = settings?.enablePassword
-      ? Math.random().toString(36).slice(2, 10).toUpperCase()
+      ? crypto.randomBytes(8).toString('hex').toUpperCase()
       : null;
 
     const meeting = await Meeting.create({
