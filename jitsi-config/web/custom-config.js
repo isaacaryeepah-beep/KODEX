@@ -1,6 +1,6 @@
 // DIKLY custom Jitsi server-side config — loaded automatically by jitsi/web container.
 // Applies to ALL joins regardless of what the External API client sends.
-// v2026-05-20 — BOSH+Colibri-ping LTE fix
+// v2026-05-20b — coturn hardened, STUN entry added, ICE ordering explicit
 
 // ── Authentication bypass ─────────────────────────────────────────────────────
 config.prejoinPageEnabled = false;
@@ -69,27 +69,46 @@ config.deeplinking = { disabled: true };
 // P2P disabled — all media flows through JVB for proctoring visibility.
 config.p2p = { enabled: false };
 
-// Static TURN credentials — HMAC-SHA1 signed, expire ~2036.
-// Prosody's turncredentials module also delivers per-session credentials over
-// XMPP after connect; these are just a reliable pre-connect fallback.
-// Regen: source /root/KODEX/.env && EXPIRY=$(($(date +%s)+315360000)) &&
-//   UN="${EXPIRY}:dikly" && printf "%s" "$UN" | openssl dgst -sha1 -hmac "$TURN_SECRET" -binary | base64 -w0
+// coturn serves STUN and TURN on the same host.
+//
+// Two iceServers entries:
+//   1. STUN-only (no credentials) — pure STUN binding for public-IP discovery.
+//      Used by ICE to find the client's reflexive address before trying TURN.
+//      Lightweight; coturn responds to STUN binding without auth.
+//   2. TURN relay (HMAC-SHA1 time-limited credentials, expire ~2036).
+//      Required when carrier-grade NAT blocks direct UDP — relays all media
+//      through coturn on 3478/5349.
+//
+// Prosody's turncredentials module also delivers fresh per-session TURN
+// credentials over XMPP after connect; these static creds are the pre-connect
+// fallback that lets ICE start before XMPP authentication completes.
+//
+// Regen static creds after TURN_SECRET rotation:
+//   source /root/KODEX/.env
+//   EXPIRY=$(($(date +%s)+315360000))   # 10 years from now
+//   UN="${EXPIRY}:dikly"
+//   printf "%s" "$UN" | openssl dgst -sha1 -hmac "$TURN_SECRET" -binary | base64 -w0
 config.iceServers = [
+  // STUN binding — discovers client public IP, no credentials required
+  { urls: 'stun:meet.dikly.live:3478' },
+  // TURN relay — media bypass for carrier-grade NAT (LTE, hotel WiFi, VPNs)
   {
     urls: [
-      'turns:meet.dikly.live:5349',
-      'turn:meet.dikly.live:3478?transport=tcp',
-      'turn:meet.dikly.live:3478',
+      'turns:meet.dikly.live:5349',             // TURN over TLS — penetrates strict carrier NAT
+      'turn:meet.dikly.live:3478?transport=tcp', // TURN over TCP — when UDP 3478 is blocked
+      'turn:meet.dikly.live:3478',              // TURN over UDP — lowest latency, tried first
     ],
     username:   '2094567176:dikly',
     credential: 'a3T5VHdqy/4Tw/ylSQSrt5J9cPg=',
   },
 ];
 
-// Use 'all' on both mobile and desktop — let ICE try direct UDP first,
-// fall back to TURN automatically. 'relay' was too strict: if TURN has
-// any issue, there is zero fallback and the call never connects.
+// ICE transport policy: try direct (host/STUN) candidates first, fall back to
+// TURN relay automatically. 'relay' would be marginally faster on LTE but
+// breaks entirely if coturn is unreachable — 'all' is the safer choice.
 config.iceTransportPolicy = 'all';
+
+// No separate STUN-only servers — coturn already in iceServers handles STUN.
 config.stunServers = [];
 
 config.enableIceRestart = true;

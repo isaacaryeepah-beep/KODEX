@@ -1,11 +1,11 @@
 #!/bin/sh
 # Runs after 10-config generates /config/jvb.conf, before JVB process starts.
-# Fixes three values the init script gets wrong regardless of env var settings.
+# Fixes values the init script gets wrong regardless of env var settings.
 set -e
 JVB_CONF=/config/jvb.conf
 [ -f "${JVB_CONF}" ] || { echo "[jvb-patch] no config found, skipping"; exit 0; }
 
-# Enable Colibri WebSocket (generated as false — causes black screen)
+# Enable Colibri WebSocket (generated as false — causes black screen on clients)
 awk '
   /websockets \{/ { in_ws=1 }
   in_ws && /enabled = false/ { sub("enabled = false", "enabled = true") }
@@ -22,4 +22,15 @@ sed -i 's/server-id = "[^"]*"/server-id = "default-id"/' "${JVB_CONF}"
 # ICE gathering time on mobile before TURN fallback kicks in.
 sed -i 's/advertise-private-candidates = true/advertise-private-candidates = false/' "${JVB_CONF}"
 
-echo "[jvb-patch] websockets.enabled=true  server-id=default-id  no-private-candidates"
+# Disable SCTP (WebRTC data channels).
+# DIKLY does not use data channels (no file-transfer, no arbitrary data).
+# Disabling SCTP removes the SCTP ICE component, which reduces ICE complexity
+# and eliminates a source of false-positive connection failures on mobile LTE.
+awk '
+  /sctp \{/ { in_sctp=1 }
+  in_sctp && /enabled/ { sub(/enabled = true/, "enabled = false") }
+  /\}/ && in_sctp { in_sctp=0 }
+  { print }
+' "${JVB_CONF}" > "${JVB_CONF}.tmp" && mv "${JVB_CONF}.tmp" "${JVB_CONF}"
+
+echo "[jvb-patch] websockets.enabled=true  server-id=default-id  no-private-candidates  sctp=false"
