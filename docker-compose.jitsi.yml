@@ -67,8 +67,6 @@ services:
       --max-port=65535
       --fingerprint
       --no-rfc5780
-      --no-loopback-peers
-      --no-multicast-peers
       --no-cli
       --denied-peer-ip=0.0.0.0-0.255.255.255
       --denied-peer-ip=10.0.0.0-10.255.255.255
