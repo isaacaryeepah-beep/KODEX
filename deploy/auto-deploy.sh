@@ -34,7 +34,7 @@ if [ -f "$REPO/deploy/nginx-jitsi.conf" ] && [ -f "$NGINX_CONF" ]; then
     fi
 fi
 
-# ── Check for new commits ─────────────────────────────────────────────────
+# ── Check for new commits ─────────────────────────────────────────────────────
 git fetch origin main --quiet 2>> "$LOG"
 
 LOCAL=$(git rev-parse HEAD)
@@ -56,7 +56,7 @@ chmod +x "$REPO/jitsi-config/jvb/11-patch.sh" \
 log "Pulled. Changed files:"
 echo "$CHANGED" | while read -r f; do log "  $f"; done
 
-# ── Decide what to restart ────────────────────────────────────────────────
+# ── Decide what to restart ────────────────────────────────────────────────────
 
 RESTART_JITSI=0
 RESTART_APP=0

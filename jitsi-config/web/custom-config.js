@@ -1,5 +1,6 @@
 // DIKLY custom Jitsi server-side config — loaded automatically by jitsi/web container.
 // Applies to ALL joins regardless of what the External API client sends.
+// v2026-05-20 — BOSH+Colibri-ping LTE fix
 
 // ── Authentication bypass ─────────────────────────────────────────────────────
 config.prejoinPageEnabled = false;
