@@ -56,6 +56,7 @@ git pull --ff-only origin main >> "$LOG" 2>&1
 
 # Ensure init and deploy scripts are always executable
 chmod +x "$REPO/jitsi-config/jvb/11-patch.sh" \
+         "$REPO/jitsi-config/jvb/12-patch-jvm.sh" \
          "$REPO/jitsi-config/prosody/11-prosody-ws-ping.sh" \
          "$REPO/deploy/auto-deploy.sh" 2>/dev/null || true
 

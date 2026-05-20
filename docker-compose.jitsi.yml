@@ -272,6 +272,10 @@ services:
       # Post-init patch: runs after 10-config generates jvb.conf, fixes
       # websockets.enabled, server-id, and advertise-private-candidates.
       - ${CONFIG:-./jitsi-config}/jvb/11-patch.sh:/etc/cont-init.d/11-patch
+      # JVM heap patch: stable-9584 hardcodes -Xmx3072m in the run script;
+      # env vars (JAVA_SYS_PROPS, JVB_JAVA_XMX) have no effect in this version.
+      # Patching the run script before s6 starts the service is the only reliable fix.
+      - ${CONFIG:-./jitsi-config}/jvb/12-patch-jvm.sh:/etc/cont-init.d/12-patch-jvm
     depends_on:
       - prosody
     networks:
