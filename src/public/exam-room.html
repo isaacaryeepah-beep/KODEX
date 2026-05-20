@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Exam — Dikly</title>
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    :root{
+      --bg:#080b12;--surface:#0f1420;--card:#151c2e;--border:rgba(255,255,255,.07);
+      --accent:#4f6ef7;--green:#10b981;--danger:#ef4444;--warning:#f59e0b;
+      --text:#f1f5f9;--muted:#64748b;
+    }
+    html,body{height:100%;background:var(--bg);color:var(--text);overflow:hidden;
+      font-family:-apple-system,BlinkMacSystemFont,'SF Pro Display','Segoe UI',Roboto,sans-serif}
+
+    /* ── LAYOUT ── */
+    #examLayout{height:100vh;display:flex;flex-direction:column}
+
+    /* Top bar */
+    #examBar{flex-shrink:0;display:flex;align-items:center;justify-content:space-between;
+      padding:10px 16px;background:rgba(8,11,18,.95);
+      border-bottom:1px solid var(--border);z-index:10}
+    .bar-left{display:flex;align-items:center;gap:12px}
+    .bar-logo{width:28px;height:28px;border-radius:8px;
+      background:linear-gradient(135deg,var(--accent),#7c3aed);
+      display:grid;place-items:center;font-weight:800;font-size:12px;color:#fff}
+    .bar-title{font-size:13px;font-weight:700}
+    .ai-pill{display:inline-flex;align-items:center;gap:5px;font-size:10px;font-weight:700;
+      background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.2);
+      color:#f87171;padding:2px 8px;border-radius:20px;text-transform:uppercase}
+    .ai-dot{width:5px;height:5px;border-radius:50%;background:#ef4444;
+      animation:blink 2s ease-in-out infinite}
+    @keyframes blink{0%,100%{opacity:1}50%{opacity:.2}}
+    .bar-right{display:flex;align-items:center;gap:14px}
+    .timer-display{font-size:15px;font-weight:700;font-variant-numeric:tabular-nums;
+      color:var(--text)}
+    .timer-display.urgent{color:var(--danger)}
+    .risk-chip{display:flex;align-items:center;gap:5px;padding:4px 10px;border-radius:20px;
+      font-size:11px;font-weight:700;background:rgba(16,185,129,.1);
+      border:1px solid rgba(16,185,129,.2);color:#34d399}
+    .risk-chip.medium{background:rgba(245,158,11,.1);border-color:rgba(245,158,11,.2);color:#fcd34d}
+    .risk-chip.high{background:rgba(239,68,68,.1);border-color:rgba(239,68,68,.2);color:#f87171}
+
+    /* Exam content area */
+    #examContent{flex:1;overflow:hidden;position:relative}
+    #examFrame{width:100%;height:100%;border:none;background:var(--bg)}
+    /* Fallback if no iframe src */
+    #examPlaceholder{width:100%;height:100%;display:flex;flex-direction:column;
+      align-items:center;justify-content:center;gap:12px;color:var(--muted)}
+    #examPlaceholder .ph-icon{font-size:48px}
+    #examPlaceholder .ph-msg{font-size:14px}
+
+    /* Camera pip */
+    #cameraPip{position:fixed;bottom:20px;right:20px;width:120px;height:90px;
+      border-radius:12px;overflow:hidden;border:2px solid rgba(79,110,247,.4);
+      background:#0f1420;z-index:50;box-shadow:0 8px 24px rgba(0,0,0,.5)}
+    #pipVideo{width:100%;height:100%;object-fit:cover;transform:scaleX(-1)}
+    .pip-label{position:absolute;bottom:4px;left:0;right:0;text-align:center;
+      font-size:9px;font-weight:700;color:rgba(255,255,255,.5);letter-spacing:.5px;text-transform:uppercase}
+
+    /* Warning toast */
+    #warnToast{position:fixed;top:60px;left:50%;transform:translateX(-50%);
+      background:#1e2640;border:1px solid rgba(245,158,11,.4);border-radius:14px;
+      padding:12px 18px;display:none;z-index:100;align-items:center;gap:10px;
+      max-width:320px;box-shadow:0 8px 24px rgba(0,0,0,.4)}
+    .warn-icon{font-size:20px;flex-shrink:0}
+    .warn-text{font-size:13px;font-weight:600;color:#fcd34d;line-height:1.4}
+
+    /* Submit button */
+    #submitArea{flex-shrink:0;padding:10px 16px;background:rgba(8,11,18,.95);
+      border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:10px;align-items:center}
+    #submitInfo{font-size:12px;color:var(--muted)}
+    .btn-submit{padding:11px 24px;background:var(--accent);border:none;border-radius:12px;
+      color:#fff;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;
+      transition:transform .1s,opacity .1s}
+    .btn-submit:active{transform:scale(.97)}
+    .btn-submit:disabled{opacity:.5;cursor:not-allowed}
+  </style>
+</head>
+<body>
+<div id="examLayout">
+  <!-- Top bar -->
+  <div id="examBar">
+    <div class="bar-left">
+      <div class="bar-logo">D</div>
+      <div class="bar-title" id="barTitle">Exam</div>
+      <div class="ai-pill"><span class="ai-dot"></span>AI Monitoring</div>
+    </div>
+    <div class="bar-right">
+      <div class="risk-chip" id="riskChip">✓ Integrity OK</div>
+      <div class="timer-display" id="timerDisplay">00:00</div>
+    </div>
+  </div>
+
+  <!-- Exam content -->
+  <div id="examContent">
+    <div id="examPlaceholder">
+      <div class="ph-icon">📋</div>
+      <div class="ph-msg">Exam content loads here</div>
+    </div>
+  </div>
+
+  <!-- Submit bar -->
+  <div id="submitArea">
+    <span id="submitInfo">AI monitoring active</span>
+    <button class="btn-submit" id="submitBtn" onclick="submitExam()">Submit Exam</button>
+  </div>
+</div>
+
+<!-- Camera PiP -->
+<div id="cameraPip">
+  <video id="pipVideo" autoplay playsinline muted></video>
+  <div class="pip-label">AI cam</div>
+</div>
+
+<!-- Warning toast -->
+<div id="warnToast">
+  <span class="warn-icon">⚠️</span>
+  <span class="warn-text" id="warnText">Please look at your screen.</span>
+</div>
+
+<script>
+'use strict';
+const _p       = new URLSearchParams(location.search);
+const meetingId= _p.get('meetingId') || '';
+const token    = _p.get('token')     || '';
+const userId   = _p.get('userId')    || '';
+const userName = _p.get('userName')  || 'Student';
+
+const API = location.origin + '/api';
+let sessionId    = null;
+let riskScore    = 0;
+let camStream    = null;
+let snapInterval = null;
+let timerInt     = null;
+let elapsed      = 0;
+let submitting   = false;
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+async function init() {
+  if (!meetingId || !token) { alert('Missing exam parameters.'); history.back(); return; }
+
+  // Start exam session
+  try {
+    const r = await apiFetch('/exam/sessions', 'POST', { meetingId });
+    sessionId = r.data.sessionId;
+  } catch (e) { alert('Could not start exam: ' + e.message); return; }
+
+  // Camera
+  try {
+    camStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: 320, height: 240 }, audio: false });
+    document.getElementById('pipVideo').srcObject = camStream;
+  } catch (e) { warn('Camera access lost. Please allow camera access.'); }
+
+  // Fullscreen enforcement
+  enforceFullscreen();
+  document.addEventListener('fullscreenchange', onFullscreenChange);
+  document.addEventListener('webkitfullscreenchange', onFullscreenChange);
+
+  // Tab/focus detection
+  document.addEventListener('visibilitychange', onVisibilityChange);
+  window.addEventListener('blur', () => submitEvent('tab_switch', { message: 'Window lost focus' }));
+
+  startTimer();
+  scheduleSnapshot();
+}
+
+// ── Snapshot capture (every 10–15 s) ─────────────────────────────────────────
+function scheduleSnapshot() {
+  const delay = 10000 + Math.random() * 5000;
+  snapInterval = setTimeout(async () => {
+    await captureAndSubmit();
+    scheduleSnapshot(); // reschedule
+  }, delay);
+}
+
+async function captureAndSubmit() {
+  if (!camStream || !sessionId) return;
+  const track = camStream.getVideoTracks()[0];
+  if (!track || track.readyState !== 'live') return;
+
+  try {
+    const canvas = document.createElement('canvas');
+    canvas.width = 320; canvas.height = 240;
+    const ctx = canvas.getContext('2d');
+    // Draw from video track via ImageCapture or VideoFrame fallback
+    const imageCapture = new ImageCapture(track);
+    const bitmap = await imageCapture.grabFrame();
+    ctx.drawImage(bitmap, 0, 0, 320, 240);
+    bitmap.close();
+    const imageData = canvas.toDataURL('image/jpeg', 0.6).split(',')[1];
+    const result = await apiFetch(`/exam/sessions/${sessionId}/snapshot`, 'POST', { imageData });
+    updateRisk(result.data.riskScore, result.data.newViolations || []);
+  } catch (e) {
+    // ImageCapture may not be supported — fallback
+    try { await captureFromVideoElement(); } catch (_) {}
+  }
+}
+
+async function captureFromVideoElement() {
+  const video = document.getElementById('pipVideo');
+  if (!video || video.readyState < 2) return;
+  const canvas = document.createElement('canvas');
+  canvas.width = 320; canvas.height = 240;
+  canvas.getContext('2d').drawImage(video, 0, 0, 320, 240);
+  const imageData = canvas.toDataURL('image/jpeg', 0.6).split(',')[1];
+  const result = await apiFetch(`/exam/sessions/${sessionId}/snapshot`, 'POST', { imageData });
+  updateRisk(result.data.riskScore, result.data.newViolations || []);
+}
+
+// ── Browser event logging ─────────────────────────────────────────────────────
+async function submitEvent(type, metadata = {}) {
+  if (!sessionId) return;
+  try {
+    const result = await apiFetch(`/exam/sessions/${sessionId}/event`, 'POST', { type, metadata });
+    updateRisk(result.data.riskScore, []);
+  } catch (_) {}
+}
+
+function onVisibilityChange() {
+  if (document.hidden) {
+    submitEvent('tab_switch', { message: 'Tab hidden or switched' });
+    warn('Tab switching detected and logged.');
+  }
+}
+
+function onFullscreenChange() {
+  const inFs = !!(document.fullscreenElement || document.webkitFullscreenElement);
+  if (!inFs) {
+    submitEvent('fullscreen_exit', { message: 'Fullscreen exited' });
+    warn('Please return to fullscreen mode.');
+    setTimeout(enforceFullscreen, 2000);
+  }
+}
+
+function enforceFullscreen() {
+  if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+    (document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen)?.call(document.documentElement);
+  }
+}
+
+// ── Risk display ──────────────────────────────────────────────────────────────
+function updateRisk(score, violations) {
+  riskScore = score;
+  const chip = document.getElementById('riskChip');
+  if (score < 20) {
+    chip.className = 'risk-chip'; chip.textContent = '✓ Integrity OK';
+  } else if (score < 50) {
+    chip.className = 'risk-chip medium'; chip.textContent = `⚠ Risk ${score}`;
+  } else {
+    chip.className = 'risk-chip high'; chip.textContent = `🚨 Risk ${score}`;
+  }
+  for (const v of violations) {
+    if (v.severity !== 'info') warn(v.message || v.type.replace(/_/g,' '));
+  }
+}
+
+function warn(msg) {
+  const el = document.getElementById('warnToast');
+  document.getElementById('warnText').textContent = msg;
+  el.style.display = 'flex';
+  clearTimeout(el._t);
+  el._t = setTimeout(() => { el.style.display = 'none'; }, 5000);
+}
+
+// ── Timer ─────────────────────────────────────────────────────────────────────
+function startTimer() {
+  timerInt = setInterval(() => {
+    elapsed++;
+    const m = Math.floor(elapsed/60), s = elapsed%60;
+    const el = document.getElementById('timerDisplay');
+    el.textContent = String(m).padStart(2,'0') + ':' + String(s).padStart(2,'0');
+  }, 1000);
+}
+
+// ── Submit exam ───────────────────────────────────────────────────────────────
+async function submitExam() {
+  if (submitting || !sessionId) return;
+  if (!confirm('Submit your exam? This cannot be undone.')) return;
+  submitting = true;
+  document.getElementById('submitBtn').disabled = true;
+  document.getElementById('submitBtn').textContent = 'Submitting…';
+  clearTimeout(snapInterval);
+  clearInterval(timerInt);
+
+  // Exit fullscreen
+  try { await (document.exitFullscreen || document.webkitExitFullscreen)?.call(document); } catch(_){}
+  // Stop camera
+  camStream?.getTracks().forEach(t => t.stop());
+  // End session
+  try {
+    const result = await apiFetch(`/exam/sessions/${sessionId}/end`, 'POST', {});
+    const report = result.data?.report;
+    const score  = report?.integrityScore ?? (100 - riskScore);
+    alert(`Exam submitted.\nIntegrity score: ${score}/100\n${report?.summary || ''}`);
+  } catch (e) { alert('Exam submitted. ' + e.message); }
+
+  history.back();
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+async function apiFetch(path, method, body) {
+  const r = await fetch(API + path, {
+    method,
+    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+    body: JSON.stringify(body),
+  });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(data.error || data.message || `HTTP ${r.status}`);
+  return data;
+}
+
+init();
+</script>
+</body>
+</html>

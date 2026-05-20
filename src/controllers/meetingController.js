@@ -7,7 +7,7 @@ const User               = require('../models/User');
 const { generateRoomName }                             = require('../utils/generateRoomName');
 const { generateMeetingToken, verifyMeetingToken }     = require('../utils/jwt');
 const { generateJitsiToken, JITSI_DOMAIN, JITSI_APP_ID, jitsiConfigured } = require('../services/jitsiTokenService');
-const { configured: streamConfigured, generateStreamToken, createStreamCall, buildStreamRoomUrl } = require('../services/streamService');
+const { configured: streamConfigured, generateStreamToken, createStreamCall, buildStreamRoomUrl, muteAllParticipants, muteParticipant: muteOneParticipant, removeParticipant: blockParticipant } = require('../services/streamService');
 const { broadcastMonitor }                             = require('./meetingMonitorController');
 const { runPreflight, handleReconnect }                 = require('../services/sessionPreflight');
 
@@ -489,7 +489,7 @@ exports.joinMeeting = async (req, res) => {
     if (streamConfigured) {
       // ── GetStream path ──────────────────────────────────────────────────
       try {
-        await createStreamCall(meeting.roomName);
+        await createStreamCall(meeting.roomName, isMod ? user._id : null);
       } catch (e) {
         console.warn('[Stream] createStreamCall failed, continuing anyway:', e.message);
       }
@@ -624,6 +624,24 @@ exports.jitsiHealth = async (req, res) => {
   const ok = result.token_ok && result.jitsi_reachable;
   console.log(`[Jitsi:health] ${ok ? '✓ OK' : '✗ FAILED'} — domain=${JITSI_DOMAIN} bosh=${result.xmpp_bosh_ok}`);
   res.status(ok ? 200 : 502).json(result);
+};
+
+// ─── MUTE ALL (GetStream) ─────────────────────────────────────────────────────
+exports.muteAll = async (req, res) => {
+  try {
+    if (!streamConfigured) return res.status(503).json({ error: 'GetStream not configured' });
+    await muteAllParticipants(req.meeting.roomName);
+    res.json({ success: true, message: 'All participants muted' });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+};
+
+// ─── MUTE PARTICIPANT (GetStream) ─────────────────────────────────────────────
+exports.muteParticipant = async (req, res) => {
+  try {
+    if (!streamConfigured) return res.status(503).json({ error: 'GetStream not configured' });
+    await muteOneParticipant(req.meeting.roomName, req.params.uid);
+    res.json({ success: true, message: 'Participant muted' });
+  } catch (err) { res.status(500).json({ error: err.message }); }
 };
 
 // ─── DELETE ───────────────────────────────────────────────────────────────────

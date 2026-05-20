@@ -1,11 +1,5 @@
 require("dotenv").config();
 
-// ── Jitsi configuration guard — fail fast before binding to any port ──────────
-// Importing the service here triggers its startup check. If JITSI_DOMAIN,
-// JITSI_APP_ID, or JITSI_APP_SECRET are missing the service throws and the
-// process exits with a clear error rather than serving broken meeting joins.
-require('./services/jitsiTokenService');
-
 const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");
@@ -100,6 +94,8 @@ const allowedOrigins = [
   "https://monitor.dikly.sbs",
   "https://api.dikly.sbs",
   "https://admin.dikly.sbs",
+  // exam subdomain
+  "https://exam.dikly.sbs",
   // local development
   "http://localhost:3000",
   "http://localhost:5000",
@@ -177,7 +173,7 @@ app.get('/session-preflight', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'session-preflight.html'));
 });
 
-// Embedded meeting pages (Jitsi External API — no Jitsi UI chrome)
+// Meeting lobby pages
 app.get('/lecturer-meeting', (req, res) => {
   res.setHeader('Permissions-Policy', 'camera=*, microphone=*, display-capture=*');
   res.sendFile(path.join(__dirname, 'public', 'lecturer-meeting.html'));
@@ -185,6 +181,22 @@ app.get('/lecturer-meeting', (req, res) => {
 app.get('/student-meeting', (req, res) => {
   res.setHeader('Permissions-Policy', 'camera=*, microphone=*, display-capture=*');
   res.sendFile(path.join(__dirname, 'public', 'student-meeting.html'));
+});
+
+// GetStream live call room
+app.get('/stream-room', (req, res) => {
+  res.setHeader('Permissions-Policy', 'camera=*, microphone=*, display-capture=*');
+  res.sendFile(path.join(__dirname, 'public', 'stream-room.html'));
+});
+
+// AI-proctored exam pages
+app.get('/exam-preflight', (req, res) => {
+  res.setHeader('Permissions-Policy', 'camera=*, microphone=*, fullscreen=*');
+  res.sendFile(path.join(__dirname, 'public', 'exam-preflight.html'));
+});
+app.get('/exam-room', (req, res) => {
+  res.setHeader('Permissions-Policy', 'camera=*, microphone=*, fullscreen=*');
+  res.sendFile(path.join(__dirname, 'public', 'exam-room.html'));
 });
 
 app.get("/anticheat",      (req, res) => res.sendFile(path.join(__dirname, "public", "anticheat-dashboard.html")));
@@ -273,6 +285,7 @@ if (proctoredQuizRoutes) {
 app.use("/api/assignments", assignmentRoutes);
 app.use("/api/ai", aiProxyRoutes);
 app.use("/api/meetings", meetingRoutes);
+app.use("/api/exam",     require("./routes/examRoutes"));
 app.use("/api/attendance-sessions", sessionDashboardRoutes);
 
 const { markAttendance } = require('./controllers/sessionDashboardController');
