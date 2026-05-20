@@ -5,10 +5,18 @@ set -e
 JVB_CONF=/config/jvb.conf
 [ -f "${JVB_CONF}" ] || { echo "[jvb-patch] no config found, skipping"; exit 0; }
 
-# Enable Colibri WebSocket (generated as false — causes black screen on clients)
-awk '
+# Enable Colibri WebSocket and set domain — without domain JVB logs
+# "no domains specified" and cannot validate inbound WS connections.
+JITSI_DOMAIN="${XMPP_AUTH_DOMAIN#auth.}"   # strip "auth." prefix → meet.dikly.live
+awk -v domain="${JITSI_DOMAIN}" '
   /websockets \{/ { in_ws=1 }
   in_ws && /enabled = false/ { sub("enabled = false", "enabled = true") }
+  in_ws && /server-id =/ {
+    # inject domain on the line after server-id if not already present
+    print; already_domain=1
+    print "    domain = \"" domain "\""
+    next
+  }
   /\}/ && in_ws { in_ws=0 }
   { print }
 ' "${JVB_CONF}" > "${JVB_CONF}.tmp" && mv "${JVB_CONF}.tmp" "${JVB_CONF}"
@@ -33,4 +41,4 @@ awk '
   { print }
 ' "${JVB_CONF}" > "${JVB_CONF}.tmp" && mv "${JVB_CONF}.tmp" "${JVB_CONF}"
 
-echo "[jvb-patch] websockets.enabled=true  server-id=default-id  no-private-candidates  sctp=false"
+echo "[jvb-patch] websockets.enabled=true  domain=${JITSI_DOMAIN}  server-id=default-id  no-private-candidates  sctp=false"
