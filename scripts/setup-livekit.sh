@@ -56,11 +56,11 @@ success "Dependencies installed."
 
 # ── 3. Configure firewall ────────────────────────────────────────
 info "Configuring UFW firewall..."
-ufw allow 22/tcp    comment "SSH"
-ufw allow 80/tcp    comment "HTTP (Let'\''s Encrypt)"
-ufw allow 443/tcp   comment "HTTPS / WSS"
-ufw allow 7881/tcp  comment "LiveKit TCP fallback"
-ufw allow ${RTC_PORT_START}:${RTC_PORT_END}/udp comment "LiveKit WebRTC media"
+ufw allow 22/tcp
+ufw allow 80/tcp
+ufw allow 443/tcp
+ufw allow 7881/tcp
+ufw allow ${RTC_PORT_START}:${RTC_PORT_END}/udp
 ufw --force enable
 success "Firewall configured."
 
