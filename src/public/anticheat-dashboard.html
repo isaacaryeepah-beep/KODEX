@@ -221,7 +221,7 @@ html, body { height: 100%; background: var(--bg); color: var(--text); font-famil
 <!-- Login overlay -->
 <div id="login-overlay">
   <div class="login-card">
-    <button onclick="history.back()" style="display:inline-flex;align-items:center;gap:5px;background:none;border:none;color:#64748b;font-size:13px;cursor:pointer;padding:0;margin-bottom:12px" onmouseover="this.style.color='#0f172a'" onmouseout="this.style.color='#64748b'">
+    <button onclick="window.history.length>1?history.back():location.href='/assignments.html?tab=quizzes'" style="display:inline-flex;align-items:center;gap:5px;background:none;border:none;color:#64748b;font-size:13px;cursor:pointer;padding:0;margin-bottom:12px" onmouseover="this.style.color='#0f172a'" onmouseout="this.style.color='#64748b'">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
       Back
     </button>
