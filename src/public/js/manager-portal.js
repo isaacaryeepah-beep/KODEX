@@ -143,10 +143,6 @@ async function renderManagerDashboard(content) {
         <div class="quick-actions-bar">
           <div class="section-label">Quick actions</div>
           <div class="actions-row">
-            <button class="action-chip blue" onclick="navigateTo('sessions')">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
-              Start session
-            </button>
             <button class="action-chip green" onclick="navigateTo('live-attendance')">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
               Live attendance
