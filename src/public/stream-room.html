@@ -282,7 +282,6 @@ const BASE_URL = location.origin;
 
 if (!callId || !token || !userId || !apiKey) { showError('Missing parameters. Please go back.'); throw 0; }
 
-// KODEX auth token (for backend API calls) — different from the GetStream token in the URL
 function getKodexToken() {
   return localStorage.getItem('token') || localStorage.getItem('jwt_token') ||
          localStorage.getItem('auth_token') || sessionStorage.getItem('token') || '';
@@ -294,11 +293,14 @@ if (isMod) document.getElementById('callScreen').classList.add('is-mod');
 
 // ── State ─────────────────────────────────────────────────────────────────────
 let call, client, chatClient, channel;
-let micOn = true, camOn = false, sharing = false, handRaised = false;
+let micOn = false, camOn = false, sharing = false, handRaised = false;
 let chatOpen = false, participantsOpen = false;
 let startedAt = Date.now();
-let raisedHands = new Set(); // userIds with hand raised
+let raisedHands = new Set();
 let subs = [];
+// Local camera MediaStream — kept separately so we can show it even when
+// the participant's p.videoStream hasn't propagated through state yet.
+let localCamStream = null;
 
 // ── Load SDKs ─────────────────────────────────────────────────────────────────
 setMsg('Loading…');
@@ -320,23 +322,30 @@ try {
 setMsg('Joining class…');
 try {
   call = client.call('default', callId);
-  await call.join({ create: isMod });
+  // create:true = join if exists, create if not (safe for both roles)
+  await call.join({ create: true });
 } catch (e) { showError('Could not join: ' + e.message); throw e; }
 
 // ── Local media ───────────────────────────────────────────────────────────────
 setMsg('Setting up media…');
-try { await call.microphone.enable(); } catch(e) { console.warn('[Mic]', e.message); }
-try { await call.camera.enable(); camOn = true; } catch(e) { console.warn('[Camera]', e.message); camOn = false; }
+try {
+  await call.microphone.enable();
+  micOn = true;
+} catch(e) { console.warn('[Mic]', e.message); micOn = false; }
+try {
+  await call.camera.enable();
+  camOn = true;
+  // Grab the raw camera MediaStream immediately so the local tile renders
+  localCamStream = call.camera.state?.mediaStream ?? null;
+} catch(e) { console.warn('[Camera]', e.message); camOn = false; }
 
 // ── Chat ──────────────────────────────────────────────────────────────────────
 try {
   chatClient = StreamChat.getInstance(apiKey);
-  // getInstance returns a singleton — guard against re-connecting an already-connected client
   if (chatClient.userID && chatClient.userID !== userId) await chatClient.disconnectUser();
   if (!chatClient.userID) await chatClient.connectUser({ id: userId, name: userName }, token);
   channel = chatClient.channel('messaging', callId, { name: title });
   await channel.watch();
-  // Render existing messages
   (channel.state.messages || []).forEach(addChatMessage);
   channel.on('message.new', e => { if (e.message) addChatMessage(e.message); });
 } catch (e) { console.warn('[Chat] init failed:', e.message); }
@@ -344,16 +353,40 @@ try {
 // ── Show call ─────────────────────────────────────────────────────────────────
 showCall();
 startTimer();
-updateMicBtn(); updateCamBtn();
 
 // ── Subscribe to participants ─────────────────────────────────────────────────
-if (call.state?.participants$) {
-  subs.push(call.state.participants$.subscribe(ps => { renderGrid(ps); renderPeopleList(ps); }));
-} else {
-  const refresh = () => { renderGrid(call.state?.participants||[]); renderPeopleList(call.state?.participants||[]); };
-  ['participantJoined','participantLeft','participantUpdated','trackPublished','trackUnpublished'].forEach(ev => call.on(ev, refresh));
-  refresh();
+function rerender() {
+  const ps = call.state?.participants || [];
+  renderGrid(ps);
+  renderPeopleList(ps);
 }
+
+if (call.state?.participants$) {
+  subs.push(call.state.participants$.subscribe(rerender));
+} else {
+  ['participantJoined','participantLeft','participantUpdated','trackPublished','trackUnpublished']
+    .forEach(ev => call.on(ev, rerender));
+  rerender();
+}
+
+// ── Subscribe to camera MediaStream for local tile ────────────────────────────
+// call.camera.state.mediaStream$ fires whenever the camera stream changes
+// (enable, device switch, disable). We update localCamStream and re-render
+// the local participant tile directly — this is the fix for the black screen.
+try {
+  const camStateStream = call.camera?.state?.mediaStream$;
+  if (camStateStream?.subscribe) {
+    subs.push(camStateStream.subscribe(stream => {
+      localCamStream = stream ?? null;
+      const ps = call.state?.participants || [];
+      const localP = ps.find(p => p.isLocalParticipant);
+      if (localP) {
+        const tile = document.querySelector(`[data-sid="${CSS.escape(localP.sessionId)}"]`);
+        if (tile) updateTile(tile, localP);
+      }
+    }));
+  }
+} catch(e) { console.warn('[CamSub]', e.message); }
 
 // ── Raise hand reactions ──────────────────────────────────────────────────────
 call.on('call.reaction_new', ({ reaction, user: rUser }) => {
@@ -364,81 +397,108 @@ call.on('call.reaction_new', ({ reaction, user: rUser }) => {
   } else if (reaction.type === 'lowered-hand') {
     raisedHands.delete(rUser.id);
   }
-  renderGrid(call.state?.participants || []);
-  renderPeopleList(call.state?.participants || []);
+  rerender();
 });
 
 // ── Controls ──────────────────────────────────────────────────────────────────
 window.toggleMic = async () => {
-  micOn = !micOn; await safe(() => micOn ? call.microphone.enable() : call.microphone.disable()); updateMicBtn();
-};
-window.toggleCam = async () => {
-  const next = !camOn;
+  const btn = document.getElementById('btnMic');
+  btn.disabled = true;
   try {
-    if (next) await call.camera.enable();
-    else      await call.camera.disable();
-    camOn = next;
-  } catch (e) {
-    console.warn('[Camera]', e.message);
-  }
-  updateCamBtn();
+    if (micOn) { await call.microphone.disable(); micOn = false; }
+    else       { await call.microphone.enable();  micOn = true;  }
+  } catch (e) { console.warn('[Mic]', e.message); }
+  btn.disabled = false;
+  updateMicBtn();
+  rerender();
 };
+
+window.toggleCam = async () => {
+  const btn = document.getElementById('btnCam');
+  btn.disabled = true;
+  try {
+    if (camOn) {
+      await call.camera.disable();
+      camOn = false;
+      localCamStream = null;
+    } else {
+      await call.camera.enable();
+      camOn = true;
+      localCamStream = call.camera.state?.mediaStream ?? null;
+    }
+  } catch (e) { console.warn('[Camera]', e.message); }
+  btn.disabled = false;
+  updateCamBtn();
+  rerender();
+};
+
 window.toggleShare = async () => {
+  const btn = document.getElementById('btnShare');
+  btn.disabled = true;
   try {
     if (!sharing) { await call.screenShare.enable(); sharing = true; }
     else          { await call.screenShare.disable(); sharing = false; }
   } catch (_) { sharing = false; }
-  const btn = document.getElementById('btnShare');
+  btn.disabled = false;
   document.getElementById('shareIcon').textContent = sharing ? '⏹' : '🖥';
   btn.classList.toggle('active', sharing);
 };
+
 window.toggleHand = async () => {
   try {
     handRaised = !handRaised;
     await call.sendReaction({ type: handRaised ? 'raised-hand' : 'lowered-hand' });
     document.getElementById('btnHand').classList.toggle('active', handRaised);
-    document.getElementById('handIcon').textContent = handRaised ? '✋' : '✋';
-  } catch (_) {}
+  } catch (e) { console.warn('[Hand]', e.message); }
 };
+
 window.muteAll = async () => {
   if (!isMod || !meetingId) return;
   try {
     await fetch(`${BASE_URL}/api/meetings/${meetingId}/mute-all`, {
-      method: 'POST',
-      headers: { Authorization: 'Bearer ' + kodexToken },
+      method: 'POST', headers: { Authorization: 'Bearer ' + kodexToken },
     });
   } catch (_) {}
 };
+
 window.muteParticipant = async (uid) => {
   if (!isMod || !meetingId) return;
   try {
     await fetch(`${BASE_URL}/api/meetings/${meetingId}/participants/${uid}/mute`, {
-      method: 'POST',
-      headers: { Authorization: 'Bearer ' + kodexToken },
+      method: 'POST', headers: { Authorization: 'Bearer ' + kodexToken },
     });
   } catch (_) {}
 };
+
 window.kickParticipant = async (uid) => {
   if (!isMod || !meetingId) return;
   if (!confirm('Remove this participant?')) return;
   try {
     await fetch(`${BASE_URL}/api/meetings/${meetingId}/participants/${uid}/kick`, {
-      method: 'POST',
-      headers: { Authorization: 'Bearer ' + kodexToken },
+      method: 'POST', headers: { Authorization: 'Bearer ' + kodexToken },
     });
   } catch (_) {}
 };
+
 window.toggleChat = () => {
   chatOpen = !chatOpen;
   document.getElementById('chatSidebar').classList.toggle('open', chatOpen);
-  if (chatOpen) { participantsOpen = false; document.getElementById('participantsSidebar').classList.remove('open'); }
-  if (chatOpen) setTimeout(() => document.getElementById('chatMessages').scrollTo(0,99999), 50);
+  if (chatOpen) {
+    participantsOpen = false;
+    document.getElementById('participantsSidebar').classList.remove('open');
+    setTimeout(() => document.getElementById('chatMessages').scrollTo(0, 99999), 50);
+  }
 };
+
 window.toggleParticipants = () => {
   participantsOpen = !participantsOpen;
   document.getElementById('participantsSidebar').classList.toggle('open', participantsOpen);
-  if (participantsOpen) { chatOpen = false; document.getElementById('chatSidebar').classList.remove('open'); }
+  if (participantsOpen) {
+    chatOpen = false;
+    document.getElementById('chatSidebar').classList.remove('open');
+  }
 };
+
 window.leaveCall = async () => {
   clearInterval(timerInt);
   subs.forEach(s => s?.unsubscribe?.());
@@ -447,6 +507,7 @@ window.leaveCall = async () => {
   try { await chatClient?.disconnectUser(); } catch(_){}
   history.back();
 };
+
 window.sendChat = async () => {
   const inp = document.getElementById('chatInput');
   const text = inp.value.trim();
@@ -454,16 +515,16 @@ window.sendChat = async () => {
   inp.value = '';
   try { await channel.sendMessage({ text }); } catch (_) {}
 };
+
 document.getElementById('chatInput').addEventListener('keydown', e => {
   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); window.sendChat(); }
 });
 
-// ── Toggle tile menu (host controls) ─────────────────────────────────────────
 window.toggleTileMenu = (btn) => {
   const menu = btn.closest('.tile-menu');
   menu.classList.toggle('active');
-  document.addEventListener('click', function outsideClick(e) {
-    if (!menu.contains(e.target)) { menu.classList.remove('active'); document.removeEventListener('click', outsideClick); }
+  document.addEventListener('click', function outsideClick(e2) {
+    if (!menu.contains(e2.target)) { menu.classList.remove('active'); document.removeEventListener('click', outsideClick); }
   }, { once: false });
 };
 
@@ -478,7 +539,7 @@ function renderGrid(participants) {
   grid.querySelectorAll('.tile').forEach(t => { if (!active.has(t.dataset.sid)) t.remove(); });
 
   for (const p of participants) {
-    let tile = grid.querySelector(`[data-sid="${p.sessionId}"]`);
+    let tile = grid.querySelector(`[data-sid="${CSS.escape(p.sessionId)}"]`);
     if (!tile) { tile = buildTile(p); grid.appendChild(tile); }
     updateTile(tile, p);
   }
@@ -500,8 +561,10 @@ function buildTile(p) {
         <button class="danger" onclick="kickParticipant(${JSON.stringify(p.userId||'')})">✕ Remove</button>
       </div>
     </div>` : '';
+  // Local video is mirrored so it feels natural (same as front camera selfie view)
+  const vidStyle = p.isLocalParticipant ? ' style="transform:scaleX(-1)"' : '';
   tile.innerHTML = `
-    <video id="vid-${p.sessionId}" autoplay playsinline muted></video>
+    <video id="vid-${p.sessionId}" autoplay playsinline muted${vidStyle}></video>
     <audio id="aud-${p.sessionId}" autoplay></audio>
     <div class="tile-nov" id="nov-${p.sessionId}">
       <div class="tile-av">${esc(initials)}</div>
@@ -520,39 +583,30 @@ function buildTile(p) {
 
 function updateTile(tile, p) {
   const vid = document.getElementById('vid-' + p.sessionId);
-  const aud = document.getElementById('aud-' + p.sessionId);
   const nov = document.getElementById('nov-' + p.sessionId);
+  const aud = document.getElementById('aud-' + p.sessionId);
   const tmEl = document.getElementById('tm-' + p.sessionId);
   const thEl = document.getElementById('th-' + p.sessionId);
+  if (!vid || !nov) return;
 
-  // Stream SDK v1: publishedTracks contains TrackType integers (2=video, 1=audio),
-  // NOT strings. Use videoStream/audioStream presence as the reliable check instead.
-  const hasVideo = !!p.videoStream;
-  const hasAudio = !!p.audioStream;
+  // Video source: local uses the raw camera stream (available immediately after
+  // call.camera.enable()), remote participants use their received p.videoStream.
+  const videoSrc = p.isLocalParticipant
+    ? (localCamStream || p.videoStream || null)
+    : (p.videoStream || null);
 
-  if (hasVideo) {
-    // Use SDK bindVideoElement if available (preferred); fall back to srcObject
-    if (typeof call.bindVideoElement === 'function') {
-      if (!tile.__videoBound) {
-        tile.__unbindVideo = call.bindVideoElement(vid, p.sessionId, 'videoTrack') || null;
-        tile.__videoBound = true;
-      }
-    } else if (vid.srcObject !== p.videoStream) {
-      vid.srcObject = p.videoStream;
-    }
-    vid.style.display = 'block'; nov.style.display = 'none';
-  } else {
-    if (tile.__videoBound) {
-      if (tile.__unbindVideo) { tile.__unbindVideo(); tile.__unbindVideo = null; }
-      tile.__videoBound = false;
-    }
-    vid.srcObject = null; vid.style.display = 'none'; nov.style.display = 'flex';
+  if (vid.srcObject !== videoSrc) vid.srcObject = videoSrc;
+  const hasVideo = !!videoSrc;
+  vid.style.display = hasVideo ? 'block' : 'none';
+  nov.style.display = hasVideo ? 'none' : 'flex';
+
+  // Audio: never play back local audio (avoids echo)
+  if (!p.isLocalParticipant && aud) {
+    const audioSrc = p.audioStream || null;
+    if (aud.srcObject !== audioSrc) aud.srcObject = audioSrc;
   }
 
-  if (!p.isLocalParticipant && hasAudio) {
-    if (aud.srcObject !== p.audioStream) aud.srcObject = p.audioStream;
-  } else { aud.srcObject = null; }
-
+  const hasAudio = p.isLocalParticipant ? micOn : !!p.audioStream;
   if (tmEl) tmEl.textContent = hasAudio ? '' : '🔇';
   if (thEl) thEl.textContent = raisedHands.has(p.userId) ? '✋' : '';
   tile.classList.toggle('speaking', !!p.isSpeaking);
@@ -562,8 +616,8 @@ function renderPeopleList(participants) {
   const list = document.getElementById('participantsList');
   list.innerHTML = '';
   for (const p of participants) {
-    const hasAudio = !!p.audioStream;
-    const hasVideo = !!p.videoStream;
+    const hasAudio = p.isLocalParticipant ? micOn : !!p.audioStream;
+    const hasVideo = p.isLocalParticipant ? camOn : !!p.videoStream;
     const hand = raisedHands.has(p.userId);
     const div = document.createElement('div');
     div.className = 'pitem';
@@ -617,7 +671,6 @@ function updateCamBtn() {
 }
 
 // ── Utility ───────────────────────────────────────────────────────────────────
-async function safe(fn) { try { await fn(); } catch(e){ console.warn('[safe]', e?.message || e); } }
 function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 function setMsg(m) { document.getElementById('connectMsg').textContent = m; }
 function showCall() {
