@@ -325,10 +325,8 @@ try {
 
 // ── Local media ───────────────────────────────────────────────────────────────
 setMsg('Setting up media…');
-await safe(() => call.microphone.enable());
-// Always enable camera on join so the local tile shows immediately
-await safe(() => call.camera.enable());
-camOn = true;
+try { await call.microphone.enable(); } catch(e) { console.warn('[Mic]', e.message); }
+try { await call.camera.enable(); camOn = true; } catch(e) { console.warn('[Camera]', e.message); camOn = false; }
 
 // ── Chat ──────────────────────────────────────────────────────────────────────
 try {
@@ -491,6 +489,8 @@ function buildTile(p) {
   tile.className = 'tile' + (p.isLocalParticipant ? ' local' : '');
   tile.dataset.sid = p.sessionId;
   tile.dataset.uid = p.userId || '';
+  tile.__videoBound = false;
+  tile.__unbindVideo = null;
   const initials = (p.name||p.userId||'P').charAt(0).toUpperCase();
   const hostCtrl = isMod && !p.isLocalParticipant ? `
     <div class="tile-menu">
@@ -525,13 +525,27 @@ function updateTile(tile, p) {
   const tmEl = document.getElementById('tm-' + p.sessionId);
   const thEl = document.getElementById('th-' + p.sessionId);
 
-  const hasVideo = p.videoStream && (p.publishedTracks||[]).includes('video');
-  const hasAudio = p.audioStream && (p.publishedTracks||[]).includes('audio');
+  // Stream SDK v1: publishedTracks contains TrackType integers (2=video, 1=audio),
+  // NOT strings. Use videoStream/audioStream presence as the reliable check instead.
+  const hasVideo = !!p.videoStream;
+  const hasAudio = !!p.audioStream;
 
   if (hasVideo) {
-    if (vid.srcObject !== p.videoStream) vid.srcObject = p.videoStream;
+    // Use SDK bindVideoElement if available (preferred); fall back to srcObject
+    if (typeof call.bindVideoElement === 'function') {
+      if (!tile.__videoBound) {
+        tile.__unbindVideo = call.bindVideoElement(vid, p.sessionId, 'videoTrack') || null;
+        tile.__videoBound = true;
+      }
+    } else if (vid.srcObject !== p.videoStream) {
+      vid.srcObject = p.videoStream;
+    }
     vid.style.display = 'block'; nov.style.display = 'none';
   } else {
+    if (tile.__videoBound) {
+      if (tile.__unbindVideo) { tile.__unbindVideo(); tile.__unbindVideo = null; }
+      tile.__videoBound = false;
+    }
     vid.srcObject = null; vid.style.display = 'none'; nov.style.display = 'flex';
   }
 
@@ -548,8 +562,8 @@ function renderPeopleList(participants) {
   const list = document.getElementById('participantsList');
   list.innerHTML = '';
   for (const p of participants) {
-    const hasAudio = (p.publishedTracks||[]).includes('audio');
-    const hasVideo = (p.publishedTracks||[]).includes('video');
+    const hasAudio = !!p.audioStream;
+    const hasVideo = !!p.videoStream;
     const hand = raisedHands.has(p.userId);
     const div = document.createElement('div');
     div.className = 'pitem';
@@ -603,7 +617,7 @@ function updateCamBtn() {
 }
 
 // ── Utility ───────────────────────────────────────────────────────────────────
-async function safe(fn) { try { await fn(); } catch(_){} }
+async function safe(fn) { try { await fn(); } catch(e){ console.warn('[safe]', e?.message || e); } }
 function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 function setMsg(m) { document.getElementById('connectMsg').textContent = m; }
 function showCall() {
