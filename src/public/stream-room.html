@@ -550,6 +550,8 @@ function buildTile(p) {
   tile.className = 'tile' + (p.isLocalParticipant ? ' local' : '');
   tile.dataset.sid = p.sessionId;
   tile.dataset.uid = p.userId || '';
+  tile.__videoBound = false;
+  tile.__unbindVideo = null;
   const initials = (p.name||p.userId||'P').charAt(0).toUpperCase();
   const hostCtrl = isMod && !p.isLocalParticipant ? `
     <div class="tile-menu">
