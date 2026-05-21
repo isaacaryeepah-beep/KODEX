@@ -7,7 +7,7 @@ const User               = require('../models/User');
 const { generateRoomName }                             = require('../utils/generateRoomName');
 const { generateMeetingToken, verifyMeetingToken }     = require('../utils/jwt');
 const { generateJitsiToken, JITSI_DOMAIN, JITSI_APP_ID, jitsiConfigured } = require('../services/jitsiTokenService');
-const { configured: streamConfigured, generateStreamToken, createStreamCall, buildStreamRoomUrl, muteAllParticipants, muteParticipant: muteOneParticipant, removeParticipant: blockParticipant } = require('../services/streamService');
+const { configured: streamConfigured, generateLiveKitToken, buildLiveKitRoomUrl, muteAllInRoom, muteParticipantInRoom } = require('../services/livekitService');
 const { broadcastMonitor }                             = require('./meetingMonitorController');
 const { runPreflight, handleReconnect }                 = require('../services/sessionPreflight');
 
@@ -322,9 +322,8 @@ exports.startMeeting = async (req, res) => {
 
     let meetingUrl, jitsiToken;
     if (streamConfigured) {
-      try { await createStreamCall(meeting.roomName); } catch (e) { console.warn('[Stream] createStreamCall:', e.message); }
-      const streamToken = generateStreamToken(req.user._id);
-      meetingUrl = buildStreamRoomUrl(meeting, req.user, streamToken, true);
+      const lkToken = await generateLiveKitToken(req.user._id, req.user.name || req.user.email, meeting.roomName, true);
+      meetingUrl = buildLiveKitRoomUrl(meeting, req.user, lkToken, true);
     } else {
       jitsiToken = generateJitsiToken(req.user, meeting.roomName, true);
       meetingUrl = buildJitsiMeetingUrl(meeting, req.user, true);
@@ -487,14 +486,9 @@ exports.joinMeeting = async (req, res) => {
     let meetingUrl, jitsiToken, jitsiConfig;
 
     if (streamConfigured) {
-      // ── GetStream path ──────────────────────────────────────────────────
-      try {
-        await createStreamCall(meeting.roomName, isMod ? user._id : null);
-      } catch (e) {
-        console.warn('[Stream] createStreamCall failed, continuing anyway:', e.message);
-      }
-      const streamToken = generateStreamToken(user._id);
-      meetingUrl = buildStreamRoomUrl(meeting, user, streamToken, isMod);
+      // ── LiveKit path ────────────────────────────────────────────────────
+      const lkToken = await generateLiveKitToken(user._id, user.name || user.email, meeting.roomName, isMod);
+      meetingUrl = buildLiveKitRoomUrl(meeting, user, lkToken, isMod);
     } else {
       // ── Jitsi fallback ──────────────────────────────────────────────────
       jitsiToken  = generateJitsiToken(user, meeting.roomName, isMod);
@@ -626,20 +620,20 @@ exports.jitsiHealth = async (req, res) => {
   res.status(ok ? 200 : 502).json(result);
 };
 
-// ─── MUTE ALL (GetStream) ─────────────────────────────────────────────────────
+// ─── MUTE ALL (LiveKit) ───────────────────────────────────────────────────────
 exports.muteAll = async (req, res) => {
   try {
-    if (!streamConfigured) return res.status(503).json({ error: 'GetStream not configured' });
-    await muteAllParticipants(req.meeting.roomName);
+    if (!streamConfigured) return res.status(503).json({ error: 'LiveKit not configured' });
+    await muteAllInRoom(req.meeting.roomName);
     res.json({ success: true, message: 'All participants muted' });
   } catch (err) { res.status(500).json({ error: err.message }); }
 };
 
-// ─── MUTE PARTICIPANT (GetStream) ─────────────────────────────────────────────
+// ─── MUTE PARTICIPANT (LiveKit) ───────────────────────────────────────────────
 exports.muteParticipant = async (req, res) => {
   try {
-    if (!streamConfigured) return res.status(503).json({ error: 'GetStream not configured' });
-    await muteOneParticipant(req.meeting.roomName, req.params.uid);
+    if (!streamConfigured) return res.status(503).json({ error: 'LiveKit not configured' });
+    await muteParticipantInRoom(req.meeting.roomName, req.params.uid);
     res.json({ success: true, message: 'Participant muted' });
   } catch (err) { res.status(500).json({ error: err.message }); }
 };
