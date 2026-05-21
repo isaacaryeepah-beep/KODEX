@@ -26,7 +26,8 @@ const approvalRoutes = require("./routes/approvals");
 const rosterRoutes = require("./routes/roster");
 const adminReportRoutes = require("./routes/adminReports");
 const adminDashboardRoutes = require("./routes/adminDashboard");
-const jitsiRoutes = require("./routes/jitsi");
+let jitsiRoutes = null;
+try { jitsiRoutes = require("./routes/jitsi"); } catch(e) { console.warn('[Jitsi] routes not loaded:', e.message); }
 const searchRoutes = require("./routes/Search");
 // Legacy proctored quiz system — superseded by SnapQuiz (proctoringEnabled=true).
 // Kept for historical data access. Set LEGACY_PROCTOR_DISABLED=true to retire.
@@ -272,7 +273,11 @@ app.use("/api/approvals", approvalRoutes);
 app.use("/api/hod", hodRoutes);
 app.use("/api/roster", rosterRoutes);
 app.use("/api/admin/reports", adminReportRoutes);
-app.use("/api/jitsi", jitsiRoutes);
+if (jitsiRoutes) {
+  app.use("/api/jitsi", jitsiRoutes);
+} else {
+  app.use("/api/jitsi", (req, res) => res.status(503).json({ error: "Jitsi is not configured on this server. Use GetStream meetings instead." }));
+}
 app.use("/api/admin", adminDashboardRoutes);
 app.use("/api/search", searchRoutes);
 if (proctoredQuizRoutes) {
@@ -403,7 +408,8 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: "Internal server error" });
 });
 
-const { validateJitsiConfig } = require('./services/jitsiConfigValidator');
+let validateJitsiConfig = () => {};
+try { ({ validateJitsiConfig } = require('./services/jitsiConfigValidator')); } catch(_) {}
 
 const start = async () => {
   validateJitsiConfig();
