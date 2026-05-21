@@ -681,6 +681,34 @@ exports.configureWifi = async (req, res) => {
   }
 };
 
+// ─── ASSIGN DEVICE TO CLASS REP ──────────────────────────────────────────────
+// PATCH /api/devices/:deviceId/assign-class-rep
+exports.assignClassRep = async (req, res) => {
+  try {
+    const { classRepId } = req.body;
+    const device = await Device.findOne({ deviceId: req.params.deviceId, companyId: req.user.company });
+    if (!device) return res.status(404).json({ error: 'Device not found' });
+
+    if (classRepId) {
+      const classRep = await User.findOne({ _id: classRepId, company: req.user.company, role: 'student' });
+      if (!classRep) return res.status(404).json({ error: 'Student not found' });
+
+      // Mark student as class rep
+      await User.findByIdAndUpdate(classRepId, { isClassRep: true });
+
+      device.classRepId = classRepId;
+      device.ownershipType = 'shared';
+      device.lecturerId = null;
+    } else {
+      // Unassign
+      device.classRepId = null;
+      device.ownershipType = 'dedicated';
+    }
+    await device.save({ validateModifiedOnly: true });
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+};
+
 // ─── SUPERADMIN TRANSFER (only way to reassign a device) ─────────────────────
 exports.transferDevice = async (req, res) => {
   try {

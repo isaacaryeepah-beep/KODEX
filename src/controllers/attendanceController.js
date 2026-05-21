@@ -16,7 +16,11 @@ const DEVICE_MARK_WINDOW_MS   = 15_000;   // mark-attendance gate
 // online device in the company.
 async function _resolveSessionDevice(user) {
   if (user.role === 'lecturer') {
-    return await Device.findOne({ lecturerId: user._id, companyId: user.company });
+    // First: check if lecturer has a dedicated device
+    const dedicated = await Device.findOne({ lecturerId: user._id, companyId: user.company, ownershipType: 'dedicated' });
+    if (dedicated) return dedicated;
+    // Second: check if a shared device is currently connected to this lecturer
+    return await Device.findOne({ activeLecturerId: user._id, companyId: user.company, ownershipType: 'shared' });
   }
   return await Device.findOne({ companyId: user.company }).sort({ lastHeartbeat: -1 });
 }

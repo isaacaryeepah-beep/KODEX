@@ -15,11 +15,15 @@ const deviceSchema = new mongoose.Schema({
   // Tenant isolation
   companyId: { type: mongoose.Schema.Types.ObjectId, ref: 'Company', required: true },
 
-  // ── STRICT OWNERSHIP ──────────────────────────────────────────────────────
-  // unique: true on the field already creates the index — no schema.index() needed
-  lecturerId:     { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, unique: true },
-  ownershipType:  { type: String, default: 'dedicated', enum: ['dedicated'] },
-  isTransferable: { type: Boolean, default: false },
+  // ── OWNERSHIP ─────────────────────────────────────────────────────────────
+  lecturerId:      { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: false, sparse: true },
+  ownershipType:   { type: String, default: 'dedicated', enum: ['dedicated', 'shared'] },
+  isTransferable:  { type: Boolean, default: false },
+  classRepId:      { type: mongoose.Schema.Types.ObjectId, ref: 'User', sparse: true },
+  classRepCourse:  { type: mongoose.Schema.Types.ObjectId, ref: 'Course', sparse: true },
+  activeLecturerId:{ type: mongoose.Schema.Types.ObjectId, ref: 'User', sparse: true },
+  activeCourseId:  { type: mongoose.Schema.Types.ObjectId, ref: 'Course', sparse: true },
+  connectedAt:     { type: Date, default: null },
   // ─────────────────────────────────────────────────────────────────────────
 
   // Multi-WiFi support
@@ -72,8 +76,11 @@ deviceSchema.virtual('isOnline').get(function () {
 deviceSchema.set('toJSON',   { virtuals: true });
 deviceSchema.set('toObject', { virtuals: true });
 
-// Only compound indexes here — deviceId and lecturerId unique indexes
-// are already created by unique: true on the field definitions above
+// Only compound indexes here — deviceId unique index is already created
+// by unique: true on the field definition above.
+// lecturerId is now sparse (no unique constraint) to allow shared devices.
 deviceSchema.index({ companyId: 1 });
+deviceSchema.index({ classRepId: 1 }, { sparse: true });
+deviceSchema.index({ activeLecturerId: 1 }, { sparse: true });
 
 module.exports = mongoose.model('Device', deviceSchema);

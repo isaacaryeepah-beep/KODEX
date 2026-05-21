@@ -6,6 +6,7 @@ const deviceCtrl  = require('../controllers/deviceController');
 const authenticate         = require('../middleware/auth');
 const deviceAuth           = require('../middleware/deviceAuth');
 const { companyIsolation } = require('../middleware/companyIsolation');
+const { requireRole }      = require('../middleware/role');
 
 // ─── ESP32 DEVICE-SIDE ROUTES (device JWT) ────────────────────────────────────
 // These are called by the ESP32 firmware using `Authorization: Bearer <token>`
@@ -29,5 +30,8 @@ router.post('/devices/transfer',          authenticate, deviceCtrl.transferDevic
 // WiFi setup helpers — server proxies to the ESP32 over the local network
 router.get('/devices/my/scan-wifi',    authenticate, companyIsolation, deviceCtrl.scanWifi);
 router.post('/devices/configure-wifi', authenticate, companyIsolation, deviceCtrl.configureWifi);
+
+// ─── ADMIN: ASSIGN DEVICE TO CLASS REP ───────────────────────────────────────
+router.patch('/devices/:deviceId/assign-class-rep', authenticate, requireRole('admin', 'superadmin'), deviceCtrl.assignClassRep);
 
 module.exports = router;

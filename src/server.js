@@ -364,6 +364,9 @@ app.use("/api/faq",                 faqRoutes);
 const deviceSessionRoutes = require("./routes/deviceSessionRoutes");
 app.use("/api", deviceSessionRoutes);
 
+const classRepRoutes = require('./routes/classRepRoutes');
+app.use('/api/class-rep', classRepRoutes);
+
 if (superadminRoutes) app.use("/api/superadmin", superadminRoutes);
 
 app.get('/.well-known/assetlinks.json', (req, res) => {

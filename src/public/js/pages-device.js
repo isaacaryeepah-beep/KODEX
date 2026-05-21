@@ -298,6 +298,16 @@ function _devPairedHTML(d) {
 
 </div>
 
+<!-- Class Rep PIN card -->
+<div style="margin-top:20px;padding:16px;background:#f8fafc;border-radius:12px;border:1.5px solid #e2e8f0">
+  <h4 style="font-size:13px;font-weight:700;margin-bottom:8px">Class Rep PIN</h4>
+  <p style="font-size:12px;color:#64748b;margin-bottom:10px">Set a 4-digit PIN that your class rep must enter to connect a shared device to your session.</p>
+  <div style="display:flex;gap:8px;align-items:center">
+    <input id="lecturer-pin-input" type="password" inputmode="numeric" maxlength="4" placeholder="4 digits" style="width:100px;padding:8px 12px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:16px;letter-spacing:4px">
+    <button onclick="saveLecturerPin()" style="padding:8px 16px;background:#1e293b;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer">Save PIN</button>
+  </div>
+</div>
+
 <!-- Help panel -->
 ${_devHelpHTML()}`;
 }
