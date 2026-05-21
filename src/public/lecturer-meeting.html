@@ -6,216 +6,327 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="format-detection" content="telephone=no" />
-  <!-- Prevent any back-navigation cache from restoring this page mid-redirect -->
   <meta http-equiv="Cache-Control" content="no-store" />
-  <title>Starting Meeting — DIKLY</title>
+  <title>Starting Class — Dikly</title>
   <style>
-    *, *::before, *::after {
-      box-sizing: border-box; margin: 0; padding: 0;
-      -webkit-tap-highlight-color: transparent;
-    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
     :root {
-      --bg:      #0a0c10;
-      --card:    #1a1e28;
-      --border:  #2a2f3d;
-      --accent:  #3b82f6;
-      --danger:  #ef4444;
-      --text:    #e2e8f0;
-      --muted:   #6b7280;
-      --sat: env(safe-area-inset-top,    0px);
+      --bg: #080b12;
+      --surface: #0f1420;
+      --card: #151c2e;
+      --border: rgba(255,255,255,.07);
+      --accent: #4f6ef7;
+      --accent2: #7c3aed;
+      --green: #10b981;
+      --danger: #ef4444;
+      --text: #f1f5f9;
+      --muted: #64748b;
+      --sat: env(safe-area-inset-top, 0px);
       --sab: env(safe-area-inset-bottom, 0px);
     }
-    html {
-      height: -webkit-fill-available;
-      -webkit-text-size-adjust: 100%;
-      text-size-adjust: 100%;
-    }
+    html { height: -webkit-fill-available; -webkit-text-size-adjust: 100%; }
     body {
-      position: fixed; inset: 0;
+      min-height: 100vh;
+      min-height: -webkit-fill-available;
       background: var(--bg);
       color: var(--text);
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      display: flex; align-items: center; justify-content: center;
-      padding:
-        calc(var(--sat) + 28px)
-        28px
-        calc(var(--sab) + 28px);
+      font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, sans-serif;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      padding: calc(var(--sat) + 24px) 20px calc(var(--sab) + 24px);
+      overflow: hidden;
+      position: relative;
     }
 
-    /* ── Shared screen layout ── */
-    .screen {
-      width: 100%; max-width: 380px;
-      display: flex; flex-direction: column;
-      align-items: center; gap: 20px;
-      text-align: center;
+    /* Ambient background */
+    body::before {
+      content: '';
+      position: fixed; inset: 0;
+      background:
+        radial-gradient(ellipse 80% 60% at 20% 20%, rgba(79,110,247,.12) 0%, transparent 60%),
+        radial-gradient(ellipse 60% 50% at 80% 80%, rgba(124,58,237,.10) 0%, transparent 60%);
+      pointer-events: none;
     }
 
-    /* ── Logo ── */
-    .logo {
-      width: 72px; height: 72px; border-radius: 20px;
-      background: var(--accent);
+    .wrap {
+      width: 100%; max-width: 420px;
+      display: flex; flex-direction: column; align-items: center; gap: 0;
+      position: relative; z-index: 1;
+    }
+
+    /* ── LOADING STATE ── */
+    #loadScreen { display: flex; flex-direction: column; align-items: center; gap: 28px; width: 100%; }
+
+    .brand {
+      display: flex; align-items: center; gap: 12px;
+      margin-bottom: 8px;
+    }
+    .brand-logo {
+      width: 44px; height: 44px; border-radius: 12px;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
       display: grid; place-items: center;
-      font-size: 34px; font-weight: 800; color: #fff;
-      box-shadow: 0 0 56px rgba(59,130,246,.35);
-      flex-shrink: 0;
+      font-weight: 800; font-size: 20px; color: #fff;
+      box-shadow: 0 8px 32px rgba(79,110,247,.4);
     }
+    .brand-name { font-size: 20px; font-weight: 700; letter-spacing: -.3px; }
 
-    /* ── Text ── */
-    .title { font-size: 22px; font-weight: 700; letter-spacing: -.3px; }
-    .status { font-size: 14px; color: var(--muted); line-height: 1.5; min-height: 22px; }
-
-    /* ── Spinner ── */
-    .spinner {
-      width: 32px; height: 32px;
-      border: 3px solid var(--border);
-      border-top-color: var(--accent);
-      border-radius: 50%;
-      animation: spin .85s linear infinite;
-    }
-    @keyframes spin { to { transform: rotate(360deg); } }
-
-    /* ── Error screen ── */
-    .err-icon  { font-size: 52px; line-height: 1; }
-    .err-title { font-size: 20px; font-weight: 700; color: var(--danger); }
-    .err-msg   { font-size: 14px; color: var(--muted); max-width: 300px; line-height: 1.65; }
-
-    /* ── Buttons ── */
-    .actions {
-      display: flex; flex-direction: column; gap: 10px;
+    .meeting-card {
       width: 100%;
-    }
-    .btn {
-      width: 100%; padding: 16px;
-      border-radius: 12px; border: none;
-      font-size: 15px; font-weight: 600;
-      cursor: pointer; touch-action: manipulation;
-      transition: opacity .15s;
-    }
-    .btn:active { opacity: .8; }
-    .btn-primary   { background: var(--accent); color: #fff; }
-    .btn-secondary {
       background: var(--card);
       border: 1px solid var(--border);
-      color: var(--text);
+      border-radius: 24px;
+      padding: 28px 24px;
+      display: flex; flex-direction: column; gap: 20px;
+      box-shadow: 0 24px 64px rgba(0,0,0,.4), inset 0 1px 0 rgba(255,255,255,.06);
+    }
+
+    .host-badge {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: rgba(16,185,129,.12); border: 1px solid rgba(16,185,129,.25);
+      color: #34d399; font-size: 12px; font-weight: 600;
+      padding: 4px 10px; border-radius: 20px;
+      letter-spacing: .3px; text-transform: uppercase;
+      align-self: flex-start;
+    }
+    .host-badge::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: #10b981; animation: pulse 1.5s ease-in-out infinite; }
+    @keyframes pulse { 0%,100% { opacity:1; transform:scale(1); } 50% { opacity:.5; transform:scale(.8); } }
+
+    .meeting-title {
+      font-size: 24px; font-weight: 700; letter-spacing: -.4px; line-height: 1.2;
+    }
+
+    .progress-area { display: flex; flex-direction: column; gap: 10px; }
+    .progress-label {
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .status-text { font-size: 14px; color: var(--muted); }
+    .step-text { font-size: 12px; color: var(--muted); }
+    .progress-bar {
+      height: 3px; background: rgba(255,255,255,.06); border-radius: 99px; overflow: hidden;
+    }
+    .progress-fill {
+      height: 100%; border-radius: 99px;
+      background: linear-gradient(90deg, var(--accent), var(--accent2));
+      transition: width .5s cubic-bezier(.4,0,.2,1);
+      width: 0%;
+    }
+
+    .steps {
+      display: flex; flex-direction: column; gap: 10px;
+    }
+    .step {
+      display: flex; align-items: center; gap: 12px;
+      padding: 10px 14px;
+      border-radius: 12px;
+      background: rgba(255,255,255,.02);
+      transition: background .2s;
+    }
+    .step.active { background: rgba(79,110,247,.08); }
+    .step.done { opacity: .5; }
+    .step-icon {
+      width: 28px; height: 28px; border-radius: 8px; flex-shrink: 0;
+      display: grid; place-items: center;
+      background: rgba(255,255,255,.05);
+      font-size: 14px;
+    }
+    .step.active .step-icon { background: rgba(79,110,247,.2); }
+    .step.done .step-icon { background: rgba(16,185,129,.15); }
+    .step-label { font-size: 13px; color: var(--muted); }
+    .step.active .step-label { color: var(--text); font-weight: 500; }
+    .step-spinner {
+      width: 14px; height: 14px; border-radius: 50%;
+      border: 2px solid rgba(79,110,247,.2);
+      border-top-color: var(--accent);
+      animation: spin .7s linear infinite;
+      margin-left: auto; flex-shrink: 0;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .step-check { margin-left: auto; color: #10b981; font-size: 14px; flex-shrink: 0; }
+
+    /* ── ERROR STATE ── */
+    #errorScreen {
+      display: none; flex-direction: column; align-items: center; gap: 24px; width: 100%;
+    }
+    .error-card {
+      width: 100%;
+      background: var(--card);
+      border: 1px solid rgba(239,68,68,.2);
+      border-radius: 24px;
+      padding: 32px 24px;
+      display: flex; flex-direction: column; align-items: center; gap: 16px;
+      text-align: center;
+      box-shadow: 0 24px 64px rgba(0,0,0,.4);
+    }
+    .error-icon {
+      width: 56px; height: 56px; border-radius: 16px;
+      background: rgba(239,68,68,.1);
+      display: grid; place-items: center; font-size: 26px;
+    }
+    .error-title { font-size: 20px; font-weight: 700; }
+    .error-msg { font-size: 14px; color: var(--muted); line-height: 1.65; max-width: 300px; }
+
+    .actions { display: flex; flex-direction: column; gap: 10px; width: 100%; }
+    .btn {
+      width: 100%; padding: 15px; border-radius: 14px; border: none;
+      font-size: 15px; font-weight: 600; cursor: pointer;
+      touch-action: manipulation; transition: transform .1s, opacity .1s;
+      font-family: inherit;
+    }
+    .btn:active { transform: scale(.98); opacity: .9; }
+    .btn-primary {
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      color: #fff;
+      box-shadow: 0 4px 20px rgba(79,110,247,.35);
+    }
+    .btn-ghost {
+      background: rgba(255,255,255,.04);
+      border: 1px solid var(--border);
+      color: var(--muted);
     }
   </style>
 </head>
 <body>
+<div class="wrap">
 
-<!-- Loading -->
-<div class="screen" id="loadScreen">
-  <div class="logo">D</div>
-  <div class="title">DIKLY Classes</div>
-  <div class="spinner"></div>
-  <div class="status" id="status">Preparing meeting room…</div>
-</div>
+  <!-- LOADING -->
+  <div id="loadScreen">
+    <div class="brand">
+      <div class="brand-logo">D</div>
+      <span class="brand-name">Dikly</span>
+    </div>
 
-<!-- Error -->
-<div class="screen" id="errorScreen" style="display:none">
-  <div class="err-icon">⚠️</div>
-  <div class="err-title">Cannot Start Meeting</div>
-  <div class="err-msg" id="errMsg">Something went wrong.</div>
-  <div class="actions">
-    <button class="btn btn-primary"   onclick="init()">Try Again</button>
-    <button class="btn btn-secondary" onclick="history.back()">Go Back</button>
+    <div class="meeting-card">
+      <div class="host-badge">Host</div>
+      <div class="meeting-title" id="meetingTitle">Starting your class…</div>
+
+      <div class="progress-area">
+        <div class="progress-label">
+          <span class="status-text" id="statusText">Preparing meeting room</span>
+          <span class="step-text" id="stepText">1 / 3</span>
+        </div>
+        <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+      </div>
+
+      <div class="steps">
+        <div class="step active" id="step1">
+          <div class="step-icon">🔐</div>
+          <div class="step-label">Authenticating session</div>
+          <div class="step-spinner" id="spin1"></div>
+        </div>
+        <div class="step" id="step2">
+          <div class="step-icon">🏫</div>
+          <div class="step-label">Setting up meeting room</div>
+        </div>
+        <div class="step" id="step3">
+          <div class="step-icon">🚀</div>
+          <div class="step-label">Launching as host</div>
+        </div>
+      </div>
+    </div>
   </div>
-</div>
 
+  <!-- ERROR -->
+  <div id="errorScreen">
+    <div class="brand">
+      <div class="brand-logo">D</div>
+      <span class="brand-name">Dikly</span>
+    </div>
+    <div class="error-card">
+      <div class="error-icon">⚠️</div>
+      <div class="error-title">Cannot Start Class</div>
+      <div class="error-msg" id="errMsg">Something went wrong.</div>
+      <div class="actions">
+        <button class="btn btn-primary" onclick="init()">Try Again</button>
+        <button class="btn btn-ghost" onclick="history.back()">Go Back</button>
+      </div>
+    </div>
+  </div>
+
+</div>
 <script>
 'use strict';
 
-// ── URL params ────────────────────────────────────────────────────────────────
-const _params    = new URLSearchParams(location.search);
-const MEETING_ID = _params.get('meeting') || _params.get('id') || '';
+const _p = new URLSearchParams(location.search);
+const MEETING_ID = _p.get('meeting') || _p.get('id') || '';
 
-// API is served from the same origin as the frontend (same Express server).
-// Always use relative URLs so this works on any domain/port.
-function getApiBase() { return ''; }
-
-// ── Auth token ────────────────────────────────────────────────────────────────
 function getAuthToken() {
-  // 1. Explicit token in URL (used when portal embeds token in redirect)
-  const urlToken = _params.get('token');
+  const urlToken = _p.get('token');
   if (urlToken) return urlToken;
-  // 2. Session-scoped meeting token stored by session-preflight
   try {
     const s = JSON.parse(sessionStorage.getItem('dikly_jitsi_session') || 'null');
     if (s?.meetingId === MEETING_ID && s.authToken) return s.authToken;
   } catch (_) {}
-  // 3. Standard auth token storage locations
-  return (
-    localStorage.getItem('token') ||
-    localStorage.getItem('jwt_token') ||
-    localStorage.getItem('auth_token') ||
-    sessionStorage.getItem('token') ||
-    ''
-  );
+  return localStorage.getItem('token') || localStorage.getItem('jwt_token') ||
+         localStorage.getItem('auth_token') || sessionStorage.getItem('token') || '';
 }
 
-const API_BASE   = getApiBase();
 const AUTH_TOKEN = getAuthToken();
 
-// ── Boot ──────────────────────────────────────────────────────────────────────
+function setProgress(step, pct, label) {
+  document.getElementById('statusText').textContent = label;
+  document.getElementById('stepText').textContent = `${step} / 3`;
+  document.getElementById('progressFill').style.width = pct + '%';
+
+  for (let i = 1; i <= 3; i++) {
+    const el = document.getElementById('step' + i);
+    const sp = el.querySelector('.step-spinner');
+    const ck = el.querySelector('.step-check');
+
+    if (i < step) {
+      el.className = 'step done';
+      if (sp) sp.remove();
+      if (!ck) { const c = document.createElement('span'); c.className = 'step-check'; c.textContent = '✓'; el.appendChild(c); }
+    } else if (i === step) {
+      el.className = 'step active';
+      if (!sp) { const s = document.createElement('div'); s.className = 'step-spinner'; s.id = 'spin' + i; el.appendChild(s); }
+    } else {
+      el.className = 'step';
+    }
+  }
+}
+
 async function init() {
-  // Reset to loading state (supports "Try Again")
   document.getElementById('loadScreen').style.display = 'flex';
   document.getElementById('errorScreen').style.display = 'none';
 
-  if (!MEETING_ID) {
-    return showError('No meeting ID provided. Please go back and try again.');
-  }
-  if (!AUTH_TOKEN) {
-    return showError('Your session has expired. Please log in to DIKLY and try again.');
-  }
+  if (!MEETING_ID) return showError('No meeting ID provided. Please go back and try again.');
+  if (!AUTH_TOKEN) return showError('Your session has expired. Please log in to Dikly and try again.');
 
-  setStatus('Connecting to server…');
+  setProgress(1, 15, 'Authenticating session…');
 
   try {
-    const r = await fetch(`${API_BASE}/api/meetings/${MEETING_ID}/join`, {
+    await delay(400);
+    setProgress(2, 50, 'Setting up meeting room…');
+
+    const r = await fetch(`/api/meetings/${MEETING_ID}/join`, {
       headers: { Authorization: 'Bearer ' + AUTH_TOKEN },
     });
     const body = await r.json().catch(() => ({}));
 
     if (!r.ok) {
-      const msg = body.error || body.message || `Server error (${r.status})`;
-      // Meeting not started yet — moderators auto-start, so this shouldn't happen;
-      // but if the backend returns scheduled for some reason, give a friendly message.
-      if (body.status === 'scheduled') {
-        return showError('The meeting hasn\'t been activated yet. Please wait and try again, or contact your administrator.');
-      }
-      if (body.status === 'ended' || body.status === 'cancelled') {
-        return showError('This meeting has ended or been cancelled.');
-      }
-      throw new Error(msg);
+      if (body.status === 'scheduled') return showError('The meeting hasn\'t been activated yet. Please contact your administrator.');
+      if (body.status === 'ended' || body.status === 'cancelled') return showError('This meeting has ended or been cancelled.');
+      throw new Error(body.error || body.message || `Server error (${r.status})`);
     }
 
     const data = body.data || body;
 
-    // This page is lecturers/moderators only
-    if (!data.isModerator) {
-      return showError('This page is for class hosts only. Students should use the Join Meeting link from the portal.');
-    }
+    if (!data.isModerator) return showError('This page is for class hosts only. Students should use the Join Class link.');
+
+    if (data.title) document.getElementById('meetingTitle').textContent = data.title;
 
     const meetingUrl = data.meetingUrl;
-    if (!meetingUrl) {
-      return showError('The server did not return a meeting URL. Please contact support.');
-    }
+    if (!meetingUrl) return showError('The server did not return a meeting URL. Please contact support.');
 
-    setStatus('Launching meeting room…');
+    setProgress(3, 90, 'Launching meeting room…');
+    await delay(500);
+    setProgress(3, 100, 'Opening your class now…');
+    await delay(300);
 
-    // Full-page redirect — the only correct approach on mobile Safari.
-    // Permissions (camera/microphone) are requested by Jitsi on meet.dikly.live,
-    // not here, so there is no permission-grant reload loop.
-    setTimeout(() => { window.location.href = meetingUrl; }, 350);
+    window.location.href = meetingUrl;
 
   } catch (err) {
     showError(err.message || 'Unexpected error. Please check your connection and try again.');
   }
-}
-
-// ── UI helpers ────────────────────────────────────────────────────────────────
-function setStatus(msg) {
-  document.getElementById('status').textContent = msg;
 }
 
 function showError(msg) {
@@ -224,7 +335,8 @@ function showError(msg) {
   document.getElementById('errorScreen').style.display = 'flex';
 }
 
-// ── Run ───────────────────────────────────────────────────────────────────────
+function delay(ms) { return new Promise(r => setTimeout(r, ms)); }
+
 init();
 </script>
 </body>

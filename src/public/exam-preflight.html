@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+  <title>Exam Pre-check — Dikly</title>
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+    :root{
+      --bg:#080b12;--card:#151c2e;--border:rgba(255,255,255,.07);
+      --accent:#4f6ef7;--accent2:#7c3aed;--green:#10b981;--danger:#ef4444;--warning:#f59e0b;
+      --text:#f1f5f9;--muted:#64748b;
+      --sat:env(safe-area-inset-top,0px);--sab:env(safe-area-inset-bottom,0px);
+    }
+    html{height:-webkit-fill-available;-webkit-text-size-adjust:100%}
+    body{min-height:100vh;min-height:-webkit-fill-available;background:var(--bg);color:var(--text);
+      font-family:-apple-system,BlinkMacSystemFont,'SF Pro Display','Segoe UI',Roboto,sans-serif;
+      display:flex;flex-direction:column;align-items:center;justify-content:center;
+      padding:calc(var(--sat)+24px) 20px calc(var(--sab)+24px);overflow-x:hidden}
+    body::before{content:'';position:fixed;inset:0;pointer-events:none;
+      background:radial-gradient(ellipse 80% 60% at 20% 20%,rgba(79,110,247,.10) 0%,transparent 60%),
+                 radial-gradient(ellipse 60% 50% at 80% 80%,rgba(124,58,237,.08) 0%,transparent 60%)}
+    .wrap{width:100%;max-width:440px;display:flex;flex-direction:column;gap:20px;position:relative;z-index:1}
+    .brand{display:flex;align-items:center;gap:12px;margin-bottom:4px}
+    .brand-logo{width:44px;height:44px;border-radius:12px;
+      background:linear-gradient(135deg,var(--accent),var(--accent2));
+      display:grid;place-items:center;font-weight:800;font-size:20px;color:#fff;
+      box-shadow:0 8px 32px rgba(79,110,247,.4)}
+    .brand-name{font-size:20px;font-weight:700;letter-spacing:-.3px}
+    .exam-badge{display:inline-flex;align-items:center;gap:6px;align-self:flex-start;
+      background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.25);
+      color:#f87171;font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;text-transform:uppercase}
+    .card{width:100%;background:var(--card);border:1px solid var(--border);border-radius:24px;
+      padding:24px;display:flex;flex-direction:column;gap:16px;
+      box-shadow:0 24px 64px rgba(0,0,0,.4),inset 0 1px 0 rgba(255,255,255,.06)}
+    .card-title{font-size:18px;font-weight:700;letter-spacing:-.2px}
+    .check-list{display:flex;flex-direction:column;gap:10px}
+    .check-item{display:flex;align-items:center;gap:12px;padding:11px 14px;
+      border-radius:12px;background:rgba(255,255,255,.03);border:1px solid var(--border)}
+    .check-icon{width:32px;height:32px;border-radius:9px;display:grid;place-items:center;
+      font-size:16px;flex-shrink:0;background:rgba(255,255,255,.05)}
+    .check-icon.pass{background:rgba(16,185,129,.15)}
+    .check-icon.fail{background:rgba(239,68,68,.15)}
+    .check-icon.pending{background:rgba(100,116,139,.1)}
+    .check-info{flex:1}
+    .check-label{font-size:13px;font-weight:600}
+    .check-sub{font-size:11px;color:var(--muted);margin-top:2px}
+    .check-status{font-size:18px;flex-shrink:0}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    .spin{display:inline-block;width:16px;height:16px;border-radius:50%;
+      border:2px solid rgba(79,110,247,.2);border-top-color:var(--accent);animation:spin .7s linear infinite}
+    .divider{height:1px;background:var(--border)}
+    .preview-row{display:flex;flex-direction:column;gap:8px}
+    .preview-label{font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
+    #camPreview{width:100%;height:160px;border-radius:14px;object-fit:cover;
+      background:#0f1420;border:1px solid var(--border);display:block}
+    .policy-box{padding:14px;background:rgba(239,68,68,.05);border:1px solid rgba(239,68,68,.15);
+      border-radius:12px;display:flex;flex-direction:column;gap:10px}
+    .policy-text{font-size:12px;color:var(--muted);line-height:1.65}
+    .policy-check{display:flex;align-items:flex-start;gap:10px;cursor:pointer}
+    .policy-check input{margin-top:2px;width:16px;height:16px;accent-color:var(--accent);flex-shrink:0}
+    .policy-check span{font-size:13px;font-weight:500;line-height:1.4}
+    .btn{width:100%;padding:15px;border-radius:14px;border:none;
+      font-size:15px;font-weight:600;cursor:pointer;touch-action:manipulation;
+      transition:transform .1s,opacity .1s;font-family:inherit}
+    .btn:active{transform:scale(.98)}
+    .btn-primary{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;
+      box-shadow:0 4px 20px rgba(79,110,247,.35)}
+    .btn:disabled{opacity:.35;cursor:not-allowed}
+    .status-bar{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted)}
+    .dot{width:8px;height:8px;border-radius:50%;background:var(--warning);flex-shrink:0}
+    .dot.ready{background:var(--green)}
+    .dot.error{background:var(--danger)}
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <div class="brand">
+    <div class="brand-logo">D</div>
+    <span class="brand-name">Dikly</span>
+  </div>
+  <div class="exam-badge">🛡 AI Proctored Exam</div>
+
+  <div class="card">
+    <div class="card-title" id="examTitle">Pre-flight Check</div>
+
+    <div class="check-list" id="checkList">
+      <div class="check-item" id="chk-browser">
+        <div class="check-icon pending" id="chk-browser-icon">🌐</div>
+        <div class="check-info">
+          <div class="check-label">Browser Compatibility</div>
+          <div class="check-sub" id="chk-browser-sub">Checking…</div>
+        </div>
+        <span class="check-status"><span class="spin"></span></span>
+      </div>
+      <div class="check-item" id="chk-camera">
+        <div class="check-icon pending" id="chk-camera-icon">📷</div>
+        <div class="check-info">
+          <div class="check-label">Camera Access</div>
+          <div class="check-sub" id="chk-camera-sub">Requesting permission…</div>
+        </div>
+        <span class="check-status" id="chk-camera-st"><span class="spin"></span></span>
+      </div>
+      <div class="check-item" id="chk-mic">
+        <div class="check-icon pending" id="chk-mic-icon">🎤</div>
+        <div class="check-info">
+          <div class="check-label">Microphone Access</div>
+          <div class="check-sub" id="chk-mic-sub">Requesting permission…</div>
+        </div>
+        <span class="check-status" id="chk-mic-st"><span class="spin"></span></span>
+      </div>
+      <div class="check-item" id="chk-fullscreen">
+        <div class="check-icon pending" id="chk-fullscreen-icon">⛶</div>
+        <div class="check-info">
+          <div class="check-label">Fullscreen Support</div>
+          <div class="check-sub" id="chk-fullscreen-sub">Checking…</div>
+        </div>
+        <span class="check-status" id="chk-fullscreen-st"><span class="spin"></span></span>
+      </div>
+      <div class="check-item" id="chk-conn">
+        <div class="check-icon pending" id="chk-conn-icon">🌐</div>
+        <div class="check-info">
+          <div class="check-label">Internet Connection</div>
+          <div class="check-sub" id="chk-conn-sub">Testing…</div>
+        </div>
+        <span class="check-status" id="chk-conn-st"><span class="spin"></span></span>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="preview-row">
+      <div class="preview-label">Camera Preview</div>
+      <video id="camPreview" autoplay playsinline muted></video>
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="policy-box">
+      <div class="policy-text">
+        This exam is monitored by AI. The system will capture periodic snapshots of your face and screen.
+        Tab switching, fullscreen exits, and suspicious activity are automatically logged.
+        By proceeding you consent to AI monitoring for the duration of this exam.
+      </div>
+      <label class="policy-check">
+        <input type="checkbox" id="policyAccept" onchange="checkReady()"/>
+        <span>I understand and accept AI monitoring during this exam.</span>
+      </label>
+    </div>
+  </div>
+
+  <div class="status-bar">
+    <div class="dot" id="statusDot"></div>
+    <span id="statusMsg">Running checks…</span>
+  </div>
+
+  <button class="btn btn-primary" id="beginBtn" disabled onclick="beginExam()">
+    Begin Exam
+  </button>
+</div>
+
+<script>
+'use strict';
+const _p       = new URLSearchParams(location.search);
+const meetingId= _p.get('meetingId') || '';
+const token    = _p.get('token')     || '';
+const userId   = _p.get('userId')    || '';
+const userName = _p.get('userName')  || '';
+
+const checks = { browser: false, camera: false, mic: false, fullscreen: false, conn: false };
+let camStream = null;
+
+function pass(id, sub) {
+  checks[id] = true;
+  document.getElementById('chk-'+id+'-icon').className = 'check-icon pass';
+  document.getElementById('chk-'+id+'-sub').textContent = sub;
+  const stEl = document.getElementById('chk-'+id+'-st');
+  if (stEl) stEl.textContent = '✅';
+  checkReady();
+}
+function fail(id, sub) {
+  checks[id] = false;
+  document.getElementById('chk-'+id+'-icon').className = 'check-icon fail';
+  document.getElementById('chk-'+id+'-sub').textContent = sub;
+  const stEl = document.getElementById('chk-'+id+'-st');
+  if (stEl) stEl.textContent = '❌';
+  checkReady();
+}
+
+function checkReady() {
+  const allPass = Object.values(checks).every(Boolean);
+  const accepted = document.getElementById('policyAccept').checked;
+  const ready = allPass && accepted;
+  document.getElementById('beginBtn').disabled = !ready;
+  const dot = document.getElementById('statusDot');
+  const msg = document.getElementById('statusMsg');
+  if (ready) { dot.className = 'dot ready'; msg.textContent = 'All checks passed. Ready to begin.'; }
+  else if (Object.values(checks).some(v => v === false && v !== undefined)) {
+    dot.className = 'dot error'; msg.textContent = 'Some checks failed. Please resolve before continuing.';
+  } else { dot.className = 'dot'; msg.textContent = 'Running checks…'; }
+}
+
+// ── Run checks ────────────────────────────────────────────────────────────────
+async function runChecks() {
+  // Browser compatibility
+  const compatible = !!(navigator.mediaDevices?.getUserMedia && window.RTCPeerConnection && document.documentElement.requestFullscreen !== undefined);
+  if (compatible) pass('browser', 'WebRTC + camera APIs supported');
+  else { fail('browser', 'Browser not supported. Use Chrome or Safari.'); return; }
+
+  // Camera + Mic
+  try {
+    camStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+    document.getElementById('camPreview').srcObject = camStream;
+    pass('camera', 'Camera access granted');
+    pass('mic', 'Microphone access granted');
+  } catch (e) {
+    fail('camera', 'Camera access denied. Please allow camera and reload.');
+    fail('mic', 'Microphone access denied. Please allow microphone and reload.');
+  }
+
+  // Fullscreen
+  if (document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen) {
+    pass('fullscreen', 'Fullscreen mode available');
+  } else { fail('fullscreen', 'Fullscreen not supported. Use a different browser.'); }
+
+  // Connection
+  try {
+    const t0 = Date.now();
+    await fetch('/health', { cache: 'no-store' });
+    const ms = Date.now() - t0;
+    if (ms < 3000) pass('conn', `Connected (${ms}ms latency)`);
+    else fail('conn', `Slow connection (${ms}ms). You may experience issues.`);
+  } catch (_) { fail('conn', 'Cannot reach server. Check your internet.'); }
+}
+
+async function beginExam() {
+  if (!meetingId || !token) { alert('Missing exam parameters. Go back and try again.'); return; }
+  // Request fullscreen
+  try { await document.documentElement.requestFullscreen?.(); } catch (_) {}
+  // Stop preview stream
+  camStream?.getTracks().forEach(t => t.stop());
+  // Navigate to exam room
+  const qs = new URLSearchParams({ meetingId, token, userId, userName });
+  location.href = '/exam-room?' + qs.toString();
+}
+
+runChecks();
+</script>
+</body>
+</html>

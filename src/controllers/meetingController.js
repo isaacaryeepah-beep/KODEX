@@ -6,7 +6,8 @@ const MeetingParticipant = require('../models/MeetingParticipant');
 const User               = require('../models/User');
 const { generateRoomName }                             = require('../utils/generateRoomName');
 const { generateMeetingToken, verifyMeetingToken }     = require('../utils/jwt');
-const { generateJitsiToken, JITSI_DOMAIN, JITSI_APP_ID } = require('../services/jitsiTokenService');
+const { generateJitsiToken, JITSI_DOMAIN, JITSI_APP_ID, jitsiConfigured } = require('../services/jitsiTokenService');
+const { configured: streamConfigured, generateStreamToken, createStreamCall, buildStreamRoomUrl, muteAllParticipants, muteParticipant: muteOneParticipant, removeParticipant: blockParticipant } = require('../services/streamService');
 const { broadcastMonitor }                             = require('./meetingMonitorController');
 const { runPreflight, handleReconnect }                 = require('../services/sessionPreflight');
 
@@ -317,21 +318,28 @@ exports.startMeeting = async (req, res) => {
 
     console.log(`[Meeting:start] id=${meeting._id} room=${meeting.roomName} host=${req.user.email || req.user._id} role=${req.user.role}`);
 
-    const jitsiToken   = generateJitsiToken(req.user, meeting.roomName, true);
     const meetingToken = generateMeetingToken(req.user._id.toString(), meeting._id.toString(), req.user.deviceId || null);
-    const meetingUrl   = buildJitsiMeetingUrl(meeting, req.user, true);
+
+    let meetingUrl, jitsiToken;
+    if (streamConfigured) {
+      try { await createStreamCall(meeting.roomName); } catch (e) { console.warn('[Stream] createStreamCall:', e.message); }
+      const streamToken = generateStreamToken(req.user._id);
+      meetingUrl = buildStreamRoomUrl(meeting, req.user, streamToken, true);
+    } else {
+      jitsiToken = generateJitsiToken(req.user, meeting.roomName, true);
+      meetingUrl = buildJitsiMeetingUrl(meeting, req.user, true);
+    }
 
     res.json({
       success: true, message: 'Meeting started',
       data: {
         roomName:    meeting.roomName,
         meetingUrl,
-        joinUrl:     `https://${JITSI_DOMAIN}/${meeting.roomName}`,
         password:    meeting.roomPassword,
         settings:    meeting.settings,
-        jitsiToken,
+        jitsiToken:  jitsiToken || null,
         meetingToken,
-        jitsiConfig: buildJitsiConfig(meeting, req.user, true),
+        jitsiConfig: streamConfigured ? null : buildJitsiConfig(meeting, req.user, true),
         monitorUrl:  `${APP_BASE_URL}/meeting-monitor.html?meeting=${meeting._id}`,
       },
     });
@@ -474,23 +482,37 @@ exports.joinMeeting = async (req, res) => {
       return res.status(403).json({ error: 'The room is locked. No new participants can join at this time.' });
     }
 
-    const jitsiToken   = generateJitsiToken(user, meeting.roomName, isMod);
     const meetingToken = generateMeetingToken(user._id.toString(), meeting._id.toString(), user.deviceId || null);
-    const jitsiConfig  = buildJitsiConfig(meeting, user, isMod);
-    const meetingUrl   = buildJitsiMeetingUrl(meeting, user, isMod);
+
+    let meetingUrl, jitsiToken, jitsiConfig;
+
+    if (streamConfigured) {
+      // ── GetStream path ──────────────────────────────────────────────────
+      try {
+        await createStreamCall(meeting.roomName, isMod ? user._id : null);
+      } catch (e) {
+        console.warn('[Stream] createStreamCall failed, continuing anyway:', e.message);
+      }
+      const streamToken = generateStreamToken(user._id);
+      meetingUrl = buildStreamRoomUrl(meeting, user, streamToken, isMod);
+    } else {
+      // ── Jitsi fallback ──────────────────────────────────────────────────
+      jitsiToken  = generateJitsiToken(user, meeting.roomName, isMod);
+      jitsiConfig = buildJitsiConfig(meeting, user, isMod);
+      meetingUrl  = buildJitsiMeetingUrl(meeting, user, isMod);
+    }
 
     res.json({
       success: true,
       data: {
         meeting,
         meetingUrl,
-        jitsiConfig,
-        jitsiToken,
-        meetingToken,
         isModerator: isMod,
-        monitorUrl:  isMod
-          ? `${MONITOR_BASE_URL}/monitor?meeting=${meeting._id}`
-          : null,
+        meetingToken,
+        // Jitsi fields (null when using GetStream)
+        jitsiConfig: jitsiConfig || null,
+        jitsiToken:  jitsiToken  || null,
+        monitorUrl:  isMod ? `${MONITOR_BASE_URL}/monitor?meeting=${meeting._id}` : null,
         embedUrl: isMod
           ? `${APP_BASE_URL}/lecturer-meeting?meeting=${meeting._id}`
           : `${APP_BASE_URL}/session-preflight?meeting=${meeting._id}`,
@@ -602,6 +624,24 @@ exports.jitsiHealth = async (req, res) => {
   const ok = result.token_ok && result.jitsi_reachable;
   console.log(`[Jitsi:health] ${ok ? '✓ OK' : '✗ FAILED'} — domain=${JITSI_DOMAIN} bosh=${result.xmpp_bosh_ok}`);
   res.status(ok ? 200 : 502).json(result);
+};
+
+// ─── MUTE ALL (GetStream) ─────────────────────────────────────────────────────
+exports.muteAll = async (req, res) => {
+  try {
+    if (!streamConfigured) return res.status(503).json({ error: 'GetStream not configured' });
+    await muteAllParticipants(req.meeting.roomName);
+    res.json({ success: true, message: 'All participants muted' });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+};
+
+// ─── MUTE PARTICIPANT (GetStream) ─────────────────────────────────────────────
+exports.muteParticipant = async (req, res) => {
+  try {
+    if (!streamConfigured) return res.status(503).json({ error: 'GetStream not configured' });
+    await muteOneParticipant(req.meeting.roomName, req.params.uid);
+    res.json({ success: true, message: 'Participant muted' });
+  } catch (err) { res.status(500).json({ error: err.message }); }
 };
 
 // ─── DELETE ───────────────────────────────────────────────────────────────────

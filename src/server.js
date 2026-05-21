@@ -1,11 +1,5 @@
 require("dotenv").config();
 
-// ── Jitsi configuration guard — fail fast before binding to any port ──────────
-// Importing the service here triggers its startup check. If JITSI_DOMAIN,
-// JITSI_APP_ID, or JITSI_APP_SECRET are missing the service throws and the
-// process exits with a clear error rather than serving broken meeting joins.
-require('./services/jitsiTokenService');
-
 const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");
@@ -32,7 +26,8 @@ const approvalRoutes = require("./routes/approvals");
 const rosterRoutes = require("./routes/roster");
 const adminReportRoutes = require("./routes/adminReports");
 const adminDashboardRoutes = require("./routes/adminDashboard");
-const jitsiRoutes = require("./routes/jitsi");
+let jitsiRoutes = null;
+try { jitsiRoutes = require("./routes/jitsi"); } catch(e) { console.warn('[Jitsi] routes not loaded:', e.message); }
 const searchRoutes = require("./routes/Search");
 // Legacy proctored quiz system — superseded by SnapQuiz (proctoringEnabled=true).
 // Kept for historical data access. Set LEGACY_PROCTOR_DISABLED=true to retire.
@@ -100,6 +95,8 @@ const allowedOrigins = [
   "https://monitor.dikly.sbs",
   "https://api.dikly.sbs",
   "https://admin.dikly.sbs",
+  // exam subdomain
+  "https://exam.dikly.sbs",
   // local development
   "http://localhost:3000",
   "http://localhost:5000",
@@ -177,7 +174,7 @@ app.get('/session-preflight', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'session-preflight.html'));
 });
 
-// Embedded meeting pages (Jitsi External API — no Jitsi UI chrome)
+// Meeting lobby pages
 app.get('/lecturer-meeting', (req, res) => {
   res.setHeader('Permissions-Policy', 'camera=*, microphone=*, display-capture=*');
   res.sendFile(path.join(__dirname, 'public', 'lecturer-meeting.html'));
@@ -185,6 +182,22 @@ app.get('/lecturer-meeting', (req, res) => {
 app.get('/student-meeting', (req, res) => {
   res.setHeader('Permissions-Policy', 'camera=*, microphone=*, display-capture=*');
   res.sendFile(path.join(__dirname, 'public', 'student-meeting.html'));
+});
+
+// GetStream live call room
+app.get('/stream-room', (req, res) => {
+  res.setHeader('Permissions-Policy', 'camera=*, microphone=*, display-capture=*');
+  res.sendFile(path.join(__dirname, 'public', 'stream-room.html'));
+});
+
+// AI-proctored exam pages
+app.get('/exam-preflight', (req, res) => {
+  res.setHeader('Permissions-Policy', 'camera=*, microphone=*, fullscreen=*');
+  res.sendFile(path.join(__dirname, 'public', 'exam-preflight.html'));
+});
+app.get('/exam-room', (req, res) => {
+  res.setHeader('Permissions-Policy', 'camera=*, microphone=*, fullscreen=*');
+  res.sendFile(path.join(__dirname, 'public', 'exam-room.html'));
 });
 
 app.get("/anticheat",      (req, res) => res.sendFile(path.join(__dirname, "public", "anticheat-dashboard.html")));
@@ -260,7 +273,11 @@ app.use("/api/approvals", approvalRoutes);
 app.use("/api/hod", hodRoutes);
 app.use("/api/roster", rosterRoutes);
 app.use("/api/admin/reports", adminReportRoutes);
-app.use("/api/jitsi", jitsiRoutes);
+if (jitsiRoutes) {
+  app.use("/api/jitsi", jitsiRoutes);
+} else {
+  app.use("/api/jitsi", (req, res) => res.status(503).json({ error: "Jitsi is not configured on this server. Use GetStream meetings instead." }));
+}
 app.use("/api/admin", adminDashboardRoutes);
 app.use("/api/search", searchRoutes);
 if (proctoredQuizRoutes) {
@@ -273,6 +290,7 @@ if (proctoredQuizRoutes) {
 app.use("/api/assignments", assignmentRoutes);
 app.use("/api/ai", aiProxyRoutes);
 app.use("/api/meetings", meetingRoutes);
+app.use("/api/exam",     require("./routes/examRoutes"));
 app.use("/api/attendance-sessions", sessionDashboardRoutes);
 
 const { markAttendance } = require('./controllers/sessionDashboardController');
@@ -390,7 +408,8 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: "Internal server error" });
 });
 
-const { validateJitsiConfig } = require('./services/jitsiConfigValidator');
+let validateJitsiConfig = () => {};
+try { ({ validateJitsiConfig } = require('./services/jitsiConfigValidator')); } catch(_) {}
 
 const start = async () => {
   validateJitsiConfig();
