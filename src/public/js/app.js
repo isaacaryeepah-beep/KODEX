@@ -11546,13 +11546,9 @@ async function loadMyDevices() {
           <div style="font-size:11px;color:var(--text-muted);margin-top:2px">${esc(d.ipAddress) || 'IP unknown'} · Last seen ${timeAgo(d.lastSeenAt)}</div>
           ${d.userAgent ? `<div style="font-size:10px;color:var(--text-muted);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(d.userAgent)}</div>` : ''}
         </div>
-        ${!d.isCurrent ? `<button data-device-id="${esc(d.deviceId)}" class="remove-device-btn" style="flex-shrink:0;padding:6px 12px;border-radius:8px;border:1.5px solid #ef4444;background:transparent;color:#ef4444;font-size:12px;font-weight:600;cursor:pointer">Remove</button>` : ''}
+        ${!d.isCurrent ? `<button onclick="removeDevice('${esc(d.deviceId)}')" style="flex-shrink:0;padding:6px 12px;border-radius:8px;border:1.5px solid #ef4444;background:transparent;color:#ef4444;font-size:12px;font-weight:600;cursor:pointer">Remove</button>` : ''}
       </div>
     `).join('');
-
-    container.querySelectorAll('.remove-device-btn').forEach(btn => {
-      btn.addEventListener('click', () => removeDevice(btn.dataset.deviceId));
-    });
 
     // Show device lock warning if active
     if (data.deviceLock?.isLocked && data.deviceLock?.lockedUntil) {
