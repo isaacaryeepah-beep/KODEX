@@ -108,6 +108,14 @@ const snapQuizSchema = new mongoose.Schema(
       enum: Object.values(SNAP_QUIZ_TYPES),
       default: SNAP_QUIZ_TYPES.EXAM,
     },
+    // snap     → lightweight: fullscreen + tab/focus/blur detection, basic camera check
+    // proctored → advanced AI: snapshots every 10-15s, face/object/audio detection, AI report
+    quizLevel: {
+      type: String,
+      enum: ["snap", "proctored"],
+      default: "snap",
+      index: true,
+    },
 
     // ── Scoring ───────────────────────────────────────────────────────────
     totalMarks: {
@@ -235,13 +243,11 @@ const snapQuizSchema = new mongoose.Schema(
     archivedBy:   { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
 
     // ── Monitoring mode ───────────────────────────────────────────────────
-    // none   → standard anti-cheat flags only (default)
-    // ai     → AI snapshot analysis + face/phone/gaze detection
-    // human  → live moderator views webcam + screen share via WebRTC
-    // hybrid → AI pre-screens; human moderator reviews flagged events
+    // none → standard anti-cheat flags only (snap quizzes)
+    // ai   → AI snapshot analysis + face/object/gaze detection (proctored quizzes)
     monitoringMode: {
       type: String,
-      enum: ["none", "ai", "human", "hybrid"],
+      enum: ["none", "ai"],
       default: "none",
     },
     humanMonitors: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],

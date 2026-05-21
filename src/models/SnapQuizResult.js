@@ -107,6 +107,15 @@ const snapQuizResultSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+    // AI-generated integrity report (populated for proctored quizzes)
+    aiReport: {
+      integrityScore:  { type: Number, default: null, min: 0, max: 100 },
+      summary:         { type: String, default: null },
+      violationCount:  { type: Number, default: null },
+      snapshotCount:   { type: Number, default: null },
+      flaggedCount:    { type: Number, default: null },
+      generatedAt:     { type: Date,   default: null },
+    },
 
     // ── Release control ───────────────────────────────────────────────────
     isReleased: {

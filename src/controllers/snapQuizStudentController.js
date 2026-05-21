@@ -34,6 +34,7 @@ const { ATTEMPT_STATUSES, GRADING_STATUSES } = require("../models/SnapQuizAttemp
 const { QUESTION_TYPES, MANUAL_GRADE_TYPES } = require("../models/SnapQuizQuestion");
 const { VIOLATION_TYPES, VIOLATION_SEVERITIES, ACTIONS_TAKEN } = require("../models/SnapQuizViolationLog");
 const { autoGradeAttempt } = require("../services/quizGradingService");
+const { analyzeSnapshot, generateQuizReport } = require("../services/aiProctoringService");
 
 // ─── Quiz discovery ───────────────────────────────────────────────────────────
 
@@ -544,10 +545,16 @@ exports.submitAttempt = async (req, res) => {
     if (!hasManual) attempt.gradedAt = now;
     await attempt.save();
 
-    await _upsertResult(attempt, quiz);
+    const result = await _upsertResult(attempt, quiz);
 
     return res.json({
-      message: "Attempt submitted",
+      message:        "Attempt submitted",
+      score:          attempt.rawScore,
+      maxScore:       attempt.maxScore,
+      percentage:     Math.round(attempt.percentageScore ?? 0),
+      isPassed:       attempt.isPassed,
+      integrityScore: result?.aiReport?.integrityScore ?? null,
+      aiReport:       result?.aiReport ?? null,
       attempt: {
         _id:             attempt._id,
         status:          attempt.status,
@@ -604,8 +611,8 @@ exports.reportViolation = async (req, res) => {
       );
     }
 
-    // Check termination threshold — strictly 4 critical violations.
-    const maxViolations = 4;
+    // Check termination threshold — use quiz config, fall back to 4.
+    const maxViolations = quiz?.maxViolationsBeforeTermination || 4;
     const causedTermination = newCount >= maxViolations && isCriticalType;
     const actionTaken = causedTermination
       ? ACTIONS_TAKEN.TERMINATED
@@ -677,16 +684,41 @@ exports.recordSnapshot = async (req, res) => {
       faceDetected, faceCount, faceScore, similarityToStart,
     } = req.body;
 
-    // Build AI flags from client-reported face data
+    // Run Claude Haiku AI analysis when enabled and image data is present
     const aiFlags = [];
-    if (faceDetected === false || faceDetected === 0) {
-      aiFlags.push({ flagType: "face_not_visible", confidence: 1.0, detail: "No face detected" });
+    let aiAnalysisDone = false;
+
+    if (quiz.aiProctoringEnabled && imageUrl && imageUrl.startsWith('data:image')) {
+      const base64 = imageUrl.split(',')[1];
+      const analysis = await analyzeSnapshot(base64).catch(() => null);
+      if (analysis) {
+        aiAnalysisDone = true;
+        if (!analysis.facePresent) {
+          aiFlags.push({ flagType: "face_not_visible", confidence: 0.95, detail: "AI: no face detected" });
+        }
+        if (analysis.faceCount > 1) {
+          aiFlags.push({ flagType: "multiple_faces", confidence: 0.95, detail: `AI: ${analysis.faceCount} faces detected` });
+        }
+        if (analysis.phoneVisible) {
+          aiFlags.push({ flagType: "phone_detected", confidence: 0.9, detail: "AI: phone visible" });
+        }
+        if (analysis.suspiciousActivity) {
+          aiFlags.push({ flagType: "suspicious_activity", confidence: 0.85, detail: analysis.notes || "AI: suspicious activity" });
+        }
+      }
     }
-    if (faceCount > 1) {
-      aiFlags.push({ flagType: "multiple_faces", confidence: 1.0, detail: `${faceCount} faces detected` });
-    }
-    if (similarityToStart != null && similarityToStart < 0.5) {
-      aiFlags.push({ flagType: "low_confidence", confidence: 1 - similarityToStart, detail: "Face similarity below threshold" });
+
+    // Fall back to client-reported face data if AI was not run
+    if (!aiAnalysisDone) {
+      if (faceDetected === false || faceDetected === 0) {
+        aiFlags.push({ flagType: "face_not_visible", confidence: 1.0, detail: "No face detected" });
+      }
+      if (faceCount > 1) {
+        aiFlags.push({ flagType: "multiple_faces", confidence: 1.0, detail: `${faceCount} faces detected` });
+      }
+      if (similarityToStart != null && similarityToStart < 0.5) {
+        aiFlags.push({ flagType: "low_confidence", confidence: 1 - similarityToStart, detail: "Face similarity below threshold" });
+      }
     }
 
     const aiRiskScore = aiFlags.length > 0 ? Math.min(1, aiFlags.length * 0.35) : 0;
@@ -701,8 +733,8 @@ exports.recordSnapshot = async (req, res) => {
       imageUrl:             imageUrl    || null,
       thumbnailUrl:         thumbnailUrl || null,
       relatedViolationId:   relatedViolationId || null,
-      aiAnalysisCompleted:  aiFlags.length > 0,
-      aiAnalysisCompletedAt: aiFlags.length > 0 ? new Date() : null,
+      aiAnalysisCompleted:  aiAnalysisDone,
+      aiAnalysisCompletedAt: aiAnalysisDone ? new Date() : null,
       aiFlags,
       aiRiskScore,
       reviewStatus:         aiFlags.length > 0 ? "flagged" : "pending",
@@ -890,40 +922,53 @@ async function _upsertResult(attempt, quiz, wasTerminated = false) {
   const violations = await SnapQuizViolationLog.countDocuments({ attempt: attempt._id });
   const integrityFlag = wasTerminated || violations > 0;
 
-  await SnapQuizResult.findOneAndUpdate(
+  // For proctored quizzes generate an AI integrity report (fire-and-forget safe)
+  let aiReport = undefined;
+  const quizDoc = quiz?.quizLevel
+    ? quiz
+    : await SnapQuiz.findById(attempt.quiz).select("quizLevel aiProctoringEnabled").lean();
+
+  if (quizDoc?.quizLevel === "proctored" || quizDoc?.aiProctoringEnabled) {
+    aiReport = await generateQuizReport(attempt._id).catch(() => null);
+  }
+
+  const setFields = {
+    countedAttemptId: attempt._id,
+    rawScore:         attempt.rawScore,
+    maxScore:         attempt.maxScore,
+    percentageScore:  attempt.percentageScore,
+    isPassed:         attempt.isPassed,
+    gradingStatus:    attempt.gradingStatus,
+    computedAt:       now,
+    integrityFlag,
+    integrityFlagReason: integrityFlag
+      ? (wasTerminated ? attempt.terminationReason : "Violations recorded")
+      : null,
+    totalViolations: violations,
+    isReleased:      quiz?.autoReleaseResults && attempt.gradingStatus === "auto_graded",
+    releasedAt:      quiz?.autoReleaseResults && attempt.gradingStatus === "auto_graded" ? now : null,
+  };
+  if (aiReport) setFields.aiReport = aiReport;
+
+  return SnapQuizResult.findOneAndUpdate(
     { quiz: attempt.quiz, student: attempt.student, company: attempt.company },
     {
-      $set: {
-        countedAttemptId: attempt._id,
-        rawScore:         attempt.rawScore,
-        maxScore:         attempt.maxScore,
-        percentageScore:  attempt.percentageScore,
-        isPassed:         attempt.isPassed,
-        gradingStatus:    attempt.gradingStatus,
-        computedAt:       now,
-        integrityFlag,
-        integrityFlagReason: integrityFlag
-          ? (wasTerminated ? attempt.terminationReason : "Violations recorded")
-          : null,
-        totalViolations: violations,
-        isReleased:      quiz?.autoReleaseResults && attempt.gradingStatus === "auto_graded",
-        releasedAt:      quiz?.autoReleaseResults && attempt.gradingStatus === "auto_graded" ? now : null,
-      },
+      $set:  setFields,
       $inc:  { totalAttempts: 1, completedAttempts: 1 },
       $push: {
         breakdown: {
-          attemptId:       attempt._id,
-          attemptNumber:   attempt.attemptNumber,
-          status:          attempt.status,
-          rawScore:        attempt.rawScore,
-          maxScore:        attempt.maxScore,
-          percentageScore: attempt.percentageScore,
-          isPassed:        attempt.isPassed,
-          gradingStatus:   attempt.gradingStatus,
-          submittedAt:     attempt.submittedAt,
+          attemptId:        attempt._id,
+          attemptNumber:    attempt.attemptNumber,
+          status:           attempt.status,
+          rawScore:         attempt.rawScore,
+          maxScore:         attempt.maxScore,
+          percentageScore:  attempt.percentageScore,
+          isPassed:         attempt.isPassed,
+          gradingStatus:    attempt.gradingStatus,
+          submittedAt:      attempt.submittedAt,
           timeSpentSeconds: attempt.timeSpentSeconds,
-          isTerminated:    attempt.isTerminated || false,
-          violationCount:  attempt.violationCount,
+          isTerminated:     attempt.isTerminated || false,
+          violationCount:   attempt.violationCount,
         },
       },
     },

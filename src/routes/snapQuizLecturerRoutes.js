@@ -39,6 +39,9 @@
  *   PATCH  /:quizId/attempts/:attemptId/responses/:responseId/grade  gradeResponse
  *   PATCH  /:quizId/attempts/:attemptId/grade                        gradeBulk
  *
+ * Dashboard stats
+ *   GET    /:quizId/stats                       getQuizStats
+ *
  * Result release
  *   GET    /:quizId/results                     listResults
  *   POST   /:quizId/results/release             releaseResults
@@ -105,6 +108,10 @@ router.patch("/:quizId/proctoring/:eventId",    ownsQuiz, ctrl.reviewProctoringE
 
 router.patch("/:quizId/attempts/:attemptId/responses/:responseId/grade", ownsQuiz, ctrl.gradeResponse);
 router.patch("/:quizId/attempts/:attemptId/grade",                        ownsQuiz, ctrl.gradeBulk);
+
+// ─── Dashboard stats ──────────────────────────────────────────────────────────
+
+router.get("/:quizId/stats",             ownsQuiz, ctrl.getQuizStats);
 
 // ─── Result release ───────────────────────────────────────────────────────────
 

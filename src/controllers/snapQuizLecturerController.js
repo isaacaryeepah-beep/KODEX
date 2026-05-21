@@ -37,7 +37,7 @@ const { autoGradeAttempt } = require("../services/quizGradingService");
 exports.createQuiz = async (req, res) => {
   try {
     const {
-      courseId, title, description, instructions, quizType,
+      courseId, title, description, instructions, quizType, quizLevel,
       totalMarks, passMark, scorePolicy,
       timeLimitMinutes, startTime, endTime, gracePeriodSeconds, lockAfterEndTime,
       allowedAttempts,
@@ -47,21 +47,28 @@ exports.createQuiz = async (req, res) => {
       requireFullscreen, preventCopyPaste, preventRightClick, preventPrintScreen,
       showViolationWarnings,
       proctoringEnabled, snapshotIntervalSeconds, aiProctoringEnabled,
-      monitoringMode, humanMonitors, maxConcurrentMonitors, noiseDetectionThreshold,
+      monitoringMode, maxConcurrentMonitors, noiseDetectionThreshold,
       showResultAfterSubmission, showAnswersAfterSubmission,
       showAnswersAfterClose, autoReleaseResults,
       randomizeQuestions, randomizeOptions,
     } = req.body;
 
-    // Derive proctoring flags from monitoringMode if not explicitly set.
-    const resolvedProctoringEnabled   = proctoringEnabled   ?? (["ai","hybrid"].includes(monitoringMode));
-    const resolvedAiProctoringEnabled = aiProctoringEnabled ?? (["ai","hybrid"].includes(monitoringMode));
+    // quizLevel drives monitoring defaults:
+    //   proctored → AI snapshots every 12s, full proctoring enabled
+    //   snap      → no AI snapshots, basic anti-cheat only
+    const level = quizLevel === "proctored" ? "proctored" : "snap";
+    const isProctored = level === "proctored";
+    const resolvedMode               = isProctored ? "ai" : "none";
+    const resolvedProctoringEnabled   = proctoringEnabled   ?? isProctored;
+    const resolvedAiProctoringEnabled = aiProctoringEnabled ?? isProctored;
+    const resolvedSnapshotInterval    = snapshotIntervalSeconds ?? (isProctored ? 12 : 0);
 
     const quiz = await SnapQuiz.create({
       company:   req.companyId,
       course:    courseId,
       createdBy: req.user._id,
       title, description, instructions, quizType,
+      quizLevel: level,
       totalMarks, passMark, scorePolicy,
       timeLimitMinutes, startTime, endTime, gracePeriodSeconds, lockAfterEndTime,
       allowedAttempts,
@@ -71,10 +78,10 @@ exports.createQuiz = async (req, res) => {
       requireFullscreen, preventCopyPaste, preventRightClick, preventPrintScreen,
       showViolationWarnings,
       proctoringEnabled: resolvedProctoringEnabled,
-      snapshotIntervalSeconds,
+      snapshotIntervalSeconds: resolvedSnapshotInterval,
       aiProctoringEnabled: resolvedAiProctoringEnabled,
-      monitoringMode: monitoringMode || "none",
-      humanMonitors:  humanMonitors  || [],
+      monitoringMode: resolvedMode,
+      humanMonitors:  [],
       maxConcurrentMonitors, noiseDetectionThreshold,
       showResultAfterSubmission, showAnswersAfterSubmission,
       showAnswersAfterClose, autoReleaseResults,
@@ -144,7 +151,7 @@ exports.updateQuiz = async (req, res) => {
     }
 
     const updatable = [
-      "title","description","instructions","quizType",
+      "title","description","instructions","quizType","quizLevel",
       "totalMarks","passMark","scorePolicy",
       "timeLimitMinutes","startTime","endTime","gracePeriodSeconds","lockAfterEndTime",
       "allowedAttempts",
@@ -154,7 +161,7 @@ exports.updateQuiz = async (req, res) => {
       "requireFullscreen","preventCopyPaste","preventRightClick","preventPrintScreen",
       "showViolationWarnings",
       "proctoringEnabled","snapshotIntervalSeconds","aiProctoringEnabled",
-      "monitoringMode","humanMonitors","maxConcurrentMonitors","noiseDetectionThreshold",
+      "monitoringMode","maxConcurrentMonitors","noiseDetectionThreshold",
       "showResultAfterSubmission","showAnswersAfterSubmission",
       "showAnswersAfterClose","autoReleaseResults",
       "randomizeQuestions","randomizeOptions",
@@ -745,6 +752,71 @@ exports.releaseResults = async (req, res) => {
     return res.json({ message: `Results released for ${updated.modifiedCount} student(s)` });
   } catch (err) {
     console.error("[snapQuiz releaseResults]", err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+};
+
+// ─── Quiz Dashboard Stats ─────────────────────────────────────────────────────
+
+/**
+ * GET /lecturer/snap-quizzes/:quizId/stats
+ * Returns aggregate monitoring stats for the quiz dashboard.
+ */
+exports.getQuizStats = async (req, res) => {
+  try {
+    const quiz = req.assessment;
+
+    const [
+      totalAttempts,
+      activeAttempts,
+      submittedAttempts,
+      terminatedAttempts,
+      totalViolations,
+      flaggedSnapshots,
+      results,
+    ] = await Promise.all([
+      SnapQuizAttempt.countDocuments({ quiz: quiz._id }),
+      SnapQuizAttempt.countDocuments({ quiz: quiz._id, status: "active" }),
+      SnapQuizAttempt.countDocuments({ quiz: quiz._id, status: { $in: ["submitted", "auto_submitted"] } }),
+      SnapQuizAttempt.countDocuments({ quiz: quiz._id, isTerminated: true }),
+      SnapQuizViolationLog.countDocuments({ quiz: quiz._id }),
+      SnapQuizProctoringEvent.countDocuments({ quiz: quiz._id, reviewStatus: "flagged" }),
+      SnapQuizResult.find({ quiz: quiz._id }).select("percentageScore isPassed integrityFlag aiReport totalViolations").lean(),
+    ]);
+
+    const passCount  = results.filter(r => r.isPassed === true).length;
+    const flagCount  = results.filter(r => r.integrityFlag).length;
+    const avgScore   = results.length > 0
+      ? Math.round(results.reduce((s, r) => s + (r.percentageScore || 0), 0) / results.length * 10) / 10
+      : null;
+    const avgIntegrity = results.filter(r => r.aiReport?.integrityScore != null).length > 0
+      ? Math.round(
+          results
+            .filter(r => r.aiReport?.integrityScore != null)
+            .reduce((s, r) => s + r.aiReport.integrityScore, 0) /
+          results.filter(r => r.aiReport?.integrityScore != null).length
+        )
+      : null;
+
+    return res.json({
+      quizId:             quiz._id,
+      quizLevel:          quiz.quizLevel || "snap",
+      monitoringMode:     quiz.monitoringMode,
+      totalAttempts,
+      activeAttempts,
+      submittedAttempts,
+      terminatedAttempts,
+      totalViolations,
+      flaggedSnapshots,
+      totalStudents:      results.length,
+      passCount,
+      failCount:          results.filter(r => r.isPassed === false).length,
+      integrityFlagCount: flagCount,
+      averageScore:       avgScore,
+      averageIntegrityScore: avgIntegrity,
+    });
+  } catch (err) {
+    console.error("[snapQuiz getQuizStats]", err);
     return res.status(500).json({ error: "Internal server error" });
   }
 };
