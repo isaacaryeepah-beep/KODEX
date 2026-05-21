@@ -214,6 +214,13 @@ exports.stopSession = async (req, res) => {
     session.stoppedReason = "manual";
     await session.save();
 
+    // Auto-release shared device when session stops so the class rep doesn't
+    // have to manually disconnect after the lecturer ends attendance.
+    await Device.findOneAndUpdate(
+      { deviceId: session.deviceId, ownershipType: 'shared', companyId: session.company },
+      { $set: { activeLecturerId: null, activeCourseId: null, connectedAt: null } }
+    );
+
     // No explicit ESP32 stop command needed. The device polls
     // /api/devices/heartbeat every few seconds; once `activeSession` returns
     // null (because status flipped to stopped), the firmware clears the OLED
