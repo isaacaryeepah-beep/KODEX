@@ -27,7 +27,6 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.37.0",
-    "@stream-io/node-sdk": "^0.4.0",
     "@capacitor/android": "^6.0.0",
     "@capacitor/browser": "^6.0.0",
     "@capacitor/core": "^6.0.0",
@@ -46,6 +45,7 @@
     "express": "^5.2.1",
     "helmet": "^8.1.0",
     "jsonwebtoken": "^9.0.3",
+    "livekit-server-sdk": "^2.15.3",
     "mailersend": "^2.2.0",
     "mongoose": "^9.2.1",
     "multer": "^1.4.5-lts.1",

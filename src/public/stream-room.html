@@ -225,10 +225,8 @@
 
   <!-- Main: video + optional sidebars -->
   <div id="mainArea">
-    <!-- Video grid -->
     <div id="videoGrid" class="n1"></div>
 
-    <!-- Participants sidebar -->
     <div class="sidebar" id="participantsSidebar">
       <div class="sidebar-header">
         <span class="sidebar-title">Participants</span>
@@ -237,7 +235,6 @@
       <div id="participantsList"></div>
     </div>
 
-    <!-- Chat sidebar -->
     <div class="sidebar" id="chatSidebar">
       <div class="sidebar-header">
         <span class="sidebar-title">Chat</span>
@@ -251,15 +248,13 @@
     </div>
   </div>
 
-  <!-- Raised hand toast -->
   <div id="handToast">✋ <span id="handToastName"></span> raised their hand</div>
 
-  <!-- Controls -->
   <div id="controlBar">
     <button class="ctrl" id="btnMic"   onclick="toggleMic()">  <span class="ci" id="micIcon">🎤</span><span class="cl">Mic</span></button>
     <button class="ctrl" id="btnCam"   onclick="toggleCam()">  <span class="ci" id="camIcon">📷</span><span class="cl">Camera</span></button>
     <button class="ctrl" id="btnShare" onclick="toggleShare()"><span class="ci" id="shareIcon">🖥</span><span class="cl">Share</span></button>
-    <button class="ctrl" id="btnHand"  onclick="toggleHand()"> <span class="ci" id="handIcon">✋</span><span class="cl">Hand</span></button>
+    <button class="ctrl" id="btnHand"  onclick="toggleHand()"> <span class="ci">✋</span><span class="cl">Hand</span></button>
     <button class="ctrl" onclick="toggleChat()">               <span class="ci">💬</span><span class="cl">Chat</span></button>
     <button class="ctrl" onclick="toggleParticipants()">       <span class="ci">👥</span><span class="cl">People</span></button>
     <button class="ctrl mod-only" id="btnMuteAll" onclick="muteAll()"><span class="ci">🔇</span><span class="cl">Mute All</span></button>
@@ -268,212 +263,188 @@
 </div>
 
 <script>
-// Catch ANY unhandled error and surface it visibly
+// Surface any fatal async error on-screen instead of silently failing
 window.addEventListener('unhandledrejection', function(e) {
-  var msg = (e.reason && e.reason.message) ? e.reason.message : String(e.reason || 'Unknown error');
-  console.error('[DIKLY unhandled]', e.reason);
-  showError('Error: ' + msg);
+  showError('Error: ' + ((e.reason && e.reason.message) || String(e.reason || 'unknown')));
+  console.error('[DIKLY]', e.reason);
 });
 
 (async function() {
 'use strict';
-var _p       = new URLSearchParams(location.search);
-var callId   = _p.get('callId')   || '';
-var token    = _p.get('token')    || '';
-var userId   = _p.get('userId')   || '';
-var userName = _p.get('userName') || 'Participant';
-var apiKey   = _p.get('apiKey')   || '';
-var isMod    = _p.get('isMod')  === '1';
-var meetingId= _p.get('meetingId')|| '';
-var title    = _p.get('title')    || 'Class';
-var BASE_URL = location.origin;
 
-if (!callId || !token || !userId || !apiKey) { showError('Missing parameters. Please go back.'); return; }
+var _p        = new URLSearchParams(location.search);
+var roomName  = _p.get('roomName')  || '';
+var token     = _p.get('token')     || '';
+var userId    = _p.get('userId')    || '';
+var userName  = _p.get('userName')  || 'Participant';
+var isMod     = _p.get('isMod')   === '1';
+var meetingId = _p.get('meetingId') || '';
+var title     = _p.get('title')     || 'Class';
+var livekitUrl= _p.get('livekitUrl')|| '';
+var BASE_URL  = location.origin;
 
-function getKodexToken() {
-  return localStorage.getItem('token') || localStorage.getItem('jwt_token') ||
-         localStorage.getItem('auth_token') || sessionStorage.getItem('token') || '';
+if (!roomName || !token || !livekitUrl) {
+  showError('Missing connection parameters. Please go back and try again.');
+  return;
 }
-var kodexToken = getKodexToken();
+
+var kodexToken = localStorage.getItem('token') || localStorage.getItem('jwt_token') ||
+                 localStorage.getItem('auth_token') || sessionStorage.getItem('token') || '';
 
 document.getElementById('callTitle').textContent = title;
 if (isMod) document.getElementById('callScreen').classList.add('is-mod');
 
 // ── State ─────────────────────────────────────────────────────────────────────
-var call, client, chatClient, channel;
+var room;
 var micOn = false, camOn = false, sharing = false, handRaised = false;
 var chatOpen = false, participantsOpen = false;
 var startedAt = Date.now();
-var raisedHands = new Set();
-var subs = [];
-var localCamStream = null;
+var activeSpeakerSids = new Set();
+var encoder = new TextEncoder();
+var decoder = new TextDecoder();
 
-// ── Load SDKs ─────────────────────────────────────────────────────────────────
-setMsg('Loading SDKs…');
-var StreamVideoClient, StreamChat;
+// ── Load LiveKit SDK ──────────────────────────────────────────────────────────
+setMsg('Loading…');
+var Room, RoomEvent, Track;
 try {
-  var mods = await Promise.all([
-    import('https://esm.sh/@stream-io/video-client@1'),
-    import('https://esm.sh/stream-chat@8'),
-  ]);
-  StreamVideoClient = mods[0].StreamVideoClient;
-  StreamChat        = mods[1].StreamChat;
-} catch (e) { showError('Failed to load video SDK. Check your connection. ' + e.message); return; }
+  var lk = await import('https://esm.sh/livekit-client@2');
+  Room      = lk.Room;
+  RoomEvent = lk.RoomEvent;
+  Track     = lk.Track;
+} catch(e) { showError('Failed to load LiveKit SDK: ' + e.message); return; }
 
-// ── Init video client ─────────────────────────────────────────────────────────
+// ── Create and connect room ───────────────────────────────────────────────────
 setMsg('Connecting…');
 try {
-  client = new StreamVideoClient({ apiKey: apiKey, user: { id: userId, name: userName }, token: token });
-} catch (e) { showError('Connection failed: ' + e.message); return; }
+  room = new Room({
+    adaptiveStream: true,
+    dynacast: true,
+    videoCaptureDefaults: { resolution: { width: 640, height: 360, frameRate: 24 } },
+  });
+} catch(e) { showError('Could not create room: ' + e.message); return; }
 
-// ── Join call ─────────────────────────────────────────────────────────────────
 setMsg('Joining class…');
 try {
-  call = client.call('default', callId);
-  await call.join({ create: true });
-} catch (e) { showError('Could not join: ' + e.message); return; }
+  await room.connect(livekitUrl, token);
+} catch(e) { showError('Could not join: ' + e.message); return; }
 
-// ── Local media ───────────────────────────────────────────────────────────────
+// ── Enable camera + mic ───────────────────────────────────────────────────────
 setMsg('Starting camera…');
 try {
-  await call.microphone.enable();
-  micOn = true;
-} catch(e) { console.warn('[Mic]', e.message); micOn = false; }
-try {
-  await call.camera.enable();
-  camOn = true;
-  localCamStream = (call.camera.state && call.camera.state.mediaStream) || null;
-} catch(e) { console.warn('[Camera]', e.message); camOn = false; localCamStream = null; }
-
-// ── Chat ──────────────────────────────────────────────────────────────────────
-try {
-  chatClient = StreamChat.getInstance(apiKey);
-  if (chatClient.userID && chatClient.userID !== userId) await chatClient.disconnectUser();
-  if (!chatClient.userID) await chatClient.connectUser({ id: userId, name: userName }, token);
-  channel = chatClient.channel('messaging', callId, { name: title });
-  await channel.watch();
-  (channel.state.messages || []).forEach(addChatMessage);
-  channel.on('message.new', function(e) { if (e.message) addChatMessage(e.message); });
-} catch (e) { console.warn('[Chat] init failed:', e.message); }
-
-// ── Show call UI ──────────────────────────────────────────────────────────────
-showCall();
-startTimer();
-
-// ── Subscribe to participants ─────────────────────────────────────────────────
-function rerender() {
-  try {
-    var ps = (call.state && call.state.participants) || [];
-    renderGrid(ps);
-    renderPeopleList(ps);
-  } catch(e) { console.error('[rerender]', e); }
+  await room.localParticipant.enableCameraAndMicrophone();
+  micOn = true; camOn = true;
+} catch(e) {
+  console.warn('[Media] enableCameraAndMicrophone failed:', e.message);
+  try { await room.localParticipant.setMicrophoneEnabled(true); micOn = true; } catch(_) {}
+  try { await room.localParticipant.setCameraEnabled(true);    camOn = true; } catch(_) {}
 }
 
-try {
-  if (call.state && call.state.participants$) {
-    subs.push(call.state.participants$.subscribe(rerender));
-  } else {
-    ['participantJoined','participantLeft','participantUpdated','trackPublished','trackUnpublished']
-      .forEach(function(ev) { call.on(ev, rerender); });
-    rerender();
-  }
-} catch(e) { console.error('[subscribe]', e); rerender(); }
+// ── Show UI ───────────────────────────────────────────────────────────────────
+showCall();
+startTimer();
+rerender();
 
-// ── Camera MediaStream subscription for local tile ────────────────────────────
-try {
-  var camStream$ = call.camera && call.camera.state && call.camera.state.mediaStream$;
-  if (camStream$ && typeof camStream$.subscribe === 'function') {
-    subs.push(camStream$.subscribe(function(stream) {
-      try {
-        localCamStream = stream || null;
-        var ps = (call.state && call.state.participants) || [];
-        var localP = null;
-        for (var i = 0; i < ps.length; i++) { if (ps[i].isLocalParticipant) { localP = ps[i]; break; } }
-        if (localP) {
-          var tile = findTile(localP.sessionId);
-          if (tile) updateTile(tile, localP);
-        }
-      } catch(e) { console.error('[camSub cb]', e); }
-    }));
-  }
-} catch(e) { console.warn('[camSub]', e.message); }
-
-// ── Reactions ─────────────────────────────────────────────────────────────────
-try {
-  call.on('call.reaction_new', function(ev) {
-    var reaction = ev.reaction, rUser = ev.user;
-    if (!reaction || !rUser) return;
-    if (reaction.type === 'raised-hand')  { raisedHands.add(rUser.id); showHandToast(rUser.name || rUser.id); }
-    if (reaction.type === 'lowered-hand') { raisedHands.delete(rUser.id); }
+// ── Room events ───────────────────────────────────────────────────────────────
+room
+  .on(RoomEvent.ParticipantConnected,    rerender)
+  .on(RoomEvent.ParticipantDisconnected, rerender)
+  .on(RoomEvent.LocalTrackPublished,     rerender)
+  .on(RoomEvent.LocalTrackUnpublished,   rerender)
+  .on(RoomEvent.TrackSubscribed,         rerender)
+  .on(RoomEvent.TrackUnsubscribed,       rerender)
+  .on(RoomEvent.TrackMuted,              rerender)
+  .on(RoomEvent.TrackUnmuted,            rerender)
+  .on(RoomEvent.ActiveSpeakersChanged, function(speakers) {
+    activeSpeakerSids = new Set(speakers.map(function(s) { return s.sid; }));
     rerender();
+  })
+  .on(RoomEvent.DataReceived, function(data, participant) {
+    try {
+      var msg = JSON.parse(decoder.decode(data));
+      if (msg.type === 'chat') {
+        addChatMessage(msg.name || (participant && participant.name) || 'Participant', msg.text, false);
+      }
+      if (msg.type === 'hand') {
+        showHandToast(msg.name || 'Someone');
+      }
+    } catch(_) {}
+  })
+  .on(RoomEvent.Disconnected, function() {
+    showError('You were disconnected from the room.');
   });
-} catch(e) { console.warn('[reactions]', e.message); }
 
-// ── Button handlers — assigned to window so onclick="" can reach them ─────────
+// ── Controls ──────────────────────────────────────────────────────────────────
 window.toggleMic = async function() {
   var btn = document.getElementById('btnMic');
   btn.disabled = true;
   try {
-    if (micOn) { await call.microphone.disable(); micOn = false; }
-    else       { await call.microphone.enable();  micOn = true;  }
-  } catch(e) { console.warn('[Mic toggle]', e.message); }
+    micOn = !micOn;
+    await room.localParticipant.setMicrophoneEnabled(micOn);
+  } catch(e) { console.warn('[Mic]', e.message); micOn = !micOn; }
   btn.disabled = false;
-  updateMicBtn();
-  rerender();
+  updateMicBtn(); rerender();
 };
 
 window.toggleCam = async function() {
   var btn = document.getElementById('btnCam');
   btn.disabled = true;
   try {
-    if (camOn) {
-      await call.camera.disable();
-      camOn = false; localCamStream = null;
-    } else {
-      await call.camera.enable();
-      camOn = true;
-      localCamStream = (call.camera.state && call.camera.state.mediaStream) || null;
-    }
-  } catch(e) { console.warn('[Cam toggle]', e.message); }
+    camOn = !camOn;
+    await room.localParticipant.setCameraEnabled(camOn);
+  } catch(e) { console.warn('[Cam]', e.message); camOn = !camOn; }
   btn.disabled = false;
-  updateCamBtn();
-  rerender();
+  updateCamBtn(); rerender();
 };
 
 window.toggleShare = async function() {
   var btn = document.getElementById('btnShare');
   btn.disabled = true;
   try {
-    if (!sharing) { await call.screenShare.enable(); sharing = true; }
-    else          { await call.screenShare.disable(); sharing = false; }
-  } catch(_) { sharing = false; }
+    sharing = !sharing;
+    await room.localParticipant.setScreenShareEnabled(sharing);
+  } catch(e) { console.warn('[Share]', e.message); sharing = !sharing; }
   btn.disabled = false;
   document.getElementById('shareIcon').textContent = sharing ? '⏹' : '🖥';
   document.getElementById('btnShare').classList.toggle('active', sharing);
 };
 
 window.toggleHand = async function() {
+  handRaised = !handRaised;
+  document.getElementById('btnHand').classList.toggle('active', handRaised);
   try {
-    handRaised = !handRaised;
-    await call.sendReaction({ type: handRaised ? 'raised-hand' : 'lowered-hand' });
-    document.getElementById('btnHand').classList.toggle('active', handRaised);
-  } catch(e) { console.warn('[Hand]', e.message); handRaised = !handRaised; }
+    room.localParticipant.publishData(
+      encoder.encode(JSON.stringify({ type: 'hand', name: userName, raised: handRaised })),
+      { reliable: true }
+    );
+  } catch(_) {}
 };
 
 window.muteAll = async function() {
   if (!isMod || !meetingId) return;
-  try { await fetch(BASE_URL + '/api/meetings/' + meetingId + '/mute-all', { method: 'POST', headers: { Authorization: 'Bearer ' + kodexToken } }); } catch(_) {}
+  try {
+    await fetch(BASE_URL + '/api/meetings/' + meetingId + '/mute-all', {
+      method: 'POST', headers: { Authorization: 'Bearer ' + kodexToken }
+    });
+  } catch(_) {}
 };
 
-window.muteParticipant = async function(uid) {
+window.muteParticipant = async function(identity) {
   if (!isMod || !meetingId) return;
-  try { await fetch(BASE_URL + '/api/meetings/' + meetingId + '/participants/' + uid + '/mute', { method: 'POST', headers: { Authorization: 'Bearer ' + kodexToken } }); } catch(_) {}
+  try {
+    await fetch(BASE_URL + '/api/meetings/' + meetingId + '/participants/' + encodeURIComponent(identity) + '/mute', {
+      method: 'POST', headers: { Authorization: 'Bearer ' + kodexToken }
+    });
+  } catch(_) {}
 };
 
-window.kickParticipant = async function(uid) {
+window.kickParticipant = async function(identity) {
   if (!isMod || !meetingId) return;
   if (!confirm('Remove this participant?')) return;
-  try { await fetch(BASE_URL + '/api/meetings/' + meetingId + '/participants/' + uid + '/kick', { method: 'POST', headers: { Authorization: 'Bearer ' + kodexToken } }); } catch(_) {}
+  try {
+    await fetch(BASE_URL + '/api/meetings/' + meetingId + '/participants/' + encodeURIComponent(identity) + '/kick', {
+      method: 'POST', headers: { Authorization: 'Bearer ' + kodexToken }
+    });
+  } catch(_) {}
 };
 
 window.toggleChat = function() {
@@ -494,19 +465,22 @@ window.toggleParticipants = function() {
 
 window.leaveCall = async function() {
   clearInterval(timerInt);
-  subs.forEach(function(s) { if (s && s.unsubscribe) s.unsubscribe(); });
-  try { await call.leave(); } catch(_) {}
-  try { await client.disconnectUser(); } catch(_) {}
-  try { if (chatClient) await chatClient.disconnectUser(); } catch(_) {}
+  try { await room.disconnect(); } catch(_) {}
   history.back();
 };
 
-window.sendChat = async function() {
+window.sendChat = function() {
   var inp = document.getElementById('chatInput');
   var text = inp.value.trim();
-  if (!text || !channel) return;
+  if (!text) return;
   inp.value = '';
-  try { await channel.sendMessage({ text: text }); } catch(_) {}
+  try {
+    room.localParticipant.publishData(
+      encoder.encode(JSON.stringify({ type: 'chat', text: text, name: userName })),
+      { reliable: true }
+    );
+    addChatMessage('You', text, true);
+  } catch(e) { console.warn('[Chat]', e.message); }
 };
 
 document.getElementById('chatInput').addEventListener('keydown', function(e) {
@@ -516,17 +490,31 @@ document.getElementById('chatInput').addEventListener('keydown', function(e) {
 window.toggleTileMenu = function(btn) {
   var menu = btn.closest('.tile-menu');
   menu.classList.toggle('active');
-  document.addEventListener('click', function outsideClick(e2) {
-    if (!menu.contains(e2.target)) { menu.classList.remove('active'); document.removeEventListener('click', outsideClick); }
+  document.addEventListener('click', function oc(e2) {
+    if (!menu.contains(e2.target)) { menu.classList.remove('active'); document.removeEventListener('click', oc); }
   });
 };
 
-// ── Render helpers ────────────────────────────────────────────────────────────
-function findTile(sessionId) {
-  var grid = document.getElementById('videoGrid');
-  var tiles = grid.querySelectorAll('.tile');
+// ── Render ────────────────────────────────────────────────────────────────────
+function allParticipants() {
+  var list = [room.localParticipant];
+  room.participants.forEach(function(p) { list.push(p); });
+  return list;
+}
+
+function rerender() {
+  try {
+    var ps = allParticipants();
+    renderGrid(ps);
+    renderPeopleList(ps);
+    document.getElementById('pCount').textContent = ps.length;
+  } catch(e) { console.error('[rerender]', e); }
+}
+
+function findTile(sid) {
+  var tiles = document.getElementById('videoGrid').querySelectorAll('.tile');
   for (var i = 0; i < tiles.length; i++) {
-    if (tiles[i].dataset.sid === sessionId) return tiles[i];
+    if (tiles[i].dataset.sid === sid) return tiles[i];
   }
   return null;
 }
@@ -535,80 +523,98 @@ function renderGrid(participants) {
   var grid = document.getElementById('videoGrid');
   var n = participants.length;
   grid.className = n<=1?'n1':n===2?'n2':n===3?'n3':n===4?'n4':n<=6?(n===5?'n5':'n6'):'many';
-  document.getElementById('pCount').textContent = n;
 
+  // Remove tiles for participants who left
   var active = {};
-  for (var i = 0; i < participants.length; i++) active[participants[i].sessionId] = true;
-  var existing = grid.querySelectorAll('.tile');
-  for (var j = 0; j < existing.length; j++) {
-    if (!active[existing[j].dataset.sid]) existing[j].remove();
-  }
+  for (var i = 0; i < participants.length; i++) active[participants[i].sid] = true;
+  grid.querySelectorAll('.tile').forEach(function(t) {
+    if (!active[t.dataset.sid]) {
+      t.querySelectorAll('video,audio').forEach(function(el) { el.srcObject = null; });
+      t.remove();
+    }
+  });
 
   for (var k = 0; k < participants.length; k++) {
     var p = participants[k];
-    var tile = findTile(p.sessionId);
+    var tile = findTile(p.sid);
     if (!tile) { tile = buildTile(p); grid.appendChild(tile); }
     updateTile(tile, p);
   }
 }
 
 function buildTile(p) {
+  var isLocal = p === room.localParticipant;
   var tile = document.createElement('div');
-  tile.className = 'tile' + (p.isLocalParticipant ? ' local' : '');
-  tile.dataset.sid = p.sessionId;
-  tile.dataset.uid = p.userId || '';
-  var initials = ((p.name || p.userId || 'P').charAt(0)).toUpperCase();
-  var hostCtrl = (isMod && !p.isLocalParticipant) ? (
+  tile.className = 'tile' + (isLocal ? ' local' : '');
+  tile.dataset.sid = p.sid;
+  var initials = ((p.name || p.identity || 'P').charAt(0)).toUpperCase();
+  var hostCtrl = (isMod && !isLocal) ? (
     '<div class="tile-menu">' +
     '<button class="tile-menu-btn" onclick="toggleTileMenu(this)">⋯</button>' +
     '<div class="tile-menu-popup">' +
-    '<button onclick="muteParticipant(' + JSON.stringify(p.userId||'') + ')">🔇 Mute</button>' +
-    '<button class="danger" onclick="kickParticipant(' + JSON.stringify(p.userId||'') + ')">✕ Remove</button>' +
+    '<button onclick="muteParticipant(' + JSON.stringify(p.identity || '') + ')">🔇 Mute</button>' +
+    '<button class="danger" onclick="kickParticipant(' + JSON.stringify(p.identity || '') + ')">✕ Remove</button>' +
     '</div></div>'
   ) : '';
-  var vidStyle = p.isLocalParticipant ? ' style="transform:scaleX(-1)"' : '';
+  // Mirror local video so it looks like a front camera
+  var vidStyle = isLocal ? ' style="transform:scaleX(-1)"' : '';
   tile.innerHTML =
-    '<video id="vid-' + p.sessionId + '" autoplay playsinline muted' + vidStyle + '></video>' +
-    '<audio id="aud-' + p.sessionId + '" autoplay></audio>' +
-    '<div class="tile-nov" id="nov-' + p.sessionId + '">' +
+    '<video id="vid-' + p.sid + '" autoplay playsinline muted' + vidStyle + '></video>' +
+    '<audio id="aud-' + p.sid + '" autoplay></audio>' +
+    '<div class="tile-nov" id="nov-' + p.sid + '">' +
       '<div class="tile-av">' + esc(initials) + '</div>' +
-      '<div class="tile-dname">' + esc(p.name || p.userId || 'Participant') + '</div>' +
+      '<div class="tile-dname">' + esc(p.name || p.identity || 'Participant') + '</div>' +
     '</div>' +
     '<div class="tile-footer">' +
-      '<span class="tile-name">' + esc(p.name || p.userId || 'Participant') + '</span>' +
-      '<span class="tile-icons"><span id="tm-' + p.sessionId + '"></span><span id="th-' + p.sessionId + '"></span></span>' +
+      '<span class="tile-name">' + esc(p.name || p.identity || 'Participant') + '</span>' +
+      '<span class="tile-icons"><span id="tm-' + p.sid + '"></span></span>' +
     '</div>' + hostCtrl;
   return tile;
 }
 
 function updateTile(tile, p) {
-  var vid  = document.getElementById('vid-' + p.sessionId);
-  var nov  = document.getElementById('nov-' + p.sessionId);
-  var aud  = document.getElementById('aud-' + p.sessionId);
-  var tmEl = document.getElementById('tm-'  + p.sessionId);
-  var thEl = document.getElementById('th-'  + p.sessionId);
+  var isLocal = p === room.localParticipant;
+  var vid  = document.getElementById('vid-'  + p.sid);
+  var aud  = document.getElementById('aud-'  + p.sid);
+  var nov  = document.getElementById('nov-'  + p.sid);
+  var tmEl = document.getElementById('tm-'   + p.sid);
   if (!vid || !nov) return;
 
-  // Local participant uses the raw camera stream from call.camera.state
-  // because p.videoStream may not populate until the SFU round-trip completes
-  var videoSrc = p.isLocalParticipant
-    ? (localCamStream || p.videoStream || null)
-    : (p.videoStream || null);
+  // ── Video ─────────────────────────────────────────────────────────────────
+  var camPub = p.getTrackPublication(Track.Source.Camera);
+  // For screen share, check screenshare track too
+  var sharePub = p.getTrackPublication(Track.Source.ScreenShare);
+  var activeVideoPub = (sharePub && sharePub.track && !sharePub.isMuted) ? sharePub : camPub;
+  var hasVideo = !!(activeVideoPub && activeVideoPub.track && !activeVideoPub.isMuted);
 
-  if (vid.srcObject !== videoSrc) vid.srcObject = videoSrc;
-  var hasVideo = !!videoSrc;
-  vid.style.display = hasVideo ? 'block' : 'none';
-  nov.style.display = hasVideo ? 'none' : 'flex';
-
-  if (!p.isLocalParticipant && aud) {
-    var audioSrc = p.audioStream || null;
-    if (aud.srcObject !== audioSrc) aud.srcObject = audioSrc;
+  if (hasVideo) {
+    // track.attach(el) sets srcObject and handles track lifecycle
+    activeVideoPub.track.attach(vid);
+    vid.style.display = 'block';
+    nov.style.display = 'none';
+  } else {
+    if (camPub && camPub.track) try { camPub.track.detach(vid); } catch(_) {}
+    vid.srcObject = null;
+    vid.style.display = 'none';
+    nov.style.display = 'flex';
   }
 
-  var hasAudio = p.isLocalParticipant ? micOn : !!p.audioStream;
-  if (tmEl) tmEl.textContent = hasAudio ? '' : '🔇';
-  if (thEl) thEl.textContent = raisedHands.has(p.userId) ? '✋' : '';
-  tile.classList.toggle('speaking', !!p.isSpeaking);
+  // ── Audio (never play local audio back) ───────────────────────────────────
+  if (!isLocal) {
+    var micPub = p.getTrackPublication(Track.Source.Microphone);
+    var hasAudio = !!(micPub && micPub.track && !micPub.isMuted);
+    if (hasAudio) {
+      micPub.track.attach(aud);
+    } else {
+      if (micPub && micPub.track) try { micPub.track.detach(aud); } catch(_) {}
+      aud.srcObject = null;
+    }
+    if (tmEl) tmEl.textContent = hasAudio ? '' : '🔇';
+  } else {
+    if (tmEl) tmEl.textContent = micOn ? '' : '🔇';
+  }
+
+  tile.classList.toggle('speaking', activeSpeakerSids.has(p.sid));
 }
 
 function renderPeopleList(participants) {
@@ -616,27 +622,28 @@ function renderPeopleList(participants) {
   list.innerHTML = '';
   for (var i = 0; i < participants.length; i++) {
     var p = participants[i];
-    var hasAudio = p.isLocalParticipant ? micOn : !!p.audioStream;
-    var hasVideo = p.isLocalParticipant ? camOn : !!p.videoStream;
-    var hand = raisedHands.has(p.userId);
+    var isLocal = p === room.localParticipant;
+    var camPub = p.getTrackPublication(Track.Source.Camera);
+    var micPub = p.getTrackPublication(Track.Source.Microphone);
+    var hasVideo = !!(camPub && !camPub.isMuted);
+    var hasAudio = !!(micPub && !micPub.isMuted);
     var div = document.createElement('div');
     div.className = 'pitem';
     div.innerHTML =
-      '<div class="pav">' + esc((p.name||p.userId||'P').charAt(0).toUpperCase()) + '</div>' +
-      '<div class="pname">' + esc(p.name||p.userId||'Participant') + (p.isLocalParticipant?' (You)':'') + '</div>' +
-      '<div class="picons">' + (hand?'✋':'') + (hasAudio?'':'🔇') + (hasVideo?'':'🚫') + '</div>';
+      '<div class="pav">' + esc((p.name||p.identity||'P').charAt(0).toUpperCase()) + '</div>' +
+      '<div class="pname">' + esc(p.name||p.identity||'Participant') + (isLocal?' (You)':'') + '</div>' +
+      '<div class="picons">' + (hasAudio?'':'🔇') + (hasVideo?'':'🚫') + '</div>';
     list.appendChild(div);
   }
 }
 
-function addChatMessage(msg) {
+function addChatMessage(name, text, isOwn) {
   var box = document.getElementById('chatMessages');
-  var isOwn = msg.user && msg.user.id === userId;
   var div = document.createElement('div');
   div.className = 'chat-msg' + (isOwn ? ' own' : '');
   div.innerHTML =
-    '<div class="chat-msg-sender">' + esc(isOwn ? 'You' : ((msg.user && msg.user.name) || 'Participant')) + '</div>' +
-    '<div class="chat-bubble">' + esc(msg.text || '') + '</div>';
+    '<div class="chat-msg-sender">' + esc(name) + '</div>' +
+    '<div class="chat-bubble">' + esc(text) + '</div>';
   box.appendChild(div);
   box.scrollTo({ top: box.scrollHeight, behavior: 'smooth' });
 }
@@ -649,18 +656,16 @@ function showHandToast(name) {
   el._t = setTimeout(function() { el.style.display = 'none'; }, 4000);
 }
 
-// ── Timer ─────────────────────────────────────────────────────────────────────
 var timerInt;
 function startTimer() {
   timerInt = setInterval(function() {
-    var s = Math.floor((Date.now()-startedAt)/1000);
-    var m = Math.floor(s/60), h = Math.floor(m/60);
-    var mm = String(m%60).padStart(2,'0'), ss = String(s%60).padStart(2,'0');
-    document.getElementById('callTimer').textContent = h ? (h+':'+mm+':'+ss) : (mm+':'+ss);
+    var s = Math.floor((Date.now() - startedAt) / 1000);
+    var m = Math.floor(s / 60), h = Math.floor(m / 60);
+    var mm = String(m % 60).padStart(2, '0'), ss = String(s % 60).padStart(2, '0');
+    document.getElementById('callTimer').textContent = h ? (h + ':' + mm + ':' + ss) : (mm + ':' + ss);
   }, 1000);
 }
 
-// ── Button state ──────────────────────────────────────────────────────────────
 function updateMicBtn() {
   document.getElementById('micIcon').textContent = micOn ? '🎤' : '🔇';
   document.getElementById('btnMic').classList.toggle('off', !micOn);
@@ -669,425 +674,20 @@ function updateCamBtn() {
   document.getElementById('camIcon').textContent = camOn ? '📷' : '🚫';
   document.getElementById('btnCam').classList.toggle('off', !camOn);
 }
-
-// ── Utility ───────────────────────────────────────────────────────────────────
-function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
 
 })().catch(function(e) {
-  // Any uncaught error from the async IIFE is shown to the user
   console.error('[DIKLY fatal]', e);
   showError((e && e.message) ? e.message : String(e));
 });
 
+// These live outside the IIFE so onclick="" can reach them before the IIFE resolves
 function setMsg(m) { var el = document.getElementById('connectMsg'); if (el) el.textContent = m; }
 function showCall() {
   document.getElementById('connectScreen').classList.add('hidden');
   document.getElementById('callScreen').style.display = 'flex';
-}
-function showError(msg) {
-  document.getElementById('connectScreen').classList.add('hidden');
-  document.getElementById('errMsg').textContent = msg;
-  document.getElementById('errorScreen').classList.remove('hidden');
-}
-</script>
-
-if (!callId || !token || !userId || !apiKey) { showError('Missing parameters. Please go back.'); throw 0; }
-
-function getKodexToken() {
-  return localStorage.getItem('token') || localStorage.getItem('jwt_token') ||
-         localStorage.getItem('auth_token') || sessionStorage.getItem('token') || '';
-}
-const kodexToken = getKodexToken();
-
-document.getElementById('callTitle').textContent = title;
-if (isMod) document.getElementById('callScreen').classList.add('is-mod');
-
-// ── State ─────────────────────────────────────────────────────────────────────
-let call, client, chatClient, channel;
-let micOn = false, camOn = false, sharing = false, handRaised = false;
-let chatOpen = false, participantsOpen = false;
-let startedAt = Date.now();
-let raisedHands = new Set();
-let subs = [];
-// Local camera MediaStream — kept separately so we can show it even when
-// the participant's p.videoStream hasn't propagated through state yet.
-let localCamStream = null;
-
-// ── Load SDKs ─────────────────────────────────────────────────────────────────
-setMsg('Loading…');
-let StreamVideoClient, StreamChat;
-try {
-  [{ StreamVideoClient }, { StreamChat }] = await Promise.all([
-    import('https://esm.sh/@stream-io/video-client@1'),
-    import('https://esm.sh/stream-chat@8'),
-  ]);
-} catch (e) { showError('Failed to load video SDK. Check your connection.'); throw e; }
-
-// ── Init video client ─────────────────────────────────────────────────────────
-setMsg('Connecting…');
-try {
-  client = new StreamVideoClient({ apiKey, user: { id: userId, name: userName }, token });
-} catch (e) { showError('Connection failed: ' + e.message); throw e; }
-
-// ── Join call ─────────────────────────────────────────────────────────────────
-setMsg('Joining class…');
-try {
-  call = client.call('default', callId);
-  // create:true = join if exists, create if not (safe for both roles)
-  await call.join({ create: true });
-} catch (e) { showError('Could not join: ' + e.message); throw e; }
-
-// ── Local media ───────────────────────────────────────────────────────────────
-setMsg('Setting up media…');
-try {
-  await call.microphone.enable();
-  micOn = true;
-} catch(e) { console.warn('[Mic]', e.message); micOn = false; }
-try {
-  await call.camera.enable();
-  camOn = true;
-  // Grab the raw camera MediaStream immediately so the local tile renders
-  localCamStream = call.camera.state?.mediaStream ?? null;
-} catch(e) { console.warn('[Camera]', e.message); camOn = false; }
-
-// ── Chat ──────────────────────────────────────────────────────────────────────
-try {
-  chatClient = StreamChat.getInstance(apiKey);
-  if (chatClient.userID && chatClient.userID !== userId) await chatClient.disconnectUser();
-  if (!chatClient.userID) await chatClient.connectUser({ id: userId, name: userName }, token);
-  channel = chatClient.channel('messaging', callId, { name: title });
-  await channel.watch();
-  (channel.state.messages || []).forEach(addChatMessage);
-  channel.on('message.new', e => { if (e.message) addChatMessage(e.message); });
-} catch (e) { console.warn('[Chat] init failed:', e.message); }
-
-// ── Show call ─────────────────────────────────────────────────────────────────
-showCall();
-startTimer();
-
-// ── Subscribe to participants ─────────────────────────────────────────────────
-function rerender() {
-  const ps = call.state?.participants || [];
-  renderGrid(ps);
-  renderPeopleList(ps);
-}
-
-if (call.state?.participants$) {
-  subs.push(call.state.participants$.subscribe(rerender));
-} else {
-  ['participantJoined','participantLeft','participantUpdated','trackPublished','trackUnpublished']
-    .forEach(ev => call.on(ev, rerender));
-  rerender();
-}
-
-// ── Subscribe to camera MediaStream for local tile ────────────────────────────
-// call.camera.state.mediaStream$ fires whenever the camera stream changes
-// (enable, device switch, disable). We update localCamStream and re-render
-// the local participant tile directly — this is the fix for the black screen.
-try {
-  const camStateStream = call.camera?.state?.mediaStream$;
-  if (camStateStream?.subscribe) {
-    subs.push(camStateStream.subscribe(stream => {
-      localCamStream = stream ?? null;
-      const ps = call.state?.participants || [];
-      const localP = ps.find(p => p.isLocalParticipant);
-      if (localP) {
-        const tile = document.querySelector(`[data-sid="${CSS.escape(localP.sessionId)}"]`);
-        if (tile) updateTile(tile, localP);
-      }
-    }));
-  }
-} catch(e) { console.warn('[CamSub]', e.message); }
-
-// ── Raise hand reactions ──────────────────────────────────────────────────────
-call.on('call.reaction_new', ({ reaction, user: rUser }) => {
-  if (!reaction || !rUser) return;
-  if (reaction.type === 'raised-hand') {
-    raisedHands.add(rUser.id);
-    showHandToast(rUser.name || rUser.id);
-  } else if (reaction.type === 'lowered-hand') {
-    raisedHands.delete(rUser.id);
-  }
-  rerender();
-});
-
-// ── Controls ──────────────────────────────────────────────────────────────────
-window.toggleMic = async () => {
-  const btn = document.getElementById('btnMic');
-  btn.disabled = true;
-  try {
-    if (micOn) { await call.microphone.disable(); micOn = false; }
-    else       { await call.microphone.enable();  micOn = true;  }
-  } catch (e) { console.warn('[Mic]', e.message); }
-  btn.disabled = false;
-  updateMicBtn();
-  rerender();
-};
-
-window.toggleCam = async () => {
-  const btn = document.getElementById('btnCam');
-  btn.disabled = true;
-  try {
-    if (camOn) {
-      await call.camera.disable();
-      camOn = false;
-      localCamStream = null;
-    } else {
-      await call.camera.enable();
-      camOn = true;
-      localCamStream = call.camera.state?.mediaStream ?? null;
-    }
-  } catch (e) { console.warn('[Camera]', e.message); }
-  btn.disabled = false;
-  updateCamBtn();
-  rerender();
-};
-
-window.toggleShare = async () => {
-  const btn = document.getElementById('btnShare');
-  btn.disabled = true;
-  try {
-    if (!sharing) { await call.screenShare.enable(); sharing = true; }
-    else          { await call.screenShare.disable(); sharing = false; }
-  } catch (_) { sharing = false; }
-  btn.disabled = false;
-  document.getElementById('shareIcon').textContent = sharing ? '⏹' : '🖥';
-  btn.classList.toggle('active', sharing);
-};
-
-window.toggleHand = async () => {
-  try {
-    handRaised = !handRaised;
-    await call.sendReaction({ type: handRaised ? 'raised-hand' : 'lowered-hand' });
-    document.getElementById('btnHand').classList.toggle('active', handRaised);
-  } catch (e) { console.warn('[Hand]', e.message); }
-};
-
-window.muteAll = async () => {
-  if (!isMod || !meetingId) return;
-  try {
-    await fetch(`${BASE_URL}/api/meetings/${meetingId}/mute-all`, {
-      method: 'POST', headers: { Authorization: 'Bearer ' + kodexToken },
-    });
-  } catch (_) {}
-};
-
-window.muteParticipant = async (uid) => {
-  if (!isMod || !meetingId) return;
-  try {
-    await fetch(`${BASE_URL}/api/meetings/${meetingId}/participants/${uid}/mute`, {
-      method: 'POST', headers: { Authorization: 'Bearer ' + kodexToken },
-    });
-  } catch (_) {}
-};
-
-window.kickParticipant = async (uid) => {
-  if (!isMod || !meetingId) return;
-  if (!confirm('Remove this participant?')) return;
-  try {
-    await fetch(`${BASE_URL}/api/meetings/${meetingId}/participants/${uid}/kick`, {
-      method: 'POST', headers: { Authorization: 'Bearer ' + kodexToken },
-    });
-  } catch (_) {}
-};
-
-window.toggleChat = () => {
-  chatOpen = !chatOpen;
-  document.getElementById('chatSidebar').classList.toggle('open', chatOpen);
-  if (chatOpen) {
-    participantsOpen = false;
-    document.getElementById('participantsSidebar').classList.remove('open');
-    setTimeout(() => document.getElementById('chatMessages').scrollTo(0, 99999), 50);
-  }
-};
-
-window.toggleParticipants = () => {
-  participantsOpen = !participantsOpen;
-  document.getElementById('participantsSidebar').classList.toggle('open', participantsOpen);
-  if (participantsOpen) {
-    chatOpen = false;
-    document.getElementById('chatSidebar').classList.remove('open');
-  }
-};
-
-window.leaveCall = async () => {
-  clearInterval(timerInt);
-  subs.forEach(s => s?.unsubscribe?.());
-  try { await call.leave(); } catch(_){}
-  try { await client.disconnectUser(); } catch(_){}
-  try { await chatClient?.disconnectUser(); } catch(_){}
-  history.back();
-};
-
-window.sendChat = async () => {
-  const inp = document.getElementById('chatInput');
-  const text = inp.value.trim();
-  if (!text || !channel) return;
-  inp.value = '';
-  try { await channel.sendMessage({ text }); } catch (_) {}
-};
-
-document.getElementById('chatInput').addEventListener('keydown', e => {
-  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); window.sendChat(); }
-});
-
-window.toggleTileMenu = (btn) => {
-  const menu = btn.closest('.tile-menu');
-  menu.classList.toggle('active');
-  document.addEventListener('click', function outsideClick(e2) {
-    if (!menu.contains(e2.target)) { menu.classList.remove('active'); document.removeEventListener('click', outsideClick); }
-  }, { once: false });
-};
-
-// ── Render helpers ────────────────────────────────────────────────────────────
-function renderGrid(participants) {
-  const grid = document.getElementById('videoGrid');
-  const n = participants.length;
-  grid.className = n<=1?'n1':n===2?'n2':n===3?'n3':n===4?'n4':n<=6?(n===5?'n5':'n6'):'many';
-  document.getElementById('pCount').textContent = n;
-
-  const active = new Set(participants.map(p => p.sessionId));
-  grid.querySelectorAll('.tile').forEach(t => { if (!active.has(t.dataset.sid)) t.remove(); });
-
-  for (const p of participants) {
-    let tile = grid.querySelector(`[data-sid="${CSS.escape(p.sessionId)}"]`);
-    if (!tile) { tile = buildTile(p); grid.appendChild(tile); }
-    updateTile(tile, p);
-  }
-}
-
-function buildTile(p) {
-  const tile = document.createElement('div');
-  tile.className = 'tile' + (p.isLocalParticipant ? ' local' : '');
-  tile.dataset.sid = p.sessionId;
-  tile.dataset.uid = p.userId || '';
-  tile.__videoBound = false;
-  tile.__unbindVideo = null;
-  const initials = (p.name||p.userId||'P').charAt(0).toUpperCase();
-  const hostCtrl = isMod && !p.isLocalParticipant ? `
-    <div class="tile-menu">
-      <button class="tile-menu-btn" onclick="toggleTileMenu(this)">⋯</button>
-      <div class="tile-menu-popup">
-        <button onclick="muteParticipant(${JSON.stringify(p.userId||'')})">🔇 Mute</button>
-        <button class="danger" onclick="kickParticipant(${JSON.stringify(p.userId||'')})">✕ Remove</button>
-      </div>
-    </div>` : '';
-  // Local video is mirrored so it feels natural (same as front camera selfie view)
-  const vidStyle = p.isLocalParticipant ? ' style="transform:scaleX(-1)"' : '';
-  tile.innerHTML = `
-    <video id="vid-${p.sessionId}" autoplay playsinline muted${vidStyle}></video>
-    <audio id="aud-${p.sessionId}" autoplay></audio>
-    <div class="tile-nov" id="nov-${p.sessionId}">
-      <div class="tile-av">${esc(initials)}</div>
-      <div class="tile-dname">${esc(p.name||p.userId||'Participant')}</div>
-    </div>
-    <div class="tile-footer">
-      <span class="tile-name">${esc(p.name||p.userId||'Participant')}</span>
-      <span class="tile-icons">
-        <span id="tm-${p.sessionId}"></span>
-        <span id="th-${p.sessionId}"></span>
-      </span>
-    </div>
-    ${hostCtrl}`;
-  return tile;
-}
-
-function updateTile(tile, p) {
-  const vid = document.getElementById('vid-' + p.sessionId);
-  const nov = document.getElementById('nov-' + p.sessionId);
-  const aud = document.getElementById('aud-' + p.sessionId);
-  const tmEl = document.getElementById('tm-' + p.sessionId);
-  const thEl = document.getElementById('th-' + p.sessionId);
-  if (!vid || !nov) return;
-
-  // Video source: local uses the raw camera stream (available immediately after
-  // call.camera.enable()), remote participants use their received p.videoStream.
-  const videoSrc = p.isLocalParticipant
-    ? (localCamStream || p.videoStream || null)
-    : (p.videoStream || null);
-
-  if (vid.srcObject !== videoSrc) vid.srcObject = videoSrc;
-  const hasVideo = !!videoSrc;
-  vid.style.display = hasVideo ? 'block' : 'none';
-  nov.style.display = hasVideo ? 'none' : 'flex';
-
-  // Audio: never play back local audio (avoids echo)
-  if (!p.isLocalParticipant && aud) {
-    const audioSrc = p.audioStream || null;
-    if (aud.srcObject !== audioSrc) aud.srcObject = audioSrc;
-  }
-
-  const hasAudio = p.isLocalParticipant ? micOn : !!p.audioStream;
-  if (tmEl) tmEl.textContent = hasAudio ? '' : '🔇';
-  if (thEl) thEl.textContent = raisedHands.has(p.userId) ? '✋' : '';
-  tile.classList.toggle('speaking', !!p.isSpeaking);
-}
-
-function renderPeopleList(participants) {
-  const list = document.getElementById('participantsList');
-  list.innerHTML = '';
-  for (const p of participants) {
-    const hasAudio = p.isLocalParticipant ? micOn : !!p.audioStream;
-    const hasVideo = p.isLocalParticipant ? camOn : !!p.videoStream;
-    const hand = raisedHands.has(p.userId);
-    const div = document.createElement('div');
-    div.className = 'pitem';
-    div.innerHTML = `
-      <div class="pav">${esc((p.name||p.userId||'P').charAt(0).toUpperCase())}</div>
-      <div class="pname">${esc(p.name||p.userId||'Participant')}${p.isLocalParticipant?' (You)':''}</div>
-      <div class="picons">${hand?'✋':''}${hasAudio?'':'🔇'}${hasVideo?'':'🚫'}</div>`;
-    list.appendChild(div);
-  }
-}
-
-function addChatMessage(msg) {
-  const box = document.getElementById('chatMessages');
-  const isOwn = msg.user?.id === userId;
-  const div = document.createElement('div');
-  div.className = 'chat-msg' + (isOwn ? ' own' : '');
-  div.innerHTML = `
-    <div class="chat-msg-sender">${esc(isOwn ? 'You' : (msg.user?.name || 'Participant'))}</div>
-    <div class="chat-bubble">${esc(msg.text||'')}</div>`;
-  box.appendChild(div);
-  box.scrollTo({ top: box.scrollHeight, behavior: 'smooth' });
-}
-
-function showHandToast(name) {
-  const el = document.getElementById('handToast');
-  document.getElementById('handToastName').textContent = name;
-  el.style.display = 'flex';
-  clearTimeout(el._t);
-  el._t = setTimeout(() => { el.style.display = 'none'; }, 4000);
-}
-
-// ── Timer ─────────────────────────────────────────────────────────────────────
-let timerInt;
-function startTimer() {
-  timerInt = setInterval(() => {
-    const s = Math.floor((Date.now()-startedAt)/1000);
-    const m = Math.floor(s/60), h = Math.floor(m/60);
-    const mm = String(m%60).padStart(2,'0'), ss = String(s%60).padStart(2,'0');
-    document.getElementById('callTimer').textContent = h ? `${h}:${mm}:${ss}` : `${mm}:${ss}`;
-  }, 1000);
-}
-
-// ── Button state ──────────────────────────────────────────────────────────────
-function updateMicBtn() {
-  document.getElementById('micIcon').textContent = micOn ? '🎤' : '🔇';
-  document.getElementById('btnMic').classList.toggle('off', !micOn);
-}
-function updateCamBtn() {
-  document.getElementById('camIcon').textContent = camOn ? '📷' : '🚫';
-  document.getElementById('btnCam').classList.toggle('off', !camOn);
-}
-
-// ── Utility ───────────────────────────────────────────────────────────────────
-function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
-function setMsg(m) { document.getElementById('connectMsg').textContent = m; }
-function showCall() {
-  document.getElementById('connectScreen').classList.add('hidden');
-  document.getElementById('callScreen').style.display = 'flex';
-  updateMicBtn(); updateCamBtn();
 }
 function showError(msg) {
   document.getElementById('connectScreen').classList.add('hidden');
