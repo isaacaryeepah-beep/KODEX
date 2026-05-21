@@ -24,10 +24,10 @@ const { requireActiveSubscription } = require("../middleware/subscription");
 const AuditLog = require("../models/AuditLog");
 const { AUDIT_ACTIONS, SEVERITY } = AuditLog;
 
-// All audit log routes are admin-only
+// Admin and corporate managers can view audit logs (scoped to their company)
 router.use(authenticate);
 router.use(requireActiveSubscription);
-router.use(requireRole("admin", "superadmin"));
+router.use(requireRole("admin", "superadmin", "manager"));
 router.use(companyIsolation);
 
 // ---------------------------------------------------------------------------

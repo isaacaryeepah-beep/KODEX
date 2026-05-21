@@ -1,3 +1,4 @@
+const bcrypt = require('bcryptjs');
 const Device = require('../models/Device');
 const Course = require('../models/Course');
 const User = require('../models/User');
@@ -66,9 +67,8 @@ exports.connectDevice = async (req, res) => {
 
     // Verify lecturer PIN if they have set one
     if (lecturer.classRepPin) {
-      if (!lecturerPin || String(lecturerPin) !== String(lecturer.classRepPin)) {
-        return res.status(403).json({ error: 'Incorrect lecturer PIN', requiresPin: true });
-      }
+      const pinOk = lecturerPin && await bcrypt.compare(String(lecturerPin), lecturer.classRepPin);
+      if (!pinOk) return res.status(403).json({ error: 'Incorrect lecturer PIN', requiresPin: true });
     }
 
     // Verify course
@@ -106,7 +106,8 @@ exports.setLecturerPin = async (req, res) => {
     if (req.user.role !== 'lecturer') return res.status(403).json({ error: 'Only lecturers can set a PIN' });
     const { pin } = req.body;
     if (!pin || !/^\d{4}$/.test(String(pin))) return res.status(400).json({ error: 'PIN must be exactly 4 digits' });
-    await User.findByIdAndUpdate(req.user._id, { classRepPin: String(pin) });
+    const hashed = await bcrypt.hash(String(pin), 10);
+    await User.findByIdAndUpdate(req.user._id, { classRepPin: hashed });
     res.json({ ok: true, message: 'PIN set successfully' });
   } catch (e) { res.status(500).json({ error: e.message }); }
 };

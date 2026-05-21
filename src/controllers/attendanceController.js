@@ -126,6 +126,24 @@ exports.startSession = async (req, res) => {
 
     const courseRef = course._id;
 
+    // ── Shared-device course mismatch warning ────────────────────────────
+    // If the class rep connected this device for a specific course but the
+    // lecturer started a session for a different course, include a warning
+    // in the response (soft — session still starts).
+    let courseWarning = null;
+    if (device.ownershipType === 'shared' && device.activeCourseId) {
+      const repCourseId = device.activeCourseId.toString();
+      const sessionCourseId = courseRef.toString();
+      if (repCourseId !== sessionCourseId) {
+        const RepCourse = require('../models/Course');
+        const repCourse = await RepCourse.findById(device.activeCourseId).select('title code').lean();
+        courseWarning = repCourse
+          ? `Note: the class rep connected this device for ${repCourse.code} – ${repCourse.title}, but you started a session for ${course.code} – ${course.title}. If this is wrong, stop the session, ask the class rep to reconnect for the correct course, and try again.`
+          : 'Note: the course selected by the class rep does not match the course you started attendance for.';
+      }
+    }
+    // ────────────────────────────────────────────────────────────────────
+
     // ── Per-session secret seed ───────────────────────────────────────────
     // The seed is what makes the rotating 6-digit code unguessable. It is
     // never sent to students — only to the paired ESP32 (via /api/devices/
@@ -156,7 +174,7 @@ exports.startSession = async (req, res) => {
       { path: "course", select: "title code" },
     ]);
 
-    res.status(201).json({ session: populated });
+    res.status(201).json({ session: populated, ...(courseWarning && { warning: courseWarning }) });
   } catch (error) {
     if (error.name === "ValidationError") {
       const messages = Object.values(error.errors).map((e) => e.message);
@@ -195,6 +213,13 @@ exports.stopSession = async (req, res) => {
     session.stoppedBy = req.user._id;
     session.stoppedReason = "manual";
     await session.save();
+
+    // Auto-release shared device when session stops so the class rep doesn't
+    // have to manually disconnect after the lecturer ends attendance.
+    await Device.findOneAndUpdate(
+      { deviceId: session.deviceId, ownershipType: 'shared', companyId: session.company },
+      { $set: { activeLecturerId: null, activeCourseId: null, connectedAt: null } }
+    );
 
     // No explicit ESP32 stop command needed. The device polls
     // /api/devices/heartbeat every few seconds; once `activeSession` returns

@@ -58,6 +58,7 @@
   },
   "devDependencies": {
     "@capacitor/cli": "^6.0.0",
+    "mongodb-memory-server": "^11.1.0",
     "nodemon": "^3.1.0"
   }
 }
