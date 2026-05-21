@@ -32,6 +32,6 @@ router.get('/devices/my/scan-wifi',    authenticate, companyIsolation, deviceCtr
 router.post('/devices/configure-wifi', authenticate, companyIsolation, deviceCtrl.configureWifi);
 
 // ─── ADMIN: ASSIGN DEVICE TO CLASS REP ───────────────────────────────────────
-router.patch('/devices/:deviceId/assign-class-rep', authenticate, requireRole('admin', 'superadmin'), deviceCtrl.assignClassRep);
+router.patch('/devices/:deviceId/assign-class-rep', authenticate, requireRole('admin', 'superadmin', 'hod'), deviceCtrl.assignClassRep);
 
 module.exports = router;
