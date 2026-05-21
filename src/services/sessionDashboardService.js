@@ -238,6 +238,12 @@ async function endSession(sessionId, companyId, userId, userRole) {
   session.stoppedReason = 'manual';
   await session.save();
 
+  // Auto-release shared device so class rep doesn't have to disconnect manually
+  await Device.findOneAndUpdate(
+    { deviceId: session.deviceId, ownershipType: 'shared', companyId: session.company },
+    { $set: { activeLecturerId: null, activeCourseId: null, connectedAt: null } }
+  );
+
   // Generate report summary
   const [marked, enrolled] = await Promise.all([
     AttendanceRecord.countDocuments({ session: sessionId }),
