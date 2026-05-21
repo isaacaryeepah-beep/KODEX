@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const Meeting = require('../models/Meeting');
 const Company = require('../models/Company');
 
@@ -70,12 +71,20 @@ exports.isOwner = (req, res, next) => {
 // ─── LOAD MEETING + COMPANY ISOLATION ────────────────────────────────────────
 exports.loadMeeting = async (req, res, next) => {
   try {
+    if (!mongoose.isValidObjectId(req.params.id)) {
+      return res.status(404).json({ message: 'Meeting not found' });
+    }
     const meeting = await Meeting.findOne({
-      _id:     req.params.id,
-      company: req.user.company,
-      isActive: true
+      _id:      req.params.id,
+      company:  req.user.company,
+      isActive: true,
     });
-    if (!meeting) return res.status(404).json({ message: 'Meeting not found' });
+    if (!meeting) {
+      // Check if meeting exists at all (helps diagnose company mismatch vs deleted)
+      const exists = await Meeting.exists({ _id: req.params.id });
+      if (!exists) return res.status(404).json({ message: 'Meeting not found' });
+      return res.status(403).json({ message: 'You do not have access to this meeting' });
+    }
     req.meeting = meeting;
     next();
   } catch (err) {
