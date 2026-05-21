@@ -732,11 +732,7 @@ exports.login = async (req, res) => {
         (corporateRoles.includes(user.role) && portalMode === "academic") ||
         user.role === "admin";
       if (isRolePortalMismatch) {
-        if (user.role === "admin") {
-          const correctPortal = company.mode === "academic" ? "Academic Admin" : "Corporate Admin";
-          return res.status(401).json({ error: `Use the ${correctPortal} portal for this account.` });
-        }
-        return res.status(401).json({ error: "Invalid credentials" });
+        return res.status(401).json({ error: "Incorrect email or password." });
       }
     }
 
@@ -1377,18 +1373,20 @@ exports.resetPasswordEmail = async (req, res) => {
       user = await User.findOne({
         phone: { $in: [normPhone, phone.trim()] },
         resetPasswordExpires: { $gt: Date.now() },
-      }).select("+password");
+      }).select("+password +resetPasswordToken");
     }
     if (!user && email) {
       user = await User.findOne({
         email: email.trim().toLowerCase(),
         resetPasswordExpires: { $gt: Date.now() },
-      }).select("+password");
+      }).select("+password +resetPasswordToken");
     }
 
     if (!user) return res.status(400).json({ error: "Invalid or expired reset code" });
 
-    const isValid = await bcrypt.compare(resetCode, user.resetPasswordToken);
+    if (!user.resetPasswordToken) return res.status(400).json({ error: "Reset code has expired. Please request a new one." });
+
+    const isValid = await bcrypt.compare(String(resetCode).trim(), user.resetPasswordToken);
     if (!isValid) return res.status(400).json({ error: "Incorrect reset code" });
 
     user.password = newPassword;
