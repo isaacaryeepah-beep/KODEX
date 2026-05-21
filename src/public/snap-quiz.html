@@ -1344,9 +1344,6 @@ function populateConsentScreen(quiz) {
       rule('🤖', 'AI will analyse your webcam feed in real time — detecting face absence, multiple people in frame, mobile phone use, and suspicious eye-gaze direction.', 'warn');
     }
 
-    if (['human', 'hybrid'].includes(quiz.monitoringMode)) {
-      rule('👁', 'A <strong>human moderator may be watching your webcam feed live</strong>. Any suspicious behaviour will be flagged and recorded immediately.', 'high');
-    }
   }
 
   // Noise detection

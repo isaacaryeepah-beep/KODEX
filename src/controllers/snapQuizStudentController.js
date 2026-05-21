@@ -34,6 +34,7 @@ const { ATTEMPT_STATUSES, GRADING_STATUSES } = require("../models/SnapQuizAttemp
 const { QUESTION_TYPES, MANUAL_GRADE_TYPES } = require("../models/SnapQuizQuestion");
 const { VIOLATION_TYPES, VIOLATION_SEVERITIES, ACTIONS_TAKEN } = require("../models/SnapQuizViolationLog");
 const { autoGradeAttempt } = require("../services/quizGradingService");
+const { analyzeSnapshot }  = require("../services/aiProctoringService");
 
 // ─── Quiz discovery ───────────────────────────────────────────────────────────
 
@@ -677,16 +678,41 @@ exports.recordSnapshot = async (req, res) => {
       faceDetected, faceCount, faceScore, similarityToStart,
     } = req.body;
 
-    // Build AI flags from client-reported face data
+    // Run Claude Haiku AI analysis when enabled and image data is present
     const aiFlags = [];
-    if (faceDetected === false || faceDetected === 0) {
-      aiFlags.push({ flagType: "face_not_visible", confidence: 1.0, detail: "No face detected" });
+    let aiAnalysisDone = false;
+
+    if (quiz.aiProctoringEnabled && imageUrl && imageUrl.startsWith('data:image')) {
+      const base64 = imageUrl.split(',')[1];
+      const analysis = await analyzeSnapshot(base64).catch(() => null);
+      if (analysis) {
+        aiAnalysisDone = true;
+        if (!analysis.facePresent) {
+          aiFlags.push({ flagType: "face_not_visible", confidence: 0.95, detail: "AI: no face detected" });
+        }
+        if (analysis.faceCount > 1) {
+          aiFlags.push({ flagType: "multiple_faces", confidence: 0.95, detail: `AI: ${analysis.faceCount} faces detected` });
+        }
+        if (analysis.phoneVisible) {
+          aiFlags.push({ flagType: "phone_detected", confidence: 0.9, detail: "AI: phone visible" });
+        }
+        if (analysis.suspiciousActivity) {
+          aiFlags.push({ flagType: "suspicious_activity", confidence: 0.85, detail: analysis.notes || "AI: suspicious activity" });
+        }
+      }
     }
-    if (faceCount > 1) {
-      aiFlags.push({ flagType: "multiple_faces", confidence: 1.0, detail: `${faceCount} faces detected` });
-    }
-    if (similarityToStart != null && similarityToStart < 0.5) {
-      aiFlags.push({ flagType: "low_confidence", confidence: 1 - similarityToStart, detail: "Face similarity below threshold" });
+
+    // Fall back to client-reported face data if AI was not run
+    if (!aiAnalysisDone) {
+      if (faceDetected === false || faceDetected === 0) {
+        aiFlags.push({ flagType: "face_not_visible", confidence: 1.0, detail: "No face detected" });
+      }
+      if (faceCount > 1) {
+        aiFlags.push({ flagType: "multiple_faces", confidence: 1.0, detail: `${faceCount} faces detected` });
+      }
+      if (similarityToStart != null && similarityToStart < 0.5) {
+        aiFlags.push({ flagType: "low_confidence", confidence: 1 - similarityToStart, detail: "Face similarity below threshold" });
+      }
     }
 
     const aiRiskScore = aiFlags.length > 0 ? Math.min(1, aiFlags.length * 0.35) : 0;
@@ -701,8 +727,8 @@ exports.recordSnapshot = async (req, res) => {
       imageUrl:             imageUrl    || null,
       thumbnailUrl:         thumbnailUrl || null,
       relatedViolationId:   relatedViolationId || null,
-      aiAnalysisCompleted:  aiFlags.length > 0,
-      aiAnalysisCompletedAt: aiFlags.length > 0 ? new Date() : null,
+      aiAnalysisCompleted:  aiAnalysisDone,
+      aiAnalysisCompletedAt: aiAnalysisDone ? new Date() : null,
       aiFlags,
       aiRiskScore,
       reviewStatus:         aiFlags.length > 0 ? "flagged" : "pending",

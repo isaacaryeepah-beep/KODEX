@@ -294,7 +294,7 @@ if (isMod) document.getElementById('callScreen').classList.add('is-mod');
 
 // ── State ─────────────────────────────────────────────────────────────────────
 let call, client, chatClient, channel;
-let micOn = true, camOn = isMod, sharing = false, handRaised = false;
+let micOn = true, camOn = false, sharing = false, handRaised = false;
 let chatOpen = false, participantsOpen = false;
 let startedAt = Date.now();
 let raisedHands = new Set(); // userIds with hand raised
@@ -326,7 +326,9 @@ try {
 // ── Local media ───────────────────────────────────────────────────────────────
 setMsg('Setting up media…');
 await safe(() => call.microphone.enable());
-if (camOn) await safe(() => call.camera.enable());
+// Always enable camera on join so the local tile shows immediately
+await safe(() => call.camera.enable());
+camOn = true;
 
 // ── Chat ──────────────────────────────────────────────────────────────────────
 try {
@@ -373,7 +375,15 @@ window.toggleMic = async () => {
   micOn = !micOn; await safe(() => micOn ? call.microphone.enable() : call.microphone.disable()); updateMicBtn();
 };
 window.toggleCam = async () => {
-  camOn = !camOn; await safe(() => camOn ? call.camera.enable() : call.camera.disable()); updateCamBtn();
+  const next = !camOn;
+  try {
+    if (next) await call.camera.enable();
+    else      await call.camera.disable();
+    camOn = next;
+  } catch (e) {
+    console.warn('[Camera]', e.message);
+  }
+  updateCamBtn();
 };
 window.toggleShare = async () => {
   try {

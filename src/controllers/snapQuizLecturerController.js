@@ -53,9 +53,10 @@ exports.createQuiz = async (req, res) => {
       randomizeQuestions, randomizeOptions,
     } = req.body;
 
-    // Derive proctoring flags from monitoringMode if not explicitly set.
-    const resolvedProctoringEnabled   = proctoringEnabled   ?? (["ai","hybrid"].includes(monitoringMode));
-    const resolvedAiProctoringEnabled = aiProctoringEnabled ?? (["ai","hybrid"].includes(monitoringMode));
+    // AI-only monitoring is the default. Human monitoring is not used.
+    const resolvedMode               = monitoringMode === 'none' ? 'none' : (monitoringMode || 'ai');
+    const resolvedProctoringEnabled   = proctoringEnabled   ?? (resolvedMode !== 'none');
+    const resolvedAiProctoringEnabled = aiProctoringEnabled ?? (resolvedMode !== 'none');
 
     const quiz = await SnapQuiz.create({
       company:   req.companyId,
@@ -73,8 +74,8 @@ exports.createQuiz = async (req, res) => {
       proctoringEnabled: resolvedProctoringEnabled,
       snapshotIntervalSeconds,
       aiProctoringEnabled: resolvedAiProctoringEnabled,
-      monitoringMode: monitoringMode || "none",
-      humanMonitors:  humanMonitors  || [],
+      monitoringMode: resolvedMode,
+      humanMonitors:  [],
       maxConcurrentMonitors, noiseDetectionThreshold,
       showResultAfterSubmission, showAnswersAfterSubmission,
       showAnswersAfterClose, autoReleaseResults,
