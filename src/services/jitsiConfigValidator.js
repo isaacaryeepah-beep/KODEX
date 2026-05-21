@@ -2,11 +2,6 @@
 
 let _ran = false;
 
-/**
- * Validate Jitsi environment configuration at server startup.
- * Logs a summary — the actual fatal guard is in jitsiTokenService.js which
- * throws if required vars are missing before the server binds to any port.
- */
 exports.validateJitsiConfig = function () {
   if (_ran) return;
   _ran = true;
@@ -14,6 +9,8 @@ exports.validateJitsiConfig = function () {
   const domain = process.env.JITSI_DOMAIN;
   const appId  = process.env.JITSI_APP_ID;
   const jicofo = process.env.JITSI_JICOFO_URL;
+
+  if (!domain || !appId) return; // Jitsi not configured — skip logging
 
   console.log(`[Jitsi] ✓ Self-hosted: ${domain}  app_id=${appId}`);
 
