@@ -724,13 +724,18 @@ exports.login = async (req, res) => {
       console.log(`[LOGIN] Auto-corrected company mode to 'academic' for ${company.name}`);
     }
 
-    if (portalMode && company && company.mode !== portalMode && user.role !== "superadmin" && user.role !== "admin") {
+    if (portalMode && company && company.mode !== portalMode && user.role !== "superadmin") {
       const academicRoles = ["lecturer", "hod", "student"];
       const corporateRoles = ["employee", "manager"];
       const isRolePortalMismatch =
         (academicRoles.includes(user.role) && portalMode === "corporate") ||
-        (corporateRoles.includes(user.role) && portalMode === "academic");
+        (corporateRoles.includes(user.role) && portalMode === "academic") ||
+        user.role === "admin";
       if (isRolePortalMismatch) {
+        if (user.role === "admin") {
+          const correctPortal = company.mode === "academic" ? "Academic Admin" : "Corporate Admin";
+          return res.status(401).json({ error: `Use the ${correctPortal} portal for this account.` });
+        }
         return res.status(401).json({ error: "Invalid credentials" });
       }
     }
