@@ -55,14 +55,16 @@ apt-get install -y -qq \
 success "Dependencies installed."
 
 # ── 3. Configure firewall ────────────────────────────────────────
-info "Configuring UFW firewall..."
-ufw allow 22/tcp
-ufw allow 80/tcp
-ufw allow 443/tcp
-ufw allow 7881/tcp
-ufw allow ${RTC_PORT_START}:${RTC_PORT_END}/udp
-ufw --force enable
-success "Firewall configured."
+info "Configuring UFW firewall (errors here are non-fatal)..."
+ufw allow 22/tcp    || true
+ufw allow 80/tcp    || true
+ufw allow 443/tcp   || true
+ufw allow 7881/tcp  || true
+ufw allow ${RTC_PORT_START}:${RTC_PORT_END}/udp || true
+ufw --force enable  || true
+success "Firewall step done (verify manually if needed: ufw status)."
+warn "If UFW failed, open these ports in your Contabo control panel firewall:"
+warn "  TCP: 80, 443, 7881 | UDP: 50000-60000"
 
 # ── 4. Install Caddy ─────────────────────────────────────────────
 info "Installing Caddy web server..."
