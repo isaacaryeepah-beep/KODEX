@@ -5976,12 +5976,25 @@ async function startSession() {
 
   try {
     const hotspotKey = sessionStorage.getItem('dikly_esp32_hotspot_key') || '';
-    await api('/api/attendance-sessions/start', {
+    const result = await api('/api/attendance-sessions/start', {
       method: 'POST',
       headers: hotspotKey ? { 'x-esp32-hotspot-key': hotspotKey } : {},
       body: JSON.stringify({ title, courseId }),
     });
     closeModal();
+    if (result.warning) {
+      if (container) container.innerHTML = `
+        <div class="modal-overlay" onclick="closeModal(event)">
+          <div class="modal" onclick="event.stopPropagation()" style="max-width:440px">
+            <div style="font-size:36px;text-align:center;margin-bottom:10px">⚠️</div>
+            <h3 style="text-align:center;margin-bottom:10px">Course Mismatch Warning</h3>
+            <p style="font-size:13px;color:var(--text-muted);line-height:1.6;margin-bottom:18px">${esc(result.warning)}</p>
+            <div style="display:flex;gap:8px;justify-content:center">
+              <button class="btn btn-primary btn-sm" onclick="closeModal()">OK, Continue</button>
+            </div>
+          </div>
+        </div>`;
+    }
     renderSessions();
   } catch (e) {
     // Device offline or not registered — show in-modal block screen
