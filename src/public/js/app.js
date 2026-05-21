@@ -6980,12 +6980,13 @@ async function showCreateMeetingModal() {
               <option value="staff_conference">Staff Conference</option>
             </select>
           </div>
+          ${currentUser?.company?.mode !== 'corporate' ? `
           <div class="form-group">
             <label>Course</label>
             <select id="meeting-course" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
               ${courseOptions}
             </select>
-          </div>
+          </div>` : ''}
         </div>
 
         <div id="meeting-error" style="color:#ef4444;margin:8px 0;display:none;font-size:13px;"></div>
