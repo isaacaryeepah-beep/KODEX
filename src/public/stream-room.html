@@ -411,7 +411,8 @@ window.toggleTileMenu = function(btn) {
 // ── Render ────────────────────────────────────────────────────────────────────
 function allParticipants() {
   var list = [room.localParticipant];
-  room.participants.forEach(function(p) { list.push(p); });
+  var remotes = room.remoteParticipants || room.participants;
+  if (remotes) remotes.forEach(function(p) { list.push(p); });
   return list;
 }
 
