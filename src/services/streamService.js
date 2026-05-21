@@ -67,7 +67,9 @@ async function removeParticipant(callId, userId) {
 }
 
 function buildStreamRoomUrl(meeting, user, token, isMod) {
-  const base = process.env.APP_BASE_URL || 'https://dikly.sbs';
+  // MEET_BASE_URL separates the meeting room domain (e.g. meet.dikly.live)
+  // from the main app domain (APP_BASE_URL / dikly.sbs).
+  const base = process.env.MEET_BASE_URL || process.env.APP_BASE_URL || 'https://dikly.sbs';
   const qs   = new URLSearchParams({
     callId:    meeting.roomName,
     token,
