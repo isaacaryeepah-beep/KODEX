@@ -10472,7 +10472,7 @@ window.classRepConnect = async function() {
   const courseId = parts[1];
   try {
     await api('/api/class-rep/connect', { method: 'POST', body: JSON.stringify({ lecturerId, courseId, lecturerPin: pin }) });
-    showToast('Device connected successfully', 'success');
+    showToastNotif('Device connected successfully', 'success');
     renderClassDevice();
   } catch (e) {
     const msg = (e.data && e.data.requiresPin) ? 'Incorrect PIN — ask the lecturer for their 4-digit PIN' : (e.message || 'Failed to connect');
@@ -10485,18 +10485,18 @@ window.classRepDisconnect = async function() {
   if (!confirm('End the session and release the device?')) return;
   try {
     await api('/api/class-rep/disconnect', { method: 'POST', body: '{}' });
-    showToast('Device released', 'success');
+    showToastNotif('Device released', 'success');
     renderClassDevice();
-  } catch (e) { showToast(e.message || 'Failed to disconnect', 'error'); }
+  } catch (e) { showToastNotif(e.message || 'Failed to disconnect', 'error'); }
 };
 
 window.saveLecturerPin = async function() {
   const pin = document.getElementById('lecturer-pin-input') ? document.getElementById('lecturer-pin-input').value : '';
-  if (!pin || !/^\d{4}$/.test(pin)) { showToast('PIN must be 4 digits', 'error'); return; }
+  if (!pin || !/^\d{4}$/.test(pin)) { showToastNotif('PIN must be 4 digits', 'error'); return; }
   try {
     await api('/api/class-rep/set-pin', { method: 'POST', body: JSON.stringify({ pin }) });
-    showToast('PIN saved', 'success');
-  } catch (e) { showToast(e.message || 'Failed to save PIN', 'error'); }
+    showToastNotif('PIN saved', 'success');
+  } catch (e) { showToastNotif(e.message || 'Failed to save PIN', 'error'); }
 };
 // ─────────────────────────────────────────────────────────────────────────────
 
