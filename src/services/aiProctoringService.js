@@ -125,4 +125,52 @@ async function generateReport(session) {
   };
 }
 
-module.exports = { analyzeSnapshot, detectViolations, generateReport, riskFor, severityFor };
+// Generates an integrity report for a SnapQuiz attempt by querying DB records.
+// Returns { integrityScore, summary, violationCount, snapshotCount, flaggedCount, generatedAt }
+async function generateQuizReport(attemptId) {
+  // Lazy-require to avoid circular deps at module load time
+  const SnapQuizViolationLog    = require('../models/SnapQuizViolationLog');
+  const SnapQuizProctoringEvent = require('../models/SnapQuizProctoringEvent');
+
+  const [violations, snapshots] = await Promise.all([
+    SnapQuizViolationLog.find({ attempt: attemptId }).select('violationType').lean(),
+    SnapQuizProctoringEvent.find({ attempt: attemptId }).select('reviewStatus aiRiskScore aiFlags').lean(),
+  ]);
+
+  const snapshotCount = snapshots.length;
+  const flaggedCount  = snapshots.filter(s => s.reviewStatus === 'flagged').length;
+
+  // Aggregate risk from violations using the existing weight map
+  let riskScore = 0;
+  for (const v of violations) {
+    riskScore += riskFor(v.violationType) || 3;
+  }
+  // AI risk from snapshots
+  for (const s of snapshots) {
+    riskScore += (s.aiRiskScore || 0) * 20;
+  }
+  riskScore = Math.min(100, Math.round(riskScore));
+
+  const integrityScore = Math.max(0, 100 - riskScore);
+
+  const typeCounts = {};
+  for (const v of violations) {
+    typeCounts[v.violationType] = (typeCounts[v.violationType] || 0) + 1;
+  }
+  const lines = Object.entries(typeCounts).map(([t, n]) => `${n}× ${t.replace(/_/g, ' ')}`);
+
+  const summary = violations.length === 0 && flaggedCount === 0
+    ? `Completed with no violations across ${snapshotCount} AI snapshot${snapshotCount !== 1 ? 's' : ''}. Integrity score: ${integrityScore}/100.`
+    : `${violations.length} violation(s) detected${flaggedCount > 0 ? `, ${flaggedCount} flagged snapshot(s)` : ''}. ${lines.join(', ')}. Integrity score: ${integrityScore}/100.`;
+
+  return {
+    integrityScore,
+    summary,
+    violationCount: violations.length,
+    snapshotCount,
+    flaggedCount,
+    generatedAt: new Date(),
+  };
+}
+
+module.exports = { analyzeSnapshot, detectViolations, generateReport, generateQuizReport, riskFor, severityFor };

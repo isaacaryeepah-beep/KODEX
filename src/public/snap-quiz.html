@@ -802,19 +802,19 @@ window.addEventListener('load', () => loadMLLibs().catch(() => {}));
 <div id="consent-screen" class="screen hidden">
   <div class="card" style="max-width:580px;width:100%">
 
-    <!-- Header -->
+    <!-- Header (content updated dynamically by populateConsentScreen) -->
     <div style="display:flex;align-items:center;gap:14px;margin-bottom:18px">
-      <div style="width:46px;height:46px;border-radius:12px;background:#fef2f2;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:22px;border:1.5px solid #fecaca">🔐</div>
+      <div id="consent-icon" style="width:46px;height:46px;border-radius:12px;background:#fef2f2;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:22px;border:1.5px solid #fecaca">🔐</div>
       <div>
-        <h2 style="margin:0;font-size:19px;font-weight:800;color:var(--text)">Exam Rules &amp; Consent</h2>
+        <h2 id="consent-title-heading" style="margin:0;font-size:19px;font-weight:800;color:var(--text)">Exam Rules &amp; Consent</h2>
         <p id="consent-quiz-title" style="margin:3px 0 0;font-size:13px;color:var(--muted);font-weight:500"></p>
       </div>
     </div>
 
-    <!-- Warning banner -->
-    <div style="background:#fef2f2;border:1.5px solid #fecaca;border-radius:10px;padding:12px 16px;margin-bottom:22px;display:flex;gap:12px;align-items:flex-start">
+    <!-- Warning banner (updated per level) -->
+    <div id="consent-warning-banner" style="background:#fef2f2;border:1.5px solid #fecaca;border-radius:10px;padding:12px 16px;margin-bottom:22px;display:flex;gap:12px;align-items:flex-start">
       <span style="font-size:18px;flex-shrink:0;margin-top:1px">⚠️</span>
-      <p style="margin:0;font-size:13px;color:#b91c1c;line-height:1.5;font-weight:500">Read all rules carefully. Violations are <strong>logged and reported</strong> to your lecturer. Repeated offences will result in <strong>automatic exam termination</strong>.</p>
+      <p id="consent-warning-text" style="margin:0;font-size:13px;color:#b91c1c;line-height:1.5;font-weight:500">Read all rules carefully. Violations are <strong>logged and reported</strong> to your lecturer. Repeated offences will result in <strong>automatic exam termination</strong>.</p>
     </div>
 
     <!-- Dynamic rules (populated by populateConsentScreen) -->
@@ -960,6 +960,14 @@ window.addEventListener('load', () => loadMLLibs().catch(() => {}));
       <div class="stat-box">
         <div class="stat-val" id="stat-violations" style="color:var(--red)">0</div>
         <div class="stat-key">Violations</div>
+      </div>
+    </div>
+
+    <!-- AI integrity report (shown only for proctored quizzes) -->
+    <div id="ai-report-section" style="display:none;margin-top:16px;text-align:left;border-top:1px solid var(--border);padding-top:14px">
+      <p style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin:0 0 8px">AI Integrity Report</p>
+      <div style="background:#f8fafc;border:1.5px solid var(--border);border-radius:10px;padding:12px 16px">
+        <p id="ai-report-summary" style="font-size:13px;color:var(--text);line-height:1.55;margin:0"></p>
       </div>
     </div>
 
@@ -1233,11 +1241,17 @@ async function loadQuizList() {
       return;
     }
 
-    container.innerHTML = quizzes.map(q => `
+    container.innerHTML = quizzes.map(q => {
+      const isProctored = q.quizLevel === 'proctored';
+      const levelBadge  = isProctored
+        ? `<span style="display:inline-flex;align-items:center;gap:4px;background:rgba(239,68,68,0.08);color:#b91c1c;border:1px solid rgba(239,68,68,0.25);border-radius:5px;padding:2px 7px;font-size:10px;font-weight:700;margin-bottom:5px">🔴 Proctored</span>`
+        : `<span style="display:inline-flex;align-items:center;gap:4px;background:rgba(14,165,233,0.07);color:var(--accent);border:1px solid rgba(56,189,248,0.25);border-radius:5px;padding:2px 7px;font-size:10px;font-weight:700;margin-bottom:5px">⚡ Snap Quiz</span>`;
+      return `
       <div class="question-card" style="margin-bottom:12px;cursor:pointer" data-id="${q._id}" data-title="${q.title}">
         <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px">
           <div>
             <div style="font-size:11px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px">${q.course?.code || 'Course'}</div>
+            ${levelBadge}
             <div style="font-size:16px;font-weight:700;margin-bottom:4px">${q.title}</div>
             <div style="font-size:12px;color:var(--slate)">${q.questionCount || 0} questions · ${q.timeLimitMinutes || q.timeLimit || '?'} min</div>
             <div style="font-size:11px;color:var(--muted);margin-top:3px">
@@ -1254,8 +1268,8 @@ async function loadQuizList() {
           </div>
         </div>
         ${q.isSubmitted ? `<div style="margin-top:10px;font-size:13px;color:var(--muted)">Score: ${q.myScore ?? 0} / ${q.myMaxScore ?? 0}</div>` : ''}
-      </div>
-    `).join('');
+      </div>`;
+    }).join('');
 
     container.querySelectorAll('[data-id]').forEach(card => {
       card.addEventListener('click', () => {
@@ -1278,13 +1292,34 @@ async function loadQuizList() {
 //  CONSENT
 // ══════════════════════════════════════════════════════════════════
 function populateConsentScreen(quiz) {
-  const titleEl = document.getElementById('consent-quiz-title');
+  const isProctored = quiz.quizLevel === 'proctored';
+
+  // Update header icon + title
+  const iconEl   = document.getElementById('consent-icon');
+  const titleH   = document.getElementById('consent-title-heading');
+  const titleEl  = document.getElementById('consent-quiz-title');
+  const warnText = document.getElementById('consent-warning-text');
+  const procBtn  = document.getElementById('proceed-camera-btn');
+
+  if (iconEl) {
+    iconEl.textContent = isProctored ? '🔴' : '⚡';
+    iconEl.style.background = isProctored ? '#fef2f2' : 'rgba(14,165,233,0.08)';
+    iconEl.style.borderColor = isProctored ? '#fecaca' : 'rgba(56,189,248,0.3)';
+  }
+  if (titleH) titleH.textContent = isProctored ? 'Proctored Quiz — Rules & Consent' : 'Snap Quiz — Rules & Consent';
   if (titleEl) titleEl.textContent = quiz.title || 'Untitled Quiz';
+  if (warnText) {
+    warnText.innerHTML = isProctored
+      ? 'This is an <strong>AI-proctored assessment</strong>. Your camera and microphone are monitored throughout. Violations are logged and may result in automatic submission.'
+      : 'Read all rules carefully. Violations are <strong>logged and reported</strong> to your lecturer. Repeated offences will result in <strong>automatic exam termination</strong>.';
+  }
+  if (procBtn) {
+    procBtn.textContent = isProctored ? 'Continue to Camera Setup →' : 'Start Quiz →';
+    procBtn.disabled = true;
+  }
 
   const cb = document.getElementById('consent-checkbox');
   if (cb) cb.checked = false;
-  const btn = document.getElementById('proceed-camera-btn');
-  if (btn) btn.disabled = true;
 
   const list = document.getElementById('consent-rules-list');
   if (!list) return;
@@ -1332,18 +1367,21 @@ function populateConsentScreen(quiz) {
   if (quiz.preventCopyPaste) rule('📋', 'Copy and paste are <strong>disabled</strong> in this exam window. All answers must be typed directly.', 'normal');
   if (quiz.preventRightClick) rule('🖱', 'Right-clicking is disabled during the exam.', 'normal');
 
-  // Camera / proctoring
-  if (quiz.proctoringEnabled) {
+  // Camera / proctoring — detailed rules for proctored quizzes
+  if (isProctored) {
+    rule('📷', 'Your <strong>camera and microphone must remain active</strong> throughout this exam. You must be clearly visible and facing your screen at all times.', 'high');
+    const interval = quiz.snapshotIntervalSeconds || 12;
+    rule('🖼', `AI snapshots are captured every <strong>${interval} second${interval !== 1 ? 's' : ''}</strong> and analysed automatically for integrity violations.`, 'warn');
+    rule('🤖', 'AI analyses each snapshot for: face absence, multiple people in frame, mobile phone use, and suspicious head movement. Each detection generates an automated violation.', 'warn');
+    rule('📊', 'An <strong>AI integrity report</strong> is generated automatically after submission and sent to your lecturer.', 'normal');
+  } else if (quiz.proctoringEnabled) {
     rule('📷', 'Your <strong>camera must be active</strong> throughout this exam. You must remain clearly visible and facing your screen at all times.', 'high');
-
     if (quiz.snapshotIntervalSeconds > 0) {
       rule('🖼', `Webcam snapshots are captured every <strong>${quiz.snapshotIntervalSeconds} second${quiz.snapshotIntervalSeconds !== 1 ? 's' : ''}</strong> and stored securely for integrity review.`, 'normal');
     }
-
-    if (quiz.aiProctoringEnabled || ['ai', 'hybrid'].includes(quiz.monitoringMode)) {
-      rule('🤖', 'AI will analyse your webcam feed in real time — detecting face absence, multiple people in frame, mobile phone use, and suspicious eye-gaze direction.', 'warn');
+    if (quiz.aiProctoringEnabled || quiz.monitoringMode === 'ai') {
+      rule('🤖', 'AI will analyse your webcam feed — detecting face absence, multiple people in frame, and mobile phone use.', 'warn');
     }
-
   }
 
   // Noise detection
@@ -1359,6 +1397,12 @@ document.getElementById('consent-checkbox').addEventListener('change', function 
 });
 
 document.getElementById('proceed-camera-btn').addEventListener('click', () => {
+  const quiz = state.selectedQuiz;
+  // Snap quizzes skip the camera setup screen — go straight to exam
+  if (quiz && quiz.quizLevel !== 'proctored' && !quiz.proctoringEnabled) {
+    startExam();
+    return;
+  }
   show('camera-screen');
   initCameraSetup();
 });
@@ -1538,6 +1582,66 @@ function captureFrame(videoEl) {
   return canvas.toDataURL('image/jpeg', 0.6);
 }
 
+// ── Snap Quiz direct start (no camera setup screen) ──────────────
+async function startExam() {
+  try {
+    const data = await api('POST', `/api/student/snap-quizzes/quizzes/${state.selectedQuiz._id}/attempts/start`, {
+      termsAcknowledged: true,
+      deviceFingerprint: state.deviceFingerprint,
+      platform: detectClientPlatform(),
+    });
+
+    state.attempt      = data.attempt;
+    state.sessionToken = data.attempt.sessionToken;
+    state.questions    = data.questions;
+    state.answers      = {};
+    state.currentIdx   = 0;
+    if (data.quiz) Object.assign(state.selectedQuiz, data.quiz);
+
+    const expiresAt = data.attempt?.expiresAt ? new Date(data.attempt.expiresAt) : null;
+    state.timerSeconds = expiresAt
+      ? Math.max(0, Math.round((expiresAt.getTime() - Date.now()) / 1000))
+      : (data.quiz?.timeLimitMinutes || 30) * 60;
+
+    state.integrityScore  = 100;
+    state.totalViolations = 0;
+    state.warningsIssued  = 0;
+
+    // Hide floating camera for snap quizzes — no camera stream
+    const floatingCam = document.getElementById('floating-cam');
+    if (floatingCam) floatingCam.style.display = 'none';
+
+    // Update proctor status bar to show lightweight monitoring
+    const psText = document.getElementById('ps-text');
+    if (psText) psText.textContent = 'Monitored';
+
+    show('exam-screen');
+    document.body.classList.add('exam-active');
+    state.examActive = true;
+
+    await OfflineMonitor.init({
+      attemptId: state.attempt._id,
+      quizId:    state.selectedQuiz._id,
+      token:     state.token,
+      settings:  state.selectedQuiz,
+    }).catch(err => console.warn('[OfflineMonitor] init failed:', err.message));
+
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.ready.then(reg => {
+        reg.active?.postMessage({ type: 'REGISTER_SYNC' });
+      }).catch(() => {});
+    }
+
+    startTimer();
+    startProctoring();
+    renderQuestion();
+    document.getElementById('q-total').textContent = state.questions.length;
+
+  } catch (e) {
+    toast(e.message || 'Failed to start quiz. Please try again.', 'error');
+  }
+}
+
 // ══════════════════════════════════════════════════════════════════
 //  BEGIN EXAM
 // ══════════════════════════════════════════════════════════════════
@@ -1590,6 +1694,10 @@ document.getElementById('capture-start-btn').addEventListener('click', async () 
       // Retry once after short delay (iOS Safari quirk)
       setTimeout(() => examVideo.play().catch(() => {}), 300);
     }
+
+    // Ensure floating camera is visible for proctored quizzes
+    const floatingCamEl = document.getElementById('floating-cam');
+    if (floatingCamEl) floatingCamEl.style.display = '';
 
     show('exam-screen');
     document.body.classList.add('exam-active');
@@ -2410,6 +2518,18 @@ function showResult(data) {
   document.getElementById('result-emoji').textContent = emoji;
   document.getElementById('result-title').textContent = pct >= 70 ? 'Great job!' : pct >= 50 ? 'Well done!' : 'Keep studying!';
   document.getElementById('result-subtitle').textContent = `${data.score ?? 0} / ${data.maxScore ?? 0} points`;
+
+  // Show AI integrity report for proctored quizzes
+  const isProctored = state.selectedQuiz?.quizLevel === 'proctored';
+  const aiReportSection = document.getElementById('ai-report-section');
+  if (isProctored && aiReportSection) {
+    aiReportSection.style.display = 'block';
+    const summaryEl = document.getElementById('ai-report-summary');
+    if (summaryEl) {
+      summaryEl.textContent = data.aiReport?.summary
+        || `AI analysis complete. Integrity score: ${data.integrityScore ?? state.integrityScore}/100.`;
+    }
+  }
 
   show('result-screen');
 }
