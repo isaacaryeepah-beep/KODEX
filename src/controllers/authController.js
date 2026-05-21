@@ -732,11 +732,7 @@ exports.login = async (req, res) => {
         (corporateRoles.includes(user.role) && portalMode === "academic") ||
         user.role === "admin";
       if (isRolePortalMismatch) {
-        if (user.role === "admin") {
-          const correctPortal = company.mode === "academic" ? "Academic Admin" : "Corporate Admin";
-          return res.status(401).json({ error: `Use the ${correctPortal} portal for this account.` });
-        }
-        return res.status(401).json({ error: "Invalid credentials" });
+        return res.status(401).json({ error: "Incorrect email or password." });
       }
     }
 
