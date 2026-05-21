@@ -267,18 +267,429 @@
   </div>
 </div>
 
-<script type="module">
+<script>
+// Catch ANY unhandled error and surface it visibly
+window.addEventListener('unhandledrejection', function(e) {
+  var msg = (e.reason && e.reason.message) ? e.reason.message : String(e.reason || 'Unknown error');
+  console.error('[DIKLY unhandled]', e.reason);
+  showError('Error: ' + msg);
+});
+
+(async function() {
 'use strict';
-const _p       = new URLSearchParams(location.search);
-const callId   = _p.get('callId')   || '';
-const token    = _p.get('token')    || '';
-const userId   = _p.get('userId')   || '';
-const userName = _p.get('userName') || 'Participant';
-const apiKey   = _p.get('apiKey')   || '';
-const isMod    = _p.get('isMod')  === '1';
-const meetingId= _p.get('meetingId')|| '';
-const title    = _p.get('title')    || 'Class';
-const BASE_URL = location.origin;
+var _p       = new URLSearchParams(location.search);
+var callId   = _p.get('callId')   || '';
+var token    = _p.get('token')    || '';
+var userId   = _p.get('userId')   || '';
+var userName = _p.get('userName') || 'Participant';
+var apiKey   = _p.get('apiKey')   || '';
+var isMod    = _p.get('isMod')  === '1';
+var meetingId= _p.get('meetingId')|| '';
+var title    = _p.get('title')    || 'Class';
+var BASE_URL = location.origin;
+
+if (!callId || !token || !userId || !apiKey) { showError('Missing parameters. Please go back.'); return; }
+
+function getKodexToken() {
+  return localStorage.getItem('token') || localStorage.getItem('jwt_token') ||
+         localStorage.getItem('auth_token') || sessionStorage.getItem('token') || '';
+}
+var kodexToken = getKodexToken();
+
+document.getElementById('callTitle').textContent = title;
+if (isMod) document.getElementById('callScreen').classList.add('is-mod');
+
+// ── State ─────────────────────────────────────────────────────────────────────
+var call, client, chatClient, channel;
+var micOn = false, camOn = false, sharing = false, handRaised = false;
+var chatOpen = false, participantsOpen = false;
+var startedAt = Date.now();
+var raisedHands = new Set();
+var subs = [];
+var localCamStream = null;
+
+// ── Load SDKs ─────────────────────────────────────────────────────────────────
+setMsg('Loading SDKs…');
+var StreamVideoClient, StreamChat;
+try {
+  var mods = await Promise.all([
+    import('https://esm.sh/@stream-io/video-client@1'),
+    import('https://esm.sh/stream-chat@8'),
+  ]);
+  StreamVideoClient = mods[0].StreamVideoClient;
+  StreamChat        = mods[1].StreamChat;
+} catch (e) { showError('Failed to load video SDK. Check your connection. ' + e.message); return; }
+
+// ── Init video client ─────────────────────────────────────────────────────────
+setMsg('Connecting…');
+try {
+  client = new StreamVideoClient({ apiKey: apiKey, user: { id: userId, name: userName }, token: token });
+} catch (e) { showError('Connection failed: ' + e.message); return; }
+
+// ── Join call ─────────────────────────────────────────────────────────────────
+setMsg('Joining class…');
+try {
+  call = client.call('default', callId);
+  await call.join({ create: true });
+} catch (e) { showError('Could not join: ' + e.message); return; }
+
+// ── Local media ───────────────────────────────────────────────────────────────
+setMsg('Starting camera…');
+try {
+  await call.microphone.enable();
+  micOn = true;
+} catch(e) { console.warn('[Mic]', e.message); micOn = false; }
+try {
+  await call.camera.enable();
+  camOn = true;
+  localCamStream = (call.camera.state && call.camera.state.mediaStream) || null;
+} catch(e) { console.warn('[Camera]', e.message); camOn = false; localCamStream = null; }
+
+// ── Chat ──────────────────────────────────────────────────────────────────────
+try {
+  chatClient = StreamChat.getInstance(apiKey);
+  if (chatClient.userID && chatClient.userID !== userId) await chatClient.disconnectUser();
+  if (!chatClient.userID) await chatClient.connectUser({ id: userId, name: userName }, token);
+  channel = chatClient.channel('messaging', callId, { name: title });
+  await channel.watch();
+  (channel.state.messages || []).forEach(addChatMessage);
+  channel.on('message.new', function(e) { if (e.message) addChatMessage(e.message); });
+} catch (e) { console.warn('[Chat] init failed:', e.message); }
+
+// ── Show call UI ──────────────────────────────────────────────────────────────
+showCall();
+startTimer();
+
+// ── Subscribe to participants ─────────────────────────────────────────────────
+function rerender() {
+  try {
+    var ps = (call.state && call.state.participants) || [];
+    renderGrid(ps);
+    renderPeopleList(ps);
+  } catch(e) { console.error('[rerender]', e); }
+}
+
+try {
+  if (call.state && call.state.participants$) {
+    subs.push(call.state.participants$.subscribe(rerender));
+  } else {
+    ['participantJoined','participantLeft','participantUpdated','trackPublished','trackUnpublished']
+      .forEach(function(ev) { call.on(ev, rerender); });
+    rerender();
+  }
+} catch(e) { console.error('[subscribe]', e); rerender(); }
+
+// ── Camera MediaStream subscription for local tile ────────────────────────────
+try {
+  var camStream$ = call.camera && call.camera.state && call.camera.state.mediaStream$;
+  if (camStream$ && typeof camStream$.subscribe === 'function') {
+    subs.push(camStream$.subscribe(function(stream) {
+      try {
+        localCamStream = stream || null;
+        var ps = (call.state && call.state.participants) || [];
+        var localP = null;
+        for (var i = 0; i < ps.length; i++) { if (ps[i].isLocalParticipant) { localP = ps[i]; break; } }
+        if (localP) {
+          var tile = findTile(localP.sessionId);
+          if (tile) updateTile(tile, localP);
+        }
+      } catch(e) { console.error('[camSub cb]', e); }
+    }));
+  }
+} catch(e) { console.warn('[camSub]', e.message); }
+
+// ── Reactions ─────────────────────────────────────────────────────────────────
+try {
+  call.on('call.reaction_new', function(ev) {
+    var reaction = ev.reaction, rUser = ev.user;
+    if (!reaction || !rUser) return;
+    if (reaction.type === 'raised-hand')  { raisedHands.add(rUser.id); showHandToast(rUser.name || rUser.id); }
+    if (reaction.type === 'lowered-hand') { raisedHands.delete(rUser.id); }
+    rerender();
+  });
+} catch(e) { console.warn('[reactions]', e.message); }
+
+// ── Button handlers — assigned to window so onclick="" can reach them ─────────
+window.toggleMic = async function() {
+  var btn = document.getElementById('btnMic');
+  btn.disabled = true;
+  try {
+    if (micOn) { await call.microphone.disable(); micOn = false; }
+    else       { await call.microphone.enable();  micOn = true;  }
+  } catch(e) { console.warn('[Mic toggle]', e.message); }
+  btn.disabled = false;
+  updateMicBtn();
+  rerender();
+};
+
+window.toggleCam = async function() {
+  var btn = document.getElementById('btnCam');
+  btn.disabled = true;
+  try {
+    if (camOn) {
+      await call.camera.disable();
+      camOn = false; localCamStream = null;
+    } else {
+      await call.camera.enable();
+      camOn = true;
+      localCamStream = (call.camera.state && call.camera.state.mediaStream) || null;
+    }
+  } catch(e) { console.warn('[Cam toggle]', e.message); }
+  btn.disabled = false;
+  updateCamBtn();
+  rerender();
+};
+
+window.toggleShare = async function() {
+  var btn = document.getElementById('btnShare');
+  btn.disabled = true;
+  try {
+    if (!sharing) { await call.screenShare.enable(); sharing = true; }
+    else          { await call.screenShare.disable(); sharing = false; }
+  } catch(_) { sharing = false; }
+  btn.disabled = false;
+  document.getElementById('shareIcon').textContent = sharing ? '⏹' : '🖥';
+  document.getElementById('btnShare').classList.toggle('active', sharing);
+};
+
+window.toggleHand = async function() {
+  try {
+    handRaised = !handRaised;
+    await call.sendReaction({ type: handRaised ? 'raised-hand' : 'lowered-hand' });
+    document.getElementById('btnHand').classList.toggle('active', handRaised);
+  } catch(e) { console.warn('[Hand]', e.message); handRaised = !handRaised; }
+};
+
+window.muteAll = async function() {
+  if (!isMod || !meetingId) return;
+  try { await fetch(BASE_URL + '/api/meetings/' + meetingId + '/mute-all', { method: 'POST', headers: { Authorization: 'Bearer ' + kodexToken } }); } catch(_) {}
+};
+
+window.muteParticipant = async function(uid) {
+  if (!isMod || !meetingId) return;
+  try { await fetch(BASE_URL + '/api/meetings/' + meetingId + '/participants/' + uid + '/mute', { method: 'POST', headers: { Authorization: 'Bearer ' + kodexToken } }); } catch(_) {}
+};
+
+window.kickParticipant = async function(uid) {
+  if (!isMod || !meetingId) return;
+  if (!confirm('Remove this participant?')) return;
+  try { await fetch(BASE_URL + '/api/meetings/' + meetingId + '/participants/' + uid + '/kick', { method: 'POST', headers: { Authorization: 'Bearer ' + kodexToken } }); } catch(_) {}
+};
+
+window.toggleChat = function() {
+  chatOpen = !chatOpen;
+  document.getElementById('chatSidebar').classList.toggle('open', chatOpen);
+  if (chatOpen) {
+    participantsOpen = false;
+    document.getElementById('participantsSidebar').classList.remove('open');
+    setTimeout(function() { document.getElementById('chatMessages').scrollTo(0, 99999); }, 50);
+  }
+};
+
+window.toggleParticipants = function() {
+  participantsOpen = !participantsOpen;
+  document.getElementById('participantsSidebar').classList.toggle('open', participantsOpen);
+  if (participantsOpen) { chatOpen = false; document.getElementById('chatSidebar').classList.remove('open'); }
+};
+
+window.leaveCall = async function() {
+  clearInterval(timerInt);
+  subs.forEach(function(s) { if (s && s.unsubscribe) s.unsubscribe(); });
+  try { await call.leave(); } catch(_) {}
+  try { await client.disconnectUser(); } catch(_) {}
+  try { if (chatClient) await chatClient.disconnectUser(); } catch(_) {}
+  history.back();
+};
+
+window.sendChat = async function() {
+  var inp = document.getElementById('chatInput');
+  var text = inp.value.trim();
+  if (!text || !channel) return;
+  inp.value = '';
+  try { await channel.sendMessage({ text: text }); } catch(_) {}
+};
+
+document.getElementById('chatInput').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); window.sendChat(); }
+});
+
+window.toggleTileMenu = function(btn) {
+  var menu = btn.closest('.tile-menu');
+  menu.classList.toggle('active');
+  document.addEventListener('click', function outsideClick(e2) {
+    if (!menu.contains(e2.target)) { menu.classList.remove('active'); document.removeEventListener('click', outsideClick); }
+  });
+};
+
+// ── Render helpers ────────────────────────────────────────────────────────────
+function findTile(sessionId) {
+  var grid = document.getElementById('videoGrid');
+  var tiles = grid.querySelectorAll('.tile');
+  for (var i = 0; i < tiles.length; i++) {
+    if (tiles[i].dataset.sid === sessionId) return tiles[i];
+  }
+  return null;
+}
+
+function renderGrid(participants) {
+  var grid = document.getElementById('videoGrid');
+  var n = participants.length;
+  grid.className = n<=1?'n1':n===2?'n2':n===3?'n3':n===4?'n4':n<=6?(n===5?'n5':'n6'):'many';
+  document.getElementById('pCount').textContent = n;
+
+  var active = {};
+  for (var i = 0; i < participants.length; i++) active[participants[i].sessionId] = true;
+  var existing = grid.querySelectorAll('.tile');
+  for (var j = 0; j < existing.length; j++) {
+    if (!active[existing[j].dataset.sid]) existing[j].remove();
+  }
+
+  for (var k = 0; k < participants.length; k++) {
+    var p = participants[k];
+    var tile = findTile(p.sessionId);
+    if (!tile) { tile = buildTile(p); grid.appendChild(tile); }
+    updateTile(tile, p);
+  }
+}
+
+function buildTile(p) {
+  var tile = document.createElement('div');
+  tile.className = 'tile' + (p.isLocalParticipant ? ' local' : '');
+  tile.dataset.sid = p.sessionId;
+  tile.dataset.uid = p.userId || '';
+  var initials = ((p.name || p.userId || 'P').charAt(0)).toUpperCase();
+  var hostCtrl = (isMod && !p.isLocalParticipant) ? (
+    '<div class="tile-menu">' +
+    '<button class="tile-menu-btn" onclick="toggleTileMenu(this)">⋯</button>' +
+    '<div class="tile-menu-popup">' +
+    '<button onclick="muteParticipant(' + JSON.stringify(p.userId||'') + ')">🔇 Mute</button>' +
+    '<button class="danger" onclick="kickParticipant(' + JSON.stringify(p.userId||'') + ')">✕ Remove</button>' +
+    '</div></div>'
+  ) : '';
+  var vidStyle = p.isLocalParticipant ? ' style="transform:scaleX(-1)"' : '';
+  tile.innerHTML =
+    '<video id="vid-' + p.sessionId + '" autoplay playsinline muted' + vidStyle + '></video>' +
+    '<audio id="aud-' + p.sessionId + '" autoplay></audio>' +
+    '<div class="tile-nov" id="nov-' + p.sessionId + '">' +
+      '<div class="tile-av">' + esc(initials) + '</div>' +
+      '<div class="tile-dname">' + esc(p.name || p.userId || 'Participant') + '</div>' +
+    '</div>' +
+    '<div class="tile-footer">' +
+      '<span class="tile-name">' + esc(p.name || p.userId || 'Participant') + '</span>' +
+      '<span class="tile-icons"><span id="tm-' + p.sessionId + '"></span><span id="th-' + p.sessionId + '"></span></span>' +
+    '</div>' + hostCtrl;
+  return tile;
+}
+
+function updateTile(tile, p) {
+  var vid  = document.getElementById('vid-' + p.sessionId);
+  var nov  = document.getElementById('nov-' + p.sessionId);
+  var aud  = document.getElementById('aud-' + p.sessionId);
+  var tmEl = document.getElementById('tm-'  + p.sessionId);
+  var thEl = document.getElementById('th-'  + p.sessionId);
+  if (!vid || !nov) return;
+
+  // Local participant uses the raw camera stream from call.camera.state
+  // because p.videoStream may not populate until the SFU round-trip completes
+  var videoSrc = p.isLocalParticipant
+    ? (localCamStream || p.videoStream || null)
+    : (p.videoStream || null);
+
+  if (vid.srcObject !== videoSrc) vid.srcObject = videoSrc;
+  var hasVideo = !!videoSrc;
+  vid.style.display = hasVideo ? 'block' : 'none';
+  nov.style.display = hasVideo ? 'none' : 'flex';
+
+  if (!p.isLocalParticipant && aud) {
+    var audioSrc = p.audioStream || null;
+    if (aud.srcObject !== audioSrc) aud.srcObject = audioSrc;
+  }
+
+  var hasAudio = p.isLocalParticipant ? micOn : !!p.audioStream;
+  if (tmEl) tmEl.textContent = hasAudio ? '' : '🔇';
+  if (thEl) thEl.textContent = raisedHands.has(p.userId) ? '✋' : '';
+  tile.classList.toggle('speaking', !!p.isSpeaking);
+}
+
+function renderPeopleList(participants) {
+  var list = document.getElementById('participantsList');
+  list.innerHTML = '';
+  for (var i = 0; i < participants.length; i++) {
+    var p = participants[i];
+    var hasAudio = p.isLocalParticipant ? micOn : !!p.audioStream;
+    var hasVideo = p.isLocalParticipant ? camOn : !!p.videoStream;
+    var hand = raisedHands.has(p.userId);
+    var div = document.createElement('div');
+    div.className = 'pitem';
+    div.innerHTML =
+      '<div class="pav">' + esc((p.name||p.userId||'P').charAt(0).toUpperCase()) + '</div>' +
+      '<div class="pname">' + esc(p.name||p.userId||'Participant') + (p.isLocalParticipant?' (You)':'') + '</div>' +
+      '<div class="picons">' + (hand?'✋':'') + (hasAudio?'':'🔇') + (hasVideo?'':'🚫') + '</div>';
+    list.appendChild(div);
+  }
+}
+
+function addChatMessage(msg) {
+  var box = document.getElementById('chatMessages');
+  var isOwn = msg.user && msg.user.id === userId;
+  var div = document.createElement('div');
+  div.className = 'chat-msg' + (isOwn ? ' own' : '');
+  div.innerHTML =
+    '<div class="chat-msg-sender">' + esc(isOwn ? 'You' : ((msg.user && msg.user.name) || 'Participant')) + '</div>' +
+    '<div class="chat-bubble">' + esc(msg.text || '') + '</div>';
+  box.appendChild(div);
+  box.scrollTo({ top: box.scrollHeight, behavior: 'smooth' });
+}
+
+function showHandToast(name) {
+  var el = document.getElementById('handToast');
+  document.getElementById('handToastName').textContent = name;
+  el.style.display = 'flex';
+  clearTimeout(el._t);
+  el._t = setTimeout(function() { el.style.display = 'none'; }, 4000);
+}
+
+// ── Timer ─────────────────────────────────────────────────────────────────────
+var timerInt;
+function startTimer() {
+  timerInt = setInterval(function() {
+    var s = Math.floor((Date.now()-startedAt)/1000);
+    var m = Math.floor(s/60), h = Math.floor(m/60);
+    var mm = String(m%60).padStart(2,'0'), ss = String(s%60).padStart(2,'0');
+    document.getElementById('callTimer').textContent = h ? (h+':'+mm+':'+ss) : (mm+':'+ss);
+  }, 1000);
+}
+
+// ── Button state ──────────────────────────────────────────────────────────────
+function updateMicBtn() {
+  document.getElementById('micIcon').textContent = micOn ? '🎤' : '🔇';
+  document.getElementById('btnMic').classList.toggle('off', !micOn);
+}
+function updateCamBtn() {
+  document.getElementById('camIcon').textContent = camOn ? '📷' : '🚫';
+  document.getElementById('btnCam').classList.toggle('off', !camOn);
+}
+
+// ── Utility ───────────────────────────────────────────────────────────────────
+function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+})().catch(function(e) {
+  // Any uncaught error from the async IIFE is shown to the user
+  console.error('[DIKLY fatal]', e);
+  showError((e && e.message) ? e.message : String(e));
+});
+
+function setMsg(m) { var el = document.getElementById('connectMsg'); if (el) el.textContent = m; }
+function showCall() {
+  document.getElementById('connectScreen').classList.add('hidden');
+  document.getElementById('callScreen').style.display = 'flex';
+}
+function showError(msg) {
+  document.getElementById('connectScreen').classList.add('hidden');
+  document.getElementById('errMsg').textContent = msg;
+  document.getElementById('errorScreen').classList.remove('hidden');
+}
+</script>
 
 if (!callId || !token || !userId || !apiKey) { showError('Missing parameters. Please go back.'); throw 0; }
 
