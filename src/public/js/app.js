@@ -18417,6 +18417,74 @@ async function deleteBranch(id) {
 }
 
 // ══════════════════════════════════════════════════════════════
+// AUDIT LOGS (manager + admin view)
+// ══════════════════════════════════════════════════════════════
+async function renderAuditLogs() {
+  const content = document.getElementById('main-content');
+  if (!content) return;
+  content.innerHTML = '<div class="loading">Loading audit logs…</div>';
+  try {
+    const params = new URLSearchParams({ limit: 50 });
+    const data = await api('/api/audit-logs?' + params.toString());
+    const logs = data.logs || data.data || [];
+    const total = data.total || logs.length;
+
+    const severityColor = s => ({ critical: '#dc2626', high: '#ea580c', medium: '#d97706', low: '#2563eb', info: '#6b7280' }[s] || '#6b7280');
+    const severityBg    = s => ({ critical: '#fef2f2', high: '#fff7ed', medium: '#fffbeb', low: '#eff6ff', info: '#f9fafb' }[s] || '#f9fafb');
+
+    content.innerHTML = `
+      <div style="max-width:900px;margin:0 auto">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:10px">
+          <div>
+            <h2 style="font-size:20px;font-weight:800;margin:0 0 2px">Audit Logs</h2>
+            <p style="color:#64748b;font-size:13px;margin:0">${total.toLocaleString()} records</p>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <select id="al-severity" onchange="renderAuditLogs()" style="padding:7px 10px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:13px">
+              <option value="">All severities</option>
+              <option value="critical">Critical</option>
+              <option value="high">High</option>
+              <option value="medium">Medium</option>
+              <option value="low">Low</option>
+              <option value="info">Info</option>
+            </select>
+            <input id="al-from" type="date" onchange="renderAuditLogs()" style="padding:7px 10px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:13px">
+            <input id="al-to"   type="date" onchange="renderAuditLogs()" style="padding:7px 10px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:13px">
+          </div>
+        </div>
+
+        ${!logs.length ? `
+          <div style="text-align:center;padding:48px;background:#f8fafc;border-radius:14px;border:1.5px dashed #e2e8f0">
+            <div style="font-size:36px;margin-bottom:10px">📋</div>
+            <p style="font-weight:700;margin-bottom:4px">No audit logs found</p>
+            <p style="color:#64748b;font-size:13px">Actions taken in the system will appear here.</p>
+          </div>` : `
+          <div style="display:flex;flex-direction:column;gap:8px">
+            ${logs.map(log => `
+              <div style="background:#fff;border:1.5px solid #e2e8f0;border-left:4px solid ${severityColor(log.severity)};border-radius:10px;padding:12px 16px">
+                <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap">
+                  <div style="flex:1;min-width:0">
+                    <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;flex-wrap:wrap">
+                      <span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;background:${severityBg(log.severity)};color:${severityColor(log.severity)}">${(log.severity || 'info').toUpperCase()}</span>
+                      <span style="font-size:12px;font-weight:700;color:#1e293b">${esc(log.action || '—')}</span>
+                      ${log.resource ? `<span style="font-size:11px;color:#64748b">${esc(log.resource)}</span>` : ''}
+                    </div>
+                    <div style="font-size:13px;color:#334155">${esc(log.description || log.details || '—')}</div>
+                    ${log.actor?.name ? `<div style="font-size:12px;color:#64748b;margin-top:4px">By <strong>${esc(log.actor.name)}</strong>${log.actor.email ? ` (${esc(log.actor.email)})` : ''}</div>` : ''}
+                  </div>
+                  <div style="font-size:11px;color:#94a3b8;white-space:nowrap">${log.createdAt ? new Date(log.createdAt).toLocaleString() : '—'}</div>
+                </div>
+              </div>`).join('')}
+          </div>
+          ${total > 50 ? `<p style="text-align:center;color:#64748b;font-size:13px;margin-top:16px">Showing 50 of ${total.toLocaleString()} entries. Use filters to narrow results.</p>` : ''}
+        `}
+      </div>`;
+  } catch(e) {
+    content.innerHTML = `<div style="color:#dc2626;padding:20px">Error loading audit logs: ${esc(e.message)}</div>`;
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
 // WHITE-LABEL BRANDING
 // ══════════════════════════════════════════════════════════════
 async function renderBranding() {
