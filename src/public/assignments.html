@@ -237,14 +237,6 @@ window.MathJax = { tex: { inlineMath: [['\\(','\\)']], displayMath: [['\\[','\\]
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
         <span>Dashboard</span>
       </a>
-      <a onclick="location.href='/snap-quiz-lecturer.html'">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
-        <span>Snap Quiz</span>
-      </a>
-      <a onclick="window.open('/proctor-dashboard.html','_blank')">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20z"/><path d="M12 8v4l3 3"/></svg>
-        <span>Proctor Dashboard</span>
-      </a>
     </nav>
   </aside>
 
@@ -1806,10 +1798,20 @@ async function renderLecturerSnapQuizzes() {
           <h2 style="font-size:20px;font-weight:800;letter-spacing:-.5px;margin:0 0 3px;color:#0f172a">Snap Quizzes</h2>
           <p style="color:#64748b;font-size:13px;margin:0">Timed exams with anti-cheat enforcement for the student portal</p>
         </div>
-        <button onclick="openCreateSnapQuizModal()" style="display:inline-flex;align-items:center;gap:7px;padding:9px 18px;background:#1e293b;color:#fff;border:none;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer;letter-spacing:-.1px;transition:background .15s" onmouseover="this.style.background='#0f172a'" onmouseout="this.style.background='#1e293b'">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-          New Snap Quiz
-        </button>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <button onclick="location.href='/snap-quiz-lecturer.html'" style="display:inline-flex;align-items:center;gap:7px;padding:9px 16px;background:#0ea5e9;color:#fff;border:none;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer;transition:background .15s" onmouseover="this.style.background='#0284c7'" onmouseout="this.style.background='#0ea5e9'">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            Quiz Monitor
+          </button>
+          <button onclick="window.open('/proctor-dashboard.html','_blank')" style="display:inline-flex;align-items:center;gap:7px;padding:9px 16px;background:#7c3aed;color:#fff;border:none;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer;transition:background .15s" onmouseover="this.style.background='#6d28d9'" onmouseout="this.style.background='#7c3aed'">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>
+            Live Proctor Monitor
+          </button>
+          <button onclick="openCreateSnapQuizModal()" style="display:inline-flex;align-items:center;gap:7px;padding:9px 18px;background:#1e293b;color:#fff;border:none;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer;letter-spacing:-.1px;transition:background .15s" onmouseover="this.style.background='#0f172a'" onmouseout="this.style.background='#1e293b'">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            New Snap Quiz
+          </button>
+        </div>
       </div>
       ${!QS.snapQuizzes.length ? `
         <div style="text-align:center;padding:64px 20px;background:#fff;border-radius:16px;border:1.5px dashed #e2e8f0">
