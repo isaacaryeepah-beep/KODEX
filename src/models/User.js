@@ -132,6 +132,11 @@ const userSchema = new mongoose.Schema(
       default: null,
     },
 
+    // ── Class Rep fields ──────────────────────────────────────────────────
+    isClassRep:     { type: Boolean, default: false },
+    classRepCourse: { type: mongoose.Schema.Types.ObjectId, ref: 'Course', sparse: true },
+    classRepPin:    { type: String, select: false }, // 4-digit PIN lecturers set for verification
+
     // ── Corporate profile fields ──────────────────────────────────────────
     // Granular corporate role used alongside the coarse `role` field.
     // Only populated for users in corporate-mode companies.

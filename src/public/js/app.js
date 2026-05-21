@@ -2535,6 +2535,10 @@ function buildSidebar() {
       links.push({ id: 'messages', label: 'Messages', icon: svgIcon('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>') });
       links.push({ id: 'meetings', label: 'Meetings', icon: meetingsIcon() });
       links.push({ id: 'announcements', label: 'Announcements', icon: svgIcon('<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>') });
+      if (currentUser.isClassRep) {
+        links.push({ sep: true, label: 'CLASS REP' });
+        links.push({ id: 'class-device', label: 'Class Device', icon: svgIcon('<rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/><polyline points="9 11 12 14 22 4"/>') });
+      }
       links.push({ sep: true, label: 'SUPPORT' });
       links.push({ id: 'support', label: 'Support', icon: svgIcon('<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>') });
       links.push({ id: 'faq-center', label: 'FAQ Center', icon: svgIcon('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><line x1="9" y1="10" x2="15" y2="10"/><line x1="12" y1="7" x2="12" y2="13"/>') });
@@ -2665,6 +2669,7 @@ function navigateTo(view) {
     case 'live-attendance': _safeRender(content, renderLiveAttendance, 'Live Attendance'); break;
     case 'branches':        _safeRender(content, renderBranches,       'Branches');        break;
     case 'my-profile':      renderProfile(); break;
+    case 'class-device':   renderClassDevice(); break;
     default: renderDashboard();
   }
 }
@@ -10371,6 +10376,129 @@ async function handleQrScan() {
   }
   return true;
 }
+
+// ── CLASS REP DEVICE PAGE ─────────────────────────────────────────────────────
+async function renderClassDevice() {
+  const root = document.getElementById('main-content');
+  if (!root) return;
+  root.innerHTML = '<div class="loading">Loading device…</div>';
+  try {
+    const [devRes, lecRes] = await Promise.all([
+      api('/api/class-rep/device'),
+      api('/api/class-rep/lecturers'),
+    ]);
+    const device = devRes.device;
+    const lecturers = lecRes.lecturers || [];
+
+    const deviceStatus = device
+      ? (Date.now() - new Date(device.lastHeartbeat || 0).getTime() < 30000
+        ? '<span style="color:#16a34a;font-weight:700">● Online</span>'
+        : '<span style="color:#dc2626;font-weight:700">● Offline</span>')
+      : null;
+
+    const activeInfo = device && device.activeLecturerId
+      ? `<div style="margin-top:12px;padding:12px 16px;background:#f0fdf4;border:1.5px solid #86efac;border-radius:10px;font-size:13px">
+          <strong>Currently connected to:</strong> ${esc(device.activeLecturerId.name || 'Lecturer')}<br>
+          <span style="color:#64748b;font-size:12px">Connected at ${new Date(device.connectedAt).toLocaleTimeString()}</span>
+          <br><button onclick="classRepDisconnect()" style="margin-top:10px;padding:7px 16px;background:#dc2626;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">End Session &amp; Release Device</button>
+         </div>`
+      : '';
+
+    root.innerHTML = `
+      <div style="max-width:560px;margin:0 auto">
+        <h2 style="font-size:20px;font-weight:800;margin-bottom:4px">Class Device</h2>
+        <p style="color:#64748b;font-size:13px;margin-bottom:24px">Manage the attendance device for your class</p>
+
+        ${!device ? `
+          <div style="text-align:center;padding:48px 20px;background:#f8fafc;border-radius:16px;border:1.5px dashed #e2e8f0">
+            <div style="font-size:40px;margin-bottom:12px">&#128225;</div>
+            <h3 style="font-size:16px;font-weight:700;margin-bottom:6px">No device assigned</h3>
+            <p style="color:#64748b;font-size:13px">Ask your admin to assign an attendance device to your class.</p>
+          </div>` : `
+          <div style="background:#fff;border:1.5px solid #e2e8f0;border-radius:14px;padding:18px;margin-bottom:20px">
+            <div style="display:flex;align-items:center;gap:12px;margin-bottom:4px">
+              <span style="font-size:28px">&#128225;</span>
+              <div>
+                <div style="font-weight:700;font-size:15px">${esc(device.deviceName || device.deviceId)}</div>
+                <div style="font-size:12px;color:#64748b">${deviceStatus}</div>
+              </div>
+            </div>
+            ${activeInfo}
+          </div>
+
+          ${!device.activeLecturerId ? `
+          <div style="background:#fff;border:1.5px solid #e2e8f0;border-radius:14px;padding:18px">
+            <h3 style="font-size:15px;font-weight:700;margin-bottom:14px">Connect Device to a Lecturer</h3>
+            ${!lecturers.length ? `<p style="color:#64748b;font-size:13px">No lecturers found for your class courses.</p>` : `
+            <div style="margin-bottom:12px">
+              <label style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:#64748b;display:block;margin-bottom:6px">Select Lecturer &amp; Course</label>
+              <select id="cr-lecturer-select" style="width:100%;padding:10px 12px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:13px">
+                <option value="">&mdash; Choose lecturer / course &mdash;</option>
+                ${lecturers.map(l => `<option value="${l.lecturerId}|${l.courseId}">${esc(l.lecturerName)} — ${esc(l.courseCode)}: ${esc(l.courseTitle)}</option>`).join('')}
+              </select>
+            </div>
+            <div id="cr-pin-wrap" style="margin-bottom:12px;display:none">
+              <label style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:#64748b;display:block;margin-bottom:6px">Lecturer PIN (if required)</label>
+              <input id="cr-pin" type="password" inputmode="numeric" maxlength="4" placeholder="4-digit PIN" style="width:100%;padding:10px 12px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:16px;letter-spacing:4px;box-sizing:border-box">
+            </div>
+            <div id="cr-error" style="color:#dc2626;font-size:13px;margin-bottom:8px;display:none"></div>
+            <button onclick="classRepConnect()" style="width:100%;padding:11px;background:#1e293b;color:#fff;border:none;border-radius:9px;font-size:14px;font-weight:700;cursor:pointer">
+              Connect &amp; Start Session
+            </button>`}
+          </div>` : ''}
+        `}
+      </div>
+    `;
+
+    // Show PIN field when a lecturer is selected
+    const sel = document.getElementById('cr-lecturer-select');
+    if (sel) sel.addEventListener('change', () => {
+      const pinWrap = document.getElementById('cr-pin-wrap');
+      if (pinWrap) pinWrap.style.display = sel.value ? 'block' : 'none';
+    });
+
+  } catch (e) {
+    root.innerHTML = `<div style="color:#dc2626;padding:20px">Error: ${esc(e.message)}</div>`;
+  }
+}
+
+window.classRepConnect = async function() {
+  const sel = document.getElementById('cr-lecturer-select');
+  const pin = document.getElementById('cr-pin') ? document.getElementById('cr-pin').value : '';
+  const errEl = document.getElementById('cr-error');
+  if (!sel || !sel.value) { if (errEl) { errEl.textContent = 'Please select a lecturer'; errEl.style.display = 'block'; } return; }
+  const parts = sel.value.split('|');
+  const lecturerId = parts[0];
+  const courseId = parts[1];
+  try {
+    await api('/api/class-rep/connect', { method: 'POST', body: JSON.stringify({ lecturerId, courseId, lecturerPin: pin }) });
+    showToast('Device connected successfully', 'success');
+    renderClassDevice();
+  } catch (e) {
+    const msg = (e.data && e.data.requiresPin) ? 'Incorrect PIN — ask the lecturer for their 4-digit PIN' : (e.message || 'Failed to connect');
+    if (errEl) { errEl.textContent = msg; errEl.style.display = 'block'; }
+    if (e.data && e.data.requiresPin) { const pw = document.getElementById('cr-pin-wrap'); if (pw) pw.style.display = 'block'; }
+  }
+};
+
+window.classRepDisconnect = async function() {
+  if (!confirm('End the session and release the device?')) return;
+  try {
+    await api('/api/class-rep/disconnect', { method: 'POST', body: '{}' });
+    showToast('Device released', 'success');
+    renderClassDevice();
+  } catch (e) { showToast(e.message || 'Failed to disconnect', 'error'); }
+};
+
+window.saveLecturerPin = async function() {
+  const pin = document.getElementById('lecturer-pin-input') ? document.getElementById('lecturer-pin-input').value : '';
+  if (!pin || !/^\d{4}$/.test(pin)) { showToast('PIN must be 4 digits', 'error'); return; }
+  try {
+    await api('/api/class-rep/set-pin', { method: 'POST', body: JSON.stringify({ pin }) });
+    showToast('PIN saved', 'success');
+  } catch (e) { showToast(e.message || 'Failed to save PIN', 'error'); }
+};
+// ─────────────────────────────────────────────────────────────────────────────
 
 async function renderMarkAttendance() {
   const content = document.getElementById('main-content');
