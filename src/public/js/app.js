@@ -11646,6 +11646,18 @@ async function renderProfile() {
       </div>` : ''}
       <button class="btn btn-primary" onclick="saveProfile()" style="width:100%">Save Changes</button>
 
+      ${u.role === 'lecturer' ? `
+      <div style="margin-top:28px;padding-top:24px;border-top:1px solid var(--border)">
+        <h3 style="font-size:14px;font-weight:700;margin-bottom:4px;color:var(--text-primary)">Class Rep PIN</h3>
+        <p style="font-size:12px;color:var(--text-muted);margin-bottom:14px">Set a 4-digit PIN that your class rep must enter to connect the attendance device to your session. Leave blank to allow connection without a PIN.</p>
+        <div style="display:flex;gap:10px;align-items:flex-end">
+          <div style="flex:1">
+            <input type="password" id="lecturer-pin-input" inputmode="numeric" maxlength="4" placeholder="4-digit PIN" style="width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:18px;letter-spacing:6px;box-sizing:border-box">
+          </div>
+          <button onclick="saveLecturerPin()" style="padding:10px 18px;background:var(--primary);color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap">Save PIN</button>
+        </div>
+      </div>` : ''}
+
       <div style="margin-top:28px;padding-top:24px;border-top:1px solid var(--border)">
         <h3 style="font-size:14px;font-weight:700;margin-bottom:4px;color:var(--text-primary)">Signed-in Devices</h3>
         <p style="font-size:12px;color:var(--text-muted);margin-bottom:16px">All devices that have logged into your account</p>
