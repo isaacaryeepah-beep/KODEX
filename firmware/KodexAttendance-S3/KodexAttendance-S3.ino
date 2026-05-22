@@ -119,7 +119,7 @@ bool     timeSynced  = false;
 bool     forceReconn = false;
 
 // Screen state machine
-enum Screen { SPLASH, SETUP, CONNECTING, READY, SESSION };
+enum Screen { SPLASH, SETUP, WIFI_RECONFIG, CONNECTING, READY, SESSION };
 Screen curScreen = SPLASH;
 String statusMsg = "";   // shown on CONNECTING / error banners
 uint32_t splashStart = 0;
@@ -496,6 +496,191 @@ static void drawSetup(const String& apName) {
   // Pulsing dot (we'll just leave it static — loop redraws)
   spr.fillSmoothCircle(SW / 2, 278, 8, COL_WARNING, COL_BG);
   spr.pushSprite(0, 0);
+}
+
+// ── WIFI RECONFIG (paired, but saved network unavailable) ────────────────────
+static void drawWifiReconfig(const String& apName) {
+  spr.fillSprite(COL_BG);
+  spr.fillRect(0, 0, SW, 6, COL_WARNING);
+  // Title
+  spr.setTextFont(4); spr.setTextColor(COL_TEXT, COL_BG);
+  String t = "Change WiFi";
+  int32_t tw = spr.textWidth(t);
+  spr.setCursor((SW - tw) / 2, 20); spr.print(t);
+  // Info card
+  card(spr, 10, 52, SW - 20, 56, COL_CARD, COL_BORDER, 10);
+  spr.setTextFont(2); spr.setTextColor(COL_MUTED, COL_CARD);
+  spr.setCursor(18, 62); spr.print("Saved network not found.");
+  spr.setCursor(18, 78); spr.print("Connect phone to:");
+  spr.setTextFont(2); spr.setTextColor(COL_PRIMARY, COL_CARD);
+  tw = spr.textWidth(apName);
+  spr.setCursor((SW - tw) / 2, 94); spr.print(apName);
+  // Steps
+  spr.setTextFont(2); spr.setTextColor(COL_TEXT, COL_BG);
+  spr.setCursor(18, 124); spr.print("Then open 192.168.4.1 and");
+  spr.setCursor(18, 140); spr.print("enter the new WiFi details.");
+  // Note — pairing is kept
+  card(spr, 10, 165, SW - 20, 44, 0x0841, COL_SUCCESS, 8);
+  spr.setTextFont(2); spr.setTextColor(COL_SUCCESS, 0x0841);
+  spr.setCursor(18, 174); spr.print("Device pairing is preserved.");
+  spr.setCursor(18, 190); spr.print("Only WiFi will change.");
+  // Factory reset hint
+  card(spr, 10, 224, SW - 20, 36, 0x2000, 0x4000, 8);
+  spr.setTextFont(2); spr.setTextColor(COL_WARNING, 0x2000);
+  spr.setCursor(18, 235); spr.print("Hold 3 s to full factory reset");
+  spr.fillSmoothCircle(SW / 2, 284, 8, COL_WARNING, COL_BG);
+  spr.pushSprite(0, 0);
+}
+
+// Lightweight captive portal — changes WiFi only, preserves device JWT + pairing
+static const char WIFI_RECONFIG_HTML[] PROGMEM = R"HTML(<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Dikly — Change WiFi</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:system-ui,sans-serif;background:#0f172a;color:#e2e8f0;padding:24px;max-width:440px;margin:0 auto}
+  .logo{font-size:24px;font-weight:900;color:#e2e8f0;margin:12px 0 2px}
+  .logo span{color:#6366f1}
+  .sub{font-size:13px;color:#64748b;margin-bottom:20px}
+  .card{background:#1e293b;border:1px solid #334155;border-radius:14px;padding:20px;margin-bottom:16px}
+  .info{background:#052e16;border:1px solid #166534;border-radius:10px;padding:12px 14px;font-size:13px;color:#22c55e;margin-bottom:16px}
+  h3{font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:#6366f1;margin-bottom:14px}
+  label{display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#64748b;margin:12px 0 5px}
+  label:first-child{margin-top:0}
+  input{width:100%;padding:11px 13px;border-radius:9px;border:1.5px solid #334155;background:#0f172a;color:#e2e8f0;font-size:14px}
+  input:focus{outline:none;border-color:#6366f1}
+  .row{display:flex;gap:8px}
+  .row input{flex:1}
+  .scan-btn{padding:11px 14px;border-radius:9px;border:1.5px solid #6366f1;background:transparent;color:#6366f1;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap}
+  .nets{margin-top:8px;border:1px solid #1e293b;border-radius:10px;overflow:hidden;max-height:180px;overflow-y:auto}
+  .net{padding:10px 14px;cursor:pointer;font-size:13px;display:flex;justify-content:space-between;border-bottom:1px solid #0f172a}
+  .net:last-child{border-bottom:0}
+  .net:hover,.net.sel{background:#1e3a5f}
+  .bars{font-size:11px;color:#64748b}
+  .submit{width:100%;padding:13px;border-radius:10px;border:0;background:#6366f1;color:#fff;font-weight:700;font-size:15px;cursor:pointer;margin-top:6px}
+  .submit:disabled{opacity:.5;cursor:default}
+  .ok{background:#052e16;border:1px solid #166534;color:#22c55e;padding:12px 14px;border-radius:10px;font-size:13px;margin-top:12px}
+  .err{background:#450a0a;border:1px solid #991b1b;color:#fca5a5;padding:12px 14px;border-radius:10px;font-size:13px;margin-top:12px}
+</style></head>
+<body>
+  <div class="logo">Di<span>kly</span></div>
+  <p class="sub">Change WiFi Network</p>
+  <div class="info">✓ Device pairing is preserved — only WiFi credentials will change.</div>
+  <form id="f">
+    <div class="card">
+      <h3>New School WiFi</h3>
+      <label>Network</label>
+      <div class="row">
+        <input id="ssid" name="ssid" required autocomplete="off" placeholder="Select or type SSID">
+        <button type="button" class="scan-btn" id="sb" onclick="scan()">Scan</button>
+      </div>
+      <div id="nl" class="nets" style="display:none"></div>
+      <label>Password</label>
+      <input name="password" type="password" autocomplete="new-password" placeholder="Leave blank if open">
+    </div>
+    <button type="submit" class="submit" id="b">Save &amp; Reconnect</button>
+  </form>
+  <div id="msg"></div>
+<script>
+async function scan(){
+  const sb=document.getElementById('sb'),nl=document.getElementById('nl');
+  sb.disabled=true;sb.textContent='…';nl.style.display='block';
+  nl.innerHTML='<div style="padding:10px 14px;font-size:12px;color:#64748b">Scanning…</div>';
+  try{
+    const r=await fetch('/wifi/scan');const nets=await r.json();
+    if(!nets.length){nl.innerHTML='<div style="padding:10px 14px;font-size:12px;color:#64748b">No networks found.</div>';return;}
+    nets.sort((a,b)=>(b.rssi||0)-(a.rssi||0));
+    nl.innerHTML=nets.map(n=>{
+      const bars=n.rssi>-60?'▂▄▆█':n.rssi>-75?'▂▄▆':n.rssi>-85?'▂▄':'▂';
+      const lock=n.open===false?'🔒 ':'';
+      const s=(n.ssid||'').replace(/'/g,"\\'");
+      return `<div class="net" onclick="pick(this,'${s}')"><span>${n.ssid||'(Hidden)'}</span><span class="bars">${lock}${bars}</span></div>`;
+    }).join('');
+  }catch(e){nl.innerHTML='<div style="padding:10px;color:#fca5a5">Scan failed</div>';}
+  finally{sb.disabled=false;sb.textContent='Scan';}
+}
+function pick(el,ssid){
+  document.getElementById('ssid').value=ssid;
+  document.querySelectorAll('.net').forEach(i=>i.classList.remove('sel'));
+  el.classList.add('sel');
+}
+document.getElementById('f').onsubmit=async(e)=>{
+  e.preventDefault();
+  const d=Object.fromEntries(new FormData(e.target));
+  const m=document.getElementById('msg'),b=document.getElementById('b');
+  b.disabled=true;m.className='';m.textContent='Connecting — this may take 30 s…';
+  try{
+    const r=await fetch('/wifi/reconfigure',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(d)});
+    const j=await r.json();
+    if(!r.ok)throw new Error(j.error||'Failed');
+    m.className='ok';m.textContent='✓ Connected! Device is restarting…';
+  }catch(err){m.className='err';m.textContent='✗ '+err.message;b.disabled=false;}
+};
+</script></body></html>)HTML";
+
+static void startWifiReconfigPortal() {
+  WiFi.mode(WIFI_AP);
+  String ap = "Dikly-" + macSuffix();
+  WiFi.softAP(ap.c_str()); delay(200);
+  IPAddress gw = WiFi.softAPIP();
+  LOG("WiFi reconfig AP: " + ap);
+
+  dns.start(53, "*", gw);
+
+  auto servePage = []() { localHttp.send_P(200, "text/html", WIFI_RECONFIG_HTML); };
+  localHttp.on("/", HTTP_GET, servePage);
+  localHttp.on("/generate_204", HTTP_GET, servePage);
+  localHttp.on("/hotspot-detect.html", HTTP_GET, servePage);
+  localHttp.onNotFound(servePage);
+
+  localHttp.on("/wifi/scan", HTTP_GET, []() {
+    int n = WiFi.scanNetworks();
+    JsonDocument doc; JsonArray arr = doc.to<JsonArray>();
+    for (int i = 0; i < n && i < 24; i++) {
+      JsonObject o = arr.add<JsonObject>();
+      o["ssid"] = WiFi.SSID(i); o["rssi"] = WiFi.RSSI(i);
+      o["open"] = (WiFi.encryptionType(i) == WIFI_AUTH_OPEN);
+    }
+    String s; serializeJson(doc, s);
+    localHttp.send(200, "application/json", s);
+  });
+
+  // /wifi/reconfigure — save new credentials only, keep JWT + pairing
+  localHttp.on("/wifi/reconfigure", HTTP_POST, []() {
+    JsonDocument req;
+    if (deserializeJson(req, localHttp.arg("plain"))) {
+      localHttp.send(400, "application/json", "{\"error\":\"Bad JSON\"}"); return;
+    }
+    String ssid = req["ssid"] | "";
+    String pass = req["password"] | "";
+    if (ssid.isEmpty()) {
+      localHttp.send(400, "application/json", "{\"error\":\"SSID required\"}"); return;
+    }
+    // Test the new credentials before saving
+    WiFi.mode(WIFI_AP_STA);
+    WiFi.begin(ssid.c_str(), pass.c_str());
+    uint32_t t0 = millis();
+    while (WiFi.status() != WL_CONNECTED && millis() - t0 < WIFI_TIMEOUT_MS) {
+      delay(200); localHttp.handleClient();
+    }
+    if (WiFi.status() != WL_CONNECTED) {
+      WiFi.mode(WIFI_AP);
+      localHttp.send(502, "application/json", "{\"error\":\"Could not connect — check password\"}"); return;
+    }
+    // Connected — save only WiFi credentials, leave JWT/pairing untouched
+    wifiSSID = ssid; wifiPass = pass;
+    prefs.begin("kodex", false);
+    prefs.putString("ssid", wifiSSID);
+    prefs.putString("pass", wifiPass);
+    prefs.end();
+    LOG("WiFi updated → " + ssid);
+    localHttp.send(200, "application/json", "{\"ok\":true}");
+    delay(1200); ESP.restart();
+  });
+
+  localHttp.begin();
+  curScreen = WIFI_RECONFIG;
+  drawWifiReconfig(ap);
 }
 
 // ── CONNECTING ────────────────────────────────────────────────────────────────
@@ -970,8 +1155,8 @@ void setup() {
     delay(180);
   }
   if (WiFi.status() != WL_CONNECTED) {
-    LOG("WiFi fail — captive portal for reconfigure");
-    startApPortal();
+    LOG("WiFi fail — starting WiFi reconfigure portal (pairing preserved)");
+    startWifiReconfigPortal();
     return;
   }
   digitalWrite(LED_PIN, HIGH);
@@ -986,7 +1171,7 @@ void loop() {
   dns.processNextRequest();
   localHttp.handleClient();
 
-  // Pairing-portal path
+  // AP portal paths (setup or wifi-reconfig)
   if (deviceJWT.isEmpty() || WiFi.getMode() == WIFI_AP) {
     // Touch long-press → factory reset
     uint16_t tx, ty;
@@ -994,7 +1179,8 @@ void loop() {
       if (!touchActive) { touchActive = true; touchDownMs = millis(); }
       else if (millis() - touchDownMs >= 3000) factoryReset();
     } else { touchActive = false; }
-    if (curScreen == SETUP) drawSetup("Dikly-" + macSuffix());
+    if (curScreen == SETUP)        drawSetup("Dikly-" + macSuffix());
+    if (curScreen == WIFI_RECONFIG) drawWifiReconfig("Dikly-" + macSuffix());
     delay(60);
     return;
   }
