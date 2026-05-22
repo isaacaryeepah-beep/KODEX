@@ -1,12 +1,12 @@
 /**
  * ─────────────────────────────────────────────────────────────────────────────
- *  KODEX Attendance — ESP32-S3 Classroom Device Firmware
+ *  Dikly Attendance — ESP32-S3 Classroom Device Firmware
  *  Target: ESP32-S3 + ILI9341 2.8" IPS 240×320 Colour Touchscreen (CTP)
  *  SKU: ES3C28P
  *
  *  WHAT THIS DOES
  *  ─────────────
- *  • On first boot, runs a captive-portal AP "KODEX-XXXXXX". Open
+ *  • On first boot, runs a captive-portal AP "Dikly-XXXXXX". Open
  *    192.168.4.1 on your phone, enter institution code + pairing code
  *    from the lecturer portal, and your school WiFi credentials.
  *  • Calls POST /api/devices/pair → saves a long-lived device JWT in NVS.
@@ -115,7 +115,7 @@ uint16_t touchX = 0, touchY = 0;
 uint32_t touchDownMs = 0;   // for long-press detection
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
-#define LOG(s) do { Serial.print("[KODEX] "); Serial.println(s); } while(0)
+#define LOG(s) do { Serial.print("[Dikly] "); Serial.println(s); } while(0)
 
 static String macSuffix() {
   char b[7]; snprintf(b, sizeof(b), "%06X", (uint32_t)(ESP.getEfuseMac() & 0xFFFFFF));
@@ -216,7 +216,7 @@ static bool tryPair(const String& pcode, const String& inst) {
   JsonDocument req;
   req["pairingCode"]     = pcode;
   req["deviceId"]        = deviceId;
-  req["deviceName"]      = "KODEX-" + macSuffix();
+  req["deviceName"]      = "Dikly-" + macSuffix();
   req["institutionCode"] = inst;
   String body; serializeJson(req, body);
   String resp; int code = postJson("/api/devices/pair", body, resp, false);
@@ -298,13 +298,13 @@ static void centreText(TFT_eSprite& s, const String& txt, int32_t y,
   s.setCursor((SW - tw) / 2, y); s.print(txt);
 }
 
-// ── Utility: draw status dot + "KODEX" header bar ────────────────────────────
+// ── Utility: draw status dot + "Dikly" header bar ────────────────────────────
 static void drawHeader(TFT_eSprite& s, bool online) {
   s.fillRect(0, 0, SW, 38, COL_CARD);
   s.drawFastHLine(0, 38, SW, COL_BORDER);
   // Logo
   s.setTextFont(4); s.setTextSize(1); s.setTextColor(COL_TEXT, COL_CARD);
-  s.setCursor(14, 9); s.print("KODEX");
+  s.setCursor(14, 9); s.print("Dikly");
   // Status dot
   uint16_t dotCol = online ? COL_SUCCESS : COL_ERROR;
   s.fillSmoothCircle(SW - 20, 19, 7, dotCol, COL_CARD);
@@ -319,10 +319,10 @@ static void drawSplash() {
   spr.fillSprite(COL_BG);
   // Accent bar
   spr.fillRect(0, 0, SW, 6, COL_PRIMARY);
-  // KODEX large
+  // Dikly large
   spr.setTextFont(6); spr.setTextSize(1); spr.setTextColor(COL_TEXT, COL_BG);
-  int32_t tw = spr.textWidth("KODEX");
-  spr.setCursor((SW - tw) / 2, 90); spr.print("KODEX");
+  int32_t tw = spr.textWidth("Dikly");
+  spr.setCursor((SW - tw) / 2, 90); spr.print("Dikly");
   // Indigo line under logo
   spr.fillRect((SW - 80) / 2, 148, 80, 3, COL_PRIMARY);
   // Subtitle
@@ -504,7 +504,7 @@ static void drawSession(const String& code, uint32_t secsLeft, uint32_t secsTota
 // ─── Captive-Portal Pairing HTML ─────────────────────────────────────────────
 static const char PAIR_HTML[] PROGMEM = R"HTML(<!doctype html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>KODEX Setup</title>
+<title>Dikly Setup</title>
 <style>
   *{box-sizing:border-box;margin:0;padding:0}
   body{font-family:system-ui,sans-serif;background:#0f172a;color:#e2e8f0;padding:24px;max-width:440px;margin:0 auto}
@@ -600,7 +600,7 @@ document.getElementById('f').onsubmit=async(e)=>{
 // ─── Captive-portal AP startup ────────────────────────────────────────────────
 static void startApPortal() {
   WiFi.mode(WIFI_AP);
-  String ap = "KODEX-" + macSuffix();
+  String ap = "Dikly-" + macSuffix();
   WiFi.softAP(ap.c_str()); delay(200);
   IPAddress gw = WiFi.softAPIP();
   LOG("AP: " + ap + " @ " + gw.toString());
@@ -666,7 +666,7 @@ static void startApPortal() {
 
   localHttp.begin();
   curScreen = SETUP;
-  drawSetup("KODEX-" + macSuffix());
+  drawSetup("Dikly-" + macSuffix());
 }
 
 // ─── Local HTTP (WiFi proxy for Attendance Device page) ──────────────────────
@@ -774,7 +774,7 @@ void loop() {
       if (!touchActive) { touchActive = true; touchDownMs = millis(); }
       else if (millis() - touchDownMs >= 3000) factoryReset();
     } else { touchActive = false; }
-    if (curScreen == SETUP) drawSetup("KODEX-" + macSuffix());
+    if (curScreen == SETUP) drawSetup("Dikly-" + macSuffix());
     delay(60);
     return;
   }
