@@ -147,6 +147,33 @@ struct OfflineRec {
 static OfflineRec offlineBuf[200];
 static uint8_t    offlineCount = 0;
 
+// ─── Per-session duplicate guard ─────────────────────────────────────────────
+// Keeps a compact list of identifiers that have already submitted this session.
+// Cleared automatically when the session ID changes.
+// Uses indexNumber when available, userId otherwise — whichever the student sent.
+static char     dedupIds[400][32];   // 400 students × 32 chars ≈ 12.5 KB
+static uint16_t dedupCount   = 0;
+static String   dedupSession = "";   // session this list belongs to
+
+static void dedupClear(const String& sid) {
+  dedupCount = 0;
+  dedupSession = sid;
+}
+
+// Returns true if this identifier has already been seen in the current session.
+static bool dedupCheck(const char* id) {
+  if (!id || id[0] == '\0') return false;
+  for (uint16_t i = 0; i < dedupCount; i++)
+    if (strncmp(dedupIds[i], id, 31) == 0) return true;
+  return false;
+}
+
+static void dedupAdd(const char* id) {
+  if (!id || id[0] == '\0' || dedupCount >= 400) return;
+  strncpy(dedupIds[dedupCount++], id, 31);
+  dedupIds[dedupCount - 1][31] = '\0';
+}
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 #define LOG(s) do { Serial.print("[Dikly] "); Serial.println(s); } while(0)
 
@@ -358,9 +385,12 @@ static void sendHeartbeat() {
       LOG("Session ended"); sessionId = ""; sessionSeed = "";
       sessionTitle = ""; sessionCourse = ""; sessionLecturer = "";
       studentsMarked = 0;
+      dedupClear("");
     }
   } else {
-    sessionId       = sess["sessionId"] | "";
+    String incomingId = sess["sessionId"] | "";
+    if (incomingId != sessionId) dedupClear(incomingId);  // new session → reset dedup
+    sessionId       = incomingId;
     sessionSeed     = sess["esp32Seed"] | "";
     sessionTitle    = sess["title"]     | "Attendance";
     sessionCourse   = sess["courseCode"]| "";
@@ -634,7 +664,7 @@ static const char PAIR_HTML[] PROGMEM = R"HTML(<!doctype html>
   .err{background:#450a0a;border:1px solid #991b1b;color:#fca5a5;padding:12px 14px;border-radius:10px;font-size:13px;margin-top:12px}
 </style></head>
 <body>
-  <div class="logo">KO<span>DEX</span></div>
+  <div class="logo">Di<span>kly</span></div>
   <p class="sub">Attendance Device Setup</p>
   <form id="f">
     <div class="card">
@@ -825,6 +855,13 @@ static void registerLocalHttp() {
     if (!valid) {
       localHttp.send(403, "application/json", "{\"error\":\"Incorrect code. Check the screen and try again.\"}"); return;
     }
+    // ── Duplicate guard ───────────────────────────────────────────────────────
+    // Reset dedup table if this is a new session (edge case: device rebooted mid-session)
+    if (dedupSession != sessionId) dedupClear(sessionId);
+    const char* dedupKey = indexNum.length() ? indexNum.c_str() : userId.c_str();
+    if (dedupCheck(dedupKey)) {
+      localHttp.send(409, "application/json", "{\"error\":\"Attendance already recorded for this session.\"}"); return;
+    }
     // ── Write to SD card (primary) ────────────────────────────────────────────
     bool stored = false;
     if (sdAvailable) {
@@ -853,6 +890,7 @@ static void registerLocalHttp() {
       rec.ts = (uint32_t)now;
       LOG("RAM attendance [" + String(offlineCount) + "] idx=" + indexNum);
     }
+    dedupAdd(dedupKey);
     localHttp.send(200, "application/json", "{\"ok\":true,\"message\":\"Attendance recorded. Will sync when internet returns.\"}");
   });
 
