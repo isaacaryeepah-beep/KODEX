@@ -1,0 +1,37 @@
+// ─────────────────────────────────────────────────────────────────────────────
+//  TFT_eSPI User Setup — ESP32-S3 + ILI9341 2.8" IPS (SKU: ES3C28P)
+//
+//  IMPORTANT: Copy this file into your TFT_eSPI library folder OR place it
+//  alongside the .ino and define USER_SETUP_LOADED before the include.
+//
+//  Pin numbers below are typical for the ES3C28P board.
+//  Verify against your board's schematic if the display shows garbage.
+// ─────────────────────────────────────────────────────────────────────────────
+
+#define USER_SETUP_LOADED   // Tell TFT_eSPI this file is loaded
+
+// Driver
+#define ILI9341_DRIVER
+
+// ── SPI Display Pins ──────────────────────────────────────────────────────────
+#define TFT_MISO  13
+#define TFT_MOSI  11
+#define TFT_SCLK  12
+#define TFT_CS    10    // Chip select
+#define TFT_DC     8    // Data/Command
+#define TFT_RST    9    // Reset (-1 if tied to ESP reset)
+// #define TFT_BL   -1   // Backlight — comment out if wired to 3V3 directly
+
+// ── SPI Speed ─────────────────────────────────────────────────────────────────
+#define SPI_FREQUENCY       40000000
+#define SPI_READ_FREQUENCY  20000000
+
+// ── Fonts (load all — flash is large enough on S3) ───────────────────────────
+#define LOAD_GLCD
+#define LOAD_FONT2
+#define LOAD_FONT4
+#define LOAD_FONT6
+#define LOAD_FONT7   // 7-segment style — used for the attendance code
+#define LOAD_FONT8
+#define LOAD_GFXFF
+#define SMOOTH_FONT
