@@ -10590,11 +10590,16 @@ async function renderMarkAttendance() {
   }
 
   let activeSession = null;
+  let deviceLocalIp = null;
   try {
     const data = await api('/api/attendance-sessions/active');
     activeSession = data.session;
-    if (activeSession) offlineCache('activeSession', activeSession); // cache for offline
-  } catch (e) {}
+    deviceLocalIp = data.deviceLocalIp || null;
+    if (activeSession) offlineCache('activeSession', activeSession);
+    if (deviceLocalIp) offlineCache('deviceLocalIp', deviceLocalIp);
+  } catch (e) {
+    deviceLocalIp = offlineRead('deviceLocalIp');
+  }
 
   const alreadyMarked = activeSession ? await api('/api/attendance-sessions/my-attendance?limit=100')
     .then(d => d.records.some(r => r.session?._id === activeSession._id))
@@ -10628,7 +10633,7 @@ async function renderMarkAttendance() {
       ` : `
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;margin-bottom:16px">
           
-          <div class="card mark-method-card" onclick="showCodeEntry()" style="cursor:pointer;text-align:center;transition:all 0.2s">
+          <div class="card mark-method-card" onclick="showCodeEntry('${deviceLocalIp || ''}')" style="cursor:pointer;text-align:center;transition:all 0.2s">
             <div style="font-size:36px;margin-bottom:12px">${svgIcon('<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M7 7h.01M7 12h.01M12 7h.01M12 12h.01M17 7h.01M7 17h.01M12 17h.01M17 12h.01M17 17h.01"/>', 42)}</div>
             <div style="font-size:16px;font-weight:700">Enter Code</div>
             <p style="font-size:12px;color:var(--text-light);margin-top:4px">Type the verbal code read out by your lecturer</p>
@@ -10661,17 +10666,20 @@ async function renderMarkAttendance() {
   `;
 }
 
-function showCodeEntry() {
+function showCodeEntry(localIp) {
   const area = document.getElementById('mark-input-area');
   if (!area) return;
   area.innerHTML = `
     <div class="card">
       <div class="card-title">Enter Attendance Code</div>
+      <p style="font-size:13px;color:var(--text-muted);margin-bottom:14px">Type the 6-digit code shown on the classroom device screen.</p>
       <div class="form-group">
         <label>6-Digit Code</label>
-        <input type="text" id="mark-code-input" placeholder="Enter code" maxlength="4" style="font-size:24px;text-align:center;letter-spacing:8px;font-weight:700;text-transform:uppercase" autofocus>
+        <input type="text" id="mark-code-input" placeholder="000000" maxlength="6" inputmode="numeric"
+          style="font-size:28px;text-align:center;letter-spacing:10px;font-weight:700" autofocus>
       </div>
-      <button class="btn btn-primary" onclick="submitCodeMark()" style="width:100%">Submit Code</button>
+      <div id="mark-code-msg" style="display:none;padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:12px"></div>
+      <button class="btn btn-primary" onclick="submitCodeMark('${localIp || ''}')" style="width:100%">Mark Attendance</button>
     </div>
   `;
   document.getElementById('mark-code-input')?.focus();
@@ -10695,44 +10703,91 @@ function showQrEntry() {
   `;
 }
 
-async function submitCodeMark() {
-  const code = document.getElementById('mark-code-input')?.value?.toUpperCase().trim();
-  if (!code || code.length !== 4) { toastWarning('Please enter the 4-character code.'); return; }
+async function submitCodeMark(localIp) {
+  const code = document.getElementById('mark-code-input')?.value?.trim();
+  const msgEl = document.getElementById('mark-code-msg');
+  const showMsg = (txt, ok) => {
+    if (!msgEl) return;
+    msgEl.textContent = txt;
+    msgEl.style.background = ok ? '#f0fdf4' : '#fef2f2';
+    msgEl.style.color = ok ? '#15803d' : '#dc2626';
+    msgEl.style.border = ok ? '1px solid #86efac' : '1px solid #fca5a5';
+    msgEl.style.display = 'block';
+  };
 
-  // If ESP32 is detected, submit locally (works offline)
-  if (bleDetected && esp32IP) {
+  if (!code || code.length !== 6 || !/^\d{6}$/.test(code)) {
+    showMsg('Please enter the 6-digit code shown on the classroom device.', false); return;
+  }
+
+  const btn = document.querySelector('#mark-input-area .btn-primary');
+  if (btn) { btn.textContent = 'Submitting…'; btn.disabled = true; }
+
+  const restoreBtn = () => { if (btn) { btn.textContent = 'Mark Attendance'; btn.disabled = false; } };
+
+  // ── Try server first (online path) ──────────────────────────────────────
+  if (isOnline()) {
     try {
-      await submitToESP32(code);
-      offlineCache('pendingMark', null);
-      toastSuccess('Attendance marked successfully!');
+      await api('/api/attendance-sessions/mark', {
+        method: 'POST',
+        body: JSON.stringify({ code, method: 'code_mark', deviceId: getDeviceFingerprint() }),
+      });
+      showToastNotif('Attendance marked successfully!', 'success');
       navigateTo('mark-attendance');
       return;
-    } catch(e) {
-      // Fall through to server if ESP32 submission fails
-      console.warn('[BLE] ESP32 submission failed, trying server:', e.message);
+    } catch (e) {
+      restoreBtn();
+      if (e.data?.networkMismatch) {
+        showMsg('You must be connected to the school WiFi to mark attendance. Switch from mobile data to school WiFi and try again.', false);
+        return;
+      }
+      if (e.data?.esp32Offline) {
+        showMsg('The classroom device is offline. Ask your lecturer to power it on.', false);
+        return;
+      }
+      if (e.data?.attendanceWindowClosed) {
+        showMsg('The attendance window for this session has closed.', false);
+        return;
+      }
+      // Network error (no internet) — fall through to local ESP32 submission
+      if (!e.data && localIp) {
+        // intentional fall-through
+      } else {
+        showMsg(e.message || 'Failed to mark attendance.', false);
+        return;
+      }
     }
   }
 
-  // Offline queuing is disabled — attendance must be marked in real-time
-  // while connected to the classroom WiFi (DIKLY-CLASSROOM).
-  if (!(await isOnlineAsync())) {
-    toastError('You must be connected to the classroom WiFi (DIKLY-CLASSROOM) and have internet access to mark attendance.');
+  // ── Offline path — submit directly to ESP32 on local network ─────────────
+  if (!localIp) {
+    restoreBtn();
+    showMsg('No internet and no classroom device found on this network. Connect to school WiFi with internet access.', false);
     return;
   }
 
   try {
-    await api('/api/attendance-sessions/mark', {
+    const resp = await fetch(`http://${localIp}/attend`, {
       method: 'POST',
-      body: JSON.stringify({ code, method: 'code_mark' }),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        userId:      currentUser?._id || '',
+        indexNumber: currentUser?.indexNumber || currentUser?.IndexNumber || '',
+        code,
+        sessionId:   '',
+      }),
+      signal: AbortSignal.timeout(6000),
     });
-    offlineCache('pendingMark', null);
-    toastSuccess('Attendance marked successfully!');
-    navigateTo('mark-attendance');
+    const result = await resp.json();
+    if (!resp.ok || result.error) throw new Error(result.error || 'Device rejected the code');
+    restoreBtn();
+    showMsg('✓ Attendance recorded offline — will sync when internet returns.', true);
+    setTimeout(() => navigateTo('mark-attendance'), 2200);
   } catch (e) {
-    if (e.data && e.data.esp32Required) {
-      toastError('You must be connected to the classroom WiFi (DIKLY-CLASSROOM) to mark attendance.');
+    restoreBtn();
+    if (e.name === 'TimeoutError' || e.message?.includes('fetch')) {
+      showMsg('Could not reach the classroom device. Make sure you are connected to the school WiFi.', false);
     } else {
-      toastError(e.message);
+      showMsg(e.message || 'Failed to mark attendance offline.', false);
     }
   }
 }
