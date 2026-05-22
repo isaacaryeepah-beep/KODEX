@@ -119,15 +119,25 @@ bool     timeSynced  = false;
 bool     forceReconn = false;
 
 // Screen state machine
-enum Screen { SPLASH, SETUP, WIFI_RECONFIG, CONNECTING, READY, SESSION };
+enum Screen { SPLASH, SETUP, WIFI_SCAN, WIFI_RECONFIG, CONNECTING, READY, SESSION };
 Screen curScreen = SPLASH;
-String statusMsg = "";   // shown on CONNECTING / error banners
+String statusMsg = "";
 uint32_t splashStart = 0;
 
 // Touch state
-bool     touchActive     = false;
+bool     touchActive  = false;
 uint16_t touchX = 0, touchY = 0;
-uint32_t touchDownMs = 0;   // for long-press detection
+uint32_t touchDownMs  = 0;
+bool     touchHandled = false;   // prevents hold-repeat firing as a tap
+
+// ─── WiFi scanner ─────────────────────────────────────────────────────────────
+struct WifiNet { char ssid[33]; int8_t bars; bool open; };
+static WifiNet  wifiNets[20];
+static uint8_t  wifiNetCount = 0;
+static int8_t   wifiScroll   = 0;
+static bool     wifiScanning = false;
+static String   wifiMsg      = "";
+static String   pendingSsid  = "";   // network tapped, waiting for password
 
 // ─── Offline Attendance Storage ──────────────────────────────────────────────
 // Primary: append JSON lines to /attendance.jsonl on the built-in SD card.
@@ -234,6 +244,33 @@ static bool touchRead(uint16_t& tx, uint16_t& ty) {
   tx = ((xh & 0x0F) << 8) | xl;
   ty = ((yh & 0x0F) << 8) | yl;
   return true;
+}
+
+// ─── WiFi scanner ────────────────────────────────────────────────────────────
+static void doWifiScan() {
+  wifiScanning = true; wifiMsg = ""; wifiNetCount = 0; wifiScroll = 0;
+  WiFi.mode(WIFI_STA);
+  int n = WiFi.scanNetworks();
+  for (int i = 0; i < n && wifiNetCount < 20; i++) {
+    // Deduplicate by SSID
+    bool dup = false;
+    for (uint8_t j = 0; j < wifiNetCount; j++)
+      if (strncmp(wifiNets[j].ssid, WiFi.SSID(i).c_str(), 32) == 0) { dup = true; break; }
+    if (dup || WiFi.SSID(i).isEmpty()) continue;
+    int32_t rssi = WiFi.RSSI(i);
+    strncpy(wifiNets[wifiNetCount].ssid, WiFi.SSID(i).c_str(), 32);
+    wifiNets[wifiNetCount].ssid[32] = '\0';
+    wifiNets[wifiNetCount].bars = rssi > -60 ? 4 : rssi > -75 ? 3 : rssi > -85 ? 2 : 1;
+    wifiNets[wifiNetCount].open = (WiFi.encryptionType(i) == WIFI_AUTH_OPEN);
+    wifiNetCount++;
+  }
+  // Sort by signal strength descending
+  for (uint8_t i = 0; i < wifiNetCount - 1; i++)
+    for (uint8_t j = i + 1; j < wifiNetCount; j++)
+      if (wifiNets[j].bars > wifiNets[i].bars)
+        { WifiNet tmp = wifiNets[i]; wifiNets[i] = wifiNets[j]; wifiNets[j] = tmp; }
+  wifiScanning = false;
+  wifiMsg = (wifiNetCount == 0) ? "No networks found." : "";
 }
 
 // ─── NVS ─────────────────────────────────────────────────────────────────────
@@ -532,6 +569,148 @@ static void drawWifiReconfig(const String& apName) {
   spr.pushSprite(0, 0);
 }
 
+// ── WIFI SCAN (on-device WiFi picker) ────────────────────────────────────────
+#define LIST_Y      70    // y where network list starts
+#define ITEM_H      41    // height of each list item (38px + 3px gap)
+#define MAX_VIS      6    // max visible items at once
+#define SCAN_BTN_X  162   // scan button x
+#define SCROLL_X    220   // scroll arrow column x
+
+static void drawWifiScan() {
+  spr.fillSprite(COL_BG);
+  drawHeader(spr, false);
+
+  // Title
+  spr.setTextFont(4); spr.setTextColor(COL_TEXT, COL_BG);
+  spr.setCursor(10, 46); spr.print("WiFi Networks");
+
+  // Scan button (top-right)
+  uint16_t sbCol = wifiScanning ? COL_MUTED : COL_PRIMARY;
+  spr.fillSmoothRoundRect(SCAN_BTN_X, 42, 68, 26, 13, sbCol, COL_BG);
+  spr.setTextFont(2); spr.setTextColor(COL_WHITE, sbCol);
+  String scanLabel = wifiScanning ? "Scanning" : "Scan";
+  int32_t stw = spr.textWidth(scanLabel);
+  spr.setCursor(SCAN_BTN_X + (68 - stw) / 2, 51); spr.print(scanLabel);
+
+  if (wifiScanning) { spr.pushSprite(0, 0); return; }
+
+  if (!wifiMsg.isEmpty()) {
+    spr.setTextFont(2); spr.setTextColor(COL_MUTED, COL_BG);
+    int32_t tw = spr.textWidth(wifiMsg);
+    spr.setCursor((SW - tw) / 2, 170); spr.print(wifiMsg);
+    spr.setTextFont(2); spr.setTextColor(COL_BORDER, COL_BG);
+    String hint = "Tap Scan to search";
+    tw = spr.textWidth(hint);
+    spr.setCursor((SW - tw) / 2, 192); spr.print(hint);
+    spr.pushSprite(0, 0); return;
+  }
+
+  // Network rows
+  uint8_t visible = (uint8_t)min((int)wifiNetCount - wifiScroll, MAX_VIS);
+  for (uint8_t i = 0; i < visible; i++) {
+    uint8_t idx = wifiScroll + i;
+    WifiNet& n  = wifiNets[idx];
+    int32_t  y  = LIST_Y + i * ITEM_H;
+
+    card(spr, 4, y, 212, 38, COL_CARD, COL_BORDER, 8);
+
+    // Signal bars (4 vertical bars, left side)
+    for (uint8_t b = 0; b < 4; b++) {
+      uint8_t bh = 6 + b * 5;
+      uint16_t bc = (b < (uint8_t)n.bars) ? COL_SUCCESS : COL_BORDER;
+      spr.fillRoundRect(10 + b * 8, y + 30 - bh, 6, bh, 1, bc);
+    }
+
+    // SSID
+    spr.setTextFont(2); spr.setTextColor(COL_TEXT, COL_CARD);
+    String ssid = String(n.ssid);
+    if (spr.textWidth(ssid) > 118) { ssid = ssid.substring(0, 15); ssid += ".."; }
+    spr.setCursor(46, y + 12); spr.print(ssid);
+
+    // Badge — OPEN (green) or PWD (slate)
+    if (n.open) {
+      spr.fillSmoothRoundRect(167, y + 10, 40, 18, 9, COL_SUCCESS, COL_CARD);
+      spr.setTextFont(2); spr.setTextColor(COL_WHITE, COL_SUCCESS);
+      spr.setCursor(172, y + 13); spr.print("OPEN");
+    } else {
+      spr.fillSmoothRoundRect(167, y + 10, 40, 18, 9, COL_BORDER, COL_CARD);
+      spr.setTextFont(2); spr.setTextColor(COL_MUTED, COL_BORDER);
+      spr.setCursor(174, y + 13); spr.print("PWD");
+    }
+  }
+
+  // Scroll arrows (right strip)
+  if (wifiScroll > 0)
+    spr.fillTriangle(SCROLL_X + 9, LIST_Y - 8,
+                     SCROLL_X,     LIST_Y + 8,
+                     SCROLL_X + 18,LIST_Y + 8, COL_PRIMARY);
+  if (wifiScroll + MAX_VIS < wifiNetCount)
+    spr.fillTriangle(SCROLL_X + 9, LIST_Y + MAX_VIS * ITEM_H + 8,
+                     SCROLL_X,     LIST_Y + MAX_VIS * ITEM_H - 8,
+                     SCROLL_X + 18,LIST_Y + MAX_VIS * ITEM_H - 8, COL_PRIMARY);
+
+  // Footer hint
+  spr.setTextFont(2); spr.setTextColor(COL_BORDER, COL_BG);
+  String ft = "Hold 3s to factory reset";
+  int32_t ftw = spr.textWidth(ft);
+  spr.setCursor((SW - ftw) / 2, 308); spr.print(ft);
+
+  spr.pushSprite(0, 0);
+}
+
+// ── Tap handler for WiFi scan screen ─────────────────────────────────────────
+static void handleWifiScanTap(uint16_t tx, uint16_t ty) {
+  // Scan button
+  if (tx >= SCAN_BTN_X && ty >= 42 && ty <= 68) {
+    drawWifiScan();   // show "Scanning" label immediately
+    doWifiScan();
+    return;
+  }
+  // Scroll up
+  if (tx >= SCROLL_X && ty >= LIST_Y - 12 && ty <= LIST_Y + 12 && wifiScroll > 0) {
+    wifiScroll--; return;
+  }
+  // Scroll down
+  int32_t downY = LIST_Y + MAX_VIS * ITEM_H;
+  if (tx >= SCROLL_X && ty >= downY - 12 && ty <= downY + 12
+      && wifiScroll + MAX_VIS < wifiNetCount) {
+    wifiScroll++; return;
+  }
+  // Network item tap
+  if (tx < 216) {
+    int8_t row = ((int32_t)ty - LIST_Y) / ITEM_H;
+    if (row < 0 || row >= MAX_VIS) return;
+    uint8_t idx = wifiScroll + (uint8_t)row;
+    if (idx >= wifiNetCount) return;
+    WifiNet& n = wifiNets[idx];
+
+    if (n.open) {
+      // Open network — connect directly on the device
+      wifiMsg = String("Connecting to ") + n.ssid + "...";
+      drawWifiScan();
+      WiFi.mode(WIFI_STA);
+      WiFi.begin(n.ssid, "");
+      uint32_t t0 = millis();
+      while (WiFi.status() != WL_CONNECTED && millis() - t0 < WIFI_TIMEOUT_MS)
+        delay(300);
+      if (WiFi.status() == WL_CONNECTED) {
+        wifiSSID = String(n.ssid); wifiPass = "";
+        prefs.begin("kodex", false);
+        prefs.putString("ssid", wifiSSID); prefs.putString("pass", wifiPass);
+        prefs.end();
+        delay(800); ESP.restart();
+      } else {
+        wifiMsg = String("Couldn't connect to ") + n.ssid + ". Try again.";
+        WiFi.mode(WIFI_AP);
+      }
+    } else {
+      // Secured — launch phone portal with this SSID pre-selected
+      pendingSsid = String(n.ssid);
+      startWifiReconfigPortal();
+    }
+  }
+}
+
 // Lightweight captive portal — changes WiFi only, preserves device JWT + pairing
 static const char WIFI_RECONFIG_HTML[] PROGMEM = R"HTML(<!doctype html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -569,6 +748,7 @@ static const char WIFI_RECONFIG_HTML[] PROGMEM = R"HTML(<!doctype html>
   <form id="f">
     <div class="card">
       <h3>New School WiFi</h3>
+      <p id="sel-note" style="font-size:11px;color:#6366f1;margin:0 0 8px;min-height:14px"></p>
       <label>Network</label>
       <div class="row">
         <input id="ssid" name="ssid" required autocomplete="off" placeholder="Select or type SSID">
@@ -604,6 +784,19 @@ function pick(el,ssid){
   document.querySelectorAll('.net').forEach(i=>i.classList.remove('sel'));
   el.classList.add('sel');
 }
+// Auto-fill SSID selected on device screen (if any)
+window.addEventListener('load',async()=>{
+  try{
+    const r=await fetch('/wifi/selected-ssid');
+    const j=await r.json();
+    if(j.ssid){
+      const el=document.getElementById('ssid');
+      el.value=j.ssid; el.readOnly=true;
+      el.style.color='#6366f1'; el.style.borderColor='#6366f1';
+      document.getElementById('sel-note').textContent='Network pre-selected from device screen.';
+    }
+  }catch(e){}
+});
 document.getElementById('f').onsubmit=async(e)=>{
   e.preventDefault();
   const d=Object.fromEntries(new FormData(e.target));
@@ -643,6 +836,12 @@ static void startWifiReconfigPortal() {
     }
     String s; serializeJson(doc, s);
     localHttp.send(200, "application/json", s);
+  });
+
+  // /wifi/selected-ssid — returns the SSID the rep tapped on device screen
+  localHttp.on("/wifi/selected-ssid", HTTP_GET, []() {
+    String j = "{\"ssid\":\"" + pendingSsid + "\"}";
+    localHttp.send(200, "application/json", j);
   });
 
   // /wifi/reconfigure — save new credentials only, keep JWT + pairing
@@ -1155,8 +1354,10 @@ void setup() {
     delay(180);
   }
   if (WiFi.status() != WL_CONNECTED) {
-    LOG("WiFi fail — starting WiFi reconfigure portal (pairing preserved)");
-    startWifiReconfigPortal();
+    LOG("WiFi fail — showing on-device WiFi scanner");
+    curScreen = WIFI_SCAN;
+    wifiMsg = "Tap Scan to find networks.";
+    drawWifiScan();
     return;
   }
   digitalWrite(LED_PIN, HIGH);
@@ -1171,15 +1372,36 @@ void loop() {
   dns.processNextRequest();
   localHttp.handleClient();
 
-  // AP portal paths (setup or wifi-reconfig)
+  // WiFi scanner screen (paired device, no WiFi connection yet)
+  if (curScreen == WIFI_SCAN) {
+    uint16_t tx, ty;
+    bool touched = touchRead(tx, ty);
+    if (touched) {
+      if (!touchActive) {
+        touchActive = true; touchDownMs = millis(); touchHandled = false;
+      } else if (!touchHandled && millis() - touchDownMs >= 3000) {
+        touchHandled = true; factoryReset();
+      }
+    } else {
+      if (touchActive && !touchHandled) {
+        // Short tap released
+        handleWifiScanTap(tx, ty);
+      }
+      touchActive = false; touchHandled = false;
+    }
+    drawWifiScan();
+    delay(80);
+    return;
+  }
+
+  // AP portal paths (setup or wifi-reconfig for password entry)
   if (deviceJWT.isEmpty() || WiFi.getMode() == WIFI_AP) {
-    // Touch long-press → factory reset
     uint16_t tx, ty;
     if (touchRead(tx, ty)) {
       if (!touchActive) { touchActive = true; touchDownMs = millis(); }
       else if (millis() - touchDownMs >= 3000) factoryReset();
     } else { touchActive = false; }
-    if (curScreen == SETUP)        drawSetup("Dikly-" + macSuffix());
+    if (curScreen == SETUP)         drawSetup("Dikly-" + macSuffix());
     if (curScreen == WIFI_RECONFIG) drawWifiReconfig("Dikly-" + macSuffix());
     delay(60);
     return;
