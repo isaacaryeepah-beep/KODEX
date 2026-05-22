@@ -114,6 +114,19 @@ bool     touchActive     = false;
 uint16_t touchX = 0, touchY = 0;
 uint32_t touchDownMs = 0;   // for long-press detection
 
+// ─── Offline Attendance Buffer ────────────────────────────────────────────────
+// When school WiFi has no internet, students submit directly to /attend.
+// Records are buffered here and pushed to the server via /api/devices/sync
+// on the next successful heartbeat.
+struct OfflineRec {
+  char indexNumber[32];
+  char userId[32];
+  char code[8];
+  uint32_t ts;
+};
+static OfflineRec offlineBuf[200];
+static uint8_t    offlineCount = 0;
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 #define LOG(s) do { Serial.print("[Dikly] "); Serial.println(s); } while(0)
 
@@ -211,6 +224,29 @@ static int postJson(const String& path, const String& body,
   return code;
 }
 
+// ─── Offline attendance sync ──────────────────────────────────────────────────
+static void syncOfflineAttendance() {
+  if (offlineCount == 0) return;
+  JsonDocument doc;
+  JsonArray arr = doc["records"].to<JsonArray>();
+  for (uint8_t i = 0; i < offlineCount; i++) {
+    JsonObject o = arr.add<JsonObject>();
+    if (offlineBuf[i].indexNumber[0]) o["indexNumber"] = offlineBuf[i].indexNumber;
+    if (offlineBuf[i].userId[0])      o["userId"]      = offlineBuf[i].userId;
+    o["codeUsed"]  = offlineBuf[i].code;
+    o["timestamp"] = offlineBuf[i].ts;
+    o["sessionId"] = sessionId;
+  }
+  String body; serializeJson(doc, body);
+  String resp; int code = postJson("/api/devices/sync", body, resp);
+  if (code == 200) {
+    LOG("Synced " + String(offlineCount) + " offline records");
+    offlineCount = 0;
+  } else {
+    LOG("Sync failed " + String(code) + ": " + resp);
+  }
+}
+
 // ─── Pairing ─────────────────────────────────────────────────────────────────
 static bool tryPair(const String& pcode, const String& inst) {
   JsonDocument req;
@@ -248,6 +284,8 @@ static void sendHeartbeat() {
     return;
   }
   hbFails = 0;
+  // Flush any offline attendance records now that we have internet.
+  syncOfflineAttendance();
   JsonDocument doc;
   if (deserializeJson(doc, resp)) return;
   if (doc["serverTime"].is<const char*>()) {
@@ -693,6 +731,45 @@ static void registerLocalHttp() {
     String s; serializeJson(doc, s);
     localHttp.send(200, "application/json", s);
   });
+  // /attend — offline attendance submission (student on school WiFi, no internet)
+  localHttp.on("/attend", HTTP_POST, []() {
+    if (sessionId.isEmpty() || sessionSeed.isEmpty()) {
+      localHttp.send(503, "application/json", "{\"error\":\"No active session\"}"); return;
+    }
+    if (!timeSynced) {
+      localHttp.send(503, "application/json", "{\"error\":\"Device clock not synced yet. Try again in a moment.\"}"); return;
+    }
+    if (offlineCount >= 200) {
+      localHttp.send(503, "application/json", "{\"error\":\"Offline buffer full. Internet needed.\"}"); return;
+    }
+    JsonDocument req;
+    if (deserializeJson(req, localHttp.arg("plain"))) {
+      localHttp.send(400, "application/json", "{\"error\":\"Bad JSON\"}"); return;
+    }
+    String submittedCode = req["code"] | "";
+    String indexNum      = req["indexNumber"] | "";
+    String userId        = req["userId"] | "";
+    submittedCode.trim();
+    if (submittedCode.length() != 6) {
+      localHttp.send(400, "application/json", "{\"error\":\"Code must be 6 digits\"}"); return;
+    }
+    // Validate against current and previous window (±20s clock tolerance)
+    time_t now = time(nullptr);
+    bool valid = (submittedCode == deriveCode(sessionSeed, (uint32_t)now)) ||
+                 (submittedCode == deriveCode(sessionSeed, (uint32_t)(now - WINDOW_SECONDS)));
+    if (!valid) {
+      localHttp.send(403, "application/json", "{\"error\":\"Incorrect code. Check the screen and try again.\"}"); return;
+    }
+    // Store in offline buffer
+    OfflineRec& rec = offlineBuf[offlineCount++];
+    strncpy(rec.indexNumber, indexNum.c_str(), sizeof(rec.indexNumber) - 1);
+    strncpy(rec.userId,      userId.c_str(),   sizeof(rec.userId) - 1);
+    strncpy(rec.code,        submittedCode.c_str(), sizeof(rec.code) - 1);
+    rec.ts = (uint32_t)now;
+    LOG("Offline attendance stored [" + String(offlineCount) + "] idx=" + indexNum);
+    localHttp.send(200, "application/json", "{\"ok\":true,\"message\":\"Attendance recorded. Will sync when internet returns.\"}");
+  });
+
   localHttp.on("/wifi/configure", HTTP_POST, []() {
     JsonDocument req;
     if (deserializeJson(req, localHttp.arg("plain"))) {
