@@ -77,7 +77,7 @@ static const char*   FIRMWARE_VERSION     = "s3-2.0.0";
 static const char*   DEFAULT_API_BASE     = "https://kodex.it.com";
 static const uint32_t HEARTBEAT_MS        = 5000;
 static const uint32_t WIFI_TIMEOUT_MS     = 30000;
-static const uint32_t WINDOW_SECONDS      = 20;   // code rotation period
+static const uint32_t WINDOW_SECONDS      = 300;  // code rotation period (5 minutes)
 
 // ─── Colour Palette (RGB565) ─────────────────────────────────────────────────
 #define COL_BG        0x0841   // #0f172a  dark navy
@@ -602,9 +602,9 @@ static void drawSession(const String& code, uint32_t secsLeft, uint32_t secsTota
 
   // ── Countdown bar ────────────────────────────────────────────────────────
   // Urgency colour: green → amber → red
-  uint16_t barCol = secsLeft > 14 ? COL_SUCCESS
-                  : secsLeft > 7  ? COL_WARNING
-                  :                 COL_ERROR;
+  uint16_t barCol = secsLeft > 120 ? COL_SUCCESS   // > 2 min → green
+                  : secsLeft > 60  ? COL_WARNING   // > 1 min → amber
+                  :                  COL_ERROR;    // ≤ 1 min → red
   int32_t barW = (int32_t)((SW - 24) * secsLeft / secsTotal);
   // Track
   spr.fillRoundRect(12, 208, SW - 24, 14, 7, COL_CARD);
