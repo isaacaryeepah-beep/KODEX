@@ -58,16 +58,19 @@
 #include <FS.h>
 
 // ─── Pin / Hardware Config ───────────────────────────────────────────────────
-static const uint8_t TOUCH_SDA  = 4;
-static const uint8_t TOUCH_SCL  = 5;
+// Confirmed from board silkscreen (Shenzhen Hong Shu Yuan ES3C28P):
+//   I2C header: IO15 = SCL, IO16 = SDA
+// Touch INT/RST: typical for this board family — adjust if touch is unresponsive.
+static const uint8_t TOUCH_SDA  = 16;
+static const uint8_t TOUCH_SCL  = 15;
 static const uint8_t TOUCH_INT  = 7;
 static const uint8_t TOUCH_RST  = 6;
 static const uint8_t LED_PIN    = 2;   // status LED (if present on your board)
 static const uint8_t FT6X36_ADDR = 0x38;
 
 // SD card — shares FSPI bus with display; only needs its own CS pin.
-// *** Verify this GPIO against your ES3C28P board schematic. ***
-static const uint8_t SD_CS_PIN = 39;
+// GPIO 38 is the typical SD CS for this board family (Shenzhen Hong Shu Yuan ES3C28P).
+static const uint8_t SD_CS_PIN = 38;
 
 // ─── App Config ──────────────────────────────────────────────────────────────
 static const char*   FIRMWARE_VERSION     = "s3-2.0.0";
