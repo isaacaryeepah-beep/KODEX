@@ -1007,9 +1007,7 @@ function selectPortal(type) {
   if (type === 'admin-corporate' || type === 'admin-academic' || type === 'manager') {
     const isAcademic = type === 'admin-academic';
     const isManager  = type === 'manager';
-    // Manager uses the same admin login form — override selectedPortalType
-    if (isManager) selectedPortalType = 'admin-corporate';
-    // Make sure portal-selector is hidden and admin-auth is visible
+    // selectedPortalType stays as 'manager' — used in handleAdminLogin to send loginRole:'manager'
     const portalSel = document.getElementById('portal-selector');
     if (portalSel) portalSel.classList.add('hidden');
     const adminAuth = document.getElementById('admin-auth');
@@ -1343,9 +1341,9 @@ async function handleAdminLogin() {
     if (!password) return showAdminError('Please enter your password.');
     if (btn) { btn.textContent = 'Signing in…'; btn.disabled = true; }
 
-    const portalMode = selectedPortalType === 'admin-academic' ? 'academic' : 'corporate';
-    // loginRole 'admin' allows both admin and manager roles (PORTAL_ALLOWED_ROLES.admin = ['admin','manager'])
-    const credentials = { email, password, loginRole: 'admin', portalMode, deviceId: getDeviceFingerprint() };
+    const portalMode  = selectedPortalType === 'admin-academic' ? 'academic' : 'corporate';
+    const loginRole   = selectedPortalType === 'manager' ? 'manager' : 'admin';
+    const credentials = { email, password, loginRole, portalMode, deviceId: getDeviceFingerprint() };
 
     let data;
     if (!(await isOnlineAsync())) {
@@ -2042,8 +2040,6 @@ async function loadUserData() {
 }
 
 function getPortalName(role) {
-  // Manager in a corporate-mode company = Corporate Admin
-  if (role === 'manager' && currentUser?.company?.mode === 'corporate') return 'Corporate Admin Portal';
   const names = {
     manager: 'Manager Portal',
     lecturer: 'Lecturer Portal',
@@ -2215,8 +2211,7 @@ function showDashboard(data) {
 
     document.getElementById('user-name').textContent = currentUser.name || '';
     const roleEl = document.getElementById('user-role');
-    const isCorporateAdmin = currentUser.role === 'manager' && currentUser.company?.mode === 'corporate';
-    roleEl.textContent = isCorporateAdmin ? 'corporate admin' : (currentUser.role || '');
+    roleEl.textContent = currentUser.role || '';
     roleEl.className = `role-badge role-${currentUser.role || 'user'}`;
     // Mark role on body so CSS can scope role-specific overrides (e.g. hide banners for student)
     document.body.setAttribute('data-role', currentUser.role || '');
