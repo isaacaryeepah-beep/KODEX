@@ -19645,13 +19645,17 @@ async function renderCourseVideos() {
 }
 
 async function _renderLecturerVideos(content) {
+  const body = document.getElementById('cv-body');
   let courses = [];
   try {
-    const d = await api('/api/courses?role=lecturer');
-    courses = d.courses || d || [];
-  } catch(e) { courses = []; }
+    const d = await api('/api/courses');
+    courses = d.courses || [];
+  } catch(e) {
+    if (body) body.innerHTML = `<div class="empty-state"><p style="color:var(--error)">Could not load courses: ${escHtml(e.message)}</p></div>`;
+    return;
+  }
 
-  const body = document.getElementById('cv-body');
+  if (!body) return;
 
   if (!courses.length) {
     body.innerHTML = `<div class="empty-state"><p>You have no courses yet. Create a course first.</p></div>`;
