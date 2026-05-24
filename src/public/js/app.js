@@ -2042,6 +2042,8 @@ async function loadUserData() {
 }
 
 function getPortalName(role) {
+  // Manager in a corporate-mode company = Corporate Admin
+  if (role === 'manager' && currentUser?.company?.mode === 'corporate') return 'Corporate Admin Portal';
   const names = {
     manager: 'Manager Portal',
     lecturer: 'Lecturer Portal',
@@ -2213,7 +2215,8 @@ function showDashboard(data) {
 
     document.getElementById('user-name').textContent = currentUser.name || '';
     const roleEl = document.getElementById('user-role');
-    roleEl.textContent = currentUser.role || '';
+    const isCorporateAdmin = currentUser.role === 'manager' && currentUser.company?.mode === 'corporate';
+    roleEl.textContent = isCorporateAdmin ? 'corporate admin' : (currentUser.role || '');
     roleEl.className = `role-badge role-${currentUser.role || 'user'}`;
     // Mark role on body so CSS can scope role-specific overrides (e.g. hide banners for student)
     document.body.setAttribute('data-role', currentUser.role || '');
