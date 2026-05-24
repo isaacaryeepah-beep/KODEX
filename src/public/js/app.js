@@ -10649,6 +10649,7 @@ window.crConnectWifi = async function(localIp, ssid, idx, isOpen = false) {
   }
 };
 // ─────────────────────────────────────────────────────────────────────────────
+async function renderMarkAttendance() {
   const content = document.getElementById('main-content');
   if (!content) return;
 
