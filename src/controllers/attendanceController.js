@@ -339,7 +339,13 @@ exports.getActiveSession = async (req, res) => {
       .populate("createdBy", "name email")
       .populate("course", "title code");
 
-    res.json({ session: session || null });
+    // Include device localIp so the app can reach the ESP32 on the same network
+    let deviceLocalIp = null;
+    if (session && session.deviceId) {
+      const sessionDevice = await Device.findOne({ deviceId: session.deviceId, companyId: req.user.company }).select('localIp').lean();
+      deviceLocalIp = sessionDevice?.localIp || null;
+    }
+    res.json({ session: session || null, deviceLocalIp });
   } catch (error) {
     console.error("Active session error:", error);
     res.status(500).json({ error: "Failed to fetch active session" });
