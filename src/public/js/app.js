@@ -10417,6 +10417,9 @@ async function renderClassDevice() {
          </div>`
       : '';
 
+    const localIp = device && device.localIp ? device.localIp : null;
+    const currentSsid = device && device.wifiSSID ? device.wifiSSID : null;
+
     root.innerHTML = `
       <div style="max-width:560px;margin:0 auto">
         <h2 style="font-size:20px;font-weight:800;margin-bottom:4px">Class Device</h2>
@@ -10440,7 +10443,7 @@ async function renderClassDevice() {
           </div>
 
           ${!device.activeLecturerId ? `
-          <div style="background:#fff;border:1.5px solid #e2e8f0;border-radius:14px;padding:18px">
+          <div style="background:#fff;border:1.5px solid #e2e8f0;border-radius:14px;padding:18px;margin-bottom:20px">
             <h3 style="font-size:15px;font-weight:700;margin-bottom:14px">Connect Device to a Lecturer</h3>
             ${!lecturers.length ? `<p style="color:#64748b;font-size:13px">No lecturers found for your class courses.</p>` : `
             <div style="margin-bottom:12px">
@@ -10458,6 +10461,22 @@ async function renderClassDevice() {
             <button onclick="classRepConnect()" style="width:100%;padding:11px;background:#1e293b;color:#fff;border:none;border-radius:9px;font-size:14px;font-weight:700;cursor:pointer">
               Connect &amp; Start Session
             </button>`}
+          </div>` : ''}
+
+          <!-- WiFi Management -->
+          ${localIp ? `
+          <div style="background:#fff;border:1.5px solid #e2e8f0;border-radius:14px;padding:18px">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+              <h3 style="font-size:15px;font-weight:700;margin:0">Device WiFi</h3>
+              ${currentSsid ? `<span style="font-size:12px;color:#16a34a;font-weight:600;background:#f0fdf4;padding:3px 10px;border-radius:20px;border:1px solid #86efac">&#9679; ${esc(currentSsid)}</span>` : ''}
+            </div>
+            <p style="font-size:12px;color:#64748b;margin-bottom:14px">Change the WiFi network the device is connected to — useful when moving between campus branches.</p>
+            <button onclick="crScanWifi('${localIp}')" id="cr-wifi-scan-btn"
+              style="width:100%;padding:10px;background:#f8fafc;color:#1e293b;border:1.5px solid #e2e8f0;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer;margin-bottom:14px">
+              Scan for Networks
+            </button>
+            <div id="cr-wifi-list" style="display:none"></div>
+            <div id="cr-wifi-msg" style="font-size:13px;margin-top:8px"></div>
           </div>` : ''}
         `}
       </div>
@@ -10511,9 +10530,127 @@ window.saveLecturerPin = async function() {
     showToastNotif('PIN saved', 'success');
   } catch (e) { showToastNotif(e.message || 'Failed to save PIN', 'error'); }
 };
-// ─────────────────────────────────────────────────────────────────────────────
 
-async function renderMarkAttendance() {
+// ─── Class Rep WiFi Management ────────────────────────────────────────────────
+window.crScanWifi = async function(localIp) {
+  const btn     = document.getElementById('cr-wifi-scan-btn');
+  const listEl  = document.getElementById('cr-wifi-list');
+  const msgEl   = document.getElementById('cr-wifi-msg');
+  if (!listEl || !msgEl) return;
+
+  btn.disabled = true;
+  btn.textContent = 'Scanning…';
+  listEl.style.display = 'none';
+  msgEl.textContent = '';
+
+  try {
+    const res = await fetch(`http://${localIp}/wifi/scan`, { signal: AbortSignal.timeout(12000) });
+    if (!res.ok) throw new Error('Device returned an error');
+    const nets = await res.json();
+    const list = Array.isArray(nets) ? nets : (nets.networks || []);
+    list.sort((a, b) => (b.rssi || 0) - (a.rssi || 0));
+
+    if (!list.length) {
+      msgEl.innerHTML = '<span style="color:#64748b">No networks found. Try scanning again.</span>';
+      return;
+    }
+
+    listEl.style.display = 'block';
+    listEl.innerHTML = list.map((n, i) => {
+      const rssi  = n.rssi || -90;
+      const bars  = rssi > -60 ? 4 : rssi > -75 ? 3 : rssi > -85 ? 2 : 1;
+      const barHtml = [1,2,3,4].map(b =>
+        `<span style="display:inline-block;width:4px;height:${4+b*4}px;border-radius:1px;background:${b<=bars?'#16a34a':'#e2e8f0'};margin-right:2px;vertical-align:bottom"></span>`
+      ).join('');
+      const badge = n.open
+        ? `<span style="font-size:10px;font-weight:700;color:#16a34a;background:#f0fdf4;border:1px solid #86efac;padding:2px 7px;border-radius:20px">OPEN</span>`
+        : `<span style="font-size:10px;font-weight:700;color:#64748b;background:#f8fafc;border:1px solid #e2e8f0;padding:2px 7px;border-radius:20px">PWD</span>`;
+      const ssidEsc = esc(n.ssid || '(Hidden)');
+      const ssidRaw = (n.ssid || '').replace(/'/g, "\\'");
+      return `
+        <div id="cr-net-${i}" style="display:flex;align-items:center;justify-content:space-between;padding:11px 14px;
+             border-bottom:1px solid #f1f5f9;cursor:pointer;transition:background .1s"
+             onmouseenter="this.style.background='#f8fafc'" onmouseleave="this.style.background=''"
+             onclick="crSelectNetwork('${localIp}','${ssidRaw}',${n.open?'true':'false'},${i})">
+          <div style="display:flex;align-items:center;gap:10px">
+            <div style="display:flex;align-items:flex-end;height:20px">${barHtml}</div>
+            <span style="font-size:13px;font-weight:600;color:#1e293b">${ssidEsc}</span>
+          </div>
+          ${badge}
+        </div>
+        <div id="cr-pwd-${i}" style="display:none;padding:10px 14px;background:#f8fafc;border-bottom:1px solid #f1f5f9">
+          <input id="cr-pwd-input-${i}" type="password" placeholder="Enter WiFi password"
+            style="width:100%;padding:9px 12px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:13px;box-sizing:border-box;margin-bottom:8px">
+          <div style="display:flex;gap:8px">
+            <button onclick="crConnectWifi('${localIp}','${ssidRaw}',${i})"
+              style="flex:1;padding:9px;background:#1e293b;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">
+              Connect
+            </button>
+            <button onclick="document.getElementById('cr-pwd-${i}').style.display='none'"
+              style="padding:9px 14px;background:#f1f5f9;color:#64748b;border:none;border-radius:8px;font-size:13px;cursor:pointer">
+              Cancel
+            </button>
+          </div>
+        </div>`;
+    }).join('');
+
+    // Wrap in a bordered container
+    listEl.style.cssText = 'display:block;border:1.5px solid #e2e8f0;border-radius:10px;overflow:hidden';
+
+  } catch (e) {
+    const isBlocked = e.message && (e.message.includes('Failed to fetch') || e.message.includes('NetworkError'));
+    msgEl.innerHTML = isBlocked
+      ? `<span style="color:#dc2626">Could not reach device. Make sure you're on the same WiFi network as the device.</span>`
+      : `<span style="color:#dc2626">Scan failed: ${esc(e.message)}</span>`;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Scan for Networks';
+  }
+};
+
+window.crSelectNetwork = function(localIp, ssid, isOpen, idx) {
+  if (isOpen) {
+    crConnectWifi(localIp, ssid, idx, true);
+  } else {
+    // Toggle password field
+    const pwd = document.getElementById(`cr-pwd-${idx}`);
+    if (pwd) {
+      const visible = pwd.style.display !== 'none';
+      pwd.style.display = visible ? 'none' : 'block';
+      if (!visible) document.getElementById(`cr-pwd-input-${idx}`)?.focus();
+    }
+  }
+};
+
+window.crConnectWifi = async function(localIp, ssid, idx, isOpen = false) {
+  const msgEl   = document.getElementById('cr-wifi-msg');
+  const pwdInput = document.getElementById(`cr-pwd-input-${idx}`);
+  const password = isOpen ? '' : (pwdInput ? pwdInput.value : '');
+
+  if (msgEl) { msgEl.innerHTML = `<span style="color:#64748b">Connecting to <strong>${esc(ssid)}</strong>…</span>`; }
+
+  try {
+    const res = await fetch(`http://${localIp}/wifi/reconfigure`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ssid, password }),
+      signal: AbortSignal.timeout(35000),
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(json.error || 'Connection failed');
+    if (msgEl) msgEl.innerHTML = `<span style="color:#16a34a;font-weight:600">✓ Connected to <strong>${esc(ssid)}</strong>. Device is restarting…</span>`;
+    showToastNotif(`Device switching to ${ssid}`, 'success');
+    // Refresh after device reboots (~3s)
+    setTimeout(() => renderClassDevice(), 4000);
+  } catch (e) {
+    const msg = e.message.includes('aborted') || e.message.includes('timeout')
+      ? 'Timed out — device may be rebooting on the new network'
+      : (e.message || 'Failed to connect');
+    if (msgEl) msgEl.innerHTML = `<span style="color:#dc2626">${esc(msg)}</span>`;
+    showToastNotif(msg, 'error');
+  }
+};
+// ─────────────────────────────────────────────────────────────────────────────
   const content = document.getElementById('main-content');
   if (!content) return;
 
