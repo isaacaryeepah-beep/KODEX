@@ -152,7 +152,7 @@ class AppTheme {
       navigationDrawerTheme: NavigationDrawerThemeData(
         backgroundColor: DiklyColors.surface,
         indicatorColor: DiklyColors.primary.withOpacity(0.1),
-        labelTextStyle: MaterialStateProperty.all(
+        labelTextStyle: WidgetStateProperty.all(
           GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w500),
         ),
       ),
