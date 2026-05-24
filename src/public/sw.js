@@ -4,7 +4,7 @@
 //  Handles BackgroundSync for offline monitor event uploads.
 // ════════════════════════════════════════════════════════════════════
 
-const CACHE_NAME  = 'dikly-v26';
+const CACHE_NAME  = 'dikly-v27';
 const SYNC_TAG    = 'dikly-offline-sync';
 const BEACON_TAG  = 'dikly-beacon-sync';
 
