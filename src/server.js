@@ -367,6 +367,9 @@ app.use("/api", deviceSessionRoutes);
 const classRepRoutes = require('./routes/classRepRoutes');
 app.use('/api/class-rep', classRepRoutes);
 
+const courseVideoRoutes = require('./routes/courseVideoRoutes');
+app.use('/api/course-videos', courseVideoRoutes);
+
 if (superadminRoutes) app.use("/api/superadmin", superadminRoutes);
 
 app.get('/.well-known/assetlinks.json', (req, res) => {

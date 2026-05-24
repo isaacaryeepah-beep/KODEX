@@ -1,0 +1,18 @@
+const mongoose = require('mongoose');
+
+const courseVideoSchema = new mongoose.Schema({
+  courseId:    { type: mongoose.Schema.Types.ObjectId, ref: 'Course', required: true, index: true },
+  companyId:   { type: mongoose.Schema.Types.ObjectId, ref: 'Company', required: true, index: true },
+  addedBy:     { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  title:       { type: String, required: true, trim: true, maxlength: 200 },
+  description: { type: String, trim: true, maxlength: 1000, default: '' },
+  url:         { type: String, required: true, trim: true },
+  embedUrl:    { type: String, required: true },
+  thumbnail:   { type: String, default: '' },
+  platform:    { type: String, enum: ['youtube', 'vimeo', 'googledrive', 'loom', 'other'], default: 'other' },
+  order:       { type: Number, default: 0 },
+}, { timestamps: true });
+
+courseVideoSchema.index({ courseId: 1, order: 1 });
+
+module.exports = mongoose.model('CourseVideo', courseVideoSchema);
