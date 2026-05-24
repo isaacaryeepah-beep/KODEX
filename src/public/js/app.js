@@ -19633,29 +19633,37 @@ async function submitHodRequest() {
 // ── Course Videos ─────────────────────────────────────────────────────────────
 async function renderCourseVideos() {
   const content = document.getElementById('main-content');
+  if (!content) return;
   content.innerHTML = `<div class="page-header"><h1>Course Videos</h1></div><div id="cv-body"><p style="color:var(--text-secondary)">Loading…</p></div>`;
 
-  const isLecturer = ['lecturer','admin','superadmin','hod'].includes(currentUser.role);
-
-  if (isLecturer) {
-    await _renderLecturerVideos(content);
-  } else {
-    await _renderStudentVideos(content);
+  try {
+    const isLecturer = ['lecturer','admin','superadmin','hod'].includes(currentUser?.role);
+    if (isLecturer) {
+      await _renderLecturerVideos();
+    } else {
+      await _renderStudentVideos();
+    }
+  } catch(e) {
+    const body = document.getElementById('cv-body');
+    if (body) body.innerHTML = `<div class="empty-state"><p style="color:var(--error)">Error: ${escHtml(e.message)}</p></div>`;
   }
 }
 
-async function _renderLecturerVideos(content) {
+async function _renderLecturerVideos() {
   const body = document.getElementById('cv-body');
+  if (!body) return;
+
+  // Timeout race — show error if API takes >12s
+  const timeout = new Promise((_, rej) => setTimeout(() => rej(new Error('Request timed out')), 12000));
+
   let courses = [];
   try {
-    const d = await api('/api/courses');
-    courses = d.courses || [];
+    const d = await Promise.race([api('/api/courses'), timeout]);
+    courses = (d && d.courses) ? d.courses : [];
   } catch(e) {
-    if (body) body.innerHTML = `<div class="empty-state"><p style="color:var(--error)">Could not load courses: ${escHtml(e.message)}</p></div>`;
+    body.innerHTML = `<div class="empty-state"><p style="color:var(--error)">Could not load courses: ${escHtml(e.message)}</p></div>`;
     return;
   }
-
-  if (!body) return;
 
   if (!courses.length) {
     body.innerHTML = `<div class="empty-state"><p>You have no courses yet. Create a course first.</p></div>`;
@@ -19752,9 +19760,9 @@ window.cvWatchVideo = function(embedUrl, title) {
   overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
 };
 
-async function _renderStudentVideos(content) {
+async function _renderStudentVideos() {
   const body = document.getElementById('cv-body');
-  body.innerHTML = '<p style="color:var(--text-secondary)">Loading…</p>';
+  if (!body) return;
   try {
     const d = await api('/api/course-videos/my-courses');
     const courses = d.courses || [];
