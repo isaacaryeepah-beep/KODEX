@@ -5820,14 +5820,13 @@ async function showStartSessionModal() {
       <div class="modal-overlay" onclick="closeModal(event)">
         <div class="modal" onclick="event.stopPropagation()" style="text-align:center;max-width:400px">
           <div style="font-size:40px;margin-bottom:12px">📟</div>
-          <h3 style="margin-bottom:8px">Device Not Paired</h3>
+          <h3 style="margin-bottom:8px">No Device Connected</h3>
           <p style="font-size:13px;color:var(--text-muted);margin-bottom:20px;line-height:1.6">
-            You haven't paired a classroom device yet.<br>
-            Open <strong>Attendance Device</strong>, generate a pairing code, and enter it on your ESP32.
+            No attendance device is connected to your session yet.<br><br>
+            Ask your <strong>class rep</strong> to open the app, go to <strong>Class Device</strong>, and connect the device to you before you start.
           </p>
           <div style="display:flex;gap:8px;justify-content:center">
             <button class="btn btn-secondary btn-sm" onclick="closeModal()">Cancel</button>
-            <button class="btn btn-primary btn-sm" onclick="closeModal();navigateTo('attendance-device')">Open Pairing</button>
             <button class="btn btn-primary btn-sm" onclick="showStartSessionModal()">↻ Retry</button>
           </div>
         </div>
