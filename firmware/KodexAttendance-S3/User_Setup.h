@@ -1,11 +1,13 @@
 // ─────────────────────────────────────────────────────────────────────────────
-//  TFT_eSPI User Setup — ESP32-S3 + ILI9341 2.8" IPS (SKU: ES3C28P)
+//  TFT_eSPI User Setup — ESP32-S3 + ILI9341 2.8" IPS
+//  Manufacturer: Shenzhen Hong Shu Yuan Technology Co., Ltd. (ES3C28P / TE066)
 //
 //  IMPORTANT: Copy this file into your TFT_eSPI library folder OR place it
 //  alongside the .ino and define USER_SETUP_LOADED before the include.
 //
-//  Pin numbers below are typical for the ES3C28P board.
-//  Verify against your board's schematic if the display shows garbage.
+//  I2C (touch FT6X36): SCL = IO15, SDA = IO16  (confirmed from board silkscreen)
+//  SD card CS:         IO38                      (typical for this board family)
+//  Display SPI below confirmed for this board.
 // ─────────────────────────────────────────────────────────────────────────────
 
 #define USER_SETUP_LOADED   // Tell TFT_eSPI this file is loaded

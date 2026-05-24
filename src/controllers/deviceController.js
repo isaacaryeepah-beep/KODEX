@@ -383,9 +383,20 @@ async function _markStaleOffline(device) {
 exports.getMyDevice = async (req, res) => {
   try {
     const isAdmin = ['admin', 'superadmin'].includes(req.user.role);
-    const query = isAdmin
-      ? { companyId: req.user.company }
-      : { lecturerId: req.user._id, companyId: req.user.company };
+
+    let query;
+    if (isAdmin) {
+      query = { companyId: req.user.company };
+    } else {
+      // Dedicated device OR shared device currently connected to this lecturer
+      query = {
+        companyId: req.user.company,
+        $or: [
+          { lecturerId: req.user._id },
+          { activeLecturerId: req.user._id, ownershipType: 'shared' },
+        ],
+      };
+    }
 
     let device = await Device.findOne(query).populate('lecturerId', 'name email');
     if (!device) return res.json({ success: true, data: null });

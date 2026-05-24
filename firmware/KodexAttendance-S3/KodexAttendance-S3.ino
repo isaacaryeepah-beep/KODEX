@@ -20,7 +20,12 @@
  *    TFT_eSPI        — colour display driver (Bodmer)
  *    ArduinoJson     — JSON (≥ 7.0)
  *  Built into ESP32 core: WiFi, HTTPClient, WebServer, DNSServer,
- *                         Preferences, mbedtls
+ *                         Preferences, mbedtls, SD
+ *
+ *  SD CARD (built-in on ES3C28P)
+ *    Shares the FSPI bus with the display (MOSI=11, MISO=13, SCLK=12).
+ *    SD_CS_PIN is the chip-select for the SD slot — verify GPIO 39 against
+ *    your board's silkscreen or schematic and adjust if different.
  *
  *  TOUCH CONTROLLER (FT6336 / FT6X36 via I2C)
  *    I2C SDA: GPIO 4   I2C SCL: GPIO 5
@@ -48,21 +53,31 @@
 #include <time.h>
 #include <mbedtls/md.h>
 #include <ArduinoJson.h>
+#include <SPI.h>
+#include <SD.h>
+#include <FS.h>
 
 // ─── Pin / Hardware Config ───────────────────────────────────────────────────
-static const uint8_t TOUCH_SDA  = 4;
-static const uint8_t TOUCH_SCL  = 5;
+// Confirmed from board silkscreen (Shenzhen Hong Shu Yuan ES3C28P):
+//   I2C header: IO15 = SCL, IO16 = SDA
+// Touch INT/RST: typical for this board family — adjust if touch is unresponsive.
+static const uint8_t TOUCH_SDA  = 16;
+static const uint8_t TOUCH_SCL  = 15;
 static const uint8_t TOUCH_INT  = 7;
 static const uint8_t TOUCH_RST  = 6;
 static const uint8_t LED_PIN    = 2;   // status LED (if present on your board)
 static const uint8_t FT6X36_ADDR = 0x38;
+
+// SD card — shares FSPI bus with display; only needs its own CS pin.
+// GPIO 38 is the typical SD CS for this board family (Shenzhen Hong Shu Yuan ES3C28P).
+static const uint8_t SD_CS_PIN = 38;
 
 // ─── App Config ──────────────────────────────────────────────────────────────
 static const char*   FIRMWARE_VERSION     = "s3-2.0.0";
 static const char*   DEFAULT_API_BASE     = "https://kodex.it.com";
 static const uint32_t HEARTBEAT_MS        = 5000;
 static const uint32_t WIFI_TIMEOUT_MS     = 30000;
-static const uint32_t WINDOW_SECONDS      = 20;   // code rotation period
+static const uint32_t WINDOW_SECONDS      = 300;  // code rotation period (5 minutes)
 
 // ─── Colour Palette (RGB565) ─────────────────────────────────────────────────
 #define COL_BG        0x0841   // #0f172a  dark navy
@@ -104,28 +119,73 @@ bool     timeSynced  = false;
 bool     forceReconn = false;
 
 // Screen state machine
-enum Screen { SPLASH, SETUP, CONNECTING, READY, SESSION };
+enum Screen { SPLASH, SETUP, WIFI_SCAN, WIFI_RECONFIG, CONNECTING, READY, SESSION };
 Screen curScreen = SPLASH;
-String statusMsg = "";   // shown on CONNECTING / error banners
+String statusMsg = "";
 uint32_t splashStart = 0;
 
 // Touch state
-bool     touchActive     = false;
+bool     touchActive  = false;
 uint16_t touchX = 0, touchY = 0;
-uint32_t touchDownMs = 0;   // for long-press detection
+uint32_t touchDownMs  = 0;
+bool     touchHandled = false;   // prevents hold-repeat firing as a tap
 
-// ─── Offline Attendance Buffer ────────────────────────────────────────────────
-// When school WiFi has no internet, students submit directly to /attend.
-// Records are buffered here and pushed to the server via /api/devices/sync
-// on the next successful heartbeat.
+// ─── WiFi scanner ─────────────────────────────────────────────────────────────
+struct WifiNet { char ssid[33]; int8_t bars; bool open; };
+static WifiNet  wifiNets[20];
+static uint8_t  wifiNetCount = 0;
+static int8_t   wifiScroll   = 0;
+static bool     wifiScanning = false;
+static String   wifiMsg      = "";
+static String   pendingSsid  = "";   // network tapped, waiting for password
+
+// ─── Offline Attendance Storage ──────────────────────────────────────────────
+// Primary: append JSON lines to /attendance.jsonl on the built-in SD card.
+// Fallback: fixed 200-slot RAM buffer (used if SD is absent or fails to init).
+// Records are flushed to /api/devices/sync on the next successful heartbeat.
+static const char* SD_ATT_FILE = "/attendance.jsonl";
+
+// SD SPI instance — same FSPI bus as display, dedicated CS for SD slot.
+static SPIClass    sdSPI(FSPI);
+static bool        sdAvailable  = false;
+static uint32_t    sdRecordCount = 0;  // tracks records written to SD file
+
 struct OfflineRec {
   char indexNumber[32];
   char userId[32];
   char code[8];
+  char sessionId[48];
   uint32_t ts;
 };
 static OfflineRec offlineBuf[200];
 static uint8_t    offlineCount = 0;
+
+// ─── Per-session duplicate guard ─────────────────────────────────────────────
+// Keeps a compact list of identifiers that have already submitted this session.
+// Cleared automatically when the session ID changes.
+// Uses indexNumber when available, userId otherwise — whichever the student sent.
+static char     dedupIds[400][32];   // 400 students × 32 chars ≈ 12.5 KB
+static uint16_t dedupCount   = 0;
+static String   dedupSession = "";   // session this list belongs to
+
+static void dedupClear(const String& sid) {
+  dedupCount = 0;
+  dedupSession = sid;
+}
+
+// Returns true if this identifier has already been seen in the current session.
+static bool dedupCheck(const char* id) {
+  if (!id || id[0] == '\0') return false;
+  for (uint16_t i = 0; i < dedupCount; i++)
+    if (strncmp(dedupIds[i], id, 31) == 0) return true;
+  return false;
+}
+
+static void dedupAdd(const char* id) {
+  if (!id || id[0] == '\0' || dedupCount >= 400) return;
+  strncpy(dedupIds[dedupCount++], id, 31);
+  dedupIds[dedupCount - 1][31] = '\0';
+}
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 #define LOG(s) do { Serial.print("[Dikly] "); Serial.println(s); } while(0)
@@ -186,6 +246,33 @@ static bool touchRead(uint16_t& tx, uint16_t& ty) {
   return true;
 }
 
+// ─── WiFi scanner ────────────────────────────────────────────────────────────
+static void doWifiScan() {
+  wifiScanning = true; wifiMsg = ""; wifiNetCount = 0; wifiScroll = 0;
+  WiFi.mode(WIFI_STA);
+  int n = WiFi.scanNetworks();
+  for (int i = 0; i < n && wifiNetCount < 20; i++) {
+    // Deduplicate by SSID
+    bool dup = false;
+    for (uint8_t j = 0; j < wifiNetCount; j++)
+      if (strncmp(wifiNets[j].ssid, WiFi.SSID(i).c_str(), 32) == 0) { dup = true; break; }
+    if (dup || WiFi.SSID(i).isEmpty()) continue;
+    int32_t rssi = WiFi.RSSI(i);
+    strncpy(wifiNets[wifiNetCount].ssid, WiFi.SSID(i).c_str(), 32);
+    wifiNets[wifiNetCount].ssid[32] = '\0';
+    wifiNets[wifiNetCount].bars = rssi > -60 ? 4 : rssi > -75 ? 3 : rssi > -85 ? 2 : 1;
+    wifiNets[wifiNetCount].open = (WiFi.encryptionType(i) == WIFI_AUTH_OPEN);
+    wifiNetCount++;
+  }
+  // Sort by signal strength descending
+  for (uint8_t i = 0; i < wifiNetCount - 1; i++)
+    for (uint8_t j = i + 1; j < wifiNetCount; j++)
+      if (wifiNets[j].bars > wifiNets[i].bars)
+        { WifiNet tmp = wifiNets[i]; wifiNets[i] = wifiNets[j]; wifiNets[j] = tmp; }
+  wifiScanning = false;
+  wifiMsg = (wifiNetCount == 0) ? "No networks found." : "";
+}
+
 // ─── NVS ─────────────────────────────────────────────────────────────────────
 static void loadConfig() {
   prefs.begin("kodex", true);
@@ -226,6 +313,44 @@ static int postJson(const String& path, const String& body,
 
 // ─── Offline attendance sync ──────────────────────────────────────────────────
 static void syncOfflineAttendance() {
+  // ── SD path ──────────────────────────────────────────────────────────────────
+  if (sdAvailable && sdRecordCount > 0 && SD.exists(SD_ATT_FILE)) {
+    File f = SD.open(SD_ATT_FILE, FILE_READ);
+    if (f) {
+      JsonDocument doc;
+      JsonArray arr = doc["records"].to<JsonArray>();
+      uint32_t parsed = 0;
+      while (f.available()) {
+        String line = f.readStringUntil('\n');
+        line.trim();
+        if (line.isEmpty()) continue;
+        JsonDocument rec;
+        if (!deserializeJson(rec, line)) {
+          JsonObject o = arr.add<JsonObject>();
+          if (rec["indexNumber"].is<const char*>()) o["indexNumber"] = rec["indexNumber"];
+          if (rec["userId"].is<const char*>())      o["userId"]      = rec["userId"];
+          o["codeUsed"]  = rec["code"];
+          o["timestamp"] = rec["ts"];
+          o["sessionId"] = rec["sid"];
+          parsed++;
+        }
+      }
+      f.close();
+      if (parsed == 0) { SD.remove(SD_ATT_FILE); sdRecordCount = 0; return; }
+      String body; serializeJson(doc, body);
+      String resp; int code = postJson("/api/devices/sync", body, resp);
+      if (code == 200) {
+        LOG("SD sync: " + String(parsed) + " records sent");
+        SD.remove(SD_ATT_FILE);
+        sdRecordCount = 0;
+      } else {
+        LOG("SD sync failed " + String(code) + ": " + resp);
+      }
+    }
+    return;
+  }
+
+  // ── RAM fallback path ─────────────────────────────────────────────────────────
   if (offlineCount == 0) return;
   JsonDocument doc;
   JsonArray arr = doc["records"].to<JsonArray>();
@@ -235,15 +360,15 @@ static void syncOfflineAttendance() {
     if (offlineBuf[i].userId[0])      o["userId"]      = offlineBuf[i].userId;
     o["codeUsed"]  = offlineBuf[i].code;
     o["timestamp"] = offlineBuf[i].ts;
-    o["sessionId"] = sessionId;
+    o["sessionId"] = offlineBuf[i].sessionId[0] ? offlineBuf[i].sessionId : sessionId.c_str();
   }
   String body; serializeJson(doc, body);
   String resp; int code = postJson("/api/devices/sync", body, resp);
   if (code == 200) {
-    LOG("Synced " + String(offlineCount) + " offline records");
+    LOG("RAM sync: " + String(offlineCount) + " records sent");
     offlineCount = 0;
   } else {
-    LOG("Sync failed " + String(code) + ": " + resp);
+    LOG("RAM sync failed " + String(code) + ": " + resp);
   }
 }
 
@@ -300,9 +425,12 @@ static void sendHeartbeat() {
       LOG("Session ended"); sessionId = ""; sessionSeed = "";
       sessionTitle = ""; sessionCourse = ""; sessionLecturer = "";
       studentsMarked = 0;
+      dedupClear("");
     }
   } else {
-    sessionId       = sess["sessionId"] | "";
+    String incomingId = sess["sessionId"] | "";
+    if (incomingId != sessionId) dedupClear(incomingId);  // new session → reset dedup
+    sessionId       = incomingId;
     sessionSeed     = sess["esp32Seed"] | "";
     sessionTitle    = sess["title"]     | "Attendance";
     sessionCourse   = sess["courseCode"]| "";
@@ -407,6 +535,353 @@ static void drawSetup(const String& apName) {
   spr.pushSprite(0, 0);
 }
 
+// ── WIFI RECONFIG (paired, but saved network unavailable) ────────────────────
+static void drawWifiReconfig(const String& apName) {
+  spr.fillSprite(COL_BG);
+  spr.fillRect(0, 0, SW, 6, COL_WARNING);
+  // Title
+  spr.setTextFont(4); spr.setTextColor(COL_TEXT, COL_BG);
+  String t = "Change WiFi";
+  int32_t tw = spr.textWidth(t);
+  spr.setCursor((SW - tw) / 2, 20); spr.print(t);
+  // Info card
+  card(spr, 10, 52, SW - 20, 56, COL_CARD, COL_BORDER, 10);
+  spr.setTextFont(2); spr.setTextColor(COL_MUTED, COL_CARD);
+  spr.setCursor(18, 62); spr.print("Saved network not found.");
+  spr.setCursor(18, 78); spr.print("Connect phone to:");
+  spr.setTextFont(2); spr.setTextColor(COL_PRIMARY, COL_CARD);
+  tw = spr.textWidth(apName);
+  spr.setCursor((SW - tw) / 2, 94); spr.print(apName);
+  // Steps
+  spr.setTextFont(2); spr.setTextColor(COL_TEXT, COL_BG);
+  spr.setCursor(18, 124); spr.print("Then open 192.168.4.1 and");
+  spr.setCursor(18, 140); spr.print("enter the new WiFi details.");
+  // Note — pairing is kept
+  card(spr, 10, 165, SW - 20, 44, 0x0841, COL_SUCCESS, 8);
+  spr.setTextFont(2); spr.setTextColor(COL_SUCCESS, 0x0841);
+  spr.setCursor(18, 174); spr.print("Device pairing is preserved.");
+  spr.setCursor(18, 190); spr.print("Only WiFi will change.");
+  // Factory reset hint
+  card(spr, 10, 224, SW - 20, 36, 0x2000, 0x4000, 8);
+  spr.setTextFont(2); spr.setTextColor(COL_WARNING, 0x2000);
+  spr.setCursor(18, 235); spr.print("Hold 3 s to full factory reset");
+  spr.fillSmoothCircle(SW / 2, 284, 8, COL_WARNING, COL_BG);
+  spr.pushSprite(0, 0);
+}
+
+// ── WIFI SCAN (on-device WiFi picker) ────────────────────────────────────────
+#define LIST_Y      70    // y where network list starts
+#define ITEM_H      41    // height of each list item (38px + 3px gap)
+#define MAX_VIS      6    // max visible items at once
+#define SCAN_BTN_X  162   // scan button x
+#define SCROLL_X    220   // scroll arrow column x
+
+static void drawWifiScan() {
+  spr.fillSprite(COL_BG);
+  drawHeader(spr, false);
+
+  // Title
+  spr.setTextFont(4); spr.setTextColor(COL_TEXT, COL_BG);
+  spr.setCursor(10, 46); spr.print("WiFi Networks");
+
+  // Scan button (top-right)
+  uint16_t sbCol = wifiScanning ? COL_MUTED : COL_PRIMARY;
+  spr.fillSmoothRoundRect(SCAN_BTN_X, 42, 68, 26, 13, sbCol, COL_BG);
+  spr.setTextFont(2); spr.setTextColor(COL_WHITE, sbCol);
+  String scanLabel = wifiScanning ? "Scanning" : "Scan";
+  int32_t stw = spr.textWidth(scanLabel);
+  spr.setCursor(SCAN_BTN_X + (68 - stw) / 2, 51); spr.print(scanLabel);
+
+  if (wifiScanning) { spr.pushSprite(0, 0); return; }
+
+  if (!wifiMsg.isEmpty()) {
+    spr.setTextFont(2); spr.setTextColor(COL_MUTED, COL_BG);
+    int32_t tw = spr.textWidth(wifiMsg);
+    spr.setCursor((SW - tw) / 2, 170); spr.print(wifiMsg);
+    spr.setTextFont(2); spr.setTextColor(COL_BORDER, COL_BG);
+    String hint = "Tap Scan to search";
+    tw = spr.textWidth(hint);
+    spr.setCursor((SW - tw) / 2, 192); spr.print(hint);
+    spr.pushSprite(0, 0); return;
+  }
+
+  // Network rows
+  uint8_t visible = (uint8_t)min((int)wifiNetCount - wifiScroll, MAX_VIS);
+  for (uint8_t i = 0; i < visible; i++) {
+    uint8_t idx = wifiScroll + i;
+    WifiNet& n  = wifiNets[idx];
+    int32_t  y  = LIST_Y + i * ITEM_H;
+
+    card(spr, 4, y, 212, 38, COL_CARD, COL_BORDER, 8);
+
+    // Signal bars (4 vertical bars, left side)
+    for (uint8_t b = 0; b < 4; b++) {
+      uint8_t bh = 6 + b * 5;
+      uint16_t bc = (b < (uint8_t)n.bars) ? COL_SUCCESS : COL_BORDER;
+      spr.fillRoundRect(10 + b * 8, y + 30 - bh, 6, bh, 1, bc);
+    }
+
+    // SSID
+    spr.setTextFont(2); spr.setTextColor(COL_TEXT, COL_CARD);
+    String ssid = String(n.ssid);
+    if (spr.textWidth(ssid) > 118) { ssid = ssid.substring(0, 15); ssid += ".."; }
+    spr.setCursor(46, y + 12); spr.print(ssid);
+
+    // Badge — OPEN (green) or PWD (slate)
+    if (n.open) {
+      spr.fillSmoothRoundRect(167, y + 10, 40, 18, 9, COL_SUCCESS, COL_CARD);
+      spr.setTextFont(2); spr.setTextColor(COL_WHITE, COL_SUCCESS);
+      spr.setCursor(172, y + 13); spr.print("OPEN");
+    } else {
+      spr.fillSmoothRoundRect(167, y + 10, 40, 18, 9, COL_BORDER, COL_CARD);
+      spr.setTextFont(2); spr.setTextColor(COL_MUTED, COL_BORDER);
+      spr.setCursor(174, y + 13); spr.print("PWD");
+    }
+  }
+
+  // Scroll arrows (right strip)
+  if (wifiScroll > 0)
+    spr.fillTriangle(SCROLL_X + 9, LIST_Y - 8,
+                     SCROLL_X,     LIST_Y + 8,
+                     SCROLL_X + 18,LIST_Y + 8, COL_PRIMARY);
+  if (wifiScroll + MAX_VIS < wifiNetCount)
+    spr.fillTriangle(SCROLL_X + 9, LIST_Y + MAX_VIS * ITEM_H + 8,
+                     SCROLL_X,     LIST_Y + MAX_VIS * ITEM_H - 8,
+                     SCROLL_X + 18,LIST_Y + MAX_VIS * ITEM_H - 8, COL_PRIMARY);
+
+  // Footer hint
+  spr.setTextFont(2); spr.setTextColor(COL_BORDER, COL_BG);
+  String ft = "Hold 3s to factory reset";
+  int32_t ftw = spr.textWidth(ft);
+  spr.setCursor((SW - ftw) / 2, 308); spr.print(ft);
+
+  spr.pushSprite(0, 0);
+}
+
+// ── Tap handler for WiFi scan screen ─────────────────────────────────────────
+static void handleWifiScanTap(uint16_t tx, uint16_t ty) {
+  // Scan button
+  if (tx >= SCAN_BTN_X && ty >= 42 && ty <= 68) {
+    drawWifiScan();   // show "Scanning" label immediately
+    doWifiScan();
+    return;
+  }
+  // Scroll up
+  if (tx >= SCROLL_X && ty >= LIST_Y - 12 && ty <= LIST_Y + 12 && wifiScroll > 0) {
+    wifiScroll--; return;
+  }
+  // Scroll down
+  int32_t downY = LIST_Y + MAX_VIS * ITEM_H;
+  if (tx >= SCROLL_X && ty >= downY - 12 && ty <= downY + 12
+      && wifiScroll + MAX_VIS < wifiNetCount) {
+    wifiScroll++; return;
+  }
+  // Network item tap
+  if (tx < 216) {
+    int8_t row = ((int32_t)ty - LIST_Y) / ITEM_H;
+    if (row < 0 || row >= MAX_VIS) return;
+    uint8_t idx = wifiScroll + (uint8_t)row;
+    if (idx >= wifiNetCount) return;
+    WifiNet& n = wifiNets[idx];
+
+    if (n.open) {
+      // Open network — connect directly on the device
+      wifiMsg = String("Connecting to ") + n.ssid + "...";
+      drawWifiScan();
+      WiFi.mode(WIFI_STA);
+      WiFi.begin(n.ssid, "");
+      uint32_t t0 = millis();
+      while (WiFi.status() != WL_CONNECTED && millis() - t0 < WIFI_TIMEOUT_MS)
+        delay(300);
+      if (WiFi.status() == WL_CONNECTED) {
+        wifiSSID = String(n.ssid); wifiPass = "";
+        prefs.begin("kodex", false);
+        prefs.putString("ssid", wifiSSID); prefs.putString("pass", wifiPass);
+        prefs.end();
+        delay(800); ESP.restart();
+      } else {
+        wifiMsg = String("Couldn't connect to ") + n.ssid + ". Try again.";
+        WiFi.mode(WIFI_AP);
+      }
+    } else {
+      // Secured — launch phone portal with this SSID pre-selected
+      pendingSsid = String(n.ssid);
+      startWifiReconfigPortal();
+    }
+  }
+}
+
+// Lightweight captive portal — changes WiFi only, preserves device JWT + pairing
+static const char WIFI_RECONFIG_HTML[] PROGMEM = R"HTML(<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Dikly — Change WiFi</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:system-ui,sans-serif;background:#0f172a;color:#e2e8f0;padding:24px;max-width:440px;margin:0 auto}
+  .logo{font-size:24px;font-weight:900;color:#e2e8f0;margin:12px 0 2px}
+  .logo span{color:#6366f1}
+  .sub{font-size:13px;color:#64748b;margin-bottom:20px}
+  .card{background:#1e293b;border:1px solid #334155;border-radius:14px;padding:20px;margin-bottom:16px}
+  .info{background:#052e16;border:1px solid #166534;border-radius:10px;padding:12px 14px;font-size:13px;color:#22c55e;margin-bottom:16px}
+  h3{font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:#6366f1;margin-bottom:14px}
+  label{display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#64748b;margin:12px 0 5px}
+  label:first-child{margin-top:0}
+  input{width:100%;padding:11px 13px;border-radius:9px;border:1.5px solid #334155;background:#0f172a;color:#e2e8f0;font-size:14px}
+  input:focus{outline:none;border-color:#6366f1}
+  .row{display:flex;gap:8px}
+  .row input{flex:1}
+  .scan-btn{padding:11px 14px;border-radius:9px;border:1.5px solid #6366f1;background:transparent;color:#6366f1;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap}
+  .nets{margin-top:8px;border:1px solid #1e293b;border-radius:10px;overflow:hidden;max-height:180px;overflow-y:auto}
+  .net{padding:10px 14px;cursor:pointer;font-size:13px;display:flex;justify-content:space-between;border-bottom:1px solid #0f172a}
+  .net:last-child{border-bottom:0}
+  .net:hover,.net.sel{background:#1e3a5f}
+  .bars{font-size:11px;color:#64748b}
+  .submit{width:100%;padding:13px;border-radius:10px;border:0;background:#6366f1;color:#fff;font-weight:700;font-size:15px;cursor:pointer;margin-top:6px}
+  .submit:disabled{opacity:.5;cursor:default}
+  .ok{background:#052e16;border:1px solid #166534;color:#22c55e;padding:12px 14px;border-radius:10px;font-size:13px;margin-top:12px}
+  .err{background:#450a0a;border:1px solid #991b1b;color:#fca5a5;padding:12px 14px;border-radius:10px;font-size:13px;margin-top:12px}
+</style></head>
+<body>
+  <div class="logo">Di<span>kly</span></div>
+  <p class="sub">Change WiFi Network</p>
+  <div class="info">✓ Device pairing is preserved — only WiFi credentials will change.</div>
+  <form id="f">
+    <div class="card">
+      <h3>New School WiFi</h3>
+      <p id="sel-note" style="font-size:11px;color:#6366f1;margin:0 0 8px;min-height:14px"></p>
+      <label>Network</label>
+      <div class="row">
+        <input id="ssid" name="ssid" required autocomplete="off" placeholder="Select or type SSID">
+        <button type="button" class="scan-btn" id="sb" onclick="scan()">Scan</button>
+      </div>
+      <div id="nl" class="nets" style="display:none"></div>
+      <label>Password</label>
+      <input name="password" type="password" autocomplete="new-password" placeholder="Leave blank if open">
+    </div>
+    <button type="submit" class="submit" id="b">Save &amp; Reconnect</button>
+  </form>
+  <div id="msg"></div>
+<script>
+async function scan(){
+  const sb=document.getElementById('sb'),nl=document.getElementById('nl');
+  sb.disabled=true;sb.textContent='…';nl.style.display='block';
+  nl.innerHTML='<div style="padding:10px 14px;font-size:12px;color:#64748b">Scanning…</div>';
+  try{
+    const r=await fetch('/wifi/scan');const nets=await r.json();
+    if(!nets.length){nl.innerHTML='<div style="padding:10px 14px;font-size:12px;color:#64748b">No networks found.</div>';return;}
+    nets.sort((a,b)=>(b.rssi||0)-(a.rssi||0));
+    nl.innerHTML=nets.map(n=>{
+      const bars=n.rssi>-60?'▂▄▆█':n.rssi>-75?'▂▄▆':n.rssi>-85?'▂▄':'▂';
+      const lock=n.open===false?'🔒 ':'';
+      const s=(n.ssid||'').replace(/'/g,"\\'");
+      return `<div class="net" onclick="pick(this,'${s}')"><span>${n.ssid||'(Hidden)'}</span><span class="bars">${lock}${bars}</span></div>`;
+    }).join('');
+  }catch(e){nl.innerHTML='<div style="padding:10px;color:#fca5a5">Scan failed</div>';}
+  finally{sb.disabled=false;sb.textContent='Scan';}
+}
+function pick(el,ssid){
+  document.getElementById('ssid').value=ssid;
+  document.querySelectorAll('.net').forEach(i=>i.classList.remove('sel'));
+  el.classList.add('sel');
+}
+// Auto-fill SSID selected on device screen (if any)
+window.addEventListener('load',async()=>{
+  try{
+    const r=await fetch('/wifi/selected-ssid');
+    const j=await r.json();
+    if(j.ssid){
+      const el=document.getElementById('ssid');
+      el.value=j.ssid; el.readOnly=true;
+      el.style.color='#6366f1'; el.style.borderColor='#6366f1';
+      document.getElementById('sel-note').textContent='Network pre-selected from device screen.';
+    }
+  }catch(e){}
+});
+document.getElementById('f').onsubmit=async(e)=>{
+  e.preventDefault();
+  const d=Object.fromEntries(new FormData(e.target));
+  const m=document.getElementById('msg'),b=document.getElementById('b');
+  b.disabled=true;m.className='';m.textContent='Connecting — this may take 30 s…';
+  try{
+    const r=await fetch('/wifi/reconfigure',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(d)});
+    const j=await r.json();
+    if(!r.ok)throw new Error(j.error||'Failed');
+    m.className='ok';m.textContent='✓ Connected! Device is restarting…';
+  }catch(err){m.className='err';m.textContent='✗ '+err.message;b.disabled=false;}
+};
+</script></body></html>)HTML";
+
+static void startWifiReconfigPortal() {
+  WiFi.mode(WIFI_AP);
+  String ap = "Dikly-" + macSuffix();
+  WiFi.softAP(ap.c_str()); delay(200);
+  IPAddress gw = WiFi.softAPIP();
+  LOG("WiFi reconfig AP: " + ap);
+
+  dns.start(53, "*", gw);
+
+  auto servePage = []() { localHttp.send_P(200, "text/html", WIFI_RECONFIG_HTML); };
+  localHttp.on("/", HTTP_GET, servePage);
+  localHttp.on("/generate_204", HTTP_GET, servePage);
+  localHttp.on("/hotspot-detect.html", HTTP_GET, servePage);
+  localHttp.onNotFound(servePage);
+
+  localHttp.on("/wifi/scan", HTTP_GET, []() {
+    int n = WiFi.scanNetworks();
+    JsonDocument doc; JsonArray arr = doc.to<JsonArray>();
+    for (int i = 0; i < n && i < 24; i++) {
+      JsonObject o = arr.add<JsonObject>();
+      o["ssid"] = WiFi.SSID(i); o["rssi"] = WiFi.RSSI(i);
+      o["open"] = (WiFi.encryptionType(i) == WIFI_AUTH_OPEN);
+    }
+    String s; serializeJson(doc, s);
+    localHttp.send(200, "application/json", s);
+  });
+
+  // /wifi/selected-ssid — returns the SSID the rep tapped on device screen
+  localHttp.on("/wifi/selected-ssid", HTTP_GET, []() {
+    String j = "{\"ssid\":\"" + pendingSsid + "\"}";
+    localHttp.send(200, "application/json", j);
+  });
+
+  // /wifi/reconfigure — save new credentials only, keep JWT + pairing
+  localHttp.on("/wifi/reconfigure", HTTP_POST, []() {
+    JsonDocument req;
+    if (deserializeJson(req, localHttp.arg("plain"))) {
+      localHttp.send(400, "application/json", "{\"error\":\"Bad JSON\"}"); return;
+    }
+    String ssid = req["ssid"] | "";
+    String pass = req["password"] | "";
+    if (ssid.isEmpty()) {
+      localHttp.send(400, "application/json", "{\"error\":\"SSID required\"}"); return;
+    }
+    // Test the new credentials before saving
+    WiFi.mode(WIFI_AP_STA);
+    WiFi.begin(ssid.c_str(), pass.c_str());
+    uint32_t t0 = millis();
+    while (WiFi.status() != WL_CONNECTED && millis() - t0 < WIFI_TIMEOUT_MS) {
+      delay(200); localHttp.handleClient();
+    }
+    if (WiFi.status() != WL_CONNECTED) {
+      WiFi.mode(WIFI_AP);
+      localHttp.send(502, "application/json", "{\"error\":\"Could not connect — check password\"}"); return;
+    }
+    // Connected — save only WiFi credentials, leave JWT/pairing untouched
+    wifiSSID = ssid; wifiPass = pass;
+    prefs.begin("kodex", false);
+    prefs.putString("ssid", wifiSSID);
+    prefs.putString("pass", wifiPass);
+    prefs.end();
+    LOG("WiFi updated → " + ssid);
+    localHttp.send(200, "application/json", "{\"ok\":true}");
+    delay(1200); ESP.restart();
+  });
+
+  localHttp.begin();
+  curScreen = WIFI_RECONFIG;
+  drawWifiReconfig(ap);
+}
+
 // ── CONNECTING ────────────────────────────────────────────────────────────────
 static void drawConnecting(const String& ssid) {
   static uint8_t dots = 0; dots = (dots + 1) % 4;
@@ -458,12 +933,18 @@ static void drawReady() {
   String sub = "Waiting for a session to start";
   tw = spr.textWidth(sub);
   spr.setCursor((SW - tw) / 2, 246); spr.print(sub);
-  // IP pill
+  // IP + SD status row
   String ip = WiFi.localIP().toString();
-  card(spr, 30, 278, SW - 60, 28, COL_CARD, COL_BORDER, 14);
+  card(spr, 8, 272, SW - 16, 34, COL_CARD, COL_BORDER, 12);
   spr.setTextFont(2); spr.setTextColor(COL_MUTED, COL_CARD);
   tw = spr.textWidth(ip);
-  spr.setCursor((SW - tw) / 2, 287); spr.print(ip);
+  spr.setCursor((SW - tw) / 2, 279); spr.print(ip);
+  // SD dot
+  uint16_t sdDotCol = sdAvailable ? COL_SUCCESS : COL_WARNING;
+  spr.fillSmoothCircle(22, 289, 5, sdDotCol, COL_CARD);
+  spr.setTextFont(2); spr.setTextColor(sdAvailable ? COL_SUCCESS : COL_WARNING, COL_CARD);
+  spr.setCursor(30, 283);
+  spr.print(sdAvailable ? "SD" : "SD?");
   spr.pushSprite(0, 0);
 }
 
@@ -505,9 +986,9 @@ static void drawSession(const String& code, uint32_t secsLeft, uint32_t secsTota
 
   // ── Countdown bar ────────────────────────────────────────────────────────
   // Urgency colour: green → amber → red
-  uint16_t barCol = secsLeft > 14 ? COL_SUCCESS
-                  : secsLeft > 7  ? COL_WARNING
-                  :                 COL_ERROR;
+  uint16_t barCol = secsLeft > 120 ? COL_SUCCESS   // > 2 min → green
+                  : secsLeft > 60  ? COL_WARNING   // > 1 min → amber
+                  :                  COL_ERROR;    // ≤ 1 min → red
   int32_t barW = (int32_t)((SW - 24) * secsLeft / secsTotal);
   // Track
   spr.fillRoundRect(12, 208, SW - 24, 14, 7, COL_CARD);
@@ -570,7 +1051,7 @@ static const char PAIR_HTML[] PROGMEM = R"HTML(<!doctype html>
   .err{background:#450a0a;border:1px solid #991b1b;color:#fca5a5;padding:12px 14px;border-radius:10px;font-size:13px;margin-top:12px}
 </style></head>
 <body>
-  <div class="logo">KO<span>DEX</span></div>
+  <div class="logo">Di<span>kly</span></div>
   <p class="sub">Attendance Device Setup</p>
   <form id="f">
     <div class="card">
@@ -739,7 +1220,8 @@ static void registerLocalHttp() {
     if (!timeSynced) {
       localHttp.send(503, "application/json", "{\"error\":\"Device clock not synced yet. Try again in a moment.\"}"); return;
     }
-    if (offlineCount >= 200) {
+    // Capacity guard (SD: effectively unlimited; RAM fallback: 200 slots)
+    if (!sdAvailable && offlineCount >= 200) {
       localHttp.send(503, "application/json", "{\"error\":\"Offline buffer full. Internet needed.\"}"); return;
     }
     JsonDocument req;
@@ -760,13 +1242,42 @@ static void registerLocalHttp() {
     if (!valid) {
       localHttp.send(403, "application/json", "{\"error\":\"Incorrect code. Check the screen and try again.\"}"); return;
     }
-    // Store in offline buffer
-    OfflineRec& rec = offlineBuf[offlineCount++];
-    strncpy(rec.indexNumber, indexNum.c_str(), sizeof(rec.indexNumber) - 1);
-    strncpy(rec.userId,      userId.c_str(),   sizeof(rec.userId) - 1);
-    strncpy(rec.code,        submittedCode.c_str(), sizeof(rec.code) - 1);
-    rec.ts = (uint32_t)now;
-    LOG("Offline attendance stored [" + String(offlineCount) + "] idx=" + indexNum);
+    // ── Duplicate guard ───────────────────────────────────────────────────────
+    // Reset dedup table if this is a new session (edge case: device rebooted mid-session)
+    if (dedupSession != sessionId) dedupClear(sessionId);
+    const char* dedupKey = indexNum.length() ? indexNum.c_str() : userId.c_str();
+    if (dedupCheck(dedupKey)) {
+      localHttp.send(409, "application/json", "{\"error\":\"Attendance already recorded for this session.\"}"); return;
+    }
+    // ── Write to SD card (primary) ────────────────────────────────────────────
+    bool stored = false;
+    if (sdAvailable) {
+      File f = SD.open(SD_ATT_FILE, FILE_APPEND);
+      if (f) {
+        JsonDocument entry;
+        if (indexNum.length()) entry["indexNumber"] = indexNum;
+        if (userId.length())   entry["userId"]      = userId;
+        entry["code"] = submittedCode;
+        entry["sid"]  = sessionId;
+        entry["ts"]   = (uint32_t)now;
+        String line; serializeJson(entry, line); line += "\n";
+        f.print(line); f.close();
+        sdRecordCount++;
+        stored = true;
+        LOG("SD attendance [" + String(sdRecordCount) + "] idx=" + indexNum);
+      }
+    }
+    // ── RAM fallback ──────────────────────────────────────────────────────────
+    if (!stored) {
+      OfflineRec& rec = offlineBuf[offlineCount++];
+      strncpy(rec.indexNumber, indexNum.c_str(), sizeof(rec.indexNumber) - 1);
+      strncpy(rec.userId,      userId.c_str(),   sizeof(rec.userId) - 1);
+      strncpy(rec.code,        submittedCode.c_str(), sizeof(rec.code) - 1);
+      strncpy(rec.sessionId,   sessionId.c_str(), sizeof(rec.sessionId) - 1);
+      rec.ts = (uint32_t)now;
+      LOG("RAM attendance [" + String(offlineCount) + "] idx=" + indexNum);
+    }
+    dedupAdd(dedupKey);
     localHttp.send(200, "application/json", "{\"ok\":true,\"message\":\"Attendance recorded. Will sync when internet returns.\"}");
   });
 
@@ -802,6 +1313,22 @@ void setup() {
   // Touch init
   touchInit();
 
+  // SD card init — shares FSPI bus (SCLK=12, MISO=13, MOSI=11) with display
+  sdSPI.begin(TFT_SCLK, TFT_MISO, TFT_MOSI, SD_CS_PIN);
+  sdAvailable = SD.begin(SD_CS_PIN, sdSPI, 25000000);
+  if (sdAvailable) {
+    LOG("SD card OK — " + String(SD.totalBytes() / (1024 * 1024)) + " MB total");
+    // Count any existing unsent records so sync runs on first heartbeat
+    if (SD.exists(SD_ATT_FILE)) {
+      File f = SD.open(SD_ATT_FILE, FILE_READ);
+      while (f && f.available()) { if (f.readStringUntil('\n').length() > 2) sdRecordCount++; }
+      if (f) f.close();
+      if (sdRecordCount) LOG("Found " + String(sdRecordCount) + " pending offline records on SD");
+    }
+  } else {
+    LOG("SD card not found — falling back to RAM buffer (GPIO " + String(SD_CS_PIN) + " — verify board schematic)");
+  }
+
   // Splash
   splashStart = millis();
   drawSplash();
@@ -827,8 +1354,10 @@ void setup() {
     delay(180);
   }
   if (WiFi.status() != WL_CONNECTED) {
-    LOG("WiFi fail — captive portal for reconfigure");
-    startApPortal();
+    LOG("WiFi fail — showing on-device WiFi scanner");
+    curScreen = WIFI_SCAN;
+    wifiMsg = "Tap Scan to find networks.";
+    drawWifiScan();
     return;
   }
   digitalWrite(LED_PIN, HIGH);
@@ -843,15 +1372,37 @@ void loop() {
   dns.processNextRequest();
   localHttp.handleClient();
 
-  // Pairing-portal path
+  // WiFi scanner screen (paired device, no WiFi connection yet)
+  if (curScreen == WIFI_SCAN) {
+    uint16_t tx, ty;
+    bool touched = touchRead(tx, ty);
+    if (touched) {
+      if (!touchActive) {
+        touchActive = true; touchDownMs = millis(); touchHandled = false;
+      } else if (!touchHandled && millis() - touchDownMs >= 3000) {
+        touchHandled = true; factoryReset();
+      }
+    } else {
+      if (touchActive && !touchHandled) {
+        // Short tap released
+        handleWifiScanTap(tx, ty);
+      }
+      touchActive = false; touchHandled = false;
+    }
+    drawWifiScan();
+    delay(80);
+    return;
+  }
+
+  // AP portal paths (setup or wifi-reconfig for password entry)
   if (deviceJWT.isEmpty() || WiFi.getMode() == WIFI_AP) {
-    // Touch long-press → factory reset
     uint16_t tx, ty;
     if (touchRead(tx, ty)) {
       if (!touchActive) { touchActive = true; touchDownMs = millis(); }
       else if (millis() - touchDownMs >= 3000) factoryReset();
     } else { touchActive = false; }
-    if (curScreen == SETUP) drawSetup("Dikly-" + macSuffix());
+    if (curScreen == SETUP)         drawSetup("Dikly-" + macSuffix());
+    if (curScreen == WIFI_RECONFIG) drawWifiReconfig("Dikly-" + macSuffix());
     delay(60);
     return;
   }

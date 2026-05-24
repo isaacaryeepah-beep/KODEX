@@ -22,13 +22,11 @@
 
 const crypto = require("crypto");
 
-// How long each code is valid for, in seconds. 20s matches the spec
-// ("rotate every 20-30 seconds"). Do NOT lower below ~10s: students on slow
-// mobile data need time to type and submit.
-const WINDOW_SECONDS = 20;
+// How long each code is valid for, in seconds. 300s = 5 minutes.
+const WINDOW_SECONDS = 300;
 
 // How many previous windows to accept (grace period for slow networks / typing).
-// 1 means: current window + 1 previous window = up to 40s effective validity.
+// 1 means: current window + 1 previous window = up to 10 min effective validity.
 const GRACE_WINDOWS = 1;
 
 function _slotForTime(unixSeconds) {
