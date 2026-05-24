@@ -11166,19 +11166,29 @@ async function submitJitsiJoin(meetingId) {
     const d           = data.data || data;
     const jitsiToken  = d.jitsiToken;
     const jitsiConfig = d.jitsiConfig;
+    const meetingUrl  = d.meetingUrl;
 
-    if (!jitsiConfig?.roomName) { toastError('No meeting room returned.'); return; }
+    if (!meetingUrl && !jitsiConfig?.roomName) {
+      toastError('No meeting room returned — contact your admin.');
+      return;
+    }
 
     toastSuccess('Attendance marked via meeting join!');
 
     if (_isMobile) {
-      const roomUrl = `https://${jitsiConfig.domain}/${jitsiConfig.roomName}${jitsiToken ? '?jwt=' + jitsiToken : ''}`;
+      // Always prefer the canonical meetingUrl (has all config hash params)
+      const roomUrl = meetingUrl || `https://${jitsiConfig.domain}/${jitsiConfig.roomName}${jitsiToken ? '?jwt=' + jitsiToken : ''}`;
       await _joinMeetingMobile(roomUrl);
       return;
     }
 
-    showJitsiEmbed(jitsiConfig, jitsiToken);
-    navigateTo('mark-attendance');
+    if (jitsiConfig?.roomName) {
+      showJitsiEmbed(jitsiConfig, jitsiToken);
+      navigateTo('mark-attendance');
+    } else {
+      // LiveKit or external URL — open directly
+      window.location.href = meetingUrl;
+    }
   } catch (e) {
     toastError(e.message);
   }
