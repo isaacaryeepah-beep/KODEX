@@ -140,22 +140,41 @@ body {
   min-height: 100vh;
   padding: 24px;
   flex-direction: column;
-  background: #f8f9fb;
+  background: #0a0f1e;
   position: relative;
   overflow: hidden;
 }
 
+/* Fullscreen background video */
+#auth-bg-video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  z-index: 0;
+  pointer-events: none;
+}
 
+/* Dark gradient overlay so cards stay readable */
+#auth-bg-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(10,15,30,.72) 0%, rgba(10,15,30,.55) 100%);
+  z-index: 1;
+  pointer-events: none;
+}
 
-/* Corner accents */
+/* Fallback corner accent (shown when video absent) */
 #auth-page::after {
   content: '';
   position: absolute;
   top: -120px; right: -120px;
   width: 480px; height: 480px;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(37,99,235,.07) 0%, transparent 70%);
+  background: radial-gradient(circle, rgba(37,99,235,.12) 0%, transparent 70%);
   pointer-events: none;
+  z-index: 0;
 }
 
 /* DIKLY background watermark */
@@ -167,7 +186,7 @@ body {
   text-align: center;
   animation: fadeInUp .5s var(--ease);
   position: relative;
-  z-index: 1;
+  z-index: 2;
   max-width: 700px;
   width: 100%;
 }
@@ -463,6 +482,8 @@ body {
   transition: var(--transition);
   padding: 5px 10px;
   border-radius: var(--radius-sm);
+  position: relative;
+  z-index: 2;
 }
 
 .auth-back:hover { color: var(--text); background: white; }
@@ -476,7 +497,7 @@ body {
   max-width: 420px;
   animation: fadeInUp .45s var(--ease);
   position: relative;
-  z-index: 1;
+  z-index: 2;
   border: 1px solid var(--border);
 }
 
@@ -3930,21 +3951,21 @@ table tr:hover td { background: #f8fafc !important; }
 #workspace-brand,
 #workspace-foot { display: none; }
 
-/* ── Background: softened office photo (–12% brightness) ── */
+/* ── Background: video fills #auth-page; image fallback removed ── */
 #auth-page:has(#portal-selector:not(.hidden)) {
-  background-image:
-    linear-gradient(rgba(20,22,40,0.50), rgba(20,22,40,0.50)),
-    url('/img/login-bg.jpg') !important;
-  background-size: cover !important;
-  background-position: center center !important;
-  background-repeat: no-repeat !important;
-  background-color: #d4d9ea !important;
+  background: transparent !important;
   align-items: center !important;
   justify-content: center !important;
   flex-direction: column !important;
   padding: 28px 16px !important;
   overflow-y: auto !important;
   gap: 0 !important;
+}
+
+/* Show video + overlay on workspace selector screen */
+#auth-page:has(#portal-selector:not(.hidden)) #auth-bg-video,
+#auth-page:has(#portal-selector:not(.hidden)) #auth-bg-overlay {
+  display: block !important;
 }
 
 /* Suppress base pseudo-elements */
@@ -3964,6 +3985,8 @@ table tr:hover td { background: #f8fafc !important; }
   display: block !important;
   text-align: center !important;
   margin-bottom: 26px !important;
+  position: relative !important;
+  z-index: 2 !important;
 }
 #auth-page:has(#portal-selector:not(.hidden)) #workspace-brand .brand-logo svg {
   height: 80px !important;
@@ -3985,6 +4008,8 @@ table tr:hover td { background: #f8fafc !important; }
   width: 100% !important;
   padding: 30px 26px 24px !important;
   background: rgba(255,255,255,0.62) !important;
+  position: relative !important;
+  z-index: 2 !important;
   backdrop-filter: blur(40px) saturate(2.0) brightness(1.08) !important;
   -webkit-backdrop-filter: blur(40px) saturate(2.0) brightness(1.08) !important;
   border: 1px solid rgba(255,255,255,0.88) !important;
@@ -4202,6 +4227,8 @@ table tr:hover td { background: #f8fafc !important; }
   color: rgba(235,235,255,.68) !important;
   line-height: 1.6 !important;
   text-shadow: 0 1px 4px rgba(0,0,0,.30) !important;
+  position: relative !important;
+  z-index: 2 !important;
 }
 
 /* ── Mobile ── */
