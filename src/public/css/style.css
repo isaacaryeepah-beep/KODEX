@@ -6350,3 +6350,10 @@ table tr:hover td { background: #f8fafc !important; }
 [data-theme="dark"] .bottom-nav { background: #111827 !important; border-top-color: #1f2937 !important; }
 [data-theme="dark"] .bottom-nav-item { color: #4a6380 !important; }
 [data-theme="dark"] .bottom-nav-item:hover { background: rgba(255,255,255,0.04) !important; color: #9db3c8 !important; }
+
+/* ── Course Videos responsive layout ──────────────────────────────────── */
+@media (max-width: 860px) {
+  #main-content .cv-lecturer-grid {
+    grid-template-columns: 1fr !important;
+  }
+}

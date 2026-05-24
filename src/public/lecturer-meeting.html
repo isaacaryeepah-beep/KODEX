@@ -255,8 +255,9 @@ function getAuthToken() {
     const s = JSON.parse(sessionStorage.getItem('dikly_jitsi_session') || 'null');
     if (s?.meetingId === MEETING_ID && s.authToken) return s.authToken;
   } catch (_) {}
-  return localStorage.getItem('token') || localStorage.getItem('jwt_token') ||
-         localStorage.getItem('auth_token') || sessionStorage.getItem('token') || '';
+  return localStorage.getItem('token') || localStorage.getItem('dikly_token') ||
+         localStorage.getItem('jwt_token') || localStorage.getItem('auth_token') ||
+         sessionStorage.getItem('token') || '';
 }
 
 const AUTH_TOKEN = getAuthToken();
@@ -315,7 +316,7 @@ async function init() {
     if (data.title) document.getElementById('meetingTitle').textContent = data.title;
 
     const meetingUrl = data.meetingUrl;
-    if (!meetingUrl) return showError('The server did not return a meeting URL. Please contact support.');
+    if (!meetingUrl) return showError('No meeting room configured — ask your admin to set up Jitsi or LiveKit on the server.');
 
     setProgress(3, 90, 'Launching meeting room…');
     await delay(500);
