@@ -19631,65 +19631,58 @@ async function submitHodRequest() {
 }
 
 // ── Course Videos ─────────────────────────────────────────────────────────────
-async function renderCourseVideos() {
+function renderCourseVideos() {
   const content = document.getElementById('main-content');
   if (!content) return;
-  content.innerHTML = `<div class="page-header"><h1>Course Videos</h1></div><div id="cv-body"><p style="color:var(--text-secondary)">Loading…</p></div>`;
 
-  try {
-    const isLecturer = ['lecturer','admin','superadmin','hod'].includes(currentUser?.role);
-    if (isLecturer) {
-      await _renderLecturerVideos();
-    } else {
-      await _renderStudentVideos();
-    }
-  } catch(e) {
-    const body = document.getElementById('cv-body');
-    if (body) body.innerHTML = `<div class="empty-state"><p style="color:var(--error)">Error: ${escHtml(e.message)}</p></div>`;
+  const isLecturer = ['lecturer','admin','superadmin','hod'].includes(currentUser?.role);
+
+  if (isLecturer) {
+    // Render the shell immediately — no loading state
+    content.innerHTML = `
+      <div class="page-header"><h1>Course Videos</h1></div>
+      <div class="card" style="max-width:680px;margin-bottom:1.5rem">
+        <h3 style="margin:0 0 1rem">Add Video</h3>
+        <label class="form-label">Course</label>
+        <select id="cv-course-sel" class="form-input" style="margin-bottom:.75rem">
+          <option value="">Loading courses…</option>
+        </select>
+        <label class="form-label">Title</label>
+        <input id="cv-title" class="form-input" placeholder="Video title" style="margin-bottom:.75rem">
+        <label class="form-label">Description (optional)</label>
+        <input id="cv-desc" class="form-input" placeholder="Short description" style="margin-bottom:.75rem">
+        <label class="form-label">Video URL</label>
+        <input id="cv-url" class="form-input" placeholder="YouTube, Vimeo, Google Drive or Loom link" style="margin-bottom:1rem">
+        <button class="btn btn-primary" onclick="cvAddVideo()">Add Video</button>
+      </div>
+      <div id="cv-list-area"><p style="color:var(--text-secondary)">Select a course above to see its videos.</p></div>`;
+
+    // Populate dropdown asynchronously
+    _cvLoadCourses();
+  } else {
+    content.innerHTML = `<div class="page-header"><h1>Course Videos</h1></div><div id="cv-body"><p style="color:var(--text-secondary)">Loading…</p></div>`;
+    _renderStudentVideos();
   }
 }
 
-async function _renderLecturerVideos() {
-  const body = document.getElementById('cv-body');
-  if (!body) return;
-
-  // Timeout race — show error if API takes >12s
-  const timeout = new Promise((_, rej) => setTimeout(() => rej(new Error('Request timed out')), 12000));
-
-  let courses = [];
-  try {
-    const d = await Promise.race([api('/api/courses'), timeout]);
-    courses = (d && d.courses) ? d.courses : [];
-  } catch(e) {
-    body.innerHTML = `<div class="empty-state"><p style="color:var(--error)">Could not load courses: ${escHtml(e.message)}</p></div>`;
-    return;
-  }
-
-  if (!courses.length) {
-    body.innerHTML = `<div class="empty-state"><p>You have no courses yet. Create a course first.</p></div>`;
-    return;
-  }
-
-  const opts = courses.map(c => `<option value="${c._id}">${escHtml(c.title)} (${escHtml(c.code||'')})</option>`).join('');
-
-  body.innerHTML = `
-    <div class="card" style="max-width:680px;margin-bottom:1.5rem">
-      <h3 style="margin:0 0 1rem">Add Video</h3>
-      <label class="form-label">Course</label>
-      <select id="cv-course-sel" class="form-input" style="margin-bottom:.75rem">${opts}</select>
-      <label class="form-label">Title</label>
-      <input id="cv-title" class="form-input" placeholder="Video title" style="margin-bottom:.75rem">
-      <label class="form-label">Description (optional)</label>
-      <input id="cv-desc" class="form-input" placeholder="Short description" style="margin-bottom:.75rem">
-      <label class="form-label">Video URL</label>
-      <input id="cv-url" class="form-input" placeholder="YouTube, Vimeo, Google Drive or Loom link" style="margin-bottom:1rem">
-      <button class="btn btn-primary" onclick="cvAddVideo()">Add Video</button>
-    </div>
-    <div id="cv-list-area"></div>`;
-
+async function _cvLoadCourses() {
   const sel = document.getElementById('cv-course-sel');
-  sel.addEventListener('change', () => cvLoadList(sel.value));
-  cvLoadList(sel.value);
+  if (!sel) return;
+  try {
+    const d = await api('/api/courses');
+    const courses = (d && d.courses) ? d.courses : [];
+    if (!courses.length) {
+      sel.innerHTML = '<option value="">No courses found — create a course first</option>';
+      return;
+    }
+    sel.innerHTML = courses.map(c =>
+      `<option value="${c._id}">${escHtml(c.title)}${c.code ? ' (' + escHtml(c.code) + ')' : ''}</option>`
+    ).join('');
+    sel.addEventListener('change', () => cvLoadList(sel.value));
+    cvLoadList(sel.value);
+  } catch(e) {
+    if (sel) sel.innerHTML = `<option value="">Error: ${escHtml(e.message)}</option>`;
+  }
 }
 
 async function cvLoadList(courseId) {
