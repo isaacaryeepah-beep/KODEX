@@ -5090,12 +5090,13 @@ async function viewStudentQuizResult(quizId) {
 }
 
 async function renderStudentDashboard(content) {
-  const [attendance, coursesData, quizzesData, meetingsData, activeSessionData] = await Promise.all([
+  const [attendance, coursesData, quizzesData, meetingsData, activeSessionData, upcomingAsgData] = await Promise.all([
     api('/api/attendance-sessions/my-attendance?limit=5').catch(() => ({ records: [], pagination: { total: 0 } })),
     api('/api/courses').catch(() => ({ courses: [] })),
     api('/api/student/quizzes').catch(() => ({ quizzes: [] })),
     api('/api/meetings').catch(() => ({ data: [] })),
     api('/api/attendance-sessions/active').catch(() => ({ session: null })),
+    api('/api/student/assignments/upcoming').catch(() => ({ assignments: [] })),
   ]);
 
   const totalCheckins = attendance.pagination.total;
@@ -5103,6 +5104,7 @@ async function renderStudentDashboard(content) {
   const quizzesTaken = quizzesData.quizzes.length;
   const upcomingMeetings = (meetingsData.data || meetingsData.meetings || []).filter(m => m.status === 'scheduled');
   const activeSession = activeSessionData.session;
+  const upcomingAssignments = upcomingAsgData.assignments || [];
   const attendanceRate = totalCheckins > 0 ? Math.round((attendance.records.filter(r => r.status === 'present').length / attendance.records.length) * 100) : 0;
 
   const methodLabel = (m) => {
@@ -5179,7 +5181,36 @@ async function renderStudentDashboard(content) {
         `).join('')}
       </div>
     ` : ''}
-    
+
+    ${upcomingAssignments.length > 0 ? `
+      <div class="card">
+        <div class="card-title" style="display:flex;align-items:center;justify-content:space-between">
+          <span>Upcoming Assignments</span>
+          <button class="btn btn-secondary btn-sm" onclick="location.href='/assignments.html'">View All</button>
+        </div>
+        ${upcomingAssignments.slice(0, 5).map(a => {
+          const hoursLeft = Math.round((new Date(a.dueDate) - Date.now()) / 3600000);
+          const daysLeft  = Math.floor(hoursLeft / 24);
+          const urgency   = hoursLeft <= 24 ? 'color:#dc2626' : hoursLeft <= 48 ? 'color:#d97706' : 'color:var(--text-light)';
+          const timeLabel = daysLeft >= 2 ? `${daysLeft}d left` : hoursLeft >= 1 ? `${hoursLeft}h left` : 'Due soon';
+          const subStatus = a.submission ? a.submission.status : null;
+          const badge     = subStatus === 'graded' ? '<span style="font-size:11px;background:#dcfce7;color:#166534;border-radius:8px;padding:2px 8px;font-weight:600">Graded</span>'
+                          : subStatus ? '<span style="font-size:11px;background:#dbeafe;color:#1e40af;border-radius:8px;padding:2px 8px;font-weight:600">Submitted</span>'
+                          : '<span style="font-size:11px;background:#fef3c7;color:#92400e;border-radius:8px;padding:2px 8px;font-weight:600">Pending</span>';
+          return `<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border);cursor:pointer" onclick="location.href='/assignments.html?id=${a._id}'">
+            <div style="flex:1;min-width:0">
+              <div style="font-weight:600;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${a.title}</div>
+              <div style="font-size:12px;color:var(--text-light)">${a.course?.code || ''} ${a.course?.title || ''}</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;margin-left:12px">
+              ${badge}
+              <span style="font-size:12px;font-weight:600;${urgency}">${timeLabel}</span>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>
+    ` : ''}
+
     <div class="card">
       <div class="card-title">Recent Attendance</div>
       ${attendance.records.length ? `

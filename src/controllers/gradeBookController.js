@@ -457,7 +457,7 @@ exports.getMyGrades = async (req, res) => {
     }
 
     const gb = await GradeBook.findOne({ course: courseId, company })
-      || { weights: { quizzes: 50, normalQuizzes: 0, snapQuizzes: 0, assignments: 0, attendance: 20, manual: 30 }, manualEntries: [] };
+      || { weights: { quizzes: 30, normalQuizzes: 0, snapQuizzes: 0, assignments: 20, attendance: 20, manual: 30 }, manualEntries: [] };
 
     const w = gb.weights;
 

@@ -432,14 +432,23 @@ async function init(){
     $('portal-title').textContent=isLecturer?'Lecturer Portal':'Student Portal';
     if(S.user.company?.name) { const cn=$('company-name'); if(cn) cn.textContent='— '+S.user.company.name; }
 
-    const tabParam = new URLSearchParams(location.search).get('tab');
+    const params   = new URLSearchParams(location.search);
+    const tabParam = params.get('tab');
+    const idParam  = params.get('id');
+    const subParam = params.get('subId');
     if(isLecturer){
       await loadCourses();
       if(tabParam === 'quizzes') await renderQuizzesPanel();
-      else await renderLecturerPage();
+      else {
+        await renderLecturerPage();
+        if(idParam) await openDetail(idParam, subParam || null);
+      }
     } else {
       if(tabParam === 'quizzes') await renderQuizzesPanel();
-      else await renderStudentPage();
+      else {
+        await renderStudentPage();
+        if(idParam) await openStudentAssignment(idParam);
+      }
     }
   } catch(e){
     if(e.message.includes('401')||e.message.toLowerCase().includes('token')){ logout(); return; }

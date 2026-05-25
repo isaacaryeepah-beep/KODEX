@@ -480,6 +480,13 @@ const start = async () => {
     } catch (e) {
       console.error("Scheduler failed to start:", e.message);
     }
+
+    try {
+      const { startAssignmentReminder } = require("./services/assignmentReminder");
+      startAssignmentReminder();
+    } catch (e) {
+      console.error("[AssignmentReminder] Failed to start:", e.message);
+    }
   });
 };
 

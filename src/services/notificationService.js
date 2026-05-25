@@ -207,7 +207,7 @@ exports.notifyAssignmentPublished = async (assignment, studentIds) => {
     body:    assignment.dueDate
       ? `Due ${_fmtDate(assignment.dueDate)}`
       : "",
-    link:    `/assignments/${assignment._id}`,
+    link:    `/assignments.html?id=${assignment._id}`,
     data:    {
       assignmentId: assignment._id,
       courseId:     assignment.course,
@@ -226,7 +226,7 @@ exports.notifyAssignmentSubmitted = async (submission, lecturerIds) => {
     type:    NOTIFICATION_TYPES.ASSIGNMENT_SUBMITTED,
     title:   "New assignment submission",
     body:    `A student has submitted an assignment.`,
-    link:    `/lecturer/assignments/${submission.assignment}/submissions/${submission._id}`,
+    link:    `/assignments.html?id=${submission.assignment}&subId=${submission._id}`,
     data:    { submissionId: submission._id, assignmentId: submission.assignment },
   });
 };
@@ -241,7 +241,7 @@ exports.notifyAssignmentGraded = async (submission) => {
     type:      NOTIFICATION_TYPES.ASSIGNMENT_GRADED,
     title:     "Assignment graded",
     body:      `Your assignment has been graded.`,
-    link:      `/student/assignments/${submission.assignment}`,
+    link:      `/assignments.html?id=${submission.assignment}`,
     data:      { submissionId: submission._id, assignmentId: submission.assignment },
   });
 };
@@ -256,8 +256,25 @@ exports.notifyAssignmentReturned = async (submission) => {
     type:      NOTIFICATION_TYPES.ASSIGNMENT_RETURNED,
     title:     "Assignment returned for revision",
     body:      `Your assignment has been returned. Please review the feedback and resubmit.`,
-    link:      `/student/assignments/${submission.assignment}`,
+    link:      `/assignments.html?id=${submission.assignment}`,
     data:      { submissionId: submission._id, assignmentId: submission.assignment },
+  });
+};
+
+/**
+ * Remind enrolled students that an assignment deadline is approaching.
+ * hoursLeft: approximate hours remaining (for display only).
+ */
+exports.notifyAssignmentDueSoon = async (assignment, studentIds, hoursLeft) => {
+  if (!studentIds || studentIds.length === 0) return;
+  const label = hoursLeft <= 1 ? 'less than 1 hour' : `${hoursLeft} hour${hoursLeft !== 1 ? 's' : ''}`;
+  await notifyMany(studentIds, {
+    company: assignment.company,
+    type:    NOTIFICATION_TYPES.ASSIGNMENT_DUE_SOON,
+    title:   `Assignment due soon: ${assignment.title}`,
+    body:    `Due in ${label}`,
+    link:    `/assignments.html?id=${assignment._id}`,
+    data:    { assignmentId: assignment._id, courseId: assignment.course, dueDate: assignment.dueDate },
   });
 };
 
