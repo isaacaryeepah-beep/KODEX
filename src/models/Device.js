@@ -19,9 +19,9 @@ const deviceSchema = new mongoose.Schema({
   lecturerId:      { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: false, sparse: true },
   ownershipType:   { type: String, default: 'dedicated', enum: ['dedicated', 'shared'] },
   isTransferable:  { type: Boolean, default: false },
-  classRepId:      { type: mongoose.Schema.Types.ObjectId, ref: 'User', sparse: true },
+  classRepId:      { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   classRepCourse:  { type: mongoose.Schema.Types.ObjectId, ref: 'Course', sparse: true },
-  activeLecturerId:{ type: mongoose.Schema.Types.ObjectId, ref: 'User', sparse: true },
+  activeLecturerId:{ type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   activeCourseId:  { type: mongoose.Schema.Types.ObjectId, ref: 'Course', sparse: true },
   connectedAt:     { type: Date, default: null },
   // ─────────────────────────────────────────────────────────────────────────
