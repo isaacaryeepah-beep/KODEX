@@ -1232,6 +1232,7 @@ function showPortalSelector() {
   document.getElementById('employee-auth').classList.add('hidden');
   document.getElementById('student-auth').classList.add('hidden');
   document.getElementById('portal-selector').classList.remove('hidden');
+  const mrf = document.getElementById('manager-register-form'); if (mrf) mrf.classList.add('hidden');
   document.querySelectorAll('.auth-container input').forEach(i => i.value = '');
   document.querySelectorAll('.error-msg').forEach(e => e.style.display = 'none');
   selectedPortalType = null;
@@ -1243,15 +1244,51 @@ function backToPortalSelector() {
 
 function showAdminRegister() {
   document.getElementById('admin-login-form').classList.add('hidden');
-  document.getElementById('admin-register-form').classList.remove('hidden');
   document.getElementById('admin-auth-error').style.display = 'none';
+  if (selectedPortalType === 'manager') {
+    document.getElementById('admin-register-form').classList.add('hidden');
+    document.getElementById('manager-register-form').classList.remove('hidden');
+  } else {
+    document.getElementById('manager-register-form').classList.add('hidden');
+    document.getElementById('admin-register-form').classList.remove('hidden');
+  }
 }
 
 function showAdminLogin() {
   document.getElementById('admin-register-form').classList.add('hidden');
+  document.getElementById('manager-register-form').classList.add('hidden');
   document.getElementById('admin-login-form').classList.remove('hidden');
   document.getElementById('admin-auth-error').style.display = 'none';
   const f = document.getElementById('admin-forgot-form'); if(f) f.classList.add('hidden');
+}
+
+async function handleManagerRegister() {
+  try {
+    const name            = document.getElementById('manager-reg-name').value.trim();
+    const email           = document.getElementById('manager-reg-email').value.trim();
+    const phone           = document.getElementById('manager-reg-phone').value.trim();
+    const password        = document.getElementById('manager-reg-password').value;
+    const institutionCode = document.getElementById('manager-reg-code').value.trim().toUpperCase();
+    if (!name || !email || !password || !institutionCode) {
+      return showAdminError('Please fill in all required fields');
+    }
+    if (password.length < 8) {
+      return showAdminError('Password must be at least 8 characters');
+    }
+    const data = await api('/api/auth/register-manager', {
+      method: 'POST',
+      body: JSON.stringify({ name, email, phone: phone || undefined, password, institutionCode }),
+    });
+    const el = document.getElementById('admin-auth-error');
+    el.textContent = data.message || 'Registration submitted! Your account is pending admin approval.';
+    el.style.background = '#f0fdf4';
+    el.style.color = '#15803d';
+    el.style.border = '1px solid #86efac';
+    el.style.display = 'block';
+    showAdminLogin();
+  } catch (e) {
+    showAdminError(e.message || 'Registration failed');
+  }
 }
 
 function showAdminForgot() {
@@ -2973,7 +3010,7 @@ async function renderApprovals() {
       ? `Lecturer &amp; student requests for <strong>${currentUser.department || 'your department'}</strong>`
       : isManager
         ? 'Employee registration requests pending your approval'
-        : 'Review and approve registration requests';
+        : 'Review and approve employee and manager registration requests';
 
     // HODs don't need a department column (all in same dept); managers don't need one either
     const showDeptCol = !isHod && !isManager;

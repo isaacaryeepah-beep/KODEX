@@ -54,16 +54,16 @@ exports.approveUser = async (req, res) => {
           }))
           .catch(err => console.error("[approveUser] student welcome email failed:", err.message));
       }
-    } else if (user.role === "employee") {
+    } else if (user.role === "employee" || user.role === "manager") {
       if (user.email) {
         Company.findById(user.company).select("name").lean()
           .then(company => sendEmployeeWelcome({
             email: user.email,
             name: user.name,
             companyName: company?.name || "",
-            employeeId: user.employeeId || "",
+            employeeId: user.employeeId || user.role,
           }))
-          .catch(err => console.error("[approveUser] employee welcome email failed:", err.message));
+          .catch(err => console.error("[approveUser] welcome email failed:", err.message));
       }
     }
 
