@@ -10,6 +10,9 @@ exports.list = async (req, res) => {
 
     if (req.user.role === 'lecturer') {
       filter.lecturer = req.user._id;
+    } else if (req.user.isClassRep && req.user.classRepCourse && !['admin','superadmin','hod','manager'].includes(req.user.role)) {
+      // Class rep sees slots for their assigned course
+      filter.course = req.user.classRepCourse;
     } else if (req.user.role === 'hod' && req.user.department) {
       filter.department = req.user.department;
     } else if (req.user.role === 'student') {
@@ -37,8 +40,17 @@ exports.list = async (req, res) => {
 // ── Create a slot ─────────────────────────────────────────────────────────────
 exports.create = async (req, res) => {
   try {
-    if (!['lecturer', 'admin', 'superadmin', 'manager', 'hod'].includes(req.user.role)) {
-      return res.status(403).json({ error: 'Only lecturers and admins can add timetable slots' });
+    const canEdit = ['lecturer', 'admin', 'superadmin', 'manager', 'hod'].includes(req.user.role)
+      || req.user.isClassRep;
+    if (!canEdit) {
+      return res.status(403).json({ error: 'Only lecturers, admins, HODs and class reps can add timetable slots' });
+    }
+
+    // Class rep can only add slots for their assigned course
+    if (req.user.isClassRep && !['admin','superadmin','hod','lecturer','manager'].includes(req.user.role)) {
+      if (String(req.body.courseId) !== String(req.user.classRepCourse)) {
+        return res.status(403).json({ error: 'You can only add timetable slots for your assigned course' });
+      }
     }
 
     const { courseId, dayOfWeek, startTime, endTime, title, room, color, notes } = req.body;
@@ -105,9 +117,12 @@ exports.update = async (req, res) => {
     const slot = await Timetable.findOne({ _id: req.params.id, company: req.user.company });
     if (!slot) return res.status(404).json({ error: 'Slot not found' });
 
-    // Only the lecturer who created it or an admin can edit
-    if (req.user.role === 'lecturer' && String(slot.lecturer) !== String(req.user._id)) {
-      return res.status(403).json({ error: 'You can only edit your own timetable slots' });
+    const isAdmin = ['admin','superadmin','hod','manager'].includes(req.user.role);
+    const isOwnerLecturer = req.user.role === 'lecturer' && String(slot.lecturer) === String(req.user._id);
+    const isClassRepForCourse = req.user.isClassRep && String(slot.course) === String(req.user.classRepCourse);
+
+    if (!isAdmin && !isOwnerLecturer && !isClassRepForCourse) {
+      return res.status(403).json({ error: 'You can only edit timetable slots for your assigned course' });
     }
 
     const { dayOfWeek, startTime, endTime, title, room, color, notes } = req.body;
@@ -140,8 +155,12 @@ exports.remove = async (req, res) => {
     const slot = await Timetable.findOne({ _id: req.params.id, company: req.user.company });
     if (!slot) return res.status(404).json({ error: 'Slot not found' });
 
-    if (req.user.role === 'lecturer' && String(slot.lecturer) !== String(req.user._id)) {
-      return res.status(403).json({ error: 'You can only delete your own timetable slots' });
+    const isAdmin = ['admin','superadmin','hod','manager'].includes(req.user.role);
+    const isOwnerLecturer = req.user.role === 'lecturer' && String(slot.lecturer) === String(req.user._id);
+    const isClassRepForCourse = req.user.isClassRep && String(slot.course) === String(req.user.classRepCourse);
+
+    if (!isAdmin && !isOwnerLecturer && !isClassRepForCourse) {
+      return res.status(403).json({ error: 'You can only delete timetable slots for your assigned course' });
     }
 
     await Timetable.findByIdAndDelete(req.params.id);
