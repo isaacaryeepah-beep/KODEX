@@ -146,7 +146,7 @@ class _CourseVideosScreenState extends ConsumerState<CourseVideosScreen> {
                   ? EmptyState(
                       icon: Icons.video_library_outlined,
                       title: 'No videos yet',
-                      subtitle: canManage ? 'Add videos for this course' : 'No videos available for this course',
+                      message: canManage ? 'Add videos for this course' : 'No videos available for this course',
                       actionLabel: canManage ? 'Add Video' : null,
                       onAction: canManage ? _addVideo : null,
                     )

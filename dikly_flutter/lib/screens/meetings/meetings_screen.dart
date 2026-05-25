@@ -69,7 +69,7 @@ class _MeetingsScreenState extends ConsumerState<MeetingsScreen> {
                   ? EmptyState(
                       icon: Icons.groups_outlined,
                       title: 'No meetings scheduled',
-                      subtitle: 'Meetings will appear here',
+                      message: 'Meetings will appear here',
                       actionLabel: canCreate ? 'Schedule Meeting' : null,
                       onAction: canCreate ? () => context.push('/sessions/create') : null,
                     )

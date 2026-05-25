@@ -191,7 +191,7 @@ class _AssignmentList extends StatelessWidget {
     return RefreshIndicator(
       onRefresh: onRefresh,
       child: assignments.isEmpty
-          ? EmptyState(icon: Icons.assignment_outlined, title: emptyTitle, subtitle: 'Your assignments will appear here')
+          ? EmptyState(icon: Icons.assignment_outlined, title: emptyTitle, message: 'Your assignments will appear here')
           : ListView.builder(
               padding: const EdgeInsets.all(16),
               itemCount: assignments.length,

@@ -228,7 +228,7 @@ class _StudentDashboardState extends ConsumerState<StudentDashboard> {
           const EmptyState(
             icon: Icons.video_call_outlined,
             title: 'No upcoming sessions',
-            subtitle: 'Your scheduled sessions will appear here',
+            message: 'Your scheduled sessions will appear here',
           )
         else
           for (final meeting in _meetings.take(3))
@@ -255,7 +255,7 @@ class _StudentDashboardState extends ConsumerState<StudentDashboard> {
           const EmptyState(
             icon: Icons.assignment_outlined,
             title: 'No assignments',
-            subtitle: 'Your assignments will appear here',
+            message: 'Your assignments will appear here',
           )
         else
           for (final assignment in _assignments.where((a) => !a.isSubmitted).take(3))

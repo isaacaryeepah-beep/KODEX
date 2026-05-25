@@ -52,7 +52,7 @@ class _TimesheetsScreenState extends State<TimesheetsScreen> {
                   ],
                 ))
               : _timesheets.isEmpty
-                  ? const EmptyState(icon: Icons.schedule_outlined, title: 'No timesheets', subtitle: 'Timesheets will appear here')
+                  ? const EmptyState(icon: Icons.schedule_outlined, title: 'No timesheets', message: 'Timesheets will appear here')
                   : RefreshIndicator(
                       onRefresh: _loadData,
                       child: ListView.builder(

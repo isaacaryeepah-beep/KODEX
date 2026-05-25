@@ -172,7 +172,7 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                       ? EmptyState(
                           icon: Icons.fact_check_outlined,
                           title: 'No attendance sessions',
-                          subtitle: 'Attendance sessions will appear here',
+                          message: 'Attendance sessions will appear here',
                           actionLabel: isLecturer ? null : 'Mark Attendance',
                           onAction: isLecturer ? null : _showMarkAttendanceDialog,
                         )

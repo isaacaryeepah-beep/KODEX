@@ -86,7 +86,7 @@ class _QuizzesScreenState extends State<QuizzesScreen> {
                   ],
                 ))
               : _quizzes.isEmpty
-                  ? const EmptyState(icon: Icons.quiz_outlined, title: 'No quizzes available', subtitle: 'Quizzes will appear here when available')
+                  ? const EmptyState(icon: Icons.quiz_outlined, title: 'No quizzes available', message: 'Quizzes will appear here when available')
                   : RefreshIndicator(
                       onRefresh: _loadData,
                       child: ListView.builder(
