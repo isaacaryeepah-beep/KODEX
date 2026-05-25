@@ -12,6 +12,7 @@
 
 const Assignment           = require("../models/Assignment");
 const AssignmentSubmission = require("../models/AssignmentSubmission");
+const notif                = require("../services/notificationService");
 
 // ─── Assignment discovery ──────────────────────────────────────────────────────
 
@@ -182,6 +183,13 @@ exports.submit = async (req, res) => {
         },
         { $set: { isCountedSubmission: false } }
       );
+    }
+
+    // Notify the assignment's creator (lecturer) on real submission
+    if (!isDraft) {
+      Promise.resolve(
+        notif.notifyAssignmentSubmitted(submission, [assignment.createdBy.toString()])
+      ).catch(() => {});
     }
 
     return res.status(isDraft ? 200 : 201).json({
