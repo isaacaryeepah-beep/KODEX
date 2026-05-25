@@ -1,0 +1,56 @@
+name: Build Flutter APK
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'dikly_flutter/**'
+  workflow_dispatch:
+
+jobs:
+  build-android:
+    name: Build Android APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.22.0'
+          channel: 'stable'
+          cache: true
+
+      - name: Get dependencies
+        working-directory: dikly_flutter
+        run: flutter pub get
+
+      - name: Build Debug APK
+        working-directory: dikly_flutter
+        run: flutter build apk --debug
+
+      - name: Upload Debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Dikly-Android-Debug
+          path: dikly_flutter/build/app/outputs/flutter-apk/app-debug.apk
+          retention-days: 30
+
+      - name: Build Release APK (unsigned)
+        working-directory: dikly_flutter
+        run: flutter build apk --release
+
+      - name: Upload Release APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Dikly-Android-Release
+          path: dikly_flutter/build/app/outputs/flutter-apk/app-release.apk
+          retention-days: 30
