@@ -19,7 +19,7 @@ jobs:
             set -e
             cd /root/KODEX
             git fetch origin main
-            git checkout jitsi-config/web/custom-config.js
+            git checkout jitsi-config/web/custom-config.js 2>/dev/null || true
             git reset --hard origin/main
             docker restart kodex-app-1
             docker restart kodex-web-1
