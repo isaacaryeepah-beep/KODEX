@@ -2,7 +2,7 @@ name: Build Flutter APK
 
 on:
   push:
-    branches: [main]
+    branches: [main, claude/update-resume-aVv3d]
     paths:
       - 'dikly_flutter/**'
   workflow_dispatch:
