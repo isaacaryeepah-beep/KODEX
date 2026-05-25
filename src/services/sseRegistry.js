@@ -12,11 +12,19 @@
  */
 
 const clients = new Map(); // userId (string) → Set<res>
+const MAX_PER_USER = 5;
 
 exports.add = (userId, res) => {
   const key = userId.toString();
   if (!clients.has(key)) clients.set(key, new Set());
-  clients.get(key).add(res);
+  const set = clients.get(key);
+  if (set.size >= MAX_PER_USER) {
+    // Evict the oldest connection (first in insertion order)
+    const oldest = set.values().next().value;
+    try { oldest.end(); } catch (_) {}
+    set.delete(oldest);
+  }
+  set.add(res);
 };
 
 exports.remove = (userId, res) => {

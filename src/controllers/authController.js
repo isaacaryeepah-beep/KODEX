@@ -5,7 +5,7 @@ const Company = require("../models/Company");
 const PlatformSettings = require("../models/PlatformSettings");
 const StudentRoster = require("../models/StudentRoster");
 const MeetingIdentity = require("../models/MeetingIdentity");
-const { generateToken } = require("../utils/jwt");
+const { generateToken, generateRefreshToken, verifyRefreshToken } = require("../utils/jwt");
 const { sendWelcome, sendAdminPasswordResetNotice, sendPasswordReset, sendNewInstitutionAlert, sendLecturerWelcome, sendEmployeeWelcome, sendHodWelcome } = require("../services/emailService");
 const { sendOtp, normalisePhone } = require("../services/smsService");
 const { syncStudentToRoster } = require("../utils/rosterSync");
@@ -164,7 +164,8 @@ exports.register = async (req, res) => {
       throw userError;
     }
 
-    const token = generateToken(user._id);
+    const token        = generateToken(user._id);
+    const refreshToken = generateRefreshToken(user._id);
 
     // Auto-create Jitsi meeting identity for the new admin
     await createMeetingIdentity(user, company._id);
@@ -187,6 +188,7 @@ exports.register = async (req, res) => {
 
     res.status(201).json({
       token,
+      refreshToken,
       user: {
         id: user._id,
         email: user.email,
@@ -885,10 +887,12 @@ exports.login = async (req, res) => {
     if (deviceId && !user.deviceId) user.deviceId = deviceId;
     await user.save({ validateModifiedOnly: true });
 
-    const token = generateToken(user._id);
+    const token        = generateToken(user._id);
+    const refreshToken = generateRefreshToken(user._id);
 
     res.json({
       token,
+      refreshToken,
       user: {
         id: user._id,
         email: user.email,
@@ -954,6 +958,19 @@ exports.logout = async (req, res) => {
   } catch (error) {
     console.error("Logout error:", error);
     res.status(500).json({ error: "Logout failed" });
+  }
+};
+
+exports.refresh = async (req, res) => {
+  try {
+    const { refreshToken } = req.body;
+    if (!refreshToken) return res.status(400).json({ error: "Refresh token required" });
+    const decoded = verifyRefreshToken(refreshToken);
+    const token   = generateToken(decoded.id);
+    const newRefreshToken = generateRefreshToken(decoded.id);
+    res.json({ token, refreshToken: newRefreshToken });
+  } catch (err) {
+    res.status(401).json({ error: "Invalid or expired refresh token" });
   }
 };
 
@@ -1489,8 +1506,9 @@ exports.verify2FACode = async (req, res) => {
     user.twoFactorExpires = null;
     await user.save({ validateBeforeSave: false });
 
-    const token = generateToken(user._id);
-    res.json({ ok: true, token });
+    const token        = generateToken(user._id);
+    const refreshToken = generateRefreshToken(user._id);
+    res.json({ ok: true, token, refreshToken });
   } catch(e) {
     console.error("2FA verify error:", e);
     res.status(500).json({ error: "Verification failed" });

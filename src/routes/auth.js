@@ -13,6 +13,7 @@ router.post("/register-student",       registerLimiter,       authController.reg
 router.post("/register-employee",      registerLimiter,       authController.registerEmployee);
 router.post("/register-hod",           registerLimiter,       authController.registerHod);
 router.post("/login",                  loginLimiter,          authController.login);
+router.post("/refresh",                loginLimiter,          authController.refresh);
 router.post("/logout",                 authenticate,          authController.logout);
 router.get("/me",                      authenticate,          authController.getMe);
 router.post("/migrate-orphans",        authenticate, requireRole("superadmin"), authController.migrateOrphanUsers);

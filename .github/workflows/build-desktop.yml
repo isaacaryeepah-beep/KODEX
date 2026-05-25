@@ -2,7 +2,7 @@ name: Build Desktop App
 
 on:
   push:
-    branches: [main]
+    branches: [main, claude/update-resume-aVv3d]
   workflow_dispatch:
 
 jobs:
