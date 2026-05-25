@@ -29,13 +29,16 @@ import '../screens/shared/announcements_screen.dart';
 import '../screens/shared/reports_screen.dart';
 import '../screens/shared/profile_screen.dart';
 import '../screens/gradebook/grade_book_screen.dart';
+import '../screens/splash_screen.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
   final authState = ref.watch(authProvider);
 
   return GoRouter(
-    initialLocation: '/portal',
+    initialLocation: '/splash',
     redirect: (context, state) {
+      if (state.matchedLocation == '/splash') return null;
+
       final isLoading = authState.status == AuthStatus.unknown;
       if (isLoading) return null;
 
@@ -50,6 +53,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       return null;
     },
     routes: [
+      GoRoute(
+        path: '/splash',
+        builder: (context, state) => const SplashScreen(),
+      ),
       GoRoute(
         path: '/portal',
         builder: (context, state) => const PortalSelectorScreen(),

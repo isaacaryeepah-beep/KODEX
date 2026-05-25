@@ -43,6 +43,7 @@ const enrolledInCourse = requireStudentCourseEnrollment({
 
 // ─── Discovery ────────────────────────────────────────────────────────────────
 
+router.get("/upcoming",                      ctrl.upcomingAssignments);
 router.get("/courses/:courseId/assignments", enrolledInCourse, ctrl.listAssignments);
 router.get("/assignments/:assignmentId",     ctrl.getAssignment);
 

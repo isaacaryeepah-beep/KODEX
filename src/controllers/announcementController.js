@@ -36,6 +36,13 @@ exports.createAnnouncement = async (req, res) => {
       };
     }
 
+    // Class reps can only post to their course group
+    const isClassRep = req.user.isClassRep && req.user.classRepCourse;
+    const finalAudience   = isClassRep ? 'course' : (audience || 'all');
+    const finalTargetCourse = isClassRep
+      ? req.user.classRepCourse
+      : (targetCourse || courseId || null);
+
     const announcement = await Announcement.create({
       title:                   title.trim(),
       body:                    body.trim(),
@@ -43,10 +50,10 @@ exports.createAnnouncement = async (req, res) => {
       author:                  req.user._id,
       authorRole:              req.user.role,
       type:                    type        || 'info',
-      audience:                audience    || 'all',
-      targetDepartment:        targetDepartment        || null,
-      targetProgramme:         targetProgramme         || null,
-      targetCourse:            targetCourse || courseId  || null,
+      audience:                finalAudience,
+      targetDepartment:        isClassRep ? null : (targetDepartment || null),
+      targetProgramme:         isClassRep ? null : (targetProgramme  || null),
+      targetCourse:            finalTargetCourse,
       targetLevel:             targetLevel             || null,
       targetGroup:             targetGroup             || null,
       targetStudyType:         targetStudyType         || null,
@@ -89,6 +96,14 @@ exports.listAnnouncements = async (req, res) => {
     // Audience scoping — pushed into $and so it doesn't clobber the date filters
     let audienceFilter = null;
     if (role === 'student') {
+      // Include course-level announcements for enrolled courses
+      const Course = require('../models/Course');
+      const enrolledCourses = await Course.find({
+        company: companyId,
+        enrolledStudents: req.user._id,
+      }).select('_id').lean();
+      const enrolledIds = enrolledCourses.map(c => c._id);
+
       audienceFilter = [
         { audience: 'all' },
         { audience: 'students' },
@@ -97,6 +112,7 @@ exports.listAnnouncements = async (req, res) => {
         { audience: 'group',     targetGroup:       req.user.studentGroup },
         { audience: 'studyType', targetStudyType:   req.user.studyType },
         { audience: 'qualificationType', targetQualificationType: req.user.qualificationType },
+        { audience: 'course', targetCourse: { $in: enrolledIds } },
       ];
     } else if (role === 'employee') {
       audienceFilter = [

@@ -49,6 +49,9 @@ const NOTIFICATION_TYPES = Object.freeze({
   ENROLLMENT_ADDED:      "enrollment_added",       // → student (added to course)
   ENROLLMENT_REMOVED:    "enrollment_removed",     // → student (removed from course)
 
+  // Academic: timetable
+  CLASS_STARTING_SOON:   "class_starting_soon",    // → enrolled students + lecturer
+
   // System / admin
   ANNOUNCEMENT:          "announcement",           // cross-mode broadcast
   SYSTEM:                "system",                 // platform-level message

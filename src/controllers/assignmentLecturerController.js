@@ -15,6 +15,8 @@
 const mongoose   = require("mongoose");
 const Assignment            = require("../models/Assignment");
 const AssignmentSubmission  = require("../models/AssignmentSubmission");
+const Course                = require("../models/Course");
+const notif                 = require("../services/notificationService");
 
 // ─── Assignment CRUD ──────────────────────────────────────────────────────────
 
@@ -143,6 +145,15 @@ exports.publishAssignment = async (req, res) => {
     assignment.publishedAt = new Date();
     assignment.updatedBy   = req.user._id;
     await assignment.save();
+
+    // Notify enrolled students fire-and-forget
+    Promise.resolve(
+      Course.findById(assignment.course).select("enrolledStudents").lean()
+        .then(course => {
+          const studentIds = (course?.enrolledStudents || []).map(id => id.toString());
+          return notif.notifyAssignmentPublished(assignment, studentIds);
+        })
+    ).catch(() => {});
 
     return res.json({ assignment });
   } catch (err) {
@@ -291,6 +302,9 @@ exports.gradeSubmission = async (req, res) => {
     }
 
     await submission.save();
+
+    Promise.resolve(notif.notifyAssignmentGraded(submission)).catch(() => {});
+
     return res.json({ submission });
   } catch (err) {
     console.error("[assignmentLecturer gradeSubmission]", err);
@@ -318,6 +332,8 @@ exports.returnSubmission = async (req, res) => {
     submission.gradedBy        = req.user._id;
     submission.gradedAt        = new Date();
     await submission.save();
+
+    Promise.resolve(notif.notifyAssignmentReturned(submission)).catch(() => {});
 
     return res.json({ submission });
   } catch (err) {

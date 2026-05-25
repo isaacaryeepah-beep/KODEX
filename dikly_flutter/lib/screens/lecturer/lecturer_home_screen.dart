@@ -94,7 +94,7 @@ class _WelcomeCard extends StatelessWidget {
 }
 
 class _LiveMeetingCard extends ConsumerWidget {
-  final dynamic meeting;
+  final meeting;
   const _LiveMeetingCard({required this.meeting});
 
   @override

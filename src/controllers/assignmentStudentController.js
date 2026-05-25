@@ -12,6 +12,8 @@
 
 const Assignment           = require("../models/Assignment");
 const AssignmentSubmission = require("../models/AssignmentSubmission");
+const Course               = require("../models/Course");
+const notif                = require("../services/notificationService");
 
 // ─── Assignment discovery ──────────────────────────────────────────────────────
 
@@ -184,6 +186,13 @@ exports.submit = async (req, res) => {
       );
     }
 
+    // Notify the assignment's creator (lecturer) on real submission
+    if (!isDraft) {
+      Promise.resolve(
+        notif.notifyAssignmentSubmitted(submission, [assignment.createdBy.toString()])
+      ).catch(() => {});
+    }
+
     return res.status(isDraft ? 200 : 201).json({
       submission,
       message: isDraft ? "Draft saved" : "Assignment submitted",
@@ -304,6 +313,66 @@ exports.getSubmission = async (req, res) => {
     return res.json({ submission, gradeReleased: true });
   } catch (err) {
     console.error("[assignmentStudent getSubmission]", err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+};
+
+/**
+ * GET /student/assignments/upcoming
+ * Returns published assignments due within the next 7 days across all
+ * courses the student is enrolled in, with their submission status.
+ */
+exports.upcomingAssignments = async (req, res) => {
+  try {
+    const now     = new Date();
+    const weekOut = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+
+    // Enrolled course IDs for this student
+    const courses = await Course.find({
+      companyId:        req.companyId,
+      enrolledStudents: req.user._id,
+      isActive:         true,
+    }).select("_id").lean();
+
+    const courseIds = courses.map(c => c._id);
+    if (!courseIds.length) return res.json({ assignments: [] });
+
+    const assignments = await Assignment.find({
+      company:     req.companyId,
+      course:      { $in: courseIds },
+      status:      "published",
+      isActive:    true,
+      dueDate:     { $gte: now, $lte: weekOut },
+    })
+      .populate("course", "title code")
+      .sort({ dueDate: 1 })
+      .lean();
+
+    if (!assignments.length) return res.json({ assignments: [] });
+
+    // Fetch student's submissions for these assignments
+    const subMap = {};
+    const subs = await AssignmentSubmission.find({
+      assignment:          { $in: assignments.map(a => a._id) },
+      student:             req.user._id,
+      company:             req.companyId,
+      isCountedSubmission: true,
+    }).select("assignment status earnedMarks percentageScore isResultReleased").lean();
+
+    for (const s of subs) subMap[s.assignment.toString()] = s;
+
+    const result = assignments.map(a => ({
+      _id:         a._id,
+      title:       a.title,
+      course:      a.course,
+      dueDate:     a.dueDate,
+      totalMarks:  a.totalMarks,
+      submission:  subMap[a._id.toString()] || null,
+    }));
+
+    return res.json({ assignments: result });
+  } catch (err) {
+    console.error("[assignmentStudent upcomingAssignments]", err);
     return res.status(500).json({ error: "Internal server error" });
   }
 };

@@ -12,7 +12,7 @@ router.use(companyIsolation);
 // ── Role guards ───────────────────────────────────────────────────────────────
 const canCreate = (req, res, next) => {
   const allowed = ['lecturer', 'hod', 'admin', 'superadmin', 'manager'];
-  if (!allowed.includes(req.user.role)) {
+  if (!allowed.includes(req.user.role) && !req.user.isClassRep) {
     return res.status(403).json({
       success: false,
       message: 'You are not allowed to post announcements.',

@@ -796,4 +796,9 @@ router.patch("/clock-window", ...mw, canManage, async (req, res) => {
   }
 });
 
+// Return the caller's public IP as seen by the server (used by the admin UI "Detect My IP" button)
+router.get("/my-ip", ...mw, (req, res) => {
+  res.json({ ip: extractClientIp(req) });
+});
+
 module.exports = router;

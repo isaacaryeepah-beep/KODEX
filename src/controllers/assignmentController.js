@@ -5,6 +5,7 @@ const Assignment         = require("../models/Assignment");
 const AssignmentSubmission = require("../models/AssignmentSubmission");
 const Course   = require("../models/Course");
 const { uploadBrief, uploadSubmission, BRIEF_DIR, SUBMISSION_DIR } = require("../config/uploadConfig");
+const notif    = require("../services/notificationService");
 
 // ─── Grading helper ────────────────────────────────────────────────────────
 function gradeAnswers(questions, answers) {
@@ -476,6 +477,8 @@ exports.gradeSubmission = async (req, res) => {
     sub.gradedAt  = new Date();
     await sub.save();
 
+    Promise.resolve(notif.notifyAssignmentGraded(sub)).catch(() => {});
+
     res.json({ submission: sub });
   } catch (err) {
     console.error("gradeSubmission:", err);
@@ -705,6 +708,10 @@ exports.studentSubmit = (req, res) => {
         maxMarks:       assignment.questions[a.questionIndex]?.marks || 1,
         explanation:    assignment.questions[a.questionIndex]?.explanation || null,
       }));
+
+      Promise.resolve(
+        notif.notifyAssignmentSubmitted(submission, [assignment.createdBy.toString()])
+      ).catch(() => {});
 
       res.json({
         success:             true,

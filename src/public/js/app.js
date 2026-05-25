@@ -190,6 +190,117 @@ function stopNotifPolling() {
   if (_notifPollTimer) { clearInterval(_notifPollTimer); _notifPollTimer = null; }
 }
 
+// ── Real-time notification SSE ────────────────────────────────────────────────
+let _sseSource       = null;
+let _notifUnread     = 0;
+let _notifPanelOpen  = false;
+
+function _updateNotifBadge(count) {
+  _notifUnread = count;
+  const badge = document.getElementById('notif-bell-badge');
+  if (!badge) return;
+  if (count > 0) {
+    badge.textContent    = count > 99 ? '99+' : count;
+    badge.style.display  = 'inline-block';
+  } else {
+    badge.style.display  = 'none';
+  }
+}
+
+function startSSE() {
+  if (_sseSource) { _sseSource.close(); _sseSource = null; }
+  const token = localStorage.getItem('token');
+  if (!token) return;
+
+  _sseSource = new EventSource(`/api/notifications/stream?token=${encodeURIComponent(token)}`);
+
+  _sseSource.onmessage = (e) => {
+    try {
+      const msg = JSON.parse(e.data);
+      if (msg.event === 'unread_count') {
+        _updateNotifBadge(msg.count);
+      } else if (msg.event === 'notification') {
+        const n = msg.notification;
+        _updateNotifBadge(_notifUnread + 1);
+        _notifSound.playChime('announcement');
+        if (window.toastInfo) toastInfo(n.title + (n.body ? ' — ' + n.body : ''));
+        if (_notifPanelOpen) _loadNotifPanel();
+      }
+    } catch (_) {}
+  };
+
+  _sseSource.onerror = () => {
+    // EventSource auto-reconnects; close and let it retry after 5 s
+    _sseSource.close();
+    _sseSource = null;
+    setTimeout(() => { if (currentUser) startSSE(); }, 5000);
+  };
+}
+
+function stopSSE() {
+  if (_sseSource) { _sseSource.close(); _sseSource = null; }
+}
+
+async function _loadNotifPanel() {
+  const list = document.getElementById('notif-panel-list');
+  if (!list) return;
+  try {
+    const d = await api('/api/notifications?limit=15');
+    const notifs = d.notifications || [];
+    if (!notifs.length) {
+      list.innerHTML = '<p style="text-align:center;color:var(--text-muted);font-size:13px;padding:20px">All caught up!</p>';
+      return;
+    }
+    list.innerHTML = notifs.map(n => `
+      <div onclick="_notifPanelClick('${n._id}','${n.link || ''}')"
+           style="display:flex;gap:10px;padding:10px 16px;cursor:pointer;border-bottom:1px solid var(--border);align-items:flex-start;background:${n.isRead ? 'transparent' : 'var(--primary-ultra-light,#f0f4ff)'}">
+        <div style="width:8px;height:8px;border-radius:50%;background:${n.isRead ? 'transparent' : 'var(--primary)'};margin-top:5px;flex-shrink:0"></div>
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:${n.isRead ? '400' : '600'};font-size:13px;line-height:1.3">${n.title}</div>
+          ${n.body ? `<div style="font-size:12px;color:var(--text-light);margin-top:2px">${n.body}</div>` : ''}
+          <div style="font-size:11px;color:var(--text-muted);margin-top:3px">${_timeAgo(new Date(n.createdAt))}</div>
+        </div>
+      </div>`).join('');
+  } catch (_) {
+    list.innerHTML = '<p style="text-align:center;color:var(--text-muted);font-size:13px;padding:20px">Could not load</p>';
+  }
+}
+
+async function _notifPanelClick(id, link) {
+  await api('/api/notifications/' + id + '/read', { method: 'PATCH' }).catch(() => {});
+  _updateNotifBadge(Math.max(0, _notifUnread - 1));
+  closeNotifPanel();
+  if (link) location.href = link;
+}
+
+function toggleNotifPanel() {
+  const panel = document.getElementById('notif-panel');
+  if (!panel) return;
+  _notifPanelOpen = !_notifPanelOpen;
+  panel.style.display = _notifPanelOpen ? 'flex' : 'none';
+  if (_notifPanelOpen) _loadNotifPanel();
+}
+
+function closeNotifPanel() {
+  const panel = document.getElementById('notif-panel');
+  if (panel) panel.style.display = 'none';
+  _notifPanelOpen = false;
+}
+
+async function markAllNotifsRead() {
+  await api('/api/notifications/read-all', { method: 'PATCH' }).catch(() => {});
+  _updateNotifBadge(0);
+  _loadNotifPanel();
+}
+
+function _timeAgo(date) {
+  const s = Math.floor((Date.now() - date) / 1000);
+  if (s < 60)   return 'just now';
+  if (s < 3600)  return Math.floor(s / 60) + 'm ago';
+  if (s < 86400) return Math.floor(s / 3600) + 'h ago';
+  return Math.floor(s / 86400) + 'd ago';
+}
+
 // ═══════════════════════════════════════════════════════
 // TOAST NOTIFICATION SYSTEM
 // Usage: toast('Message')           → info (default)
@@ -1988,6 +2099,7 @@ async function handleStudentForgotPassword() {
 
 async function handleLogout() {
   stopNotifPolling();
+  stopSSE();
   try {
     if (isOnline()) await api('/api/auth/logout', { method: 'POST' });
   } catch (e) {}
@@ -2392,6 +2504,7 @@ function showDashboard(data) {
     buildSidebar();
     loadAnnBadge();
     startNotifPolling();
+    startSSE();
     _notifSound.updateBtn();
     applyBranding(); // async — applies colors/logo in background
     // Show offline banner immediately when logged in via cached credentials
@@ -2428,8 +2541,8 @@ function buildSidebar() {
       links.push({ id: 'approvals', label: 'Approvals', icon: approvalsIcon() });
       links.push({ id: 'search', label: 'Search', icon: svgIcon('<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>') });
       links.push({ id: 'users', label: 'Users', icon: usersIcon() });
-      links.push({ id: 'sessions', label: 'Sessions', icon: sessionsIcon() });
       if (currentUser.company?.mode === 'academic') {
+        links.push({ id: 'sessions', label: 'Sessions', icon: sessionsIcon() });
         links.push({ sep: true, label: 'ACADEMIC' });
         links.push({ id: 'courses', label: 'Courses', icon: coursesIcon() });
         links.push({ id: 'hod-course-approvals', label: 'Course Approvals', icon: svgIcon('<path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>') });
@@ -2447,6 +2560,8 @@ function buildSidebar() {
         links.push({ id: 'leave-requests', label: 'Leave Requests',  icon: svgIcon('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>') });
         links.push({ id: 'timesheets',     label: 'Timesheets',      icon: svgIcon('<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="14" x2="16" y2="14"/>') });
         links.push({ id: 'expenses-mgr',   label: 'Expenses',        icon: svgIcon('<line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>') });
+        links.push({ id: 'performance',    label: 'Performance',     icon: svgIcon('<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>') });
+        links.push({ id: 'branches',       label: 'Branches',        icon: svgIcon('<line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/>') });
         links.push({ id: 'announcements',  label: 'Announcements',   icon: svgIcon('<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>') });
         links.push({ id: 'audit-logs',     label: 'Audit Logs',      icon: svgIcon('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="10" y2="9"/>') });
       }
@@ -2576,6 +2691,8 @@ function buildSidebar() {
       if (currentUser.isClassRep) {
         links.push({ sep: true, label: 'CLASS REP' });
         links.push({ id: 'class-device', label: 'Class Device', icon: svgIcon('<rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/><polyline points="9 11 12 14 22 4"/>') });
+        links.push({ id: 'class-announcements', label: 'Class Announcements', icon: svgIcon('<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/><line x1="12" y1="2" x2="12" y2="4"/>') });
+        links.push({ id: 'class-timetable', label: 'Class Timetable', icon: svgIcon('<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="12" y1="14" x2="12" y2="18"/><line x1="10" y1="16" x2="14" y2="16"/>') });
       }
       links.push({ sep: true, label: 'SUPPORT' });
       links.push({ id: 'support', label: 'Support', icon: svgIcon('<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>') });
@@ -2707,8 +2824,10 @@ function navigateTo(view) {
     case 'live-attendance': _safeRender(content, renderLiveAttendance, 'Live Attendance'); break;
     case 'branches':        _safeRender(content, renderBranches,       'Branches');        break;
     case 'my-profile':      renderProfile(); break;
-    case 'class-device':   renderClassDevice(); break;
-    case 'course-videos':  renderCourseVideos(); break;
+    case 'class-device':         renderClassDevice(); break;
+    case 'class-announcements':  renderClassAnnouncements(); break;
+    case 'class-timetable':      renderClassTimetable(); break;
+    case 'course-videos':        renderCourseVideos(); break;
     default: renderDashboard();
   }
 }
@@ -5122,12 +5241,13 @@ async function viewStudentQuizResult(quizId) {
 }
 
 async function renderStudentDashboard(content) {
-  const [attendance, coursesData, quizzesData, meetingsData, activeSessionData] = await Promise.all([
+  const [attendance, coursesData, quizzesData, meetingsData, activeSessionData, upcomingAsgData] = await Promise.all([
     api('/api/attendance-sessions/my-attendance?limit=5').catch(() => ({ records: [], pagination: { total: 0 } })),
     api('/api/courses').catch(() => ({ courses: [] })),
     api('/api/student/quizzes').catch(() => ({ quizzes: [] })),
     api('/api/meetings').catch(() => ({ data: [] })),
     api('/api/attendance-sessions/active').catch(() => ({ session: null })),
+    api('/api/student/assignments/upcoming').catch(() => ({ assignments: [] })),
   ]);
 
   const totalCheckins = attendance.pagination.total;
@@ -5135,6 +5255,7 @@ async function renderStudentDashboard(content) {
   const quizzesTaken = quizzesData.quizzes.length;
   const upcomingMeetings = (meetingsData.data || meetingsData.meetings || []).filter(m => m.status === 'scheduled');
   const activeSession = activeSessionData.session;
+  const upcomingAssignments = upcomingAsgData.assignments || [];
   const attendanceRate = totalCheckins > 0 ? Math.round((attendance.records.filter(r => r.status === 'present').length / attendance.records.length) * 100) : 0;
 
   const methodLabel = (m) => {
@@ -5211,7 +5332,36 @@ async function renderStudentDashboard(content) {
         `).join('')}
       </div>
     ` : ''}
-    
+
+    ${upcomingAssignments.length > 0 ? `
+      <div class="card">
+        <div class="card-title" style="display:flex;align-items:center;justify-content:space-between">
+          <span>Upcoming Assignments</span>
+          <button class="btn btn-secondary btn-sm" onclick="location.href='/assignments.html'">View All</button>
+        </div>
+        ${upcomingAssignments.slice(0, 5).map(a => {
+          const hoursLeft = Math.round((new Date(a.dueDate) - Date.now()) / 3600000);
+          const daysLeft  = Math.floor(hoursLeft / 24);
+          const urgency   = hoursLeft <= 24 ? 'color:#dc2626' : hoursLeft <= 48 ? 'color:#d97706' : 'color:var(--text-light)';
+          const timeLabel = daysLeft >= 2 ? `${daysLeft}d left` : hoursLeft >= 1 ? `${hoursLeft}h left` : 'Due soon';
+          const subStatus = a.submission ? a.submission.status : null;
+          const badge     = subStatus === 'graded' ? '<span style="font-size:11px;background:#dcfce7;color:#166534;border-radius:8px;padding:2px 8px;font-weight:600">Graded</span>'
+                          : subStatus ? '<span style="font-size:11px;background:#dbeafe;color:#1e40af;border-radius:8px;padding:2px 8px;font-weight:600">Submitted</span>'
+                          : '<span style="font-size:11px;background:#fef3c7;color:#92400e;border-radius:8px;padding:2px 8px;font-weight:600">Pending</span>';
+          return `<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border);cursor:pointer" onclick="location.href='/assignments.html?id=${a._id}'">
+            <div style="flex:1;min-width:0">
+              <div style="font-weight:600;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${a.title}</div>
+              <div style="font-size:12px;color:var(--text-light)">${a.course?.code || ''} ${a.course?.title || ''}</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;margin-left:12px">
+              ${badge}
+              <span style="font-size:12px;font-weight:600;${urgency}">${timeLabel}</span>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>
+    ` : ''}
+
     <div class="card">
       <div class="card-title">Recent Attendance</div>
       ${attendance.records.length ? `
@@ -12579,6 +12729,7 @@ async function loadAnnBadge() {
 const ANN_COLORS = { info:'#6366f1', warning:'#f59e0b', success:'#22c55e', urgent:'#ef4444' };
 const ANN_ICONS  = { info:'ℹ️', warning:'⚠️', success:'✅', urgent:'🚨' };
 const ANN_CAN_POST = ['admin','superadmin','lecturer','manager','hod'];
+// Class reps can post via class-announcements page, not the general announcements page
 
 async function renderAnnouncements() {
   const content = document.getElementById('main-content');
@@ -13327,10 +13478,17 @@ async function renderStudentTimetable() {
   try {
     const slotData = await api('/api/timetable');
     const slots = slotData.slots || [];
+    const isClassRep = currentUser.isClassRep;
     content.innerHTML = `
-      <div class="page-header" style="margin-bottom:20px">
-        <h2 style="font-size:22px;font-weight:800;letter-spacing:-.5px;color:#0f172a;margin-bottom:2px">My Schedule</h2>
-        <p style="color:#64748b;font-size:13px">Your weekly class timetable based on enrolled courses</p>
+      <div class="page-header" style="margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
+        <div>
+          <h2 style="font-size:22px;font-weight:800;letter-spacing:-.5px;color:#0f172a;margin-bottom:2px">My Schedule</h2>
+          <p style="color:#64748b;font-size:13px">Your weekly class timetable based on enrolled courses</p>
+        </div>
+        ${isClassRep ? `<button onclick="navigateTo('class-timetable')" style="display:inline-flex;align-items:center;gap:6px;padding:8px 14px;background:#f0fdf4;border:1.5px solid #86efac;color:#16a34a;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+          Edit Timetable
+        </button>` : ''}
       </div>
       ${slots.length === 0
         ? `<div style="background:#fff;border:1px solid #e8eaed;border-radius:16px;padding:60px 20px;text-align:center;box-shadow:0 1px 4px rgba(0,0,0,.05)">
@@ -14087,6 +14245,10 @@ document.addEventListener('click', (e) => {
   const navLink = e.target.closest('.sidebar-nav a');
   if (navLink && window.innerWidth <= 768) {
     closeMobileSidebar();
+  }
+  // Close notification panel when clicking outside of it
+  if (_notifPanelOpen && !e.target.closest('#notif-panel') && !e.target.closest('#notif-bell-btn')) {
+    closeNotifPanel();
   }
 });
 
@@ -15234,7 +15396,7 @@ async function _caLoadSettings() {
         </div>
 
         <button class="btn btn-primary" style="margin-top:20px" onclick="_caSaveSettings()">Save Settings</button>
-        <button class="btn btn-secondary btn-sm" style="margin-top:20px;margin-left:8px" onclick="_caDetectMyIP()">📡 Detect My IP</button>
+        <button class="btn btn-secondary btn-sm" style="margin-top:20px;margin-left:8px" onclick="_caDetectMyIP(true)">📡 Detect My IP</button>
       </div>
 
       <div class="card" style="max-width:560px">
@@ -15304,13 +15466,23 @@ async function _caClearClockWindow() {
   await _caSaveClockWindow();
 }
 
-async function _caDetectMyIP() {
-  const el = document.getElementById('cas-myip');
+async function _caDetectMyIP(addToInput = false) {
+  const el  = document.getElementById('cas-myip');
+  const inp = document.getElementById('cas-ips');
   if (!el) return;
   try {
-    const r = await fetch('https://api.ipify.org?format=json');
-    const d = await r.json();
-    el.textContent = d.ip || 'unknown';
+    const d = await api('/api/corporate-attendance/my-ip');
+    const ip = d.ip || 'unknown';
+    el.textContent = ip;
+    if (addToInput && inp && ip !== 'unknown') {
+      const existing = inp.value.split(',').map(s => s.trim()).filter(Boolean);
+      if (!existing.includes(ip)) {
+        inp.value = [...existing, ip].join(', ');
+        toastSuccess(`IP ${ip} added to the allowed list — click Save Settings to apply`);
+      } else {
+        toastInfo(`IP ${ip} is already in the list`);
+      }
+    }
   } catch { el.textContent = 'unavailable'; }
 }
 
@@ -19942,6 +20114,152 @@ async function _renderStudentVideos() {
       </div>`).join('');
   } catch(e) {
     body.innerHTML = `<div class="empty-state"><p style="color:var(--error)">${escHtml(e.message)}</p></div>`;
+  }
+}
+
+// ── Class Rep: Announcements ──────────────────────────────────────────────────
+async function renderClassAnnouncements() {
+  const content = document.getElementById('main-content');
+  if (!content) return;
+  content.innerHTML = '<div class="loading">Loading…</div>';
+
+  try {
+    const [annData] = await Promise.all([api('/api/announcements')]);
+    const allAnns = annData.announcements || [];
+    // Show only announcements posted by this class rep or targeting their course
+    const courseId = currentUser.classRepCourse;
+    const classAnns = allAnns.filter(a =>
+      (a.audience === 'course' && String(a.targetCourse) === String(courseId)) ||
+      String(a.author?._id || a.author) === String(currentUser._id)
+    );
+
+    content.innerHTML = `
+      <div class="page-header" style="margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
+        <div>
+          <h2 style="font-size:22px;font-weight:800;letter-spacing:-.5px;color:#0f172a;margin-bottom:2px">Class Announcements</h2>
+          <p style="color:#64748b;font-size:13px">Post announcements visible only to your class group</p>
+        </div>
+        <button onclick="openClassRepAnnouncementModal()" style="display:inline-flex;align-items:center;gap:8px;padding:10px 18px;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;box-shadow:0 4px 12px rgba(99,102,241,.35)">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Post Announcement
+        </button>
+      </div>
+      <div id="class-ann-list">
+        ${classAnns.length === 0
+          ? `<div style="background:#fff;border:1px solid #e8eaed;border-radius:16px;padding:60px 20px;text-align:center">
+              <div style="font-size:40px;margin-bottom:12px">📢</div>
+              <h3 style="font-size:16px;font-weight:700;color:#0f172a;margin-bottom:6px">No announcements yet</h3>
+              <p style="color:#64748b;font-size:13px">Post your first announcement to your class group above.</p>
+            </div>`
+          : classAnns.map(a => `
+            <div style="background:#fff;border:1px solid #e8eaed;border-radius:14px;padding:20px 24px;margin-bottom:12px;box-shadow:0 1px 4px rgba(0,0,0,.05)">
+              <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:8px">
+                <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                  <span style="font-size:18px">${ANN_ICONS[a.type]||'ℹ️'}</span>
+                  <span style="font-weight:700;font-size:15px;color:#0f172a">${esc(a.title)}</span>
+                  <span style="background:#ede9fe;color:#7c3aed;font-size:11px;font-weight:600;padding:2px 8px;border-radius:20px">Class Group</span>
+                </div>
+                ${String(a.author?._id||a.author)===String(currentUser._id)
+                  ? `<button onclick="annDelete('${a._id}')" style="background:#fff;border:1px solid #fca5a5;color:#ef4444;border-radius:8px;padding:4px 10px;font-size:12px;cursor:pointer">Delete</button>`
+                  : ''}
+              </div>
+              <p style="color:#374151;font-size:14px;line-height:1.6;margin:0 0 8px">${esc(a.body)}</p>
+              <span style="color:#94a3b8;font-size:11px">${new Date(a.createdAt).toLocaleString()}</span>
+            </div>`).join('')
+        }
+      </div>`;
+  } catch(e) {
+    content.innerHTML = `<div class="card"><p style="color:var(--danger)">${esc(e.message)}</p></div>`;
+  }
+}
+
+function openClassRepAnnouncementModal() {
+  const container = document.getElementById('modal-container');
+  container.classList.remove('hidden');
+  container.innerHTML = `
+    <div class="modal-overlay" onclick="closeModal(event)">
+      <div class="modal" onclick="event.stopPropagation()" style="max-width:480px">
+        <h3 style="margin:0 0 18px;font-size:18px;font-weight:800">Post Class Announcement</h3>
+        <p style="color:#64748b;font-size:13px;margin:-10px 0 18px">This announcement will only be visible to students in your class group.</p>
+        <div class="form-group" style="margin-bottom:14px">
+          <label style="font-size:13px;font-weight:600;color:#374151;display:block;margin-bottom:6px">Title <span style="color:red">*</span></label>
+          <input id="cr-ann-title" type="text" placeholder="Announcement title…" style="width:100%;padding:10px 12px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:14px;font-family:inherit;outline:none">
+        </div>
+        <div class="form-group" style="margin-bottom:14px">
+          <label style="font-size:13px;font-weight:600;color:#374151;display:block;margin-bottom:6px">Message <span style="color:red">*</span></label>
+          <textarea id="cr-ann-body" rows="5" placeholder="Write your message…" style="width:100%;padding:10px 12px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:14px;font-family:inherit;resize:vertical;outline:none"></textarea>
+        </div>
+        <div class="form-group" style="margin-bottom:20px">
+          <label style="font-size:13px;font-weight:600;color:#374151;display:block;margin-bottom:6px">Type</label>
+          <select id="cr-ann-type" style="width:100%;padding:10px 12px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:14px;font-family:inherit">
+            <option value="info">ℹ️ Info</option>
+            <option value="warning">⚠️ Warning</option>
+            <option value="success">✅ Reminder</option>
+            <option value="urgent">🚨 Urgent</option>
+          </select>
+        </div>
+        <div style="display:flex;gap:10px;justify-content:flex-end">
+          <button onclick="closeModal()" style="padding:10px 18px;background:#f1f5f9;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;color:#64748b">Cancel</button>
+          <button onclick="submitClassRepAnnouncement()" style="padding:10px 20px;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer">Post</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+async function submitClassRepAnnouncement() {
+  const title = document.getElementById('cr-ann-title')?.value?.trim();
+  const body  = document.getElementById('cr-ann-body')?.value?.trim();
+  const type  = document.getElementById('cr-ann-type')?.value || 'info';
+  if (!title || !body) return toastError('Title and message are required.');
+  try {
+    await api('/api/announcements', {
+      method: 'POST',
+      body: JSON.stringify({ title, body, type }),
+    });
+    closeModal();
+    toastSuccess('Announcement posted to your class group!');
+    renderClassAnnouncements();
+  } catch(e) {
+    toastError(e.message || 'Failed to post announcement.');
+  }
+}
+
+// ── Class Rep: Timetable (editable) ──────────────────────────────────────────
+async function renderClassTimetable() {
+  const content = document.getElementById('main-content');
+  if (!content) return;
+  content.innerHTML = '<div class="loading">Loading timetable…</div>';
+  try {
+    const [slotData, courseData] = await Promise.all([
+      api('/api/timetable'),
+      api('/api/courses'),
+    ]);
+    _timetableSlots   = slotData.slots || [];
+    _timetableCourses = (courseData.courses || courseData.data || []).filter(c =>
+      String(c._id) === String(currentUser.classRepCourse)
+    );
+
+    content.innerHTML = `
+      <div class="page-header" style="margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
+        <div>
+          <h2 style="font-size:22px;font-weight:800;letter-spacing:-.5px;color:#0f172a;margin-bottom:2px">Class Timetable</h2>
+          <p style="color:#64748b;font-size:13px">Manage the weekly schedule for your class group</p>
+        </div>
+        <button onclick="openAddSlotModal()" style="display:inline-flex;align-items:center;gap:8px;padding:10px 18px;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;box-shadow:0 4px 12px rgba(99,102,241,.35)">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Add Slot
+        </button>
+      </div>
+      ${_timetableSlots.length === 0
+        ? `<div style="background:#fff;border:1px solid #e8eaed;border-radius:16px;padding:60px 20px;text-align:center">
+            <div style="font-size:40px;margin-bottom:12px">📅</div>
+            <h3 style="font-size:16px;font-weight:700;color:#0f172a;margin-bottom:6px">No timetable slots yet</h3>
+            <p style="color:#64748b;font-size:13px">Click "Add Slot" to create the first class entry.</p>
+          </div>`
+        : `<div style="background:#fff;border:1px solid #e8eaed;border-radius:14px;overflow-x:auto;box-shadow:0 1px 4px rgba(0,0,0,.05)">${_timetableGrid(_timetableSlots, true)}</div>`
+      }`;
+  } catch(e) {
+    content.innerHTML = `<div class="card"><p style="color:var(--danger)">${esc(e.message)}</p></div>`;
   }
 }
 

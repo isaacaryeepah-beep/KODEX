@@ -231,6 +231,14 @@ exports.createUser = async (req, res) => {
 exports.updateUser = async (req, res) => {
   try {
     const { name, role, isActive, department } = req.body;
+
+    // Enforce role hierarchy on the target user, not just on role assignment
+    const targetUser = await User.findOne({ _id: req.params.id, ...req.companyFilter });
+    if (!targetUser) return res.status(404).json({ error: "User not found" });
+    if (ROLE_HIERARCHY[targetUser.role] >= ROLE_HIERARCHY[req.user.role]) {
+      return res.status(403).json({ error: "Cannot modify a user with equal or higher role" });
+    }
+
     const update = {};
     if (name) update.name = name;
     if (typeof isActive === "boolean") update.isActive = isActive;
@@ -238,7 +246,6 @@ exports.updateUser = async (req, res) => {
       update.department = department ? department.trim() : null;
       // If changing department of an HOD, ensure no HOD already exists in target department
       if (update.department) {
-        const targetUser = await User.findOne({ _id: req.params.id, company: req.user.company });
         if (targetUser?.role === "hod") {
           const clash = await User.findOne({
             company: req.user.company,
@@ -663,8 +670,12 @@ exports.changePasswordAfterReset = async (req, res) => {
     if (!newPassword || newPassword.length < 8) {
       return res.status(400).json({ error: "New password must be at least 8 characters" });
     }
-    const user = await require('../models/User').findById(req.user._id).select('+password');
+    const user = await require('../models/User').findById(req.user._id).select('+password +mustChangePassword');
     if (!user) return res.status(404).json({ error: "User not found" });
+
+    if (!user.mustChangePassword) {
+      return res.status(403).json({ error: "No pending password reset for this account" });
+    }
 
     user.password = newPassword;
     user.mustChangePassword = false;
