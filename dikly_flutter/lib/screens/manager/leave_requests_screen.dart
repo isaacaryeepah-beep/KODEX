@@ -137,7 +137,7 @@ class _LeaveList extends StatelessWidget {
     return RefreshIndicator(
       onRefresh: onRefresh,
       child: requests.isEmpty
-          ? const EmptyState(icon: Icons.event_note_outlined, title: 'No leave requests', subtitle: 'Leave requests will appear here')
+          ? const EmptyState(icon: Icons.event_note_outlined, title: 'No leave requests', message: 'Leave requests will appear here')
           : ListView.builder(
               padding: const EdgeInsets.all(16),
               itemCount: requests.length,

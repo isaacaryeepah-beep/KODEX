@@ -197,7 +197,7 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen> {
                   ? EmptyState(
                       icon: Icons.message_outlined,
                       title: 'No messages yet',
-                      subtitle: 'Start a conversation',
+                      message: 'Start a conversation',
                       actionLabel: 'New Message',
                       onAction: _showNewMessageDialog,
                     )

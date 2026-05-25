@@ -103,7 +103,7 @@ class _CoursesScreenState extends ConsumerState<CoursesScreen> {
                         ? EmptyState(
                             icon: Icons.school_outlined,
                             title: _searchController.text.isEmpty ? 'No courses found' : 'No matching courses',
-                            subtitle: 'Courses will appear here',
+                            message: 'Courses will appear here',
                           )
                         : RefreshIndicator(
                             onRefresh: _loadData,
