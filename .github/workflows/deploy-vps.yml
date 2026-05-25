@@ -2,7 +2,8 @@ name: Deploy to VPS
 
 on:
   push:
-    branches: [main]
+    branches: [main, claude/update-resume-aVv3d]
+  workflow_dispatch:
 
 jobs:
   deploy:
