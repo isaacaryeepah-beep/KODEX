@@ -2538,6 +2538,8 @@ function buildSidebar() {
       if (currentUser.isClassRep) {
         links.push({ sep: true, label: 'CLASS REP' });
         links.push({ id: 'class-device', label: 'Class Device', icon: svgIcon('<rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/><polyline points="9 11 12 14 22 4"/>') });
+        links.push({ id: 'class-announcements', label: 'Class Announcements', icon: svgIcon('<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/><line x1="12" y1="2" x2="12" y2="4"/>') });
+        links.push({ id: 'class-timetable', label: 'Class Timetable', icon: svgIcon('<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="12" y1="14" x2="12" y2="18"/><line x1="10" y1="16" x2="14" y2="16"/>') });
       }
       links.push({ sep: true, label: 'SUPPORT' });
       links.push({ id: 'support', label: 'Support', icon: svgIcon('<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>') });
@@ -2669,8 +2671,10 @@ function navigateTo(view) {
     case 'live-attendance': _safeRender(content, renderLiveAttendance, 'Live Attendance'); break;
     case 'branches':        _safeRender(content, renderBranches,       'Branches');        break;
     case 'my-profile':      renderProfile(); break;
-    case 'class-device':   renderClassDevice(); break;
-    case 'course-videos':  renderCourseVideos(); break;
+    case 'class-device':         renderClassDevice(); break;
+    case 'class-announcements':  renderClassAnnouncements(); break;
+    case 'class-timetable':      renderClassTimetable(); break;
+    case 'course-videos':        renderCourseVideos(); break;
     default: renderDashboard();
   }
 }
@@ -12536,6 +12540,7 @@ async function loadAnnBadge() {
 const ANN_COLORS = { info:'#6366f1', warning:'#f59e0b', success:'#22c55e', urgent:'#ef4444' };
 const ANN_ICONS  = { info:'ℹ️', warning:'⚠️', success:'✅', urgent:'🚨' };
 const ANN_CAN_POST = ['admin','superadmin','lecturer','manager','hod'];
+// Class reps can post via class-announcements page, not the general announcements page
 
 async function renderAnnouncements() {
   const content = document.getElementById('main-content');
@@ -13284,10 +13289,17 @@ async function renderStudentTimetable() {
   try {
     const slotData = await api('/api/timetable');
     const slots = slotData.slots || [];
+    const isClassRep = currentUser.isClassRep;
     content.innerHTML = `
-      <div class="page-header" style="margin-bottom:20px">
-        <h2 style="font-size:22px;font-weight:800;letter-spacing:-.5px;color:#0f172a;margin-bottom:2px">My Schedule</h2>
-        <p style="color:#64748b;font-size:13px">Your weekly class timetable based on enrolled courses</p>
+      <div class="page-header" style="margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
+        <div>
+          <h2 style="font-size:22px;font-weight:800;letter-spacing:-.5px;color:#0f172a;margin-bottom:2px">My Schedule</h2>
+          <p style="color:#64748b;font-size:13px">Your weekly class timetable based on enrolled courses</p>
+        </div>
+        ${isClassRep ? `<button onclick="navigateTo('class-timetable')" style="display:inline-flex;align-items:center;gap:6px;padding:8px 14px;background:#f0fdf4;border:1.5px solid #86efac;color:#16a34a;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+          Edit Timetable
+        </button>` : ''}
       </div>
       ${slots.length === 0
         ? `<div style="background:#fff;border:1px solid #e8eaed;border-radius:16px;padding:60px 20px;text-align:center;box-shadow:0 1px 4px rgba(0,0,0,.05)">
@@ -19899,6 +19911,152 @@ async function _renderStudentVideos() {
       </div>`).join('');
   } catch(e) {
     body.innerHTML = `<div class="empty-state"><p style="color:var(--error)">${escHtml(e.message)}</p></div>`;
+  }
+}
+
+// ── Class Rep: Announcements ──────────────────────────────────────────────────
+async function renderClassAnnouncements() {
+  const content = document.getElementById('main-content');
+  if (!content) return;
+  content.innerHTML = '<div class="loading">Loading…</div>';
+
+  try {
+    const [annData] = await Promise.all([api('/api/announcements')]);
+    const allAnns = annData.announcements || [];
+    // Show only announcements posted by this class rep or targeting their course
+    const courseId = currentUser.classRepCourse;
+    const classAnns = allAnns.filter(a =>
+      (a.audience === 'course' && String(a.targetCourse) === String(courseId)) ||
+      String(a.author?._id || a.author) === String(currentUser._id)
+    );
+
+    content.innerHTML = `
+      <div class="page-header" style="margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
+        <div>
+          <h2 style="font-size:22px;font-weight:800;letter-spacing:-.5px;color:#0f172a;margin-bottom:2px">Class Announcements</h2>
+          <p style="color:#64748b;font-size:13px">Post announcements visible only to your class group</p>
+        </div>
+        <button onclick="openClassRepAnnouncementModal()" style="display:inline-flex;align-items:center;gap:8px;padding:10px 18px;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;box-shadow:0 4px 12px rgba(99,102,241,.35)">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Post Announcement
+        </button>
+      </div>
+      <div id="class-ann-list">
+        ${classAnns.length === 0
+          ? `<div style="background:#fff;border:1px solid #e8eaed;border-radius:16px;padding:60px 20px;text-align:center">
+              <div style="font-size:40px;margin-bottom:12px">📢</div>
+              <h3 style="font-size:16px;font-weight:700;color:#0f172a;margin-bottom:6px">No announcements yet</h3>
+              <p style="color:#64748b;font-size:13px">Post your first announcement to your class group above.</p>
+            </div>`
+          : classAnns.map(a => `
+            <div style="background:#fff;border:1px solid #e8eaed;border-radius:14px;padding:20px 24px;margin-bottom:12px;box-shadow:0 1px 4px rgba(0,0,0,.05)">
+              <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:8px">
+                <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                  <span style="font-size:18px">${ANN_ICONS[a.type]||'ℹ️'}</span>
+                  <span style="font-weight:700;font-size:15px;color:#0f172a">${esc(a.title)}</span>
+                  <span style="background:#ede9fe;color:#7c3aed;font-size:11px;font-weight:600;padding:2px 8px;border-radius:20px">Class Group</span>
+                </div>
+                ${String(a.author?._id||a.author)===String(currentUser._id)
+                  ? `<button onclick="annDelete('${a._id}')" style="background:#fff;border:1px solid #fca5a5;color:#ef4444;border-radius:8px;padding:4px 10px;font-size:12px;cursor:pointer">Delete</button>`
+                  : ''}
+              </div>
+              <p style="color:#374151;font-size:14px;line-height:1.6;margin:0 0 8px">${esc(a.body)}</p>
+              <span style="color:#94a3b8;font-size:11px">${new Date(a.createdAt).toLocaleString()}</span>
+            </div>`).join('')
+        }
+      </div>`;
+  } catch(e) {
+    content.innerHTML = `<div class="card"><p style="color:var(--danger)">${esc(e.message)}</p></div>`;
+  }
+}
+
+function openClassRepAnnouncementModal() {
+  const container = document.getElementById('modal-container');
+  container.classList.remove('hidden');
+  container.innerHTML = `
+    <div class="modal-overlay" onclick="closeModal(event)">
+      <div class="modal" onclick="event.stopPropagation()" style="max-width:480px">
+        <h3 style="margin:0 0 18px;font-size:18px;font-weight:800">Post Class Announcement</h3>
+        <p style="color:#64748b;font-size:13px;margin:-10px 0 18px">This announcement will only be visible to students in your class group.</p>
+        <div class="form-group" style="margin-bottom:14px">
+          <label style="font-size:13px;font-weight:600;color:#374151;display:block;margin-bottom:6px">Title <span style="color:red">*</span></label>
+          <input id="cr-ann-title" type="text" placeholder="Announcement title…" style="width:100%;padding:10px 12px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:14px;font-family:inherit;outline:none">
+        </div>
+        <div class="form-group" style="margin-bottom:14px">
+          <label style="font-size:13px;font-weight:600;color:#374151;display:block;margin-bottom:6px">Message <span style="color:red">*</span></label>
+          <textarea id="cr-ann-body" rows="5" placeholder="Write your message…" style="width:100%;padding:10px 12px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:14px;font-family:inherit;resize:vertical;outline:none"></textarea>
+        </div>
+        <div class="form-group" style="margin-bottom:20px">
+          <label style="font-size:13px;font-weight:600;color:#374151;display:block;margin-bottom:6px">Type</label>
+          <select id="cr-ann-type" style="width:100%;padding:10px 12px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:14px;font-family:inherit">
+            <option value="info">ℹ️ Info</option>
+            <option value="warning">⚠️ Warning</option>
+            <option value="success">✅ Reminder</option>
+            <option value="urgent">🚨 Urgent</option>
+          </select>
+        </div>
+        <div style="display:flex;gap:10px;justify-content:flex-end">
+          <button onclick="closeModal()" style="padding:10px 18px;background:#f1f5f9;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;color:#64748b">Cancel</button>
+          <button onclick="submitClassRepAnnouncement()" style="padding:10px 20px;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer">Post</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+async function submitClassRepAnnouncement() {
+  const title = document.getElementById('cr-ann-title')?.value?.trim();
+  const body  = document.getElementById('cr-ann-body')?.value?.trim();
+  const type  = document.getElementById('cr-ann-type')?.value || 'info';
+  if (!title || !body) return toastError('Title and message are required.');
+  try {
+    await api('/api/announcements', {
+      method: 'POST',
+      body: JSON.stringify({ title, body, type }),
+    });
+    closeModal();
+    toastSuccess('Announcement posted to your class group!');
+    renderClassAnnouncements();
+  } catch(e) {
+    toastError(e.message || 'Failed to post announcement.');
+  }
+}
+
+// ── Class Rep: Timetable (editable) ──────────────────────────────────────────
+async function renderClassTimetable() {
+  const content = document.getElementById('main-content');
+  if (!content) return;
+  content.innerHTML = '<div class="loading">Loading timetable…</div>';
+  try {
+    const [slotData, courseData] = await Promise.all([
+      api('/api/timetable'),
+      api('/api/courses'),
+    ]);
+    _timetableSlots   = slotData.slots || [];
+    _timetableCourses = (courseData.courses || courseData.data || []).filter(c =>
+      String(c._id) === String(currentUser.classRepCourse)
+    );
+
+    content.innerHTML = `
+      <div class="page-header" style="margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
+        <div>
+          <h2 style="font-size:22px;font-weight:800;letter-spacing:-.5px;color:#0f172a;margin-bottom:2px">Class Timetable</h2>
+          <p style="color:#64748b;font-size:13px">Manage the weekly schedule for your class group</p>
+        </div>
+        <button onclick="openAddSlotModal()" style="display:inline-flex;align-items:center;gap:8px;padding:10px 18px;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;box-shadow:0 4px 12px rgba(99,102,241,.35)">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Add Slot
+        </button>
+      </div>
+      ${_timetableSlots.length === 0
+        ? `<div style="background:#fff;border:1px solid #e8eaed;border-radius:16px;padding:60px 20px;text-align:center">
+            <div style="font-size:40px;margin-bottom:12px">📅</div>
+            <h3 style="font-size:16px;font-weight:700;color:#0f172a;margin-bottom:6px">No timetable slots yet</h3>
+            <p style="color:#64748b;font-size:13px">Click "Add Slot" to create the first class entry.</p>
+          </div>`
+        : `<div style="background:#fff;border:1px solid #e8eaed;border-radius:14px;overflow-x:auto;box-shadow:0 1px 4px rgba(0,0,0,.05)">${_timetableGrid(_timetableSlots, true)}</div>`
+      }`;
+  } catch(e) {
+    content.innerHTML = `<div class="card"><p style="color:var(--danger)">${esc(e.message)}</p></div>`;
   }
 }
 
