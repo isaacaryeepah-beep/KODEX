@@ -2611,6 +2611,7 @@ function buildSidebar() {
       links.push({ id: 'hod-overview',     label: 'Overview',       icon: dashboardIcon() });
       links.push({ id: 'hod-sessions',     label: 'Sessions',       icon: sessionsIcon() });
       links.push({ id: 'hod-courses',      label: 'Courses',        icon: coursesIcon() });
+      links.push({ id: 'timetable',        label: 'Schedule',       icon: svgIcon('<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>') });
       links.push({ id: 'hod-lecturers',    label: 'Lecturers',      icon: svgIcon('<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>') });
       links.push({ id: 'hod-students',     label: 'Students',       icon: usersIcon() });
       links.push({ sep: true, label: 'INSIGHTS' });
@@ -2755,7 +2756,7 @@ function navigateTo(view) {
     case 'quizzes': renderQuizzes(); break;
     case 'quiz-history': renderStudentQuizHistory(); break;
     case 'lecturer-performance': renderLecturerPerformance(); break;
-    case 'timetable': currentUser.role === 'student' ? renderStudentTimetable() : renderLecturerTimetable(); break;
+    case 'timetable': (currentUser.role === 'student' || currentUser.role === 'hod') ? renderStudentTimetable() : renderLecturerTimetable(); break;
     case 'question-bank': renderQuestionBank(); break;
     case 'my-attendance': renderMyAttendance(); break;
     case 'mark-attendance': renderMarkAttendance(); break;
@@ -13479,11 +13480,12 @@ async function renderStudentTimetable() {
     const slotData = await api('/api/timetable');
     const slots = slotData.slots || [];
     const isClassRep = currentUser.isClassRep;
+    const isHod = currentUser.role === 'hod';
     content.innerHTML = `
       <div class="page-header" style="margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
         <div>
-          <h2 style="font-size:22px;font-weight:800;letter-spacing:-.5px;color:#0f172a;margin-bottom:2px">My Schedule</h2>
-          <p style="color:#64748b;font-size:13px">Your weekly class timetable based on enrolled courses</p>
+          <h2 style="font-size:22px;font-weight:800;letter-spacing:-.5px;color:#0f172a;margin-bottom:2px">${isHod ? 'Department Schedule' : 'My Schedule'}</h2>
+          <p style="color:#64748b;font-size:13px">${isHod ? 'Read-only view of all department class slots' : 'Your weekly class timetable based on enrolled courses'}</p>
         </div>
         ${isClassRep ? `<button onclick="navigateTo('class-timetable')" style="display:inline-flex;align-items:center;gap:6px;padding:8px 14px;background:#f0fdf4;border:1.5px solid #86efac;color:#16a34a;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
