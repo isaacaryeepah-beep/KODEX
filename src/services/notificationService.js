@@ -30,6 +30,7 @@
 
 const Notification = require("../models/Notification");
 const { NOTIFICATION_TYPES } = Notification;
+const sse = require("./sseRegistry");
 
 // ---------------------------------------------------------------------------
 // Core
@@ -53,9 +54,11 @@ async function notify({ company, recipient, type, title, body = "", link = null,
     console.warn("[NotificationService] notify() called with missing required fields — skipped");
     return;
   }
-  Notification.create({ company, recipient, type, title, body, link, data }).catch((err) => {
-    console.error("[NotificationService] Failed to create notification:", err.message);
-  });
+  Notification.create({ company, recipient, type, title, body, link, data })
+    .then(doc => sse.push(recipient.toString(), { event: "notification", notification: doc.toObject() }))
+    .catch((err) => {
+      console.error("[NotificationService] Failed to create notification:", err.message);
+    });
 }
 
 /**
@@ -75,9 +78,15 @@ async function notifyMany(recipientIds, { company, type, title, body = "", link 
     link,
     data,
   }));
-  Notification.insertMany(docs, { ordered: false }).catch((err) => {
-    console.error("[NotificationService] insertMany failed:", err.message);
-  });
+  Notification.insertMany(docs, { ordered: false })
+    .then(created => {
+      for (const doc of created) {
+        sse.push(doc.recipient.toString(), { event: "notification", notification: doc.toObject() });
+      }
+    })
+    .catch((err) => {
+      console.error("[NotificationService] insertMany failed:", err.message);
+    });
 }
 
 // ---------------------------------------------------------------------------
@@ -207,7 +216,7 @@ exports.notifyAssignmentPublished = async (assignment, studentIds) => {
     body:    assignment.dueDate
       ? `Due ${_fmtDate(assignment.dueDate)}`
       : "",
-    link:    `/assignments/${assignment._id}`,
+    link:    `/assignments.html?id=${assignment._id}`,
     data:    {
       assignmentId: assignment._id,
       courseId:     assignment.course,
@@ -226,7 +235,7 @@ exports.notifyAssignmentSubmitted = async (submission, lecturerIds) => {
     type:    NOTIFICATION_TYPES.ASSIGNMENT_SUBMITTED,
     title:   "New assignment submission",
     body:    `A student has submitted an assignment.`,
-    link:    `/lecturer/assignments/${submission.assignment}/submissions/${submission._id}`,
+    link:    `/assignments.html?id=${submission.assignment}&subId=${submission._id}`,
     data:    { submissionId: submission._id, assignmentId: submission.assignment },
   });
 };
@@ -241,7 +250,7 @@ exports.notifyAssignmentGraded = async (submission) => {
     type:      NOTIFICATION_TYPES.ASSIGNMENT_GRADED,
     title:     "Assignment graded",
     body:      `Your assignment has been graded.`,
-    link:      `/student/assignments/${submission.assignment}`,
+    link:      `/assignments.html?id=${submission.assignment}`,
     data:      { submissionId: submission._id, assignmentId: submission.assignment },
   });
 };
@@ -256,8 +265,57 @@ exports.notifyAssignmentReturned = async (submission) => {
     type:      NOTIFICATION_TYPES.ASSIGNMENT_RETURNED,
     title:     "Assignment returned for revision",
     body:      `Your assignment has been returned. Please review the feedback and resubmit.`,
-    link:      `/student/assignments/${submission.assignment}`,
+    link:      `/assignments.html?id=${submission.assignment}`,
     data:      { submissionId: submission._id, assignmentId: submission.assignment },
+  });
+};
+
+/**
+ * Remind enrolled students that an assignment deadline is approaching.
+ * hoursLeft: approximate hours remaining (for display only).
+ */
+exports.notifyAssignmentDueSoon = async (assignment, studentIds, hoursLeft) => {
+  if (!studentIds || studentIds.length === 0) return;
+  const label = hoursLeft <= 1 ? 'less than 1 hour' : `${hoursLeft} hour${hoursLeft !== 1 ? 's' : ''}`;
+  await notifyMany(studentIds, {
+    company: assignment.company,
+    type:    NOTIFICATION_TYPES.ASSIGNMENT_DUE_SOON,
+    title:   `Assignment due soon: ${assignment.title}`,
+    body:    `Due in ${label}`,
+    link:    `/assignments.html?id=${assignment._id}`,
+    data:    { assignmentId: assignment._id, courseId: assignment.course, dueDate: assignment.dueDate },
+  });
+};
+
+/**
+ * Notify enrolled students and the lecturer that a class starts in ~30 min.
+ */
+exports.notifyClassStartingSoon = async (slot, studentIds) => {
+  const label    = slot.title || 'Class';
+  const location = slot.room  ? ` · Room ${slot.room}` : '';
+  const body     = `Starting at ${slot.startTime}${location}`;
+
+  // Notify students
+  if (studentIds && studentIds.length > 0) {
+    await notifyMany(studentIds, {
+      company: slot.company,
+      type:    NOTIFICATION_TYPES.CLASS_STARTING_SOON,
+      title:   `${label} starts in 30 minutes`,
+      body,
+      link:    `/index.html#timetable`,
+      data:    { slotId: slot._id, courseId: slot.course },
+    });
+  }
+
+  // Notify lecturer
+  await notify({
+    company:   slot.company,
+    recipient: slot.lecturer,
+    type:      NOTIFICATION_TYPES.CLASS_STARTING_SOON,
+    title:     `Your class starts in 30 minutes`,
+    body,
+    link:      `/index.html#timetable`,
+    data:      { slotId: slot._id, courseId: slot.course },
   });
 };
 

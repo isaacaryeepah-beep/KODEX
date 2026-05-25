@@ -164,7 +164,8 @@ exports.register = async (req, res) => {
       throw userError;
     }
 
-    const token = generateToken(user._id);
+    const token        = generateToken(user._id);
+    const refreshToken = generateRefreshToken(user._id);
 
     // Auto-create Jitsi meeting identity for the new admin
     await createMeetingIdentity(user, company._id);
@@ -187,6 +188,7 @@ exports.register = async (req, res) => {
 
     res.status(201).json({
       token,
+      refreshToken,
       user: {
         id: user._id,
         email: user.email,
