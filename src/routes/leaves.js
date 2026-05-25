@@ -204,9 +204,9 @@ router.patch("/:id/review", ...mw, requireRole("admin", "manager", "superadmin")
 
     // Notify employee (fire-and-forget)
     if (action === "approved") {
-      notificationService.notifyLeaveApproved(leave);
+      Promise.resolve(notificationService.notifyLeaveApproved(leave)).catch(() => {});
     } else {
-      notificationService.notifyLeaveRejected(leave, note);
+      Promise.resolve(notificationService.notifyLeaveRejected(leave, note)).catch(() => {});
     }
 
     res.json({ leave });
