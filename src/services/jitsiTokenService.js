@@ -7,9 +7,7 @@ const JITSI_APP_ID     = process.env.JITSI_APP_ID;
 const JITSI_APP_SECRET = process.env.JITSI_APP_SECRET;
 
 const MISSING = ['JITSI_DOMAIN', 'JITSI_APP_ID', 'JITSI_APP_SECRET'].filter(k => !process.env[k]);
-if (MISSING.length) {
-  console.warn(`[Jitsi] WARNING: Jitsi env vars not set: ${MISSING.join(', ')}. Jitsi meetings disabled — GetStream will be used instead.`);
-} else {
+if (!MISSING.length) {
   console.log(`[Jitsi] ✓ Configured — domain=${JITSI_DOMAIN}  app_id=${JITSI_APP_ID}`);
 }
 
