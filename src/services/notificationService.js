@@ -287,6 +287,38 @@ exports.notifyAssignmentDueSoon = async (assignment, studentIds, hoursLeft) => {
   });
 };
 
+/**
+ * Notify enrolled students and the lecturer that a class starts in ~30 min.
+ */
+exports.notifyClassStartingSoon = async (slot, studentIds) => {
+  const label    = slot.title || 'Class';
+  const location = slot.room  ? ` · Room ${slot.room}` : '';
+  const body     = `Starting at ${slot.startTime}${location}`;
+
+  // Notify students
+  if (studentIds && studentIds.length > 0) {
+    await notifyMany(studentIds, {
+      company: slot.company,
+      type:    NOTIFICATION_TYPES.CLASS_STARTING_SOON,
+      title:   `${label} starts in 30 minutes`,
+      body,
+      link:    `/index.html#timetable`,
+      data:    { slotId: slot._id, courseId: slot.course },
+    });
+  }
+
+  // Notify lecturer
+  await notify({
+    company:   slot.company,
+    recipient: slot.lecturer,
+    type:      NOTIFICATION_TYPES.CLASS_STARTING_SOON,
+    title:     `Your class starts in 30 minutes`,
+    body,
+    link:      `/index.html#timetable`,
+    data:      { slotId: slot._id, courseId: slot.course },
+  });
+};
+
 // ---------------------------------------------------------------------------
 // Academic: quizzes
 // ---------------------------------------------------------------------------

@@ -487,6 +487,13 @@ const start = async () => {
     } catch (e) {
       console.error("[AssignmentReminder] Failed to start:", e.message);
     }
+
+    try {
+      const { startTimetableReminder } = require("./services/timetableReminder");
+      startTimetableReminder();
+    } catch (e) {
+      console.error("[TimetableReminder] Failed to start:", e.message);
+    }
   });
 };
 
