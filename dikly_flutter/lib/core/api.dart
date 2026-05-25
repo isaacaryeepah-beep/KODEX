@@ -462,6 +462,10 @@ class ApiService {
     await _dio.post('/api/expenses', data: body);
   }
 
+  Future<void> createShift(Map<String, dynamic> body) async {
+    await _dio.post('/api/shifts', data: body);
+  }
+
   Future<void> createAnnouncement(Map<String, dynamic> body) async {
     await _dio.post('/api/announcements', data: body);
   }
