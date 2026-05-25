@@ -28,9 +28,38 @@ const { requireRole }           = require("../middleware/role");
 const { requireActiveSubscription } = require("../middleware/subscription");
 const Notification = require("../models/Notification");
 const { NOTIFICATION_TYPES } = Notification;
+const sse = require("../services/sseRegistry");
 
 const mw        = [authenticate, requireActiveSubscription, companyIsolation];
 const adminOnly = requireRole("admin", "superadmin");
+
+// ── GET /stream  — SSE live-push endpoint ────────────────────────────────────
+// Must come before /unread-count and / to avoid route conflicts.
+router.get("/stream", authenticate, (req, res) => {
+  res.setHeader("Content-Type",  "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Connection",    "keep-alive");
+  res.setHeader("X-Accel-Buffering", "no"); // disable Nginx buffering
+  res.flushHeaders();
+
+  const userId = req.user._id.toString();
+  sse.add(userId, res);
+
+  // Send current unread count immediately so the bell badge is correct on connect
+  Notification.countDocuments({ recipient: req.user._id, company: req.user.company, isRead: false })
+    .then(count => res.write(`data: ${JSON.stringify({ event: "unread_count", count })}\n\n`))
+    .catch(() => {});
+
+  // Keep-alive comment every 25 s (proxies/load-balancers drop idle SSE)
+  const ping = setInterval(() => {
+    try { res.write(": ping\n\n"); } catch (_) {}
+  }, 25000);
+
+  req.on("close", () => {
+    clearInterval(ping);
+    sse.remove(userId, res);
+  });
+});
 
 // ── GET /unread-count  — must come before / to avoid route conflict ──────────
 router.get("/unread-count", ...mw, async (req, res) => {

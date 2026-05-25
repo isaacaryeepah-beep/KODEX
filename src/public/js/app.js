@@ -190,6 +190,117 @@ function stopNotifPolling() {
   if (_notifPollTimer) { clearInterval(_notifPollTimer); _notifPollTimer = null; }
 }
 
+// ── Real-time notification SSE ────────────────────────────────────────────────
+let _sseSource       = null;
+let _notifUnread     = 0;
+let _notifPanelOpen  = false;
+
+function _updateNotifBadge(count) {
+  _notifUnread = count;
+  const badge = document.getElementById('notif-bell-badge');
+  if (!badge) return;
+  if (count > 0) {
+    badge.textContent    = count > 99 ? '99+' : count;
+    badge.style.display  = 'inline-block';
+  } else {
+    badge.style.display  = 'none';
+  }
+}
+
+function startSSE() {
+  if (_sseSource) { _sseSource.close(); _sseSource = null; }
+  const token = localStorage.getItem('token');
+  if (!token) return;
+
+  _sseSource = new EventSource(`/api/notifications/stream?token=${encodeURIComponent(token)}`);
+
+  _sseSource.onmessage = (e) => {
+    try {
+      const msg = JSON.parse(e.data);
+      if (msg.event === 'unread_count') {
+        _updateNotifBadge(msg.count);
+      } else if (msg.event === 'notification') {
+        const n = msg.notification;
+        _updateNotifBadge(_notifUnread + 1);
+        _notifSound.playChime('announcement');
+        if (window.toastInfo) toastInfo(n.title + (n.body ? ' — ' + n.body : ''));
+        if (_notifPanelOpen) _loadNotifPanel();
+      }
+    } catch (_) {}
+  };
+
+  _sseSource.onerror = () => {
+    // EventSource auto-reconnects; close and let it retry after 5 s
+    _sseSource.close();
+    _sseSource = null;
+    setTimeout(() => { if (currentUser) startSSE(); }, 5000);
+  };
+}
+
+function stopSSE() {
+  if (_sseSource) { _sseSource.close(); _sseSource = null; }
+}
+
+async function _loadNotifPanel() {
+  const list = document.getElementById('notif-panel-list');
+  if (!list) return;
+  try {
+    const d = await api('/api/notifications?limit=15');
+    const notifs = d.notifications || [];
+    if (!notifs.length) {
+      list.innerHTML = '<p style="text-align:center;color:var(--text-muted);font-size:13px;padding:20px">All caught up!</p>';
+      return;
+    }
+    list.innerHTML = notifs.map(n => `
+      <div onclick="_notifPanelClick('${n._id}','${n.link || ''}')"
+           style="display:flex;gap:10px;padding:10px 16px;cursor:pointer;border-bottom:1px solid var(--border);align-items:flex-start;background:${n.isRead ? 'transparent' : 'var(--primary-ultra-light,#f0f4ff)'}">
+        <div style="width:8px;height:8px;border-radius:50%;background:${n.isRead ? 'transparent' : 'var(--primary)'};margin-top:5px;flex-shrink:0"></div>
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:${n.isRead ? '400' : '600'};font-size:13px;line-height:1.3">${n.title}</div>
+          ${n.body ? `<div style="font-size:12px;color:var(--text-light);margin-top:2px">${n.body}</div>` : ''}
+          <div style="font-size:11px;color:var(--text-muted);margin-top:3px">${_timeAgo(new Date(n.createdAt))}</div>
+        </div>
+      </div>`).join('');
+  } catch (_) {
+    list.innerHTML = '<p style="text-align:center;color:var(--text-muted);font-size:13px;padding:20px">Could not load</p>';
+  }
+}
+
+async function _notifPanelClick(id, link) {
+  await api('/api/notifications/' + id + '/read', { method: 'PATCH' }).catch(() => {});
+  _updateNotifBadge(Math.max(0, _notifUnread - 1));
+  closeNotifPanel();
+  if (link) location.href = link;
+}
+
+function toggleNotifPanel() {
+  const panel = document.getElementById('notif-panel');
+  if (!panel) return;
+  _notifPanelOpen = !_notifPanelOpen;
+  panel.style.display = _notifPanelOpen ? 'flex' : 'none';
+  if (_notifPanelOpen) _loadNotifPanel();
+}
+
+function closeNotifPanel() {
+  const panel = document.getElementById('notif-panel');
+  if (panel) panel.style.display = 'none';
+  _notifPanelOpen = false;
+}
+
+async function markAllNotifsRead() {
+  await api('/api/notifications/read-all', { method: 'PATCH' }).catch(() => {});
+  _updateNotifBadge(0);
+  _loadNotifPanel();
+}
+
+function _timeAgo(date) {
+  const s = Math.floor((Date.now() - date) / 1000);
+  if (s < 60)   return 'just now';
+  if (s < 3600)  return Math.floor(s / 60) + 'm ago';
+  if (s < 86400) return Math.floor(s / 3600) + 'h ago';
+  return Math.floor(s / 86400) + 'd ago';
+}
+
 // ═══════════════════════════════════════════════════════
 // TOAST NOTIFICATION SYSTEM
 // Usage: toast('Message')           → info (default)
@@ -1951,6 +2062,7 @@ async function handleStudentForgotPassword() {
 
 async function handleLogout() {
   stopNotifPolling();
+  stopSSE();
   try {
     if (isOnline()) await api('/api/auth/logout', { method: 'POST' });
   } catch (e) {}
@@ -2354,6 +2466,7 @@ function showDashboard(data) {
     buildSidebar();
     loadAnnBadge();
     startNotifPolling();
+    startSSE();
     _notifSound.updateBtn();
     applyBranding(); // async — applies colors/logo in background
     // Show offline banner immediately when logged in via cached credentials
@@ -14094,6 +14207,10 @@ document.addEventListener('click', (e) => {
   const navLink = e.target.closest('.sidebar-nav a');
   if (navLink && window.innerWidth <= 768) {
     closeMobileSidebar();
+  }
+  // Close notification panel when clicking outside of it
+  if (_notifPanelOpen && !e.target.closest('#notif-panel') && !e.target.closest('#notif-bell-btn')) {
+    closeNotifPanel();
   }
 });
 

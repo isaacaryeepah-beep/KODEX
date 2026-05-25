@@ -850,10 +850,27 @@ function selectPortal(t){if(window._appLoaded)window._realSelectPortal(t);else w
       <div class="topbar-left">
         <h2>DIKLY</h2>
       </div>
-      <div class="topbar-right">
+      <div class="topbar-right" style="position:relative">
         <div class="user-info">
           <strong id="user-name"></strong>
           <span id="user-role" class="role-badge"></span>
+        </div>
+        <button id="notif-bell-btn" onclick="toggleNotifPanel()" title="Notifications" aria-label="Notifications" style="position:relative;background:none;border:none;cursor:pointer;padding:6px;border-radius:8px;display:flex;align-items:center;color:var(--text-light)">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+          <span id="notif-bell-badge" style="display:none;position:absolute;top:2px;right:2px;background:#ef4444;color:#fff;font-size:9px;font-weight:700;padding:1px 4px;border-radius:20px;min-width:14px;text-align:center;line-height:14px;pointer-events:none"></span>
+        </button>
+        <div id="notif-panel" style="display:none;position:absolute;top:56px;right:12px;width:340px;max-height:420px;background:var(--card);border:1px solid var(--border);border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,.12);z-index:999;overflow:hidden;display:none;flex-direction:column">
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px 10px;border-bottom:1px solid var(--border)">
+            <span style="font-weight:700;font-size:14px">Notifications</span>
+            <div style="display:flex;gap:8px;align-items:center">
+              <button onclick="markAllNotifsRead()" style="font-size:11px;color:var(--primary);background:none;border:none;cursor:pointer">Mark all read</button>
+              <button onclick="closeNotifPanel()" style="background:none;border:none;cursor:pointer;color:var(--text-light);font-size:18px;line-height:1">&times;</button>
+            </div>
+          </div>
+          <div id="notif-panel-list" style="overflow-y:auto;max-height:320px;padding:8px 0"></div>
+          <div style="padding:10px 16px;border-top:1px solid var(--border)">
+            <button class="btn btn-secondary btn-sm" style="width:100%" onclick="closeNotifPanel();navigateTo('emp-notifications')">View all notifications</button>
+          </div>
         </div>
         <button id="faq-panel-toggle-btn" class="fap-topbar-btn" onclick="faqPanelToggle()" title="FAQ Assistant" aria-label="Toggle FAQ Assistant">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>

@@ -30,6 +30,7 @@
 
 const Notification = require("../models/Notification");
 const { NOTIFICATION_TYPES } = Notification;
+const sse = require("./sseRegistry");
 
 // ---------------------------------------------------------------------------
 // Core
@@ -53,9 +54,11 @@ async function notify({ company, recipient, type, title, body = "", link = null,
     console.warn("[NotificationService] notify() called with missing required fields — skipped");
     return;
   }
-  Notification.create({ company, recipient, type, title, body, link, data }).catch((err) => {
-    console.error("[NotificationService] Failed to create notification:", err.message);
-  });
+  Notification.create({ company, recipient, type, title, body, link, data })
+    .then(doc => sse.push(recipient.toString(), { event: "notification", notification: doc.toObject() }))
+    .catch((err) => {
+      console.error("[NotificationService] Failed to create notification:", err.message);
+    });
 }
 
 /**
@@ -75,9 +78,15 @@ async function notifyMany(recipientIds, { company, type, title, body = "", link 
     link,
     data,
   }));
-  Notification.insertMany(docs, { ordered: false }).catch((err) => {
-    console.error("[NotificationService] insertMany failed:", err.message);
-  });
+  Notification.insertMany(docs, { ordered: false })
+    .then(created => {
+      for (const doc of created) {
+        sse.push(doc.recipient.toString(), { event: "notification", notification: doc.toObject() });
+      }
+    })
+    .catch((err) => {
+      console.error("[NotificationService] insertMany failed:", err.message);
+    });
 }
 
 // ---------------------------------------------------------------------------
