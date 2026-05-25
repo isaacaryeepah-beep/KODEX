@@ -86,7 +86,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
       final token = result['token']?.toString() ?? '';
       await _storage.write(key: 'auth_token', value: token);
 
-      final userData = result['user'] as Map<String, dynamic>? ?? {};
+      final rawUser = result['user'];
+      final userData = (rawUser is Map<String, dynamic> ? rawUser : <String, dynamic>{});
       // Merge portalMode into user data if not present
       if (!userData.containsKey('portalMode')) {
         userData['portalMode'] = portalMode;
