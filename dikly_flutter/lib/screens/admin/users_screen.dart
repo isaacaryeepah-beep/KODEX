@@ -185,7 +185,7 @@ class _UsersScreenState extends State<UsersScreen> {
                         ],
                       ))
                     : _filtered.isEmpty
-                        ? const EmptyState(icon: Icons.people_outlined, title: 'No users found', subtitle: 'Users will appear here')
+                        ? const EmptyState(icon: Icons.people_outlined, title: 'No users found', message: 'Users will appear here')
                         : RefreshIndicator(
                             onRefresh: _loadData,
                             child: ListView.builder(

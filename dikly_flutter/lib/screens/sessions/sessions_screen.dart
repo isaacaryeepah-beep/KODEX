@@ -221,7 +221,7 @@ class _MeetingList extends StatelessWidget {
     return RefreshIndicator(
       onRefresh: onRefresh,
       child: meetings.isEmpty
-          ? EmptyState(icon: Icons.video_call_outlined, title: emptyTitle, subtitle: emptySubtitle)
+          ? EmptyState(icon: Icons.video_call_outlined, title: emptyTitle, message: emptySubtitle)
           : ListView.builder(
               padding: const EdgeInsets.all(16),
               itemCount: meetings.length,

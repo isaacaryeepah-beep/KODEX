@@ -52,7 +52,7 @@ class _TeamScreenState extends State<TeamScreen> {
                   ],
                 ))
               : _team.isEmpty
-                  ? const EmptyState(icon: Icons.group_outlined, title: 'No team members', subtitle: 'Your team will appear here')
+                  ? const EmptyState(icon: Icons.group_outlined, title: 'No team members', message: 'Your team will appear here')
                   : RefreshIndicator(
                       onRefresh: _loadData,
                       child: Column(

@@ -143,7 +143,7 @@ class _GradeBookScreenState extends ConsumerState<GradeBookScreen> {
                       Text('Assignment Grades', style: Theme.of(context).textTheme.titleLarge),
                       const SizedBox(height: 12),
                       if (_assignments.isEmpty)
-                        const EmptyState(icon: Icons.grade_outlined, title: 'No assignments', subtitle: 'Your grades will appear here')
+                        const EmptyState(icon: Icons.grade_outlined, title: 'No assignments', message: 'Your grades will appear here')
                       else
                         for (final assignment in _assignments)
                           _GradeRow(assignment: assignment),

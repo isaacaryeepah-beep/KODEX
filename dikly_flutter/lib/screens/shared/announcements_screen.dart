@@ -53,7 +53,7 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
                   ],
                 ))
               : _announcements.isEmpty
-                  ? const EmptyState(icon: Icons.campaign_outlined, title: 'No announcements', subtitle: 'Announcements will appear here')
+                  ? const EmptyState(icon: Icons.campaign_outlined, title: 'No announcements', message: 'Announcements will appear here')
                   : RefreshIndicator(
                       onRefresh: _loadData,
                       child: ListView.builder(
