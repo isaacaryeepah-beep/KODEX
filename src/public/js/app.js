@@ -15210,7 +15210,7 @@ async function _caLoadSettings() {
         </div>
 
         <button class="btn btn-primary" style="margin-top:20px" onclick="_caSaveSettings()">Save Settings</button>
-        <button class="btn btn-secondary btn-sm" style="margin-top:20px;margin-left:8px" onclick="_caDetectMyIP()">📡 Detect My IP</button>
+        <button class="btn btn-secondary btn-sm" style="margin-top:20px;margin-left:8px" onclick="_caDetectMyIP(true)">📡 Detect My IP</button>
       </div>
 
       <div class="card" style="max-width:560px">
@@ -15280,13 +15280,23 @@ async function _caClearClockWindow() {
   await _caSaveClockWindow();
 }
 
-async function _caDetectMyIP() {
-  const el = document.getElementById('cas-myip');
+async function _caDetectMyIP(addToInput = false) {
+  const el  = document.getElementById('cas-myip');
+  const inp = document.getElementById('cas-ips');
   if (!el) return;
   try {
-    const r = await fetch('https://api.ipify.org?format=json');
-    const d = await r.json();
-    el.textContent = d.ip || 'unknown';
+    const d = await api('/api/corporate-attendance/my-ip');
+    const ip = d.ip || 'unknown';
+    el.textContent = ip;
+    if (addToInput && inp && ip !== 'unknown') {
+      const existing = inp.value.split(',').map(s => s.trim()).filter(Boolean);
+      if (!existing.includes(ip)) {
+        inp.value = [...existing, ip].join(', ');
+        toastSuccess(`IP ${ip} added to the allowed list — click Save Settings to apply`);
+      } else {
+        toastInfo(`IP ${ip} is already in the list`);
+      }
+    }
   } catch { el.textContent = 'unavailable'; }
 }
 
