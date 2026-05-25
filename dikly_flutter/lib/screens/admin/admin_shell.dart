@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../../core/auth.dart';
 import '../../core/theme.dart';
 import 'admin_home_screen.dart';
@@ -42,6 +43,7 @@ class _AdminShellState extends ConsumerState<AdminShell> {
           Text(_labels[_index]),
         ]),
         actions: [
+          Builder(builder: (ctx) => IconButton(icon: const Icon(Icons.menu_outlined), onPressed: () => Scaffold.of(ctx).openEndDrawer())),
           PopupMenuButton<String>(
             offset: const Offset(0, 48),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -66,16 +68,20 @@ class _AdminShellState extends ConsumerState<AdminShell> {
                 ),
               ])),
               const PopupMenuDivider(),
+              const PopupMenuItem(value: 'profile', child: Row(children: [Icon(Icons.person_outline, size: 18), SizedBox(width: 10), Text('My Profile')])),
               const PopupMenuItem(value: 'logout', child: Row(children: [
                 Icon(Icons.logout, size: 18, color: DiklyColors.error),
-                SizedBox(width: 10),
-                Text('Sign Out', style: TextStyle(color: DiklyColors.error)),
+                SizedBox(width: 10), Text('Sign Out', style: TextStyle(color: DiklyColors.error)),
               ])),
             ],
-            onSelected: (v) async { if (v == 'logout') await ref.read(authProvider.notifier).logout(); },
+            onSelected: (v) async {
+              if (v == 'logout') await ref.read(authProvider.notifier).logout();
+              if (v == 'profile') context.push('/profile');
+            },
           ),
         ],
       ),
+      endDrawer: _AdminDrawer(),
       body: IndexedStack(index: _index, children: screens),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _index,
@@ -85,4 +91,67 @@ class _AdminShellState extends ConsumerState<AdminShell> {
       ),
     );
   }
+}
+
+class _AdminDrawer extends StatelessWidget {
+  void _go(BuildContext context, String route) {
+    Navigator.pop(context);
+    context.push(route);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Drawer(
+      child: SafeArea(
+        child: ListView(
+          padding: EdgeInsets.zero,
+          children: [
+            const DrawerHeader(
+              decoration: BoxDecoration(gradient: LinearGradient(colors: [Color(0xFFDC2626), Color(0xFF7C3AED)])),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.end, children: [
+                Text('DIKLY Admin', style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w700)),
+                Text('Administration Panel', style: TextStyle(color: Colors.white70, fontSize: 13)),
+              ]),
+            ),
+            _section('ACADEMIC'),
+            _tile(context, Icons.play_circle_outline, 'Sessions', '/sessions'),
+            _tile(context, Icons.schedule_outlined, 'Timetable', '/timetable'),
+            _tile(context, Icons.quiz_outlined, 'Quizzes', '/quizzes'),
+            _tile(context, Icons.grade_outlined, 'Gradebook', '/gradebook'),
+            _tile(context, Icons.assignment_outlined, 'Assignments', '/assignments'),
+            _tile(context, Icons.campaign_outlined, 'Announcements', '/announcements'),
+            _section('WORKFORCE'),
+            _tile(context, Icons.login_outlined, 'Sign In / Out', '/sign-in-out'),
+            _tile(context, Icons.event_available_outlined, 'Attendance', '/corporate-attendance'),
+            _tile(context, Icons.calendar_month_outlined, 'Shifts', '/shifts'),
+            _tile(context, Icons.time_to_leave_outlined, 'Leave Requests', '/manager/leave-requests'),
+            _tile(context, Icons.receipt_long_outlined, 'Timesheets', '/manager/timesheets'),
+            _tile(context, Icons.attach_money_outlined, 'Expenses', '/expenses'),
+            _tile(context, Icons.trending_up_outlined, 'Performance', '/performance'),
+            _tile(context, Icons.business_outlined, 'Branches', '/admin/branches'),
+            _section('COMMUNICATE'),
+            _tile(context, Icons.message_outlined, 'Messages', '/messages'),
+            _tile(context, Icons.video_call_outlined, 'Meetings', '/meetings'),
+            _section('SYSTEM'),
+            _tile(context, Icons.history_outlined, 'Audit Logs', '/admin/audit-logs'),
+            _tile(context, Icons.card_membership_outlined, 'Subscription', '/subscription'),
+            _tile(context, Icons.help_outline, 'FAQ & Help', '/faq'),
+            _tile(context, Icons.person_outline, 'My Profile', '/profile'),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _section(String label) => Padding(
+    padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
+    child: Text(label, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: DiklyColors.textSecondary, letterSpacing: 0.8)),
+  );
+
+  Widget _tile(BuildContext context, IconData icon, String label, String route) => ListTile(
+    leading: Icon(icon, size: 20, color: DiklyColors.textSecondary),
+    title: Text(label, style: const TextStyle(fontSize: 14)),
+    onTap: () => _go(context, route),
+    dense: true,
+  );
 }
