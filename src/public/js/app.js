@@ -854,10 +854,40 @@ function assignmentsIcon() {
   return svgIcon('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/>');
 }
 
-async function api(path, options = {}) {
+async function _doFetch(path, options, tok) {
   const headers = { 'Content-Type': 'application/json' };
-  if (token) headers['Authorization'] = `Bearer ${token}`;
-  const res = await fetch(`${API}${path}`, { ...options, headers: { ...headers, ...options.headers } });
+  if (tok) headers['Authorization'] = `Bearer ${tok}`;
+  return fetch(`${API}${path}`, { ...options, headers: { ...headers, ...options.headers } });
+}
+
+let _refreshing = null;
+async function _tryRefreshToken() {
+  const rt = localStorage.getItem('refreshToken');
+  if (!rt) return false;
+  try {
+    const r = await fetch(`${API}/api/auth/refresh`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refreshToken: rt }),
+    });
+    if (!r.ok) return false;
+    const d = await r.json();
+    token = d.token;
+    localStorage.setItem('token', token);
+    if (d.refreshToken) localStorage.setItem('refreshToken', d.refreshToken);
+    return true;
+  } catch { return false; }
+}
+
+async function api(path, options = {}) {
+  let res = await _doFetch(path, options, token);
+  if (res.status === 401 && path !== '/api/auth/refresh') {
+    if (!_refreshing) _refreshing = _tryRefreshToken().finally(() => { _refreshing = null; });
+    const refreshed = await _refreshing;
+    if (refreshed) {
+      res = await _doFetch(path, options, token);
+    }
+  }
   if (res.headers.get('content-type')?.includes('application/json')) {
     const data = await res.json();
     if (!res.ok) {
@@ -1357,6 +1387,7 @@ async function handleAdminLogin() {
 
     token = data.token;
     localStorage.setItem('token', token);
+    if (data.refreshToken) localStorage.setItem('refreshToken', data.refreshToken);
     currentUser = data.user;
     showDashboard(data);
     requestPushPermission().catch(() => {});
@@ -1398,6 +1429,7 @@ async function handleAdminRegister() {
     const data = await api('/api/auth/register', { method: 'POST', body: JSON.stringify(body) });
     token = data.token;
     localStorage.setItem('token', token);
+    if (data.refreshToken) localStorage.setItem('refreshToken', data.refreshToken);
     currentUser = data.user;
     showDashboard(data);
   } catch (e) {
@@ -1433,6 +1465,7 @@ async function handleLecturerLogin() {
 
     token = data.token;
     localStorage.setItem('token', token);
+    if (data.refreshToken) localStorage.setItem('refreshToken', data.refreshToken);
     currentUser = data.user;
     showDashboard(data);
   } catch (e) {
@@ -1673,6 +1706,7 @@ async function handleHodLogin() {
     }
     token = data.token;
     localStorage.setItem('token', token);
+    if (data.refreshToken) localStorage.setItem('refreshToken', data.refreshToken);
     currentUser = data.user;
     showDashboard(data);
   } catch (e) {
@@ -1752,6 +1786,7 @@ async function handleEmployeeLogin() {
 
     token = data.token;
     localStorage.setItem('token', token);
+    if (data.refreshToken) localStorage.setItem('refreshToken', data.refreshToken);
     currentUser = data.user;
     showDashboard(data);
   } catch (e) {
@@ -1824,6 +1859,7 @@ async function handleStudentLogin() {
 
     token = data.token;
     localStorage.setItem('token', token);
+    if (data.refreshToken) localStorage.setItem('refreshToken', data.refreshToken);
     currentUser = data.user;
     showDashboard(data);
   } catch (e) {
@@ -1879,6 +1915,7 @@ async function handleStudentRegister() {
     if (data.token) {
       token = data.token;
       localStorage.setItem('token', token);
+      if (data.refreshToken) localStorage.setItem('refreshToken', data.refreshToken);
       currentUser = data.user;
       showDashboard(data);
       if (data.departmentNote) toastWarning(data.departmentNote);
@@ -1960,6 +1997,7 @@ async function handleLogout() {
   currentUserTrial = null;
   window.currentUser = null;
   localStorage.removeItem('token');
+  localStorage.removeItem('refreshToken');
   document.getElementById('main-content').innerHTML = '';
   document.getElementById('sidebar-nav').innerHTML = '';
   document.getElementById('user-name').textContent = '';
