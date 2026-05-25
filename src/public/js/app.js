@@ -2718,6 +2718,7 @@ function buildSidebar() {
       links.push({ id: 'hod-unlock-students', label: 'Locked Students',  icon: svgIcon('<rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>') });
       links.push({ sep: true, label: 'SUPPORT' });
       links.push({ id: 'faq-center',       label: 'FAQ Center',     icon: svgIcon('<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>') });
+      links.push({ id: 'subscription',     label: 'Subscription',   icon: subscriptionIcon() });
       break;
     case 'lecturer':
       links.push({ id: 'sessions', label: 'Sessions', icon: sessionsIcon() });
