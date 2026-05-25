@@ -6259,6 +6259,9 @@ async function renderUsers(filterRole='', filterDept='', filterSearch='') {
     const canManage = ['manager', 'admin', 'superadmin'].includes(currentUser.role);
     const pageTitle = isManager ? 'Employees' : 'Users';
     const pageDesc = isManager ? 'Manage your employees' : 'Manage team members';
+    const _roleRank = {superadmin:6,admin:5,manager:4,hod:3,lecturer:3,employee:2,student:1};
+    const _myRank = _roleRank[currentUser.role] || 0;
+    const canActOn = u => (_roleRank[u.role] || 0) < _myRank;
     const addLabel = isManager ? 'Add Employee' : 'Add User';
 
     let otherUsers = data.users.filter(u => u._id !== currentUser.id);
@@ -6330,7 +6333,7 @@ async function renderUsers(filterRole='', filterDept='', filterSearch='') {
             </tr></thead>
             <tbody>${otherUsers.map(u => `
               <tr id="user-row-${u._id}">
-                ${canManage ? `<td><input type="checkbox" class="user-checkbox" value="${u._id}" onchange="updateBulkActions()"></td>` : ''}
+                ${canManage ? `<td>${canActOn(u) ? `<input type="checkbox" class="user-checkbox" value="${u._id}" onchange="updateBulkActions()">` : ''}</td>` : ''}
                 <td>${u.name}</td>
                 ${mode === 'corporate' ? `<td>${u.employeeId || '-'}</td>` : ''}
                 <td>${u.email || u.IndexNumber || u.indexNumber || 'N/A'}</td>
@@ -6347,12 +6350,14 @@ async function renderUsers(filterRole='', filterDept='', filterSearch='') {
                 </td>` : ''}
                 <td><span class="status-badge ${u.isActive ? 'status-active' : 'status-stopped'}">${u.isActive ? 'Active' : 'Inactive'}</span></td>
                 ${canManage ? `<td style="white-space:nowrap">
-                  ${u.isActive
-                    ? `<button class="btn btn-sm" style="background:#f59e0b;color:#fff;font-size:11px" onclick="deactivateUser('${u._id}')">Deactivate</button>`
-                    : `<button class="btn btn-sm" style="background:#22c55e;color:#fff;font-size:11px" onclick="activateUser('${u._id}')">Activate</button>`}
-                  <button class="btn btn-sm" style="background:#6366f1;color:#fff;font-size:11px" onclick="adminResetStudentPassword('${u._id}', this)">🔑 Reset</button>
-                  ${u.role === 'student' && u.deviceId ? `<button class="btn btn-sm" style="background:#f97316;color:#fff;font-size:11px" onclick="clearStudentDeviceLock('${u._id}', this)">🔓 Unlock</button>` : ''}
-                  <button class="btn btn-danger btn-sm" style="font-size:11px" onclick="deleteUserPermanently('${u._id}', this)">Delete</button>
+                  ${canActOn(u) ? `
+                    ${u.isActive
+                      ? `<button class="btn btn-sm" style="background:#f59e0b;color:#fff;font-size:11px" onclick="deactivateUser('${u._id}')">Deactivate</button>`
+                      : `<button class="btn btn-sm" style="background:#22c55e;color:#fff;font-size:11px" onclick="activateUser('${u._id}')">Activate</button>`}
+                    <button class="btn btn-sm" style="background:#6366f1;color:#fff;font-size:11px" onclick="adminResetStudentPassword('${u._id}', this)">🔑 Reset</button>
+                    ${u.role === 'student' && u.deviceId ? `<button class="btn btn-sm" style="background:#f97316;color:#fff;font-size:11px" onclick="clearStudentDeviceLock('${u._id}', this)">🔓 Unlock</button>` : ''}
+                    <button class="btn btn-danger btn-sm" style="font-size:11px" onclick="deleteUserPermanently('${u._id}', this)">Delete</button>
+                  ` : `<span style="font-size:11px;color:var(--text-muted);font-style:italic">—</span>`}
                 </td>` : ''}
               </tr>
             `).join('')}</tbody>
