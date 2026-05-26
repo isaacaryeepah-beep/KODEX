@@ -55,12 +55,12 @@ class _MeetingCard extends ConsumerWidget {
                 _StatusBadge(status: meeting.status),
               ],
             ),
-            if (meeting.hostName != null) ...[
+            if (meeting.createdBy != null) ...[
               const SizedBox(height: 6),
               Row(children: [
                 const Icon(Icons.person_outline, size: 14, color: DiklyColors.textSecondary),
                 const SizedBox(width: 4),
-                Text(meeting.hostName!, style: const TextStyle(fontSize: 13, color: DiklyColors.textSecondary)),
+                Text(meeting.createdBy!, style: const TextStyle(fontSize: 13, color: DiklyColors.textSecondary)),
               ]),
             ],
             if (meeting.scheduledStart != null) ...[

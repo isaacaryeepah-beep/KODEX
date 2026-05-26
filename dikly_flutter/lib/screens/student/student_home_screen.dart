@@ -177,9 +177,9 @@ class _AnnouncementTile extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(a.title, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
-            if (a.message.isNotEmpty) ...[
+            if (a.content.isNotEmpty) ...[
               const SizedBox(height: 4),
-              Text(a.message, style: const TextStyle(fontSize: 13, color: DiklyColors.textSecondary, height: 1.4), maxLines: 3, overflow: TextOverflow.ellipsis),
+              Text(a.content, style: const TextStyle(fontSize: 13, color: DiklyColors.textSecondary, height: 1.4), maxLines: 3, overflow: TextOverflow.ellipsis),
             ],
           ],
         ),
