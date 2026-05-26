@@ -123,7 +123,7 @@ class _TeamScreenState extends State<TeamScreen> {
                         ? DiklyEmptyState(
                             icon: Icons.group_outlined,
                             title: _searchCtrl.text.isNotEmpty ? 'No results found' : 'No team members',
-                            message: _searchCtrl.text.isNotEmpty
+                            subtitle: _searchCtrl.text.isNotEmpty
                                 ? 'Try a different search term'
                                 : 'Your team will appear here',
                           )

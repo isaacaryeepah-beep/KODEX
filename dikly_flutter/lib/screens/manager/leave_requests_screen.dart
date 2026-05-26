@@ -158,7 +158,7 @@ class _LeaveRequestsScreenState extends State<LeaveRequestsScreen> {
                         ? const DiklyEmptyState(
                             icon: Icons.event_note_outlined,
                             title: 'No leave requests',
-                            message: 'Leave requests will appear here',
+                            subtitle: 'Leave requests will appear here',
                           )
                         : RefreshIndicator(
                             onRefresh: _loadData,

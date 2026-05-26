@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../../core/api.dart';
 import '../../core/auth.dart';
 import '../../core/theme.dart';
+import '../../widgets/ds/dikly_ds.dart';
 
 final _timetableProvider = FutureProvider.autoDispose<List<Map<String, dynamic>>>(
   (ref) => apiService.getTimetable(),
@@ -88,8 +90,15 @@ class _TimetableScreenState extends ConsumerState<TimetableScreen> {
     return Scaffold(
       backgroundColor: DiklyColors.background,
       appBar: AppBar(
-        title: Text(title),
+        backgroundColor: DiklyColors.surface,
+        elevation: 0,
+        surfaceTintColor: Colors.transparent,
+        title: Text(title, style: GoogleFonts.dmSans(fontSize: 17, fontWeight: FontWeight.w700, color: DiklyColors.text)),
         leading: BackButton(onPressed: () => Navigator.of(context).maybePop()),
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(1),
+          child: Container(height: 1, color: DiklyColors.border),
+        ),
       ),
       body: async.when(
         loading: () => const Center(child: CircularProgressIndicator()),
@@ -99,7 +108,7 @@ class _TimetableScreenState extends ConsumerState<TimetableScreen> {
             children: [
               const Icon(Icons.error_outline, size: 48, color: DiklyColors.error),
               const SizedBox(height: 12),
-              const Text('Failed to load timetable'),
+              Text('Failed to load timetable', style: GoogleFonts.dmSans(color: DiklyColors.textSecondary)),
               const SizedBox(height: 8),
               TextButton(
                 onPressed: () => ref.refresh(_timetableProvider),
@@ -194,31 +203,10 @@ class _DaySchedule extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (slots.isEmpty) {
-      return ListView(
-        children: const [
-          SizedBox(height: 80),
-          Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.calendar_today_outlined,
-                  size: 64, color: DiklyColors.textSecondary),
-              SizedBox(height: 16),
-              Text(
-                'No classes scheduled',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: DiklyColors.textSecondary,
-                ),
-              ),
-              SizedBox(height: 8),
-              Text(
-                'Enjoy your free day!',
-                style: TextStyle(color: DiklyColors.textSecondary),
-              ),
-            ],
-          ),
-        ],
+      return const DiklyEmptyState(
+        icon: Icons.calendar_today_outlined,
+        title: 'No classes scheduled',
+        subtitle: 'Enjoy your free day!',
       );
     }
 
@@ -281,10 +269,7 @@ class _SlotCard extends StatelessWidget {
                         Expanded(
                           child: Text(
                             courseName,
-                            style: Theme.of(context)
-                                .textTheme
-                                .titleMedium
-                                ?.copyWith(fontWeight: FontWeight.w600),
+                            style: GoogleFonts.dmSans(fontSize: 14, fontWeight: FontWeight.w600, color: DiklyColors.text),
                           ),
                         ),
                         if (courseCode.isNotEmpty)

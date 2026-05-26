@@ -97,7 +97,7 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
                   ? const DiklyEmptyState(
                       icon: Icons.campaign_outlined,
                       title: 'No announcements',
-                      message: 'Announcements will appear here',
+                      subtitle: 'Announcements will appear here',
                     )
                   : RefreshIndicator(
                       onRefresh: _loadData,

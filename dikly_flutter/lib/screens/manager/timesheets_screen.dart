@@ -67,7 +67,7 @@ class _TimesheetsScreenState extends State<TimesheetsScreen> {
                         ? const DiklyEmptyState(
                             icon: Icons.schedule_outlined,
                             title: 'No timesheets',
-                            message: 'Timesheets will appear here',
+                            subtitle: 'Timesheets will appear here',
                           )
                         : RefreshIndicator(
                             onRefresh: _loadData,
