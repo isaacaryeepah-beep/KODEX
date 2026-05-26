@@ -146,62 +146,56 @@ class _EmployeeHomeScreenState extends ConsumerState<EmployeeHomeScreen> {
 
 class _GreetingRow extends StatelessWidget {
   final String name;
-  const _GreetingRow({required this.name});
+  final String institution;
+  final String deptBadge;
 
-  String get _greeting {
-    final hour = DateTime.now().hour;
-    if (hour < 12) return 'Good morning';
-    if (hour < 17) return 'Good afternoon';
-    return 'Good evening';
-  }
+  const _GreetingRow({
+    required this.name,
+    required this.institution,
+    required this.deptBadge,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Row(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                _greeting,
-                style: const TextStyle(
-                  fontSize: 13,
-                  color: DiklyColors.textSecondary,
-                ),
-              ),
-              Text(
-                name.split(' ').first,
-                style: const TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w800,
-                  color: DiklyColors.textPrimary,
-                ),
-              ),
-            ],
+        Text(
+          'Welcome back, $name',
+          style: const TextStyle(
+            fontSize: 24,
+            fontWeight: FontWeight.w800,
+            color: DiklyColors.textPrimary,
           ),
         ),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-          decoration: BoxDecoration(
-            color: const Color(0xFF0369A1).withOpacity(0.08),
-            borderRadius: BorderRadius.circular(20),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.work_outline, size: 14, color: Color(0xFF0369A1)),
-              const SizedBox(width: 4),
-              Text(
-                'My Workspace',
-                style: const TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: Color(0xFF0369A1),
+        const SizedBox(height: 6),
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                "Here's an overview of your workspace at $institution",
+                style: const TextStyle(fontSize: 13, color: DiklyColors.textSecondary),
+              ),
+            ),
+            if (deptBadge.isNotEmpty) ...[
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFEF3C7),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  deptBadge,
+                  style: const TextStyle(
+                    color: Color(0xFFD97706),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
             ],
-          ),
+          ],
         ),
       ],
     );

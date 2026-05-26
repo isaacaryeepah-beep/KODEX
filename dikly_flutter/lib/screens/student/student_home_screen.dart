@@ -19,6 +19,10 @@ class StudentHomeScreen extends ConsumerWidget {
     final meetingsAsync = ref.watch(upcomingMeetingsProvider);
     final announcementsAsync = ref.watch(announcementsProvider);
 
+    final firstName = (user?.name ?? 'Student').split(' ').first;
+    final institution = user?.company ?? user?.department ?? 'your institution';
+    final deptBadge = user?.department ?? user?.company ?? '';
+
     return RefreshIndicator(
       onRefresh: () async {
         ref.invalidate(upcomingMeetingsProvider);
@@ -27,8 +31,50 @@ class StudentHomeScreen extends ConsumerWidget {
       child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          _GreetingCard(name: user?.name ?? 'Student'),
-          const SizedBox(height: 20),
+          // Plain welcome section
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Welcome back, $firstName',
+                style: const TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.w800,
+                  color: DiklyColors.textPrimary,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      "Here's an overview of your workspace at $institution",
+                      style: const TextStyle(fontSize: 13, color: DiklyColors.textSecondary),
+                    ),
+                  ),
+                  if (deptBadge.isNotEmpty) ...[
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFEF3C7),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        deptBadge,
+                        style: const TextStyle(
+                          color: Color(0xFFD97706),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 24),
           const Text('Overview', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: DiklyColors.textPrimary)),
           const SizedBox(height: 12),
           meetingsAsync.when(
@@ -67,41 +113,6 @@ class StudentHomeScreen extends ConsumerWidget {
     decoration: BoxDecoration(color: DiklyColors.surface, borderRadius: BorderRadius.circular(12), border: Border.all(color: DiklyColors.border)),
     child: Text(msg, style: const TextStyle(color: DiklyColors.textSecondary, fontSize: 13)),
   );
-}
-
-class _GreetingCard extends StatelessWidget {
-  final String name;
-  const _GreetingCard({required this.name});
-
-  String get _greeting {
-    final h = DateTime.now().hour;
-    if (h < 12) return 'Good morning';
-    if (h < 17) return 'Good afternoon';
-    return 'Good evening';
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(colors: [DiklyColors.primary, Color(0xFF7C3AED)], begin: Alignment.topLeft, end: Alignment.bottomRight),
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [BoxShadow(color: DiklyColors.primary.withOpacity(0.3), blurRadius: 16, offset: const Offset(0, 6))],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('$_greeting,', style: const TextStyle(color: Colors.white70, fontSize: 14)),
-          const SizedBox(height: 4),
-          Text(name.split(' ').first, style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w800)),
-          const SizedBox(height: 8),
-          Text(DateFormat('EEEE, d MMMM yyyy').format(DateTime.now()),
-              style: const TextStyle(color: Colors.white60, fontSize: 12)),
-        ],
-      ),
-    );
-  }
 }
 
 class _StatsRow extends StatelessWidget {
