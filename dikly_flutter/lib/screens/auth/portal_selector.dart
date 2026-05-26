@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
+import 'package:google_fonts/google_fonts.dart';
+import '../../core/theme.dart';
 
 class PortalSelectorScreen extends StatefulWidget {
   const PortalSelectorScreen({super.key});
@@ -10,341 +11,200 @@ class PortalSelectorScreen extends StatefulWidget {
 }
 
 class _PortalSelectorScreenState extends State<PortalSelectorScreen> {
-  String _selectedWorkspace = 'corporate';
-
-  @override
-  void initState() {
-    super.initState();
-    SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
-      statusBarColor: Colors.transparent,
-      statusBarIconBrightness: Brightness.light,
-    ));
-  }
+  String _selectedMode = 'corp';
 
   @override
   Widget build(BuildContext context) {
-    final isCorporate = _selectedWorkspace == 'corporate';
-
     return Scaffold(
-      body: Stack(
-        children: [
-          // Background gradient (simulates dark blurred office photo)
-          Container(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  Color(0xFF1A237E),
-                  Color(0xFF283593),
-                  Color(0xFF1565C0),
-                ],
-              ),
-            ),
-          ),
-          // Dark overlay
-          Container(color: Colors.black.withOpacity(0.45)),
-          // Content
-          SafeArea(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 0),
+      backgroundColor: DiklyColors.authBg,
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 32),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 600),
               child: Column(
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  const SizedBox(height: 32),
-                  // ── Header ──────────────────────────────────────
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      SizedBox(
-                        width: 70,
-                        height: 70,
-                        child: Image.asset(
-                          'assets/icon.png',
-                          fit: BoxFit.contain,
-                        ),
-                      ),
-                      const SizedBox(width: 14),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'DIKLY',
-                            style: TextStyle(
-                              fontSize: 28,
-                              fontWeight: FontWeight.w800,
-                              color: Color(0xFF1A237E),
-                              letterSpacing: 1,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            'INNOVATE · CONNECT · EMPOWER',
-                            style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.blue[300],
-                              letterSpacing: 1.5,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  const Text(
-                    'ENTERPRISE ATTENDANCE MANAGEMENT PLATFORM',
+                  // ── A) Logo section ────────────────────────────────────────
+                  _DiklyLogo(),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Enterprise Attendance Management Platform',
                     textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
-                      color: Colors.white,
+                    style: GoogleFonts.dmSans(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w400,
+                      color: DiklyColors.textLight,
+                    ),
+                  ),
+                  const SizedBox(height: 32),
+
+                  // ── B) "CHOOSE YOUR WORKSPACE" heading ─────────────────────
+                  Text(
+                    'CHOOSE YOUR WORKSPACE',
+                    style: GoogleFonts.dmSans(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: DiklyColors.textMuted,
                       letterSpacing: 2,
                     ),
                   ),
+                  const SizedBox(height: 16),
+
+                  // ── C) Mode toggles ────────────────────────────────────────
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _ModeToggle(
+                          label: 'Corporate',
+                          subtitle: 'Businesses & organisations',
+                          icon: Icons.work_outline_rounded,
+                          isSelected: _selectedMode == 'corp',
+                          selectedBorderColor: DiklyColors.primary,
+                          selectedBgColor: DiklyColors.primaryULight,
+                          accentColor: DiklyColors.primary,
+                          onTap: () => setState(() => _selectedMode = 'corp'),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: _ModeToggle(
+                          label: 'Academic',
+                          subtitle: 'Schools & institutions',
+                          icon: Icons.school_outlined,
+                          isSelected: _selectedMode == 'acad',
+                          selectedBorderColor: const Color(0xFF7C3AED),
+                          selectedBgColor: const Color(0xFFF5F3FF),
+                          accentColor: const Color(0xFF7C3AED),
+                          onTap: () => setState(() => _selectedMode = 'acad'),
+                        ),
+                      ),
+                    ],
+                  ),
                   const SizedBox(height: 24),
 
-                  // ── Frosted glass card ───────────────────────────
-                  Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 14),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.93),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 20, 16, 20),
-                      child: Column(
-                        children: [
-                          // "CHOOSE YOUR WORKSPACE" label
-                          const Text(
-                            'CHOOSE YOUR WORKSPACE',
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                              color: Color(0xFF9E9E9E),
-                              letterSpacing: 2,
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          const Divider(height: 1, color: Color(0xFFE0E0E0)),
-                          const SizedBox(height: 14),
-
-                          // ── Workspace tabs ──────────────────────
-                          Row(
-                            children: [
-                              Expanded(
-                                child: _WorkspaceTab(
-                                  label: 'Corporate',
-                                  subtitle: 'Businesses & organisations',
-                                  icon: Icons.work_rounded,
-                                  iconBg: const Color(0xFFFFF3E0),
-                                  iconColor: const Color(0xFFD97706),
-                                  borderColor: const Color(0xFFD97706),
-                                  indicatorColor: const Color(0xFFD97706),
-                                  isSelected: isCorporate,
-                                  onTap: () =>
-                                      setState(() => _selectedWorkspace = 'corporate'),
-                                ),
-                              ),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: _WorkspaceTab(
-                                  label: 'Academic',
-                                  subtitle: 'Schools & institutions',
-                                  icon: Icons.school_rounded,
-                                  iconBg: const Color(0xFFEDE7F6),
-                                  iconColor: const Color(0xFF3F51B5),
-                                  borderColor: const Color(0xFF3F51B5),
-                                  indicatorColor: const Color(0xFF3F51B5),
-                                  isSelected: !isCorporate,
-                                  onTap: () =>
-                                      setState(() => _selectedWorkspace = 'academic'),
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 18),
-
-                          // ── Section label ───────────────────────
-                          Row(
-                            children: [
-                              Text(
-                                isCorporate ? '🏢' : '🎓',
-                                style: const TextStyle(fontSize: 16),
-                              ),
-                              const SizedBox(width: 6),
-                              Text(
-                                isCorporate
-                                    ? 'CORPORATE PORTALS'
-                                    : 'ACADEMIC PORTALS',
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w700,
-                                  color: isCorporate
-                                      ? const Color(0xFFD97706)
-                                      : const Color(0xFF3F51B5),
-                                  letterSpacing: 1.5,
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 12),
-
-                          // ── Role cards ──────────────────────────
-                          if (isCorporate) ...[
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: _RoleCard(
-                                    icon: Icons.person_rounded,
-                                    iconBg: const Color(0xFFFFF3E0),
-                                    iconColor: const Color(0xFFD97706),
-                                    title: 'Admin',
-                                    subtitle: 'Company admin',
-                                    onTap: () => context.push('/login/admin'),
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: _RoleCard(
-                                    icon: Icons.group_rounded,
-                                    iconBg: const Color(0xFFE8F5E9),
-                                    iconColor: const Color(0xFF388E3C),
-                                    title: 'Manager',
-                                    subtitle: 'Team leads & managers',
-                                    onTap: () => context.push('/login/manager'),
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: _RoleCard(
-                                    icon: Icons.work_rounded,
-                                    iconBg: const Color(0xFFE0F2F1),
-                                    iconColor: const Color(0xFF0D9488),
-                                    title: 'Employee',
-                                    subtitle: 'Staff & workers',
-                                    onTap: () => context.push('/login/employee'),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ] else ...[
-                            GridView.count(
-                              crossAxisCount: 2,
-                              shrinkWrap: true,
-                              physics: const NeverScrollableScrollPhysics(),
-                              crossAxisSpacing: 8,
-                              mainAxisSpacing: 8,
-                              childAspectRatio: 1.1,
-                              children: [
-                                _RoleCard(
-                                  icon: Icons.person_rounded,
-                                  iconBg: const Color(0xFFEDE7F6),
-                                  iconColor: const Color(0xFF3F51B5),
-                                  title: 'Admin',
-                                  subtitle: 'Institution admin',
-                                  onTap: () => context.push('/login/admin'),
-                                ),
-                                _RoleCard(
-                                  icon: Icons.group_rounded,
-                                  iconBg: const Color(0xFFE8EAF6),
-                                  iconColor: const Color(0xFF5C6BC0),
-                                  title: 'Lecturer',
-                                  subtitle: 'Instructors',
-                                  onTap: () => context.push('/login/lecturer'),
-                                ),
-                                _RoleCard(
-                                  icon: Icons.account_balance_rounded,
-                                  iconBg: const Color(0xFFFFEBEE),
-                                  iconColor: const Color(0xFFDC2626),
-                                  title: 'HOD',
-                                  subtitle: 'Head of Department',
-                                  onTap: () => context.push('/login/hod'),
-                                ),
-                                _RoleCard(
-                                  icon: Icons.menu_book_rounded,
-                                  iconBg: const Color(0xFFE3F2FD),
-                                  iconColor: const Color(0xFF2563EB),
-                                  title: 'Student',
-                                  subtitle: 'Learners',
-                                  onTap: () => context.push('/login/student'),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ],
+                  // ── D) Portal cards (AnimatedSwitcher) ─────────────────────
+                  AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 300),
+                    transitionBuilder: (child, animation) => FadeTransition(
+                      opacity: animation,
+                      child: SlideTransition(
+                        position: Tween<Offset>(
+                          begin: const Offset(0, 0.08),
+                          end: Offset.zero,
+                        ).animate(animation),
+                        child: child,
                       ),
                     ),
+                    child: _selectedMode == 'corp'
+                        ? _CorporateCards(key: const ValueKey('corp'))
+                        : _AcademicCards(key: const ValueKey('acad')),
                   ),
 
-                  // ── Footer ──────────────────────────────────────
-                  const SizedBox(height: 24),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 24),
-                    child: Column(
-                      children: const [
-                        Text(
-                          'By using DIKLY, you agree to our Terms & Conditions and Privacy Policy.',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 10,
-                            color: Color(0xFFB0BEC5),
-                          ),
-                        ),
-                        SizedBox(height: 6),
-                        Text(
-                          '© 2026 DIKLY Technologies. All rights reserved.',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 10,
-                            color: Color(0xFFB0BEC5),
-                          ),
-                        ),
-                        SizedBox(height: 4),
-                        Text(
-                          'Founded by Isaac Kweku Aryeepah',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 10,
-                            color: Color(0xFFB0BEC5),
-                          ),
-                        ),
-                      ],
+                  const SizedBox(height: 32),
+
+                  // ── Footer ─────────────────────────────────────────────────
+                  Text(
+                    'By using DIKLY, you agree to our Terms & Conditions and Privacy Policy.',
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.dmSans(
+                      fontSize: 11,
+                      color: DiklyColors.textMuted,
                     ),
                   ),
-                  const SizedBox(height: 32),
+                  const SizedBox(height: 4),
+                  Text(
+                    '© 2026 DIKLY Technologies. All rights reserved.',
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.dmSans(
+                      fontSize: 11,
+                      color: DiklyColors.textMuted,
+                    ),
+                  ),
                 ],
               ),
             ),
           ),
-        ],
+        ),
       ),
     );
   }
 }
 
-// ── Workspace Tab Widget ──────────────────────────────────────────────────────
+// ── DIKLY Logo Widget ───────────────────────────────────────────────────────────
 
-class _WorkspaceTab extends StatelessWidget {
+class _DiklyLogo extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 48,
+          height: 48,
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [Color(0xFF2563EB), Color(0xFF1D4ED8)],
+            ),
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF2563EB).withOpacity(0.25),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Center(
+            child: Text(
+              'D',
+              style: GoogleFonts.dmSans(
+                fontSize: 22,
+                fontWeight: FontWeight.w800,
+                color: Colors.white,
+                height: 1.0,
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Text(
+          'DIKLY',
+          style: GoogleFonts.dmSans(
+            fontSize: 32,
+            fontWeight: FontWeight.w800,
+            color: const Color(0xFF1E1B4B),
+            letterSpacing: 1,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ── Mode Toggle Widget ─────────────────────────────────────────────────────────
+
+class _ModeToggle extends StatelessWidget {
   final String label;
   final String subtitle;
   final IconData icon;
-  final Color iconBg;
-  final Color iconColor;
-  final Color borderColor;
-  final Color indicatorColor;
   final bool isSelected;
+  final Color selectedBorderColor;
+  final Color selectedBgColor;
+  final Color accentColor;
   final VoidCallback onTap;
 
-  const _WorkspaceTab({
+  const _ModeToggle({
     required this.label,
     required this.subtitle,
     required this.icon,
-    required this.iconBg,
-    required this.iconColor,
-    required this.borderColor,
-    required this.indicatorColor,
     required this.isSelected,
+    required this.selectedBorderColor,
+    required this.selectedBgColor,
+    required this.accentColor,
     required this.onTap,
   });
 
@@ -352,66 +212,75 @@ class _WorkspaceTab extends StatelessWidget {
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
-      child: Container(
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
+          color: isSelected ? selectedBgColor : DiklyColors.surface,
+          borderRadius: BorderRadius.circular(14),
           border: Border.all(
-            color: isSelected ? borderColor : const Color(0xFFE0E0E0),
-            width: isSelected ? 2 : 1,
+            color: isSelected ? selectedBorderColor : DiklyColors.border,
+            width: 2,
           ),
         ),
-        child: Column(
+        child: Row(
           children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
-              child: Row(
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: isSelected
+                    ? accentColor.withOpacity(0.12)
+                    : DiklyColors.grey100,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                icon,
+                size: 18,
+                color: isSelected ? accentColor : DiklyColors.textLight,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Container(
-                    width: 36,
-                    height: 36,
-                    decoration: BoxDecoration(
-                      color: iconBg,
-                      shape: BoxShape.circle,
+                  Text(
+                    label,
+                    style: GoogleFonts.dmSans(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: isSelected ? accentColor : DiklyColors.text,
                     ),
-                    child: Icon(icon, color: iconColor, size: 20),
                   ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          label,
-                          style: const TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w700,
-                            color: Color(0xFF212121),
-                          ),
-                        ),
-                        Text(
-                          subtitle,
-                          style: const TextStyle(
-                            fontSize: 10,
-                            color: Color(0xFF9E9E9E),
-                          ),
-                        ),
-                      ],
+                  Text(
+                    subtitle,
+                    style: GoogleFonts.dmSans(
+                      fontSize: 10,
+                      color: DiklyColors.textMuted,
                     ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ],
               ),
             ),
-            // Indicator bar at bottom
-            Container(
-              height: isSelected ? 4 : 2,
+            const SizedBox(width: 4),
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              width: 18,
+              height: 18,
               decoration: BoxDecoration(
-                color: isSelected ? indicatorColor : const Color(0xFFEEEEEE),
-                borderRadius: const BorderRadius.only(
-                  bottomLeft: Radius.circular(12),
-                  bottomRight: Radius.circular(12),
+                shape: BoxShape.circle,
+                color: isSelected ? accentColor : Colors.transparent,
+                border: Border.all(
+                  color: isSelected ? accentColor : DiklyColors.border,
+                  width: 2,
                 ),
               ),
+              child: isSelected
+                  ? const Icon(Icons.check, size: 11, color: Colors.white)
+                  : null,
             ),
           ],
         ),
@@ -420,20 +289,100 @@ class _WorkspaceTab extends StatelessWidget {
   }
 }
 
-// ── Role Card Widget ──────────────────────────────────────────────────────────
+// ── Corporate Portal Cards ─────────────────────────────────────────────────────
 
-class _RoleCard extends StatelessWidget {
+class _CorporateCards extends StatelessWidget {
+  const _CorporateCards({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        _PortalCard(
+          icon: Icons.admin_panel_settings_outlined,
+          iconColor: const Color(0xFF2563EB),
+          iconBgColor: const Color(0xFFEFF6FF),
+          title: 'Admin',
+          subtitle: 'Manage company settings & users',
+          onTap: () => context.go('/login/admin'),
+        ),
+        const SizedBox(height: 10),
+        _PortalCard(
+          icon: Icons.business_center_outlined,
+          iconColor: const Color(0xFF4F46E5),
+          iconBgColor: const Color(0xFFEEF2FF),
+          title: 'Manager',
+          subtitle: 'Team leads & department managers',
+          onTap: () => context.go('/login/manager'),
+        ),
+        const SizedBox(height: 10),
+        _PortalCard(
+          icon: Icons.badge_outlined,
+          iconColor: const Color(0xFF16A34A),
+          iconBgColor: const Color(0xFFF0FDF4),
+          title: 'Employee',
+          subtitle: 'Staff & workers',
+          onTap: () => context.go('/login/employee'),
+        ),
+      ],
+    );
+  }
+}
+
+// ── Academic Portal Cards ──────────────────────────────────────────────────────
+
+class _AcademicCards extends StatelessWidget {
+  const _AcademicCards({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        _PortalCard(
+          icon: Icons.menu_book_outlined,
+          iconColor: const Color(0xFF7C3AED),
+          iconBgColor: const Color(0xFFF5F3FF),
+          title: 'Student',
+          subtitle: 'Learners & enrolled students',
+          onTap: () => context.go('/login/student'),
+        ),
+        const SizedBox(height: 10),
+        _PortalCard(
+          icon: Icons.person_outlined,
+          iconColor: const Color(0xFF2563EB),
+          iconBgColor: const Color(0xFFEFF6FF),
+          title: 'Lecturer',
+          subtitle: 'Course instructors & tutors',
+          onTap: () => context.go('/login/lecturer'),
+        ),
+        const SizedBox(height: 10),
+        _PortalCard(
+          icon: Icons.account_balance_outlined,
+          iconColor: const Color(0xFF4F46E5),
+          iconBgColor: const Color(0xFFEEF2FF),
+          title: 'HOD',
+          subtitle: 'Head of Department',
+          onTap: () => context.go('/login/hod'),
+        ),
+      ],
+    );
+  }
+}
+
+// ── Portal Card Widget ─────────────────────────────────────────────────────────
+
+class _PortalCard extends StatelessWidget {
   final IconData icon;
-  final Color iconBg;
   final Color iconColor;
+  final Color iconBgColor;
   final String title;
   final String subtitle;
   final VoidCallback onTap;
 
-  const _RoleCard({
+  const _PortalCard({
     required this.icon,
-    required this.iconBg,
     required this.iconColor,
+    required this.iconBgColor,
     required this.title,
     required this.subtitle,
     required this.onTap,
@@ -444,55 +393,54 @@ class _RoleCard extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.all(10),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
         decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: const Color(0xFFE0E0E0)),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.04),
-              blurRadius: 6,
-              offset: const Offset(0, 2),
-            ),
-          ],
+          color: DiklyColors.surface,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: DiklyColors.border, width: 1.5),
+          boxShadow: AppTheme.shadowSm,
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        child: Row(
           children: [
             Container(
-              width: 36,
-              height: 36,
+              width: 50,
+              height: 50,
               decoration: BoxDecoration(
-                color: iconBg,
+                color: iconBgColor,
                 shape: BoxShape.circle,
               ),
-              child: Icon(icon, color: iconColor, size: 20),
+              child: Icon(icon, color: iconColor, size: 24),
             ),
-            const SizedBox(height: 8),
-            Text(
-              title,
-              style: const TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
-                color: Color(0xFF212121),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: GoogleFonts.dmSans(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      color: DiklyColors.text,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: GoogleFonts.dmSans(
+                      fontSize: 12,
+                      color: DiklyColors.textLight,
+                    ),
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: 2),
             Text(
-              subtitle,
-              style: const TextStyle(
-                fontSize: 10,
-                color: Color(0xFF9E9E9E),
-              ),
-            ),
-            const SizedBox(height: 6),
-            Align(
-              alignment: Alignment.bottomRight,
-              child: Icon(
-                Icons.arrow_forward_ios_rounded,
-                size: 11,
-                color: iconColor,
+              '→',
+              style: GoogleFonts.dmSans(
+                fontSize: 18,
+                color: DiklyColors.textMuted,
+                fontWeight: FontWeight.w400,
               ),
             ),
           ],

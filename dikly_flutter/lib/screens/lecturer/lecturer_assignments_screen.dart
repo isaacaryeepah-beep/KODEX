@@ -5,6 +5,7 @@ import '../../core/api.dart';
 import '../../core/theme.dart';
 import '../../models/assignment.dart';
 import '../../models/course.dart';
+import '../../widgets/ds/dikly_ds.dart';
 
 class LecturerAssignmentsScreen extends ConsumerStatefulWidget {
   const LecturerAssignmentsScreen({super.key});
@@ -49,9 +50,7 @@ class _LecturerAssignmentsScreenState
       isScrollControlled: true,
       backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(
-          top: Radius.circular(20),
-        ),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (_) => _NewAssignmentSheet(
         courses: _courses,
@@ -72,53 +71,22 @@ class _LecturerAssignmentsScreenState
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            // Header row
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Assignments',
-                        style: TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.w800,
-                          color: Color(0xFF111827),
-                        ),
-                      ),
-                      SizedBox(height: 4),
-                      Text(
-                        'Create, schedule and grade student assignments',
-                        style: TextStyle(
-                            fontSize: 13, color: Color(0xFF6B7280)),
-                      ),
-                    ],
-                  ),
+            DiklyScreenHeader(
+              title: 'Assignments',
+              subtitle: 'Create, schedule and grade student assignments',
+              action: ElevatedButton.icon(
+                onPressed: _showNewAssignmentSheet,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF2563EB),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  elevation: 0,
                 ),
-                const SizedBox(width: 12),
-                ElevatedButton.icon(
-                  onPressed: _showNewAssignmentSheet,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF2563EB),
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 14, vertical: 10),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10)),
-                    elevation: 0,
-                  ),
-                  icon: const Icon(Icons.add, size: 16),
-                  label: const Text(
-                    '+ New Assignment',
-                    style: TextStyle(
-                        fontSize: 13, fontWeight: FontWeight.w600),
-                  ),
-                ),
-              ],
+                icon: const Icon(Icons.add, size: 16),
+                label: const Text('+ New Assignment', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+              ),
             ),
-            const SizedBox(height: 16),
 
             if (_loading)
               const Center(
@@ -128,24 +96,12 @@ class _LecturerAssignmentsScreenState
                 ),
               )
             else if (_assignments.isEmpty)
-              Container(
+              DiklyCard(
                 padding: const EdgeInsets.all(32),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(14),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.06),
-                      blurRadius: 8,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
                 child: const Center(
                   child: Text(
                     'No assignments yet',
-                    style: TextStyle(
-                        fontSize: 14, color: Color(0xFF6B7280)),
+                    style: TextStyle(fontSize: 14, color: Color(0xFF6B7280)),
                   ),
                 ),
               )
@@ -166,27 +122,11 @@ class _AssignmentCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isClosed = assignment.status == 'closed' ||
-        assignment.status == 'archived';
-    final isOpen = assignment.status == 'open' ||
-        assignment.status == 'active';
-    final hasBrief = assignment.description != null &&
-        assignment.description!.isNotEmpty;
+    final isClosed = assignment.status == 'closed' || assignment.status == 'archived';
+    final isOpen = assignment.status == 'open' || assignment.status == 'active';
 
-    return Container(
+    return DiklyCard(
       margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.06),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -206,7 +146,7 @@ class _AssignmentCard extends StatelessWidget {
                           color: Color(0xFF2563EB),
                         ),
                       ),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 2),
                     Text(
                       assignment.title,
                       style: const TextStyle(
@@ -225,7 +165,7 @@ class _AssignmentCard extends StatelessWidget {
                   Text(
                     '0',
                     style: TextStyle(
-                      fontSize: 24,
+                      fontSize: 22,
                       fontWeight: FontWeight.w800,
                       color: Color(0xFF2563EB),
                     ),
@@ -249,55 +189,28 @@ class _AssignmentCard extends StatelessWidget {
             runSpacing: 6,
             children: [
               if (isClosed)
-                _StatusChip(
-                  label: 'Closed',
-                  color: DiklyColors.error,
-                )
+                DiklyBadge.closed()
               else if (isOpen)
-                _StatusChip(
-                  label: 'Open',
-                  color: const Color(0xFF16A34A),
-                ),
+                DiklyBadge(label: 'Open', color: const Color(0xFF16A34A)),
               if (assignment.dueDate != null)
-                _StatusChip(
-                  label:
-                      'Due ${DateFormat('MMM d').format(assignment.dueDate!)}',
-                  color: const Color(0xFFF59E0B),
-                ),
-              if (hasBrief)
-                const _StatusChip(
-                  label: 'Brief',
-                  color: Color(0xFF6B7280),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: const Color(0xFFF59E0B).withOpacity(0.5)),
+                  ),
+                  child: Text(
+                    'Due ${DateFormat('MMM d').format(assignment.dueDate!)}',
+                    style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFFF59E0B),
+                    ),
+                  ),
                 ),
             ],
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _StatusChip extends StatelessWidget {
-  final String label;
-  final Color color;
-
-  const _StatusChip({required this.label, required this.color});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: color.withOpacity(0.5)),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
-          color: color,
-        ),
       ),
     );
   }
@@ -397,11 +310,7 @@ class _NewAssignmentSheetState extends ConsumerState<_NewAssignmentSheet> {
     }
   }
 
-  InputDecoration _fieldDeco({
-    String? hint,
-    int? maxLines,
-    Widget? suffixIcon,
-  }) {
+  InputDecoration _fieldDeco({String? hint, Widget? suffixIcon}) {
     return InputDecoration(
       hintText: hint,
       suffixIcon: suffixIcon,
@@ -415,48 +324,12 @@ class _NewAssignmentSheetState extends ConsumerState<_NewAssignmentSheet> {
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(10),
-        borderSide:
-            const BorderSide(color: Color(0xFF2563EB), width: 2),
+        borderSide: const BorderSide(color: Color(0xFF2563EB), width: 2),
       ),
-      contentPadding:
-          const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       filled: true,
       fillColor: Colors.white,
       hintStyle: const TextStyle(color: Color(0xFF9CA3AF), fontSize: 14),
-    );
-  }
-
-  Widget _sectionLabel(String text) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          text,
-          style: const TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.w700,
-            color: Color(0xFF9CA3AF),
-            letterSpacing: 1.5,
-          ),
-        ),
-        const SizedBox(height: 4),
-        const Divider(height: 1, color: Color(0xFFE5E7EB)),
-        const SizedBox(height: 12),
-      ],
-    );
-  }
-
-  Widget _fieldLabel(String text) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
-      child: Text(
-        text,
-        style: const TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w700,
-          color: Color(0xFF374151),
-        ),
-      ),
     );
   }
 
@@ -465,9 +338,7 @@ class _NewAssignmentSheetState extends ConsumerState<_NewAssignmentSheet> {
     final fmt = DateFormat('MMM d, yyyy');
 
     return Padding(
-      padding: EdgeInsets.only(
-        bottom: MediaQuery.of(context).viewInsets.bottom,
-      ),
+      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
       child: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
         child: Column(
@@ -479,11 +350,7 @@ class _NewAssignmentSheetState extends ConsumerState<_NewAssignmentSheet> {
               children: [
                 const Text(
                   'New Assignment',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w700,
-                    color: Color(0xFF111827),
-                  ),
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: Color(0xFF111827)),
                 ),
                 const Spacer(),
                 IconButton(
@@ -497,114 +364,75 @@ class _NewAssignmentSheetState extends ConsumerState<_NewAssignmentSheet> {
             const Divider(height: 20),
             const SizedBox(height: 4),
 
-            // ── BASIC INFO ──
-            _sectionLabel('BASIC INFO'),
+            // BASIC INFO
+            DiklySectionLabel('BASIC INFO'),
 
-            _fieldLabel('TITLE *'),
-            TextField(
-              controller: _titleCtrl,
-              decoration: _fieldDeco(
-                  hint: 'e.g. Research Report — Climate Change'),
-            ),
+            DiklySectionLabel('TITLE *'),
+            TextField(controller: _titleCtrl, decoration: _fieldDeco(hint: 'e.g. Research Report — Climate Change')),
             const SizedBox(height: 16),
 
-            _fieldLabel('DESCRIPTION (optional)'),
-            TextField(
-              controller: _descCtrl,
-              maxLines: 3,
-              decoration: _fieldDeco(
-                  hint: 'Brief overview visible to students...'),
-            ),
+            DiklySectionLabel('DESCRIPTION (optional)'),
+            TextField(controller: _descCtrl, maxLines: 3, decoration: _fieldDeco(hint: 'Brief overview visible to students...')),
             const SizedBox(height: 16),
 
-            _fieldLabel('COURSE *'),
+            DiklySectionLabel('COURSE *'),
             DropdownButtonFormField<Course>(
               value: _selectedCourse,
-              hint: const Text(
-                'Select a course...',
-                style: TextStyle(color: Color(0xFF9CA3AF), fontSize: 14),
-              ),
+              hint: const Text('Select a course...', style: TextStyle(color: Color(0xFF9CA3AF), fontSize: 14)),
               decoration: InputDecoration(
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(10),
-                  borderSide:
-                      const BorderSide(color: Color(0xFFE5E7EB)),
+                  borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
                 ),
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(10),
-                  borderSide:
-                      const BorderSide(color: Color(0xFFE5E7EB)),
+                  borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(10),
-                  borderSide: const BorderSide(
-                      color: Color(0xFF2563EB), width: 2),
+                  borderSide: const BorderSide(color: Color(0xFF2563EB), width: 2),
                 ),
-                contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 14, vertical: 12),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                 filled: true,
                 fillColor: Colors.white,
               ),
               items: widget.courses
-                  .map(
-                    (c) => DropdownMenuItem(
-                      value: c,
-                      child: Text(c.title,
-                          style: const TextStyle(fontSize: 14)),
-                    ),
-                  )
+                  .map((c) => DropdownMenuItem(value: c, child: Text(c.title, style: const TextStyle(fontSize: 14))))
                   .toList(),
-              onChanged: (c) =>
-                  setState(() => _selectedCourse = c),
+              onChanged: (c) => setState(() => _selectedCourse = c),
             ),
             const SizedBox(height: 20),
 
-            // ── SCHEDULE ──
-            _sectionLabel('SCHEDULE'),
+            // SCHEDULE
+            DiklySectionLabel('SCHEDULE'),
 
-            _fieldLabel('RELEASE DATE *'),
+            DiklySectionLabel('RELEASE DATE *'),
             GestureDetector(
               onTap: () => _pickDate(false),
               child: AbsorbPointer(
                 child: TextField(
                   readOnly: true,
                   decoration: _fieldDeco(
-                    hint: _releaseDate != null
-                        ? fmt.format(_releaseDate!)
-                        : 'Select release date',
-                    suffixIcon: const Icon(
-                        Icons.calendar_today_outlined,
-                        color: Color(0xFF9CA3AF),
-                        size: 18),
+                    hint: _releaseDate != null ? fmt.format(_releaseDate!) : 'Select release date',
+                    suffixIcon: const Icon(Icons.calendar_today_outlined, color: Color(0xFF9CA3AF), size: 18),
                   ),
-                  controller: TextEditingController(
-                    text: _releaseDate != null
-                        ? fmt.format(_releaseDate!)
-                        : '',
-                  ),
+                  controller: TextEditingController(text: _releaseDate != null ? fmt.format(_releaseDate!) : ''),
                 ),
               ),
             ),
             const SizedBox(height: 16),
 
-            _fieldLabel('DUE DATE *'),
+            DiklySectionLabel('DUE DATE *'),
             GestureDetector(
               onTap: () => _pickDate(true),
               child: AbsorbPointer(
                 child: TextField(
                   readOnly: true,
                   decoration: _fieldDeco(
-                    hint: _dueDate != null
-                        ? fmt.format(_dueDate!)
-                        : 'Select due date',
-                    suffixIcon: const Icon(
-                        Icons.calendar_today_outlined,
-                        color: Color(0xFF9CA3AF),
-                        size: 18),
+                    hint: _dueDate != null ? fmt.format(_dueDate!) : 'Select due date',
+                    suffixIcon: const Icon(Icons.calendar_today_outlined, color: Color(0xFF9CA3AF), size: 18),
                   ),
-                  controller: TextEditingController(
-                    text: _dueDate != null ? fmt.format(_dueDate!) : '',
-                  ),
+                  controller: TextEditingController(text: _dueDate != null ? fmt.format(_dueDate!) : ''),
                 ),
               ),
             ),
@@ -612,20 +440,16 @@ class _NewAssignmentSheetState extends ConsumerState<_NewAssignmentSheet> {
 
             CheckboxListTile(
               value: _allowFile,
-              onChanged: (v) =>
-                  setState(() => _allowFile = v ?? true),
-              title: const Text('Allow file submission',
-                  style: TextStyle(fontSize: 14)),
+              onChanged: (v) => setState(() => _allowFile = v ?? true),
+              title: const Text('Allow file submission', style: TextStyle(fontSize: 14)),
               controlAffinity: ListTileControlAffinity.leading,
               contentPadding: EdgeInsets.zero,
               dense: true,
             ),
             CheckboxListTile(
               value: _allowLate,
-              onChanged: (v) =>
-                  setState(() => _allowLate = v ?? false),
-              title: const Text('Allow late submission',
-                  style: TextStyle(fontSize: 14)),
+              onChanged: (v) => setState(() => _allowLate = v ?? false),
+              title: const Text('Allow late submission', style: TextStyle(fontSize: 14)),
               controlAffinity: ListTileControlAffinity.leading,
               contentPadding: EdgeInsets.zero,
               dense: true,
@@ -634,18 +458,13 @@ class _NewAssignmentSheetState extends ConsumerState<_NewAssignmentSheet> {
 
             const Text(
               'ASSIGNMENT BRIEF (optional — PDF / Word, max 15 MB)',
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-                color: Color(0xFF6B7280),
-              ),
+              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF6B7280)),
             ),
             const SizedBox(height: 8),
             GestureDetector(
               onTap: () {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                      content: Text('File upload coming soon')),
+                  const SnackBar(content: Text('File upload coming soon')),
                 );
               },
               child: Container(
@@ -659,14 +478,9 @@ class _NewAssignmentSheetState extends ConsumerState<_NewAssignmentSheet> {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.upload_file_outlined,
-                          color: Color(0xFF9CA3AF), size: 22),
+                      Icon(Icons.upload_file_outlined, color: Color(0xFF9CA3AF), size: 22),
                       SizedBox(width: 8),
-                      Text(
-                        'Tap to upload file',
-                        style: TextStyle(
-                            fontSize: 14, color: Color(0xFF9CA3AF)),
-                      ),
+                      Text('Tap to upload file', style: TextStyle(fontSize: 14, color: Color(0xFF9CA3AF))),
                     ],
                   ),
                 ),
@@ -683,8 +497,7 @@ class _NewAssignmentSheetState extends ConsumerState<_NewAssignmentSheet> {
                       foregroundColor: const Color(0xFF6B7280),
                       side: const BorderSide(color: Color(0xFFE5E7EB)),
                       padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10)),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                     ),
                     child: const Text('Cancel'),
                   ),
@@ -696,27 +509,17 @@ class _NewAssignmentSheetState extends ConsumerState<_NewAssignmentSheet> {
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF2563EB),
                       foregroundColor: Colors.white,
-                      padding:
-                          const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10)),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                       elevation: 0,
                     ),
                     icon: _saving
                         ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.white,
-                            ),
+                            width: 16, height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                           )
                         : const Icon(Icons.save_outlined, size: 18),
-                    label: const Text(
-                      'Save Assignment',
-                      style: TextStyle(
-                          fontSize: 14, fontWeight: FontWeight.w600),
-                    ),
+                    label: const Text('Save Assignment', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
                   ),
                 ),
               ],

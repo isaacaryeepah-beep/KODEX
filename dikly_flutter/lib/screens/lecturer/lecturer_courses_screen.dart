@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../core/theme.dart';
 import '../../models/course.dart';
 import '../../providers/courses_provider.dart';
 import '../../widgets/error_view.dart';
+import '../../widgets/ds/dikly_ds.dart';
 
 class LecturerCoursesScreen extends ConsumerWidget {
   const LecturerCoursesScreen({super.key});
@@ -38,79 +38,33 @@ class _CoursesBody extends StatelessWidget {
       child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          // Header row
-          Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: const [
-                    Text(
-                      'Courses',
-                      style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: Color(0xFF111827)),
-                    ),
-                    SizedBox(height: 2),
-                    Text(
-                      'Manage academic courses',
-                      style: TextStyle(fontSize: 13, color: DiklyColors.textSecondary),
-                    ),
-                  ],
-                ),
+          DiklyScreenHeader(
+            title: 'Courses',
+            subtitle: 'Manage academic courses',
+            action: ElevatedButton.icon(
+              onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Create Course — coming soon')),
               ),
-              ElevatedButton.icon(
-                onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Create Course — coming soon')),
-                ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: DiklyColors.primary,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                  elevation: 0,
-                ),
-                icon: const Icon(Icons.add, size: 18),
-                label: const Text('Create Course', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF2563EB),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                elevation: 0,
               ),
-            ],
+              icon: const Icon(Icons.add, size: 18),
+              label: const Text('+ Create Course', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+            ),
           ),
-          const SizedBox(height: 16),
 
           if (courses.isEmpty)
-            _EmptyState()
+            const DiklyEmptyState(
+              icon: Icons.book_outlined,
+              title: 'No courses yet',
+              subtitle: 'Create your first course to get started',
+            )
           else
-            ...courses.map((c) => _CourseCard(course: c, context: context)),
-        ],
-      ),
-    );
-  }
-}
-
-class _EmptyState extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(top: 60),
-      child: Column(
-        children: [
-          Container(
-            width: 72,
-            height: 72,
-            decoration: BoxDecoration(
-              color: DiklyColors.primary.withOpacity(0.1),
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(Icons.book_outlined, size: 36, color: DiklyColors.primary),
-          ),
-          const SizedBox(height: 16),
-          const Text(
-            'No courses yet',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: Color(0xFF111827)),
-          ),
-          const SizedBox(height: 6),
-          const Text(
-            'Create your first course to get started',
-            style: TextStyle(fontSize: 13, color: DiklyColors.textSecondary),
-          ),
+            ...courses.map((c) => _CourseCard(course: c)),
         ],
       ),
     );
@@ -119,8 +73,7 @@ class _EmptyState extends StatelessWidget {
 
 class _CourseCard extends StatelessWidget {
   final Course course;
-  final BuildContext context;
-  const _CourseCard({required this.course, required this.context});
+  const _CourseCard({required this.course});
 
   @override
   Widget build(BuildContext context) {
@@ -129,20 +82,8 @@ class _CourseCard extends StatelessWidget {
     final enrolled = course.studentCount ?? 0;
     final instructor = course.instructorName ?? '';
 
-    return Container(
+    return DiklyCard(
       margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -153,7 +94,7 @@ class _CourseCard extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                   decoration: BoxDecoration(
-                    color: DiklyColors.primary.withOpacity(0.1),
+                    color: const Color(0xFF2563EB).withOpacity(0.1),
                     borderRadius: BorderRadius.circular(6),
                   ),
                   child: Text(
@@ -161,11 +102,11 @@ class _CourseCard extends StatelessWidget {
                     style: const TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.w700,
-                      color: DiklyColors.primary,
+                      color: Color(0xFF2563EB),
                     ),
                   ),
                 ),
-                const SizedBox(width: 10),
+                const SizedBox(width: 8),
               ],
               Expanded(
                 child: Text(
@@ -180,65 +121,27 @@ class _CourseCard extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 8),
-
-          // Instructor + badges row
-          Row(
-            children: [
-              const SizedBox(width: 2),
-              if (instructor.isNotEmpty) ...[
-                Text(
-                  instructor,
-                  style: const TextStyle(fontSize: 12, color: DiklyColors.textSecondary),
-                ),
-                const SizedBox(width: 8),
-              ],
-            ],
-          ),
           const SizedBox(height: 6),
 
-          // Enrolled count
+          if (instructor.isNotEmpty) ...[
+            Row(
+              children: [
+                Text(instructor, style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280))),
+              ],
+            ),
+          ],
+          const SizedBox(height: 4),
+
           Row(
             children: [
-              const Icon(Icons.people_outlined, size: 14, color: DiklyColors.textSecondary),
+              const Icon(Icons.people_outlined, size: 14, color: Color(0xFF6B7280)),
               const SizedBox(width: 4),
-              Text(
-                '$enrolled enrolled',
-                style: const TextStyle(fontSize: 12, color: DiklyColors.textSecondary),
-              ),
+              Text('$enrolled enrolled', style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280))),
             ],
           ),
           const SizedBox(height: 10),
 
-          // Status badge
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            decoration: BoxDecoration(
-              color: isApproved
-                  ? const Color(0xFFDCFCE7)
-                  : const Color(0xFFFEF3C7),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  isApproved ? Icons.check : Icons.schedule,
-                  size: 12,
-                  color: isApproved ? const Color(0xFF16A34A) : const Color(0xFFD97706),
-                ),
-                const SizedBox(width: 4),
-                Text(
-                  isApproved ? 'Approved' : 'Pending',
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    color: isApproved ? const Color(0xFF16A34A) : const Color(0xFFD97706),
-                  ),
-                ),
-              ],
-            ),
-          ),
+          isApproved ? DiklyBadge.approved() : DiklyBadge.pending(),
           const SizedBox(height: 14),
 
           // Action buttons
@@ -249,7 +152,7 @@ class _CourseCard extends StatelessWidget {
               _ActionButton(
                 label: 'Upload Students',
                 icon: Icons.upload_outlined,
-                color: DiklyColors.primary,
+                color: const Color(0xFF2563EB),
                 filled: true,
                 onTap: () => ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(content: Text('Upload Students — coming soon')),
@@ -258,7 +161,7 @@ class _CourseCard extends StatelessWidget {
               _ActionButton(
                 label: 'View Roster',
                 icon: Icons.people_outline,
-                color: DiklyColors.textSecondary,
+                color: const Color(0xFF6B7280),
                 filled: false,
                 onTap: () => ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(content: Text('View Roster — coming soon')),

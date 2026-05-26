@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../core/theme.dart';
+import '../../widgets/ds/dikly_ds.dart';
 
 class FaqScreen extends StatefulWidget {
   const FaqScreen({super.key});
@@ -35,232 +35,138 @@ class _FaqScreenState extends State<FaqScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
     return Scaffold(
-      backgroundColor: DiklyColors.background,
+      backgroundColor: const Color(0xFFF1F5F9),
       appBar: AppBar(
-        title: const Text('FAQ & Help'),
+        backgroundColor: Colors.white,
+        elevation: 0,
+        surfaceTintColor: Colors.transparent,
+        title: const Text('FAQ Center'),
         leading: BackButton(onPressed: () => Navigator.of(context).maybePop()),
       ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          // Page header
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'FAQ Center',
-                style: theme.textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.w800,
-                  color: DiklyColors.textPrimary,
-                ),
-              ),
-              const SizedBox(height: 4),
-              const Text(
-                'Ask questions, browse answers, get instant AI help',
-                style: TextStyle(
-                  fontSize: 13,
-                  color: DiklyColors.textSecondary,
-                ),
-              ),
-            ],
+          DiklyScreenHeader(
+            title: 'FAQ Center',
+            subtitle: 'Ask questions, browse answers, get instant AI help',
           ),
-          const SizedBox(height: 20),
 
           // Ask a Question card
-          _Card(
+          DiklyCard(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'Ask a Question',
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w700,
-                    color: DiklyColors.textPrimary,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: _askController,
-                  decoration: const InputDecoration(
-                    hintText: 'e.g. How do I mark attendance?',
-                    prefixIcon: Icon(Icons.help_outline_rounded,
-                        color: DiklyColors.textSecondary, size: 20),
-                    contentPadding:
-                        EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton.icon(
-                    onPressed: _askAi,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF2563EB),
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10)),
-                      elevation: 0,
+                const Text('Ask a Question', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: Color(0xFF111827))),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _askController,
+                        decoration: InputDecoration(
+                          hintText: 'e.g. How do I mark attendance?',
+                          filled: true,
+                          fillColor: const Color(0xFFF9FAFB),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: const BorderSide(color: Color(0xFF2563EB), width: 2),
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        ),
+                      ),
                     ),
-                    icon: const Icon(Icons.auto_awesome_outlined, size: 16),
-                    label: const Text(
-                      'Ask AI',
-                      style: TextStyle(
-                          fontSize: 14, fontWeight: FontWeight.w600),
+                    const SizedBox(width: 8),
+                    SizedBox(
+                      height: 48,
+                      child: ElevatedButton(
+                        onPressed: _askAi,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF2563EB),
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          elevation: 0,
+                        ),
+                        child: const Text('Ask AI', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                      ),
                     ),
-                  ),
+                  ],
                 ),
               ],
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
 
           // Knowledge Base card
-          _Card(
+          DiklyCard(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
                   children: [
                     const Expanded(
-                      child: Text(
-                        'Knowledge Base',
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
-                          color: DiklyColors.textPrimary,
-                        ),
-                      ),
+                      child: Text('Knowledge Base', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: Color(0xFF111827))),
                     ),
-                    // Category dropdown
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10),
-                      decoration: BoxDecoration(
-                        border: Border.all(color: DiklyColors.border),
-                        borderRadius: BorderRadius.circular(8),
+                    OutlinedButton(
+                      onPressed: () {},
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFF2563EB),
+                        side: const BorderSide(color: Color(0xFFBFDBFE)),
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                       ),
                       child: DropdownButtonHideUnderline(
                         child: DropdownButton<String>(
                           value: _selectedCategory,
-                          icon: const Icon(
-                            Icons.keyboard_arrow_down_rounded,
-                            color: DiklyColors.textSecondary,
-                            size: 18,
-                          ),
-                          style: const TextStyle(
-                            color: DiklyColors.textPrimary,
-                            fontSize: 12,
-                          ),
+                          icon: const Icon(Icons.expand_more, size: 16, color: Color(0xFF2563EB)),
+                          style: const TextStyle(color: Color(0xFF2563EB), fontSize: 12),
                           isDense: true,
                           items: _categories
-                              .map(
-                                (c) => DropdownMenuItem(
-                                  value: c,
-                                  child: Text(c),
-                                ),
-                              )
+                              .map((c) => DropdownMenuItem(value: c, child: Text(c)))
                               .toList(),
-                          onChanged: (v) => setState(
-                              () => _selectedCategory = v ?? 'All categories'),
+                          onChanged: (v) => setState(() => _selectedCategory = v ?? 'All categories'),
                         ),
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 16),
-                // Empty state
-                Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: const [
-                      Icon(Icons.menu_book_outlined,
-                          size: 40, color: DiklyColors.border),
-                      SizedBox(height: 10),
-                      Text(
-                        'No FAQs found yet.',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: DiklyColors.textSecondary,
-                        ),
-                      ),
-                      SizedBox(height: 4),
-                      Text(
-                        'Check back soon or ask the AI above.',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: DiklyColors.textSecondary,
-                        ),
-                      ),
-                    ],
+                const SizedBox(height: 12),
+                const Center(
+                  child: Text(
+                    'No FAQs found yet. Check back soon or ask the AI above.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 13, color: Color(0xFF6B7280)),
                   ),
                 ),
               ],
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
 
           // My Question History card
-          _Card(
+          DiklyCard(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: const [
-                Text(
-                  'My Question History',
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w700,
-                    color: DiklyColors.textPrimary,
-                  ),
-                ),
-                SizedBox(height: 14),
-                Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.history_rounded,
-                          size: 36, color: DiklyColors.border),
-                      SizedBox(height: 8),
-                      Text(
-                        'You have not asked any questions yet.',
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: DiklyColors.textSecondary,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
+                Text('My Question History', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: Color(0xFF111827))),
+                SizedBox(height: 12),
+                Text('You have not asked any questions yet.', style: TextStyle(fontSize: 13, color: Color(0xFF6B7280))),
               ],
             ),
           ),
           const SizedBox(height: 32),
         ],
       ),
-    );
-  }
-}
-
-class _Card extends StatelessWidget {
-  final Widget child;
-  const _Card({required this.child});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: DiklyColors.surface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: DiklyColors.border),
-      ),
-      child: child,
     );
   }
 }

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import '../../core/theme.dart';
 import '../../widgets/stat_card.dart';
+import '../../widgets/ds/dikly_ds.dart';
 
 class SubscriptionScreen extends StatelessWidget {
   const SubscriptionScreen({super.key});
@@ -8,229 +8,152 @@ class SubscriptionScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: DiklyColors.background,
+      backgroundColor: const Color(0xFFF1F5F9),
       appBar: AppBar(
-        title: const Text('Subscription'),
+        backgroundColor: Colors.white,
+        elevation: 0,
+        surfaceTintColor: Colors.transparent,
+        title: const Text('My Subscription'),
         leading: BackButton(onPressed: () => Navigator.of(context).maybePop()),
       ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          // Page header
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'My Subscription',
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.w800,
-                  color: DiklyColors.textPrimary,
-                ),
-              ),
-              const SizedBox(height: 4),
-              const Text(
-                'Your personal DIKLY access · ₵30 / semester · Paystack only',
-                style: TextStyle(fontSize: 13, color: DiklyColors.textSecondary),
-              ),
-            ],
+          DiklyScreenHeader(
+            title: 'My Subscription',
+            subtitle: 'Your personal DIKLY access · ₵30 / semester · Paystack only',
           ),
-          const SizedBox(height: 20),
 
-          // 2x2 Stat grid
-          Row(
-            children: [
-              Expanded(
-                child: StatCard(
-                  value: 'Free Trial',
-                  title: 'Subscription Status',
-                  icon: Icons.verified_outlined,
-                  color: DiklyColors.primary,
-                ),
+          // 2×2 stat cards
+          GridView.count(
+            crossAxisCount: 2,
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            crossAxisSpacing: 12,
+            mainAxisSpacing: 12,
+            childAspectRatio: 1.4,
+            children: const [
+              StatCard(
+                value: 'Free Trial',
+                title: 'SUBSCRIPTION STATUS',
+                icon: Icons.hourglass_empty,
+                color: Color(0xFF2563EB),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: StatCard(
-                  value: 'Free Trial',
-                  title: 'Current Plan',
-                  icon: Icons.card_membership_outlined,
-                  color: DiklyColors.success,
-                ),
+              StatCard(
+                value: 'Free Trial',
+                title: 'CURRENT PLAN',
+                icon: Icons.star_outline,
+                color: Color(0xFF16A34A),
               ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: StatCard(
-                  value: '27',
-                  title: 'Days Remaining',
-                  icon: Icons.hourglass_bottom_outlined,
-                  color: DiklyColors.warning,
-                ),
+              StatCard(
+                value: '27',
+                title: 'DAYS REMAINING',
+                icon: Icons.calendar_today,
+                color: Color(0xFFD97706),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: StatCard(
-                  value: '—',
-                  title: 'Trial Ends',
-                  icon: Icons.event_outlined,
-                  color: const Color(0xFF7C3AED),
-                ),
+              StatCard(
+                value: '—',
+                title: 'TRIAL ENDS',
+                icon: Icons.event_outlined,
+                color: Color(0xFF7C3AED),
               ),
             ],
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 16),
 
           // Subscribe Now card
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: DiklyColors.surface,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: DiklyColors.border),
-            ),
+          DiklyCard(
+            borderRadius: 14,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.baseline,
-                  textBaseline: TextBaseline.alphabetic,
-                  children: const [
-                    Text(
-                      'Semester Plan',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                        color: DiklyColors.textPrimary,
+                const Text('Subscribe Now', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Color(0xFF111827))),
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF9FAFB),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFFE5E7EB)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: const [
+                          Text('Semester Plan', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: Color(0xFF111827))),
+                          Spacer(),
+                          Text('₵30', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: Color(0xFF2563EB))),
+                        ],
                       ),
-                    ),
-                    Spacer(),
-                    Text(
-                      '₵30',
-                      style: TextStyle(
-                        fontSize: 28,
-                        fontWeight: FontWeight.w900,
-                        color: Color(0xFF2563EB),
+                      const SizedBox(height: 6),
+                      const Text(
+                        '⏱ 1 semester (16 weeks) · Auto-stacks if renewed early',
+                        style: TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: 10),
+                      ...[
+                        'Full platform access',
+                        'Attendance marking & session management',
+                        'Assessment creation & grading',
+                        'Grade book & reports',
+                        'Renew any time — days stack up',
+                      ].map((f) => Padding(
+                        padding: const EdgeInsets.only(bottom: 6),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Icon(Icons.circle, size: 6, color: Color(0xFF6B7280)),
+                            const SizedBox(width: 8),
+                            Expanded(child: Text(f, style: const TextStyle(fontSize: 13, color: Color(0xFF374151)))),
+                          ],
+                        ),
+                      )),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFEF9C3),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: const Color(0xFFFDE68A)),
+                  ),
+                  child: const Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('⏳', style: TextStyle(fontSize: 16)),
+                      SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          '30-day free trial active — 27 days left. Subscribe before it ends to avoid interruption.',
+                          style: TextStyle(fontSize: 12, color: Color(0xFF92400E)),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                DiklyPrimaryButton(
+                  label: '💳  Pay ₵30 with Paystack',
+                  color: const Color(0xFF1D4ED8),
+                  onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Redirecting to Paystack...')),
+                  ),
                 ),
                 const SizedBox(height: 8),
-                const Text(
-                  '⏱ 1 semester (16 weeks) · Auto-stacks if renewed early',
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: DiklyColors.textSecondary,
-                  ),
-                ),
-                const SizedBox(height: 14),
-                // Feature list
-                _FeatureRow('Full platform access'),
-                _FeatureRow(
-                    'Attendance marking & session management'),
-                _FeatureRow('Assessment creation & grading'),
-                _FeatureRow('Grade book & reports'),
-                _FeatureRow(
-                    'Renew any time — days stack up'),
-              ],
-            ),
-          ),
-          const SizedBox(height: 16),
-
-          // Amber warning banner
-          Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: const Color(0xFFFEF9C3),
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: const Color(0xFFFBBF24)),
-            ),
-            child: const Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('⏳', style: TextStyle(fontSize: 16)),
-                SizedBox(width: 8),
-                Expanded(
+                const Center(
                   child: Text(
-                    '30-day free trial active — 27 days left. Subscribe before it ends to avoid interruption.',
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: Color(0xFF92400E),
-                      height: 1.4,
-                    ),
+                    'Secured by Paystack · Paid in GHS (₵) · Mobile Money & Card accepted',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 11, color: Color(0xFF6B7280)),
                   ),
                 ),
               ],
-            ),
-          ),
-          const SizedBox(height: 16),
-
-          // Pay button
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                      content: Text('Redirecting to Paystack...')),
-                );
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF1E3A5F),
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10)),
-                elevation: 0,
-              ),
-              child: const Text(
-                '💳  Pay ₵30 with Paystack',
-                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
-              ),
-            ),
-          ),
-          const SizedBox(height: 10),
-
-          // Caption
-          const Center(
-            child: Text(
-              'Secured by Paystack · Paid in GHS (₵) · Mobile Money & Card accepted',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 11,
-                color: DiklyColors.textSecondary,
-              ),
             ),
           ),
           const SizedBox(height: 32),
-        ],
-      ),
-    );
-  }
-}
-
-class _FeatureRow extends StatelessWidget {
-  final String text;
-  const _FeatureRow(this.text);
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Icon(Icons.check_circle_rounded,
-              size: 16, color: DiklyColors.success),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              text,
-              style: const TextStyle(
-                  fontSize: 13, color: DiklyColors.textSecondary, height: 1.4),
-            ),
-          ),
         ],
       ),
     );

@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../core/api.dart';
 import '../../core/theme.dart';
+import '../../widgets/ds/dikly_ds.dart';
 
 class LecturerAttendanceScreen extends ConsumerStatefulWidget {
   const LecturerAttendanceScreen({super.key});
@@ -53,30 +54,18 @@ class _LecturerAttendanceScreenState
                 color: const Color(0xFFF3F4F6),
                 borderRadius: BorderRadius.circular(16),
               ),
-              child: const Icon(
-                Icons.devices_other,
-                size: 32,
-                color: Color(0xFF9CA3AF),
-              ),
+              child: const Icon(Icons.devices_other, size: 32, color: Color(0xFF9CA3AF)),
             ),
             const SizedBox(height: 16),
             const Text(
               'Device Not Paired',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w800,
-                color: Color(0xFF111827),
-              ),
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Color(0xFF111827)),
             ),
             const SizedBox(height: 8),
             const Text(
               "You haven't paired a classroom device yet.\nOpen Attendance Device, generate a pairing code, and enter it on your ESP32.",
               textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 13,
-                color: Color(0xFF6B7280),
-                height: 1.5,
-              ),
+              style: TextStyle(fontSize: 13, color: Color(0xFF6B7280), height: 1.5),
             ),
             const SizedBox(height: 20),
             Row(
@@ -88,8 +77,7 @@ class _LecturerAttendanceScreenState
                       foregroundColor: const Color(0xFF6B7280),
                       side: const BorderSide(color: Color(0xFFE5E7EB)),
                       padding: const EdgeInsets.symmetric(vertical: 10),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8)),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                     ),
                     child: const Text('Cancel'),
                   ),
@@ -105,14 +93,10 @@ class _LecturerAttendanceScreenState
                       backgroundColor: DiklyColors.primary,
                       foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(vertical: 10),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8)),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                       elevation: 0,
                     ),
-                    child: const Text(
-                      'Open Pairing',
-                      style: TextStyle(fontSize: 13),
-                    ),
+                    child: const Text('Open Pairing', style: TextStyle(fontSize: 13)),
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -124,10 +108,8 @@ class _LecturerAttendanceScreenState
                   style: OutlinedButton.styleFrom(
                     foregroundColor: const Color(0xFF6B7280),
                     side: const BorderSide(color: Color(0xFFE5E7EB)),
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 10, vertical: 10),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8)),
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                   ),
                   child: const Row(
                     mainAxisSize: MainAxisSize.min,
@@ -155,47 +137,17 @@ class _LecturerAttendanceScreenState
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            // Header
-            const Text(
-              'Attendance Sessions',
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.w800,
-                color: Color(0xFF111827),
-              ),
+            DiklyScreenHeader(
+              title: 'Attendance Sessions',
+              subtitle: 'Manage attendance sessions',
             ),
-            const SizedBox(height: 4),
-            const Text(
-              'Manage attendance sessions',
-              style: TextStyle(fontSize: 13, color: Color(0xFF6B7280)),
+
+            DiklyPrimaryButton(
+              label: 'Start New Session',
+              onPressed: _onStartSession,
             ),
             const SizedBox(height: 16),
 
-            // Start New Session button
-            SizedBox(
-              width: double.infinity,
-              height: 52,
-              child: ElevatedButton(
-                onPressed: _onStartSession,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: DiklyColors.primary,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10)),
-                  elevation: 0,
-                ),
-                child: const Text(
-                  'Start New Session',
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            // Sessions list
             if (_loading)
               const Center(
                 child: Padding(
@@ -204,23 +156,11 @@ class _LecturerAttendanceScreenState
                 ),
               )
             else if (_sessions.isEmpty)
-              Container(
-                padding: const EdgeInsets.all(32),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.06),
-                      blurRadius: 8,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
+              DiklyCard(
                 child: const Center(
-                  child: Text(
-                    'No sessions found',
-                    style: TextStyle(fontSize: 14, color: Color(0xFF6B7280)),
+                  child: Padding(
+                    padding: EdgeInsets.all(16),
+                    child: Text('No sessions found', style: TextStyle(fontSize: 14, color: Color(0xFF6B7280))),
                   ),
                 ),
               )
@@ -239,8 +179,7 @@ class _SessionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final present =
-        session['presentCount'] ?? session['present'] ?? 0;
+    final present = session['presentCount'] ?? session['present'] ?? 0;
     final total = session['totalStudents'] ?? session['total'] ?? 0;
     final title = session['title']?.toString() ??
         session['meetingTitle']?.toString() ??
@@ -250,31 +189,19 @@ class _SessionCard extends StatelessWidget {
             DateTime.tryParse(session['date'].toString()) ?? DateTime.now())
         : '';
 
-    return Container(
+    return DiklyCard(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.06),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
       child: Row(
         children: [
           Container(
             width: 40,
             height: 40,
             decoration: BoxDecoration(
-              color: DiklyColors.primary.withOpacity(0.1),
+              color: const Color(0xFF2563EB).withOpacity(0.1),
               borderRadius: BorderRadius.circular(10),
             ),
-            child: const Icon(Icons.checklist,
-                color: DiklyColors.primary, size: 20),
+            child: const Icon(Icons.checklist, color: Color(0xFF2563EB), size: 20),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -283,25 +210,17 @@ class _SessionCard extends StatelessWidget {
               children: [
                 Text(
                   title,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w600,
-                    fontSize: 14,
-                    color: Color(0xFF111827),
-                  ),
+                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: Color(0xFF111827)),
                 ),
                 Text(
                   '$present / $total present',
-                  style: const TextStyle(
-                      fontSize: 12, color: Color(0xFF6B7280)),
+                  style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
                 ),
               ],
             ),
           ),
           if (date.isNotEmpty)
-            Text(
-              date,
-              style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
-            ),
+            Text(date, style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280))),
         ],
       ),
     );

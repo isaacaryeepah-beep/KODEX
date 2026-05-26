@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import '../../core/theme.dart';
+import '../../widgets/ds/dikly_ds.dart';
 
 class LecturerAttendanceDeviceScreen extends StatefulWidget {
   const LecturerAttendanceDeviceScreen({super.key});
@@ -35,100 +35,45 @@ class _LecturerAttendanceDeviceScreenState
         leading: BackButton(onPressed: () => Navigator.of(context).maybePop()),
         title: const Text(
           'Attendance Device',
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w700,
-            color: Color(0xFF111827),
-          ),
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Color(0xFF111827)),
         ),
       ),
-      body: Padding(
+      body: ListView(
         padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Attendance Device',
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.w800,
-                color: Color(0xFF111827),
-              ),
+        children: [
+          DiklyScreenHeader(
+            title: 'Attendance Device',
+            subtitle: 'Your dedicated ESP32 classroom device',
+          ),
+          DiklyCard(
+            borderRadius: 16,
+            padding: const EdgeInsets.all(32),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.wifi_tethering, size: 64, color: Color(0xFF9CA3AF)),
+                const SizedBox(height: 16),
+                const Text(
+                  'Connect Your Classroom Device',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: Color(0xFF111827)),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  "Tap Connect Device and we'll walk you through the setup automatically.",
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 13, color: Color(0xFF6B7280), height: 1.5),
+                ),
+                const SizedBox(height: 24),
+                DiklyPrimaryButton(
+                  label: '+ Connect Device',
+                  color: const Color(0xFF3F51B5),
+                  onPressed: _showPairingSheet,
+                ),
+              ],
             ),
-            const SizedBox(height: 4),
-            const Text(
-              'Your dedicated ESP32 classroom device',
-              style: TextStyle(fontSize: 13, color: Color(0xFF6B7280)),
-            ),
-            const SizedBox(height: 24),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(32),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.06),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-              ),
-              child: Column(
-                children: [
-                  const Icon(
-                    Icons.wifi_tethering,
-                    size: 64,
-                    color: Color(0xFF9CA3AF),
-                  ),
-                  const SizedBox(height: 16),
-                  const Text(
-                    'Connect Your Classroom Device',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w700,
-                      color: Color(0xFF111827),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    "Tap Connect Device and we'll walk you through the setup automatically.",
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: Color(0xFF6B7280),
-                      height: 1.5,
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 52,
-                    child: ElevatedButton(
-                      onPressed: _showPairingSheet,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF3F51B5),
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12)),
-                        elevation: 0,
-                      ),
-                      child: const Text(
-                        '+ Connect Device',
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -190,11 +135,7 @@ class _PairingBottomSheetState extends State<_PairingBottomSheet> {
       child: Center(
         child: Text(
           number,
-          style: const TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.w700,
-            fontSize: 14,
-          ),
+          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 14),
         ),
       ),
     );
@@ -203,8 +144,7 @@ class _PairingBottomSheetState extends State<_PairingBottomSheet> {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding:
-          EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
       child: SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
         child: Column(
@@ -236,17 +176,12 @@ class _PairingBottomSheetState extends State<_PairingBottomSheet> {
                     children: [
                       Text(
                         'Get a pairing code',
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
-                          color: Color(0xFF111827),
-                        ),
+                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: Color(0xFF111827)),
                       ),
                       SizedBox(height: 2),
                       Text(
                         'Tap Generate Code to create a one-time code.',
-                        style: TextStyle(
-                            fontSize: 13, color: Color(0xFF6B7280)),
+                        style: TextStyle(fontSize: 13, color: Color(0xFF6B7280)),
                       ),
                     ],
                   ),
@@ -268,19 +203,14 @@ class _PairingBottomSheetState extends State<_PairingBottomSheet> {
             ),
             const SizedBox(height: 8),
             Center(
-              child: Text(
-                _timerLabel,
-                style: const TextStyle(
-                    fontSize: 13, color: Color(0xFF6B7280)),
-              ),
+              child: Text(_timerLabel, style: const TextStyle(fontSize: 13, color: Color(0xFF6B7280))),
             ),
             const SizedBox(height: 6),
             const Center(
               child: Text(
                 'Auto-filled in the setup portal — no need to type it',
                 textAlign: TextAlign.center,
-                style: TextStyle(
-                    fontSize: 12, color: Color(0xFF9CA3AF)),
+                style: TextStyle(fontSize: 12, color: Color(0xFF9CA3AF)),
               ),
             ),
             const SizedBox(height: 20),
@@ -297,17 +227,12 @@ class _PairingBottomSheetState extends State<_PairingBottomSheet> {
                     children: [
                       Text(
                         'Connect to the device WiFi',
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
-                          color: Color(0xFF111827),
-                        ),
+                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: Color(0xFF111827)),
                       ),
                       SizedBox(height: 2),
                       Text(
                         'Power on the ESP32, then join its hotspot',
-                        style: TextStyle(
-                            fontSize: 13, color: Color(0xFF6B7280)),
+                        style: TextStyle(fontSize: 13, color: Color(0xFF6B7280)),
                       ),
                     ],
                   ),
@@ -315,15 +240,9 @@ class _PairingBottomSheetState extends State<_PairingBottomSheet> {
               ],
             ),
             const SizedBox(height: 12),
-            const Text(
-              '1  Power on the ESP32 device — its LED will blink.',
-              style: TextStyle(fontSize: 13, color: Color(0xFF374151)),
-            ),
+            const Text('1  Power on the ESP32 device — its LED will blink.', style: TextStyle(fontSize: 13, color: Color(0xFF374151))),
             const SizedBox(height: 6),
-            const Text(
-              '2  Open WiFi settings on this device and connect to:',
-              style: TextStyle(fontSize: 13, color: Color(0xFF374151)),
-            ),
+            const Text('2  Open WiFi settings on this device and connect to:', style: TextStyle(fontSize: 13, color: Color(0xFF374151))),
             const SizedBox(height: 8),
             Container(
               padding: const EdgeInsets.all(14),
@@ -350,8 +269,7 @@ class _PairingBottomSheetState extends State<_PairingBottomSheet> {
                       const SizedBox(height: 2),
                       const Text(
                         'No password needed · your internet will pause briefly',
-                        style: TextStyle(
-                            fontSize: 11, color: Color(0xFF9CA3AF)),
+                        style: TextStyle(fontSize: 11, color: Color(0xFF9CA3AF)),
                       ),
                     ],
                   ),
@@ -361,8 +279,7 @@ class _PairingBottomSheetState extends State<_PairingBottomSheet> {
             const SizedBox(height: 8),
             const Text(
               '3  Come back here and tap Open Setup Portal. The portal opens with your code already filled in — just enter your classroom WiFi password and tap Pair Device.',
-              style: TextStyle(
-                  fontSize: 13, color: Color(0xFF374151), height: 1.5),
+              style: TextStyle(fontSize: 13, color: Color(0xFF374151), height: 1.5),
             ),
             const SizedBox(height: 16),
             SizedBox(
@@ -373,15 +290,10 @@ class _PairingBottomSheetState extends State<_PairingBottomSheet> {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: _indigo,
                   foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10)),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                   elevation: 0,
                 ),
-                child: const Text(
-                  'Open Setup Portal →',
-                  style: TextStyle(
-                      fontSize: 15, fontWeight: FontWeight.w600),
-                ),
+                child: const Text('Open Setup Portal →', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
               ),
             ),
             const SizedBox(height: 12),
@@ -392,23 +304,19 @@ class _PairingBottomSheetState extends State<_PairingBottomSheet> {
                 borderRadius: BorderRadius.circular(8),
               ),
               child: const Text(
-                '⚠ The portal only works while you\'re connected to the DIKLY WiFi.',
-                style: TextStyle(
-                    fontSize: 13, color: Color(0xFFD97706), height: 1.4),
+                "⚠ The portal only works while you're connected to the DIKLY WiFi.",
+                style: TextStyle(fontSize: 13, color: Color(0xFFD97706), height: 1.4),
               ),
             ),
             const SizedBox(height: 20),
 
-            // ── Step 4: Completing ────────────────────────────────────
+            // ── Step 3: Completing ────────────────────────────────────
             Row(
               children: [
                 const SizedBox(
                   width: 24,
                   height: 24,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2.5,
-                    color: _indigo,
-                  ),
+                  child: CircularProgressIndicator(strokeWidth: 2.5, color: _indigo),
                 ),
                 const SizedBox(width: 12),
                 const Expanded(
@@ -417,16 +325,11 @@ class _PairingBottomSheetState extends State<_PairingBottomSheet> {
                     children: [
                       Text(
                         'Completing setup',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w700,
-                          color: Color(0xFF111827),
-                        ),
+                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Color(0xFF111827)),
                       ),
                       Text(
                         'Waiting for device to pair...',
-                        style: TextStyle(
-                            fontSize: 13, color: Color(0xFF6B7280)),
+                        style: TextStyle(fontSize: 13, color: Color(0xFF6B7280)),
                       ),
                     ],
                   ),
@@ -440,8 +343,7 @@ class _PairingBottomSheetState extends State<_PairingBottomSheet> {
                 style: OutlinedButton.styleFrom(
                   foregroundColor: const Color(0xFF6B7280),
                   side: const BorderSide(color: Color(0xFFD1D5DB)),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8)),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                 ),
                 child: const Text('Cancel'),
               ),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../../core/auth.dart';
 import '../../core/theme.dart';
 import '../../widgets/dikly_drawer.dart';
@@ -21,9 +22,12 @@ class _AdminShellState extends ConsumerState<AdminShell> {
   late int _index;
 
   @override
-  void initState() { super.initState(); _index = widget.initialTab; }
+  void initState() {
+    super.initState();
+    _index = widget.initialTab;
+  }
 
-  static const _color = Color(0xFFDC2626);
+  static const _accent = Color(0xFF0F172A);
   static const _labels = ['Dashboard', 'Users', 'Courses', 'Reports'];
   static const _icons = [
     Icons.dashboard_outlined,
@@ -36,40 +40,26 @@ class _AdminShellState extends ConsumerState<AdminShell> {
     DrawerSection(items: [
       DrawerItem(Icons.dashboard_outlined, 'Dashboard', '/dashboard/admin'),
     ]),
-    DrawerSection(header: 'ACADEMIC', items: [
+    DrawerSection(header: 'MANAGEMENT', items: [
       DrawerItem(Icons.people_outlined, 'Users', '/admin/users'),
+      DrawerItem(Icons.business_outlined, 'Branches', '/admin/branches'),
+      DrawerItem(Icons.history_outlined, 'Audit Logs', '/admin/audit-logs'),
+    ]),
+    DrawerSection(header: 'ACADEMIC', items: [
       DrawerItem(Icons.book_outlined, 'Courses', '/courses'),
       DrawerItem(Icons.play_circle_outline, 'Sessions', '/sessions'),
       DrawerItem(Icons.quiz_outlined, 'Quizzes', '/quizzes'),
       DrawerItem(Icons.assignment_outlined, 'Assignments', '/assignments'),
       DrawerItem(Icons.schedule_outlined, 'Timetable', '/timetable'),
-      DrawerItem(Icons.campaign_outlined, 'Announcements', '/announcements'),
     ]),
-    DrawerSection(header: 'WORKFORCE', items: [
-      DrawerItem(Icons.login_outlined, 'Sign In / Out', '/sign-in-out'),
-      DrawerItem(Icons.event_available_outlined, 'Attendance', '/corporate-attendance'),
-      DrawerItem(Icons.calendar_month_outlined, 'Shifts', '/shifts'),
-      DrawerItem(Icons.event_note_outlined, 'Leave Requests', '/manager/leave-requests'),
-      DrawerItem(Icons.receipt_long_outlined, 'Timesheets', '/manager/timesheets'),
-      DrawerItem(Icons.attach_money_outlined, 'Expenses', '/expenses'),
-      DrawerItem(Icons.business_outlined, 'Branches', '/admin/branches'),
-    ]),
-    DrawerSection(header: 'COMMUNICATE', items: [
-      DrawerItem(Icons.message_outlined, 'Messages', '/messages'),
-      DrawerItem(Icons.video_call_outlined, 'Meetings', '/meetings'),
-    ]),
-    DrawerSection(header: 'SYSTEM', items: [
-      DrawerItem(Icons.history_outlined, 'Audit Logs', '/admin/audit-logs'),
-      DrawerItem(Icons.trending_up_outlined, 'Performance', '/performance'),
+    DrawerSection(header: 'INSIGHTS', items: [
       DrawerItem(Icons.assessment_outlined, 'Reports', '/reports'),
-    ]),
-    DrawerSection(items: [
-      DrawerItem(Icons.campaign_outlined, 'Announcements', '/announcements'),
+      DrawerItem(Icons.trending_up_outlined, 'Performance', '/performance'),
     ]),
     DrawerSection(header: 'SUPPORT', items: [
-      DrawerItem(Icons.help_outline, 'FAQ Center', '/faq'),
       DrawerItem(Icons.card_membership_outlined, 'Subscription', '/subscription'),
-      DrawerItem(Icons.person_outlined, 'My Profile', '/profile'),
+      DrawerItem(Icons.person_outlined, 'Profile', '/profile'),
+      DrawerItem(Icons.help_outline, 'FAQ Center', '/faq'),
       DrawerItem(Icons.phone_outlined, 'Contact Us', '/contact'),
       DrawerItem(Icons.info_outline, 'About', '/about'),
     ]),
@@ -86,46 +76,111 @@ class _AdminShellState extends ConsumerState<AdminShell> {
     ];
 
     return Scaffold(
+      backgroundColor: DiklyColors.background,
       appBar: AppBar(
+        backgroundColor: DiklyColors.surface,
+        elevation: 0,
+        shadowColor: Colors.transparent,
+        surfaceTintColor: Colors.transparent,
         leading: Builder(
           builder: (ctx) => IconButton(
-            icon: const Icon(Icons.menu_outlined),
+            icon: const Icon(Icons.menu_outlined, color: DiklyColors.text),
             onPressed: () => Scaffold.of(ctx).openDrawer(),
           ),
         ),
-        title: const Text('Admin Portal'),
+        title: Text(
+          'Admin Portal',
+          style: GoogleFonts.dmSans(
+            fontSize: 17,
+            fontWeight: FontWeight.w700,
+            color: DiklyColors.text,
+          ),
+        ),
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(1),
+          child: Container(height: 1, color: DiklyColors.border),
+        ),
         actions: [
           PopupMenuButton<String>(
-            offset: const Offset(0, 48),
+            offset: const Offset(0, 52),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            color: DiklyColors.surface,
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 12),
               child: CircleAvatar(
                 radius: 18,
-                backgroundColor: _color.withOpacity(0.12),
+                backgroundColor: _accent,
                 child: Text(
                   (user?.name ?? 'A').substring(0, 1).toUpperCase(),
-                  style: const TextStyle(color: _color, fontWeight: FontWeight.w700, fontSize: 14),
+                  style: GoogleFonts.dmSans(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 14,
+                  ),
                 ),
               ),
             ),
             itemBuilder: (_) => [
-              PopupMenuItem(enabled: false, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(user?.name ?? '', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
-                Text(user?.email ?? '', style: const TextStyle(fontSize: 12, color: DiklyColors.textSecondary)),
-                Container(
-                  margin: const EdgeInsets.only(top: 4),
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(color: _color.withOpacity(0.1), borderRadius: BorderRadius.circular(4)),
-                  child: Text((user?.role ?? 'admin').toUpperCase(), style: TextStyle(fontSize: 10, color: _color, fontWeight: FontWeight.w700)),
+              PopupMenuItem(
+                enabled: false,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      user?.name ?? '',
+                      style: GoogleFonts.dmSans(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 14,
+                        color: DiklyColors.text,
+                      ),
+                    ),
+                    Text(
+                      user?.email ?? '',
+                      style: GoogleFonts.dmSans(
+                        fontSize: 12,
+                        color: DiklyColors.textLight,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: _accent.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        (user?.role ?? 'admin').toUpperCase(),
+                        style: GoogleFonts.dmSans(
+                          fontSize: 10,
+                          color: _accent,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-              ])),
+              ),
               const PopupMenuDivider(),
-              const PopupMenuItem(value: 'profile', child: Row(children: [Icon(Icons.person_outline, size: 18), SizedBox(width: 10), Text('My Profile')])),
-              const PopupMenuItem(value: 'logout', child: Row(children: [
-                Icon(Icons.logout, size: 18, color: DiklyColors.error),
-                SizedBox(width: 10), Text('Sign Out', style: TextStyle(color: DiklyColors.error)),
-              ])),
+              PopupMenuItem(
+                value: 'profile',
+                child: Row(children: [
+                  const Icon(Icons.person_outline, size: 18, color: DiklyColors.textSecondary),
+                  const SizedBox(width: 10),
+                  Text('My Profile', style: GoogleFonts.dmSans(fontSize: 14)),
+                ]),
+              ),
+              PopupMenuItem(
+                value: 'logout',
+                child: Row(children: [
+                  const Icon(Icons.logout, size: 18, color: DiklyColors.error),
+                  const SizedBox(width: 10),
+                  Text(
+                    'Sign Out',
+                    style: GoogleFonts.dmSans(fontSize: 14, color: DiklyColors.error),
+                  ),
+                ]),
+              ),
             ],
             onSelected: (v) async {
               if (v == 'logout') await ref.read(authProvider.notifier).logout();
@@ -136,7 +191,7 @@ class _AdminShellState extends ConsumerState<AdminShell> {
       ),
       drawer: DiklyDrawer(
         portalTitle: 'Admin Portal',
-        accentColor: _color,
+        accentColor: _accent,
         userName: user?.name ?? '',
         userEmail: user?.email ?? '',
         userRole: 'Administrator',
@@ -150,8 +205,19 @@ class _AdminShellState extends ConsumerState<AdminShell> {
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _index,
         onTap: (i) => setState(() => _index = i),
-        selectedItemColor: _color,
-        items: List.generate(4, (i) => BottomNavigationBarItem(icon: Icon(_icons[i]), label: _labels[i])),
+        backgroundColor: DiklyColors.surface,
+        selectedItemColor: _accent,
+        unselectedItemColor: DiklyColors.textLight,
+        showSelectedLabels: true,
+        showUnselectedLabels: true,
+        selectedLabelStyle: GoogleFonts.dmSans(fontSize: 11, fontWeight: FontWeight.w600),
+        unselectedLabelStyle: GoogleFonts.dmSans(fontSize: 11, fontWeight: FontWeight.w400),
+        type: BottomNavigationBarType.fixed,
+        elevation: 8,
+        items: List.generate(
+          4,
+          (i) => BottomNavigationBarItem(icon: Icon(_icons[i]), label: _labels[i]),
+        ),
       ),
     );
   }

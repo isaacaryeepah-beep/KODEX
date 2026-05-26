@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../core/api.dart';
-import '../../core/theme.dart';
 import '../../models/user.dart';
+import '../../widgets/ds/dikly_ds.dart';
 
 class LecturerSearchScreen extends StatefulWidget {
   const LecturerSearchScreen({super.key});
@@ -64,14 +64,12 @@ class _LecturerSearchScreenState extends State<LecturerSearchScreen> {
         if (_results != null) _doSearch();
       },
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         decoration: BoxDecoration(
           color: selected ? const Color(0xFF2563EB) : Colors.white,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: selected
-                ? const Color(0xFF2563EB)
-                : const Color(0xFFD1D5DB),
+            color: selected ? const Color(0xFF2563EB) : const Color(0xFFE5E7EB),
           ),
         ),
         child: Text(
@@ -98,33 +96,11 @@ class _LecturerSearchScreenState extends State<LecturerSearchScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'Search',
-                  style: TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.w800,
-                    color: Color(0xFF111827),
-                  ),
+                DiklyScreenHeader(
+                  title: 'Search',
+                  subtitle: 'Find students, lecturers, or staff quickly',
                 ),
-                const SizedBox(height: 4),
-                const Text(
-                  'Find students, lecturers, or staff quickly',
-                  style: TextStyle(fontSize: 13, color: Color(0xFF6B7280)),
-                ),
-                const SizedBox(height: 16),
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(14),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.06),
-                        blurRadius: 8,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
-                  ),
+                DiklyCard(
                   child: Column(
                     children: [
                       Row(
@@ -135,51 +111,45 @@ class _LecturerSearchScreenState extends State<LecturerSearchScreen> {
                               onSubmitted: (_) => _doSearch(),
                               decoration: InputDecoration(
                                 hintText: 'Search by name, email, index...',
-                                prefixIcon: const Icon(Icons.search,
-                                    color: Color(0xFF9CA3AF)),
+                                prefixIcon: const Icon(Icons.search, color: Color(0xFF9CA3AF)),
                                 filled: true,
                                 fillColor: const Color(0xFFF9FAFB),
                                 border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                  borderSide: const BorderSide(
-                                      color: Color(0xFFE5E7EB)),
+                                  borderRadius: BorderRadius.circular(10),
+                                  borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
                                 ),
                                 enabledBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                  borderSide: const BorderSide(
-                                      color: Color(0xFFE5E7EB)),
+                                  borderRadius: BorderRadius.circular(10),
+                                  borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
                                 ),
                                 focusedBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                  borderSide: const BorderSide(
-                                      color: Color(0xFF2563EB), width: 2),
+                                  borderRadius: BorderRadius.circular(10),
+                                  borderSide: const BorderSide(color: Color(0xFF2563EB), width: 2),
                                 ),
-                                contentPadding: const EdgeInsets.symmetric(
-                                    horizontal: 12, vertical: 12),
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                               ),
                             ),
                           ),
                           const SizedBox(width: 8),
-                          ElevatedButton(
-                            onPressed: _doSearch,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF2563EB),
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 16, vertical: 14),
-                              shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(10)),
-                              elevation: 0,
-                            ),
-                            child: const Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(Icons.search, size: 18),
-                                SizedBox(width: 4),
-                                Text('Search',
-                                    style: TextStyle(
-                                        fontWeight: FontWeight.w600)),
-                              ],
+                          SizedBox(
+                            height: 48,
+                            child: ElevatedButton(
+                              onPressed: _doSearch,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF2563EB),
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(horizontal: 16),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                elevation: 0,
+                              ),
+                              child: const Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.search, size: 18),
+                                  SizedBox(width: 4),
+                                  Text('Search', style: TextStyle(fontWeight: FontWeight.w600)),
+                                ],
+                              ),
                             ),
                           ),
                         ],
@@ -202,36 +172,28 @@ class _LecturerSearchScreenState extends State<LecturerSearchScreen> {
           ),
           // Results area
           if (_results == null && !_loading)
-            Expanded(
+            const Expanded(
               child: Center(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
-                  children: const [
-                    Icon(Icons.search_outlined,
-                        size: 64, color: Color(0xFFD1D5DB)),
+                  children: [
+                    Icon(Icons.search_outlined, size: 64, color: Color(0xFFD1D5DB)),
                     SizedBox(height: 16),
                     Text(
                       'Enter a name, email, or index number to search',
                       textAlign: TextAlign.center,
-                      style: TextStyle(
-                          fontSize: 14, color: Color(0xFF6B7280)),
+                      style: TextStyle(fontSize: 14, color: Color(0xFF6B7280)),
                     ),
                   ],
                 ),
               ),
             )
           else if (_loading)
-            const Expanded(
-              child: Center(child: CircularProgressIndicator()),
-            )
+            const Expanded(child: Center(child: CircularProgressIndicator()))
           else if (_results!.isEmpty)
             const Expanded(
               child: Center(
-                child: Text(
-                  'No results found',
-                  style: TextStyle(
-                      fontSize: 14, color: Color(0xFF6B7280)),
-                ),
+                child: Text('No results found', style: TextStyle(fontSize: 14, color: Color(0xFF6B7280))),
               ),
             )
           else
@@ -254,33 +216,20 @@ class _UserCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final initial =
-        user.name.isNotEmpty ? user.name[0].toUpperCase() : 'U';
+    final initial = user.name.isNotEmpty ? user.name[0].toUpperCase() : 'U';
 
-    return Container(
+    return DiklyCard(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.06),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
       child: Row(
         children: [
           CircleAvatar(
             radius: 20,
-            backgroundColor:
-                DiklyColors.primary.withOpacity(0.1),
+            backgroundColor: const Color(0xFF2563EB).withOpacity(0.1),
             child: Text(
               initial,
               style: const TextStyle(
-                color: DiklyColors.primary,
+                color: Color(0xFF2563EB),
                 fontWeight: FontWeight.w700,
                 fontSize: 14,
               ),
@@ -293,23 +242,14 @@ class _UserCard extends StatelessWidget {
               children: [
                 Text(
                   user.name,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w600,
-                    fontSize: 14,
-                    color: Color(0xFF111827),
-                  ),
+                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: Color(0xFF111827)),
                 ),
                 const SizedBox(height: 2),
-                Text(
-                  user.email,
-                  style: const TextStyle(
-                      fontSize: 12, color: Color(0xFF6B7280)),
-                ),
+                Text(user.email, style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280))),
               ],
             ),
           ),
-          const Icon(Icons.chevron_right,
-              color: Color(0xFF9CA3AF)),
+          const Icon(Icons.chevron_right, color: Color(0xFF9CA3AF)),
         ],
       ),
     );

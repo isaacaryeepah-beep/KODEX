@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/auth.dart';
 import '../../core/theme.dart';
+import '../../widgets/ds/dikly_ds.dart';
 
 class ProfileScreen extends ConsumerStatefulWidget {
   const ProfileScreen({super.key});
@@ -41,16 +42,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         title: const Text('Logout'),
         content: const Text('Are you sure you want to logout?'),
         actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
           ElevatedButton(
             onPressed: () {
               Navigator.pop(ctx);
               ref.read(authProvider.notifier).logout();
             },
-            style: ElevatedButton.styleFrom(
-                backgroundColor: DiklyColors.error),
+            style: ElevatedButton.styleFrom(backgroundColor: DiklyColors.error),
             child: const Text('Logout'),
           ),
         ],
@@ -64,7 +62,30 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     if (!mounted) return;
     setState(() => _saving = false);
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Changes saved')),
+      const SnackBar(content: Text('Profile updated')),
+    );
+  }
+
+  InputDecoration _inputDeco({String? hint, bool readOnly = false}) {
+    return InputDecoration(
+      hintText: hint,
+      filled: true,
+      fillColor: readOnly ? const Color(0xFFF3F4F6) : Colors.white,
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: readOnly
+            ? const BorderSide(color: Color(0xFFE5E7EB))
+            : const BorderSide(color: Color(0xFF2563EB), width: 2),
+      ),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
     );
   }
 
@@ -77,9 +98,12 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     }
 
     return Scaffold(
-      backgroundColor: DiklyColors.background,
+      backgroundColor: const Color(0xFFF1F5F9),
       appBar: AppBar(
-        title: const Text('Profile'),
+        backgroundColor: Colors.white,
+        elevation: 0,
+        surfaceTintColor: Colors.transparent,
+        title: const Text('My Profile'),
         leading: BackButton(onPressed: () => context.pop()),
         actions: [
           IconButton(
@@ -94,228 +118,128 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           : ListView(
               padding: const EdgeInsets.all(16),
               children: [
-                // Avatar + info
+                // Avatar header
                 Center(
                   child: Column(
                     children: [
-                      // Avatar with upload badge
                       Stack(
                         children: [
                           CircleAvatar(
-                            radius: 60,
-                            backgroundColor:
-                                DiklyColors.primary.withOpacity(0.15),
+                            radius: 52,
+                            backgroundColor: const Color(0xFF2563EB),
                             child: Text(
                               _getInitials(user.name),
                               style: const TextStyle(
-                                fontSize: 36,
-                                fontWeight: FontWeight.w800,
-                                color: DiklyColors.primary,
+                                fontSize: 28,
+                                fontWeight: FontWeight.w700,
+                                color: Colors.white,
                               ),
                             ),
                           ),
                           Positioned(
-                            bottom: 4,
-                            right: 4,
-                            child: GestureDetector(
-                              onTap: () {},
-                              child: Container(
-                                width: 28,
-                                height: 28,
-                                decoration: BoxDecoration(
-                                  color: DiklyColors.primary,
-                                  shape: BoxShape.circle,
-                                  border: Border.all(
-                                      color: Colors.white, width: 2),
-                                ),
-                                child: const Icon(
-                                  Icons.upload_rounded,
-                                  size: 14,
-                                  color: Colors.white,
-                                ),
+                            bottom: 0,
+                            right: 0,
+                            child: Container(
+                              width: 28,
+                              height: 28,
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF2563EB),
+                                shape: BoxShape.circle,
+                                border: Border.all(color: Colors.white, width: 2),
                               ),
+                              child: const Icon(Icons.upload, size: 16, color: Colors.white),
                             ),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 14),
+                      const SizedBox(height: 12),
                       Text(
                         user.name,
-                        style: Theme.of(context)
-                            .textTheme
-                            .headlineMedium
-                            ?.copyWith(fontWeight: FontWeight.w700),
+                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: Color(0xFF111827)),
                       ),
-                      const SizedBox(height: 4),
-                      Text(
-                        user.email,
-                        style: const TextStyle(
-                            fontSize: 13,
-                            color: DiklyColors.textSecondary),
-                      ),
-                      const SizedBox(height: 10),
-                      // Role badge
+                      const SizedBox(height: 2),
+                      Text(user.email, style: const TextStyle(fontSize: 13, color: Color(0xFF6B7280))),
+                      const SizedBox(height: 6),
                       Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 14, vertical: 5),
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                         decoration: BoxDecoration(
                           color: const Color(0xFFFEF3C7),
                           borderRadius: BorderRadius.circular(20),
-                          border: Border.all(
-                              color: const Color(0xFFF59E0B)
-                                  .withOpacity(0.4)),
                         ),
                         child: Text(
                           user.role.toUpperCase(),
-                          style: const TextStyle(
-                            color: Color(0xFFD97706),
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: 1,
-                          ),
+                          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFFD97706)),
                         ),
                       ),
                     ],
                   ),
                 ),
-                const SizedBox(height: 24),
-                const Divider(height: 1),
-                const SizedBox(height: 24),
+                const SizedBox(height: 20),
 
-                // Account Details section
-                const Text(
-                  'Account Details',
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w700,
-                    color: DiklyColors.textPrimary,
+                // Account Details card
+                DiklyCard(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Account Details', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: Color(0xFF111827))),
+                      const SizedBox(height: 16),
+                      const DiklySectionLabel('FULL NAME'),
+                      TextFormField(
+                        controller: _nameCtrl,
+                        decoration: _inputDeco(hint: 'Your full name'),
+                      ),
+                      const SizedBox(height: 14),
+                      const DiklySectionLabel('DEPARTMENT (CANNOT BE CHANGED HERE — CONTACT ADMIN)'),
+                      TextFormField(
+                        initialValue: user.department ?? '',
+                        readOnly: true,
+                        style: const TextStyle(color: Color(0xFF6B7280)),
+                        decoration: _inputDeco(readOnly: true),
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(height: 14),
-                // Full name
-                _FieldLabel('FULL NAME'),
-                const SizedBox(height: 6),
-                TextField(
-                  controller: _nameCtrl,
-                  decoration: const InputDecoration(
-                    hintText: 'Your full name',
-                    contentPadding:
-                        EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                  ),
-                ),
-                const SizedBox(height: 14),
-                // Department — read-only
-                _FieldLabel(
-                    'DEPARTMENT (CANNOT BE CHANGED HERE — CONTACT ADMIN)'),
-                const SizedBox(height: 6),
-                TextField(
-                  readOnly: true,
-                  controller: TextEditingController(
-                      text: user.department ?? '—'),
-                  style: const TextStyle(color: DiklyColors.textSecondary),
-                  decoration: const InputDecoration(
-                    filled: true,
-                    fillColor: Color(0xFFF8FAFC),
-                    contentPadding:
-                        EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                    disabledBorder: OutlineInputBorder(
-                      borderSide: BorderSide(color: DiklyColors.border),
-                      borderRadius: BorderRadius.all(Radius.circular(10)),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderSide: BorderSide(color: DiklyColors.border),
-                      borderRadius: BorderRadius.all(Radius.circular(10)),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderSide: BorderSide(color: DiklyColors.border),
-                      borderRadius: BorderRadius.all(Radius.circular(10)),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 28),
+                const SizedBox(height: 12),
 
-                // Change Password section
-                const Text(
-                  'Change Password',
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w700,
-                    color: DiklyColors.textPrimary,
-                  ),
-                ),
-                const SizedBox(height: 14),
-                // Current password
-                _FieldLabel('CURRENT PASSWORD'),
-                const SizedBox(height: 6),
-                TextField(
-                  controller: _currentPwCtrl,
-                  obscureText: true,
-                  decoration: const InputDecoration(
-                    hintText: 'Enter current password',
-                    contentPadding:
-                        EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                  ),
-                ),
-                const SizedBox(height: 14),
-                // New password
-                _FieldLabel('NEW PASSWORD'),
-                const SizedBox(height: 6),
-                TextField(
-                  controller: _newPwCtrl,
-                  obscureText: true,
-                  decoration: const InputDecoration(
-                    hintText: 'Min 8 characters',
-                    contentPadding:
-                        EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                  ),
-                ),
-                const SizedBox(height: 14),
-                // Confirm password
-                _FieldLabel('CONFIRM NEW PASSWORD'),
-                const SizedBox(height: 6),
-                TextField(
-                  controller: _confirmPwCtrl,
-                  obscureText: true,
-                  decoration: const InputDecoration(
-                    hintText: 'Repeat new password',
-                    contentPadding:
-                        EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                  ),
-                ),
-                const SizedBox(height: 28),
-
-                // Save button
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: _saving ? null : _saveChanges,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF2563EB),
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10)),
-                      elevation: 0,
-                    ),
-                    child: _saving
-                        ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.white,
-                            ),
-                          )
-                        : const Text(
-                            'Save Changes',
-                            style: TextStyle(
-                                fontSize: 15, fontWeight: FontWeight.w600),
-                          ),
+                // Change Password card
+                DiklyCard(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Change Password', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: Color(0xFF111827))),
+                      const SizedBox(height: 16),
+                      const DiklySectionLabel('CURRENT PASSWORD'),
+                      TextFormField(
+                        controller: _currentPwCtrl,
+                        obscureText: true,
+                        decoration: _inputDeco(hint: 'Enter current password'),
+                      ),
+                      const SizedBox(height: 14),
+                      const DiklySectionLabel('NEW PASSWORD'),
+                      TextFormField(
+                        controller: _newPwCtrl,
+                        obscureText: true,
+                        decoration: _inputDeco(hint: 'Min 8 characters'),
+                      ),
+                      const SizedBox(height: 14),
+                      const DiklySectionLabel('CONFIRM NEW PASSWORD'),
+                      TextFormField(
+                        controller: _confirmPwCtrl,
+                        obscureText: true,
+                        decoration: _inputDeco(hint: 'Repeat new password'),
+                      ),
+                    ],
                   ),
                 ),
                 const SizedBox(height: 20),
 
-                // Logout button
+                DiklyPrimaryButton(
+                  label: 'Save Changes',
+                  loading: _saving,
+                  onPressed: _saveChanges,
+                ),
+                const SizedBox(height: 12),
+
                 SizedBox(
                   width: double.infinity,
                   child: OutlinedButton.icon(
@@ -332,24 +256,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 const SizedBox(height: 32),
               ],
             ),
-    );
-  }
-}
-
-class _FieldLabel extends StatelessWidget {
-  final String label;
-  const _FieldLabel(this.label);
-
-  @override
-  Widget build(BuildContext context) {
-    return Text(
-      label,
-      style: const TextStyle(
-        fontSize: 10,
-        fontWeight: FontWeight.w700,
-        color: DiklyColors.textSecondary,
-        letterSpacing: 0.8,
-      ),
     );
   }
 }
