@@ -40,6 +40,13 @@ const _portalInfo = {
     'loginRole': 'admin',
     'portalMode': 'academic',
   },
+  'employee': {
+    'title': 'Employee Login',
+    'icon': Icons.badge_outlined,
+    'color': Color(0xFF0D9488),
+    'loginRole': 'employee',
+    'portalMode': 'corporate',
+  },
 };
 
 class LoginScreen extends ConsumerStatefulWidget {
