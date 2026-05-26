@@ -252,7 +252,7 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
                   for (final video in _videos.take(3))
                     _VideoTile(
                       video: video,
-                      onTap: () => context.push('/video-player', extra: {'url': video.embedUrl, 'title': video.title}),
+                      onTap: () => context.push('/video-player', extra: {'url': video.url, 'title': video.title}),
                     ),
                 ],
                 const SizedBox(height: 32),
@@ -325,7 +325,7 @@ class _VideoTile extends StatelessWidget {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  video.videoType.toUpperCase(),
+                  video.platform?.toUpperCase() ?? 'VIDEO',
                   style: const TextStyle(fontSize: 11, color: DiklyColors.primary, fontWeight: FontWeight.w600),
                 ),
               ],
