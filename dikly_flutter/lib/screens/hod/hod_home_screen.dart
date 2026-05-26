@@ -26,6 +26,10 @@ class HodHomeScreen extends ConsumerWidget {
     final approvalsAsync = ref.watch(_pendingApprovalsCountProvider);
     final user = ref.watch(authProvider).user;
 
+    final firstName = (user?.name ?? 'HOD').split(' ').first;
+    final institution = user?.company ?? user?.department ?? 'your institution';
+    final deptBadge = user?.department ?? user?.company ?? '';
+
     return RefreshIndicator(
       onRefresh: () async {
         ref.invalidate(_hodOverviewProvider);
@@ -34,7 +38,49 @@ class HodHomeScreen extends ConsumerWidget {
       child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          _HodWelcomeCard(name: user?.name ?? 'HOD'),
+          // Plain welcome section
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Welcome back, $firstName',
+                style: const TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.w800,
+                  color: DiklyColors.textPrimary,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      "Here's an overview of your workspace at $institution",
+                      style: const TextStyle(fontSize: 13, color: DiklyColors.textSecondary),
+                    ),
+                  ),
+                  if (deptBadge.isNotEmpty) ...[
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFEF3C7),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        deptBadge,
+                        style: const TextStyle(
+                          color: Color(0xFFD97706),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ],
+          ),
           const SizedBox(height: 20),
           overviewAsync.when(
             loading:
@@ -201,65 +247,3 @@ class HodHomeScreen extends ConsumerWidget {
   }
 }
 
-class _HodWelcomeCard extends StatelessWidget {
-  final String name;
-  const _HodWelcomeCard({required this.name});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFF7C2D12), Color(0xFFB45309)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF7C2D12).withOpacity(0.25),
-            blurRadius: 16,
-            offset: const Offset(0, 6),
-          ),
-        ],
-      ),
-      child: Row(children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'HOD Portal',
-                style: TextStyle(
-                  color: Colors.white70,
-                  fontSize: 12,
-                  letterSpacing: 0.5,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                name.split(' ').first,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 22,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-              const SizedBox(height: 4),
-              const Text(
-                'Head of Department',
-                style: TextStyle(color: Colors.white60, fontSize: 12),
-              ),
-            ],
-          ),
-        ),
-        const Icon(
-          Icons.account_balance_outlined,
-          color: Colors.white60,
-          size: 40,
-        ),
-      ]),
-    );
-  }
-}

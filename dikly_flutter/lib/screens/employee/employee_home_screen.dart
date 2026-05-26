@@ -55,6 +55,10 @@ class _EmployeeHomeScreenState extends ConsumerState<EmployeeHomeScreen> {
     final shiftAsync = ref.watch(_myShiftProvider);
     final leavesAsync = ref.watch(_myLeavesProvider);
 
+    final firstName = (user?.name ?? 'Employee').split(' ').first;
+    final institution = user?.company ?? user?.department ?? 'your institution';
+    final deptBadge = user?.department ?? user?.company ?? '';
+
     return RefreshIndicator(
       onRefresh: () async {
         ref.refresh(_signInStatusProvider);
@@ -64,7 +68,7 @@ class _EmployeeHomeScreenState extends ConsumerState<EmployeeHomeScreen> {
       child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          _GreetingRow(name: user?.name ?? 'Employee'),
+          _GreetingRow(name: firstName, institution: institution, deptBadge: deptBadge),
           const SizedBox(height: 16),
           // Clock In / Out Card
           signInAsync.when(

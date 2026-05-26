@@ -31,12 +31,58 @@ class _AdminHomeScreenState extends ConsumerState<AdminHomeScreen> {
   Widget build(BuildContext context) {
     final user = ref.watch(authProvider).user;
 
+    final firstName = (user?.name ?? 'Admin').split(' ').first;
+    final institution = user?.company ?? user?.department ?? 'your institution';
+    final deptBadge = user?.department ?? user?.company ?? '';
+
     return RefreshIndicator(
       onRefresh: _load,
       child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          _AdminCard(name: user?.name ?? 'Admin', role: user?.role ?? 'admin'),
+          // Plain welcome section
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Welcome back, $firstName',
+                style: const TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.w800,
+                  color: DiklyColors.textPrimary,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      "Here's an overview of your workspace at $institution",
+                      style: const TextStyle(fontSize: 13, color: DiklyColors.textSecondary),
+                    ),
+                  ),
+                  if (deptBadge.isNotEmpty) ...[
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFEF3C7),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        deptBadge,
+                        style: const TextStyle(
+                          color: Color(0xFFD97706),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ],
+          ),
           const SizedBox(height: 20),
           const Text('Platform Overview', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
           const SizedBox(height: 12),
@@ -62,27 +108,3 @@ class _AdminHomeScreenState extends ConsumerState<AdminHomeScreen> {
   }
 }
 
-class _AdminCard extends StatelessWidget {
-  final String name, role;
-  const _AdminCard({required this.name, required this.role});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(colors: [Color(0xFFDC2626), Color(0xFF7C3AED)], begin: Alignment.topLeft, end: Alignment.bottomRight),
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [BoxShadow(color: const Color(0xFFDC2626).withOpacity(0.25), blurRadius: 16, offset: const Offset(0, 6))],
-      ),
-      child: Row(children: [
-        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('${role == 'hod' ? 'HOD' : 'Admin'} Portal', style: const TextStyle(color: Colors.white70, fontSize: 12, letterSpacing: 0.5)),
-          const SizedBox(height: 4),
-          Text(name.split(' ').first, style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w800)),
-        ])),
-        const Icon(Icons.admin_panel_settings, color: Colors.white60, size: 40),
-      ]),
-    );
-  }
-}
