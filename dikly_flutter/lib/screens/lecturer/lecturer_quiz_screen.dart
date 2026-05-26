@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../core/api.dart';
-import '../../core/theme.dart';
 import '../../models/quiz.dart';
+import '../../widgets/ds/dikly_ds.dart';
 
 class LecturerQuizScreen extends StatefulWidget {
   const LecturerQuizScreen({super.key});
@@ -15,12 +15,11 @@ class _LecturerQuizScreenState extends State<LecturerQuizScreen>
   late final TabController _tabController;
   List<SnapQuiz> _quizzes = [];
   bool _loading = false;
-  String? _error;
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 2, vsync: this, initialIndex: 1);
     _loadQuizzes();
   }
 
@@ -31,21 +30,15 @@ class _LecturerQuizScreenState extends State<LecturerQuizScreen>
   }
 
   Future<void> _loadQuizzes() async {
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
+    setState(() => _loading = true);
     try {
       final quizzes = await apiService.getQuizzes();
       setState(() {
         _quizzes = quizzes;
         _loading = false;
       });
-    } catch (e) {
-      setState(() {
-        _error = e.toString();
-        _loading = false;
-      });
+    } catch (_) {
+      setState(() => _loading = false);
     }
   }
 
@@ -59,45 +52,20 @@ class _LecturerQuizScreenState extends State<LecturerQuizScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF1F5F9),
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        leading: BackButton(onPressed: () => Navigator.of(context).maybePop()),
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: const [
-            Text(
-              'Quiz Management',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w700,
-                color: DiklyColors.textPrimary,
-              ),
-            ),
-            Text(
-              'Manage proctored and snap quizzes',
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w400,
-                color: DiklyColors.textSecondary,
-              ),
-            ),
-          ],
-        ),
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(52),
-          child: Container(
-            margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-            padding: const EdgeInsets.all(4),
+      body: Column(
+        children: [
+          // Tab toggle bar
+          Container(
+            margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
             decoration: BoxDecoration(
-              color: const Color(0xFFF1F5F9),
-              borderRadius: BorderRadius.circular(10),
+              color: const Color(0xFFE5E7EB),
+              borderRadius: BorderRadius.circular(6),
             ),
             child: TabBar(
               controller: _tabController,
               indicator: BoxDecoration(
                 color: Colors.white,
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(4),
                 boxShadow: [
                   BoxShadow(
                     color: Colors.black.withOpacity(0.08),
@@ -108,34 +76,47 @@ class _LecturerQuizScreenState extends State<LecturerQuizScreen>
               ),
               indicatorSize: TabBarIndicatorSize.tab,
               dividerColor: Colors.transparent,
-              labelColor: DiklyColors.textPrimary,
-              unselectedLabelColor: DiklyColors.textSecondary,
-              labelStyle: const TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-              ),
-              unselectedLabelStyle: const TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w400,
-              ),
+              labelColor: const Color(0xFF111827),
+              unselectedLabelColor: const Color(0xFF6B7280),
+              labelStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+              unselectedLabelStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w400),
               tabs: const [
-                Tab(text: 'Proctored Quizzes'),
-                Tab(text: 'Snap Quizzes'),
+                Tab(
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.shield_outlined, size: 16),
+                      SizedBox(width: 4),
+                      Text('Proctored Quizzes'),
+                    ],
+                  ),
+                ),
+                Tab(
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.bolt, size: 16),
+                      SizedBox(width: 4),
+                      Text('Snap Quizzes'),
+                    ],
+                  ),
+                ),
               ],
             ),
           ),
-        ),
-      ),
-      body: TabBarView(
-        controller: _tabController,
-        children: [
-          _ProctoredQuizzesTab(onCreateQuiz: _showComingSoon),
-          _SnapQuizzesTab(
-            quizzes: _quizzes,
-            loading: _loading,
-            error: _error,
-            onRefresh: _loadQuizzes,
-            onComingSoon: _showComingSoon,
+          Expanded(
+            child: TabBarView(
+              controller: _tabController,
+              children: [
+                _ProctoredTab(onComingSoon: _showComingSoon),
+                _SnapQuizzesTab(
+                  quizzes: _quizzes,
+                  loading: _loading,
+                  onRefresh: _loadQuizzes,
+                  onComingSoon: _showComingSoon,
+                ),
+              ],
+            ),
           ),
         ],
       ),
@@ -143,109 +124,59 @@ class _LecturerQuizScreenState extends State<LecturerQuizScreen>
   }
 }
 
-class _ProctoredQuizzesTab extends StatelessWidget {
-  final VoidCallback onCreateQuiz;
+// ── Proctored Quizzes Tab ─────────────────────────────────────────────────────
 
-  const _ProctoredQuizzesTab({required this.onCreateQuiz});
+class _ProctoredTab extends StatelessWidget {
+  final VoidCallback onComingSoon;
+  const _ProctoredTab({required this.onComingSoon});
 
   @override
   Widget build(BuildContext context) {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        // Header row
-        Row(
-          children: [
-            const Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Proctored Quizzes',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                      color: DiklyColors.textPrimary,
-                    ),
-                  ),
-                  SizedBox(height: 2),
-                  Text(
-                    'Create proctored quizzes and manage questions',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: DiklyColors.textSecondary,
-                    ),
-                  ),
-                ],
-              ),
+        DiklyScreenHeader(
+          title: 'Proctored Quizzes',
+          subtitle: 'Create proctored quizzes and manage questions',
+          action: ElevatedButton.icon(
+            onPressed: onComingSoon,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF2563EB),
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              elevation: 0,
             ),
-            ElevatedButton.icon(
-              onPressed: onCreateQuiz,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF2563EB),
-                foregroundColor: Colors.white,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8)),
-                elevation: 0,
-              ),
-              icon: const Icon(Icons.add, size: 16),
-              label: const Text(
-                'Create Quiz',
-                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-              ),
-            ),
-          ],
+            icon: const Icon(Icons.add, size: 16),
+            label: const Text('+ Create Quiz', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+          ),
         ),
-        const SizedBox(height: 32),
-        // Empty state
-        Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                '📝',
-                style: TextStyle(fontSize: 56),
-              ),
-              const SizedBox(height: 16),
-              const Text(
-                'No quizzes yet',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w700,
-                  color: DiklyColors.textPrimary,
+        DiklyCard(
+          padding: const EdgeInsets.all(48),
+          child: Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text('📝', style: TextStyle(fontSize: 48)),
+                const SizedBox(height: 12),
+                const Text(
+                  'No quizzes yet',
+                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: Color(0xFF111827)),
                 ),
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                'Create your first proctored quiz for students',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 13,
-                  color: DiklyColors.textSecondary,
-                  height: 1.5,
+                const SizedBox(height: 6),
+                const Text(
+                  'Create your first proctored quiz for students',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 13, color: Color(0xFF6B7280)),
                 ),
-              ),
-              const SizedBox(height: 24),
-              ElevatedButton.icon(
-                onPressed: onCreateQuiz,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF2563EB),
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 24, vertical: 12),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10)),
-                  elevation: 0,
+                const SizedBox(height: 20),
+                DiklyPrimaryButton(
+                  label: '+ Create Quiz',
+                  fullWidth: false,
+                  onPressed: onComingSoon,
                 ),
-                icon: const Icon(Icons.add, size: 18),
-                label: const Text(
-                  '+ Create Quiz',
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ],
@@ -253,17 +184,17 @@ class _ProctoredQuizzesTab extends StatelessWidget {
   }
 }
 
+// ── Snap Quizzes Tab ──────────────────────────────────────────────────────────
+
 class _SnapQuizzesTab extends StatelessWidget {
   final List<SnapQuiz> quizzes;
   final bool loading;
-  final String? error;
   final VoidCallback onRefresh;
   final VoidCallback onComingSoon;
 
   const _SnapQuizzesTab({
     required this.quizzes,
     required this.loading,
-    required this.error,
     required this.onRefresh,
     required this.onComingSoon,
   });
@@ -275,164 +206,87 @@ class _SnapQuizzesTab extends StatelessWidget {
       child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          // Header
-          const Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          DiklyScreenHeader(
+            title: 'Snap Quizzes',
+            subtitle: 'Timed exams with anti-cheat enforcement for the student portal',
+          ),
+          // Action buttons row
+          Row(
             children: [
-              Text(
-                'Snap Quizzes',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                  color: DiklyColors.textPrimary,
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: onComingSoon,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF06B6D4),
+                    foregroundColor: Colors.white,
+                    minimumSize: const Size.fromHeight(44),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    elevation: 0,
+                  ),
+                  icon: const Icon(Icons.shield_outlined, size: 18),
+                  label: const Text('Quiz Monitor', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
                 ),
               ),
-              SizedBox(height: 2),
-              Text(
-                'Timed exams with anti-cheat enforcement for the student portal',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: DiklyColors.textSecondary,
+              const SizedBox(width: 8),
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: onComingSoon,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF7C3AED),
+                    foregroundColor: Colors.white,
+                    minimumSize: const Size.fromHeight(44),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    elevation: 0,
+                  ),
+                  icon: const Icon(Icons.access_time_outlined, size: 18),
+                  label: const Text('Live Proctor Monitor', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 16),
-          // Action buttons row
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: [
-                _ActionButton(
-                  label: '🛡 Quiz Monitor',
-                  color: const Color(0xFF06B6D4),
-                  onTap: onComingSoon,
-                ),
-                const SizedBox(width: 10),
-                _ActionButton(
-                  label: '⏱ Live Proctor Monitor',
-                  color: const Color(0xFF7C3AED),
-                  onTap: onComingSoon,
-                ),
-                const SizedBox(width: 10),
-                _ActionButton(
-                  label: '+ New Snap Quiz',
-                  color: Colors.black87,
-                  onTap: onComingSoon,
-                ),
-              ],
+          const SizedBox(height: 8),
+          SizedBox(
+            width: double.infinity,
+            height: 44,
+            child: ElevatedButton.icon(
+              onPressed: onComingSoon,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF111827),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                elevation: 0,
+              ),
+              icon: const Icon(Icons.add, size: 18),
+              label: const Text('+ New Snap Quiz', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
             ),
           ),
-          const SizedBox(height: 20),
-          // Content
+          const SizedBox(height: 16),
           if (loading)
             const Center(
               child: Padding(
-                padding: EdgeInsets.only(top: 48),
+                padding: EdgeInsets.all(32),
                 child: CircularProgressIndicator(),
               ),
             )
-          else if (error != null)
-            Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(Icons.error_outline,
-                      size: 48, color: DiklyColors.error),
-                  const SizedBox(height: 12),
-                  Text(
-                    error!,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(color: DiklyColors.textSecondary),
-                  ),
-                  const SizedBox(height: 16),
-                  ElevatedButton(
-                    onPressed: onRefresh,
-                    child: const Text('Retry'),
-                  ),
-                ],
-              ),
-            )
           else if (quizzes.isEmpty)
-            Center(
+            const Center(
               child: Padding(
-                padding: const EdgeInsets.only(top: 32),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      width: 64,
-                      height: 64,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFEEF2FF),
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: const Icon(Icons.quiz_outlined,
-                          color: Color(0xFF3F51B5), size: 32),
-                    ),
-                    const SizedBox(height: 16),
-                    const Text(
-                      'No snap quizzes yet',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                        color: DiklyColors.textPrimary,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    const Text(
-                      'Tap "+ New Snap Quiz" to create your first timed quiz.',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                          fontSize: 13, color: DiklyColors.textSecondary),
-                    ),
-                  ],
+                padding: EdgeInsets.only(top: 32),
+                child: Text(
+                  'No snap quizzes yet',
+                  style: TextStyle(fontSize: 14, color: Color(0xFF6B7280)),
                 ),
               ),
             )
           else
-            Column(
-              children: quizzes
-                  .map((q) => _QuizCard(quiz: q, onComingSoon: onComingSoon))
-                  .toList(),
-            ),
+            ...quizzes.map((q) => _QuizCard(quiz: q, onComingSoon: onComingSoon)),
         ],
       ),
     );
   }
 }
 
-class _ActionButton extends StatelessWidget {
-  final String label;
-  final Color color;
-  final VoidCallback onTap;
-
-  const _ActionButton({
-    required this.label,
-    required this.color,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return ElevatedButton(
-      onPressed: onTap,
-      style: ElevatedButton.styleFrom(
-        backgroundColor: color,
-        foregroundColor: Colors.white,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-        elevation: 0,
-      ),
-      child: Text(
-        label,
-        style:
-            const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-      ),
-    );
-  }
-}
+// ── Quiz Card ─────────────────────────────────────────────────────────────────
 
 class _QuizCard extends StatelessWidget {
   final SnapQuiz quiz;
@@ -440,180 +294,82 @@ class _QuizCard extends StatelessWidget {
 
   const _QuizCard({required this.quiz, required this.onComingSoon});
 
+  String _fmt(DateTime dt) =>
+      '${dt.day}/${dt.month}/${dt.year.toString().substring(2)}';
+
   @override
   Widget build(BuildContext context) {
     final isArchived = quiz.status == 'archived' || quiz.status == 'closed';
-    return Container(
+
+    return DiklyCard(
       margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: DiklyColors.border),
-      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              if (quiz.courseName != null) ...[
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFEFF6FF),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Text(
-                    quiz.courseName!,
-                    style: const TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                      color: Color(0xFF2563EB),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-              ],
-              const Spacer(),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: isArchived
-                      ? const Color(0xFFF1F5F9)
-                      : const Color(0xFFF0FDF4),
-                  borderRadius: BorderRadius.circular(6),
-                  border: Border.all(
-                    color: isArchived
-                        ? DiklyColors.border
-                        : const Color(0xFF16A34A).withOpacity(0.3),
-                  ),
-                ),
+              Expanded(
                 child: Text(
-                  isArchived ? 'Archived' : 'Active',
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    color: isArchived
-                        ? DiklyColors.textSecondary
-                        : const Color(0xFF16A34A),
-                  ),
+                  quiz.title,
+                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: Color(0xFF111827)),
                 ),
               ),
+              const SizedBox(width: 8),
+              isArchived ? DiklyBadge.archived() : DiklyBadge.active(),
             ],
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 4),
           Text(
-            quiz.title,
-            style: const TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.w700,
-              color: DiklyColors.textPrimary,
-            ),
+            quiz.courseName ?? 'Mid-Semester',
+            style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
           ),
           const SizedBox(height: 10),
-          // Chips row
           Wrap(
             spacing: 8,
             runSpacing: 6,
             children: [
               if (quiz.timeLimit != null)
-                _Chip(
-                  icon: Icons.timer_outlined,
-                  label: '${quiz.timeLimit} min',
-                ),
-              if (quiz.totalMarks != null)
-                _Chip(
-                  icon: Icons.description_outlined,
-                  label: '${quiz.totalMarks} marks',
-                ),
+                DiklyInfoChip(icon: Icons.timer_outlined, label: '${quiz.timeLimit} min'),
+              if (quiz.totalQuestions != null)
+                DiklyInfoChip(icon: Icons.description_outlined, label: '${quiz.totalQuestions} marks'),
               if (quiz.startTime != null)
-                _Chip(
+                DiklyInfoChip(
                   icon: Icons.calendar_today_outlined,
-                  label:
-                      '${_fmt(quiz.startTime!)} – ${quiz.endTime != null ? _fmt(quiz.endTime!) : '?'}',
+                  label: '${_fmt(quiz.startTime!)} – ${quiz.endTime != null ? _fmt(quiz.endTime!) : '?'}',
                 ),
             ],
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 12),
           Row(
             children: [
               Expanded(
-                child: ElevatedButton.icon(
+                child: ElevatedButton(
                   onPressed: onComingSoon,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF1E293B),
+                    backgroundColor: const Color(0xFF111827),
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 10),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8)),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                     elevation: 0,
                   ),
-                  icon: const Icon(Icons.list_alt_outlined, size: 16),
-                  label: const Text(
-                    'Questions',
-                    style:
-                        TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-                  ),
+                  child: const Text('≡ Questions', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
                 ),
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: 8),
               Expanded(
                 child: OutlinedButton.icon(
                   onPressed: onComingSoon,
                   style: OutlinedButton.styleFrom(
-                    foregroundColor: DiklyColors.error,
-                    side: const BorderSide(color: DiklyColors.error),
+                    foregroundColor: const Color(0xFF6B7280),
+                    side: const BorderSide(color: Color(0xFFD1D5DB)),
                     padding: const EdgeInsets.symmetric(vertical: 10),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8)),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                   ),
-                  icon: const Icon(Icons.delete_outline_rounded, size: 16),
-                  label: const Text(
-                    'Delete',
-                    style:
-                        TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-                  ),
+                  icon: const Icon(Icons.delete_outline, size: 16),
+                  label: const Text('Delete', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
                 ),
               ),
             ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  String _fmt(DateTime dt) =>
-      '${dt.day}/${dt.month}/${dt.year.toString().substring(2)}';
-}
-
-class _Chip extends StatelessWidget {
-  final IconData icon;
-  final String label;
-
-  const _Chip({required this.icon, required this.label});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: DiklyColors.border),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 12, color: DiklyColors.textSecondary),
-          const SizedBox(width: 4),
-          Text(
-            label,
-            style: const TextStyle(
-                fontSize: 11,
-                color: DiklyColors.textSecondary,
-                fontWeight: FontWeight.w500),
           ),
         ],
       ),

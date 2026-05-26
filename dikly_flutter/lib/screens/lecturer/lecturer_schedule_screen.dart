@@ -6,7 +6,8 @@ class LecturerScheduleScreen extends StatefulWidget {
   const LecturerScheduleScreen({super.key});
 
   @override
-  State<LecturerScheduleScreen> createState() => _LecturerScheduleScreenState();
+  State<LecturerScheduleScreen> createState() =>
+      _LecturerScheduleScreenState();
 }
 
 class _LecturerScheduleScreenState extends State<LecturerScheduleScreen> {
@@ -45,11 +46,12 @@ class _LecturerScheduleScreenState extends State<LecturerScheduleScreen> {
     );
   }
 
-  /// Groups timetable slots by day field.
   Map<String, List<Map<String, dynamic>>> get _grouped {
     final map = <String, List<Map<String, dynamic>>>{};
     for (final slot in _timetable) {
-      final day = slot['day']?.toString() ?? slot['dayOfWeek']?.toString() ?? 'Unknown';
+      final day = slot['day']?.toString() ??
+          slot['dayOfWeek']?.toString() ??
+          'Unknown';
       map.putIfAbsent(day, () => []).add(slot);
     }
     return map;
@@ -62,161 +64,184 @@ class _LecturerScheduleScreenState extends State<LecturerScheduleScreen> {
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
-        leading: BackButton(onPressed: () => Navigator.of(context).maybePop()),
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: const [
-            Text(
-              'My Schedule',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w700,
-                color: DiklyColors.textPrimary,
-              ),
-            ),
-            Text(
-              'Your weekly class timetable — tap any slot to edit',
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w400,
-                color: DiklyColors.textSecondary,
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 12),
-            child: ElevatedButton.icon(
-              onPressed: _showComingSoon,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF2563EB),
-                foregroundColor: Colors.white,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8)),
-                elevation: 0,
-              ),
-              icon: const Icon(Icons.add, size: 16),
-              label: const Text(
-                'Add Class',
-                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-              ),
-            ),
+        surfaceTintColor: Colors.transparent,
+        leading:
+            BackButton(onPressed: () => Navigator.of(context).maybePop()),
+        title: const Text(
+          'My Schedule',
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w700,
+            color: Color(0xFF111827),
           ),
-        ],
+        ),
       ),
       body: RefreshIndicator(
         onRefresh: _loadTimetable,
-        child: _loading
-            ? const Center(child: CircularProgressIndicator())
-            : _error != null
-                ? Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(24),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(Icons.error_outline,
-                              size: 48, color: DiklyColors.error),
-                          const SizedBox(height: 12),
-                          Text(
-                            _error!,
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(
-                                color: DiklyColors.textSecondary),
-                          ),
-                          const SizedBox(height: 16),
-                          ElevatedButton(
-                            onPressed: _loadTimetable,
-                            child: const Text('Retry'),
-                          ),
-                        ],
+        child: ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            // Header row
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'My Schedule',
+                        style: TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.w800,
+                          color: Color(0xFF111827),
+                        ),
                       ),
+                      SizedBox(height: 4),
+                      Text(
+                        'Your weekly class timetable — click any slot to edit',
+                        style: TextStyle(
+                            fontSize: 13, color: Color(0xFF6B7280)),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                ElevatedButton.icon(
+                  onPressed: _showComingSoon,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF2563EB),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 10),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10)),
+                    elevation: 0,
+                  ),
+                  icon: const Icon(Icons.add, size: 16),
+                  label: const Text(
+                    '+ Add Class',
+                    style: TextStyle(
+                        fontSize: 13, fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+
+            if (_loading)
+              const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(32),
+                  child: CircularProgressIndicator(),
+                ),
+              )
+            else if (_error != null)
+              Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.error_outline,
+                          size: 48, color: DiklyColors.error),
+                      const SizedBox(height: 12),
+                      Text(
+                        _error!,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                            color: Color(0xFF6B7280)),
+                      ),
+                      const SizedBox(height: 16),
+                      ElevatedButton(
+                        onPressed: _loadTimetable,
+                        child: const Text('Retry'),
+                      ),
+                    ],
+                  ),
+                ),
+              )
+            else if (_timetable.isEmpty)
+              Container(
+                padding: const EdgeInsets.all(40),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.06),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
                     ),
-                  )
-                : _timetable.isEmpty
-                    ? ListView(
-                        padding: const EdgeInsets.all(20),
-                        children: [
-                          const SizedBox(height: 40),
-                          Center(
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Container(
-                                  width: 80,
-                                  height: 80,
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFFEFF6FF),
-                                    borderRadius: BorderRadius.circular(20),
-                                  ),
-                                  child: const Icon(
-                                    Icons.calendar_month_outlined,
-                                    size: 40,
-                                    color: Color(0xFF2563EB),
-                                  ),
-                                ),
-                                const SizedBox(height: 24),
-                                const Text(
-                                  'No classes scheduled yet',
-                                  style: TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.w700,
-                                    color: DiklyColors.textPrimary,
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
-                                const Text(
-                                  'Add your first class to build out your weekly timetable',
-                                  textAlign: TextAlign.center,
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    color: DiklyColors.textSecondary,
-                                    height: 1.5,
-                                  ),
-                                ),
-                                const SizedBox(height: 28),
-                                SizedBox(
-                                  width: double.infinity,
-                                  child: ElevatedButton.icon(
-                                    onPressed: _showComingSoon,
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor:
-                                          const Color(0xFF2563EB),
-                                      foregroundColor: Colors.white,
-                                      padding: const EdgeInsets.symmetric(
-                                          vertical: 14),
-                                      shape: RoundedRectangleBorder(
-                                          borderRadius:
-                                              BorderRadius.circular(10)),
-                                      elevation: 0,
-                                    ),
-                                    icon: const Icon(Icons.add, size: 18),
-                                    label: const Text(
-                                      '+ Add Your First Class',
-                                      style: TextStyle(
-                                          fontSize: 15,
-                                          fontWeight: FontWeight.w600),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      )
-                    : ListView(
-                        padding: const EdgeInsets.all(16),
-                        children: _grouped.entries.map((entry) {
-                          return _DaySection(
-                            day: entry.key,
-                            slots: entry.value,
-                            onTapSlot: _showComingSoon,
-                          );
-                        }).toList(),
+                  ],
+                ),
+                child: Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 64,
+                        height: 64,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFEFF6FF),
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: const Icon(
+                          Icons.calendar_month_outlined,
+                          size: 32,
+                          color: Color(0xFF2563EB),
+                        ),
                       ),
+                      const SizedBox(height: 16),
+                      const Text(
+                        'No classes scheduled yet',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF111827),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      const Text(
+                        'Add your first class to build out your weekly timetable',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                            fontSize: 13, color: Color(0xFF6B7280)),
+                      ),
+                      const SizedBox(height: 24),
+                      SizedBox(
+                        width: 220,
+                        height: 48,
+                        child: ElevatedButton(
+                          onPressed: _showComingSoon,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF2563EB),
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                                borderRadius:
+                                    BorderRadius.circular(10)),
+                            elevation: 0,
+                          ),
+                          child: const Text(
+                            '+ Add Your First Class',
+                            style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              )
+            else
+              ..._grouped.entries.map((entry) => _DaySection(
+                    day: entry.key,
+                    slots: entry.value,
+                    onTapSlot: _showComingSoon,
+                  )),
+          ],
+        ),
       ),
     );
   }
@@ -245,8 +270,8 @@ class _DaySection extends StatelessWidget {
             style: const TextStyle(
               fontSize: 11,
               fontWeight: FontWeight.w700,
-              color: DiklyColors.textSecondary,
-              letterSpacing: 1.2,
+              color: Color(0xFF9CA3AF),
+              letterSpacing: 1.5,
             ),
           ),
         ),
@@ -270,7 +295,8 @@ class _SlotCard extends StatelessWidget {
       'Class';
 
   String get _timeRange {
-    final start = slot['startTime']?.toString() ?? slot['start']?.toString();
+    final start =
+        slot['startTime']?.toString() ?? slot['start']?.toString();
     final end = slot['endTime']?.toString() ?? slot['end']?.toString();
     if (start != null && end != null) return '$start – $end';
     if (start != null) return start;
@@ -290,7 +316,13 @@ class _SlotCard extends StatelessWidget {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: DiklyColors.border),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.06),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
         ),
         child: Row(
           children: [
@@ -312,7 +344,7 @@ class _SlotCard extends StatelessWidget {
                     style: const TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
-                      color: DiklyColors.textPrimary,
+                      color: Color(0xFF111827),
                     ),
                   ),
                   if (_timeRange.isNotEmpty) ...[
@@ -320,24 +352,22 @@ class _SlotCard extends StatelessWidget {
                     Row(
                       children: [
                         const Icon(Icons.access_time_rounded,
-                            size: 12, color: DiklyColors.textSecondary),
+                            size: 12, color: Color(0xFF6B7280)),
                         const SizedBox(width: 4),
                         Text(
                           _timeRange,
                           style: const TextStyle(
-                              fontSize: 12,
-                              color: DiklyColors.textSecondary),
+                              fontSize: 12, color: Color(0xFF6B7280)),
                         ),
                         if (_room.isNotEmpty) ...[
                           const SizedBox(width: 8),
                           const Icon(Icons.room_outlined,
-                              size: 12, color: DiklyColors.textSecondary),
+                              size: 12, color: Color(0xFF6B7280)),
                           const SizedBox(width: 2),
                           Text(
                             _room,
                             style: const TextStyle(
-                                fontSize: 12,
-                                color: DiklyColors.textSecondary),
+                                fontSize: 12, color: Color(0xFF6B7280)),
                           ),
                         ],
                       ],
@@ -347,7 +377,7 @@ class _SlotCard extends StatelessWidget {
               ),
             ),
             const Icon(Icons.chevron_right_rounded,
-                size: 18, color: DiklyColors.textSecondary),
+                size: 18, color: Color(0xFF9CA3AF)),
           ],
         ),
       ),

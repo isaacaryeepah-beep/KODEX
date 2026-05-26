@@ -5,11 +5,9 @@ import '../../core/auth.dart';
 import '../../core/theme.dart';
 import '../../widgets/dikly_drawer.dart';
 import 'lecturer_home_screen.dart';
-import 'lecturer_courses_screen.dart';
 import 'lecturer_attendance_screen.dart';
 import 'lecturer_quiz_screen.dart';
 import 'lecturer_assignments_screen.dart';
-import '../sessions/sessions_screen.dart';
 
 class LecturerShell extends ConsumerStatefulWidget {
   final int initialTab;
@@ -21,30 +19,43 @@ class LecturerShell extends ConsumerStatefulWidget {
 
 class _LecturerShellState extends ConsumerState<LecturerShell> {
   late int _index;
+  final _scaffoldKey = GlobalKey<ScaffoldState>();
 
   @override
-  void initState() { super.initState(); _index = widget.initialTab; }
+  void initState() {
+    super.initState();
+    _index = widget.initialTab;
+  }
 
-  static const _color = Color(0xFF7C3AED);
-  static const _labels = ['Dashboard', 'Sessions', 'Quizzes', 'Assignments'];
+  static const _accentColor = Color(0xFF7C3AED);
+
+  static const _labels = [
+    'Dashboard',
+    'Sessions',
+    'Proctored/S...',
+    'Assignment',
+    'More',
+  ];
+
   static const _icons = [
     Icons.dashboard_outlined,
-    Icons.play_circle_outline,
-    Icons.quiz_outlined,
+    Icons.access_time_outlined,
+    Icons.shield_outlined,
     Icons.assignment_outlined,
+    Icons.more_horiz,
   ];
 
   static const _sections = [
     DrawerSection(items: [
       DrawerItem(Icons.dashboard_outlined, 'Dashboard', '/dashboard/lecturer'),
-      DrawerItem(Icons.play_circle_outline, 'Sessions', '/sessions'),
+      DrawerItem(Icons.access_time_outlined, 'Sessions', '/sessions'),
       DrawerItem(Icons.sensors_outlined, 'Attendance Device', '/lecturer/attendance-device'),
     ]),
     DrawerSection(header: 'CONTENT', items: [
       DrawerItem(Icons.search_outlined, 'Search', '/lecturer/search'),
       DrawerItem(Icons.book_outlined, 'Courses', '/courses'),
-      DrawerItem(Icons.quiz_outlined, 'Proctored/Snap Quiz', '/lecturer/quiz'),
-      DrawerItem(Icons.calendar_month_outlined, 'Schedule', '/lecturer/schedule'),
+      DrawerItem(Icons.shield_outlined, 'Proctored/Snap Quiz', '/lecturer/quiz'),
+      DrawerItem(Icons.calendar_today_outlined, 'Schedule', '/lecturer/schedule'),
       DrawerItem(Icons.storage_outlined, 'Question Bank', '/lecturer/question-bank'),
       DrawerItem(Icons.assignment_outlined, 'Assignment', '/lecturer/assignments'),
       DrawerItem(Icons.grade_outlined, 'Grade Book', '/gradebook'),
@@ -69,25 +80,48 @@ class _LecturerShellState extends ConsumerState<LecturerShell> {
     ]),
   ];
 
+  void _onTabTap(int i) {
+    if (i == 4) {
+      _scaffoldKey.currentState?.openDrawer();
+    } else {
+      setState(() => _index = i);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final user = ref.watch(authProvider).user;
-    final screens = const [
-      LecturerHomeScreen(),
-      SessionsScreen(),
-      LecturerQuizScreen(),
-      LecturerAssignmentsScreen(),
+
+    final screens = [
+      const LecturerHomeScreen(),
+      const LecturerAttendanceScreen(),
+      const LecturerQuizScreen(),
+      const LecturerAssignmentsScreen(),
+      // Index 4 is "More" — tapping opens drawer, so this is a dummy placeholder
+      const _MorePlaceholder(),
     ];
 
     return Scaffold(
+      key: _scaffoldKey,
+      backgroundColor: const Color(0xFFF1F5F9),
       appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 0,
+        surfaceTintColor: Colors.transparent,
         leading: Builder(
           builder: (ctx) => IconButton(
             icon: const Icon(Icons.menu_outlined),
-            onPressed: () => Scaffold.of(ctx).openDrawer(),
+            onPressed: () => _scaffoldKey.currentState?.openDrawer(),
           ),
         ),
-        title: const Text('Lecturer Portal'),
+        title: const Text(
+          'Lecturer Portal',
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.w700,
+            color: Color(0xFF111827),
+          ),
+        ),
         actions: [
           PopupMenuButton<String>(
             offset: const Offset(0, 48),
@@ -96,24 +130,51 @@ class _LecturerShellState extends ConsumerState<LecturerShell> {
               padding: const EdgeInsets.symmetric(horizontal: 12),
               child: CircleAvatar(
                 radius: 18,
-                backgroundColor: _color.withOpacity(0.12),
+                backgroundColor: _accentColor.withOpacity(0.12),
                 child: Text(
-                  (user?.name ?? 'L').substring(0, 1).toUpperCase(),
-                  style: const TextStyle(color: _color, fontWeight: FontWeight.w700, fontSize: 14),
+                  (user?.name.isNotEmpty == true ? user!.name[0] : 'L').toUpperCase(),
+                  style: const TextStyle(
+                    color: _accentColor,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 14,
+                  ),
                 ),
               ),
             ),
             itemBuilder: (_) => [
-              PopupMenuItem(enabled: false, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(user?.name ?? '', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
-                Text(user?.email ?? '', style: const TextStyle(fontSize: 12, color: DiklyColors.textSecondary)),
-              ])),
+              PopupMenuItem(
+                enabled: false,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      user?.name ?? '',
+                      style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+                    ),
+                    Text(
+                      user?.email ?? '',
+                      style: const TextStyle(fontSize: 12, color: DiklyColors.textSecondary),
+                    ),
+                  ],
+                ),
+              ),
               const PopupMenuDivider(),
-              const PopupMenuItem(value: 'profile', child: Row(children: [Icon(Icons.person_outline, size: 18), SizedBox(width: 10), Text('My Profile')])),
-              const PopupMenuItem(value: 'logout', child: Row(children: [
-                Icon(Icons.logout, size: 18, color: DiklyColors.error),
-                SizedBox(width: 10), Text('Sign Out', style: TextStyle(color: DiklyColors.error)),
-              ])),
+              const PopupMenuItem(
+                value: 'profile',
+                child: Row(children: [
+                  Icon(Icons.person_outline, size: 18),
+                  SizedBox(width: 10),
+                  Text('My Profile'),
+                ]),
+              ),
+              const PopupMenuItem(
+                value: 'logout',
+                child: Row(children: [
+                  Icon(Icons.logout, size: 18, color: DiklyColors.error),
+                  SizedBox(width: 10),
+                  Text('Sign Out', style: TextStyle(color: DiklyColors.error)),
+                ]),
+              ),
             ],
             onSelected: (v) async {
               if (v == 'logout') await ref.read(authProvider.notifier).logout();
@@ -124,7 +185,7 @@ class _LecturerShellState extends ConsumerState<LecturerShell> {
       ),
       drawer: DiklyDrawer(
         portalTitle: 'Lecturer Portal',
-        accentColor: _color,
+        accentColor: _accentColor,
         userName: user?.name ?? '',
         userEmail: user?.email ?? '',
         userRole: 'Lecturer',
@@ -134,14 +195,37 @@ class _LecturerShellState extends ConsumerState<LecturerShell> {
           await ref.read(authProvider.notifier).logout();
         },
       ),
-      body: IndexedStack(index: _index, children: screens),
+      body: IndexedStack(
+        index: _index.clamp(0, 3),
+        children: screens.sublist(0, 4),
+      ),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _index,
-        onTap: (i) => setState(() => _index = i),
-        selectedItemColor: _color,
-        items: List.generate(4, (i) => BottomNavigationBarItem(icon: Icon(_icons[i]), label: _labels[i])),
-      type: BottomNavigationBarType.fixed,
+        onTap: _onTabTap,
+        type: BottomNavigationBarType.fixed,
+        backgroundColor: Colors.white,
+        selectedItemColor: _accentColor,
+        unselectedItemColor: const Color(0xFF6B7280),
+        selectedLabelStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+        unselectedLabelStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w400),
+        elevation: 8,
+        items: List.generate(5, (i) => BottomNavigationBarItem(
+          icon: Icon(_icons[i]),
+          label: _labels[i],
+        )),
       ),
+    );
+  }
+}
+
+class _MorePlaceholder extends StatelessWidget {
+  const _MorePlaceholder();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Scaffold(
+      backgroundColor: Color(0xFFF1F5F9),
+      body: Center(child: CircularProgressIndicator()),
     );
   }
 }

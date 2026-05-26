@@ -8,12 +8,20 @@ class DiklyColors {
   static const Color success = Color(0xFF16A34A);
   static const Color error = Color(0xFFEF4444);
   static const Color warning = Color(0xFFF59E0B);
-  static const Color background = Color(0xFFF4F6F9);
+  static const Color background = Color(0xFFF1F5F9);
   static const Color surface = Color(0xFFFFFFFF);
   static const Color textPrimary = Color(0xFF1E293B);
   static const Color textSecondary = Color(0xFF64748B);
   static const Color border = Color(0xFFE2E8F0);
   static const Color cardShadow = Color(0x0A000000);
+
+  static const Color grey50  = Color(0xFFF9FAFB);
+  static const Color grey100 = Color(0xFFF3F4F6);
+  static const Color grey200 = Color(0xFFE5E7EB);
+  static const Color grey400 = Color(0xFF9CA3AF);
+  static const Color grey500 = Color(0xFF6B7280);
+  static const Color grey700 = Color(0xFF374151);
+  static const Color grey900 = Color(0xFF111827);
 
   // Dark mode
   static const Color darkBackground = Color(0xFF0F172A);
@@ -58,7 +66,7 @@ class AppTheme {
       useMaterial3: true,
       colorScheme: colorScheme,
       textTheme: _textTheme,
-      scaffoldBackgroundColor: DiklyColors.background,
+      scaffoldBackgroundColor: const Color(0xFFF1F5F9),
       appBarTheme: AppBarTheme(
         backgroundColor: DiklyColors.surface,
         foregroundColor: DiklyColors.textPrimary,
@@ -75,10 +83,8 @@ class AppTheme {
       cardTheme: CardThemeData(
         color: DiklyColors.surface,
         elevation: 0,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-          side: const BorderSide(color: DiklyColors.border, width: 1),
-        ),
+        shadowColor: Colors.black.withOpacity(0.06),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         margin: const EdgeInsets.only(bottom: 12),
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
@@ -108,15 +114,15 @@ class AppTheme {
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: DiklyColors.surface,
+        fillColor: const Color(0xFFF9FAFB),
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
-          borderSide: const BorderSide(color: DiklyColors.border, width: 1),
+          borderSide: const BorderSide(color: Color(0xFFE5E7EB), width: 1),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
-          borderSide: const BorderSide(color: DiklyColors.border, width: 1),
+          borderSide: const BorderSide(color: Color(0xFFE5E7EB), width: 1),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),

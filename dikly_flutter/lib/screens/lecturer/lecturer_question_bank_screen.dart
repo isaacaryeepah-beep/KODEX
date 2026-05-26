@@ -13,9 +13,6 @@ class _LecturerQuestionBankScreenState
     extends State<LecturerQuestionBankScreen> {
   final _searchController = TextEditingController();
   bool _selectAll = false;
-  String _selectedTopic = 'All Topics';
-
-  final List<String> _topics = ['All Topics', 'Mathematics', 'Science', 'History', 'English'];
 
   @override
   void dispose() {
@@ -36,191 +33,169 @@ class _LecturerQuestionBankScreenState
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
-        leading: BackButton(onPressed: () => Navigator.of(context).maybePop()),
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: const [
-            Text(
-              'Question Bank',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w700,
-                color: DiklyColors.textPrimary,
-              ),
-            ),
-            Text(
-              'Save and reuse questions across quizzes — 0 total',
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w400,
-                color: DiklyColors.textSecondary,
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 12),
-            child: ElevatedButton.icon(
-              onPressed: _showComingSoon,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF2563EB),
-                foregroundColor: Colors.white,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8)),
-                elevation: 0,
-              ),
-              icon: const Icon(Icons.add, size: 16),
-              label: const Text(
-                'Add Question',
-                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-              ),
-            ),
+        surfaceTintColor: Colors.transparent,
+        leading:
+            BackButton(onPressed: () => Navigator.of(context).maybePop()),
+        title: const Text(
+          'Question Bank',
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w700,
+            color: Color(0xFF111827),
           ),
-        ],
+        ),
       ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          // Toolbar row: Select All + Search + Topic filter
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: DiklyColors.border),
-            ),
-            child: Column(
-              children: [
-                Row(
+          // Header row
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Select all checkbox
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Checkbox(
-                          value: _selectAll,
-                          onChanged: (v) =>
-                              setState(() => _selectAll = v ?? false),
-                          materialTapTargetSize:
-                              MaterialTapTargetSize.shrinkWrap,
-                          visualDensity: VisualDensity.compact,
-                        ),
-                        const Text(
-                          'Select All',
-                          style: TextStyle(
-                              fontSize: 13, color: DiklyColors.textSecondary),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(width: 10),
-                    // Search field
-                    Expanded(
-                      child: TextField(
-                        controller: _searchController,
-                        decoration: const InputDecoration(
-                          hintText: 'Search questions...',
-                          prefixIcon: Icon(Icons.search_rounded,
-                              color: DiklyColors.textSecondary, size: 18),
-                          contentPadding: EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 10),
-                          isDense: true,
-                        ),
+                    Text(
+                      'Question Bank',
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFF111827),
                       ),
+                    ),
+                    SizedBox(height: 4),
+                    Text(
+                      'Save and reuse questions across quizzes — 0 total',
+                      style: TextStyle(
+                          fontSize: 13, color: Color(0xFF6B7280)),
                     ),
                   ],
                 ),
-                const SizedBox(height: 10),
-                // Topic dropdown
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  decoration: BoxDecoration(
-                    border: Border.all(color: DiklyColors.border),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: DropdownButtonHideUnderline(
-                    child: DropdownButton<String>(
-                      value: _selectedTopic,
-                      isExpanded: true,
-                      icon: const Icon(Icons.keyboard_arrow_down_rounded,
-                          color: DiklyColors.textSecondary),
-                      style: const TextStyle(
-                          color: DiklyColors.textPrimary, fontSize: 13),
-                      items: _topics
-                          .map((t) => DropdownMenuItem(
-                                value: t,
-                                child: Text(t),
-                              ))
-                          .toList(),
-                      onChanged: (v) =>
-                          setState(() => _selectedTopic = v ?? 'All Topics'),
+              ),
+              const SizedBox(width: 12),
+              ElevatedButton.icon(
+                onPressed: _showComingSoon,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF2563EB),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 14, vertical: 10),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10)),
+                  elevation: 0,
+                ),
+                icon: const Icon(Icons.add, size: 16),
+                label: const Text(
+                  '+ Add Question',
+                  style: TextStyle(
+                      fontSize: 13, fontWeight: FontWeight.w600),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+
+          // Toolbar card
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(14),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.06),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Row(
+              children: [
+                // Select all checkbox
+                Checkbox(
+                  value: _selectAll,
+                  onChanged: (v) =>
+                      setState(() => _selectAll = v ?? false),
+                  materialTapTargetSize:
+                      MaterialTapTargetSize.shrinkWrap,
+                  visualDensity: VisualDensity.compact,
+                ),
+                const Text(
+                  'Select All',
+                  style: TextStyle(
+                      fontSize: 13, color: Color(0xFF374151)),
+                ),
+                const SizedBox(width: 8),
+                // Search field
+                Expanded(
+                  child: TextField(
+                    controller: _searchController,
+                    decoration: InputDecoration(
+                      hintText: 'Search questions...',
+                      filled: true,
+                      fillColor: const Color(0xFFF9FAFB),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: const BorderSide(
+                            color: Color(0xFFE5E7EB)),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: const BorderSide(
+                            color: Color(0xFFE5E7EB)),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: const BorderSide(
+                            color: Color(0xFF2563EB), width: 2),
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 10),
+                      isDense: true,
+                      hintStyle: const TextStyle(
+                          fontSize: 13, color: Color(0xFF9CA3AF)),
                     ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                OutlinedButton(
+                  onPressed: _showComingSoon,
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFF2563EB),
+                    side: const BorderSide(
+                        color: Color(0xFFBFDBFE)),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 10),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8)),
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'All Topics',
+                        style: TextStyle(fontSize: 13),
+                      ),
+                      SizedBox(width: 4),
+                      Icon(Icons.expand_more, size: 16),
+                    ],
                   ),
                 ),
               ],
             ),
           ),
-          const SizedBox(height: 32),
+          const SizedBox(height: 24),
+
           // Empty state
           Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 72,
-                  height: 72,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFEEF2FF),
-                    borderRadius: BorderRadius.circular(18),
-                  ),
-                  child: const Icon(
-                    Icons.help_outline_rounded,
-                    size: 36,
-                    color: Color(0xFF3F51B5),
-                  ),
-                ),
-                const SizedBox(height: 20),
-                const Text(
-                  'No questions yet.',
-                  style: TextStyle(
-                    fontSize: 17,
-                    fontWeight: FontWeight.w700,
-                    color: DiklyColors.textPrimary,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                const Text(
-                  'Add your first question or save questions from a quiz.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: DiklyColors.textSecondary,
-                    height: 1.5,
-                  ),
-                ),
-                const SizedBox(height: 24),
-                ElevatedButton.icon(
-                  onPressed: _showComingSoon,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF2563EB),
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 24, vertical: 12),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10)),
-                    elevation: 0,
-                  ),
-                  icon: const Icon(Icons.add, size: 18),
-                  label: const Text(
-                    '+ Add Question',
-                    style:
-                        TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-                  ),
-                ),
-              ],
+            child: Text(
+              'No questions yet. Add your first question or save\nquestions from a quiz.',
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 13,
+                color: Color(0xFF9CA3AF),
+              ),
             ),
           ),
         ],
