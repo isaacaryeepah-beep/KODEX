@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../core/api.dart';
 import '../../core/theme.dart';
+import '../../widgets/ds/dikly_ds.dart';
 
 class LecturerScheduleScreen extends StatefulWidget {
   const LecturerScheduleScreen({super.key});
@@ -65,15 +66,10 @@ class _LecturerScheduleScreenState extends State<LecturerScheduleScreen> {
         backgroundColor: Colors.white,
         elevation: 0,
         surfaceTintColor: Colors.transparent,
-        leading:
-            BackButton(onPressed: () => Navigator.of(context).maybePop()),
+        leading: BackButton(onPressed: () => Navigator.of(context).maybePop()),
         title: const Text(
           'My Schedule',
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w700,
-            color: Color(0xFF111827),
-          ),
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Color(0xFF111827)),
         ),
       ),
       body: RefreshIndicator(
@@ -81,53 +77,22 @@ class _LecturerScheduleScreenState extends State<LecturerScheduleScreen> {
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            // Header row
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'My Schedule',
-                        style: TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.w800,
-                          color: Color(0xFF111827),
-                        ),
-                      ),
-                      SizedBox(height: 4),
-                      Text(
-                        'Your weekly class timetable — click any slot to edit',
-                        style: TextStyle(
-                            fontSize: 13, color: Color(0xFF6B7280)),
-                      ),
-                    ],
-                  ),
+            DiklyScreenHeader(
+              title: 'My Schedule',
+              subtitle: 'Your weekly class timetable — click any slot to edit',
+              action: ElevatedButton.icon(
+                onPressed: _showComingSoon,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF2563EB),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  elevation: 0,
                 ),
-                const SizedBox(width: 12),
-                ElevatedButton.icon(
-                  onPressed: _showComingSoon,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF2563EB),
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 14, vertical: 10),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10)),
-                    elevation: 0,
-                  ),
-                  icon: const Icon(Icons.add, size: 16),
-                  label: const Text(
-                    '+ Add Class',
-                    style: TextStyle(
-                        fontSize: 13, fontWeight: FontWeight.w600),
-                  ),
-                ),
-              ],
+                icon: const Icon(Icons.add, size: 16),
+                label: const Text('+ Add Class', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+              ),
             ),
-            const SizedBox(height: 16),
 
             if (_loading)
               const Center(
@@ -143,14 +108,12 @@ class _LecturerScheduleScreenState extends State<LecturerScheduleScreen> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.error_outline,
-                          size: 48, color: DiklyColors.error),
+                      const Icon(Icons.error_outline, size: 48, color: DiklyColors.error),
                       const SizedBox(height: 12),
                       Text(
                         _error!,
                         textAlign: TextAlign.center,
-                        style: const TextStyle(
-                            color: Color(0xFF6B7280)),
+                        style: const TextStyle(color: Color(0xFF6B7280)),
                       ),
                       const SizedBox(height: 16),
                       ElevatedButton(
@@ -162,76 +125,17 @@ class _LecturerScheduleScreenState extends State<LecturerScheduleScreen> {
                 ),
               )
             else if (_timetable.isEmpty)
-              Container(
+              DiklyCard(
+                borderRadius: 16,
                 padding: const EdgeInsets.all(40),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.06),
-                      blurRadius: 8,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child: Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Container(
-                        width: 64,
-                        height: 64,
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFEFF6FF),
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: const Icon(
-                          Icons.calendar_month_outlined,
-                          size: 32,
-                          color: Color(0xFF2563EB),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      const Text(
-                        'No classes scheduled yet',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w700,
-                          color: Color(0xFF111827),
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      const Text(
-                        'Add your first class to build out your weekly timetable',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                            fontSize: 13, color: Color(0xFF6B7280)),
-                      ),
-                      const SizedBox(height: 24),
-                      SizedBox(
-                        width: 220,
-                        height: 48,
-                        child: ElevatedButton(
-                          onPressed: _showComingSoon,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF2563EB),
-                            foregroundColor: Colors.white,
-                            shape: RoundedRectangleBorder(
-                                borderRadius:
-                                    BorderRadius.circular(10)),
-                            elevation: 0,
-                          ),
-                          child: const Text(
-                            '+ Add Your First Class',
-                            style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
+                child: DiklyEmptyState(
+                  icon: Icons.calendar_month_outlined,
+                  iconColor: const Color(0xFF2563EB),
+                  iconBg: const Color(0xFFEFF6FF),
+                  title: 'No classes scheduled yet',
+                  subtitle: 'Add your first class to build out your weekly timetable',
+                  buttonLabel: '+ Add Your First Class',
+                  onButton: _showComingSoon,
                 ),
               )
             else
@@ -295,8 +199,7 @@ class _SlotCard extends StatelessWidget {
       'Class';
 
   String get _timeRange {
-    final start =
-        slot['startTime']?.toString() ?? slot['start']?.toString();
+    final start = slot['startTime']?.toString() ?? slot['start']?.toString();
     final end = slot['endTime']?.toString() ?? slot['end']?.toString();
     if (start != null && end != null) return '$start – $end';
     if (start != null) return start;
@@ -308,78 +211,54 @@ class _SlotCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
+    return DiklyCard(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(14),
       onTap: onTap,
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 8),
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.06),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
+      child: Row(
+        children: [
+          Container(
+            width: 4,
+            height: 44,
+            decoration: BoxDecoration(
+              color: const Color(0xFF2563EB),
+              borderRadius: BorderRadius.circular(2),
             ),
-          ],
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 4,
-              height: 44,
-              decoration: BoxDecoration(
-                color: const Color(0xFF2563EB),
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    _subject,
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: Color(0xFF111827),
-                    ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  _subject,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF111827),
                   ),
-                  if (_timeRange.isNotEmpty) ...[
-                    const SizedBox(height: 3),
-                    Row(
-                      children: [
-                        const Icon(Icons.access_time_rounded,
-                            size: 12, color: Color(0xFF6B7280)),
-                        const SizedBox(width: 4),
-                        Text(
-                          _timeRange,
-                          style: const TextStyle(
-                              fontSize: 12, color: Color(0xFF6B7280)),
-                        ),
-                        if (_room.isNotEmpty) ...[
-                          const SizedBox(width: 8),
-                          const Icon(Icons.room_outlined,
-                              size: 12, color: Color(0xFF6B7280)),
-                          const SizedBox(width: 2),
-                          Text(
-                            _room,
-                            style: const TextStyle(
-                                fontSize: 12, color: Color(0xFF6B7280)),
-                          ),
-                        ],
+                ),
+                if (_timeRange.isNotEmpty) ...[
+                  const SizedBox(height: 3),
+                  Row(
+                    children: [
+                      const Icon(Icons.access_time_rounded, size: 12, color: Color(0xFF6B7280)),
+                      const SizedBox(width: 4),
+                      Text(_timeRange, style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280))),
+                      if (_room.isNotEmpty) ...[
+                        const SizedBox(width: 8),
+                        const Icon(Icons.room_outlined, size: 12, color: Color(0xFF6B7280)),
+                        const SizedBox(width: 2),
+                        Text(_room, style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280))),
                       ],
-                    ),
-                  ],
+                    ],
+                  ),
                 ],
-              ),
+              ],
             ),
-            const Icon(Icons.chevron_right_rounded,
-                size: 18, color: Color(0xFF9CA3AF)),
-          ],
-        ),
+          ),
+          const Icon(Icons.chevron_right_rounded, size: 18, color: Color(0xFF9CA3AF)),
+        ],
       ),
     );
   }
