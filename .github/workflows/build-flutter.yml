@@ -2,14 +2,14 @@ name: Build Flutter APK
 
 on:
   push:
-    branches: [main]
+    branches: [main, claude/update-resume-aVv3d]
     paths:
       - 'dikly_flutter/**'
   workflow_dispatch:
 
 jobs:
   build-android:
-    name: Build Android APK
+    name: Build Android
     runs-on: ubuntu-latest
 
     steps:
@@ -25,7 +25,7 @@ jobs:
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.22.0'
+          flutter-version: '3.32.1'
           channel: 'stable'
           cache: true
 
@@ -33,24 +33,24 @@ jobs:
         working-directory: dikly_flutter
         run: flutter pub get
 
-      - name: Build Debug APK
-        working-directory: dikly_flutter
-        run: flutter build apk --debug
-
-      - name: Upload Debug APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: Dikly-Android-Debug
-          path: dikly_flutter/build/app/outputs/flutter-apk/app-debug.apk
-          retention-days: 30
-
-      - name: Build Release APK (unsigned)
+      - name: Build Release APK
         working-directory: dikly_flutter
         run: flutter build apk --release
 
-      - name: Upload Release APK
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: Dikly-Android-Release
+          name: Dikly-Android-APK
           path: dikly_flutter/build/app/outputs/flutter-apk/app-release.apk
+          retention-days: 30
+
+      - name: Build Release AAB (Play Store)
+        working-directory: dikly_flutter
+        run: flutter build appbundle --release
+
+      - name: Upload AAB
+        uses: actions/upload-artifact@v4
+        with:
+          name: Dikly-Android-AAB
+          path: dikly_flutter/build/app/outputs/bundle/release/app-release.aab
           retention-days: 30
