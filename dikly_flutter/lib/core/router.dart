@@ -128,6 +128,8 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/timetable',    builder: (context, state) => const TimetableScreen()),
       GoRoute(path: '/subscription', builder: (context, state) => const SubscriptionScreen()),
       GoRoute(path: '/faq',          builder: (context, state) => const FaqScreen()),
+      GoRoute(path: '/contact',      builder: (context, state) => const FaqScreen()),
+      GoRoute(path: '/about',        builder: (context, state) => const FaqScreen()),
       GoRoute(path: '/performance',  builder: (context, state) => const PerformanceScreen()),
 
       // Corporate

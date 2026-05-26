@@ -49,16 +49,20 @@ class _ManagerShellState extends ConsumerState<ManagerShell> {
     DrawerSection(header: 'COMMUNICATE', items: [
       DrawerItem(Icons.message_outlined, 'Messages', '/messages'),
       DrawerItem(Icons.video_call_outlined, 'Meetings', '/meetings'),
-      DrawerItem(Icons.campaign_outlined, 'Announcements', '/announcements'),
     ]),
     DrawerSection(header: 'INSIGHTS', items: [
       DrawerItem(Icons.trending_up_outlined, 'Performance', '/performance'),
       DrawerItem(Icons.assessment_outlined, 'Reports', '/reports'),
     ]),
-    DrawerSection(header: 'ACCOUNT', items: [
-      DrawerItem(Icons.person_outlined, 'My Profile', '/profile'),
+    DrawerSection(items: [
+      DrawerItem(Icons.campaign_outlined, 'Announcements', '/announcements'),
+    ]),
+    DrawerSection(header: 'SUPPORT', items: [
+      DrawerItem(Icons.help_outline, 'FAQ Center', '/faq'),
       DrawerItem(Icons.card_membership_outlined, 'Subscription', '/subscription'),
-      DrawerItem(Icons.help_outline, 'FAQ & Help', '/faq'),
+      DrawerItem(Icons.person_outlined, 'My Profile', '/profile'),
+      DrawerItem(Icons.phone_outlined, 'Contact Us', '/contact'),
+      DrawerItem(Icons.info_outline, 'About', '/about'),
     ]),
   ];
 
