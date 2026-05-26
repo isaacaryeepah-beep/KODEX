@@ -101,8 +101,7 @@ class LecturerHomeScreen extends ConsumerWidget {
                   data: (m) => StatCard(
                     title: 'Students',
                     value: m.fold<int>(0, (sum, meeting) {
-                      final count = meeting.toJson()['participantCount'];
-                      return sum + ((count is int) ? count : 0);
+                      return sum + (meeting.participantCount ?? 0);
                     }).toString(),
                     icon: Icons.people_outlined,
                     color: DiklyColors.primary,
