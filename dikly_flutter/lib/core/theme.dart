@@ -74,7 +74,7 @@ class AppTheme {
         ),
         iconTheme: const IconThemeData(color: DiklyColors.textPrimary),
       ),
-      cardTheme: CardTheme(
+      cardTheme: CardThemeData(
         color: DiklyColors.surface,
         elevation: 0,
         shape: RoundedRectangleBorder(
@@ -209,7 +209,7 @@ class AppTheme {
         surfaceTintColor: Colors.transparent,
         titleTextStyle: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.w600, color: Colors.white),
       ),
-      cardTheme: CardTheme(
+      cardTheme: CardThemeData(
         color: DiklyColors.darkSurface,
         elevation: 0,
         shape: RoundedRectangleBorder(
