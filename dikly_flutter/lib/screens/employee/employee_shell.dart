@@ -48,8 +48,9 @@ class _EmployeeShellState extends ConsumerState<EmployeeShell> {
       _MoreItem(icon: Icons.chat_bubble_outline, label: 'Messages', route: '/messages'),
       _MoreItem(icon: Icons.video_call_outlined, label: 'Meetings', route: '/meetings'),
       _MoreItem(icon: Icons.campaign_outlined, label: 'Announcements', route: '/announcements'),
-      _MoreItem(icon: Icons.bar_chart_outlined, label: 'Performance', route: '/reports'),
+      _MoreItem(icon: Icons.bar_chart_outlined, label: 'Performance', route: '/performance'),
       _MoreItem(icon: Icons.assessment_outlined, label: 'Reports', route: '/reports'),
+      _MoreItem(icon: Icons.card_membership_outlined, label: 'Subscription', route: '/subscription'),
       _MoreItem(icon: Icons.person_outline, label: 'Profile', route: '/profile'),
     ];
 

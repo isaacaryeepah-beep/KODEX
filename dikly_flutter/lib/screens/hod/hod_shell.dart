@@ -275,6 +275,12 @@ class _HodShellState extends ConsumerState<HodShell> {
                       onTap: () => _closeDrawerThenPush('/hod/performance'),
                     ),
                     _DrawerItem(
+                      icon: Icons.card_membership_outlined,
+                      label: 'Subscription',
+                      color: _color,
+                      onTap: () => _closeDrawerThenPush('/subscription'),
+                    ),
+                    _DrawerItem(
                       icon: Icons.person_outlined,
                       label: 'Profile',
                       color: _color,
