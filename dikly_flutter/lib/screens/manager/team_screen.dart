@@ -2,9 +2,7 @@ import 'package:flutter/material.dart';
 import '../../core/api.dart';
 import '../../core/theme.dart';
 import '../../models/user.dart';
-import '../../widgets/app_shell.dart';
-import '../../widgets/loading_list.dart';
-import '../../widgets/empty_state.dart';
+import '../../widgets/ds/dikly_ds.dart';
 
 class TeamScreen extends StatefulWidget {
   const TeamScreen({super.key});
@@ -15,20 +13,47 @@ class TeamScreen extends StatefulWidget {
 
 class _TeamScreenState extends State<TeamScreen> {
   List<User> _team = [];
+  List<User> _filtered = [];
   bool _loading = true;
   String? _error;
+  final _searchCtrl = TextEditingController();
 
   @override
   void initState() {
     super.initState();
     _loadData();
+    _searchCtrl.addListener(_onSearch);
+  }
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  void _onSearch() {
+    final q = _searchCtrl.text.toLowerCase();
+    setState(() {
+      _filtered = q.isEmpty
+          ? _team
+          : _team
+              .where((u) =>
+                  u.name.toLowerCase().contains(q) ||
+                  u.email.toLowerCase().contains(q) ||
+                  (u.department ?? '').toLowerCase().contains(q))
+              .toList();
+    });
   }
 
   Future<void> _loadData() async {
     setState(() { _loading = true; _error = null; });
     try {
       final users = await apiService.getUsers();
-      setState(() { _team = users.where((u) => u.role == 'employee' || u.isCorporate).toList(); _loading = false; });
+      setState(() {
+        _team = users.where((u) => u.role == 'employee' || u.isCorporate).toList();
+        _filtered = _team;
+        _loading = false;
+      });
     } catch (e) {
       setState(() { _error = e.toString(); _loading = false; });
     }
@@ -36,64 +61,83 @@ class _TeamScreenState extends State<TeamScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return AppShell(
-      title: 'My Team',
-      child: _loading
-          ? const LoadingList()
-          : _error != null
-              ? Center(child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.error_outline, color: DiklyColors.error, size: 48),
-                    const SizedBox(height: 12),
-                    Text(_error!),
-                    const SizedBox(height: 16),
-                    ElevatedButton(onPressed: _loadData, child: const Text('Retry')),
-                  ],
-                ))
-              : _team.isEmpty
-                  ? const EmptyState(icon: Icons.group_outlined, title: 'No team members', message: 'Your team will appear here')
-                  : RefreshIndicator(
-                      onRefresh: _loadData,
-                      child: Column(
-                        children: [
-                          Container(
-                            margin: const EdgeInsets.all(16),
-                            padding: const EdgeInsets.all(16),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF0D9488).withOpacity(0.08),
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: const Color(0xFF0D9488).withOpacity(0.2)),
-                            ),
-                            child: Row(
-                              children: [
-                                Container(
-                                  width: 44,
-                                  height: 44,
-                                  decoration: BoxDecoration(color: const Color(0xFF0D9488).withOpacity(0.2), shape: BoxShape.circle),
-                                  child: const Icon(Icons.group_rounded, color: Color(0xFF0D9488), size: 22),
-                                ),
-                                const SizedBox(width: 12),
-                                Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text('${_team.length}', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700, color: const Color(0xFF0D9488))),
-                                    const Text('Team Members', style: TextStyle(color: DiklyColors.textSecondary, fontSize: 12)),
-                                  ],
-                                ),
-                              ],
-                            ),
-                          ),
-                          Expanded(
-                            child: ListView.builder(
-                              padding: const EdgeInsets.symmetric(horizontal: 16),
-                              itemCount: _team.length,
-                              itemBuilder: (context, index) => _TeamMemberCard(user: _team[index]),
-                            ),
-                          ),
-                        ],
-                      ),
+    return Scaffold(
+      backgroundColor: DiklyColors.background,
+      body: Column(
+        children: [
+          // Header + search
+          Container(
+            color: DiklyColors.surface,
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                DiklyScreenHeader(
+                  title: 'Team',
+                  subtitle: '${_team.length} members',
+                  padding: const EdgeInsets.only(bottom: 12),
+                ),
+                TextField(
+                  controller: _searchCtrl,
+                  decoration: InputDecoration(
+                    hintText: 'Search team members...',
+                    prefixIcon: const Icon(Icons.search, size: 20, color: DiklyColors.textLight),
+                    filled: true,
+                    fillColor: DiklyColors.background,
+                    contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: const BorderSide(color: DiklyColors.border),
                     ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: const BorderSide(color: DiklyColors.border),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: const BorderSide(color: DiklyColors.primary, width: 2),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          Expanded(
+            child: _loading
+                ? const Center(child: CircularProgressIndicator())
+                : _error != null
+                    ? Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.error_outline, color: DiklyColors.error, size: 48),
+                            const SizedBox(height: 12),
+                            Text(_error!),
+                            const SizedBox(height: 16),
+                            ElevatedButton(onPressed: _loadData, child: const Text('Retry')),
+                          ],
+                        ),
+                      )
+                    : _filtered.isEmpty
+                        ? DiklyEmptyState(
+                            icon: Icons.group_outlined,
+                            title: _searchCtrl.text.isNotEmpty ? 'No results found' : 'No team members',
+                            message: _searchCtrl.text.isNotEmpty
+                                ? 'Try a different search term'
+                                : 'Your team will appear here',
+                          )
+                        : RefreshIndicator(
+                            onRefresh: _loadData,
+                            child: ListView.builder(
+                              padding: const EdgeInsets.all(16),
+                              itemCount: _filtered.length,
+                              itemBuilder: (context, index) => _TeamMemberCard(user: _filtered[index]),
+                            ),
+                          ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -101,6 +145,8 @@ class _TeamScreenState extends State<TeamScreen> {
 class _TeamMemberCard extends StatelessWidget {
   final User user;
   const _TeamMemberCard({required this.user});
+
+  static const _accent = Color(0xFF0891B2);
 
   String get _initials {
     final parts = user.name.trim().split(' ');
@@ -111,35 +157,75 @@ class _TeamMemberCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return DiklyCard(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: DiklyColors.surface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: DiklyColors.border),
-      ),
       child: Row(
         children: [
-          CircleAvatar(
-            radius: 24,
-            backgroundColor: const Color(0xFF0D9488).withOpacity(0.1),
-            child: Text(_initials, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Color(0xFF0D9488))),
+          // Avatar with online indicator
+          Stack(
+            children: [
+              CircleAvatar(
+                radius: 24,
+                backgroundColor: _accent.withOpacity(0.12),
+                child: Text(
+                  _initials,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: _accent,
+                  ),
+                ),
+              ),
+              // Online indicator dot
+              Positioned(
+                bottom: 1,
+                right: 1,
+                child: Container(
+                  width: 11,
+                  height: 11,
+                  decoration: BoxDecoration(
+                    color: DiklyColors.success,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white, width: 2),
+                  ),
+                ),
+              ),
+            ],
           ),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(user.name, style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600)),
+                Text(
+                  user.name,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 14,
+                    color: DiklyColors.textPrimary,
+                  ),
+                ),
                 const SizedBox(height: 2),
-                Text(user.email, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: DiklyColors.textSecondary), overflow: TextOverflow.ellipsis),
-                if (user.department != null)
-                  Text(user.department!, style: Theme.of(context).textTheme.labelSmall?.copyWith(color: DiklyColors.textSecondary)),
+                Text(
+                  user.email,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: DiklyColors.textSecondary,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+                if (user.department != null && user.department!.isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  DiklyBadge(
+                    label: user.department!,
+                    color: _accent,
+                  ),
+                ],
               ],
             ),
           ),
-          const Icon(Icons.chevron_right_rounded, color: DiklyColors.textSecondary, size: 18),
+          const Icon(Icons.chevron_right_rounded, color: DiklyColors.textSecondary, size: 20),
         ],
       ),
     );

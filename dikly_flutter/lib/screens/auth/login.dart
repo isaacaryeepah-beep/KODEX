@@ -1,49 +1,57 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../../core/auth.dart';
 import '../../core/theme.dart';
 
+// Role metadata: badge label, icon, accent color
 const _portalInfo = {
   'student': {
-    'title': 'Student Login',
-    'icon': Icons.school_rounded,
-    'color': Color(0xFF2563EB),
+    'title': 'Student Portal',
+    'badge': 'Student Portal',
+    'icon': Icons.menu_book_outlined,
+    'color': Color(0xFF7C3AED),
     'loginRole': 'student',
     'portalMode': 'academic',
   },
   'lecturer': {
-    'title': 'Lecturer Login',
-    'icon': Icons.person_rounded,
-    'color': Color(0xFF7C3AED),
+    'title': 'Lecturer Portal',
+    'badge': 'Lecturer Portal',
+    'icon': Icons.person_outlined,
+    'color': Color(0xFF2563EB),
     'loginRole': 'lecturer',
     'portalMode': 'academic',
   },
-  'manager': {
-    'title': 'Manager Login',
-    'icon': Icons.business_center_rounded,
-    'color': Color(0xFF0D9488),
-    'loginRole': 'manager',
-    'portalMode': 'corporate',
-  },
-  'hod': {
-    'title': 'Head of Dept Login',
-    'icon': Icons.account_balance_rounded,
-    'color': Color(0xFFDC2626),
-    'loginRole': 'hod',
-    'portalMode': 'academic',
-  },
   'admin': {
-    'title': 'Admin Login',
-    'icon': Icons.admin_panel_settings_rounded,
-    'color': Color(0xFFD97706),
+    'title': 'Admin Portal',
+    'badge': 'Admin Portal',
+    'icon': Icons.admin_panel_settings_outlined,
+    'color': Color(0xFF0F172A),
     'loginRole': 'admin',
     'portalMode': 'academic',
   },
+  'hod': {
+    'title': 'HOD Portal',
+    'badge': 'HOD Portal',
+    'icon': Icons.account_balance_outlined,
+    'color': Color(0xFF7C3AED),
+    'loginRole': 'hod',
+    'portalMode': 'academic',
+  },
+  'manager': {
+    'title': 'Manager Portal',
+    'badge': 'Manager Portal',
+    'icon': Icons.business_center_outlined,
+    'color': Color(0xFF0891B2),
+    'loginRole': 'manager',
+    'portalMode': 'corporate',
+  },
   'employee': {
-    'title': 'Employee Login',
+    'title': 'Employee Portal',
+    'badge': 'Employee Portal',
     'icon': Icons.badge_outlined,
-    'color': Color(0xFF0D9488),
+    'color': Color(0xFF16A34A),
     'loginRole': 'employee',
     'portalMode': 'corporate',
   },
@@ -65,7 +73,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   bool _obscurePassword = true;
 
   Map<String, dynamic> get _info =>
-      _portalInfo[widget.role] ?? _portalInfo['student']!;
+      (_portalInfo[widget.role] ?? _portalInfo['student'])!
+          as Map<String, dynamic>;
 
   @override
   void dispose() {
@@ -86,14 +95,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         );
 
     if (!success && mounted) {
-      final error = ref.read(authProvider).error;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(error ?? 'Login failed'),
-          backgroundColor: DiklyColors.error,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+      // Error is shown inline via authState.error — nothing extra needed here.
     }
   }
 
@@ -102,146 +104,355 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     final authState = ref.watch(authProvider);
     final color = _info['color'] as Color;
     final icon = _info['icon'] as IconData;
-    final title = _info['title'] as String;
+    final badge = _info['badge'] as String;
 
     return Scaffold(
-      backgroundColor: DiklyColors.background,
+      backgroundColor: DiklyColors.authBg,
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const SizedBox(height: 12),
-              // Back
+              const SizedBox(height: 8),
+
+              // ── Back arrow ─────────────────────────────────────────────────
               GestureDetector(
                 onTap: () => context.pop(),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.arrow_back_ios_rounded, size: 16, color: DiklyColors.textSecondary),
-                    const SizedBox(width: 4),
-                    Text(
-                      'Back',
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: DiklyColors.textSecondary,
-                          ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 32),
-              // Icon + Title
-              Container(
-                width: 64,
-                height: 64,
-                decoration: BoxDecoration(
-                  color: color.withOpacity(0.12),
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Icon(icon, color: color, size: 30),
-              ),
-              const SizedBox(height: 20),
-              Text(
-                title,
-                style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
-                      color: DiklyColors.textPrimary,
-                    ),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                'Enter your credentials to continue',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: DiklyColors.textSecondary,
-                    ),
-              ),
-              const SizedBox(height: 36),
-              // Form
-              Form(
-                key: _formKey,
-                child: Column(
-                  children: [
-                    TextFormField(
-                      controller: _emailController,
-                      keyboardType: TextInputType.emailAddress,
-                      autocorrect: false,
-                      decoration: const InputDecoration(
-                        labelText: 'Email Address',
-                        prefixIcon: Icon(Icons.email_outlined, size: 20),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
+                  decoration: BoxDecoration(
+                    color: DiklyColors.surface,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: DiklyColors.border),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(
+                        Icons.arrow_back_ios_rounded,
+                        size: 14,
+                        color: DiklyColors.textSecondary,
                       ),
-                      validator: (value) {
-                        if (value == null || value.trim().isEmpty) {
-                          return 'Please enter your email';
-                        }
-                        if (!value.contains('@')) {
-                          return 'Please enter a valid email';
-                        }
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 16),
-                    TextFormField(
-                      controller: _passwordController,
-                      obscureText: _obscurePassword,
-                      decoration: InputDecoration(
-                        labelText: 'Password',
-                        prefixIcon: const Icon(Icons.lock_outline_rounded, size: 20),
-                        suffixIcon: GestureDetector(
-                          onTap: () =>
-                              setState(() => _obscurePassword = !_obscurePassword),
-                          child: Icon(
-                            _obscurePassword
-                                ? Icons.visibility_outlined
-                                : Icons.visibility_off_outlined,
-                            size: 20,
-                            color: DiklyColors.textSecondary,
-                          ),
+                      const SizedBox(width: 4),
+                      Text(
+                        'Back',
+                        style: GoogleFonts.dmSans(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                          color: DiklyColors.textSecondary,
                         ),
                       ),
-                      validator: (value) {
-                        if (value == null || value.isEmpty) {
-                          return 'Please enter your password';
-                        }
-                        if (value.length < 4) {
-                          return 'Password too short';
-                        }
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 28),
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        onPressed: authState.isLoading ? null : _login,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: color,
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                        ),
-                        child: authState.isLoading
-                            ? const SizedBox(
-                                width: 20,
-                                height: 20,
-                                child: CircularProgressIndicator(
-                                  color: Colors.white,
-                                  strokeWidth: 2.5,
-                                ),
-                              )
-                            : const Text('Sign In', style: TextStyle(fontSize: 16)),
-                      ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
               const SizedBox(height: 24),
+
+              // ── Logo (small) ───────────────────────────────────────────────
+              Row(
+                children: [
+                  Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [Color(0xFF2563EB), Color(0xFF1D4ED8)],
+                      ),
+                      borderRadius: BorderRadius.circular(9),
+                    ),
+                    child: Center(
+                      child: Text(
+                        'D',
+                        style: GoogleFonts.dmSans(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.white,
+                          height: 1.0,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Text(
+                    'DIKLY',
+                    style: GoogleFonts.dmSans(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w800,
+                      color: const Color(0xFF1E1B4B),
+                      letterSpacing: 1,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
+
+              // ── Login card ─────────────────────────────────────────────────
+              Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 480),
+                  child: Container(
+                    padding: const EdgeInsets.all(32),
+                    decoration: BoxDecoration(
+                      color: DiklyColors.surface,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                        color: DiklyColors.border,
+                        width: 1.5,
+                      ),
+                      boxShadow: AppTheme.shadowMd,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Role badge chip
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: color.withOpacity(0.10),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(icon, size: 14, color: color),
+                              const SizedBox(width: 6),
+                              Text(
+                                badge,
+                                style: GoogleFonts.dmSans(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: color,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+
+                        // "Welcome back"
+                        Text(
+                          'Welcome back',
+                          style: GoogleFonts.dmSans(
+                            fontSize: 24,
+                            fontWeight: FontWeight.w700,
+                            color: DiklyColors.text,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Sign in to your account',
+                          style: GoogleFonts.dmSans(
+                            fontSize: 14,
+                            color: DiklyColors.textLight,
+                          ),
+                        ),
+                        const SizedBox(height: 28),
+
+                        // Error alert
+                        if (authState.error != null) ...[
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 12,
+                            ),
+                            decoration: BoxDecoration(
+                              color: DiklyColors.errorLight,
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(
+                                color: DiklyColors.error.withOpacity(0.3),
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(
+                                  Icons.error_outline_rounded,
+                                  size: 16,
+                                  color: DiklyColors.error,
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    authState.error!,
+                                    style: GoogleFonts.dmSans(
+                                      fontSize: 13,
+                                      color: DiklyColors.error,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 20),
+                        ],
+
+                        // Form
+                        Form(
+                          key: _formKey,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // Email label + field
+                              Text(
+                                'Email address',
+                                style: GoogleFonts.dmSans(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w500,
+                                  color: DiklyColors.textSecondary,
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              TextFormField(
+                                controller: _emailController,
+                                keyboardType: TextInputType.emailAddress,
+                                autocorrect: false,
+                                style: GoogleFonts.dmSans(
+                                  fontSize: 14,
+                                  color: DiklyColors.text,
+                                ),
+                                decoration: InputDecoration(
+                                  hintText: 'you@example.com',
+                                  prefixIcon: const Icon(
+                                    Icons.email_outlined,
+                                    size: 18,
+                                  ),
+                                  contentPadding: const EdgeInsets.symmetric(
+                                    horizontal: 14,
+                                    vertical: 12,
+                                  ),
+                                ),
+                                validator: (value) {
+                                  if (value == null || value.trim().isEmpty) {
+                                    return 'Please enter your email';
+                                  }
+                                  if (!value.contains('@')) {
+                                    return 'Please enter a valid email';
+                                  }
+                                  return null;
+                                },
+                              ),
+                              const SizedBox(height: 18),
+
+                              // Password label + field
+                              Text(
+                                'Password',
+                                style: GoogleFonts.dmSans(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w500,
+                                  color: DiklyColors.textSecondary,
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              TextFormField(
+                                controller: _passwordController,
+                                obscureText: _obscurePassword,
+                                style: GoogleFonts.dmSans(
+                                  fontSize: 14,
+                                  color: DiklyColors.text,
+                                ),
+                                decoration: InputDecoration(
+                                  hintText: '••••••••',
+                                  prefixIcon: const Icon(
+                                    Icons.lock_outline_rounded,
+                                    size: 18,
+                                  ),
+                                  contentPadding: const EdgeInsets.symmetric(
+                                    horizontal: 14,
+                                    vertical: 12,
+                                  ),
+                                  suffixIcon: GestureDetector(
+                                    onTap: () => setState(
+                                      () => _obscurePassword = !_obscurePassword,
+                                    ),
+                                    child: Icon(
+                                      _obscurePassword
+                                          ? Icons.visibility_outlined
+                                          : Icons.visibility_off_outlined,
+                                      size: 18,
+                                      color: DiklyColors.textLight,
+                                    ),
+                                  ),
+                                ),
+                                validator: (value) {
+                                  if (value == null || value.isEmpty) {
+                                    return 'Please enter your password';
+                                  }
+                                  if (value.length < 4) {
+                                    return 'Password too short';
+                                  }
+                                  return null;
+                                },
+                              ),
+                              const SizedBox(height: 28),
+
+                              // Sign In button
+                              SizedBox(
+                                width: double.infinity,
+                                height: 46,
+                                child: ElevatedButton(
+                                  onPressed:
+                                      authState.isLoading ? null : _login,
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: DiklyColors.primary,
+                                    foregroundColor: Colors.white,
+                                    elevation: 0,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    textStyle: GoogleFonts.dmSans(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                  child: authState.isLoading
+                                      ? const SizedBox(
+                                          width: 20,
+                                          height: 20,
+                                          child: CircularProgressIndicator(
+                                            color: Colors.white,
+                                            strokeWidth: 2.5,
+                                          ),
+                                        )
+                                      : Text(
+                                          'Sign In',
+                                          style: GoogleFonts.dmSans(
+                                            fontSize: 15,
+                                            fontWeight: FontWeight.w700,
+                                            color: Colors.white,
+                                          ),
+                                        ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 24),
+
+              // Footer
               Center(
                 child: Text(
                   'DIKLY Platform v1.0',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: DiklyColors.textSecondary,
-                      ),
+                  style: GoogleFonts.dmSans(
+                    fontSize: 12,
+                    color: DiklyColors.textMuted,
+                  ),
                 ),
               ),
+              const SizedBox(height: 16),
             ],
           ),
         ),
