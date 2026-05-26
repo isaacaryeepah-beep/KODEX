@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../../core/auth.dart';
 import '../../core/theme.dart';
 import '../../widgets/dikly_drawer.dart';
@@ -21,9 +22,12 @@ class _HodShellState extends ConsumerState<HodShell> {
   late int _index;
 
   @override
-  void initState() { super.initState(); _index = widget.initialTab; }
+  void initState() {
+    super.initState();
+    _index = widget.initialTab;
+  }
 
-  static const _color = Color(0xFF7C2D12);
+  static const _accent = Color(0xFF7C3AED);
   static const _labels = ['Dashboard', 'Department', 'Staff', 'Reports'];
   static const _icons = [
     Icons.dashboard_outlined,
@@ -76,49 +80,122 @@ class _HodShellState extends ConsumerState<HodShell> {
     ];
 
     return Scaffold(
+      backgroundColor: DiklyColors.background,
       appBar: AppBar(
+        backgroundColor: DiklyColors.surface,
+        elevation: 0,
+        shadowColor: Colors.transparent,
+        surfaceTintColor: Colors.transparent,
         leading: Builder(
           builder: (ctx) => IconButton(
-            icon: const Icon(Icons.menu_outlined),
+            icon: const Icon(Icons.menu_outlined, color: DiklyColors.text),
             onPressed: () => Scaffold.of(ctx).openDrawer(),
           ),
         ),
-        title: const Text('HOD Portal'),
+        title: Text(
+          'HOD Portal',
+          style: GoogleFonts.dmSans(
+            fontSize: 17,
+            fontWeight: FontWeight.w700,
+            color: DiklyColors.text,
+          ),
+        ),
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(1),
+          child: Container(height: 1, color: DiklyColors.border),
+        ),
         actions: [
           PopupMenuButton<String>(
-            offset: const Offset(0, 48),
+            offset: const Offset(0, 52),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            color: DiklyColors.surface,
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 12),
               child: CircleAvatar(
                 radius: 18,
-                backgroundColor: _color.withOpacity(0.12),
+                backgroundColor: _accent,
                 child: Text(
                   (user?.name ?? 'H').substring(0, 1).toUpperCase(),
-                  style: const TextStyle(color: _color, fontWeight: FontWeight.w700, fontSize: 14),
+                  style: GoogleFonts.dmSans(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 14,
+                  ),
                 ),
               ),
             ),
             itemBuilder: (_) => [
-              PopupMenuItem(enabled: false, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(user?.name ?? '', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
-                Text(user?.email ?? '', style: const TextStyle(fontSize: 12, color: DiklyColors.textSecondary)),
-              ])),
+              PopupMenuItem(
+                enabled: false,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      user?.name ?? '',
+                      style: GoogleFonts.dmSans(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 14,
+                        color: DiklyColors.text,
+                      ),
+                    ),
+                    Text(
+                      user?.email ?? '',
+                      style: GoogleFonts.dmSans(
+                        fontSize: 12,
+                        color: DiklyColors.textLight,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: _accent.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        'HOD',
+                        style: GoogleFonts.dmSans(
+                          fontSize: 10,
+                          color: _accent,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
               const PopupMenuDivider(),
-              const PopupMenuItem(value: 'logout', child: Row(children: [
-                Icon(Icons.logout, size: 18, color: DiklyColors.error),
-                SizedBox(width: 10), Text('Sign Out', style: TextStyle(color: DiklyColors.error)),
-              ])),
+              PopupMenuItem(
+                value: 'profile',
+                child: Row(children: [
+                  const Icon(Icons.person_outline, size: 18, color: DiklyColors.textSecondary),
+                  const SizedBox(width: 10),
+                  Text('My Profile', style: GoogleFonts.dmSans(fontSize: 14)),
+                ]),
+              ),
+              PopupMenuItem(
+                value: 'logout',
+                child: Row(children: [
+                  const Icon(Icons.logout, size: 18, color: DiklyColors.error),
+                  const SizedBox(width: 10),
+                  Text(
+                    'Sign Out',
+                    style: GoogleFonts.dmSans(fontSize: 14, color: DiklyColors.error),
+                  ),
+                ]),
+              ),
             ],
             onSelected: (v) async {
               if (v == 'logout') await ref.read(authProvider.notifier).logout();
+              if (v == 'profile') context.push('/profile');
             },
           ),
         ],
       ),
       drawer: DiklyDrawer(
         portalTitle: 'HOD Portal',
-        accentColor: _color,
+        accentColor: _accent,
         userName: user?.name ?? '',
         userEmail: user?.email ?? '',
         userRole: 'Head of Department',
@@ -132,8 +209,19 @@ class _HodShellState extends ConsumerState<HodShell> {
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _index,
         onTap: (i) => setState(() => _index = i),
-        selectedItemColor: _color,
-        items: List.generate(4, (i) => BottomNavigationBarItem(icon: Icon(_icons[i]), label: _labels[i])),
+        backgroundColor: DiklyColors.surface,
+        selectedItemColor: _accent,
+        unselectedItemColor: DiklyColors.textLight,
+        showSelectedLabels: true,
+        showUnselectedLabels: true,
+        selectedLabelStyle: GoogleFonts.dmSans(fontSize: 11, fontWeight: FontWeight.w600),
+        unselectedLabelStyle: GoogleFonts.dmSans(fontSize: 11, fontWeight: FontWeight.w400),
+        type: BottomNavigationBarType.fixed,
+        elevation: 8,
+        items: List.generate(
+          4,
+          (i) => BottomNavigationBarItem(icon: Icon(_icons[i]), label: _labels[i]),
+        ),
       ),
     );
   }
