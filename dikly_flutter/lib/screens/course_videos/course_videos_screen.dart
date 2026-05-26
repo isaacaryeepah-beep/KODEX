@@ -161,7 +161,7 @@ class _CourseVideosScreenState extends ConsumerState<CourseVideosScreen> {
                             video: video,
                             canDelete: canManage,
                             onTap: () => context.push('/video-player', extra: {
-                              'url': video.url,
+                              'url': video.embedUrl,
                               'title': video.title,
                             }),
                             onDelete: () => _deleteVideo(video),
@@ -187,7 +187,7 @@ class _VideoCard extends StatelessWidget {
   });
 
   Color get _typeColor {
-    switch (video.platform ?? 'video') {
+    switch (video.videoType) {
       case 'youtube': return const Color(0xFFDC2626);
       case 'vimeo': return const Color(0xFF1AB7EA);
       case 'drive': return const Color(0xFF4285F4);
@@ -231,7 +231,7 @@ class _VideoCard extends StatelessWidget {
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: Text(
-                        video.platform ?? 'video'.toUpperCase(),
+                        video.videoType.toUpperCase(),
                         style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w700),
                       ),
                     ),
