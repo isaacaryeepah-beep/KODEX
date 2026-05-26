@@ -33,6 +33,10 @@ jobs:
         working-directory: dikly_flutter
         run: flutter pub get
 
+      - name: Generate app icons
+        working-directory: dikly_flutter
+        run: dart run flutter_launcher_icons
+
       - name: Build Release APK
         working-directory: dikly_flutter
         run: flutter build apk --release
