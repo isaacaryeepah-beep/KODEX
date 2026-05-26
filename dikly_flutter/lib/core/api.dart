@@ -298,6 +298,178 @@ class ApiService {
     return data['expenses'] ?? data['data'] ?? [];
   }
 
+  // HOD
+  Future<Map<String, dynamic>> getHodOverview() async {
+    final response = await _dio.get('/api/hod/overview');
+    final data = response.data;
+    return (data['data'] ?? data) as Map<String, dynamic>;
+  }
+
+  Future<List<Map<String, dynamic>>> getPendingApprovals() async {
+    final response = await _dio.get('/api/hod/pending-approvals');
+    final data = response.data;
+    final list = data['data'] ?? data['approvals'] ?? data['users'] ?? [];
+    return (list as List).cast<Map<String, dynamic>>();
+  }
+
+  Future<void> approveUser(String id) async {
+    await _dio.post('/api/hod/approve/$id');
+  }
+
+  Future<void> rejectUser(String id) async {
+    await _dio.post('/api/hod/reject/$id');
+  }
+
+  Future<void> unlockStudent(String id) async {
+    await _dio.post('/api/hod/unlock-student/$id');
+  }
+
+  Future<List<Map<String, dynamic>>> getDepartmentStudents() async {
+    final response = await _dio.get('/api/hod/students');
+    final data = response.data;
+    final list = data['data'] ?? data['students'] ?? [];
+    return (list as List).cast<Map<String, dynamic>>();
+  }
+
+  Future<List<Map<String, dynamic>>> getDepartmentLecturers() async {
+    final response = await _dio.get('/api/hod/lecturers');
+    final data = response.data;
+    final list = data['data'] ?? data['lecturers'] ?? [];
+    return (list as List).cast<Map<String, dynamic>>();
+  }
+
+  Future<List<Map<String, dynamic>>> getDepartmentCourses() async {
+    final response = await _dio.get('/api/hod/courses');
+    final data = response.data;
+    final list = data['data'] ?? data['courses'] ?? [];
+    return (list as List).cast<Map<String, dynamic>>();
+  }
+
+  Future<Map<String, dynamic>> getDepartmentPerformance() async {
+    final response = await _dio.get('/api/hod/performance');
+    final data = response.data;
+    return (data['data'] ?? data) as Map<String, dynamic>;
+  }
+
+  // Timetable
+  Future<List<Map<String, dynamic>>> getTimetable() async {
+    final response = await _dio.get('/api/timetable');
+    final data = response.data;
+    final list = data['timetable'] ?? data['slots'] ?? data['data'] ?? [];
+    return (list as List).cast<Map<String, dynamic>>();
+  }
+
+  // Quiz history
+  Future<List<Map<String, dynamic>>> getQuizHistory() async {
+    final response = await _dio.get('/api/snap-quizzes/history');
+    final data = response.data;
+    final list = data['history'] ?? data['results'] ?? data['data'] ?? [];
+    return (list as List).cast<Map<String, dynamic>>();
+  }
+
+  Future<void> submitQuiz(String id, Map<String, dynamic> answers) async {
+    await _dio.post('/api/snap-quizzes/$id/submit', data: answers);
+  }
+
+  // Performance
+  Future<Map<String, dynamic>> getPerformance() async {
+    final response = await _dio.get('/api/performance/me');
+    final data = response.data;
+    return (data['data'] ?? data) as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> getLecturerPerformance() async {
+    final response = await _dio.get('/api/performance/lecturer');
+    final data = response.data;
+    return (data['data'] ?? data) as Map<String, dynamic>;
+  }
+
+  // Subscription
+  Future<Map<String, dynamic>> getSubscription() async {
+    final response = await _dio.get('/api/subscription/status');
+    final data = response.data;
+    return (data['subscription'] ?? data['data'] ?? data) as Map<String, dynamic>;
+  }
+
+  // Branches
+  Future<List<Map<String, dynamic>>> getBranches() async {
+    final response = await _dio.get('/api/branches');
+    final data = response.data;
+    final list = data['branches'] ?? data['data'] ?? [];
+    return (list as List).cast<Map<String, dynamic>>();
+  }
+
+  Future<void> createBranch(Map<String, dynamic> body) async {
+    await _dio.post('/api/branches', data: body);
+  }
+
+  // Audit logs
+  Future<List<Map<String, dynamic>>> getAuditLogs() async {
+    final response = await _dio.get('/api/audit-logs');
+    final data = response.data;
+    final list = data['logs'] ?? data['data'] ?? [];
+    return (list as List).cast<Map<String, dynamic>>();
+  }
+
+  // Sign-in/out (corporate)
+  Future<Map<String, dynamic>> getSignInStatus() async {
+    final response = await _dio.get('/api/sign-in-out/status');
+    final data = response.data;
+    return (data['data'] ?? data) as Map<String, dynamic>;
+  }
+
+  Future<void> signIn() async {
+    await _dio.post('/api/sign-in-out/sign-in');
+  }
+
+  Future<void> signOut() async {
+    await _dio.post('/api/sign-in-out/sign-out');
+  }
+
+  Future<List<Map<String, dynamic>>> getCorporateAttendance() async {
+    final response = await _dio.get('/api/sign-in-out/attendance');
+    final data = response.data;
+    final list = data['attendance'] ?? data['data'] ?? [];
+    return (list as List).cast<Map<String, dynamic>>();
+  }
+
+  // Employee-specific
+  Future<List<Map<String, dynamic>>> getMyAttendance() async {
+    final response = await _dio.get('/api/sign-in-out/my-attendance');
+    final data = response.data;
+    final list = data['attendance'] ?? data['data'] ?? [];
+    return (list as List).cast<Map<String, dynamic>>();
+  }
+
+  Future<Map<String, dynamic>> getMyShift() async {
+    final response = await _dio.get('/api/shifts/my-shift');
+    final data = response.data;
+    return (data['shift'] ?? data['data'] ?? data) as Map<String, dynamic>;
+  }
+
+  Future<List<Map<String, dynamic>>> getMyLeaves() async {
+    final response = await _dio.get('/api/leave-requests/my');
+    final data = response.data;
+    final list = data['leaveRequests'] ?? data['data'] ?? [];
+    return (list as List).cast<Map<String, dynamic>>();
+  }
+
+  Future<void> createLeaveRequest(Map<String, dynamic> body) async {
+    await _dio.post('/api/leave-requests', data: body);
+  }
+
+  Future<void> createExpense(Map<String, dynamic> body) async {
+    await _dio.post('/api/expenses', data: body);
+  }
+
+  Future<void> createShift(Map<String, dynamic> body) async {
+    await _dio.post('/api/shifts', data: body);
+  }
+
+  Future<void> createAnnouncement(Map<String, dynamic> body) async {
+    await _dio.post('/api/announcements', data: body);
+  }
+
   Future<void> saveToken(String token) async {
     await _storage.write(key: 'auth_token', value: token);
   }

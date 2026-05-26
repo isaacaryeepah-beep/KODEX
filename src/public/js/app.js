@@ -971,6 +971,54 @@ async function _doFetch(path, options, tok) {
   return fetch(`${API}${path}`, { ...options, headers: { ...headers, ...options.headers } });
 }
 
+// ── Session expiry warning ────────────────────────────────────────────────────
+let _expiryTimer = null;
+let _expiryBannerVisible = false;
+
+function _scheduleExpiryWarning() {
+  if (_expiryTimer) { clearTimeout(_expiryTimer); _expiryTimer = null; }
+  if (!token) return;
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    const msLeft  = payload.exp * 1000 - Date.now();
+    const warnAt  = msLeft - 2 * 60 * 1000; // 2 min before expiry
+    if (warnAt <= 0) return;
+    _expiryTimer = setTimeout(_showExpiryBanner, warnAt);
+  } catch (_) {}
+}
+
+function _showExpiryBanner() {
+  if (_expiryBannerVisible || !currentUser) return;
+  _expiryBannerVisible = true;
+  const banner = document.createElement('div');
+  banner.id = 'session-expiry-banner';
+  banner.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);z-index:9999;background:#1e293b;color:#fff;padding:12px 20px;border-radius:12px;display:flex;align-items:center;gap:12px;box-shadow:0 4px 20px rgba(0,0,0,.35);font-size:13px;max-width:360px;width:90%';
+  banner.innerHTML = `
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fbbf24" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+    <span style="flex:1">Your session expires in 2 minutes</span>
+    <button onclick="stayLoggedIn()" style="background:#3b82f6;color:#fff;border:none;padding:6px 12px;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap">Stay logged in</button>
+  `;
+  document.body.appendChild(banner);
+  setTimeout(_dismissExpiryBanner, 90 * 1000);
+}
+
+function _dismissExpiryBanner() {
+  const el = document.getElementById('session-expiry-banner');
+  if (el) el.remove();
+  _expiryBannerVisible = false;
+}
+
+async function stayLoggedIn() {
+  _dismissExpiryBanner();
+  const ok = await _tryRefreshToken();
+  if (ok) {
+    _scheduleExpiryWarning();
+    showToastNotif('Session extended', 'success');
+  } else {
+    showToastNotif('Could not extend session — please log in again', 'error');
+  }
+}
+
 let _refreshing = null;
 async function _tryRefreshToken() {
   const rt = localStorage.getItem('refreshToken');
@@ -986,6 +1034,7 @@ async function _tryRefreshToken() {
     token = d.token;
     localStorage.setItem('token', token);
     if (d.refreshToken) localStorage.setItem('refreshToken', d.refreshToken);
+    _scheduleExpiryWarning();
     return true;
   } catch { return false; }
 }
@@ -1183,6 +1232,7 @@ function showPortalSelector() {
   document.getElementById('employee-auth').classList.add('hidden');
   document.getElementById('student-auth').classList.add('hidden');
   document.getElementById('portal-selector').classList.remove('hidden');
+  const mrf = document.getElementById('manager-register-form'); if (mrf) mrf.classList.add('hidden');
   document.querySelectorAll('.auth-container input').forEach(i => i.value = '');
   document.querySelectorAll('.error-msg').forEach(e => e.style.display = 'none');
   selectedPortalType = null;
@@ -1194,15 +1244,51 @@ function backToPortalSelector() {
 
 function showAdminRegister() {
   document.getElementById('admin-login-form').classList.add('hidden');
-  document.getElementById('admin-register-form').classList.remove('hidden');
   document.getElementById('admin-auth-error').style.display = 'none';
+  if (selectedPortalType === 'manager') {
+    document.getElementById('admin-register-form').classList.add('hidden');
+    document.getElementById('manager-register-form').classList.remove('hidden');
+  } else {
+    document.getElementById('manager-register-form').classList.add('hidden');
+    document.getElementById('admin-register-form').classList.remove('hidden');
+  }
 }
 
 function showAdminLogin() {
   document.getElementById('admin-register-form').classList.add('hidden');
+  document.getElementById('manager-register-form').classList.add('hidden');
   document.getElementById('admin-login-form').classList.remove('hidden');
   document.getElementById('admin-auth-error').style.display = 'none';
   const f = document.getElementById('admin-forgot-form'); if(f) f.classList.add('hidden');
+}
+
+async function handleManagerRegister() {
+  try {
+    const name            = document.getElementById('manager-reg-name').value.trim();
+    const email           = document.getElementById('manager-reg-email').value.trim();
+    const phone           = document.getElementById('manager-reg-phone').value.trim();
+    const password        = document.getElementById('manager-reg-password').value;
+    const institutionCode = document.getElementById('manager-reg-code').value.trim().toUpperCase();
+    if (!name || !email || !password || !institutionCode) {
+      return showAdminError('Please fill in all required fields');
+    }
+    if (password.length < 8) {
+      return showAdminError('Password must be at least 8 characters');
+    }
+    const data = await api('/api/auth/register-manager', {
+      method: 'POST',
+      body: JSON.stringify({ name, email, phone: phone || undefined, password, institutionCode }),
+    });
+    const el = document.getElementById('admin-auth-error');
+    el.textContent = data.message || 'Registration submitted! Your account is pending admin approval.';
+    el.style.background = '#f0fdf4';
+    el.style.color = '#15803d';
+    el.style.border = '1px solid #86efac';
+    el.style.display = 'block';
+    showAdminLogin();
+  } catch (e) {
+    showAdminError(e.message || 'Registration failed');
+  }
 }
 
 function showAdminForgot() {
@@ -2110,6 +2196,8 @@ async function handleLogout() {
   window.currentUser = null;
   localStorage.removeItem('token');
   localStorage.removeItem('refreshToken');
+  if (_expiryTimer) { clearTimeout(_expiryTimer); _expiryTimer = null; }
+  _dismissExpiryBanner();
   document.getElementById('main-content').innerHTML = '';
   document.getElementById('sidebar-nav').innerHTML = '';
   document.getElementById('user-name').textContent = '';
@@ -2349,6 +2437,7 @@ function showDashboard(data) {
   if (data?.userTrial) {
     currentUserTrial = data.userTrial;
   }
+  _scheduleExpiryWarning();
   try {
     window.currentUser = currentUser; // expose for faq-assistant.js (let ≠ window prop)
     document.getElementById('auth-page').style.display = 'none';
@@ -2629,6 +2718,7 @@ function buildSidebar() {
       links.push({ id: 'hod-unlock-students', label: 'Locked Students',  icon: svgIcon('<rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>') });
       links.push({ sep: true, label: 'SUPPORT' });
       links.push({ id: 'faq-center',       label: 'FAQ Center',     icon: svgIcon('<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>') });
+      links.push({ id: 'subscription',     label: 'Subscription',   icon: subscriptionIcon() });
       break;
     case 'lecturer':
       links.push({ id: 'sessions', label: 'Sessions', icon: sessionsIcon() });
@@ -2672,6 +2762,7 @@ function buildSidebar() {
       links.push({ id: 'emp-assistant', label: 'Assistant', icon: svgIcon('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><circle cx="12" cy="10" r="1"/><circle cx="8" cy="10" r="1"/><circle cx="16" cy="10" r="1"/>') });
       links.push({ id: 'support',       label: 'Support',         icon: svgIcon('<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>') });
       links.push({ id: 'faq-center',    label: 'FAQ Center',      icon: svgIcon('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><line x1="9" y1="10" x2="15" y2="10"/><line x1="12" y1="7" x2="12" y2="13"/>') });
+      links.push({ id: 'subscription',  label: 'Subscription',    icon: subscriptionIcon() });
       break;
     case 'student':
       links.push({ sep: true, label: 'ATTENDANCE' });
@@ -2698,6 +2789,7 @@ function buildSidebar() {
       links.push({ sep: true, label: 'SUPPORT' });
       links.push({ id: 'support', label: 'Support', icon: svgIcon('<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>') });
       links.push({ id: 'faq-center', label: 'FAQ Center', icon: svgIcon('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><line x1="9" y1="10" x2="15" y2="10"/><line x1="12" y1="7" x2="12" y2="13"/>') });
+      links.push({ id: 'subscription', label: 'Subscription', icon: subscriptionIcon() });
       break;
     case 'superadmin':
       links.push({ id: 'superadmin-platform', label: 'Platform',   icon: svgIcon('<rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>') });
@@ -2921,7 +3013,7 @@ async function renderApprovals() {
       ? `Lecturer &amp; student requests for <strong>${currentUser.department || 'your department'}</strong>`
       : isManager
         ? 'Employee registration requests pending your approval'
-        : 'Review and approve registration requests';
+        : 'Review and approve employee and manager registration requests';
 
     // HODs don't need a department column (all in same dept); managers don't need one either
     const showDeptCol = !isHod && !isManager;
@@ -13427,6 +13519,62 @@ function _timetableGrid(slots, canEdit) {
     </div>`;
 }
 
+// ── Timetable ICS calendar export ────────────────────────────────────────────
+function exportTimetableICS(slots) {
+  if (!slots || slots.length === 0) { showToastNotif('No slots to export', 'error'); return; }
+  const DAYS = ['SU','MO','TU','WE','TH','FR','SA'];
+  const pad  = n => String(n).padStart(2, '0');
+
+  // Find the Monday of the current week as anchor
+  const now    = new Date();
+  const monday = new Date(now);
+  monday.setDate(now.getDate() - ((now.getDay() + 6) % 7));
+  monday.setHours(0, 0, 0, 0);
+
+  const uid = () => `${Date.now()}-${Math.random().toString(36).slice(2)}@kodex`;
+
+  const events = slots.map(slot => {
+    const [h, m]   = (slot.startTime || '00:00').split(':').map(Number);
+    const [eh, em] = (slot.endTime   || `${h+1}:00`).split(':').map(Number);
+    const dayOfWeek = slot.dayOfWeek ?? 1; // 0=Sun … 6=Sat
+    const diff = (dayOfWeek - 1 + 7) % 7;  // days from Monday
+    const date = new Date(monday);
+    date.setDate(monday.getDate() + diff);
+
+    const dtFmt = (d, hr, mn) =>
+      `${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}T${pad(hr)}${pad(mn)}00`;
+
+    return [
+      'BEGIN:VEVENT',
+      `UID:${uid()}`,
+      `SUMMARY:${(slot.title || slot.courseName || 'Class').replace(/[,;\\]/g, '\\$&')}`,
+      `DTSTART:${dtFmt(date, h, m)}`,
+      `DTEND:${dtFmt(date, eh, em)}`,
+      `RRULE:FREQ=WEEKLY;BYDAY=${DAYS[dayOfWeek]}`,
+      slot.room ? `LOCATION:Room ${slot.room}` : '',
+      'END:VEVENT',
+    ].filter(Boolean).join('\r\n');
+  });
+
+  const ics = [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//KODEX//Timetable//EN',
+    'CALSCALE:GREGORIAN',
+    'METHOD:PUBLISH',
+    ...events,
+    'END:VCALENDAR',
+  ].join('\r\n');
+
+  const blob = new Blob([ics], { type: 'text/calendar;charset=utf-8' });
+  const a    = document.createElement('a');
+  a.href     = URL.createObjectURL(blob);
+  a.download = 'timetable.ics';
+  a.click();
+  URL.revokeObjectURL(a.href);
+  showToastNotif('Calendar downloaded — open it to import into Google/Apple Calendar', 'success');
+}
+
 let _timetableSlots = [];
 let _timetableCourses = [];
 
@@ -13448,10 +13596,16 @@ async function renderLecturerTimetable() {
           <h2 style="font-size:22px;font-weight:800;letter-spacing:-.5px;color:#0f172a;margin-bottom:2px">My Schedule</h2>
           <p style="color:#64748b;font-size:13px">Your weekly class timetable — click any slot to edit</p>
         </div>
-        <button class="btn btn-primary" onclick="openAddSlotModal()" style="display:flex;align-items:center;gap:6px">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-          Add Class
-        </button>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-secondary" onclick="exportTimetableICS(_timetableSlots)" style="display:flex;align-items:center;gap:6px;font-size:13px">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+            Export .ics
+          </button>
+          <button class="btn btn-primary" onclick="openAddSlotModal()" style="display:flex;align-items:center;gap:6px">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Add Class
+          </button>
+        </div>
       </div>
       ${_timetableSlots.length === 0
         ? `<div style="background:#fff;border:1px solid #e8eaed;border-radius:16px;padding:60px 20px;text-align:center;box-shadow:0 1px 4px rgba(0,0,0,.05)">
@@ -13487,10 +13641,16 @@ async function renderStudentTimetable() {
           <h2 style="font-size:22px;font-weight:800;letter-spacing:-.5px;color:#0f172a;margin-bottom:2px">${isHod ? 'Department Schedule' : 'My Schedule'}</h2>
           <p style="color:#64748b;font-size:13px">${isHod ? 'Read-only view of all department class slots' : 'Your weekly class timetable based on enrolled courses'}</p>
         </div>
-        ${isClassRep ? `<button onclick="navigateTo('class-timetable')" style="display:inline-flex;align-items:center;gap:6px;padding:8px 14px;background:#f0fdf4;border:1.5px solid #86efac;color:#16a34a;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-          Edit Timetable
-        </button>` : ''}
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+          <button onclick="exportTimetableICS(slots)" style="display:inline-flex;align-items:center;gap:6px;padding:8px 14px;background:#f8fafc;border:1.5px solid #e2e8f0;color:#475569;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+            Export .ics
+          </button>
+          ${isClassRep ? `<button onclick="navigateTo('class-timetable')" style="display:inline-flex;align-items:center;gap:6px;padding:8px 14px;background:#f0fdf4;border:1.5px solid #86efac;color:#16a34a;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+            Edit Timetable
+          </button>` : ''}
+        </div>
       </div>
       ${slots.length === 0
         ? `<div style="background:#fff;border:1px solid #e8eaed;border-radius:16px;padding:60px 20px;text-align:center;box-shadow:0 1px 4px rgba(0,0,0,.05)">

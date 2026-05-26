@@ -7,6 +7,10 @@ class User {
   final String? avatar;
   final String? phone;
   final String? department;
+  final String? company;
+  final String? indexNumber;
+  final bool isClassRep;
+  final bool isApproved;
   final DateTime? createdAt;
 
   const User({
@@ -18,6 +22,10 @@ class User {
     this.avatar,
     this.phone,
     this.department,
+    this.company,
+    this.indexNumber,
+    this.isClassRep = false,
+    this.isApproved = true,
     this.createdAt,
   });
 
@@ -31,6 +39,10 @@ class User {
       avatar: json['avatar']?.toString() ?? json['profilePicture']?.toString(),
       phone: json['phone']?.toString(),
       department: json['department']?.toString(),
+      company: json['company']?.toString(),
+      indexNumber: json['indexNumber']?.toString(),
+      isClassRep: json['isClassRep'] == true,
+      isApproved: json['isApproved'] != false,
       createdAt: json['createdAt'] != null
           ? DateTime.tryParse(json['createdAt'].toString())
           : null,

@@ -4,10 +4,11 @@ import 'package:go_router/go_router.dart';
 import 'auth.dart';
 import '../screens/auth/portal_selector.dart';
 import '../screens/auth/login.dart';
-import '../screens/dashboard/student_dashboard.dart';
-import '../screens/dashboard/lecturer_dashboard.dart';
-import '../screens/dashboard/manager_dashboard.dart';
-import '../screens/dashboard/admin_dashboard.dart';
+import '../screens/student/student_shell.dart';
+import '../screens/lecturer/lecturer_shell.dart';
+import '../screens/manager/manager_shell.dart';
+import '../screens/admin/admin_shell.dart';
+import '../screens/hod/hod_shell.dart';
 import '../screens/sessions/sessions_screen.dart';
 import '../screens/sessions/create_session_screen.dart';
 import '../screens/sessions/session_detail_screen.dart';
@@ -19,16 +20,41 @@ import '../screens/attendance/attendance_screen.dart';
 import '../screens/assignments/assignments_screen.dart';
 import '../screens/assignments/assignment_detail_screen.dart';
 import '../screens/quizzes/quizzes_screen.dart';
+import '../screens/quizzes/quiz_history_screen.dart';
 import '../screens/messages/messages_screen.dart';
 import '../screens/meetings/meetings_screen.dart';
+import '../screens/meetings/create_meeting_screen.dart';
 import '../screens/admin/users_screen.dart';
+import '../screens/admin/branches_screen.dart';
+import '../screens/admin/audit_logs_screen.dart';
 import '../screens/manager/team_screen.dart';
 import '../screens/manager/leave_requests_screen.dart';
 import '../screens/manager/timesheets_screen.dart';
+import '../screens/employee/employee_shell.dart';
+import '../screens/employee/employee_leaves_screen.dart';
+import '../screens/employee/employee_shift_screen.dart';
 import '../screens/shared/announcements_screen.dart';
 import '../screens/shared/reports_screen.dart';
 import '../screens/shared/profile_screen.dart';
+import '../screens/shared/timetable_screen.dart';
+import '../screens/shared/subscription_screen.dart';
+import '../screens/shared/faq_screen.dart';
+import '../screens/shared/sign_in_out_screen.dart';
+import '../screens/shared/corporate_attendance_screen.dart';
+import '../screens/shared/shifts_screen.dart';
+import '../screens/shared/expenses_screen.dart';
+import '../screens/shared/performance_screen.dart';
 import '../screens/gradebook/grade_book_screen.dart';
+import '../screens/hod/hod_approvals_screen.dart';
+import '../screens/hod/hod_course_approvals_screen.dart';
+import '../screens/hod/hod_unlock_students_screen.dart';
+import '../screens/hod/hod_alerts_screen.dart';
+import '../screens/hod/hod_performance_screen.dart';
+import '../screens/hod/hod_lecturers_screen.dart';
+import '../screens/hod/hod_students_screen.dart';
+import '../screens/hod/hod_courses_screen.dart';
+import '../screens/hod/hod_reports_screen.dart';
+import '../screens/lecturer/lecturer_performance_screen.dart';
 import '../screens/splash_screen.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
@@ -38,80 +64,105 @@ final routerProvider = Provider<GoRouter>((ref) {
     initialLocation: '/splash',
     redirect: (context, state) {
       if (state.matchedLocation == '/splash') return null;
-
       final isLoading = authState.status == AuthStatus.unknown;
       if (isLoading) return null;
-
       final isAuthenticated = authState.status == AuthStatus.authenticated;
       final isOnAuth = state.matchedLocation == '/portal' ||
           state.matchedLocation.startsWith('/login');
-
       if (!isAuthenticated && !isOnAuth) return '/portal';
-      if (isAuthenticated && isOnAuth) {
-        return _getDashboardRoute(authState.user?.role ?? 'student');
-      }
+      if (isAuthenticated && isOnAuth) return _getDashboardRoute(authState.user?.role ?? 'student');
       return null;
     },
     routes: [
-      GoRoute(
-        path: '/splash',
-        builder: (context, state) => const SplashScreen(),
-      ),
-      GoRoute(
-        path: '/portal',
-        builder: (context, state) => const PortalSelectorScreen(),
-      ),
-      GoRoute(
-        path: '/login/:role',
-        builder: (context, state) {
-          final role = state.pathParameters['role'] ?? 'student';
-          return LoginScreen(role: role);
-        },
-      ),
-      // Dashboards
-      GoRoute(path: '/dashboard/student', builder: (context, state) => const StudentDashboard()),
-      GoRoute(path: '/dashboard/lecturer', builder: (context, state) => const LecturerDashboard()),
-      GoRoute(path: '/dashboard/manager', builder: (context, state) => const ManagerDashboard()),
-      GoRoute(path: '/dashboard/admin', builder: (context, state) => const AdminDashboard()),
+      GoRoute(path: '/splash', builder: (context, state) => const SplashScreen()),
+      GoRoute(path: '/portal', builder: (context, state) => const PortalSelectorScreen()),
+      GoRoute(path: '/login/:role', builder: (context, state) => LoginScreen(role: state.pathParameters['role'] ?? 'student')),
+
+      // Dashboards (shells)
+      GoRoute(path: '/dashboard/student',  builder: (context, state) => const StudentShell()),
+      GoRoute(path: '/dashboard/lecturer', builder: (context, state) => const LecturerShell()),
+      GoRoute(path: '/dashboard/manager',  builder: (context, state) => const ManagerShell()),
+      GoRoute(path: '/dashboard/admin',    builder: (context, state) => const AdminShell()),
+      GoRoute(path: '/dashboard/hod',      builder: (context, state) => const HodShell()),
+      GoRoute(path: '/dashboard/employee', builder: (context, state) => const EmployeeShell()),
+
       // Sessions
-      GoRoute(path: '/sessions', builder: (context, state) => const SessionsScreen()),
+      GoRoute(path: '/sessions',        builder: (context, state) => const SessionsScreen()),
       GoRoute(path: '/sessions/create', builder: (context, state) => const CreateSessionScreen()),
-      GoRoute(path: '/sessions/:id', builder: (context, state) => SessionDetailScreen(sessionId: state.pathParameters['id']!)),
+      GoRoute(path: '/sessions/:id',    builder: (context, state) => SessionDetailScreen(sessionId: state.pathParameters['id']!)),
+
       // Meetings
-      GoRoute(path: '/meetings', builder: (context, state) => const MeetingsScreen()),
+      GoRoute(path: '/meetings',        builder: (context, state) => const MeetingsScreen()),
+      GoRoute(path: '/meetings/create', builder: (context, state) => const CreateMeetingScreen()),
+
       // Courses
-      GoRoute(path: '/courses', builder: (context, state) => const CoursesScreen()),
+      GoRoute(path: '/courses',     builder: (context, state) => const CoursesScreen()),
       GoRoute(path: '/courses/:id', builder: (context, state) => CourseDetailScreen(courseId: state.pathParameters['id']!)),
-      // Course Videos
+
+      // Videos
       GoRoute(path: '/course-videos/:courseId', builder: (context, state) => CourseVideosScreen(courseId: state.pathParameters['courseId']!)),
-      GoRoute(
-        path: '/video-player',
-        builder: (context, state) {
-          final extra = state.extra as Map<String, dynamic>?;
-          return VideoPlayerScreen(url: extra?['url'] ?? '', title: extra?['title'] ?? '');
-        },
-      ),
+      GoRoute(path: '/video-player', builder: (context, state) {
+        final extra = state.extra as Map<String, dynamic>?;
+        return VideoPlayerScreen(url: extra?['url'] ?? '', title: extra?['title'] ?? '');
+      }),
+
       // Attendance
       GoRoute(path: '/attendance', builder: (context, state) => const AttendanceScreen()),
+
       // Assignments
-      GoRoute(path: '/assignments', builder: (context, state) => const AssignmentsScreen()),
+      GoRoute(path: '/assignments',     builder: (context, state) => const AssignmentsScreen()),
       GoRoute(path: '/assignments/:id', builder: (context, state) => AssignmentDetailScreen(assignmentId: state.pathParameters['id']!)),
+
       // Quizzes
-      GoRoute(path: '/quizzes', builder: (context, state) => const QuizzesScreen()),
-      // Messages
-      GoRoute(path: '/messages', builder: (context, state) => const MessagesScreen()),
-      // Admin
-      GoRoute(path: '/admin/users', builder: (context, state) => const UsersScreen()),
-      // Manager
-      GoRoute(path: '/manager/team', builder: (context, state) => const TeamScreen()),
-      GoRoute(path: '/manager/leave-requests', builder: (context, state) => const LeaveRequestsScreen()),
-      GoRoute(path: '/manager/timesheets', builder: (context, state) => const TimesheetsScreen()),
-      // Shared
+      GoRoute(path: '/quizzes',       builder: (context, state) => const QuizzesScreen()),
+      GoRoute(path: '/quiz-history',  builder: (context, state) => const QuizHistoryScreen()),
+
+      // Communicate
+      GoRoute(path: '/messages',      builder: (context, state) => const MessagesScreen()),
       GoRoute(path: '/announcements', builder: (context, state) => const AnnouncementsScreen()),
-      GoRoute(path: '/reports', builder: (context, state) => const ReportsScreen()),
-      GoRoute(path: '/profile', builder: (context, state) => const ProfileScreen()),
-      // Grade Book
-      GoRoute(path: '/gradebook', builder: (context, state) => const GradeBookScreen()),
+
+      // Shared
+      GoRoute(path: '/reports',      builder: (context, state) => const ReportsScreen()),
+      GoRoute(path: '/profile',      builder: (context, state) => const ProfileScreen()),
+      GoRoute(path: '/gradebook',    builder: (context, state) => const GradeBookScreen()),
+      GoRoute(path: '/timetable',    builder: (context, state) => const TimetableScreen()),
+      GoRoute(path: '/subscription', builder: (context, state) => const SubscriptionScreen()),
+      GoRoute(path: '/faq',          builder: (context, state) => const FaqScreen()),
+      GoRoute(path: '/performance',  builder: (context, state) => const PerformanceScreen()),
+
+      // Corporate
+      GoRoute(path: '/sign-in-out',           builder: (context, state) => const SignInOutScreen()),
+      GoRoute(path: '/corporate-attendance',  builder: (context, state) => const CorporateAttendanceScreen()),
+      GoRoute(path: '/shifts',                builder: (context, state) => const ShiftsScreen()),
+      GoRoute(path: '/expenses',              builder: (context, state) => const ExpensesScreen()),
+
+      // Admin
+      GoRoute(path: '/admin/users',       builder: (context, state) => const UsersScreen()),
+      GoRoute(path: '/admin/branches',    builder: (context, state) => const BranchesScreen()),
+      GoRoute(path: '/admin/audit-logs',  builder: (context, state) => const AuditLogsScreen()),
+
+      // Manager
+      GoRoute(path: '/manager/team',          builder: (context, state) => const TeamScreen()),
+      GoRoute(path: '/manager/leave-requests',builder: (context, state) => const LeaveRequestsScreen()),
+      GoRoute(path: '/manager/timesheets',    builder: (context, state) => const TimesheetsScreen()),
+
+      // Employee
+      GoRoute(path: '/employee/leaves', builder: (context, state) => const EmployeeLeavesScreen()),
+      GoRoute(path: '/employee/shift',  builder: (context, state) => const EmployeeShiftScreen()),
+
+      // HOD
+      GoRoute(path: '/hod/approvals',       builder: (context, state) => const HodApprovalsScreen()),
+      GoRoute(path: '/hod/course-approvals',builder: (context, state) => const HodCourseApprovalsScreen()),
+      GoRoute(path: '/hod/locked-students', builder: (context, state) => const HodUnlockStudentsScreen()),
+      GoRoute(path: '/hod/alerts',          builder: (context, state) => const HodAlertsScreen()),
+      GoRoute(path: '/hod/performance',     builder: (context, state) => const HodPerformanceScreen()),
+      GoRoute(path: '/hod/lecturers',       builder: (context, state) => const HodLecturersScreen()),
+      GoRoute(path: '/hod/students',        builder: (context, state) => const HodStudentsScreen()),
+      GoRoute(path: '/hod/courses',         builder: (context, state) => const HodCoursesScreen()),
+      GoRoute(path: '/hod/reports',         builder: (context, state) => const HodReportsScreen()),
+
+      // Lecturer
+      GoRoute(path: '/lecturer/performance', builder: (context, state) => const LecturerPerformanceScreen()),
     ],
     errorBuilder: (context, state) => Scaffold(
       body: Center(child: Text('Page not found: ${state.uri}')),
@@ -122,10 +173,11 @@ final routerProvider = Provider<GoRouter>((ref) {
 String _getDashboardRoute(String role) {
   switch (role) {
     case 'lecturer': return '/dashboard/lecturer';
-    case 'manager': return '/dashboard/manager';
-    case 'admin':
-    case 'hod': return '/dashboard/admin';
+    case 'manager':  return '/dashboard/manager';
+    case 'admin':    return '/dashboard/admin';
+    case 'hod':      return '/dashboard/hod';
+    case 'employee': return '/dashboard/employee';
     case 'student':
-    default: return '/dashboard/student';
+    default:         return '/dashboard/student';
   }
 }

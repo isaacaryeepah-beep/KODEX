@@ -542,6 +542,71 @@ exports.registerEmployee = async (req, res) => {
   }
 };
 
+exports.registerManager = async (req, res) => {
+  try {
+    const { name, email: emailRaw, password, institutionCode, phone } = req.body;
+    const email = emailRaw ? emailRaw.trim().toLowerCase() : "";
+
+    if (!name || !email || !password || !institutionCode) {
+      return res.status(400).json({ error: "Name, email, password, and institution code are required" });
+    }
+    if (password.length < 8) {
+      return res.status(400).json({ error: "Password must be at least 8 characters" });
+    }
+
+    const company = await Company.findOne({ institutionCode: institutionCode.toUpperCase(), mode: "corporate" });
+    if (!company) {
+      return res.status(404).json({ error: "Company not found. Please check your institution code." });
+    }
+    if (!company.isActive) {
+      return res.status(403).json({ error: "This company is currently inactive." });
+    }
+
+    const existingUser = await User.findOne({ email, company: company._id });
+    if (existingUser) {
+      return res.status(400).json({ error: "An account with this email already exists at this company" });
+    }
+
+    if (phone) {
+      const normPhone = normalisePhone(phone);
+      const phoneExists = await User.findOne({ phone: normPhone, company: company._id });
+      if (phoneExists) return res.status(400).json({ error: "Phone number is already in use" });
+    }
+
+    const user = await User.create({
+      name,
+      email,
+      password,
+      phone: phone ? normalisePhone(phone) : null,
+      company: company._id,
+      role: "manager",
+      isApproved: false,
+    });
+
+    res.status(201).json({
+      user: {
+        id: user._id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        isApproved: user.isApproved,
+        company: { id: company._id, name: company.name, mode: company.mode },
+      },
+      message: "Registration successful. Your account is pending admin approval.",
+    });
+  } catch (error) {
+    if (error.name === "ValidationError") {
+      const messages = Object.values(error.errors).map(e => e.message);
+      return res.status(400).json({ error: messages.join(", ") });
+    }
+    if (error.code === 11000) {
+      return res.status(400).json({ error: "This email is already registered at this company" });
+    }
+    console.error("Manager register error:", error);
+    res.status(500).json({ error: "Manager registration failed" });
+  }
+};
+
 exports.registerHod = async (req, res) => {
   try {
     const { name, email: emailRaw, password, institutionCode, department, phone } = req.body;

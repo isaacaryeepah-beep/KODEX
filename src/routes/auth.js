@@ -11,6 +11,7 @@ router.post("/register",               registerLimiter,       authController.reg
 router.post("/register-lecturer",      registerLimiter,       authController.registerLecturer);
 router.post("/register-student",       registerLimiter,       authController.registerStudent);
 router.post("/register-employee",      registerLimiter,       authController.registerEmployee);
+router.post("/register-manager",       registerLimiter,       authController.registerManager);
 router.post("/register-hod",           registerLimiter,       authController.registerHod);
 router.post("/login",                  loginLimiter,          authController.login);
 router.post("/refresh",                loginLimiter,          authController.refresh);
