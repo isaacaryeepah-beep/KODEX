@@ -22,7 +22,9 @@ class _EmployeeShellState extends ConsumerState<EmployeeShell> {
   @override
   void initState() { super.initState(); _index = widget.initialTab; }
 
-  static const _color = Color(0xFF0369A1);
+  // Green accent per spec
+  static const _color = Color(0xFF16A34A);
+
   static const _labels = ['Dashboard', 'Attendance', 'Leave'];
   static const _icons = [
     Icons.dashboard_outlined,
@@ -33,31 +35,19 @@ class _EmployeeShellState extends ConsumerState<EmployeeShell> {
   static const _sections = [
     DrawerSection(items: [
       DrawerItem(Icons.dashboard_outlined, 'Dashboard', '/dashboard/employee'),
+    ]),
+    DrawerSection(header: 'ATTENDANCE', items: [
       DrawerItem(Icons.login_outlined, 'Sign In / Out', '/sign-in-out'),
       DrawerItem(Icons.check_circle_outline, 'My Attendance', '/corporate-attendance'),
     ]),
     DrawerSection(header: 'WORK', items: [
+      DrawerItem(Icons.calendar_today_outlined, 'Leaves', '/employee/leaves'),
       DrawerItem(Icons.access_time_outlined, 'My Shift', '/employee/shift'),
-      DrawerItem(Icons.calendar_today_outlined, 'Leave Requests', '/employee/leaves'),
       DrawerItem(Icons.attach_money_outlined, 'Expenses', '/expenses'),
     ]),
-    DrawerSection(header: 'COMMUNICATE', items: [
-      DrawerItem(Icons.message_outlined, 'Messages', '/messages'),
-      DrawerItem(Icons.video_call_outlined, 'Meetings', '/meetings'),
-    ]),
-    DrawerSection(header: 'INSIGHTS', items: [
-      DrawerItem(Icons.trending_up_outlined, 'Performance', '/performance'),
-      DrawerItem(Icons.assessment_outlined, 'Reports', '/reports'),
-    ]),
-    DrawerSection(items: [
-      DrawerItem(Icons.campaign_outlined, 'Announcements', '/announcements'),
-    ]),
-    DrawerSection(header: 'SUPPORT', items: [
-      DrawerItem(Icons.help_outline, 'FAQ Center', '/faq'),
+    DrawerSection(header: 'ACCOUNT', items: [
       DrawerItem(Icons.card_membership_outlined, 'Subscription', '/subscription'),
       DrawerItem(Icons.person_outlined, 'My Profile', '/profile'),
-      DrawerItem(Icons.phone_outlined, 'Contact Us', '/contact'),
-      DrawerItem(Icons.info_outline, 'About', '/about'),
     ]),
   ];
 
@@ -71,7 +61,11 @@ class _EmployeeShellState extends ConsumerState<EmployeeShell> {
     ];
 
     return Scaffold(
+      backgroundColor: DiklyColors.background,
       appBar: AppBar(
+        backgroundColor: DiklyColors.surface,
+        elevation: 0,
+        surfaceTintColor: Colors.transparent,
         leading: Builder(
           builder: (ctx) => IconButton(
             icon: const Icon(Icons.menu_outlined),
@@ -130,6 +124,10 @@ class _EmployeeShellState extends ConsumerState<EmployeeShell> {
         currentIndex: _index,
         onTap: (i) => setState(() => _index = i),
         selectedItemColor: _color,
+        unselectedItemColor: DiklyColors.textLight,
+        backgroundColor: DiklyColors.surface,
+        type: BottomNavigationBarType.fixed,
+        elevation: 8,
         items: List.generate(3, (i) => BottomNavigationBarItem(icon: Icon(_icons[i]), label: _labels[i])),
       ),
     );

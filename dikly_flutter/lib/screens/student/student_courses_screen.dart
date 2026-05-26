@@ -301,8 +301,8 @@ class _VideoTile extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       onTap: () async {
-        final url = video.embedUrl ?? video.url;
-        if (url != null && await canLaunchUrl(Uri.parse(url))) {
+        final url = video.embedUrl;
+        if (await canLaunchUrl(Uri.parse(url))) {
           await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
         }
       },
