@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../../core/api.dart';
 import '../../core/theme.dart';
+import '../../widgets/ds/dikly_ds.dart';
 
 class CreateMeetingScreen extends ConsumerStatefulWidget {
   const CreateMeetingScreen({super.key});
@@ -18,6 +19,7 @@ class _CreateMeetingScreenState extends ConsumerState<CreateMeetingScreen> {
   final _descriptionController = TextEditingController();
   final _urlController = TextEditingController();
   final _durationController = TextEditingController();
+  final _maxParticipantsController = TextEditingController();
 
   DateTime? _selectedDate;
   TimeOfDay? _selectedTime;
@@ -38,6 +40,7 @@ class _CreateMeetingScreenState extends ConsumerState<CreateMeetingScreen> {
     _descriptionController.dispose();
     _urlController.dispose();
     _durationController.dispose();
+    _maxParticipantsController.dispose();
     super.dispose();
   }
 
@@ -48,9 +51,7 @@ class _CreateMeetingScreenState extends ConsumerState<CreateMeetingScreen> {
       firstDate: DateTime.now(),
       lastDate: DateTime.now().add(const Duration(days: 365)),
     );
-    if (picked != null) {
-      setState(() => _selectedDate = picked);
-    }
+    if (picked != null) setState(() => _selectedDate = picked);
   }
 
   Future<void> _pickTime() async {
@@ -58,9 +59,7 @@ class _CreateMeetingScreenState extends ConsumerState<CreateMeetingScreen> {
       context: context,
       initialTime: _selectedTime ?? TimeOfDay.now(),
     );
-    if (picked != null) {
-      setState(() => _selectedTime = picked);
-    }
+    if (picked != null) setState(() => _selectedTime = picked);
   }
 
   String get _dateDisplay {
@@ -96,13 +95,12 @@ class _CreateMeetingScreenState extends ConsumerState<CreateMeetingScreen> {
         'platform': _selectedPlatform ?? '',
         'url': _urlController.text.trim(),
         'duration': int.tryParse(_durationController.text.trim()) ?? 60,
+        if (_maxParticipantsController.text.trim().isNotEmpty)
+          'maxParticipants': int.tryParse(_maxParticipantsController.text.trim()),
       });
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Meeting created'),
-            backgroundColor: DiklyColors.success,
-          ),
+          const SnackBar(content: Text('Meeting created'), backgroundColor: DiklyColors.success),
         );
         Navigator.pop(context);
       }
@@ -116,22 +114,24 @@ class _CreateMeetingScreenState extends ConsumerState<CreateMeetingScreen> {
 
   void _showError(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: DiklyColors.error,
-      ),
+      SnackBar(content: Text(message), backgroundColor: DiklyColors.error),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
     return Scaffold(
       backgroundColor: DiklyColors.background,
       appBar: AppBar(
-        title: const Text('New Meeting'),
+        title: const Text('Create Meeting'),
         leading: BackButton(onPressed: () => Navigator.of(context).maybePop()),
+        backgroundColor: DiklyColors.surface,
+        elevation: 0,
+        surfaceTintColor: Colors.transparent,
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(1),
+          child: Container(color: DiklyColors.border, height: 1),
+        ),
       ),
       body: Form(
         key: _formKey,
@@ -139,7 +139,7 @@ class _CreateMeetingScreenState extends ConsumerState<CreateMeetingScreen> {
           padding: const EdgeInsets.all(16),
           children: [
             // Title
-            _SectionLabel(label: 'Title'),
+            _FieldLabel(label: 'Title'),
             const SizedBox(height: 8),
             TextFormField(
               controller: _titleController,
@@ -148,24 +148,17 @@ class _CreateMeetingScreenState extends ConsumerState<CreateMeetingScreen> {
                 prefixIcon: Icon(Icons.title_rounded),
               ),
               textCapitalization: TextCapitalization.sentences,
-              validator: (v) =>
-                  (v == null || v.trim().isEmpty)
-                      ? 'Title is required'
-                      : null,
+              validator: (v) => (v == null || v.trim().isEmpty) ? 'Title is required' : null,
             ),
             const SizedBox(height: 16),
 
             // Description
-            _SectionLabel(label: 'Description (optional)'),
+            _FieldLabel(label: 'Description (optional)'),
             const SizedBox(height: 8),
             TextFormField(
               controller: _descriptionController,
               decoration: const InputDecoration(
                 hintText: 'Add details about this meeting...',
-                prefixIcon: Padding(
-                  padding: EdgeInsets.only(bottom: 48),
-                  child: Icon(Icons.description_outlined),
-                ),
                 alignLabelWithHint: true,
               ),
               maxLines: 3,
@@ -180,7 +173,7 @@ class _CreateMeetingScreenState extends ConsumerState<CreateMeetingScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _SectionLabel(label: 'Date'),
+                      _FieldLabel(label: 'Date'),
                       const SizedBox(height: 8),
                       _TappableField(
                         icon: Icons.calendar_today_outlined,
@@ -196,7 +189,7 @@ class _CreateMeetingScreenState extends ConsumerState<CreateMeetingScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _SectionLabel(label: 'Time'),
+                      _FieldLabel(label: 'Time'),
                       const SizedBox(height: 8),
                       _TappableField(
                         icon: Icons.access_time_outlined,
@@ -212,7 +205,7 @@ class _CreateMeetingScreenState extends ConsumerState<CreateMeetingScreen> {
             const SizedBox(height: 16),
 
             // Platform
-            _SectionLabel(label: 'Platform'),
+            _FieldLabel(label: 'Platform'),
             const SizedBox(height: 8),
             DropdownButtonFormField<String>(
               value: _selectedPlatform,
@@ -220,18 +213,15 @@ class _CreateMeetingScreenState extends ConsumerState<CreateMeetingScreen> {
               decoration: const InputDecoration(
                 prefixIcon: Icon(Icons.videocam_outlined),
               ),
-              items: _platforms
-                  .map((p) => DropdownMenuItem(value: p, child: Text(p)))
-                  .toList(),
+              items: _platforms.map((p) => DropdownMenuItem(value: p, child: Text(p))).toList(),
               onChanged: (v) => setState(() => _selectedPlatform = v),
-              validator: (v) =>
-                  (v == null || v.isEmpty) ? 'Please select a platform' : null,
+              validator: (v) => (v == null || v.isEmpty) ? 'Please select a platform' : null,
             ),
             const SizedBox(height: 16),
 
-            // Meeting URL (shown when platform selected)
+            // Meeting URL
             if (_selectedPlatform != null) ...[
-              _SectionLabel(label: 'Meeting URL'),
+              _FieldLabel(label: 'Meeting URL'),
               const SizedBox(height: 8),
               TextFormField(
                 controller: _urlController,
@@ -242,12 +232,8 @@ class _CreateMeetingScreenState extends ConsumerState<CreateMeetingScreen> {
                 keyboardType: TextInputType.url,
                 autocorrect: false,
                 validator: (v) {
-                  if (v == null || v.trim().isEmpty) {
-                    return 'Please enter the meeting URL';
-                  }
-                  if (!v.trim().startsWith('http')) {
-                    return 'Please enter a valid URL';
-                  }
+                  if (v == null || v.trim().isEmpty) return 'Please enter the meeting URL';
+                  if (!v.trim().startsWith('http')) return 'Please enter a valid URL';
                   return null;
                 },
               ),
@@ -255,7 +241,7 @@ class _CreateMeetingScreenState extends ConsumerState<CreateMeetingScreen> {
             ],
 
             // Duration
-            _SectionLabel(label: 'Duration (minutes)'),
+            _FieldLabel(label: 'Duration (minutes)'),
             const SizedBox(height: 8),
             TextFormField(
               controller: _durationController,
@@ -265,36 +251,34 @@ class _CreateMeetingScreenState extends ConsumerState<CreateMeetingScreen> {
               ),
               keyboardType: TextInputType.number,
               validator: (v) {
-                if (v == null || v.trim().isEmpty) {
-                  return 'Duration is required';
-                }
+                if (v == null || v.trim().isEmpty) return 'Duration is required';
                 final n = int.tryParse(v.trim());
-                if (n == null || n <= 0) {
-                  return 'Enter a valid duration';
-                }
+                if (n == null || n <= 0) return 'Enter a valid duration';
                 return null;
               },
+            ),
+            const SizedBox(height: 16),
+
+            // Max Participants
+            _FieldLabel(label: 'Max Participants (optional)'),
+            const SizedBox(height: 8),
+            TextFormField(
+              controller: _maxParticipantsController,
+              decoration: const InputDecoration(
+                hintText: '100',
+                prefixIcon: Icon(Icons.people_outline_rounded),
+              ),
+              keyboardType: TextInputType.number,
             ),
             const SizedBox(height: 32),
 
             // Submit
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: _loading ? null : _submit,
-                icon: _loading
-                    ? const SizedBox(
-                        height: 16,
-                        width: 16,
-                        child: CircularProgressIndicator(
-                            strokeWidth: 2, color: Colors.white),
-                      )
-                    : const Icon(Icons.check_rounded),
-                label: Text(_loading ? 'Creating...' : 'Create Meeting'),
-                style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                ),
-              ),
+            DiklyPrimaryButton(
+              label: _loading ? 'Creating...' : 'Create Meeting',
+              icon: Icons.check_rounded,
+              loading: _loading,
+              onPressed: _submit,
+              height: 50,
             ),
             const SizedBox(height: 32),
           ],
@@ -304,10 +288,9 @@ class _CreateMeetingScreenState extends ConsumerState<CreateMeetingScreen> {
   }
 }
 
-class _SectionLabel extends StatelessWidget {
+class _FieldLabel extends StatelessWidget {
   final String label;
-
-  const _SectionLabel({required this.label});
+  const _FieldLabel({required this.label});
 
   @override
   Widget build(BuildContext context) {
@@ -343,7 +326,7 @@ class _TappableField extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
         decoration: BoxDecoration(
           color: DiklyColors.surface,
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(8),
           border: Border.all(color: DiklyColors.border),
         ),
         child: Row(
@@ -355,11 +338,8 @@ class _TappableField extends StatelessWidget {
                 value,
                 style: TextStyle(
                   fontSize: 14,
-                  color: placeholder
-                      ? DiklyColors.textSecondary
-                      : DiklyColors.textPrimary,
-                  fontWeight:
-                      placeholder ? FontWeight.w400 : FontWeight.w500,
+                  color: placeholder ? DiklyColors.textSecondary : DiklyColors.text,
+                  fontWeight: placeholder ? FontWeight.w400 : FontWeight.w500,
                 ),
                 overflow: TextOverflow.ellipsis,
               ),

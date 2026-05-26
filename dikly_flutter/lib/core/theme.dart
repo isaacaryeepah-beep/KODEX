@@ -66,7 +66,7 @@ class AppTheme {
     GoogleFonts.dmSans(fontSize: size, fontWeight: weight, color: color, letterSpacing: letterSpacing, height: height);
 
   static TextTheme get _textTheme {
-    return GoogleFonts.dmSansTextTheme().copyWith(
+    return const TextTheme().copyWith(
       displayLarge:  _dm(32, FontWeight.w700, letterSpacing: -0.5),
       displayMedium: _dm(28, FontWeight.w700, letterSpacing: -0.3),
       displaySmall:  _dm(24, FontWeight.w600),

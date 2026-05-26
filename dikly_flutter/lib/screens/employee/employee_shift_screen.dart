@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/api.dart';
 import '../../core/theme.dart';
+import '../../widgets/ds/dikly_ds.dart';
 
 final _myShiftProvider = FutureProvider.autoDispose<Map<String, dynamic>>((ref) =>
     apiService.getMyShift());
@@ -9,7 +10,7 @@ final _myShiftProvider = FutureProvider.autoDispose<Map<String, dynamic>>((ref) 
 class EmployeeShiftScreen extends ConsumerWidget {
   const EmployeeShiftScreen({super.key});
 
-  static const _accent = Color(0xFF0369A1);
+  static const _accent = Color(0xFF16A34A);
   static const _allDays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
   bool _isDayActive(List<dynamic> days, String day) {
@@ -20,9 +21,6 @@ class EmployeeShiftScreen extends ConsumerWidget {
   }
 
   List<bool> _getWeekSchedule(List<dynamic> days) {
-    final now = DateTime.now();
-    // Build 7-column for this week starting Monday
-    final monday = now.subtract(Duration(days: now.weekday - 1));
     return List.generate(7, (i) {
       final dayName = _allDays[i];
       return _isDayActive(days, dayName);
@@ -36,8 +34,11 @@ class EmployeeShiftScreen extends ConsumerWidget {
     return Scaffold(
       backgroundColor: DiklyColors.background,
       appBar: AppBar(
-        title: const Text('My Shift'),
         backgroundColor: DiklyColors.surface,
+        elevation: 0,
+        surfaceTintColor: Colors.transparent,
+        title: const Text('My Shift'),
+        leading: BackButton(onPressed: () => Navigator.of(context).maybePop()),
       ),
       body: RefreshIndicator(
         onRefresh: () async => ref.refresh(_myShiftProvider),
@@ -68,110 +69,76 @@ class EmployeeShiftScreen extends ConsumerWidget {
             return ListView(
               padding: const EdgeInsets.all(16),
               children: [
-                // Main Shift Card
-                Container(
-                  padding: const EdgeInsets.all(24),
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [Color(0xFF0369A1), Color(0xFF2563EB)],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                    borderRadius: BorderRadius.circular(20),
-                    boxShadow: [
-                      BoxShadow(
-                        color: _accent.withOpacity(0.3),
-                        blurRadius: 20,
-                        offset: const Offset(0, 8),
-                      ),
-                    ],
-                  ),
+                DiklyScreenHeader(
+                  title: 'My Shift',
+                  subtitle: 'Your current shift schedule',
+                ),
+
+                // Shift card: name, start, end, location
+                DiklyCard(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Row(
                         children: [
-                          const Icon(Icons.schedule, color: Colors.white70, size: 18),
-                          const SizedBox(width: 8),
-                          const Text(
-                            'My Shift',
-                            style: TextStyle(
-                              color: Colors.white70,
-                              fontSize: 13,
-                              letterSpacing: 0.5,
+                          Container(
+                            width: 40,
+                            height: 40,
+                            decoration: BoxDecoration(
+                              color: _accent.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: const Icon(Icons.schedule, color: _accent, size: 20),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              name,
+                              style: const TextStyle(
+                                fontSize: 17,
+                                fontWeight: FontWeight.w700,
+                                color: DiklyColors.textPrimary,
+                              ),
                             ),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 8),
-                      Text(
-                        name,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 26,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                      const SizedBox(height: 20),
+                      const SizedBox(height: 16),
                       Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           _TimeBlock(label: 'START', time: startTime),
                           Padding(
                             padding: const EdgeInsets.symmetric(horizontal: 16),
-                            child: Column(
-                              children: [
-                                Container(
-                                  width: 40,
-                                  height: 2,
-                                  color: Colors.white.withOpacity(0.4),
-                                ),
-                                const SizedBox(height: 4),
-                                const Icon(Icons.arrow_forward, color: Colors.white60, size: 16),
-                              ],
-                            ),
+                            child: Icon(Icons.arrow_forward, color: DiklyColors.textSecondary, size: 18),
                           ),
                           _TimeBlock(label: 'END', time: endTime),
+                          const Spacer(),
+                          if (location != null && location.isNotEmpty)
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.location_on_outlined, color: DiklyColors.textSecondary, size: 16),
+                                const SizedBox(width: 4),
+                                Text(
+                                  location,
+                                  style: const TextStyle(fontSize: 13, color: DiklyColors.textSecondary),
+                                ),
+                              ],
+                            ),
                         ],
                       ),
-                      if (location != null && location.isNotEmpty) ...[
-                        const SizedBox(height: 16),
-                        Row(
-                          children: [
-                            const Icon(Icons.location_on_outlined, color: Colors.white70, size: 16),
-                            const SizedBox(width: 6),
-                            Text(
-                              location,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 14,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
                     ],
                   ),
                 ),
-                const SizedBox(height: 20),
-                // Days of Week Chips
+                const SizedBox(height: 16),
+
+                // Day dots schedule
                 const Text(
                   'Scheduled Days',
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w700,
-                    color: DiklyColors.textPrimary,
-                  ),
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: DiklyColors.textPrimary),
                 ),
-                const SizedBox(height: 12),
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: DiklyColors.surface,
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: DiklyColors.border),
-                  ),
+                const SizedBox(height: 10),
+                DiklyCard(
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                     children: _allDays.map((day) {
@@ -179,8 +146,8 @@ class EmployeeShiftScreen extends ConsumerWidget {
                       return Column(
                         children: [
                           Container(
-                            width: 40,
-                            height: 40,
+                            width: 38,
+                            height: 38,
                             decoration: BoxDecoration(
                               color: isActive ? _accent : DiklyColors.background,
                               shape: BoxShape.circle,
@@ -193,14 +160,14 @@ class EmployeeShiftScreen extends ConsumerWidget {
                               child: Text(
                                 day.substring(0, 1),
                                 style: TextStyle(
-                                  fontSize: 14,
+                                  fontSize: 13,
                                   fontWeight: FontWeight.w700,
                                   color: isActive ? Colors.white : DiklyColors.textSecondary,
                                 ),
                               ),
                             ),
                           ),
-                          const SizedBox(height: 6),
+                          const SizedBox(height: 5),
                           Text(
                             day,
                             style: TextStyle(
@@ -214,17 +181,14 @@ class EmployeeShiftScreen extends ConsumerWidget {
                     }).toList(),
                   ),
                 ),
-                const SizedBox(height: 20),
-                // This Week View
+                const SizedBox(height: 16),
+
+                // This week table/list
                 const Text(
                   'This Week',
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w700,
-                    color: DiklyColors.textPrimary,
-                  ),
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: DiklyColors.textPrimary),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 10),
                 _WeekView(weekSchedule: weekSchedule),
                 const SizedBox(height: 32),
               ],
@@ -244,28 +208,30 @@ class _TimeBlock extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           label,
           style: const TextStyle(
-            color: Colors.white60,
-            fontSize: 11,
+            color: DiklyColors.textSecondary,
+            fontSize: 10,
             letterSpacing: 1,
             fontWeight: FontWeight.w600,
           ),
         ),
         const SizedBox(height: 4),
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.15),
-            borderRadius: BorderRadius.circular(12),
+            color: DiklyColors.background,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: DiklyColors.border),
           ),
           child: Text(
             time,
             style: const TextStyle(
-              color: Colors.white,
-              fontSize: 22,
+              color: DiklyColors.textPrimary,
+              fontSize: 18,
               fontWeight: FontWeight.w800,
             ),
           ),
@@ -280,20 +246,14 @@ class _WeekView extends StatelessWidget {
   const _WeekView({required this.weekSchedule});
 
   static const _days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-  static const _accent = Color(0xFF0369A1);
+  static const _accent = Color(0xFF16A34A);
 
   @override
   Widget build(BuildContext context) {
     final now = DateTime.now();
     final todayIndex = now.weekday - 1; // 0=Mon
 
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: DiklyColors.surface,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: DiklyColors.border),
-      ),
+    return DiklyCard(
       child: Column(
         children: [
           Row(
@@ -316,31 +276,26 @@ class _WeekView extends StatelessWidget {
                     ),
                     const SizedBox(height: 6),
                     Container(
-                      width: 36,
-                      height: 36,
+                      width: 34,
+                      height: 34,
                       decoration: BoxDecoration(
                         color: isScheduled
                             ? (isToday ? _accent : _accent.withOpacity(0.15))
                             : (isToday ? DiklyColors.background : Colors.transparent),
                         shape: BoxShape.circle,
-                        border: isToday
-                            ? Border.all(color: _accent, width: 2)
-                            : null,
+                        border: isToday ? Border.all(color: _accent, width: 2) : null,
                       ),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text(
-                            day.day.toString(),
-                            style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w700,
-                              color: isScheduled
-                                  ? (isToday ? Colors.white : _accent)
-                                  : (isToday ? _accent : DiklyColors.textSecondary),
-                            ),
+                      child: Center(
+                        child: Text(
+                          day.day.toString(),
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: isScheduled
+                                ? (isToday ? Colors.white : _accent)
+                                : (isToday ? _accent : DiklyColors.textSecondary),
                           ),
-                        ],
+                        ),
                       ),
                     ),
                     const SizedBox(height: 4),
@@ -366,30 +321,18 @@ class _WeekView extends StatelessWidget {
               Container(
                 width: 10,
                 height: 10,
-                decoration: const BoxDecoration(
-                  color: _accent,
-                  shape: BoxShape.circle,
-                ),
+                decoration: const BoxDecoration(color: _accent, shape: BoxShape.circle),
               ),
               const SizedBox(width: 6),
-              const Text(
-                'Scheduled',
-                style: TextStyle(fontSize: 12, color: DiklyColors.textSecondary),
-              ),
+              const Text('Scheduled', style: TextStyle(fontSize: 12, color: DiklyColors.textSecondary)),
               const SizedBox(width: 16),
               Container(
                 width: 10,
                 height: 10,
-                decoration: BoxDecoration(
-                  color: DiklyColors.border,
-                  shape: BoxShape.circle,
-                ),
+                decoration: const BoxDecoration(color: DiklyColors.border, shape: BoxShape.circle),
               ),
               const SizedBox(width: 6),
-              const Text(
-                'Off',
-                style: TextStyle(fontSize: 12, color: DiklyColors.textSecondary),
-              ),
+              const Text('Off', style: TextStyle(fontSize: 12, color: DiklyColors.textSecondary)),
             ],
           ),
         ],

@@ -6,7 +6,7 @@ import '../../core/theme.dart';
 import '../../models/quiz.dart';
 import '../../widgets/app_shell.dart';
 import '../../widgets/loading_list.dart';
-import '../../widgets/empty_state.dart';
+import '../../widgets/ds/dikly_ds.dart';
 
 class QuizzesScreen extends StatefulWidget {
   const QuizzesScreen({super.key});
@@ -19,6 +19,7 @@ class _QuizzesScreenState extends State<QuizzesScreen> {
   List<SnapQuiz> _quizzes = [];
   bool _loading = true;
   String? _error;
+  bool _showUpcoming = true; // true=Upcoming, false=Past
   SnapQuiz? _activeQuiz;
   int _currentQuestion = 0;
   List<int?> _selectedAnswers = [];
@@ -55,13 +56,8 @@ class _QuizzesScreenState extends State<QuizzesScreen> {
     });
   }
 
-  void _finishQuiz() {
-    setState(() => _quizFinished = true);
-  }
-
-  void _closeQuiz() {
-    setState(() { _activeQuiz = null; _quizFinished = false; });
-  }
+  void _finishQuiz() => setState(() => _quizFinished = true);
+  void _closeQuiz() => setState(() { _activeQuiz = null; _quizFinished = false; });
 
   @override
   Widget build(BuildContext context) {
@@ -70,34 +66,119 @@ class _QuizzesScreenState extends State<QuizzesScreen> {
       return _buildQuizView();
     }
 
+    final upcoming = _quizzes.where((q) => q.isActive && !q.isCompleted).toList();
+    final past = _quizzes.where((q) => !q.isActive || q.isCompleted).toList();
+    final displayList = _showUpcoming ? upcoming : past;
+
     return AppShell(
       title: 'Quizzes',
-      child: _loading
-          ? const LoadingList()
-          : _error != null
-              ? Center(child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.error_outline, color: DiklyColors.error, size: 48),
-                    const SizedBox(height: 12),
-                    Text(_error!),
-                    const SizedBox(height: 16),
-                    ElevatedButton(onPressed: _loadData, child: const Text('Retry')),
-                  ],
-                ))
-              : _quizzes.isEmpty
-                  ? const EmptyState(icon: Icons.quiz_outlined, title: 'No quizzes available', message: 'Quizzes will appear here when available')
-                  : RefreshIndicator(
-                      onRefresh: _loadData,
-                      child: ListView.builder(
-                        padding: const EdgeInsets.all(16),
-                        itemCount: _quizzes.length,
-                        itemBuilder: (ctx, i) => _QuizCard(
-                          quiz: _quizzes[i],
-                          onStart: () => _startQuiz(_quizzes[i]),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header
+          const Padding(
+            padding: EdgeInsets.fromLTRB(16, 16, 16, 0),
+            child: DiklyScreenHeader(
+              title: 'Quizzes',
+              subtitle: 'Test your knowledge',
+            ),
+          ),
+          // Pill tab bar: Upcoming / Past
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+            child: Container(
+              decoration: BoxDecoration(
+                color: DiklyColors.grey100,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              padding: const EdgeInsets.all(4),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () => setState(() => _showUpcoming = true),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 150),
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                        decoration: BoxDecoration(
+                          color: _showUpcoming ? Colors.white : Colors.transparent,
+                          borderRadius: BorderRadius.circular(8),
+                          boxShadow: _showUpcoming ? AppTheme.shadowSm : [],
+                        ),
+                        child: Text(
+                          'Upcoming (${upcoming.length})',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: _showUpcoming ? DiklyColors.text : DiklyColors.textLight,
+                          ),
                         ),
                       ),
                     ),
+                  ),
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () => setState(() => _showUpcoming = false),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 150),
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                        decoration: BoxDecoration(
+                          color: !_showUpcoming ? Colors.white : Colors.transparent,
+                          borderRadius: BorderRadius.circular(8),
+                          boxShadow: !_showUpcoming ? AppTheme.shadowSm : [],
+                        ),
+                        child: Text(
+                          'Past (${past.length})',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: !_showUpcoming ? DiklyColors.text : DiklyColors.textLight,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Expanded(
+            child: _loading
+                ? const LoadingList()
+                : _error != null
+                    ? Center(child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.error_outline, color: DiklyColors.error, size: 48),
+                          const SizedBox(height: 12),
+                          Text(_error!),
+                          const SizedBox(height: 16),
+                          ElevatedButton(onPressed: _loadData, child: const Text('Retry')),
+                        ],
+                      ))
+                    : displayList.isEmpty
+                        ? DiklyEmptyState(
+                            icon: Icons.quiz_outlined,
+                            title: _showUpcoming ? 'No upcoming quizzes' : 'No past quizzes',
+                            subtitle: 'Quizzes will appear here when available',
+                          )
+                        : RefreshIndicator(
+                            onRefresh: _loadData,
+                            child: ListView.builder(
+                              padding: const EdgeInsets.all(16),
+                              itemCount: displayList.length,
+                              itemBuilder: (ctx, i) => _QuizCard(
+                                quiz: displayList[i],
+                                onStart: () => _startQuiz(displayList[i]),
+                              ),
+                            ),
+                          ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -127,16 +208,17 @@ class _QuizzesScreenState extends State<QuizzesScreen> {
         padding: const EdgeInsets.all(20),
         children: [
           const SizedBox(height: 8),
-          Text(quiz.title, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: DiklyColors.textSecondary, fontWeight: FontWeight.w600)),
+          Text(quiz.title, style: const TextStyle(fontSize: 12, color: DiklyColors.textSecondary, fontWeight: FontWeight.w600)),
           const SizedBox(height: 16),
           Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
               color: DiklyColors.surface,
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(10),
               border: Border.all(color: DiklyColors.primary.withOpacity(0.2)),
+              boxShadow: AppTheme.shadowMd,
             ),
-            child: Text(q.text, style: Theme.of(context).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w600, height: 1.5)),
+            child: Text(q.text, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, height: 1.5, color: DiklyColors.text)),
           ),
           const SizedBox(height: 20),
           for (int i = 0; i < q.options.length; i++)
@@ -149,7 +231,7 @@ class _QuizzesScreenState extends State<QuizzesScreen> {
                   color: _selectedAnswers[_currentQuestion] == i
                       ? DiklyColors.primary.withOpacity(0.1)
                       : DiklyColors.surface,
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(10),
                   border: Border.all(
                     color: _selectedAnswers[_currentQuestion] == i ? DiklyColors.primary : DiklyColors.border,
                     width: _selectedAnswers[_currentQuestion] == i ? 2 : 1,
@@ -174,7 +256,16 @@ class _QuizzesScreenState extends State<QuizzesScreen> {
                       ),
                     ),
                     const SizedBox(width: 12),
-                    Expanded(child: Text(q.options[i], style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontWeight: _selectedAnswers[_currentQuestion] == i ? FontWeight.w600 : FontWeight.w400))),
+                    Expanded(
+                      child: Text(
+                        q.options[i],
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: _selectedAnswers[_currentQuestion] == i ? FontWeight.w600 : FontWeight.w400,
+                          color: DiklyColors.text,
+                        ),
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -231,28 +322,46 @@ class _QuizzesScreenState extends State<QuizzesScreen> {
                       width: 120,
                       height: 120,
                       decoration: BoxDecoration(
-                        color: score >= 70 ? DiklyColors.success.withOpacity(0.1) : DiklyColors.error.withOpacity(0.1),
+                        color: score >= 70 ? DiklyColors.successLight : DiklyColors.errorLight,
                         shape: BoxShape.circle,
                       ),
                       child: Center(
-                        child: Text('$score%', style: TextStyle(fontSize: 36, fontWeight: FontWeight.w800, color: score >= 70 ? DiklyColors.success : DiklyColors.error)),
+                        child: Text(
+                          '$score%',
+                          style: TextStyle(
+                            fontSize: 36,
+                            fontWeight: FontWeight.w800,
+                            color: score >= 70 ? DiklyColors.success : DiklyColors.error,
+                          ),
+                        ),
                       ),
                     ),
                     const SizedBox(height: 24),
-                    Text('Quiz Complete!', style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w700)),
+                    const Text('Quiz Complete!', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: DiklyColors.text)),
                     const SizedBox(height: 8),
-                    Text('$correct out of ${quiz.questions.length} correct', style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: DiklyColors.textSecondary)),
+                    Text(
+                      '$correct out of ${quiz.questions.length} correct',
+                      style: const TextStyle(fontSize: 16, color: DiklyColors.textSecondary),
+                    ),
                     const SizedBox(height: 8),
-                    Text(score >= 70 ? 'Great job!' : score >= 50 ? 'Good effort!' : 'Keep practicing!', style: TextStyle(color: score >= 70 ? DiklyColors.success : DiklyColors.warning, fontWeight: FontWeight.w600)),
+                    Text(
+                      score >= 70 ? 'Great job!' : score >= 50 ? 'Good effort!' : 'Keep practicing!',
+                      style: TextStyle(
+                        color: score >= 70 ? DiklyColors.success : DiklyColors.warning,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14,
+                      ),
+                    ),
                   ],
                 ),
               ),
             ),
             Padding(
               padding: const EdgeInsets.all(24),
-              child: SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(onPressed: _closeQuiz, child: const Text('Back to Quizzes')),
+              child: DiklyPrimaryButton(
+                label: 'Back to Quizzes',
+                onPressed: _closeQuiz,
+                height: 50,
               ),
             ),
           ],
@@ -270,24 +379,22 @@ class _QuizCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return DiklyCard(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: DiklyColors.surface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: DiklyColors.border),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8, offset: const Offset(0, 2))],
-      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
                 width: 44,
                 height: 44,
-                decoration: BoxDecoration(color: DiklyColors.primary.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
+                decoration: BoxDecoration(
+                  color: DiklyColors.primary.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
                 child: const Icon(Icons.quiz_rounded, color: DiklyColors.primary, size: 22),
               ),
               const SizedBox(width: 12),
@@ -295,59 +402,82 @@ class _QuizCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(quiz.title, style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600), overflow: TextOverflow.ellipsis),
-                    if (quiz.courseName != null)
-                      Text(quiz.courseName!, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: DiklyColors.textSecondary)),
+                    Text(
+                      quiz.title,
+                      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: DiklyColors.text),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    if (quiz.courseName != null) ...[
+                      const SizedBox(height: 4),
+                      // Course chip
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: DiklyColors.primaryULight,
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(
+                          quiz.courseName!,
+                          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: DiklyColors.primary),
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: quiz.isActive ? DiklyColors.success.withOpacity(0.1) : DiklyColors.textSecondary.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Text(
-                  quiz.isActive ? 'ACTIVE' : 'CLOSED',
-                  style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: quiz.isActive ? DiklyColors.success : DiklyColors.textSecondary),
-                ),
+              // Status badge
+              DiklyBadge(
+                label: quiz.isCompleted ? 'Completed' : quiz.isActive ? 'Active' : 'Closed',
+                color: quiz.isCompleted ? DiklyColors.primary : quiz.isActive ? DiklyColors.success : DiklyColors.textLight,
               ),
             ],
           ),
           const SizedBox(height: 12),
-          Row(
+          // Chips: date, duration, marks
+          Wrap(
+            spacing: 8,
+            runSpacing: 6,
             children: [
-              if (quiz.totalQuestions != null) ...[
-                const Icon(Icons.help_outline_rounded, size: 14, color: DiklyColors.textSecondary),
-                const SizedBox(width: 4),
-                Text('${quiz.totalQuestions} questions', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: DiklyColors.textSecondary)),
-                const SizedBox(width: 12),
-              ],
-              if (quiz.timeLimit != null) ...[
-                const Icon(Icons.timer_outlined, size: 14, color: DiklyColors.textSecondary),
-                const SizedBox(width: 4),
-                Text('${quiz.timeLimit} mins', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: DiklyColors.textSecondary)),
-              ],
+              if (quiz.startTime != null)
+                DiklyInfoChip(
+                  icon: Icons.calendar_today_outlined,
+                  label: DateFormat('MMM d').format(quiz.startTime!),
+                ),
+              if (quiz.timeLimit != null)
+                DiklyInfoChip(
+                  icon: Icons.timer_outlined,
+                  label: '${quiz.timeLimit} mins',
+                ),
+              if (quiz.totalMarks != null)
+                DiklyInfoChip(
+                  icon: Icons.bar_chart_rounded,
+                  label: '${quiz.totalMarks} marks',
+                ),
+              if (quiz.totalQuestions != null)
+                DiklyInfoChip(
+                  icon: Icons.help_outline_rounded,
+                  label: '${quiz.totalQuestions} questions',
+                ),
             ],
           ),
           if (quiz.isActive && !quiz.isCompleted) ...[
             const SizedBox(height: 12),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: onStart,
-                style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 10)),
-                child: const Text('Start Quiz'),
-              ),
+            DiklyPrimaryButton(
+              label: 'Start Quiz',
+              onPressed: onStart,
+              height: 42,
             ),
           ],
           if (quiz.isCompleted) ...[
-            const SizedBox(height: 8),
+            const SizedBox(height: 10),
             Row(
               children: [
                 const Icon(Icons.check_circle_outline_rounded, size: 16, color: DiklyColors.success),
                 const SizedBox(width: 6),
-                Text('Completed${quiz.myScore != null ? " • Score: ${quiz.myScore}" : ""}', style: const TextStyle(fontSize: 12, color: DiklyColors.success, fontWeight: FontWeight.w500)),
+                Text(
+                  'Completed${quiz.myScore != null ? " • Score: ${quiz.myScore}" : ""}',
+                  style: const TextStyle(fontSize: 12, color: DiklyColors.success, fontWeight: FontWeight.w600),
+                ),
               ],
             ),
           ],

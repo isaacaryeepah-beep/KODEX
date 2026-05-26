@@ -4,6 +4,7 @@ import '../../core/api.dart';
 import '../../core/theme.dart';
 import '../../models/course.dart';
 import '../../models/course_video.dart';
+import '../../widgets/ds/dikly_ds.dart';
 
 class CourseDetailScreen extends StatefulWidget {
   final String courseId;
@@ -66,18 +67,24 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
     final course = _course!;
     return CustomScrollView(
       slivers: [
+        // AppBar with blue gradient banner
         SliverAppBar(
           expandedHeight: 200,
           pinned: true,
-          leading: BackButton(onPressed: () => context.pop()),
+          leading: BackButton(
+            onPressed: () => context.pop(),
+            color: Colors.white,
+          ),
           actions: [
             IconButton(
-              icon: const Icon(Icons.video_library_outlined),
+              icon: const Icon(Icons.video_library_outlined, color: Colors.white),
               onPressed: () => context.push('/course-videos/${course.id}'),
             ),
           ],
+          backgroundColor: DiklyColors.primary,
+          surfaceTintColor: Colors.transparent,
           flexibleSpace: FlexibleSpaceBar(
-            title: Text(course.title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+            collapseMode: CollapseMode.parallax,
             background: Container(
               decoration: const BoxDecoration(
                 gradient: LinearGradient(
@@ -86,8 +93,46 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
                   end: Alignment.bottomRight,
                 ),
               ),
-              child: const Center(
-                child: Icon(Icons.school_rounded, size: 64, color: Colors.white24),
+              child: SafeArea(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 56, 20, 20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      // Course code
+                      if (course.code != null)
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.2),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Text(
+                            course.code!.toUpperCase(),
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                        ),
+                      const SizedBox(height: 8),
+                      Text(
+                        course.title,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 20,
+                          fontWeight: FontWeight.w700,
+                          height: 1.3,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ),
           ),
@@ -98,56 +143,105 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Info
-                _InfoSection(course: course),
+                // Instructor info card
+                DiklyCard(
+                  margin: EdgeInsets.zero,
+                  child: Column(
+                    children: [
+                      _InfoRow(icon: Icons.tag_rounded, label: 'Course Code', value: course.code ?? 'N/A'),
+                      Divider(height: 20, color: DiklyColors.border),
+                      _InfoRow(
+                        icon: Icons.person_outline_rounded,
+                        label: 'Instructor',
+                        value: course.instructorName ?? 'N/A',
+                      ),
+                      Divider(height: 20, color: DiklyColors.border),
+                      _InfoRow(
+                        icon: Icons.people_outline_rounded,
+                        label: 'Enrolled',
+                        value: '${course.studentCount ?? 0} students',
+                      ),
+                      Divider(height: 20, color: DiklyColors.border),
+                      _InfoRow(
+                        icon: Icons.circle_outlined,
+                        label: 'Status',
+                        value: (course.status ?? 'active')[0].toUpperCase() +
+                            (course.status ?? 'active').substring(1),
+                      ),
+                    ],
+                  ),
+                ),
                 const SizedBox(height: 16),
+
                 // Description
                 if (course.description != null && course.description!.isNotEmpty) ...[
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: DiklyColors.surface,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: DiklyColors.border),
-                    ),
+                  DiklyCard(
+                    margin: EdgeInsets.zero,
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('About this Course', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
-                        const SizedBox(height: 8),
-                        Text(course.description!, style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: DiklyColors.textSecondary, height: 1.6)),
+                        const Text(
+                          'About this Course',
+                          style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: DiklyColors.text),
+                        ),
+                        const SizedBox(height: 10),
+                        Text(
+                          course.description!,
+                          style: const TextStyle(
+                            fontSize: 14,
+                            color: DiklyColors.textSecondary,
+                            height: 1.6,
+                          ),
+                        ),
                       ],
                     ),
                   ),
                   const SizedBox(height: 16),
                 ],
-                // Quick Actions
+
+                // Quick Actions: Videos + Assignments buttons
                 Row(
                   children: [
                     Expanded(
                       child: OutlinedButton.icon(
                         onPressed: () => context.push('/course-videos/${course.id}'),
-                        icon: const Icon(Icons.play_circle_outline_rounded),
+                        icon: const Icon(Icons.play_circle_outline_rounded, size: 18),
                         label: Text('Videos (${_videos.length})'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: DiklyColors.primary,
+                          side: const BorderSide(color: DiklyColors.border),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        ),
                       ),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
                       child: OutlinedButton.icon(
                         onPressed: () => context.go('/assignments'),
-                        icon: const Icon(Icons.assignment_outlined),
+                        icon: const Icon(Icons.assignment_outlined, size: 18),
                         label: const Text('Assignments'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: DiklyColors.primary,
+                          side: const BorderSide(color: DiklyColors.border),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        ),
                       ),
                     ),
                   ],
                 ),
                 const SizedBox(height: 20),
+
                 // Videos preview
                 if (_videos.isNotEmpty) ...[
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text('Course Videos', style: Theme.of(context).textTheme.titleLarge),
+                      const Text(
+                        'Course Videos',
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: DiklyColors.text),
+                      ),
                       TextButton(
                         onPressed: () => context.push('/course-videos/${course.id}'),
                         child: const Text('See all'),
@@ -161,6 +255,7 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
                       onTap: () => context.push('/video-player', extra: {'url': video.embedUrl, 'title': video.title}),
                     ),
                 ],
+                const SizedBox(height: 32),
               ],
             ),
           ),
@@ -170,49 +265,27 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
   }
 }
 
-class _InfoSection extends StatelessWidget {
-  final Course course;
-  const _InfoSection({required this.course});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: DiklyColors.surface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: DiklyColors.border),
-      ),
-      child: Column(
-        children: [
-          _Row(icon: Icons.tag_rounded, label: 'Course Code', value: course.code ?? 'N/A'),
-          const Divider(height: 20),
-          _Row(icon: Icons.person_outline_rounded, label: 'Instructor', value: course.instructorName ?? 'N/A'),
-          const Divider(height: 20),
-          _Row(icon: Icons.people_outline_rounded, label: 'Students', value: '${course.studentCount ?? 0}'),
-          const Divider(height: 20),
-          _Row(icon: Icons.circle_outlined, label: 'Status', value: (course.status ?? 'active').toUpperCase()),
-        ],
-      ),
-    );
-  }
-}
-
-class _Row extends StatelessWidget {
+class _InfoRow extends StatelessWidget {
   final IconData icon;
   final String label;
   final String value;
-  const _Row({required this.icon, required this.label, required this.value});
+  const _InfoRow({required this.icon, required this.label, required this.value});
 
   @override
   Widget build(BuildContext context) {
     return Row(
       children: [
-        Icon(icon, size: 18, color: DiklyColors.primary),
+        Icon(icon, size: 16, color: DiklyColors.primary),
         const SizedBox(width: 10),
-        Text(label, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: DiklyColors.textSecondary)),
+        Text(
+          label,
+          style: const TextStyle(fontSize: 13, color: DiklyColors.textSecondary),
+        ),
         const Spacer(),
-        Text(value, style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600)),
+        Text(
+          value,
+          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: DiklyColors.text),
+        ),
       ],
     );
   }
@@ -225,37 +298,41 @@ class _VideoTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
+    return DiklyCard(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(12),
       onTap: onTap,
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 10),
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: DiklyColors.surface,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: DiklyColors.border),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(color: DiklyColors.primary.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
-              child: const Icon(Icons.play_arrow_rounded, color: DiklyColors.primary, size: 24),
+      child: Row(
+        children: [
+          Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: DiklyColors.primary.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(10),
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(video.title, style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w500), overflow: TextOverflow.ellipsis),
-                  Text(video.videoType.toUpperCase(), style: Theme.of(context).textTheme.labelSmall?.copyWith(color: DiklyColors.primary)),
-                ],
-              ),
+            child: const Icon(Icons.play_arrow_rounded, color: DiklyColors.primary, size: 24),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  video.title,
+                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: DiklyColors.text),
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  video.videoType.toUpperCase(),
+                  style: const TextStyle(fontSize: 11, color: DiklyColors.primary, fontWeight: FontWeight.w600),
+                ),
+              ],
             ),
-            const Icon(Icons.play_circle_outline_rounded, color: DiklyColors.primary),
-          ],
-        ),
+          ),
+          const Icon(Icons.play_circle_outline_rounded, color: DiklyColors.primary, size: 22),
+        ],
       ),
     );
   }

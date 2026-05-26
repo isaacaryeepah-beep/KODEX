@@ -8,7 +8,7 @@ import '../../models/message.dart';
 import '../../models/user.dart';
 import '../../widgets/app_shell.dart';
 import '../../widgets/loading_list.dart';
-import '../../widgets/empty_state.dart';
+import '../../widgets/ds/dikly_ds.dart';
 
 class MessagesScreen extends ConsumerStatefulWidget {
   const MessagesScreen({super.key});
@@ -120,7 +120,6 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen> {
       });
       _messageController.clear();
       await _loadData();
-      // Refresh conversation
       _openConversation(_activeConversationId!, '');
     } catch (e) {
       if (mounted) {
@@ -178,46 +177,63 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen> {
       title: 'Messages',
       floatingActionButton: FloatingActionButton(
         onPressed: _showNewMessageDialog,
-        child: const Icon(Icons.edit_rounded),
+        backgroundColor: DiklyColors.primary,
+        child: const Icon(Icons.edit_rounded, color: Colors.white),
       ),
-      child: _loading
-          ? const LoadingList()
-          : _error != null
-              ? Center(child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.error_outline, color: DiklyColors.error, size: 48),
-                    const SizedBox(height: 12),
-                    Text(_error!),
-                    const SizedBox(height: 16),
-                    ElevatedButton(onPressed: _loadData, child: const Text('Retry')),
-                  ],
-                ))
-              : _conversations.isEmpty
-                  ? EmptyState(
-                      icon: Icons.message_outlined,
-                      title: 'No messages yet',
-                      message: 'Start a conversation',
-                      actionLabel: 'New Message',
-                      onAction: _showNewMessageDialog,
-                    )
-                  : RefreshIndicator(
-                      onRefresh: _loadData,
-                      child: ListView.builder(
-                        padding: const EdgeInsets.all(16),
-                        itemCount: _conversations.length,
-                        itemBuilder: (context, index) {
-                          final conv = _conversations[index];
-                          return _ConversationTile(
-                            name: conv['name'] as String,
-                            lastMessage: conv['lastMessage'] as String,
-                            time: conv['lastTime'] as DateTime?,
-                            unreadCount: conv['unread'] as int,
-                            onTap: () => _openConversation(conv['userId'] as String, conv['name'] as String),
-                          );
-                        },
-                      ),
-                    ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header
+          const Padding(
+            padding: EdgeInsets.fromLTRB(16, 16, 16, 0),
+            child: DiklyScreenHeader(
+              title: 'Messages',
+              subtitle: 'Your conversations',
+            ),
+          ),
+          const SizedBox(height: 8),
+          Expanded(
+            child: _loading
+                ? const LoadingList()
+                : _error != null
+                    ? Center(child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.error_outline, color: DiklyColors.error, size: 48),
+                          const SizedBox(height: 12),
+                          Text(_error!),
+                          const SizedBox(height: 16),
+                          ElevatedButton(onPressed: _loadData, child: const Text('Retry')),
+                        ],
+                      ))
+                    : _conversations.isEmpty
+                        ? DiklyEmptyState(
+                            icon: Icons.message_outlined,
+                            title: 'No conversations yet',
+                            subtitle: 'Start a conversation',
+                            buttonLabel: 'New Message',
+                            onButton: _showNewMessageDialog,
+                          )
+                        : RefreshIndicator(
+                            onRefresh: _loadData,
+                            child: ListView.builder(
+                              padding: const EdgeInsets.all(16),
+                              itemCount: _conversations.length,
+                              itemBuilder: (context, index) {
+                                final conv = _conversations[index];
+                                return _ConversationTile(
+                                  name: conv['name'] as String,
+                                  lastMessage: conv['lastMessage'] as String,
+                                  time: conv['lastTime'] as DateTime?,
+                                  unreadCount: conv['unread'] as int,
+                                  onTap: () => _openConversation(conv['userId'] as String, conv['name'] as String),
+                                );
+                              },
+                            ),
+                          ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -227,7 +243,14 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen> {
     return Scaffold(
       backgroundColor: DiklyColors.background,
       appBar: AppBar(
+        backgroundColor: DiklyColors.surface,
+        elevation: 0,
+        surfaceTintColor: Colors.transparent,
         leading: BackButton(onPressed: () => setState(() => _activeConversationId = null)),
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(1),
+          child: Container(color: DiklyColors.border, height: 1),
+        ),
         title: Row(
           children: [
             CircleAvatar(
@@ -239,7 +262,7 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen> {
               ),
             ),
             const SizedBox(width: 10),
-            Text(convUser.name, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+            Text(convUser.name, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: DiklyColors.text)),
           ],
         ),
       ),
@@ -272,10 +295,24 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen> {
                     child: TextField(
                       controller: _messageController,
                       maxLines: null,
-                      decoration: const InputDecoration(
+                      decoration: InputDecoration(
                         hintText: 'Type a message...',
-                        border: OutlineInputBorder(),
-                        contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                        hintStyle: const TextStyle(color: DiklyColors.textMuted),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                        filled: true,
+                        fillColor: DiklyColors.background,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(24),
+                          borderSide: const BorderSide(color: DiklyColors.border),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(24),
+                          borderSide: const BorderSide(color: DiklyColors.border),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(24),
+                          borderSide: const BorderSide(color: DiklyColors.primary, width: 1.5),
+                        ),
                       ),
                     ),
                   ),
@@ -316,55 +353,69 @@ class _ConversationTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
+    final initials = name.trim().isNotEmpty
+        ? name.trim().split(' ').map((w) => w.isNotEmpty ? w[0].toUpperCase() : '').take(2).join()
+        : 'U';
+
+    return DiklyCard(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(14),
       onTap: onTap,
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 8),
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: DiklyColors.surface,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: DiklyColors.border),
-        ),
-        child: Row(
-          children: [
-            CircleAvatar(
-              radius: 24,
-              backgroundColor: DiklyColors.primary.withOpacity(0.1),
-              child: Text(
-                name.isNotEmpty ? name[0].toUpperCase() : 'U',
-                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: DiklyColors.primary),
-              ),
+      child: Row(
+        children: [
+          // Avatar (initials circle)
+          CircleAvatar(
+            radius: 24,
+            backgroundColor: DiklyColors.primary.withOpacity(0.1),
+            child: Text(
+              initials,
+              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: DiklyColors.primary),
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(name, style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600)),
-                  const SizedBox(height: 3),
-                  Text(lastMessage, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: DiklyColors.textSecondary), overflow: TextOverflow.ellipsis),
-                ],
-              ),
-            ),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                if (time != null)
-                  Text(DateFormat('h:mm a').format(time!), style: const TextStyle(fontSize: 11, color: DiklyColors.textSecondary)),
-                if (unreadCount > 0) ...[
-                  const SizedBox(height: 4),
-                  Container(
-                    width: 20,
-                    height: 20,
-                    decoration: const BoxDecoration(color: DiklyColors.primary, shape: BoxShape.circle),
-                    child: Center(child: Text('$unreadCount', style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w700))),
-                  ),
-                ],
+                Text(
+                  name,
+                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: DiklyColors.text),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  lastMessage,
+                  style: const TextStyle(fontSize: 13, color: DiklyColors.textSecondary),
+                  overflow: TextOverflow.ellipsis,
+                ),
               ],
             ),
-          ],
-        ),
+          ),
+          const SizedBox(width: 8),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              if (time != null)
+                Text(
+                  DateFormat('h:mm a').format(time!),
+                  style: const TextStyle(fontSize: 11, color: DiklyColors.textMuted),
+                ),
+              if (unreadCount > 0) ...[
+                const SizedBox(height: 4),
+                Container(
+                  width: 20,
+                  height: 20,
+                  decoration: const BoxDecoration(color: DiklyColors.primary, shape: BoxShape.circle),
+                  child: Center(
+                    child: Text(
+                      '$unreadCount',
+                      style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -393,6 +444,7 @@ class _MessageBubble extends StatelessWidget {
             bottomRight: Radius.circular(isMe ? 4 : 16),
           ),
           border: isMe ? null : Border.all(color: DiklyColors.border),
+          boxShadow: AppTheme.shadowSm,
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.end,
@@ -401,7 +453,7 @@ class _MessageBubble extends StatelessWidget {
               message.content,
               style: TextStyle(
                 fontSize: 14,
-                color: isMe ? Colors.white : DiklyColors.textPrimary,
+                color: isMe ? Colors.white : DiklyColors.text,
               ),
             ),
             if (message.createdAt != null) ...[
@@ -410,7 +462,7 @@ class _MessageBubble extends StatelessWidget {
                 DateFormat('h:mm a').format(message.createdAt!),
                 style: TextStyle(
                   fontSize: 10,
-                  color: isMe ? Colors.white60 : DiklyColors.textSecondary,
+                  color: isMe ? Colors.white60 : DiklyColors.textMuted,
                 ),
               ),
             ],

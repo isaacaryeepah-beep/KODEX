@@ -3,8 +3,6 @@ import 'package:intl/intl.dart';
 import '../../core/api.dart';
 import '../../core/theme.dart';
 import '../../models/announcement.dart';
-import '../../widgets/loading_list.dart';
-import '../../widgets/empty_state.dart';
 import '../../widgets/ds/dikly_ds.dart';
 
 class AnnouncementsScreen extends StatefulWidget {
@@ -26,21 +24,12 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
   }
 
   Future<void> _loadData() async {
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
+    setState(() { _loading = true; _error = null; });
     try {
       final announcements = await apiService.getAnnouncements();
-      setState(() {
-        _announcements = announcements;
-        _loading = false;
-      });
+      setState(() { _announcements = announcements; _loading = false; });
     } catch (e) {
-      setState(() {
-        _error = e.toString();
-        _loading = false;
-      });
+      setState(() { _error = e.toString(); _loading = false; });
     }
   }
 
@@ -48,7 +37,7 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.white,
+      backgroundColor: DiklyColors.surface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -64,9 +53,9 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF1F5F9),
+      backgroundColor: DiklyColors.background,
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: DiklyColors.surface,
         elevation: 0,
         surfaceTintColor: Colors.transparent,
         title: const Text('Announcements'),
@@ -77,7 +66,7 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
             child: ElevatedButton.icon(
               onPressed: _showPostSheet,
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF2563EB),
+                backgroundColor: DiklyColors.primary,
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
@@ -89,15 +78,8 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _showPostSheet,
-        backgroundColor: const Color(0xFF2563EB),
-        foregroundColor: Colors.white,
-        icon: const Icon(Icons.campaign_outlined),
-        label: const Text('Post Announcement', style: TextStyle(fontWeight: FontWeight.w600)),
-      ),
       body: _loading
-          ? const LoadingList()
+          ? const Center(child: CircularProgressIndicator())
           : _error != null
               ? Center(
                   child: Column(
@@ -112,24 +94,36 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
                   ),
                 )
               : _announcements.isEmpty
-                  ? const EmptyState(
+                  ? const DiklyEmptyState(
                       icon: Icons.campaign_outlined,
                       title: 'No announcements',
                       message: 'Announcements will appear here',
                     )
                   : RefreshIndicator(
                       onRefresh: _loadData,
-                      child: ListView.builder(
+                      child: ListView(
                         padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
-                        itemCount: _announcements.length,
-                        itemBuilder: (ctx, i) => _AnnouncementCard(announcement: _announcements[i]),
+                        children: [
+                          DiklyScreenHeader(
+                            title: 'Announcements',
+                            subtitle: '${_announcements.length} announcement${_announcements.length == 1 ? '' : 's'}',
+                          ),
+                          ..._announcements.map((a) => _AnnouncementCard(announcement: a)),
+                        ],
                       ),
                     ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _showPostSheet,
+        backgroundColor: DiklyColors.primary,
+        foregroundColor: Colors.white,
+        icon: const Icon(Icons.campaign_outlined),
+        label: const Text('Post Announcement', style: TextStyle(fontWeight: FontWeight.w600)),
+      ),
     );
   }
 }
 
-// ---------- Post Announcement Sheet ----------
+// ── Post Announcement Bottom Sheet ───────────────────────────────────────────
 
 class _PostAnnouncementSheet extends StatefulWidget {
   final VoidCallback onPosted;
@@ -143,12 +137,12 @@ class _PostAnnouncementSheetState extends State<_PostAnnouncementSheet> {
   final _titleCtrl = TextEditingController();
   final _messageCtrl = TextEditingController();
   String _type = 'Info';
-  String _targetCourse = '— All my students —';
+  String _audience = 'All';
   DateTime? _expiresAt;
   bool _posting = false;
 
   final List<String> _types = ['Info', 'Warning', 'Urgent'];
-  final List<String> _courses = ['— All my students —'];
+  final List<String> _audiences = ['All', 'Employees', 'Managers'];
 
   @override
   void dispose() {
@@ -165,22 +159,16 @@ class _PostAnnouncementSheetState extends State<_PostAnnouncementSheet> {
       firstDate: now,
       lastDate: now.add(const Duration(days: 365)),
     );
-    if (picked != null) {
-      setState(() => _expiresAt = picked);
-    }
+    if (picked != null) setState(() => _expiresAt = picked);
   }
 
   Future<void> _post() async {
     if (_titleCtrl.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter a title')),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please enter a title')));
       return;
     }
     if (_messageCtrl.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter a message')),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please enter a message')));
       return;
     }
     setState(() => _posting = true);
@@ -189,42 +177,28 @@ class _PostAnnouncementSheetState extends State<_PostAnnouncementSheet> {
         'title': _titleCtrl.text.trim(),
         'content': _messageCtrl.text.trim(),
         'type': _type.toLowerCase(),
-        'audience': 'students',
+        'audience': _audience.toLowerCase(),
         if (_expiresAt != null) 'expiresAt': _expiresAt!.toIso8601String(),
       });
       widget.onPosted();
     } catch (e) {
       setState(() => _posting = false);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: ${e.toString()}')),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: ${e.toString()}')));
       }
     }
   }
 
-  InputDecoration _fieldDeco({String? hint, int? maxLines, Widget? suffixIcon}) {
-    return InputDecoration(
-      hintText: hint,
-      suffixIcon: suffixIcon,
-      filled: true,
-      fillColor: Colors.white,
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(10),
-        borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
-      ),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(10),
-        borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(10),
-        borderSide: const BorderSide(color: Color(0xFF2563EB), width: 2),
-      ),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      hintStyle: const TextStyle(color: Color(0xFF9CA3AF), fontSize: 14),
-    );
-  }
+  InputDecoration _fieldDeco({String? hint}) => InputDecoration(
+    hintText: hint,
+    filled: true,
+    fillColor: DiklyColors.surface,
+    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: DiklyColors.border)),
+    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: DiklyColors.border)),
+    focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: DiklyColors.primary, width: 2)),
+    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+    hintStyle: const TextStyle(color: DiklyColors.textMuted, fontSize: 14),
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -241,187 +215,107 @@ class _PostAnnouncementSheetState extends State<_PostAnnouncementSheet> {
             // Handle
             Center(
               child: Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFE5E7EB),
-                  borderRadius: BorderRadius.circular(2),
-                ),
+                width: 40, height: 4,
+                decoration: BoxDecoration(color: DiklyColors.border, borderRadius: BorderRadius.circular(2)),
               ),
             ),
             const SizedBox(height: 16),
-            // Header row
             Row(
               children: [
                 const Text(
-                  '📢 Post Announcement',
-                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: Color(0xFF111827)),
+                  'Post Announcement',
+                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: DiklyColors.textPrimary),
                 ),
                 const Spacer(),
-                Container(
-                  decoration: BoxDecoration(
-                    border: Border.all(color: const Color(0xFFE5E7EB)),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: IconButton(
-                    onPressed: () => Navigator.of(context).pop(),
-                    icon: const Icon(Icons.close, color: Color(0xFF6B7280), size: 20),
-                    padding: const EdgeInsets.all(6),
-                    constraints: const BoxConstraints(),
-                  ),
+                IconButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  icon: const Icon(Icons.close, color: DiklyColors.textSecondary, size: 20),
+                  padding: const EdgeInsets.all(6),
+                  constraints: const BoxConstraints(),
+                  visualDensity: VisualDensity.compact,
                 ),
               ],
             ),
-            const Divider(height: 20, color: Color(0xFFE5E7EB)),
-            const SizedBox(height: 4),
+            const Divider(height: 20),
 
-            // TITLE
+            // Title
             const DiklySectionLabel('TITLE *'),
-            TextField(
-              controller: _titleCtrl,
-              decoration: _fieldDeco(hint: 'e.g. Class cancelled tomorrow'),
-            ),
+            const SizedBox(height: 6),
+            TextField(controller: _titleCtrl, decoration: _fieldDeco(hint: 'e.g. Office closed tomorrow')),
             const SizedBox(height: 14),
 
-            // MESSAGE
+            // Message
             const DiklySectionLabel('MESSAGE *'),
-            TextField(
-              controller: _messageCtrl,
-              maxLines: 4,
-              decoration: _fieldDeco(hint: 'Enter your announcement...'),
-            ),
+            const SizedBox(height: 6),
+            TextField(controller: _messageCtrl, maxLines: 4, decoration: _fieldDeco(hint: 'Enter your announcement...')),
             const SizedBox(height: 14),
 
-            // TYPE
+            // Type
             const DiklySectionLabel('TYPE'),
+            const SizedBox(height: 6),
             DropdownButtonFormField<String>(
               value: _type,
-              decoration: InputDecoration(
-                filled: true,
-                fillColor: Colors.white,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: const BorderSide(color: Color(0xFF2563EB), width: 2),
-                ),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-              ),
-              items: _types.map((t) => DropdownMenuItem(value: t, child: Text(t, style: const TextStyle(fontSize: 14)))).toList(),
+              decoration: _fieldDeco(),
+              items: _types.map((t) {
+                Color c;
+                switch (t) {
+                  case 'Warning': c = DiklyColors.warning; break;
+                  case 'Urgent': c = DiklyColors.error; break;
+                  default: c = DiklyColors.primary;
+                }
+                return DropdownMenuItem(
+                  value: t,
+                  child: Row(
+                    children: [
+                      Container(width: 8, height: 8, decoration: BoxDecoration(color: c, shape: BoxShape.circle)),
+                      const SizedBox(width: 8),
+                      Text(t, style: const TextStyle(fontSize: 14)),
+                    ],
+                  ),
+                );
+              }).toList(),
               onChanged: (v) => setState(() => _type = v ?? 'Info'),
             ),
             const SizedBox(height: 14),
 
-            // AUDIENCE
+            // Audience
             const DiklySectionLabel('AUDIENCE'),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF3F4F6),
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: const Color(0xFFE5E7EB)),
-              ),
-              child: const Row(
-                children: [
-                  Text('📚 My Students only', style: TextStyle(fontSize: 14, color: Color(0xFF374151))),
-                ],
-              ),
-            ),
-            const SizedBox(height: 14),
-
-            // TARGET COURSE
-            const DiklySectionLabel('TARGET COURSE (optional)'),
+            const SizedBox(height: 6),
             DropdownButtonFormField<String>(
-              value: _targetCourse,
-              decoration: InputDecoration(
-                filled: true,
-                fillColor: Colors.white,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: const BorderSide(color: Color(0xFF2563EB), width: 2),
-                ),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-              ),
-              items: _courses.map((c) => DropdownMenuItem(value: c, child: Text(c, style: const TextStyle(fontSize: 14)))).toList(),
-              onChanged: (v) => setState(() => _targetCourse = v ?? '— All my students —'),
-            ),
-            const SizedBox(height: 4),
-            const Text(
-              'Pick a course to target only that group. Leave blank to reach all your students.',
-              style: TextStyle(fontSize: 11, color: Color(0xFF6B7280)),
+              value: _audience,
+              decoration: _fieldDeco(),
+              items: _audiences.map((a) => DropdownMenuItem(value: a, child: Text(a, style: const TextStyle(fontSize: 14)))).toList(),
+              onChanged: (v) => setState(() => _audience = v ?? 'All'),
             ),
             const SizedBox(height: 14),
 
-            // EXPIRES AT
+            // Expires At
             const DiklySectionLabel('EXPIRES AT (optional)'),
+            const SizedBox(height: 6),
             GestureDetector(
               onTap: _pickExpiry,
               child: AbsorbPointer(
                 child: TextField(
                   readOnly: true,
-                  controller: TextEditingController(
-                    text: _expiresAt != null ? fmt.format(_expiresAt!) : '',
+                  controller: TextEditingController(text: _expiresAt != null ? fmt.format(_expiresAt!) : ''),
+                  decoration: _fieldDeco(hint: 'No expiry date').copyWith(
+                    suffixIcon: const Icon(Icons.calendar_today_outlined, color: DiklyColors.textMuted, size: 18),
                   ),
-                  decoration: _fieldDeco(
-                    hint: 'No expiry date',
-                    suffixIcon: const Icon(Icons.calendar_today_outlined, color: Color(0xFF9CA3AF), size: 18),
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 14),
-
-            // ATTACHMENT
-            const DiklySectionLabel('ATTACHMENT (PDF or image, optional)'),
-            GestureDetector(
-              onTap: () => ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('File upload coming soon')),
-              ),
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: const Color(0xFFE5E7EB)),
-                ),
-                child: const Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.attach_file, size: 16, color: Color(0xFF6B7280)),
-                    SizedBox(width: 6),
-                    Text('📎 Attach File', style: TextStyle(fontSize: 13, color: Color(0xFF6B7280))),
-                  ],
                 ),
               ),
             ),
             const SizedBox(height: 24),
 
-            // Action buttons
             Row(
               children: [
                 Expanded(
                   child: OutlinedButton(
                     onPressed: () => Navigator.of(context).pop(),
                     style: OutlinedButton.styleFrom(
-                      foregroundColor: const Color(0xFF6B7280),
-                      side: const BorderSide(color: Color(0xFFE5E7EB)),
+                      foregroundColor: DiklyColors.textSecondary,
+                      side: const BorderSide(color: DiklyColors.border),
                       padding: const EdgeInsets.symmetric(vertical: 13),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                     ),
                     child: const Text('Cancel'),
                   ),
@@ -429,7 +323,7 @@ class _PostAnnouncementSheetState extends State<_PostAnnouncementSheet> {
                 const SizedBox(width: 12),
                 Expanded(
                   child: DiklyPrimaryButton(
-                    label: '📢 Post',
+                    label: 'Post',
                     loading: _posting,
                     onPressed: _post,
                   ),
@@ -444,7 +338,7 @@ class _PostAnnouncementSheetState extends State<_PostAnnouncementSheet> {
   }
 }
 
-// ---------- Announcement Card ----------
+// ── Announcement Card ─────────────────────────────────────────────────────────
 
 class _AnnouncementCard extends StatefulWidget {
   final Announcement announcement;
@@ -457,30 +351,26 @@ class _AnnouncementCard extends StatefulWidget {
 class _AnnouncementCardState extends State<_AnnouncementCard> {
   bool _expanded = false;
 
-  Color get _priorityColor {
-    if (widget.announcement.isUrgent) return DiklyColors.error;
+  Color get _typeColor {
+    final priority = widget.announcement.priority?.toLowerCase() ?? '';
+    if (widget.announcement.isUrgent || priority == 'urgent') return DiklyColors.error;
+    if (priority == 'warning' || priority == 'high') return DiklyColors.warning;
     return DiklyColors.primary;
+  }
+
+  String get _typeLabel {
+    final priority = widget.announcement.priority?.toLowerCase() ?? '';
+    if (widget.announcement.isUrgent || priority == 'urgent') return 'Urgent';
+    if (priority == 'warning' || priority == 'high') return 'Warning';
+    return 'Info';
   }
 
   @override
   Widget build(BuildContext context) {
     final a = widget.announcement;
-    return Container(
+    return DiklyCard(
       margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: DiklyColors.surface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: a.isUrgent ? DiklyColors.error.withOpacity(0.3) : DiklyColors.border,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
+      padding: EdgeInsets.zero,
       child: Column(
         children: [
           Padding(
@@ -489,17 +379,18 @@ class _AnnouncementCardState extends State<_AnnouncementCard> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Container(
-                      width: 38,
-                      height: 38,
+                      width: 40,
+                      height: 40,
                       decoration: BoxDecoration(
-                        color: _priorityColor.withOpacity(0.1),
+                        color: _typeColor.withOpacity(0.1),
                         borderRadius: BorderRadius.circular(10),
                       ),
                       child: Icon(
                         a.isUrgent ? Icons.priority_high_rounded : Icons.campaign_rounded,
-                        color: _priorityColor,
+                        color: _typeColor,
                         size: 20,
                       ),
                     ),
@@ -510,34 +401,32 @@ class _AnnouncementCardState extends State<_AnnouncementCard> {
                         children: [
                           Text(
                             a.title,
-                            style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 14,
+                              color: DiklyColors.textPrimary,
+                            ),
                           ),
                           if (a.authorName != null)
                             Text(
                               'By ${a.authorName}',
-                              style: Theme.of(context).textTheme.bodySmall?.copyWith(color: DiklyColors.textSecondary),
+                              style: const TextStyle(fontSize: 12, color: DiklyColors.textSecondary),
                             ),
                         ],
                       ),
                     ),
-                    if (a.isUrgent)
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                        decoration: BoxDecoration(
-                          color: DiklyColors.error.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: const Text(
-                          'URGENT',
-                          style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: DiklyColors.error),
-                        ),
-                      ),
+                    const SizedBox(width: 8),
+                    DiklyBadge(label: _typeLabel, color: _typeColor),
                   ],
                 ),
                 const SizedBox(height: 10),
                 Text(
                   a.content,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: DiklyColors.textSecondary, height: 1.5),
+                  style: const TextStyle(
+                    fontSize: 14,
+                    color: DiklyColors.textSecondary,
+                    height: 1.5,
+                  ),
                   maxLines: _expanded ? null : 3,
                   overflow: _expanded ? TextOverflow.visible : TextOverflow.ellipsis,
                 ),
@@ -547,19 +436,24 @@ class _AnnouncementCardState extends State<_AnnouncementCard> {
                     onTap: () => setState(() => _expanded = !_expanded),
                     child: Text(
                       _expanded ? 'Show less' : 'Read more',
-                      style: const TextStyle(color: DiklyColors.primary, fontWeight: FontWeight.w600, fontSize: 13),
+                      style: const TextStyle(
+                        color: DiklyColors.primary,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 13,
+                      ),
                     ),
                   ),
                 ],
               ],
             ),
           ),
+          // Footer: date + audience
           if (a.createdAt != null)
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               decoration: const BoxDecoration(
-                color: Color(0xFFF1F5F9),
-                borderRadius: BorderRadius.vertical(bottom: Radius.circular(12)),
+                color: DiklyColors.background,
+                borderRadius: BorderRadius.vertical(bottom: Radius.circular(10)),
               ),
               child: Row(
                 children: [

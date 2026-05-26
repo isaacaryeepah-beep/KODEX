@@ -7,7 +7,7 @@ import '../../core/theme.dart';
 import '../../models/course.dart';
 import '../../widgets/app_shell.dart';
 import '../../widgets/loading_list.dart';
-import '../../widgets/empty_state.dart';
+import '../../widgets/ds/dikly_ds.dart';
 
 class CoursesScreen extends ConsumerStatefulWidget {
   const CoursesScreen({super.key});
@@ -65,26 +65,65 @@ class _CoursesScreenState extends ConsumerState<CoursesScreen> {
 
     return AppShell(
       title: 'Courses',
-      floatingActionButton: canCreate
-          ? FloatingActionButton(
-              onPressed: () => _showCreateCourseDialog(context),
-              child: const Icon(Icons.add),
-            )
-          : null,
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            color: DiklyColors.surface,
-            padding: const EdgeInsets.all(12),
+          // Header
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+            child: DiklyScreenHeader(
+              title: 'Courses',
+              subtitle: '${_courses.length} course${_courses.length == 1 ? '' : 's'} available',
+              action: canCreate
+                  ? ElevatedButton.icon(
+                      onPressed: () => _showCreateCourseDialog(context),
+                      icon: const Icon(Icons.add, size: 16),
+                      label: const Text('Create Course'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: DiklyColors.primary,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                        elevation: 0,
+                      ),
+                    )
+                  : null,
+            ),
+          ),
+          // Search bar
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
             child: TextField(
               controller: _searchController,
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 hintText: 'Search courses...',
-                prefixIcon: Icon(Icons.search_rounded),
-                contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                prefixIcon: const Icon(Icons.search_rounded, size: 20),
+                suffixIcon: _searchController.text.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(Icons.clear_rounded, size: 18),
+                        onPressed: () => _searchController.clear(),
+                      )
+                    : null,
+                filled: true,
+                fillColor: DiklyColors.surface,
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: const BorderSide(color: DiklyColors.border),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: const BorderSide(color: DiklyColors.border),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: const BorderSide(color: DiklyColors.primary, width: 2),
+                ),
               ),
             ),
           ),
+          const SizedBox(height: 8),
           Expanded(
             child: _loading
                 ? const LoadingList()
@@ -100,10 +139,10 @@ class _CoursesScreenState extends ConsumerState<CoursesScreen> {
                         ],
                       ))
                     : _filtered.isEmpty
-                        ? EmptyState(
+                        ? DiklyEmptyState(
                             icon: Icons.school_outlined,
                             title: _searchController.text.isEmpty ? 'No courses found' : 'No matching courses',
-                            message: 'Courses will appear here',
+                            subtitle: 'Courses will appear here',
                           )
                         : RefreshIndicator(
                             onRefresh: _loadData,
@@ -180,82 +219,125 @@ class _CourseCard extends StatelessWidget {
 
   const _CourseCard({required this.course, required this.onTap});
 
+  Color get _statusColor {
+    switch ((course.status ?? 'active').toLowerCase()) {
+      case 'approved':
+      case 'active':
+        return DiklyColors.success;
+      case 'pending':
+        return DiklyColors.warning;
+      default:
+        return DiklyColors.textLight;
+    }
+  }
+
+  Color get _statusBg {
+    switch ((course.status ?? 'active').toLowerCase()) {
+      case 'approved':
+      case 'active':
+        return DiklyColors.successLight;
+      case 'pending':
+        return DiklyColors.warningLight;
+      default:
+        return DiklyColors.grey100;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
+    final status = course.status ?? 'active';
+
+    return DiklyCard(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
       onTap: onTap,
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 12),
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: DiklyColors.surface,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: DiklyColors.border),
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8, offset: const Offset(0, 2))],
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 52,
-              height: 52,
-              decoration: BoxDecoration(
-                color: DiklyColors.primary.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: const Icon(Icons.school_outlined, color: DiklyColors.primary, size: 26),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(course.title, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600), overflow: TextOverflow.ellipsis),
-                  if (course.code != null) ...[
-                    const SizedBox(height: 2),
-                    Text(course.code!, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: DiklyColors.primary, fontWeight: FontWeight.w500)),
-                  ],
-                  if (course.instructorName != null) ...[
-                    const SizedBox(height: 4),
-                    Row(
-                      children: [
-                        const Icon(Icons.person_outline_rounded, size: 12, color: DiklyColors.textSecondary),
-                        const SizedBox(width: 4),
-                        Text(course.instructorName!, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: DiklyColors.textSecondary)),
-                      ],
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Code badge (blue pill)
+                    if (course.code != null) ...[
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: DiklyColors.primaryULight,
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(
+                          course.code!.toUpperCase(),
+                          style: const TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: DiklyColors.primary,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                    ],
+                    // Title (uppercase)
+                    Text(
+                      course.title.toUpperCase(),
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: DiklyColors.text,
+                        height: 1.3,
+                      ),
                     ),
                   ],
-                ],
+                ),
               ),
-            ),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                if (course.studentCount != null)
-                  Row(
-                    children: [
-                      const Icon(Icons.people_outline_rounded, size: 14, color: DiklyColors.textSecondary),
-                      const SizedBox(width: 4),
-                      Text('${course.studentCount}', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: DiklyColors.textSecondary)),
-                    ],
+              const SizedBox(width: 12),
+              // Status badge
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  color: _statusBg,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  status[0].toUpperCase() + status.substring(1),
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: _statusColor,
                   ),
-                const SizedBox(height: 4),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: DiklyColors.success.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          // Instructor & enrolled count
+          Row(
+            children: [
+              if (course.instructorName != null) ...[
+                const Icon(Icons.person_outline_rounded, size: 14, color: DiklyColors.textLight),
+                const SizedBox(width: 4),
+                Expanded(
                   child: Text(
-                    (course.status ?? 'active').toUpperCase(),
-                    style: const TextStyle(fontSize: 9, color: DiklyColors.success, fontWeight: FontWeight.w700),
+                    course.instructorName!,
+                    style: const TextStyle(fontSize: 13, color: DiklyColors.textSecondary),
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
               ],
-            ),
-            const SizedBox(width: 8),
-            const Icon(Icons.chevron_right_rounded, color: DiklyColors.textSecondary, size: 18),
-          ],
-        ),
+              if (course.studentCount != null) ...[
+                const Icon(Icons.people_outline_rounded, size: 14, color: DiklyColors.textLight),
+                const SizedBox(width: 4),
+                Text(
+                  '${course.studentCount} enrolled',
+                  style: const TextStyle(fontSize: 13, color: DiklyColors.textSecondary),
+                ),
+              ],
+            ],
+          ),
+        ],
       ),
     );
   }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/api.dart';
 import '../../core/theme.dart';
+import '../../widgets/ds/dikly_ds.dart';
 
 final _myLeavesProvider = FutureProvider.autoDispose<List<Map<String, dynamic>>>((ref) =>
     apiService.getMyLeaves());
@@ -53,18 +54,42 @@ class _EmployeeLeavesScreenState extends ConsumerState<EmployeeLeavesScreen>
       backgroundColor: DiklyColors.background,
       body: Column(
         children: [
+          // Header + Request Leave button + tabs
           Container(
             color: DiklyColors.surface,
-            child: TabBar(
-              controller: _tabController,
-              labelColor: const Color(0xFF0369A1),
-              unselectedLabelColor: DiklyColors.textSecondary,
-              indicatorColor: const Color(0xFF0369A1),
-              labelStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-              tabs: const [
-                Tab(text: 'Pending'),
-                Tab(text: 'Approved'),
-                Tab(text: 'Rejected'),
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                DiklyScreenHeader(
+                  title: 'My Leaves',
+                  subtitle: 'Track and request your leave',
+                  padding: const EdgeInsets.only(bottom: 12),
+                  action: ElevatedButton.icon(
+                    onPressed: _showNewLeaveSheet,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: DiklyColors.success,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      elevation: 0,
+                    ),
+                    icon: const Icon(Icons.add, size: 16),
+                    label: const Text('Request Leave', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                  ),
+                ),
+                TabBar(
+                  controller: _tabController,
+                  labelColor: DiklyColors.success,
+                  unselectedLabelColor: DiklyColors.textSecondary,
+                  indicatorColor: DiklyColors.success,
+                  labelStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                  tabs: const [
+                    Tab(text: 'Pending'),
+                    Tab(text: 'Approved'),
+                    Tab(text: 'Rejected'),
+                  ],
+                ),
               ],
             ),
           ),
@@ -109,11 +134,6 @@ class _EmployeeLeavesScreenState extends ConsumerState<EmployeeLeavesScreen>
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _showNewLeaveSheet,
-        backgroundColor: const Color(0xFF0369A1),
-        child: const Icon(Icons.add, color: Colors.white),
-      ),
     );
   }
 }
@@ -138,10 +158,7 @@ class _LeaveList extends StatelessWidget {
           children: [
             const Icon(Icons.event_busy_outlined, size: 56, color: DiklyColors.border),
             const SizedBox(height: 12),
-            Text(
-              emptyMessage,
-              style: const TextStyle(color: DiklyColors.textSecondary, fontSize: 14),
-            ),
+            Text(emptyMessage, style: const TextStyle(color: DiklyColors.textSecondary, fontSize: 14)),
           ],
         ),
       );
@@ -198,90 +215,66 @@ class _LeaveCard extends StatelessWidget {
     final status = leave['status']?.toString() ?? 'pending';
     final reason = leave['reason']?.toString() ?? '';
 
-    return Card(
+    return DiklyCard(
       margin: const EdgeInsets.only(bottom: 12),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                  decoration: BoxDecoration(
-                    color: _typeColor(type).withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(_typeIcon(type), size: 14, color: _typeColor(type)),
-                      const SizedBox(width: 5),
-                      Text(
-                        type,
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: _typeColor(type),
-                        ),
-                      ),
-                    ],
-                  ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              // Leave type chip
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  color: _typeColor(type).withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(20),
                 ),
-                const Spacer(),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: _statusColor(status).withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Text(
-                    status.toUpperCase(),
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                      color: _statusColor(status),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(_typeIcon(type), size: 14, color: _typeColor(type)),
+                    const SizedBox(width: 5),
+                    Text(
+                      type,
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: _typeColor(type)),
                     ),
-                  ),
+                  ],
                 ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                const Icon(Icons.calendar_today_outlined, size: 14, color: DiklyColors.textSecondary),
-                const SizedBox(width: 6),
-                Text(
-                  startDate == endDate ? startDate : '$startDate  →  $endDate',
-                  style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: DiklyColors.textPrimary,
-                  ),
-                ),
-              ],
-            ),
-            if (reason.isNotEmpty) ...[
-              const SizedBox(height: 8),
-              const Divider(height: 1),
-              const SizedBox(height: 8),
+              ),
+              const Spacer(),
+              // Status badge
+              DiklyBadge(label: status.toUpperCase(), color: _statusColor(status)),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              const Icon(Icons.calendar_today_outlined, size: 14, color: DiklyColors.textSecondary),
+              const SizedBox(width: 6),
               Text(
-                reason,
-                style: const TextStyle(
-                  fontSize: 13,
-                  color: DiklyColors.textSecondary,
-                ),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
+                startDate == endDate ? startDate : '$startDate  →  $endDate',
+                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: DiklyColors.textPrimary),
               ),
             ],
+          ),
+          if (reason.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            const Divider(height: 1),
+            const SizedBox(height: 8),
+            Text(
+              reason,
+              style: const TextStyle(fontSize: 13, color: DiklyColors.textSecondary),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
           ],
-        ),
+        ],
       ),
     );
   }
 }
+
+// ── New Leave Form (Bottom Sheet) ────────────────────────────────────────────
 
 class _NewLeaveForm extends ConsumerStatefulWidget {
   final VoidCallback onSubmitted;
@@ -319,9 +312,7 @@ class _NewLeaveFormState extends ConsumerState<_NewLeaveForm> {
       setState(() {
         if (isStart) {
           _startDate = picked;
-          if (_endDate != null && _endDate!.isBefore(picked)) {
-            _endDate = picked;
-          }
+          if (_endDate != null && _endDate!.isBefore(picked)) _endDate = picked;
         } else {
           _endDate = picked;
         }
@@ -333,10 +324,7 @@ class _NewLeaveFormState extends ConsumerState<_NewLeaveForm> {
     if (!_formKey.currentState!.validate()) return;
     if (_startDate == null || _endDate == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please select start and end dates'),
-          backgroundColor: DiklyColors.warning,
-        ),
+        const SnackBar(content: Text('Please select start and end dates'), backgroundColor: DiklyColors.warning),
       );
       return;
     }
@@ -353,19 +341,13 @@ class _NewLeaveFormState extends ConsumerState<_NewLeaveForm> {
         Navigator.pop(context);
         widget.onSubmitted();
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Leave request submitted successfully'),
-            backgroundColor: DiklyColors.success,
-          ),
+          const SnackBar(content: Text('Leave request submitted successfully'), backgroundColor: DiklyColors.success),
         );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to submit: ${e.toString()}'),
-            backgroundColor: DiklyColors.error,
-          ),
+          SnackBar(content: Text('Failed to submit: ${e.toString()}'), backgroundColor: DiklyColors.error),
         );
       }
     } finally {
@@ -375,6 +357,26 @@ class _NewLeaveFormState extends ConsumerState<_NewLeaveForm> {
 
   String _formatDate(DateTime? d) =>
       d == null ? 'Select date' : '${d.day}/${d.month}/${d.year}';
+
+  InputDecoration _fieldDeco({String? hint}) => InputDecoration(
+    hintText: hint,
+    filled: true,
+    fillColor: DiklyColors.surface,
+    border: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(8),
+      borderSide: const BorderSide(color: DiklyColors.border),
+    ),
+    enabledBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(8),
+      borderSide: const BorderSide(color: DiklyColors.border),
+    ),
+    focusedBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(8),
+      borderSide: const BorderSide(color: DiklyColors.primary, width: 2),
+    ),
+    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+    hintStyle: const TextStyle(color: DiklyColors.textMuted, fontSize: 14),
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -388,15 +390,19 @@ class _NewLeaveFormState extends ConsumerState<_NewLeaveForm> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Handle
+            Center(
+              child: Container(
+                width: 40, height: 4,
+                decoration: BoxDecoration(color: DiklyColors.border, borderRadius: BorderRadius.circular(2)),
+              ),
+            ),
+            const SizedBox(height: 16),
             Row(
               children: [
                 const Text(
                   'New Leave Request',
-                  style: TextStyle(
-                    fontSize: 17,
-                    fontWeight: FontWeight.w700,
-                    color: DiklyColors.textPrimary,
-                  ),
+                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: DiklyColors.textPrimary),
                 ),
                 const Spacer(),
                 IconButton(
@@ -407,48 +413,36 @@ class _NewLeaveFormState extends ConsumerState<_NewLeaveForm> {
               ],
             ),
             const SizedBox(height: 20),
-            const Text(
-              'Leave Type',
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: DiklyColors.textSecondary,
-              ),
-            ),
-            const SizedBox(height: 8),
+
+            // Leave Type
+            const DiklySectionLabel('LEAVE TYPE'),
+            const SizedBox(height: 6),
             DropdownButtonFormField<String>(
               value: _type,
-              decoration: const InputDecoration(
-                border: OutlineInputBorder(),
-                contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-              ),
+              decoration: _fieldDeco(),
               items: _types.map((t) => DropdownMenuItem(value: t, child: Text(t))).toList(),
               onChanged: (v) => setState(() => _type = v ?? _type),
             ),
             const SizedBox(height: 16),
+
+            // Date range
             Row(
               children: [
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
-                        'Start Date',
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: DiklyColors.textSecondary,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
+                      const DiklySectionLabel('START DATE'),
+                      const SizedBox(height: 6),
                       InkWell(
                         onTap: () => _pickDate(true),
-                        borderRadius: BorderRadius.circular(10),
+                        borderRadius: BorderRadius.circular(8),
                         child: Container(
                           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
                           decoration: BoxDecoration(
                             border: Border.all(color: DiklyColors.border),
-                            borderRadius: BorderRadius.circular(10),
+                            borderRadius: BorderRadius.circular(8),
+                            color: DiklyColors.surface,
                           ),
                           child: Row(
                             children: [
@@ -473,23 +467,17 @@ class _NewLeaveFormState extends ConsumerState<_NewLeaveForm> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
-                        'End Date',
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: DiklyColors.textSecondary,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
+                      const DiklySectionLabel('END DATE'),
+                      const SizedBox(height: 6),
                       InkWell(
                         onTap: () => _pickDate(false),
-                        borderRadius: BorderRadius.circular(10),
+                        borderRadius: BorderRadius.circular(8),
                         child: Container(
                           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
                           decoration: BoxDecoration(
                             border: Border.all(color: DiklyColors.border),
-                            borderRadius: BorderRadius.circular(10),
+                            borderRadius: BorderRadius.circular(8),
+                            color: DiklyColors.surface,
                           ),
                           child: Row(
                             children: [
@@ -512,52 +500,26 @@ class _NewLeaveFormState extends ConsumerState<_NewLeaveForm> {
               ],
             ),
             const SizedBox(height: 16),
-            const Text(
-              'Reason',
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: DiklyColors.textSecondary,
-              ),
-            ),
-            const SizedBox(height: 8),
+
+            // Reason
+            const DiklySectionLabel('REASON'),
+            const SizedBox(height: 6),
             TextFormField(
               controller: _reasonController,
               maxLines: 3,
-              decoration: const InputDecoration(
-                hintText: 'Describe the reason for your leave...',
-                border: OutlineInputBorder(),
-              ),
+              decoration: _fieldDeco(hint: 'Describe the reason for your leave...'),
               validator: (v) {
                 if (v == null || v.trim().isEmpty) return 'Please provide a reason';
                 return null;
               },
             ),
             const SizedBox(height: 20),
-            SizedBox(
-              width: double.infinity,
-              height: 50,
-              child: ElevatedButton(
-                onPressed: _loading ? null : _submit,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF0369A1),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                ),
-                child: _loading
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                      )
-                    : const Text(
-                        'Submit Leave Request',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 15,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-              ),
+
+            // Submit
+            DiklyPrimaryButton(
+              label: 'Submit Leave Request',
+              loading: _loading,
+              onPressed: _submit,
             ),
           ],
         ),

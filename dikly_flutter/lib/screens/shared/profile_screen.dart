@@ -70,22 +70,23 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     return InputDecoration(
       hintText: hint,
       filled: true,
-      fillColor: readOnly ? const Color(0xFFF3F4F6) : Colors.white,
+      fillColor: readOnly ? DiklyColors.background : DiklyColors.surface,
       border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(10),
-        borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+        borderRadius: BorderRadius.circular(8),
+        borderSide: const BorderSide(color: DiklyColors.border),
       ),
       enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(10),
-        borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+        borderRadius: BorderRadius.circular(8),
+        borderSide: const BorderSide(color: DiklyColors.border),
       ),
       focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(8),
         borderSide: readOnly
-            ? const BorderSide(color: Color(0xFFE5E7EB))
-            : const BorderSide(color: Color(0xFF2563EB), width: 2),
+            ? const BorderSide(color: DiklyColors.border)
+            : const BorderSide(color: DiklyColors.primary, width: 2),
       ),
       contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      hintStyle: const TextStyle(color: DiklyColors.textMuted, fontSize: 14),
     );
   }
 
@@ -98,9 +99,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     }
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF1F5F9),
+      backgroundColor: DiklyColors.background,
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: DiklyColors.surface,
         elevation: 0,
         surfaceTintColor: Colors.transparent,
         title: const Text('My Profile'),
@@ -118,19 +119,20 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           : ListView(
               padding: const EdgeInsets.all(16),
               children: [
-                // Avatar header
-                Center(
+                // Profile card: large avatar + name + role badge
+                DiklyCard(
                   child: Column(
                     children: [
+                      // Large 80px CircleAvatar with camera overlay badge
                       Stack(
                         children: [
                           CircleAvatar(
-                            radius: 52,
-                            backgroundColor: const Color(0xFF2563EB),
+                            radius: 40,
+                            backgroundColor: DiklyColors.primary,
                             child: Text(
                               _getInitials(user.name),
                               style: const TextStyle(
-                                fontSize: 28,
+                                fontSize: 26,
                                 fontWeight: FontWeight.w700,
                                 color: Colors.white,
                               ),
@@ -140,14 +142,14 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                             bottom: 0,
                             right: 0,
                             child: Container(
-                              width: 28,
-                              height: 28,
+                              width: 26,
+                              height: 26,
                               decoration: BoxDecoration(
-                                color: const Color(0xFF2563EB),
+                                color: DiklyColors.primary,
                                 shape: BoxShape.circle,
                                 border: Border.all(color: Colors.white, width: 2),
                               ),
-                              child: const Icon(Icons.upload, size: 16, color: Colors.white),
+                              child: const Icon(Icons.camera_alt, size: 13, color: Colors.white),
                             ),
                           ),
                         ],
@@ -155,11 +157,18 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       const SizedBox(height: 12),
                       Text(
                         user.name,
-                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: Color(0xFF111827)),
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w700,
+                          color: DiklyColors.textPrimary,
+                        ),
                       ),
-                      const SizedBox(height: 2),
-                      Text(user.email, style: const TextStyle(fontSize: 13, color: Color(0xFF6B7280))),
-                      const SizedBox(height: 6),
+                      const SizedBox(height: 3),
+                      Text(
+                        user.email,
+                        style: const TextStyle(fontSize: 13, color: DiklyColors.textSecondary),
+                      ),
+                      const SizedBox(height: 8),
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                         decoration: BoxDecoration(
@@ -168,32 +177,61 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                         ),
                         child: Text(
                           user.role.toUpperCase(),
-                          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFFD97706)),
+                          style: const TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFFD97706),
+                          ),
                         ),
                       ),
                     ],
                   ),
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 12),
 
-                // Account Details card
+                // Account Details
                 DiklyCard(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('Account Details', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: Color(0xFF111827))),
+                      const Text(
+                        'Account Details',
+                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: DiklyColors.textPrimary),
+                      ),
                       const SizedBox(height: 16),
+
                       const DiklySectionLabel('FULL NAME'),
+                      const SizedBox(height: 6),
                       TextFormField(
                         controller: _nameCtrl,
                         decoration: _inputDeco(hint: 'Your full name'),
                       ),
                       const SizedBox(height: 14),
-                      const DiklySectionLabel('DEPARTMENT (CANNOT BE CHANGED HERE — CONTACT ADMIN)'),
+
+                      const DiklySectionLabel('DEPARTMENT'),
+                      const SizedBox(height: 6),
                       TextFormField(
                         initialValue: user.department ?? '',
                         readOnly: true,
-                        style: const TextStyle(color: Color(0xFF6B7280)),
+                        style: const TextStyle(color: DiklyColors.textSecondary),
+                        decoration: _inputDeco(
+                          hint: 'Not set',
+                          readOnly: true,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      const Text(
+                        'Department cannot be changed here — contact your admin.',
+                        style: TextStyle(fontSize: 11, color: DiklyColors.textMuted),
+                      ),
+                      const SizedBox(height: 14),
+
+                      const DiklySectionLabel('EMAIL'),
+                      const SizedBox(height: 6),
+                      TextFormField(
+                        initialValue: user.email,
+                        readOnly: true,
+                        style: const TextStyle(color: DiklyColors.textSecondary),
                         decoration: _inputDeco(readOnly: true),
                       ),
                     ],
@@ -201,28 +239,37 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 ),
                 const SizedBox(height: 12),
 
-                // Change Password card
+                // Change Password
                 DiklyCard(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('Change Password', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: Color(0xFF111827))),
+                      const Text(
+                        'Change Password',
+                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: DiklyColors.textPrimary),
+                      ),
                       const SizedBox(height: 16),
+
                       const DiklySectionLabel('CURRENT PASSWORD'),
+                      const SizedBox(height: 6),
                       TextFormField(
                         controller: _currentPwCtrl,
                         obscureText: true,
                         decoration: _inputDeco(hint: 'Enter current password'),
                       ),
                       const SizedBox(height: 14),
+
                       const DiklySectionLabel('NEW PASSWORD'),
+                      const SizedBox(height: 6),
                       TextFormField(
                         controller: _newPwCtrl,
                         obscureText: true,
                         decoration: _inputDeco(hint: 'Min 8 characters'),
                       ),
                       const SizedBox(height: 14),
+
                       const DiklySectionLabel('CONFIRM NEW PASSWORD'),
+                      const SizedBox(height: 6),
                       TextFormField(
                         controller: _confirmPwCtrl,
                         obscureText: true,
@@ -233,6 +280,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 ),
                 const SizedBox(height: 20),
 
+                // Save button — full width, blue
                 DiklyPrimaryButton(
                   label: 'Save Changes',
                   loading: _saving,
@@ -250,6 +298,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       foregroundColor: DiklyColors.error,
                       side: const BorderSide(color: DiklyColors.error),
                       padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                     ),
                   ),
                 ),

@@ -8,7 +8,7 @@ import '../../core/theme.dart';
 import '../../models/assignment.dart';
 import '../../widgets/app_shell.dart';
 import '../../widgets/loading_list.dart';
-import '../../widgets/empty_state.dart';
+import '../../widgets/ds/dikly_ds.dart';
 
 class AssignmentsScreen extends ConsumerStatefulWidget {
   const AssignmentsScreen({super.key});
@@ -17,24 +17,17 @@ class AssignmentsScreen extends ConsumerStatefulWidget {
   ConsumerState<AssignmentsScreen> createState() => _AssignmentsScreenState();
 }
 
-class _AssignmentsScreenState extends ConsumerState<AssignmentsScreen>
-    with SingleTickerProviderStateMixin {
-  late TabController _tabController;
+class _AssignmentsScreenState extends ConsumerState<AssignmentsScreen> {
   List<Assignment> _assignments = [];
   bool _loading = true;
   String? _error;
+  // Filter: 'all', 'active', 'closed'
+  String _filter = 'all';
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
     _loadData();
-  }
-
-  @override
-  void dispose() {
-    _tabController.dispose();
-    super.dispose();
   }
 
   Future<void> _loadData() async {
@@ -47,40 +40,77 @@ class _AssignmentsScreenState extends ConsumerState<AssignmentsScreen>
     }
   }
 
-  List<Assignment> get _pending => _assignments.where((a) => !a.isSubmitted && !a.isOverdue).toList();
-  List<Assignment> get _overdue => _assignments.where((a) => a.isOverdue).toList();
-  List<Assignment> get _submitted => _assignments.where((a) => a.isSubmitted).toList();
+  List<Assignment> get _filtered {
+    switch (_filter) {
+      case 'active':
+        return _assignments.where((a) => !a.isSubmitted && !a.isOverdue).toList();
+      case 'closed':
+        return _assignments.where((a) => a.isOverdue || a.isSubmitted).toList();
+      default:
+        return _assignments;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final user = ref.watch(currentUserProvider);
     final canCreate = user?.role == 'lecturer' || user?.role == 'admin';
+    final isLecturer = user?.role == 'lecturer' || user?.role == 'admin';
 
     return AppShell(
       title: 'Assignments',
-      floatingActionButton: canCreate
-          ? FloatingActionButton(
-              onPressed: () => _showCreateDialog(context),
-              child: const Icon(Icons.add),
-            )
-          : null,
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            color: DiklyColors.surface,
-            child: TabBar(
-              controller: _tabController,
-              tabs: [
-                Tab(text: 'Pending (${_pending.length})'),
-                Tab(text: 'Overdue (${_overdue.length})'),
-                Tab(text: 'Submitted (${_submitted.length})'),
-              ],
-              labelColor: DiklyColors.primary,
-              unselectedLabelColor: DiklyColors.textSecondary,
-              indicatorColor: DiklyColors.primary,
-              labelStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+          // Header
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+            child: DiklyScreenHeader(
+              title: 'Assignments',
+              subtitle: '${_assignments.length} total assignment${_assignments.length == 1 ? '' : 's'}',
+              action: canCreate
+                  ? ElevatedButton.icon(
+                      onPressed: () => _showCreateDialog(context),
+                      icon: const Icon(Icons.add, size: 16),
+                      label: const Text('Create'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: DiklyColors.primary,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                        elevation: 0,
+                      ),
+                    )
+                  : null,
             ),
           ),
+          // Filter chips (pill style)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+            child: Row(
+              children: [
+                _FilterChip(label: 'All', count: _assignments.length, selected: _filter == 'all', onTap: () => setState(() => _filter = 'all')),
+                const SizedBox(width: 8),
+                _FilterChip(
+                  label: 'Active',
+                  count: _assignments.where((a) => !a.isSubmitted && !a.isOverdue).length,
+                  selected: _filter == 'active',
+                  onTap: () => setState(() => _filter = 'active'),
+                  selectedColor: DiklyColors.success,
+                ),
+                const SizedBox(width: 8),
+                _FilterChip(
+                  label: 'Closed',
+                  count: _assignments.where((a) => a.isOverdue || a.isSubmitted).length,
+                  selected: _filter == 'closed',
+                  onTap: () => setState(() => _filter = 'closed'),
+                  selectedColor: DiklyColors.textLight,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 8),
           Expanded(
             child: _loading
                 ? const LoadingList()
@@ -95,14 +125,27 @@ class _AssignmentsScreenState extends ConsumerState<AssignmentsScreen>
                           ElevatedButton(onPressed: _loadData, child: const Text('Retry')),
                         ],
                       ))
-                    : TabBarView(
-                        controller: _tabController,
-                        children: [
-                          _AssignmentList(assignments: _pending, emptyTitle: 'No pending assignments', onRefresh: _loadData),
-                          _AssignmentList(assignments: _overdue, emptyTitle: 'No overdue assignments', onRefresh: _loadData, isOverdue: true),
-                          _AssignmentList(assignments: _submitted, emptyTitle: 'No submitted assignments', onRefresh: _loadData, isSubmitted: true),
-                        ],
-                      ),
+                    : _filtered.isEmpty
+                        ? const DiklyEmptyState(
+                            icon: Icons.assignment_outlined,
+                            title: 'No assignments found',
+                            subtitle: 'Your assignments will appear here',
+                          )
+                        : RefreshIndicator(
+                            onRefresh: _loadData,
+                            child: ListView.builder(
+                              padding: const EdgeInsets.all(16),
+                              itemCount: _filtered.length,
+                              itemBuilder: (context, index) {
+                                final assignment = _filtered[index];
+                                return _AssignmentCard(
+                                  assignment: assignment,
+                                  isLecturer: isLecturer,
+                                  onTap: () => context.push('/assignments/${assignment.id}'),
+                                );
+                              },
+                            ),
+                          ),
           ),
         ],
       ),
@@ -171,121 +214,168 @@ class _AssignmentsScreenState extends ConsumerState<AssignmentsScreen>
   }
 }
 
-class _AssignmentList extends StatelessWidget {
-  final List<Assignment> assignments;
-  final String emptyTitle;
-  final Future<void> Function() onRefresh;
-  final bool isOverdue;
-  final bool isSubmitted;
+class _FilterChip extends StatelessWidget {
+  final String label;
+  final int count;
+  final bool selected;
+  final VoidCallback onTap;
+  final Color? selectedColor;
 
-  const _AssignmentList({
-    required this.assignments,
-    required this.emptyTitle,
-    required this.onRefresh,
-    this.isOverdue = false,
-    this.isSubmitted = false,
+  const _FilterChip({
+    required this.label,
+    required this.count,
+    required this.selected,
+    required this.onTap,
+    this.selectedColor,
   });
 
   @override
   Widget build(BuildContext context) {
-    return RefreshIndicator(
-      onRefresh: onRefresh,
-      child: assignments.isEmpty
-          ? EmptyState(icon: Icons.assignment_outlined, title: emptyTitle, message: 'Your assignments will appear here')
-          : ListView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: assignments.length,
-              itemBuilder: (context, index) {
-                final assignment = assignments[index];
-                return _AssignmentCard(
-                  assignment: assignment,
-                  isOverdue: isOverdue,
-                  isSubmitted: isSubmitted,
-                  onTap: () => context.push('/assignments/${assignment.id}'),
-                );
-              },
+    final color = selectedColor ?? DiklyColors.primary;
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: selected ? color : DiklyColors.surface,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: selected ? color : DiklyColors.border),
+          boxShadow: selected ? [] : AppTheme.shadowSm,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: selected ? Colors.white : DiklyColors.textSecondary,
+              ),
             ),
+            const SizedBox(width: 5),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+              decoration: BoxDecoration(
+                color: selected ? Colors.white.withOpacity(0.25) : DiklyColors.grey100,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Text(
+                '$count',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: selected ? Colors.white : DiklyColors.textLight,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
 
 class _AssignmentCard extends StatelessWidget {
   final Assignment assignment;
-  final bool isOverdue;
-  final bool isSubmitted;
+  final bool isLecturer;
   final VoidCallback onTap;
 
   const _AssignmentCard({
     required this.assignment,
-    required this.isOverdue,
-    required this.isSubmitted,
+    required this.isLecturer,
     required this.onTap,
   });
 
   Color get _accentColor {
-    if (isOverdue) return DiklyColors.error;
-    if (isSubmitted) return DiklyColors.success;
+    if (assignment.isSubmitted) return DiklyColors.success;
+    if (assignment.isOverdue) return DiklyColors.error;
     return DiklyColors.warning;
   }
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
+    return DiklyCard(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
       onTap: onTap,
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 12),
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: DiklyColors.surface,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: _accentColor.withOpacity(0.2)),
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8, offset: const Offset(0, 2))],
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(color: _accentColor.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
-              child: Icon(
-                isSubmitted ? Icons.check_circle_outline_rounded : Icons.assignment_outlined,
-                color: _accentColor,
-                size: 22,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Icon
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: _accentColor.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(
+                  assignment.isSubmitted ? Icons.check_circle_outline_rounded : Icons.assignment_outlined,
+                  color: _accentColor,
+                  size: 20,
+                ),
               ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(assignment.title, style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600), overflow: TextOverflow.ellipsis),
-                  const SizedBox(height: 4),
-                  Row(
-                    children: [
-                      if (assignment.courseName != null) ...[
-                        const Icon(Icons.school_outlined, size: 12, color: DiklyColors.textSecondary),
-                        const SizedBox(width: 3),
-                        Text(assignment.courseName!, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: DiklyColors.textSecondary)),
-                        const SizedBox(width: 8),
-                      ],
-                      if (assignment.dueDate != null) ...[
-                        const Icon(Icons.schedule_outlined, size: 12, color: DiklyColors.textSecondary),
-                        const SizedBox(width: 3),
-                        Text(DateFormat('MMM d').format(assignment.dueDate!), style: TextStyle(fontSize: 12, color: _accentColor, fontWeight: FontWeight.w500)),
-                      ],
-                    ],
-                  ),
-                  if (isSubmitted && assignment.grade != null) ...[
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      assignment.title,
+                      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: DiklyColors.text),
+                      overflow: TextOverflow.ellipsis,
+                    ),
                     const SizedBox(height: 4),
-                    Text('Grade: ${assignment.grade}/${assignment.totalMarks ?? '?'}', style: TextStyle(fontSize: 12, color: DiklyColors.success, fontWeight: FontWeight.w600)),
+                    // Course code chip
+                    if (assignment.courseName != null)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: DiklyColors.primaryULight,
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(
+                          assignment.courseName!,
+                          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: DiklyColors.primary),
+                        ),
+                      ),
                   ],
-                ],
+                ),
               ),
-            ),
-            const SizedBox(width: 8),
-            const Icon(Icons.chevron_right_rounded, color: DiklyColors.textSecondary, size: 18),
-          ],
-        ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              // Due date with clock icon
+              if (assignment.dueDate != null)
+                DiklyInfoChip(
+                  icon: Icons.access_time_outlined,
+                  label: 'Due ${DateFormat('MMM d').format(assignment.dueDate!)}',
+                  color: _accentColor,
+                  bg: _accentColor.withOpacity(0.08),
+                ),
+              const Spacer(),
+              // Lecturer: submission count | Student: status badge
+              if (isLecturer && assignment.totalMarks != null)
+                DiklyInfoChip(
+                  icon: Icons.bar_chart_rounded,
+                  label: '${assignment.totalMarks} marks',
+                  color: DiklyColors.textSecondary,
+                )
+              else
+                DiklyBadge(
+                  label: assignment.isSubmitted ? 'Submitted' : assignment.isOverdue ? 'Overdue' : 'Pending',
+                  color: _accentColor,
+                ),
+            ],
+          ),
+        ],
       ),
     );
   }
