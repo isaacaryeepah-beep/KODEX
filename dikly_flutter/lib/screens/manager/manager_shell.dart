@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/auth.dart';
 import '../../core/theme.dart';
+import '../../widgets/dikly_drawer.dart';
 import 'manager_home_screen.dart';
 import 'manager_employees_screen.dart';
 import 'manager_leave_screen.dart';
@@ -23,48 +24,63 @@ class _ManagerShellState extends ConsumerState<ManagerShell> {
   @override
   void initState() { super.initState(); _index = widget.initialTab; }
 
-  static const _labels = ['Home', 'Team', 'Leave', 'Timesheets', 'More'];
+  static const _color = Color(0xFF059669);
+  static const _labels = ['Dashboard', 'Team', 'Leave', 'Timesheets'];
   static const _icons = [
-    Icons.home_outlined,
+    Icons.dashboard_outlined,
     Icons.people_outlined,
     Icons.event_note_outlined,
     Icons.receipt_long_outlined,
-    Icons.menu_outlined,
   ];
-  static const _color = Color(0xFF059669);
 
-  void _openMore(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (_) => _ManagerMoreSheet(),
-    );
-  }
+  static const _sections = [
+    DrawerSection(items: [
+      DrawerItem(Icons.dashboard_outlined, 'Dashboard', '/dashboard/manager'),
+      DrawerItem(Icons.login_outlined, 'Sign In / Out', '/sign-in-out'),
+      DrawerItem(Icons.event_available_outlined, 'Attendance', '/corporate-attendance'),
+    ]),
+    DrawerSection(header: 'MANAGEMENT', items: [
+      DrawerItem(Icons.people_outlined, 'Team', '/manager/team'),
+      DrawerItem(Icons.event_note_outlined, 'Leave Requests', '/manager/leave-requests'),
+      DrawerItem(Icons.receipt_long_outlined, 'Timesheets', '/manager/timesheets'),
+      DrawerItem(Icons.calendar_month_outlined, 'Shifts', '/shifts'),
+      DrawerItem(Icons.attach_money_outlined, 'Expenses', '/expenses'),
+    ]),
+    DrawerSection(header: 'COMMUNICATE', items: [
+      DrawerItem(Icons.message_outlined, 'Messages', '/messages'),
+      DrawerItem(Icons.video_call_outlined, 'Meetings', '/meetings'),
+      DrawerItem(Icons.campaign_outlined, 'Announcements', '/announcements'),
+    ]),
+    DrawerSection(header: 'INSIGHTS', items: [
+      DrawerItem(Icons.trending_up_outlined, 'Performance', '/performance'),
+      DrawerItem(Icons.assessment_outlined, 'Reports', '/reports'),
+    ]),
+    DrawerSection(header: 'ACCOUNT', items: [
+      DrawerItem(Icons.person_outlined, 'My Profile', '/profile'),
+      DrawerItem(Icons.card_membership_outlined, 'Subscription', '/subscription'),
+      DrawerItem(Icons.help_outline, 'FAQ & Help', '/faq'),
+    ]),
+  ];
 
   @override
   Widget build(BuildContext context) {
     final user = ref.watch(authProvider).user;
-
-    final screens = [
-      const ManagerHomeScreen(),
-      const ManagerEmployeesScreen(),
-      const ManagerLeaveScreen(),
-      const TimesheetsScreen(),
-      // "More" tab shows a sheet instead of a screen; placeholder:
-      const SizedBox.shrink(),
+    final screens = const [
+      ManagerHomeScreen(),
+      ManagerEmployeesScreen(),
+      ManagerLeaveScreen(),
+      TimesheetsScreen(),
     ];
 
     return Scaffold(
       appBar: AppBar(
-        title: Row(children: [
-          Container(
-            width: 32, height: 32,
-            decoration: BoxDecoration(gradient: const LinearGradient(colors: [Color(0xFF059669), Color(0xFF2563EB)]), borderRadius: BorderRadius.circular(8)),
-            child: const Center(child: Text('D', style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w800))),
+        leading: Builder(
+          builder: (ctx) => IconButton(
+            icon: const Icon(Icons.menu_outlined),
+            onPressed: () => Scaffold.of(ctx).openDrawer(),
           ),
-          const SizedBox(width: 10),
-          Text(_index < 4 ? _labels[_index] : 'Manager'),
-        ]),
+        ),
+        title: const Text('Manager Portal'),
         actions: [
           PopupMenuButton<String>(
             offset: const Offset(0, 48),
@@ -74,8 +90,10 @@ class _ManagerShellState extends ConsumerState<ManagerShell> {
               child: CircleAvatar(
                 radius: 18,
                 backgroundColor: _color.withOpacity(0.12),
-                child: Text((user?.name ?? 'M').substring(0, 1).toUpperCase(),
-                    style: const TextStyle(color: _color, fontWeight: FontWeight.w700, fontSize: 14)),
+                child: Text(
+                  (user?.name ?? 'M').substring(0, 1).toUpperCase(),
+                  style: const TextStyle(color: _color, fontWeight: FontWeight.w700, fontSize: 14),
+                ),
               ),
             ),
             itemBuilder: (_) => [
@@ -97,65 +115,25 @@ class _ManagerShellState extends ConsumerState<ManagerShell> {
           ),
         ],
       ),
-      body: _index == 4 ? const SizedBox.shrink() : IndexedStack(index: _index, children: screens.sublist(0, 4)),
+      drawer: DiklyDrawer(
+        portalTitle: 'Manager Portal',
+        accentColor: _color,
+        userName: user?.name ?? '',
+        userEmail: user?.email ?? '',
+        userRole: 'Manager',
+        sections: _sections,
+        onSignOut: () async {
+          Navigator.pop(context);
+          await ref.read(authProvider.notifier).logout();
+        },
+      ),
+      body: IndexedStack(index: _index, children: screens),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _index,
-        onTap: (i) {
-          if (i == 4) {
-            _openMore(context);
-          } else {
-            setState(() => _index = i);
-          }
-        },
+        onTap: (i) => setState(() => _index = i),
         selectedItemColor: _color,
-        items: List.generate(5, (i) => BottomNavigationBarItem(icon: Icon(_icons[i]), label: _labels[i])),
+        items: List.generate(4, (i) => BottomNavigationBarItem(icon: Icon(_icons[i]), label: _labels[i])),
       ),
     );
   }
-}
-
-class _ManagerMoreSheet extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    final items = [
-      _Item(Icons.login_outlined, 'Sign In/Out', '/sign-in-out'),
-      _Item(Icons.event_available_outlined, 'Attendance', '/corporate-attendance'),
-      _Item(Icons.calendar_month_outlined, 'Shifts', '/shifts'),
-      _Item(Icons.attach_money_outlined, 'Expenses', '/expenses'),
-      _Item(Icons.trending_up_outlined, 'Performance', '/performance'),
-      _Item(Icons.business_outlined, 'Branches', '/admin/branches'),
-      _Item(Icons.history_outlined, 'Audit Logs', '/admin/audit-logs'),
-      _Item(Icons.message_outlined, 'Messages', '/messages'),
-      _Item(Icons.video_call_outlined, 'Meetings', '/meetings'),
-      _Item(Icons.campaign_outlined, 'Announcements', '/announcements'),
-      _Item(Icons.card_membership_outlined, 'Subscription', '/subscription'),
-      _Item(Icons.help_outline, 'FAQ & Help', '/faq'),
-    ];
-    return Column(mainAxisSize: MainAxisSize.min, children: [
-      const SizedBox(height: 8),
-      Container(width: 40, height: 4, decoration: BoxDecoration(color: DiklyColors.border, borderRadius: BorderRadius.circular(2))),
-      const SizedBox(height: 12),
-      const Padding(padding: EdgeInsets.symmetric(horizontal: 16), child: Align(alignment: Alignment.centerLeft, child: Text('More', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)))),
-      const SizedBox(height: 8),
-      GridView.count(
-        shrinkWrap: true, crossAxisCount: 4,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        children: items.map((item) => InkWell(
-          onTap: () { Navigator.pop(context); context.push(item.route); },
-          borderRadius: BorderRadius.circular(12),
-          child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-            Container(width: 48, height: 48, decoration: BoxDecoration(color: const Color(0xFF059669).withOpacity(0.1), borderRadius: BorderRadius.circular(12)), child: Icon(item.icon, color: const Color(0xFF059669), size: 22)),
-            const SizedBox(height: 6),
-            Text(item.label, textAlign: TextAlign.center, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w500), maxLines: 2),
-          ]),
-        )).toList(),
-      ),
-      const SizedBox(height: 16),
-    ]);
-  }
-}
-
-class _Item {
-  final IconData icon; final String label; final String route;
-  const _Item(this.icon, this.label, this.route);
 }
