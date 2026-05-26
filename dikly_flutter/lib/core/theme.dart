@@ -50,9 +50,7 @@ class AppTheme {
       onPrimary: Colors.white,
       secondary: DiklyColors.primaryLight,
       error: DiklyColors.error,
-      background: DiklyColors.background,
       surface: DiklyColors.surface,
-      onBackground: DiklyColors.textPrimary,
       onSurface: DiklyColors.textPrimary,
     );
 
@@ -170,7 +168,7 @@ class AppTheme {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         contentTextStyle: GoogleFonts.inter(fontSize: 14),
       ),
-      dialogTheme: DialogTheme(
+      dialogTheme: DialogThemeData(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         elevation: 8,
       ),
@@ -190,9 +188,7 @@ class AppTheme {
       onPrimary: Colors.white,
       secondary: DiklyColors.primary,
       error: DiklyColors.error,
-      background: DiklyColors.darkBackground,
       surface: DiklyColors.darkSurface,
-      onBackground: Colors.white,
       onSurface: Colors.white,
     );
 
