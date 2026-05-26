@@ -66,7 +66,7 @@ class _AttendanceSummary extends StatelessWidget {
   Widget build(BuildContext context) {
     final present = records.where((r) => r['status'] == 'present').length;
     final absent = records.where((r) => r['status'] == 'absent').length;
-    final late = records.where((r) => r['status'] == 'late').length;
+    final lateCount = records.where((r) => r['status'] == 'late').length;
     final total = records.length;
 
     return Container(
@@ -90,7 +90,7 @@ class _AttendanceSummary extends StatelessWidget {
           const SizedBox(width: 16),
           _SumStat(label: 'Absent', value: absent.toString(), color: const Color(0xFFFCA5A5)),
           const SizedBox(width: 16),
-          _SumStat(label: 'Late', value: late.toString(), color: const Color(0xFFFDE68A)),
+          _SumStat(label: 'Late', value: lateCount.toString(), color: const Color(0xFFFDE68A)),
         ]),
       ]),
     );
