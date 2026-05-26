@@ -58,6 +58,11 @@ class User {
         'avatar': avatar,
         'phone': phone,
         'department': department,
+        'company': company,
+        'indexNumber': indexNumber,
+        'isClassRep': isClassRep,
+        'isApproved': isApproved,
+        if (createdAt != null) 'createdAt': createdAt!.toIso8601String(),
       };
 
   bool get isStudent => role == 'student';

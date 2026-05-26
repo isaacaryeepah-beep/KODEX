@@ -4,6 +4,7 @@ import 'package:device_info_plus/device_info_plus.dart';
 import 'dart:io';
 import '../models/user.dart';
 import 'api.dart';
+import 'cache.dart';
 
 enum AuthStatus { unknown, authenticated, unauthenticated }
 
@@ -54,16 +55,38 @@ class AuthNotifier extends StateNotifier<AuthState> {
       return;
     }
     try {
+      // getMe uses _cachedGet — returns cached data when offline.
       final user = await _api.getMe();
-      state = AuthState(
-        status: AuthStatus.authenticated,
-        user: user,
-        token: token,
-      );
-    } catch (_) {
-      await _storage.delete(key: 'auth_token');
-      state = state.copyWith(status: AuthStatus.unauthenticated);
+      await _cacheUser(user);
+      state = AuthState(status: AuthStatus.authenticated, user: user, token: token);
+    } catch (e) {
+      // If it's a network error, try loading a previously cached user so the
+      // app works offline without forcing the user to log in again.
+      final cachedUser = _loadCachedUser();
+      if (cachedUser != null) {
+        state = AuthState(status: AuthStatus.authenticated, user: cachedUser, token: token);
+      } else {
+        // Only a 401/403 should clear the token; network errors keep it.
+        final is401 = e.toString().contains('401') || e.toString().contains('403');
+        if (is401) {
+          await _storage.delete(key: 'auth_token');
+          state = state.copyWith(status: AuthStatus.unauthenticated);
+        } else {
+          // Unknown user but token present — let router decide.
+          state = AuthState(status: AuthStatus.authenticated, user: null, token: token);
+        }
+      }
     }
+  }
+
+  Future<void> _cacheUser(User user) async {
+    await CacheService.set('cached_user', user.toJson());
+  }
+
+  User? _loadCachedUser() {
+    final raw = CacheService.get<Map<String, dynamic>>('cached_user');
+    if (raw == null) return null;
+    try { return User.fromJson(raw); } catch (_) { return null; }
   }
 
   Future<bool> login({
@@ -97,6 +120,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
       }
       final user = User.fromJson(userData);
 
+      await _cacheUser(user);
       state = AuthState(
         status: AuthStatus.authenticated,
         user: user,
@@ -132,6 +156,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
   Future<void> refreshUser() async {
     try {
       final user = await _api.getMe();
+      await _cacheUser(user);
       state = state.copyWith(user: user);
     } catch (_) {}
   }
