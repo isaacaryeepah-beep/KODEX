@@ -7,6 +7,8 @@ import '../../widgets/dikly_drawer.dart';
 import 'lecturer_home_screen.dart';
 import 'lecturer_courses_screen.dart';
 import 'lecturer_attendance_screen.dart';
+import 'lecturer_quiz_screen.dart';
+import 'lecturer_assignments_screen.dart';
 import '../sessions/sessions_screen.dart';
 
 class LecturerShell extends ConsumerStatefulWidget {
@@ -24,25 +26,27 @@ class _LecturerShellState extends ConsumerState<LecturerShell> {
   void initState() { super.initState(); _index = widget.initialTab; }
 
   static const _color = Color(0xFF7C3AED);
-  static const _labels = ['Dashboard', 'Sessions', 'Courses', 'Attendance'];
+  static const _labels = ['Dashboard', 'Sessions', 'Quizzes', 'Assignments'];
   static const _icons = [
     Icons.dashboard_outlined,
     Icons.play_circle_outline,
-    Icons.book_outlined,
-    Icons.checklist_outlined,
+    Icons.quiz_outlined,
+    Icons.assignment_outlined,
   ];
 
   static const _sections = [
     DrawerSection(items: [
       DrawerItem(Icons.dashboard_outlined, 'Dashboard', '/dashboard/lecturer'),
       DrawerItem(Icons.play_circle_outline, 'Sessions', '/sessions'),
-      DrawerItem(Icons.checklist_outlined, 'Attendance', '/attendance'),
+      DrawerItem(Icons.sensors_outlined, 'Attendance Device', '/lecturer/attendance-device'),
     ]),
     DrawerSection(header: 'CONTENT', items: [
+      DrawerItem(Icons.search_outlined, 'Search', '/lecturer/search'),
       DrawerItem(Icons.book_outlined, 'Courses', '/courses'),
-      DrawerItem(Icons.quiz_outlined, 'Snap Quiz', '/quizzes'),
-      DrawerItem(Icons.schedule_outlined, 'Timetable', '/timetable'),
-      DrawerItem(Icons.assignment_outlined, 'Assignments', '/assignments'),
+      DrawerItem(Icons.quiz_outlined, 'Proctored/Snap Quiz', '/lecturer/quiz'),
+      DrawerItem(Icons.calendar_month_outlined, 'Schedule', '/lecturer/schedule'),
+      DrawerItem(Icons.storage_outlined, 'Question Bank', '/lecturer/question-bank'),
+      DrawerItem(Icons.assignment_outlined, 'Assignment', '/lecturer/assignments'),
       DrawerItem(Icons.grade_outlined, 'Grade Book', '/gradebook'),
     ]),
     DrawerSection(header: 'COMMUNICATE', items: [
@@ -71,8 +75,8 @@ class _LecturerShellState extends ConsumerState<LecturerShell> {
     final screens = const [
       LecturerHomeScreen(),
       SessionsScreen(),
-      LecturerCoursesScreen(),
-      LecturerAttendanceScreen(),
+      LecturerQuizScreen(),
+      LecturerAssignmentsScreen(),
     ];
 
     return Scaffold(
@@ -136,6 +140,7 @@ class _LecturerShellState extends ConsumerState<LecturerShell> {
         onTap: (i) => setState(() => _index = i),
         selectedItemColor: _color,
         items: List.generate(4, (i) => BottomNavigationBarItem(icon: Icon(_icons[i]), label: _labels[i])),
+      type: BottomNavigationBarType.fixed,
       ),
     );
   }
