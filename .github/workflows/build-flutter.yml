@@ -37,6 +37,19 @@ jobs:
         working-directory: dikly_flutter
         run: dart run flutter_launcher_icons
 
+      - name: Decode keystore
+        run: |
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > dikly_flutter/android/app/dikly-release.jks
+
+      - name: Create key.properties
+        run: |
+          cat > dikly_flutter/android/key.properties << EOF
+          storePassword=${{ secrets.KEY_STORE_PASSWORD }}
+          keyPassword=${{ secrets.KEY_PASSWORD }}
+          keyAlias=${{ secrets.KEY_ALIAS }}
+          storeFile=../app/dikly-release.jks
+          EOF
+
       - name: Build Release APK
         working-directory: dikly_flutter
         run: flutter build apk --release
