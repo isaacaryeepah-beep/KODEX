@@ -7,7 +7,6 @@ import '../../core/auth.dart';
 import '../../core/theme.dart';
 import '../../models/meeting.dart';
 import '../../widgets/app_shell.dart';
-
 import '../../widgets/ds/dikly_ds.dart';
 
 class SessionsScreen extends ConsumerStatefulWidget {
@@ -43,7 +42,7 @@ class _SessionsScreenState extends ConsumerState<SessionsScreen>
       final meetings = await apiService.getMeetings();
       setState(() { _allMeetings = meetings; _loading = false; });
     } catch (e) {
-      setState(() { _error = e.toString(); _loading = false; });
+      setState(() { _allMeetings = []; _loading = false; });
     }
   }
 
@@ -54,108 +53,116 @@ class _SessionsScreenState extends ConsumerState<SessionsScreen>
   @override
   Widget build(BuildContext context) {
     final user = ref.watch(currentUserProvider);
-    final canCreate = user?.role == 'lecturer' || user?.role == 'admin' || user?.role == 'hod' || user?.role == 'manager';
+    final canCreate = user?.role == 'lecturer' || user?.role == 'admin' ||
+        user?.role == 'hod' || user?.role == 'manager';
 
     return AppShell(
       title: 'Sessions',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header
+          // ── Header ──────────────────────────────────────────────────
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-            child: DiklyScreenHeader(
-              title: 'Attendance Sessions',
-              subtitle: 'Manage and view all sessions',
-              action: canCreate
-                  ? ElevatedButton.icon(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Attendance Sessions',
+                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: Color(0xFF111827)),
+                ),
+                const SizedBox(height: 4),
+                const Text(
+                  'Manage attendance sessions',
+                  style: TextStyle(fontSize: 13, color: Color(0xFF6B7280)),
+                ),
+                if (canCreate) ...[
+                  const SizedBox(height: 14),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
                       onPressed: () => context.push('/sessions/create'),
-                      icon: const Icon(Icons.add, size: 16),
-                      label: const Text('New Session'),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: DiklyColors.primary,
                         foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                        padding: const EdgeInsets.symmetric(vertical: 14),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                        textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
                         elevation: 0,
+                        textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
                       ),
-                    )
-                  : null,
-            ),
-          ),
-          // Tab bar
-          Container(
-            margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-            decoration: BoxDecoration(
-              color: DiklyColors.grey100,
-              borderRadius: BorderRadius.circular(10),
-            ),
-            padding: const EdgeInsets.all(4),
-            child: TabBar(
-              controller: _tabController,
-              indicator: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(8),
-                boxShadow: AppTheme.shadowSm,
-              ),
-              indicatorSize: TabBarIndicatorSize.tab,
-              dividerColor: Colors.transparent,
-              tabs: [
-                Tab(text: 'Live (${_liveMeetings.length})'),
-                Tab(text: 'Upcoming (${_upcomingMeetings.length})'),
-                Tab(text: 'Past'),
+                      child: const Text('Start New Session'),
+                    ),
+                  ),
+                ],
               ],
-              labelColor: DiklyColors.text,
-              unselectedLabelColor: DiklyColors.textLight,
-              labelStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-              unselectedLabelStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
             ),
           ),
+
+          const SizedBox(height: 12),
+
+          // ── Tab bar ──────────────────────────────────────────────────
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Container(
+              decoration: BoxDecoration(
+                color: const Color(0xFFF3F4F6),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              padding: const EdgeInsets.all(4),
+              child: TabBar(
+                controller: _tabController,
+                indicator: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(8),
+                  boxShadow: AppTheme.shadowSm,
+                ),
+                indicatorSize: TabBarIndicatorSize.tab,
+                dividerColor: Colors.transparent,
+                tabs: [
+                  Tab(text: 'Live (${_liveMeetings.length})'),
+                  Tab(text: 'Upcoming (${_upcomingMeetings.length})'),
+                  Tab(text: 'Past'),
+                ],
+                labelColor: DiklyColors.text,
+                unselectedLabelColor: DiklyColors.textLight,
+                labelStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                unselectedLabelStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+              ),
+            ),
+          ),
+
           const SizedBox(height: 8),
+
+          // ── Tab content ──────────────────────────────────────────────
           Expanded(
             child: _loading
                 ? const Center(child: CircularProgressIndicator(color: DiklyColors.primary))
-                : _error != null
-                    ? Center(child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(Icons.error_outline, color: DiklyColors.error, size: 48),
-                          const SizedBox(height: 12),
-                          Text(_error!),
-                          const SizedBox(height: 16),
-                          ElevatedButton(onPressed: _loadData, child: const Text('Retry')),
-                        ],
-                      ))
-                    : TabBarView(
-                        controller: _tabController,
-                        children: [
-                          _SessionList(
-                            meetings: _liveMeetings,
-                            emptyTitle: 'No live sessions',
-                            emptySubtitle: 'Currently no sessions are live',
-                            onRefresh: _loadData,
-                            onJoin: _joinMeeting,
-                            onEnd: _endMeeting,
-                            canManage: canCreate,
-                          ),
-                          _SessionList(
-                            meetings: _upcomingMeetings,
-                            emptyTitle: 'No upcoming sessions',
-                            emptySubtitle: 'Scheduled sessions will appear here',
-                            onRefresh: _loadData,
-                            onStart: _startMeeting,
-                            canManage: canCreate,
-                          ),
-                          _SessionList(
-                            meetings: _pastMeetings,
-                            emptyTitle: 'No past sessions',
-                            emptySubtitle: 'Completed sessions will appear here',
-                            onRefresh: _loadData,
-                            canManage: false,
-                          ),
-                        ],
+                : TabBarView(
+                    controller: _tabController,
+                    children: [
+                      _SessionList(
+                        meetings: _liveMeetings,
+                        emptyMessage: 'No sessions found',
+                        onRefresh: _loadData,
+                        onJoin: _joinMeeting,
+                        onEnd: _endMeeting,
+                        canManage: canCreate,
                       ),
+                      _SessionList(
+                        meetings: _upcomingMeetings,
+                        emptyMessage: 'No upcoming sessions',
+                        onRefresh: _loadData,
+                        onStart: _startMeeting,
+                        canManage: canCreate,
+                      ),
+                      _SessionList(
+                        meetings: _pastMeetings,
+                        emptyMessage: 'No past sessions',
+                        onRefresh: _loadData,
+                        canManage: false,
+                      ),
+                    ],
+                  ),
           ),
         ],
       ),
@@ -226,10 +233,11 @@ class _SessionsScreenState extends ConsumerState<SessionsScreen>
   }
 }
 
+// ── Session list ──────────────────────────────────────────────────────────────
+
 class _SessionList extends StatelessWidget {
   final List<Meeting> meetings;
-  final String emptyTitle;
-  final String emptySubtitle;
+  final String emptyMessage;
   final Future<void> Function() onRefresh;
   final Future<void> Function(Meeting)? onJoin;
   final Future<void> Function(Meeting)? onStart;
@@ -238,8 +246,7 @@ class _SessionList extends StatelessWidget {
 
   const _SessionList({
     required this.meetings,
-    required this.emptyTitle,
-    required this.emptySubtitle,
+    required this.emptyMessage,
     required this.onRefresh,
     this.onJoin,
     this.onStart,
@@ -249,32 +256,53 @@ class _SessionList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (meetings.isEmpty) {
+      return RefreshIndicator(
+        onRefresh: onRefresh,
+        child: ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 32),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFE5E7EB)),
+              ),
+              child: Text(
+                emptyMessage,
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 14, color: Color(0xFF9CA3AF)),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
     return RefreshIndicator(
       onRefresh: onRefresh,
-      child: meetings.isEmpty
-          ? DiklyEmptyState(
-              icon: Icons.video_call_outlined,
-              title: emptyTitle,
-              subtitle: emptySubtitle,
-            )
-          : ListView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: meetings.length,
-              itemBuilder: (context, index) {
-                final meeting = meetings[index];
-                return _SessionCard(
-                  meeting: meeting,
-                  canManage: canManage,
-                  onTap: () => context.push('/sessions/${meeting.id}'),
-                  onJoin: (onJoin != null && meeting.isLive) ? () => onJoin!(meeting) : null,
-                  onStart: (onStart != null && canManage && meeting.isScheduled) ? () => onStart!(meeting) : null,
-                  onEnd: (onEnd != null && canManage && meeting.isLive) ? () => onEnd!(meeting) : null,
-                );
-              },
-            ),
+      child: ListView.builder(
+        padding: const EdgeInsets.all(16),
+        itemCount: meetings.length,
+        itemBuilder: (context, index) {
+          final meeting = meetings[index];
+          return _SessionCard(
+            meeting: meeting,
+            canManage: canManage,
+            onTap: () => context.push('/sessions/${meeting.id}'),
+            onJoin: (onJoin != null && meeting.isLive) ? () => onJoin!(meeting) : null,
+            onStart: (onStart != null && canManage && meeting.isScheduled) ? () => onStart!(meeting) : null,
+            onEnd: (onEnd != null && canManage && meeting.isLive) ? () => onEnd!(meeting) : null,
+          );
+        },
+      ),
     );
   }
 }
+
+// ── Session card ──────────────────────────────────────────────────────────────
 
 class _SessionCard extends StatelessWidget {
   final Meeting meeting;
@@ -304,7 +332,6 @@ class _SessionCard extends StatelessWidget {
     final dateStr = meeting.scheduledStart != null
         ? DateFormat('EEE, MMM d · h:mm a').format(meeting.scheduledStart!)
         : '';
-    final presentCount = meeting.participantCount ?? 0;
 
     return DiklyCard(
       margin: const EdgeInsets.only(bottom: 12),
@@ -316,7 +343,6 @@ class _SessionCard extends StatelessWidget {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Icon
               Container(
                 width: 44,
                 height: 44,
@@ -333,14 +359,9 @@ class _SessionCard extends StatelessWidget {
                   children: [
                     Text(
                       meeting.title,
-                      style: const TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                        color: DiklyColors.text,
-                      ),
+                      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: DiklyColors.text),
                     ),
                     const SizedBox(height: 4),
-                    // Course label chip
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                       decoration: BoxDecoration(
@@ -349,45 +370,19 @@ class _SessionCard extends StatelessWidget {
                       ),
                       child: Text(
                         meeting.meetingType[0].toUpperCase() + meeting.meetingType.substring(1),
-                        style: const TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          color: DiklyColors.primary,
-                        ),
+                        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: DiklyColors.primary),
                       ),
                     ),
                   ],
                 ),
               ),
-              // Status badge
-              DiklyBadge(
-                label: meeting.statusLabel,
-                color: _statusColor,
-              ),
+              DiklyBadge(label: meeting.statusLabel, color: _statusColor),
             ],
           ),
-          const SizedBox(height: 12),
-          // Date + present count
-          Row(
-            children: [
-              if (dateStr.isNotEmpty) ...[
-                DiklyInfoChip(
-                  icon: Icons.calendar_today_outlined,
-                  label: dateStr,
-                ),
-                const SizedBox(width: 8),
-              ],
-              if (presentCount > 0) ...[
-                DiklyInfoChip(
-                  icon: Icons.people_outline_rounded,
-                  label: '$presentCount present',
-                  color: DiklyColors.success,
-                  bg: DiklyColors.successLight,
-                ),
-              ],
-            ],
-          ),
-          // Action buttons
+          if (dateStr.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            DiklyInfoChip(icon: Icons.calendar_today_outlined, label: dateStr),
+          ],
           if (onJoin != null || onStart != null || onEnd != null) ...[
             const SizedBox(height: 12),
             Row(
@@ -410,9 +405,7 @@ class _SessionCard extends StatelessWidget {
                       onPressed: onStart,
                       icon: const Icon(Icons.play_arrow_rounded, size: 16),
                       label: const Text('Start'),
-                      style: ElevatedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 8),
-                      ),
+                      style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 8)),
                     ),
                   ),
                 if (onEnd != null) ...[
