@@ -18,8 +18,8 @@ class _PortalSelectorScreenState extends State<PortalSelectorScreen> {
       body: Stack(
         fit: StackFit.expand,
         children: [
-          // ── Background photo (replace assets/bg_office.jpg with office image)
-          const ColoredBox(color: Color(0xFF1A1740)),
+          // ── Background photo ─────────────────────────────────────────────
+          Image.asset('assets/bg_office.jpg', fit: BoxFit.cover),
 
           // ── Dark indigo overlay (~70% opacity, matching website) ─────────
           Container(
