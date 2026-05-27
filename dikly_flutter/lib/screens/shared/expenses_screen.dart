@@ -166,7 +166,7 @@ class _ExpenseCard extends StatelessWidget {
   final Map<String, dynamic> expense;
   const _ExpenseCard({required this.expense});
 
-  static const _fmt = DateFormat('MMM d, yyyy');
+  static final _fmt = DateFormat('MMM d, yyyy');
 
   IconData _icon(String? cat) {
     switch ((cat ?? '').toLowerCase()) {
