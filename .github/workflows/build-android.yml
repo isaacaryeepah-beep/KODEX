@@ -9,7 +9,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     env:
-      HAS_KEYSTORE: ${{ secrets.KEYSTORE_BASE64 != '' }}
+      HAS_KEYSTORE: true
 
     steps:
       - name: Checkout code
@@ -91,30 +91,18 @@ jobs:
           path: android/app/build/outputs/apk/debug/app-debug.apk
           retention-days: 30
 
-      - name: Decode release keystore
-        if: ${{ env.HAS_KEYSTORE == 'true' }}
-        env:
-          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
-        run: echo "$KEYSTORE_BASE64" | base64 -d > /tmp/release.jks
-
-      - name: Build Release AAB (signed)
-        if: ${{ env.HAS_KEYSTORE == 'true' }}
-        env:
-          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+      - name: Build Release APK (signed)
         run: |
           cd android
-          ./gradlew bundleRelease --no-daemon \
-            -Pandroid.injected.signing.store.file=/tmp/release.jks \
-            -Pandroid.injected.signing.store.password="$KEYSTORE_PASSWORD" \
-            -Pandroid.injected.signing.key.alias="$KEY_ALIAS" \
-            -Pandroid.injected.signing.key.password="$KEY_PASSWORD"
+          ./gradlew assembleRelease --no-daemon \
+            -Pandroid.injected.signing.store.file="${{ github.workspace }}/ci/release.p12" \
+            -Pandroid.injected.signing.store.password="DiklySecure2026" \
+            -Pandroid.injected.signing.key.alias="dikly" \
+            -Pandroid.injected.signing.key.password="DiklySecure2026"
 
-      - name: Upload Release AAB artifact
-        if: ${{ env.HAS_KEYSTORE == 'true' }}
+      - name: Upload Release APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: DIKLY-release
-          path: android/app/build/outputs/bundle/release/app-release.aab
+          path: android/app/build/outputs/apk/release/app-release.apk
           retention-days: 30
