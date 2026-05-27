@@ -2,30 +2,41 @@ name: Deploy to VPS
 
 on:
   push:
-    branches: [main, claude/update-resume-aVv3d]
+    branches: [main]
   workflow_dispatch:
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Deploy
-        env:
-          SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+      - name: Setup SSH key
         run: |
-          echo "$SSH_KEY" > /tmp/deploy_key
-          chmod 600 /tmp/deploy_key
-          ssh -i /tmp/deploy_key -o StrictHostKeyChecking=no -o ConnectTimeout=30 root@194.163.172.76 << 'ENDSSH'
-            set -e
-            cd /root/KODEX
-            git fetch origin main
-            git checkout jitsi-config/web/custom-config.js 2>/dev/null || true
-            git reset --hard origin/main
-            docker restart kodex-app-1
-            docker restart kodex-web-1
-            git diff HEAD~1 --name-only 2>/dev/null | grep -q docker-compose.jitsi.yml \
-              && docker compose -f docker-compose.jitsi.yml restart coturn \
-              || true
-            echo "Deploy complete"
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H 194.163.172.76 >> ~/.ssh/known_hosts 2>/dev/null
+        env:
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+
+      - name: Deploy
+        run: |
+          ssh -i ~/.ssh/deploy_key \
+              -o StrictHostKeyChecking=no \
+              -o ConnectTimeout=15 \
+              root@194.163.172.76 bash << 'ENDSSH'
+          set -e
+          cd /root/KODEX
+
+          git fetch origin main
+          git checkout jitsi-config/web/custom-config.js 2>/dev/null || true
+          git reset --hard origin/main
+
+          docker restart kodex-app-1
+          docker restart kodex-web-1
+
+          git diff HEAD~1 --name-only 2>/dev/null | grep -q docker-compose.jitsi.yml \
+            && docker compose -f docker-compose.jitsi.yml restart coturn \
+            || true
+
+          echo "Deploy complete"
           ENDSSH
-          rm /tmp/deploy_key
