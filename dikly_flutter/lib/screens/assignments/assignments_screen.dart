@@ -7,7 +7,7 @@ import '../../core/auth.dart';
 import '../../core/theme.dart';
 import '../../models/assignment.dart';
 import '../../widgets/app_shell.dart';
-import '../../widgets/loading_list.dart';
+
 import '../../widgets/ds/dikly_ds.dart';
 
 class AssignmentsScreen extends ConsumerStatefulWidget {
@@ -113,7 +113,7 @@ class _AssignmentsScreenState extends ConsumerState<AssignmentsScreen> {
           const SizedBox(height: 8),
           Expanded(
             child: _loading
-                ? const LoadingList()
+                ? const Center(child: CircularProgressIndicator(color: DiklyColors.primary))
                 : _error != null
                     ? Center(child: Column(
                         mainAxisSize: MainAxisSize.min,

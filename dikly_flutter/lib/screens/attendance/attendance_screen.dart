@@ -6,7 +6,7 @@ import '../../core/auth.dart';
 import '../../core/theme.dart';
 import '../../models/attendance.dart';
 import '../../widgets/app_shell.dart';
-import '../../widgets/loading_list.dart';
+
 import '../../widgets/ds/empty_state.dart';
 
 class AttendanceScreen extends ConsumerStatefulWidget {
@@ -154,7 +154,7 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
             )
           : null,
       child: _loading
-          ? const LoadingList()
+          ? const Center(child: CircularProgressIndicator(color: DiklyColors.primary))
           : _error != null
               ? Center(child: Column(
                   mainAxisSize: MainAxisSize.min,

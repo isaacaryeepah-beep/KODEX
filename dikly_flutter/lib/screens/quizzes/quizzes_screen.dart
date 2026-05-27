@@ -5,7 +5,7 @@ import '../../core/api.dart';
 import '../../core/theme.dart';
 import '../../models/quiz.dart';
 import '../../widgets/app_shell.dart';
-import '../../widgets/loading_list.dart';
+
 import '../../widgets/ds/dikly_ds.dart';
 
 class QuizzesScreen extends StatefulWidget {
@@ -147,7 +147,7 @@ class _QuizzesScreenState extends State<QuizzesScreen> {
           const SizedBox(height: 8),
           Expanded(
             child: _loading
-                ? const LoadingList()
+                ? const Center(child: CircularProgressIndicator(color: DiklyColors.primary))
                 : _error != null
                     ? Center(child: Column(
                         mainAxisSize: MainAxisSize.min,

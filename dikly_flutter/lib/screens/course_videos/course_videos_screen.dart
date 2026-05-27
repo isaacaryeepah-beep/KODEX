@@ -6,7 +6,7 @@ import '../../core/auth.dart';
 import '../../core/theme.dart';
 import '../../models/course_video.dart';
 import '../../widgets/app_shell.dart';
-import '../../widgets/loading_list.dart';
+
 import '../../widgets/ds/empty_state.dart';
 
 class CourseVideosScreen extends ConsumerStatefulWidget {
@@ -130,7 +130,7 @@ class _CourseVideosScreenState extends ConsumerState<CourseVideosScreen> {
           ? FloatingActionButton(onPressed: _addVideo, child: const Icon(Icons.add))
           : null,
       child: _loading
-          ? const LoadingList()
+          ? const Center(child: CircularProgressIndicator(color: DiklyColors.primary))
           : _error != null
               ? Center(child: Column(
                   mainAxisSize: MainAxisSize.min,

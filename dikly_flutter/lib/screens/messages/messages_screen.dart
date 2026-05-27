@@ -7,7 +7,7 @@ import '../../core/theme.dart';
 import '../../models/message.dart';
 import '../../models/user.dart';
 import '../../widgets/app_shell.dart';
-import '../../widgets/loading_list.dart';
+
 import '../../widgets/ds/dikly_ds.dart';
 
 class MessagesScreen extends ConsumerStatefulWidget {
@@ -194,7 +194,7 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen> {
           const SizedBox(height: 8),
           Expanded(
             child: _loading
-                ? const LoadingList()
+                ? const Center(child: CircularProgressIndicator(color: DiklyColors.primary))
                 : _error != null
                     ? Center(child: Column(
                         mainAxisSize: MainAxisSize.min,

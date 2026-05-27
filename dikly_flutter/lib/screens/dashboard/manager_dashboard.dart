@@ -7,9 +7,8 @@ import '../../core/auth.dart';
 import '../../core/theme.dart';
 import '../../models/meeting.dart';
 import '../../widgets/app_shell.dart';
-import '../../widgets/stat_card.dart';
 import '../../widgets/meeting_card.dart';
-import '../../widgets/loading_list.dart';
+import '../../widgets/ds/dikly_ds.dart';
 
 class ManagerDashboard extends ConsumerStatefulWidget {
   const ManagerDashboard({super.key});
@@ -59,7 +58,7 @@ class _ManagerDashboardState extends ConsumerState<ManagerDashboard> {
       child: RefreshIndicator(
         onRefresh: _loadData,
         child: _loading
-            ? const LoadingList()
+            ? const Center(child: CircularProgressIndicator(color: DiklyColors.primary))
             : _error != null
                 ? Center(child: Column(
                     mainAxisSize: MainAxisSize.min,
@@ -117,10 +116,10 @@ class _ManagerDashboardState extends ConsumerState<ManagerDashboard> {
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
           children: [
-            SmallStatCard(label: 'Pending Leave', value: '$pendingLeave', color: DiklyColors.warning, icon: Icons.event_note_outlined),
-            SmallStatCard(label: 'Timesheets', value: '${_timesheets.length}', color: DiklyColors.primary, icon: Icons.schedule_outlined),
-            SmallStatCard(label: 'Meetings', value: '${_meetings.length}', color: const Color(0xFF0D9488), icon: Icons.video_call_outlined),
-            SmallStatCard(label: 'Live Sessions', value: '${_meetings.where((m) => m.isLive).length}', color: DiklyColors.success, icon: Icons.fiber_manual_record),
+            DiklyStatCard(label: 'Pending Leave', value: '$pendingLeave', color: DiklyColors.warning, icon: Icons.event_note_outlined),
+            DiklyStatCard(label: 'Timesheets', value: '${_timesheets.length}', color: DiklyColors.primary, icon: Icons.schedule_outlined),
+            DiklyStatCard(label: 'Meetings', value: '${_meetings.length}', color: const Color(0xFF0D9488), icon: Icons.video_call_outlined),
+            DiklyStatCard(label: 'Live Sessions', value: '${_meetings.where((m) => m.isLive).length}', color: DiklyColors.success, icon: Icons.fiber_manual_record),
           ],
         ),
         const SizedBox(height: 20),

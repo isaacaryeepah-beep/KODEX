@@ -9,8 +9,7 @@ import '../../models/user.dart';
 import '../../models/course.dart';
 import '../../models/meeting.dart';
 import '../../widgets/app_shell.dart';
-import '../../widgets/stat_card.dart';
-import '../../widgets/loading_list.dart';
+import '../../widgets/ds/dikly_ds.dart';
 
 class AdminDashboard extends ConsumerStatefulWidget {
   const AdminDashboard({super.key});
@@ -61,7 +60,7 @@ class _AdminDashboardState extends ConsumerState<AdminDashboard> {
       child: RefreshIndicator(
         onRefresh: _loadData,
         child: _loading
-            ? const LoadingList()
+            ? const Center(child: CircularProgressIndicator(color: DiklyColors.primary))
             : _error != null
                 ? Center(child: Column(
                     mainAxisSize: MainAxisSize.min,
@@ -119,10 +118,10 @@ class _AdminDashboardState extends ConsumerState<AdminDashboard> {
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
           children: [
-            SmallStatCard(label: 'Total Users', value: '${_users.length}', color: DiklyColors.primary, icon: Icons.people_outlined),
-            SmallStatCard(label: 'Courses', value: '${_courses.length}', color: const Color(0xFF7C3AED), icon: Icons.school_outlined),
-            SmallStatCard(label: 'Students', value: '$students', color: DiklyColors.success, icon: Icons.person_outlined),
-            SmallStatCard(label: 'Lecturers', value: '$lecturers', color: DiklyColors.warning, icon: Icons.person_pin_outlined),
+            DiklyStatCard(label: 'Total Users', value: '${_users.length}', color: DiklyColors.primary, icon: Icons.people_outlined),
+            DiklyStatCard(label: 'Courses', value: '${_courses.length}', color: const Color(0xFF7C3AED), icon: Icons.school_outlined),
+            DiklyStatCard(label: 'Students', value: '$students', color: DiklyColors.success, icon: Icons.person_outlined),
+            DiklyStatCard(label: 'Lecturers', value: '$lecturers', color: DiklyColors.warning, icon: Icons.person_pin_outlined),
           ],
         ),
         const SizedBox(height: 20),
