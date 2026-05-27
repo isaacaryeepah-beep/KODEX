@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../../core/api.dart';
 import '../../core/theme.dart';
 import '../../models/user.dart';
-import '../../widgets/ds/empty_state.dart';
+import '../../widgets/ds/dikly_ds.dart';
 
 class AdminUsersScreen extends StatefulWidget {
   const AdminUsersScreen({super.key});

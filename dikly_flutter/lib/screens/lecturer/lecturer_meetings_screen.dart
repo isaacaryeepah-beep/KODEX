@@ -6,8 +6,8 @@ import '../../core/api.dart';
 import '../../core/theme.dart';
 import '../../models/meeting.dart';
 import '../../providers/meetings_provider.dart';
-import '../../widgets/ds/empty_state.dart';
-import '../../widgets/error_view.dart';
+import '../../widgets/ds/dikly_ds.dart';
+
 
 class LecturerMeetingsScreen extends ConsumerStatefulWidget {
   const LecturerMeetingsScreen({super.key});
@@ -72,7 +72,7 @@ class _LecturerMeetingsScreenState extends ConsumerState<LecturerMeetingsScreen>
                   itemBuilder: (_, i) => _LecturerMeetingCard(meeting: meetings[i]),
                 ),
           loading: () => const Center(child: CircularProgressIndicator()),
-          error: (e, _) => ErrorView(message: e.toString(), onRetry: () => ref.invalidate(meetingsProvider)),
+          error: (e, _) => DiklyErrorView(message: e.toString(), onRetry: () => ref.invalidate(meetingsProvider)),
         ),
       ),
     );

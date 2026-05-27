@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/api.dart';
 import '../../core/theme.dart';
-import '../../widgets/ds/empty_state.dart';
+import '../../widgets/ds/dikly_ds.dart';
 
 class ManagerLeaveScreen extends ConsumerStatefulWidget {
   const ManagerLeaveScreen({super.key});

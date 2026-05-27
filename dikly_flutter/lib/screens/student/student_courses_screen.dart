@@ -7,7 +7,7 @@ import '../../models/course.dart';
 import '../../models/course_video.dart';
 import '../../providers/courses_provider.dart';
 import '../../widgets/ds/dikly_ds.dart';
-import '../../widgets/error_view.dart';
+
 
 class StudentCoursesScreen extends ConsumerStatefulWidget {
   const StudentCoursesScreen({super.key});
@@ -97,7 +97,7 @@ class _StudentCoursesScreenState extends ConsumerState<StudentCoursesScreen> {
           );
         },
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => ErrorView(
+        error: (e, _) => DiklyErrorView(
           message: e.toString(),
           onRetry: () => ref.invalidate(coursesProvider),
         ),

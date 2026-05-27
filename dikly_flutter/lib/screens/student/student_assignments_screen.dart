@@ -6,7 +6,7 @@ import '../../core/theme.dart';
 import '../../models/assignment.dart';
 import '../../providers/assignments_provider.dart';
 import '../../widgets/ds/dikly_ds.dart';
-import '../../widgets/error_view.dart';
+
 
 enum _Filter { all, pending, submitted, overdue }
 
@@ -115,7 +115,7 @@ class _StudentAssignmentsScreenState
           );
         },
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => ErrorView(
+        error: (e, _) => DiklyErrorView(
           message: e.toString(),
           onRetry: () => ref.invalidate(assignmentsProvider),
         ),

@@ -7,7 +7,7 @@ import '../../core/theme.dart';
 import '../../models/attendance.dart';
 import '../../widgets/app_shell.dart';
 
-import '../../widgets/ds/empty_state.dart';
+import '../../widgets/ds/dikly_ds.dart';
 
 class AttendanceScreen extends ConsumerStatefulWidget {
   const AttendanceScreen({super.key});

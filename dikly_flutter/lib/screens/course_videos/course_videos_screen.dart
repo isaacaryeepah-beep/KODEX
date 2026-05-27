@@ -7,7 +7,7 @@ import '../../core/theme.dart';
 import '../../models/course_video.dart';
 import '../../widgets/app_shell.dart';
 
-import '../../widgets/ds/empty_state.dart';
+import '../../widgets/ds/dikly_ds.dart';
 
 class CourseVideosScreen extends ConsumerStatefulWidget {
   final String courseId;

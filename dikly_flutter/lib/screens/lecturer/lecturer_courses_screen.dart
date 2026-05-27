@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/course.dart';
 import '../../providers/courses_provider.dart';
-import '../../widgets/error_view.dart';
+
 import '../../widgets/ds/dikly_ds.dart';
 
 class LecturerCoursesScreen extends ConsumerWidget {
@@ -16,7 +16,7 @@ class LecturerCoursesScreen extends ConsumerWidget {
       backgroundColor: const Color(0xFFF1F5F9),
       body: coursesAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => ErrorView(
+        error: (e, _) => DiklyErrorView(
           message: e.toString(),
           onRetry: () => ref.invalidate(coursesProvider),
         ),

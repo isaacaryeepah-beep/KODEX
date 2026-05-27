@@ -6,7 +6,7 @@ import '../../core/theme.dart';
 import '../../providers/meetings_provider.dart';
 import '../../providers/announcements_provider.dart';
 import '../../widgets/ds/dikly_ds.dart';
-import '../../widgets/error_view.dart';
+
 import '../../models/meeting.dart';
 import '../../models/announcement.dart';
 
@@ -94,7 +94,7 @@ class StudentHomeScreen extends ConsumerWidget {
                 child: CircularProgressIndicator(),
               ),
             ),
-            error: (e, _) => ErrorView(
+            error: (e, _) => DiklyErrorView(
               message: e.toString(),
               onRetry: () => ref.invalidate(upcomingMeetingsProvider),
             ),
@@ -127,7 +127,7 @@ class StudentHomeScreen extends ConsumerWidget {
                 child: CircularProgressIndicator(),
               ),
             ),
-            error: (e, _) => ErrorView(
+            error: (e, _) => DiklyErrorView(
               message: e.toString(),
               onRetry: () => ref.invalidate(announcementsProvider),
             ),

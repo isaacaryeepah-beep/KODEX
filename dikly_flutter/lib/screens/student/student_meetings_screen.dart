@@ -7,7 +7,7 @@ import '../../core/theme.dart';
 import '../../models/meeting.dart';
 import '../../providers/meetings_provider.dart';
 import '../../widgets/ds/dikly_ds.dart';
-import '../../widgets/error_view.dart';
+
 
 class StudentMeetingsScreen extends ConsumerWidget {
   const StudentMeetingsScreen({super.key});
@@ -40,7 +40,7 @@ class StudentMeetingsScreen extends ConsumerWidget {
           ],
         ),
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => ErrorView(
+        error: (e, _) => DiklyErrorView(
           message: e.toString(),
           onRetry: () => ref.invalidate(meetingsProvider),
         ),

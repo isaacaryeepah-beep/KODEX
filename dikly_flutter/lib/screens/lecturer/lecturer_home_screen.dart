@@ -9,7 +9,7 @@ import '../../models/meeting.dart';
 import '../../providers/meetings_provider.dart';
 import '../../providers/courses_provider.dart';
 import '../../widgets/ds/dikly_ds.dart';
-import '../../widgets/error_view.dart';
+
 
 class LecturerHomeScreen extends ConsumerWidget {
   const LecturerHomeScreen({super.key});
@@ -200,7 +200,7 @@ class LecturerHomeScreen extends ConsumerWidget {
                 child: CircularProgressIndicator(),
               ),
             ),
-            error: (e, _) => ErrorView(
+            error: (e, _) => DiklyErrorView(
               message: e.toString(),
               onRetry: () => ref.invalidate(meetingsProvider),
             ),

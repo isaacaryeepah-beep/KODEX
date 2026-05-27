@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/api.dart';
 import '../../core/theme.dart';
 import '../../models/user.dart';
-import '../../widgets/ds/empty_state.dart';
+import '../../widgets/ds/dikly_ds.dart';
 
 class ManagerEmployeesScreen extends ConsumerStatefulWidget {
   const ManagerEmployeesScreen({super.key});

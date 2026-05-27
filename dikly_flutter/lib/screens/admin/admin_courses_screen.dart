@@ -4,8 +4,8 @@ import '../../core/api.dart';
 import '../../core/theme.dart';
 import '../../models/course.dart';
 import '../../providers/courses_provider.dart';
-import '../../widgets/ds/empty_state.dart';
-import '../../widgets/error_view.dart';
+import '../../widgets/ds/dikly_ds.dart';
+
 
 class AdminCoursesScreen extends ConsumerStatefulWidget {
   const AdminCoursesScreen({super.key});
@@ -85,7 +85,7 @@ class _AdminCoursesScreenState extends ConsumerState<AdminCoursesScreen> {
                   },
                 ),
           loading: () => const Center(child: CircularProgressIndicator()),
-          error: (e, _) => ErrorView(message: e.toString(), onRetry: () => ref.invalidate(coursesProvider)),
+          error: (e, _) => DiklyErrorView(message: e.toString(), onRetry: () => ref.invalidate(coursesProvider)),
         ),
       ),
     );
