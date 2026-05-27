@@ -1,0 +1,60 @@
+name: Deploy Flutter Web to GitHub Pages
+
+on:
+  push:
+    branches: [main, claude/update-resume-aVv3d]
+    paths:
+      - 'dikly_flutter/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build-and-deploy:
+    name: Build & Deploy Web
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.32.1'
+          channel: 'stable'
+          cache: true
+
+      - name: Get dependencies
+        working-directory: dikly_flutter
+        run: flutter pub get
+
+      - name: Build web
+        working-directory: dikly_flutter
+        run: |
+          flutter build web \
+            --release \
+            --base-href /KODEX/ \
+            --web-renderer canvaskit
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dikly_flutter/build/web
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
