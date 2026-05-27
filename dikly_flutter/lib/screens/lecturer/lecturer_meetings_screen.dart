@@ -6,7 +6,7 @@ import '../../core/api.dart';
 import '../../core/theme.dart';
 import '../../models/meeting.dart';
 import '../../providers/meetings_provider.dart';
-import '../../widgets/empty_state.dart';
+import '../../widgets/ds/empty_state.dart';
 import '../../widgets/error_view.dart';
 
 class LecturerMeetingsScreen extends ConsumerStatefulWidget {
@@ -65,7 +65,7 @@ class _LecturerMeetingsScreenState extends ConsumerState<LecturerMeetingsScreen>
         onRefresh: () async => ref.invalidate(meetingsProvider),
         child: meetingsAsync.when(
           data: (meetings) => meetings.isEmpty
-              ? const EmptyState(icon: Icons.video_call_outlined, title: 'No Meetings', message: 'Create your first meeting to get started.')
+              ? const DiklyEmptyState(icon: Icons.video_call_outlined, title: 'No Meetings', subtitle: 'Create your first meeting to get started.')
               : ListView.builder(
                   padding: const EdgeInsets.fromLTRB(16, 16, 16, 90),
                   itemCount: meetings.length,

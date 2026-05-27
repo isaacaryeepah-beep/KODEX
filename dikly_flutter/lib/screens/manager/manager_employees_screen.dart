@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/api.dart';
 import '../../core/theme.dart';
 import '../../models/user.dart';
-import '../../widgets/empty_state.dart';
+import '../../widgets/ds/empty_state.dart';
 
 class ManagerEmployeesScreen extends ConsumerStatefulWidget {
   const ManagerEmployeesScreen({super.key});
@@ -43,7 +43,7 @@ class _ManagerEmployeesScreenState extends ConsumerState<ManagerEmployeesScreen>
       Expanded(child: _loading
           ? const Center(child: CircularProgressIndicator())
           : filtered.isEmpty
-              ? const EmptyState(icon: Icons.people_outlined, title: 'No Employees', message: 'No employees found.')
+              ? const DiklyEmptyState(icon: Icons.people_outlined, title: 'No Employees', subtitle: 'No employees found.')
               : ListView.builder(
                   padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
                   itemCount: filtered.length,

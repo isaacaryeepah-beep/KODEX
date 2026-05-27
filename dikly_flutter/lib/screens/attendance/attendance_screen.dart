@@ -7,7 +7,7 @@ import '../../core/theme.dart';
 import '../../models/attendance.dart';
 import '../../widgets/app_shell.dart';
 import '../../widgets/loading_list.dart';
-import '../../widgets/empty_state.dart';
+import '../../widgets/ds/empty_state.dart';
 
 class AttendanceScreen extends ConsumerStatefulWidget {
   const AttendanceScreen({super.key});
@@ -169,12 +169,12 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
               : RefreshIndicator(
                   onRefresh: _loadData,
                   child: _sessions.isEmpty
-                      ? EmptyState(
+                      ? DiklyEmptyState(
                           icon: Icons.fact_check_outlined,
                           title: 'No attendance sessions',
-                          message: 'Attendance sessions will appear here',
-                          actionLabel: isLecturer ? null : 'Mark Attendance',
-                          onAction: isLecturer ? null : _showMarkAttendanceDialog,
+                          subtitle: 'Attendance sessions will appear here',
+                          buttonLabel: isLecturer ? null : 'Mark Attendance',
+                          onButton: isLecturer ? null : _showMarkAttendanceDialog,
                         )
                       : ListView.builder(
                           padding: const EdgeInsets.all(16),

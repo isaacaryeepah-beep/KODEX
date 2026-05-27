@@ -4,7 +4,7 @@ import '../../core/api.dart';
 import '../../core/theme.dart';
 import '../../models/course.dart';
 import '../../providers/courses_provider.dart';
-import '../../widgets/empty_state.dart';
+import '../../widgets/ds/empty_state.dart';
 import '../../widgets/error_view.dart';
 
 class AdminCoursesScreen extends ConsumerStatefulWidget {
@@ -63,7 +63,7 @@ class _AdminCoursesScreenState extends ConsumerState<AdminCoursesScreen> {
         onRefresh: () async => ref.invalidate(coursesProvider),
         child: coursesAsync.when(
           data: (courses) => courses.isEmpty
-              ? const EmptyState(icon: Icons.book_outlined, title: 'No Courses', message: 'Create the first course.')
+              ? const DiklyEmptyState(icon: Icons.book_outlined, title: 'No Courses', subtitle: 'Create the first course.')
               : ListView.builder(
                   padding: const EdgeInsets.fromLTRB(16, 16, 16, 80),
                   itemCount: courses.length,

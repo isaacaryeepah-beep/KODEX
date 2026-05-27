@@ -11,7 +11,7 @@ import '../../widgets/app_shell.dart';
 import '../../widgets/stat_card.dart';
 import '../../widgets/meeting_card.dart';
 import '../../widgets/loading_list.dart';
-import '../../widgets/empty_state.dart';
+import '../../widgets/ds/empty_state.dart';
 
 class LecturerDashboard extends ConsumerStatefulWidget {
   const LecturerDashboard({super.key});
@@ -179,7 +179,7 @@ class _LecturerDashboardState extends ConsumerState<LecturerDashboard> {
         ),
         const SizedBox(height: 8),
         if (_courses.isEmpty)
-          const EmptyState(icon: Icons.school_outlined, title: 'No courses', message: 'Your courses will appear here')
+          const DiklyEmptyState(icon: Icons.school_outlined, title: 'No courses', subtitle: 'Your courses will appear here')
         else
           for (final course in _courses.take(3))
             _CourseTile(course: course),

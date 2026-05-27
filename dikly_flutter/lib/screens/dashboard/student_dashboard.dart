@@ -12,7 +12,7 @@ import '../../widgets/app_shell.dart';
 import '../../widgets/stat_card.dart';
 import '../../widgets/meeting_card.dart';
 import '../../widgets/loading_list.dart';
-import '../../widgets/empty_state.dart';
+import '../../widgets/ds/empty_state.dart';
 
 class StudentDashboard extends ConsumerStatefulWidget {
   const StudentDashboard({super.key});
@@ -225,10 +225,10 @@ class _StudentDashboardState extends ConsumerState<StudentDashboard> {
         ),
         const SizedBox(height: 8),
         if (_meetings.isEmpty)
-          const EmptyState(
+          const DiklyEmptyState(
             icon: Icons.video_call_outlined,
             title: 'No upcoming sessions',
-            message: 'Your scheduled sessions will appear here',
+            subtitle: 'Your scheduled sessions will appear here',
           )
         else
           for (final meeting in _meetings.take(3))
@@ -252,10 +252,10 @@ class _StudentDashboardState extends ConsumerState<StudentDashboard> {
         ),
         const SizedBox(height: 8),
         if (_assignments.isEmpty)
-          const EmptyState(
+          const DiklyEmptyState(
             icon: Icons.assignment_outlined,
             title: 'No assignments',
-            message: 'Your assignments will appear here',
+            subtitle: 'Your assignments will appear here',
           )
         else
           for (final assignment in _assignments.where((a) => !a.isSubmitted).take(3))
