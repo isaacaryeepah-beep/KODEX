@@ -91,18 +91,18 @@ jobs:
           path: android/app/build/outputs/apk/debug/app-debug.apk
           retention-days: 30
 
-      - name: Build Release AAB (signed)
+      - name: Build Release APK (signed)
         run: |
           cd android
-          ./gradlew bundleRelease --no-daemon \
+          ./gradlew assembleRelease --no-daemon \
             -Pandroid.injected.signing.store.file="${{ github.workspace }}/ci/release.p12" \
             -Pandroid.injected.signing.store.password="DiklySecure2026" \
             -Pandroid.injected.signing.key.alias="dikly" \
             -Pandroid.injected.signing.key.password="DiklySecure2026"
 
-      - name: Upload Release AAB artifact
+      - name: Upload Release APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: DIKLY-release
-          path: android/app/build/outputs/bundle/release/app-release.aab
+          path: android/app/build/outputs/apk/release/app-release.apk
           retention-days: 30
