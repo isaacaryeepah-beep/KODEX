@@ -409,34 +409,141 @@ class _AcademicCards extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _PortalCard(
-          icon: Icons.menu_book_outlined,
-          iconColor: const Color(0xFF7C3AED),
-          iconBg: const Color(0xFFF5F3FF),
-          title: 'Student',
-          subtitle: 'Learners & enrolled students',
-          onTap: () => context.go('/login/student'),
+        const Padding(
+          padding: EdgeInsets.only(bottom: 10),
+          child: Text(
+            'ACADEMIC PORTALS',
+            style: TextStyle(
+              fontSize: 9,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF9CA3AF),
+              letterSpacing: 2.0,
+            ),
+          ),
+        ),
+        // Row 1: Admin + Lecturer
+        Row(
+          children: [
+            Expanded(
+              child: _GridPortalCard(
+                icon: Icons.admin_panel_settings_outlined,
+                iconColor: const Color(0xFF2563EB),
+                iconBg: const Color(0xFFEFF6FF),
+                title: 'Admin',
+                onTap: () => context.go('/login/admin'),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _GridPortalCard(
+                icon: Icons.person_outlined,
+                iconColor: const Color(0xFF7C3AED),
+                iconBg: const Color(0xFFF5F3FF),
+                title: 'Lecturer',
+                onTap: () => context.go('/login/lecturer'),
+              ),
+            ),
+          ],
         ),
         const SizedBox(height: 8),
-        _PortalCard(
-          icon: Icons.person_outlined,
-          iconColor: const Color(0xFF2563EB),
-          iconBg: const Color(0xFFEFF6FF),
-          title: 'Lecturer',
-          subtitle: 'Course instructors & tutors',
-          onTap: () => context.go('/login/lecturer'),
-        ),
-        const SizedBox(height: 8),
-        _PortalCard(
-          icon: Icons.account_balance_outlined,
-          iconColor: const Color(0xFF4F46E5),
-          iconBg: const Color(0xFFEEF2FF),
-          title: 'HOD',
-          subtitle: 'Head of Department',
-          onTap: () => context.go('/login/hod'),
+        // Row 2: HOD + Student
+        Row(
+          children: [
+            Expanded(
+              child: _GridPortalCard(
+                icon: Icons.account_balance_outlined,
+                iconColor: const Color(0xFF4F46E5),
+                iconBg: const Color(0xFFEEF2FF),
+                title: 'HOD',
+                onTap: () => context.go('/login/hod'),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _GridPortalCard(
+                icon: Icons.menu_book_outlined,
+                iconColor: const Color(0xFF0EA5E9),
+                iconBg: const Color(0xFFE0F2FE),
+                title: 'Student',
+                onTap: () => context.go('/login/student'),
+              ),
+            ),
+          ],
         ),
       ],
+    );
+  }
+}
+
+// ── Grid Portal Card (2×2 grid style for academic) ────────────────────────────
+
+class _GridPortalCard extends StatelessWidget {
+  final IconData icon;
+  final Color iconColor;
+  final Color iconBg;
+  final String title;
+  final VoidCallback onTap;
+
+  const _GridPortalCard({
+    required this.icon,
+    required this.iconColor,
+    required this.iconBg,
+    required this.title,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 14),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFFE5E7EB), width: 1.5),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.04),
+              blurRadius: 6,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(color: iconBg, shape: BoxShape.circle),
+              child: Icon(icon, color: iconColor, size: 20),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              title,
+              style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF111827),
+              ),
+            ),
+            const SizedBox(height: 4),
+            Row(
+              children: [
+                Text(
+                  'Sign in',
+                  style: TextStyle(fontSize: 11, color: iconColor, fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(width: 2),
+                Text('→', style: TextStyle(fontSize: 11, color: iconColor)),
+              ],
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
