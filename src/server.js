@@ -210,6 +210,11 @@ app.get("/privacy",        (req, res) => res.sendFile(path.join(__dirname, "publ
 app.get("/terms",          (req, res) => res.sendFile(path.join(__dirname, "public", "terms.html")));
 app.get("/delete-account", (req, res) => res.sendFile(path.join(__dirname, "public", "delete-account.html")));
 
+// Flutter web app — served at /app/ (same origin as API, no CORS needed)
+const flutterWebPath = path.join(__dirname, '..', 'flutter-web');
+app.use('/app', express.static(flutterWebPath));
+app.get('/app/*', (req, res) => res.sendFile(path.join(flutterWebPath, 'index.html')));
+
 app.use(express.static(path.join(__dirname, "public"), {
   setHeaders: (res, filePath) => {
     const ext = path.extname(filePath).toLowerCase();

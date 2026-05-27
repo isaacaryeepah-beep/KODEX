@@ -9,6 +9,22 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.32.1'
+          channel: 'stable'
+          cache: true
+
+      - name: Build Flutter web
+        working-directory: dikly_flutter
+        run: |
+          flutter pub get
+          flutter build web --release --base-href /app/
+
       - name: Setup SSH key
         run: |
           mkdir -p ~/.ssh
@@ -18,7 +34,7 @@ jobs:
         env:
           VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
 
-      - name: Deploy
+      - name: Deploy server code
         run: |
           ssh -i ~/.ssh/deploy_key \
               -o StrictHostKeyChecking=no \
@@ -31,6 +47,8 @@ jobs:
           git checkout jitsi-config/web/custom-config.js 2>/dev/null || true
           git reset --hard origin/main
 
+          mkdir -p /root/dikly-flutter-web
+
           docker compose up -d --build app
           docker restart kodex-web-1 2>/dev/null || true
 
@@ -38,30 +56,13 @@ jobs:
             && docker compose -f docker-compose.jitsi.yml restart coturn \
             || true
 
-          sleep 5
-
-          echo "=== CORS TEST (direct to Node.js port 5000) ==="
-          curl -s -o /dev/null -D - -X OPTIONS \
-            -H "Origin: https://isaacaryeepah-beep.github.io" \
-            -H "Access-Control-Request-Method: POST" \
-            -H "Access-Control-Request-Headers: content-type,authorization" \
-            http://localhost:5000/api/auth/login | grep -i "access-control\|HTTP/"
-
-          echo "=== CORS TEST (through nginx at dikly.sbs) ==="
-          curl -s -o /dev/null -D - -X OPTIONS \
-            -H "Origin: https://isaacaryeepah-beep.github.io" \
-            -H "Access-Control-Request-Method: POST" \
-            -H "Access-Control-Request-Headers: content-type,authorization" \
-            https://dikly.sbs/api/auth/login | grep -i "access-control\|HTTP/"
-
-          echo "Deploy complete"
+          echo "Server deploy complete"
           ENDSSH
 
-      - name: Test CORS from runner
+      - name: Copy Flutter web to VPS
         run: |
-          echo "=== CORS TEST from GitHub Actions runner ==="
-          curl -sv -X OPTIONS \
-            -H "Origin: https://isaacaryeepah-beep.github.io" \
-            -H "Access-Control-Request-Method: POST" \
-            -H "Access-Control-Request-Headers: content-type,authorization" \
-            https://dikly.sbs/api/auth/login 2>&1 | grep -i "access-control\|< HTTP"
+          scp -i ~/.ssh/deploy_key \
+              -o StrictHostKeyChecking=no \
+              -r dikly_flutter/build/web/* \
+              root@194.163.172.76:/root/dikly-flutter-web/
+          echo "Flutter web files copied"
