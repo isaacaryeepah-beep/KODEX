@@ -35,7 +35,7 @@ class DiklyApp extends ConsumerWidget {
     });
 
     return MaterialApp.router(
-      title: 'Dikly',
+      title: 'DIKLY',
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
       themeMode: ThemeMode.light,
