@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:google_fonts/google_fonts.dart';
 import '../../core/api.dart';
 import '../../core/theme.dart';
-import '../../widgets/ds/dikly_ds.dart';
 
 final _branchesProvider =
     FutureProvider.autoDispose<List<Map<String, dynamic>>>(
@@ -20,95 +18,57 @@ class BranchesScreen extends ConsumerWidget {
     return Scaffold(
       backgroundColor: DiklyColors.background,
       appBar: AppBar(
-        backgroundColor: DiklyColors.surface,
-        elevation: 0,
-        shadowColor: Colors.transparent,
-        surfaceTintColor: Colors.transparent,
-        leading: BackButton(
-          color: DiklyColors.text,
-          onPressed: () => Navigator.of(context).maybePop(),
-        ),
-        title: Text(
-          'Branches',
-          style: GoogleFonts.dmSans(
-            fontSize: 17,
-            fontWeight: FontWeight.w700,
-            color: DiklyColors.text,
-          ),
-        ),
-        actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 16),
-            child: ElevatedButton.icon(
-              onPressed: () => _showAddBranchSheet(context, ref),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: DiklyColors.primary,
-                foregroundColor: Colors.white,
-                elevation: 0,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                textStyle: GoogleFonts.dmSans(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              icon: const Icon(Icons.add, size: 16),
-              label: const Text('Add Branch'),
-            ),
-          ),
-        ],
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(1),
-          child: Container(height: 1, color: DiklyColors.border),
-        ),
+        title: const Text('Branches'),
+        leading: BackButton(onPressed: () => Navigator.of(context).maybePop()),
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () => _showAddBranchSheet(context, ref),
+        icon: const Icon(Icons.add),
+        label: const Text('Add Branch'),
       ),
       body: async.when(
-        loading: () => const Center(
-          child: CircularProgressIndicator(color: DiklyColors.primary),
-        ),
+        loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(
-          child: Padding(
-            padding: const EdgeInsets.all(32),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.error_outline, size: 48, color: DiklyColors.error),
-                const SizedBox(height: 12),
-                Text(
-                  'Failed to load branches',
-                  style: GoogleFonts.dmSans(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: DiklyColors.text,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                TextButton.icon(
-                  onPressed: () => ref.refresh(_branchesProvider),
-                  icon: const Icon(Icons.refresh, size: 16),
-                  label: const Text('Retry'),
-                ),
-              ],
-            ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.error_outline, size: 48, color: DiklyColors.error),
+              const SizedBox(height: 12),
+              const Text('Failed to load branches'),
+              const SizedBox(height: 8),
+              TextButton(
+                onPressed: () => ref.refresh(_branchesProvider),
+                child: const Text('Retry'),
+              ),
+            ],
           ),
         ),
         data: (data) => RefreshIndicator(
           onRefresh: () async => ref.refresh(_branchesProvider),
-          color: DiklyColors.primary,
           child: data.isEmpty
               ? ListView(
-                  children: [
-                    const SizedBox(height: 80),
-                    DiklyEmptyState(
-                      icon: Icons.business_outlined,
-                      iconColor: DiklyColors.primary,
-                      iconBg: DiklyColors.primaryULight,
-                      title: 'No branches yet',
-                      subtitle: 'Tap "Add Branch" to create your first branch.',
-                      buttonLabel: 'Add Branch',
-                      onButton: () => _showAddBranchSheet(context, ref),
+                  children: const [
+                    SizedBox(height: 100),
+                    Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.business_outlined,
+                            size: 72, color: DiklyColors.textSecondary),
+                        SizedBox(height: 16),
+                        Text(
+                          'No branches added yet',
+                          style: TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.w600,
+                            color: DiklyColors.textSecondary,
+                          ),
+                        ),
+                        SizedBox(height: 8),
+                        Text(
+                          'Tap "Add Branch" to create one',
+                          style: TextStyle(color: DiklyColors.textSecondary),
+                        ),
+                      ],
                     ),
                   ],
                 )
@@ -140,29 +100,38 @@ class BranchesScreen extends ConsumerWidget {
 
 class _BranchCard extends StatelessWidget {
   final Map<String, dynamic> branch;
+
   const _BranchCard({required this.branch});
 
   String get _name => branch['name']?.toString() ?? 'Unknown Branch';
   String get _address => branch['address']?.toString() ?? '';
-  int get _employeeCount => (branch['employeeCount'] as num?)?.toInt() ?? 0;
+  int get _employeeCount =>
+      (branch['employeeCount'] as num?)?.toInt() ?? 0;
 
   @override
   Widget build(BuildContext context) {
-    return DiklyCard(
+    final theme = Theme.of(context);
+
+    return Container(
       margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: DiklyColors.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: DiklyColors.border),
+      ),
       padding: const EdgeInsets.all(16),
       child: Row(
         children: [
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: DiklyColors.primaryULight,
+              color: DiklyColors.primary.withOpacity(0.1),
               borderRadius: BorderRadius.circular(10),
             ),
             child: const Icon(
               Icons.business_rounded,
               color: DiklyColors.primary,
-              size: 22,
+              size: 24,
             ),
           ),
           const SizedBox(width: 14),
@@ -172,28 +141,22 @@ class _BranchCard extends StatelessWidget {
               children: [
                 Text(
                   _name,
-                  style: GoogleFonts.dmSans(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w700,
-                    color: DiklyColors.text,
-                  ),
+                  style: theme.textTheme.titleSmall
+                      ?.copyWith(fontWeight: FontWeight.w700),
                 ),
                 if (_address.isNotEmpty) ...[
                   const SizedBox(height: 4),
                   Row(
                     children: [
-                      const Icon(
-                        Icons.location_on_outlined,
-                        size: 13,
-                        color: DiklyColors.textLight,
-                      ),
+                      const Icon(Icons.location_on_outlined,
+                          size: 13, color: DiklyColors.textSecondary),
                       const SizedBox(width: 4),
                       Expanded(
                         child: Text(
                           _address,
-                          style: GoogleFonts.dmSans(
+                          style: const TextStyle(
                             fontSize: 12,
-                            color: DiklyColors.textLight,
+                            color: DiklyColors.textSecondary,
                           ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
@@ -205,11 +168,11 @@ class _BranchCard extends StatelessWidget {
               ],
             ),
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: 8),
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
             decoration: BoxDecoration(
-              color: DiklyColors.primaryULight,
+              color: DiklyColors.primary.withOpacity(0.1),
               borderRadius: BorderRadius.circular(20),
               border: Border.all(color: DiklyColors.primary.withOpacity(0.3)),
             ),
@@ -220,11 +183,11 @@ class _BranchCard extends StatelessWidget {
                     size: 13, color: DiklyColors.primary),
                 const SizedBox(width: 4),
                 Text(
-                  '$_employeeCount staff',
-                  style: GoogleFonts.dmSans(
+                  '$_employeeCount',
+                  style: const TextStyle(
                     color: DiklyColors.primary,
                     fontSize: 12,
-                    fontWeight: FontWeight.w600,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
               ],
@@ -238,6 +201,7 @@ class _BranchCard extends StatelessWidget {
 
 class _AddBranchSheet extends StatefulWidget {
   final VoidCallback onCreated;
+
   const _AddBranchSheet({required this.onCreated});
 
   @override
@@ -289,10 +253,11 @@ class _AddBranchSheetState extends State<_AddBranchSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
 
     return Padding(
-      padding: EdgeInsets.fromLTRB(20, 20, 20, 24 + bottomInset),
+      padding: EdgeInsets.fromLTRB(16, 20, 16, 24 + bottomInset),
       child: Form(
         key: _formKey,
         child: Column(
@@ -309,52 +274,41 @@ class _AddBranchSheetState extends State<_AddBranchSheet> {
                 ),
               ),
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 16),
             Text(
               'Add Branch',
-              style: GoogleFonts.dmSans(
-                fontSize: 20,
-                fontWeight: FontWeight.w700,
-                color: DiklyColors.text,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              'Create a new branch location for your organisation.',
-              style: GoogleFonts.dmSans(
-                fontSize: 13,
-                color: DiklyColors.textLight,
-              ),
+              style: theme.textTheme.headlineSmall
+                  ?.copyWith(fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 20),
             TextFormField(
               controller: _nameController,
-              textCapitalization: TextCapitalization.words,
               decoration: const InputDecoration(
                 labelText: 'Branch Name',
                 hintText: 'e.g. Accra Main Office',
-                prefixIcon: Icon(Icons.business_outlined, size: 20),
+                prefixIcon: Icon(Icons.business_outlined),
               ),
               validator: (v) =>
                   (v == null || v.trim().isEmpty) ? 'Branch name is required' : null,
+              textCapitalization: TextCapitalization.words,
             ),
             const SizedBox(height: 14),
             TextFormField(
               controller: _addressController,
-              textCapitalization: TextCapitalization.sentences,
               decoration: const InputDecoration(
                 labelText: 'Address',
                 hintText: 'e.g. 25 Independence Ave, Accra',
-                prefixIcon: Icon(Icons.location_on_outlined, size: 20),
+                prefixIcon: Icon(Icons.location_on_outlined),
               ),
               validator: (v) =>
                   (v == null || v.trim().isEmpty) ? 'Address is required' : null,
+              textCapitalization: TextCapitalization.sentences,
             ),
             if (_error != null) ...[
-              const SizedBox(height: 12),
+              const SizedBox(height: 10),
               Text(
                 _error!,
-                style: GoogleFonts.dmSans(color: DiklyColors.error, fontSize: 13),
+                style: const TextStyle(color: DiklyColors.error, fontSize: 13),
               ),
             ],
             const SizedBox(height: 20),
@@ -362,19 +316,6 @@ class _AddBranchSheetState extends State<_AddBranchSheet> {
               width: double.infinity,
               child: ElevatedButton(
                 onPressed: _loading ? null : _submit,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: DiklyColors.primary,
-                  foregroundColor: Colors.white,
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  textStyle: GoogleFonts.dmSans(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
                 child: _loading
                     ? const SizedBox(
                         height: 18,

@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/api.dart';
 import '../../core/theme.dart';
-import '../../widgets/ds/dikly_ds.dart';
 
 final _quizHistoryProvider = FutureProvider.autoDispose<List<Map<String, dynamic>>>(
   (ref) => apiService.getQuizHistory(),
@@ -18,15 +17,8 @@ class QuizHistoryScreen extends ConsumerWidget {
     return Scaffold(
       backgroundColor: DiklyColors.background,
       appBar: AppBar(
-        title: const Text('Quiz History'),
+        title: const Text('My Results'),
         leading: BackButton(onPressed: () => Navigator.of(context).maybePop()),
-        backgroundColor: DiklyColors.surface,
-        elevation: 0,
-        surfaceTintColor: Colors.transparent,
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(1),
-          child: Container(color: DiklyColors.border, height: 1),
-        ),
       ),
       body: async.when(
         loading: () => const Center(child: CircularProgressIndicator()),
@@ -78,26 +70,48 @@ class _QuizHistoryBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     if (quizzes.isEmpty) {
-      return const DiklyEmptyState(
-        icon: Icons.emoji_events_outlined,
-        title: 'No quizzes completed yet',
-        subtitle: 'Your quiz results will appear here',
+      return ListView(
+        children: const [
+          SizedBox(height: 100),
+          Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.emoji_events_outlined,
+                  size: 72, color: DiklyColors.textSecondary),
+              SizedBox(height: 16),
+              Text(
+                'No quizzes completed yet',
+                style: TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w600,
+                  color: DiklyColors.textSecondary,
+                ),
+              ),
+              SizedBox(height: 8),
+              Text(
+                'Your quiz results will appear here',
+                style: TextStyle(color: DiklyColors.textSecondary),
+              ),
+            ],
+          ),
+        ],
       );
     }
 
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        // Header
-        const DiklyScreenHeader(
-          title: 'Quiz History',
-          subtitle: 'Your performance over time',
-        ),
-
-        // Summary stats row
-        DiklyCard(
-          margin: EdgeInsets.zero,
+        // Summary row
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: DiklyColors.surface,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: DiklyColors.border),
+          ),
           child: Row(
             children: [
               _SummaryItem(
@@ -106,14 +120,14 @@ class _QuizHistoryBody extends StatelessWidget {
                 icon: Icons.quiz_outlined,
                 color: DiklyColors.primary,
               ),
-              Container(width: 1, height: 40, color: DiklyColors.border),
+              _VerticalDivider(),
               _SummaryItem(
                 label: 'Avg Score',
                 value: '${_averageScore.toStringAsFixed(1)}%',
                 icon: Icons.bar_chart_rounded,
                 color: DiklyColors.warning,
               ),
-              Container(width: 1, height: 40, color: DiklyColors.border),
+              _VerticalDivider(),
               _SummaryItem(
                 label: 'Pass Rate',
                 value: '${_passRate.toStringAsFixed(0)}%',
@@ -123,14 +137,26 @@ class _QuizHistoryBody extends StatelessWidget {
             ],
           ),
         ),
-        const SizedBox(height: 20),
-        const Text(
+        const SizedBox(height: 16),
+        Text(
           'Completed Quizzes',
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: DiklyColors.text),
+          style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
         ),
         const SizedBox(height: 12),
-        ...quizzes.map((quiz) => _QuizHistoryCard(quiz: quiz)),
+        ...quizzes.map((quiz) => _QuizCard(quiz: quiz)),
       ],
+    );
+  }
+}
+
+class _VerticalDivider extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 40,
+      width: 1,
+      color: DiklyColors.border,
+      margin: const EdgeInsets.symmetric(horizontal: 8),
     );
   }
 }
@@ -154,17 +180,25 @@ class _SummaryItem extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 20, color: color),
+          Icon(icon, size: 22, color: color),
           const SizedBox(height: 6),
           Text(
             value,
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: color),
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w700,
+              color: color,
+            ),
           ),
           const SizedBox(height: 2),
           Text(
             label,
             textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: 11, color: DiklyColors.textSecondary, fontWeight: FontWeight.w500),
+            style: const TextStyle(
+              fontSize: 11,
+              color: DiklyColors.textSecondary,
+              fontWeight: FontWeight.w500,
+            ),
           ),
         ],
       ),
@@ -172,10 +206,10 @@ class _SummaryItem extends StatelessWidget {
   }
 }
 
-class _QuizHistoryCard extends StatelessWidget {
+class _QuizCard extends StatelessWidget {
   final Map<String, dynamic> quiz;
 
-  const _QuizHistoryCard({required this.quiz});
+  const _QuizCard({required this.quiz});
 
   String get _title => quiz['quizTitle']?.toString() ?? 'Untitled Quiz';
   int get _score => (quiz['score'] as num?)?.toInt() ?? 0;
@@ -200,8 +234,15 @@ class _QuizHistoryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return DiklyCard(
+    final theme = Theme.of(context);
+
+    return Container(
       margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: DiklyColors.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: DiklyColors.border),
+      ),
       padding: const EdgeInsets.all(14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -211,18 +252,20 @@ class _QuizHistoryCard extends StatelessWidget {
               Expanded(
                 child: Text(
                   _title,
-                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: DiklyColors.text),
+                  style: theme.textTheme.titleSmall
+                      ?.copyWith(fontWeight: FontWeight.w600),
                 ),
               ),
               const SizedBox(width: 8),
-              // Pass/Fail score badge
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
-                  color: (_passed ? DiklyColors.success : DiklyColors.error).withOpacity(0.1),
+                  color: (_passed ? DiklyColors.success : DiklyColors.error)
+                      .withOpacity(0.1),
                   borderRadius: BorderRadius.circular(20),
                   border: Border.all(
-                    color: (_passed ? DiklyColors.success : DiklyColors.error).withOpacity(0.4),
+                    color: (_passed ? DiklyColors.success : DiklyColors.error)
+                        .withOpacity(0.4),
                   ),
                 ),
                 child: Text(
@@ -250,7 +293,8 @@ class _QuizHistoryCard extends StatelessWidget {
                 ),
                 child: Text(
                   '$_score / $_maxScore',
-                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: DiklyColors.text),
+                  style: theme.textTheme.bodyMedium
+                      ?.copyWith(fontWeight: FontWeight.w700),
                 ),
               ),
               const SizedBox(width: 8),
@@ -264,14 +308,26 @@ class _QuizHistoryCard extends StatelessWidget {
                 ),
                 child: Text(
                   '${_percentage.toStringAsFixed(1)}%',
-                  style: TextStyle(color: _percentageColor, fontSize: 13, fontWeight: FontWeight.w700),
+                  style: TextStyle(
+                    color: _percentageColor,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               ),
               const Spacer(),
               if (_timeTaken.isNotEmpty)
-                DiklyInfoChip(
-                  icon: Icons.timer_outlined,
-                  label: _timeTaken,
+                Row(
+                  children: [
+                    const Icon(Icons.timer_outlined,
+                        size: 13, color: DiklyColors.textSecondary),
+                    const SizedBox(width: 3),
+                    Text(
+                      _timeTaken,
+                      style: const TextStyle(
+                          fontSize: 12, color: DiklyColors.textSecondary),
+                    ),
+                  ],
                 ),
             ],
           ),
@@ -279,11 +335,13 @@ class _QuizHistoryCard extends StatelessWidget {
             const SizedBox(height: 8),
             Row(
               children: [
-                const Icon(Icons.calendar_today_outlined, size: 13, color: DiklyColors.textSecondary),
+                const Icon(Icons.calendar_today_outlined,
+                    size: 13, color: DiklyColors.textSecondary),
                 const SizedBox(width: 4),
                 Text(
                   _formatDate(_completedAt),
-                  style: const TextStyle(fontSize: 12, color: DiklyColors.textSecondary),
+                  style: const TextStyle(
+                      fontSize: 12, color: DiklyColors.textSecondary),
                 ),
               ],
             ),

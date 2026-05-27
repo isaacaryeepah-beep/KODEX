@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/api.dart';
 import '../../core/auth.dart';
 import '../../core/theme.dart';
-import '../../widgets/ds/dikly_ds.dart';
 
 final _signInStatusProvider = FutureProvider.autoDispose<Map<String, dynamic>>((ref) =>
     apiService.getSignInStatus());
@@ -24,7 +23,7 @@ class EmployeeHomeScreen extends ConsumerStatefulWidget {
 class _EmployeeHomeScreenState extends ConsumerState<EmployeeHomeScreen> {
   bool _clockLoading = false;
 
-  static const _accent = Color(0xFF16A34A);
+  static const _accent = Color(0xFF0369A1);
 
   Future<void> _toggleClock(bool isClockedIn) async {
     setState(() => _clockLoading = true);
@@ -53,183 +52,167 @@ class _EmployeeHomeScreenState extends ConsumerState<EmployeeHomeScreen> {
   Widget build(BuildContext context) {
     final user = ref.watch(currentUserProvider);
     final signInAsync = ref.watch(_signInStatusProvider);
+    final shiftAsync = ref.watch(_myShiftProvider);
     final leavesAsync = ref.watch(_myLeavesProvider);
 
-    final firstName = (user?.name ?? 'Employee').split(' ').first;
-    final institution = user?.company ?? user?.department ?? 'your institution';
-    final deptBadge = user?.department ?? user?.company ?? '';
-
-    return Scaffold(
-      backgroundColor: DiklyColors.background,
-      body: RefreshIndicator(
-        onRefresh: () async {
-          ref.refresh(_signInStatusProvider);
-          ref.refresh(_myShiftProvider);
-          ref.refresh(_myLeavesProvider);
-        },
-        child: ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            // Greeting header
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Welcome back, $firstName',
-                        style: const TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.w800,
-                          color: DiklyColors.textPrimary,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Employee Portal',
-                        style: const TextStyle(
-                          fontSize: 13,
-                          color: DiklyColors.textSecondary,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                if (deptBadge.isNotEmpty) ...[
-                  const SizedBox(width: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFFEF3C7),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text(
-                      deptBadge,
-                      style: const TextStyle(
-                        color: Color(0xFFD97706),
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                ],
-              ],
+    return RefreshIndicator(
+      onRefresh: () async {
+        ref.refresh(_signInStatusProvider);
+        ref.refresh(_myShiftProvider);
+        ref.refresh(_myLeavesProvider);
+      },
+      child: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          _GreetingRow(name: user?.name ?? 'Employee'),
+          const SizedBox(height: 16),
+          // Clock In / Out Card
+          signInAsync.when(
+            loading: () => const _ClockCardSkeleton(),
+            error: (e, _) => _ClockCardError(
+              onRetry: () => ref.refresh(_signInStatusProvider),
             ),
-            const SizedBox(height: 16),
-
-            // Clock In/Out Card
-            signInAsync.when(
-              loading: () => _ClockCardSkeleton(),
-              error: (e, _) => _ClockCardError(
-                onRetry: () => ref.refresh(_signInStatusProvider),
-              ),
-              data: (status) {
-                final isClockedIn = status['isClockedIn'] == true;
-                final lastClockIn = status['lastClockIn']?.toString();
-                final lastClockOut = status['lastClockOut']?.toString();
-                final todayHours = status['todayHours']?.toString() ?? '0';
-                final weekHours = status['weekHours']?.toString() ?? '0';
-
-                return _ClockCard(
-                  isClockedIn: isClockedIn,
-                  lastClockIn: lastClockIn,
-                  lastClockOut: lastClockOut,
-                  todayHours: todayHours,
-                  weekHours: weekHours,
-                  loading: _clockLoading,
-                  onTap: () => _toggleClock(isClockedIn),
-                );
-              },
+            data: (status) => _ClockCard(
+              isClockedIn: status['isClockedIn'] == true,
+              lastClockIn: status['lastClockIn']?.toString(),
+              lastClockOut: status['lastClockOut']?.toString(),
+              todayHours: status['todayHours']?.toString() ?? '0',
+              loading: _clockLoading,
+              onTap: () => _toggleClock(status['isClockedIn'] == true),
             ),
-            const SizedBox(height: 20),
-
-            // Stats row
-            signInAsync.when(
-              loading: () => const SizedBox.shrink(),
-              error: (_, __) => const SizedBox.shrink(),
-              data: (status) {
-                final todayHours = status['todayHours']?.toString() ?? '0';
-                final weekHours = status['weekHours']?.toString() ?? '0';
-                return leavesAsync.when(
-                  loading: () => const SizedBox.shrink(),
-                  error: (_, __) => const SizedBox.shrink(),
-                  data: (leaves) {
-                    final remaining = leaves.where((l) => l['status'] == 'approved').length;
-                    return Row(
-                      children: [
-                        Expanded(child: _MiniStat(label: 'Hours Today', value: '${todayHours}h', color: _accent)),
-                        const SizedBox(width: 10),
-                        Expanded(child: _MiniStat(label: 'Hours Week', value: '${weekHours}h', color: DiklyColors.primary)),
-                        const SizedBox(width: 10),
-                        Expanded(child: _MiniStat(label: 'Leaves Left', value: '$remaining', color: DiklyColors.warning)),
-                      ],
-                    );
-                  },
-                );
-              },
+          ),
+          const SizedBox(height: 20),
+          // My Shift Summary
+          const Text(
+            'My Shift',
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w700,
+              color: DiklyColors.textPrimary,
             ),
-            const SizedBox(height: 20),
-
-            // Recent activity
-            const Text(
-              'Recent Leave Requests',
-              style: TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w700,
-                color: DiklyColors.textPrimary,
+          ),
+          const SizedBox(height: 10),
+          shiftAsync.when(
+            loading: () => const Center(
+              child: Padding(
+                padding: EdgeInsets.all(20),
+                child: CircularProgressIndicator(strokeWidth: 2),
               ),
             ),
-            const SizedBox(height: 10),
-            leavesAsync.when(
-              loading: () => const Center(
-                child: Padding(
-                  padding: EdgeInsets.all(20),
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                ),
-              ),
-              error: (e, _) => _ErrorCard(
-                message: 'Could not load leave requests',
-                onRetry: () => ref.refresh(_myLeavesProvider),
-              ),
-              data: (leaves) {
-                if (leaves.isEmpty) {
-                  return DiklyCard(
-                    child: Column(
-                      children: const [
-                        Icon(Icons.event_available_outlined, size: 40, color: DiklyColors.border),
-                        SizedBox(height: 8),
-                        Text(
-                          'No leave requests yet',
-                          style: TextStyle(color: DiklyColors.textSecondary, fontSize: 13),
-                        ),
-                      ],
-                    ),
-                  );
-                }
-                final recent = leaves.take(3).toList();
-                return Column(
-                  children: recent.map((l) => _LeaveRequestRow(leave: l)).toList(),
-                );
-              },
+            error: (e, _) => _ErrorCard(
+              message: 'Could not load shift info',
+              onRetry: () => ref.refresh(_myShiftProvider),
             ),
-            const SizedBox(height: 80),
-          ],
-        ),
+            data: (shift) => _ShiftSummaryCard(shift: shift),
+          ),
+          const SizedBox(height: 20),
+          // Recent Leave Requests
+          const Text(
+            'Recent Leave Requests',
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w700,
+              color: DiklyColors.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 10),
+          leavesAsync.when(
+            loading: () => const Center(
+              child: Padding(
+                padding: EdgeInsets.all(20),
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            ),
+            error: (e, _) => _ErrorCard(
+              message: 'Could not load leave requests',
+              onRetry: () => ref.refresh(_myLeavesProvider),
+            ),
+            data: (leaves) {
+              if (leaves.isEmpty) {
+                return const _EmptyLeaveCard();
+              }
+              final recent = leaves.take(3).toList();
+              return Column(
+                children: recent.map((l) => _LeaveRequestRow(leave: l)).toList(),
+              );
+            },
+          ),
+          const SizedBox(height: 80),
+        ],
       ),
     );
   }
 }
 
-// ── Clock Card ──────────────────────────────────────────────────────────────
+class _GreetingRow extends StatelessWidget {
+  final String name;
+  const _GreetingRow({required this.name});
+
+  String get _greeting {
+    final hour = DateTime.now().hour;
+    if (hour < 12) return 'Good morning';
+    if (hour < 17) return 'Good afternoon';
+    return 'Good evening';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                _greeting,
+                style: const TextStyle(
+                  fontSize: 13,
+                  color: DiklyColors.textSecondary,
+                ),
+              ),
+              Text(
+                name.split(' ').first,
+                style: const TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w800,
+                  color: DiklyColors.textPrimary,
+                ),
+              ),
+            ],
+          ),
+        ),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          decoration: BoxDecoration(
+            color: const Color(0xFF0369A1).withOpacity(0.08),
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.work_outline, size: 14, color: Color(0xFF0369A1)),
+              const SizedBox(width: 4),
+              Text(
+                'My Workspace',
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF0369A1),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
 
 class _ClockCard extends StatelessWidget {
   final bool isClockedIn;
   final String? lastClockIn;
   final String? lastClockOut;
   final String todayHours;
-  final String weekHours;
   final bool loading;
   final VoidCallback onTap;
 
@@ -238,31 +221,42 @@ class _ClockCard extends StatelessWidget {
     required this.lastClockIn,
     required this.lastClockOut,
     required this.todayHours,
-    required this.weekHours,
     required this.loading,
     required this.onTap,
   });
 
-  static const _accent = Color(0xFF16A34A);
-
   @override
   Widget build(BuildContext context) {
-    final buttonColor = isClockedIn ? DiklyColors.error : _accent;
+    final buttonColor = isClockedIn ? DiklyColors.success : const Color(0xFF0369A1);
     final statusLabel = isClockedIn ? 'Clocked In' : 'Not Clocked In';
-    final statusColor = isClockedIn ? _accent : DiklyColors.textSecondary;
+    final statusColor = isClockedIn ? DiklyColors.success : DiklyColors.textSecondary;
 
-    return DiklyCard(
+    return Container(
       padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: DiklyColors.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: DiklyColors.border),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Status indicator
           Row(
             children: [
               Container(
                 width: 10,
                 height: 10,
-                decoration: BoxDecoration(color: statusColor, shape: BoxShape.circle),
+                decoration: BoxDecoration(
+                  color: statusColor,
+                  shape: BoxShape.circle,
+                ),
               ),
               const SizedBox(width: 8),
               Text(
@@ -275,8 +269,7 @@ class _ClockCard extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 14),
-          // Large time display + timestamps
+          const SizedBox(height: 12),
           Row(
             children: [
               Expanded(
@@ -284,13 +277,16 @@ class _ClockCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text(
-                      "Today's Hours",
-                      style: TextStyle(fontSize: 12, color: DiklyColors.textSecondary),
+                      'Today\'s Hours',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: DiklyColors.textSecondary,
+                      ),
                     ),
                     Text(
                       '${todayHours}h',
                       style: const TextStyle(
-                        fontSize: 36,
+                        fontSize: 32,
                         fontWeight: FontWeight.w800,
                         color: DiklyColors.textPrimary,
                       ),
@@ -302,20 +298,39 @@ class _ClockCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   if (lastClockIn != null) ...[
-                    const Text('Last Clock In', style: TextStyle(fontSize: 11, color: DiklyColors.textSecondary)),
-                    Text(lastClockIn!, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: DiklyColors.textPrimary)),
+                    const Text(
+                      'Last Clock In',
+                      style: TextStyle(fontSize: 11, color: DiklyColors.textSecondary),
+                    ),
+                    Text(
+                      lastClockIn!,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: DiklyColors.textPrimary,
+                      ),
+                    ),
                     const SizedBox(height: 6),
                   ],
                   if (lastClockOut != null) ...[
-                    const Text('Last Clock Out', style: TextStyle(fontSize: 11, color: DiklyColors.textSecondary)),
-                    Text(lastClockOut!, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: DiklyColors.textPrimary)),
+                    const Text(
+                      'Last Clock Out',
+                      style: TextStyle(fontSize: 11, color: DiklyColors.textSecondary),
+                    ),
+                    Text(
+                      lastClockOut!,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: DiklyColors.textPrimary,
+                      ),
+                    ),
                   ],
                 ],
               ),
             ],
           ),
           const SizedBox(height: 16),
-          // Big Clock In / Clock Out button
           SizedBox(
             width: double.infinity,
             height: 52,
@@ -323,20 +338,35 @@ class _ClockCard extends StatelessWidget {
               style: ElevatedButton.styleFrom(
                 backgroundColor: buttonColor,
                 foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
                 elevation: 0,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
               ),
               onPressed: loading ? null : onTap,
               icon: loading
                   ? const SizedBox(
                       width: 18,
                       height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
                     )
-                  : Icon(isClockedIn ? Icons.logout : Icons.login, size: 20),
+                  : Icon(
+                      isClockedIn ? Icons.logout : Icons.login,
+                      size: 20,
+                    ),
               label: Text(
-                loading ? 'Please wait...' : isClockedIn ? 'Clock Out' : 'Clock In',
-                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                loading
+                    ? 'Please wait...'
+                    : isClockedIn
+                        ? 'Clock Out'
+                        : 'Clock In',
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
             ),
           ),
@@ -347,13 +377,15 @@ class _ClockCard extends StatelessWidget {
 }
 
 class _ClockCardSkeleton extends StatelessWidget {
+  const _ClockCardSkeleton();
+
   @override
   Widget build(BuildContext context) {
     return Container(
       height: 180,
       decoration: BoxDecoration(
         color: DiklyColors.border.withOpacity(0.5),
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(16),
       ),
       child: const Center(child: CircularProgressIndicator(strokeWidth: 2)),
     );
@@ -366,53 +398,148 @@ class _ClockCardError extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return DiklyCard(
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: DiklyColors.error.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: DiklyColors.error.withOpacity(0.2)),
+      ),
       child: Row(
         children: [
           const Icon(Icons.error_outline, color: DiklyColors.error, size: 24),
           const SizedBox(width: 12),
           const Expanded(
-            child: Text('Failed to load clock status', style: TextStyle(color: DiklyColors.textPrimary, fontSize: 14)),
+            child: Text(
+              'Failed to load clock status',
+              style: TextStyle(color: DiklyColors.textPrimary, fontSize: 14),
+            ),
           ),
-          TextButton(onPressed: onRetry, child: const Text('Retry')),
+          TextButton(
+            onPressed: onRetry,
+            child: const Text('Retry'),
+          ),
         ],
       ),
     );
   }
 }
 
-// ── Mini Stat ────────────────────────────────────────────────────────────────
-
-class _MiniStat extends StatelessWidget {
-  final String label;
-  final String value;
-  final Color color;
-
-  const _MiniStat({required this.label, required this.value, required this.color});
+class _ShiftSummaryCard extends StatelessWidget {
+  final Map<String, dynamic> shift;
+  const _ShiftSummaryCard({required this.shift});
 
   @override
   Widget build(BuildContext context) {
-    return DiklyCard(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+    final name = shift['shiftName']?.toString() ?? 'N/A';
+    final startTime = shift['startTime']?.toString() ?? '--:--';
+    final endTime = shift['endTime']?.toString() ?? '--:--';
+    final days = shift['days'] as List? ?? [];
+    final location = shift['location']?.toString();
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF0369A1), Color(0xFF0284C7)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(14),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            value,
-            style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: color),
+          Row(
+            children: [
+              const Icon(Icons.schedule, color: Colors.white70, size: 16),
+              const SizedBox(width: 6),
+              Text(
+                name,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 2),
-          Text(
-            label,
-            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: DiklyColors.textSecondary),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              _TimeChip(label: startTime),
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 8),
+                child: Icon(Icons.arrow_forward, color: Colors.white70, size: 16),
+              ),
+              _TimeChip(label: endTime),
+              const Spacer(),
+              if (location != null)
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.location_on_outlined, color: Colors.white70, size: 14),
+                    const SizedBox(width: 4),
+                    Text(
+                      location,
+                      style: const TextStyle(color: Colors.white70, fontSize: 12),
+                    ),
+                  ],
+                ),
+            ],
           ),
+          if (days.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 6,
+              children: days.map((d) {
+                return Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    d.toString().length > 3 ? d.toString().substring(0, 3) : d.toString(),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+          ],
         ],
       ),
     );
   }
 }
 
-// ── Leave Request Row ────────────────────────────────────────────────────────
+class _TimeChip extends StatelessWidget {
+  final String label;
+  const _TimeChip({required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.15),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(
+        label,
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 13,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+  }
+}
 
 class _LeaveRequestRow extends StatelessWidget {
   final Map<String, dynamic> leave;
@@ -445,9 +572,14 @@ class _LeaveRequestRow extends StatelessWidget {
     final status = leave['status']?.toString() ?? 'pending';
     final reason = leave['reason']?.toString() ?? '';
 
-    return DiklyCard(
+    return Container(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: DiklyColors.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: DiklyColors.border),
+      ),
       child: Row(
         children: [
           Container(
@@ -458,7 +590,11 @@ class _LeaveRequestRow extends StatelessWidget {
             ),
             child: Text(
               type,
-              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: _typeColor(type)),
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: _typeColor(type),
+              ),
             ),
           ),
           const SizedBox(width: 12),
@@ -468,26 +604,71 @@ class _LeaveRequestRow extends StatelessWidget {
               children: [
                 Text(
                   '$startDate → $endDate',
-                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: DiklyColors.textPrimary),
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: DiklyColors.textPrimary,
+                  ),
                 ),
                 if (reason.isNotEmpty)
                   Text(
                     reason,
-                    style: const TextStyle(fontSize: 11, color: DiklyColors.textSecondary),
+                    style: const TextStyle(
+                      fontSize: 11,
+                      color: DiklyColors.textSecondary,
+                    ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
               ],
             ),
           ),
-          DiklyBadge(label: status.toUpperCase(), color: _statusColor(status)),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            decoration: BoxDecoration(
+              color: _statusColor(status).withOpacity(0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(
+              status.toUpperCase(),
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w600,
+                color: _statusColor(status),
+              ),
+            ),
+          ),
         ],
       ),
     );
   }
 }
 
-// ── Error Card ────────────────────────────────────────────────────────────────
+class _EmptyLeaveCard extends StatelessWidget {
+  const _EmptyLeaveCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: DiklyColors.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: DiklyColors.border),
+      ),
+      child: const Column(
+        children: [
+          Icon(Icons.event_available_outlined, size: 40, color: DiklyColors.border),
+          SizedBox(height: 8),
+          Text(
+            'No leave requests yet',
+            style: TextStyle(color: DiklyColors.textSecondary, fontSize: 13),
+          ),
+        ],
+      ),
+    );
+  }
+}
 
 class _ErrorCard extends StatelessWidget {
   final String message;
@@ -496,15 +677,30 @@ class _ErrorCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return DiklyCard(
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: DiklyColors.error.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: DiklyColors.error.withOpacity(0.2)),
+      ),
       child: Row(
         children: [
           const Icon(Icons.error_outline, color: DiklyColors.error, size: 20),
           const SizedBox(width: 10),
           Expanded(
-            child: Text(message, style: const TextStyle(fontSize: 13, color: DiklyColors.textPrimary)),
+            child: Text(
+              message,
+              style: const TextStyle(
+                fontSize: 13,
+                color: DiklyColors.textPrimary,
+              ),
+            ),
           ),
-          TextButton(onPressed: onRetry, child: const Text('Retry')),
+          TextButton(
+            onPressed: onRetry,
+            child: const Text('Retry'),
+          ),
         ],
       ),
     );

@@ -1,14 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:google_fonts/google_fonts.dart';
 import '../../core/api.dart';
 import '../../core/theme.dart';
-import '../../widgets/ds/dikly_ds.dart';
 
 final _departmentCoursesProvider =
     FutureProvider.autoDispose<List<Map<String, dynamic>>>(
-  (ref) => apiService.getDepartmentCourses(),
-);
+      (ref) => apiService.getDepartmentCourses(),
+    );
 
 class HodCoursesScreen extends ConsumerStatefulWidget {
   const HodCoursesScreen({super.key});
@@ -18,7 +16,7 @@ class HodCoursesScreen extends ConsumerStatefulWidget {
 }
 
 class _HodCoursesScreenState extends ConsumerState<HodCoursesScreen> {
-  static const _accent = Color(0xFF7C3AED);
+  static const _color = Color(0xFF7C2D12);
   String _filter = 'all';
   static const _filters = ['all', 'active', 'pending', 'inactive'];
 
@@ -29,7 +27,7 @@ class _HodCoursesScreenState extends ConsumerState<HodCoursesScreen> {
       case 'pending':
         return DiklyColors.warning;
       case 'inactive':
-        return DiklyColors.textLight;
+        return DiklyColors.textSecondary;
       default:
         return DiklyColors.primary;
     }
@@ -39,199 +37,173 @@ class _HodCoursesScreenState extends ConsumerState<HodCoursesScreen> {
   Widget build(BuildContext context) {
     final asyncData = ref.watch(_departmentCoursesProvider);
 
-    return Scaffold(
-      backgroundColor: DiklyColors.background,
-      appBar: AppBar(
-        backgroundColor: DiklyColors.surface,
-        elevation: 0,
-        shadowColor: Colors.transparent,
-        surfaceTintColor: Colors.transparent,
-        leading: const BackButton(color: DiklyColors.text),
-        title: Text(
-          'Courses',
-          style: GoogleFonts.dmSans(
-            fontSize: 17,
-            fontWeight: FontWeight.w700,
-            color: DiklyColors.text,
-          ),
-        ),
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(1),
-          child: Container(height: 1, color: DiklyColors.border),
+    return asyncData.when(
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (e, _) => Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.error_outline, size: 48, color: DiklyColors.error),
+            const SizedBox(height: 12),
+            Text(
+              'Failed to load courses',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            TextButton(
+              onPressed: () => ref.invalidate(_departmentCoursesProvider),
+              child: const Text('Retry'),
+            ),
+          ],
         ),
       ),
-      body: asyncData.when(
-        loading: () => const Center(
-          child: CircularProgressIndicator(color: Color(0xFF7C3AED)),
-        ),
-        error: (e, _) => Center(
-          child: Padding(
-            padding: const EdgeInsets.all(32),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.error_outline, size: 48, color: DiklyColors.error),
-                const SizedBox(height: 12),
-                Text(
-                  'Failed to load courses',
-                  style: GoogleFonts.dmSans(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: DiklyColors.text,
-                  ),
-                ),
-                TextButton.icon(
-                  onPressed: () => ref.invalidate(_departmentCoursesProvider),
-                  icon: const Icon(Icons.refresh, size: 16),
-                  label: const Text('Retry'),
-                ),
-              ],
-            ),
-          ),
-        ),
-        data: (courses) {
-          final filtered = _filter == 'all'
-              ? courses
-              : courses
-                  .where((c) =>
-                      (c['status']?.toString().toLowerCase() ?? '') == _filter)
-                  .toList();
+      data: (courses) {
+        final filtered = _filter == 'all'
+            ? courses
+            : courses
+                .where((c) =>
+                    (c['status']?.toString().toLowerCase() ?? '') == _filter)
+                .toList();
 
-          return RefreshIndicator(
-            onRefresh: () async => ref.invalidate(_departmentCoursesProvider),
-            color: _accent,
-            child: Column(
-              children: [
-                // Filter chips
-                Container(
-                  color: DiklyColors.surface,
-                  padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
-                  child: SingleChildScrollView(
+        return RefreshIndicator(
+          onRefresh: () async => ref.invalidate(_departmentCoursesProvider),
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                child: SizedBox(
+                  height: 36,
+                  child: ListView(
                     scrollDirection: Axis.horizontal,
-                    child: Row(
-                      children: _filters.map((f) {
-                        final selected = _filter == f;
-                        final label = f[0].toUpperCase() + f.substring(1);
-                        return Padding(
-                          padding: const EdgeInsets.only(right: 8),
-                          child: GestureDetector(
-                            onTap: () => setState(() => _filter = f),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 14,
-                                vertical: 6,
-                              ),
-                              decoration: BoxDecoration(
-                                color: selected ? _accent : DiklyColors.background,
-                                borderRadius: BorderRadius.circular(999),
-                                border: Border.all(
-                                  color: selected ? _accent : DiklyColors.border,
+                    children: _filters
+                        .map((f) => Padding(
+                              padding: const EdgeInsets.only(right: 8),
+                              child: FilterChip(
+                                label: Text(
+                                  f[0].toUpperCase() + f.substring(1),
+                                  style: const TextStyle(fontSize: 12),
                                 ),
+                                selected: _filter == f,
+                                onSelected: (_) =>
+                                    setState(() => _filter = f),
+                                selectedColor: _color.withOpacity(0.15),
+                                checkmarkColor: _color,
                               ),
-                              child: Text(
-                                label,
-                                style: GoogleFonts.dmSans(
-                                  fontSize: 12,
-                                  fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
-                                  color: selected ? Colors.white : DiklyColors.textSecondary,
-                                ),
-                              ),
-                            ),
-                          ),
-                        );
-                      }).toList(),
-                    ),
+                            ))
+                        .toList(),
                   ),
                 ),
-                const Divider(height: 1, color: DiklyColors.border),
-
-                // List or empty
-                if (filtered.isEmpty)
-                  Expanded(
-                    child: DiklyEmptyState(
-                      icon: Icons.book_outlined,
-                      iconColor: DiklyColors.textLight,
-                      iconBg: DiklyColors.background,
-                      title: _filter == 'all'
-                          ? 'No courses found'
-                          : 'No $_filter courses',
-                      subtitle: 'Department courses will appear here.',
+              ),
+              if (filtered.isEmpty)
+                Expanded(
+                  child: Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(
+                          Icons.book_outlined,
+                          size: 56,
+                          color: DiklyColors.textSecondary,
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          _filter == 'all'
+                              ? 'No courses found'
+                              : 'No ${_filter} courses',
+                          style: const TextStyle(
+                            color: DiklyColors.textSecondary,
+                          ),
+                        ),
+                      ],
                     ),
-                  )
-                else
-                  Expanded(
-                    child: ListView.builder(
-                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-                      itemCount: filtered.length,
-                      itemBuilder: (_, i) {
-                        final c = filtered[i];
-                        final title = c['title']?.toString() ?? 'Untitled';
-                        final code = c['code']?.toString() ?? '';
-                        final lecturer = c['lecturer']?.toString() ?? 'Unassigned';
-                        final enrolled = c['studentsEnrolled'] ?? 0;
-                        final status = c['status']?.toString() ?? 'active';
-                        final statusColor = _statusColor(status);
+                  ),
+                )
+              else
+                Expanded(
+                  child: ListView.builder(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                    itemCount: filtered.length,
+                    itemBuilder: (_, i) {
+                      final c = filtered[i];
+                      final title = c['title']?.toString() ?? 'Untitled';
+                      final code = c['code']?.toString() ?? '';
+                      final lecturer = c['lecturer']?.toString() ?? 'Unassigned';
+                      final enrolled = c['studentsEnrolled'] ?? 0;
+                      final status = c['status']?.toString() ?? 'active';
+                      final statusColor = _statusColor(status);
 
-                        return DiklyCard(
-                          margin: const EdgeInsets.only(bottom: 10),
-                          padding: const EdgeInsets.all(16),
+                      return Card(
+                        margin: const EdgeInsets.only(bottom: 10),
+                        child: Padding(
+                          padding: const EdgeInsets.all(14),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Row(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  // Code badge
                                   Container(
                                     padding: const EdgeInsets.symmetric(
-                                      horizontal: 10,
-                                      vertical: 5,
+                                      horizontal: 8,
+                                      vertical: 4,
                                     ),
                                     decoration: BoxDecoration(
-                                      color: _accent.withOpacity(0.1),
+                                      color: _color.withOpacity(0.1),
                                       borderRadius: BorderRadius.circular(6),
                                     ),
                                     child: Text(
                                       code.isNotEmpty ? code : 'N/A',
-                                      style: GoogleFonts.dmSans(
-                                        fontSize: 12,
-                                        color: _accent,
+                                      style: const TextStyle(
+                                        fontSize: 11,
+                                        color: _color,
                                         fontWeight: FontWeight.w700,
                                         letterSpacing: 0.3,
                                       ),
                                     ),
                                   ),
                                   const Spacer(),
-                                  // Status badge
-                                  DiklyBadge(
-                                    label: status[0].toUpperCase() + status.substring(1),
-                                    color: statusColor,
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                      vertical: 4,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: statusColor.withOpacity(0.1),
+                                      borderRadius: BorderRadius.circular(20),
+                                    ),
+                                    child: Text(
+                                      status[0].toUpperCase() +
+                                          status.substring(1),
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        color: statusColor,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
                                   ),
                                 ],
                               ),
-                              const SizedBox(height: 10),
+                              const SizedBox(height: 8),
                               Text(
                                 title,
-                                style: GoogleFonts.dmSans(
-                                  fontSize: 15,
+                                style: const TextStyle(
                                   fontWeight: FontWeight.w700,
-                                  color: DiklyColors.text,
+                                  fontSize: 15,
                                 ),
                               ),
-                              const SizedBox(height: 8),
+                              const SizedBox(height: 6),
                               Row(children: [
                                 const Icon(
                                   Icons.person_outlined,
                                   size: 14,
-                                  color: DiklyColors.textLight,
+                                  color: DiklyColors.textSecondary,
                                 ),
                                 const SizedBox(width: 4),
                                 Expanded(
                                   child: Text(
                                     lecturer,
-                                    style: GoogleFonts.dmSans(
+                                    style: const TextStyle(
                                       fontSize: 12,
-                                      color: DiklyColors.textLight,
+                                      color: DiklyColors.textSecondary,
                                     ),
                                     overflow: TextOverflow.ellipsis,
                                   ),
@@ -240,28 +212,28 @@ class _HodCoursesScreenState extends ConsumerState<HodCoursesScreen> {
                                 const Icon(
                                   Icons.people_outlined,
                                   size: 14,
-                                  color: DiklyColors.textLight,
+                                  color: DiklyColors.textSecondary,
                                 ),
                                 const SizedBox(width: 4),
                                 Text(
                                   '$enrolled enrolled',
-                                  style: GoogleFonts.dmSans(
+                                  style: const TextStyle(
                                     fontSize: 12,
-                                    color: DiklyColors.textLight,
+                                    color: DiklyColors.textSecondary,
                                   ),
                                 ),
                               ]),
                             ],
                           ),
-                        );
-                      },
-                    ),
+                        ),
+                      );
+                    },
                   ),
-              ],
-            ),
-          );
-        },
-      ),
+                ),
+            ],
+          ),
+        );
+      },
     );
   }
 }
