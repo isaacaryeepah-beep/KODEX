@@ -97,6 +97,8 @@ const allowedOrigins = [
   "https://admin.dikly.sbs",
   // exam subdomain
   "https://exam.dikly.sbs",
+  // Flutter web app (GitHub Pages)
+  "https://isaacaryeepah-beep.github.io",
   // local development
   "http://localhost:3000",
   "http://localhost:5000",
