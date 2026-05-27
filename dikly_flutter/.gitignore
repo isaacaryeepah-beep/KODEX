@@ -18,3 +18,13 @@ ios/Runner/GeneratedPluginRegistrant.m
 # Obfuscation/symbolication maps
 app.*.symbols
 app.*.map.json
+
+# IDE / editor
+.idea/
+*.iml
+.metadata
+
+# Project-generated files
+analysis_options.yaml
+test/
+web/
