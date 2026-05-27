@@ -6,6 +6,7 @@ import '../../core/api.dart';
 import '../../core/auth.dart';
 import '../../core/theme.dart';
 import '../../models/assignment.dart';
+import '../../widgets/ds/dikly_ds.dart';
 
 class AssignmentDetailScreen extends ConsumerStatefulWidget {
   final String assignmentId;
@@ -85,8 +86,15 @@ class _AssignmentDetailScreenState extends ConsumerState<AssignmentDetailScreen>
     return Scaffold(
       backgroundColor: DiklyColors.background,
       appBar: AppBar(
-        title: const Text('Assignment Details'),
+        title: Text(_assignment?.title ?? 'Assignment'),
         leading: BackButton(onPressed: () => context.pop()),
+        backgroundColor: DiklyColors.surface,
+        elevation: 0,
+        surfaceTintColor: Colors.transparent,
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(1),
+          child: Container(color: DiklyColors.border, height: 1),
+        ),
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
@@ -107,90 +115,128 @@ class _AssignmentDetailScreenState extends ConsumerState<AssignmentDetailScreen>
 
   Widget _buildContent(bool isStudent) {
     final a = _assignment!;
+
+    Color headerColor1, headerColor2;
+    if (a.isSubmitted) {
+      headerColor1 = DiklyColors.success;
+      headerColor2 = const Color(0xFF15803D);
+    } else if (a.isOverdue) {
+      headerColor1 = DiklyColors.error;
+      headerColor2 = const Color(0xFFB91C1C);
+    } else {
+      headerColor1 = DiklyColors.warning;
+      headerColor2 = const Color(0xFFB45309);
+    }
+
+    String statusLabel = a.isSubmitted ? 'SUBMITTED' : a.isOverdue ? 'OVERDUE' : 'PENDING';
+
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        // Header
-        Container(
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: a.isSubmitted
-                  ? [DiklyColors.success, const Color(0xFF15803D)]
-                  : a.isOverdue
-                      ? [DiklyColors.error, const Color(0xFFB91C1C)]
-                      : [DiklyColors.warning, const Color(0xFFD97706)],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Text(
-                  a.isSubmitted ? 'SUBMITTED' : a.isOverdue ? 'OVERDUE' : 'PENDING',
-                  style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700),
-                ),
-              ),
-              const SizedBox(height: 12),
-              Text(a.title, style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w700)),
-              if (a.courseName != null) ...[
-                const SizedBox(height: 8),
-                Text(a.courseName!, style: TextStyle(color: Colors.white.withOpacity(0.8), fontSize: 14)),
-              ],
-            ],
-          ),
-        ),
-        const SizedBox(height: 20),
-        // Details
-        _InfoContainer(children: [
-          if (a.dueDate != null) _InfoRow(label: 'Due Date', value: DateFormat('EEE, MMM d, yyyy').format(a.dueDate!)),
-          if (a.totalMarks != null) _InfoRow(label: 'Total Marks', value: '${a.totalMarks}'),
-          _InfoRow(label: 'Status', value: a.isSubmitted ? 'Submitted' : a.isOverdue ? 'Overdue' : 'Pending'),
-          if (a.submittedAt != null) _InfoRow(label: 'Submitted At', value: DateFormat('MMM d, y h:mm a').format(a.submittedAt!)),
-          if (a.grade != null) _InfoRow(label: 'Grade', value: '${a.grade}/${a.totalMarks ?? '?'}'),
-          if (a.feedback != null && a.feedback!.isNotEmpty) _InfoRow(label: 'Feedback', value: a.feedback!),
-        ]),
-        const SizedBox(height: 16),
+        // Brief (description) card
         if (a.description != null && a.description!.isNotEmpty) ...[
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: DiklyColors.surface,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: DiklyColors.border),
-            ),
+          DiklyCard(
+            margin: EdgeInsets.zero,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Instructions', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: headerColor1.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        statusLabel,
+                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: headerColor1),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                const Text(
+                  'Instructions',
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: DiklyColors.text),
+                ),
                 const SizedBox(height: 8),
-                Text(a.description!, style: Theme.of(context).textTheme.bodyMedium?.copyWith(height: 1.6, color: DiklyColors.textSecondary)),
+                Text(
+                  a.description!,
+                  style: const TextStyle(fontSize: 14, color: DiklyColors.textSecondary, height: 1.6),
+                ),
               ],
             ),
           ),
           const SizedBox(height: 16),
         ],
-        // Submission form
+
+        // Deadline card
+        DiklyCard(
+          margin: EdgeInsets.zero,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Deadline',
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: DiklyColors.text),
+              ),
+              const SizedBox(height: 12),
+              if (a.dueDate != null)
+                Row(
+                  children: [
+                    Container(
+                      width: 44,
+                      height: 44,
+                      decoration: BoxDecoration(
+                        color: headerColor1.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Icon(Icons.calendar_today_outlined, color: headerColor1, size: 20),
+                    ),
+                    const SizedBox(width: 12),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          DateFormat('EEE, MMM d, yyyy').format(a.dueDate!),
+                          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: DiklyColors.text),
+                        ),
+                        Text(
+                          DateFormat('h:mm a').format(a.dueDate!),
+                          style: const TextStyle(fontSize: 12, color: DiklyColors.textLight),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              const SizedBox(height: 12),
+              // Details
+              if (a.totalMarks != null)
+                _DetailRow(label: 'Total Marks', value: '${a.totalMarks}'),
+              _DetailRow(label: 'Status', value: a.isSubmitted ? 'Submitted' : a.isOverdue ? 'Overdue' : 'Pending'),
+              if (a.submittedAt != null)
+                _DetailRow(label: 'Submitted At', value: DateFormat('MMM d, y h:mm a').format(a.submittedAt!)),
+              if (a.grade != null)
+                _DetailRow(label: 'Grade', value: '${a.grade}/${a.totalMarks ?? '?'}'),
+              if (a.feedback != null && a.feedback!.isNotEmpty)
+                _DetailRow(label: 'Feedback', value: a.feedback!),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+
+        // Student: Submit button / submission form
         if (isStudent && !a.isSubmitted) ...[
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: DiklyColors.surface,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: DiklyColors.primary.withOpacity(0.3)),
-            ),
+          DiklyCard(
+            margin: EdgeInsets.zero,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Submit Your Work', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+                const Text(
+                  'Submit Your Work',
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: DiklyColors.text),
+                ),
                 const SizedBox(height: 16),
                 TextField(
                   controller: _submissionController,
@@ -209,16 +255,38 @@ class _AssignmentDetailScreenState extends ConsumerState<AssignmentDetailScreen>
                     hintText: 'https://...',
                   ),
                 ),
-                const SizedBox(height: 16),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: _submitting ? null : _submitAssignment,
-                    child: _submitting
-                        ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                        : const Text('Submit Assignment'),
-                  ),
+                const SizedBox(height: 20),
+                DiklyPrimaryButton(
+                  label: 'Submit Assignment',
+                  icon: Icons.check_rounded,
+                  color: DiklyColors.success,
+                  loading: _submitting,
+                  onPressed: _submitAssignment,
+                  height: 50,
                 ),
+              ],
+            ),
+          ),
+        ],
+
+        // Lecturer: Submissions list (placeholder using grade info)
+        if (!isStudent && a.isSubmitted) ...[
+          DiklyCard(
+            margin: EdgeInsets.zero,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Submission Details',
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: DiklyColors.text),
+                ),
+                const SizedBox(height: 12),
+                if (a.grade != null)
+                  _DetailRow(label: 'Grade', value: '${a.grade}/${a.totalMarks ?? '?'}'),
+                if (a.feedback != null)
+                  _DetailRow(label: 'Feedback', value: a.feedback!),
+                if (a.submittedAt != null)
+                  _DetailRow(label: 'Submitted', value: DateFormat('MMM d, y h:mm a').format(a.submittedAt!)),
               ],
             ),
           ),
@@ -229,38 +297,28 @@ class _AssignmentDetailScreenState extends ConsumerState<AssignmentDetailScreen>
   }
 }
 
-class _InfoContainer extends StatelessWidget {
-  final List<Widget> children;
-  const _InfoContainer({required this.children});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: DiklyColors.surface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: DiklyColors.border),
-      ),
-      child: Column(children: children),
-    );
-  }
-}
-
-class _InfoRow extends StatelessWidget {
+class _DetailRow extends StatelessWidget {
   final String label;
   final String value;
-  const _InfoRow({required this.label, required this.value});
+  const _DetailRow({required this.label, required this.value});
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
+      padding: const EdgeInsets.symmetric(vertical: 5),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(width: 110, child: Text(label, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: DiklyColors.textSecondary))),
-          Expanded(child: Text(value, style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w500))),
+          SizedBox(
+            width: 110,
+            child: Text(label, style: const TextStyle(fontSize: 13, color: DiklyColors.textSecondary)),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: DiklyColors.text),
+            ),
+          ),
         ],
       ),
     );

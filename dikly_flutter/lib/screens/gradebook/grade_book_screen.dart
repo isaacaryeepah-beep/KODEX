@@ -1,13 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../../core/api.dart';
 import '../../core/auth.dart';
 import '../../core/theme.dart';
 import '../../models/assignment.dart';
-import '../../widgets/app_shell.dart';
-import '../../widgets/loading_list.dart';
-import '../../widgets/empty_state.dart';
-import '../../widgets/stat_card.dart';
+import '../../widgets/ds/dikly_ds.dart';
 
 class GradeBookScreen extends ConsumerStatefulWidget {
   const GradeBookScreen({super.key});
@@ -37,16 +35,23 @@ class _GradeBookScreenState extends ConsumerState<GradeBookScreen> {
     }
   }
 
-  List<Assignment> get _gradedAssignments => _assignments.where((a) => a.grade != null).toList();
-  double get _averageGrade {
-    if (_gradedAssignments.isEmpty) return 0;
-    final sum = _gradedAssignments.fold(0.0, (acc, a) {
+  List<Assignment> get _graded => _assignments.where((a) => a.grade != null).toList();
+
+  double get _average {
+    if (_graded.isEmpty) return 0;
+    final sum = _graded.fold(0.0, (acc, a) {
       if (a.totalMarks != null && a.totalMarks! > 0) {
         return acc + (a.grade! / a.totalMarks! * 100);
       }
       return acc;
     });
-    return sum / _gradedAssignments.length;
+    return sum / _graded.length;
+  }
+
+  Color _gradeColor(double pct) {
+    if (pct >= 70) return DiklyColors.success;
+    if (pct >= 50) return DiklyColors.warning;
+    return DiklyColors.error;
   }
 
   @override
@@ -54,99 +59,127 @@ class _GradeBookScreenState extends ConsumerState<GradeBookScreen> {
     final user = ref.watch(currentUserProvider);
     final isStudent = user?.role == 'student';
 
-    return AppShell(
-      title: 'Grade Book',
-      child: _loading
-          ? const LoadingList()
+    return Scaffold(
+      backgroundColor: DiklyColors.background,
+      appBar: AppBar(
+        backgroundColor: DiklyColors.surface,
+        elevation: 0,
+        surfaceTintColor: Colors.transparent,
+        title: Text(
+          'Grade Book',
+          style: GoogleFonts.dmSans(fontSize: 17, fontWeight: FontWeight.w700, color: DiklyColors.text),
+        ),
+        leading: BackButton(onPressed: () => Navigator.of(context).maybePop()),
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(1),
+          child: Container(height: 1, color: DiklyColors.border),
+        ),
+      ),
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
           : _error != null
-              ? Center(child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.error_outline, color: DiklyColors.error, size: 48),
-                    const SizedBox(height: 12),
-                    Text(_error!),
-                    const SizedBox(height: 16),
-                    ElevatedButton(onPressed: _loadData, child: const Text('Retry')),
-                  ],
-                ))
+              ? Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.error_outline, size: 48, color: DiklyColors.error),
+                      const SizedBox(height: 12),
+                      Text(_error!, style: GoogleFonts.dmSans(color: DiklyColors.textSecondary)),
+                      const SizedBox(height: 16),
+                      ElevatedButton(onPressed: _loadData, child: const Text('Retry')),
+                    ],
+                  ),
+                )
               : RefreshIndicator(
                   onRefresh: _loadData,
                   child: ListView(
-                    padding: const EdgeInsets.all(16),
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
                     children: [
-                      // Summary cards
-                      if (isStudent && _gradedAssignments.isNotEmpty) ...[
+                      DiklyScreenHeader(
+                        title: 'Grade Book',
+                        subtitle: '${_assignments.length} assignment${_assignments.length == 1 ? '' : 's'}',
+                      ),
+
+                      // Summary section (student only)
+                      if (isStudent && _graded.isNotEmpty) ...[
                         GridView.count(
                           crossAxisCount: 2,
                           crossAxisSpacing: 12,
                           mainAxisSpacing: 12,
-                          childAspectRatio: 1.8,
+                          childAspectRatio: 1.6,
                           shrinkWrap: true,
                           physics: const NeverScrollableScrollPhysics(),
                           children: [
-                            SmallStatCard(
+                            _StatTile(
                               label: 'Average Score',
-                              value: '${_averageGrade.toStringAsFixed(1)}%',
-                              color: _averageGrade >= 70 ? DiklyColors.success : _averageGrade >= 50 ? DiklyColors.warning : DiklyColors.error,
+                              value: '${_average.toStringAsFixed(1)}%',
                               icon: Icons.grade_rounded,
+                              color: _gradeColor(_average),
                             ),
-                            SmallStatCard(
+                            _StatTile(
                               label: 'Graded',
-                              value: '${_gradedAssignments.length}/${_assignments.length}',
-                              color: DiklyColors.primary,
+                              value: '${_graded.length}/${_assignments.length}',
                               icon: Icons.assignment_turned_in_outlined,
+                              color: DiklyColors.primary,
                             ),
                           ],
                         ),
-                        const SizedBox(height: 20),
-                        // GPA Progress bar
-                        Container(
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: DiklyColors.surface,
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: DiklyColors.border),
-                          ),
+                        const SizedBox(height: 16),
+
+                        // Progress bar card
+                        DiklyCard(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Row(
                                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                 children: [
-                                  Text('Overall Performance', style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
-                                  Text('${_averageGrade.toStringAsFixed(1)}%', style: TextStyle(
-                                    fontWeight: FontWeight.w700,
-                                    color: _averageGrade >= 70 ? DiklyColors.success : _averageGrade >= 50 ? DiklyColors.warning : DiklyColors.error,
-                                  )),
+                                  Text(
+                                    'Overall Performance',
+                                    style: GoogleFonts.dmSans(fontSize: 14, fontWeight: FontWeight.w700, color: DiklyColors.text),
+                                  ),
+                                  Text(
+                                    '${_average.toStringAsFixed(1)}%',
+                                    style: GoogleFonts.dmSans(fontSize: 14, fontWeight: FontWeight.w700, color: _gradeColor(_average)),
+                                  ),
                                 ],
                               ),
-                              const SizedBox(height: 10),
+                              const SizedBox(height: 12),
                               ClipRRect(
                                 borderRadius: BorderRadius.circular(4),
                                 child: LinearProgressIndicator(
-                                  value: _averageGrade / 100,
+                                  value: _average / 100,
                                   backgroundColor: DiklyColors.border,
-                                  color: _averageGrade >= 70 ? DiklyColors.success : _averageGrade >= 50 ? DiklyColors.warning : DiklyColors.error,
+                                  valueColor: AlwaysStoppedAnimation<Color>(_gradeColor(_average)),
                                   minHeight: 8,
                                 ),
                               ),
                               const SizedBox(height: 8),
                               Text(
-                                _averageGrade >= 70 ? 'Excellent performance!' : _averageGrade >= 50 ? 'Good, keep improving!' : 'Needs improvement',
-                                style: Theme.of(context).textTheme.bodySmall?.copyWith(color: DiklyColors.textSecondary),
+                                _average >= 70 ? 'Excellent performance!' : _average >= 50 ? 'Good, keep improving!' : 'Needs improvement',
+                                style: GoogleFonts.dmSans(fontSize: 12, color: DiklyColors.textLight),
                               ),
                             ],
                           ),
                         ),
-                        const SizedBox(height: 20),
+                        const SizedBox(height: 16),
                       ],
-                      Text('Assignment Grades', style: Theme.of(context).textTheme.titleLarge),
+
+                      Text(
+                        'Assignment Grades',
+                        style: GoogleFonts.dmSans(fontSize: 15, fontWeight: FontWeight.w700, color: DiklyColors.text),
+                      ),
                       const SizedBox(height: 12),
+
                       if (_assignments.isEmpty)
-                        const EmptyState(icon: Icons.grade_outlined, title: 'No assignments', message: 'Your grades will appear here')
+                        const DiklyEmptyState(
+                          icon: Icons.grade_outlined,
+                          title: 'No assignments',
+                          subtitle: 'Your grades will appear here',
+                        )
                       else
-                        for (final assignment in _assignments)
-                          _GradeRow(assignment: assignment),
+                        for (final a in _assignments)
+                          _GradeRow(assignment: a),
                     ],
                   ),
                 ),
@@ -154,50 +187,95 @@ class _GradeBookScreenState extends ConsumerState<GradeBookScreen> {
   }
 }
 
+// ── Stat Tile ─────────────────────────────────────────────────────────────────
+
+class _StatTile extends StatelessWidget {
+  final String label;
+  final String value;
+  final IconData icon;
+  final Color color;
+
+  const _StatTile({required this.label, required this.value, required this.icon, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return DiklyCard(
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Container(
+            width: 34,
+            height: 34,
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(icon, size: 18, color: color),
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                value,
+                style: GoogleFonts.dmSans(fontSize: 20, fontWeight: FontWeight.w800, color: color),
+              ),
+              Text(
+                label,
+                style: GoogleFonts.dmSans(fontSize: 11, color: DiklyColors.textLight, fontWeight: FontWeight.w500),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Grade Row ─────────────────────────────────────────────────────────────────
+
 class _GradeRow extends StatelessWidget {
   final Assignment assignment;
   const _GradeRow({required this.assignment});
 
-  Color get _gradeColor {
-    if (assignment.grade == null) return DiklyColors.textSecondary;
-    if (assignment.totalMarks == null) return DiklyColors.primary;
-    final pct = assignment.grade! / assignment.totalMarks! * 100;
-    if (pct >= 70) return DiklyColors.success;
-    if (pct >= 50) return DiklyColors.warning;
+  double? get _pct => (assignment.grade != null && assignment.totalMarks != null && assignment.totalMarks! > 0)
+      ? assignment.grade! / assignment.totalMarks! * 100
+      : null;
+
+  Color get _color {
+    if (assignment.grade == null) return DiklyColors.textLight;
+    final p = _pct;
+    if (p == null) return DiklyColors.primary;
+    if (p >= 70) return DiklyColors.success;
+    if (p >= 50) return DiklyColors.warning;
     return DiklyColors.error;
   }
 
-  String get _gradeLabel {
+  String get _label {
     if (!assignment.isSubmitted) return 'Not Submitted';
     if (assignment.grade == null) return 'Pending';
-    if (assignment.totalMarks != null) {
-      return '${assignment.grade}/${assignment.totalMarks}';
-    }
+    if (assignment.totalMarks != null) return '${assignment.grade}/${assignment.totalMarks}';
     return '${assignment.grade}';
   }
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return DiklyCard(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: DiklyColors.surface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: DiklyColors.border),
-      ),
       child: Row(
         children: [
           Container(
             width: 44,
             height: 44,
             decoration: BoxDecoration(
-              color: _gradeColor.withOpacity(0.1),
+              color: _color.withOpacity(0.1),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Icon(
               assignment.grade != null ? Icons.grade_rounded : Icons.assignment_outlined,
-              color: _gradeColor,
+              color: _color,
               size: 22,
             ),
           ),
@@ -206,11 +284,23 @@ class _GradeRow extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(assignment.title, style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600), overflow: TextOverflow.ellipsis),
+                Text(
+                  assignment.title,
+                  style: GoogleFonts.dmSans(fontSize: 14, fontWeight: FontWeight.w600, color: DiklyColors.text),
+                  overflow: TextOverflow.ellipsis,
+                ),
                 if (assignment.courseName != null)
-                  Text(assignment.courseName!, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: DiklyColors.textSecondary)),
+                  Text(
+                    assignment.courseName!,
+                    style: GoogleFonts.dmSans(fontSize: 12, color: DiklyColors.textLight),
+                  ),
                 if (assignment.feedback != null && assignment.feedback!.isNotEmpty)
-                  Text('Feedback: ${assignment.feedback}', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: DiklyColors.textSecondary), overflow: TextOverflow.ellipsis),
+                  Text(
+                    assignment.feedback!,
+                    style: GoogleFonts.dmSans(fontSize: 12, color: DiklyColors.textLight),
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
+                  ),
               ],
             ),
           ),
@@ -218,13 +308,10 @@ class _GradeRow extends StatelessWidget {
           Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              Text(_gradeLabel, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: _gradeColor)),
-              if (assignment.grade != null && assignment.totalMarks != null) ...[
+              Text(_label, style: GoogleFonts.dmSans(fontSize: 16, fontWeight: FontWeight.w700, color: _color)),
+              if (_pct != null) ...[
                 const SizedBox(height: 2),
-                Text(
-                  '${(assignment.grade! / assignment.totalMarks! * 100).toStringAsFixed(0)}%',
-                  style: TextStyle(fontSize: 11, color: _gradeColor),
-                ),
+                Text('${_pct!.toStringAsFixed(0)}%', style: GoogleFonts.dmSans(fontSize: 11, color: _color)),
               ],
             ],
           ),

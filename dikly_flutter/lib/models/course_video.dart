@@ -9,6 +9,7 @@ class CourseVideo {
   final int? order;
   final DateTime? createdAt;
   final String? uploadedBy;
+  final String? platform;
 
   const CourseVideo({
     required this.id,
@@ -21,6 +22,7 @@ class CourseVideo {
     this.order,
     this.createdAt,
     this.uploadedBy,
+    this.platform,
   });
 
   factory CourseVideo.fromJson(Map<String, dynamic> json) {
@@ -37,6 +39,7 @@ class CourseVideo {
           ? DateTime.tryParse(json['createdAt'].toString())
           : null,
       uploadedBy: json['uploadedBy']?.toString(),
+      platform: json['platform']?.toString() ?? json['type']?.toString(),
     );
   }
 

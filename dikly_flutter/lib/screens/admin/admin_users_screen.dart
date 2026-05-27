@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../../core/api.dart';
 import '../../core/theme.dart';
 import '../../models/user.dart';
-import '../../widgets/empty_state.dart';
+import '../../widgets/ds/dikly_ds.dart';
 
 class AdminUsersScreen extends StatefulWidget {
   const AdminUsersScreen({super.key});
@@ -120,7 +120,7 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
         Expanded(child: _loading
             ? const Center(child: CircularProgressIndicator())
             : filtered.isEmpty
-                ? const EmptyState(icon: Icons.people_outlined, title: 'No Users', message: 'No users match your filters.')
+                ? const DiklyEmptyState(icon: Icons.people_outlined, title: 'No Users', subtitle: 'No users match your filters.')
                 : ListView.builder(
                     padding: const EdgeInsets.fromLTRB(16, 0, 16, 80),
                     itemCount: filtered.length,

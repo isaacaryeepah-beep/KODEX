@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/api.dart';
 import '../../core/theme.dart';
-import '../../widgets/empty_state.dart';
+import '../../widgets/ds/dikly_ds.dart';
 
 class ManagerLeaveScreen extends ConsumerStatefulWidget {
   const ManagerLeaveScreen({super.key});
@@ -45,7 +45,7 @@ class _ManagerLeaveScreenState extends ConsumerState<ManagerLeaveScreen> {
       child: _loading
           ? const Center(child: CircularProgressIndicator())
           : _requests.isEmpty
-              ? const EmptyState(icon: Icons.event_note_outlined, title: 'No Leave Requests', message: 'No pending leave requests.')
+              ? const DiklyEmptyState(icon: Icons.event_note_outlined, title: 'No Leave Requests', subtitle: 'No pending leave requests.')
               : ListView.builder(
                   padding: const EdgeInsets.all(16),
                   itemCount: _requests.length,

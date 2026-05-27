@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../models/user.dart';
@@ -9,6 +10,7 @@ import '../models/attendance.dart';
 import '../models/quiz.dart';
 import '../models/message.dart';
 import '../models/announcement.dart';
+import 'cache.dart';
 
 const String _baseUrl = 'https://dikly.sbs';
 const FlutterSecureStorage _storage = FlutterSecureStorage();
@@ -19,8 +21,8 @@ class ApiService {
   ApiService() {
     _dio = Dio(BaseOptions(
       baseUrl: _baseUrl,
-      connectTimeout: const Duration(seconds: 30),
-      receiveTimeout: const Duration(seconds: 30),
+      connectTimeout: const Duration(seconds: 15),
+      receiveTimeout: const Duration(seconds: 15),
       headers: {'Content-Type': 'application/json'},
     ));
 
@@ -36,6 +38,74 @@ class ApiService {
         handler.next(error);
       },
     ));
+  }
+
+  bool _isOfflineError(Object e) {
+    if (e is DioException) {
+      return e.type == DioExceptionType.connectionTimeout ||
+             e.type == DioExceptionType.receiveTimeout ||
+             e.type == DioExceptionType.connectionError ||
+             (e.error is SocketException);
+    }
+    return false;
+  }
+
+  /// GET with cache-first-when-offline strategy.
+  /// Online: fetch network, update cache, return fresh data.
+  /// Offline: return cached data or throw if no cache.
+  Future<dynamic> _cachedGet(String path, String cacheKey) async {
+    try {
+      final response = await _dio.get(path);
+      await CacheService.set(cacheKey, response.data);
+      return response.data;
+    } catch (e) {
+      if (_isOfflineError(e)) {
+        final cached = CacheService.get(cacheKey);
+        if (cached != null) return cached;
+      }
+      rethrow;
+    }
+  }
+
+  /// POST/PUT/DELETE that queues when offline.
+  Future<dynamic> _queueablePost(String path, Map<String, dynamic> body, {String method = 'POST'}) async {
+    try {
+      final response = method == 'PUT'
+          ? await _dio.put(path, data: body)
+          : await _dio.post(path, data: body);
+      return response.data;
+    } catch (e) {
+      if (_isOfflineError(e)) {
+        await CacheService.enqueueWrite({'method': method, 'path': path, 'body': body});
+        return {'queued': true, 'offline': true};
+      }
+      rethrow;
+    }
+  }
+
+  /// Flush all queued writes when back online.
+  Future<void> flushWriteQueue() async {
+    final queue = CacheService.getPendingWrites();
+    if (queue.isEmpty) return;
+    final failed = <Map<String, dynamic>>[];
+    for (final op in queue) {
+      try {
+        final method = op['method'] as String? ?? 'POST';
+        final path   = op['path'] as String;
+        final body   = (op['body'] as Map?)?.cast<String, dynamic>() ?? {};
+        if (method == 'PUT') {
+          await _dio.put(path, data: body);
+        } else {
+          await _dio.post(path, data: body);
+        }
+      } catch (_) {
+        failed.add(op);
+      }
+    }
+    await CacheService.clearPendingWrites();
+    for (final f in failed) {
+      await CacheService.enqueueWrite(f);
+    }
   }
 
   // Auth
@@ -57,8 +127,7 @@ class ApiService {
   }
 
   Future<User> getMe() async {
-    final response = await _dio.get('/api/auth/me');
-    final data = response.data;
+    final data = await _cachedGet('/api/auth/me', 'me');
     final userData = data['user'] ?? data['data'] ?? data;
     return User.fromJson(userData as Map<String, dynamic>);
   }
@@ -72,22 +141,19 @@ class ApiService {
 
   // Meetings
   Future<List<Meeting>> getMeetings() async {
-    final response = await _dio.get('/api/meetings');
-    final data = response.data;
+    final data = await _cachedGet('/api/meetings', 'meetings');
     final list = data['data'] ?? data['meetings'] ?? [];
     return (list as List).map((e) => Meeting.fromJson(e as Map<String, dynamic>)).toList();
   }
 
   Future<List<Meeting>> getUpcomingMeetings() async {
-    final response = await _dio.get('/api/meetings/upcoming');
-    final data = response.data;
+    final data = await _cachedGet('/api/meetings/upcoming', 'meetings:upcoming');
     final list = data['data'] ?? data['meetings'] ?? [];
     return (list as List).map((e) => Meeting.fromJson(e as Map<String, dynamic>)).toList();
   }
 
   Future<List<Meeting>> getLiveMeetings() async {
-    final response = await _dio.get('/api/meetings/live');
-    final data = response.data;
+    final data = await _cachedGet('/api/meetings/live', 'meetings:live');
     final list = data['data'] ?? data['meetings'] ?? [];
     return (list as List).map((e) => Meeting.fromJson(e as Map<String, dynamic>)).toList();
   }
@@ -126,8 +192,7 @@ class ApiService {
 
   // Courses
   Future<List<Course>> getCourses() async {
-    final response = await _dio.get('/api/courses');
-    final data = response.data;
+    final data = await _cachedGet('/api/courses', 'courses');
     final list = data['courses'] ?? data['data'] ?? [];
     return (list as List).map((e) => Course.fromJson(e as Map<String, dynamic>)).toList();
   }
@@ -171,8 +236,7 @@ class ApiService {
 
   // Assignments
   Future<List<Assignment>> getAssignments() async {
-    final response = await _dio.get('/api/assignments');
-    final data = response.data;
+    final data = await _cachedGet('/api/assignments', 'assignments');
     final list = data['assignments'] ?? data['data'] ?? [];
     return (list as List).map((e) => Assignment.fromJson(e as Map<String, dynamic>)).toList();
   }
@@ -195,14 +259,13 @@ class ApiService {
 
   // Attendance
   Future<List<AttendanceSession>> getAttendanceSessions() async {
-    final response = await _dio.get('/api/attendance-sessions');
-    final data = response.data;
+    final data = await _cachedGet('/api/attendance-sessions', 'sessions');
     final list = data['sessions'] ?? data['data'] ?? [];
     return (list as List).map((e) => AttendanceSession.fromJson(e as Map<String, dynamic>)).toList();
   }
 
   Future<void> markAttendance(String code) async {
-    await _dio.post('/api/attendance-sessions/mark', data: {
+    await _queueablePost('/api/attendance-sessions/mark', {
       'code': code,
       'method': 'code_mark',
     });
@@ -238,8 +301,7 @@ class ApiService {
 
   // Messages
   Future<List<Message>> getMessages() async {
-    final response = await _dio.get('/api/messages');
-    final data = response.data;
+    final data = await _cachedGet('/api/messages', 'messages');
     final list = data['messages'] ?? data['data'] ?? [];
     return (list as List).map((e) => Message.fromJson(e as Map<String, dynamic>)).toList();
   }
@@ -250,22 +312,20 @@ class ApiService {
 
   // Announcements
   Future<List<Announcement>> getAnnouncements() async {
-    final response = await _dio.get('/api/announcements');
-    final data = response.data;
+    final data = await _cachedGet('/api/announcements', 'announcements');
     final list = data['announcements'] ?? data['data'] ?? [];
     return (list as List).map((e) => Announcement.fromJson(e as Map<String, dynamic>)).toList();
   }
 
   // Reports
   Future<Map<String, dynamic>> getReports() async {
-    final response = await _dio.get('/api/reports');
-    return response.data as Map<String, dynamic>;
+    final data = await _cachedGet('/api/reports', 'reports');
+    return data as Map<String, dynamic>;
   }
 
   // Leave Requests
   Future<List<dynamic>> getLeaveRequests() async {
-    final response = await _dio.get('/api/leave-requests');
-    final data = response.data;
+    final data = await _cachedGet('/api/leave-requests', 'leave_requests');
     return data['leaveRequests'] ?? data['data'] ?? [];
   }
 
@@ -279,29 +339,25 @@ class ApiService {
 
   // Timesheets
   Future<List<dynamic>> getTimesheets() async {
-    final response = await _dio.get('/api/timesheets');
-    final data = response.data;
+    final data = await _cachedGet('/api/timesheets', 'timesheets');
     return data['timesheets'] ?? data['data'] ?? [];
   }
 
   // Shifts
   Future<List<dynamic>> getShifts() async {
-    final response = await _dio.get('/api/shifts');
-    final data = response.data;
+    final data = await _cachedGet('/api/shifts', 'shifts');
     return data['shifts'] ?? data['data'] ?? [];
   }
 
   // Expenses
   Future<List<dynamic>> getExpenses() async {
-    final response = await _dio.get('/api/expenses');
-    final data = response.data;
+    final data = await _cachedGet('/api/expenses', 'expenses');
     return data['expenses'] ?? data['data'] ?? [];
   }
 
   // HOD
   Future<Map<String, dynamic>> getHodOverview() async {
-    final response = await _dio.get('/api/hod/overview');
-    final data = response.data;
+    final data = await _cachedGet('/api/hod/overview', 'hod_overview');
     return (data['data'] ?? data) as Map<String, dynamic>;
   }
 
@@ -353,8 +409,7 @@ class ApiService {
 
   // Timetable
   Future<List<Map<String, dynamic>>> getTimetable() async {
-    final response = await _dio.get('/api/timetable');
-    final data = response.data;
+    final data = await _cachedGet('/api/timetable', 'timetable');
     final list = data['timetable'] ?? data['slots'] ?? data['data'] ?? [];
     return (list as List).cast<Map<String, dynamic>>();
   }
@@ -386,8 +441,7 @@ class ApiService {
 
   // Subscription
   Future<Map<String, dynamic>> getSubscription() async {
-    final response = await _dio.get('/api/subscription/status');
-    final data = response.data;
+    final data = await _cachedGet('/api/subscription/status', 'subscription');
     return (data['subscription'] ?? data['data'] ?? data) as Map<String, dynamic>;
   }
 
@@ -419,11 +473,11 @@ class ApiService {
   }
 
   Future<void> signIn() async {
-    await _dio.post('/api/sign-in-out/sign-in');
+    await _queueablePost('/api/sign-in-out/sign-in', {});
   }
 
   Future<void> signOut() async {
-    await _dio.post('/api/sign-in-out/sign-out');
+    await _queueablePost('/api/sign-in-out/sign-out', {});
   }
 
   Future<List<Map<String, dynamic>>> getCorporateAttendance() async {
@@ -455,19 +509,19 @@ class ApiService {
   }
 
   Future<void> createLeaveRequest(Map<String, dynamic> body) async {
-    await _dio.post('/api/leave-requests', data: body);
+    await _queueablePost('/api/leave-requests', body);
   }
 
   Future<void> createExpense(Map<String, dynamic> body) async {
-    await _dio.post('/api/expenses', data: body);
+    await _queueablePost('/api/expenses', body);
   }
 
   Future<void> createShift(Map<String, dynamic> body) async {
-    await _dio.post('/api/shifts', data: body);
+    await _queueablePost('/api/shifts', body);
   }
 
   Future<void> createAnnouncement(Map<String, dynamic> body) async {
-    await _dio.post('/api/announcements', data: body);
+    await _queueablePost('/api/announcements', body);
   }
 
   Future<void> saveToken(String token) async {

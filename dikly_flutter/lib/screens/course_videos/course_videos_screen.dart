@@ -6,8 +6,8 @@ import '../../core/auth.dart';
 import '../../core/theme.dart';
 import '../../models/course_video.dart';
 import '../../widgets/app_shell.dart';
-import '../../widgets/loading_list.dart';
-import '../../widgets/empty_state.dart';
+
+import '../../widgets/ds/dikly_ds.dart';
 
 class CourseVideosScreen extends ConsumerStatefulWidget {
   final String courseId;
@@ -130,7 +130,7 @@ class _CourseVideosScreenState extends ConsumerState<CourseVideosScreen> {
           ? FloatingActionButton(onPressed: _addVideo, child: const Icon(Icons.add))
           : null,
       child: _loading
-          ? const LoadingList()
+          ? const Center(child: CircularProgressIndicator(color: DiklyColors.primary))
           : _error != null
               ? Center(child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -143,12 +143,12 @@ class _CourseVideosScreenState extends ConsumerState<CourseVideosScreen> {
                   ],
                 ))
               : _videos.isEmpty
-                  ? EmptyState(
+                  ? DiklyEmptyState(
                       icon: Icons.video_library_outlined,
                       title: 'No videos yet',
-                      message: canManage ? 'Add videos for this course' : 'No videos available for this course',
-                      actionLabel: canManage ? 'Add Video' : null,
-                      onAction: canManage ? _addVideo : null,
+                      subtitle: canManage ? 'Add videos for this course' : 'No videos available for this course',
+                      buttonLabel: canManage ? 'Add Video' : null,
+                      onButton: canManage ? _addVideo : null,
                     )
                   : RefreshIndicator(
                       onRefresh: _loadData,

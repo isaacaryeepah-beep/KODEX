@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../../core/auth.dart';
 import '../../core/api.dart';
 import '../../core/theme.dart';
-import '../../widgets/stat_card.dart';
+import '../../widgets/ds/dikly_ds.dart';
 
 class AdminHomeScreen extends ConsumerStatefulWidget {
   const AdminHomeScreen({super.key});
@@ -17,31 +19,104 @@ class _AdminHomeScreenState extends ConsumerState<AdminHomeScreen> {
   bool _loading = true;
 
   @override
-  void initState() { super.initState(); _load(); }
+  void initState() {
+    super.initState();
+    _load();
+  }
 
   Future<void> _load() async {
     setState(() => _loading = true);
     try {
       final data = await apiService.getReports();
-      setState(() { _reports = data; _loading = false; });
-    } catch (_) { setState(() => _loading = false); }
+      setState(() {
+        _reports = data;
+        _loading = false;
+      });
+    } catch (_) {
+      setState(() => _loading = false);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final user = ref.watch(authProvider).user;
+    final firstName = (user?.name ?? 'Admin').split(' ').first;
+    final institution = user?.company ?? user?.department ?? 'your institution';
+    final deptBadge = user?.department ?? user?.company ?? '';
 
     return RefreshIndicator(
       onRefresh: _load,
+      color: DiklyColors.primary,
       child: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(20),
         children: [
-          _AdminCard(name: user?.name ?? 'Admin', role: user?.role ?? 'admin'),
-          const SizedBox(height: 20),
-          const Text('Platform Overview', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
-          const SizedBox(height: 12),
+          // Greeting header
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Welcome back, $firstName',
+                      style: GoogleFonts.dmSans(
+                        fontSize: 24,
+                        fontWeight: FontWeight.w800,
+                        color: DiklyColors.text,
+                        height: 1.2,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Admin Portal · $institution',
+                      style: GoogleFonts.dmSans(
+                        fontSize: 13,
+                        color: DiklyColors.textLight,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (deptBadge.isNotEmpty) ...[
+                const SizedBox(width: 10),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFEF3C7),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    deptBadge,
+                    style: GoogleFonts.dmSans(
+                      color: DiklyColors.warning,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+          const SizedBox(height: 24),
+
+          // Stats section
+          Text(
+            'Platform Overview',
+            style: GoogleFonts.dmSans(
+              fontSize: 15,
+              fontWeight: FontWeight.w700,
+              color: DiklyColors.text,
+            ),
+          ),
+          const SizedBox(height: 14),
           if (_loading)
-            const Center(child: Padding(padding: EdgeInsets.all(32), child: CircularProgressIndicator()))
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.all(32),
+                child: CircularProgressIndicator(color: DiklyColors.primary),
+              ),
+            )
           else
             GridView.count(
               shrinkWrap: true,
@@ -49,40 +124,202 @@ class _AdminHomeScreenState extends ConsumerState<AdminHomeScreen> {
               crossAxisCount: 2,
               crossAxisSpacing: 12,
               mainAxisSpacing: 12,
+              childAspectRatio: 1.4,
               children: [
-                StatCard(title: 'Total Users', value: (_reports?['totalUsers'] ?? '—').toString(), icon: Icons.people_outlined, color: const Color(0xFFDC2626)),
-                StatCard(title: 'Active Meetings', value: (_reports?['activeMeetings'] ?? '—').toString(), icon: Icons.video_call_outlined, color: DiklyColors.success),
-                StatCard(title: 'Courses', value: (_reports?['totalCourses'] ?? '—').toString(), icon: Icons.book_outlined, color: DiklyColors.primary),
-                StatCard(title: 'Lecturers', value: (_reports?['totalLecturers'] ?? '—').toString(), icon: Icons.cast_for_education_outlined, color: const Color(0xFF7C3AED)),
+                _StatCard(
+                  title: 'Total Users',
+                  value: (_reports?['totalUsers'] ?? '—').toString(),
+                  icon: Icons.people_outlined,
+                  color: DiklyColors.primary,
+                ),
+                _StatCard(
+                  title: 'Total Courses',
+                  value: (_reports?['totalCourses'] ?? '—').toString(),
+                  icon: Icons.book_outlined,
+                  color: DiklyColors.success,
+                ),
+                _StatCard(
+                  title: 'Active Sessions',
+                  value: (_reports?['activeMeetings'] ?? '—').toString(),
+                  icon: Icons.play_circle_outline,
+                  color: DiklyColors.warning,
+                ),
+                _StatCard(
+                  title: 'Reports',
+                  value: (_reports?['totalLecturers'] ?? '—').toString(),
+                  icon: Icons.bar_chart_outlined,
+                  color: const Color(0xFF7C3AED),
+                ),
               ],
             ),
+
+          const SizedBox(height: 28),
+
+          // Quick Actions
+          Text(
+            'Quick Actions',
+            style: GoogleFonts.dmSans(
+              fontSize: 15,
+              fontWeight: FontWeight.w700,
+              color: DiklyColors.text,
+            ),
+          ),
+          const SizedBox(height: 14),
+          _QuickActionRow(
+            actions: [
+              _QuickAction(
+                icon: Icons.people_outlined,
+                label: 'Manage Users',
+                color: DiklyColors.primary,
+                onTap: () => context.push('/admin/users'),
+              ),
+              _QuickAction(
+                icon: Icons.business_outlined,
+                label: 'Manage Branches',
+                color: DiklyColors.success,
+                onTap: () => context.push('/admin/branches'),
+              ),
+              _QuickAction(
+                icon: Icons.history_outlined,
+                label: 'Audit Logs',
+                color: DiklyColors.warning,
+                onTap: () => context.push('/admin/audit-logs'),
+              ),
+            ],
+          ),
         ],
       ),
     );
   }
 }
 
-class _AdminCard extends StatelessWidget {
-  final String name, role;
-  const _AdminCard({required this.name, required this.role});
+class _StatCard extends StatelessWidget {
+  final String title;
+  final String value;
+  final IconData icon;
+  final Color color;
+
+  const _StatCard({
+    required this.title,
+    required this.value,
+    required this.icon,
+    required this.color,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(colors: [Color(0xFFDC2626), Color(0xFF7C3AED)], begin: Alignment.topLeft, end: Alignment.bottomRight),
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [BoxShadow(color: const Color(0xFFDC2626).withOpacity(0.25), blurRadius: 16, offset: const Offset(0, 6))],
+    return DiklyCard(
+      padding: const EdgeInsets.all(16),
+      border: Border(top: BorderSide(color: color, width: 3)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(icon, color: color, size: 20),
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                value,
+                style: GoogleFonts.dmSans(
+                  fontSize: 26,
+                  fontWeight: FontWeight.w800,
+                  color: DiklyColors.text,
+                  height: 1,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                title,
+                style: GoogleFonts.dmSans(
+                  fontSize: 12,
+                  color: DiklyColors.textLight,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
-      child: Row(children: [
-        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('${role == 'hod' ? 'HOD' : 'Admin'} Portal', style: const TextStyle(color: Colors.white70, fontSize: 12, letterSpacing: 0.5)),
-          const SizedBox(height: 4),
-          Text(name.split(' ').first, style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w800)),
-        ])),
-        const Icon(Icons.admin_panel_settings, color: Colors.white60, size: 40),
-      ]),
+    );
+  }
+}
+
+class _QuickActionRow extends StatelessWidget {
+  final List<_QuickAction> actions;
+  const _QuickActionRow({required this.actions});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: actions
+          .map(
+            (a) => Expanded(
+              child: Padding(
+                padding: EdgeInsets.only(
+                  right: a == actions.last ? 0 : 10,
+                ),
+                child: _QuickActionCard(action: a),
+              ),
+            ),
+          )
+          .toList(),
+    );
+  }
+}
+
+class _QuickAction {
+  final IconData icon;
+  final String label;
+  final Color color;
+  final VoidCallback onTap;
+  const _QuickAction({
+    required this.icon,
+    required this.label,
+    required this.color,
+    required this.onTap,
+  });
+}
+
+class _QuickActionCard extends StatelessWidget {
+  final _QuickAction action;
+  const _QuickActionCard({required this.action});
+
+  @override
+  Widget build(BuildContext context) {
+    return DiklyCard(
+      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
+      onTap: action.onTap,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: action.color.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(action.icon, color: action.color, size: 22),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            action.label,
+            textAlign: TextAlign.center,
+            style: GoogleFonts.dmSans(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: DiklyColors.textSecondary,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

@@ -55,6 +55,12 @@ import '../screens/hod/hod_students_screen.dart';
 import '../screens/hod/hod_courses_screen.dart';
 import '../screens/hod/hod_reports_screen.dart';
 import '../screens/lecturer/lecturer_performance_screen.dart';
+import '../screens/lecturer/lecturer_attendance_device_screen.dart';
+import '../screens/lecturer/lecturer_search_screen.dart';
+import '../screens/lecturer/lecturer_quiz_screen.dart';
+import '../screens/lecturer/lecturer_schedule_screen.dart';
+import '../screens/lecturer/lecturer_assignments_screen.dart';
+import '../screens/lecturer/lecturer_question_bank_screen.dart';
 import '../screens/splash_screen.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
@@ -128,6 +134,8 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/timetable',    builder: (context, state) => const TimetableScreen()),
       GoRoute(path: '/subscription', builder: (context, state) => const SubscriptionScreen()),
       GoRoute(path: '/faq',          builder: (context, state) => const FaqScreen()),
+      GoRoute(path: '/contact',      builder: (context, state) => const FaqScreen()),
+      GoRoute(path: '/about',        builder: (context, state) => const FaqScreen()),
       GoRoute(path: '/performance',  builder: (context, state) => const PerformanceScreen()),
 
       // Corporate
@@ -162,7 +170,13 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/hod/reports',         builder: (context, state) => const HodReportsScreen()),
 
       // Lecturer
-      GoRoute(path: '/lecturer/performance', builder: (context, state) => const LecturerPerformanceScreen()),
+      GoRoute(path: '/lecturer/performance',     builder: (context, state) => const LecturerPerformanceScreen()),
+      GoRoute(path: '/lecturer/attendance-device', builder: (context, state) => const LecturerAttendanceDeviceScreen()),
+      GoRoute(path: '/lecturer/search',          builder: (context, state) => const LecturerSearchScreen()),
+      GoRoute(path: '/lecturer/quiz',            builder: (context, state) => const LecturerQuizScreen()),
+      GoRoute(path: '/lecturer/schedule',        builder: (context, state) => const LecturerScheduleScreen()),
+      GoRoute(path: '/lecturer/assignments',     builder: (context, state) => const LecturerAssignmentsScreen()),
+      GoRoute(path: '/lecturer/question-bank',   builder: (context, state) => const LecturerQuestionBankScreen()),
     ],
     errorBuilder: (context, state) => Scaffold(
       body: Center(child: Text('Page not found: ${state.uri}')),

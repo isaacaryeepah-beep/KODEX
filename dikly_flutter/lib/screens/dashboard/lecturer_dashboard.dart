@@ -8,10 +8,8 @@ import '../../core/theme.dart';
 import '../../models/meeting.dart';
 import '../../models/course.dart';
 import '../../widgets/app_shell.dart';
-import '../../widgets/stat_card.dart';
 import '../../widgets/meeting_card.dart';
-import '../../widgets/loading_list.dart';
-import '../../widgets/empty_state.dart';
+import '../../widgets/ds/dikly_ds.dart';
 
 class LecturerDashboard extends ConsumerStatefulWidget {
   const LecturerDashboard({super.key});
@@ -58,7 +56,7 @@ class _LecturerDashboardState extends ConsumerState<LecturerDashboard> {
       child: RefreshIndicator(
         onRefresh: _loadData,
         child: _loading
-            ? const LoadingList()
+            ? const Center(child: CircularProgressIndicator(color: DiklyColors.primary))
             : _error != null
                 ? Center(child: Column(
                     mainAxisSize: MainAxisSize.min,
@@ -125,10 +123,10 @@ class _LecturerDashboardState extends ConsumerState<LecturerDashboard> {
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
           children: [
-            SmallStatCard(label: 'My Courses', value: '${_courses.length}', color: const Color(0xFF7C3AED), icon: Icons.school_outlined),
-            SmallStatCard(label: 'Live Now', value: '${liveMeetings.length}', color: DiklyColors.success, icon: Icons.fiber_manual_record_rounded),
-            SmallStatCard(label: 'Upcoming', value: '${upcomingMeetings.length}', color: DiklyColors.warning, icon: Icons.schedule_outlined),
-            SmallStatCard(label: 'Total Sessions', value: '${_meetings.length}', color: DiklyColors.primary, icon: Icons.video_call_outlined),
+            DiklyStatCard(label: 'My Courses', value: '${_courses.length}', color: const Color(0xFF7C3AED), icon: Icons.school_outlined),
+            DiklyStatCard(label: 'Live Now', value: '${liveMeetings.length}', color: DiklyColors.success, icon: Icons.fiber_manual_record_rounded),
+            DiklyStatCard(label: 'Upcoming', value: '${upcomingMeetings.length}', color: DiklyColors.warning, icon: Icons.schedule_outlined),
+            DiklyStatCard(label: 'Total Sessions', value: '${_meetings.length}', color: DiklyColors.primary, icon: Icons.video_call_outlined),
           ],
         ),
         const SizedBox(height: 20),
@@ -179,7 +177,7 @@ class _LecturerDashboardState extends ConsumerState<LecturerDashboard> {
         ),
         const SizedBox(height: 8),
         if (_courses.isEmpty)
-          const EmptyState(icon: Icons.school_outlined, title: 'No courses', message: 'Your courses will appear here')
+          const DiklyEmptyState(icon: Icons.school_outlined, title: 'No courses', subtitle: 'Your courses will appear here')
         else
           for (final course in _courses.take(3))
             _CourseTile(course: course),

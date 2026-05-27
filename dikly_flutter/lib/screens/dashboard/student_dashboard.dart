@@ -9,10 +9,8 @@ import '../../models/meeting.dart';
 import '../../models/assignment.dart';
 import '../../models/attendance.dart';
 import '../../widgets/app_shell.dart';
-import '../../widgets/stat_card.dart';
 import '../../widgets/meeting_card.dart';
-import '../../widgets/loading_list.dart';
-import '../../widgets/empty_state.dart';
+import '../../widgets/ds/dikly_ds.dart';
 
 class StudentDashboard extends ConsumerStatefulWidget {
   const StudentDashboard({super.key});
@@ -67,7 +65,7 @@ class _StudentDashboardState extends ConsumerState<StudentDashboard> {
       child: RefreshIndicator(
         onRefresh: _loadData,
         child: _loading
-            ? const LoadingList()
+            ? const Center(child: CircularProgressIndicator(color: DiklyColors.primary))
             : _error != null
                 ? _buildError()
                 : _buildContent(user?.name ?? 'Student'),
@@ -142,25 +140,25 @@ class _StudentDashboardState extends ConsumerState<StudentDashboard> {
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
           children: [
-            SmallStatCard(
+            DiklyStatCard(
               label: 'Pending Tasks',
               value: '$_pendingAssignments',
               color: DiklyColors.warning,
               icon: Icons.assignment_outlined,
             ),
-            SmallStatCard(
+            DiklyStatCard(
               label: 'Attended',
               value: '$_presentSessions',
               color: DiklyColors.success,
               icon: Icons.fact_check_outlined,
             ),
-            SmallStatCard(
+            DiklyStatCard(
               label: 'Upcoming',
               value: '${_meetings.length}',
               color: DiklyColors.primary,
               icon: Icons.video_call_outlined,
             ),
-            SmallStatCard(
+            DiklyStatCard(
               label: 'Sessions',
               value: '${_sessions.length}',
               color: const Color(0xFF7C3AED),
@@ -225,10 +223,10 @@ class _StudentDashboardState extends ConsumerState<StudentDashboard> {
         ),
         const SizedBox(height: 8),
         if (_meetings.isEmpty)
-          const EmptyState(
+          const DiklyEmptyState(
             icon: Icons.video_call_outlined,
             title: 'No upcoming sessions',
-            message: 'Your scheduled sessions will appear here',
+            subtitle: 'Your scheduled sessions will appear here',
           )
         else
           for (final meeting in _meetings.take(3))
@@ -252,10 +250,10 @@ class _StudentDashboardState extends ConsumerState<StudentDashboard> {
         ),
         const SizedBox(height: 8),
         if (_assignments.isEmpty)
-          const EmptyState(
+          const DiklyEmptyState(
             icon: Icons.assignment_outlined,
             title: 'No assignments',
-            message: 'Your assignments will appear here',
+            subtitle: 'Your assignments will appear here',
           )
         else
           for (final assignment in _assignments.where((a) => !a.isSubmitted).take(3))

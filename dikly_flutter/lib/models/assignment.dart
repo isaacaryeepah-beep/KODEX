@@ -6,6 +6,7 @@ class Assignment {
   final String? courseName;
   final DateTime? dueDate;
   final int? totalMarks;
+  int get maxScore => totalMarks ?? 100;
   final String status;
   final String? submissionStatus;
   final double? grade;

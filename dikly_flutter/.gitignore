@@ -1,0 +1,30 @@
+# Dart/Flutter generated
+.dart_tool/
+.flutter-plugins
+.pub-cache/
+.pub/
+build/
+
+# Android generated plugin registrant
+android/app/src/main/java/io/flutter/plugins/
+
+# iOS ephemeral and generated
+ios/Flutter/ephemeral/
+ios/Flutter/Generated.xcconfig
+ios/Flutter/flutter_export_environment.sh
+ios/Runner/GeneratedPluginRegistrant.h
+ios/Runner/GeneratedPluginRegistrant.m
+
+# Obfuscation/symbolication maps
+app.*.symbols
+app.*.map.json
+
+# IDE / editor
+.idea/
+*.iml
+.metadata
+
+# Project-generated files
+analysis_options.yaml
+test/
+web/

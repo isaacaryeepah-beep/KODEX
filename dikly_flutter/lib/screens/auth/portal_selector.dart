@@ -2,184 +2,478 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/theme.dart';
 
-class PortalConfig {
-  final String role;
-  final String title;
-  final String subtitle;
-  final IconData icon;
-  final Color color;
-  final String loginRole;
-  final String portalMode;
+class PortalSelectorScreen extends StatefulWidget {
+  const PortalSelectorScreen({super.key});
 
-  const PortalConfig({
-    required this.role,
-    required this.title,
-    required this.subtitle,
-    required this.icon,
-    required this.color,
-    required this.loginRole,
-    required this.portalMode,
-  });
+  @override
+  State<PortalSelectorScreen> createState() => _PortalSelectorScreenState();
 }
 
-const _portals = [
-  PortalConfig(
-    role: 'student',
-    title: 'Student',
-    subtitle: 'Access courses, sessions & assignments',
-    icon: Icons.school_rounded,
-    color: Color(0xFF2563EB),
-    loginRole: 'student',
-    portalMode: 'academic',
-  ),
-  PortalConfig(
-    role: 'lecturer',
-    title: 'Lecturer',
-    subtitle: 'Manage courses, attendance & grades',
-    icon: Icons.person_rounded,
-    color: Color(0xFF7C3AED),
-    loginRole: 'lecturer',
-    portalMode: 'academic',
-  ),
-  PortalConfig(
-    role: 'manager',
-    title: 'Manager',
-    subtitle: 'Team management & corporate tools',
-    icon: Icons.business_center_rounded,
-    color: Color(0xFF0D9488),
-    loginRole: 'manager',
-    portalMode: 'corporate',
-  ),
-  PortalConfig(
-    role: 'hod',
-    title: 'Head of Dept',
-    subtitle: 'Department oversight & analytics',
-    icon: Icons.account_balance_rounded,
-    color: Color(0xFFDC2626),
-    loginRole: 'hod',
-    portalMode: 'academic',
-  ),
-  PortalConfig(
-    role: 'admin',
-    title: 'Admin',
-    subtitle: 'Full platform administration',
-    icon: Icons.admin_panel_settings_rounded,
-    color: Color(0xFFD97706),
-    loginRole: 'admin',
-    portalMode: 'academic',
-  ),
-];
-
-class PortalSelectorScreen extends StatelessWidget {
-  const PortalSelectorScreen({super.key});
+class _PortalSelectorScreenState extends State<PortalSelectorScreen> {
+  String _selectedMode = 'corp';
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: DiklyColors.background,
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(height: 20),
-              // Logo / Brand
-              Center(
-                child: Column(
-                  children: [
-                    Container(
-                      width: 80,
-                      height: 80,
-                      decoration: BoxDecoration(
-                        color: DiklyColors.primary,
-                        borderRadius: BorderRadius.circular(20),
-                        boxShadow: [
-                          BoxShadow(
-                            color: DiklyColors.primary.withOpacity(0.3),
-                            blurRadius: 20,
-                            offset: const Offset(0, 8),
+      body: Stack(
+        children: [
+          // ── Background gradient (mimics the website's dark indigo photo overlay)
+          Container(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Color(0xFF312E81), // deep indigo
+                  Color(0xFF1E1B4B), // darker indigo
+                  Color(0xFF0F0E2E), // near-black indigo
+                ],
+                stops: [0.0, 0.55, 1.0],
+              ),
+            ),
+          ),
+          // ── Subtle texture overlay
+          Container(
+            decoration: BoxDecoration(
+              gradient: RadialGradient(
+                center: Alignment.topRight,
+                radius: 1.5,
+                colors: [
+                  const Color(0xFF4F46E5).withOpacity(0.25),
+                  Colors.transparent,
+                ],
+              ),
+            ),
+          ),
+
+          // ── Main content
+          SafeArea(
+            child: Center(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 420),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      const SizedBox(height: 16),
+
+                      // ── Logo ──────────────────────────────────────────
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Image.asset(
+                            'assets/icon.png',
+                            width: 56,
+                            height: 56,
+                          ),
+                          const SizedBox(width: 14),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'DIKLY',
+                                style: TextStyle(
+                                  fontSize: 34,
+                                  fontWeight: FontWeight.w800,
+                                  color: Colors.white,
+                                  letterSpacing: 1.5,
+                                  height: 1.0,
+                                ),
+                              ),
+                              Text(
+                                'INNOVATE · CONNECT · EMPOWER',
+                                style: TextStyle(
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.white.withOpacity(0.55),
+                                  letterSpacing: 2.5,
+                                ),
+                              ),
+                            ],
                           ),
                         ],
                       ),
-                      child: const Icon(
-                        Icons.school_rounded,
-                        color: Colors.white,
-                        size: 40,
+
+                      const SizedBox(height: 20),
+
+                      // ── Hero headline ─────────────────────────────────
+                      Text(
+                        'ENTERPRISE ATTENDANCE\nMANAGEMENT PLATFORM',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.white.withOpacity(0.9),
+                          letterSpacing: 2.5,
+                          height: 1.55,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 16),
-                    Text(
-                      'DIKLY',
-                      style: Theme.of(context).textTheme.displaySmall?.copyWith(
-                            fontWeight: FontWeight.w800,
-                            color: DiklyColors.primary,
-                            letterSpacing: 2,
-                          ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Academic & Corporate Management',
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: DiklyColors.textSecondary,
-                          ),
-                    ),
-                  ],
+
+                      const SizedBox(height: 36),
+
+                      // ── Workspace card ────────────────────────────────
+                      Container(
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF3F4F6),
+                          borderRadius: BorderRadius.circular(22),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.30),
+                              blurRadius: 32,
+                              offset: const Offset(0, 12),
+                            ),
+                          ],
+                        ),
+                        padding: const EdgeInsets.fromLTRB(16, 20, 16, 24),
+                        child: Column(
+                          children: [
+                            // "CHOOSE YOUR WORKSPACE"
+                            Text(
+                              'CHOOSE YOUR WORKSPACE',
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w700,
+                                color: const Color(0xFF6B7280),
+                                letterSpacing: 2.2,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Container(
+                              height: 1,
+                              color: const Color(0xFFE5E7EB),
+                              margin: const EdgeInsets.symmetric(horizontal: 16),
+                            ),
+                            const SizedBox(height: 16),
+
+                            // ── Corporate / Academic big cards ────────
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: _WorkspaceCard(
+                                    label: 'Corporate',
+                                    subtitle: 'Businesses &\norganisations',
+                                    icon: Icons.work_outline_rounded,
+                                    iconColor: const Color(0xFFB45309),
+                                    iconBg: const Color(0xFFFEF3C7),
+                                    isSelected: _selectedMode == 'corp',
+                                    onTap: () =>
+                                        setState(() => _selectedMode = 'corp'),
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: _WorkspaceCard(
+                                    label: 'Academic',
+                                    subtitle: 'Schools &\ninstitutions',
+                                    icon: Icons.school_outlined,
+                                    iconColor: const Color(0xFF4338CA),
+                                    iconBg: const Color(0xFFEEF2FF),
+                                    isSelected: _selectedMode == 'acad',
+                                    onTap: () =>
+                                        setState(() => _selectedMode = 'acad'),
+                                  ),
+                                ),
+                              ],
+                            ),
+
+                            const SizedBox(height: 16),
+
+                            // ── Role cards (animated) ─────────────────
+                            AnimatedSwitcher(
+                              duration: const Duration(milliseconds: 280),
+                              transitionBuilder: (child, animation) =>
+                                  FadeTransition(
+                                opacity: animation,
+                                child: SlideTransition(
+                                  position: Tween<Offset>(
+                                    begin: const Offset(0, 0.06),
+                                    end: Offset.zero,
+                                  ).animate(animation),
+                                  child: child,
+                                ),
+                              ),
+                              child: _selectedMode == 'corp'
+                                  ? _CorporateCards(key: const ValueKey('corp'))
+                                  : _AcademicCards(key: const ValueKey('acad')),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      const SizedBox(height: 28),
+
+                      // ── Footer ────────────────────────────────────────
+                      Text(
+                        'By using DIKLY, you agree to our Terms & Conditions and Privacy Policy.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: Colors.white.withOpacity(0.45),
+                          height: 1.5,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        '© 2026 DIKLY Technologies. All rights reserved.\nFounded by Isaac Kweku Aryeepah',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: Colors.white.withOpacity(0.4),
+                          height: 1.5,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                    ],
+                  ),
                 ),
               ),
-              const SizedBox(height: 40),
-              Text(
-                'Select Your Portal',
-                style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
-                      color: DiklyColors.textPrimary,
-                    ),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                'Choose the portal that matches your role',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: DiklyColors.textSecondary,
-                    ),
-              ),
-              const SizedBox(height: 24),
-              // Portal cards
-              for (final portal in _portals) ...[
-                _PortalCard(
-                  portal: portal,
-                  onTap: () => context.push('/login/${portal.role}'),
-                ),
-                const SizedBox(height: 12),
-              ],
-              const SizedBox(height: 20),
-            ],
+            ),
           ),
+
+          // ── Help FAB ──────────────────────────────────────────────────
+          Positioned(
+            bottom: 40,
+            right: 20,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                FloatingActionButton(
+                  mini: true,
+                  onPressed: () {},
+                  backgroundColor: const Color(0xFF4F46E5),
+                  elevation: 4,
+                  child: const Icon(Icons.help_outline, color: Colors.white, size: 20),
+                ),
+                const SizedBox(height: 6),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: Colors.white.withOpacity(0.2)),
+                  ),
+                  child: Text(
+                    'Help',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.white,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Workspace Card (large square card shown side-by-side) ─────────────────────
+
+class _WorkspaceCard extends StatelessWidget {
+  final String label;
+  final String subtitle;
+  final IconData icon;
+  final Color iconColor;
+  final Color iconBg;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  const _WorkspaceCard({
+    required this.label,
+    required this.subtitle,
+    required this.icon,
+    required this.iconColor,
+    required this.iconBg,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.fromLTRB(14, 20, 14, 16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: isSelected ? iconColor.withOpacity(0.5) : Colors.transparent,
+            width: 2,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.07),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 46,
+              height: 46,
+              decoration: BoxDecoration(
+                color: iconBg,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, color: iconColor, size: 24),
+            ),
+            const SizedBox(height: 14),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w800,
+                color: const Color(0xFF111827),
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              subtitle,
+              style: TextStyle(
+                fontSize: 12,
+                color: const Color(0xFF6B7280),
+                height: 1.4,
+              ),
+            ),
+            const SizedBox(height: 14),
+            // Bottom indicator bar
+            Container(
+              height: 3,
+              width: 32,
+              decoration: BoxDecoration(
+                color: isSelected ? iconColor : const Color(0xFFE5E7EB),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ],
         ),
       ),
     );
   }
 }
 
+// ── Corporate Portal Cards ─────────────────────────────────────────────────────
+
+class _CorporateCards extends StatelessWidget {
+  const _CorporateCards({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        _PortalCard(
+          icon: Icons.admin_panel_settings_outlined,
+          iconColor: const Color(0xFF2563EB),
+          iconBg: const Color(0xFFEFF6FF),
+          title: 'Admin',
+          subtitle: 'Manage company settings & users',
+          onTap: () => context.go('/login/admin'),
+        ),
+        const SizedBox(height: 8),
+        _PortalCard(
+          icon: Icons.business_center_outlined,
+          iconColor: const Color(0xFF4F46E5),
+          iconBg: const Color(0xFFEEF2FF),
+          title: 'Manager',
+          subtitle: 'Team leads & department managers',
+          onTap: () => context.go('/login/manager'),
+        ),
+        const SizedBox(height: 8),
+        _PortalCard(
+          icon: Icons.badge_outlined,
+          iconColor: const Color(0xFF16A34A),
+          iconBg: const Color(0xFFF0FDF4),
+          title: 'Employee',
+          subtitle: 'Staff & workers',
+          onTap: () => context.go('/login/employee'),
+        ),
+      ],
+    );
+  }
+}
+
+// ── Academic Portal Cards ──────────────────────────────────────────────────────
+
+class _AcademicCards extends StatelessWidget {
+  const _AcademicCards({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        _PortalCard(
+          icon: Icons.menu_book_outlined,
+          iconColor: const Color(0xFF7C3AED),
+          iconBg: const Color(0xFFF5F3FF),
+          title: 'Student',
+          subtitle: 'Learners & enrolled students',
+          onTap: () => context.go('/login/student'),
+        ),
+        const SizedBox(height: 8),
+        _PortalCard(
+          icon: Icons.person_outlined,
+          iconColor: const Color(0xFF2563EB),
+          iconBg: const Color(0xFFEFF6FF),
+          title: 'Lecturer',
+          subtitle: 'Course instructors & tutors',
+          onTap: () => context.go('/login/lecturer'),
+        ),
+        const SizedBox(height: 8),
+        _PortalCard(
+          icon: Icons.account_balance_outlined,
+          iconColor: const Color(0xFF4F46E5),
+          iconBg: const Color(0xFFEEF2FF),
+          title: 'HOD',
+          subtitle: 'Head of Department',
+          onTap: () => context.go('/login/hod'),
+        ),
+      ],
+    );
+  }
+}
+
+// ── Portal Card ────────────────────────────────────────────────────────────────
+
 class _PortalCard extends StatelessWidget {
-  final PortalConfig portal;
+  final IconData icon;
+  final Color iconColor;
+  final Color iconBg;
+  final String title;
+  final String subtitle;
   final VoidCallback onTap;
 
-  const _PortalCard({required this.portal, required this.onTap});
+  const _PortalCard({
+    required this.icon,
+    required this.iconColor,
+    required this.iconBg,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.all(18),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         decoration: BoxDecoration(
-          color: DiklyColors.surface,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: DiklyColors.border),
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFFE5E7EB), width: 1.5),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withOpacity(0.04),
-              blurRadius: 8,
+              blurRadius: 6,
               offset: const Offset(0, 2),
             ),
           ],
@@ -187,37 +481,45 @@ class _PortalCard extends StatelessWidget {
         child: Row(
           children: [
             Container(
-              width: 52,
-              height: 52,
+              width: 44,
+              height: 44,
               decoration: BoxDecoration(
-                color: portal.color.withOpacity(0.12),
-                borderRadius: BorderRadius.circular(14),
+                color: iconBg,
+                shape: BoxShape.circle,
               ),
-              child: Icon(portal.icon, color: portal.color, size: 26),
+              child: Icon(icon, color: iconColor, size: 22),
             ),
-            const SizedBox(width: 16),
+            const SizedBox(width: 14),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    portal.title,
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w600,
-                          color: DiklyColors.textPrimary,
-                        ),
+                    title,
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                      color: const Color(0xFF111827),
+                    ),
                   ),
-                  const SizedBox(height: 3),
+                  const SizedBox(height: 2),
                   Text(
-                    portal.subtitle,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: DiklyColors.textSecondary,
-                        ),
+                    subtitle,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: const Color(0xFF6B7280),
+                    ),
                   ),
                 ],
               ),
             ),
-            Icon(Icons.arrow_forward_ios_rounded, size: 14, color: portal.color),
+            Text(
+              '→',
+              style: TextStyle(
+                fontSize: 18,
+                color: const Color(0xFF9CA3AF),
+              ),
+            ),
           ],
         ),
       ),

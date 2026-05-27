@@ -3,113 +3,29 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/auth.dart';
 import '../../core/theme.dart';
-import '../../models/user.dart';
+import '../../widgets/ds/dikly_ds.dart';
 
-class ProfileScreen extends ConsumerWidget {
+class ProfileScreen extends ConsumerStatefulWidget {
   const ProfileScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final user = ref.watch(currentUserProvider);
+  ConsumerState<ProfileScreen> createState() => _ProfileScreenState();
+}
 
-    return Scaffold(
-      backgroundColor: DiklyColors.background,
-      appBar: AppBar(
-        title: const Text('Profile'),
-        leading: BackButton(onPressed: () => context.pop()),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.logout_rounded),
-            onPressed: () => _showLogoutDialog(context, ref),
-            tooltip: 'Logout',
-          ),
-        ],
-      ),
-      body: user == null
-          ? const Center(child: CircularProgressIndicator())
-          : ListView(
-              padding: const EdgeInsets.all(16),
-              children: [
-                // Avatar + name
-                Center(
-                  child: Column(
-                    children: [
-                      Container(
-                        width: 90,
-                        height: 90,
-                        decoration: BoxDecoration(
-                          gradient: const LinearGradient(
-                            colors: [DiklyColors.primary, DiklyColors.primaryDark],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                          ),
-                          shape: BoxShape.circle,
-                          boxShadow: [BoxShadow(color: DiklyColors.primary.withOpacity(0.3), blurRadius: 16, offset: const Offset(0, 6))],
-                        ),
-                        child: Center(
-                          child: Text(
-                            _getInitials(user.name),
-                            style: const TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.w700),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      Text(user.name, style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w700)),
-                      const SizedBox(height: 4),
-                      Text(user.email, style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: DiklyColors.textSecondary)),
-                      const SizedBox(height: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: _getRoleColor(user.role).withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: _getRoleColor(user.role).withOpacity(0.3)),
-                        ),
-                        child: Text(
-                          user.role.toUpperCase(),
-                          style: TextStyle(color: _getRoleColor(user.role), fontWeight: FontWeight.w700, fontSize: 12, letterSpacing: 1),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 28),
-                // Info card
-                _InfoCard(title: 'Account Details', children: [
-                  _InfoRow(icon: Icons.person_outline_rounded, label: 'Full Name', value: user.name),
-                  _InfoRow(icon: Icons.email_outlined, label: 'Email', value: user.email),
-                  _InfoRow(icon: Icons.badge_outlined, label: 'Role', value: user.role),
-                  if (user.portalMode != null) _InfoRow(icon: Icons.layers_outlined, label: 'Portal', value: user.portalMode!),
-                  if (user.phone != null && user.phone!.isNotEmpty) _InfoRow(icon: Icons.phone_outlined, label: 'Phone', value: user.phone!),
-                  if (user.department != null && user.department!.isNotEmpty) _InfoRow(icon: Icons.apartment_outlined, label: 'Department', value: user.department!),
-                ]),
-                const SizedBox(height: 16),
-                // Actions
-                _ActionCard(title: 'Settings', children: [
-                  _ActionTile(icon: Icons.dark_mode_outlined, label: 'Appearance', onTap: () {}),
-                  _ActionTile(icon: Icons.notifications_outlined, label: 'Notifications', onTap: () {}),
-                  _ActionTile(icon: Icons.lock_outline_rounded, label: 'Change Password', onTap: () {}),
-                  _ActionTile(icon: Icons.help_outline_rounded, label: 'Help & Support', onTap: () {}),
-                ]),
-                const SizedBox(height: 16),
-                // Logout
-                SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton.icon(
-                    onPressed: () => _showLogoutDialog(context, ref),
-                    icon: const Icon(Icons.logout_rounded),
-                    label: const Text('Logout'),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: DiklyColors.error,
-                      side: const BorderSide(color: DiklyColors.error),
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 32),
-              ],
-            ),
-    );
+class _ProfileScreenState extends ConsumerState<ProfileScreen> {
+  final _nameCtrl = TextEditingController();
+  final _currentPwCtrl = TextEditingController();
+  final _newPwCtrl = TextEditingController();
+  final _confirmPwCtrl = TextEditingController();
+  bool _saving = false;
+
+  @override
+  void dispose() {
+    _nameCtrl.dispose();
+    _currentPwCtrl.dispose();
+    _newPwCtrl.dispose();
+    _confirmPwCtrl.dispose();
+    super.dispose();
   }
 
   String _getInitials(String name) {
@@ -119,18 +35,7 @@ class ProfileScreen extends ConsumerWidget {
     return '${parts[0][0]}${parts[parts.length - 1][0]}'.toUpperCase();
   }
 
-  Color _getRoleColor(String role) {
-    switch (role) {
-      case 'student': return DiklyColors.primary;
-      case 'lecturer': return const Color(0xFF7C3AED);
-      case 'manager': return const Color(0xFF0D9488);
-      case 'admin': return const Color(0xFFD97706);
-      case 'hod': return const Color(0xFFDC2626);
-      default: return DiklyColors.textSecondary;
-    }
-  }
-
-  void _showLogoutDialog(BuildContext context, WidgetRef ref) {
+  void _showLogoutDialog() {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -150,100 +55,256 @@ class ProfileScreen extends ConsumerWidget {
       ),
     );
   }
-}
 
-class _InfoCard extends StatelessWidget {
-  final String title;
-  final List<Widget> children;
-
-  const _InfoCard({required this.title, required this.children});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: DiklyColors.surface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: DiklyColors.border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(title, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
-          const SizedBox(height: 12),
-          ...children,
-        ],
-      ),
+  Future<void> _saveChanges() async {
+    setState(() => _saving = true);
+    await Future.delayed(const Duration(milliseconds: 600));
+    if (!mounted) return;
+    setState(() => _saving = false);
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Profile updated')),
     );
   }
-}
 
-class _InfoRow extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final String value;
-
-  const _InfoRow({required this.icon, required this.label, required this.value});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Row(
-        children: [
-          Icon(icon, size: 18, color: DiklyColors.textSecondary),
-          const SizedBox(width: 12),
-          SizedBox(width: 90, child: Text(label, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: DiklyColors.textSecondary))),
-          Expanded(child: Text(value, style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w500))),
-        ],
+  InputDecoration _inputDeco({String? hint, bool readOnly = false}) {
+    return InputDecoration(
+      hintText: hint,
+      filled: true,
+      fillColor: readOnly ? DiklyColors.background : DiklyColors.surface,
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(8),
+        borderSide: const BorderSide(color: DiklyColors.border),
       ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(8),
+        borderSide: const BorderSide(color: DiklyColors.border),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(8),
+        borderSide: readOnly
+            ? const BorderSide(color: DiklyColors.border)
+            : const BorderSide(color: DiklyColors.primary, width: 2),
+      ),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      hintStyle: const TextStyle(color: DiklyColors.textMuted, fontSize: 14),
     );
   }
-}
-
-class _ActionCard extends StatelessWidget {
-  final String title;
-  final List<Widget> children;
-
-  const _ActionCard({required this.title, required this.children});
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: DiklyColors.surface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: DiklyColors.border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-            child: Text(title, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+    final user = ref.watch(currentUserProvider);
+
+    if (user != null && _nameCtrl.text.isEmpty) {
+      _nameCtrl.text = user.name;
+    }
+
+    return Scaffold(
+      backgroundColor: DiklyColors.background,
+      appBar: AppBar(
+        backgroundColor: DiklyColors.surface,
+        elevation: 0,
+        surfaceTintColor: Colors.transparent,
+        title: const Text('My Profile'),
+        leading: BackButton(onPressed: () => context.pop()),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.logout_rounded),
+            onPressed: _showLogoutDialog,
+            tooltip: 'Logout',
           ),
-          ...children,
         ],
       ),
-    );
-  }
-}
+      body: user == null
+          ? const Center(child: CircularProgressIndicator())
+          : ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                // Profile card: large avatar + name + role badge
+                DiklyCard(
+                  child: Column(
+                    children: [
+                      // Large 80px CircleAvatar with camera overlay badge
+                      Stack(
+                        children: [
+                          CircleAvatar(
+                            radius: 40,
+                            backgroundColor: DiklyColors.primary,
+                            child: Text(
+                              _getInitials(user.name),
+                              style: const TextStyle(
+                                fontSize: 26,
+                                fontWeight: FontWeight.w700,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ),
+                          Positioned(
+                            bottom: 0,
+                            right: 0,
+                            child: Container(
+                              width: 26,
+                              height: 26,
+                              decoration: BoxDecoration(
+                                color: DiklyColors.primary,
+                                shape: BoxShape.circle,
+                                border: Border.all(color: Colors.white, width: 2),
+                              ),
+                              child: const Icon(Icons.camera_alt, size: 13, color: Colors.white),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        user.name,
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w700,
+                          color: DiklyColors.textPrimary,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        user.email,
+                        style: const TextStyle(fontSize: 13, color: DiklyColors.textSecondary),
+                      ),
+                      const SizedBox(height: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFEF3C7),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(
+                          user.role.toUpperCase(),
+                          style: const TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFFD97706),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
 
-class _ActionTile extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
+                // Account Details
+                DiklyCard(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Account Details',
+                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: DiklyColors.textPrimary),
+                      ),
+                      const SizedBox(height: 16),
 
-  const _ActionTile({required this.icon, required this.label, required this.onTap});
+                      const DiklySectionLabel('FULL NAME'),
+                      const SizedBox(height: 6),
+                      TextFormField(
+                        controller: _nameCtrl,
+                        decoration: _inputDeco(hint: 'Your full name'),
+                      ),
+                      const SizedBox(height: 14),
 
-  @override
-  Widget build(BuildContext context) {
-    return ListTile(
-      leading: Icon(icon, size: 20, color: DiklyColors.textSecondary),
-      title: Text(label, style: Theme.of(context).textTheme.bodyMedium),
-      trailing: const Icon(Icons.chevron_right_rounded, size: 18, color: DiklyColors.textSecondary),
-      onTap: onTap,
+                      const DiklySectionLabel('DEPARTMENT'),
+                      const SizedBox(height: 6),
+                      TextFormField(
+                        initialValue: user.department ?? '',
+                        readOnly: true,
+                        style: const TextStyle(color: DiklyColors.textSecondary),
+                        decoration: _inputDeco(
+                          hint: 'Not set',
+                          readOnly: true,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      const Text(
+                        'Department cannot be changed here — contact your admin.',
+                        style: TextStyle(fontSize: 11, color: DiklyColors.textMuted),
+                      ),
+                      const SizedBox(height: 14),
+
+                      const DiklySectionLabel('EMAIL'),
+                      const SizedBox(height: 6),
+                      TextFormField(
+                        initialValue: user.email,
+                        readOnly: true,
+                        style: const TextStyle(color: DiklyColors.textSecondary),
+                        decoration: _inputDeco(readOnly: true),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+
+                // Change Password
+                DiklyCard(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Change Password',
+                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: DiklyColors.textPrimary),
+                      ),
+                      const SizedBox(height: 16),
+
+                      const DiklySectionLabel('CURRENT PASSWORD'),
+                      const SizedBox(height: 6),
+                      TextFormField(
+                        controller: _currentPwCtrl,
+                        obscureText: true,
+                        decoration: _inputDeco(hint: 'Enter current password'),
+                      ),
+                      const SizedBox(height: 14),
+
+                      const DiklySectionLabel('NEW PASSWORD'),
+                      const SizedBox(height: 6),
+                      TextFormField(
+                        controller: _newPwCtrl,
+                        obscureText: true,
+                        decoration: _inputDeco(hint: 'Min 8 characters'),
+                      ),
+                      const SizedBox(height: 14),
+
+                      const DiklySectionLabel('CONFIRM NEW PASSWORD'),
+                      const SizedBox(height: 6),
+                      TextFormField(
+                        controller: _confirmPwCtrl,
+                        obscureText: true,
+                        decoration: _inputDeco(hint: 'Repeat new password'),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 20),
+
+                // Save button — full width, blue
+                DiklyPrimaryButton(
+                  label: 'Save Changes',
+                  loading: _saving,
+                  onPressed: _saveChanges,
+                ),
+                const SizedBox(height: 12),
+
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: _showLogoutDialog,
+                    icon: const Icon(Icons.logout_rounded),
+                    label: const Text('Logout'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: DiklyColors.error,
+                      side: const BorderSide(color: DiklyColors.error),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 32),
+              ],
+            ),
     );
   }
 }

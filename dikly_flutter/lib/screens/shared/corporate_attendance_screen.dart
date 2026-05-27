@@ -197,7 +197,7 @@ class _CorporateAttendanceScreenState extends ConsumerState<CorporateAttendanceS
                       _SummaryStats(
                         present: totalPresent,
                         absent: totalAbsent,
-                        late: totalLate,
+                        lateCount: totalLate,
                         onLeave: totalOnLeave,
                       ),
                       const SizedBox(height: 20),
@@ -229,13 +229,13 @@ class _CorporateAttendanceScreenState extends ConsumerState<CorporateAttendanceS
 class _SummaryStats extends StatelessWidget {
   final int present;
   final int absent;
-  final int late;
+  final int lateCount;
   final int onLeave;
 
   const _SummaryStats({
     required this.present,
     required this.absent,
-    required this.late,
+    required this.lateCount,
     required this.onLeave,
   });
 
@@ -263,7 +263,7 @@ class _SummaryStats extends StatelessWidget {
         ),
         _StatBox(
           label: 'Late',
-          value: late.toString(),
+          value: lateCount.toString(),
           color: DiklyColors.warning,
           icon: Icons.access_time_outlined,
         ),
