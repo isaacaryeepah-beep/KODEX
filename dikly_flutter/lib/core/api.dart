@@ -44,7 +44,7 @@ class ApiService {
       return e.type == DioExceptionType.connectionTimeout ||
              e.type == DioExceptionType.receiveTimeout ||
              e.type == DioExceptionType.connectionError ||
-             (e.error is SocketException);
+             e.message?.toLowerCase().contains('socket') == true;
     }
     return false;
   }
