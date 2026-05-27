@@ -5,7 +5,6 @@ import 'package:intl/intl.dart';
 import '../../core/api.dart';
 import '../../core/theme.dart';
 import '../../models/course.dart';
-import '../../widgets/ds/dikly_ds.dart';
 
 class CreateSessionScreen extends ConsumerStatefulWidget {
   const CreateSessionScreen({super.key});
@@ -17,15 +16,23 @@ class CreateSessionScreen extends ConsumerStatefulWidget {
 class _CreateSessionScreenState extends ConsumerState<CreateSessionScreen> {
   final _formKey = GlobalKey<FormState>();
   final _titleController = TextEditingController();
-  String _meetingType = 'session';
-  DateTime? _scheduledStart;
-  DateTime? _scheduledEnd;
+  final _descController = TextEditingController();
+  String _meetingType = 'General Meeting';
+  DateTime _start = DateTime.now().add(const Duration(minutes: 5));
+  DateTime _end = DateTime.now().add(const Duration(hours: 1, minutes: 5));
   String? _linkedCourseId;
-  bool _openToCompany = false;
   bool _loading = false;
+  bool _startingNow = false;
   List<Course> _courses = [];
 
-  final _meetingTypes = ['session', 'lecture', 'meeting', 'workshop', 'webinar', 'general'];
+  final _meetingTypes = [
+    'General Meeting',
+    'Lecture',
+    'Session',
+    'Workshop',
+    'Webinar',
+    'Tutorial',
+  ];
 
   @override
   void initState() {
@@ -43,58 +50,66 @@ class _CreateSessionScreenState extends ConsumerState<CreateSessionScreen> {
   @override
   void dispose() {
     _titleController.dispose();
+    _descController.dispose();
     super.dispose();
   }
 
   Future<void> _pickDateTime({required bool isStart}) async {
+    final initial = isStart ? _start : _end;
     final date = await showDatePicker(
       context: context,
-      initialDate: DateTime.now().add(const Duration(hours: 1)),
+      initialDate: initial,
       firstDate: DateTime.now(),
       lastDate: DateTime.now().add(const Duration(days: 365)),
+      builder: (context, child) => Theme(
+        data: Theme.of(context).copyWith(
+          colorScheme: Theme.of(context).colorScheme.copyWith(primary: DiklyColors.primary),
+        ),
+        child: child!,
+      ),
     );
     if (date == null) return;
 
     final time = await showTimePicker(
       context: context,
-      initialTime: TimeOfDay.fromDateTime(DateTime.now().add(const Duration(hours: 1))),
+      initialTime: TimeOfDay.fromDateTime(initial),
+      builder: (context, child) => Theme(
+        data: Theme.of(context).copyWith(
+          colorScheme: Theme.of(context).colorScheme.copyWith(primary: DiklyColors.primary),
+        ),
+        child: child!,
+      ),
     );
     if (time == null) return;
 
     final dt = DateTime(date.year, date.month, date.day, time.hour, time.minute);
     setState(() {
       if (isStart) {
-        _scheduledStart = dt;
-        if (_scheduledEnd == null || _scheduledEnd!.isBefore(dt)) {
-          _scheduledEnd = dt.add(const Duration(hours: 1));
-        }
+        _start = dt;
+        if (_end.isBefore(dt)) _end = dt.add(const Duration(hours: 1));
       } else {
-        _scheduledEnd = dt;
+        _end = dt;
       }
     });
   }
 
-  Future<void> _submit() async {
+  String _fmt(DateTime dt) => DateFormat('d MMM yyyy \'at\' h:mm a').format(dt);
+
+  Future<void> _schedule() async {
     if (!_formKey.currentState!.validate()) return;
-    if (_scheduledStart == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select a start time'), backgroundColor: DiklyColors.error),
-      );
-      return;
-    }
     setState(() => _loading = true);
     try {
       await apiService.createMeeting({
         'title': _titleController.text.trim(),
-        'meetingType': _meetingType,
-        'scheduledStart': _scheduledStart!.toIso8601String(),
-        'scheduledEnd': _scheduledEnd?.toIso8601String(),
+        'meetingType': _meetingType.toLowerCase().replaceAll(' ', '_'),
+        'scheduledStart': _start.toIso8601String(),
+        'scheduledEnd': _end.toIso8601String(),
+        if (_descController.text.trim().isNotEmpty) 'description': _descController.text.trim(),
         if (_linkedCourseId != null) 'linkedCourseId': _linkedCourseId,
-        'openToCompany': _openToCompany,
       });
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Session created!'), backgroundColor: DiklyColors.success),
+          const SnackBar(content: Text('Session scheduled!'), backgroundColor: DiklyColors.success),
         );
         context.pop();
       }
@@ -109,16 +124,50 @@ class _CreateSessionScreenState extends ConsumerState<CreateSessionScreen> {
     }
   }
 
+  Future<void> _startNow() async {
+    if (_titleController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter a meeting title'), backgroundColor: DiklyColors.error),
+      );
+      return;
+    }
+    setState(() => _startingNow = true);
+    try {
+      await apiService.createMeeting({
+        'title': _titleController.text.trim(),
+        'meetingType': _meetingType.toLowerCase().replaceAll(' ', '_'),
+        'scheduledStart': DateTime.now().toIso8601String(),
+        'scheduledEnd': DateTime.now().add(const Duration(hours: 1)).toIso8601String(),
+        if (_descController.text.trim().isNotEmpty) 'description': _descController.text.trim(),
+        if (_linkedCourseId != null) 'linkedCourseId': _linkedCourseId,
+        'startNow': true,
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Session started!'), backgroundColor: DiklyColors.success),
+        );
+        context.pop();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: DiklyColors.error),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _startingNow = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: DiklyColors.background,
       appBar: AppBar(
-        title: const Text('New Session'),
-        leading: BackButton(onPressed: () => context.pop()),
-        elevation: 0,
         backgroundColor: DiklyColors.surface,
+        elevation: 0,
         surfaceTintColor: Colors.transparent,
+        leading: BackButton(onPressed: () => context.pop()),
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(1),
           child: Container(color: DiklyColors.border, height: 1),
@@ -127,119 +176,122 @@ class _CreateSessionScreenState extends ConsumerState<CreateSessionScreen> {
       body: Form(
         key: _formKey,
         child: ListView(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 40),
           children: [
-            // Session Details
-            _FormSection(
-              title: 'Session Details',
-              children: [
-                TextFormField(
-                  controller: _titleController,
-                  decoration: const InputDecoration(
-                    labelText: 'Session Title',
-                    hintText: 'e.g. MATH101 Lecture 5',
-                    prefixIcon: Icon(Icons.title_outlined),
-                  ),
-                  validator: (v) => v == null || v.trim().isEmpty ? 'Please enter a title' : null,
-                ),
-                const SizedBox(height: 16),
-                DropdownButtonFormField<String>(
-                  value: _meetingType,
-                  decoration: const InputDecoration(
-                    labelText: 'Session Type',
-                    prefixIcon: Icon(Icons.category_outlined),
-                  ),
-                  items: _meetingTypes.map((type) => DropdownMenuItem(
-                    value: type,
-                    child: Text(type[0].toUpperCase() + type.substring(1)),
-                  )).toList(),
-                  onChanged: (v) => setState(() => _meetingType = v ?? 'session'),
-                ),
-              ],
+            // ── Header ──────────────────────────────────────────────────
+            const Text(
+              'Schedule a Meeting',
+              style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: Color(0xFF111827)),
             ),
-            const SizedBox(height: 16),
-
-            // Schedule
-            _FormSection(
-              title: 'Schedule',
-              children: [
-                _DateTimeTile(
-                  label: 'Start Time',
-                  dateTime: _scheduledStart,
-                  onTap: () => _pickDateTime(isStart: true),
-                ),
-                const SizedBox(height: 12),
-                _DateTimeTile(
-                  label: 'End Time',
-                  dateTime: _scheduledEnd,
-                  onTap: () => _pickDateTime(isStart: false),
-                ),
-              ],
+            const SizedBox(height: 6),
+            const Text(
+              'Fill in the details below. Start Now skips the schedule and opens immediately.',
+              style: TextStyle(fontSize: 13, color: Color(0xFF6B7280), height: 1.4),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 28),
 
-            // Link to Course
-            if (_courses.isNotEmpty)
-              _FormSection(
-                title: 'Link to Course (optional)',
-                children: [
-                  DropdownButtonFormField<String?>(
-                    value: _linkedCourseId,
-                    decoration: const InputDecoration(
-                      labelText: 'Course',
-                      prefixIcon: Icon(Icons.school_outlined),
-                    ),
-                    items: [
-                      const DropdownMenuItem(value: null, child: Text('No course link')),
-                      ..._courses.map((c) => DropdownMenuItem(
-                        value: c.id,
-                        child: Text(c.title, overflow: TextOverflow.ellipsis),
-                      )),
-                    ],
-                    onChanged: (v) => setState(() => _linkedCourseId = v),
-                  ),
-                ],
+            // ── Meeting Title ────────────────────────────────────────────
+            _FieldLabel(label: 'MEETING TITLE', required: true),
+            const SizedBox(height: 6),
+            TextFormField(
+              controller: _titleController,
+              decoration: const InputDecoration(
+                hintText: 'e.g. Week 5 Lecture',
               ),
-            if (_courses.isNotEmpty) const SizedBox(height: 16),
+              validator: (v) => v == null || v.trim().isEmpty ? 'Required' : null,
+            ),
+            const SizedBox(height: 20),
 
-            // Access
-            _FormSection(
-              title: 'Access',
-              children: [
-                Container(
-                  decoration: BoxDecoration(
-                    color: DiklyColors.background,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: DiklyColors.border),
-                  ),
-                  child: SwitchListTile(
-                    title: const Text(
-                      'Open to all company members',
-                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: DiklyColors.text),
-                    ),
-                    subtitle: const Text(
-                      'Anyone in the organization can join',
-                      style: TextStyle(fontSize: 12, color: DiklyColors.textLight),
-                    ),
-                    value: _openToCompany,
-                    onChanged: (v) => setState(() => _openToCompany = v),
-                    activeColor: DiklyColors.primary,
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                  ),
-                ),
+            // ── Start Date & Time ────────────────────────────────────────
+            _FieldLabel(label: 'START DATE & TIME', required: true),
+            const SizedBox(height: 6),
+            _DateButton(value: _fmt(_start), onTap: () => _pickDateTime(isStart: true)),
+            const SizedBox(height: 20),
+
+            // ── End Date & Time ──────────────────────────────────────────
+            _FieldLabel(label: 'END DATE & TIME', required: true),
+            const SizedBox(height: 6),
+            _DateButton(value: _fmt(_end), onTap: () => _pickDateTime(isStart: false)),
+            const SizedBox(height: 20),
+
+            // ── Description ──────────────────────────────────────────────
+            _FieldLabel(label: 'DESCRIPTION', optional: true),
+            const SizedBox(height: 6),
+            TextFormField(
+              controller: _descController,
+              maxLines: 3,
+              decoration: const InputDecoration(
+                hintText: 'What is this meeting about?',
+              ),
+            ),
+            const SizedBox(height: 20),
+
+            // ── Meeting Type ─────────────────────────────────────────────
+            const _FieldLabel(label: 'MEETING TYPE'),
+            const SizedBox(height: 6),
+            DropdownButtonFormField<String>(
+              value: _meetingType,
+              decoration: const InputDecoration(),
+              items: _meetingTypes.map((t) => DropdownMenuItem(value: t, child: Text(t))).toList(),
+              onChanged: (v) { if (v != null) setState(() => _meetingType = v); },
+            ),
+            const SizedBox(height: 20),
+
+            // ── Course ────────────────────────────────────────────────────
+            const _FieldLabel(label: 'COURSE'),
+            const SizedBox(height: 6),
+            DropdownButtonFormField<String?>(
+              value: _linkedCourseId,
+              decoration: const InputDecoration(),
+              items: [
+                const DropdownMenuItem<String?>(value: null, child: Text('— Select a course —')),
+                ..._courses.map((c) => DropdownMenuItem<String?>(
+                  value: c.id,
+                  child: Text(c.title, overflow: TextOverflow.ellipsis),
+                )),
               ],
+              onChanged: (v) => setState(() => _linkedCourseId = v),
             ),
             const SizedBox(height: 32),
 
-            // Submit button
-            DiklyPrimaryButton(
-              label: 'Create Session',
-              icon: Icons.check_rounded,
-              loading: _loading,
-              onPressed: _submit,
-              height: 50,
+            // ── Schedule button ───────────────────────────────────────────
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: (_loading || _startingNow) ? null : _schedule,
+                icon: _loading
+                    ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                    : const Icon(Icons.calendar_today_rounded, size: 18),
+                label: Text(_loading ? 'Scheduling...' : 'Schedule'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: DiklyColors.primary,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+                ),
+              ),
             ),
-            const SizedBox(height: 32),
+            const SizedBox(height: 12),
+
+            // ── Start Now button ──────────────────────────────────────────
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: (_loading || _startingNow) ? null : _startNow,
+                icon: _startingNow
+                    ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                    : const Icon(Icons.play_arrow_rounded, size: 20),
+                label: Text(_startingNow ? 'Starting...' : 'Start Now'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF16A34A),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+                ),
+              ),
+            ),
           ],
         ),
       ),
@@ -247,88 +299,58 @@ class _CreateSessionScreenState extends ConsumerState<CreateSessionScreen> {
   }
 }
 
-class _FormSection extends StatelessWidget {
-  final String title;
-  final List<Widget> children;
+// ── Supporting widgets ────────────────────────────────────────────────────────
 
-  const _FormSection({required this.title, required this.children});
+class _FieldLabel extends StatelessWidget {
+  final String label;
+  final bool required;
+  final bool optional;
+
+  const _FieldLabel({required this.label, this.required = false, this.optional = false});
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: DiklyColors.surface,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: DiklyColors.border),
-        boxShadow: AppTheme.shadowMd,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            title,
-            style: const TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w700,
-              color: DiklyColors.textSecondary,
-              letterSpacing: 0.3,
-            ),
-          ),
-          const SizedBox(height: 14),
-          ...children,
+    return Row(
+      children: [
+        Text(
+          label,
+          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF374151), letterSpacing: 0.6),
+        ),
+        if (required) ...[
+          const SizedBox(width: 4),
+          const Text(' *', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFFDC2626))),
         ],
-      ),
+        if (optional) ...[
+          const SizedBox(width: 6),
+          const Text('(OPTIONAL)', style: TextStyle(fontSize: 10, color: Color(0xFF9CA3AF), letterSpacing: 0.3)),
+        ],
+      ],
     );
   }
 }
 
-class _DateTimeTile extends StatelessWidget {
-  final String label;
-  final DateTime? dateTime;
+class _DateButton extends StatelessWidget {
+  final String value;
   final VoidCallback onTap;
 
-  const _DateTimeTile({required this.label, this.dateTime, required this.onTap});
+  const _DateButton({required this.value, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
+        width: double.infinity,
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
         decoration: BoxDecoration(
-          border: Border.all(color: DiklyColors.border),
+          color: Colors.white,
           borderRadius: BorderRadius.circular(8),
-          color: DiklyColors.background,
+          border: Border.all(color: const Color(0xFFD1D5DB)),
         ),
-        child: Row(
-          children: [
-            const Icon(Icons.schedule_outlined, size: 18, color: DiklyColors.textSecondary),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    label,
-                    style: const TextStyle(fontSize: 11, color: DiklyColors.textLight, fontWeight: FontWeight.w500),
-                  ),
-                  const SizedBox(height: 2),
-                  if (dateTime != null)
-                    Text(
-                      DateFormat('EEE, MMM d, yyyy  h:mm a').format(dateTime!),
-                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: DiklyColors.text),
-                    )
-                  else
-                    const Text(
-                      'Tap to select',
-                      style: TextStyle(fontSize: 14, color: DiklyColors.textSecondary),
-                    ),
-                ],
-              ),
-            ),
-            const Icon(Icons.chevron_right_rounded, color: DiklyColors.textSecondary, size: 18),
-          ],
+        child: Text(
+          value,
+          textAlign: TextAlign.center,
+          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500, color: Color(0xFF111827)),
         ),
       ),
     );

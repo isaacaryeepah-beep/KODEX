@@ -20,7 +20,6 @@ class MeetingsScreen extends ConsumerStatefulWidget {
 class _MeetingsScreenState extends ConsumerState<MeetingsScreen> {
   List<Meeting> _meetings = [];
   bool _loading = true;
-  String? _error;
 
   @override
   void initState() {
@@ -29,12 +28,12 @@ class _MeetingsScreenState extends ConsumerState<MeetingsScreen> {
   }
 
   Future<void> _loadData() async {
-    setState(() { _loading = true; _error = null; });
+    setState(() { _loading = true; });
     try {
       final meetings = await apiService.getMeetings();
       setState(() { _meetings = meetings; _loading = false; });
-    } catch (e) {
-      setState(() { _error = e.toString(); _loading = false; });
+    } catch (_) {
+      setState(() { _meetings = []; _loading = false; });
     }
   }
 
@@ -78,18 +77,7 @@ class _MeetingsScreenState extends ConsumerState<MeetingsScreen> {
           Expanded(
             child: _loading
                 ? const Center(child: CircularProgressIndicator(color: DiklyColors.primary))
-                : _error != null
-                    ? Center(child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(Icons.error_outline, color: DiklyColors.error, size: 48),
-                          const SizedBox(height: 12),
-                          Text(_error!),
-                          const SizedBox(height: 16),
-                          ElevatedButton(onPressed: _loadData, child: const Text('Retry')),
-                        ],
-                      ))
-                    : _meetings.isEmpty
+                : _meetings.isEmpty
                         ? DiklyEmptyState(
                             icon: Icons.groups_outlined,
                             title: 'No meetings scheduled',

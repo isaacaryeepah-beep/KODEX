@@ -77,7 +77,13 @@ class _SessionDetailScreenState extends ConsumerState<SessionDetailScreen> {
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _error != null
-              ? Center(child: Text(_error!))
+              ? const Center(
+                  child: Text(
+                    'Something went wrong. Please try again.',
+                    style: TextStyle(fontSize: 13, color: DiklyColors.textSecondary),
+                    textAlign: TextAlign.center,
+                  ),
+                )
               : _meeting == null
                   ? const Center(child: Text('Session not found'))
                   : _buildContent(canManage),

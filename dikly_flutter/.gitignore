@@ -27,4 +27,3 @@ app.*.map.json
 # Project-generated files
 analysis_options.yaml
 test/
-web/

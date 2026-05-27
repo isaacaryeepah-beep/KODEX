@@ -392,25 +392,38 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                   return null;
                                 },
                               ),
-                              const SizedBox(height: 28),
+                              const SizedBox(height: 12),
+
+                              // Forgot password
+                              Align(
+                                alignment: Alignment.centerRight,
+                                child: GestureDetector(
+                                  onTap: () {},
+                                  child: Text(
+                                    'Forgot password?',
+                                    style: GoogleFonts.dmSans(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w500,
+                                      color: color,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 20),
 
                               // Sign In button
                               SizedBox(
                                 width: double.infinity,
-                                height: 46,
+                                height: 48,
                                 child: ElevatedButton(
                                   onPressed:
                                       authState.isLoading ? null : _login,
                                   style: ElevatedButton.styleFrom(
-                                    backgroundColor: DiklyColors.primary,
+                                    backgroundColor: color,
                                     foregroundColor: Colors.white,
                                     elevation: 0,
                                     shape: RoundedRectangleBorder(
                                       borderRadius: BorderRadius.circular(8),
-                                    ),
-                                    textStyle: GoogleFonts.dmSans(
-                                      fontSize: 15,
-                                      fontWeight: FontWeight.w700,
                                     ),
                                   ),
                                   child: authState.isLoading
@@ -444,12 +457,25 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
               // Footer
               Center(
-                child: Text(
-                  'DIKLY Platform v1.0',
-                  style: GoogleFonts.dmSans(
-                    fontSize: 12,
-                    color: DiklyColors.textMuted,
-                  ),
+                child: Column(
+                  children: [
+                    Text(
+                      'DIKLY · Secure Academic Portal',
+                      style: GoogleFonts.dmSans(fontSize: 12, color: DiklyColors.textMuted),
+                    ),
+                    const SizedBox(height: 4),
+                    GestureDetector(
+                      onTap: () => context.go('/portal'),
+                      child: Text(
+                        'Switch portal',
+                        style: GoogleFonts.dmSans(
+                          fontSize: 12,
+                          color: DiklyColors.primary,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
               const SizedBox(height: 16),

@@ -63,6 +63,28 @@ import '../screens/lecturer/lecturer_assignments_screen.dart';
 import '../screens/lecturer/lecturer_question_bank_screen.dart';
 import '../screens/splash_screen.dart';
 
+// Smooth fade+slide transition used for all routes
+Page<void> _fadePage(GoRouterState state, Widget child) {
+  return CustomTransitionPage<void>(
+    key: state.pageKey,
+    child: child,
+    transitionDuration: const Duration(milliseconds: 220),
+    reverseTransitionDuration: const Duration(milliseconds: 180),
+    transitionsBuilder: (context, animation, secondaryAnimation, child) {
+      return FadeTransition(
+        opacity: CurveTween(curve: Curves.easeIn).animate(animation),
+        child: SlideTransition(
+          position: Tween<Offset>(
+            begin: const Offset(0, 0.03),
+            end: Offset.zero,
+          ).animate(CurveTween(curve: Curves.easeOut).animate(animation)),
+          child: child,
+        ),
+      );
+    },
+  );
+}
+
 final routerProvider = Provider<GoRouter>((ref) {
   final authState = ref.watch(authProvider);
 
@@ -81,8 +103,17 @@ final routerProvider = Provider<GoRouter>((ref) {
     },
     routes: [
       GoRoute(path: '/splash', builder: (context, state) => const SplashScreen()),
-      GoRoute(path: '/portal', builder: (context, state) => const PortalSelectorScreen()),
-      GoRoute(path: '/login/:role', builder: (context, state) => LoginScreen(role: state.pathParameters['role'] ?? 'student')),
+      GoRoute(
+        path: '/portal',
+        pageBuilder: (context, state) => _fadePage(state, const PortalSelectorScreen()),
+      ),
+      GoRoute(
+        path: '/login/:role',
+        pageBuilder: (context, state) => _fadePage(
+          state,
+          LoginScreen(role: state.pathParameters['role'] ?? 'student'),
+        ),
+      ),
 
       // Dashboards (shells)
       GoRoute(path: '/dashboard/student',  builder: (context, state) => const StudentShell()),

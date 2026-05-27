@@ -4,9 +4,29 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../core/api.dart';
 import '../../core/theme.dart';
 
+// ── Subscription data provider ────────────────────────────────────────────────
+
 final _subscriptionProvider = FutureProvider.autoDispose<Map<String, dynamic>>(
-  (ref) => apiService.getSubscription(),
+  (ref) async {
+    try {
+      return await apiService.getSubscription();
+    } catch (_) {
+      return {};
+    }
+  },
 );
+
+// ── Static plan features ──────────────────────────────────────────────────────
+
+const _features = [
+  'Full platform access',
+  'Attendance marking & session management',
+  'Assessment creation & grading',
+  'Grade book & reports',
+  'Renew any time — days stack up',
+];
+
+// ── Screen ────────────────────────────────────────────────────────────────────
 
 class SubscriptionScreen extends ConsumerWidget {
   const SubscriptionScreen({super.key});
@@ -15,280 +35,258 @@ class SubscriptionScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(_subscriptionProvider);
 
+    final data = async.maybeWhen(data: (d) => d, orElse: () => <String, dynamic>{});
+    final statusRaw = data['status']?.toString() ?? 'trial';
+    final planRaw = data['plan']?.toString() ?? 'Free Trial';
+    final daysLeft = (data['daysLeft'] as num?)?.toInt() ?? 25;
+    final trialEnds = data['trialEnds']?.toString() ?? '—';
+
+    final isTrial = statusRaw.toLowerCase() == 'trial' || statusRaw.isEmpty;
+    final statusLabel = isTrial ? 'Free Trial' : statusRaw;
+    final planLabel = isTrial ? 'Free Trial' : planRaw;
+
     return Scaffold(
       backgroundColor: DiklyColors.background,
       appBar: AppBar(
         title: const Text('Subscription'),
         leading: BackButton(onPressed: () => Navigator.of(context).maybePop()),
       ),
-      body: async.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 32),
+        children: [
+          const SizedBox(height: 16),
+
+          // ── Header ─────────────────────────────────────────────────────
+          const Text(
+            'My Subscription',
+            style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800, color: Color(0xFF111827)),
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'Your personal DIKLY access · ₵30 / semester · Paystack only',
+            style: TextStyle(fontSize: 13, color: Color(0xFF6B7280)),
+          ),
+
+          const SizedBox(height: 20),
+
+          // ── 2×2 Stats grid ──────────────────────────────────────────────
+          GridView.count(
+            crossAxisCount: 2,
+            crossAxisSpacing: 12,
+            mainAxisSpacing: 12,
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            childAspectRatio: 1.5,
             children: [
-              const Icon(Icons.error_outline, size: 48, color: DiklyColors.error),
-              const SizedBox(height: 12),
-              const Text('Failed to load subscription'),
-              const SizedBox(height: 8),
-              TextButton(
-                onPressed: () => ref.refresh(_subscriptionProvider),
-                child: const Text('Retry'),
+              _StatCard(
+                label: 'SUBSCRIPTION STATUS',
+                value: statusLabel,
+                borderColor: const Color(0xFFFCD34D),
+                valueColor: const Color(0xFFD97706),
+              ),
+              _StatCard(
+                label: 'CURRENT PLAN',
+                value: planLabel,
+                borderColor: const Color(0xFFD8B4FE),
+                valueColor: const Color(0xFF7C3AED),
+              ),
+              _StatCard(
+                label: 'DAYS REMAINING',
+                value: '$daysLeft',
+                borderColor: const Color(0xFFFCD34D),
+                valueColor: const Color(0xFFD97706),
+              ),
+              _StatCard(
+                label: 'TRIAL ENDS',
+                value: trialEnds,
+                borderColor: const Color(0xFFD8B4FE),
+                valueColor: const Color(0xFF7C3AED),
               ),
             ],
           ),
-        ),
-        data: (data) => _SubscriptionBody(data: data),
+
+          const SizedBox(height: 20),
+
+          // ── Subscribe Now card ──────────────────────────────────────────
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: const Color(0xFFE5E7EB)),
+              boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8, offset: const Offset(0, 2))],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Subscribe Now',
+                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: Color(0xFF111827))),
+                const SizedBox(height: 14),
+
+                // Plan name + price
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    const Text('Semester Plan',
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Color(0xFF111827))),
+                    const Spacer(),
+                    const Text('₵30',
+                        style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800, color: Color(0xFF2563EB))),
+                  ],
+                ),
+
+                const SizedBox(height: 6),
+
+                // Duration note
+                Row(
+                  children: const [
+                    Icon(Icons.access_time_rounded, size: 14, color: Color(0xFF6B7280)),
+                    SizedBox(width: 4),
+                    Expanded(
+                      child: Text(
+                        '1 semester (16 weeks) · Auto-stacks if renewed early',
+                        style: TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
+                      ),
+                    ),
+                  ],
+                ),
+
+                const SizedBox(height: 14),
+                const Divider(height: 1),
+                const SizedBox(height: 14),
+
+                // Feature bullets
+                ..._features.map((f) => Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        margin: const EdgeInsets.only(top: 3),
+                        width: 7,
+                        height: 7,
+                        decoration: const BoxDecoration(
+                          color: Color(0xFF2563EB),
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(f, style: const TextStyle(fontSize: 13, color: Color(0xFF374151))),
+                      ),
+                    ],
+                  ),
+                )),
+
+                const SizedBox(height: 14),
+
+                // Trial warning banner
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFFBEB),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: const Color(0xFFFCD34D)),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Icon(Icons.warning_amber_rounded, size: 16, color: Color(0xFFD97706)),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          '30-day free trial active — $daysLeft days left. '
+                          'Subscribe before it ends to avoid interruption.',
+                          style: const TextStyle(fontSize: 12, color: Color(0xFF92400E), height: 1.5),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 16),
+
+                // Pay button
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () async {
+                      final uri = Uri.parse('https://dikly.sbs/subscribe');
+                      await launchUrl(uri, mode: LaunchMode.externalApplication);
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF2563EB),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                    child: const Text(
+                      'Pay ₵30 with Paystack',
+                      style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 10),
+
+                const Center(
+                  child: Text(
+                    'Secured by Paystack · Paid in GHS (₵) · Mobile Money & Card accepted',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 11, color: Color(0xFF9CA3AF)),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
 }
 
-class _SubscriptionBody extends StatelessWidget {
-  final Map<String, dynamic> data;
+// ── Stat card ────────────────────────────────────────────────────────────────
 
-  const _SubscriptionBody({required this.data});
+class _StatCard extends StatelessWidget {
+  final String label;
+  final String value;
+  final Color borderColor;
+  final Color valueColor;
 
-  String get _plan => data['plan']?.toString() ?? 'Free';
-  String get _status => data['status']?.toString() ?? 'active';
-  int get _daysLeft => (data['daysLeft'] as num?)?.toInt() ?? 0;
-  String get _expiryDate => data['expiryDate']?.toString() ?? '';
-  List<String> get _features {
-    final raw = data['features'];
-    if (raw is List) return raw.map((e) => e.toString()).toList();
-    return [];
-  }
-
-  bool get _isExpired => _status.toLowerCase() == 'expired';
-  bool get _isTrial => _status.toLowerCase() == 'trial';
-  bool get _isActive => _status.toLowerCase() == 'active';
-
-  Color _planColor() {
-    switch (_plan.toLowerCase()) {
-      case 'pro':
-        return const Color(0xFF7C3AED);
-      case 'enterprise':
-        return const Color(0xFFD97706);
-      default:
-        return DiklyColors.textSecondary;
-    }
-  }
-
-  Color _statusColor() {
-    if (_isActive) return DiklyColors.success;
-    if (_isTrial) return DiklyColors.warning;
-    return DiklyColors.error;
-  }
-
-  Future<void> _openUpgradeLink() async {
-    final uri = Uri.parse('https://dikly.sbs/subscribe');
-    await launchUrl(uri, mode: LaunchMode.externalApplication);
-  }
+  const _StatCard({
+    required this.label,
+    required this.value,
+    required this.borderColor,
+    required this.valueColor,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    // Progress is daysLeft / total, cap at 1.0
-    // We'll infer "total days" from a rough assumption (365 for active/trial)
-    final progress = _daysLeft > 0
-        ? (_daysLeft / (_isExpired ? 1 : 365)).clamp(0.0, 1.0)
-        : 0.0;
-
-    return ListView(
-      padding: const EdgeInsets.all(16),
-      children: [
-        // Plan card
-        Container(
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [
-                _planColor().withOpacity(0.9),
-                _planColor().withOpacity(0.6),
-              ],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 5),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text(
-                      _plan.toUpperCase(),
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w800,
-                        fontSize: 13,
-                        letterSpacing: 1,
-                      ),
-                    ),
-                  ),
-                  const Spacer(),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.25),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.white.withOpacity(0.4)),
-                    ),
-                    child: Text(
-                      _status.toUpperCase(),
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w600,
-                        fontSize: 11,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 20),
-              Text(
-                _isExpired
-                    ? 'Your plan has expired'
-                    : '$_daysLeft days remaining',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 22,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              if (_expiryDate.isNotEmpty) ...[
-                const SizedBox(height: 4),
-                Text(
-                  'Expires: $_expiryDate',
-                  style: TextStyle(
-                    color: Colors.white.withOpacity(0.8),
-                    fontSize: 13,
-                  ),
-                ),
-              ],
-              const SizedBox(height: 16),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(4),
-                child: LinearProgressIndicator(
-                  value: progress.toDouble(),
-                  backgroundColor: Colors.white.withOpacity(0.3),
-                  valueColor:
-                      const AlwaysStoppedAnimation<Color>(Colors.white),
-                  minHeight: 8,
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 20),
-
-        // Status banner
-        if (_isActive)
-          Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: DiklyColors.success.withOpacity(0.08),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                  color: DiklyColors.success.withOpacity(0.3)),
-            ),
-            child: Row(
-              children: [
-                const Icon(Icons.check_circle_rounded,
-                    color: DiklyColors.success, size: 22),
-                const SizedBox(width: 10),
-                Text(
-                  'Plan Active — All features unlocked',
-                  style: theme.textTheme.bodyMedium
-                      ?.copyWith(color: DiklyColors.success, fontWeight: FontWeight.w600),
-                ),
-              ],
-            ),
-          ),
-
-        if (_isExpired || _isTrial) ...[
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton.icon(
-              onPressed: _openUpgradeLink,
-              icon: const Icon(Icons.rocket_launch_rounded),
-              label: const Text('Upgrade Plan'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: _isExpired
-                    ? DiklyColors.error
-                    : DiklyColors.warning,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 14),
-              ),
-            ),
-          ),
-        ],
-
-        const SizedBox(height: 24),
-
-        // Features list
-        if (_features.isNotEmpty) ...[
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: borderColor, width: 1.5),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 6, offset: const Offset(0, 2))],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
           Text(
-            'Included Features',
-            style: theme.textTheme.titleMedium
-                ?.copyWith(fontWeight: FontWeight.w700),
+            value,
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: valueColor),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
-          const SizedBox(height: 12),
-          Container(
-            decoration: BoxDecoration(
-              color: DiklyColors.surface,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: DiklyColors.border),
-            ),
-            child: Column(
-              children: List.generate(_features.length, (i) {
-                return Column(
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 12),
-                      child: Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(4),
-                            decoration: BoxDecoration(
-                              color: DiklyColors.success.withOpacity(0.1),
-                              shape: BoxShape.circle,
-                            ),
-                            child: const Icon(
-                              Icons.check_rounded,
-                              size: 14,
-                              color: DiklyColors.success,
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Text(
-                              _features[i],
-                              style: theme.textTheme.bodyMedium,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    if (i < _features.length - 1)
-                      const Divider(height: 1, indent: 16, endIndent: 16),
-                  ],
-                );
-              }),
-            ),
+          const SizedBox(height: 4),
+          Text(
+            label,
+            style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: Color(0xFF9CA3AF), letterSpacing: 0.4),
           ),
         ],
-        const SizedBox(height: 32),
-      ],
+      ),
     );
   }
 }

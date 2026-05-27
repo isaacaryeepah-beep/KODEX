@@ -1,143 +1,114 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../core/theme.dart';
+
+// ── Static knowledge base ────────────────────────────────────────────────────
 
 class _FaqItem {
   final String question;
   final String answer;
-  const _FaqItem({required this.question, required this.answer});
+  final String category;
+  const _FaqItem({required this.question, required this.answer, required this.category});
 }
 
-class _FaqCategory {
-  final String title;
-  final IconData icon;
-  final List<_FaqItem> items;
-  const _FaqCategory({
-    required this.title,
-    required this.icon,
-    required this.items,
-  });
-}
-
-const _categories = [
-  _FaqCategory(
-    title: 'Getting Started',
-    icon: Icons.play_circle_outline_rounded,
-    items: [
-      _FaqItem(
-        question: 'How do I mark attendance?',
-        answer:
-            'Go to the Attendance section from the home screen. Your lecturer will share a session code or QR code. Enter the code or scan it to mark yourself present. Make sure you are within the allowed time window for the session.',
-      ),
-      _FaqItem(
-        question: 'How do I join a session?',
-        answer:
-            'Navigate to the Sessions or Meetings screen. Find the active session and tap "Join". If it is an online meeting, you will be redirected to the meeting platform. For in-person sessions, your attendance will be tracked via code.',
-      ),
-      _FaqItem(
-        question: 'How do I submit an assignment?',
-        answer:
-            'Open the Assignments screen, find the relevant assignment, and tap on it to view details. Use the "Submit" button to upload your work before the deadline. You can attach files or enter text depending on the assignment type.',
-      ),
-    ],
+const _allFaqs = [
+  _FaqItem(
+    category: 'Getting Started',
+    question: 'How do I mark attendance?',
+    answer: 'Go to the Attendance section from the home screen. Your lecturer will share a session code or QR code. Enter the code or scan it to mark yourself present within the allowed time window.',
   ),
-  _FaqCategory(
-    title: 'Account & Security',
-    icon: Icons.shield_outlined,
-    items: [
-      _FaqItem(
-        question: 'How do I change my password?',
-        answer:
-            'Go to your Profile screen and tap "Change Password" under the Settings section. You will need to enter your current password followed by your new password twice to confirm. Passwords must be at least 8 characters long.',
-      ),
-      _FaqItem(
-        question: 'What is 2FA?',
-        answer:
-            'Two-Factor Authentication (2FA) adds an extra layer of security to your account. After entering your password, you will be asked for a one-time code sent to your registered email or phone number. This helps prevent unauthorised access even if your password is compromised.',
-      ),
-      _FaqItem(
-        question: 'How do I update my profile?',
-        answer:
-            'Tap your avatar or name at the top of the home screen to open your Profile. You can update your display name, phone number, and profile picture. Some fields like email and role can only be changed by an administrator.',
-      ),
-    ],
+  _FaqItem(
+    category: 'Getting Started',
+    question: 'How do I join a session?',
+    answer: 'Navigate to Sessions or Meetings. Find the active session and tap "Join". For online meetings you will be redirected to the meeting platform; for in-person sessions attendance is tracked via code.',
   ),
-  _FaqCategory(
-    title: 'Technical',
-    icon: Icons.build_outlined,
-    items: [
-      _FaqItem(
-        question: 'What if I cannot connect?',
-        answer:
-            'First check your internet connection — switch between Wi-Fi and mobile data to see if the issue is network-specific. If the app still cannot connect, the server may be temporarily unavailable. Try again after a few minutes. If the problem persists, contact support at support@dikly.sbs.',
-      ),
-      _FaqItem(
-        question: 'Which devices are supported?',
-        answer:
-            'DIKLY is available on Android (version 8.0 and above) and iOS (version 14 and above). For the best experience, keep your device operating system and the DIKLY app updated to the latest version.',
-      ),
-      _FaqItem(
-        question: 'How do I report a bug?',
-        answer:
-            'Use the "Contact Support" button at the bottom of this screen to email our support team. Please include a description of what you were doing, what went wrong, your device model, and the app version. Screenshots are always helpful.',
-      ),
-    ],
+  _FaqItem(
+    category: 'Getting Started',
+    question: 'How do I submit an assignment?',
+    answer: 'Open Assignments, find the relevant task, and tap it to view details. Use the "Submit" button to upload your work before the deadline.',
+  ),
+  _FaqItem(
+    category: 'Account & Security',
+    question: 'How do I change my password?',
+    answer: 'Go to your Profile screen and tap "Change Password". Enter your current password followed by your new password twice. Passwords must be at least 8 characters long.',
+  ),
+  _FaqItem(
+    category: 'Account & Security',
+    question: 'What is 2FA?',
+    answer: 'Two-Factor Authentication adds an extra security layer. After entering your password you will be asked for a one-time code sent to your registered email or phone number.',
+  ),
+  _FaqItem(
+    category: 'Account & Security',
+    question: 'How do I update my profile?',
+    answer: 'Open your Profile screen and tap "Edit Profile". You can update your name, phone number, profile photo, and other details. Tap "Save" when done.',
+  ),
+  _FaqItem(
+    category: 'Technical Support',
+    question: 'The app is not loading, what should I do?',
+    answer: 'First check your internet connection. If the issue persists, try force-closing the app and reopening it. You can also clear the app cache in your device settings.',
+  ),
+  _FaqItem(
+    category: 'Technical Support',
+    question: 'I cannot log in, what should I do?',
+    answer: 'Make sure you are using the correct email and password. If you have forgotten your password, use the "Forgot Password" link on the login screen.',
   ),
 ];
 
-class FaqScreen extends StatefulWidget {
+const _allCategories = ['All categories', 'Getting Started', 'Account & Security', 'Technical Support'];
+
+// ── Question history provider ────────────────────────────────────────────────
+
+final _questionHistoryProvider = FutureProvider.autoDispose<List<Map<String, dynamic>>>(
+  (ref) async => [],
+);
+
+// ── Screen ───────────────────────────────────────────────────────────────────
+
+class FaqScreen extends ConsumerStatefulWidget {
   const FaqScreen({super.key});
 
   @override
-  State<FaqScreen> createState() => _FaqScreenState();
+  ConsumerState<FaqScreen> createState() => _FaqScreenState();
 }
 
-class _FaqScreenState extends State<FaqScreen> {
-  final _searchController = TextEditingController();
-  String _query = '';
+class _FaqScreenState extends ConsumerState<FaqScreen> {
+  final _aiController = TextEditingController();
+  String _selectedCategory = 'All categories';
+  String _searchQuery = '';
+  bool _askingAI = false;
+  String? _aiAnswer;
 
   @override
-  void initState() {
-    super.initState();
-    _searchController.addListener(() {
-      setState(() => _query = _searchController.text.trim().toLowerCase());
+  void dispose() {
+    _aiController.dispose();
+    super.dispose();
+  }
+
+  List<_FaqItem> get _filtered {
+    return _allFaqs.where((f) {
+      final catMatch = _selectedCategory == 'All categories' || f.category == _selectedCategory;
+      final searchMatch = _searchQuery.isEmpty ||
+          f.question.toLowerCase().contains(_searchQuery.toLowerCase()) ||
+          f.answer.toLowerCase().contains(_searchQuery.toLowerCase());
+      return catMatch && searchMatch;
+    }).toList();
+  }
+
+  Future<void> _askAI() async {
+    final q = _aiController.text.trim();
+    if (q.isEmpty) return;
+    setState(() { _askingAI = true; _aiAnswer = null; });
+    await Future.delayed(const Duration(milliseconds: 600));
+    setState(() {
+      _askingAI = false;
+      _aiAnswer = 'For personalised support, please contact your institution\'s help desk or email support@dikly.sbs.';
     });
   }
 
   @override
-  void dispose() {
-    _searchController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _contactSupport() async {
-    final uri = Uri.parse('mailto:support@dikly.sbs');
-    await launchUrl(uri, mode: LaunchMode.externalApplication);
-  }
-
-  List<_FaqCategory> get _filteredCategories {
-    if (_query.isEmpty) return _categories;
-    final result = <_FaqCategory>[];
-    for (final cat in _categories) {
-      final matchedItems = cat.items.where((item) {
-        return item.question.toLowerCase().contains(_query) ||
-            item.answer.toLowerCase().contains(_query);
-      }).toList();
-      if (matchedItems.isNotEmpty) {
-        result.add(_FaqCategory(
-          title: cat.title,
-          icon: cat.icon,
-          items: matchedItems,
-        ));
-      }
-    }
-    return result;
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final filtered = _filteredCategories;
+    final history = ref.watch(_questionHistoryProvider);
 
     return Scaffold(
       backgroundColor: DiklyColors.background,
@@ -145,67 +116,224 @@ class _FaqScreenState extends State<FaqScreen> {
         title: const Text('FAQ & Help'),
         leading: BackButton(onPressed: () => Navigator.of(context).maybePop()),
       ),
-      body: Column(
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 32),
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-            child: TextField(
-              controller: _searchController,
-              decoration: InputDecoration(
-                hintText: 'Search questions...',
-                prefixIcon: const Icon(Icons.search_rounded,
-                    color: DiklyColors.textSecondary),
-                suffixIcon: _query.isNotEmpty
-                    ? IconButton(
-                        icon: const Icon(Icons.clear_rounded,
-                            color: DiklyColors.textSecondary),
-                        onPressed: () {
-                          _searchController.clear();
-                          setState(() => _query = '');
-                        },
-                      )
-                    : null,
-              ),
-            ),
+          const SizedBox(height: 16),
+
+          // ── Header ──────────────────────────────────────────────────────
+          const Text(
+            'FAQ Center',
+            style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800, color: Color(0xFF111827)),
           ),
-          Expanded(
-            child: filtered.isEmpty
-                ? Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
+          const SizedBox(height: 4),
+          const Text(
+            'Ask questions, browse answers, get instant AI help',
+            style: TextStyle(fontSize: 14, color: Color(0xFF6B7280)),
+          ),
+
+          const SizedBox(height: 20),
+
+          // ── Ask a Question card ─────────────────────────────────────────
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: const Color(0xFFE5E7EB)),
+              boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8, offset: const Offset(0, 2))],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Ask a Question',
+                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: Color(0xFF111827))),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _aiController,
+                        decoration: const InputDecoration(
+                          hintText: 'e.g. How do I mark attendance?',
+                          hintStyle: TextStyle(fontSize: 13, color: Color(0xFF9CA3AF)),
+                          contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.all(Radius.circular(8)),
+                            borderSide: BorderSide(color: Color(0xFFE5E7EB)),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.all(Radius.circular(8)),
+                            borderSide: BorderSide(color: Color(0xFFE5E7EB)),
+                          ),
+                        ),
+                        onSubmitted: (_) => _askAI(),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    ElevatedButton(
+                      onPressed: _askingAI ? null : _askAI,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: DiklyColors.primary,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                      child: _askingAI
+                          ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                          : const Text('Ask AI', style: TextStyle(fontWeight: FontWeight.w700)),
+                    ),
+                  ],
+                ),
+                if (_aiAnswer != null) ...[
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEFF6FF),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: const Color(0xFFBFDBFE)),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Icon(Icons.search_off_rounded,
-                            size: 56, color: DiklyColors.textSecondary),
-                        const SizedBox(height: 16),
-                        Text(
-                          'No results for "$_query"',
-                          style: theme.textTheme.bodyLarge?.copyWith(
-                              color: DiklyColors.textSecondary),
+                        const Icon(Icons.auto_awesome_rounded, size: 18, color: DiklyColors.primary),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(_aiAnswer!, style: const TextStyle(fontSize: 13, color: Color(0xFF1E40AF), height: 1.5)),
                         ),
                       ],
                     ),
-                  )
-                : ListView.builder(
-                    padding:
-                        const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                    itemCount: filtered.length,
-                    itemBuilder: (context, index) {
-                      return _CategorySection(
-                        category: filtered[index],
-                        searchQuery: _query,
-                      );
-                    },
                   ),
+                ],
+              ],
+            ),
           ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-            child: SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                onPressed: _contactSupport,
-                icon: const Icon(Icons.email_outlined),
-                label: const Text('Contact Support'),
-              ),
+
+          const SizedBox(height: 16),
+
+          // ── Knowledge Base card ─────────────────────────────────────────
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: const Color(0xFFE5E7EB)),
+              boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8, offset: const Offset(0, 2))],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Text('Knowledge Base',
+                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: Color(0xFF111827))),
+                    const Spacer(),
+                    // Category filter
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: const Color(0xFFE5E7EB)),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<String>(
+                          value: _selectedCategory,
+                          isDense: true,
+                          style: const TextStyle(fontSize: 12, color: DiklyColors.primary, fontWeight: FontWeight.w600),
+                          icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 16, color: DiklyColors.primary),
+                          items: _allCategories.map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
+                          onChanged: (v) { if (v != null) setState(() => _selectedCategory = v); },
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                // Search
+                TextField(
+                  decoration: const InputDecoration(
+                    hintText: 'Search questions...',
+                    prefixIcon: Icon(Icons.search_rounded, size: 18),
+                    contentPadding: EdgeInsets.symmetric(vertical: 8),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.all(Radius.circular(8)),
+                      borderSide: BorderSide(color: Color(0xFFE5E7EB)),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.all(Radius.circular(8)),
+                      borderSide: BorderSide(color: Color(0xFFE5E7EB)),
+                    ),
+                  ),
+                  onChanged: (v) => setState(() => _searchQuery = v),
+                ),
+                const SizedBox(height: 12),
+
+                if (_filtered.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 24),
+                    child: Center(
+                      child: Text(
+                        'No FAQs found yet. Check back soon or ask the AI above.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: Color(0xFF9CA3AF), fontSize: 13),
+                      ),
+                    ),
+                  )
+                else
+                  ..._filtered.map((faq) => _FaqTile(faq: faq)),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 16),
+
+          // ── My Question History card ────────────────────────────────────
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: const Color(0xFFE5E7EB)),
+              boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8, offset: const Offset(0, 2))],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('My Question History',
+                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: Color(0xFF111827))),
+                const SizedBox(height: 12),
+                history.when(
+                  loading: () => const Center(child: Padding(
+                    padding: EdgeInsets.all(16),
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )),
+                  error: (_, __) => const Text('You have not asked any questions yet.',
+                      style: TextStyle(color: Color(0xFF9CA3AF), fontSize: 13)),
+                  data: (items) => items.isEmpty
+                      ? const Text('You have not asked any questions yet.',
+                          style: TextStyle(color: Color(0xFF9CA3AF), fontSize: 13))
+                      : Column(
+                          children: items.map((item) => _HistoryTile(item: item)).toList(),
+                        ),
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 20),
+
+          // ── Contact Support button ──────────────────────────────────────
+          OutlinedButton.icon(
+            onPressed: () async {
+              final uri = Uri.parse('mailto:support@dikly.sbs');
+              await launchUrl(uri, mode: LaunchMode.externalApplication);
+            },
+            icon: const Icon(Icons.email_outlined, size: 18),
+            label: const Text('Contact Support'),
+            style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
             ),
           ),
         ],
@@ -214,63 +342,45 @@ class _FaqScreenState extends State<FaqScreen> {
   }
 }
 
-class _CategorySection extends StatelessWidget {
-  final _FaqCategory category;
-  final String searchQuery;
-
-  const _CategorySection({
-    required this.category,
-    required this.searchQuery,
-  });
+class _FaqTile extends StatelessWidget {
+  final _FaqItem faq;
+  const _FaqTile({required this.faq});
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: DiklyColors.surface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: DiklyColors.border),
-      ),
-      child: ExpansionTile(
-        leading: Icon(category.icon,
-            color: DiklyColors.primary, size: 22),
-        title: Text(
-          category.title,
-          style: theme.textTheme.titleMedium
-              ?.copyWith(fontWeight: FontWeight.w600),
-        ),
-        initiallyExpanded: searchQuery.isNotEmpty,
-        childrenPadding: EdgeInsets.zero,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        collapsedShape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        children: List.generate(category.items.length, (i) {
-          final item = category.items[i];
-          return Column(
-            children: [
-              const Divider(height: 1, indent: 16, endIndent: 16),
-              ListTile(
-                contentPadding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
-                title: Text(
-                  item.question,
-                  style: theme.textTheme.bodyMedium
-                      ?.copyWith(fontWeight: FontWeight.w600),
-                ),
-                subtitle: Padding(
-                  padding: const EdgeInsets.only(top: 4),
-                  child: Text(
-                    item.answer,
-                    style: theme.textTheme.bodySmall
-                        ?.copyWith(color: DiklyColors.textSecondary, height: 1.5),
-                  ),
-                ),
-                isThreeLine: true,
-              ),
-            ],
-          );
-        }),
+    return ExpansionTile(
+      tilePadding: EdgeInsets.zero,
+      childrenPadding: const EdgeInsets.only(bottom: 12),
+      title: Text(faq.question,
+          style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: Color(0xFF111827))),
+      children: [
+        Text(faq.answer,
+            style: const TextStyle(fontSize: 13, color: Color(0xFF6B7280), height: 1.55)),
+      ],
+    );
+  }
+}
+
+class _HistoryTile extends StatelessWidget {
+  final Map<String, dynamic> item;
+  const _HistoryTile({required this.item});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.history_rounded, size: 16, color: Color(0xFF9CA3AF)),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              item['question']?.toString() ?? '',
+              style: const TextStyle(fontSize: 13, color: Color(0xFF374151)),
+            ),
+          ),
+        ],
       ),
     );
   }

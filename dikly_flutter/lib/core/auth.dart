@@ -1,7 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:device_info_plus/device_info_plus.dart';
-import 'dart:io';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import '../models/user.dart';
 import 'api.dart';
 import 'cache.dart';
@@ -162,15 +162,12 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }
 
   Future<String> _getDeviceId() async {
+    if (kIsWeb) return 'web-device';
     try {
       final di = DeviceInfoPlugin();
-      if (Platform.isAndroid) {
-        final info = await di.androidInfo;
-        return info.id;
-      } else if (Platform.isIOS) {
-        final info = await di.iosInfo;
-        return info.identifierForVendor ?? 'ios-device';
-      }
+      final info = await di.deviceInfo;
+      final data = info.data;
+      return data['id']?.toString() ?? data['identifierForVendor']?.toString() ?? 'flutter-device';
     } catch (_) {}
     return 'flutter-device';
   }

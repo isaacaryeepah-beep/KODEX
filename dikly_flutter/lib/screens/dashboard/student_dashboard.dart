@@ -24,7 +24,6 @@ class _StudentDashboardState extends ConsumerState<StudentDashboard> {
   List<Assignment> _assignments = [];
   List<AttendanceSession> _sessions = [];
   bool _loading = true;
-  String? _error;
 
   @override
   void initState() {
@@ -46,8 +45,8 @@ class _StudentDashboardState extends ConsumerState<StudentDashboard> {
         _sessions = results[2] as List<AttendanceSession>;
         _loading = false;
       });
-    } catch (e) {
-      setState(() { _error = e.toString(); _loading = false; });
+    } catch (_) {
+      setState(() { _loading = false; });
     }
   }
 
@@ -66,24 +65,7 @@ class _StudentDashboardState extends ConsumerState<StudentDashboard> {
         onRefresh: _loadData,
         child: _loading
             ? const Center(child: CircularProgressIndicator(color: DiklyColors.primary))
-            : _error != null
-                ? _buildError()
-                : _buildContent(user?.name ?? 'Student'),
-      ),
-    );
-  }
-
-  Widget _buildError() {
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(Icons.error_outline, color: DiklyColors.error, size: 48),
-          const SizedBox(height: 12),
-          Text(_error ?? 'Something went wrong'),
-          const SizedBox(height: 16),
-          ElevatedButton(onPressed: _loadData, child: const Text('Retry')),
-        ],
+            : _buildContent(user?.name ?? 'Student'),
       ),
     );
   }

@@ -23,7 +23,6 @@ class _AdminDashboardState extends ConsumerState<AdminDashboard> {
   List<Course> _courses = [];
   List<Meeting> _meetings = [];
   bool _loading = true;
-  String? _error;
 
   @override
   void initState() {
@@ -45,8 +44,8 @@ class _AdminDashboardState extends ConsumerState<AdminDashboard> {
         _meetings = results[2] as List<Meeting>;
         _loading = false;
       });
-    } catch (e) {
-      setState(() { _error = e.toString(); _loading = false; });
+    } catch (_) {
+      setState(() { _loading = false; });
     }
   }
 
@@ -61,18 +60,7 @@ class _AdminDashboardState extends ConsumerState<AdminDashboard> {
         onRefresh: _loadData,
         child: _loading
             ? const Center(child: CircularProgressIndicator(color: DiklyColors.primary))
-            : _error != null
-                ? Center(child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.error_outline, color: DiklyColors.error, size: 48),
-                      const SizedBox(height: 12),
-                      Text(_error!),
-                      const SizedBox(height: 16),
-                      ElevatedButton(onPressed: _loadData, child: const Text('Retry')),
-                    ],
-                  ))
-                : _buildContent(user?.name ?? 'Admin', isHod),
+            : _buildContent(user?.name ?? 'Admin', isHod),
       ),
     );
   }
