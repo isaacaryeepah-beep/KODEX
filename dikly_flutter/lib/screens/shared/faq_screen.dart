@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
-import '../../core/api.dart';
 import '../../core/theme.dart';
 
 // ── Static knowledge base ────────────────────────────────────────────────────
@@ -61,13 +60,7 @@ const _allCategories = ['All categories', 'Getting Started', 'Account & Security
 // ── Question history provider ────────────────────────────────────────────────
 
 final _questionHistoryProvider = FutureProvider.autoDispose<List<Map<String, dynamic>>>(
-  (ref) async {
-    try {
-      final data = await apiService.get('/faq/history');
-      if (data is List) return data.cast<Map<String, dynamic>>();
-    } catch (_) {}
-    return [];
-  },
+  (ref) async => [],
 );
 
 // ── Screen ───────────────────────────────────────────────────────────────────
@@ -106,14 +99,11 @@ class _FaqScreenState extends ConsumerState<FaqScreen> {
     final q = _aiController.text.trim();
     if (q.isEmpty) return;
     setState(() { _askingAI = true; _aiAnswer = null; });
-    try {
-      final data = await apiService.post('/faq/ask', {'question': q});
-      setState(() => _aiAnswer = data['answer']?.toString() ?? 'No answer available.');
-    } catch (_) {
-      setState(() => _aiAnswer = 'Could not reach the AI. Please check your connection and try again.');
-    } finally {
-      setState(() => _askingAI = false);
-    }
+    await Future.delayed(const Duration(milliseconds: 600));
+    setState(() {
+      _askingAI = false;
+      _aiAnswer = 'For personalised support, please contact your institution\'s help desk or email support@dikly.sbs.';
+    });
   }
 
   @override
