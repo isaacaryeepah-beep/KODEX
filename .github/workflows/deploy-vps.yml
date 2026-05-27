@@ -56,6 +56,32 @@ jobs:
             && docker compose -f docker-compose.jitsi.yml restart coturn \
             || true
 
+          # Ensure nginx proxies /app/ to Node.js (insert before first "location /" block)
+          NGINX_CONF=$(grep -rl "dikly.sbs" /etc/nginx/sites-enabled/ /etc/nginx/conf.d/ 2>/dev/null | head -1)
+          if [ -n "$NGINX_CONF" ]; then
+            if ! grep -q "location /app" "$NGINX_CONF"; then
+              awk '/^[[:space:]]*location[[:space:]]+\/[[:space:]]*\{/{
+                print "    location ^~ /app {"
+                print "        proxy_pass http://127.0.0.1:5000;"
+                print "        proxy_http_version 1.1;"
+                print "        proxy_set_header Host $host;"
+                print "        proxy_set_header X-Real-IP $remote_addr;"
+                print "        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;"
+                print "        proxy_set_header X-Forwarded-Proto $scheme;"
+                print "    }"
+              }
+              {print}' "$NGINX_CONF" > /tmp/nginx_app.conf \
+                && mv /tmp/nginx_app.conf "$NGINX_CONF" \
+                && nginx -t \
+                && systemctl reload nginx \
+                && echo "nginx updated and reloaded with /app proxy"
+            else
+              echo "nginx /app already configured"
+            fi
+          else
+            echo "WARNING: nginx config for dikly.sbs not found"
+          fi
+
           echo "Server deploy complete"
           ENDSSH
 
