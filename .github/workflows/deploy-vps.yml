@@ -38,20 +38,16 @@ jobs:
             && docker compose -f docker-compose.jitsi.yml restart coturn \
             || true
 
-          # Patch nginx to allow GitHub Pages CORS origin
-          NGINX_SNIPPET="/etc/nginx/snippets/cors-github.conf"
-          cat > "$NGINX_SNIPPET" << 'NGINXEOF'
-set $cors_origin "";
-if ($http_origin ~* "github\.io") {
-    set $cors_origin $http_origin;
-}
-add_header 'Access-Control-Allow-Origin' $cors_origin always;
-add_header 'Access-Control-Allow-Credentials' 'true' always;
-add_header 'Access-Control-Allow-Methods' 'GET, POST, PUT, PATCH, DELETE, OPTIONS' always;
-add_header 'Access-Control-Allow-Headers' 'Content-Type,Authorization,x-device-id,x-session-token' always;
-NGINXEOF
+          mkdir -p /etc/nginx/snippets
+          printf '%s\n' \
+            'set $cors_origin "";' \
+            'if ($http_origin ~* "github\.io") { set $cors_origin $http_origin; }' \
+            "add_header 'Access-Control-Allow-Origin' \$cors_origin always;" \
+            "add_header 'Access-Control-Allow-Credentials' 'true' always;" \
+            "add_header 'Access-Control-Allow-Methods' 'GET, POST, PUT, PATCH, DELETE, OPTIONS' always;" \
+            "add_header 'Access-Control-Allow-Headers' 'Content-Type,Authorization,x-device-id,x-session-token' always;" \
+            > /etc/nginx/snippets/cors-github.conf
 
-          # Include snippet in every dikly.sbs server block if not already there
           for CONF in /etc/nginx/sites-enabled/*; do
             if grep -q "dikly.sbs" "$CONF" 2>/dev/null && ! grep -q "cors-github.conf" "$CONF"; then
               sed -i "s|server_name dikly.sbs|include /etc/nginx/snippets/cors-github.conf;\n    server_name dikly.sbs|g" "$CONF" || true
