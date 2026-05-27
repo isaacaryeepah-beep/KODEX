@@ -38,23 +38,30 @@ jobs:
             && docker compose -f docker-compose.jitsi.yml restart coturn \
             || true
 
-          mkdir -p /etc/nginx/snippets
-          printf '%s\n' \
-            'set $cors_origin "";' \
-            'if ($http_origin ~* "github\.io") { set $cors_origin $http_origin; }' \
-            "add_header 'Access-Control-Allow-Origin' \$cors_origin always;" \
-            "add_header 'Access-Control-Allow-Credentials' 'true' always;" \
-            "add_header 'Access-Control-Allow-Methods' 'GET, POST, PUT, PATCH, DELETE, OPTIONS' always;" \
-            "add_header 'Access-Control-Allow-Headers' 'Content-Type,Authorization,x-device-id,x-session-token' always;" \
-            > /etc/nginx/snippets/cors-github.conf
+          sleep 5
 
-          for CONF in /etc/nginx/sites-enabled/*; do
-            if grep -q "dikly.sbs" "$CONF" 2>/dev/null && ! grep -q "cors-github.conf" "$CONF"; then
-              sed -i "s|server_name dikly.sbs|include /etc/nginx/snippets/cors-github.conf;\n    server_name dikly.sbs|g" "$CONF" || true
-            fi
-          done
+          echo "=== CORS TEST (direct to Node.js port 5000) ==="
+          curl -s -o /dev/null -D - -X OPTIONS \
+            -H "Origin: https://isaacaryeepah-beep.github.io" \
+            -H "Access-Control-Request-Method: POST" \
+            -H "Access-Control-Request-Headers: content-type,authorization" \
+            http://localhost:5000/api/auth/login | grep -i "access-control\|HTTP/"
 
-          nginx -t && systemctl reload nginx || true
+          echo "=== CORS TEST (through nginx at dikly.sbs) ==="
+          curl -s -o /dev/null -D - -X OPTIONS \
+            -H "Origin: https://isaacaryeepah-beep.github.io" \
+            -H "Access-Control-Request-Method: POST" \
+            -H "Access-Control-Request-Headers: content-type,authorization" \
+            https://dikly.sbs/api/auth/login | grep -i "access-control\|HTTP/"
 
           echo "Deploy complete"
           ENDSSH
+
+      - name: Test CORS from runner
+        run: |
+          echo "=== CORS TEST from GitHub Actions runner ==="
+          curl -sv -X OPTIONS \
+            -H "Origin: https://isaacaryeepah-beep.github.io" \
+            -H "Access-Control-Request-Method: POST" \
+            -H "Access-Control-Request-Headers: content-type,authorization" \
+            https://dikly.sbs/api/auth/login 2>&1 | grep -i "access-control\|< HTTP"
