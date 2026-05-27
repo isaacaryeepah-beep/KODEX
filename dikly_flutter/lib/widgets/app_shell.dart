@@ -317,18 +317,128 @@ class AppShell extends ConsumerWidget {
     List<NavItem> items,
     int selectedIndex,
   ) {
-    return BottomNavigationBar(
-      currentIndex: selectedIndex < 0 ? 0 : selectedIndex,
+    return _ModernBottomNav(
+      items: items,
+      selectedIndex: selectedIndex < 0 ? 0 : selectedIndex,
       onTap: (index) => context.go(items[index].route),
-      items: items
-          .map(
-            (item) => BottomNavigationBarItem(
-              icon: Icon(item.icon),
-              activeIcon: Icon(item.selectedIcon),
-              label: item.label,
+    );
+  }
+}
+
+// ── Modern pill bottom navigation ─────────────────────────────────────────────
+
+class _ModernBottomNav extends StatelessWidget {
+  final List<NavItem> items;
+  final int selectedIndex;
+  final ValueChanged<int> onTap;
+
+  const _ModernBottomNav({
+    required this.items,
+    required this.selectedIndex,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border(top: BorderSide(color: const Color(0xFFE5E7EB), width: 1)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.06),
+            blurRadius: 16,
+            offset: const Offset(0, -4),
+          ),
+        ],
+      ),
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: List.generate(items.length, (index) {
+              final item = items[index];
+              final isSelected = index == selectedIndex;
+              return _NavItem(
+                item: item,
+                isSelected: isSelected,
+                onTap: () => onTap(index),
+              );
+            }),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _NavItem extends StatelessWidget {
+  final NavItem item;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  const _NavItem({
+    required this.item,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeInOut,
+        padding: EdgeInsets.symmetric(
+          horizontal: isSelected ? 16 : 12,
+          vertical: 8,
+        ),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? DiklyColors.primary.withOpacity(0.10)
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(40),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 180),
+              child: Icon(
+                isSelected ? item.selectedIcon : item.icon,
+                key: ValueKey(isSelected),
+                size: 22,
+                color: isSelected
+                    ? DiklyColors.primary
+                    : const Color(0xFF9CA3AF),
+              ),
             ),
-          )
-          .toList(),
+            AnimatedSize(
+              duration: const Duration(milliseconds: 200),
+              curve: Curves.easeInOut,
+              child: isSelected
+                  ? Row(
+                      children: [
+                        const SizedBox(width: 6),
+                        Text(
+                          item.label,
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: DiklyColors.primary,
+                          ),
+                        ),
+                      ],
+                    )
+                  : const SizedBox.shrink(),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
