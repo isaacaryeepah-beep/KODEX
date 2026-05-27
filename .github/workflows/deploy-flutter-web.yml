@@ -38,11 +38,7 @@ jobs:
 
       - name: Build web
         working-directory: dikly_flutter
-        run: |
-          flutter build web \
-            --release \
-            --base-href /KODEX/ \
-            --web-renderer canvaskit
+        run: flutter build web --release --base-href /KODEX/
 
       - name: Upload artifact
         if: github.ref == 'refs/heads/main'
