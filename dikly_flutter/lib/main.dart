@@ -38,7 +38,7 @@ class DiklyApp extends ConsumerWidget {
       title: 'DIKLY',
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
-      themeMode: ThemeMode.system,
+      themeMode: ThemeMode.light,
       routerConfig: router,
       debugShowCheckedModeBanner: false,
       builder: (context, child) => _AppShell(child: child!),
