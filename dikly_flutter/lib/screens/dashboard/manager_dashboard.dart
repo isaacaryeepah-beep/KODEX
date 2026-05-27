@@ -22,7 +22,6 @@ class _ManagerDashboardState extends ConsumerState<ManagerDashboard> {
   List<dynamic> _leaveRequests = [];
   List<dynamic> _timesheets = [];
   bool _loading = true;
-  String? _error;
 
   @override
   void initState() {
@@ -44,8 +43,8 @@ class _ManagerDashboardState extends ConsumerState<ManagerDashboard> {
         _timesheets = results[2] as List<dynamic>;
         _loading = false;
       });
-    } catch (e) {
-      setState(() { _error = e.toString(); _loading = false; });
+    } catch (_) {
+      setState(() { _loading = false; });
     }
   }
 
@@ -59,18 +58,7 @@ class _ManagerDashboardState extends ConsumerState<ManagerDashboard> {
         onRefresh: _loadData,
         child: _loading
             ? const Center(child: CircularProgressIndicator(color: DiklyColors.primary))
-            : _error != null
-                ? Center(child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.error_outline, color: DiklyColors.error, size: 48),
-                      const SizedBox(height: 12),
-                      Text(_error!),
-                      const SizedBox(height: 16),
-                      ElevatedButton(onPressed: _loadData, child: const Text('Retry')),
-                    ],
-                  ))
-                : _buildContent(user?.name ?? 'Manager'),
+            : _buildContent(user?.name ?? 'Manager'),
       ),
     );
   }

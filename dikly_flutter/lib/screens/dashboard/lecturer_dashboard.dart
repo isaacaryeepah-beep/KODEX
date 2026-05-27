@@ -22,7 +22,6 @@ class _LecturerDashboardState extends ConsumerState<LecturerDashboard> {
   List<Meeting> _meetings = [];
   List<Course> _courses = [];
   bool _loading = true;
-  String? _error;
 
   @override
   void initState() {
@@ -42,8 +41,8 @@ class _LecturerDashboardState extends ConsumerState<LecturerDashboard> {
         _courses = results[1] as List<Course>;
         _loading = false;
       });
-    } catch (e) {
-      setState(() { _error = e.toString(); _loading = false; });
+    } catch (_) {
+      setState(() { _loading = false; });
     }
   }
 
@@ -57,18 +56,7 @@ class _LecturerDashboardState extends ConsumerState<LecturerDashboard> {
         onRefresh: _loadData,
         child: _loading
             ? const Center(child: CircularProgressIndicator(color: DiklyColors.primary))
-            : _error != null
-                ? Center(child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.error_outline, color: DiklyColors.error, size: 48),
-                      const SizedBox(height: 12),
-                      Text(_error!),
-                      const SizedBox(height: 16),
-                      ElevatedButton(onPressed: _loadData, child: const Text('Retry')),
-                    ],
-                  ))
-                : _buildContent(user?.name ?? 'Lecturer'),
+            : _buildContent(user?.name ?? 'Lecturer'),
       ),
     );
   }

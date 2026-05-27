@@ -137,7 +137,11 @@ class _CourseVideosScreenState extends ConsumerState<CourseVideosScreen> {
                   children: [
                     const Icon(Icons.error_outline, color: DiklyColors.error, size: 48),
                     const SizedBox(height: 12),
-                    Text(_error!),
+                    const Text(
+                      'Unable to load data. Pull down to refresh.',
+                      style: TextStyle(fontSize: 13, color: DiklyColors.textSecondary),
+                      textAlign: TextAlign.center,
+                    ),
                     const SizedBox(height: 16),
                     ElevatedButton(onPressed: _loadData, child: const Text('Retry')),
                   ],
