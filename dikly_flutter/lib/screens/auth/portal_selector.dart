@@ -50,9 +50,9 @@ class _PortalSelectorScreenState extends State<PortalSelectorScreen>
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                   colors: [
-                    Color(0xD40F0C29), // 83%
-                    Color(0xDB1A1650), // 86%
-                    Color(0xD40D0B2E), // 83%
+                    Color(0x991E1B4B), // 60%
+                    Color(0xA81E1B4B), // 66%
+                    Color(0x991E1B4B), // 60%
                   ],
                   stops: [0.0, 0.5, 1.0],
                 ),
