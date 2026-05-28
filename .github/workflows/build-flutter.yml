@@ -37,15 +37,9 @@ jobs:
         working-directory: dikly_flutter
         run: dart run flutter_launcher_icons
 
-      - name: Generate keystore
+      - name: Decode keystore
         run: |
-          keytool -genkey -v \
-            -keystore dikly_flutter/android/app/dikly-release.jks \
-            -alias "${{ secrets.KEY_ALIAS }}" \
-            -keyalg RSA -keysize 2048 -validity 10000 \
-            -storepass "${{ secrets.KEY_STORE_PASSWORD }}" \
-            -keypass "${{ secrets.KEY_STORE_PASSWORD }}" \
-            -dname "CN=DIKLY App, OU=Engineering, O=DIKLY, L=Accra, C=GH"
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > dikly_flutter/android/app/dikly-release.jks
 
       - name: Create key.properties
         run: |
