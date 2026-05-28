@@ -42,7 +42,7 @@ class _PortalSelectorScreenState extends State<PortalSelectorScreen>
             child: Image.asset('assets/bg_office.jpg', fit: BoxFit.cover),
           ),
 
-          // ── Deep dark-indigo overlay (matches screenshot)
+          // ── Dark indigo overlay — kept at ~72% so background photo bleeds through the glass
           Positioned.fill(
             child: Container(
               decoration: const BoxDecoration(
@@ -50,9 +50,9 @@ class _PortalSelectorScreenState extends State<PortalSelectorScreen>
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                   colors: [
-                    Color(0xDD0F0C29),
-                    Color(0xEA1A1650),
-                    Color(0xDD0D0B2E),
+                    Color(0xB80F0C29), // 72%
+                    Color(0xC51A1650), // 77%
+                    Color(0xB80D0B2E), // 72%
                   ],
                   stops: [0.0, 0.5, 1.0],
                 ),
@@ -161,16 +161,37 @@ class _PortalSelectorScreenState extends State<PortalSelectorScreen>
                         ClipRRect(
                           borderRadius: BorderRadius.circular(28),
                           child: BackdropFilter(
-                            filter:
-                                ImageFilter.blur(sigmaX: 30, sigmaY: 30),
+                            filter: ImageFilter.blur(sigmaX: 28, sigmaY: 28),
                             child: Container(
                               decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.08),
+                                // Gradient: lighter top-left → darker bottom-right = glass depth
+                                gradient: LinearGradient(
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                  colors: [
+                                    Colors.white.withOpacity(0.22),
+                                    Colors.white.withOpacity(0.10),
+                                  ],
+                                ),
                                 borderRadius: BorderRadius.circular(28),
                                 border: Border.all(
-                                  color: Colors.white.withOpacity(0.15),
+                                  color: Colors.white.withOpacity(0.40),
                                   width: 1.5,
                                 ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(0.20),
+                                    blurRadius: 40,
+                                    offset: const Offset(0, 16),
+                                  ),
+                                  // Inner highlight at top edge
+                                  BoxShadow(
+                                    color: Colors.white.withOpacity(0.10),
+                                    blurRadius: 0,
+                                    spreadRadius: -1,
+                                    offset: const Offset(0, 1),
+                                  ),
+                                ],
                               ),
                               padding: const EdgeInsets.fromLTRB(
                                   18, 22, 18, 22),
@@ -182,12 +203,17 @@ class _PortalSelectorScreenState extends State<PortalSelectorScreen>
                                     style: GoogleFonts.dmSans(
                                       fontSize: 10,
                                       fontWeight: FontWeight.w700,
-                                      color:
-                                          Colors.white.withOpacity(0.55),
+                                      color: Colors.white.withOpacity(0.70),
                                       letterSpacing: 2.6,
                                     ),
                                   ),
-                                  const SizedBox(height: 18),
+                                  const SizedBox(height: 6),
+                                  Container(
+                                    height: 1,
+                                    color: Colors.white.withOpacity(0.15),
+                                    margin: const EdgeInsets.symmetric(horizontal: 20),
+                                  ),
+                                  const SizedBox(height: 16),
 
                                   // ── Corporate / Academic cards
                                   Row(
@@ -474,12 +500,12 @@ class _WorkspaceCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Unselected-but-another-picked: subtle indigo tint (matches screenshot)
+    // Unselected-but-another-picked: lavender tint; default: bright white
     final bg = isSelected
         ? Colors.white
         : (anySelected
-            ? const Color(0xFFEEF2FF).withOpacity(0.55)
-            : Colors.white.withOpacity(0.88));
+            ? const Color(0xFFEEF2FF).withOpacity(0.70)
+            : Colors.white.withOpacity(0.95));
 
     return GestureDetector(
       onTap: onTap,
