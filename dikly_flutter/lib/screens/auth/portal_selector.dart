@@ -42,7 +42,7 @@ class _PortalSelectorScreenState extends State<PortalSelectorScreen>
             child: Image.asset('assets/bg_office.jpg', fit: BoxFit.cover),
           ),
 
-          // ── Dark indigo overlay — kept at ~72% so background photo bleeds through the glass
+          // ── Dark indigo overlay
           Positioned.fill(
             child: Container(
               decoration: const BoxDecoration(
@@ -50,9 +50,9 @@ class _PortalSelectorScreenState extends State<PortalSelectorScreen>
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                   colors: [
-                    Color(0xB80F0C29), // 72%
-                    Color(0xC51A1650), // 77%
-                    Color(0xB80D0B2E), // 72%
+                    Color(0xD40F0C29), // 83%
+                    Color(0xDB1A1650), // 86%
+                    Color(0xD40D0B2E), // 83%
                   ],
                   stops: [0.0, 0.5, 1.0],
                 ),
@@ -165,17 +165,10 @@ class _PortalSelectorScreenState extends State<PortalSelectorScreen>
                             child: Container(
                               decoration: BoxDecoration(
                                 // Gradient: lighter top-left → darker bottom-right = glass depth
-                                gradient: LinearGradient(
-                                  begin: Alignment.topLeft,
-                                  end: Alignment.bottomRight,
-                                  colors: [
-                                    Colors.white.withOpacity(0.22),
-                                    Colors.white.withOpacity(0.10),
-                                  ],
-                                ),
+                                color: const Color(0xFFF3F4F6).withOpacity(0.92),
                                 borderRadius: BorderRadius.circular(28),
                                 border: Border.all(
-                                  color: Colors.white.withOpacity(0.40),
+                                  color: Colors.white.withOpacity(0.70),
                                   width: 1.5,
                                 ),
                                 boxShadow: [
