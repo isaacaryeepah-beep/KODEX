@@ -17,32 +17,16 @@ class _PortalSelectorScreenState extends State<PortalSelectorScreen> {
     return Scaffold(
       body: Stack(
         children: [
-          // ── Background gradient (mimics the website's dark indigo photo overlay)
-          Container(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  Color(0xFF312E81), // deep indigo
-                  Color(0xFF1E1B4B), // darker indigo
-                  Color(0xFF0F0E2E), // near-black indigo
-                ],
-                stops: [0.0, 0.55, 1.0],
-              ),
+          // ── Background: office photo with dark indigo overlay (matches website exactly)
+          Positioned.fill(
+            child: Image.asset(
+              'assets/bg_office.jpg',
+              fit: BoxFit.cover,
             ),
           ),
-          // ── Subtle texture overlay
-          Container(
-            decoration: BoxDecoration(
-              gradient: RadialGradient(
-                center: Alignment.topRight,
-                radius: 1.5,
-                colors: [
-                  const Color(0xFF4F46E5).withOpacity(0.25),
-                  Colors.transparent,
-                ],
-              ),
+          Positioned.fill(
+            child: Container(
+              color: const Color(0xFF1E1B4B).withOpacity(0.78),
             ),
           ),
 
@@ -231,38 +215,35 @@ class _PortalSelectorScreenState extends State<PortalSelectorScreen> {
             ),
           ),
 
-          // ── Help FAB ──────────────────────────────────────────────────
+          // ── Help button — pill style matching the website exactly
           Positioned(
-            bottom: 40,
+            bottom: 32,
             right: 20,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                FloatingActionButton(
-                  mini: true,
-                  onPressed: () {},
-                  backgroundColor: const Color(0xFF4F46E5),
-                  elevation: 4,
-                  child: const Icon(Icons.help_outline, color: Colors.white, size: 20),
+            child: GestureDetector(
+              onTap: () {},
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.18),
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(color: Colors.white.withOpacity(0.28)),
                 ),
-                const SizedBox(height: 6),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.15),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: Colors.white.withOpacity(0.2)),
-                  ),
-                  child: Text(
-                    'Help',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.white,
-                      fontWeight: FontWeight.w500,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.help_outline, color: Colors.white, size: 16),
+                    const SizedBox(width: 6),
+                    Text(
+                      'Help',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Colors.white,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
-                  ),
+                  ],
                 ),
-              ],
+              ),
             ),
           ),
         ],
