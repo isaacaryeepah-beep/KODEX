@@ -96,7 +96,7 @@ class _StudentShellState extends ConsumerState<StudentShell> {
         ),
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(1),
-          child: Container(height: 1, color: DiklyColors.border),
+          child: Container(height: 1, color: const Color(0xFFE4E4E7)),
         ),
         actions: [
           Padding(
@@ -190,11 +190,12 @@ class _StudentShellState extends ConsumerState<StudentShell> {
       ),
       body: IndexedStack(index: _index, children: screens),
       bottomNavigationBar: Container(
-        decoration: BoxDecoration(
+        decoration: const BoxDecoration(
           color: Colors.white,
-          border: const Border(top: BorderSide(color: Color(0xFFEEEEFF), width: 1)),
+          border: Border(top: BorderSide(color: Color(0xFFE4E4E7), width: 1)),
           boxShadow: [
-            BoxShadow(color: const Color(0xFF6366F1).withOpacity(0.08), blurRadius: 20, offset: const Offset(0, -4)),
+            BoxShadow(color: Color(0x0D000000), blurRadius: 12, offset: Offset(0, -2)),
+            BoxShadow(color: Color(0x08000000), blurRadius: 4,  offset: Offset(0, -1)),
           ],
         ),
         child: NavigationBar(

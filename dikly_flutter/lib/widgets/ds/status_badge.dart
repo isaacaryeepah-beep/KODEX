@@ -68,7 +68,6 @@ class DiklyBadge extends StatelessWidget {
         border = Border.all(color: color, width: 1);
         break;
       case BadgeStyle.soft:
-      default:
         bg = color.withOpacity(0.12);
         textColor = color;
         border = null;

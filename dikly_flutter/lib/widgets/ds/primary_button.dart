@@ -101,7 +101,6 @@ class DiklyPrimaryButton extends StatelessWidget {
         );
 
       case DiklyButtonVariant.solid:
-      default:
         return SizedBox(
           width: fullWidth ? double.infinity : null,
           height: height,
