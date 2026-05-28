@@ -190,27 +190,26 @@ class _StudentShellState extends ConsumerState<StudentShell> {
       ),
       body: IndexedStack(index: _index, children: screens),
       bottomNavigationBar: Container(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           color: Colors.white,
-          border: Border(top: BorderSide(color: DiklyColors.border, width: 1)),
+          border: const Border(top: BorderSide(color: Color(0xFFEEEEFF), width: 1)),
+          boxShadow: [
+            BoxShadow(color: const Color(0xFF6366F1).withOpacity(0.08), blurRadius: 20, offset: const Offset(0, -4)),
+          ],
         ),
-        child: BottomNavigationBar(
-          currentIndex: _index,
-          onTap: (i) => setState(() => _index = i),
-          selectedItemColor: _accent,
-          unselectedItemColor: DiklyColors.textLight,
+        child: NavigationBar(
+          selectedIndex: _index,
+          onDestinationSelected: (i) => setState(() => _index = i),
           backgroundColor: Colors.transparent,
+          surfaceTintColor: Colors.transparent,
           elevation: 0,
-          type: BottomNavigationBarType.fixed,
-          selectedLabelStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
-          unselectedLabelStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w400),
-          items: List.generate(
-            4,
-            (i) => BottomNavigationBarItem(
-              icon: Icon(_icons[i]),
-              label: _labels[i],
-            ),
-          ),
+          height: 72,
+          destinations: const [
+            NavigationDestination(icon: Icon(Icons.home_outlined), selectedIcon: Icon(Icons.home_rounded), label: 'Home'),
+            NavigationDestination(icon: Icon(Icons.book_outlined), selectedIcon: Icon(Icons.book_rounded), label: 'Courses'),
+            NavigationDestination(icon: Icon(Icons.check_circle_outline), selectedIcon: Icon(Icons.check_circle), label: 'Attendance'),
+            NavigationDestination(icon: Icon(Icons.assignment_outlined), selectedIcon: Icon(Icons.assignment), label: 'Assignments'),
+          ],
         ),
       ),
     );
