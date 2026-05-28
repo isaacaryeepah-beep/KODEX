@@ -19,11 +19,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   bool _obscurePass = true;
 
   static const _portalConfig = {
-    'student':  {'title': 'Student Portal',  'role': 'student',  'mode': 'academic', 'color': DiklyColors.primary,         'icon': Icons.school_outlined},
-    'lecturer': {'title': 'Lecturer Portal', 'role': 'lecturer', 'mode': 'academic', 'color': Color(0xFF7C3AED),            'icon': Icons.cast_for_education_outlined},
-    'manager':  {'title': 'Manager Portal',  'role': 'manager',  'mode': 'corporate','color': Color(0xFF059669),            'icon': Icons.business_center_outlined},
-    'admin':    {'title': 'Admin Portal',    'role': 'admin',    'mode': 'academic', 'color': Color(0xFFDC2626),            'icon': Icons.admin_panel_settings_outlined},
-    'hod':      {'title': 'HOD Portal',      'role': 'hod',      'mode': 'academic', 'color': Color(0xFFF59E0B),            'icon': Icons.supervisor_account_outlined},
+    'student':  {'title': 'Student Portal',   'role': 'student',  'mode': 'academic',  'color': DiklyColors.primary,      'icon': Icons.school_outlined},
+    'lecturer': {'title': 'Lecturer Portal',  'role': 'lecturer', 'mode': 'academic',  'color': Color(0xFF7C3AED),         'icon': Icons.cast_for_education_outlined},
+    'manager':  {'title': 'Manager Portal',   'role': 'manager',  'mode': 'corporate', 'color': Color(0xFF059669),         'icon': Icons.business_center_outlined},
+    'admin':    {'title': 'Admin Portal',     'role': 'admin',    'mode': 'academic',  'color': Color(0xFFDC2626),         'icon': Icons.admin_panel_settings_outlined},
+    'hod':      {'title': 'HOD Portal',       'role': 'hod',      'mode': 'academic',  'color': Color(0xFFF59E0B),         'icon': Icons.supervisor_account_outlined},
+    'employee': {'title': 'Employee Portal',  'role': 'employee', 'mode': 'corporate', 'color': Color(0xFF4F46E5),         'icon': Icons.badge_outlined},
   };
 
   Map<String, dynamic> get _config => (_portalConfig[widget.portal] ?? _portalConfig['student'])!;
