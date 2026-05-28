@@ -60,12 +60,73 @@ jobs:
 
       - name: Bundle web app into www/
         run: |
-          # Copy the full web app (src/public) into www/ so the APK is self-contained
-          # API calls in the JS still point to dikly.sbs — only the server.url redirect is removed
           cp -r src/public/. www/
-          echo "www/ contents after copy:"
-          ls www/ | head -20
+
+      - name: Mirror live site assets (pages, JS, CSS, images)
+        run: |
+          sudo apt-get install -y wget --quiet
+          # Mirror all reachable pages and static assets from dikly.sbs
+          wget \
+            --mirror \
+            --page-requisites \
+            --convert-links \
+            --adjust-extension \
+            --no-parent \
+            --timeout=30 \
+            --tries=2 \
+            --wait=0 \
+            --no-check-certificate \
+            --reject "*.mp4,*.webm,*.zip,*.tar.gz" \
+            --directory-prefix=/tmp/site-mirror/ \
+            https://dikly.sbs 2>&1 | tail -5 || true
+          # Copy mirrored assets into www/ (overwrites with live versions)
+          if [ -d /tmp/site-mirror/dikly.sbs ]; then
+            cp -r /tmp/site-mirror/dikly.sbs/. www/ 2>/dev/null || true
+            echo "Mirrored site size:"
+            du -sh /tmp/site-mirror/dikly.sbs/
+          fi
+
+      - name: Bundle Google Fonts offline (DM Sans + Inter)
+        run: |
+          mkdir -p www/fonts
+          pip install requests --quiet --break-system-packages
+
+          python3 - <<'PYEOF'
+          import os, re, requests
+
+          headers = {"User-Agent": "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36"}
+          font_queries = [
+            "family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000",
+            "family=Inter:wght@100;200;300;400;500;600;700;800;900",
+            "family=Poppins:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400;1,600",
+          ]
+          saved = 0
+          for q in font_queries:
+            url = f"https://fonts.googleapis.com/css2?{q}&display=swap"
+            try:
+              css = requests.get(url, headers=headers, timeout=15).text
+              font_urls = re.findall(r"url\((https://fonts\.gstatic\.com/[^)]+)\)", css)
+              for fu in font_urls:
+                fname = fu.split("/")[-1].split("?")[0]
+                out = f"www/fonts/{fname}"
+                if not os.path.exists(out):
+                  data = requests.get(fu, timeout=15).content
+                  with open(out, "wb") as f:
+                    f.write(data)
+                  saved += 1
+            except Exception as e:
+              print(f"  skip {q}: {e}")
+          print(f"Downloaded {saved} font files")
+          PYEOF
+
+          echo "Font bundle size:"
+          du -sh www/fonts/
+
+      - name: Report total www/ bundle size
+        run: |
+          echo "Total www/ size:"
           du -sh www/
+          echo "File count: $(find www/ -type f | wc -l)"
 
       - name: Sync Capacitor to Android
         run: npx cap sync android
