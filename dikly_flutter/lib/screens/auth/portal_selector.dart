@@ -12,7 +12,7 @@ class PortalSelectorScreen extends StatefulWidget {
 
 class _PortalSelectorScreenState extends State<PortalSelectorScreen>
     with SingleTickerProviderStateMixin {
-  String _selectedMode = 'corp';
+  String? _selectedMode; // null = nothing selected yet
   late AnimationController _fadeCtrl;
   late Animation<double> _fadeAnim;
 
@@ -194,6 +194,7 @@ class _PortalSelectorScreenState extends State<PortalSelectorScreen>
                                           iconColor: const Color(0xFFB45309),
                                           iconBg: const Color(0xFFFEF3C7),
                                           isSelected: _selectedMode == 'corp',
+                                          anySelected: _selectedMode != null,
                                           onTap: () => setState(() => _selectedMode = 'corp'),
                                         ),
                                       ),
@@ -206,30 +207,47 @@ class _PortalSelectorScreenState extends State<PortalSelectorScreen>
                                           iconColor: const Color(0xFF4338CA),
                                           iconBg: const Color(0xFFEEF2FF),
                                           isSelected: _selectedMode == 'acad',
+                                          anySelected: _selectedMode != null,
                                           onTap: () => setState(() => _selectedMode = 'acad'),
                                         ),
                                       ),
                                     ],
                                   ),
 
-                                  const SizedBox(height: 14),
-
-                                  // ── Role portal cards (animated switch)
-                                  AnimatedSwitcher(
-                                    duration: const Duration(milliseconds: 300),
-                                    transitionBuilder: (child, anim) => FadeTransition(
-                                      opacity: anim,
-                                      child: SlideTransition(
-                                        position: Tween<Offset>(
-                                          begin: const Offset(0, 0.05),
-                                          end: Offset.zero,
-                                        ).animate(CurvedAnimation(parent: anim, curve: Curves.easeOut)),
-                                        child: child,
-                                      ),
-                                    ),
-                                    child: _selectedMode == 'corp'
-                                        ? _CorporateCards(key: const ValueKey('corp'))
-                                        : _AcademicCards(key: const ValueKey('acad')),
+                                  // ── Portal section — only shown after workspace is picked
+                                  AnimatedSize(
+                                    duration: const Duration(milliseconds: 320),
+                                    curve: Curves.easeInOut,
+                                    child: _selectedMode == null
+                                        ? const SizedBox.shrink()
+                                        : Column(
+                                            children: [
+                                              const SizedBox(height: 14),
+                                              Container(
+                                                height: 1,
+                                                color: const Color(0xFFE5E7EB),
+                                                margin: const EdgeInsets.symmetric(horizontal: 4),
+                                              ),
+                                              const SizedBox(height: 14),
+                                              AnimatedSwitcher(
+                                                duration: const Duration(milliseconds: 300),
+                                                transitionBuilder: (child, anim) => FadeTransition(
+                                                  opacity: anim,
+                                                  child: SlideTransition(
+                                                    position: Tween<Offset>(
+                                                      begin: const Offset(0, 0.06),
+                                                      end: Offset.zero,
+                                                    ).animate(CurvedAnimation(
+                                                        parent: anim, curve: Curves.easeOut)),
+                                                    child: child,
+                                                  ),
+                                                ),
+                                                child: _selectedMode == 'corp'
+                                                    ? _CorporateCards(key: const ValueKey('corp'))
+                                                    : _AcademicCards(key: const ValueKey('acad')),
+                                              ),
+                                            ],
+                                          ),
                                   ),
                                 ],
                               ),
@@ -320,6 +338,7 @@ class _WorkspaceCard extends StatelessWidget {
   final Color iconColor;
   final Color iconBg;
   final bool isSelected;
+  final bool anySelected; // true once user has picked any workspace
   final VoidCallback onTap;
 
   const _WorkspaceCard({
@@ -329,6 +348,7 @@ class _WorkspaceCard extends StatelessWidget {
     required this.iconColor,
     required this.iconBg,
     required this.isSelected,
+    required this.anySelected,
     required this.onTap,
   });
 
@@ -341,7 +361,9 @@ class _WorkspaceCard extends StatelessWidget {
         curve: Curves.easeInOut,
         padding: const EdgeInsets.fromLTRB(14, 18, 14, 14),
         decoration: BoxDecoration(
-          color: isSelected ? Colors.white : const Color(0xFFF9FAFB),
+          color: isSelected
+              ? Colors.white
+              : (anySelected ? const Color(0xFFF3F4F6) : const Color(0xFFF9FAFB)),
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
             color: isSelected ? iconColor.withOpacity(0.45) : const Color(0xFFE5E7EB),
