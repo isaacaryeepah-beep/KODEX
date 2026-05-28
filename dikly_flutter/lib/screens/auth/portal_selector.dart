@@ -350,32 +350,63 @@ class _CorporateCards extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _PortalCard(
-          icon: Icons.admin_panel_settings_outlined,
-          iconColor: const Color(0xFF2563EB),
-          iconBg: const Color(0xFFEFF6FF),
-          title: 'Admin',
-          subtitle: 'Manage company settings & users',
-          onTap: () => context.go('/login/admin'),
+        // Section header — amber briefcase icon + "CORPORATE PORTALS"
+        Padding(
+          padding: const EdgeInsets.only(bottom: 10),
+          child: Row(
+            children: const [
+              Icon(Icons.work_outline_rounded, color: Color(0xFFB45309), size: 13),
+              SizedBox(width: 5),
+              Text(
+                'CORPORATE PORTALS',
+                style: TextStyle(
+                  fontSize: 9,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFFB45309),
+                  letterSpacing: 1.8,
+                ),
+              ),
+            ],
+          ),
         ),
-        const SizedBox(height: 8),
-        _PortalCard(
-          icon: Icons.business_center_outlined,
-          iconColor: const Color(0xFF4F46E5),
-          iconBg: const Color(0xFFEEF2FF),
-          title: 'Manager',
-          subtitle: 'Team leads & department managers',
-          onTap: () => context.go('/login/manager'),
-        ),
-        const SizedBox(height: 8),
-        _PortalCard(
-          icon: Icons.badge_outlined,
-          iconColor: const Color(0xFF16A34A),
-          iconBg: const Color(0xFFF0FDF4),
-          title: 'Employee',
-          subtitle: 'Staff & workers',
-          onTap: () => context.go('/login/employee'),
+        // 3 cards in one row
+        Row(
+          children: [
+            Expanded(
+              child: _GridPortalCard(
+                icon: Icons.person_outline_rounded,
+                iconColor: const Color(0xFF4F46E5),
+                iconBg: const Color(0xFFEEF2FF),
+                title: 'Admin',
+                subtitle: 'Company admin',
+                onTap: () => context.go('/login/admin'),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _GridPortalCard(
+                icon: Icons.group_outlined,
+                iconColor: const Color(0xFF4F46E5),
+                iconBg: const Color(0xFFEEF2FF),
+                title: 'Manager',
+                subtitle: 'Team leads &\nmanagers',
+                onTap: () => context.go('/login/manager'),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _GridPortalCard(
+                icon: Icons.work_outline_rounded,
+                iconColor: const Color(0xFF4F46E5),
+                iconBg: const Color(0xFFEEF2FF),
+                title: 'Employee',
+                subtitle: 'Staff & workers',
+                onTap: () => context.go('/login/employee'),
+              ),
+            ),
+          ],
         ),
       ],
     );
@@ -392,16 +423,22 @@ class _AcademicCards extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Padding(
-          padding: EdgeInsets.only(bottom: 10),
-          child: Text(
-            'ACADEMIC PORTALS',
-            style: TextStyle(
-              fontSize: 9,
-              fontWeight: FontWeight.w700,
-              color: Color(0xFF9CA3AF),
-              letterSpacing: 2.0,
-            ),
+        Padding(
+          padding: const EdgeInsets.only(bottom: 10),
+          child: Row(
+            children: const [
+              Icon(Icons.school_outlined, color: Color(0xFF4338CA), size: 13),
+              SizedBox(width: 5),
+              Text(
+                'ACADEMIC PORTALS',
+                style: TextStyle(
+                  fontSize: 9,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF4338CA),
+                  letterSpacing: 1.8,
+                ),
+              ),
+            ],
           ),
         ),
         // Row 1: Admin + Lecturer
@@ -458,13 +495,16 @@ class _AcademicCards extends StatelessWidget {
   }
 }
 
-// ── Grid Portal Card (2×2 grid style for academic) ────────────────────────────
+// ── Grid Portal Card ──────────────────────────────────────────────────────────
+// subtitle=null → shows "Sign in →" (academic style)
+// subtitle!=null → shows subtitle text + "→" (corporate style)
 
 class _GridPortalCard extends StatelessWidget {
   final IconData icon;
   final Color iconColor;
   final Color iconBg;
   final String title;
+  final String? subtitle;
   final VoidCallback onTap;
 
   const _GridPortalCard({
@@ -472,6 +512,7 @@ class _GridPortalCard extends StatelessWidget {
     required this.iconColor,
     required this.iconBg,
     required this.title,
+    this.subtitle,
     required this.onTap,
   });
 
@@ -480,7 +521,7 @@ class _GridPortalCard extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 14),
+        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(12),
@@ -506,107 +547,26 @@ class _GridPortalCard extends StatelessWidget {
             Text(
               title,
               style: const TextStyle(
-                fontSize: 14,
+                fontSize: 13,
                 fontWeight: FontWeight.w700,
                 color: Color(0xFF111827),
               ),
             ),
             const SizedBox(height: 4),
-            Row(
-              children: [
-                Text(
-                  'Sign in',
-                  style: TextStyle(fontSize: 11, color: iconColor, fontWeight: FontWeight.w600),
+            if (subtitle != null) ...[
+              Text(
+                subtitle!,
+                style: const TextStyle(
+                  fontSize: 10,
+                  color: Color(0xFF6B7280),
+                  height: 1.3,
                 ),
-                const SizedBox(width: 2),
-                Text('→', style: TextStyle(fontSize: 11, color: iconColor)),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ── Portal Card ────────────────────────────────────────────────────────────────
-
-class _PortalCard extends StatelessWidget {
-  final IconData icon;
-  final Color iconColor;
-  final Color iconBg;
-  final String title;
-  final String subtitle;
-  final VoidCallback onTap;
-
-  const _PortalCard({
-    required this.icon,
-    required this.iconColor,
-    required this.iconBg,
-    required this.title,
-    required this.subtitle,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: const Color(0xFFE5E7EB), width: 1.5),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.04),
-              blurRadius: 6,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                color: iconBg,
-                shape: BoxShape.circle,
               ),
-              child: Icon(icon, color: iconColor, size: 22),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w700,
-                      color: const Color(0xFF111827),
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    subtitle,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: const Color(0xFF6B7280),
-                    ),
-                  ),
-                ],
-              ),
-            ),
+              const SizedBox(height: 6),
+            ],
             Text(
               '→',
-              style: TextStyle(
-                fontSize: 18,
-                color: const Color(0xFF9CA3AF),
-              ),
+              style: TextStyle(fontSize: 13, color: iconColor, fontWeight: FontWeight.w600),
             ),
           ],
         ),
@@ -614,3 +574,4 @@ class _PortalCard extends StatelessWidget {
     );
   }
 }
+
