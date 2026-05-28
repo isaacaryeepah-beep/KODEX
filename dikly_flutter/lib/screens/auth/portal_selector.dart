@@ -13,13 +13,15 @@ class PortalSelectorScreen extends StatefulWidget {
 class _PortalSelectorScreenState extends State<PortalSelectorScreen>
     with SingleTickerProviderStateMixin {
   String? _selectedMode; // null = nothing selected yet
+
   late AnimationController _fadeCtrl;
   late Animation<double> _fadeAnim;
 
   @override
   void initState() {
     super.initState();
-    _fadeCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 500));
+    _fadeCtrl = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 600));
     _fadeAnim = CurvedAnimation(parent: _fadeCtrl, curve: Curves.easeOut);
     _fadeCtrl.forward();
   }
@@ -35,60 +37,79 @@ class _PortalSelectorScreenState extends State<PortalSelectorScreen>
     return Scaffold(
       body: Stack(
         children: [
-          // ── Background office photo
+          // ── Office photo background
           Positioned.fill(
             child: Image.asset('assets/bg_office.jpg', fit: BoxFit.cover),
           ),
-          // ── Dark indigo overlay
+
+          // ── Deep dark-indigo overlay (matches screenshot)
           Positioned.fill(
             child: Container(
               decoration: const BoxDecoration(
                 gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
                   colors: [
-                    Color(0xCC1E1B4B),
-                    Color(0xE61E1B4B),
+                    Color(0xDD0F0C29),
+                    Color(0xEA1A1650),
+                    Color(0xDD0D0B2E),
                   ],
+                  stops: [0.0, 0.5, 1.0],
                 ),
               ),
             ),
           ),
 
-          // ── Main content
+          // ── Subtle purple glow top-right
+          Positioned(
+            top: -60,
+            right: -60,
+            child: Container(
+              width: 260,
+              height: 260,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: const Color(0xFF6366F1).withOpacity(0.18),
+              ),
+            ),
+          ),
+
+          // ── Main scrollable content
           SafeArea(
             child: FadeTransition(
               opacity: _fadeAnim,
               child: Center(
                 child: SingleChildScrollView(
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 22, vertical: 20),
                   child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 420),
+                    constraints: const BoxConstraints(maxWidth: 430),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
-                        const SizedBox(height: 8),
+                        const SizedBox(height: 4),
 
-                        // ── Logo
+                        // ── Logo row
                         Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Container(
-                              width: 58,
-                              height: 58,
+                              width: 62,
+                              height: 62,
                               decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(14),
+                                borderRadius: BorderRadius.circular(16),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: Colors.black.withOpacity(0.3),
-                                    blurRadius: 16,
-                                    offset: const Offset(0, 4),
+                                    color: Colors.black.withOpacity(0.4),
+                                    blurRadius: 20,
+                                    offset: const Offset(0, 6),
                                   ),
                                 ],
                               ),
                               child: ClipRRect(
-                                borderRadius: BorderRadius.circular(14),
-                                child: Image.asset('assets/icon.png', fit: BoxFit.cover),
+                                borderRadius: BorderRadius.circular(16),
+                                child: Image.asset('assets/icon.png',
+                                    fit: BoxFit.cover),
                               ),
                             ),
                             const SizedBox(width: 14),
@@ -98,20 +119,20 @@ class _PortalSelectorScreenState extends State<PortalSelectorScreen>
                                 Text(
                                   'DIKLY',
                                   style: GoogleFonts.dmSans(
-                                    fontSize: 36,
+                                    fontSize: 38,
                                     fontWeight: FontWeight.w900,
                                     color: Colors.white,
-                                    letterSpacing: 2,
+                                    letterSpacing: 2.5,
                                     height: 1.0,
                                   ),
                                 ),
                                 Text(
                                   'INNOVATE · CONNECT · EMPOWER',
                                   style: GoogleFonts.dmSans(
-                                    fontSize: 8.5,
+                                    fontSize: 8,
                                     fontWeight: FontWeight.w600,
-                                    color: Colors.white.withOpacity(0.5),
-                                    letterSpacing: 2.8,
+                                    color: Colors.white.withOpacity(0.45),
+                                    letterSpacing: 3.0,
                                   ),
                                 ),
                               ],
@@ -119,135 +140,208 @@ class _PortalSelectorScreenState extends State<PortalSelectorScreen>
                           ],
                         ),
 
-                        const SizedBox(height: 18),
+                        const SizedBox(height: 16),
 
-                        // ── Hero headline
+                        // ── Headline
                         Text(
                           'ENTERPRISE ATTENDANCE\nMANAGEMENT PLATFORM',
                           textAlign: TextAlign.center,
                           style: GoogleFonts.dmSans(
-                            fontSize: 13.5,
+                            fontSize: 13,
                             fontWeight: FontWeight.w700,
-                            color: Colors.white.withOpacity(0.85),
-                            letterSpacing: 3.0,
-                            height: 1.6,
+                            color: Colors.white.withOpacity(0.80),
+                            letterSpacing: 3.2,
+                            height: 1.7,
                           ),
                         ),
 
-                        const SizedBox(height: 32),
+                        const SizedBox(height: 28),
 
                         // ── Frosted glass workspace card
                         ClipRRect(
-                          borderRadius: BorderRadius.circular(24),
+                          borderRadius: BorderRadius.circular(28),
                           child: BackdropFilter(
-                            filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+                            filter:
+                                ImageFilter.blur(sigmaX: 30, sigmaY: 30),
                             child: Container(
                               decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.93),
-                                borderRadius: BorderRadius.circular(24),
+                                color: Colors.white.withOpacity(0.08),
+                                borderRadius: BorderRadius.circular(28),
                                 border: Border.all(
-                                  color: Colors.white.withOpacity(0.6),
+                                  color: Colors.white.withOpacity(0.15),
                                   width: 1.5,
                                 ),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withOpacity(0.28),
-                                    blurRadius: 48,
-                                    offset: const Offset(0, 16),
-                                  ),
-                                  BoxShadow(
-                                    color: Colors.black.withOpacity(0.10),
-                                    blurRadius: 12,
-                                    offset: const Offset(0, 4),
-                                  ),
-                                ],
                               ),
-                              padding: const EdgeInsets.fromLTRB(16, 20, 16, 22),
+                              padding: const EdgeInsets.fromLTRB(
+                                  18, 22, 18, 22),
                               child: Column(
                                 children: [
-                                  // Header
+                                  // "CHOOSE YOUR WORKSPACE"
                                   Text(
                                     'CHOOSE YOUR WORKSPACE',
                                     style: GoogleFonts.dmSans(
                                       fontSize: 10,
                                       fontWeight: FontWeight.w700,
-                                      color: const Color(0xFF6B7280),
-                                      letterSpacing: 2.4,
+                                      color:
+                                          Colors.white.withOpacity(0.55),
+                                      letterSpacing: 2.6,
                                     ),
                                   ),
-                                  const SizedBox(height: 6),
-                                  Container(
-                                    height: 1,
-                                    color: const Color(0xFFE5E7EB),
-                                    margin: const EdgeInsets.symmetric(horizontal: 12),
-                                  ),
-                                  const SizedBox(height: 14),
+                                  const SizedBox(height: 18),
 
-                                  // ── Corporate / Academic selector cards
+                                  // ── Corporate / Academic cards
                                   Row(
                                     children: [
                                       Expanded(
                                         child: _WorkspaceCard(
                                           label: 'Corporate',
-                                          subtitle: 'Businesses &\norganisations',
-                                          icon: Icons.business_center_rounded,
-                                          iconColor: const Color(0xFFB45309),
-                                          iconBg: const Color(0xFFFEF3C7),
-                                          isSelected: _selectedMode == 'corp',
-                                          anySelected: _selectedMode != null,
-                                          onTap: () => setState(() => _selectedMode = 'corp'),
+                                          subtitle:
+                                              'Businesses &\norganisations',
+                                          icon: Icons
+                                              .business_center_rounded,
+                                          iconColor:
+                                              const Color(0xFFB45309),
+                                          iconBg:
+                                              const Color(0xFFFEF3C7),
+                                          isSelected:
+                                              _selectedMode == 'corp',
+                                          anySelected:
+                                              _selectedMode != null,
+                                          onTap: () => setState(
+                                              () => _selectedMode = 'corp'),
                                         ),
                                       ),
-                                      const SizedBox(width: 10),
+                                      const SizedBox(width: 12),
                                       Expanded(
                                         child: _WorkspaceCard(
                                           label: 'Academic',
-                                          subtitle: 'Schools &\ninstitutions',
+                                          subtitle:
+                                              'Schools &\ninstitutions',
                                           icon: Icons.school_rounded,
-                                          iconColor: const Color(0xFF4338CA),
-                                          iconBg: const Color(0xFFEEF2FF),
-                                          isSelected: _selectedMode == 'acad',
-                                          anySelected: _selectedMode != null,
-                                          onTap: () => setState(() => _selectedMode = 'acad'),
+                                          iconColor:
+                                              const Color(0xFF4338CA),
+                                          iconBg:
+                                              const Color(0xFFEEF2FF),
+                                          isSelected:
+                                              _selectedMode == 'acad',
+                                          anySelected:
+                                              _selectedMode != null,
+                                          onTap: () => setState(
+                                              () => _selectedMode = 'acad'),
                                         ),
                                       ),
                                     ],
                                   ),
 
-                                  // ── Portal section — only shown after workspace is picked
+                                  // ── Portal cards — revealed when workspace picked
                                   AnimatedSize(
-                                    duration: const Duration(milliseconds: 320),
+                                    duration:
+                                        const Duration(milliseconds: 360),
                                     curve: Curves.easeInOut,
                                     child: _selectedMode == null
                                         ? const SizedBox.shrink()
                                         : Column(
                                             children: [
-                                              const SizedBox(height: 14),
+                                              const SizedBox(height: 16),
                                               Container(
                                                 height: 1,
-                                                color: const Color(0xFFE5E7EB),
-                                                margin: const EdgeInsets.symmetric(horizontal: 4),
+                                                color: Colors.white
+                                                    .withOpacity(0.12),
                                               ),
-                                              const SizedBox(height: 14),
+                                              const SizedBox(height: 16),
                                               AnimatedSwitcher(
-                                                duration: const Duration(milliseconds: 300),
-                                                transitionBuilder: (child, anim) => FadeTransition(
+                                                duration: const Duration(
+                                                    milliseconds: 320),
+                                                transitionBuilder:
+                                                    (child, anim) =>
+                                                        FadeTransition(
                                                   opacity: anim,
                                                   child: SlideTransition(
-                                                    position: Tween<Offset>(
-                                                      begin: const Offset(0, 0.06),
+                                                    position:
+                                                        Tween<Offset>(
+                                                      begin: const Offset(
+                                                          0, 0.06),
                                                       end: Offset.zero,
-                                                    ).animate(CurvedAnimation(
-                                                        parent: anim, curve: Curves.easeOut)),
+                                                    ).animate(
+                                                            CurvedAnimation(
+                                                                parent:
+                                                                    anim,
+                                                                curve: Curves
+                                                                    .easeOut)),
                                                     child: child,
                                                   ),
                                                 ),
-                                                child: _selectedMode == 'corp'
-                                                    ? _CorporateCards(key: const ValueKey('corp'))
-                                                    : _AcademicCards(key: const ValueKey('acad')),
+                                                child: _selectedMode ==
+                                                        'corp'
+                                                    ? _CorporateCards(
+                                                        key: const ValueKey(
+                                                            'corp'))
+                                                    : _AcademicCards(
+                                                        key: const ValueKey(
+                                                            'acad')),
                                               ),
                                             ],
                                           ),
+                                  ),
+
+                                  // ── Trust indicator (always visible at bottom)
+                                  const SizedBox(height: 20),
+                                  Container(
+                                    height: 1,
+                                    color: Colors.white.withOpacity(0.10),
+                                  ),
+                                  const SizedBox(height: 16),
+                                  Container(
+                                    width: 44,
+                                    height: 44,
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      gradient: const LinearGradient(
+                                        begin: Alignment.topLeft,
+                                        end: Alignment.bottomRight,
+                                        colors: [
+                                          Color(0xFF6366F1),
+                                          Color(0xFF4338CA)
+                                        ],
+                                      ),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: const Color(0xFF6366F1)
+                                              .withOpacity(0.45),
+                                          blurRadius: 16,
+                                          offset: const Offset(0, 4),
+                                        ),
+                                      ],
+                                    ),
+                                    child: const Icon(
+                                      Icons.verified_user_rounded,
+                                      color: Colors.white,
+                                      size: 22,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 10),
+                                  Row(
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.center,
+                                    children: [
+                                      Icon(
+                                        Icons.lock_outline_rounded,
+                                        color:
+                                            Colors.white.withOpacity(0.45),
+                                        size: 13,
+                                      ),
+                                      const SizedBox(width: 5),
+                                      Text(
+                                        'Secure. Reliable. Scalable.',
+                                        style: GoogleFonts.dmSans(
+                                          fontSize: 12,
+                                          color: Colors.white
+                                              .withOpacity(0.50),
+                                          fontWeight: FontWeight.w500,
+                                          letterSpacing: 0.3,
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ],
                               ),
@@ -255,16 +349,39 @@ class _PortalSelectorScreenState extends State<PortalSelectorScreen>
                           ),
                         ),
 
-                        const SizedBox(height: 24),
+                        const SizedBox(height: 22),
 
                         // ── Footer
-                        Text(
-                          'By using DIKLY, you agree to our Terms & Conditions\nand Privacy Policy.',
+                        RichText(
                           textAlign: TextAlign.center,
-                          style: GoogleFonts.dmSans(
-                            fontSize: 11,
-                            color: Colors.white.withOpacity(0.4),
-                            height: 1.6,
+                          text: TextSpan(
+                            style: GoogleFonts.dmSans(
+                              fontSize: 11.5,
+                              color: Colors.white.withOpacity(0.45),
+                              height: 1.6,
+                            ),
+                            children: [
+                              const TextSpan(
+                                  text: 'By using DIKLY, you agree to our '),
+                              TextSpan(
+                                text: 'Terms & Conditions',
+                                style: GoogleFonts.dmSans(
+                                  fontSize: 11.5,
+                                  color: const Color(0xFF818CF8),
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              const TextSpan(text: ' and '),
+                              TextSpan(
+                                text: 'Privacy Policy',
+                                style: GoogleFonts.dmSans(
+                                  fontSize: 11.5,
+                                  color: const Color(0xFF818CF8),
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              const TextSpan(text: '.'),
+                            ],
                           ),
                         ),
                         const SizedBox(height: 6),
@@ -273,7 +390,7 @@ class _PortalSelectorScreenState extends State<PortalSelectorScreen>
                           textAlign: TextAlign.center,
                           style: GoogleFonts.dmSans(
                             fontSize: 11,
-                            color: Colors.white.withOpacity(0.35),
+                            color: Colors.white.withOpacity(0.30),
                             height: 1.6,
                           ),
                         ),
@@ -286,33 +403,36 @@ class _PortalSelectorScreenState extends State<PortalSelectorScreen>
             ),
           ),
 
-          // ── Help pill button
+          // ── Help pill — frosted glass
           Positioned(
             bottom: 28,
             right: 18,
             child: ClipRRect(
               borderRadius: BorderRadius.circular(24),
               child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
                 child: GestureDetector(
                   onTap: () {},
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 9),
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.15),
+                      color: Colors.white.withOpacity(0.12),
                       borderRadius: BorderRadius.circular(24),
-                      border: Border.all(color: Colors.white.withOpacity(0.25)),
+                      border: Border.all(
+                          color: Colors.white.withOpacity(0.20)),
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.help_outline_rounded, color: Colors.white, size: 15),
+                        Icon(Icons.help_outline_rounded,
+                            color: Colors.white.withOpacity(0.8), size: 15),
                         const SizedBox(width: 5),
                         Text(
                           'Help',
                           style: GoogleFonts.dmSans(
                             fontSize: 13,
-                            color: Colors.white,
+                            color: Colors.white.withOpacity(0.85),
                             fontWeight: FontWeight.w600,
                           ),
                         ),
@@ -338,7 +458,7 @@ class _WorkspaceCard extends StatelessWidget {
   final Color iconColor;
   final Color iconBg;
   final bool isSelected;
-  final bool anySelected; // true once user has picked any workspace
+  final bool anySelected;
   final VoidCallback onTap;
 
   const _WorkspaceCard({
@@ -354,80 +474,81 @@ class _WorkspaceCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Unselected-but-another-picked: subtle indigo tint (matches screenshot)
+    final bg = isSelected
+        ? Colors.white
+        : (anySelected
+            ? const Color(0xFFEEF2FF).withOpacity(0.55)
+            : Colors.white.withOpacity(0.88));
+
     return GestureDetector(
       onTap: onTap,
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
+        duration: const Duration(milliseconds: 220),
         curve: Curves.easeInOut,
-        padding: const EdgeInsets.fromLTRB(14, 18, 14, 14),
+        padding: const EdgeInsets.fromLTRB(16, 22, 16, 18),
         decoration: BoxDecoration(
-          color: isSelected
-              ? Colors.white
-              : (anySelected ? const Color(0xFFF3F4F6) : const Color(0xFFF9FAFB)),
-          borderRadius: BorderRadius.circular(16),
+          color: bg,
+          borderRadius: BorderRadius.circular(18),
           border: Border.all(
-            color: isSelected ? iconColor.withOpacity(0.45) : const Color(0xFFE5E7EB),
-            width: isSelected ? 2 : 1.5,
+            color: isSelected
+                ? iconColor.withOpacity(0.55)
+                : Colors.white.withOpacity(0.3),
+            width: isSelected ? 2.0 : 1.2,
           ),
           boxShadow: isSelected
               ? [
                   BoxShadow(
-                    color: iconColor.withOpacity(0.15),
-                    blurRadius: 16,
-                    offset: const Offset(0, 4),
-                  ),
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.06),
-                    blurRadius: 6,
-                    offset: const Offset(0, 2),
+                    color: iconColor.withOpacity(0.22),
+                    blurRadius: 20,
+                    offset: const Offset(0, 6),
                   ),
                 ]
               : [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.05),
-                    blurRadius: 6,
-                    offset: const Offset(0, 2),
+                    color: Colors.black.withOpacity(0.08),
+                    blurRadius: 10,
+                    offset: const Offset(0, 3),
                   ),
                 ],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Icon circle
             AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              width: 46,
-              height: 46,
+              duration: const Duration(milliseconds: 220),
+              width: 52,
+              height: 52,
               decoration: BoxDecoration(
-                color: isSelected ? iconBg : iconBg.withOpacity(0.7),
+                color: isSelected ? iconBg : iconBg.withOpacity(0.75),
                 shape: BoxShape.circle,
               ),
-              child: Icon(icon, color: iconColor, size: 23),
+              child: Icon(icon, color: iconColor, size: 26),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 14),
             Text(
               label,
               style: GoogleFonts.dmSans(
-                fontSize: 16,
+                fontSize: 17,
                 fontWeight: FontWeight.w800,
                 color: const Color(0xFF111827),
               ),
             ),
-            const SizedBox(height: 3),
+            const SizedBox(height: 4),
             Text(
               subtitle,
               style: GoogleFonts.dmSans(
-                fontSize: 11.5,
+                fontSize: 12,
                 color: const Color(0xFF6B7280),
-                height: 1.4,
+                height: 1.45,
               ),
             ),
-            const SizedBox(height: 12),
-            // Indicator bar
+            const SizedBox(height: 14),
+            // Animated indicator bar
             AnimatedContainer(
-              duration: const Duration(milliseconds: 250),
-              height: 3,
-              width: isSelected ? 36 : 24,
+              duration: const Duration(milliseconds: 260),
+              height: 3.5,
+              width: isSelected ? 40 : 26,
               decoration: BoxDecoration(
                 color: isSelected ? iconColor : const Color(0xFFD1D5DB),
                 borderRadius: BorderRadius.circular(2),
@@ -450,31 +571,13 @@ class _CorporateCards extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Padding(
-          padding: const EdgeInsets.only(bottom: 10),
-          child: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(4),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFEF3C7),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: const Icon(Icons.business_center_rounded, color: Color(0xFFB45309), size: 11),
-              ),
-              const SizedBox(width: 6),
-              Text(
-                'CORPORATE PORTALS',
-                style: GoogleFonts.dmSans(
-                  fontSize: 9.5,
-                  fontWeight: FontWeight.w700,
-                  color: const Color(0xFFB45309),
-                  letterSpacing: 1.8,
-                ),
-              ),
-            ],
-          ),
+        _SectionHeader(
+          icon: Icons.business_center_rounded,
+          label: 'CORPORATE PORTALS',
+          iconColor: const Color(0xFFB45309),
+          badgeBg: const Color(0xFFFEF3C7),
         ),
+        const SizedBox(height: 10),
         Row(
           children: [
             Expanded(
@@ -526,31 +629,13 @@ class _AcademicCards extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Padding(
-          padding: const EdgeInsets.only(bottom: 10),
-          child: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(4),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFEEF2FF),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: const Icon(Icons.school_rounded, color: Color(0xFF4338CA), size: 11),
-              ),
-              const SizedBox(width: 6),
-              Text(
-                'ACADEMIC PORTALS',
-                style: GoogleFonts.dmSans(
-                  fontSize: 9.5,
-                  fontWeight: FontWeight.w700,
-                  color: const Color(0xFF4338CA),
-                  letterSpacing: 1.8,
-                ),
-              ),
-            ],
-          ),
+        _SectionHeader(
+          icon: Icons.school_rounded,
+          label: 'ACADEMIC PORTALS',
+          iconColor: const Color(0xFF4338CA),
+          badgeBg: const Color(0xFFEEF2FF),
         ),
+        const SizedBox(height: 10),
         Row(
           children: [
             Expanded(
@@ -603,7 +688,49 @@ class _AcademicCards extends StatelessWidget {
   }
 }
 
-// ── Portal Card (role entry point) ────────────────────────────────────────────
+// ── Section Header ─────────────────────────────────────────────────────────────
+
+class _SectionHeader extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color iconColor;
+  final Color badgeBg;
+
+  const _SectionHeader({
+    required this.icon,
+    required this.label,
+    required this.iconColor,
+    required this.badgeBg,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(4),
+          decoration: BoxDecoration(
+            color: badgeBg,
+            borderRadius: BorderRadius.circular(6),
+          ),
+          child: Icon(icon, color: iconColor, size: 11),
+        ),
+        const SizedBox(width: 6),
+        Text(
+          label,
+          style: GoogleFonts.dmSans(
+            fontSize: 9.5,
+            fontWeight: FontWeight.w700,
+            color: iconColor,
+            letterSpacing: 1.8,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ── Portal Card ────────────────────────────────────────────────────────────────
 
 class _PortalCard extends StatefulWidget {
   final IconData icon;
@@ -640,13 +767,20 @@ class _PortalCardState extends State<_PortalCard> {
       onTapCancel: () => setState(() => _pressed = false),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 120),
-        transform: _pressed ? (Matrix4.identity()..scale(0.96)) : Matrix4.identity(),
+        transform: _pressed
+            ? (Matrix4.identity()..scale(0.95))
+            : Matrix4.identity(),
+        transformAlignment: Alignment.center,
         padding: const EdgeInsets.symmetric(vertical: 13, horizontal: 10),
         decoration: BoxDecoration(
-          color: _pressed ? const Color(0xFFF5F5FF) : Colors.white,
-          borderRadius: BorderRadius.circular(13),
+          color: _pressed
+              ? const Color(0xFFF5F5FF)
+              : Colors.white,
+          borderRadius: BorderRadius.circular(14),
           border: Border.all(
-            color: _pressed ? widget.iconColor.withOpacity(0.3) : const Color(0xFFE5E7EB),
+            color: _pressed
+                ? widget.iconColor.withOpacity(0.35)
+                : const Color(0xFFE5E7EB),
             width: 1.5,
           ),
           boxShadow: [
@@ -663,7 +797,8 @@ class _PortalCardState extends State<_PortalCard> {
             Container(
               width: 38,
               height: 38,
-              decoration: BoxDecoration(color: widget.iconBg, shape: BoxShape.circle),
+              decoration: BoxDecoration(
+                  color: widget.iconBg, shape: BoxShape.circle),
               child: Icon(widget.icon, color: widget.iconColor, size: 19),
             ),
             const SizedBox(height: 9),
@@ -699,7 +834,8 @@ class _PortalCardState extends State<_PortalCard> {
                   ),
                 ),
                 const SizedBox(width: 2),
-                Icon(Icons.arrow_forward_rounded, size: 11, color: widget.iconColor),
+                Icon(Icons.arrow_forward_rounded,
+                    size: 11, color: widget.iconColor),
               ],
             ),
           ],
