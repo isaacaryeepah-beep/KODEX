@@ -1,4 +1,4 @@
-name: Build Android APK
+name: Build Android (Capacitor)
 
 on:
   push:
@@ -8,8 +8,6 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    env:
-      HAS_KEYSTORE: true
 
     steps:
       - name: Checkout code
@@ -35,7 +33,7 @@ jobs:
       - name: Add Android platform
         run: npx cap add android
 
-      - name: Generate app icons and splash screen
+      - name: Generate app icons
         run: |
           sudo apt-get install -y librsvg2-bin --quiet
           pip install Pillow --quiet --break-system-packages
@@ -44,11 +42,11 @@ jobs:
           mkdir -p android/app/src/main/res/drawable-land
           python3 scripts/gen_icons.py
 
-      - name: Ensure strings.xml exists
+      - name: Ensure strings.xml
         run: |
           mkdir -p android/app/src/main/res/values
           if [ ! -f android/app/src/main/res/values/strings.xml ]; then
-            cat > android/app/src/main/res/values/strings.xml << 'STREOF'
+            cat > android/app/src/main/res/values/strings.xml << 'EOF'
           <?xml version='1.0' encoding='utf-8'?>
           <resources>
               <string name="app_name">DIKLY</string>
@@ -57,52 +55,87 @@ jobs:
               <string name="custom_url_scheme">sbs.dikly.attendance</string>
               <string name="capacitor_server_url">https://dikly.sbs</string>
           </resources>
-          STREOF
+          EOF
           fi
 
       - name: Sync Capacitor to Android
         run: npx cap sync android
 
-      - name: Bump targetSdkVersion to 35 and set versionCode
+      - name: Bump SDK versions and set versionCode
         run: |
           if [ -f android/variables.gradle ]; then
             sed -i -E 's/compileSdkVersion = [0-9]+/compileSdkVersion = 35/' android/variables.gradle
             sed -i -E 's/targetSdkVersion = [0-9]+/targetSdkVersion = 35/' android/variables.gradle
-            grep -E 'compileSdkVersion|targetSdkVersion' android/variables.gradle
           fi
           sed -i -E 's/compileSdkVersion[[:space:]]+[0-9]+/compileSdkVersion 35/' android/app/build.gradle
           sed -i -E 's/compileSdk[[:space:]]+[0-9]+/compileSdk 35/' android/app/build.gradle
           sed -i -E 's/targetSdkVersion[[:space:]]+[0-9]+/targetSdkVersion 35/' android/app/build.gradle
           sed -i -E 's/targetSdk[[:space:]]+[0-9]+/targetSdk 35/' android/app/build.gradle
-          grep -E 'compileSdk|targetSdk' android/app/build.gradle || true
           sed -i -E "s/versionCode[[:space:]]+[0-9]+/versionCode ${{ github.run_number }}/" android/app/build.gradle
-          echo "versionCode set to: ${{ github.run_number }}"
+          echo "versionCode: ${{ github.run_number }}"
+
+      - name: Configure release signing in build.gradle
+        run: |
+          KEYSTORE_PATH="${{ github.workspace }}/ci/release.p12"
+          # Inject signingConfigs block before the existing android { block content
+          python3 - <<'PYEOF'
+          import re
+
+          with open('android/app/build.gradle', 'r') as f:
+              content = f.read()
+
+          signing_block = """
+              signingConfigs {
+                  release {
+                      storeFile file("${{ github.workspace }}/ci/release.p12")
+                      storePassword "DiklySecure2026"
+                      keyAlias "dikly"
+                      keyPassword "DiklySecure2026"
+                      storeType "PKCS12"
+                  }
+              }
+          """
+
+          # Only inject if not already present
+          if 'signingConfigs' not in content:
+              content = content.replace('android {', 'android {' + signing_block, 1)
+
+          # Point release buildType to the signingConfig
+          content = re.sub(
+              r'(buildTypes\s*\{[^}]*release\s*\{)',
+              r'\1\n            signingConfig signingConfigs.release',
+              content,
+              count=1,
+              flags=re.DOTALL
+          )
+
+          with open('android/app/build.gradle', 'w') as f:
+              f.write(content)
+
+          print("build.gradle patched with signing config")
+          PYEOF
 
       - name: Make Gradle wrapper executable
         run: chmod +x android/gradlew
 
-      - name: Build Debug APK
-        run: cd android && ./gradlew assembleDebug --no-daemon --stacktrace
+      # ── AAB (required for Google Play) ────────────────────────────────────
+      - name: Build Release AAB
+        run: cd android && ./gradlew bundleRelease --no-daemon
 
-      - name: Upload APK artifact
+      - name: Upload AAB
         uses: actions/upload-artifact@v4
         with:
-          name: DIKLY-debug
-          path: android/app/build/outputs/apk/debug/app-debug.apk
-          retention-days: 30
+          name: DIKLY-release-AAB
+          path: android/app/build/outputs/bundle/release/app-release.aab
+          retention-days: 60
 
-      - name: Build Release APK (signed)
-        run: |
-          cd android
-          ./gradlew assembleRelease --no-daemon \
-            -Pandroid.injected.signing.store.file="${{ github.workspace }}/ci/release.p12" \
-            -Pandroid.injected.signing.store.password="DiklySecure2026" \
-            -Pandroid.injected.signing.key.alias="dikly" \
-            -Pandroid.injected.signing.key.password="DiklySecure2026"
+      # ── APK (for sideloading / testing) ───────────────────────────────────
+      - name: Build Release APK
+        run: cd android && ./gradlew assembleRelease --no-daemon
 
-      - name: Upload Release APK artifact
+      - name: Upload Release APK
         uses: actions/upload-artifact@v4
         with:
-          name: DIKLY-release
+          name: DIKLY-release-APK
           path: android/app/build/outputs/apk/release/app-release.apk
-          retention-days: 30
+          retention-days: 60
