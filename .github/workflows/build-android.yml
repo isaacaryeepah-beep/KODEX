@@ -58,6 +58,15 @@ jobs:
           EOF
           fi
 
+      - name: Bundle web app into www/
+        run: |
+          # Copy the full web app (src/public) into www/ so the APK is self-contained
+          # API calls in the JS still point to dikly.sbs — only the server.url redirect is removed
+          cp -r src/public/. www/
+          echo "www/ contents after copy:"
+          ls www/ | head -20
+          du -sh www/
+
       - name: Sync Capacitor to Android
         run: npx cap sync android
 
