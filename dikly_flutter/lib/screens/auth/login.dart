@@ -108,7 +108,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     final badge = _info['badge'] as String;
 
     return Scaffold(
-      backgroundColor: DiklyColors.authBg,
+      backgroundColor: const Color(0xFF0F0F23),
       body: Stack(
         children: [
           // Gradient background
@@ -216,35 +216,37 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         padding: const EdgeInsets.all(28),
                         decoration: BoxDecoration(
                           color: Colors.white,
-                          borderRadius: BorderRadius.circular(28),
-                          boxShadow: [
-                            BoxShadow(color: const Color(0xFF6366F1).withOpacity(0.2), blurRadius: 40, offset: const Offset(0, 16)),
-                            BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 20, offset: const Offset(0, 8)),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: const Color(0xFFE4E4E7), width: 1),
+                          boxShadow: const [
+                            BoxShadow(color: Color(0x40000000), blurRadius: 50, offset: Offset(0, 25)),
+                            BoxShadow(color: Color(0x26000000), blurRadius: 20, offset: Offset(0, 8)),
                           ],
                         ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            // role badge
+                            // role badge — light indigo pill
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                               decoration: BoxDecoration(
-                                color: color.withOpacity(0.10),
+                                color: const Color(0xFFEEF2FF),
                                 borderRadius: BorderRadius.circular(999),
+                                border: Border.all(color: const Color(0xFFC7D2FE), width: 1),
                               ),
                               child: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  Icon(icon, size: 14, color: color),
-                                  const SizedBox(width: 6),
-                                  Text(badge, style: GoogleFonts.dmSans(fontSize: 12, fontWeight: FontWeight.w600, color: color)),
+                                  Icon(icon, size: 13, color: DiklyColors.primary),
+                                  const SizedBox(width: 5),
+                                  Text(badge, style: GoogleFonts.dmSans(fontSize: 12, fontWeight: FontWeight.w600, color: DiklyColors.primary)),
                                 ],
                               ),
                             ),
                             const SizedBox(height: 20),
                             Text('Welcome back', style: GoogleFonts.dmSans(fontSize: 26, fontWeight: FontWeight.w800, color: DiklyColors.text)),
                             const SizedBox(height: 4),
-                            Text('Sign in to your account', style: GoogleFonts.dmSans(fontSize: 14, color: DiklyColors.textLight)),
+                            Text('Sign in to your account', style: GoogleFonts.dmSans(fontSize: 14, color: DiklyColors.textMuted)),
                             const SizedBox(height: 28),
                             // error alert
                             if (authState.error != null) ...[
@@ -315,37 +317,37 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                     alignment: Alignment.centerRight,
                                     child: GestureDetector(
                                       onTap: () {},
-                                      child: Text('Forgot password?', style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w600, color: color)),
+                                      child: Text('Forgot password?', style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w600, color: DiklyColors.primary)),
                                     ),
                                   ),
                                   const SizedBox(height: 24),
-                                  // Gradient sign in button
+                                  // Solid indigo sign in button
                                   SizedBox(
                                     width: double.infinity,
                                     height: 52,
-                                    child: DecoratedBox(
-                                      decoration: BoxDecoration(
-                                        gradient: authState.isLoading
-                                            ? null
-                                            : LinearGradient(colors: [color, color.withOpacity(0.8)]),
-                                        color: authState.isLoading ? DiklyColors.grey200 : null,
-                                        borderRadius: BorderRadius.circular(16),
-                                        boxShadow: authState.isLoading ? [] : [
-                                          BoxShadow(color: color.withOpacity(0.4), blurRadius: 16, offset: const Offset(0, 6)),
-                                        ],
-                                      ),
-                                      child: ElevatedButton(
-                                        onPressed: authState.isLoading ? null : _login,
-                                        style: ElevatedButton.styleFrom(
-                                          backgroundColor: Colors.transparent,
-                                          shadowColor: Colors.transparent,
-                                          foregroundColor: Colors.white,
-                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                    child: ElevatedButton(
+                                      onPressed: authState.isLoading ? null : _login,
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: DiklyColors.primary,
+                                        disabledBackgroundColor: const Color(0xFFE4E4E7),
+                                        foregroundColor: Colors.white,
+                                        shadowColor: Colors.transparent,
+                                        elevation: 0,
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(12),
                                         ),
-                                        child: authState.isLoading
-                                            ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5))
-                                            : Text('Sign In', style: GoogleFonts.dmSans(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.white)),
+                                      ).copyWith(
+                                        // Indigo glow shadow when enabled
+                                        shadowColor: WidgetStateProperty.resolveWith((s) =>
+                                            s.contains(WidgetState.disabled)
+                                                ? Colors.transparent
+                                                : const Color(0x666366F1)),
+                                        elevation: WidgetStateProperty.resolveWith((s) =>
+                                            s.contains(WidgetState.disabled) ? 0 : 4),
                                       ),
+                                      child: authState.isLoading
+                                          ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5))
+                                          : Text('Sign In', style: GoogleFonts.dmSans(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.white)),
                                     ),
                                   ),
                                 ],
@@ -360,11 +362,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   Center(
                     child: Column(
                       children: [
-                        Text('DIKLY · Secure Portal', style: GoogleFonts.dmSans(fontSize: 12, color: Colors.white38)),
+                        Text('DIKLY · Secure Portal', style: GoogleFonts.dmSans(fontSize: 12, color: const Color(0xFFA1A1AA))),
                         const SizedBox(height: 6),
                         GestureDetector(
                           onTap: () => context.go('/portal'),
-                          child: Text('Switch portal', style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w600, color: DiklyColors.primaryLight)),
+                          child: Text('Switch portal', style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w600, color: const Color(0xFF818CF8))),
                         ),
                       ],
                     ),

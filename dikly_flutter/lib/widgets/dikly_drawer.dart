@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../core/theme.dart';
 
 class DrawerItem {
@@ -15,9 +16,17 @@ class DrawerSection {
   const DrawerSection({this.header, required this.items});
 }
 
-/// Shared sidebar drawer matching the website design.
-/// White background, DIKLY logo at top, grouped sections,
-/// active item: left border + tint + colored icon/text.
+// Dark zinc sidebar palette
+const _bg        = Color(0xFF18181B); // zinc-900
+const _surface   = Color(0xFF27272A); // zinc-800 — active item
+const _border    = Color(0xFF3F3F46); // zinc-700 — divider
+const _textInact = Color(0xFFD4D4D8); // zinc-300 — inactive text
+const _textMuted = Color(0xFF71717A); // zinc-500 — section headers
+const _textWhite = Colors.white;
+
+/// Shared sidebar drawer — dark zinc aesthetic.
+/// Dark #18181B background, section headers in zinc-500,
+/// active item pill in zinc-800 with white text + indigo icon.
 class DiklyDrawer extends StatelessWidget {
   final String portalTitle;
   final Color accentColor;
@@ -43,57 +52,80 @@ class DiklyDrawer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Drawer(
-      backgroundColor: Colors.white,
+      backgroundColor: _bg,
       child: SafeArea(
         child: Column(
           children: [
             // ── Header ────────────────────────────────────────────────
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+              padding: const EdgeInsets.fromLTRB(16, 20, 16, 14),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // Logo row
                   Row(
                     children: [
-                      Image.asset('assets/icon.png', width: 40, height: 40),
+                      Container(
+                        width: 36,
+                        height: 36,
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            colors: [Color(0xFF6366F1), Color(0xFF4F46E5)],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                          borderRadius: BorderRadius.circular(9),
+                        ),
+                        child: Center(
+                          child: Text(
+                            'D',
+                            style: GoogleFonts.dmSans(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w800,
+                              color: Colors.white,
+                              height: 1.0,
+                            ),
+                          ),
+                        ),
+                      ),
                       const SizedBox(width: 10),
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text(
+                          Text(
                             'DIKLY',
-                            style: TextStyle(
-                              fontSize: 20,
+                            style: GoogleFonts.dmSans(
+                              fontSize: 18,
                               fontWeight: FontWeight.w800,
-                              color: Color(0xFF1A237E),
+                              color: _textWhite,
+                              letterSpacing: 0.5,
                             ),
                           ),
                           Text(
                             portalTitle,
-                            style: TextStyle(
+                            style: GoogleFonts.dmSans(
                               fontSize: 11,
                               color: accentColor,
-                              fontWeight: FontWeight.w600,
+                              fontWeight: FontWeight.w500,
                             ),
                           ),
                         ],
                       ),
                     ],
                   ),
-                  const SizedBox(height: 14),
+                  const SizedBox(height: 18),
                   // User info
                   Row(
                     children: [
                       CircleAvatar(
                         radius: 20,
-                        backgroundColor: accentColor.withOpacity(0.12),
+                        backgroundColor: accentColor.withOpacity(0.20),
                         child: Text(
                           userName.isNotEmpty ? userName[0].toUpperCase() : 'U',
                           style: TextStyle(
                             color: accentColor,
                             fontWeight: FontWeight.w700,
-                            fontSize: 16,
+                            fontSize: 15,
                           ),
                         ),
                       ),
@@ -104,18 +136,18 @@ class DiklyDrawer extends StatelessWidget {
                           children: [
                             Text(
                               userName,
-                              style: const TextStyle(
+                              style: GoogleFonts.dmSans(
                                 fontWeight: FontWeight.w700,
                                 fontSize: 13,
-                                color: DiklyColors.textPrimary,
+                                color: _textWhite,
                               ),
                               overflow: TextOverflow.ellipsis,
                             ),
                             Text(
                               userEmail,
-                              style: const TextStyle(
+                              style: GoogleFonts.dmSans(
                                 fontSize: 11,
-                                color: DiklyColors.textSecondary,
+                                color: _textMuted,
                               ),
                               overflow: TextOverflow.ellipsis,
                             ),
@@ -124,27 +156,27 @@ class DiklyDrawer extends StatelessWidget {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 6),
+                  const SizedBox(height: 8),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                     decoration: BoxDecoration(
-                      color: accentColor.withOpacity(0.10),
+                      color: accentColor.withOpacity(0.15),
                       borderRadius: BorderRadius.circular(6),
                     ),
                     child: Text(
                       userRole.toUpperCase(),
-                      style: TextStyle(
+                      style: GoogleFonts.dmSans(
                         fontSize: 10,
                         color: accentColor,
                         fontWeight: FontWeight.w700,
-                        letterSpacing: 0.5,
+                        letterSpacing: 0.8,
                       ),
                     ),
                   ),
                 ],
               ),
             ),
-            const Divider(height: 1, color: Color(0xFFEEEEEE)),
+            const Divider(height: 1, color: _border),
 
             // ── Menu items ────────────────────────────────────────────
             Expanded(
@@ -154,13 +186,13 @@ class DiklyDrawer extends StatelessWidget {
                   for (final section in sections) ...[
                     if (section.header != null)
                       Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 14, 16, 4),
+                        padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
                         child: Text(
                           section.header!,
-                          style: const TextStyle(
+                          style: GoogleFonts.dmSans(
                             fontSize: 10,
-                            fontWeight: FontWeight.w700,
-                            color: Color(0xFF9E9E9E),
+                            fontWeight: FontWeight.w600,
+                            color: _textMuted,
                             letterSpacing: 1.2,
                           ),
                         ),
@@ -176,7 +208,7 @@ class DiklyDrawer extends StatelessWidget {
                         },
                       ),
                   ],
-                  const Divider(height: 24, color: Color(0xFFEEEEEE)),
+                  const Divider(height: 24, color: _border),
                   // Sign out
                   _DrawerTile(
                     item: const DrawerItem(Icons.logout, 'Sign Out', ''),
@@ -209,34 +241,34 @@ class _DrawerTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = isActive ? accentColor : const Color(0xFF4B5563);
+    final iconColor = isActive ? DiklyColors.primary : _textMuted;
+    final textColor = isActive ? _textWhite : _textInact;
+
     return InkWell(
       onTap: onTap,
+      highlightColor: Colors.white.withOpacity(0.04),
+      splashColor: Colors.white.withOpacity(0.06),
+      borderRadius: BorderRadius.circular(8),
       child: Container(
         margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 1),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
         decoration: BoxDecoration(
-          color: isActive ? accentColor.withOpacity(0.07) : Colors.transparent,
+          color: isActive ? _surface : Colors.transparent,
           borderRadius: BorderRadius.circular(8),
-          border: isActive
-              ? Border(left: BorderSide(color: accentColor, width: 3))
-              : null,
         ),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
-          child: Row(
-            children: [
-              Icon(item.icon, size: 20, color: color),
-              const SizedBox(width: 14),
-              Text(
-                item.label,
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
-                  color: color,
-                ),
+        child: Row(
+          children: [
+            Icon(item.icon, size: 18, color: iconColor),
+            const SizedBox(width: 12),
+            Text(
+              item.label,
+              style: GoogleFonts.dmSans(
+                fontSize: 14,
+                fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
+                color: textColor,
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
