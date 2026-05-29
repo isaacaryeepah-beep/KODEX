@@ -2797,9 +2797,11 @@ function buildSidebar() {
       links.push({ id: 'subscription', label: 'Subscription', icon: subscriptionIcon() });
       break;
     case 'superadmin':
-      links.push({ id: 'superadmin-platform', label: 'Platform',   icon: svgIcon('<rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>') });
-      links.push({ id: 'approvals',            label: 'Approvals',  icon: approvalsIcon() });
-      links.push({ id: 'search',               label: 'Search',     icon: svgIcon('<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>') });
+      links.push({ id: 'superadmin-platform', label: 'Platform',     icon: svgIcon('<rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>') });
+      links.push({ id: 'approvals',            label: 'Approvals',    icon: approvalsIcon() });
+      links.push({ id: 'search',               label: 'Search',       icon: svgIcon('<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>') });
+      links.push({ sep: true, label: 'SUPPORT' });
+      links.push({ id: 'subscription',         label: 'Subscription', icon: subscriptionIcon() });
       break;
   }
 
@@ -11857,6 +11859,52 @@ async function paySubscription() {
 async function renderSubscription() {
   const content = document.getElementById('main-content');
   if (!content) return;
+
+  // Superadmin manages all company subscriptions — show platform overview
+  if (currentUser && currentUser.role === 'superadmin') {
+    content.innerHTML = '<div class="loading">Loading platform subscriptions…</div>';
+    try {
+      const data = await api('/api/auth/me').catch(() => ({}));
+      content.innerHTML = `
+        <div class="page-header">
+          <h2>Platform Subscriptions</h2>
+          <p>Manage and monitor all institution subscription plans</p>
+        </div>
+        <div class="card" style="max-width:560px;margin-bottom:20px;">
+          <div style="display:flex;align-items:center;gap:14px;margin-bottom:20px;">
+            <div style="width:48px;height:48px;border-radius:14px;background:linear-gradient(135deg,#6366f1,#8b5cf6);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+            </div>
+            <div>
+              <div style="font-weight:700;font-size:16px;color:#0f172a;">DIKLY Platform Admin</div>
+              <div style="font-size:13px;color:#64748b;">You manage subscription plans for all institutions on the platform</div>
+            </div>
+          </div>
+          <div style="background:#f8fafc;border-radius:10px;padding:16px;margin-bottom:16px;">
+            <div style="font-size:13px;font-weight:700;color:#374151;margin-bottom:10px;">Superadmin Access Includes</div>
+            <ul style="font-size:13px;color:#64748b;margin:0;padding-left:18px;line-height:2;">
+              <li>Full platform oversight across all companies</li>
+              <li>Approve &amp; manage institution accounts</li>
+              <li>Monitor subscription status for all tenants</li>
+              <li>Access platform-level analytics &amp; audit logs</li>
+              <li>Manage payment plans &amp; billing settings</li>
+            </ul>
+          </div>
+          <div style="display:flex;gap:10px;flex-wrap:wrap;">
+            <button onclick="navigateTo('superadmin-platform')" style="display:inline-flex;align-items:center;gap:8px;padding:10px 18px;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;box-shadow:0 4px 12px rgba(99,102,241,.3);">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+              Platform Dashboard
+            </button>
+            <button onclick="navigateTo('approvals')" style="display:inline-flex;align-items:center;gap:8px;padding:10px 18px;background:#f1f5f9;color:#374151;border:1.5px solid #e2e8f0;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;">
+              Pending Approvals
+            </button>
+          </div>
+        </div>`;
+    } catch(e) {
+      content.innerHTML = `<div class="card"><p style="color:var(--danger)">${esc(e.message)}</p></div>`;
+    }
+    return;
+  }
 
   // HODs see the institution subscription status
   if (currentUser && currentUser.role === 'hod') {
