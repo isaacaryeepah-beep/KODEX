@@ -127,19 +127,6 @@ app.use(cors({
   optionsSuccessStatus: 204,
 }));
 
-// Explicit OPTIONS handler for all routes — ensures preflight works even if nginx
-// does not proxy OPTIONS to this process (some nginx configs block non-GET/POST).
-app.options('*', cors({
-  origin: (origin, callback) => {
-    if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
-    return callback(new Error(`CORS blocked: ${origin}`));
-  },
-  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization", "x-esp32-secret", "x-esp32-token",
-    "x-device-id", "x-session-token", "x-request-time"],
-  credentials: true,
-  optionsSuccessStatus: 204,
-}));
 
 app.use((req, res, next) => {
   if (req.path === "/api/webhooks/paystack") {
