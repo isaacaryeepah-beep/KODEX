@@ -1666,7 +1666,7 @@ input[type="checkbox"] {
   .topbar .user-info strong { display: none; }
   .topbar { padding: 0 14px; height: 54px; }
   .topbar-right { gap: 8px; }
-  .content { padding: 14px; padding-bottom: calc(62px + env(safe-area-inset-bottom, 0px) + 20px); }
+  .content { margin-left: 0 !important; width: 100% !important; max-width: 100% !important; padding: 14px; padding-bottom: calc(62px + env(safe-area-inset-bottom, 0px) + 20px); box-sizing: border-box; }
   .main-layout { flex: 1; min-height: 0; }
 }
 
