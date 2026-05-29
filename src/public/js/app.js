@@ -2704,7 +2704,7 @@ function buildSidebar() {
       links.push({ id: 'hod-overview',     label: 'Overview',       icon: dashboardIcon() });
       links.push({ id: 'hod-sessions',     label: 'Sessions',       icon: sessionsIcon() });
       links.push({ id: 'hod-courses',      label: 'Courses',        icon: coursesIcon() });
-      links.push({ id: 'timetable',        label: 'Schedule',       icon: svgIcon('<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>') });
+      links.push({ id: 'timetable',        label: 'Timetable',      icon: svgIcon('<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>') });
       links.push({ id: 'hod-lecturers',    label: 'Lecturers',      icon: svgIcon('<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>') });
       links.push({ id: 'hod-students',     label: 'Students',       icon: usersIcon() });
       links.push({ sep: true, label: 'INSIGHTS' });
@@ -2733,7 +2733,7 @@ function buildSidebar() {
       links.push({ id: 'courses', label: 'Courses', icon: coursesIcon() });
       links.push({ id: 'course-videos', label: 'Course Videos', icon: svgIcon('<polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>') });
       links.push({ id: 'quizzes', label: 'Proctored/Snap Quiz', icon: quizzesIcon() });
-      links.push({ id: 'timetable', label: 'Schedule', icon: svgIcon('<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>') });
+      links.push({ id: 'timetable', label: 'Timetable', icon: svgIcon('<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>') });
       links.push({ id: 'question-bank', label: 'Question Bank', icon: svgIcon('<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>') });
       links.push({ id: 'assignments', label: 'Assignment', icon: assignmentsIcon() });
       links.push({ id: 'gradebook', label: 'Grade Book', icon: svgIcon('<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>') });
@@ -2775,7 +2775,7 @@ function buildSidebar() {
       links.push({ id: 'my-attendance', label: 'My Attendance', icon: sessionsIcon() });
       links.push({ sep: true, label: 'ACADEMIC' });
       links.push({ id: 'courses', label: 'My Courses', icon: coursesIcon() });
-      links.push({ id: 'timetable', label: 'Schedule', icon: svgIcon('<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>') });
+      links.push({ id: 'timetable', label: 'Timetable', icon: svgIcon('<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>') });
       links.push({ id: 'quizzes', label: 'Proctored/Snap Quiz', icon: quizzesIcon() });
       links.push({ id: 'assignments', label: 'Assignment', icon: assignmentsIcon() });
       links.push({ id: 'gradebook', label: 'My Grades', icon: svgIcon('<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>') });
@@ -14009,7 +14009,7 @@ async function renderLecturerTimetable() {
     content.innerHTML = `
       <div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;margin-bottom:20px">
         <div>
-          <h2 style="font-size:22px;font-weight:800;letter-spacing:-.5px;color:#0f172a;margin-bottom:2px">My Schedule</h2>
+          <h2 style="font-size:22px;font-weight:800;letter-spacing:-.5px;color:#0f172a;margin-bottom:2px">My Timetable</h2>
           <p style="color:#64748b;font-size:13px">Your weekly class timetable — click any slot to edit</p>
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
@@ -14054,7 +14054,7 @@ async function renderStudentTimetable() {
     content.innerHTML = `
       <div class="page-header" style="margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
         <div>
-          <h2 style="font-size:22px;font-weight:800;letter-spacing:-.5px;color:#0f172a;margin-bottom:2px">${isHod ? 'Department Schedule' : 'My Schedule'}</h2>
+          <h2 style="font-size:22px;font-weight:800;letter-spacing:-.5px;color:#0f172a;margin-bottom:2px">${isHod ? 'Department Timetable' : 'My Timetable'}</h2>
           <p style="color:#64748b;font-size:13px">${isHod ? 'Read-only view of all department class slots' : 'Your weekly class timetable based on enrolled courses'}</p>
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
