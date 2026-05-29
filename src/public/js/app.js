@@ -1586,6 +1586,7 @@ async function handleAdminLogin() {
     localStorage.setItem('token', token);
     if (data.refreshToken) localStorage.setItem('refreshToken', data.refreshToken);
     currentUser = data.user;
+    if (window.DiklyIDB) window.DiklyIDB.saveUserSession(data.user, data.token).catch(() => {});
     showDashboard(data);
     requestPushPermission().catch(() => {});
   } catch (e) {
@@ -2189,6 +2190,7 @@ async function handleLogout() {
   try {
     if (isOnline()) await api('/api/auth/logout', { method: 'POST' });
   } catch (e) {}
+  if (window.DiklyIDB) window.DiklyIDB.clearAll().catch(() => {});
   resetBranding();
   token = null;
   currentUser = null;
@@ -2646,6 +2648,7 @@ function buildSidebar() {
         links.push({ sep: true, label: 'WORKFORCE' });
         links.push({ id: 'sign-in-out',    label: 'Sign In / Out',   icon: attendanceIcon() });
         links.push({ id: 'corp-attendance',label: 'Team Attendance', icon: svgIcon('<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/><polyline points="9 11 12 14 22 4"/>') });
+        links.push({ id: 'corp-clock-settings', label: 'Clock Settings', icon: svgIcon('<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/><circle cx="12" cy="12" r="2"/>') });
         links.push({ id: 'shifts',         label: 'Shifts',          icon: svgIcon('<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>') });
         links.push({ id: 'leave-requests', label: 'Leave Requests',  icon: svgIcon('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>') });
         links.push({ id: 'timesheets',     label: 'Timesheets',      icon: svgIcon('<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="14" x2="16" y2="14"/>') });
@@ -2859,6 +2862,7 @@ function navigateTo(view) {
     case 'emp-assistant': renderEmpAssistant(); break;
     case 'sign-in-out': renderSignInOut(); break;
     case 'corp-attendance': renderCorporateAttendance(); break;
+    case 'corp-clock-settings': renderCorpClockSettings(); break;
     case 'subscription': renderSubscription(); break;
     case 'reports': renderReports(); break;
     case 'shifts': renderShifts(); break;
@@ -3198,10 +3202,20 @@ async function renderHodDashboard(content) {
     const activeSess = sessions.filter(s => s.active).length;
 
     content.innerHTML = `
-      <div class="page-header">
+      <div class="page-header" style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px;">
         <div>
           <h2>Department Overview</h2>
           <p>Welcome back, ${currentUser.name} · <strong style="color:#0891b2;">${currentUser.department || 'No Department Assigned'}</strong> — ${currentUser.company?.name || ''}</p>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+          <button class="btn btn-primary" onclick="navigateTo('class-rep-mgmt')" style="display:inline-flex;align-items:center;gap:6px;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/><polyline points="9 11 12 14 22 4"/></svg>
+            Class Reps
+          </button>
+          <button class="btn btn-secondary" onclick="navigateTo('announcements')" style="display:inline-flex;align-items:center;gap:6px;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+            Announce
+          </button>
         </div>
       </div>
       <div class="stats-grid" style="margin-bottom:20px;">
@@ -7470,7 +7484,15 @@ async function renderMeetings() {
           ${isLive && canControl ? `<button style="flex:1;background:#22c55e;color:#fff;border:none;padding:10px 14px;border-radius:9px;font-weight:700;cursor:pointer;font-size:14px;min-width:90px;" onclick="startMeeting('${m._id}')">▶ Rejoin</button>` : ''}
           ${isLive && isDeviceLocked ? `<span style="background:#fef3c7;color:#92400e;padding:8px 12px;border-radius:9px;font-size:12px;font-weight:600;">🔒 Locked</span>` : ''}
           ${isScheduled && !canControl ? `<span style="background:#eff6ff;color:#1d4ed8;padding:8px 12px;border-radius:9px;font-size:12px;font-weight:600;">Not Live Yet</span>` : ''}
-          ${canControl && isScheduled ? `<button style="flex:1;background:#3b82f6;color:#fff;border:none;padding:10px 14px;border-radius:9px;font-weight:700;cursor:pointer;font-size:14px;min-width:90px;" onclick="startMeeting('${m._id}')">▶ Start</button>` : ''}
+          ${canControl && isScheduled ? (() => {
+            const now = Date.now();
+            const start = m.scheduledStart ? new Date(m.scheduledStart).getTime() : 0;
+            const minsUntil = Math.ceil((start - now) / 60000);
+            const canStart = now >= start - 60000; // allow 1 min early
+            return canStart
+              ? `<button style="flex:1;background:#3b82f6;color:#fff;border:none;padding:10px 14px;border-radius:9px;font-weight:700;cursor:pointer;font-size:14px;min-width:90px;" onclick="startMeeting('${m._id}')">▶ Start</button>`
+              : `<button disabled style="flex:1;background:#93c5fd;color:#fff;border:none;padding:10px 14px;border-radius:9px;font-weight:600;font-size:13px;min-width:90px;cursor:not-allowed;" title="Meeting hasn't reached its scheduled time">⏳ In ${minsUntil}m</button>`;
+          })() : ''}
           ${canControl && isLive ? `<button style="background:#0ea5e9;color:#fff;border:none;padding:10px 14px;border-radius:9px;font-weight:700;cursor:pointer;" onclick="openMeetingMonitor('${m._id}')">👁 Monitor</button>` : ''}
           ${canControl && isLive ? `<button style="background:#ef4444;color:#fff;border:none;padding:10px 14px;border-radius:9px;font-weight:700;cursor:pointer;" onclick="endMeeting('${m._id}')">■ End</button>` : ''}
           ${canControl && (isScheduled || isLive) ? `<button style="background:#f1f5f9;color:#374151;border:none;padding:10px 14px;border-radius:9px;font-weight:600;cursor:pointer;" onclick="cancelMeeting('${m._id}')">Cancel</button>` : ''}
@@ -15952,6 +15974,109 @@ async function _caSaveSettings() {
 }
 
 // ── SHIFTS (Admin/Manager) ─────────────────────────────────────────────────
+// ── Corporate Clock In/Out Settings (direct admin page) ───────────────────
+async function renderCorpClockSettings() {
+  const content = document.getElementById('main-content');
+  if (!content) return;
+  content.innerHTML = '<div class="loading">Loading settings…</div>';
+  try {
+    const [s, win] = await Promise.all([
+      api('/api/corporate-attendance/settings').catch(() => ({})),
+      api('/api/corporate-attendance/clock-window').catch(() => ({})),
+    ]);
+
+    content.innerHTML = `
+      <div class="page-header" style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px;">
+        <div>
+          <h2>Clock In / Out Settings</h2>
+          <p>Configure attendance restrictions and allowed clock-in/out time windows.</p>
+        </div>
+        <button class="btn btn-secondary btn-sm" onclick="navigateTo('corp-attendance')">← Team Attendance</button>
+      </div>
+
+      <div class="card" style="max-width:600px;margin-bottom:20px">
+        <h3 style="font-size:15px;font-weight:700;margin-bottom:4px">Strict Attendance Settings</h3>
+        <p style="font-size:12px;color:var(--text-light);margin-bottom:18px">Employees can only clock in when on company WiFi AND inside the office geofence.</p>
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--border)">
+          <div>
+            <div style="font-weight:600;font-size:13px">Require Company WiFi</div>
+            <div style="font-size:11px;color:var(--text-light)">Employees must be on the company IP range to clock in</div>
+          </div>
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+            <input type="checkbox" id="cas-require-wifi" ${s.requireWifi ? 'checked' : ''} style="width:16px;height:16px;cursor:pointer">
+          </label>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--border)">
+          <div>
+            <div style="font-weight:600;font-size:13px">Require Geofence</div>
+            <div style="font-size:11px;color:var(--text-light)">Employees must be within the office location radius</div>
+          </div>
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+            <input type="checkbox" id="cas-require-geo" ${s.requireGeofence ? 'checked' : ''} style="width:16px;height:16px;cursor:pointer">
+          </label>
+        </div>
+        <div style="padding:12px 0;border-bottom:1px solid var(--border)">
+          <div style="font-weight:600;font-size:13px;margin-bottom:6px">Allowed IP Addresses</div>
+          <div style="font-size:11px;color:var(--text-light);margin-bottom:8px">Comma-separated list of allowed IPs (leave blank to allow all)</div>
+          <input id="cas-ips" value="${esc((s.allowedIPs||[]).join(', '))}" placeholder="e.g. 192.168.1.1, 10.0.0.1" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;font-family:monospace">
+          <div style="margin-top:6px;display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-muted)">
+            My current IP: <strong id="cas-myip">—</strong>
+            <button onclick="_caDetectMyIP(true)" style="background:#f1f5f9;border:none;border-radius:6px;padding:2px 8px;font-size:11px;cursor:pointer">Detect &amp; Add</button>
+          </div>
+        </div>
+        <div style="padding:12px 0">
+          <div style="font-weight:600;font-size:13px;margin-bottom:6px">Geofence</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:8px">
+            <div>
+              <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-muted)">Latitude</label>
+              <input id="cas-lat" type="number" step="any" value="${s.geofence?.lat||''}" placeholder="e.g. 5.6037" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:13px">
+            </div>
+            <div>
+              <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-muted)">Longitude</label>
+              <input id="cas-lng" type="number" step="any" value="${s.geofence?.lng||''}" placeholder="e.g. -0.1870" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:13px">
+            </div>
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-muted)">Radius (metres)</label>
+            <input id="cas-radius" type="number" value="${s.geofence?.radius||100}" placeholder="100" style="width:120px;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:13px">
+          </div>
+        </div>
+        <button class="btn btn-primary" onclick="_caSaveSettings()" style="margin-top:8px">Save Attendance Settings</button>
+      </div>
+
+      <div class="card" style="max-width:600px">
+        <h3 style="font-size:15px;font-weight:700;margin-bottom:4px">Clock-In / Clock-Out Time Windows</h3>
+        <p style="font-size:12px;color:var(--text-light);margin-bottom:18px">Restrict the times of day when employees can clock in or out. Leave blank for no restriction.</p>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
+          <div>
+            <div style="font-weight:700;font-size:13px;margin-bottom:8px;color:#0891b2">Clock-In Window</div>
+            <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px">
+              <input type="time" id="cw-ci-start" value="${win.clockIn?.start||''}" style="flex:1;padding:7px;border:1px solid var(--border);border-radius:6px;font-size:13px">
+              <span style="color:var(--text-muted)">to</span>
+              <input type="time" id="cw-ci-end"   value="${win.clockIn?.end  ||''}" style="flex:1;padding:7px;border:1px solid var(--border);border-radius:6px;font-size:13px">
+            </div>
+          </div>
+          <div>
+            <div style="font-weight:700;font-size:13px;margin-bottom:8px;color:#7c3aed">Clock-Out Window</div>
+            <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px">
+              <input type="time" id="cw-co-start" value="${win.clockOut?.start||''}" style="flex:1;padding:7px;border:1px solid var(--border);border-radius:6px;font-size:13px">
+              <span style="color:var(--text-muted)">to</span>
+              <input type="time" id="cw-co-end"   value="${win.clockOut?.end  ||''}" style="flex:1;padding:7px;border:1px solid var(--border);border-radius:6px;font-size:13px">
+            </div>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-primary" onclick="_caSaveClockWindow()">Save Time Windows</button>
+          <button class="btn btn-secondary" onclick="_caClearClockWindow()">Clear All Windows</button>
+        </div>
+      </div>`;
+
+    _caDetectMyIP(false);
+  } catch(e) {
+    content.innerHTML = `<div class="card"><p style="color:var(--danger)">${esc(e.message)}</p></div>`;
+  }
+}
+
 async function renderShifts() {
   const content = document.getElementById('main-content');
   if (!content) return;
@@ -20364,9 +20489,14 @@ function renderCourseVideos() {
         </div>
       </div>
       <div id="cv-body">
-        <div class="empty-state" style="padding:3rem 1rem">
-          ${svgIcon('<circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8"/>', 40, 'var(--text-muted)')}
-          <p style="margin:.75rem 0 0">Loading videos…</p>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:1rem">
+          ${Array(6).fill(0).map(() => `<div class="card" style="padding:0;overflow:hidden;">
+            <div style="aspect-ratio:16/9;background:var(--border);animation:pulse 1.5s ease-in-out infinite"></div>
+            <div style="padding:.75rem">
+              <div style="height:13px;background:var(--border);border-radius:4px;margin-bottom:.5rem;width:75%;animation:pulse 1.5s ease-in-out infinite"></div>
+              <div style="height:11px;background:var(--border);border-radius:4px;width:50%;animation:pulse 1.5s ease-in-out infinite"></div>
+            </div>
+          </div>`).join('')}
         </div>
       </div>`;
     _renderStudentVideos();
@@ -20570,12 +20700,21 @@ async function renderClassAnnouncements() {
   try {
     const [annData] = await Promise.all([api('/api/announcements')]);
     const allAnns = annData.announcements || [];
-    // Show only announcements posted by this class rep or targeting their course
-    const courseId = currentUser.classRepCourse;
-    const classAnns = allAnns.filter(a =>
-      (a.audience === 'course' && String(a.targetCourse) === String(courseId)) ||
-      String(a.author?._id || a.author) === String(currentUser._id)
-    );
+    // Show announcements for this class group (posted by any class rep of the same group)
+    const classAnns = allAnns.filter(a => {
+      if (String(a.author?._id || a.author) === String(currentUser._id)) return true;
+      if (a.audience === 'class_group' && a.classGroup) {
+        return (
+          String(a.classGroup.studentLevel || '') === String(currentUser.studentLevel || '') &&
+          String(a.classGroup.studentGroup  || '') === String(currentUser.studentGroup  || '') &&
+          String(a.classGroup.sessionType   || '') === String(currentUser.sessionType   || '') &&
+          String(a.classGroup.semester      || '') === String(currentUser.semester      || '') &&
+          String(a.classGroup.programme     || '') === String(currentUser.programme     || '')
+        );
+      }
+      if (a.audience === 'course' && String(a.targetCourse) === String(currentUser.classRepCourse)) return true;
+      return false;
+    });
 
     content.innerHTML = `
       <div class="page-header" style="margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
@@ -20658,7 +20797,19 @@ async function submitClassRepAnnouncement() {
   try {
     await api('/api/announcements', {
       method: 'POST',
-      body: JSON.stringify({ title, body, type }),
+      body: JSON.stringify({
+        title,
+        body,
+        type,
+        audience: 'class_group',
+        classGroup: {
+          studentLevel: currentUser.studentLevel,
+          studentGroup: currentUser.studentGroup,
+          sessionType:  currentUser.sessionType,
+          semester:     currentUser.semester,
+          programme:    currentUser.programme,
+        },
+      }),
     });
     closeModal();
     toastSuccess('Announcement posted to your class group!');

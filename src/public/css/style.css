@@ -1135,10 +1135,13 @@ body[data-role="student"] .trial-expired-banner {
 
 .content {
   margin-left: 228px;
-  padding: 24px 28px;
+  margin-right: auto;
+  padding: 24px 32px;
   overflow-y: auto;
   animation: fadeIn .2s ease;
-  max-width: 1180px;
+  max-width: 1020px;
+  width: calc(100% - 228px);
+  box-sizing: border-box;
   height: 100%;
 }
 
