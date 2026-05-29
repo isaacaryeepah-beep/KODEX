@@ -41,6 +41,12 @@
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
+// FS must be included first — ESP32 core 3.x puts FS in the fs:: namespace,
+// and WebServer.h expects the unqualified 'FS' name. Including FS.h first
+// and pulling it into the global namespace fixes the WebServer.h compile error.
+#include <FS.h>
+using namespace fs;
+
 #include "User_Setup.h"
 #include <TFT_eSPI.h>
 #include <WiFi.h>
@@ -55,7 +61,9 @@
 #include <ArduinoJson.h>
 #include <SPI.h>
 #include <SD.h>
-#include <FS.h>
+
+// Forward declarations
+static void startWifiReconfigPortal();
 
 // ─── Pin / Hardware Config ───────────────────────────────────────────────────
 // Confirmed from board silkscreen (Shenzhen Hong Shu Yuan ES3C28P):
