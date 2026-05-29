@@ -3208,11 +3208,11 @@ async function renderHodDashboard(content) {
           <p>Welcome back, ${currentUser.name} · <strong style="color:#0891b2;">${currentUser.department || 'No Department Assigned'}</strong> — ${currentUser.company?.name || ''}</p>
         </div>
         <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
-          <button onclick="navigateTo('class-rep-mgmt')" style="display:inline-flex;align-items:center;gap:8px;padding:10px 20px;background:linear-gradient(135deg,#0891b2,#0e7490);color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;box-shadow:0 4px 14px rgba(8,145,178,.35);letter-spacing:.2px;">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/><polyline points="9 11 12 14 22 4"/></svg>
-            Class Reps
+          <button onclick="navigateTo('announcements')" style="display:inline-flex;align-items:center;gap:8px;padding:10px 20px;background:linear-gradient(135deg,#0891b2,#0e7490);color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;box-shadow:0 4px 14px rgba(8,145,178,.35);">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+            Announcements
           </button>
-          <button onclick="navigateTo('subscription')" style="display:inline-flex;align-items:center;gap:8px;padding:10px 20px;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;box-shadow:0 4px 14px rgba(99,102,241,.35);letter-spacing:.2px;">
+          <button onclick="navigateTo('subscription')" style="display:inline-flex;align-items:center;gap:8px;padding:10px 20px;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;box-shadow:0 4px 14px rgba(99,102,241,.35);">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
             Subscription
           </button>
@@ -11858,15 +11858,109 @@ async function renderSubscription() {
   const content = document.getElementById('main-content');
   if (!content) return;
 
-  // HODs are fully free
+  // HODs see the institution subscription status
   if (currentUser && currentUser.role === 'hod') {
-    content.innerHTML = `
-      <div class="page-header"><h2>Subscription</h2><p>Your access plan</p></div>
-      <div class="card" style="max-width:480px;padding:32px;text-align:center">
-        <div style="font-size:40px;margin-bottom:12px">✅</div>
-        <h3 style="margin-bottom:8px">No Payment Required</h3>
-        <p style="color:var(--text-muted)">Your access is managed by your institution. You do not need a personal subscription.</p>
-      </div>`;
+    content.innerHTML = '<div class="loading">Loading subscription info…</div>';
+    try {
+      const meData = await api('/api/auth/me');
+      const ut        = meData.userTrial || {};
+      const status    = ut.status   || 'expired';
+      const rawDays   = ut.daysLeft || 0;
+      const daysLeft  = Math.min(rawDays, 365);
+      const expiry    = ut.subscriptionExpiry
+        ? new Date(ut.subscriptionExpiry).toLocaleDateString('en-GB', { day:'numeric', month:'long', year:'numeric' })
+        : '—';
+      const isActive  = status === 'active';
+      const isTrial   = status === 'trial';
+      const isExpired = !isActive && !isTrial;
+
+      const statusColor = isActive ? '#16a34a' : isTrial ? '#d97706' : '#dc2626';
+      const statusBg    = isActive ? '#f0fdf4' : isTrial ? '#fffbeb' : '#fef2f2';
+      const statusBorder= isActive ? '#86efac' : isTrial ? '#fde68a' : '#fca5a5';
+      const statusLabel = isActive ? 'Active' : isTrial ? 'Free Trial' : 'Expired';
+      const statusIcon  = isActive ? '✅' : isTrial ? '⏳' : '❌';
+
+      const urgentBanner = (isExpired || (daysLeft <= 14 && daysLeft > 0)) ? `
+        <div style="background:${isExpired?'#fef2f2':'#fffbeb'};border:1.5px solid ${isExpired?'#fca5a5':'#fde68a'};border-radius:12px;padding:16px 20px;margin-bottom:20px;display:flex;gap:14px;align-items:flex-start;">
+          <div style="font-size:24px;flex-shrink:0">${isExpired?'🔴':'⚠️'}</div>
+          <div>
+            <div style="font-weight:700;color:${isExpired?'#b91c1c':'#92400e'};font-size:14px;margin-bottom:4px">
+              ${isExpired ? 'Subscription Expired — Access Restricted' : `Subscription Expiring in ${daysLeft} Day${daysLeft!==1?'s':''}`}
+            </div>
+            <div style="font-size:13px;color:${isExpired?'#dc2626':'#b45309'};">
+              ${isExpired ? 'Your institution\'s subscription has expired. Contact your admin to renew immediately to restore full access.' : 'Remind your institution admin to renew before access is restricted.'}
+            </div>
+          </div>
+        </div>` : '';
+
+      content.innerHTML = `
+        <div class="page-header">
+          <h2>Subscription</h2>
+          <p>Institution access plan · ${currentUser.company?.name || 'Your Institution'}</p>
+        </div>
+
+        ${urgentBanner}
+
+        <div class="stats-grid" style="margin-bottom:24px;">
+          <div class="stat-card">
+            <div class="stat-value" style="color:${statusColor}">${statusIcon} ${statusLabel}</div>
+            <div class="stat-label">Plan Status</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" style="color:${daysLeft > 30 ? 'var(--success)' : daysLeft > 7 ? '#d97706' : '#dc2626'}">${daysLeft}</div>
+            <div class="stat-label">Days Remaining</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" style="font-size:15px">${expiry}</div>
+            <div class="stat-label">${isActive ? 'Expires On' : isTrial ? 'Trial Ends' : 'Expired On'}</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" style="font-size:14px">${currentUser.company?.name || '—'}</div>
+            <div class="stat-label">Institution</div>
+          </div>
+        </div>
+
+        <div class="card" style="max-width:520px;">
+          <div style="display:flex;align-items:center;gap:14px;margin-bottom:20px;">
+            <div style="width:48px;height:48px;border-radius:14px;background:${statusBg};border:1.5px solid ${statusBorder};display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0">${statusIcon}</div>
+            <div>
+              <div style="font-weight:700;font-size:16px;color:#0f172a;">Institution Plan</div>
+              <div style="font-size:13px;color:#64748b;">Your HOD access is included in your institution's subscription</div>
+            </div>
+          </div>
+
+          <div style="background:${statusBg};border:1.5px solid ${statusBorder};border-radius:10px;padding:14px 16px;margin-bottom:20px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+              <div>
+                <div style="font-size:13px;font-weight:700;color:${statusColor};">Status: ${statusLabel}</div>
+                <div style="font-size:12px;color:#64748b;margin-top:2px;">Expires: ${expiry}</div>
+              </div>
+              <div style="text-align:right;">
+                <div style="font-size:22px;font-weight:800;color:${statusColor};">${daysLeft}</div>
+                <div style="font-size:11px;color:#64748b;">days left</div>
+              </div>
+            </div>
+          </div>
+
+          <div style="border-top:1px solid var(--border);padding-top:16px;">
+            <div style="font-size:13px;font-weight:700;color:#374151;margin-bottom:10px;">What's Included</div>
+            <ul style="font-size:13px;color:#64748b;margin:0;padding-left:18px;line-height:2;">
+              <li>Full department management access</li>
+              <li>Student &amp; lecturer oversight</li>
+              <li>Attendance monitoring &amp; reports</li>
+              <li>Course approvals &amp; performance analytics</li>
+              <li>Class representative management</li>
+              <li>Smart alerts &amp; department messaging</li>
+            </ul>
+          </div>
+
+          <div style="margin-top:20px;padding:12px 14px;background:#f8fafc;border-radius:8px;font-size:12px;color:#64748b;">
+            💡 To renew or upgrade the institution plan, contact your <strong>institution admin</strong>. Subscription management is handled at the admin level.
+          </div>
+        </div>`;
+    } catch(e) {
+      content.innerHTML = `<div class="card"><p style="color:var(--danger)">${esc(e.message)}</p></div>`;
+    }
     return;
   }
 
