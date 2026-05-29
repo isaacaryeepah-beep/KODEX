@@ -129,7 +129,7 @@ app.use(cors({
 
 // Explicit OPTIONS handler for all routes — ensures preflight works even if nginx
 // does not proxy OPTIONS to this process (some nginx configs block non-GET/POST).
-app.options('*', cors({
+app.options('(.*)', cors({
   origin: (origin, callback) => {
     if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
     return callback(new Error(`CORS blocked: ${origin}`));
