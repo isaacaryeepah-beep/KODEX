@@ -62,7 +62,7 @@ jobs:
         run: |
           cp -r src/public/. www/
 
-      - name: Bundle Google Fonts offline (DM Sans + Inter)
+      - name: Bundle Google Fonts offline (DM Sans + DM Mono + Inter)
         run: |
           mkdir -p www/fonts
           pip install requests --quiet --break-system-packages
@@ -72,37 +72,79 @@ jobs:
 
           headers = {"User-Agent": "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36"}
           font_queries = [
-            "family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000",
-            "family=Inter:wght@100;200;300;400;500;600;700;800;900",
-            "family=Poppins:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400;1,600",
+            "family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;0,9..40,800;1,9..40,400",
+            "family=DM+Mono:wght@400;500",
+            "family=Inter:wght@300;400;500;600;700;800",
           ]
+          css_files = []
           saved = 0
           for q in font_queries:
             url = f"https://fonts.googleapis.com/css2?{q}&display=swap"
             try:
-              css = requests.get(url, headers=headers, timeout=15).text
+              css = requests.get(url, headers=headers, timeout=20).text
               font_urls = re.findall(r"url\((https://fonts\.gstatic\.com/[^)]+)\)", css)
               for fu in font_urls:
                 fname = fu.split("/")[-1].split("?")[0]
                 out = f"www/fonts/{fname}"
                 if not os.path.exists(out):
-                  data = requests.get(fu, timeout=15).content
+                  data = requests.get(fu, timeout=20).content
                   with open(out, "wb") as f:
                     f.write(data)
                   saved += 1
+              # Rewrite CSS to use local font paths
+              local_css = re.sub(r"url\(https://fonts\.gstatic\.com/[^/]+/([^)]+)\)",
+                lambda m: f"url(/fonts/{m.group(0).split('/')[-1].rstrip(')')})", css)
+              css_files.append(local_css)
             except Exception as e:
               print(f"  skip {q}: {e}")
           print(f"Downloaded {saved} font files")
+          # Write combined offline font CSS
+          with open("www/fonts/fonts.css", "w") as f:
+            f.write("\n".join(css_files))
           PYEOF
 
           echo "Font bundle size:"
           du -sh www/fonts/
+
+      - name: Bundle MathJax offline
+        run: |
+          mkdir -p www/mathjax
+          pip install requests --quiet --break-system-packages
+          python3 - <<'PYEOF'
+          import requests, os
+
+          # Download the MathJax tex-chtml bundle (all-in-one, ~7MB)
+          url = "https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js"
+          out = "www/mathjax/tex-chtml.js"
+          if not os.path.exists(out):
+            try:
+              data = requests.get(url, timeout=60).content
+              with open(out, "wb") as f:
+                f.write(data)
+              print(f"Downloaded MathJax: {len(data)//1024}KB")
+            except Exception as e:
+              print(f"MathJax download failed: {e}")
+          PYEOF
+          echo "MathJax bundle size:"
+          du -sh www/mathjax/
+
+      - name: Patch index.html for offline assets
+        run: |
+          # Point MathJax to local bundle
+          sed -i 's|https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js|/mathjax/tex-chtml.js|g' www/index.html
+          # Inject offline font CSS link (before </head>)
+          sed -i 's|</head>|  <link rel="stylesheet" href="/fonts/fonts.css">\n</head>|' www/index.html
+          # Remove the Google Fonts @import from CSS so fonts load locally
+          sed -i "s|@import url('https://fonts.googleapis.com/css2[^']*');||g" www/css/style.css
+          echo "index.html patched"
 
       - name: Report total www/ bundle size
         run: |
           echo "Total www/ size:"
           du -sh www/
           echo "File count: $(find www/ -type f | wc -l)"
+          echo "--- Size breakdown ---"
+          du -sh www/fonts/ www/mathjax/ www/js/ www/css/ 2>/dev/null || true
 
       - name: Sync Capacitor to Android
         run: npx cap sync android
