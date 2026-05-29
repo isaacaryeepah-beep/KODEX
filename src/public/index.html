@@ -1317,7 +1317,6 @@ function selectPortal(t){if(window._appLoaded)window._realSelectPortal(t);else w
     function loadFabPos() {
       try { return JSON.parse(localStorage.getItem('faq_fab_pos')); } catch(e) { return null; }
     }
-
     function setFabPos(right, bottom) {
       const vw = window.innerWidth, vh = window.innerHeight;
       right  = Math.min(Math.max(right,  8), vw - 58);
@@ -1329,62 +1328,43 @@ function selectPortal(t){if(window._appLoaded)window._realSelectPortal(t);else w
     const pos = loadFabPos();
     if (pos) setFabPos(pos.right, pos.bottom);
 
-    fab.addEventListener('mousedown', function(e) {
-      if (e.button !== 0) return;
+    // Use Pointer Events — works for both mouse and touch,
+    // setPointerCapture keeps tracking even outside the element.
+    fab.addEventListener('pointerdown', function(e) {
+      if (e.button !== undefined && e.button !== 0) return;
       isDragging = true; dragMoved = false;
-      startX = e.clientX;
-      startY = e.clientY;
+      startX = e.clientX; startY = e.clientY;
       origRight  = parseInt(fab.style.right  || '24', 10);
       origBottom = parseInt(fab.style.bottom || '80', 10);
+      fab.setPointerCapture(e.pointerId);
       fab.style.cursor = 'grabbing';
       fab.style.transform = 'scale(1.12)';
       e.preventDefault();
     });
 
-    document.addEventListener('mousemove', function(e) {
+    fab.addEventListener('pointermove', function(e) {
       if (!isDragging) return;
       const dx = e.clientX - startX;
       const dy = e.clientY - startY;
       if (Math.abs(dx) > 3 || Math.abs(dy) > 3) dragMoved = true;
-      const newRight  = origRight  - dx;
-      const newBottom = origBottom + dy;
-      setFabPos(newRight, newBottom);
+      // right decreases when moved right; bottom decreases when moved down
+      setFabPos(origRight - dx, origBottom - dy);
+      e.preventDefault();
     });
 
-    document.addEventListener('mouseup', function(e) {
+    fab.addEventListener('pointerup', function(e) {
       if (!isDragging) return;
       isDragging = false;
       fab.style.cursor = 'grab';
       fab.style.transform = '';
-      if (dragMoved) {
-        saveFabPos(parseInt(fab.style.right, 10), parseInt(fab.style.bottom, 10));
-      }
+      window._faqFabDragMoved = dragMoved;
+      if (dragMoved) saveFabPos(parseInt(fab.style.right, 10), parseInt(fab.style.bottom, 10));
     });
 
-    // Touch support
-    fab.addEventListener('touchstart', function(e) {
-      const t = e.touches[0];
-      isDragging = true; dragMoved = false;
-      startX = t.clientX; startY = t.clientY;
-      origRight  = parseInt(fab.style.right  || '24', 10);
-      origBottom = parseInt(fab.style.bottom || '80', 10);
-      fab.style.transform = 'scale(1.12)';
-    }, { passive: true });
-
-    document.addEventListener('touchmove', function(e) {
-      if (!isDragging) return;
-      const t = e.touches[0];
-      const dx = t.clientX - startX;
-      const dy = t.clientY - startY;
-      if (Math.abs(dx) > 4 || Math.abs(dy) > 4) dragMoved = true;
-      setFabPos(origRight - dx, origBottom + dy);
-    }, { passive: true });
-
-    document.addEventListener('touchend', function() {
-      if (!isDragging) return;
+    fab.addEventListener('pointercancel', function() {
       isDragging = false;
+      fab.style.cursor = 'grab';
       fab.style.transform = '';
-      if (dragMoved) saveFabPos(parseInt(fab.style.right, 10), parseInt(fab.style.bottom, 10));
     });
   })();
 
