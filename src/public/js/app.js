@@ -2640,6 +2640,7 @@ function buildSidebar() {
         links.push({ id: 'announcements', label: 'Announcements', icon: svgIcon('<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>') });
         links.push({ id: 'programmes', label: 'Programmes', icon: svgIcon('<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>') });
         links.push({ id: 'hod-unlock-students', label: 'Unlock Students', icon: svgIcon('<rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>') });
+        links.push({ id: 'class-rep-mgmt',     label: 'Class Reps',      icon: svgIcon('<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/><polyline points="9 11 12 14 22 4"/>') });
       }
       if (currentUser.company?.mode === 'corporate') {
         links.push({ sep: true, label: 'WORKFORCE' });
@@ -2716,6 +2717,7 @@ function buildSidebar() {
       links.push({ id: 'approvals',           label: 'Approvals',        icon: approvalsIcon() });
       links.push({ id: 'hod-course-approvals',label: 'Course Approvals', icon: svgIcon('<path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>') });
       links.push({ id: 'hod-unlock-students', label: 'Locked Students',  icon: svgIcon('<rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>') });
+      links.push({ id: 'class-rep-mgmt',     label: 'Class Reps',       icon: svgIcon('<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/><polyline points="9 11 12 14 22 4"/>') });
       links.push({ sep: true, label: 'SUPPORT' });
       links.push({ id: 'faq-center',       label: 'FAQ Center',     icon: svgIcon('<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>') });
       links.push({ id: 'subscription',     label: 'Subscription',   icon: subscriptionIcon() });
@@ -2879,6 +2881,7 @@ function navigateTo(view) {
 
     case 'hod-course-approvals': renderHodCourseApprovals(); break;
     case 'hod-unlock-students':  renderHodUnlockStudents(); break;
+    case 'class-rep-mgmt':       renderClassRepMgmt(); break;
     case 'hod-performance':      renderHodPerformance(); break;
     case 'hod-alerts':           renderHodAlerts(); break;
     case 'hod-messaging':        renderHodMessaging(); break;
@@ -4073,6 +4076,269 @@ Current: ${currentDept || 'None'}`, currentDept || '');
   }).catch(e => toastError(e.message || 'Failed to update department'));
 }
 
+
+// ── Class Rep Management (HOD + Admin) ────────────────────────────────────
+async function renderClassRepMgmt() {
+  const content = document.getElementById('main-content');
+  content.innerHTML = '<div class="loading">Loading class representatives…</div>';
+  try {
+    const repsData = await api('/api/class-rep-admin/list');
+    const reps = repsData.reps || [];
+
+    // Group reps by class key for the 2-rep cap display
+    const repsByClass = {};
+    reps.forEach(r => {
+      const key = `${r.studentLevel}||${r.studentGroup}||${r.sessionType}||${r.semester}||${r.programme}`;
+      if (!repsByClass[key]) repsByClass[key] = [];
+      repsByClass[key].push(r._id);
+    });
+
+    content.innerHTML = `
+      <div class="page-header" style="flex-wrap:wrap;gap:10px;">
+        <div>
+          <h2>Class Representatives</h2>
+          <p>${reps.length} active rep${reps.length !== 1 ? 's' : ''} · Max 2 per class group</p>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="crOpenBrowse()">
+          ${svgIcon('<path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/>', 14)}
+          Assign New Rep
+        </button>
+      </div>
+
+      ${reps.length === 0
+        ? `<div class="card" style="text-align:center;padding:48px 20px;">
+            <div style="width:56px;height:56px;border-radius:16px;background:#ede9fe;display:flex;align-items:center;justify-content:center;margin:0 auto 14px">
+              ${svgIcon('<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>', 24, '#7c3aed')}
+            </div>
+            <h3 style="font-size:15px;font-weight:700;color:#0f172a;margin-bottom:6px">No class reps assigned yet</h3>
+            <p style="color:#64748b;font-size:13px;margin-bottom:16px">Use "Assign New Rep" to browse students and appoint up to 2 reps per class group.</p>
+            <button class="btn btn-primary btn-sm" onclick="crOpenBrowse()">Assign New Rep</button>
+          </div>`
+        : `<div style="overflow-x:auto;">
+            <table style="width:100%;border-collapse:collapse;font-size:13px;">
+              <thead>
+                <tr style="border-bottom:2px solid var(--border);">
+                  <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Name</th>
+                  <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Index No.</th>
+                  <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Programme</th>
+                  <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Level / Group</th>
+                  <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Session</th>
+                  <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Department</th>
+                  <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;"></th>
+                </tr>
+              </thead>
+              <tbody>
+                ${reps.map(r => `
+                  <tr style="border-bottom:1px solid var(--border);">
+                    <td style="padding:10px 12px;">
+                      <div style="display:flex;align-items:center;gap:8px;">
+                        ${r.profilePhoto
+                          ? `<img src="${esc(r.profilePhoto)}" style="width:32px;height:32px;border-radius:50%;object-fit:cover;" onerror="this.style.display='none'">`
+                          : `<div style="width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#7c3aed,#6366f1);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#fff">${esc((r.name||'?')[0].toUpperCase())}</div>`}
+                        <div>
+                          <div style="font-weight:600">${esc(r.name)}</div>
+                          <div style="font-size:11px;color:var(--text-muted)">${esc(r.email||'')}</div>
+                        </div>
+                      </div>
+                    </td>
+                    <td style="padding:10px 12px;color:var(--text-muted);font-family:monospace;">${esc(r.IndexNumber||r.indexNumber||'—')}</td>
+                    <td style="padding:10px 12px;">${r.programme ? `<span style="background:#ede9fe;color:#7c3aed;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700">${esc(r.programme)}</span>` : '—'}</td>
+                    <td style="padding:10px 12px;">
+                      ${r.studentLevel ? `<span style="background:#dbeafe;color:#1d4ed8;padding:2px 7px;border-radius:20px;font-size:11px;font-weight:700;margin-right:3px">L${esc(r.studentLevel)}</span>` : ''}
+                      ${r.studentGroup ? `<span style="background:#ecfdf5;color:#059669;padding:2px 7px;border-radius:20px;font-size:11px;font-weight:700">Grp ${esc(r.studentGroup)}</span>` : ''}
+                    </td>
+                    <td style="padding:10px 12px;">
+                      ${r.sessionType ? `<span style="background:#fff7ed;color:#c2410c;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600">${esc(r.sessionType)}</span>` : '—'}
+                      ${r.semester ? `<span style="font-size:11px;color:var(--text-muted);margin-left:4px">Sem ${esc(r.semester)}</span>` : ''}
+                    </td>
+                    <td style="padding:10px 12px;color:var(--text-muted);font-size:12px">${esc(r.department||'—')}</td>
+                    <td style="padding:10px 12px;">
+                      <button class="btn btn-xs" style="background:#fee2e2;color:#b91c1c;border:1px solid #fca5a5;" onclick="crRemoveRep('${r._id}','${esc(r.name).replace(/'/g,"\\'")}')">Remove</button>
+                    </td>
+                  </tr>`).join('')}
+              </tbody>
+            </table>
+          </div>`}
+
+      <!-- Browse & Assign modal -->
+      <div id="cr-browse-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:none;align-items:center;justify-content:center;padding:16px;">
+        <div style="background:#fff;border-radius:16px;width:100%;max-width:680px;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.25);">
+          <div style="padding:20px 24px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;">
+            <div>
+              <div style="font-size:16px;font-weight:800;color:#0f172a">Browse Students</div>
+              <div style="font-size:12px;color:var(--text-muted);margin-top:2px">Filter by class group, then assign a student as class rep</div>
+            </div>
+            <button onclick="crCloseBrowse()" style="background:none;border:none;cursor:pointer;padding:4px;border-radius:8px;color:var(--text-muted)">${svgIcon('<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>', 20)}</button>
+          </div>
+          <div style="padding:20px 24px;">
+            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;margin-bottom:16px;">
+              <div>
+                <label style="font-size:11px;font-weight:700;color:var(--text-muted);display:block;margin-bottom:4px">LEVEL</label>
+                <select id="cr-f-level" style="width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;">
+                  <option value="">All</option>
+                  <option value="100">100</option><option value="200">200</option><option value="300">300</option><option value="400">400</option><option value="500">500</option>
+                </select>
+              </div>
+              <div>
+                <label style="font-size:11px;font-weight:700;color:var(--text-muted);display:block;margin-bottom:4px">GROUP</label>
+                <select id="cr-f-group" style="width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;">
+                  <option value="">All</option>
+                  <option value="A">A</option><option value="B">B</option><option value="C">C</option><option value="D">D</option>
+                </select>
+              </div>
+              <div>
+                <label style="font-size:11px;font-weight:700;color:var(--text-muted);display:block;margin-bottom:4px">SESSION</label>
+                <select id="cr-f-session" style="width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;">
+                  <option value="">All</option>
+                  <option value="Regular">Regular</option><option value="Evening">Evening</option><option value="Weekend">Weekend</option><option value="Distance">Distance</option>
+                </select>
+              </div>
+              <div>
+                <label style="font-size:11px;font-weight:700;color:var(--text-muted);display:block;margin-bottom:4px">SEMESTER</label>
+                <select id="cr-f-semester" style="width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;">
+                  <option value="">All</option>
+                  <option value="1">Sem 1</option><option value="2">Sem 2</option>
+                </select>
+              </div>
+            </div>
+            <button class="btn btn-primary btn-sm" onclick="crFetchStudents()" style="margin-bottom:16px;">Search Students</button>
+            <div id="cr-student-list"><p style="color:var(--text-muted);font-size:13px;">Use filters above then click Search.</p></div>
+          </div>
+        </div>
+      </div>`;
+  } catch(e) {
+    content.innerHTML = `<div class="card"><p style="color:#ef4444;">${e.message}</p></div>`;
+  }
+}
+
+window.crOpenBrowse = function() {
+  const modal = document.getElementById('cr-browse-modal');
+  if (modal) { modal.style.display = 'flex'; }
+};
+
+window.crCloseBrowse = function() {
+  const modal = document.getElementById('cr-browse-modal');
+  if (modal) { modal.style.display = 'none'; }
+};
+
+window.crFetchStudents = async function() {
+  const listEl = document.getElementById('cr-student-list');
+  if (!listEl) return;
+  listEl.innerHTML = '<div class="loading" style="padding:16px 0;">Loading…</div>';
+  try {
+    const level    = document.getElementById('cr-f-level')?.value    || '';
+    const group    = document.getElementById('cr-f-group')?.value    || '';
+    const session  = document.getElementById('cr-f-session')?.value  || '';
+    const semester = document.getElementById('cr-f-semester')?.value || '';
+    const params = new URLSearchParams();
+    if (level)    params.set('level', level);
+    if (group)    params.set('group', group);
+    if (session)  params.set('sessionType', session);
+    if (semester) params.set('semester', semester);
+
+    const data = await api('/api/class-rep-admin/students?' + params.toString());
+    const students = data.students || [];
+
+    // Count reps per class key from the loaded students themselves
+    const repCountByKey = {};
+    students.forEach(s => {
+      const key = `${s.studentLevel}||${s.studentGroup}||${s.sessionType}||${s.semester}||${s.programme}`;
+      if (!repCountByKey[key]) repCountByKey[key] = 0;
+      if (s.isClassRep) repCountByKey[key]++;
+    });
+
+    if (students.length === 0) {
+      listEl.innerHTML = '<p style="color:var(--text-muted);font-size:13px;">No students found for those filters.</p>';
+      return;
+    }
+
+    listEl.innerHTML = `
+      <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">${students.length} student${students.length!==1?'s':''} found · reps shown at top</div>
+      <div style="overflow-x:auto;">
+        <table style="width:100%;border-collapse:collapse;font-size:13px;">
+          <thead>
+            <tr style="border-bottom:2px solid var(--border);">
+              <th style="text-align:left;padding:8px 10px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Name</th>
+              <th style="text-align:left;padding:8px 10px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Index</th>
+              <th style="text-align:left;padding:8px 10px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Level/Group</th>
+              <th style="text-align:left;padding:8px 10px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Status</th>
+              <th style="text-align:left;padding:8px 10px;"></th>
+            </tr>
+          </thead>
+          <tbody>
+            ${students.map(s => {
+              const key = `${s.studentLevel}||${s.studentGroup}||${s.sessionType}||${s.semester}||${s.programme}`;
+              const repCount = repCountByKey[key] || 0;
+              const atCap = repCount >= 2;
+              const isRep = s.isClassRep;
+              return `<tr style="border-bottom:1px solid var(--border);${isRep?'background:#faf5ff;':''}">
+                <td style="padding:8px 10px;font-weight:600;">${esc(s.name)}</td>
+                <td style="padding:8px 10px;color:var(--text-muted);font-family:monospace;font-size:12px;">${esc(s.IndexNumber||s.indexNumber||'—')}</td>
+                <td style="padding:8px 10px;">
+                  ${s.studentLevel ? `<span style="background:#dbeafe;color:#1d4ed8;padding:1px 6px;border-radius:20px;font-size:11px;font-weight:700">L${esc(s.studentLevel)}</span>` : ''}
+                  ${s.studentGroup ? `<span style="background:#ecfdf5;color:#059669;padding:1px 6px;border-radius:20px;font-size:11px;font-weight:700;margin-left:2px">Grp ${esc(s.studentGroup)}</span>` : ''}
+                </td>
+                <td style="padding:8px 10px;">
+                  ${isRep
+                    ? `<span style="background:#7c3aed;color:#fff;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:800;">CLASS REP</span>`
+                    : `<span style="background:#f1f5f9;color:#64748b;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:600;">Student</span>`}
+                  ${atCap && !isRep ? `<span style="font-size:10px;color:#dc2626;margin-left:4px">2/2 cap</span>` : ''}
+                </td>
+                <td style="padding:8px 10px;text-align:right;">
+                  ${isRep
+                    ? `<button class="btn btn-xs" style="background:#fee2e2;color:#b91c1c;border:1px solid #fca5a5;" onclick="crRemoveRepBrowse('${s._id}','${esc(s.name).replace(/'/g,"\\'")}')">Remove</button>`
+                    : atCap
+                      ? `<button class="btn btn-xs" disabled style="opacity:.4;cursor:not-allowed;">Cap reached</button>`
+                      : `<button class="btn btn-xs btn-primary" onclick="crAssignRep('${s._id}','${esc(s.name).replace(/'/g,"\\'")}')">Make Rep</button>`}
+                </td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>`;
+  } catch(e) {
+    listEl.innerHTML = `<p style="color:#ef4444;font-size:13px;">${e.message}</p>`;
+  }
+};
+
+window.crAssignRep = async function(studentId, name) {
+  if (!confirm(`Assign ${name} as a class representative?`)) return;
+  try {
+    await api('/api/class-rep-admin/assign', { method: 'POST', body: JSON.stringify({ studentId }) });
+    toastSuccess(`${name} is now a class representative`);
+    crCloseBrowse();
+    renderClassRepMgmt();
+  } catch(e) {
+    toastError(e.message || 'Failed to assign class representative');
+  }
+};
+
+window.crRemoveRep = async function(userId, name) {
+  if (!confirm(`Remove ${name} as class representative?`)) return;
+  try {
+    await api(`/api/class-rep-admin/remove/${userId}`, { method: 'DELETE' });
+    toastSuccess(`${name} is no longer a class representative`);
+    renderClassRepMgmt();
+  } catch(e) {
+    toastError(e.message || 'Failed to remove class representative');
+  }
+};
+
+window.crRemoveRepBrowse = async function(userId, name) {
+  if (!confirm(`Remove ${name} as class representative?`)) return;
+  try {
+    await api(`/api/class-rep-admin/remove/${userId}`, { method: 'DELETE' });
+    toastSuccess(`${name} is no longer a class representative`);
+    crFetchStudents();
+    // refresh main list in background
+    api('/api/class-rep-admin/list').then(d => {
+      const countEl = document.querySelector('.page-header p');
+      if (countEl) { const n = (d.reps||[]).length; countEl.textContent = `${n} active rep${n!==1?'s':''} · Max 2 per class group`; }
+    }).catch(() => {});
+  } catch(e) {
+    toastError(e.message || 'Failed to remove class representative');
+  }
+};
 
 // ── HOD — Department Performance Dashboard ────────────────────────────────
 async function renderHodPerformance() {
@@ -5373,11 +5639,27 @@ async function renderStudentDashboard(content) {
     </div>`;
   })() : '';
 
+  const classRepBanner = currentUser.isClassRep ? `
+    <div style="background:linear-gradient(135deg,#ede9fe,#f5f3ff);border:1.5px solid #c4b5fd;border-radius:12px;padding:16px 20px;margin-bottom:16px;display:flex;gap:14px;align-items:center;cursor:pointer" onclick="navigateTo('class-device')">
+      <div style="width:44px;height:44px;border-radius:12px;background:linear-gradient(135deg,#7c3aed,#6366f1);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+        ${svgIcon('<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/><polyline points="9 11 12 14 22 4"/>', 20, '#fff')}
+      </div>
+      <div style="flex:1">
+        <div style="font-weight:700;color:#5b21b6;font-size:14px;display:flex;align-items:center;gap:6px">
+          <span style="background:#7c3aed;color:#fff;font-size:10px;font-weight:800;padding:2px 7px;border-radius:20px;letter-spacing:.5px">CLASS REP</span>
+          You are a Class Representative
+        </div>
+        <div style="color:#6d28d9;font-size:12px;margin-top:2px">Tap to manage the class device &amp; connect attendance for your group.</div>
+      </div>
+      <div style="color:#7c3aed;opacity:.7">${svgIcon('<polyline points="9 18 15 12 9 6"/>', 18)}</div>
+    </div>` : '';
+
   content.innerHTML = `
     <div class="page-header">
       <h2>Welcome back, ${currentUser.name.split(' ')[0]}</h2>
       <p>${currentUser.company?.name || 'Your institution'}${currentUser.indexNumber ? ' \u2022 ' + currentUser.indexNumber : ''}</p>
     </div>
+    ${classRepBanner}
     ${devLockBanner}
 
     ${activeSession ? `
