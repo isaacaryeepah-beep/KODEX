@@ -22,15 +22,11 @@
  *  Built into ESP32 core: WiFi, HTTPClient, WebServer, DNSServer,
  *                         Preferences, mbedtls, SD
  *
- *  SD CARD (built-in on ES3C28P)
- *    Shares the FSPI bus with the display (MOSI=11, MISO=13, SCLK=12).
- *    SD_CS_PIN is the chip-select for the SD slot — verify GPIO 39 against
- *    your board's silkscreen or schematic and adjust if different.
+ *  SD CARD (SDIO bus on ES3C28P)
+ *    CLK=IO38  CMD=IO40  DATA0-3=IO39/41/48/47
  *
- *  TOUCH CONTROLLER (FT6336 / FT6X36 via I2C)
- *    I2C SDA: GPIO 4   I2C SCL: GPIO 5
- *    Touch INT: GPIO 7   Touch RST: GPIO 6
- *    Adjust TOUCH_SDA/SCL/INT/RST below if your board differs.
+ *  TOUCH CONTROLLER (FT6336G capacitive, I2C)
+ *    SDA: IO16   SCL: IO15   INT: IO17   RST: IO18
  *
  *  USER_SETUP_LOADED defined in User_Setup.h alongside this file.
  *
@@ -69,15 +65,17 @@ static void startWifiReconfigPortal();
 // Confirmed from board silkscreen (Shenzhen Hong Shu Yuan ES3C28P):
 //   I2C header: IO15 = SCL, IO16 = SDA
 // Touch INT/RST: typical for this board family — adjust if touch is unresponsive.
+// Confirmed from official ES3C28P datasheet
 static const uint8_t TOUCH_SDA  = 16;
 static const uint8_t TOUCH_SCL  = 15;
-static const uint8_t TOUCH_INT  = 7;
-static const uint8_t TOUCH_RST  = 6;
-static const uint8_t LED_PIN    = 2;   // status LED (if present on your board)
+static const uint8_t TOUCH_INT  = 17;
+static const uint8_t TOUCH_RST  = 18;
+static const uint8_t LED_PIN    = 42;  // single-wire RGB LED on IO42
 static const uint8_t FT6X36_ADDR = 0x38;
 
-// SD card — shares FSPI bus with display; only needs its own CS pin.
-// GPIO 38 is the typical SD CS for this board family (Shenzhen Hong Shu Yuan ES3C28P).
+// SD card uses SDIO bus (not SPI) on this board.
+// SDIO CLK=IO38, CMD=IO40, DATA0-3=IO39/41/48/47.
+// The SD library uses SPI mode as fallback on 1-bit SDIO — use IO38 as CLK, IO40 as MOSI.
 static const uint8_t SD_CS_PIN = 38;
 
 // ─── App Config ──────────────────────────────────────────────────────────────

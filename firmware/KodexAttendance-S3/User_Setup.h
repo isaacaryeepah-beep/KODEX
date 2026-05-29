@@ -1,54 +1,37 @@
 // ─────────────────────────────────────────────────────────────────────────────
-//  TFT_eSPI User Setup — ESP32-S3 + ILI9341 2.8" IPS
-//  Manufacturer: Shenzhen Hong Shu Yuan Technology Co., Ltd. (ES3C28P)
+//  TFT_eSPI User Setup — ESP32-S3 + ILI9341V 2.8" IPS
+//  Board: Shenzhen Hong Shu Yuan Technology Co., Ltd.
+//  SKU:   ES3C28P (with capacitive touch) / ES3N28P (no touch)
 //
-//  Place this file alongside KodexAttendance-S3.ino — do NOT edit the copy
-//  in the TFT_eSPI library folder.
+//  Confirmed pin mapping (from official datasheet + hardware verified):
+//    BL   = IO45   backlight, HIGH = on
+//    CS   = IO10   display chip select, LOW = active
+//    DC   = IO46   data/command select
+//    SCLK = IO12   SPI clock
+//    MOSI = IO11   SPI data out
+//    MISO = IO13   SPI data in
+//    RST  = EN     tied to ESP32-S3 reset — no GPIO needed (software reset only)
 //
-//  I2C (touch FT6X36): SCL = IO15, SDA = IO16  (from board silkscreen)
-//  Backlight:          GPIO 45  (confirmed working — set manually in setup())
+//  Touch (FT6336G capacitive):
+//    SDA  = IO16   I2C data
+//    SCL  = IO15   I2C clock
+//    RST  = IO18
+//    INT  = IO17
 //
-//  ── PIN CONFIGS TO TRY IF SCREEN IS BLANK ─────────────────────────────────
-//  Enable ONE config block below, recompile and flash.
-//  Config B is now active — avoids GPIO 9 (BOOT button) as CS.
+//  SD card (SDIO, not SPI):
+//    CLK  = IO38   CMD = IO40   DATA0-3 = IO39/41/48/47
 // ─────────────────────────────────────────────────────────────────────────────
 
 #define USER_SETUP_LOADED
 #define ILI9341_DRIVER
 
-// ══════════════════════════════════════════════════════
-//  CONFIG A — DISABLED (GPIO 9 = BOOT button; pulling it low hangs tft.init)
-// ══════════════════════════════════════════════════════
-//#define TFT_MISO  13
-//#define TFT_MOSI  11
-//#define TFT_SCLK  12
-//#define TFT_CS     9
-//#define TFT_DC    10
-//#define TFT_RST   -1
-//#define TFT_BL    45
-
-// ══════════════════════════════════════════════════════
-//  CONFIG B — ACTIVE (CS=10, DC=8; avoids BOOT pin)
-// ══════════════════════════════════════════════════════
 #define TFT_MISO  13
 #define TFT_MOSI  11
 #define TFT_SCLK  12
-#define TFT_CS    10    // CS  on GPIO 10
-#define TFT_DC     8    // DC  on GPIO 8
-#define TFT_RST   -1    // RST tied to EN pin — software reset
+#define TFT_CS    10
+#define TFT_DC    46
+#define TFT_RST   -1   // RST tied to EN — software reset only
 #define TFT_BL    45
-
-// ── If CONFIG B still blank, try CONFIG C ───────────────────────────────────
-// CONFIG C — alternative FSPI bus (some ES3C28P variants)
-//#define TFT_MISO   9
-//#define TFT_MOSI   6
-//#define TFT_SCLK   5
-//#define TFT_CS     4
-//#define TFT_DC     7
-//#define TFT_RST    8
-//#define TFT_BL    45
-
-// ────────────────────────────────────────────────────────────────────────────
 
 #define SPI_FREQUENCY       40000000
 #define SPI_READ_FREQUENCY  20000000
