@@ -35,7 +35,7 @@
  *  USER_SETUP_LOADED defined in User_Setup.h alongside this file.
  *
  *  CODE ROTATION FORMULA (mirrors src/services/attendanceCodeService.js)
- *    slot   = floor(unixSeconds / 20)
+ *    slot   = floor(unixSeconds / 300)      // 5-minute window
  *    digest = HMAC-SHA256(seed, ascii(slot))
  *    code   = zero-pad(uint32(digest[0..3]) % 1_000_000, 6)
  * ─────────────────────────────────────────────────────────────────────────────
@@ -73,8 +73,8 @@ static const uint8_t FT6X36_ADDR = 0x38;
 static const uint8_t SD_CS_PIN = 38;
 
 // ─── App Config ──────────────────────────────────────────────────────────────
-static const char*   FIRMWARE_VERSION     = "s3-2.0.0";
-static const char*   DEFAULT_API_BASE     = "https://kodex.it.com";
+static const char*   FIRMWARE_VERSION     = "s3-2.1.0";
+static const char*   DEFAULT_API_BASE     = "https://dikly.sbs";
 static const uint32_t HEARTBEAT_MS        = 5000;
 static const uint32_t WIFI_TIMEOUT_MS     = 30000;
 static const uint32_t WINDOW_SECONDS      = 300;  // code rotation period (5 minutes)
@@ -1072,7 +1072,7 @@ static const char PAIR_HTML[] PROGMEM = R"HTML(<!doctype html>
       <label>Password</label>
       <input name="password" type="password" autocomplete="new-password" placeholder="Leave blank if open">
       <label style="margin-top:16px;font-size:10px;color:#475569">Server (advanced)</label>
-      <input name="apiBase" value="https://kodex.it.com" style="font-size:12px;color:#475569">
+      <input name="apiBase" value="https://dikly.sbs" style="font-size:12px;color:#475569">
     </div>
     <button type="submit" class="submit" id="b">Pair Device</button>
   </form>
