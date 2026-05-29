@@ -41,6 +41,12 @@
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
+// FS must be included first — ESP32 core 3.x puts FS in the fs:: namespace,
+// and WebServer.h expects the unqualified 'FS' name. Including FS.h first
+// and pulling it into the global namespace fixes the WebServer.h compile error.
+#include <FS.h>
+using namespace fs;
+
 #include "User_Setup.h"
 #include <TFT_eSPI.h>
 #include <WiFi.h>
@@ -55,7 +61,9 @@
 #include <ArduinoJson.h>
 #include <SPI.h>
 #include <SD.h>
-#include <FS.h>
+
+// Forward declarations
+static void startWifiReconfigPortal();
 
 // ─── Pin / Hardware Config ───────────────────────────────────────────────────
 // Confirmed from board silkscreen (Shenzhen Hong Shu Yuan ES3C28P):
@@ -73,8 +81,8 @@ static const uint8_t FT6X36_ADDR = 0x38;
 static const uint8_t SD_CS_PIN = 38;
 
 // ─── App Config ──────────────────────────────────────────────────────────────
-static const char*   FIRMWARE_VERSION     = "s3-2.0.0";
-static const char*   DEFAULT_API_BASE     = "https://kodex.it.com";
+static const char*   FIRMWARE_VERSION     = "s3-2.1.0";
+static const char*   DEFAULT_API_BASE     = "https://dikly.sbs";
 static const uint32_t HEARTBEAT_MS        = 5000;
 static const uint32_t WIFI_TIMEOUT_MS     = 30000;
 static const uint32_t WINDOW_SECONDS      = 300;  // code rotation period (5 minutes)
@@ -1300,15 +1308,33 @@ static void registerLocalHttp() {
 //  SETUP & LOOP
 // ═════════════════════════════════════════════════════════════════════════════
 void setup() {
+  // Backlight FIRST — GPIO 45 on ES3C28P. Must be before anything that could
+  // crash/hang (tft.init with wrong pins, Serial, etc.) so we can always tell
+  // whether firmware has booted at all.
+  pinMode(45, OUTPUT);
+  digitalWrite(45, HIGH);
+
   Serial.begin(115200); delay(150);
   pinMode(LED_PIN, OUTPUT);
 
   // Display init
   tft.init(); tft.setRotation(0); // 0 = portrait, 2 = portrait flipped
   tft.fillScreen(COL_BG);
-  // Sprite for flicker-free rendering (uses ~150 KB PSRAM — S3 has PSRAM)
+  // Sprite for flicker-free rendering (~150 KB PSRAM). If PSRAM is disabled
+  // in Tools → PSRAM, createSprite returns null; fall back to direct TFT draw.
   spr.setColorDepth(16);
-  spr.createSprite(SW, SH);
+  void* sprBuf = spr.createSprite(SW, SH);
+  if (!sprBuf) {
+    LOG("PSRAM not available — sprite disabled, using direct TFT draw");
+    // Draw diagnostic text directly so the screen confirms firmware is running
+    // even if the sprite fails. Set Tools → PSRAM → OPI PSRAM for proper UI.
+    tft.setTextColor(TFT_WHITE, COL_BG);
+    tft.setTextSize(2);
+    tft.drawString("DIKLY", 80, 140);
+    tft.setTextSize(1);
+    tft.drawString("Enable OPI PSRAM", 40, 170);
+    tft.drawString("in Arduino IDE Tools", 30, 185);
+  }
 
   // Touch init
   touchInit();
