@@ -17,7 +17,7 @@
  *      SPLASH → SETUP → CONNECTING → READY (idle) → SESSION (code display)
  *
  *  REQUIRED LIBRARIES (Arduino IDE → Library Manager)
- *    TFT_eSPI        — colour display driver (Bodmer)
+ *    LovyanGFX       — colour display driver (lovyan03)
  *    ArduinoJson     — JSON (≥ 7.0)
  *  Built into ESP32 core: WiFi, HTTPClient, WebServer, DNSServer,
  *                         Preferences, mbedtls, SD
@@ -27,8 +27,6 @@
  *
  *  TOUCH CONTROLLER (FT6336G capacitive, I2C)
  *    SDA: IO16   SCL: IO15   INT: IO17   RST: IO18
- *
- *  USER_SETUP_LOADED defined in User_Setup.h alongside this file.
  *
  *  CODE ROTATION FORMULA (mirrors src/services/attendanceCodeService.js)
  *    slot   = floor(unixSeconds / 20)
@@ -43,8 +41,40 @@
 #include <FS.h>
 using namespace fs;
 
-#include "User_Setup.h"
-#include <TFT_eSPI.h>
+// ─── Display driver — LovyanGFX ──────────────────────────────────────────────
+#define LGFX_USE_V1
+#include <LovyanGFX.hpp>
+
+class LGFX : public lgfx::LGFX_Device {
+  lgfx::Panel_ILI9341 _panel;
+  lgfx::Bus_SPI       _bus;
+  lgfx::Light_PWM     _light;
+public:
+  LGFX() {
+    { auto cfg = _bus.config();
+      cfg.spi_host    = SPI2_HOST;   // FSPI — correct for MOSI=11, MISO=13, SCLK=12
+      cfg.spi_mode    = 0;
+      cfg.freq_write  = 40000000;
+      cfg.freq_read   = 16000000;
+      cfg.pin_sclk    = 12;
+      cfg.pin_mosi    = 11;
+      cfg.pin_miso    = 13;
+      cfg.pin_dc      = 46;
+      cfg.dma_channel = SPI_DMA_CH_AUTO;
+      _bus.config(cfg); _panel.setBus(&_bus); }
+    { auto cfg = _panel.config();
+      cfg.pin_cs      = 10;
+      cfg.pin_rst     = -1;
+      cfg.memory_width  = 240; cfg.memory_height = 320;
+      cfg.panel_width   = 240; cfg.panel_height  = 320;
+      _panel.config(cfg); }
+    { auto cfg = _light.config();
+      cfg.pin_bl = 45; cfg.invert = false;
+      _light.config(cfg); _panel.setLight(&_light); }
+    setPanel(&_panel);
+  }
+};
+
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
 #include <WebServer.h>
@@ -64,8 +94,6 @@ static void startWifiReconfigPortal();
 // ─── Pin / Hardware Config ───────────────────────────────────────────────────
 // Confirmed from board silkscreen (Shenzhen Hong Shu Yuan ES3C28P):
 //   I2C header: IO15 = SCL, IO16 = SDA
-// Touch INT/RST: typical for this board family — adjust if touch is unresponsive.
-// Confirmed from official ES3C28P datasheet
 static const uint8_t TOUCH_SDA  = 16;
 static const uint8_t TOUCH_SCL  = 15;
 static const uint8_t TOUCH_INT  = 17;
@@ -73,9 +101,7 @@ static const uint8_t TOUCH_RST  = 18;
 static const uint8_t LED_PIN    = 42;  // single-wire RGB LED on IO42
 static const uint8_t FT6X36_ADDR = 0x38;
 
-// SD card uses SDIO bus (not SPI) on this board.
-// SDIO CLK=IO38, CMD=IO40, DATA0-3=IO39/41/48/47.
-// The SD library uses SPI mode as fallback on 1-bit SDIO — use IO38 as CLK, IO40 as MOSI.
+// SD card — shares FSPI bus (SCLK=12, MISO=13, MOSI=11) with display.
 static const uint8_t SD_CS_PIN = 38;
 
 // ─── App Config ──────────────────────────────────────────────────────────────
@@ -104,8 +130,8 @@ static const uint32_t WINDOW_SECONDS      = 300;  // code rotation period (5 min
 #define SH 320
 
 // ─── Globals ─────────────────────────────────────────────────────────────────
-TFT_eSPI tft = TFT_eSPI();
-TFT_eSprite spr = TFT_eSprite(&tft);  // full-screen sprite for flicker-free render
+LGFX         display;
+LGFX_Sprite  spr(&display);   // full-screen sprite for flicker-free render
 
 Preferences prefs;
 WebServer   localHttp(80);
@@ -167,9 +193,6 @@ static OfflineRec offlineBuf[200];
 static uint8_t    offlineCount = 0;
 
 // ─── Per-session duplicate guard ─────────────────────────────────────────────
-// Keeps a compact list of identifiers that have already submitted this session.
-// Cleared automatically when the session ID changes.
-// Uses indexNumber when available, userId otherwise — whichever the student sent.
 static char     dedupIds[400][32];   // 400 students × 32 chars ≈ 12.5 KB
 static uint16_t dedupCount   = 0;
 static String   dedupSession = "";   // session this list belongs to
@@ -452,18 +475,18 @@ static void sendHeartbeat() {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-//  UI RENDERING  (double-buffered via TFT_eSprite for flicker-free updates)
+//  UI RENDERING  (double-buffered via LGFX_Sprite for flicker-free updates)
 // ═══════════════════════════════════════════════════════════════════════════
 
 // ── Utility: draw a rounded filled rectangle with border ─────────────────────
-static void card(TFT_eSprite& s, int32_t x, int32_t y, int32_t w, int32_t h,
+static void card(LGFX_Sprite& s, int32_t x, int32_t y, int32_t w, int32_t h,
                  uint32_t fill, uint32_t border = COL_BORDER, int32_t r = 10) {
-  s.fillSmoothRoundRect(x, y, w, h, r, fill, COL_BG);
-  s.drawSmoothRoundRect(x, y, r, r, w, h, border, fill);
+  s.fillRoundRect(x, y, w, h, r, fill);
+  s.drawRoundRect(x, y, w, h, r, border);
 }
 
 // ── Utility: centred text ─────────────────────────────────────────────────────
-static void centreText(TFT_eSprite& s, const String& txt, int32_t y,
+static void centreText(LGFX_Sprite& s, const String& txt, int32_t y,
                        uint8_t font, uint16_t col, uint8_t size = 1) {
   s.setTextFont(font); s.setTextSize(size); s.setTextColor(col, COL_BG);
   int32_t tw = s.textWidth(txt);
@@ -471,7 +494,7 @@ static void centreText(TFT_eSprite& s, const String& txt, int32_t y,
 }
 
 // ── Utility: draw status dot + "Dikly" header bar ────────────────────────────
-static void drawHeader(TFT_eSprite& s, bool online) {
+static void drawHeader(LGFX_Sprite& s, bool online) {
   s.fillRect(0, 0, SW, 38, COL_CARD);
   s.drawFastHLine(0, 38, SW, COL_BORDER);
   // Logo
@@ -479,7 +502,7 @@ static void drawHeader(TFT_eSprite& s, bool online) {
   s.setCursor(14, 9); s.print("Dikly");
   // Status dot
   uint16_t dotCol = online ? COL_SUCCESS : COL_ERROR;
-  s.fillSmoothCircle(SW - 20, 19, 7, dotCol, COL_CARD);
+  s.fillCircle(SW - 20, 19, 7, dotCol);
   // Label
   s.setTextFont(2); s.setTextSize(1); s.setTextColor(COL_MUTED, COL_CARD);
   s.setCursor(SW - 58, 11);
@@ -536,8 +559,8 @@ static void drawSetup(const String& apName) {
   card(spr, 10, 210, SW - 20, 40, 0x2000, 0x4000, 8);
   spr.setTextFont(2); spr.setTextColor(COL_WARNING, 0x2000);
   spr.setCursor(20, 223); spr.print("Hold anywhere 3 s to factory reset");
-  // Pulsing dot (we'll just leave it static — loop redraws)
-  spr.fillSmoothCircle(SW / 2, 278, 8, COL_WARNING, COL_BG);
+  // Pulsing dot (static — loop redraws)
+  spr.fillCircle(SW / 2, 278, 8, COL_WARNING);
   spr.pushSprite(0, 0);
 }
 
@@ -571,7 +594,7 @@ static void drawWifiReconfig(const String& apName) {
   card(spr, 10, 224, SW - 20, 36, 0x2000, 0x4000, 8);
   spr.setTextFont(2); spr.setTextColor(COL_WARNING, 0x2000);
   spr.setCursor(18, 235); spr.print("Hold 3 s to full factory reset");
-  spr.fillSmoothCircle(SW / 2, 284, 8, COL_WARNING, COL_BG);
+  spr.fillCircle(SW / 2, 284, 8, COL_WARNING);
   spr.pushSprite(0, 0);
 }
 
@@ -592,7 +615,7 @@ static void drawWifiScan() {
 
   // Scan button (top-right)
   uint16_t sbCol = wifiScanning ? COL_MUTED : COL_PRIMARY;
-  spr.fillSmoothRoundRect(SCAN_BTN_X, 42, 68, 26, 13, sbCol, COL_BG);
+  spr.fillRoundRect(SCAN_BTN_X, 42, 68, 26, 13, sbCol);
   spr.setTextFont(2); spr.setTextColor(COL_WHITE, sbCol);
   String scanLabel = wifiScanning ? "Scanning" : "Scan";
   int32_t stw = spr.textWidth(scanLabel);
@@ -635,11 +658,11 @@ static void drawWifiScan() {
 
     // Badge — OPEN (green) or PWD (slate)
     if (n.open) {
-      spr.fillSmoothRoundRect(167, y + 10, 40, 18, 9, COL_SUCCESS, COL_CARD);
+      spr.fillRoundRect(167, y + 10, 40, 18, 9, COL_SUCCESS);
       spr.setTextFont(2); spr.setTextColor(COL_WHITE, COL_SUCCESS);
       spr.setCursor(172, y + 13); spr.print("OPEN");
     } else {
-      spr.fillSmoothRoundRect(167, y + 10, 40, 18, 9, COL_BORDER, COL_CARD);
+      spr.fillRoundRect(167, y + 10, 40, 18, 9, COL_BORDER);
       spr.setTextFont(2); spr.setTextColor(COL_MUTED, COL_BORDER);
       spr.setCursor(174, y + 13); spr.print("PWD");
     }
@@ -924,7 +947,7 @@ static void drawReady() {
   spr.fillSprite(COL_BG);
   drawHeader(spr, true);
   // Big green checkmark circle
-  spr.fillSmoothCircle(SW / 2, 148, 52, COL_SUCCESS, COL_BG);
+  spr.fillCircle(SW / 2, 148, 52, COL_SUCCESS);
   // Checkmark via lines
   spr.drawLine(SW/2 - 22, 148, SW/2 - 5, 167, COL_WHITE);
   spr.drawLine(SW/2 - 21, 148, SW/2 - 4, 167, COL_WHITE);
@@ -947,7 +970,7 @@ static void drawReady() {
   spr.setCursor((SW - tw) / 2, 279); spr.print(ip);
   // SD dot
   uint16_t sdDotCol = sdAvailable ? COL_SUCCESS : COL_WARNING;
-  spr.fillSmoothCircle(22, 289, 5, sdDotCol, COL_CARD);
+  spr.fillCircle(22, 289, 5, sdDotCol);
   spr.setTextFont(2); spr.setTextColor(sdAvailable ? COL_SUCCESS : COL_WARNING, COL_CARD);
   spr.setCursor(30, 283);
   spr.print(sdAvailable ? "SD" : "SD?");
@@ -984,7 +1007,6 @@ static void drawSession(const String& code, uint32_t secsLeft, uint32_t secsTota
 
   // ── Big 7-segment code ──────────────────────────────────────────────────
   // Font 7 is a 7-segment style — perfect for attendance codes.
-  // Digits only. We draw the 6-digit code centred on the screen.
   spr.setTextFont(7); spr.setTextSize(1);
   tw = spr.textWidth(code);
   spr.setTextColor(COL_PRIMARY, COL_BG);
@@ -1249,7 +1271,6 @@ static void registerLocalHttp() {
       localHttp.send(403, "application/json", "{\"error\":\"Incorrect code. Check the screen and try again.\"}"); return;
     }
     // ── Duplicate guard ───────────────────────────────────────────────────────
-    // Reset dedup table if this is a new session (edge case: device rebooted mid-session)
     if (dedupSession != sessionId) dedupClear(sessionId);
     const char* dedupKey = indexNum.length() ? indexNum.c_str() : userId.c_str();
     if (dedupCheck(dedupKey)) {
@@ -1307,38 +1328,38 @@ static void registerLocalHttp() {
 // ═════════════════════════════════════════════════════════════════════════════
 void setup() {
   // Backlight FIRST — GPIO 45 on ES3C28P. Must be before anything that could
-  // crash/hang (tft.init with wrong pins, Serial, etc.) so we can always tell
-  // whether firmware has booted at all.
+  // crash/hang so we can always tell whether firmware has booted at all.
+  // LovyanGFX's Light_PWM will also manage this pin after display.init().
   pinMode(45, OUTPUT);
   digitalWrite(45, HIGH);
 
   Serial.begin(115200); delay(150);
   pinMode(LED_PIN, OUTPUT);
 
-  // Display init
-  tft.init(); tft.setRotation(0); // 0 = portrait, 2 = portrait flipped
-  tft.fillScreen(COL_BG);
-  // Sprite for flicker-free rendering (~150 KB PSRAM). If PSRAM is disabled
-  // in Tools → PSRAM, createSprite returns null; fall back to direct TFT draw.
+  // Display init — LovyanGFX with SPI2_HOST, ILI9341, pins confirmed working
+  display.init();
+  display.setRotation(0);  // 0 = portrait
+  display.fillScreen(COL_BG);
+
+  // Sprite for flicker-free rendering (~150 KB PSRAM).
+  // Requires Tools → PSRAM → OPI PSRAM in Arduino IDE.
   spr.setColorDepth(16);
   void* sprBuf = spr.createSprite(SW, SH);
   if (!sprBuf) {
-    LOG("PSRAM not available — sprite disabled, using direct TFT draw");
-    // Draw diagnostic text directly so the screen confirms firmware is running
-    // even if the sprite fails. Set Tools → PSRAM → OPI PSRAM for proper UI.
-    tft.setTextColor(TFT_WHITE, COL_BG);
-    tft.setTextSize(2);
-    tft.drawString("DIKLY", 80, 140);
-    tft.setTextSize(1);
-    tft.drawString("Enable OPI PSRAM", 40, 170);
-    tft.drawString("in Arduino IDE Tools", 30, 185);
+    LOG("PSRAM not available — sprite disabled, using direct display draw");
+    display.setTextColor(TFT_WHITE, COL_BG);
+    display.setTextSize(2);
+    display.drawString("DIKLY", 80, 140);
+    display.setTextSize(1);
+    display.drawString("Enable OPI PSRAM", 40, 170);
+    display.drawString("in Arduino IDE Tools", 30, 185);
   }
 
   // Touch init
   touchInit();
 
   // SD card init — shares FSPI bus (SCLK=12, MISO=13, MOSI=11) with display
-  sdSPI.begin(TFT_SCLK, TFT_MISO, TFT_MOSI, SD_CS_PIN);
+  sdSPI.begin(12, 13, 11, SD_CS_PIN);
   sdAvailable = SD.begin(SD_CS_PIN, sdSPI, 25000000);
   if (sdAvailable) {
     LOG("SD card OK — " + String(SD.totalBytes() / (1024 * 1024)) + " MB total");
