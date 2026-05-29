@@ -4186,6 +4186,11 @@ async function renderClassRepMgmt() {
             <button onclick="crCloseBrowse()" style="background:none;border:none;cursor:pointer;padding:4px;border-radius:8px;color:var(--text-muted)">${svgIcon('<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>', 20)}</button>
           </div>
           <div style="padding:20px 24px;">
+            <div style="margin-bottom:14px;">
+              <label style="font-size:11px;font-weight:700;color:var(--text-muted);display:block;margin-bottom:4px">INDEX NUMBER <span style="color:#ef4444">*</span></label>
+              <input id="cr-f-index" type="text" placeholder="e.g. UG/IT/23/0001" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;box-sizing:border-box;text-transform:uppercase;" oninput="this.value=this.value.toUpperCase()" />
+              <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Enter the student's index number to look them up. You may also apply filters below to narrow results.</div>
+            </div>
             <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;margin-bottom:16px;">
               <div>
                 <label style="font-size:11px;font-weight:700;color:var(--text-muted);display:block;margin-bottom:4px">LEVEL</label>
@@ -4237,8 +4242,19 @@ window.crCloseBrowse = function() {
 };
 
 window.crFetchStudents = async function() {
-  const listEl = document.getElementById('cr-student-list');
+  const listEl  = document.getElementById('cr-student-list');
+  const indexEl = document.getElementById('cr-f-index');
   if (!listEl) return;
+
+  const indexNumber = (indexEl?.value || '').trim().toUpperCase();
+  if (!indexNumber) {
+    indexEl && (indexEl.style.border = '1.5px solid #ef4444');
+    listEl.innerHTML = '<p style="color:#ef4444;font-size:13px;font-weight:600;">Index number is required. Please enter the student\'s index number.</p>';
+    indexEl?.focus();
+    return;
+  }
+  if (indexEl) indexEl.style.border = '1.5px solid var(--border)';
+
   listEl.innerHTML = '<div class="loading" style="padding:16px 0;">Loading…</div>';
   try {
     const level    = document.getElementById('cr-f-level')?.value    || '';
@@ -4246,6 +4262,7 @@ window.crFetchStudents = async function() {
     const session  = document.getElementById('cr-f-session')?.value  || '';
     const semester = document.getElementById('cr-f-semester')?.value || '';
     const params = new URLSearchParams();
+    params.set('indexNumber', indexNumber);
     if (level)    params.set('level', level);
     if (group)    params.set('group', group);
     if (session)  params.set('sessionType', session);

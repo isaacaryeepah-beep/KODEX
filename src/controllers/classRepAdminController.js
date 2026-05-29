@@ -144,9 +144,10 @@ exports.listReps = async (req, res) => {
 // Returns students in a class group so HOD/Admin can pick reps
 exports.listStudents = async (req, res) => {
   try {
-    const { level, group, sessionType, semester, programme, department } = req.query;
+    const { level, group, sessionType, semester, programme, department, indexNumber } = req.query;
 
     const filter = { company: req.user.company, role: 'student' };
+    if (indexNumber) filter.IndexNumber = { $regex: indexNumber.trim(), $options: 'i' };
     if (level)       filter.studentLevel = level;
     if (group)       filter.studentGroup = group;
     if (sessionType) filter.sessionType  = sessionType;
