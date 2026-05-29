@@ -62,30 +62,6 @@ jobs:
         run: |
           cp -r src/public/. www/
 
-      - name: Mirror live site assets (pages, JS, CSS, images)
-        run: |
-          sudo apt-get install -y wget --quiet
-          # Mirror all reachable pages and static assets from dikly.sbs
-          wget \
-            --mirror \
-            --page-requisites \
-            --convert-links \
-            --adjust-extension \
-            --no-parent \
-            --timeout=30 \
-            --tries=2 \
-            --wait=0 \
-            --no-check-certificate \
-            --reject "*.mp4,*.webm,*.zip,*.tar.gz" \
-            --directory-prefix=/tmp/site-mirror/ \
-            https://dikly.sbs 2>&1 | tail -5 || true
-          # Copy mirrored assets into www/ (overwrites with live versions)
-          if [ -d /tmp/site-mirror/dikly.sbs ]; then
-            cp -r /tmp/site-mirror/dikly.sbs/. www/ 2>/dev/null || true
-            echo "Mirrored site size:"
-            du -sh /tmp/site-mirror/dikly.sbs/
-          fi
-
       - name: Bundle Google Fonts offline (DM Sans + Inter)
         run: |
           mkdir -p www/fonts
