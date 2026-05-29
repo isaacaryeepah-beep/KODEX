@@ -397,8 +397,11 @@ app.use("/api/faq",                 faqRoutes);
 const deviceSessionRoutes = require("./routes/deviceSessionRoutes");
 app.use("/api", deviceSessionRoutes);
 
-const classRepRoutes = require('./routes/classRepRoutes');
+const classRepRoutes      = require('./routes/classRepRoutes');
 app.use('/api/class-rep', classRepRoutes);
+
+const classRepAdminRoutes = require('./routes/classRepAdmin');
+app.use('/api/class-rep-admin', classRepAdminRoutes);
 
 const courseVideoRoutes = require('./routes/courseVideoRoutes');
 app.use('/api/course-videos', courseVideoRoutes);

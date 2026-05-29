@@ -52,6 +52,10 @@ const NOTIFICATION_TYPES = Object.freeze({
   // Academic: timetable
   CLASS_STARTING_SOON:   "class_starting_soon",    // → enrolled students + lecturer
 
+  // Class rep
+  CLASS_REP_ASSIGNED:    "class_rep_assigned",     // → student (appointed as rep)
+  CLASS_REP_REMOVED:     "class_rep_removed",      // → student (rep role removed)
+
   // System / admin
   ANNOUNCEMENT:          "announcement",           // cross-mode broadcast
   SYSTEM:                "system",                 // platform-level message

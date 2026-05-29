@@ -1135,10 +1135,13 @@ body[data-role="student"] .trial-expired-banner {
 
 .content {
   margin-left: 228px;
-  padding: 24px 28px;
+  margin-right: auto;
+  padding: 24px 32px;
   overflow-y: auto;
   animation: fadeIn .2s ease;
-  max-width: 1180px;
+  max-width: 1020px;
+  width: calc(100% - 228px);
+  box-sizing: border-box;
   height: 100%;
 }
 
@@ -1662,6 +1665,7 @@ input[type="checkbox"] {
 
   .topbar .user-info strong { display: none; }
   .topbar { padding: 0 14px; height: 54px; }
+  .topbar-right { gap: 8px; }
   .content { padding: 14px; padding-bottom: calc(62px + env(safe-area-inset-bottom, 0px) + 20px); }
   .main-layout { flex: 1; min-height: 0; }
 }
@@ -2141,11 +2145,11 @@ input[type="checkbox"] {
 
   /* ── Topbar ───────────────────────────────────── */
   .topbar { padding: 0 10px; height: 50px; }
-  .topbar-right { gap: 6px; }
-  .topbar-right .btn { padding: 5px 8px; font-size: 11px; }
-  .user-info strong,
-  .user-info .role-badge { display: none; }
-  .topbar-left h2 { font-size: 13px; }
+  .topbar-right { gap: 5px; }
+  .topbar-right .btn { padding: 5px 7px; font-size: 11px; }
+  .user-info { display: none; }
+  .sign-out-label { display: none; }
+  .topbar-left h2 { font-size: 13px; max-width: 160px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
   /* ── Page header ──────────────────────────────── */
   .page-header { margin-bottom: 12px; }

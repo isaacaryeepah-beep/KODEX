@@ -42,7 +42,6 @@ flutter:
   uses-material-design: true
   assets:
     - assets/icon.png
-    - assets/bg_office.jpg
 
 flutter_launcher_icons:
   android: true

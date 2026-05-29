@@ -1586,6 +1586,7 @@ async function handleAdminLogin() {
     localStorage.setItem('token', token);
     if (data.refreshToken) localStorage.setItem('refreshToken', data.refreshToken);
     currentUser = data.user;
+    if (window.DiklyIDB) window.DiklyIDB.saveUserSession(data.user, data.token).catch(() => {});
     showDashboard(data);
     requestPushPermission().catch(() => {});
   } catch (e) {
@@ -2189,6 +2190,7 @@ async function handleLogout() {
   try {
     if (isOnline()) await api('/api/auth/logout', { method: 'POST' });
   } catch (e) {}
+  if (window.DiklyIDB) window.DiklyIDB.clearAll().catch(() => {});
   resetBranding();
   token = null;
   currentUser = null;
@@ -2640,11 +2642,13 @@ function buildSidebar() {
         links.push({ id: 'announcements', label: 'Announcements', icon: svgIcon('<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>') });
         links.push({ id: 'programmes', label: 'Programmes', icon: svgIcon('<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>') });
         links.push({ id: 'hod-unlock-students', label: 'Unlock Students', icon: svgIcon('<rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>') });
+        links.push({ id: 'class-rep-mgmt',     label: 'Class Reps',      icon: svgIcon('<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/><polyline points="9 11 12 14 22 4"/>') });
       }
       if (currentUser.company?.mode === 'corporate') {
         links.push({ sep: true, label: 'WORKFORCE' });
         links.push({ id: 'sign-in-out',    label: 'Sign In / Out',   icon: attendanceIcon() });
         links.push({ id: 'corp-attendance',label: 'Team Attendance', icon: svgIcon('<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/><polyline points="9 11 12 14 22 4"/>') });
+        links.push({ id: 'corp-clock-settings', label: 'Clock Settings', icon: svgIcon('<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/><circle cx="12" cy="12" r="2"/>') });
         links.push({ id: 'shifts',         label: 'Shifts',          icon: svgIcon('<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>') });
         links.push({ id: 'leave-requests', label: 'Leave Requests',  icon: svgIcon('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>') });
         links.push({ id: 'timesheets',     label: 'Timesheets',      icon: svgIcon('<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="14" x2="16" y2="14"/>') });
@@ -2716,6 +2720,7 @@ function buildSidebar() {
       links.push({ id: 'approvals',           label: 'Approvals',        icon: approvalsIcon() });
       links.push({ id: 'hod-course-approvals',label: 'Course Approvals', icon: svgIcon('<path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>') });
       links.push({ id: 'hod-unlock-students', label: 'Locked Students',  icon: svgIcon('<rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>') });
+      links.push({ id: 'class-rep-mgmt',     label: 'Class Reps',       icon: svgIcon('<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/><polyline points="9 11 12 14 22 4"/>') });
       links.push({ sep: true, label: 'SUPPORT' });
       links.push({ id: 'faq-center',       label: 'FAQ Center',     icon: svgIcon('<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>') });
       links.push({ id: 'subscription',     label: 'Subscription',   icon: subscriptionIcon() });
@@ -2792,9 +2797,10 @@ function buildSidebar() {
       links.push({ id: 'subscription', label: 'Subscription', icon: subscriptionIcon() });
       break;
     case 'superadmin':
-      links.push({ id: 'superadmin-platform', label: 'Platform',   icon: svgIcon('<rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>') });
-      links.push({ id: 'approvals',            label: 'Approvals',  icon: approvalsIcon() });
-      links.push({ id: 'search',               label: 'Search',     icon: svgIcon('<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>') });
+      links.push({ id: 'superadmin-platform', label: 'Platform',     icon: svgIcon('<rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>') });
+      links.push({ id: 'approvals',            label: 'Approvals',    icon: approvalsIcon() });
+      links.push({ id: 'search',               label: 'Search',       icon: svgIcon('<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>') });
+      links.push({ sep: true, label: 'SUPPORT' });
       break;
   }
 
@@ -2857,6 +2863,7 @@ function navigateTo(view) {
     case 'emp-assistant': renderEmpAssistant(); break;
     case 'sign-in-out': renderSignInOut(); break;
     case 'corp-attendance': renderCorporateAttendance(); break;
+    case 'corp-clock-settings': renderCorpClockSettings(); break;
     case 'subscription': renderSubscription(); break;
     case 'reports': renderReports(); break;
     case 'shifts': renderShifts(); break;
@@ -2879,6 +2886,7 @@ function navigateTo(view) {
 
     case 'hod-course-approvals': renderHodCourseApprovals(); break;
     case 'hod-unlock-students':  renderHodUnlockStudents(); break;
+    case 'class-rep-mgmt':       renderClassRepMgmt(); break;
     case 'hod-performance':      renderHodPerformance(); break;
     case 'hod-alerts':           renderHodAlerts(); break;
     case 'hod-messaging':        renderHodMessaging(); break;
@@ -3195,10 +3203,20 @@ async function renderHodDashboard(content) {
     const activeSess = sessions.filter(s => s.active).length;
 
     content.innerHTML = `
-      <div class="page-header">
+      <div class="page-header" style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px;">
         <div>
           <h2>Department Overview</h2>
           <p>Welcome back, ${currentUser.name} · <strong style="color:#0891b2;">${currentUser.department || 'No Department Assigned'}</strong> — ${currentUser.company?.name || ''}</p>
+        </div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+          <button onclick="navigateTo('announcements')" style="display:inline-flex;align-items:center;gap:8px;padding:10px 20px;background:linear-gradient(135deg,#0891b2,#0e7490);color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;box-shadow:0 4px 14px rgba(8,145,178,.35);">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+            Announcements
+          </button>
+          <button onclick="navigateTo('subscription')" style="display:inline-flex;align-items:center;gap:8px;padding:10px 20px;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;box-shadow:0 4px 14px rgba(99,102,241,.35);">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+            Subscription
+          </button>
         </div>
       </div>
       <div class="stats-grid" style="margin-bottom:20px;">
@@ -4073,6 +4091,269 @@ Current: ${currentDept || 'None'}`, currentDept || '');
   }).catch(e => toastError(e.message || 'Failed to update department'));
 }
 
+
+// ── Class Rep Management (HOD + Admin) ────────────────────────────────────
+async function renderClassRepMgmt() {
+  const content = document.getElementById('main-content');
+  content.innerHTML = '<div class="loading">Loading class representatives…</div>';
+  try {
+    const repsData = await api('/api/class-rep-admin/list');
+    const reps = repsData.reps || [];
+
+    // Group reps by class key for the 2-rep cap display
+    const repsByClass = {};
+    reps.forEach(r => {
+      const key = `${r.studentLevel}||${r.studentGroup}||${r.sessionType}||${r.semester}||${r.programme}`;
+      if (!repsByClass[key]) repsByClass[key] = [];
+      repsByClass[key].push(r._id);
+    });
+
+    content.innerHTML = `
+      <div class="page-header" style="flex-wrap:wrap;gap:10px;">
+        <div>
+          <h2>Class Representatives</h2>
+          <p>${reps.length} active rep${reps.length !== 1 ? 's' : ''} · Max 2 per class group</p>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="crOpenBrowse()">
+          ${svgIcon('<path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/>', 14)}
+          Assign New Rep
+        </button>
+      </div>
+
+      ${reps.length === 0
+        ? `<div class="card" style="text-align:center;padding:48px 20px;">
+            <div style="width:56px;height:56px;border-radius:16px;background:#ede9fe;display:flex;align-items:center;justify-content:center;margin:0 auto 14px">
+              ${svgIcon('<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>', 24, '#7c3aed')}
+            </div>
+            <h3 style="font-size:15px;font-weight:700;color:#0f172a;margin-bottom:6px">No class reps assigned yet</h3>
+            <p style="color:#64748b;font-size:13px;margin-bottom:16px">Use "Assign New Rep" to browse students and appoint up to 2 reps per class group.</p>
+            <button class="btn btn-primary btn-sm" onclick="crOpenBrowse()">Assign New Rep</button>
+          </div>`
+        : `<div style="overflow-x:auto;">
+            <table style="width:100%;border-collapse:collapse;font-size:13px;">
+              <thead>
+                <tr style="border-bottom:2px solid var(--border);">
+                  <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Name</th>
+                  <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Index No.</th>
+                  <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Programme</th>
+                  <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Level / Group</th>
+                  <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Session</th>
+                  <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Department</th>
+                  <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;"></th>
+                </tr>
+              </thead>
+              <tbody>
+                ${reps.map(r => `
+                  <tr style="border-bottom:1px solid var(--border);">
+                    <td style="padding:10px 12px;">
+                      <div style="display:flex;align-items:center;gap:8px;">
+                        ${r.profilePhoto
+                          ? `<img src="${esc(r.profilePhoto)}" style="width:32px;height:32px;border-radius:50%;object-fit:cover;" onerror="this.style.display='none'">`
+                          : `<div style="width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#7c3aed,#6366f1);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#fff">${esc((r.name||'?')[0].toUpperCase())}</div>`}
+                        <div>
+                          <div style="font-weight:600">${esc(r.name)}</div>
+                          <div style="font-size:11px;color:var(--text-muted)">${esc(r.email||'')}</div>
+                        </div>
+                      </div>
+                    </td>
+                    <td style="padding:10px 12px;color:var(--text-muted);font-family:monospace;">${esc(r.IndexNumber||r.indexNumber||'—')}</td>
+                    <td style="padding:10px 12px;">${r.programme ? `<span style="background:#ede9fe;color:#7c3aed;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700">${esc(r.programme)}</span>` : '—'}</td>
+                    <td style="padding:10px 12px;">
+                      ${r.studentLevel ? `<span style="background:#dbeafe;color:#1d4ed8;padding:2px 7px;border-radius:20px;font-size:11px;font-weight:700;margin-right:3px">L${esc(r.studentLevel)}</span>` : ''}
+                      ${r.studentGroup ? `<span style="background:#ecfdf5;color:#059669;padding:2px 7px;border-radius:20px;font-size:11px;font-weight:700">Grp ${esc(r.studentGroup)}</span>` : ''}
+                    </td>
+                    <td style="padding:10px 12px;">
+                      ${r.sessionType ? `<span style="background:#fff7ed;color:#c2410c;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600">${esc(r.sessionType)}</span>` : '—'}
+                      ${r.semester ? `<span style="font-size:11px;color:var(--text-muted);margin-left:4px">Sem ${esc(r.semester)}</span>` : ''}
+                    </td>
+                    <td style="padding:10px 12px;color:var(--text-muted);font-size:12px">${esc(r.department||'—')}</td>
+                    <td style="padding:10px 12px;">
+                      <button class="btn btn-xs" style="background:#fee2e2;color:#b91c1c;border:1px solid #fca5a5;" onclick="crRemoveRep('${r._id}','${esc(r.name).replace(/'/g,"\\'")}')">Remove</button>
+                    </td>
+                  </tr>`).join('')}
+              </tbody>
+            </table>
+          </div>`}
+
+      <!-- Browse & Assign modal -->
+      <div id="cr-browse-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:none;align-items:center;justify-content:center;padding:16px;">
+        <div style="background:#fff;border-radius:16px;width:100%;max-width:680px;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.25);">
+          <div style="padding:20px 24px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;">
+            <div>
+              <div style="font-size:16px;font-weight:800;color:#0f172a">Browse Students</div>
+              <div style="font-size:12px;color:var(--text-muted);margin-top:2px">Filter by class group, then assign a student as class rep</div>
+            </div>
+            <button onclick="crCloseBrowse()" style="background:none;border:none;cursor:pointer;padding:4px;border-radius:8px;color:var(--text-muted)">${svgIcon('<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>', 20)}</button>
+          </div>
+          <div style="padding:20px 24px;">
+            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;margin-bottom:16px;">
+              <div>
+                <label style="font-size:11px;font-weight:700;color:var(--text-muted);display:block;margin-bottom:4px">LEVEL</label>
+                <select id="cr-f-level" style="width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;">
+                  <option value="">All</option>
+                  <option value="100">100</option><option value="200">200</option><option value="300">300</option><option value="400">400</option><option value="500">500</option>
+                </select>
+              </div>
+              <div>
+                <label style="font-size:11px;font-weight:700;color:var(--text-muted);display:block;margin-bottom:4px">GROUP</label>
+                <select id="cr-f-group" style="width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;">
+                  <option value="">All</option>
+                  <option value="A">A</option><option value="B">B</option><option value="C">C</option><option value="D">D</option>
+                </select>
+              </div>
+              <div>
+                <label style="font-size:11px;font-weight:700;color:var(--text-muted);display:block;margin-bottom:4px">SESSION</label>
+                <select id="cr-f-session" style="width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;">
+                  <option value="">All</option>
+                  <option value="Regular">Regular</option><option value="Evening">Evening</option><option value="Weekend">Weekend</option><option value="Distance">Distance</option>
+                </select>
+              </div>
+              <div>
+                <label style="font-size:11px;font-weight:700;color:var(--text-muted);display:block;margin-bottom:4px">SEMESTER</label>
+                <select id="cr-f-semester" style="width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;">
+                  <option value="">All</option>
+                  <option value="1">Sem 1</option><option value="2">Sem 2</option>
+                </select>
+              </div>
+            </div>
+            <button class="btn btn-primary btn-sm" onclick="crFetchStudents()" style="margin-bottom:16px;">Search Students</button>
+            <div id="cr-student-list"><p style="color:var(--text-muted);font-size:13px;">Use filters above then click Search.</p></div>
+          </div>
+        </div>
+      </div>`;
+  } catch(e) {
+    content.innerHTML = `<div class="card"><p style="color:#ef4444;">${e.message}</p></div>`;
+  }
+}
+
+window.crOpenBrowse = function() {
+  const modal = document.getElementById('cr-browse-modal');
+  if (modal) { modal.style.display = 'flex'; }
+};
+
+window.crCloseBrowse = function() {
+  const modal = document.getElementById('cr-browse-modal');
+  if (modal) { modal.style.display = 'none'; }
+};
+
+window.crFetchStudents = async function() {
+  const listEl = document.getElementById('cr-student-list');
+  if (!listEl) return;
+  listEl.innerHTML = '<div class="loading" style="padding:16px 0;">Loading…</div>';
+  try {
+    const level    = document.getElementById('cr-f-level')?.value    || '';
+    const group    = document.getElementById('cr-f-group')?.value    || '';
+    const session  = document.getElementById('cr-f-session')?.value  || '';
+    const semester = document.getElementById('cr-f-semester')?.value || '';
+    const params = new URLSearchParams();
+    if (level)    params.set('level', level);
+    if (group)    params.set('group', group);
+    if (session)  params.set('sessionType', session);
+    if (semester) params.set('semester', semester);
+
+    const data = await api('/api/class-rep-admin/students?' + params.toString());
+    const students = data.students || [];
+
+    // Count reps per class key from the loaded students themselves
+    const repCountByKey = {};
+    students.forEach(s => {
+      const key = `${s.studentLevel}||${s.studentGroup}||${s.sessionType}||${s.semester}||${s.programme}`;
+      if (!repCountByKey[key]) repCountByKey[key] = 0;
+      if (s.isClassRep) repCountByKey[key]++;
+    });
+
+    if (students.length === 0) {
+      listEl.innerHTML = '<p style="color:var(--text-muted);font-size:13px;">No students found for those filters.</p>';
+      return;
+    }
+
+    listEl.innerHTML = `
+      <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">${students.length} student${students.length!==1?'s':''} found · reps shown at top</div>
+      <div style="overflow-x:auto;">
+        <table style="width:100%;border-collapse:collapse;font-size:13px;">
+          <thead>
+            <tr style="border-bottom:2px solid var(--border);">
+              <th style="text-align:left;padding:8px 10px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Name</th>
+              <th style="text-align:left;padding:8px 10px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Index</th>
+              <th style="text-align:left;padding:8px 10px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Level/Group</th>
+              <th style="text-align:left;padding:8px 10px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Status</th>
+              <th style="text-align:left;padding:8px 10px;"></th>
+            </tr>
+          </thead>
+          <tbody>
+            ${students.map(s => {
+              const key = `${s.studentLevel}||${s.studentGroup}||${s.sessionType}||${s.semester}||${s.programme}`;
+              const repCount = repCountByKey[key] || 0;
+              const atCap = repCount >= 2;
+              const isRep = s.isClassRep;
+              return `<tr style="border-bottom:1px solid var(--border);${isRep?'background:#faf5ff;':''}">
+                <td style="padding:8px 10px;font-weight:600;">${esc(s.name)}</td>
+                <td style="padding:8px 10px;color:var(--text-muted);font-family:monospace;font-size:12px;">${esc(s.IndexNumber||s.indexNumber||'—')}</td>
+                <td style="padding:8px 10px;">
+                  ${s.studentLevel ? `<span style="background:#dbeafe;color:#1d4ed8;padding:1px 6px;border-radius:20px;font-size:11px;font-weight:700">L${esc(s.studentLevel)}</span>` : ''}
+                  ${s.studentGroup ? `<span style="background:#ecfdf5;color:#059669;padding:1px 6px;border-radius:20px;font-size:11px;font-weight:700;margin-left:2px">Grp ${esc(s.studentGroup)}</span>` : ''}
+                </td>
+                <td style="padding:8px 10px;">
+                  ${isRep
+                    ? `<span style="background:#7c3aed;color:#fff;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:800;">CLASS REP</span>`
+                    : `<span style="background:#f1f5f9;color:#64748b;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:600;">Student</span>`}
+                  ${atCap && !isRep ? `<span style="font-size:10px;color:#dc2626;margin-left:4px">2/2 cap</span>` : ''}
+                </td>
+                <td style="padding:8px 10px;text-align:right;">
+                  ${isRep
+                    ? `<button class="btn btn-xs" style="background:#fee2e2;color:#b91c1c;border:1px solid #fca5a5;" onclick="crRemoveRepBrowse('${s._id}','${esc(s.name).replace(/'/g,"\\'")}')">Remove</button>`
+                    : atCap
+                      ? `<button class="btn btn-xs" disabled style="opacity:.4;cursor:not-allowed;">Cap reached</button>`
+                      : `<button class="btn btn-xs btn-primary" onclick="crAssignRep('${s._id}','${esc(s.name).replace(/'/g,"\\'")}')">Make Rep</button>`}
+                </td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>`;
+  } catch(e) {
+    listEl.innerHTML = `<p style="color:#ef4444;font-size:13px;">${e.message}</p>`;
+  }
+};
+
+window.crAssignRep = async function(studentId, name) {
+  if (!confirm(`Assign ${name} as a class representative?`)) return;
+  try {
+    await api('/api/class-rep-admin/assign', { method: 'POST', body: JSON.stringify({ studentId }) });
+    toastSuccess(`${name} is now a class representative`);
+    crCloseBrowse();
+    renderClassRepMgmt();
+  } catch(e) {
+    toastError(e.message || 'Failed to assign class representative');
+  }
+};
+
+window.crRemoveRep = async function(userId, name) {
+  if (!confirm(`Remove ${name} as class representative?`)) return;
+  try {
+    await api(`/api/class-rep-admin/remove/${userId}`, { method: 'DELETE' });
+    toastSuccess(`${name} is no longer a class representative`);
+    renderClassRepMgmt();
+  } catch(e) {
+    toastError(e.message || 'Failed to remove class representative');
+  }
+};
+
+window.crRemoveRepBrowse = async function(userId, name) {
+  if (!confirm(`Remove ${name} as class representative?`)) return;
+  try {
+    await api(`/api/class-rep-admin/remove/${userId}`, { method: 'DELETE' });
+    toastSuccess(`${name} is no longer a class representative`);
+    crFetchStudents();
+    // refresh main list in background
+    api('/api/class-rep-admin/list').then(d => {
+      const countEl = document.querySelector('.page-header p');
+      if (countEl) { const n = (d.reps||[]).length; countEl.textContent = `${n} active rep${n!==1?'s':''} · Max 2 per class group`; }
+    }).catch(() => {});
+  } catch(e) {
+    toastError(e.message || 'Failed to remove class representative');
+  }
+};
 
 // ── HOD — Department Performance Dashboard ────────────────────────────────
 async function renderHodPerformance() {
@@ -5373,11 +5654,27 @@ async function renderStudentDashboard(content) {
     </div>`;
   })() : '';
 
+  const classRepBanner = currentUser.isClassRep ? `
+    <div style="background:linear-gradient(135deg,#ede9fe,#f5f3ff);border:1.5px solid #c4b5fd;border-radius:12px;padding:16px 20px;margin-bottom:16px;display:flex;gap:14px;align-items:center;cursor:pointer" onclick="navigateTo('class-device')">
+      <div style="width:44px;height:44px;border-radius:12px;background:linear-gradient(135deg,#7c3aed,#6366f1);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+        ${svgIcon('<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/><polyline points="9 11 12 14 22 4"/>', 20, '#fff')}
+      </div>
+      <div style="flex:1">
+        <div style="font-weight:700;color:#5b21b6;font-size:14px;display:flex;align-items:center;gap:6px">
+          <span style="background:#7c3aed;color:#fff;font-size:10px;font-weight:800;padding:2px 7px;border-radius:20px;letter-spacing:.5px">CLASS REP</span>
+          You are a Class Representative
+        </div>
+        <div style="color:#6d28d9;font-size:12px;margin-top:2px">Tap to manage the class device &amp; connect attendance for your group.</div>
+      </div>
+      <div style="color:#7c3aed;opacity:.7">${svgIcon('<polyline points="9 18 15 12 9 6"/>', 18)}</div>
+    </div>` : '';
+
   content.innerHTML = `
     <div class="page-header">
       <h2>Welcome back, ${currentUser.name.split(' ')[0]}</h2>
       <p>${currentUser.company?.name || 'Your institution'}${currentUser.indexNumber ? ' \u2022 ' + currentUser.indexNumber : ''}</p>
     </div>
+    ${classRepBanner}
     ${devLockBanner}
 
     ${activeSession ? `
@@ -7188,7 +7485,15 @@ async function renderMeetings() {
           ${isLive && canControl ? `<button style="flex:1;background:#22c55e;color:#fff;border:none;padding:10px 14px;border-radius:9px;font-weight:700;cursor:pointer;font-size:14px;min-width:90px;" onclick="startMeeting('${m._id}')">▶ Rejoin</button>` : ''}
           ${isLive && isDeviceLocked ? `<span style="background:#fef3c7;color:#92400e;padding:8px 12px;border-radius:9px;font-size:12px;font-weight:600;">🔒 Locked</span>` : ''}
           ${isScheduled && !canControl ? `<span style="background:#eff6ff;color:#1d4ed8;padding:8px 12px;border-radius:9px;font-size:12px;font-weight:600;">Not Live Yet</span>` : ''}
-          ${canControl && isScheduled ? `<button style="flex:1;background:#3b82f6;color:#fff;border:none;padding:10px 14px;border-radius:9px;font-weight:700;cursor:pointer;font-size:14px;min-width:90px;" onclick="startMeeting('${m._id}')">▶ Start</button>` : ''}
+          ${canControl && isScheduled ? (() => {
+            const now = Date.now();
+            const start = m.scheduledStart ? new Date(m.scheduledStart).getTime() : 0;
+            const minsUntil = Math.ceil((start - now) / 60000);
+            const canStart = now >= start - 60000; // allow 1 min early
+            return canStart
+              ? `<button style="flex:1;background:#3b82f6;color:#fff;border:none;padding:10px 14px;border-radius:9px;font-weight:700;cursor:pointer;font-size:14px;min-width:90px;" onclick="startMeeting('${m._id}')">▶ Start</button>`
+              : `<button disabled style="flex:1;background:#93c5fd;color:#fff;border:none;padding:10px 14px;border-radius:9px;font-weight:600;font-size:13px;min-width:90px;cursor:not-allowed;" title="Meeting hasn't reached its scheduled time">⏳ In ${minsUntil}m</button>`;
+          })() : ''}
           ${canControl && isLive ? `<button style="background:#0ea5e9;color:#fff;border:none;padding:10px 14px;border-radius:9px;font-weight:700;cursor:pointer;" onclick="openMeetingMonitor('${m._id}')">👁 Monitor</button>` : ''}
           ${canControl && isLive ? `<button style="background:#ef4444;color:#fff;border:none;padding:10px 14px;border-radius:9px;font-weight:700;cursor:pointer;" onclick="endMeeting('${m._id}')">■ End</button>` : ''}
           ${canControl && (isScheduled || isLive) ? `<button style="background:#f1f5f9;color:#374151;border:none;padding:10px 14px;border-radius:9px;font-weight:600;cursor:pointer;" onclick="cancelMeeting('${m._id}')">Cancel</button>` : ''}
@@ -11554,15 +11859,109 @@ async function renderSubscription() {
   const content = document.getElementById('main-content');
   if (!content) return;
 
-  // HODs are fully free
+  // HODs see the institution subscription status
   if (currentUser && currentUser.role === 'hod') {
-    content.innerHTML = `
-      <div class="page-header"><h2>Subscription</h2><p>Your access plan</p></div>
-      <div class="card" style="max-width:480px;padding:32px;text-align:center">
-        <div style="font-size:40px;margin-bottom:12px">✅</div>
-        <h3 style="margin-bottom:8px">No Payment Required</h3>
-        <p style="color:var(--text-muted)">Your access is managed by your institution. You do not need a personal subscription.</p>
-      </div>`;
+    content.innerHTML = '<div class="loading">Loading subscription info…</div>';
+    try {
+      const meData = await api('/api/auth/me');
+      const ut        = meData.userTrial || {};
+      const status    = ut.status   || 'expired';
+      const rawDays   = ut.daysLeft || 0;
+      const daysLeft  = Math.min(rawDays, 365);
+      const expiry    = ut.subscriptionExpiry
+        ? new Date(ut.subscriptionExpiry).toLocaleDateString('en-GB', { day:'numeric', month:'long', year:'numeric' })
+        : '—';
+      const isActive  = status === 'active';
+      const isTrial   = status === 'trial';
+      const isExpired = !isActive && !isTrial;
+
+      const statusColor = isActive ? '#16a34a' : isTrial ? '#d97706' : '#dc2626';
+      const statusBg    = isActive ? '#f0fdf4' : isTrial ? '#fffbeb' : '#fef2f2';
+      const statusBorder= isActive ? '#86efac' : isTrial ? '#fde68a' : '#fca5a5';
+      const statusLabel = isActive ? 'Active' : isTrial ? 'Free Trial' : 'Expired';
+      const statusIcon  = isActive ? '✅' : isTrial ? '⏳' : '❌';
+
+      const urgentBanner = (isExpired || (daysLeft <= 14 && daysLeft > 0)) ? `
+        <div style="background:${isExpired?'#fef2f2':'#fffbeb'};border:1.5px solid ${isExpired?'#fca5a5':'#fde68a'};border-radius:12px;padding:16px 20px;margin-bottom:20px;display:flex;gap:14px;align-items:flex-start;">
+          <div style="font-size:24px;flex-shrink:0">${isExpired?'🔴':'⚠️'}</div>
+          <div>
+            <div style="font-weight:700;color:${isExpired?'#b91c1c':'#92400e'};font-size:14px;margin-bottom:4px">
+              ${isExpired ? 'Subscription Expired — Access Restricted' : `Subscription Expiring in ${daysLeft} Day${daysLeft!==1?'s':''}`}
+            </div>
+            <div style="font-size:13px;color:${isExpired?'#dc2626':'#b45309'};">
+              ${isExpired ? 'Your institution\'s subscription has expired. Contact your admin to renew immediately to restore full access.' : 'Remind your institution admin to renew before access is restricted.'}
+            </div>
+          </div>
+        </div>` : '';
+
+      content.innerHTML = `
+        <div class="page-header">
+          <h2>Subscription</h2>
+          <p>Institution access plan · ${currentUser.company?.name || 'Your Institution'}</p>
+        </div>
+
+        ${urgentBanner}
+
+        <div class="stats-grid" style="margin-bottom:24px;">
+          <div class="stat-card">
+            <div class="stat-value" style="color:${statusColor}">${statusIcon} ${statusLabel}</div>
+            <div class="stat-label">Plan Status</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" style="color:${daysLeft > 30 ? 'var(--success)' : daysLeft > 7 ? '#d97706' : '#dc2626'}">${daysLeft}</div>
+            <div class="stat-label">Days Remaining</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" style="font-size:15px">${expiry}</div>
+            <div class="stat-label">${isActive ? 'Expires On' : isTrial ? 'Trial Ends' : 'Expired On'}</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" style="font-size:14px">${currentUser.company?.name || '—'}</div>
+            <div class="stat-label">Institution</div>
+          </div>
+        </div>
+
+        <div class="card" style="max-width:520px;">
+          <div style="display:flex;align-items:center;gap:14px;margin-bottom:20px;">
+            <div style="width:48px;height:48px;border-radius:14px;background:${statusBg};border:1.5px solid ${statusBorder};display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0">${statusIcon}</div>
+            <div>
+              <div style="font-weight:700;font-size:16px;color:#0f172a;">Institution Plan</div>
+              <div style="font-size:13px;color:#64748b;">Your HOD access is included in your institution's subscription</div>
+            </div>
+          </div>
+
+          <div style="background:${statusBg};border:1.5px solid ${statusBorder};border-radius:10px;padding:14px 16px;margin-bottom:20px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+              <div>
+                <div style="font-size:13px;font-weight:700;color:${statusColor};">Status: ${statusLabel}</div>
+                <div style="font-size:12px;color:#64748b;margin-top:2px;">Expires: ${expiry}</div>
+              </div>
+              <div style="text-align:right;">
+                <div style="font-size:22px;font-weight:800;color:${statusColor};">${daysLeft}</div>
+                <div style="font-size:11px;color:#64748b;">days left</div>
+              </div>
+            </div>
+          </div>
+
+          <div style="border-top:1px solid var(--border);padding-top:16px;">
+            <div style="font-size:13px;font-weight:700;color:#374151;margin-bottom:10px;">What's Included</div>
+            <ul style="font-size:13px;color:#64748b;margin:0;padding-left:18px;line-height:2;">
+              <li>Full department management access</li>
+              <li>Student &amp; lecturer oversight</li>
+              <li>Attendance monitoring &amp; reports</li>
+              <li>Course approvals &amp; performance analytics</li>
+              <li>Class representative management</li>
+              <li>Smart alerts &amp; department messaging</li>
+            </ul>
+          </div>
+
+          <div style="margin-top:20px;padding:12px 14px;background:#f8fafc;border-radius:8px;font-size:12px;color:#64748b;">
+            💡 To renew or upgrade the institution plan, contact your <strong>institution admin</strong>. Subscription management is handled at the admin level.
+          </div>
+        </div>`;
+    } catch(e) {
+      content.innerHTML = `<div class="card"><p style="color:var(--danger)">${esc(e.message)}</p></div>`;
+    }
     return;
   }
 
@@ -15670,6 +16069,109 @@ async function _caSaveSettings() {
 }
 
 // ── SHIFTS (Admin/Manager) ─────────────────────────────────────────────────
+// ── Corporate Clock In/Out Settings (direct admin page) ───────────────────
+async function renderCorpClockSettings() {
+  const content = document.getElementById('main-content');
+  if (!content) return;
+  content.innerHTML = '<div class="loading">Loading settings…</div>';
+  try {
+    const [s, win] = await Promise.all([
+      api('/api/corporate-attendance/settings').catch(() => ({})),
+      api('/api/corporate-attendance/clock-window').catch(() => ({})),
+    ]);
+
+    content.innerHTML = `
+      <div class="page-header" style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px;">
+        <div>
+          <h2>Clock In / Out Settings</h2>
+          <p>Configure attendance restrictions and allowed clock-in/out time windows.</p>
+        </div>
+        <button class="btn btn-secondary btn-sm" onclick="navigateTo('corp-attendance')">← Team Attendance</button>
+      </div>
+
+      <div class="card" style="max-width:600px;margin-bottom:20px">
+        <h3 style="font-size:15px;font-weight:700;margin-bottom:4px">Strict Attendance Settings</h3>
+        <p style="font-size:12px;color:var(--text-light);margin-bottom:18px">Employees can only clock in when on company WiFi AND inside the office geofence.</p>
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--border)">
+          <div>
+            <div style="font-weight:600;font-size:13px">Require Company WiFi</div>
+            <div style="font-size:11px;color:var(--text-light)">Employees must be on the company IP range to clock in</div>
+          </div>
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+            <input type="checkbox" id="cas-require-wifi" ${s.requireWifi ? 'checked' : ''} style="width:16px;height:16px;cursor:pointer">
+          </label>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--border)">
+          <div>
+            <div style="font-weight:600;font-size:13px">Require Geofence</div>
+            <div style="font-size:11px;color:var(--text-light)">Employees must be within the office location radius</div>
+          </div>
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+            <input type="checkbox" id="cas-require-geo" ${s.requireGeofence ? 'checked' : ''} style="width:16px;height:16px;cursor:pointer">
+          </label>
+        </div>
+        <div style="padding:12px 0;border-bottom:1px solid var(--border)">
+          <div style="font-weight:600;font-size:13px;margin-bottom:6px">Allowed IP Addresses</div>
+          <div style="font-size:11px;color:var(--text-light);margin-bottom:8px">Comma-separated list of allowed IPs (leave blank to allow all)</div>
+          <input id="cas-ips" value="${esc((s.allowedIPs||[]).join(', '))}" placeholder="e.g. 192.168.1.1, 10.0.0.1" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;font-family:monospace">
+          <div style="margin-top:6px;display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-muted)">
+            My current IP: <strong id="cas-myip">—</strong>
+            <button onclick="_caDetectMyIP(true)" style="background:#f1f5f9;border:none;border-radius:6px;padding:2px 8px;font-size:11px;cursor:pointer">Detect &amp; Add</button>
+          </div>
+        </div>
+        <div style="padding:12px 0">
+          <div style="font-weight:600;font-size:13px;margin-bottom:6px">Geofence</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:8px">
+            <div>
+              <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-muted)">Latitude</label>
+              <input id="cas-lat" type="number" step="any" value="${s.geofence?.lat||''}" placeholder="e.g. 5.6037" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:13px">
+            </div>
+            <div>
+              <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-muted)">Longitude</label>
+              <input id="cas-lng" type="number" step="any" value="${s.geofence?.lng||''}" placeholder="e.g. -0.1870" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:13px">
+            </div>
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-muted)">Radius (metres)</label>
+            <input id="cas-radius" type="number" value="${s.geofence?.radius||100}" placeholder="100" style="width:120px;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:13px">
+          </div>
+        </div>
+        <button class="btn btn-primary" onclick="_caSaveSettings()" style="margin-top:8px">Save Attendance Settings</button>
+      </div>
+
+      <div class="card" style="max-width:600px">
+        <h3 style="font-size:15px;font-weight:700;margin-bottom:4px">Clock-In / Clock-Out Time Windows</h3>
+        <p style="font-size:12px;color:var(--text-light);margin-bottom:18px">Restrict the times of day when employees can clock in or out. Leave blank for no restriction.</p>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
+          <div>
+            <div style="font-weight:700;font-size:13px;margin-bottom:8px;color:#0891b2">Clock-In Window</div>
+            <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px">
+              <input type="time" id="cw-ci-start" value="${win.clockIn?.start||''}" style="flex:1;padding:7px;border:1px solid var(--border);border-radius:6px;font-size:13px">
+              <span style="color:var(--text-muted)">to</span>
+              <input type="time" id="cw-ci-end"   value="${win.clockIn?.end  ||''}" style="flex:1;padding:7px;border:1px solid var(--border);border-radius:6px;font-size:13px">
+            </div>
+          </div>
+          <div>
+            <div style="font-weight:700;font-size:13px;margin-bottom:8px;color:#7c3aed">Clock-Out Window</div>
+            <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px">
+              <input type="time" id="cw-co-start" value="${win.clockOut?.start||''}" style="flex:1;padding:7px;border:1px solid var(--border);border-radius:6px;font-size:13px">
+              <span style="color:var(--text-muted)">to</span>
+              <input type="time" id="cw-co-end"   value="${win.clockOut?.end  ||''}" style="flex:1;padding:7px;border:1px solid var(--border);border-radius:6px;font-size:13px">
+            </div>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-primary" onclick="_caSaveClockWindow()">Save Time Windows</button>
+          <button class="btn btn-secondary" onclick="_caClearClockWindow()">Clear All Windows</button>
+        </div>
+      </div>`;
+
+    _caDetectMyIP(false);
+  } catch(e) {
+    content.innerHTML = `<div class="card"><p style="color:var(--danger)">${esc(e.message)}</p></div>`;
+  }
+}
+
 async function renderShifts() {
   const content = document.getElementById('main-content');
   if (!content) return;
@@ -20082,9 +20584,14 @@ function renderCourseVideos() {
         </div>
       </div>
       <div id="cv-body">
-        <div class="empty-state" style="padding:3rem 1rem">
-          ${svgIcon('<circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8"/>', 40, 'var(--text-muted)')}
-          <p style="margin:.75rem 0 0">Loading videos…</p>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:1rem">
+          ${Array(6).fill(0).map(() => `<div class="card" style="padding:0;overflow:hidden;">
+            <div style="aspect-ratio:16/9;background:var(--border);animation:pulse 1.5s ease-in-out infinite"></div>
+            <div style="padding:.75rem">
+              <div style="height:13px;background:var(--border);border-radius:4px;margin-bottom:.5rem;width:75%;animation:pulse 1.5s ease-in-out infinite"></div>
+              <div style="height:11px;background:var(--border);border-radius:4px;width:50%;animation:pulse 1.5s ease-in-out infinite"></div>
+            </div>
+          </div>`).join('')}
         </div>
       </div>`;
     _renderStudentVideos();
@@ -20288,12 +20795,21 @@ async function renderClassAnnouncements() {
   try {
     const [annData] = await Promise.all([api('/api/announcements')]);
     const allAnns = annData.announcements || [];
-    // Show only announcements posted by this class rep or targeting their course
-    const courseId = currentUser.classRepCourse;
-    const classAnns = allAnns.filter(a =>
-      (a.audience === 'course' && String(a.targetCourse) === String(courseId)) ||
-      String(a.author?._id || a.author) === String(currentUser._id)
-    );
+    // Show announcements for this class group (posted by any class rep of the same group)
+    const classAnns = allAnns.filter(a => {
+      if (String(a.author?._id || a.author) === String(currentUser._id)) return true;
+      if (a.audience === 'class_group' && a.classGroup) {
+        return (
+          String(a.classGroup.studentLevel || '') === String(currentUser.studentLevel || '') &&
+          String(a.classGroup.studentGroup  || '') === String(currentUser.studentGroup  || '') &&
+          String(a.classGroup.sessionType   || '') === String(currentUser.sessionType   || '') &&
+          String(a.classGroup.semester      || '') === String(currentUser.semester      || '') &&
+          String(a.classGroup.programme     || '') === String(currentUser.programme     || '')
+        );
+      }
+      if (a.audience === 'course' && String(a.targetCourse) === String(currentUser.classRepCourse)) return true;
+      return false;
+    });
 
     content.innerHTML = `
       <div class="page-header" style="margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
@@ -20376,7 +20892,19 @@ async function submitClassRepAnnouncement() {
   try {
     await api('/api/announcements', {
       method: 'POST',
-      body: JSON.stringify({ title, body, type }),
+      body: JSON.stringify({
+        title,
+        body,
+        type,
+        audience: 'class_group',
+        classGroup: {
+          studentLevel: currentUser.studentLevel,
+          studentGroup: currentUser.studentGroup,
+          sessionType:  currentUser.sessionType,
+          semester:     currentUser.semester,
+          programme:    currentUser.programme,
+        },
+      }),
     });
     closeModal();
     toastSuccess('Announcement posted to your class group!');

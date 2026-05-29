@@ -904,7 +904,7 @@ function selectPortal(t){if(window._appLoaded)window._realSelectPortal(t);else w
         </button>
         <button class="btn btn-secondary btn-sm" onclick="handleLogout()" style="gap:6px">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
-          Sign Out
+          <span class="sign-out-label">Sign Out</span>
         </button>
       </div>
     </div>
@@ -1272,7 +1272,7 @@ function selectPortal(t){if(window._appLoaded)window._realSelectPortal(t);else w
   </script>
 
   <script src="/js/offline-idb.js"></script>
-  <script src="/js/app.js?v=20260519d"></script>
+  <script src="/js/app.js?v=20260529e"></script>
   <script src="/js/pages-faq.js"></script>
   <script src="/js/pages-corporate.js"></script>
   <script src="/js/pages-academic.js"></script>
@@ -1280,6 +1280,132 @@ function selectPortal(t){if(window._appLoaded)window._realSelectPortal(t);else w
   <script src="/js/manager-portal.js"></script>
   <script src="/js/faq-widget.js"></script>
   <script src="/js/faq-assistant.js"></script>
+
+  <!-- ── Draggable FAQ Bubble ──────────────────────────────────────────────── -->
+  <div id="faq-fab" title="FAQ Help" style="
+    position:fixed;
+    right:24px;
+    bottom:80px;
+    width:50px;
+    height:50px;
+    border-radius:50%;
+    background:linear-gradient(135deg,#6366f1,#8b5cf6);
+    box-shadow:0 4px 16px rgba(99,102,241,.45);
+    display:none;
+    align-items:center;
+    justify-content:center;
+    cursor:grab;
+    z-index:1200;
+    user-select:none;
+    -webkit-user-select:none;
+    transition:box-shadow .2s,transform .2s;
+  " onclick="faqFabClick(event)">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="10"/>
+      <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
+      <line x1="12" y1="17" x2="12.01" y2="17"/>
+    </svg>
+  </div>
+  <script>
+  (function() {
+    const fab = document.getElementById('faq-fab');
+    let isDragging = false, dragMoved = false, startX, startY, origRight, origBottom;
+
+    function saveFabPos(right, bottom) {
+      try { localStorage.setItem('faq_fab_pos', JSON.stringify({ right, bottom })); } catch(e) {}
+    }
+    function loadFabPos() {
+      try { return JSON.parse(localStorage.getItem('faq_fab_pos')); } catch(e) { return null; }
+    }
+
+    function setFabPos(right, bottom) {
+      const vw = window.innerWidth, vh = window.innerHeight;
+      right  = Math.min(Math.max(right,  8), vw - 58);
+      bottom = Math.min(Math.max(bottom, 8), vh - 58);
+      fab.style.right  = right  + 'px';
+      fab.style.bottom = bottom + 'px';
+    }
+
+    const pos = loadFabPos();
+    if (pos) setFabPos(pos.right, pos.bottom);
+
+    fab.addEventListener('mousedown', function(e) {
+      if (e.button !== 0) return;
+      isDragging = true; dragMoved = false;
+      startX = e.clientX;
+      startY = e.clientY;
+      origRight  = parseInt(fab.style.right  || '24', 10);
+      origBottom = parseInt(fab.style.bottom || '80', 10);
+      fab.style.cursor = 'grabbing';
+      fab.style.transform = 'scale(1.12)';
+      e.preventDefault();
+    });
+
+    document.addEventListener('mousemove', function(e) {
+      if (!isDragging) return;
+      const dx = e.clientX - startX;
+      const dy = e.clientY - startY;
+      if (Math.abs(dx) > 3 || Math.abs(dy) > 3) dragMoved = true;
+      const newRight  = origRight  - dx;
+      const newBottom = origBottom + dy;
+      setFabPos(newRight, newBottom);
+    });
+
+    document.addEventListener('mouseup', function(e) {
+      if (!isDragging) return;
+      isDragging = false;
+      fab.style.cursor = 'grab';
+      fab.style.transform = '';
+      if (dragMoved) {
+        saveFabPos(parseInt(fab.style.right, 10), parseInt(fab.style.bottom, 10));
+      }
+    });
+
+    // Touch support
+    fab.addEventListener('touchstart', function(e) {
+      const t = e.touches[0];
+      isDragging = true; dragMoved = false;
+      startX = t.clientX; startY = t.clientY;
+      origRight  = parseInt(fab.style.right  || '24', 10);
+      origBottom = parseInt(fab.style.bottom || '80', 10);
+      fab.style.transform = 'scale(1.12)';
+    }, { passive: true });
+
+    document.addEventListener('touchmove', function(e) {
+      if (!isDragging) return;
+      const t = e.touches[0];
+      const dx = t.clientX - startX;
+      const dy = t.clientY - startY;
+      if (Math.abs(dx) > 4 || Math.abs(dy) > 4) dragMoved = true;
+      setFabPos(origRight - dx, origBottom + dy);
+    }, { passive: true });
+
+    document.addEventListener('touchend', function() {
+      if (!isDragging) return;
+      isDragging = false;
+      fab.style.transform = '';
+      if (dragMoved) saveFabPos(parseInt(fab.style.right, 10), parseInt(fab.style.bottom, 10));
+    });
+  })();
+
+  window.faqFabClick = function(e) {
+    if (window._faqFabDragMoved) { window._faqFabDragMoved = false; return; }
+    if (typeof navigateTo === 'function') navigateTo('faq-center');
+  };
+
+  // Show FAB only when user is logged in
+  document.addEventListener('DOMContentLoaded', function() {
+    const observer = new MutationObserver(function() {
+      const fab = document.getElementById('faq-fab');
+      if (!fab) return;
+      const shell = document.getElementById('app-shell');
+      const hidden = !shell || shell.classList.contains('hidden') || shell.style.display === 'none';
+      fab.style.display = hidden ? 'none' : 'flex';
+    });
+    const shell = document.getElementById('app-shell');
+    if (shell) observer.observe(shell, { attributes: true, attributeFilter: ['class', 'style'] });
+  });
+  </script>
 
 </body>
 </html>
