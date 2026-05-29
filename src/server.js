@@ -222,7 +222,7 @@ app.get(['/app', '/app/'], (req, res) => {
   });
 });
 app.use('/app', express.static(flutterWebPath, { index: false }));
-app.get('/app/*', (req, res) => {
+app.get('/app/{*path}', (req, res) => {
   res.sendFile(path.join(flutterWebPath, 'index.html'), (err) => {
     if (err) res.status(503).send('Flutter app deploying — try again in a moment.');
   });
