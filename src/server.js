@@ -123,6 +123,22 @@ app.use(cors({
     "x-request-time",
   ],
   credentials: true,
+  preflightContinue: false,
+  optionsSuccessStatus: 204,
+}));
+
+// Explicit OPTIONS handler for all routes — ensures preflight works even if nginx
+// does not proxy OPTIONS to this process (some nginx configs block non-GET/POST).
+app.options('(.*)', cors({
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
+    return callback(new Error(`CORS blocked: ${origin}`));
+  },
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization", "x-esp32-secret", "x-esp32-token",
+    "x-device-id", "x-session-token", "x-request-time"],
+  credentials: true,
+  optionsSuccessStatus: 204,
 }));
 
 app.use((req, res, next) => {
@@ -209,6 +225,21 @@ app.get("/contact",        (req, res) => res.sendFile(path.join(__dirname, "publ
 app.get("/privacy",        (req, res) => res.sendFile(path.join(__dirname, "public", "privacy.html")));
 app.get("/terms",          (req, res) => res.sendFile(path.join(__dirname, "public", "terms.html")));
 app.get("/delete-account", (req, res) => res.sendFile(path.join(__dirname, "public", "delete-account.html")));
+
+// Flutter web app — served at /app/ (same origin as API, no CORS needed)
+const flutterWebPath = path.join(__dirname, '..', 'flutter-web');
+// Explicit index handler first so express.static never sees a bare directory (avoids 403)
+app.get(['/app', '/app/'], (req, res) => {
+  res.sendFile(path.join(flutterWebPath, 'index.html'), (err) => {
+    if (err) res.status(503).send('Flutter app deploying — try again in a moment.');
+  });
+});
+app.use('/app', express.static(flutterWebPath, { index: false }));
+app.get('/app/*', (req, res) => {
+  res.sendFile(path.join(flutterWebPath, 'index.html'), (err) => {
+    if (err) res.status(503).send('Flutter app deploying — try again in a moment.');
+  });
+});
 
 app.use(express.static(path.join(__dirname, "public"), {
   setHeaders: (res, filePath) => {

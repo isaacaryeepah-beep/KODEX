@@ -25,6 +25,7 @@ services:
         condition: service_healthy
     volumes:
       - uploads:/app/uploads
+      - /root/dikly-flutter-web:/app/flutter-web
     networks:
       - dikly-net
     healthcheck:

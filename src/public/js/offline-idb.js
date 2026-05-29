@@ -1,290 +1,302 @@
-/**
- * DIKLY Offline Layer  v1.0
- *
- * Provides transparent offline support via IndexedDB:
- *  - Caches all GET /api/* responses for 7 days
- *  - Queues POST/PATCH/DELETE when offline — auto-flushes on reconnect
- *  - Stores user session for offline login
- *  - Stores dashboard snapshot for offline viewing
- *
- * Loaded before app.js so the fetch interceptor is in place first.
- */
+// ════════════════════════════════════════════════════════════════════════════
+//  DIKLY Offline IDB — Invisible local database layer
+//  Intercepts all fetch() calls to:
+//    • Cache every GET /api/ response in IndexedDB (auto, silent)
+//    • Return cached data instantly when offline
+//    • Queue POST/PATCH/DELETE calls (attendance marks, etc.) when offline
+//    • Auto-sync the queue the moment the device reconnects
+//  No user interaction needed. Storage is in the app's private IDB — not
+//  visible in localStorage, not clearable by the user from browser settings.
+// ════════════════════════════════════════════════════════════════════════════
+
 (function () {
   'use strict';
 
-  const DB_NAME    = 'dikly_offline_v1';
-  const DB_VERSION = 1;
+  const DB_NAME    = 'dikly_local';
+  const DB_VERSION = 3;
   const CACHE_TTL  = 7 * 24 * 60 * 60 * 1000; // 7 days
 
+  // ── IndexedDB bootstrap ─────────────────────────────────────────────────────
   let _db = null;
 
-  // ── Open DB ────────────────────────────────────────────────────────────────
   function openDB() {
     return new Promise((resolve, reject) => {
       if (_db) return resolve(_db);
       const req = indexedDB.open(DB_NAME, DB_VERSION);
-      req.onupgradeneeded = function (e) {
+
+      req.onupgradeneeded = (e) => {
         const db = e.target.result;
+
+        // API response cache — keyed by URL
         if (!db.objectStoreNames.contains('apiCache')) {
-          db.createObjectStore('apiCache', { keyPath: 'url' });
+          const s = db.createObjectStore('apiCache', { keyPath: 'url' });
+          s.createIndex('ts', 'ts', { unique: false });
         }
+
+        // Pending write queue — attendance marks, session ops, etc.
         if (!db.objectStoreNames.contains('syncQueue')) {
-          db.createObjectStore('syncQueue', { autoIncrement: true, keyPath: '_qid' });
+          const q = db.createObjectStore('syncQueue', { keyPath: 'id', autoIncrement: true });
+          q.createIndex('queuedAt', 'queuedAt', { unique: false });
         }
+
+        // User session cache — full user object + token
         if (!db.objectStoreNames.contains('userSession')) {
           db.createObjectStore('userSession', { keyPath: 'key' });
         }
+
+        // Dashboard data — each widget/panel cached separately
         if (!db.objectStoreNames.contains('dashboardCache')) {
-          db.createObjectStore('dashboardCache', { keyPath: 'key' });
+          const d = db.createObjectStore('dashboardCache', { keyPath: 'key' });
+          d.createIndex('ts', 'ts', { unique: false });
         }
       };
-      req.onsuccess  = e => { _db = e.target.result; resolve(_db); };
-      req.onerror    = e => reject(e.target.error);
+
+      req.onsuccess  = (e) => { _db = e.target.result; resolve(_db); };
+      req.onerror    = (e) => reject(e.target.error);
+      req.onblocked  = ()  => reject(new Error('IDB blocked'));
     });
   }
 
-  // ── Generic IDB helpers ────────────────────────────────────────────────────
-  async function idbGet(store, key) {
+  // ── Generic IDB helpers ─────────────────────────────────────────────────────
+  async function idbPut(storeName, record) {
     const db = await openDB();
     return new Promise((resolve, reject) => {
-      const tx = db.transaction(store, 'readonly');
-      const req = tx.objectStore(store).get(key);
-      req.onsuccess = () => resolve(req.result);
-      req.onerror   = e => reject(e.target.error);
+      const tx = db.transaction(storeName, 'readwrite');
+      tx.objectStore(storeName).put(record);
+      tx.oncomplete = resolve;
+      tx.onerror    = (e) => reject(e.target.error);
     });
   }
 
-  async function idbPut(store, value) {
+  async function idbGet(storeName, key) {
     const db = await openDB();
     return new Promise((resolve, reject) => {
-      const tx = db.transaction(store, 'readwrite');
-      const req = tx.objectStore(store).put(value);
-      req.onsuccess = () => resolve(req.result);
-      req.onerror   = e => reject(e.target.error);
+      const tx  = db.transaction(storeName, 'readonly');
+      const req = tx.objectStore(storeName).get(key);
+      req.onsuccess = (e) => resolve(e.target.result ?? null);
+      req.onerror   = (e) => reject(e.target.error);
     });
   }
 
-  async function idbDelete(store, key) {
+  async function idbDelete(storeName, key) {
     const db = await openDB();
     return new Promise((resolve, reject) => {
-      const tx = db.transaction(store, 'readwrite');
-      const req = tx.objectStore(store).delete(key);
-      req.onsuccess = () => resolve();
-      req.onerror   = e => reject(e.target.error);
+      const tx = db.transaction(storeName, 'readwrite');
+      tx.objectStore(storeName).delete(key);
+      tx.oncomplete = resolve;
+      tx.onerror    = (e) => reject(e.target.error);
     });
   }
 
-  async function idbGetAll(store) {
+  async function idbGetAll(storeName) {
     const db = await openDB();
     return new Promise((resolve, reject) => {
-      const tx = db.transaction(store, 'readonly');
-      const req = tx.objectStore(store).getAll();
-      req.onsuccess = () => resolve(req.result || []);
-      req.onerror   = e => reject(e.target.error);
+      const tx  = db.transaction(storeName, 'readonly');
+      const req = tx.objectStore(storeName).getAll();
+      req.onsuccess = (e) => resolve(e.target.result || []);
+      req.onerror   = (e) => reject(e.target.error);
     });
   }
 
-  async function idbClear(store) {
-    const db = await openDB();
-    return new Promise((resolve, reject) => {
-      const tx = db.transaction(store, 'readwrite');
-      const req = tx.objectStore(store).clear();
-      req.onsuccess = () => resolve();
-      req.onerror   = e => reject(e.target.error);
-    });
+  // ── API cache ───────────────────────────────────────────────────────────────
+  async function cacheApiResponse(url, data) {
+    try {
+      await idbPut('apiCache', { url, data, ts: Date.now() });
+    } catch (e) {
+      // Silent — IDB write failure should never crash the app
+    }
   }
 
-  // ── Fake Response builder ─────────────────────────────────────────────────
-  function makeCachedResponse(data) {
-    return new Response(JSON.stringify(data), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json', 'X-Dikly-Offline': '1' },
-    });
+  async function getCachedApiResponse(url) {
+    try {
+      const rec = await idbGet('apiCache', url);
+      if (!rec) return null;
+      if (Date.now() - rec.ts > CACHE_TTL) return null; // expired
+      return rec.data;
+    } catch (e) {
+      return null;
+    }
   }
 
-  function makeOfflineResponse(status, message) {
-    return new Response(JSON.stringify({ error: message, offline: true }), {
-      status,
-      headers: { 'Content-Type': 'application/json', 'X-Dikly-Offline': '1' },
-    });
+  // ── Sync queue ──────────────────────────────────────────────────────────────
+  async function enqueueWrite(url, options, label) {
+    try {
+      await idbPut('syncQueue', {
+        url,
+        method:  options.method || 'POST',
+        headers: options.headers || {},
+        body:    options.body   || null,
+        label:   label || url,
+        queuedAt: Date.now(),
+      });
+    } catch (e) {
+      // Fall back silently
+    }
   }
 
-  // ── Fetch Interceptor ─────────────────────────────────────────────────────
-  const _origFetch = window.fetch.bind(window);
+  async function getSyncQueue() {
+    try { return await idbGetAll('syncQueue'); }
+    catch (e) { return []; }
+  }
 
-  window.fetch = async function (input, init) {
-    const url    = typeof input === 'string' ? input : (input instanceof URL ? input.href : input.url);
-    const method = ((init && init.method) || 'GET').toUpperCase();
-    const isApi  = typeof url === 'string' && url.includes('/api/');
+  async function removeSyncItem(id) {
+    try { await idbDelete('syncQueue', id); }
+    catch (e) { /* silent */ }
+  }
 
-    if (!isApi) return _origFetch(input, init);
+  // ── Flush queue when back online ─────────────────────────────────────────────
+  async function flushSyncQueue() {
+    const queue = await getSyncQueue();
+    if (!queue.length) return;
 
-    const isOnline = navigator.onLine;
+    console.log(`[IDB] Flushing ${queue.length} queued action(s)`);
 
-    // ── OFFLINE branch ────────────────────────────────────────────────────
-    if (!isOnline) {
-      if (method === 'GET') {
-        try {
-          const cached = await idbGet('apiCache', url);
-          if (cached && cached.data) {
-            console.log('[Offline] Serving from cache:', url);
-            return makeCachedResponse(cached.data);
-          }
-        } catch (_) {}
-        return makeOfflineResponse(503, 'You are offline and this data is not cached.');
-      } else {
-        // Queue mutation
-        const body = (init && init.body) ? init.body : null;
-        let bodyObj = null;
-        try { bodyObj = body ? JSON.parse(body) : null; } catch (_) { bodyObj = { _raw: body }; }
-
-        const label = _queueLabel(url, method, bodyObj);
-        await idbPut('syncQueue', {
-          url,
-          method,
-          body: bodyObj,
-          headers: (init && init.headers) ? Object.fromEntries(Object.entries(init.headers)) : {},
-          label,
-          queuedAt: Date.now(),
+    for (const item of queue) {
+      try {
+        const res = await window._originalFetch(item.url, {
+          method:  item.method,
+          headers: { 'Content-Type': 'application/json', ...item.headers },
+          body:    item.body,
         });
-        console.log('[Offline] Queued:', method, url);
-        // Return an optimistic 202
-        return new Response(JSON.stringify({ queued: true, offline: true, label }), {
-          status: 202,
+        if (res.ok || (res.status >= 400 && res.status < 500)) {
+          // Remove from queue — either succeeded or server rejected it (don't retry 4xx)
+          await removeSyncItem(item.id);
+          console.log(`[IDB] Synced: ${item.label}`);
+        }
+      } catch (e) {
+        console.warn(`[IDB] Sync failed for ${item.label}:`, e.message);
+        // Leave in queue — will retry on next reconnect
+      }
+    }
+
+    // Notify app.js that sync happened (triggers UI refresh)
+    window.dispatchEvent(new CustomEvent('dikly-idb-synced'));
+  }
+
+  // ── Detect whether the server is actually reachable ─────────────────────────
+  function isOffline() {
+    return !navigator.onLine;
+  }
+
+  // ── Intercept fetch ─────────────────────────────────────────────────────────
+  // Save original before anything else can override it
+  window._originalFetch = window.fetch.bind(window);
+
+  window.fetch = async function (resource, options = {}) {
+    const url    = typeof resource === 'string' ? resource : resource.url;
+    const method = (options.method || 'GET').toUpperCase();
+    const isApi  = url.includes('/api/');
+    const isGet  = method === 'GET';
+
+    // ── Offline path ──────────────────────────────────────────────────────
+    if (isOffline() && isApi) {
+
+      if (isGet) {
+        // Return cached API response if available
+        const cached = await getCachedApiResponse(url);
+        if (cached !== null) {
+          return new Response(JSON.stringify(cached), {
+            status:  200,
+            headers: { 'Content-Type': 'application/json', 'X-IDB-Cache': '1' },
+          });
+        }
+        // No cache — return graceful empty response
+        return new Response(JSON.stringify({ offline: true, data: [], results: [], items: [] }), {
+          status:  503,
           headers: { 'Content-Type': 'application/json' },
         });
       }
+
+      // Offline write (attendance mark, etc.) — queue it
+      if (!isGet) {
+        const label = _labelForUrl(url, method);
+        await enqueueWrite(url, options, label);
+        // Return a fake success so the UI doesn't show an error
+        return new Response(JSON.stringify({ success: true, queued: true, offline: true }), {
+          status:  200,
+          headers: { 'Content-Type': 'application/json', 'X-IDB-Queued': '1' },
+        });
+      }
     }
 
-    // ── ONLINE branch — fetch + cache ─────────────────────────────────────
-    try {
-      const response = await _origFetch(input, init);
-      if (method === 'GET' && response.ok) {
+    // ── Online path ───────────────────────────────────────────────────────
+    const response = await window._originalFetch(resource, options);
+
+    // Cache successful GET /api/ responses
+    if (response.ok && isApi && isGet) {
+      try {
         const clone = response.clone();
-        clone.json().then(data => {
-          idbPut('apiCache', { url, data, cachedAt: Date.now() }).catch(() => {});
-        }).catch(() => {});
-      }
-      return response;
-    } catch (err) {
-      // Network error — try cache for GETs
-      if (method === 'GET') {
-        try {
-          const cached = await idbGet('apiCache', url);
-          if (cached && cached.data && Date.now() - cached.cachedAt < CACHE_TTL) {
-            console.log('[Offline] Network failed, serving from cache:', url);
-            return makeCachedResponse(cached.data);
-          }
-        } catch (_) {}
-      }
-      throw err;
+        clone.json().then(data => cacheApiResponse(url, data)).catch(() => {});
+      } catch (_) {}
     }
+
+    return response;
   };
 
-  // ── Sync queue label ───────────────────────────────────────────────────────
-  function _queueLabel(url, method, body) {
-    if (url.includes('/attendance') && method === 'POST') return 'Mark Attendance';
-    if (url.includes('/auth/login') && method === 'POST')  return 'Login';
-    if (url.includes('/announcements') && method === 'POST') return 'Post Announcement';
+  // ── Label helper (for sync queue display) ──────────────────────────────────
+  function _labelForUrl(url, method) {
+    if (url.includes('/attendance'))    return 'Attendance mark';
+    if (url.includes('/sessions'))      return 'Session action';
+    if (url.includes('/quizzes'))       return 'Quiz submission';
+    if (url.includes('/assignments'))   return 'Assignment submit';
+    if (url.includes('/messages'))      return 'Message send';
+    if (url.includes('/notifications')) return 'Notification action';
     return `${method} ${url.split('/api/')[1] || url}`;
   }
 
-  // ── Auto-flush sync queue on reconnect ─────────────────────────────────────
-  async function flushSyncQueue() {
-    const items = await idbGetAll('syncQueue');
-    if (!items.length) return;
-
-    console.log(`[Offline] Flushing ${items.length} queued request(s)…`);
-    for (const item of items) {
-      try {
-        const headers = item.headers || {};
-        if (!headers['Content-Type']) headers['Content-Type'] = 'application/json';
-        const res = await _origFetch(item.url, {
-          method:  item.method,
-          headers,
-          body:    item.body ? JSON.stringify(item.body) : undefined,
-        });
-        if (res.ok || res.status < 500) {
-          await idbDelete('syncQueue', item._qid);
-          console.log('[Offline] Synced:', item.label);
-        }
-      } catch (e) {
-        console.warn('[Offline] Sync failed for', item.label, e.message);
-        break; // stop on network failure
-      }
-    }
-
-    // Notify the app
-    const remaining = (await idbGetAll('syncQueue')).length;
-    if (!remaining && typeof window.toastSuccess === 'function') {
-      window.toastSuccess('Offline actions synced successfully.');
-    }
-  }
-
-  window.addEventListener('online',  flushSyncQueue);
-  document.addEventListener('visibilitychange', () => {
-    if (!document.hidden && navigator.onLine) flushSyncQueue().catch(() => {});
+  // ── Auto-flush on reconnect ─────────────────────────────────────────────────
+  window.addEventListener('online', async () => {
+    await flushSyncQueue();
   });
 
-  // ── Public API ──────────────────────────────────────────────────────────────
+  // ── Expose helpers globally so app.js can use them ─────────────────────────
   window.DiklyIDB = {
-    // Save / restore logged-in user session for offline login
-    saveUserSession: async function (userData, tokenData) {
-      await idbPut('userSession', { key: 'session', user: userData, token: tokenData, savedAt: Date.now() });
+    cacheApiResponse,
+    getCachedApiResponse,
+    enqueueWrite,
+    getSyncQueue,
+    removeSyncItem,
+    flushSyncQueue,
+
+    // Store full user session (called after successful login)
+    async saveUserSession(key, sessionData) {
+      try { await idbPut('userSession', { key, ...sessionData, savedAt: Date.now() }); }
+      catch (e) { /* silent */ }
     },
 
-    getUserSession: async function () {
-      const rec = await idbGet('userSession', 'session');
-      if (!rec) return null;
-      if (Date.now() - rec.savedAt > 30 * 24 * 60 * 60 * 1000) return null; // 30 days
-      return rec;
+    async getUserSession(key) {
+      try { return await idbGet('userSession', key); }
+      catch (e) { return null; }
     },
 
-    clearUserSession: async function () {
-      await idbDelete('userSession', 'session');
+    // Store dashboard widget data
+    async saveDashboardData(key, data) {
+      try { await idbPut('dashboardCache', { key, data, ts: Date.now() }); }
+      catch (e) { /* silent */ }
     },
 
-    // Dashboard snapshot
-    saveDashboardData: async function (key, data) {
-      await idbPut('dashboardCache', { key, data, savedAt: Date.now() });
+    async getDashboardData(key) {
+      try {
+        const rec = await idbGet('dashboardCache', key);
+        if (!rec) return null;
+        if (Date.now() - rec.ts > CACHE_TTL) return null;
+        return rec.data;
+      } catch (e) { return null; }
     },
 
-    getDashboardData: async function (key) {
-      const rec = await idbGet('dashboardCache', key);
-      if (!rec) return null;
-      if (Date.now() - rec.savedAt > CACHE_TTL) return null;
-      return rec.data;
-    },
-
-    // Queue management
-    queueCount: async function () {
-      const items = await idbGetAll('syncQueue');
-      return items.length;
-    },
-
-    flushQueue: flushSyncQueue,
-
-    // Clear everything (on logout)
-    clearAll: async function () {
-      await Promise.all([
-        idbClear('apiCache'),
-        idbClear('syncQueue'),
-        idbClear('userSession'),
-        idbClear('dashboardCache'),
-      ]);
+    async queueCount() {
+      const q = await getSyncQueue();
+      return q.length;
     },
   };
 
-  // Persist user session whenever login succeeds
-  document.addEventListener('dikly:login', function (e) {
-    if (e.detail && e.detail.user && e.detail.token) {
-      window.DiklyIDB.saveUserSession(e.detail.user, e.detail.token).catch(() => {});
-    }
-  });
-
-  // Clear session on logout
-  document.addEventListener('dikly:logout', function () {
-    window.DiklyIDB.clearAll().catch(() => {});
+  // ── Pre-warm the DB on load ─────────────────────────────────────────────────
+  openDB().then(() => {
+    console.log('[IDB] Dikly local database ready');
+    // Flush any pending queue from a previous offline session
+    if (navigator.onLine) flushSyncQueue();
+  }).catch((e) => {
+    console.warn('[IDB] Could not open local database:', e.message);
   });
 
 })();

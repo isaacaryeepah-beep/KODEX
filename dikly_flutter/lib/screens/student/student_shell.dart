@@ -96,7 +96,7 @@ class _StudentShellState extends ConsumerState<StudentShell> {
         ),
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(1),
-          child: Container(height: 1, color: DiklyColors.border),
+          child: Container(height: 1, color: const Color(0xFFE4E4E7)),
         ),
         actions: [
           Padding(
@@ -192,25 +192,25 @@ class _StudentShellState extends ConsumerState<StudentShell> {
       bottomNavigationBar: Container(
         decoration: const BoxDecoration(
           color: Colors.white,
-          border: Border(top: BorderSide(color: DiklyColors.border, width: 1)),
+          border: Border(top: BorderSide(color: Color(0xFFE4E4E7), width: 1)),
+          boxShadow: [
+            BoxShadow(color: Color(0x0D000000), blurRadius: 12, offset: Offset(0, -2)),
+            BoxShadow(color: Color(0x08000000), blurRadius: 4,  offset: Offset(0, -1)),
+          ],
         ),
-        child: BottomNavigationBar(
-          currentIndex: _index,
-          onTap: (i) => setState(() => _index = i),
-          selectedItemColor: _accent,
-          unselectedItemColor: DiklyColors.textLight,
+        child: NavigationBar(
+          selectedIndex: _index,
+          onDestinationSelected: (i) => setState(() => _index = i),
           backgroundColor: Colors.transparent,
+          surfaceTintColor: Colors.transparent,
           elevation: 0,
-          type: BottomNavigationBarType.fixed,
-          selectedLabelStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
-          unselectedLabelStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w400),
-          items: List.generate(
-            4,
-            (i) => BottomNavigationBarItem(
-              icon: Icon(_icons[i]),
-              label: _labels[i],
-            ),
-          ),
+          height: 72,
+          destinations: const [
+            NavigationDestination(icon: Icon(Icons.home_outlined), selectedIcon: Icon(Icons.home_rounded), label: 'Home'),
+            NavigationDestination(icon: Icon(Icons.book_outlined), selectedIcon: Icon(Icons.book_rounded), label: 'Courses'),
+            NavigationDestination(icon: Icon(Icons.check_circle_outline), selectedIcon: Icon(Icons.check_circle), label: 'Attendance'),
+            NavigationDestination(icon: Icon(Icons.assignment_outlined), selectedIcon: Icon(Icons.assignment), label: 'Assignments'),
+          ],
         ),
       ),
     );

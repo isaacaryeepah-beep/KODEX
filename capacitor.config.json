@@ -3,8 +3,6 @@
   "appName": "DIKLY",
   "webDir": "www",
   "server": {
-    "url": "https://dikly.sbs",
-    "cleartext": false,
     "allowNavigation": ["dikly.sbs", "*.dikly.sbs", "api.paystack.co"]
   },
   "plugins": {

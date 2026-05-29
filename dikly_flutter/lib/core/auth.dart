@@ -133,8 +133,12 @@ class AuthNotifier extends StateNotifier<AuthState> {
         final str = e.toString();
         if (str.contains('401') || str.contains('Invalid') || str.contains('incorrect')) {
           message = 'Invalid email or password.';
-        } else if (str.contains('network') || str.contains('connection')) {
-          message = 'Network error. Check your connection.';
+        } else if (str.contains('403')) {
+          message = 'Access denied. Check your portal selection.';
+        } else if (str.contains('XMLHttpRequest') || str.contains('CORS') || str.contains('cors')) {
+          message = 'Connection blocked (CORS). Server may be updating — try again in 1 minute.';
+        } else if (str.contains('network') || str.contains('connection') || str.contains('Connection')) {
+          message = 'Cannot reach server. Check your internet or try again shortly.';
         }
       }
       state = state.copyWith(

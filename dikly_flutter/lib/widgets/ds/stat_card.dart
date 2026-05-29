@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../../core/theme.dart';
 
-/// Compact horizontal stat card: icon + value + label.
+/// Clean stat card: white surface, 4px colored left border, icon circle,
+/// large bold value, muted label — no gradient noise.
 class DiklyStatCard extends StatelessWidget {
   final String label;
   final String value;
@@ -19,24 +21,30 @@ class DiklyStatCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
-        color: DiklyColors.surface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: DiklyColors.border),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border(
+          left: BorderSide(color: color, width: 4),
+          top: const BorderSide(color: Color(0xFFE4E4E7)),
+          right: const BorderSide(color: Color(0xFFE4E4E7)),
+          bottom: const BorderSide(color: Color(0xFFE4E4E7)),
+        ),
+        boxShadow: AppTheme.shadowSm,
       ),
       child: Row(
         children: [
           Container(
-            width: 34,
-            height: 34,
+            width: 38,
+            height: 38,
             decoration: BoxDecoration(
-              color: color.withOpacity(0.12),
-              borderRadius: BorderRadius.circular(8),
+              color: color.withOpacity(0.10),
+              borderRadius: BorderRadius.circular(10),
             ),
-            child: Icon(icon, color: color, size: 18),
+            child: Icon(icon, color: color, size: 20),
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -44,18 +52,20 @@ class DiklyStatCard extends StatelessWidget {
               children: [
                 Text(
                   value,
-                  style: TextStyle(
-                    fontSize: 18,
+                  style: GoogleFonts.dmSans(
+                    fontSize: 20,
                     fontWeight: FontWeight.w800,
-                    color: color,
+                    color: DiklyColors.text,
+                    height: 1.1,
                   ),
                 ),
+                const SizedBox(height: 2),
                 Text(
                   label,
-                  style: const TextStyle(
-                    fontSize: 11,
+                  style: GoogleFonts.dmSans(
+                    fontSize: 12,
                     fontWeight: FontWeight.w500,
-                    color: DiklyColors.textSecondary,
+                    color: DiklyColors.textMuted,
                   ),
                   overflow: TextOverflow.ellipsis,
                 ),
