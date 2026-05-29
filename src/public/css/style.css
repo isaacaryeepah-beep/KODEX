@@ -1664,7 +1664,7 @@ input[type="checkbox"] {
   .reports-grid { grid-template-columns: 1fr; }
 
   .topbar .user-info { display: none !important; }
-  .topbar { padding: 0 12px !important; height: 46px !important; }
+  .topbar { padding: 0 12px !important; height: 44px !important; }
   .topbar-right { gap: 4px !important; }
   .topbar-right button { padding: 5px !important; }
   .topbar-right button svg { width: 16px !important; height: 16px !important; }
@@ -2151,7 +2151,7 @@ input[type="checkbox"] {
   }
 
   /* ── Topbar ───────────────────────────────────── */
-  .topbar { padding: 0 10px !important; height: 42px !important; }
+  .topbar { padding: 0 10px !important; height: 40px !important; }
   .topbar-right { gap: 2px !important; }
   .topbar-right button { padding: 4px !important; }
   .topbar-right button svg { width: 15px !important; height: 15px !important; }
@@ -6372,4 +6372,30 @@ table tr:hover td { background: #f8fafc !important; }
   #main-content .cv-lecturer-grid {
     grid-template-columns: 1fr !important;
   }
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   PWA / HOME SCREEN STANDALONE — compact topbar with safe-area handling
+   viewport-fit=cover + black-translucent status bar means the topbar
+   must absorb env(safe-area-inset-top) so content stays below the
+   system status bar. We keep the nav row itself to just 38px.
+══════════════════════════════════════════════════════════════════════ */
+@media (display-mode: standalone) {
+  .topbar {
+    height: calc(38px + env(safe-area-inset-top, 0px)) !important;
+    padding-top: env(safe-area-inset-top, 0px) !important;
+    padding-left: 10px !important;
+    padding-right: 10px !important;
+    align-items: flex-end !important; /* align content to bottom of inset-padded bar */
+    padding-bottom: 4px !important;
+  }
+  .topbar .user-info { display: none !important; }
+  .topbar-left h2 { font-size: 13px !important; }
+  .topbar-right { gap: 2px !important; }
+  .topbar-right button { padding: 4px !important; }
+  .topbar-right button svg { width: 15px !important; height: 15px !important; }
+  .topbar-right > .btn.btn-secondary { height: 28px !important; padding: 0 8px !important; font-size: 11px !important; }
+  .topbar-menu-btn { width: 30px !important; height: 30px !important; }
+  .fap-topbar-btn { width: 26px !important; height: 26px !important; }
+  .fap-topbar-btn svg { width: 12px !important; height: 12px !important; }
 }
