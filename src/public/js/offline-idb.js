@@ -259,14 +259,26 @@
     flushSyncQueue,
 
     // Store full user session (called after successful login)
-    async saveUserSession(key, sessionData) {
-      try { await idbPut('userSession', { key, ...sessionData, savedAt: Date.now() }); }
+    async saveUserSession(userData, tokenData) {
+      try { await idbPut('userSession', { key: 'session', user: userData, token: tokenData, savedAt: Date.now() }); }
       catch (e) { /* silent */ }
     },
 
-    async getUserSession(key) {
-      try { return await idbGet('userSession', key); }
+    async getUserSession() {
+      try { return await idbGet('userSession', 'session'); }
       catch (e) { return null; }
+    },
+
+    async clearAll() {
+      const db = await openDB();
+      await Promise.all(['apiCache', 'syncQueue', 'userSession', 'dashboardCache'].map(store =>
+        new Promise((res, rej) => {
+          const tx = db.transaction(store, 'readwrite');
+          const req = tx.objectStore(store).clear();
+          req.onsuccess = res;
+          req.onerror   = e => rej(e.target.error);
+        })
+      ));
     },
 
     // Store dashboard widget data
