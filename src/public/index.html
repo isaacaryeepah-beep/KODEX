@@ -1301,6 +1301,7 @@ function selectPortal(t){if(window._appLoaded)window._realSelectPortal(t);else w
     z-index:1200;
     user-select:none;
     -webkit-user-select:none;
+    touch-action:none;
     transition:box-shadow .2s,transform .2s;
   " onclick="faqFabClick(event)">
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
@@ -1334,7 +1335,7 @@ function selectPortal(t){if(window._appLoaded)window._realSelectPortal(t);else w
     // Use Pointer Events — works for both mouse and touch,
     // setPointerCapture keeps tracking even outside the element.
     fab.addEventListener('pointerdown', function(e) {
-      if (e.button !== undefined && e.button !== 0) return;
+      if (e.pointerType === 'mouse' && e.button !== 0) return;
       isDragging = true; dragMoved = false;
       startX = e.clientX; startY = e.clientY;
       origRight  = parseInt(fab.style.right  || '24', 10);
@@ -1343,6 +1344,7 @@ function selectPortal(t){if(window._appLoaded)window._realSelectPortal(t);else w
       fab.style.cursor = 'grabbing';
       fab.style.transform = 'scale(1.12)';
       e.preventDefault();
+      e.stopPropagation();
     });
 
     fab.addEventListener('pointermove', function(e) {
@@ -1350,9 +1352,9 @@ function selectPortal(t){if(window._appLoaded)window._realSelectPortal(t);else w
       const dx = e.clientX - startX;
       const dy = e.clientY - startY;
       if (Math.abs(dx) > 3 || Math.abs(dy) > 3) dragMoved = true;
-      // right decreases when moved right; bottom decreases when moved down
       setFabPos(origRight - dx, origBottom - dy);
       e.preventDefault();
+      e.stopPropagation();
     });
 
     fab.addEventListener('pointerup', function(e) {
