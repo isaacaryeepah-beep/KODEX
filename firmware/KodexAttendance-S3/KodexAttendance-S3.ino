@@ -1311,6 +1311,10 @@ void setup() {
   Serial.begin(115200); delay(150);
   pinMode(LED_PIN, OUTPUT);
 
+  // Backlight on (GPIO 45 on ES3C28P — HIGH = on)
+  pinMode(45, OUTPUT);
+  digitalWrite(45, HIGH);
+
   // Display init
   tft.init(); tft.setRotation(0); // 0 = portrait, 2 = portrait flipped
   tft.fillScreen(COL_BG);

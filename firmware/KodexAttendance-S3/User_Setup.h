@@ -22,7 +22,7 @@
 #define TFT_CS    10    // Chip select
 #define TFT_DC     8    // Data/Command
 #define TFT_RST    9    // Reset (-1 if tied to ESP reset)
-// #define TFT_BL   -1   // Backlight — comment out if wired to 3V3 directly
+#define TFT_BL    45    // Backlight control (GPIO 45 on ES3C28P)
 
 // ── SPI Speed ─────────────────────────────────────────────────────────────────
 #define SPI_FREQUENCY       40000000
