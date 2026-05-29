@@ -41,8 +41,18 @@ const announcementSchema = new mongoose.Schema({
       'studyType',
       'qualificationType',
       'group',
+      'class_group',
     ],
     default: 'all',
+  },
+
+  // ── Class-group targeting (used when audience === 'class_group') ──────────
+  classGroup: {
+    studentLevel: { type: String, default: null },
+    studentGroup: { type: String, default: null },
+    sessionType:  { type: String, default: null },
+    semester:     { type: String, default: null },
+    programme:    { type: String, default: null },
   },
 
   // ── Scoping filters (optional — used when audience is specific) ───────────

@@ -15,6 +15,7 @@ exports.createAnnouncement = async (req, res) => {
       targetLevel, targetGroup, targetStudyType, targetQualificationType,
       publishAt, expiresAt, pinned,
       courseId,
+      classGroup,
     } = req.body;
 
     if (!title || !body) {
@@ -36,12 +37,16 @@ exports.createAnnouncement = async (req, res) => {
       };
     }
 
-    // Class reps can only post to their course group
-    const isClassRep = req.user.isClassRep && req.user.classRepCourse;
-    const finalAudience   = isClassRep ? 'course' : (audience || 'all');
-    const finalTargetCourse = isClassRep
-      ? req.user.classRepCourse
-      : (targetCourse || courseId || null);
+    // Class reps can only post to their class group
+    const isClassRep = req.user.isClassRep;
+    const finalAudience = isClassRep ? 'class_group' : (audience || 'all');
+    const finalClassGroup = isClassRep ? {
+      studentLevel: req.user.studentLevel  || null,
+      studentGroup: req.user.studentGroup  || null,
+      sessionType:  req.user.sessionType   || null,
+      semester:     req.user.semester      || null,
+      programme:    req.user.programme     || null,
+    } : (classGroup || null);
 
     const announcement = await Announcement.create({
       title:                   title.trim(),
@@ -51,9 +56,10 @@ exports.createAnnouncement = async (req, res) => {
       authorRole:              req.user.role,
       type:                    type        || 'info',
       audience:                finalAudience,
+      classGroup:              finalClassGroup,
       targetDepartment:        isClassRep ? null : (targetDepartment || null),
       targetProgramme:         isClassRep ? null : (targetProgramme  || null),
-      targetCourse:            finalTargetCourse,
+      targetCourse:            isClassRep ? null : (targetCourse || courseId || null),
       targetLevel:             targetLevel             || null,
       targetGroup:             targetGroup             || null,
       targetStudyType:         targetStudyType         || null,
@@ -113,6 +119,12 @@ exports.listAnnouncements = async (req, res) => {
         { audience: 'studyType', targetStudyType:   req.user.studyType },
         { audience: 'qualificationType', targetQualificationType: req.user.qualificationType },
         { audience: 'course', targetCourse: { $in: enrolledIds } },
+        {
+          audience: 'class_group',
+          'classGroup.studentLevel': req.user.studentLevel || null,
+          'classGroup.studentGroup': req.user.studentGroup || null,
+          'classGroup.programme':    req.user.programme    || null,
+        },
       ];
     } else if (role === 'employee') {
       audienceFilter = [
