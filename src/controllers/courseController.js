@@ -86,10 +86,16 @@ exports.getCourseById = async (req, res) => {
     if (role === 'lecturer') {
       const isOwner = course.lecturerId?._id?.toString() === req.user._id.toString();
       if (!isOwner) {
-        return res.status(403).json({
-          success: false,
-          message: 'You are not allowed to access this course.',
-        });
+        const CourseLecturerAssignment = require('../models/CourseLecturerAssignment');
+        const assignment = await CourseLecturerAssignment.findActiveAssignment(
+          companyId, course._id, req.user._id
+        );
+        if (!assignment) {
+          return res.status(403).json({
+            success: false,
+            message: 'You are not allowed to access this course.',
+          });
+        }
       }
     }
 
