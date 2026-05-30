@@ -177,8 +177,9 @@ static String   pendingSsid  = "";   // network tapped, waiting for password
 // Records are flushed to /api/devices/sync on the next successful heartbeat.
 static const char* SD_ATT_FILE = "/attendance.jsonl";
 
-// SD SPI instance — same FSPI bus as display, dedicated CS for SD slot.
-static SPIClass    sdSPI(FSPI);
+// SD: ES3C28P uses SDIO (CLK=IO38, CMD=IO40, DATA0-3=IO39/41/48/47), not SPI.
+// SPI-mode SD init on the same FSPI bus as the display corrupts the GPIO matrix
+// and causes a white screen.  SDMMC driver support can be added later.
 static bool        sdAvailable  = false;
 static uint32_t    sdRecordCount = 0;  // tracks records written to SD file
 
@@ -1358,21 +1359,11 @@ void setup() {
   // Touch init
   touchInit();
 
-  // SD card init — shares FSPI bus (SCLK=12, MISO=13, MOSI=11) with display
-  sdSPI.begin(12, 13, 11, SD_CS_PIN);
-  sdAvailable = SD.begin(SD_CS_PIN, sdSPI, 25000000);
-  if (sdAvailable) {
-    LOG("SD card OK — " + String(SD.totalBytes() / (1024 * 1024)) + " MB total");
-    // Count any existing unsent records so sync runs on first heartbeat
-    if (SD.exists(SD_ATT_FILE)) {
-      File f = SD.open(SD_ATT_FILE, FILE_READ);
-      while (f && f.available()) { if (f.readStringUntil('\n').length() > 2) sdRecordCount++; }
-      if (f) f.close();
-      if (sdRecordCount) LOG("Found " + String(sdRecordCount) + " pending offline records on SD");
-    }
-  } else {
-    LOG("SD card not found — falling back to RAM buffer (GPIO " + String(SD_CS_PIN) + " — verify board schematic)");
-  }
+  // SD: ES3C28P uses SDIO (not SPI). Calling SPIClass::begin() on the same FSPI
+  // bus that LovyanGFX owns reconfigures the GPIO matrix and kills the display.
+  // SD is disabled here; use RAM buffer for offline records.
+  sdAvailable = false;
+  LOG("SD disabled — ES3C28P SD is SDIO, not SPI; using RAM buffer");
 
   // Splash
   splashStart = millis();
