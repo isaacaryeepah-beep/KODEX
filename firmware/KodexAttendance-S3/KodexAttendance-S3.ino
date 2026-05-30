@@ -8,7 +8,7 @@
  *  ─────────────
  *  • On first boot, runs a captive-portal AP "Dikly-XXXXXX". Open
  *    192.168.4.1 on your phone, enter institution code + pairing code
- *    from the lecturer portal, and your school WiFi credentials.
+ *    from the admin portal, and your school WiFi credentials.
  *  • Calls POST /api/devices/pair → saves a long-lived device JWT in NVS.
  *  • Sends heartbeats every 5 s → receives active session info.
  *  • Derives the rotating 6-digit attendance code locally using HMAC-SHA256
@@ -1420,8 +1420,8 @@ static const char PAIR_HTML[] PROGMEM = R"HTML(<!doctype html>
       <h3>Institution</h3>
       <label>Institution Code</label>
       <input id="ic" name="institutionCode" required autocomplete="off" placeholder="e.g. ABCD23" style="text-transform:uppercase">
-      <label>Pairing Code <span style="color:#334155;font-weight:400">(from Lecturer Portal)</span></label>
-      <input id="pc" name="pairingCode" required autocomplete="off" placeholder="from lecturer portal" maxlength="8" style="text-transform:uppercase">
+      <label>Pairing Code <span style="color:#334155;font-weight:400">(from Admin Portal)</span></label>
+      <input id="pc" name="pairingCode" required autocomplete="off" placeholder="from admin portal" maxlength="8" style="text-transform:uppercase">
     </div>
     <div class="card">
       <h3>School WiFi</h3>
