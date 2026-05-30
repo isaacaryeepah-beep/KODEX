@@ -76,114 +76,18 @@ function _devPageHTML(device) {
 <style>${_devCSS()}</style>`;
 }
 
-// ── no device — one-tap connect flow ─────────────────────────────────────────
+// ── no device — info panel (pairing is done by Admin/HOD) ────────────────────
 function _devNoPairedHTML() {
   return `
 <div class="dev-connect-wrapper">
-
-  <!-- main connect card -->
-  <div class="dev-connect-card" id="dev-connect-card">
-    <div class="dev-connect-top">
-      <div class="dev-connect-icon">📡</div>
-      <h2 class="dev-connect-title">Connect Your Classroom Device</h2>
-      <p class="dev-connect-desc">Tap <strong>Connect Device</strong> and we'll walk you through the setup automatically.</p>
-    </div>
-
-    <div id="dev-setup-error" class="dev-setup-err-box" style="display:none"></div>
-
-    <!-- inline progress stepper (hidden until button tap) -->
-    <div id="dev-inline-stepper" class="dev-inline-stepper" style="display:none">
-
-      <!-- Step 1: Generate code (automatic) -->
-      <div class="dev-istep" id="dev-istep-1">
-        <div class="dev-istep-icon-wrap" id="dev-istep-1-icon">
-          <span class="dev-istep-spinner"></span>
-        </div>
-        <div class="dev-istep-body">
-          <div class="dev-istep-label">Generating your setup code</div>
-          <div class="dev-istep-sub" id="dev-istep-1-sub">Connecting to server…</div>
-        </div>
-      </div>
-
-      <!-- code display (shown after step 1 succeeds) -->
-      <div id="dev-inline-code-area" class="dev-inline-code-area" style="display:none">
-        <div class="dev-inline-code-label">Your setup code</div>
-        <div id="dev-inline-code" class="dev-inline-code">——————</div>
-        <div id="dev-inline-expires" class="dev-inline-expires"></div>
-        <div class="dev-inline-code-hint">Auto-filled in the setup portal — no need to type it</div>
-      </div>
-
-      <!-- Step 2: Connect to device WiFi (manual) -->
-      <div class="dev-istep dev-istep-inactive" id="dev-istep-2">
-        <div class="dev-istep-icon-wrap dev-istep-num" id="dev-istep-2-icon">2</div>
-        <div class="dev-istep-body">
-          <div class="dev-istep-label">Connect to the device WiFi</div>
-          <div class="dev-istep-sub" id="dev-istep-2-sub">Power on the ESP32, then join its hotspot</div>
-          <div id="dev-istep-2-actions" style="display:none">
-            <ol class="dev-wifi-steps">
-              <li>
-                <span class="dev-wifi-step-num">1</span>
-                <div class="dev-wifi-step-body">
-                  <strong>Power on the ESP32</strong> device — its LED will blink.
-                </div>
-              </li>
-              <li>
-                <span class="dev-wifi-step-num">2</span>
-                <div class="dev-wifi-step-body">
-                  Open <strong>WiFi settings</strong> on this device and connect to:
-                  <div class="dev-hotspot-chip">
-                    <span class="dev-hotspot-chip-icon">📶</span>
-                    <div>
-                      <div class="dev-hotspot-chip-ssid">DIKLY-XXXXXX</div>
-                      <div class="dev-hotspot-chip-note">No password needed · your internet will pause briefly</div>
-                    </div>
-                  </div>
-                </div>
-              </li>
-              <li>
-                <span class="dev-wifi-step-num">3</span>
-                <div class="dev-wifi-step-body">
-                  Come back here and tap <strong>Open Setup Portal</strong>. The portal opens with your code already filled in — just enter your classroom WiFi password and tap <strong>Pair Device</strong>.
-                </div>
-              </li>
-            </ol>
-            <button class="dev-btn dev-btn-primary dev-btn-portal" onclick="_devOpenSetupPage()">
-              Open Setup Portal →
-            </button>
-            <p class="dev-istep-portal-note">⚠️ The portal only works while you're connected to the DIKLY WiFi.</p>
-          </div>
-        </div>
-      </div>
-
-      <!-- Step 3: Waiting for pairing (automatic polling) -->
-      <div class="dev-istep dev-istep-inactive" id="dev-istep-3">
-        <div class="dev-istep-icon-wrap dev-istep-num" id="dev-istep-3-icon">3</div>
-        <div class="dev-istep-body">
-          <div class="dev-istep-label">Completing setup</div>
-          <div class="dev-istep-sub" id="dev-istep-3-sub">Waiting for device to pair…</div>
-        </div>
-      </div>
-
-    </div><!-- /stepper -->
-
-    <!-- main action button -->
-    <button id="dev-connect-btn" class="dev-btn dev-btn-primary dev-btn-connect-main" onclick="_devStartSetup()">
-      + Connect Device
-    </button>
-
-    <div id="dev-cancel-row" style="display:none;text-align:center;margin-top:12px">
-      <button class="dev-btn dev-btn-ghost dev-btn-sm" onclick="_devCancelSetup()">Cancel</button>
-    </div>
+  <div class="dev-connect-card" style="text-align:center;padding:40px 24px">
+    <div class="dev-connect-icon">📡</div>
+    <h2 class="dev-connect-title">No Device Assigned</h2>
+    <p class="dev-connect-desc" style="max-width:340px;margin:0 auto">
+      Your classroom device hasn't been set up yet. Ask your <strong>Admin or HOD</strong> to pair a device to your room — they can generate a pairing code from the <strong>Devices</strong> section in their portal.
+    </p>
   </div>
-
-  <!-- success card (swaps in after pairing) -->
-  <div id="dev-setup-success" class="dev-setup-success" style="display:none">
-    <div class="dev-success-icon">✓</div>
-    <div class="dev-success-title">Device Connected!</div>
-    <div class="dev-success-sub">Your ESP32 is now linked to your account. Loading device details…</div>
-  </div>
-
-</div>`; // /dev-connect-wrapper
+</div>`;
 }
 
 // ── paired device view ────────────────────────────────────────────────────────
@@ -390,28 +294,22 @@ function _devModalsHTML() {
 function _devHelpHTML() {
   return `
 <div class="dev-help-panel">
-  <div class="dev-help-header">Setup & Troubleshooting</div>
+  <div class="dev-help-header">Troubleshooting</div>
   <div class="dev-help-grid">
     <div class="dev-help-section">
-      <p class="dev-help-title">How to Pair &amp; Set Up WiFi</p>
-      <ol class="dev-help-list">
-        <li>Click <strong>Generate Pairing Code</strong> and note the 6-character code</li>
-        <li>Power on the ESP32 — it broadcasts hotspot <code>DIKLY-XXXXXX</code></li>
-        <li>Connect your phone/laptop to the <code>DIKLY-XXXXXX</code> hotspot</li>
-        <li>Tap <strong>Open Device Portal</strong> in the Setup Wizard — the device setup page opens automatically</li>
-        <li>Enter your <strong>Institution Code</strong>, the <strong>Pairing Code</strong>, and your <strong>WiFi credentials</strong></li>
-        <li>Tap <strong>Pair Device</strong> — the ESP32 reboots and connects to WiFi</li>
-        <li>Return here — device shows <strong>Online</strong> within ~30 seconds</li>
-      </ol>
+      <p class="dev-help-title">Device is Offline</p>
+      <ul class="dev-help-list">
+        <li>Check the device is powered on and the classroom WiFi is working</li>
+        <li>Wait 30 s then click <strong>↻ Refresh</strong> — the first heartbeat can take a moment</li>
+        <li>If still offline, the device may need its WiFi password updated — ask your Admin or HOD</li>
+      </ul>
     </div>
     <div class="dev-help-section">
-      <p class="dev-help-title">Troubleshooting</p>
+      <p class="dev-help-title">Session not showing on device</p>
       <ul class="dev-help-list">
-        <li><strong>Device portal won't open?</strong> Make sure you're connected to <code>DIKLY-XXXXXX</code>, not your home WiFi — then tap <strong>Open Device Portal</strong> again</li>
-        <li><strong>Portal blocked?</strong> Use the <strong>QR code</strong> option to open it on your phone instead</li>
-        <li><strong>Wrong WiFi password?</strong> Hold the reset button 5 s to re-enter setup mode</li>
-        <li><strong>Offline after connecting?</strong> Wait 30 s for first heartbeat; refresh if needed</li>
-        <li><strong>Can't start session?</strong> Device must show <strong>Online</strong> first</li>
+        <li>Device must show <strong>Online</strong> before a session code appears</li>
+        <li>Start the session from the portal — the device polls every 5 s and will pick it up automatically</li>
+        <li>If the device shows the wrong session, end and restart the session</li>
       </ul>
     </div>
   </div>
@@ -455,193 +353,6 @@ async function _devLoadActivity() {
 function _devRefresh() {
   renderAttendanceDevice();
 }
-
-// ── one-tap setup flow ────────────────────────────────────────────────────────
-
-function _devStartSetup() {
-  const btn     = document.getElementById('dev-connect-btn');
-  const stepper = document.getElementById('dev-inline-stepper');
-  const cancelRow = document.getElementById('dev-cancel-row');
-  if (btn) btn.style.display = 'none';
-  if (stepper) stepper.style.display = 'flex';
-  if (cancelRow) cancelRow.style.display = 'block';
-  _devGenerateCode();
-}
-
-function _devCancelSetup() {
-  clearInterval(_devPollTimer);
-  clearInterval(_devExpiryTimer);
-  _devCurrentCode = '';
-  const btn     = document.getElementById('dev-connect-btn');
-  const stepper = document.getElementById('dev-inline-stepper');
-  const cancelRow = document.getElementById('dev-cancel-row');
-  const errBox  = document.getElementById('dev-setup-error');
-  const codeArea = document.getElementById('dev-inline-code-area');
-  if (btn)      { btn.textContent = '+ Connect Device'; btn.style.display = ''; }
-  if (stepper)  stepper.style.display = 'none';
-  if (cancelRow) cancelRow.style.display = 'none';
-  if (errBox)   errBox.style.display = 'none';
-  if (codeArea) codeArea.style.display = 'none';
-  _devIStepReset(1); _devIStepReset(2); _devIStepReset(3);
-}
-
-function _devIStepDone(n, sub) {
-  const step = document.getElementById('dev-istep-' + n);
-  const icon = document.getElementById('dev-istep-' + n + '-icon');
-  const subEl = document.getElementById('dev-istep-' + n + '-sub');
-  if (step) step.classList.remove('dev-istep-inactive');
-  if (icon) { icon.innerHTML = '✓'; icon.className = 'dev-istep-icon-wrap dev-istep-done'; }
-  if (sub && subEl) subEl.textContent = sub;
-}
-
-function _devIStepActivate(n, showSpinner) {
-  const step = document.getElementById('dev-istep-' + n);
-  const icon = document.getElementById('dev-istep-' + n + '-icon');
-  if (step) step.classList.remove('dev-istep-inactive');
-  if (showSpinner && icon) {
-    icon.innerHTML = '<span class="dev-istep-spinner"></span>';
-    icon.className = 'dev-istep-icon-wrap';
-  }
-}
-
-function _devIStepError(n) {
-  const step = document.getElementById('dev-istep-' + n);
-  const icon = document.getElementById('dev-istep-' + n + '-icon');
-  if (step) step.classList.remove('dev-istep-inactive');
-  if (icon) { icon.innerHTML = '!'; icon.className = 'dev-istep-icon-wrap dev-istep-err'; }
-}
-
-function _devIStepReset(n) {
-  const step = document.getElementById('dev-istep-' + n);
-  const icon = document.getElementById('dev-istep-' + n + '-icon');
-  if (n === 1) {
-    if (step) step.classList.remove('dev-istep-inactive');
-    if (icon) { icon.innerHTML = '<span class="dev-istep-spinner"></span>'; icon.className = 'dev-istep-icon-wrap'; }
-  } else {
-    if (step) step.classList.add('dev-istep-inactive');
-    if (icon) { icon.innerHTML = String(n); icon.className = 'dev-istep-icon-wrap dev-istep-num'; }
-  }
-}
-
-let _devCurrentCode = '';
-
-async function _devGenerateCode() {
-  const errBox   = document.getElementById('dev-setup-error');
-  const step1Sub = document.getElementById('dev-istep-1-sub');
-  if (errBox) errBox.style.display = 'none';
-  if (step1Sub) step1Sub.textContent = 'Connecting to server…';
-
-  try {
-    const res = await fetch('/api/devices/pairing-code', {
-      method: 'POST',
-      headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('token') || ''), 'Content-Type': 'application/json' }
-    });
-    const json = await res.json();
-    if (!res.ok) throw new Error(json.message || 'Failed to generate code');
-
-    _devCurrentCode = json.code;
-
-    // Step 1 done
-    _devIStepDone(1, 'Setup code ready');
-
-    // Show code
-    const codeArea = document.getElementById('dev-inline-code-area');
-    const codeEl   = document.getElementById('dev-inline-code');
-    const expiresEl = document.getElementById('dev-inline-expires');
-    if (codeArea) codeArea.style.display = 'block';
-    if (codeEl)   codeEl.textContent = json.code;
-    if (expiresEl) _devStartExpiryCountdown(new Date(json.expiresAt), expiresEl);
-
-    // Activate step 2 (manual — user connects WiFi)
-    _devIStepActivate(2, false);
-    const step2Actions = document.getElementById('dev-istep-2-actions');
-    if (step2Actions) step2Actions.style.display = 'block';
-
-    // Activate step 3 with spinner (polling starts)
-    _devIStepActivate(3, true);
-
-    // Start background polling
-    _devPollForLink(json.code);
-
-  } catch (e) {
-    const msg = e.message === 'Failed to fetch'
-      ? 'Could not reach the server. Check your connection and try again.'
-      : (e.message || 'Failed to generate setup code');
-    if (errBox) { errBox.textContent = msg; errBox.style.display = 'block'; }
-    _devIStepError(1);
-    const btn = document.getElementById('dev-connect-btn');
-    if (btn) { btn.textContent = '↻ Retry'; btn.style.display = ''; }
-  }
-}
-
-let _devExpiryTimer = null;
-function _devStartExpiryCountdown(exp, el) {
-  // Code is valid for 7 days — just show the expiry date, no countdown anxiety.
-  if (el) {
-    const d = new Date(exp);
-    el.textContent = `Valid until ${d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}`;
-  }
-}
-
-let _devPollTimer = null;
-function _devPollForLink(code) {
-  clearInterval(_devPollTimer);
-  let attempts = 0;
-  _devPollTimer = setInterval(async () => {
-    attempts++;
-    if (attempts > 360) {  // poll for up to 30 min (every 5s × 360)
-      clearInterval(_devPollTimer);
-      _devIStepError(3);
-      const sub = document.getElementById('dev-istep-3-sub');
-      if (sub) sub.textContent = 'Still waiting — leave this page open and the device will pair automatically when connected.';
-      const btn = document.getElementById('dev-connect-btn');
-      if (btn) { btn.textContent = '↻ Start Over'; btn.style.display = ''; }
-      return;
-    }
-    try {
-      const res = await fetch('/api/devices/my', {
-        headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('token') || '') }
-      });
-      const json = await res.json();
-      if (json.data) {
-        clearInterval(_devPollTimer);
-        clearInterval(_devExpiryTimer);
-        _devIStepDone(2, 'Connected to WiFi');
-        _devIStepDone(3, 'Device linked!');
-        setTimeout(() => {
-          const card    = document.getElementById('dev-connect-card');
-          const success = document.getElementById('dev-setup-success');
-          if (card)    card.style.display = 'none';
-          if (success) success.style.display = 'flex';
-          setTimeout(() => renderAttendanceDevice(), 2000);
-        }, 600);
-      }
-    } catch (_) {}
-  }, 3000);
-}
-
-// ── setup portal helpers ──────────────────────────────────────────────────────
-
-function _devSetupURL() {
-  const params = new URLSearchParams({ code: _devCurrentCode });
-  const instCode = window.currentUser?.company?.institutionCode;
-  if (instCode) params.set('inst', instCode);
-  return `http://192.168.4.1/?${params.toString()}`;
-}
-
-function _devOpenSetupPage() {
-  if (!_devCurrentCode) return;
-  const url = _devSetupURL();
-  const w = window.open(url, '_blank');
-  if (!w) {
-    const errBox = document.getElementById('dev-setup-error');
-    if (errBox) {
-      errBox.innerHTML = 'Popup blocked. <a href="' + _esc(url) + '" target="_blank" style="color:#4f46e5;font-weight:600">Tap here to open the setup portal</a>, or allow popups for this site.';
-      errBox.style.display = 'block';
-    }
-  }
-}
-
 
 async function _devUnlink() {
   const btn = document.getElementById('dev-unlink-confirm-btn');
