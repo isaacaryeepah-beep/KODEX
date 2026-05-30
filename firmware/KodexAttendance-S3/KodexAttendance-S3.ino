@@ -538,65 +538,142 @@ static void drawSplash() {
 // ── SETUP (captive portal) ────────────────────────────────────────────────────
 static void drawSetup(const String& apName) {
   spr.fillSprite(COL_BG);
-  spr.fillRect(0, 0, SW, 6, COL_WARNING);
-  // Title
+
+  // ── Top accent bar (indigo, 5px) + soft fade strip ─────────────────────────
+  spr.fillRect(0, 0, SW, 5, COL_PRIMARY);
+  spr.fillRect(0, 5, SW, 2, 0x3162);  // slightly lighter indigo fade
+
+  // ── Title + subtitle ────────────────────────────────────────────────────────
   spr.setTextFont(4); spr.setTextColor(COL_TEXT, COL_BG);
-  String t = "Device Setup";
-  int32_t tw = spr.textWidth(t);
-  spr.setCursor((SW - tw) / 2, 20); spr.print(t);
-  // Instruction card
-  card(spr, 10, 58, SW - 20, 90, COL_CARD, COL_BORDER, 12);
+  String title = "Device Setup";
+  int32_t tw = spr.textWidth(title);
+  spr.setCursor((SW - tw) / 2, 12); spr.print(title);
+
+  spr.setTextFont(2); spr.setTextColor(COL_MUTED, COL_BG);
+  String sub = "Follow 3 steps to pair this device";
+  tw = spr.textWidth(sub);
+  spr.setCursor((SW - tw) / 2, 38); spr.print(sub);
+
+  // ── Thin divider ─────────────────────────────────────────────────────────────
+  spr.drawFastHLine(14, 58, SW - 28, COL_BORDER);
+
+  // ── Step card geometry ───────────────────────────────────────────────────────
+  const int32_t CX  = 10;         // card left x
+  const int32_t CW  = SW - 20;    // card width = 220
+  const int32_t CH  = 62;         // card height
+  const int32_t CG  = 6;          // gap between cards
+  const int32_t BCX = CX + 22;    // badge centre-x = 32
+  const int32_t BR  = 13;         // badge radius
+  const int32_t TX  = CX + 46;    // text left-x = 56
+
+  int32_t cy = 63;
+
+  // ── STEP 1 — Connect to Wi-Fi ────────────────────────────────────────────
+  card(spr, CX, cy, CW, CH, COL_CARD, COL_BORDER, 10);
+  spr.fillCircle(BCX, cy + CH/2, BR, COL_PRIMARY);
+  spr.setTextFont(4); spr.setTextColor(COL_BG, COL_PRIMARY);
+  tw = spr.textWidth("1"); spr.setCursor(BCX - tw/2, cy + CH/2 - 11); spr.print("1");
   spr.setTextFont(2); spr.setTextColor(COL_MUTED, COL_CARD);
-  spr.setCursor(22, 68); spr.print("1. Connect your phone to WiFi:");
+  spr.setCursor(TX, cy + 8); spr.print("Connect phone to Wi-Fi:");
   spr.setTextFont(4); spr.setTextColor(COL_PRIMARY, COL_CARD);
-  tw = spr.textWidth(apName);
-  spr.setCursor((SW - tw) / 2, 86); spr.print(apName);
+  spr.setCursor(TX, cy + 26); spr.print(apName);
+  cy += CH + CG;
+
+  // ── STEP 2 — Open browser ────────────────────────────────────────────────
+  card(spr, CX, cy, CW, CH, COL_CARD, COL_BORDER, 10);
+  spr.fillCircle(BCX, cy + CH/2, BR, COL_PRIMARY);
+  spr.setTextFont(4); spr.setTextColor(COL_BG, COL_PRIMARY);
+  tw = spr.textWidth("2"); spr.setCursor(BCX - tw/2, cy + CH/2 - 11); spr.print("2");
   spr.setTextFont(2); spr.setTextColor(COL_MUTED, COL_CARD);
-  spr.setCursor(22, 118); spr.print("2. Open browser → 192.168.4.1");
-  // Arrow / divider
-  spr.setTextFont(2); spr.setTextColor(COL_TEXT, COL_BG);
-  spr.setCursor(22, 160); spr.print("3. Enter institution code,");
-  spr.setCursor(22, 176); spr.print("   pairing code & school WiFi.");
-  // Factory reset hint
-  card(spr, 10, 210, SW - 20, 40, 0x2000, 0x4000, 8);
+  spr.setCursor(TX, cy + 8); spr.print("Open in your browser:");
+  spr.setTextFont(4); spr.setTextColor(COL_PRIMARY, COL_CARD);
+  spr.setCursor(TX, cy + 26); spr.print("192.168.4.1");
+  cy += CH + CG;
+
+  // ── STEP 3 — Enter details (green badge = final step) ───────────────────
+  card(spr, CX, cy, CW, CH, COL_CARD, COL_BORDER, 10);
+  spr.fillCircle(BCX, cy + CH/2, BR, COL_SUCCESS);
+  spr.setTextFont(4); spr.setTextColor(COL_BG, COL_SUCCESS);
+  tw = spr.textWidth("3"); spr.setCursor(BCX - tw/2, cy + CH/2 - 11); spr.print("3");
+  spr.setTextFont(2); spr.setTextColor(COL_MUTED, COL_CARD);
+  spr.setCursor(TX, cy + 6); spr.print("Enter your details:");
+  spr.setTextFont(2); spr.setTextColor(COL_TEXT, COL_CARD);
+  spr.setCursor(TX, cy + 23); spr.print("Inst. code + pairing code");
+  spr.setTextFont(2); spr.setTextColor(COL_MUTED, COL_CARD);
+  spr.setCursor(TX, cy + 40); spr.print("then add school Wi-Fi");
+  cy += CH + CG;
+
+  // ── Factory reset hint ───────────────────────────────────────────────────
+  cy += 2;
+  card(spr, CX, cy, CW, 36, 0x2000, 0x4000, 8);
   spr.setTextFont(2); spr.setTextColor(COL_WARNING, 0x2000);
-  spr.setCursor(20, 223); spr.print("Hold anywhere 3 s to factory reset");
-  // Pulsing dot (static — loop redraws)
-  spr.fillCircle(SW / 2, 278, 8, COL_WARNING);
+  String rst = "Hold 3 s anywhere  -  factory reset";
+  tw = spr.textWidth(rst);
+  spr.setCursor((SW - tw) / 2, cy + 11); spr.print(rst);
+
+  // ── Pulse indicator dot ──────────────────────────────────────────────────
+  spr.fillCircle(SW / 2, 313, 4, COL_PRIMARY);
+
   spr.pushSprite(0, 0);
 }
 
 // ── WIFI RECONFIG (paired, but saved network unavailable) ────────────────────
 static void drawWifiReconfig(const String& apName) {
   spr.fillSprite(COL_BG);
-  spr.fillRect(0, 0, SW, 6, COL_WARNING);
-  // Title
+
+  // ── Top accent bar ─────────────────────────────────────────────────────────
+  spr.fillRect(0, 0, SW, 5, COL_WARNING);
+  spr.fillRect(0, 5, SW, 2, 0x7260);  // warm amber fade
+
+  // ── Title ──────────────────────────────────────────────────────────────────
   spr.setTextFont(4); spr.setTextColor(COL_TEXT, COL_BG);
-  String t = "Change WiFi";
-  int32_t tw = spr.textWidth(t);
-  spr.setCursor((SW - tw) / 2, 20); spr.print(t);
-  // Info card
-  card(spr, 10, 52, SW - 20, 56, COL_CARD, COL_BORDER, 10);
+  String title = "Change Wi-Fi";
+  int32_t tw = spr.textWidth(title);
+  spr.setCursor((SW - tw) / 2, 12); spr.print(title);
+
+  spr.setTextFont(2); spr.setTextColor(COL_MUTED, COL_BG);
+  String sub = "Saved network unavailable";
+  tw = spr.textWidth(sub);
+  spr.setCursor((SW - tw) / 2, 38); spr.print(sub);
+
+  spr.drawFastHLine(14, 58, SW - 28, COL_BORDER);
+
+  // ── Warning card — reconnect prompt ────────────────────────────────────────
+  card(spr, 10, 65, SW - 20, 66, COL_CARD, COL_BORDER, 10);
+  // Warning badge (amber circle with !)
+  spr.fillCircle(32, 98, 13, COL_WARNING);
+  spr.setTextFont(4); spr.setTextColor(COL_BG, COL_WARNING);
+  tw = spr.textWidth("!"); spr.setCursor(32 - tw/2, 87); spr.print("!");
   spr.setTextFont(2); spr.setTextColor(COL_MUTED, COL_CARD);
-  spr.setCursor(18, 62); spr.print("Saved network not found.");
-  spr.setCursor(18, 78); spr.print("Connect phone to:");
-  spr.setTextFont(2); spr.setTextColor(COL_PRIMARY, COL_CARD);
-  tw = spr.textWidth(apName);
-  spr.setCursor((SW - tw) / 2, 94); spr.print(apName);
-  // Steps
+  spr.setCursor(56, 73); spr.print("Connect phone to Wi-Fi:");
+  spr.setTextFont(4); spr.setTextColor(COL_WARNING, COL_CARD);
+  spr.setCursor(56, 91); spr.print(apName);
+
+  // ── Steps ──────────────────────────────────────────────────────────────────
   spr.setTextFont(2); spr.setTextColor(COL_TEXT, COL_BG);
-  spr.setCursor(18, 124); spr.print("Then open 192.168.4.1 and");
-  spr.setCursor(18, 140); spr.print("enter the new WiFi details.");
-  // Note — pairing is kept
-  card(spr, 10, 165, SW - 20, 44, 0x0841, COL_SUCCESS, 8);
+  spr.setCursor(14, 147); spr.print("Then open 192.168.4.1 in your browser");
+  spr.setTextFont(2); spr.setTextColor(COL_MUTED, COL_BG);
+  spr.setCursor(14, 163); spr.print("and enter the new Wi-Fi details.");
+
+  // ── Pairing preserved note ─────────────────────────────────────────────────
+  card(spr, 10, 188, SW - 20, 46, 0x0841, COL_SUCCESS, 8);
+  spr.fillCircle(32, 211, 11, COL_SUCCESS);
+  spr.setTextFont(4); spr.setTextColor(COL_BG, COL_SUCCESS);
+  tw = spr.textWidth("i"); spr.setCursor(32 - tw/2, 200); spr.print("i");
   spr.setTextFont(2); spr.setTextColor(COL_SUCCESS, 0x0841);
-  spr.setCursor(18, 174); spr.print("Device pairing is preserved.");
-  spr.setCursor(18, 190); spr.print("Only WiFi will change.");
-  // Factory reset hint
-  card(spr, 10, 224, SW - 20, 36, 0x2000, 0x4000, 8);
+  spr.setCursor(54, 194); spr.print("Device pairing is preserved.");
+  spr.setCursor(54, 210); spr.print("Only Wi-Fi will change.");
+
+  // ── Factory reset hint ─────────────────────────────────────────────────────
+  card(spr, 10, 248, SW - 20, 36, 0x2000, 0x4000, 8);
   spr.setTextFont(2); spr.setTextColor(COL_WARNING, 0x2000);
-  spr.setCursor(18, 235); spr.print("Hold 3 s to full factory reset");
-  spr.fillCircle(SW / 2, 284, 8, COL_WARNING);
+  String rst = "Hold 3 s anywhere  -  factory reset";
+  tw = spr.textWidth(rst);
+  spr.setCursor((SW - tw) / 2, 259); spr.print(rst);
+
+  // ── Pulse indicator dot ─────────────────────────────────────────────────────
+  spr.fillCircle(SW / 2, 310, 4, COL_WARNING);
+
   spr.pushSprite(0, 0);
 }
 
