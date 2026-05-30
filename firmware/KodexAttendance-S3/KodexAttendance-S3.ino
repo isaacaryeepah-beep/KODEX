@@ -65,6 +65,7 @@ public:
     { auto cfg = _panel.config();
       cfg.pin_cs      = 10;
       cfg.pin_rst     = -1;
+      cfg.invert      = true;   // ES3C28P ILI9341 requires colour inversion
       cfg.memory_width  = 240; cfg.memory_height = 320;
       cfg.panel_width   = 240; cfg.panel_height  = 320;
       _panel.config(cfg); }
