@@ -71,10 +71,10 @@ const deviceSchema = new mongoose.Schema({
 
 }, { timestamps: true });
 
-// Auto-compute online status based on heartbeat threshold (10s)
+// Auto-compute online status based on heartbeat threshold (20s, matches HEARTBEAT_OFFLINE_MS)
 deviceSchema.virtual('isOnline').get(function () {
   if (!this.lastHeartbeat) return false;
-  return (Date.now() - this.lastHeartbeat.getTime()) < 10000;
+  return (Date.now() - this.lastHeartbeat.getTime()) < 20000;
 });
 
 deviceSchema.set('toJSON',   { virtuals: true });

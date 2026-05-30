@@ -420,8 +420,12 @@ exports.getDeviceStatus = async (req, res) => {
       .populate('lecturerId', 'name email');
     if (!device) return res.status(404).json({ message: 'Device not found' });
 
-    // Ownership: only the owning lecturer (or admin) may view device details
-    if (!isAdmin && device.lecturerId._id.toString() !== req.user._id.toString()) {
+    // Ownership: admin sees all; shared devices visible to any company member;
+    // dedicated devices visible only to the owning lecturer.
+    const canView = isAdmin
+      || device.ownershipType === 'shared'
+      || device.lecturerId?._id?.toString() === req.user._id.toString();
+    if (!canView) {
       return res.status(403).json({ message: 'You do not own this device.' });
     }
 
@@ -492,13 +496,16 @@ exports.assignGroup = async (req, res) => {
       return res.status(403).json({ message: 'Only class reps, HODs, and admins can assign a device to a group.' });
     }
 
-    const { department, level, group } = req.body;
+    const { deviceId, department, level, group } = req.body;
+    if (!deviceId) {
+      return res.status(400).json({ message: 'deviceId is required.' });
+    }
     if (!group || !level) {
       return res.status(400).json({ message: 'group and level are required.' });
     }
 
-    const device = await Device.findOne({ companyId: req.user.company });
-    if (!device) return res.status(404).json({ message: 'No device found for this institution.' });
+    const device = await Device.findOne({ deviceId, companyId: req.user.company });
+    if (!device) return res.status(404).json({ message: 'Device not found.' });
 
     device.assignedGroup      = group.trim().toUpperCase();
     device.assignedLevel      = String(level).trim();
