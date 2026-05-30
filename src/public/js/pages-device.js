@@ -919,9 +919,27 @@ async function renderAdminDevices() {
       </div>
 
       <!-- Device list -->
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+        <div style="font-size:11px;color:var(--text-secondary)" id="ad-last-updated"></div>
+        <button class="dev-btn dev-btn-ghost" style="font-size:12px;padding:5px 12px" onclick="adRefreshDevices()">↻ Refresh</button>
+      </div>
       <div id="ad-device-list"><div class="loading">Loading devices…</div></div>
     </div>`;
 
+  await adLoadDevices();
+
+  // Auto-refresh every 10 s so the HOD sees the device come online without reloading
+  if (window._adRefreshTimer) clearInterval(window._adRefreshTimer);
+  window._adRefreshTimer = setInterval(() => {
+    // Stop polling if the user has navigated away
+    if (!document.getElementById('ad-device-list')) {
+      clearInterval(window._adRefreshTimer); window._adRefreshTimer = null; return;
+    }
+    adLoadDevices();
+  }, 10000);
+}
+
+async function adRefreshDevices() {
   await adLoadDevices();
 }
 
@@ -956,6 +974,11 @@ async function adLoadDevices() {
   if (!list) return;
   try {
     const data = await api('/api/devices/all');
+    const stamp = document.getElementById('ad-last-updated');
+    if (stamp) {
+      const t = new Date();
+      stamp.textContent = 'Updated ' + t.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    }
     const devices = data.devices || [];
     if (!devices.length) {
       list.innerHTML = `
