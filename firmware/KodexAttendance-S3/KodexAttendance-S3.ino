@@ -691,61 +691,129 @@ static void drawSplash() {
 static void drawSetup(const String& apName) {
   spr.fillSprite(COL_BG);
 
-  // ── Header ──────────────────────────────────────────────────────────────────
-  spr.fillRect(0, 0, SW, 44, COL_CARD);
-  spr.fillRect(0, 44, SW, 2, COL_PRIMARY);
-  spr.setFont(F_LOGO); spr.setTextColor(COL_PRIMARY, COL_CARD);
-  spr.setCursor(14, 10); spr.print("DIKLY");
-  spr.setFont(F_TINY); spr.setTextColor(COL_MUTED, COL_CARD);
-  spr.setCursor(14, 32); spr.print("Device Setup");
+  const uint16_t CYAN    = 0x07FF;  // #00ffff
+  const uint16_t CARDDK  = 0x0842;  // very dark card
+  const uint16_t GLOWBDR = 0x1A5F;  // dim cyan glow border
 
-  // ── Subtitle ────────────────────────────────────────────────────────────────
+  // ── DIKLY — blue/cyan split, no header bar ──────────────────────────────────
+  spr.setFont(F_LOGO_L); spr.setTextSize(1);
+  spr.setTextColor(COL_PRIMARY, COL_BG);
+  spr.setCursor(12, 6); spr.print("DIK");
+  spr.setTextColor(CYAN, COL_BG);
+  spr.print("LY");
+
+  // ── WiFi arc icon — standalone top right ────────────────────────────────────
   {
-    spr.setFont(F_TINY); spr.setTextColor(COL_MUTED, COL_BG);
-    String sub = "3 steps to connect this device";
-    int32_t stw = spr.textWidth(sub);
-    spr.setCursor((SW - stw) / 2, 53); spr.print(sub);
+    const int32_t wx = 214, wy = 28;
+    spr.fillCircle(wx, wy, 2, CYAN);
+    spr.drawArc(wx, wy, 8,  6,  220, 320, CYAN);
+    spr.drawArc(wx, wy, 14, 12, 215, 325, CYAN);
+    spr.drawArc(wx, wy, 20, 18, 210, 330, CYAN);
   }
-  spr.drawFastHLine(14, 66, SW - 28, COL_BORDER);
 
-  // ── Step cards (left-accent + number badge + two text lines) ────────────────
-  const int32_t CX = 8, CW = SW - 16, CH = 56, CG = 6;
-  const int32_t BAD_X = CX + 21;
-  int32_t cy = 73;
+  // ── "Device Setup" subtitle ─────────────────────────────────────────────────
+  spr.setFont(F_TINY); spr.setTextSize(1);
+  spr.setTextColor(COL_MUTED, COL_BG);
+  spr.setCursor(12, 46); spr.print("Device Setup");
 
-  auto stepCard = [&](uint8_t num, uint16_t acCol,
-                      const char* hint, const char* val, const char* note) {
-    card(spr, CX, cy, CW, CH, COL_CARD, COL_BORDER, 10);
-    spr.fillRoundRect(CX, cy, 4, CH, 2, acCol);
-    spr.fillCircle(BAD_X, cy + CH / 2, 11, acCol);
-    spr.setFont(F_TINY); spr.setTextColor(COL_BG, acCol);
+  // ── Thin cyan divider ───────────────────────────────────────────────────────
+  spr.drawFastHLine(12, 62, SW - 24, CYAN);
+
+  // ── Section label ───────────────────────────────────────────────────────────
+  {
+    const char* lbl = "3 STEPS TO CONNECT THIS DEVICE";
+    spr.setFont(F_TINY); spr.setTextSize(1);
+    spr.setTextColor(COL_MUTED, COL_BG);
+    spr.setCursor((SW - (int32_t)spr.textWidth(lbl)) / 2, 67);
+    spr.print(lbl);
+  }
+
+  // ── Step card helper ─────────────────────────────────────────────────────────
+  // iconType: 1=WiFi  2=Globe  3=Lock
+  // vfont: font used for val1 line (F_SMALL for short values, F_TINY for long)
+  const int32_t CX = 8, CW = SW - 16, CG = 5;
+  int32_t cy = 80;
+
+  auto stepCard = [&](uint8_t num, uint8_t iconType, uint16_t acCol,
+                      int32_t ch, const char* hint,
+                      const lgfx::IFont* vfont,
+                      const char* val1, const char* val2, const char* note) {
+    // Dark card + glow border (two-pass for soft inner glow)
+    spr.fillRoundRect(CX,     cy,     CW,     ch,     14, CARDDK);
+    spr.drawRoundRect(CX,     cy,     CW,     ch,     14, GLOWBDR);
+    spr.drawRoundRect(CX + 1, cy + 1, CW - 2, ch - 2, 13, 0x1084);
+
+    // Number badge
+    const int32_t bx = CX + 22, by = cy + ch / 2;
+    spr.fillCircle(bx, by, 12, acCol);
+    spr.setFont(F_TINY); spr.setTextColor(0xFFFF, acCol);
     char ns[2] = {(char)('0' + num), '\0'};
-    int32_t nw = spr.textWidth(ns);
-    spr.setCursor(BAD_X - nw / 2, cy + CH / 2 - 4); spr.print(ns);
-    int32_t tx = CX + 42;
-    spr.setFont(F_TINY); spr.setTextColor(COL_MUTED, COL_CARD);
-    spr.setCursor(tx, cy + 7); spr.print(hint);
-    spr.setFont(F_SMALL); spr.setTextColor(acCol, COL_CARD);
-    spr.setCursor(tx, cy + 21); spr.print(val);
-    if (note) {
-      spr.setFont(F_TINY); spr.setTextColor(COL_MUTED, COL_CARD);
-      spr.setCursor(tx, cy + 41); spr.print(note);
+    spr.setCursor(bx - (int32_t)spr.textWidth(ns) / 2, by - 4);
+    spr.print(ns);
+
+    // Vector icon (centred vertically in card)
+    const int32_t ix = CX + 51, iy = cy + ch / 2;
+    if (iconType == 1) {  // WiFi fan
+      spr.fillCircle(ix, iy + 6, 2, acCol);
+      spr.drawArc(ix, iy + 6, 6,  4,  220, 320, acCol);
+      spr.drawArc(ix, iy + 6, 11, 9,  215, 325, acCol);
+    } else if (iconType == 2) {  // Globe
+      spr.drawCircle(ix, iy, 9, acCol);
+      spr.drawFastHLine(ix - 9, iy, 18, acCol);
+      spr.drawFastVLine(ix, iy - 9, 18, acCol);
+      spr.drawArc(ix, iy, 9, 7, 270, 90, acCol);
+    } else if (iconType == 3) {  // Lock
+      spr.drawArc(ix, iy - 4, 5, 3, 180, 360, acCol);
+      spr.drawFastVLine(ix - 5, iy - 4, 4, acCol);
+      spr.drawFastVLine(ix + 5, iy - 4, 4, acCol);
+      spr.fillRoundRect(ix - 8, iy, 16, 10, 2, acCol);
+      spr.fillCircle(ix, iy + 5, 2, CARDDK);
     }
-    cy += CH + CG;
+
+    // Text (right of icon)
+    const int32_t tx = CX + 70;
+    spr.setFont(F_TINY); spr.setTextColor(COL_MUTED, CARDDK);
+    spr.setCursor(tx, cy + 9); spr.print(hint);
+    spr.setFont(vfont); spr.setTextColor(acCol, CARDDK);
+    spr.setCursor(tx, cy + 22); spr.print(val1);
+    if (val2) {
+      spr.setFont(F_TINY); spr.setTextColor(acCol, CARDDK);
+      spr.setCursor(tx, cy + 34); spr.print(val2);
+    }
+    if (note) {
+      spr.setFont(F_TINY); spr.setTextColor(COL_MUTED, CARDDK);
+      spr.setCursor(tx, val2 ? cy + 46 : cy + 42); spr.print(note);
+    }
+    cy += ch + CG;
   };
 
-  stepCard(1, COL_PRIMARY, "Connect phone to Wi-Fi:", apName.c_str(), nullptr);
-  stepCard(2, COL_PRIMARY, "Open in your browser:", "192.168.4.1", nullptr);
-  stepCard(3, COL_SUCCESS, "Enter your details:", "Inst. code + pairing code",
+  stepCard(1, 1, COL_PRIMARY, 60, "Connect phone to Wi-Fi:",
+           F_SMALL, apName.c_str(), nullptr, nullptr);
+  stepCard(2, 2, COL_PRIMARY, 60, "Open in your browser:",
+           F_SMALL, "192.168.4.1", nullptr, nullptr);
+  stepCard(3, 3, COL_SUCCESS, 72, "Enter your details:",
+           F_TINY, "Institution code +", "pairing code",
            "then your school Wi-Fi");
 
-  // ── Factory reset bar ───────────────────────────────────────────────────────
-  cy += 4;
-  card(spr, CX, cy, CW, 26, 0x2000, 0x4000, 8);
-  spr.setFont(F_TINY); spr.setTextColor(COL_WARNING, 0x2000);
-  String rst = "Hold 3 s anywhere  —  factory reset";
-  int32_t tw = spr.textWidth(rst);
-  spr.setCursor((SW - tw) / 2, cy + 8); spr.print(rst);
+  // ── Factory reset pill ──────────────────────────────────────────────────────
+  cy += 2;
+  {
+    const int32_t bh = 24;
+    spr.fillRoundRect(CX, cy, CW, bh, 12, 0x200C);
+    spr.drawRoundRect(CX, cy, CW, bh, 12, 0x3818);
+    // Gear icon
+    const int32_t gx = CX + 14, gy = cy + bh / 2;
+    spr.fillCircle(gx, gy, 5, COL_WARNING);
+    spr.fillCircle(gx, gy, 2, 0x200C);
+    spr.fillRect(gx - 1, gy - 7, 2, 3, COL_WARNING);
+    spr.fillRect(gx - 1, gy + 4, 2, 3, COL_WARNING);
+    spr.fillRect(gx - 7, gy - 1, 3, 2, COL_WARNING);
+    spr.fillRect(gx + 4, gy - 1, 3, 2, COL_WARNING);
+    // Label
+    spr.setFont(F_TINY); spr.setTextColor(COL_WARNING, 0x200C);
+    const char* rst = "HOLD 3s  |  FACTORY RESET";
+    spr.setCursor(gx + 10, gy - 4); spr.print(rst);
+  }
 
   spr.pushSprite(0, 0);
 }
