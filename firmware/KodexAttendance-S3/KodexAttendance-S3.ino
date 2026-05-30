@@ -113,19 +113,66 @@ static const uint32_t HEARTBEAT_MS        = 5000;
 static const uint32_t WIFI_TIMEOUT_MS     = 30000;
 static const uint32_t WINDOW_SECONDS      = 300;  // code rotation period (5 minutes)
 
+// ─── Theme selector ──────────────────────────────────────────────────────────
+// Change THEME to switch the whole UI colour scheme without touching anything else.
+//   1 = Indigo  — dark navy background, indigo/violet accents  (default)
+//   2 = Cyan    — pure black OLED, electric cyan accents       (high contrast)
+//   3 = Emerald — deep forest green background, lime accents   (nature)
+//   4 = Amber   — dark warm maroon background, golden accents  (warm)
+#define THEME 1
+
 // ─── Colour Palette (RGB565) ─────────────────────────────────────────────────
-#define COL_BG        0x0841   // #0f172a  dark navy
-#define COL_CARD      0x1082   // #1e293b  slate card
-#define COL_BORDER    0x2124   // #334155  border
-#define COL_PRIMARY   0x639B   // #6366f1  indigo
-#define COL_SUCCESS   0x2764   // #22c55e  green
-#define COL_WARNING   0xFD00   // #f59e0b  amber
-#define COL_ERROR     0xE904   // #ef4444  red
-#define COL_TEXT      0xE71C   // #e2e8f0  light text
-#define COL_MUTED     0x8430   // #94a3b8  muted text
+#if THEME == 1   // ── Indigo (default) ────────────────────────────────────────
+#define COL_BG        0x0841   // dark navy   #0f172a
+#define COL_CARD      0x1082   // slate card  #1e293b
+#define COL_BORDER    0x2124   // border      #334155
+#define COL_PRIMARY   0x639B   // indigo      #6366f1
+#define COL_SUCCESS   0x2764   // green       #22c55e
+#define COL_WARNING   0xFD00   // amber       #f59e0b
+#define COL_ERROR     0xE904   // red         #ef4444
+#define COL_TEXT      0xE71C   // light text  #e2e8f0
+#define COL_MUTED     0x8430   // muted text  #94a3b8
+#define COL_DIM_CARD  0x0C62
+
+#elif THEME == 2  // ── Cyan / OLED high-contrast ───────────────────────────
+#define COL_BG        0x0000   // pure black
+#define COL_CARD      0x0842   // very dark grey
+#define COL_BORDER    0x2945   // medium grey
+#define COL_PRIMARY   0x07FF   // electric cyan
+#define COL_SUCCESS   0x07E0   // bright green
+#define COL_WARNING   0xFEA0   // orange
+#define COL_ERROR     0xF800   // red
+#define COL_TEXT      0xFFFF   // white
+#define COL_MUTED     0x7BEF   // light grey
+#define COL_DIM_CARD  0x0421
+
+#elif THEME == 3  // ── Emerald / Forest ────────────────────────────────────
+#define COL_BG        0x0220   // deep forest green
+#define COL_CARD      0x0440   // dark green card
+#define COL_BORDER    0x0880   // medium green border
+#define COL_PRIMARY   0x07E0   // bright green
+#define COL_SUCCESS   0xAFE5   // lime
+#define COL_WARNING   0xFD20   // orange
+#define COL_ERROR     0xF800   // red
+#define COL_TEXT      0xE71C   // light text
+#define COL_MUTED     0x7BE0   // muted green
+#define COL_DIM_CARD  0x0340
+
+#elif THEME == 4  // ── Amber / Warm ────────────────────────────────────────
+#define COL_BG        0x1800   // dark maroon
+#define COL_CARD      0x2800   // dark red-brown card
+#define COL_BORDER    0x4000   // medium warm border
+#define COL_PRIMARY   0xFD20   // orange-gold
+#define COL_SUCCESS   0xFEA0   // gold
+#define COL_WARNING   0xFF80   // bright amber
+#define COL_ERROR     0xF800   // red
+#define COL_TEXT      0xFFE0   // warm white
+#define COL_MUTED     0xC580   // muted warm
+#define COL_DIM_CARD  0x2000
+#endif
+
 #define COL_WHITE     0xFFFF
 #define COL_BLACK     0x0000
-#define COL_DIM_CARD  0x0C62   // slightly lighter than bg for alternating
 
 // Screen dimensions
 #define SW 240
@@ -307,14 +354,15 @@ static bool touchRead(uint16_t& tx, uint16_t& ty) {
 
   if ((td & 0x0F) == 0) return false;
 
-  // Raw panel coordinates from FT6336G on ES3C28P in portrait (rotation=0).
-  // Panel physically reports X along the long axis (0-319) and Y along the
-  // short axis (0-239), opposite to the display — swap and invert X to get
-  // correct screen coordinates: screen_x = rawY, screen_y = (319 - rawX).
+  // FT6336G on ES3C28P: chip reports X/Y in portrait panel orientation.
+  // The debug dot drawn by drawSetup() will show where the chip thinks you
+  // touched — use that to confirm axis direction and swap if needed.
+  // Current mapping: direct (no swap). If dot appears mirrored, swap rawX/rawY.
+  // If dot appears upside-down, change to:  tx=rawX; ty=(SH-1)-rawY;
   uint16_t rawX = ((xh & 0x0F) << 8) | xl;
   uint16_t rawY = ((yh & 0x0F) << 8) | yl;
-  tx = rawY;
-  ty = (SH - 1) - rawX;
+  tx = rawX;
+  ty = rawY;
   return true;
 }
 
@@ -555,24 +603,41 @@ static void drawHeader(LGFX_Sprite& s, bool online) {
 // ── SPLASH ────────────────────────────────────────────────────────────────────
 static void drawSplash() {
   spr.fillSprite(COL_BG);
-  // Accent bar
-  spr.fillRect(0, 0, SW, 6, COL_PRIMARY);
-  // Dikly large
-  spr.setTextFont(6); spr.setTextSize(1); spr.setTextColor(COL_TEXT, COL_BG);
-  int32_t tw = spr.textWidth("Dikly");
-  spr.setCursor((SW - tw) / 2, 90); spr.print("Dikly");
-  // Indigo line under logo
-  spr.fillRect((SW - 80) / 2, 148, 80, 3, COL_PRIMARY);
-  // Subtitle
+
+  // ── Subtle top + bottom accent bars ────────────────────────────────────────
+  spr.fillRect(0, 0,      SW, 4, COL_PRIMARY);
+  spr.fillRect(0, SH - 4, SW, 4, COL_PRIMARY);
+
+  // ── Large ring logo (outer ring + inner filled circle) ─────────────────────
+  spr.fillCircle(SW / 2, 138, 58, COL_BORDER);    // faint outer ring bg
+  spr.fillCircle(SW / 2, 138, 54, COL_BG);         // gap
+  spr.fillCircle(SW / 2, 138, 48, COL_PRIMARY);    // filled primary circle
+  // Inner "D" glyph
+  spr.setTextFont(6); spr.setTextSize(1);
+  spr.setTextColor(COL_BG, COL_PRIMARY);
+  int32_t tw = spr.textWidth("D");
+  spr.setCursor(SW / 2 - tw / 2, 116); spr.print("D");
+
+  // ── Wordmark ────────────────────────────────────────────────────────────────
+  spr.setTextFont(4); spr.setTextSize(1); spr.setTextColor(COL_TEXT, COL_BG);
+  tw = spr.textWidth("Dikly");
+  spr.setCursor((SW - tw) / 2, 208); spr.print("Dikly");
+
+  // ── Accent underline ────────────────────────────────────────────────────────
+  spr.fillRoundRect((SW - 56) / 2, 234, 56, 3, 1, COL_PRIMARY);
+
+  // ── Subtitle ────────────────────────────────────────────────────────────────
   spr.setTextFont(2); spr.setTextColor(COL_MUTED, COL_BG);
   String sub = "Attendance System";
   tw = spr.textWidth(sub);
-  spr.setCursor((SW - tw) / 2, 162); spr.print(sub);
-  // Version
-  spr.setTextFont(2); spr.setTextColor(COL_BORDER, COL_BG);
+  spr.setCursor((SW - tw) / 2, 244); spr.print(sub);
+
+  // ── Version chip ────────────────────────────────────────────────────────────
   String ver = String("v") + FIRMWARE_VERSION;
+  spr.setTextFont(2); spr.setTextColor(COL_BORDER, COL_BG);
   tw = spr.textWidth(ver);
-  spr.setCursor((SW - tw) / 2, 295); spr.print(ver);
+  spr.setCursor((SW - tw) / 2, 294); spr.print(ver);
+
   spr.pushSprite(0, 0);
 }
 
@@ -654,6 +719,16 @@ static void drawSetup(const String& apName) {
 
   // ── Pulse indicator dot ──────────────────────────────────────────────────
   spr.fillCircle(SW / 2, 313, 4, COL_PRIMARY);
+
+  // ── Touch debug: red dot + coordinates when finger is down ───────────────
+  // Remove this block once touch is confirmed working.
+  if (touchActive) {
+    spr.fillCircle(touchX, touchY, 10, COL_ERROR);
+    spr.fillCircle(touchX, touchY,  4, COL_WHITE);
+    char dbg[20]; snprintf(dbg, sizeof(dbg), "%d,%d", touchX, touchY);
+    spr.setTextFont(2); spr.setTextColor(COL_ERROR, COL_BG);
+    spr.setCursor(4, 4); spr.print(dbg);
+  }
 
   spr.pushSprite(0, 0);
 }
@@ -1456,9 +1531,10 @@ void setup() {
   Serial.begin(115200); delay(150);
   pinMode(LED_PIN, OUTPUT);
 
-  // Display init — LovyanGFX with SPI2_HOST, ILI9341, pins confirmed working
+  // Display init — LovyanGFX with SPI2_HOST, ILI9341, pins confirmed working.
+  // cfg.invert=true in the LGFX class already sends INVON during panel init.
+  // Do NOT call invertDisplay() again here — double-inverting makes all colours wrong.
   display.init();
-  display.invertDisplay(true);  // ES3C28P ILI9341 requires INVON (sends 0x21)
   display.setRotation(0);  // 0 = portrait
   display.fillScreen(COL_BG);
 
