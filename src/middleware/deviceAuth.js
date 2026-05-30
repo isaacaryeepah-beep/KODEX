@@ -2,12 +2,11 @@
 //  deviceAuth.js — JWT auth for ESP32 attendance devices.
 //
 //  Devices are paired via /api/devices/pair → server returns a long-lived
-//  JWT containing { deviceId, lecturerId, companyId }. Devices send this on
-//  every heartbeat / sync request as `Authorization: Bearer <token>`.
+//  JWT containing { deviceId, companyId }. Devices send this on every
+//  heartbeat / sync request as `Authorization: Bearer <token>`.
 //
-//  Validating the token here is enough — there is no separate device DB
-//  password to check. Tokens are revoked by deleting the Device record
-//  (unlink) which makes the lookup below return null.
+//  Backward-compatible: old JWTs that still carry lecturerId will still
+//  authenticate correctly because `token` is the unique revocation key.
 // ──────────────────────────────────────────────────────────────────────────
 const jwt    = require("jsonwebtoken");
 const Device = require("../models/Device");
@@ -27,14 +26,15 @@ module.exports = async function authenticateDevice(req, res, next) {
       return res.status(401).json({ message: "Invalid or expired device token" });
     }
 
-    if (!payload.deviceId || !payload.lecturerId || !payload.companyId) {
+    if (!payload.deviceId || !payload.companyId) {
       return res.status(401).json({ message: "Malformed device token" });
     }
 
+    // Look up by deviceId + companyId + token (token is the revocation key).
+    // lecturerId is NOT required — devices are institution-owned, not lecturer-owned.
     const device = await Device.findOne({
-      deviceId:   payload.deviceId,
-      lecturerId: payload.lecturerId,
-      companyId:  payload.companyId,
+      deviceId:  payload.deviceId,
+      companyId: payload.companyId,
       token,
     });
     if (!device) {

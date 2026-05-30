@@ -26,18 +26,13 @@ function _auditDevice(actor, action, device, meta = {}, req = null) {
 }
 
 // ─── GENERATE PAIRING CODE ───────────────────────────────────────────────────
-// Lecturer calls this to get a one-time 6-char code the ESP32 uses to claim
-// ownership. Code is hashed server-side; expires after 5 minutes.
+// Any authorized role calls this to get a one-time 6-char code the ESP32 uses
+// to pair with the institution. Code is hashed server-side; expires after 7 days.
 exports.generatePairingCode = async (req, res) => {
   try {
-    if (req.user.role !== 'lecturer' && !['admin','superadmin'].includes(req.user.role)) {
-      return res.status(403).json({ message: 'Only lecturers can generate pairing codes.' });
-    }
-
-    // Block if they already own a device
-    const existing = await Device.findOne({ lecturerId: req.user._id });
-    if (existing) {
-      return res.status(400).json({ message: 'You already have a linked device. Unlink it before pairing a new one.' });
+    const PAIRING_ROLES = ['lecturer', 'class_rep', 'hod', 'admin', 'superadmin'];
+    if (!PAIRING_ROLES.includes(req.user.role)) {
+      return res.status(403).json({ message: 'Not authorized to generate pairing codes.' });
     }
 
     // Generate readable 6-char code (uppercase A-Z + 0-9, avoid ambiguous chars)
@@ -68,23 +63,21 @@ exports.pairDevice = async (req, res) => {
       return res.status(400).json({ message: 'pairingCode, deviceId, and institutionCode are required.' });
     }
 
-    // Find company by institution code
     const Company = require('../models/Company');
     const company = await Company.findOne({ institutionCode: institutionCode.trim().toUpperCase() });
     if (!company) return res.status(404).json({ message: 'Institution not found.' });
 
-    // Find lecturer with matching pairing code hash, within same company, not expired
     const hash = crypto.createHash('sha256').update(pairingCode.trim().toUpperCase()).digest('hex');
     const now = new Date();
-    const lecturer = await User.findOne({
+    const PAIRING_ROLES = ['lecturer', 'class_rep', 'hod', 'admin', 'superadmin'];
+    const pairer = await User.findOne({
       company: company._id,
-      role: { $in: ['lecturer'] },
+      role: { $in: PAIRING_ROLES },
       devicePairingCode: hash,
       devicePairingExpiry: { $gt: now },
     }).select('+devicePairingCode');
 
-    if (!lecturer) {
-      // Log failed attempt (no actor — device not yet authenticated)
+    if (!pairer) {
       AuditLog.record({
         company: company._id,
         actor: null,
@@ -98,42 +91,36 @@ exports.pairDevice = async (req, res) => {
       return res.status(403).json({ message: 'Invalid or expired pairing code.' });
     }
 
-    // Block if device already claimed by another lecturer
+    // Device already paired — if same deviceId exists, re-issue token
     const devExists = await Device.findOne({ deviceId });
     if (devExists) {
-      if (devExists.lecturerId.toString() !== lecturer._id.toString()) {
-        return res.status(409).json({ message: 'This device is already linked to another lecturer.' });
+      if (devExists.companyId.toString() !== company._id.toString()) {
+        return res.status(409).json({ message: 'This device is registered to a different institution.' });
       }
-      // Same lecturer re-pairing — update token and clear code
-      await User.findByIdAndUpdate(lecturer._id, { devicePairingCode: null, devicePairingExpiry: null });
-      return res.json({ success: true, message: 'Device already linked to you.', token: devExists.token });
+      // Allow re-pairing (e.g. firmware reflash) — clear code and return existing token
+      await User.findByIdAndUpdate(pairer._id, { devicePairingCode: null, devicePairingExpiry: null });
+      return res.json({ success: true, message: 'Device already linked to this institution.', token: devExists.token, deviceId: devExists.deviceId });
     }
 
-    // Block if lecturer already owns a different device
-    const lecturerDev = await Device.findOne({ lecturerId: lecturer._id });
-    if (lecturerDev) {
-      return res.status(400).json({ message: 'Lecturer already owns a device. Unlink it first.' });
-    }
-
-    // Create device and clear pairing code (one-time use)
-    const token = jwt.sign({ deviceId, lecturerId: lecturer._id, companyId: company._id }, process.env.JWT_SECRET, { expiresIn: '10y' });
+    // New device — institution-owned, not tied to a specific lecturer
+    const token = jwt.sign({ deviceId, companyId: company._id }, process.env.JWT_SECRET, { expiresIn: '10y' });
     const device = await Device.create({
       deviceId,
       deviceName: deviceName || `Device-${deviceId.slice(-6).toUpperCase()}`,
       companyId: company._id,
-      lecturerId: lecturer._id,
+      lecturerId: pairer._id,   // audit: who did the pairing
       apSSID: `DIKLY-${deviceId.slice(-6).toUpperCase()}`,
       token,
-      ownershipType: 'dedicated',
-      isTransferable: false,
+      ownershipType: 'shared',
+      isTransferable: true,
     });
 
-    await User.findByIdAndUpdate(lecturer._id, { devicePairingCode: null, devicePairingExpiry: null });
+    await User.findByIdAndUpdate(pairer._id, { devicePairingCode: null, devicePairingExpiry: null });
 
-    _auditDevice(lecturer, AUDIT_ACTIONS.CREATE, device, { action: 'device_paired_via_code', deviceId });
+    _auditDevice(pairer, AUDIT_ACTIONS.CREATE, device, { action: 'device_paired_via_code', deviceId });
     res.status(201).json({ success: true, message: 'Device paired successfully.', token, deviceId: device.deviceId });
   } catch (err) {
-    if (err.code === 11000) return res.status(409).json({ message: 'Device or lecturer already has a device registered.' });
+    if (err.code === 11000) return res.status(409).json({ message: 'Device already has a device registered.' });
     res.status(500).json({ message: 'Server error', error: err.message });
   }
 };
@@ -380,26 +367,16 @@ async function _markStaleOffline(device) {
 }
 
 // ─── GET MY DEVICE ────────────────────────────────────────────────────────────
-// Returns the device owned by the authenticated lecturer (lecturer-only).
+// Returns the institution's device for any authorized role.
 exports.getMyDevice = async (req, res) => {
   try {
-    const isAdmin = ['admin', 'superadmin'].includes(req.user.role);
-
-    let query;
-    if (isAdmin) {
-      query = { companyId: req.user.company };
-    } else {
-      // Dedicated device OR shared device currently connected to this lecturer
-      query = {
-        companyId: req.user.company,
-        $or: [
-          { lecturerId: req.user._id },
-          { activeLecturerId: req.user._id, ownershipType: 'shared' },
-        ],
-      };
+    const ALLOWED_ROLES = ['lecturer', 'class_rep', 'hod', 'admin', 'superadmin'];
+    if (!ALLOWED_ROLES.includes(req.user.role)) {
+      return res.status(403).json({ message: 'Not authorized.' });
     }
 
-    let device = await Device.findOne(query).populate('lecturerId', 'name email');
+    let device = await Device.findOne({ companyId: req.user.company })
+      .populate('lecturerId', 'name email');
     if (!device) return res.json({ success: true, data: null });
 
     device = await _markStaleOffline(device);
@@ -413,7 +390,7 @@ exports.getMyDevice = async (req, res) => {
       data: {
         deviceId:           device.deviceId,
         deviceName:         device.deviceName,
-        owner:              device.lecturerId,
+        pairedBy:           device.lecturerId,
         status:             device.isOnline ? 'online' : 'offline',
         mode:               device.mode,
         currentNetwork:     device.currentNetwork,
@@ -478,12 +455,12 @@ exports.getDeviceStatus = async (req, res) => {
 };
 
 // ─── UNLINK DEVICE ───────────────────────────────────────────────────────────
-// Only the owning lecturer (or admin) may unlink their device.
+// Admin, HOD, or superadmin can unlink the institution's device.
 // Blocked if an active attendance session is running.
 exports.unlinkDevice = async (req, res) => {
   try {
-    const isAdmin = ['admin', 'superadmin'].includes(req.user.role);
-    const query = isAdmin
+    const isPrivileged = ['admin', 'superadmin', 'hod'].includes(req.user.role);
+    const query = isPrivileged
       ? { companyId: req.user.company, ...(req.body.deviceId ? { deviceId: req.body.deviceId } : {}) }
       : { lecturerId: req.user._id, companyId: req.user.company };
 
