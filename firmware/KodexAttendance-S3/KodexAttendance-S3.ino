@@ -628,50 +628,47 @@ static void drawHeader(LGFX_Sprite& s, bool online) {
   s.setCursor(SW - 18 - 12 - lw, 16); s.print(lbl);
 }
 
-// ── SPLASH ────────────────────────────────────────────────────────────────────
+// ── SPLASH / WELCOME ─────────────────────────────────────────────────────────
 static void drawSplash() {
   spr.fillSprite(COL_BG);
+  spr.fillRect(0, 0, SW, 4, COL_PRIMARY);
 
-  // ── Top accent bar + fade ───────────────────────────────────────────────────
-  spr.fillRect(0, 0, SW, 5, COL_PRIMARY);
-  spr.fillRect(0, 5, SW, 3, COL_BORDER);
-
-  // ── Outer decorative ring ──────────────────────────────────────────────────
-  spr.fillCircle(SW / 2, 132, 64, COL_BORDER);
-  spr.fillCircle(SW / 2, 132, 60, COL_BG);
-  spr.fillCircle(SW / 2, 132, 54, COL_PRIMARY);
-  spr.fillCircle(SW / 2, 132, 46, COL_BG);          // inner cutout for ring effect
-  spr.fillCircle(SW / 2, 132, 40, COL_PRIMARY);     // filled inner circle
-
-  // ── "D" glyph in Orbitron ──────────────────────────────────────────────────
+  // ── Logo: outer faint ring → primary ring → primary filled center ──────────
+  int32_t lcx = SW / 2, lcy = 106;
+  spr.fillCircle(lcx, lcy, 56, COL_CARD);
+  spr.fillCircle(lcx, lcy, 52, COL_BG);
+  spr.fillCircle(lcx, lcy, 46, COL_PRIMARY);
+  spr.fillCircle(lcx, lcy, 38, COL_BG);
+  spr.fillCircle(lcx, lcy, 32, COL_PRIMARY);
   spr.setFont(F_LOGO_L); spr.setTextSize(1);
   spr.setTextColor(COL_BG, COL_PRIMARY);
   int32_t tw = spr.textWidth("D");
-  spr.setCursor(SW / 2 - tw / 2, 114); spr.print("D");
+  spr.setCursor(lcx - tw / 2, lcy - 16); spr.print("D");
 
-  // ── Wordmark — DIKLY in Orbitron ────────────────────────────────────────────
+  // ── "Dikly" wordmark ────────────────────────────────────────────────────────
   spr.setFont(F_LOGO); spr.setTextColor(COL_TEXT, COL_BG);
-  tw = spr.textWidth("DIKLY");
-  spr.setCursor((SW - tw) / 2, 214); spr.print("DIKLY");
+  tw = spr.textWidth("Dikly");
+  spr.setCursor((SW - tw) / 2, 172); spr.print("Dikly");
 
-  // ── Accent underline pill ───────────────────────────────────────────────────
-  int32_t pillW = 64;
-  spr.fillRoundRect((SW - pillW) / 2, 242, pillW, 3, 1, COL_PRIMARY);
-
-  // ── Subtitle ────────────────────────────────────────────────────────────────
-  spr.setFont(F_SMALL); spr.setTextColor(COL_MUTED, COL_BG);
-  String sub = "Attendance System";
+  // ── Subtitle + accent pill ──────────────────────────────────────────────────
+  spr.setFont(F_TINY); spr.setTextColor(COL_MUTED, COL_BG);
+  String sub = "Smart Attendance System";
   tw = spr.textWidth(sub);
-  spr.setCursor((SW - tw) / 2, 250); spr.print(sub);
+  spr.setCursor((SW - tw) / 2, 200); spr.print(sub);
+  spr.fillRoundRect((SW - 44) / 2, 212, 44, 2, 1, COL_PRIMARY);
 
-  // ── Version badge ───────────────────────────────────────────────────────────
+  // ── Institution / device card ───────────────────────────────────────────────
+  card(spr, 18, 222, SW - 36, 38, COL_CARD, COL_BORDER, 12);
+  spr.setFont(F_TINY); spr.setTextColor(COL_MUTED, COL_CARD);
+  String inst = institutionCode.isEmpty() ? "Attendance Device" : institutionCode;
+  tw = spr.textWidth(inst);
+  spr.setCursor((SW - tw) / 2, 235); spr.print(inst);
+
+  // ── Version ─────────────────────────────────────────────────────────────────
   String ver = String("v") + FIRMWARE_VERSION;
   spr.setFont(F_TINY); spr.setTextColor(COL_BORDER, COL_BG);
   tw = spr.textWidth(ver);
-  int32_t bx = (SW - tw - 10) / 2;
-  spr.fillRoundRect(bx, 290, tw + 10, 16, 8, COL_CARD);
-  spr.drawRoundRect(bx, 290, tw + 10, 16, 8, COL_BORDER);
-  spr.setCursor(bx + 5, 293); spr.print(ver);
+  spr.setCursor((SW - tw) / 2, 296); spr.print(ver);
 
   spr.pushSprite(0, 0);
 }
@@ -825,106 +822,114 @@ static void drawWifiReconfig(const String& apName) {
 }
 
 // ── WIFI SCAN (on-device WiFi picker) ────────────────────────────────────────
-#define LIST_Y      70    // y where network list starts
-#define ITEM_H      41    // height of each list item (38px + 3px gap)
-#define MAX_VIS      6    // max visible items at once
-#define SCAN_BTN_X  162   // scan button x
+#define LIST_Y      90    // y where network list starts (below title + subtitle)
+#define ITEM_H      37    // height of each list item
+#define MAX_VIS      5    // max visible items
+#define SCAN_BTN_X  162   // legacy — unused
 #define SCROLL_X    220   // scroll arrow column x
 
 static void drawWifiScan() {
   spr.fillSprite(COL_BG);
   drawHeader(spr, false);
 
-  spr.setFont(F_MED); spr.setTextColor(COL_TEXT, COL_BG);
-  spr.setCursor(10, 50); spr.print("Wi-Fi Networks");
+  // ── Title + subtitle ─────────────────────────────────────────────────────────
+  spr.setFont(F_MED); spr.setTextColor(COL_PRIMARY, COL_BG);
+  spr.setCursor(10, 50); spr.print("Wi-Fi Setup");
+  spr.setFont(F_TINY); spr.setTextColor(COL_MUTED, COL_BG);
+  spr.setCursor(10, 76); spr.print("Connect Dikly to your network");
 
-  uint16_t sbCol = wifiScanning ? COL_MUTED : COL_PRIMARY;
-  spr.fillRoundRect(SCAN_BTN_X, 48, 68, 24, 12, sbCol);
-  spr.setFont(F_TINY); spr.setTextColor(COL_WHITE, sbCol);
-  String scanLabel = wifiScanning ? "Scanning" : "Scan";
-  int32_t stw = spr.textWidth(scanLabel);
-  spr.setCursor(SCAN_BTN_X + (68 - stw) / 2, 55); spr.print(scanLabel);
-
-  if (wifiScanning) { spr.pushSprite(0, 0); return; }
-
-  if (!wifiMsg.isEmpty()) {
+  if (wifiScanning) {
     spr.setFont(F_SMALL); spr.setTextColor(COL_MUTED, COL_BG);
-    int32_t tw = spr.textWidth(wifiMsg);
-    spr.setCursor((SW - tw) / 2, 162); spr.print(wifiMsg);
-    spr.setFont(F_TINY); spr.setTextColor(COL_BORDER, COL_BG);
-    String hint = "Tap Scan to search";
-    tw = spr.textWidth(hint);
-    spr.setCursor((SW - tw) / 2, 186); spr.print(hint);
+    int32_t tw = spr.textWidth("Scanning...");
+    spr.setCursor((SW - tw) / 2, 170); spr.print("Scanning...");
     spr.pushSprite(0, 0); return;
   }
 
+  if (!wifiMsg.isEmpty() && wifiNetCount == 0) {
+    spr.setFont(F_SMALL); spr.setTextColor(COL_MUTED, COL_BG);
+    int32_t tw = spr.textWidth(wifiMsg);
+    spr.setCursor((SW - tw) / 2, 164); spr.print(wifiMsg);
+    spr.setFont(F_TINY); spr.setTextColor(COL_BORDER, COL_BG);
+    String hint = "Tap Scan Again below";
+    tw = spr.textWidth(hint);
+    spr.setCursor((SW - tw) / 2, 184); spr.print(hint);
+  }
+
+  // ── Network list ─────────────────────────────────────────────────────────────
   uint8_t visible = (uint8_t)min((int)wifiNetCount - wifiScroll, MAX_VIS);
   for (uint8_t i = 0; i < visible; i++) {
     uint8_t idx = wifiScroll + i;
     WifiNet& n  = wifiNets[idx];
     int32_t  y  = LIST_Y + i * ITEM_H;
 
-    card(spr, 4, y, 212, 38, COL_CARD, COL_BORDER, 8);
+    card(spr, 4, y, 212, ITEM_H - 3, COL_CARD, COL_BORDER, 8);
 
+    // Signal bars
     for (uint8_t b = 0; b < 4; b++) {
-      uint8_t bh = 6 + b * 5;
+      uint8_t bh = 4 + b * 5;
       uint16_t bc = (b < (uint8_t)n.bars) ? COL_SUCCESS : COL_BORDER;
-      spr.fillRoundRect(10 + b * 8, y + 30 - bh, 6, bh, 1, bc);
+      spr.fillRoundRect(10 + b * 8, y + (ITEM_H - 3) - 7 - bh, 6, bh, 1, bc);
     }
 
+    // SSID
     spr.setFont(F_SMALL); spr.setTextColor(COL_TEXT, COL_CARD);
     String ssid = String(n.ssid);
     if (spr.textWidth(ssid) > 118) { ssid = ssid.substring(0, 13); ssid += ".."; }
-    spr.setCursor(46, y + 10); spr.print(ssid);
+    spr.setCursor(46, y + 7); spr.print(ssid);
 
+    // Open / locked badge
     if (n.open) {
-      spr.fillRoundRect(165, y + 10, 42, 18, 9, COL_SUCCESS);
+      spr.fillRoundRect(165, y + 8, 42, 16, 8, COL_SUCCESS);
       spr.setFont(F_TINY); spr.setTextColor(COL_WHITE, COL_SUCCESS);
-      spr.setCursor(170, y + 14); spr.print("OPEN");
+      spr.setCursor(170, y + 12); spr.print("OPEN");
     } else {
-      spr.fillRoundRect(165, y + 10, 42, 18, 9, COL_BORDER);
+      spr.fillRoundRect(165, y + 8, 42, 16, 8, COL_BORDER);
       spr.setFont(F_TINY); spr.setTextColor(COL_MUTED, COL_BORDER);
-      spr.setCursor(172, y + 14); spr.print("PWD");
+      spr.setCursor(174, y + 12); spr.print("PWD");
     }
   }
 
+  // Scroll arrows
   if (wifiScroll > 0)
     spr.fillTriangle(SCROLL_X + 9, LIST_Y - 8,
                      SCROLL_X,     LIST_Y + 8,
-                     SCROLL_X + 18,LIST_Y + 8, COL_PRIMARY);
+                     SCROLL_X + 18, LIST_Y + 8, COL_PRIMARY);
   if (wifiScroll + MAX_VIS < wifiNetCount)
     spr.fillTriangle(SCROLL_X + 9, LIST_Y + MAX_VIS * ITEM_H + 8,
                      SCROLL_X,     LIST_Y + MAX_VIS * ITEM_H - 8,
-                     SCROLL_X + 18,LIST_Y + MAX_VIS * ITEM_H - 8, COL_PRIMARY);
+                     SCROLL_X + 18, LIST_Y + MAX_VIS * ITEM_H - 8, COL_PRIMARY);
 
-  spr.setFont(F_TINY); spr.setTextColor(COL_BORDER, COL_BG);
-  String ft = "Hold 3s anywhere to factory reset";
-  int32_t ftw = spr.textWidth(ft);
-  spr.setCursor((SW - ftw) / 2, 310); spr.print(ft);
+  // ── "Scan Again" full-width bottom button ────────────────────────────────────
+  uint16_t sbCol = wifiScanning ? COL_MUTED : COL_PRIMARY;
+  spr.fillRoundRect(16, 287, SW - 32, 26, 13, sbCol);
+  spr.setFont(F_TINY); spr.setTextColor(COL_WHITE, sbCol);
+  String scanLabel = wifiScanning ? "Scanning..." : "Scan Again";
+  int32_t stw = spr.textWidth(scanLabel);
+  spr.setCursor((SW - stw) / 2, 294); spr.print(scanLabel);
 
   spr.pushSprite(0, 0);
 }
 
 // ── Tap handler for WiFi scan screen ─────────────────────────────────────────
 static void handleWifiScanTap(uint16_t tx, uint16_t ty) {
-  // Scan button
-  if (tx >= SCAN_BTN_X && ty >= 42 && ty <= 68) {
+  // "Scan Again" full-width bottom button
+  if (ty >= 284 && ty <= 316) {
     drawWifiScan();   // show "Scanning" label immediately
     doWifiScan();
     return;
   }
   // Scroll up
-  if (tx >= SCROLL_X && ty >= LIST_Y - 12 && ty <= LIST_Y + 12 && wifiScroll > 0) {
+  if (tx >= SCROLL_X && ty >= LIST_Y - 14 && ty <= LIST_Y + 8 && wifiScroll > 0) {
     wifiScroll--; return;
   }
   // Scroll down
   int32_t downY = LIST_Y + MAX_VIS * ITEM_H;
-  if (tx >= SCROLL_X && ty >= downY - 12 && ty <= downY + 12
+  if (tx >= SCROLL_X && ty >= downY - 8 && ty <= downY + 14
       && wifiScroll + MAX_VIS < wifiNetCount) {
     wifiScroll++; return;
   }
   // Network item tap
-  if (tx < 216) {
+  if (tx < 216 && ty >= LIST_Y) {
     int8_t row = ((int32_t)ty - LIST_Y) / ITEM_H;
     if (row < 0 || row >= MAX_VIS) return;
     uint8_t idx = wifiScroll + (uint8_t)row;
@@ -1132,142 +1137,231 @@ static void startWifiReconfigPortal() {
 // ── CONNECTING ────────────────────────────────────────────────────────────────
 static void drawConnecting(const String& ssid) {
   static uint8_t dots = 0; dots = (dots + 1) % 4;
+  static uint8_t wave = 0; wave = (wave + 1) % 40;
   spr.fillSprite(COL_BG);
-  spr.fillRect(0, 0, SW, 6, COL_PRIMARY);
 
-  // "Connecting" title
+  // ── DIKLY header bar ────────────────────────────────────────────────────────
+  spr.fillRect(0, 0, SW, 42, COL_CARD);
+  spr.fillRect(0, 42, SW, 2, COL_PRIMARY);
+  spr.setFont(F_LOGO); spr.setTextColor(COL_PRIMARY, COL_CARD);
+  spr.setCursor(14, 10); spr.print("DIKLY");
+
+  // ── Title + animated dots ───────────────────────────────────────────────────
   spr.setFont(F_MED); spr.setTextColor(COL_TEXT, COL_BG);
   String t = "Connecting";
   int32_t tw = spr.textWidth(t);
-  spr.setCursor((SW - tw) / 2, 76); spr.print(t);
+  spr.setCursor((SW - tw) / 2, 58); spr.print(t);
 
-  // Animated dots
-  String dotStr = "";
-  for (uint8_t i = 0; i < dots; i++) dotStr += ".";
   spr.setFont(F_MED); spr.setTextColor(COL_PRIMARY, COL_BG);
-  tw = spr.textWidth(dotStr);
-  spr.setCursor((SW - tw) / 2, 106); spr.print(dotStr);
+  String dotStr;
+  for (uint8_t i = 0; i < dots; i++) dotStr += ".";
+  tw = spr.textWidth("...");
+  spr.setCursor((SW - tw) / 2, 86); spr.print(dotStr);
 
-  // SSID pill
-  card(spr, 20, 152, SW - 40, 38, COL_CARD, COL_BORDER, 19);
-  spr.setFont(F_TINY); spr.setTextColor(COL_MUTED, COL_CARD);
-  spr.setCursor(0, 0); // measure without cursor
-  tw = spr.textWidth(ssid);
-  spr.setCursor((SW - tw) / 2, 164); spr.print(ssid);
+  // ── Pulsing rings (outward expansion) ──────────────────────────────────────
+  uint8_t p = wave;
+  uint16_t c1 = COL_CARD, c2 = COL_CARD, c3 = COL_CARD;
+  if      (p < 14) { c1 = COL_PRIMARY; }
+  else if (p < 27) { c1 = COL_BORDER; c2 = COL_PRIMARY; }
+  else             { c1 = COL_CARD;   c2 = COL_BORDER; c3 = COL_PRIMARY; }
 
-  // Animated Wi-Fi bars
-  static uint8_t wave = 0; wave = (wave + 1) % 8;
-  int32_t bx = SW / 2 - 22, by = 228;
-  for (uint8_t i = 0; i < 4; i++) {
-    uint8_t h = 6 + i * 7;
-    uint16_t col = (i <= wave % 5) ? COL_PRIMARY : COL_BORDER;
-    spr.fillRoundRect(bx + i * 14, by + (28 - h), 10, h, 3, col);
-  }
+  int32_t cx = SW / 2, cy = 172;
+  spr.fillCircle(cx, cy, 52, c3);
+  spr.fillCircle(cx, cy, 46, COL_BG);
+  spr.fillCircle(cx, cy, 38, c2);
+  spr.fillCircle(cx, cy, 32, COL_BG);
+  spr.fillCircle(cx, cy, 24, c1);
+  spr.fillCircle(cx, cy, 18, COL_BG);
+  spr.fillCircle(cx, cy, 12, COL_PRIMARY);
+  spr.setFont(F_LOGO); spr.setTextColor(COL_BG, COL_PRIMARY);
+  tw = spr.textWidth("D");
+  spr.setCursor(cx - tw / 2, cy - 12); spr.print("D");
+
+  // ── SSID pill ───────────────────────────────────────────────────────────────
+  card(spr, 18, 238, SW - 36, 36, COL_CARD, COL_BORDER, 18);
+  spr.setFont(F_SMALL); spr.setTextColor(COL_TEXT, COL_CARD);
+  String s = ssid;
+  if (spr.textWidth(s) > SW - 56) s = s.substring(0, 14) + "..";
+  tw = spr.textWidth(s);
+  spr.setCursor((SW - tw) / 2, 248); spr.print(s);
+
   spr.pushSprite(0, 0);
 }
 
-// ── READY (idle — no active session) ─────────────────────────────────────────
+// ── READY — Waiting for Session ───────────────────────────────────────────────
 static void drawReady() {
   spr.fillSprite(COL_BG);
-  drawHeader(spr, true);
-  // Big green checkmark circle
-  spr.fillCircle(SW / 2, 148, 52, COL_SUCCESS);
-  // Checkmark via lines
-  spr.drawLine(SW/2 - 22, 148, SW/2 - 5, 167, COL_WHITE);
-  spr.drawLine(SW/2 - 21, 148, SW/2 - 4, 167, COL_WHITE);
-  spr.drawLine(SW/2 - 5,  167, SW/2 + 24, 128, COL_WHITE);
-  spr.drawLine(SW/2 - 4,  167, SW/2 + 25, 128, COL_WHITE);
-  // Ready text
-  spr.setFont(F_MED); spr.setTextColor(COL_TEXT, COL_BG);
-  String rt = "Ready";
-  int32_t tw = spr.textWidth(rt);
-  spr.setCursor((SW - tw) / 2, 212); spr.print(rt);
+
+  // ── Header: DIKLY + Online ──────────────────────────────────────────────────
+  spr.fillRect(0, 0, SW, 42, COL_CARD);
+  spr.fillRect(0, 42, SW, 2, COL_SUCCESS);
+  spr.setFont(F_LOGO); spr.setTextColor(COL_PRIMARY, COL_CARD);
+  spr.setCursor(14, 10); spr.print("DIKLY");
+  spr.fillCircle(SW - 18, 21, 7, COL_SUCCESS);
+  spr.fillCircle(SW - 18, 21, 4, COL_CARD);
+  spr.fillCircle(SW - 18, 21, 2, COL_SUCCESS);
+  spr.setFont(F_TINY); spr.setTextColor(COL_SUCCESS, COL_CARD);
+  int32_t lw = spr.textWidth("Online");
+  spr.setCursor(SW - 18 - 10 - lw, 16); spr.print("Online");
+
+  // ── Title ───────────────────────────────────────────────────────────────────
+  spr.setFont(F_MED); spr.setTextColor(COL_PRIMARY, COL_BG);
+  String title = "Waiting for Session";
+  int32_t tw = spr.textWidth(title);
+  if (tw > SW - 16) { spr.setFont(F_SMALL); tw = spr.textWidth(title); }
+  spr.setCursor((SW - tw) / 2, 52); spr.print(title);
+
+  // ── Subtitle (two lines if needed) ─────────────────────────────────────────
   spr.setFont(F_TINY); spr.setTextColor(COL_MUTED, COL_BG);
-  String sub = "Waiting for a session to start";
+  String sub = "The lecturer will start the session soon";
   tw = spr.textWidth(sub);
-  spr.setCursor((SW - tw) / 2, 242); spr.print(sub);
-  // IP + SD status row
-  String ip = WiFi.localIP().toString();
-  card(spr, 8, 270, SW - 16, 36, COL_CARD, COL_BORDER, 12);
-  spr.setFont(F_TINY); spr.setTextColor(COL_MUTED, COL_CARD);
-  tw = spr.textWidth(ip);
-  spr.setCursor((SW - tw) / 2, 278); spr.print(ip);
-  // SD dot
-  uint16_t sdDotCol = sdAvailable ? COL_SUCCESS : COL_WARNING;
-  spr.fillCircle(22, 288, 5, sdDotCol);
-  spr.setFont(F_TINY); spr.setTextColor(sdAvailable ? COL_SUCCESS : COL_WARNING, COL_CARD);
-  spr.setCursor(30, 282);
-  spr.print(sdAvailable ? "SD" : "SD?");
-  spr.pushSprite(0, 0);
-}
+  if (tw <= SW - 16) {
+    spr.setCursor((SW - tw) / 2, 78); spr.print(sub);
+  } else {
+    spr.setCursor((SW - spr.textWidth("The lecturer will start")) / 2, 78);
+    spr.print("The lecturer will start");
+    spr.setCursor((SW - spr.textWidth("the session soon")) / 2, 89);
+    spr.print("the session soon");
+  }
 
-// ── SESSION (attendance code display) ────────────────────────────────────────
-static void drawSession(const String& code, uint32_t secsLeft, uint32_t secsTotal) {
-  spr.fillSprite(COL_BG);
-  drawHeader(spr, true);
+  // ── Pulsing rings (outward expansion animation) ─────────────────────────────
+  static uint8_t pulse = 0; pulse = (pulse + 1) % 40;
+  uint8_t p = pulse;
+  uint16_t c1 = COL_CARD, c2 = COL_CARD, c3 = COL_CARD, c4 = COL_CARD;
+  if      (p < 10) { c1 = COL_PRIMARY; }
+  else if (p < 20) { c1 = COL_BORDER; c2 = COL_PRIMARY; }
+  else if (p < 30) { c2 = COL_BORDER; c3 = COL_PRIMARY; }
+  else             { c3 = COL_BORDER; c4 = COL_PRIMARY; }
 
-  // ── Course + Lecturer ───────────────────────────────────────────────────
-  card(spr, 8, 46, SW - 16, 56, COL_CARD, COL_BORDER, 10);
+  int32_t pcx = SW / 2, pcy = 168;
+  spr.fillCircle(pcx, pcy, 64, c4);
+  spr.fillCircle(pcx, pcy, 58, COL_BG);
+  spr.fillCircle(pcx, pcy, 50, c3);
+  spr.fillCircle(pcx, pcy, 44, COL_BG);
+  spr.fillCircle(pcx, pcy, 36, c2);
+  spr.fillCircle(pcx, pcy, 30, COL_BG);
+  spr.fillCircle(pcx, pcy, 22, c1);
+  spr.fillCircle(pcx, pcy, 16, COL_BG);
+  spr.fillCircle(pcx, pcy, 12, COL_PRIMARY);
+  spr.setFont(F_LOGO); spr.setTextColor(COL_BG, COL_PRIMARY);
+  tw = spr.textWidth("D");
+  spr.setCursor(pcx - tw / 2, pcy - 12); spr.print("D");
+
+  // ── Bottom info card ────────────────────────────────────────────────────────
+  card(spr, 8, 246, SW - 16, 52, COL_CARD, COL_BORDER, 12);
   if (!sessionCourse.isEmpty()) {
     spr.setFont(F_SMALL); spr.setTextColor(COL_TEXT, COL_CARD);
     String c = sessionCourse;
-    if (spr.textWidth(c) > SW - 40) c = c.substring(0, 10) + "...";
+    if (spr.textWidth(c) > SW - 40) c = c.substring(0, 12) + "..";
+    tw = spr.textWidth(c);
+    spr.setCursor((SW - tw) / 2, 254); spr.print(c);
+    if (!sessionLecturer.isEmpty()) {
+      spr.setFont(F_TINY); spr.setTextColor(COL_MUTED, COL_CARD);
+      String l = sessionLecturer;
+      if (spr.textWidth(l) > SW - 40) l = l.substring(0, 24) + "..";
+      tw = spr.textWidth(l);
+      spr.setCursor((SW - tw) / 2, 276); spr.print(l);
+    }
+  } else {
+    spr.setFont(F_TINY); spr.setTextColor(COL_MUTED, COL_CARD);
+    String ip = WiFi.localIP().toString();
+    tw = spr.textWidth(ip);
+    spr.setCursor((SW - tw) / 2, 264); spr.print(ip);
+    spr.fillCircle(20, 278, 4, sdAvailable ? COL_SUCCESS : COL_WARNING);
+    spr.setTextColor(sdAvailable ? COL_SUCCESS : COL_WARNING, COL_CARD);
+    spr.setCursor(28, 274); spr.print(sdAvailable ? "SD Ready" : "No SD Card");
+  }
+
+  spr.pushSprite(0, 0);
+}
+
+// ── SESSION — Attendance Code Display ────────────────────────────────────────
+static void drawSession(const String& code, uint32_t secsLeft, uint32_t secsTotal) {
+  spr.fillSprite(COL_BG);
+
+  // ── Header: Session Active (green accent) ───────────────────────────────────
+  spr.fillRect(0, 0, SW, 42, COL_CARD);
+  spr.fillRect(0, 42, SW, 2, COL_SUCCESS);
+  spr.fillCircle(14, 21, 6, COL_SUCCESS);
+  spr.fillCircle(14, 21, 3, COL_CARD);
+  spr.fillCircle(14, 21, 2, COL_SUCCESS);
+  spr.setFont(F_SMALL); spr.setTextColor(COL_TEXT, COL_CARD);
+  spr.setCursor(28, 13); spr.print("Session Active");
+
+  // ── Course + Lecturer card ───────────────────────────────────────────────────
+  card(spr, 8, 48, SW - 16, 46, COL_CARD, COL_BORDER, 10);
+  if (!sessionCourse.isEmpty()) {
+    spr.setFont(F_SMALL); spr.setTextColor(COL_TEXT, COL_CARD);
+    String c = sessionCourse;
+    if (spr.textWidth(c) > SW - 40) c = c.substring(0, 12) + "..";
     int32_t tw = spr.textWidth(c);
-    spr.setCursor((SW - tw) / 2, 52); spr.print(c);
+    spr.setCursor((SW - tw) / 2, 54); spr.print(c);
   }
   if (!sessionLecturer.isEmpty()) {
     spr.setFont(F_TINY); spr.setTextColor(COL_MUTED, COL_CARD);
     String l = sessionLecturer;
-    if (spr.textWidth(l) > SW - 40) l = l.substring(0, 20) + "...";
+    if (spr.textWidth(l) > SW - 40) l = l.substring(0, 26) + "..";
     int32_t tw = spr.textWidth(l);
-    spr.setCursor((SW - tw) / 2, 76); spr.print(l);
+    spr.setCursor((SW - tw) / 2, 74); spr.print(l);
   }
 
-  // ── Label ───────────────────────────────────────────────────────────────
+  // ── "ATTENDANCE CODE" label ───────────────────────────────────────────────────
   spr.setFont(F_TINY); spr.setTextColor(COL_MUTED, COL_BG);
   String lbl = "ATTENDANCE CODE";
   int32_t tw = spr.textWidth(lbl);
-  spr.setCursor((SW - tw) / 2, 112); spr.print(lbl);
+  spr.setCursor((SW - tw) / 2, 103); spr.print(lbl);
 
-  // ── Big 7-segment code ──────────────────────────────────────────────────
-  // Font 7 is a 7-segment style — perfect for attendance codes.
+  // ── Big 7-segment code split as "XXX XXX" for readability ─────────────────
   spr.setTextFont(7); spr.setTextSize(1);
-  tw = spr.textWidth(code);
   spr.setTextColor(COL_PRIMARY, COL_BG);
-  spr.setCursor((SW - tw) / 2, 126); spr.print(code);
+  String cA = code.substring(0, 3);
+  String cB = code.substring(3);
+  int32_t wA = spr.textWidth(cA);
+  int32_t wB = spr.textWidth(cB);
+  int32_t gap = 16;
+  int32_t codeX = (SW - wA - gap - wB) / 2;
+  spr.setCursor(codeX, 114);              spr.print(cA);
+  spr.setCursor(codeX + wA + gap, 114);  spr.print(cB);
 
-  // ── Countdown bar ────────────────────────────────────────────────────────
-  // Urgency colour: green → amber → red
-  uint16_t barCol = secsLeft > 120 ? COL_SUCCESS   // > 2 min → green
-                  : secsLeft > 60  ? COL_WARNING   // > 1 min → amber
-                  :                  COL_ERROR;    // ≤ 1 min → red
-  int32_t barW = (int32_t)((SW - 24) * secsLeft / secsTotal);
-  // Track
-  spr.fillRoundRect(12, 208, SW - 24, 14, 7, COL_CARD);
-  // Fill
-  if (barW > 0) spr.fillRoundRect(12, 208, barW, 14, 7, barCol);
-  // Countdown text
+  // ── Urgency countdown bar ────────────────────────────────────────────────────
+  uint16_t barCol = secsLeft > 120 ? COL_SUCCESS : secsLeft > 60 ? COL_WARNING : COL_ERROR;
+  int32_t barW = secsTotal > 0 ? (int32_t)((SW - 32) * secsLeft / secsTotal) : 0;
+  spr.fillRoundRect(16, 176, SW - 32, 8, 4, COL_CARD);
+  if (barW > 0) spr.fillRoundRect(16, 176, barW, 8, 4, barCol);
   spr.setFont(F_TINY); spr.setTextColor(barCol, COL_BG);
-  String ct = "Refreshes in " + String(secsLeft) + "s";
+  String ct = "This code expires in " + String(secsLeft) + "s";
   tw = spr.textWidth(ct);
-  spr.setCursor((SW - tw) / 2, 227); spr.print(ct);
+  spr.setCursor((SW - tw) / 2, 189); spr.print(ct);
 
-  // ── Student count card ───────────────────────────────────────────────────
-  card(spr, 8, 250, SW - 16, 46, COL_CARD, COL_BORDER, 10);
-  spr.setFont(F_MED); spr.setTextColor(COL_TEXT, COL_CARD);
-  String sc = String(studentsMarked);
-  tw = spr.textWidth(sc);
-  spr.setCursor((SW / 2) - tw - 4, 256); spr.print(sc);
-  spr.setFont(F_TINY); spr.setTextColor(COL_MUTED, COL_CARD);
-  spr.setCursor(SW / 2 + 4, 260); spr.print("students");
-  spr.setCursor(SW / 2 + 4, 274); spr.print("marked in");
+  // ── Stats row: Present | Current Time ───────────────────────────────────────
+  int32_t cw = (SW - 24) / 2;   // each half-card width
 
-  // ── Time ────────────────────────────────────────────────────────────────
+  // Present card (left)
+  card(spr, 8, 204, cw, 58, COL_CARD, COL_BORDER, 10);
+  spr.setFont(F_LARGE); spr.setTextColor(COL_SUCCESS, COL_CARD);
+  String ps = String(studentsMarked);
+  tw = spr.textWidth(ps);
+  spr.setCursor(8 + (cw - tw) / 2, 208); spr.print(ps);
+  spr.setFont(F_TINY); spr.setTextColor(COL_SUCCESS, COL_CARD);
+  spr.setCursor(8 + (cw - spr.textWidth("Present")) / 2, 249); spr.print("Present");
+
+  // Time card (right)
+  card(spr, 16 + cw, 204, cw, 58, COL_CARD, COL_BORDER, 10);
   time_t now = time(nullptr); struct tm tmNow; localtime_r(&now, &tmNow);
   char timeBuf[9]; strftime(timeBuf, sizeof(timeBuf), "%I:%M %p", &tmNow);
-  spr.setFont(F_TINY); spr.setTextColor(COL_MUTED, COL_BG);
+  spr.setFont(F_TINY); spr.setTextColor(COL_MUTED, COL_CARD);
+  spr.setCursor(16 + cw + (cw - spr.textWidth("Time")) / 2, 211); spr.print("Time");
+  spr.setFont(F_SMALL); spr.setTextColor(COL_TEXT, COL_CARD);
   tw = spr.textWidth(timeBuf);
-  spr.setCursor((SW - tw) / 2, 302); spr.print(timeBuf);
+  spr.setCursor(16 + cw + (cw - tw) / 2, 228); spr.print(timeBuf);
+
+  // ── Sync / SD status footer ──────────────────────────────────────────────────
+  spr.setFont(F_TINY); spr.setTextColor(COL_MUTED, COL_BG);
+  String syncStr = sdAvailable
+                 ? (sdRecordCount > 0 ? "SD: " + String(sdRecordCount) + " pending" : "SD: Ready")
+                 : "RAM buffer active";
+  tw = spr.textWidth(syncStr);
+  spr.setCursor((SW - tw) / 2, 274); spr.print(syncStr);
 
   spr.pushSprite(0, 0);
 }
