@@ -481,6 +481,52 @@ exports.unlinkDevice = async (req, res) => {
   }
 };
 
+// ─── ASSIGN DEVICE TO GROUP ───────────────────────────────────────────────────
+// Class rep, HOD, admin, or superadmin assigns the device to a student group.
+// Once assigned, lecturer authorization is derived automatically from
+// CourseLecturerAssignment — no manual lecturer list needed.
+exports.assignGroup = async (req, res) => {
+  try {
+    const ALLOWED = ['class_rep', 'hod', 'admin', 'superadmin'];
+    if (!ALLOWED.includes(req.user.role)) {
+      return res.status(403).json({ message: 'Only class reps, HODs, and admins can assign a device to a group.' });
+    }
+
+    const { department, level, group } = req.body;
+    if (!group || !level) {
+      return res.status(400).json({ message: 'group and level are required.' });
+    }
+
+    const device = await Device.findOne({ companyId: req.user.company });
+    if (!device) return res.status(404).json({ message: 'No device found for this institution.' });
+
+    device.assignedGroup      = group.trim().toUpperCase();
+    device.assignedLevel      = String(level).trim();
+    device.assignedDepartment = department ? department.trim() : device.assignedDepartment;
+    await device.save();
+
+    _auditDevice(req.user, AUDIT_ACTIONS.UPDATE, device, {
+      action: 'group_assigned',
+      assignedGroup: device.assignedGroup,
+      assignedLevel: device.assignedLevel,
+      assignedDepartment: device.assignedDepartment,
+    });
+
+    res.json({
+      success: true,
+      message: `Device assigned to Group ${device.assignedGroup}, Level ${device.assignedLevel}.`,
+      data: {
+        deviceId:           device.deviceId,
+        assignedGroup:      device.assignedGroup,
+        assignedLevel:      device.assignedLevel,
+        assignedDepartment: device.assignedDepartment,
+      },
+    });
+  } catch (err) {
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+};
+
 // ─── RENAME DEVICE ───────────────────────────────────────────────────────────
 exports.renameDevice = async (req, res) => {
   try {
