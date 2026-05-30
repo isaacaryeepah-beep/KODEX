@@ -31,6 +31,9 @@ router.post('/devices/transfer',          authenticate, deviceCtrl.transferDevic
 router.get('/devices/my/scan-wifi',    authenticate, companyIsolation, deviceCtrl.scanWifi);
 router.post('/devices/configure-wifi', authenticate, companyIsolation, deviceCtrl.configureWifi);
 
+// ─── ADMIN/HOD: LIST ALL INSTITUTION DEVICES ─────────────────────────────────
+router.get('/devices/all', authenticate, companyIsolation, requireRole('admin', 'superadmin', 'hod'), deviceCtrl.listAllDevices);
+
 // ─── ADMIN/HOD: ASSIGN DEVICE TO CLASS REP ───────────────────────────────────
 router.patch('/devices/:deviceId/assign-class-rep', authenticate, requireRole('admin', 'superadmin', 'hod'), deviceCtrl.assignClassRep);
 

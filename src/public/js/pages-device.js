@@ -1149,3 +1149,124 @@ function _devCSS() {
 .dev-pairing-code { animation: dev-code-in .2s ease; }
 `;
 }
+
+// ─── ADMIN / HOD — Devices Page ──────────────────────────────────────────────
+async function renderAdminDevices() {
+  const content = document.getElementById('main-content');
+  if (!content) return;
+
+  _injectDevStyles();
+
+  content.innerHTML = `
+    <div class="dev-page">
+      <div class="dev-page-header">
+        <div>
+          <h1 class="dev-page-title">Classroom Devices</h1>
+          <p class="dev-page-subtitle">Manage and provision ESP32 attendance devices for your institution</p>
+        </div>
+        <div class="dev-header-actions">
+          <button class="dev-btn dev-btn-primary" id="ad-gen-btn" onclick="adGenerateCode()">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Generate Pairing Code
+          </button>
+        </div>
+      </div>
+
+      <!-- Pairing code panel (hidden until generated) -->
+      <div id="ad-pair-panel" style="display:none;margin-bottom:20px">
+        <div class="dev-card" style="border-left:4px solid #6366f1">
+          <div style="font-size:13px;font-weight:700;color:#6366f1;margin-bottom:4px;text-transform:uppercase;letter-spacing:.5px">New Pairing Code</div>
+          <div style="font-size:11px;color:var(--text-secondary);margin-bottom:14px">Give this code to the Class Rep who will physically set up the device. Valid for 7 days.</div>
+          <div class="dev-pairing-code-box">
+            <div class="dev-pairing-code" id="ad-pair-code">——————</div>
+            <div class="dev-pairing-expires" id="ad-pair-expires"></div>
+          </div>
+          <div style="margin-top:12px;font-size:12px;color:var(--text-secondary)">
+            The rep connects to <strong>Dikly-XXXXXX</strong> WiFi on their phone → opens <strong>192.168.4.1</strong> → enters the institution code + this pairing code + school WiFi credentials.
+          </div>
+        </div>
+      </div>
+
+      <!-- Device list -->
+      <div id="ad-device-list"><div class="loading">Loading devices…</div></div>
+    </div>`;
+
+  await adLoadDevices();
+}
+
+async function adGenerateCode() {
+  const btn = document.getElementById('ad-gen-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Generating…'; }
+  try {
+    const data = await api('/api/devices/pairing-code', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('token') || ''), 'Content-Type': 'application/json' }
+    });
+    const panel   = document.getElementById('ad-pair-panel');
+    const codeEl  = document.getElementById('ad-pair-code');
+    const expEl   = document.getElementById('ad-pair-expires');
+    if (panel)  panel.style.display = 'block';
+    if (codeEl) { codeEl.textContent = data.code; codeEl.style.animation = 'none'; void codeEl.offsetWidth; codeEl.style.animation = ''; }
+    if (expEl && data.expiresAt) {
+      const d = new Date(data.expiresAt);
+      expEl.textContent = 'Expires ' + d.toLocaleDateString(undefined, { day:'numeric', month:'short', year:'numeric' });
+    }
+  } catch (e) {
+    alert('Failed to generate pairing code: ' + (e.message || 'Server error'));
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Generate Pairing Code'; }
+  }
+}
+
+async function adLoadDevices() {
+  const list = document.getElementById('ad-device-list');
+  if (!list) return;
+  try {
+    const data = await api('/api/devices/all');
+    const devices = data.devices || [];
+    if (!devices.length) {
+      list.innerHTML = `
+        <div class="dev-card" style="text-align:center;padding:40px 20px">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#cbd5e1" stroke-width="1.5" style="margin-bottom:12px"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
+          <div style="font-size:15px;font-weight:600;color:var(--text-secondary)">No devices paired yet</div>
+          <div style="font-size:13px;color:var(--text-secondary);margin-top:4px">Generate a pairing code above and have the Class Rep set up the first device.</div>
+        </div>`;
+      return;
+    }
+
+    list.innerHTML = `
+      <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-secondary);margin-bottom:10px">${devices.length} device${devices.length !== 1 ? 's' : ''} paired</div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        ${devices.map(d => {
+          const onlineDot = d.online
+            ? `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#22c55e;margin-right:5px"></span><span style="color:#22c55e;font-weight:600">Online</span>`
+            : `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#94a3b8;margin-right:5px"></span><span style="color:#94a3b8">Offline</span>`;
+          const last = d.lastHeartbeat
+            ? new Date(d.lastHeartbeat).toLocaleString(undefined, { day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' })
+            : 'Never';
+          const room  = [d.assignedLevel && 'Level ' + d.assignedLevel, d.assignedGroup && 'Group ' + d.assignedGroup, d.assignedRoom].filter(Boolean).join(' · ') || '—';
+          const dept  = d.assignedDepartment || '—';
+          const fw    = d.firmwareVersion || '—';
+          const ip    = d.localIp || '—';
+          return `
+            <div class="dev-card" style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+              <div style="flex:1;min-width:0">
+                <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px">
+                  <span style="font-size:15px;font-weight:700;color:var(--text-primary)">${d.deviceName}</span>
+                  <span style="font-size:12px">${onlineDot}</span>
+                </div>
+                <div style="font-size:12px;color:var(--text-secondary);display:flex;flex-wrap:wrap;gap:14px;margin-top:4px">
+                  <span>📍 ${room}</span>
+                  <span>🏛 ${dept}</span>
+                  <span>🌐 ${ip}</span>
+                  <span>⚙ fw ${fw}</span>
+                  <span>🕒 ${last}</span>
+                </div>
+              </div>
+            </div>`;
+        }).join('')}
+      </div>`;
+  } catch (e) {
+    list.innerHTML = `<div class="dev-card" style="border-left:4px solid var(--danger);font-size:13px;color:var(--danger)">Failed to load devices: ${e.message}</div>`;
+  }
+}

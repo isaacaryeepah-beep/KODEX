@@ -752,6 +752,53 @@ exports.assignClassRep = async (req, res) => {
 };
 
 // ─── GET AVAILABLE DEVICES FOR A COURSE ──────────────────────────────────────
+// ─── LIST ALL DEVICES (Admin / HOD) ──────────────────────────────────────────
+// GET /api/devices/all — returns every paired device in the institution.
+// HOD sees only devices whose assignedDepartment matches their department.
+exports.listAllDevices = async (req, res) => {
+  try {
+    const companyId = req.user.company;
+    const ALLOWED = ['admin', 'superadmin', 'hod'];
+    if (!ALLOWED.includes(req.user.role)) {
+      return res.status(403).json({ message: 'Not authorized.' });
+    }
+
+    const filter = { companyId };
+    if (req.user.role === 'hod' && req.user.department) {
+      filter.assignedDepartment = req.user.department;
+    }
+
+    const devices = await Device.find(filter)
+      .populate('pairedBy', 'name email role')
+      .sort({ createdAt: -1 })
+      .lean();
+
+    const now = Date.now();
+    const result = devices.map(d => ({
+      _id:                d._id,
+      deviceId:           d.deviceId,
+      deviceName:         d.deviceName,
+      assignedGroup:      d.assignedGroup,
+      assignedLevel:      d.assignedLevel,
+      assignedDepartment: d.assignedDepartment,
+      assignedRoom:       d.assignedRoom,
+      localIp:            d.localIp,
+      firmwareVersion:    d.firmwareVersion,
+      online: d.lastHeartbeat
+        ? (now - new Date(d.lastHeartbeat).getTime()) < 20000
+        : false,
+      lastHeartbeat: d.lastHeartbeat,
+      pairedBy:      d.pairedBy ? { name: d.pairedBy.name, role: d.pairedBy.role } : null,
+      createdAt:     d.createdAt,
+    }));
+
+    res.json({ success: true, devices: result });
+  } catch (err) {
+    console.error('[listAllDevices]', err);
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+};
+
 // GET /api/devices/available?courseId=xxx
 // Returns devices in this institution that serve the groups enrolled in the
 // given course. For lecturers: only returns devices they are authorized for

@@ -2643,6 +2643,7 @@ function buildSidebar() {
         links.push({ id: 'programmes', label: 'Programmes', icon: svgIcon('<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>') });
         links.push({ id: 'hod-unlock-students', label: 'Unlock Students', icon: svgIcon('<rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>') });
         links.push({ id: 'class-rep-mgmt',     label: 'Class Reps',      icon: svgIcon('<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/><polyline points="9 11 12 14 22 4"/>') });
+        links.push({ id: 'admin-devices',      label: 'Devices',         icon: svgIcon('<rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/>') });
       }
       if (currentUser.company?.mode === 'corporate') {
         links.push({ sep: true, label: 'WORKFORCE' });
@@ -2720,6 +2721,7 @@ function buildSidebar() {
       links.push({ id: 'approvals',           label: 'Approvals',        icon: approvalsIcon() });
       links.push({ id: 'hod-course-approvals',label: 'Course Approvals', icon: svgIcon('<path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>') });
       links.push({ id: 'hod-unlock-students', label: 'Locked Students',  icon: svgIcon('<rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>') });
+      links.push({ id: 'admin-devices',       label: 'Devices',          icon: svgIcon('<rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/>') });
       links.push({ id: 'class-rep-mgmt',     label: 'Class Reps',       icon: svgIcon('<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/><polyline points="9 11 12 14 22 4"/>') });
       links.push({ sep: true, label: 'SUPPORT' });
       links.push({ id: 'faq-center',       label: 'FAQ Center',     icon: svgIcon('<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>') });
@@ -2884,6 +2886,7 @@ function navigateTo(view) {
     case 'hod-students':         renderHodStudents(); break;
     case 'hod-reports':          renderHodReports(); break;
 
+    case 'admin-devices':        renderAdminDevices(); break;
     case 'hod-course-approvals': renderHodCourseApprovals(); break;
     case 'hod-unlock-students':  renderHodUnlockStudents(); break;
     case 'class-rep-mgmt':       renderClassRepMgmt(); break;
