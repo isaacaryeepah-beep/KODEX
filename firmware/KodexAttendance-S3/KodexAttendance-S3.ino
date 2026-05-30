@@ -604,14 +604,14 @@ static void drawSetup(const String& apName) {
   const int32_t CH  = 62;         // card height
   const int32_t CG  = 6;          // gap between cards
   const int32_t BCX = CX + 22;    // badge centre-x = 32
-  const int32_t BR  = 13;         // badge radius
+  const int32_t BRAD = 13;        // badge radius (BR conflicts with Xtensa specreg.h #define BR 4)
   const int32_t TX  = CX + 46;    // text left-x = 56
 
   int32_t cy = 63;
 
   // ── STEP 1 — Connect to Wi-Fi ────────────────────────────────────────────
   card(spr, CX, cy, CW, CH, COL_CARD, COL_BORDER, 10);
-  spr.fillCircle(BCX, cy + CH/2, BR, COL_PRIMARY);
+  spr.fillCircle(BCX, cy + CH/2, BRAD, COL_PRIMARY);
   spr.setTextFont(4); spr.setTextColor(COL_BG, COL_PRIMARY);
   tw = spr.textWidth("1"); spr.setCursor(BCX - tw/2, cy + CH/2 - 11); spr.print("1");
   spr.setTextFont(2); spr.setTextColor(COL_MUTED, COL_CARD);
@@ -622,7 +622,7 @@ static void drawSetup(const String& apName) {
 
   // ── STEP 2 — Open browser ────────────────────────────────────────────────
   card(spr, CX, cy, CW, CH, COL_CARD, COL_BORDER, 10);
-  spr.fillCircle(BCX, cy + CH/2, BR, COL_PRIMARY);
+  spr.fillCircle(BCX, cy + CH/2, BRAD, COL_PRIMARY);
   spr.setTextFont(4); spr.setTextColor(COL_BG, COL_PRIMARY);
   tw = spr.textWidth("2"); spr.setCursor(BCX - tw/2, cy + CH/2 - 11); spr.print("2");
   spr.setTextFont(2); spr.setTextColor(COL_MUTED, COL_CARD);
@@ -633,7 +633,7 @@ static void drawSetup(const String& apName) {
 
   // ── STEP 3 — Enter details (green badge = final step) ───────────────────
   card(spr, CX, cy, CW, CH, COL_CARD, COL_BORDER, 10);
-  spr.fillCircle(BCX, cy + CH/2, BR, COL_SUCCESS);
+  spr.fillCircle(BCX, cy + CH/2, BRAD, COL_SUCCESS);
   spr.setTextFont(4); spr.setTextColor(COL_BG, COL_SUCCESS);
   tw = spr.textWidth("3"); spr.setCursor(BCX - tw/2, cy + CH/2 - 11); spr.print("3");
   spr.setTextFont(2); spr.setTextColor(COL_MUTED, COL_CARD);
