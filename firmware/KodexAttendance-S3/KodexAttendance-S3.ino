@@ -29,7 +29,7 @@
  *    SDA: IO16   SCL: IO15   INT: IO17   RST: IO18
  *
  *  CODE ROTATION FORMULA (mirrors src/services/attendanceCodeService.js)
- *    slot   = floor(unixSeconds / 20)
+ *    slot   = floor(unixSeconds / 300)      // 5-minute window
  *    digest = HMAC-SHA256(seed, ascii(slot))
  *    code   = zero-pad(uint32(digest[0..3]) % 1_000_000, 6)
  * ─────────────────────────────────────────────────────────────────────────────

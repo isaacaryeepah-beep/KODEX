@@ -78,8 +78,8 @@ static const uint8_t  OLED_W = 128;
 static const uint8_t  OLED_H = 64;
 static const int8_t   OLED_RESET_PIN = -1;
 
-// Code rotation formula constants (must mirror backend).
-static const uint32_t WINDOW_SECONDS = 20;
+// Code rotation formula constants (must mirror backend WINDOW_SECONDS = 300).
+static const uint32_t WINDOW_SECONDS = 300;
 
 // ─── Globals ─────────────────────────────────────────────────────────────────
 Adafruit_SSD1306 oled(OLED_W, OLED_H, &Wire, OLED_RESET_PIN);
