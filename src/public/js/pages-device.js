@@ -882,6 +882,17 @@ async function renderAdminDevices() {
         </div>
       </div>
 
+      <!-- Institution code — always visible -->
+      <div class="dev-card" style="margin-bottom:20px;display:flex;align-items:center;gap:20px;flex-wrap:wrap">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-secondary);margin-bottom:4px">Institution Code</div>
+          <div style="font-size:22px;font-weight:800;font-family:monospace;letter-spacing:4px;color:var(--text-primary)" id="ad-inst-code">${(typeof currentUser !== 'undefined' && currentUser?.company?.institutionCode) || '——'}</div>
+        </div>
+        <div style="font-size:12px;color:var(--text-secondary);max-width:320px">
+          The Class Rep needs this code <em>and</em> a pairing code when setting up the device. Keep it confidential.
+        </div>
+      </div>
+
       <!-- Pairing code panel (hidden until generated) -->
       <div id="ad-pair-panel" style="display:none;margin-bottom:20px">
         <div class="dev-card" style="border-left:4px solid #6366f1">
@@ -891,8 +902,18 @@ async function renderAdminDevices() {
             <div class="dev-pairing-code" id="ad-pair-code">——————</div>
             <div class="dev-pairing-expires" id="ad-pair-expires"></div>
           </div>
+          <div style="margin-top:14px;display:flex;gap:16px;flex-wrap:wrap">
+            <div style="flex:1;min-width:140px">
+              <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-secondary);margin-bottom:4px">Institution Code</div>
+              <div style="font-size:16px;font-weight:800;font-family:monospace;letter-spacing:3px;color:var(--text-primary)" id="ad-inst-code-2">${(typeof currentUser !== 'undefined' && currentUser?.company?.institutionCode) || '——'}</div>
+            </div>
+            <div style="flex:1;min-width:140px">
+              <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-secondary);margin-bottom:4px">Pairing Code</div>
+              <div style="font-size:16px;font-weight:800;font-family:monospace;letter-spacing:3px;color:#6366f1" id="ad-pair-code-2">——————</div>
+            </div>
+          </div>
           <div style="margin-top:12px;font-size:12px;color:var(--text-secondary)">
-            The rep connects to <strong>Dikly-XXXXXX</strong> WiFi on their phone → opens <strong>192.168.4.1</strong> → enters the institution code + this pairing code + school WiFi credentials.
+            Rep connects to <strong>Dikly-XXXXXX</strong> WiFi → opens <strong>192.168.4.1</strong> → enters both codes above + school WiFi credentials.
           </div>
         </div>
       </div>
@@ -915,8 +936,10 @@ async function adGenerateCode() {
     const panel   = document.getElementById('ad-pair-panel');
     const codeEl  = document.getElementById('ad-pair-code');
     const expEl   = document.getElementById('ad-pair-expires');
-    if (panel)  panel.style.display = 'block';
-    if (codeEl) { codeEl.textContent = data.code; codeEl.style.animation = 'none'; void codeEl.offsetWidth; codeEl.style.animation = ''; }
+    const codeEl2 = document.getElementById('ad-pair-code-2');
+    if (panel)   panel.style.display = 'block';
+    if (codeEl)  { codeEl.textContent = data.code; codeEl.style.animation = 'none'; void codeEl.offsetWidth; codeEl.style.animation = ''; }
+    if (codeEl2) codeEl2.textContent = data.code;
     if (expEl && data.expiresAt) {
       const d = new Date(data.expiresAt);
       expEl.textContent = 'Expires ' + d.toLocaleDateString(undefined, { day:'numeric', month:'short', year:'numeric' });
