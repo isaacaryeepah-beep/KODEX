@@ -5,9 +5,10 @@
  * Controllers are thin wrappers — logic lives here.
  */
 
-const Course        = require('../models/Course');
-const User          = require('../models/User');
-const StudentRoster = require('../models/StudentRoster');
+const Course                   = require('../models/Course');
+const User                     = require('../models/User');
+const StudentRoster            = require('../models/StudentRoster');
+const CourseLecturerAssignment = require('../models/CourseLecturerAssignment');
 
 // ─── Create ───────────────────────────────────────────────────────────────────
 async function createCourse(data, creatorId, companyId) {
@@ -108,7 +109,17 @@ async function listCourses(userRole, userId, companyId, queryParams, userDepartm
 
   // Role scoping
   if (userRole === 'lecturer') {
-    query.lecturerId = userId;
+    // Include courses where this lecturer is primary (legacy field) OR
+    // has an active CourseLecturerAssignment (secondary/guest).
+    const assignments = await CourseLecturerAssignment.find(
+      { company: companyId, lecturer: userId, status: 'active' },
+      { course: 1 }
+    ).lean();
+    const assignedIds = assignments.map(a => a.course);
+    query.$or = [
+      { lecturerId: userId },
+      { _id: { $in: assignedIds } },
+    ];
   } else if (userRole === 'student') {
     query.enrolledStudents = userId;
   } else if (userRole === 'hod') {

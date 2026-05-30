@@ -26,25 +26,21 @@ function _auditDevice(actor, action, device, meta = {}, req = null) {
 }
 
 // ─── GENERATE PAIRING CODE ───────────────────────────────────────────────────
-// Lecturer calls this to get a one-time 6-char code the ESP32 uses to claim
-// ownership. Code is hashed server-side; expires after 5 minutes.
+// Any authorized role calls this to get a one-time 6-char code the ESP32 uses
+// to pair with the institution. Code is hashed server-side; expires after 7 days.
 exports.generatePairingCode = async (req, res) => {
   try {
-    if (req.user.role !== 'lecturer' && !['admin','superadmin'].includes(req.user.role)) {
-      return res.status(403).json({ message: 'Only lecturers can generate pairing codes.' });
-    }
-
-    // Block if they already own a device
-    const existing = await Device.findOne({ lecturerId: req.user._id });
-    if (existing) {
-      return res.status(400).json({ message: 'You already have a linked device. Unlink it before pairing a new one.' });
+    const PAIRING_ROLES = ['lecturer', 'class_rep', 'hod', 'admin', 'superadmin'];
+    if (!PAIRING_ROLES.includes(req.user.role)) {
+      return res.status(403).json({ message: 'Not authorized to generate pairing codes.' });
     }
 
     // Generate readable 6-char code (uppercase A-Z + 0-9, avoid ambiguous chars)
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
     const code = Array.from({ length: 6 }, () => chars[crypto.randomInt(chars.length)]).join('');
     const hash = crypto.createHash('sha256').update(code).digest('hex');
-    const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
+    // Code stays valid for 7 days — lecturer generates once, pairs device at leisure.
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 
     await User.findByIdAndUpdate(req.user._id, {
       devicePairingCode:   hash,
@@ -67,23 +63,21 @@ exports.pairDevice = async (req, res) => {
       return res.status(400).json({ message: 'pairingCode, deviceId, and institutionCode are required.' });
     }
 
-    // Find company by institution code
     const Company = require('../models/Company');
     const company = await Company.findOne({ institutionCode: institutionCode.trim().toUpperCase() });
     if (!company) return res.status(404).json({ message: 'Institution not found.' });
 
-    // Find lecturer with matching pairing code hash, within same company, not expired
     const hash = crypto.createHash('sha256').update(pairingCode.trim().toUpperCase()).digest('hex');
     const now = new Date();
-    const lecturer = await User.findOne({
+    const PAIRING_ROLES = ['lecturer', 'class_rep', 'hod', 'admin', 'superadmin'];
+    const pairer = await User.findOne({
       company: company._id,
-      role: { $in: ['lecturer'] },
+      role: { $in: PAIRING_ROLES },
       devicePairingCode: hash,
       devicePairingExpiry: { $gt: now },
     }).select('+devicePairingCode');
 
-    if (!lecturer) {
-      // Log failed attempt (no actor — device not yet authenticated)
+    if (!pairer) {
       AuditLog.record({
         company: company._id,
         actor: null,
@@ -97,42 +91,36 @@ exports.pairDevice = async (req, res) => {
       return res.status(403).json({ message: 'Invalid or expired pairing code.' });
     }
 
-    // Block if device already claimed by another lecturer
+    // Device already paired — if same deviceId exists, re-issue token
     const devExists = await Device.findOne({ deviceId });
     if (devExists) {
-      if (devExists.lecturerId.toString() !== lecturer._id.toString()) {
-        return res.status(409).json({ message: 'This device is already linked to another lecturer.' });
+      if (devExists.companyId.toString() !== company._id.toString()) {
+        return res.status(409).json({ message: 'This device is registered to a different institution.' });
       }
-      // Same lecturer re-pairing — update token and clear code
-      await User.findByIdAndUpdate(lecturer._id, { devicePairingCode: null, devicePairingExpiry: null });
-      return res.json({ success: true, message: 'Device already linked to you.', token: devExists.token });
+      // Allow re-pairing (e.g. firmware reflash) — clear code and return existing token
+      await User.findByIdAndUpdate(pairer._id, { devicePairingCode: null, devicePairingExpiry: null });
+      return res.json({ success: true, message: 'Device already linked to this institution.', token: devExists.token, deviceId: devExists.deviceId });
     }
 
-    // Block if lecturer already owns a different device
-    const lecturerDev = await Device.findOne({ lecturerId: lecturer._id });
-    if (lecturerDev) {
-      return res.status(400).json({ message: 'Lecturer already owns a device. Unlink it first.' });
-    }
-
-    // Create device and clear pairing code (one-time use)
-    const token = jwt.sign({ deviceId, lecturerId: lecturer._id, companyId: company._id }, process.env.JWT_SECRET, { expiresIn: '10y' });
+    // New device — institution-owned, not tied to a specific lecturer
+    const token = jwt.sign({ deviceId, companyId: company._id }, process.env.JWT_SECRET, { expiresIn: '10y' });
     const device = await Device.create({
       deviceId,
       deviceName: deviceName || `Device-${deviceId.slice(-6).toUpperCase()}`,
       companyId: company._id,
-      lecturerId: lecturer._id,
+      lecturerId: pairer._id,   // audit: who did the pairing
       apSSID: `DIKLY-${deviceId.slice(-6).toUpperCase()}`,
       token,
-      ownershipType: 'dedicated',
-      isTransferable: false,
+      ownershipType: 'shared',
+      isTransferable: true,
     });
 
-    await User.findByIdAndUpdate(lecturer._id, { devicePairingCode: null, devicePairingExpiry: null });
+    await User.findByIdAndUpdate(pairer._id, { devicePairingCode: null, devicePairingExpiry: null });
 
-    _auditDevice(lecturer, AUDIT_ACTIONS.CREATE, device, { action: 'device_paired_via_code', deviceId });
+    _auditDevice(pairer, AUDIT_ACTIONS.CREATE, device, { action: 'device_paired_via_code', deviceId });
     res.status(201).json({ success: true, message: 'Device paired successfully.', token, deviceId: device.deviceId });
   } catch (err) {
-    if (err.code === 11000) return res.status(409).json({ message: 'Device or lecturer already has a device registered.' });
+    if (err.code === 11000) return res.status(409).json({ message: 'Device already has a device registered.' });
     res.status(500).json({ message: 'Server error', error: err.message });
   }
 };
@@ -379,26 +367,16 @@ async function _markStaleOffline(device) {
 }
 
 // ─── GET MY DEVICE ────────────────────────────────────────────────────────────
-// Returns the device owned by the authenticated lecturer (lecturer-only).
+// Returns the institution's device for any authorized role.
 exports.getMyDevice = async (req, res) => {
   try {
-    const isAdmin = ['admin', 'superadmin'].includes(req.user.role);
-
-    let query;
-    if (isAdmin) {
-      query = { companyId: req.user.company };
-    } else {
-      // Dedicated device OR shared device currently connected to this lecturer
-      query = {
-        companyId: req.user.company,
-        $or: [
-          { lecturerId: req.user._id },
-          { activeLecturerId: req.user._id, ownershipType: 'shared' },
-        ],
-      };
+    const ALLOWED_ROLES = ['lecturer', 'class_rep', 'hod', 'admin', 'superadmin'];
+    if (!ALLOWED_ROLES.includes(req.user.role)) {
+      return res.status(403).json({ message: 'Not authorized.' });
     }
 
-    let device = await Device.findOne(query).populate('lecturerId', 'name email');
+    let device = await Device.findOne({ companyId: req.user.company })
+      .populate('lecturerId', 'name email');
     if (!device) return res.json({ success: true, data: null });
 
     device = await _markStaleOffline(device);
@@ -412,7 +390,7 @@ exports.getMyDevice = async (req, res) => {
       data: {
         deviceId:           device.deviceId,
         deviceName:         device.deviceName,
-        owner:              device.lecturerId,
+        pairedBy:           device.lecturerId,
         status:             device.isOnline ? 'online' : 'offline',
         mode:               device.mode,
         currentNetwork:     device.currentNetwork,
@@ -442,8 +420,12 @@ exports.getDeviceStatus = async (req, res) => {
       .populate('lecturerId', 'name email');
     if (!device) return res.status(404).json({ message: 'Device not found' });
 
-    // Ownership: only the owning lecturer (or admin) may view device details
-    if (!isAdmin && device.lecturerId._id.toString() !== req.user._id.toString()) {
+    // Ownership: admin sees all; shared devices visible to any company member;
+    // dedicated devices visible only to the owning lecturer.
+    const canView = isAdmin
+      || device.ownershipType === 'shared'
+      || device.lecturerId?._id?.toString() === req.user._id.toString();
+    if (!canView) {
       return res.status(403).json({ message: 'You do not own this device.' });
     }
 
@@ -477,12 +459,12 @@ exports.getDeviceStatus = async (req, res) => {
 };
 
 // ─── UNLINK DEVICE ───────────────────────────────────────────────────────────
-// Only the owning lecturer (or admin) may unlink their device.
+// Admin, HOD, or superadmin can unlink the institution's device.
 // Blocked if an active attendance session is running.
 exports.unlinkDevice = async (req, res) => {
   try {
-    const isAdmin = ['admin', 'superadmin'].includes(req.user.role);
-    const query = isAdmin
+    const isPrivileged = ['admin', 'superadmin', 'hod'].includes(req.user.role);
+    const query = isPrivileged
       ? { companyId: req.user.company, ...(req.body.deviceId ? { deviceId: req.body.deviceId } : {}) }
       : { lecturerId: req.user._id, companyId: req.user.company };
 
@@ -498,6 +480,55 @@ exports.unlinkDevice = async (req, res) => {
     _auditDevice(req.user, AUDIT_ACTIONS.DELETE, device, { action: 'device_unlinked' }, req);
     await Device.deleteOne({ _id: device._id });
     res.json({ success: true, message: 'Device unlinked successfully.' });
+  } catch (err) {
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+};
+
+// ─── ASSIGN DEVICE TO GROUP ───────────────────────────────────────────────────
+// Class rep, HOD, admin, or superadmin assigns the device to a student group.
+// Once assigned, lecturer authorization is derived automatically from
+// CourseLecturerAssignment — no manual lecturer list needed.
+exports.assignGroup = async (req, res) => {
+  try {
+    const ALLOWED = ['class_rep', 'hod', 'admin', 'superadmin'];
+    if (!ALLOWED.includes(req.user.role)) {
+      return res.status(403).json({ message: 'Only class reps, HODs, and admins can assign a device to a group.' });
+    }
+
+    const { deviceId, department, level, group } = req.body;
+    if (!deviceId) {
+      return res.status(400).json({ message: 'deviceId is required.' });
+    }
+    if (!group || !level) {
+      return res.status(400).json({ message: 'group and level are required.' });
+    }
+
+    const device = await Device.findOne({ deviceId, companyId: req.user.company });
+    if (!device) return res.status(404).json({ message: 'Device not found.' });
+
+    device.assignedGroup      = group.trim().toUpperCase();
+    device.assignedLevel      = String(level).trim();
+    device.assignedDepartment = department ? department.trim() : device.assignedDepartment;
+    await device.save();
+
+    _auditDevice(req.user, AUDIT_ACTIONS.UPDATE, device, {
+      action: 'group_assigned',
+      assignedGroup: device.assignedGroup,
+      assignedLevel: device.assignedLevel,
+      assignedDepartment: device.assignedDepartment,
+    });
+
+    res.json({
+      success: true,
+      message: `Device assigned to Group ${device.assignedGroup}, Level ${device.assignedLevel}.`,
+      data: {
+        deviceId:           device.deviceId,
+        assignedGroup:      device.assignedGroup,
+        assignedLevel:      device.assignedLevel,
+        assignedDepartment: device.assignedDepartment,
+      },
+    });
   } catch (err) {
     res.status(500).json({ message: 'Server error', error: err.message });
   }
@@ -718,6 +749,151 @@ exports.assignClassRep = async (req, res) => {
     await device.save({ validateModifiedOnly: true });
     res.json({ ok: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
+};
+
+// ─── GET AVAILABLE DEVICES FOR A COURSE ──────────────────────────────────────
+// ─── LIST ALL DEVICES (Admin / HOD) ──────────────────────────────────────────
+// GET /api/devices/all — returns every paired device in the institution.
+// HOD sees only devices whose assignedDepartment matches their department.
+exports.listAllDevices = async (req, res) => {
+  try {
+    const companyId = req.user.company;
+    const ALLOWED = ['admin', 'superadmin', 'hod'];
+    if (!ALLOWED.includes(req.user.role)) {
+      return res.status(403).json({ message: 'Not authorized.' });
+    }
+
+    const filter = { companyId };
+    if (req.user.role === 'hod' && req.user.department) {
+      filter.assignedDepartment = req.user.department;
+    }
+
+    const devices = await Device.find(filter)
+      .populate('pairedBy', 'name email role')
+      .sort({ createdAt: -1 })
+      .lean();
+
+    const now = Date.now();
+    const result = devices.map(d => ({
+      _id:                d._id,
+      deviceId:           d.deviceId,
+      deviceName:         d.deviceName,
+      assignedGroup:      d.assignedGroup,
+      assignedLevel:      d.assignedLevel,
+      assignedDepartment: d.assignedDepartment,
+      assignedRoom:       d.assignedRoom,
+      localIp:            d.localIp,
+      firmwareVersion:    d.firmwareVersion,
+      online: d.lastHeartbeat
+        ? (now - new Date(d.lastHeartbeat).getTime()) < 20000
+        : false,
+      lastHeartbeat: d.lastHeartbeat,
+      pairedBy:      d.pairedBy ? { name: d.pairedBy.name, role: d.pairedBy.role } : null,
+      createdAt:     d.createdAt,
+    }));
+
+    res.json({ success: true, devices: result });
+  } catch (err) {
+    console.error('[listAllDevices]', err);
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+};
+
+// GET /api/devices/available?courseId=xxx
+// Returns devices in this institution that serve the groups enrolled in the
+// given course. For lecturers: only returns devices they are authorized for
+// (i.e. they must be assigned to the course). For admin/HOD: returns all
+// company devices with their online status.
+exports.getAvailableDevices = async (req, res) => {
+  try {
+    const companyId = req.user.company;
+    const { courseId } = req.query;
+
+    if (!courseId) {
+      return res.status(400).json({ message: 'courseId is required.' });
+    }
+
+    const mongoose = require('mongoose');
+    if (!mongoose.Types.ObjectId.isValid(courseId)) {
+      return res.status(400).json({ message: 'Invalid courseId.' });
+    }
+
+    const Course = require('../models/Course');
+
+    // Verify course exists in this company
+    const course = await Course.findOne({ _id: courseId, companyId });
+    if (!course) {
+      return res.status(404).json({ message: 'Course not found.' });
+    }
+
+    // Lecturers must be assigned to the course
+    const BYPASS_ROLES = ['admin', 'superadmin', 'hod'];
+    if (!BYPASS_ROLES.includes(req.user.role)) {
+      const CourseLecturerAssignment = require('../models/CourseLecturerAssignment');
+      const isLegacyOwner = course.lecturerId?.toString() === req.user._id.toString();
+      if (!isLegacyOwner) {
+        const assignment = await CourseLecturerAssignment.findActiveAssignment(
+          companyId, course._id, req.user._id
+        );
+        if (!assignment) {
+          return res.status(403).json({ message: 'You are not assigned to teach this course.' });
+        }
+      }
+    }
+
+    // Find groups enrolled in this course via StudentCourseEnrollment snapshots
+    const StudentCourseEnrollment = require('../models/StudentCourseEnrollment');
+    const enrollments = await StudentCourseEnrollment.find(
+      { course: courseId, company: companyId, status: 'active' },
+      { 'academicSnapshot.group': 1, 'academicSnapshot.level': 1, 'academicSnapshot.department': 1 }
+    ).lean();
+
+    // Collect unique group/level combos from enrollment snapshots
+    const groupSet = new Map();
+    for (const e of enrollments) {
+      const g = e.academicSnapshot?.group;
+      const l = e.academicSnapshot?.level;
+      if (g && l) {
+        const key = `${String(l).trim()}::${g.trim().toUpperCase()}`;
+        if (!groupSet.has(key)) groupSet.set(key, { level: String(l).trim(), group: g.trim().toUpperCase() });
+      }
+    }
+
+    let devices;
+    if (groupSet.size > 0) {
+      // Build OR query matching any of the group/level combos
+      const groupConditions = Array.from(groupSet.values()).map(({ level, group }) => ({
+        assignedLevel: level,
+        assignedGroup: group,
+      }));
+      devices = await Device.find({
+        companyId,
+        $or: groupConditions,
+      }).lean();
+    } else {
+      // No enrollment snapshots — fall back to all company devices
+      devices = await Device.find({ companyId }).lean();
+    }
+
+    const now = Date.now();
+    const result = devices.map(d => ({
+      deviceId:           d.deviceId,
+      deviceName:         d.deviceName,
+      assignedGroup:      d.assignedGroup,
+      assignedLevel:      d.assignedLevel,
+      assignedDepartment: d.assignedDepartment,
+      assignedRoom:       d.assignedRoom,
+      online: d.lastHeartbeat
+        ? (now - new Date(d.lastHeartbeat).getTime()) < 20000
+        : false,
+      lastHeartbeat: d.lastHeartbeat,
+    }));
+
+    res.json({ success: true, devices: result });
+  } catch (err) {
+    console.error('[getAvailableDevices]', err);
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
 };
 
 // ─── SUPERADMIN TRANSFER (only way to reassign a device) ─────────────────────

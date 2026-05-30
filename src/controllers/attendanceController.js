@@ -11,18 +11,40 @@ const Device  = require("../models/Device");
 const DEVICE_ONLINE_WINDOW_MS = 20_000;   // session start gate
 const DEVICE_MARK_WINDOW_MS   = 15_000;   // mark-attendance gate
 
-// Returns the lecturer's paired ESP32 device + online state, or null if no
-// device is paired. Admins/managers/superadmins fall back to the freshest
-// online device in the company.
-async function _resolveSessionDevice(user) {
-  if (user.role === 'lecturer') {
-    // First: check if lecturer has a dedicated device
-    const dedicated = await Device.findOne({ lecturerId: user._id, companyId: user.company, ownershipType: 'dedicated' });
-    if (dedicated) return dedicated;
-    // Second: check if a shared device is currently connected to this lecturer
-    return await Device.findOne({ activeLecturerId: user._id, companyId: user.company, ownershipType: 'shared' });
+// Finds the device that should handle a session for the given user + course.
+// Priority:
+//   1. Device assigned to the group enrolled in this course (new group model)
+//   2. Any online company device (fallback for admins or unassigned devices)
+async function _resolveSessionDevice(user, courseId, explicitDeviceId) {
+  const companyId = user.company;
+
+  // If the caller explicitly picked a device, use it directly
+  if (explicitDeviceId) {
+    return Device.findOne({ deviceId: explicitDeviceId, companyId });
   }
-  return await Device.findOne({ companyId: user.company }).sort({ lastHeartbeat: -1 });
+
+  // Try to find the device assigned to the group for this course
+  if (courseId) {
+    const StudentCourseEnrollment = require('../models/StudentCourseEnrollment');
+    // Sample one active enrollment to get the group snapshot
+    const enrollment = await StudentCourseEnrollment.findOne({
+      course:  courseId,
+      company: companyId,
+      status:  'active',
+    }).lean();
+
+    if (enrollment?.academicSnapshot?.group && enrollment?.academicSnapshot?.level) {
+      const grouped = await Device.findOne({
+        companyId,
+        assignedGroup: enrollment.academicSnapshot.group,
+        assignedLevel: String(enrollment.academicSnapshot.level),
+      });
+      if (grouped) return grouped;
+    }
+  }
+
+  // Fallback — return freshest device in the company
+  return Device.findOne({ companyId }).sort({ lastHeartbeat: -1 });
 }
 
 function _deviceFreshness(device, windowMs = DEVICE_ONLINE_WINDOW_MS) {
@@ -50,7 +72,7 @@ exports.startSession = async (req, res) => {
     // The lecturer's paired ESP32 must be powered on and actively sending
     // heartbeats before any attendance session can start. The Device model
     // is the single source of truth — there is no "company-level" device.
-    const device  = await _resolveSessionDevice(req.user);
+    const device  = await _resolveSessionDevice(req.user, req.body.courseId, req.body.deviceId || null);
     const freshness = _deviceFreshness(device, DEVICE_ONLINE_WINDOW_MS);
 
     console.log(`[SESSION START] company=${company.name} deviceRegistered=${!!device} deviceOnline=${freshness.online} secondsAgo=${freshness.secondsAgo}`);
@@ -106,14 +128,28 @@ exports.startSession = async (req, res) => {
     }
 
     const Course = require("../models/Course");
-    // Course model uses 'companyId' (not 'company') and 'lecturerId' (not 'lecturer')
-    const courseQuery = { _id: req.body.courseId, companyId };
-    if (req.user.role === "lecturer") {
-      courseQuery.lecturerId = req.user._id;
-    }
-    const course = await Course.findOne(courseQuery);
+    const CourseLecturerAssignment = require('../models/CourseLecturerAssignment');
+
+    const course = await Course.findOne({ _id: req.body.courseId, companyId });
     if (!course) {
-      return res.status(400).json({ error: "Course not found or you don't have access to it" });
+      return res.status(400).json({ error: "Course not found." });
+    }
+
+    // Authorization check for lecturers:
+    // Accept if (a) they are the course's legacy primary lecturer, OR
+    // (b) they have an active CourseLecturerAssignment for this course.
+    // HOD, admin, superadmin bypass this check.
+    if (req.user.role === 'lecturer') {
+      const isLegacyOwner = course.lecturerId?.toString() === req.user._id.toString();
+      const assignment = isLegacyOwner
+        ? true
+        : await CourseLecturerAssignment.findActiveAssignment(companyId, course._id, req.user._id);
+      if (!assignment) {
+        return res.status(403).json({
+          error: "You are not assigned to teach this course.",
+          message: "Ask your admin or HOD to assign you to this course via the Course Management page.",
+        });
+      }
     }
 
     // Block sessions on unapproved courses

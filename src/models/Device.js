@@ -44,6 +44,10 @@ const deviceSchema = new mongoose.Schema({
   assignedRoom:       { type: String, default: null },
   assignedDepartment: { type: String, default: null },
 
+  // Group this device serves — drives automatic lecturer authorization
+  assignedGroup:  { type: String, trim: true, default: null }, // e.g. "A", "B", "C"
+  assignedLevel:  { type: String, trim: true, default: null }, // e.g. "100", "200", "300"
+
   // Meta
   isActive:    { type: Boolean, default: true },
   registeredAt: { type: Date, default: Date.now },
@@ -67,10 +71,10 @@ const deviceSchema = new mongoose.Schema({
 
 }, { timestamps: true });
 
-// Auto-compute online status based on heartbeat threshold (10s)
+// Auto-compute online status based on heartbeat threshold (20s, matches HEARTBEAT_OFFLINE_MS)
 deviceSchema.virtual('isOnline').get(function () {
   if (!this.lastHeartbeat) return false;
-  return (Date.now() - this.lastHeartbeat.getTime()) < 10000;
+  return (Date.now() - this.lastHeartbeat.getTime()) < 20000;
 });
 
 deviceSchema.set('toJSON',   { virtuals: true });
@@ -82,5 +86,6 @@ deviceSchema.set('toObject', { virtuals: true });
 deviceSchema.index({ companyId: 1 });
 deviceSchema.index({ classRepId: 1 }, { sparse: true });
 deviceSchema.index({ activeLecturerId: 1 }, { sparse: true });
+deviceSchema.index({ companyId: 1, assignedGroup: 1, assignedLevel: 1, assignedDepartment: 1 });
 
 module.exports = mongoose.model('Device', deviceSchema);

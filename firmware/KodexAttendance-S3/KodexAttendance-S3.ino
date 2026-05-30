@@ -8,7 +8,7 @@
  *  ─────────────
  *  • On first boot, runs a captive-portal AP "Dikly-XXXXXX". Open
  *    192.168.4.1 on your phone, enter institution code + pairing code
- *    from the lecturer portal, and your school WiFi credentials.
+ *    from the admin portal, and your school WiFi credentials.
  *  • Calls POST /api/devices/pair → saves a long-lived device JWT in NVS.
  *  • Sends heartbeats every 5 s → receives active session info.
  *  • Derives the rotating 6-digit attendance code locally using HMAC-SHA256
@@ -17,22 +17,16 @@
  *      SPLASH → SETUP → CONNECTING → READY (idle) → SESSION (code display)
  *
  *  REQUIRED LIBRARIES (Arduino IDE → Library Manager)
- *    TFT_eSPI        — colour display driver (Bodmer)
+ *    LovyanGFX       — colour display driver (lovyan03)
  *    ArduinoJson     — JSON (≥ 7.0)
  *  Built into ESP32 core: WiFi, HTTPClient, WebServer, DNSServer,
  *                         Preferences, mbedtls, SD
  *
- *  SD CARD (built-in on ES3C28P)
- *    Shares the FSPI bus with the display (MOSI=11, MISO=13, SCLK=12).
- *    SD_CS_PIN is the chip-select for the SD slot — verify GPIO 39 against
- *    your board's silkscreen or schematic and adjust if different.
+ *  SD CARD (SDIO bus on ES3C28P)
+ *    CLK=IO38  CMD=IO40  DATA0-3=IO39/41/48/47
  *
- *  TOUCH CONTROLLER (FT6336 / FT6X36 via I2C)
- *    I2C SDA: GPIO 4   I2C SCL: GPIO 5
- *    Touch INT: GPIO 7   Touch RST: GPIO 6
- *    Adjust TOUCH_SDA/SCL/INT/RST below if your board differs.
- *
- *  USER_SETUP_LOADED defined in User_Setup.h alongside this file.
+ *  TOUCH CONTROLLER (FT6336G capacitive, I2C)
+ *    SDA: IO16   SCL: IO15   INT: IO17   RST: IO18
  *
  *  CODE ROTATION FORMULA (mirrors src/services/attendanceCodeService.js)
  *    slot   = floor(unixSeconds / 300)      // 5-minute window
@@ -47,8 +41,41 @@
 #include <FS.h>
 using namespace fs;
 
-#include "User_Setup.h"
-#include <TFT_eSPI.h>
+// ─── Display driver — LovyanGFX ──────────────────────────────────────────────
+#define LGFX_USE_V1
+#include <LovyanGFX.hpp>
+
+class LGFX : public lgfx::LGFX_Device {
+  lgfx::Panel_ILI9341 _panel;
+  lgfx::Bus_SPI       _bus;
+  lgfx::Light_PWM     _light;
+public:
+  LGFX() {
+    { auto cfg = _bus.config();
+      cfg.spi_host    = SPI2_HOST;   // FSPI — correct for MOSI=11, MISO=13, SCLK=12
+      cfg.spi_mode    = 0;
+      cfg.freq_write  = 40000000;
+      cfg.freq_read   = 16000000;
+      cfg.pin_sclk    = 12;
+      cfg.pin_mosi    = 11;
+      cfg.pin_miso    = 13;
+      cfg.pin_dc      = 46;
+      cfg.dma_channel = SPI_DMA_CH_AUTO;
+      _bus.config(cfg); _panel.setBus(&_bus); }
+    { auto cfg = _panel.config();
+      cfg.pin_cs      = 10;
+      cfg.pin_rst     = -1;
+      cfg.invert      = true;   // ES3C28P ILI9341 requires colour inversion
+      cfg.memory_width  = 240; cfg.memory_height = 320;
+      cfg.panel_width   = 240; cfg.panel_height  = 320;
+      _panel.config(cfg); }
+    { auto cfg = _light.config();
+      cfg.pin_bl = 45; cfg.invert = false;
+      _light.config(cfg); _panel.setLight(&_light); }
+    setPanel(&_panel);
+  }
+};
+
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
 #include <WebServer.h>
@@ -60,7 +87,7 @@ using namespace fs;
 #include <mbedtls/md.h>
 #include <ArduinoJson.h>
 #include <SPI.h>
-#include <SD.h>
+#include <SD_MMC.h>   // SDIO driver — separate peripheral from SPI, no bus conflict
 
 // Forward declarations
 static void startWifiReconfigPortal();
@@ -68,17 +95,16 @@ static void startWifiReconfigPortal();
 // ─── Pin / Hardware Config ───────────────────────────────────────────────────
 // Confirmed from board silkscreen (Shenzhen Hong Shu Yuan ES3C28P):
 //   I2C header: IO15 = SCL, IO16 = SDA
-// Touch INT/RST: typical for this board family — adjust if touch is unresponsive.
 static const uint8_t TOUCH_SDA  = 16;
 static const uint8_t TOUCH_SCL  = 15;
-static const uint8_t TOUCH_INT  = 7;
-static const uint8_t TOUCH_RST  = 6;
-static const uint8_t LED_PIN    = 2;   // status LED (if present on your board)
+static const uint8_t TOUCH_INT  = 17;
+static const uint8_t TOUCH_RST  = 18;
+static const uint8_t LED_PIN    = 42;  // single-wire RGB LED on IO42
 static const uint8_t FT6X36_ADDR = 0x38;
 
-// SD card — shares FSPI bus with display; only needs its own CS pin.
-// GPIO 38 is the typical SD CS for this board family (Shenzhen Hong Shu Yuan ES3C28P).
-static const uint8_t SD_CS_PIN = 38;
+// SD card — SDIO bus (independent from FSPI/display, no conflict)
+static const uint8_t SD_CLK = 38, SD_CMD = 40, SD_D0 = 39;
+static const uint8_t SD_D1  = 41, SD_D2  = 48, SD_D3 = 47;
 
 // ─── App Config ──────────────────────────────────────────────────────────────
 static const char*   FIRMWARE_VERSION     = "s3-2.1.0";
@@ -87,27 +113,82 @@ static const uint32_t HEARTBEAT_MS        = 5000;
 static const uint32_t WIFI_TIMEOUT_MS     = 30000;
 static const uint32_t WINDOW_SECONDS      = 300;  // code rotation period (5 minutes)
 
+// ─── Theme selector ──────────────────────────────────────────────────────────
+// Change THEME to switch the whole UI colour scheme without touching anything else.
+//   1 = Indigo  — dark navy background, indigo/violet accents  (default)
+//   2 = Cyan    — pure black OLED, electric cyan accents       (high contrast)
+//   3 = Emerald — deep forest green background, lime accents   (nature)
+//   4 = Amber   — dark warm maroon background, golden accents  (warm)
+#define THEME 1
+
 // ─── Colour Palette (RGB565) ─────────────────────────────────────────────────
-#define COL_BG        0x0841   // #0f172a  dark navy
-#define COL_CARD      0x1082   // #1e293b  slate card
-#define COL_BORDER    0x2124   // #334155  border
-#define COL_PRIMARY   0x639B   // #6366f1  indigo
-#define COL_SUCCESS   0x2764   // #22c55e  green
-#define COL_WARNING   0xFD00   // #f59e0b  amber
-#define COL_ERROR     0xE904   // #ef4444  red
-#define COL_TEXT      0xE71C   // #e2e8f0  light text
-#define COL_MUTED     0x8430   // #94a3b8  muted text
+#if THEME == 1   // ── Blue (matches mockup) ───────────────────────────────────
+#define COL_BG        0x0841   // dark navy   #0f172a
+#define COL_CARD      0x10A2   // dark card   #1a2038
+#define COL_BORDER    0x2965   // border      #334d78
+#define COL_PRIMARY   0x243F   // royal blue  #2188F8
+#define COL_SUCCESS   0x2764   // green       #22c55e
+#define COL_WARNING   0xFD00   // amber       #f59e0b
+#define COL_ERROR     0xE904   // red         #ef4444
+#define COL_TEXT      0xFFFF   // white       #ffffff
+#define COL_MUTED     0x8430   // muted text  #94a3b8
+#define COL_DIM_CARD  0x0C62
+
+#elif THEME == 2  // ── Cyan / OLED high-contrast ───────────────────────────
+#define COL_BG        0x0000   // pure black
+#define COL_CARD      0x0842   // very dark grey
+#define COL_BORDER    0x2945   // medium grey
+#define COL_PRIMARY   0x07FF   // electric cyan
+#define COL_SUCCESS   0x07E0   // bright green
+#define COL_WARNING   0xFEA0   // orange
+#define COL_ERROR     0xF800   // red
+#define COL_TEXT      0xFFFF   // white
+#define COL_MUTED     0x7BEF   // light grey
+#define COL_DIM_CARD  0x0421
+
+#elif THEME == 3  // ── Emerald / Forest ────────────────────────────────────
+#define COL_BG        0x0220   // deep forest green
+#define COL_CARD      0x0440   // dark green card
+#define COL_BORDER    0x0880   // medium green border
+#define COL_PRIMARY   0x07E0   // bright green
+#define COL_SUCCESS   0xAFE5   // lime
+#define COL_WARNING   0xFD20   // orange
+#define COL_ERROR     0xF800   // red
+#define COL_TEXT      0xE71C   // light text
+#define COL_MUTED     0x7BE0   // muted green
+#define COL_DIM_CARD  0x0340
+
+#elif THEME == 4  // ── Amber / Warm ────────────────────────────────────────
+#define COL_BG        0x1800   // dark maroon
+#define COL_CARD      0x2800   // dark red-brown card
+#define COL_BORDER    0x4000   // medium warm border
+#define COL_PRIMARY   0xFD20   // orange-gold
+#define COL_SUCCESS   0xFEA0   // gold
+#define COL_WARNING   0xFF80   // bright amber
+#define COL_ERROR     0xF800   // red
+#define COL_TEXT      0xFFE0   // warm white
+#define COL_MUTED     0xC580   // muted warm
+#define COL_DIM_CARD  0x2000
+#endif
+
 #define COL_WHITE     0xFFFF
 #define COL_BLACK     0x0000
-#define COL_DIM_CARD  0x0C62   // slightly lighter than bg for alternating
+
+// ─── Font shortcuts (LovyanGFX built-in vector fonts) ────────────────────────
+#define F_TINY   (&lgfx::fonts::DejaVu9)
+#define F_SMALL  (&lgfx::fonts::DejaVu18)
+#define F_MED    (&lgfx::fonts::DejaVu24)
+#define F_LARGE  (&lgfx::fonts::DejaVu40)
+#define F_LOGO   (&lgfx::fonts::Orbitron_Light_24)
+#define F_LOGO_L (&lgfx::fonts::Orbitron_Light_32)
 
 // Screen dimensions
 #define SW 240
 #define SH 320
 
 // ─── Globals ─────────────────────────────────────────────────────────────────
-TFT_eSPI tft = TFT_eSPI();
-TFT_eSprite spr = TFT_eSprite(&tft);  // full-screen sprite for flicker-free render
+LGFX         display;
+LGFX_Sprite  spr(&display);   // full-screen sprite for flicker-free render
 
 Preferences prefs;
 WebServer   localHttp(80);
@@ -137,6 +218,7 @@ bool     touchActive  = false;
 uint16_t touchX = 0, touchY = 0;
 uint32_t touchDownMs  = 0;
 bool     touchHandled = false;   // prevents hold-repeat firing as a tap
+static String touchDiag = "Touch: scanning...";  // shown on Setup screen
 
 // ─── WiFi scanner ─────────────────────────────────────────────────────────────
 struct WifiNet { char ssid[33]; int8_t bars; bool open; };
@@ -153,8 +235,7 @@ static String   pendingSsid  = "";   // network tapped, waiting for password
 // Records are flushed to /api/devices/sync on the next successful heartbeat.
 static const char* SD_ATT_FILE = "/attendance.jsonl";
 
-// SD SPI instance — same FSPI bus as display, dedicated CS for SD slot.
-static SPIClass    sdSPI(FSPI);
+// SD_MMC (SDIO): tries 4-bit first, falls back to 1-bit if card rejects it.
 static bool        sdAvailable  = false;
 static uint32_t    sdRecordCount = 0;  // tracks records written to SD file
 
@@ -169,9 +250,6 @@ static OfflineRec offlineBuf[200];
 static uint8_t    offlineCount = 0;
 
 // ─── Per-session duplicate guard ─────────────────────────────────────────────
-// Keeps a compact list of identifiers that have already submitted this session.
-// Cleared automatically when the session ID changes.
-// Uses indexNumber when available, userId otherwise — whichever the student sent.
 static char     dedupIds[400][32];   // 400 students × 32 chars ≈ 12.5 KB
 static uint16_t dedupCount   = 0;
 static String   dedupSession = "";   // session this list belongs to
@@ -226,31 +304,91 @@ static String deriveCode(const String& seed, uint32_t unixSec) {
   return String(buf);
 }
 
-// ─── Touch (FT6X36) ──────────────────────────────────────────────────────────
+// ─── Touch (FT6X36 capacitive, I2C) ──────────────────────────────────────────
+// Confirmed chip: FT6336G on ES3C28P board.
+// I2C: SDA=16, SCL=15. RST=18, INT=17.
+// Standard address 0x38; auto-scan fallback catches mis-documented variants.
+
+static uint8_t touchAddr = FT6X36_ADDR;  // updated by touchInit scan
+
 static void touchInit() {
-  Wire.begin(TOUCH_SDA, TOUCH_SCL);
+  // Datasheet-confirmed: RST=IO18 (active LOW), INT=IO17
   if (TOUCH_RST >= 0) {
     pinMode(TOUCH_RST, OUTPUT);
-    digitalWrite(TOUCH_RST, LOW); delay(10);
-    digitalWrite(TOUCH_RST, HIGH); delay(100);
+    digitalWrite(TOUCH_RST, LOW);  delay(50);   // hold reset longer for cold-boot
+    digitalWrite(TOUCH_RST, HIGH); delay(500);  // FT6336G needs ~300 ms; give extra margin
   }
-  if (TOUCH_INT >= 0) pinMode(TOUCH_INT, INPUT);
+  if (TOUCH_INT >= 0) pinMode(TOUCH_INT, INPUT_PULLUP);
+
+  // Datasheet confirms: SDA=IO16, SCL=IO15. Other pairs are fallback for board variants.
+  // Try each pin pair at both 100 kHz and 400 kHz — some FT6336G only respond at 100 kHz.
+  const uint8_t PAIRS[][2] = {
+    { 16, 15 },  // confirmed by ES3C28P datasheet
+    { 15, 16 },  // swapped (just in case)
+    {  4,  5 },
+    {  6,  7 },
+    {  8,  9 },
+    { 21, 22 },
+  };
+  const uint32_t CLOCKS[] = { 100000, 400000 };
+  const uint8_t  KNOWN[]  = { 0x38, 0x3B, 0x15, 0x14, 0x5D };
+
+  for (auto& p : PAIRS) {
+    for (uint32_t clk : CLOCKS) {
+      Wire.end(); delay(10);
+      Wire.begin(p[0], p[1]); Wire.setClock(clk); delay(50);
+      for (uint8_t addr = 0x08; addr < 0x78; addr++) {
+        Wire.beginTransmission(addr);
+        if (Wire.endTransmission() != 0) continue;
+        for (uint8_t k : KNOWN) {
+          if (addr == k) {
+            touchAddr = addr;
+            touchDiag = "Touch SDA=" + String(p[0]) +
+                        " SCL=" + String(p[1]) +
+                        " @0x" + String(addr, HEX) +
+                        " " + String(clk / 1000) + "kHz";
+            LOG("[touch] " + touchDiag);
+            return;  // Wire stays on the working pins + speed
+          }
+        }
+        // Non-known address — record for display but keep searching
+        touchDiag = "I2C 0x" + String(addr, HEX) +
+                    " SDA=" + String(p[0]) + " SCL=" + String(p[1]) +
+                    " " + String(clk / 1000) + "kHz";
+      }
+    }
+  }
+  // Nothing found — restore confirmed-correct pins at 100 kHz
+  Wire.end(); Wire.begin(16, 15); Wire.setClock(100000);
+  if (!touchDiag.startsWith("I2C"))
+    touchDiag = "No touch chip found";
+  LOG("[touch] " + touchDiag);
 }
 
-// Returns true if a finger is down; sets tx, ty.
+// Returns true if a finger is down; writes screen-mapped coordinates to tx, ty.
 static bool touchRead(uint16_t& tx, uint16_t& ty) {
-  Wire.beginTransmission(FT6X36_ADDR);
-  Wire.write(0x02); // TD_STATUS
+  Wire.beginTransmission(touchAddr);
+  Wire.write(0x02);  // TD_STATUS register
   if (Wire.endTransmission(false) != 0) return false;
-  Wire.requestFrom((uint8_t)FT6X36_ADDR, (uint8_t)6);
+  Wire.requestFrom((uint8_t)touchAddr, (uint8_t)6);
   if (Wire.available() < 6) return false;
-  uint8_t td  = Wire.read();
-  uint8_t xh  = Wire.read(); uint8_t xl = Wire.read();
-  uint8_t yh  = Wire.read(); uint8_t yl = Wire.read();
-  Wire.read(); // misc
+
+  uint8_t td = Wire.read();                          // touch count
+  uint8_t xh = Wire.read(); uint8_t xl = Wire.read();
+  uint8_t yh = Wire.read(); uint8_t yl = Wire.read();
+  Wire.read();  // weight/misc
+
   if ((td & 0x0F) == 0) return false;
-  tx = ((xh & 0x0F) << 8) | xl;
-  ty = ((yh & 0x0F) << 8) | yl;
+
+  // FT6336G on ES3C28P: chip reports X/Y in portrait panel orientation.
+  // The debug dot drawn by drawSetup() will show where the chip thinks you
+  // touched — use that to confirm axis direction and swap if needed.
+  // Current mapping: direct (no swap). If dot appears mirrored, swap rawX/rawY.
+  // If dot appears upside-down, change to:  tx=rawX; ty=(SH-1)-rawY;
+  uint16_t rawX = ((xh & 0x0F) << 8) | xl;
+  uint16_t rawY = ((yh & 0x0F) << 8) | yl;
+  tx = rawX;
+  ty = rawY;
   return true;
 }
 
@@ -322,8 +460,8 @@ static int postJson(const String& path, const String& body,
 // ─── Offline attendance sync ──────────────────────────────────────────────────
 static void syncOfflineAttendance() {
   // ── SD path ──────────────────────────────────────────────────────────────────
-  if (sdAvailable && sdRecordCount > 0 && SD.exists(SD_ATT_FILE)) {
-    File f = SD.open(SD_ATT_FILE, FILE_READ);
+  if (sdAvailable && sdRecordCount > 0 && SD_MMC.exists(SD_ATT_FILE)) {
+    File f = SD_MMC.open(SD_ATT_FILE, FILE_READ);
     if (f) {
       JsonDocument doc;
       JsonArray arr = doc["records"].to<JsonArray>();
@@ -344,12 +482,12 @@ static void syncOfflineAttendance() {
         }
       }
       f.close();
-      if (parsed == 0) { SD.remove(SD_ATT_FILE); sdRecordCount = 0; return; }
+      if (parsed == 0) { SD_MMC.remove(SD_ATT_FILE); sdRecordCount = 0; return; }
       String body; serializeJson(doc, body);
       String resp; int code = postJson("/api/devices/sync", body, resp);
       if (code == 200) {
         LOG("SD sync: " + String(parsed) + " records sent");
-        SD.remove(SD_ATT_FILE);
+        SD_MMC.remove(SD_ATT_FILE);
         sdRecordCount = 0;
       } else {
         LOG("SD sync failed " + String(code) + ": " + resp);
@@ -454,238 +592,361 @@ static void sendHeartbeat() {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-//  UI RENDERING  (double-buffered via TFT_eSprite for flicker-free updates)
+//  UI RENDERING  (double-buffered via LGFX_Sprite for flicker-free updates)
 // ═══════════════════════════════════════════════════════════════════════════
 
 // ── Utility: draw a rounded filled rectangle with border ─────────────────────
-static void card(TFT_eSprite& s, int32_t x, int32_t y, int32_t w, int32_t h,
+static void card(LGFX_Sprite& s, int32_t x, int32_t y, int32_t w, int32_t h,
                  uint32_t fill, uint32_t border = COL_BORDER, int32_t r = 10) {
-  s.fillSmoothRoundRect(x, y, w, h, r, fill, COL_BG);
-  s.drawSmoothRoundRect(x, y, r, r, w, h, border, fill);
+  s.fillRoundRect(x, y, w, h, r, fill);
+  s.drawRoundRect(x, y, w, h, r, border);
 }
 
-// ── Utility: centred text ─────────────────────────────────────────────────────
-static void centreText(TFT_eSprite& s, const String& txt, int32_t y,
-                       uint8_t font, uint16_t col, uint8_t size = 1) {
-  s.setTextFont(font); s.setTextSize(size); s.setTextColor(col, COL_BG);
+// ── Utility: centred text (lgfx vector font) ──────────────────────────────────
+static void centreText(LGFX_Sprite& s, const String& txt, int32_t y,
+                       const lgfx::IFont* font, uint16_t col) {
+  s.setFont(font); s.setTextSize(1); s.setTextColor(col, COL_BG);
   int32_t tw = s.textWidth(txt);
   s.setCursor((SW - tw) / 2, y); s.print(txt);
 }
 
 // ── Utility: draw status dot + "Dikly" header bar ────────────────────────────
-static void drawHeader(TFT_eSprite& s, bool online) {
-  s.fillRect(0, 0, SW, 38, COL_CARD);
-  s.drawFastHLine(0, 38, SW, COL_BORDER);
-  // Logo
-  s.setTextFont(4); s.setTextSize(1); s.setTextColor(COL_TEXT, COL_CARD);
-  s.setCursor(14, 9); s.print("Dikly");
-  // Status dot
+static void drawHeader(LGFX_Sprite& s, bool online) {
+  s.fillRect(0, 0, SW, 42, COL_CARD);
+  s.fillRect(0, 42, SW, 2, COL_PRIMARY);   // thin primary accent line under header
+  // Logo — Orbitron gives a premium tech feel
+  s.setFont(F_LOGO); s.setTextSize(1); s.setTextColor(COL_PRIMARY, COL_CARD);
+  s.setCursor(14, 10); s.print("DIKLY");
+  // Status badge
   uint16_t dotCol = online ? COL_SUCCESS : COL_ERROR;
-  s.fillSmoothCircle(SW - 20, 19, 7, dotCol, COL_CARD);
-  // Label
-  s.setTextFont(2); s.setTextSize(1); s.setTextColor(COL_MUTED, COL_CARD);
-  s.setCursor(SW - 58, 11);
-  s.print(online ? "Online" : "Offline");
+  s.fillCircle(SW - 18, 21, 8, dotCol);
+  s.fillCircle(SW - 18, 21, 5, COL_CARD);   // ring effect
+  s.fillCircle(SW - 18, 21, 3, dotCol);
+  s.setFont(F_TINY); s.setTextColor(COL_MUTED, COL_CARD);
+  String lbl = online ? "Online" : "Offline";
+  int32_t lw = s.textWidth(lbl);
+  s.setCursor(SW - 18 - 12 - lw, 16); s.print(lbl);
 }
 
-// ── SPLASH ────────────────────────────────────────────────────────────────────
+// ── SPLASH / WELCOME ─────────────────────────────────────────────────────────
 static void drawSplash() {
   spr.fillSprite(COL_BG);
-  // Accent bar
-  spr.fillRect(0, 0, SW, 6, COL_PRIMARY);
-  // Dikly large
-  spr.setTextFont(6); spr.setTextSize(1); spr.setTextColor(COL_TEXT, COL_BG);
-  int32_t tw = spr.textWidth("Dikly");
-  spr.setCursor((SW - tw) / 2, 90); spr.print("Dikly");
-  // Indigo line under logo
-  spr.fillRect((SW - 80) / 2, 148, 80, 3, COL_PRIMARY);
-  // Subtitle
-  spr.setTextFont(2); spr.setTextColor(COL_MUTED, COL_BG);
-  String sub = "Attendance System";
-  tw = spr.textWidth(sub);
-  spr.setCursor((SW - tw) / 2, 162); spr.print(sub);
-  // Version
-  spr.setTextFont(2); spr.setTextColor(COL_BORDER, COL_BG);
-  String ver = String("v") + FIRMWARE_VERSION;
-  tw = spr.textWidth(ver);
-  spr.setCursor((SW - tw) / 2, 295); spr.print(ver);
+
+  // ── Logo group (D badge + wordmark, centred horizontally) ─────────────────
+  spr.setFont(F_LOGO_L); spr.setTextSize(1);
+  int32_t logoTxtW = spr.textWidth("Dikly");
+  const int32_t BW = 56, BH = 56, BGAP = 10;
+  int32_t BX = (SW - BW - BGAP - logoTxtW) / 2;
+  const int32_t BY = 46;
+
+  spr.fillRoundRect(BX, BY, BW, BH, 14, COL_PRIMARY);
+  spr.setTextColor(COL_WHITE, COL_PRIMARY);
+  int32_t dw = spr.textWidth("D");
+  int32_t dh = spr.fontHeight();
+  spr.setCursor(BX + (BW - dw) / 2, BY + (BH - dh) / 2); spr.print("D");
+
+  spr.setFont(F_LOGO_L); spr.setTextColor(COL_TEXT, COL_BG);
+  spr.setCursor(BX + BW + BGAP, BY + 4); spr.print("Dikly");
+
+  spr.setFont(F_TINY); spr.setTextColor(COL_MUTED, COL_BG);
+  int32_t subW = spr.textWidth("Smart Attendance System");
+  spr.setCursor((SW - subW) / 2, BY + BH + 8); spr.print("Smart Attendance System");
+
+  // ── Divider ───────────────────────────────────────────────────────────────
+  spr.drawFastHLine(18, BY + BH + 22, SW - 36, COL_BORDER);
+
+  // ── Institution card ──────────────────────────────────────────────────────
+  int32_t cardY = BY + BH + 30;
+  card(spr, 14, cardY, SW - 28, 78, COL_CARD, COL_BORDER, 12);
+
+  spr.fillCircle(38, cardY + 38, 20, COL_PRIMARY);
+  spr.setFont(F_SMALL); spr.setTextColor(COL_WHITE, COL_PRIMARY);
+  int32_t kw = spr.textWidth("K");
+  spr.setCursor(38 - kw / 2, cardY + 28); spr.print("K");
+
+  spr.setFont(F_TINY); spr.setTextColor(COL_TEXT, COL_CARD);
+  String inst = institutionCode.isEmpty() ? "Attendance Device" : institutionCode;
+  spr.setCursor(66, cardY + 10); spr.print(inst);
+  spr.setFont(F_TINY); spr.setTextColor(COL_MUTED, COL_CARD);
+  spr.setCursor(66, cardY + 26); spr.print("Excellence · Integrity · Impact");
+  spr.setCursor(66, cardY + 42); spr.print("Firmware v" + String(FIRMWARE_VERSION));
+
+  // ── "Get Started" call-to-action button ──────────────────────────────────
+  int32_t btnY = cardY + 78 + 10;
+  spr.fillRoundRect(14, btnY, SW - 28, 54, 14, COL_PRIMARY);
+  // Highlight stripe
+  spr.fillRoundRect(14, btnY, SW - 28, 20, 14, 0x3C7F);
+  spr.fillRect(14, btnY + 10, SW - 28, 10, 0x3C7F);
+  spr.setFont(F_SMALL); spr.setTextColor(COL_WHITE, COL_PRIMARY);
+  String btn = "Get Started";
+  int32_t tw = spr.textWidth(btn);
+  spr.setCursor((SW - tw) / 2 - 10, btnY + 17); spr.print(btn);
+  int32_t ax = (SW + tw) / 2 + 2, ay = btnY + 27;
+  spr.fillTriangle(ax + 10, ay, ax, ay - 8, ax, ay + 8, COL_WHITE);
+
   spr.pushSprite(0, 0);
 }
 
 // ── SETUP (captive portal) ────────────────────────────────────────────────────
 static void drawSetup(const String& apName) {
   spr.fillSprite(COL_BG);
-  spr.fillRect(0, 0, SW, 6, COL_WARNING);
-  // Title
-  spr.setTextFont(4); spr.setTextColor(COL_TEXT, COL_BG);
-  String t = "Device Setup";
-  int32_t tw = spr.textWidth(t);
-  spr.setCursor((SW - tw) / 2, 20); spr.print(t);
-  // Instruction card
-  card(spr, 10, 58, SW - 20, 90, COL_CARD, COL_BORDER, 12);
-  spr.setTextFont(2); spr.setTextColor(COL_MUTED, COL_CARD);
-  spr.setCursor(22, 68); spr.print("1. Connect your phone to WiFi:");
-  spr.setTextFont(4); spr.setTextColor(COL_PRIMARY, COL_CARD);
-  tw = spr.textWidth(apName);
-  spr.setCursor((SW - tw) / 2, 86); spr.print(apName);
-  spr.setTextFont(2); spr.setTextColor(COL_MUTED, COL_CARD);
-  spr.setCursor(22, 118); spr.print("2. Open browser → 192.168.4.1");
-  // Arrow / divider
-  spr.setTextFont(2); spr.setTextColor(COL_TEXT, COL_BG);
-  spr.setCursor(22, 160); spr.print("3. Enter institution code,");
-  spr.setCursor(22, 176); spr.print("   pairing code & school WiFi.");
-  // Factory reset hint
-  card(spr, 10, 210, SW - 20, 40, 0x2000, 0x4000, 8);
-  spr.setTextFont(2); spr.setTextColor(COL_WARNING, 0x2000);
-  spr.setCursor(20, 223); spr.print("Hold anywhere 3 s to factory reset");
-  // Pulsing dot (we'll just leave it static — loop redraws)
-  spr.fillSmoothCircle(SW / 2, 278, 8, COL_WARNING, COL_BG);
+
+  const uint16_t CYAN  = 0x07FF;
+  const uint16_t GLASS = 0x10A2;
+
+  // ── DIKLY — smaller logo, single cyan ──────────────────────────────────────
+  spr.setFont(F_LOGO); spr.setTextSize(1);
+  spr.setTextColor(CYAN, COL_BG);
+  spr.setCursor(14, 12); spr.print("DIKLY");
+
+  // ── WiFi icon — compact, top right ─────────────────────────────────────────
+  {
+    const int32_t wx = 216, wy = 22;
+    spr.fillCircle(wx, wy, 2, CYAN);
+    spr.drawArc(wx, wy, 7,  5,  220, 320, CYAN);
+    spr.drawArc(wx, wy, 13, 11, 215, 325, CYAN);
+  }
+
+  // ── Subtitle ────────────────────────────────────────────────────────────────
+  spr.setFont(F_TINY); spr.setTextSize(1);
+  spr.setTextColor(COL_MUTED, COL_BG);
+  spr.setCursor(14, 38); spr.print("Device Setup");
+
+  // ── Divider ─────────────────────────────────────────────────────────────────
+  spr.drawFastHLine(14, 52, SW - 28, COL_BORDER);
+
+  // ── Section label ───────────────────────────────────────────────────────────
+  {
+    const char* lbl = "3 STEPS TO CONNECT THIS DEVICE";
+    spr.setFont(F_TINY); spr.setTextColor(COL_MUTED, COL_BG);
+    spr.setCursor((SW - (int32_t)spr.textWidth(lbl)) / 2, 58);
+    spr.print(lbl);
+  }
+
+  // ── Step cards — minimal glass panels, no borders ───────────────────────────
+  const int32_t CX = 10, CW = SW - 20, CG = 8;
+  int32_t cy = 72;
+
+  auto stepCard = [&](uint8_t num,
+                      const char* hint, const lgfx::IFont* vfont,
+                      const char* val1, const char* val2,
+                      const char* note, int32_t ch) {
+    // Glass panel — flat fill only, no border
+    spr.fillRoundRect(CX, cy, CW, ch, 8, GLASS);
+
+    // Step indicator — dark circle with thin cyan ring
+    const int32_t bx = CX + 18, by = cy + ch / 2;
+    spr.fillCircle(bx, by, 8, COL_BG);
+    spr.drawCircle(bx, by, 8, CYAN);
+    spr.setFont(F_TINY); spr.setTextColor(CYAN, COL_BG);
+    char ns[2] = {(char)('0' + num), '\0'};
+    spr.setCursor(bx - (int32_t)spr.textWidth(ns) / 2, by - 4);
+    spr.print(ns);
+
+    // Text block
+    const int32_t tx = CX + 34;
+    spr.setFont(F_TINY); spr.setTextColor(COL_MUTED, GLASS);
+    spr.setCursor(tx, cy + 8); spr.print(hint);
+    spr.setFont(vfont); spr.setTextColor(CYAN, GLASS);
+    spr.setCursor(tx, cy + 20); spr.print(val1);
+    if (val2) {
+      spr.setFont(F_TINY); spr.setTextColor(CYAN, GLASS);
+      spr.setCursor(tx, cy + 32); spr.print(val2);
+    }
+    if (note) {
+      spr.setFont(F_TINY); spr.setTextColor(COL_MUTED, GLASS);
+      spr.setCursor(tx, val2 ? cy + 42 : cy + 32); spr.print(note);
+    }
+    cy += ch + CG;
+  };
+
+  stepCard(1, "Connect phone to Wi-Fi:", F_SMALL, apName.c_str(), nullptr, nullptr, 40);
+  stepCard(2, "Open in your browser:",   F_SMALL, "192.168.4.1", nullptr, nullptr, 40);
+  stepCard(3, "Enter your details:",     F_TINY,
+           "Institution code +", "pairing code",
+           "then your school Wi-Fi", 54);
+
+  // ── Factory reset bar — subtle, minimal ─────────────────────────────────────
+  cy += 6;
+  {
+    const int32_t bh = 22;
+    spr.fillRoundRect(CX, cy, CW, bh, 11, 0x1800);
+    const int32_t gx = CX + 14, gy = cy + bh / 2;
+    spr.fillCircle(gx, gy, 4, COL_WARNING);
+    spr.fillCircle(gx, gy, 2, 0x1800);
+    spr.fillRect(gx - 1, gy - 6, 2, 2, COL_WARNING);
+    spr.fillRect(gx - 1, gy + 4, 2, 2, COL_WARNING);
+    spr.fillRect(gx - 6, gy - 1, 2, 2, COL_WARNING);
+    spr.fillRect(gx + 4, gy - 1, 2, 2, COL_WARNING);
+    spr.setFont(F_TINY); spr.setTextColor(COL_WARNING, 0x1800);
+    spr.setCursor(gx + 9, gy - 4); spr.print("HOLD 3s  |  FACTORY RESET");
+  }
+
   spr.pushSprite(0, 0);
 }
 
 // ── WIFI RECONFIG (paired, but saved network unavailable) ────────────────────
 static void drawWifiReconfig(const String& apName) {
   spr.fillSprite(COL_BG);
-  spr.fillRect(0, 0, SW, 6, COL_WARNING);
-  // Title
-  spr.setTextFont(4); spr.setTextColor(COL_TEXT, COL_BG);
-  String t = "Change WiFi";
-  int32_t tw = spr.textWidth(t);
-  spr.setCursor((SW - tw) / 2, 20); spr.print(t);
-  // Info card
-  card(spr, 10, 52, SW - 20, 56, COL_CARD, COL_BORDER, 10);
-  spr.setTextFont(2); spr.setTextColor(COL_MUTED, COL_CARD);
-  spr.setCursor(18, 62); spr.print("Saved network not found.");
-  spr.setCursor(18, 78); spr.print("Connect phone to:");
-  spr.setTextFont(2); spr.setTextColor(COL_PRIMARY, COL_CARD);
-  tw = spr.textWidth(apName);
-  spr.setCursor((SW - tw) / 2, 94); spr.print(apName);
-  // Steps
-  spr.setTextFont(2); spr.setTextColor(COL_TEXT, COL_BG);
-  spr.setCursor(18, 124); spr.print("Then open 192.168.4.1 and");
-  spr.setCursor(18, 140); spr.print("enter the new WiFi details.");
-  // Note — pairing is kept
-  card(spr, 10, 165, SW - 20, 44, 0x0841, COL_SUCCESS, 8);
-  spr.setTextFont(2); spr.setTextColor(COL_SUCCESS, 0x0841);
-  spr.setCursor(18, 174); spr.print("Device pairing is preserved.");
-  spr.setCursor(18, 190); spr.print("Only WiFi will change.");
-  // Factory reset hint
-  card(spr, 10, 224, SW - 20, 36, 0x2000, 0x4000, 8);
-  spr.setTextFont(2); spr.setTextColor(COL_WARNING, 0x2000);
-  spr.setCursor(18, 235); spr.print("Hold 3 s to full factory reset");
-  spr.fillSmoothCircle(SW / 2, 284, 8, COL_WARNING, COL_BG);
+
+  spr.fillRect(0, 0, SW, 5, COL_WARNING);
+  spr.fillRect(0, 5, SW, 2, COL_BORDER);
+
+  spr.setFont(F_MED); spr.setTextColor(COL_TEXT, COL_BG);
+  String title = "Change Wi-Fi";
+  int32_t tw = spr.textWidth(title);
+  spr.setCursor((SW - tw) / 2, 10); spr.print(title);
+
+  spr.setFont(F_TINY); spr.setTextColor(COL_MUTED, COL_BG);
+  String sub = "Saved network unavailable";
+  tw = spr.textWidth(sub);
+  spr.setCursor((SW - tw) / 2, 40); spr.print(sub);
+
+  spr.drawFastHLine(14, 54, SW - 28, COL_BORDER);
+
+  card(spr, 8, 60, SW - 16, 68, COL_CARD, COL_BORDER, 12);
+  spr.fillCircle(30, 94, 14, COL_WARNING);
+  spr.setFont(F_MED); spr.setTextColor(COL_BG, COL_WARNING);
+  tw = spr.textWidth("!"); spr.setCursor(30 - tw/2, 82); spr.print("!");
+  spr.setFont(F_TINY); spr.setTextColor(COL_MUTED, COL_CARD);
+  spr.setCursor(54, 68); spr.print("Connect phone to Wi-Fi:");
+  spr.setFont(F_SMALL); spr.setTextColor(COL_WARNING, COL_CARD);
+  spr.setCursor(54, 84); spr.print(apName);
+
+  spr.setFont(F_TINY); spr.setTextColor(COL_TEXT, COL_BG);
+  spr.setCursor(14, 140); spr.print("Then open 192.168.4.1 in browser");
+  spr.setFont(F_TINY); spr.setTextColor(COL_MUTED, COL_BG);
+  spr.setCursor(14, 155); spr.print("and enter the new Wi-Fi details.");
+
+  card(spr, 8, 180, SW - 16, 46, 0x0841, COL_SUCCESS, 10);
+  spr.fillCircle(30, 203, 11, COL_SUCCESS);
+  spr.setFont(F_SMALL); spr.setTextColor(COL_BG, COL_SUCCESS);
+  tw = spr.textWidth("i"); spr.setCursor(30 - tw/2, 196); spr.print("i");
+  spr.setFont(F_TINY); spr.setTextColor(COL_SUCCESS, 0x0841);
+  spr.setCursor(52, 186); spr.print("Device pairing is preserved.");
+  spr.setCursor(52, 202); spr.print("Only Wi-Fi credentials change.");
+
+  card(spr, 8, 240, SW - 16, 28, 0x2000, 0x4000, 8);
+  spr.setFont(F_TINY); spr.setTextColor(COL_WARNING, 0x2000);
+  String rst = "Hold 3 s anywhere  —  factory reset";
+  tw = spr.textWidth(rst);
+  spr.setCursor((SW - tw) / 2, 250); spr.print(rst);
+
+  // ── Pulse indicator dot ─────────────────────────────────────────────────────
+  spr.fillCircle(SW / 2, 310, 4, COL_WARNING);
+
   spr.pushSprite(0, 0);
 }
 
 // ── WIFI SCAN (on-device WiFi picker) ────────────────────────────────────────
-#define LIST_Y      70    // y where network list starts
-#define ITEM_H      41    // height of each list item (38px + 3px gap)
-#define MAX_VIS      6    // max visible items at once
-#define SCAN_BTN_X  162   // scan button x
+#define LIST_Y      90    // y where network list starts (below title + subtitle)
+#define ITEM_H      37    // height of each list item
+#define MAX_VIS      5    // max visible items
+#define SCAN_BTN_X  162   // legacy — unused
 #define SCROLL_X    220   // scroll arrow column x
 
 static void drawWifiScan() {
   spr.fillSprite(COL_BG);
   drawHeader(spr, false);
 
-  // Title
-  spr.setTextFont(4); spr.setTextColor(COL_TEXT, COL_BG);
-  spr.setCursor(10, 46); spr.print("WiFi Networks");
+  // ── Title + subtitle ─────────────────────────────────────────────────────────
+  spr.setFont(F_MED); spr.setTextColor(COL_PRIMARY, COL_BG);
+  spr.setCursor(12, 50); spr.print("Wi-Fi Setup");
+  spr.setFont(F_TINY); spr.setTextColor(COL_MUTED, COL_BG);
+  spr.setCursor(12, 74); spr.print("Connect Dikly to your network");
 
-  // Scan button (top-right)
-  uint16_t sbCol = wifiScanning ? COL_MUTED : COL_PRIMARY;
-  spr.fillSmoothRoundRect(SCAN_BTN_X, 42, 68, 26, 13, sbCol, COL_BG);
-  spr.setTextFont(2); spr.setTextColor(COL_WHITE, sbCol);
-  String scanLabel = wifiScanning ? "Scanning" : "Scan";
-  int32_t stw = spr.textWidth(scanLabel);
-  spr.setCursor(SCAN_BTN_X + (68 - stw) / 2, 51); spr.print(scanLabel);
-
-  if (wifiScanning) { spr.pushSprite(0, 0); return; }
-
-  if (!wifiMsg.isEmpty()) {
-    spr.setTextFont(2); spr.setTextColor(COL_MUTED, COL_BG);
-    int32_t tw = spr.textWidth(wifiMsg);
-    spr.setCursor((SW - tw) / 2, 170); spr.print(wifiMsg);
-    spr.setTextFont(2); spr.setTextColor(COL_BORDER, COL_BG);
-    String hint = "Tap Scan to search";
-    tw = spr.textWidth(hint);
-    spr.setCursor((SW - tw) / 2, 192); spr.print(hint);
+  if (wifiScanning) {
+    spr.setFont(F_SMALL); spr.setTextColor(COL_MUTED, COL_BG);
+    int32_t tw = spr.textWidth("Scanning...");
+    spr.setCursor((SW - tw) / 2, 170); spr.print("Scanning...");
     spr.pushSprite(0, 0); return;
   }
 
-  // Network rows
+  if (!wifiMsg.isEmpty() && wifiNetCount == 0) {
+    spr.setFont(F_SMALL); spr.setTextColor(COL_MUTED, COL_BG);
+    int32_t tw = spr.textWidth(wifiMsg);
+    spr.setCursor((SW - tw) / 2, 164); spr.print(wifiMsg);
+    spr.setFont(F_TINY); spr.setTextColor(COL_BORDER, COL_BG);
+    String hint = "Tap Scan Again below";
+    tw = spr.textWidth(hint);
+    spr.setCursor((SW - tw) / 2, 184); spr.print(hint);
+  }
+
+  // ── Network list ─────────────────────────────────────────────────────────────
   uint8_t visible = (uint8_t)min((int)wifiNetCount - wifiScroll, MAX_VIS);
   for (uint8_t i = 0; i < visible; i++) {
     uint8_t idx = wifiScroll + i;
     WifiNet& n  = wifiNets[idx];
     int32_t  y  = LIST_Y + i * ITEM_H;
 
-    card(spr, 4, y, 212, 38, COL_CARD, COL_BORDER, 8);
+    card(spr, 4, y, 212, ITEM_H - 3, COL_CARD, COL_BORDER, 8);
 
-    // Signal bars (4 vertical bars, left side)
+    // Signal bars
     for (uint8_t b = 0; b < 4; b++) {
-      uint8_t bh = 6 + b * 5;
+      uint8_t bh = 4 + b * 5;
       uint16_t bc = (b < (uint8_t)n.bars) ? COL_SUCCESS : COL_BORDER;
-      spr.fillRoundRect(10 + b * 8, y + 30 - bh, 6, bh, 1, bc);
+      spr.fillRoundRect(10 + b * 8, y + (ITEM_H - 3) - 7 - bh, 6, bh, 1, bc);
     }
 
     // SSID
-    spr.setTextFont(2); spr.setTextColor(COL_TEXT, COL_CARD);
+    spr.setFont(F_SMALL); spr.setTextColor(COL_TEXT, COL_CARD);
     String ssid = String(n.ssid);
-    if (spr.textWidth(ssid) > 118) { ssid = ssid.substring(0, 15); ssid += ".."; }
-    spr.setCursor(46, y + 12); spr.print(ssid);
+    if (spr.textWidth(ssid) > 118) { ssid = ssid.substring(0, 13); ssid += ".."; }
+    spr.setCursor(46, y + 7); spr.print(ssid);
 
-    // Badge — OPEN (green) or PWD (slate)
+    // Open / locked badge
     if (n.open) {
-      spr.fillSmoothRoundRect(167, y + 10, 40, 18, 9, COL_SUCCESS, COL_CARD);
-      spr.setTextFont(2); spr.setTextColor(COL_WHITE, COL_SUCCESS);
-      spr.setCursor(172, y + 13); spr.print("OPEN");
+      spr.fillRoundRect(165, y + 8, 42, 16, 8, COL_SUCCESS);
+      spr.setFont(F_TINY); spr.setTextColor(COL_WHITE, COL_SUCCESS);
+      spr.setCursor(170, y + 12); spr.print("OPEN");
     } else {
-      spr.fillSmoothRoundRect(167, y + 10, 40, 18, 9, COL_BORDER, COL_CARD);
-      spr.setTextFont(2); spr.setTextColor(COL_MUTED, COL_BORDER);
-      spr.setCursor(174, y + 13); spr.print("PWD");
+      spr.fillRoundRect(165, y + 8, 42, 16, 8, COL_BORDER);
+      spr.setFont(F_TINY); spr.setTextColor(COL_MUTED, COL_BORDER);
+      spr.setCursor(174, y + 12); spr.print("PWD");
     }
   }
 
-  // Scroll arrows (right strip)
+  // Scroll arrows
   if (wifiScroll > 0)
     spr.fillTriangle(SCROLL_X + 9, LIST_Y - 8,
                      SCROLL_X,     LIST_Y + 8,
-                     SCROLL_X + 18,LIST_Y + 8, COL_PRIMARY);
+                     SCROLL_X + 18, LIST_Y + 8, COL_PRIMARY);
   if (wifiScroll + MAX_VIS < wifiNetCount)
     spr.fillTriangle(SCROLL_X + 9, LIST_Y + MAX_VIS * ITEM_H + 8,
                      SCROLL_X,     LIST_Y + MAX_VIS * ITEM_H - 8,
-                     SCROLL_X + 18,LIST_Y + MAX_VIS * ITEM_H - 8, COL_PRIMARY);
+                     SCROLL_X + 18, LIST_Y + MAX_VIS * ITEM_H - 8, COL_PRIMARY);
 
-  // Footer hint
-  spr.setTextFont(2); spr.setTextColor(COL_BORDER, COL_BG);
-  String ft = "Hold 3s to factory reset";
-  int32_t ftw = spr.textWidth(ft);
-  spr.setCursor((SW - ftw) / 2, 308); spr.print(ft);
+  // ── "Scan Again" full-width bottom button ────────────────────────────────────
+  uint16_t sbCol = wifiScanning ? COL_MUTED : COL_PRIMARY;
+  spr.fillRoundRect(16, 287, SW - 32, 26, 13, sbCol);
+  spr.setFont(F_TINY); spr.setTextColor(COL_WHITE, sbCol);
+  String scanLabel = wifiScanning ? "Scanning..." : "Scan Again";
+  int32_t stw = spr.textWidth(scanLabel);
+  spr.setCursor((SW - stw) / 2, 294); spr.print(scanLabel);
 
   spr.pushSprite(0, 0);
 }
 
 // ── Tap handler for WiFi scan screen ─────────────────────────────────────────
 static void handleWifiScanTap(uint16_t tx, uint16_t ty) {
-  // Scan button
-  if (tx >= SCAN_BTN_X && ty >= 42 && ty <= 68) {
+  // "Scan Again" full-width bottom button
+  if (ty >= 284 && ty <= 316) {
     drawWifiScan();   // show "Scanning" label immediately
     doWifiScan();
     return;
   }
   // Scroll up
-  if (tx >= SCROLL_X && ty >= LIST_Y - 12 && ty <= LIST_Y + 12 && wifiScroll > 0) {
+  if (tx >= SCROLL_X && ty >= LIST_Y - 14 && ty <= LIST_Y + 8 && wifiScroll > 0) {
     wifiScroll--; return;
   }
   // Scroll down
   int32_t downY = LIST_Y + MAX_VIS * ITEM_H;
-  if (tx >= SCROLL_X && ty >= downY - 12 && ty <= downY + 12
+  if (tx >= SCROLL_X && ty >= downY - 8 && ty <= downY + 14
       && wifiScroll + MAX_VIS < wifiNetCount) {
     wifiScroll++; return;
   }
   // Network item tap
-  if (tx < 216) {
+  if (tx < 216 && ty >= LIST_Y) {
     int8_t row = ((int32_t)ty - LIST_Y) / ITEM_H;
     if (row < 0 || row >= MAX_VIS) return;
     uint8_t idx = wifiScroll + (uint8_t)row;
@@ -893,137 +1154,230 @@ static void startWifiReconfigPortal() {
 // ── CONNECTING ────────────────────────────────────────────────────────────────
 static void drawConnecting(const String& ssid) {
   static uint8_t dots = 0; dots = (dots + 1) % 4;
+  static uint8_t wave = 0; wave = (wave + 1) % 40;
   spr.fillSprite(COL_BG);
-  spr.fillRect(0, 0, SW, 6, COL_PRIMARY);
-  spr.setTextFont(4); spr.setTextColor(COL_TEXT, COL_BG);
-  String t = "Connecting";
+
+  // ── Header ──────────────────────────────────────────────────────────────────
+  spr.fillRect(0, 0, SW, 44, COL_CARD);
+  spr.fillRect(0, 44, SW, 2, COL_PRIMARY);
+  spr.setFont(F_LOGO); spr.setTextColor(COL_PRIMARY, COL_CARD);
+  spr.setCursor(14, 10); spr.print("DIKLY");
+  spr.setFont(F_TINY); spr.setTextColor(COL_MUTED, COL_CARD);
+  spr.setCursor(14, 32); spr.print("Connecting to Network");
+
+  // ── Title + animated dots ───────────────────────────────────────────────────
+  spr.setFont(F_MED); spr.setTextColor(COL_TEXT, COL_BG);
+  const char* t = "Connecting";
   int32_t tw = spr.textWidth(t);
-  spr.setCursor((SW - tw) / 2, 80); spr.print(t);
-  // Animated dots
-  String dotStr = "";
-  for (uint8_t i = 0; i < dots; i++) dotStr += ".";
-  spr.setTextFont(4); spr.setTextColor(COL_PRIMARY, COL_BG);
-  tw = spr.textWidth(dotStr);
-  spr.setCursor((SW - tw) / 2, 112); spr.print(dotStr);
-  // SSID pill
-  card(spr, 20, 155, SW - 40, 40, COL_CARD, COL_BORDER, 20);
-  spr.setTextFont(2); spr.setTextColor(COL_MUTED, COL_CARD);
-  tw = spr.textWidth(ssid);
-  spr.setCursor((SW - tw) / 2, 168); spr.print(ssid);
-  // Spinning WiFi bars (manual)
-  static uint8_t wave = 0; wave = (wave + 1) % 8;
-  int32_t bx = SW / 2 - 22, by = 228;
-  for (uint8_t i = 0; i < 4; i++) {
-    uint8_t h = 6 + i * 7;
-    uint16_t col = (i <= wave % 5) ? COL_PRIMARY : COL_BORDER;
-    spr.fillRoundRect(bx + i * 14, by + (28 - h), 10, h, 3, col);
+  spr.setCursor((SW - tw) / 2, 58); spr.print(t);
+
+  spr.setFont(F_MED); spr.setTextColor(COL_BORDER, COL_BG);
+  tw = spr.textWidth("...");
+  spr.setCursor((SW - tw) / 2, 82); spr.print("...");
+  spr.setFont(F_MED); spr.setTextColor(COL_PRIMARY, COL_BG);
+  String dotStr; for (uint8_t i = 0; i < dots; i++) dotStr += ".";
+  spr.setCursor((SW - spr.textWidth("...")) / 2, 82); spr.print(dotStr);
+
+  // ── Pulsing ring outlines ──────────────────────────────────────────────────
+  uint8_t p = wave;
+  uint16_t c1 = COL_BORDER, c2 = COL_BORDER, c3 = COL_BORDER;
+  if      (p < 14) c1 = COL_PRIMARY;
+  else if (p < 27) { c1 = COL_CARD; c2 = COL_PRIMARY; }
+  else             { c2 = COL_CARD; c3 = COL_PRIMARY; }
+
+  int32_t cx = SW / 2, cy = 168;
+  for (int8_t d = -1; d <= 1; d++) {
+    spr.drawCircle(cx, cy, 56 + d, c3);
+    spr.drawCircle(cx, cy, 40 + d, c2);
+    spr.drawCircle(cx, cy, 24 + d, c1);
   }
+  spr.fillCircle(cx, cy, 14, COL_PRIMARY);
+  spr.setFont(F_LOGO); spr.setTextColor(COL_BG, COL_PRIMARY);
+  tw = spr.textWidth("D");
+  spr.setCursor(cx - tw / 2, cy - 12); spr.print("D");
+
+  // ── SSID pill card ─────────────────────────────────────────────────────────
+  card(spr, 18, 238, SW - 36, 40, COL_CARD, COL_BORDER, 20);
+  // WiFi icon dots (3 arcs)
+  spr.fillCircle(38, 258, 3, COL_PRIMARY);
+  for (int8_t d = -1; d <= 1; d++) {
+    spr.drawCircle(38, 268, 10 + d, COL_PRIMARY);
+    spr.drawCircle(38, 268, 16 + d, COL_BORDER);
+  }
+  spr.setFont(F_SMALL); spr.setTextColor(COL_TEXT, COL_CARD);
+  String s = ssid;
+  if (spr.textWidth(s) > SW - 72) s = s.substring(0, 13) + "..";
+  spr.setCursor(56, 248); spr.print(s);
+  spr.setFont(F_TINY); spr.setTextColor(COL_MUTED, COL_CARD);
+  spr.setCursor(56, 264); spr.print("Please wait...");
+
   spr.pushSprite(0, 0);
 }
 
-// ── READY (idle — no active session) ─────────────────────────────────────────
+// ── READY — Waiting for Session ───────────────────────────────────────────────
 static void drawReady() {
   spr.fillSprite(COL_BG);
-  drawHeader(spr, true);
-  // Big green checkmark circle
-  spr.fillSmoothCircle(SW / 2, 148, 52, COL_SUCCESS, COL_BG);
-  // Checkmark via lines
-  spr.drawLine(SW/2 - 22, 148, SW/2 - 5, 167, COL_WHITE);
-  spr.drawLine(SW/2 - 21, 148, SW/2 - 4, 167, COL_WHITE);
-  spr.drawLine(SW/2 - 5,  167, SW/2 + 24, 128, COL_WHITE);
-  spr.drawLine(SW/2 - 4,  167, SW/2 + 25, 128, COL_WHITE);
-  // Ready text
-  spr.setTextFont(4); spr.setTextColor(COL_TEXT, COL_BG);
-  String rt = "Ready";
-  int32_t tw = spr.textWidth(rt);
-  spr.setCursor((SW - tw) / 2, 216); spr.print(rt);
-  spr.setTextFont(2); spr.setTextColor(COL_MUTED, COL_BG);
-  String sub = "Waiting for a session to start";
-  tw = spr.textWidth(sub);
-  spr.setCursor((SW - tw) / 2, 246); spr.print(sub);
-  // IP + SD status row
-  String ip = WiFi.localIP().toString();
-  card(spr, 8, 272, SW - 16, 34, COL_CARD, COL_BORDER, 12);
-  spr.setTextFont(2); spr.setTextColor(COL_MUTED, COL_CARD);
-  tw = spr.textWidth(ip);
-  spr.setCursor((SW - tw) / 2, 279); spr.print(ip);
-  // SD dot
-  uint16_t sdDotCol = sdAvailable ? COL_SUCCESS : COL_WARNING;
-  spr.fillSmoothCircle(22, 289, 5, sdDotCol, COL_CARD);
-  spr.setTextFont(2); spr.setTextColor(sdAvailable ? COL_SUCCESS : COL_WARNING, COL_CARD);
-  spr.setCursor(30, 283);
-  spr.print(sdAvailable ? "SD" : "SD?");
+
+  // ── Header ──────────────────────────────────────────────────────────────────
+  spr.fillRect(0, 0, SW, 44, COL_CARD);
+  spr.fillRect(0, 44, SW, 2, COL_SUCCESS);
+  spr.setFont(F_LOGO); spr.setTextColor(COL_PRIMARY, COL_CARD);
+  spr.setCursor(14, 10); spr.print("DIKLY");
+  // Online pill badge
+  spr.fillRoundRect(SW - 62, 13, 50, 18, 9, COL_SUCCESS);
+  spr.fillCircle(SW - 54, 22, 3, COL_CARD);
+  spr.setFont(F_TINY); spr.setTextColor(COL_CARD, COL_SUCCESS);
+  spr.setCursor(SW - 46, 17); spr.print("Online");
+
+  // ── Title ──────────────────────────────────────────────────────────────────
+  spr.setFont(F_MED); spr.setTextColor(COL_PRIMARY, COL_BG);
+  String title = "Waiting for Session";
+  int32_t tw = spr.textWidth(title);
+  if (tw > SW - 16) { spr.setFont(F_SMALL); tw = spr.textWidth(title); }
+  spr.setCursor((SW - tw) / 2, 54); spr.print(title);
+
+  // ── Subtitle ───────────────────────────────────────────────────────────────
+  spr.setFont(F_TINY); spr.setTextColor(COL_MUTED, COL_BG);
+  const char* sub1 = "The lecturer will start";
+  const char* sub2 = "the session from the portal";
+  spr.setCursor((SW - spr.textWidth(sub1)) / 2, 80); spr.print(sub1);
+  spr.setCursor((SW - spr.textWidth(sub2)) / 2, 92); spr.print(sub2);
+
+  // ── Outward ring pulse ─────────────────────────────────────────────────────
+  static uint8_t pulse = 0; pulse = (pulse + 1) % 40;
+  uint8_t p = pulse;
+  uint16_t c1 = COL_BORDER, c2 = COL_BORDER, c3 = COL_BORDER, c4 = COL_BORDER;
+  if      (p < 10) c1 = COL_SUCCESS;
+  else if (p < 20) { c1 = COL_CARD; c2 = COL_SUCCESS; }
+  else if (p < 30) { c2 = COL_CARD; c3 = COL_SUCCESS; }
+  else             { c3 = COL_CARD; c4 = COL_SUCCESS; }
+
+  int32_t pcx = SW / 2, pcy = 166;
+  for (int8_t d = -1; d <= 1; d++) {
+    spr.drawCircle(pcx, pcy, 66 + d, c4);
+    spr.drawCircle(pcx, pcy, 50 + d, c3);
+    spr.drawCircle(pcx, pcy, 34 + d, c2);
+    spr.drawCircle(pcx, pcy, 18 + d, c1);
+  }
+  spr.fillCircle(pcx, pcy, 14, COL_PRIMARY);
+  spr.setFont(F_LOGO); spr.setTextColor(COL_BG, COL_PRIMARY);
+  tw = spr.textWidth("D");
+  spr.setCursor(pcx - tw / 2, pcy - 12); spr.print("D");
+
+  // ── Bottom info card ───────────────────────────────────────────────────────
+  card(spr, 10, 248, SW - 20, 58, COL_CARD, COL_BORDER, 12);
+  if (!sessionLecturer.isEmpty() || !sessionCourse.isEmpty()) {
+    spr.setFont(F_SMALL); spr.setTextColor(COL_TEXT, COL_CARD);
+    String l = sessionLecturer.isEmpty() ? sessionCourse : sessionLecturer;
+    if (spr.textWidth(l) > SW - 40) l = l.substring(0, 18) + "..";
+    tw = spr.textWidth(l);
+    spr.setCursor((SW - tw) / 2, 256); spr.print(l);
+    if (!sessionCourse.isEmpty() && !sessionLecturer.isEmpty()) {
+      spr.setFont(F_TINY); spr.setTextColor(COL_MUTED, COL_CARD);
+      String c = sessionCourse;
+      if (spr.textWidth(c) > SW - 40) c = c.substring(0, 22) + "..";
+      tw = spr.textWidth(c);
+      spr.setCursor((SW - tw) / 2, 278); spr.print(c);
+    }
+  } else {
+    spr.setFont(F_TINY); spr.setTextColor(COL_MUTED, COL_CARD);
+    String ip = "IP: " + WiFi.localIP().toString();
+    tw = spr.textWidth(ip);
+    spr.setCursor((SW - tw) / 2, 260); spr.print(ip);
+    uint16_t sdC = sdAvailable ? COL_SUCCESS : COL_WARNING;
+    spr.fillCircle(20, 281, 4, sdC);
+    spr.setTextColor(sdC, COL_CARD);
+    spr.setCursor(29, 277); spr.print(sdAvailable ? "SD Ready" : "No SD Card");
+  }
+
   spr.pushSprite(0, 0);
 }
 
-// ── SESSION (attendance code display) ────────────────────────────────────────
+// ── SESSION — Attendance Code Display ────────────────────────────────────────
 static void drawSession(const String& code, uint32_t secsLeft, uint32_t secsTotal) {
   spr.fillSprite(COL_BG);
-  drawHeader(spr, true);
 
-  // ── Course + Lecturer ───────────────────────────────────────────────────
-  card(spr, 8, 46, SW - 16, 56, COL_CARD, COL_BORDER, 10);
-  if (!sessionCourse.isEmpty()) {
-    spr.setTextFont(4); spr.setTextColor(COL_TEXT, COL_CARD);
-    String c = sessionCourse;
-    if (spr.textWidth(c) > SW - 40) c = c.substring(0, 10) + "...";
-    int32_t tw = spr.textWidth(c);
-    spr.setCursor((SW - tw) / 2, 52); spr.print(c);
-  }
+  // ── Header ──────────────────────────────────────────────────────────────────
+  spr.fillRect(0, 0, SW, 44, COL_CARD);
+  spr.fillRect(0, 44, SW, 2, COL_SUCCESS);
+  // Pulsing green dot
+  spr.fillCircle(16, 22, 7, COL_SUCCESS);
+  spr.fillCircle(16, 22, 4, COL_CARD);
+  spr.fillCircle(16, 22, 2, COL_SUCCESS);
+  spr.setFont(F_SMALL); spr.setTextColor(COL_SUCCESS, COL_CARD);
+  spr.setCursor(30, 14); spr.print("Session Active");
+
+  // ── Course + Lecturer card ─────────────────────────────────────────────────
+  card(spr, 8, 50, SW - 16, 40, COL_CARD, COL_BORDER, 10);
+  spr.setFont(F_SMALL); spr.setTextColor(COL_TEXT, COL_CARD);
+  String courseStr = sessionCourse.isEmpty() ? "Attendance" : sessionCourse;
+  if (spr.textWidth(courseStr) > SW - 40) courseStr = courseStr.substring(0, 13) + "..";
+  int32_t tw = spr.textWidth(courseStr);
+  spr.setCursor((SW - tw) / 2, 54); spr.print(courseStr);
   if (!sessionLecturer.isEmpty()) {
-    spr.setTextFont(2); spr.setTextColor(COL_MUTED, COL_CARD);
+    spr.setFont(F_TINY); spr.setTextColor(COL_MUTED, COL_CARD);
     String l = sessionLecturer;
-    if (spr.textWidth(l) > SW - 40) l = l.substring(0, 20) + "...";
-    int32_t tw = spr.textWidth(l);
-    spr.setCursor((SW - tw) / 2, 76); spr.print(l);
+    if (spr.textWidth(l) > SW - 40) l = l.substring(0, 26) + "..";
+    tw = spr.textWidth(l);
+    spr.setCursor((SW - tw) / 2, 72); spr.print(l);
   }
 
-  // ── Label ───────────────────────────────────────────────────────────────
-  spr.setTextFont(2); spr.setTextColor(COL_MUTED, COL_BG);
-  String lbl = "ATTENDANCE CODE";
-  int32_t tw = spr.textWidth(lbl);
-  spr.setCursor((SW - tw) / 2, 112); spr.print(lbl);
+  // ── "ATTENDANCE CODE" label ────────────────────────────────────────────────
+  spr.setFont(F_TINY); spr.setTextColor(COL_MUTED, COL_BG);
+  tw = spr.textWidth("ATTENDANCE CODE");
+  spr.setCursor((SW - tw) / 2, 98); spr.print("ATTENDANCE CODE");
 
-  // ── Big 7-segment code ──────────────────────────────────────────────────
-  // Font 7 is a 7-segment style — perfect for attendance codes.
-  // Digits only. We draw the 6-digit code centred on the screen.
+  // ── Code background card + 7-segment digits ────────────────────────────────
+  spr.fillRoundRect(10, 108, SW - 20, 58, 12, COL_CARD);
+  spr.drawRoundRect(10, 108, SW - 20, 58, 12, COL_BORDER);
   spr.setTextFont(7); spr.setTextSize(1);
-  tw = spr.textWidth(code);
-  spr.setTextColor(COL_PRIMARY, COL_BG);
-  spr.setCursor((SW - tw) / 2, 126); spr.print(code);
+  spr.setTextColor(COL_PRIMARY, COL_CARD);
+  String cA = code.substring(0, 3), cB = code.substring(3);
+  int32_t wA = spr.textWidth(cA), wB = spr.textWidth(cB), gap = 16;
+  int32_t codeX = (SW - wA - gap - wB) / 2;
+  spr.setCursor(codeX, 114);             spr.print(cA);
+  spr.setCursor(codeX + wA + gap, 114); spr.print(cB);
 
-  // ── Countdown bar ────────────────────────────────────────────────────────
-  // Urgency colour: green → amber → red
-  uint16_t barCol = secsLeft > 120 ? COL_SUCCESS   // > 2 min → green
-                  : secsLeft > 60  ? COL_WARNING   // > 1 min → amber
-                  :                  COL_ERROR;    // ≤ 1 min → red
-  int32_t barW = (int32_t)((SW - 24) * secsLeft / secsTotal);
-  // Track
-  spr.fillRoundRect(12, 208, SW - 24, 14, 7, COL_CARD);
-  // Fill
-  if (barW > 0) spr.fillRoundRect(12, 208, barW, 14, 7, barCol);
-  // Countdown text
-  spr.setTextFont(2); spr.setTextColor(barCol, COL_BG);
-  String ct = "Refreshes in " + String(secsLeft) + "s";
+  // ── Countdown bar + label ──────────────────────────────────────────────────
+  uint16_t barCol = secsLeft > 120 ? COL_SUCCESS : secsLeft > 60 ? COL_WARNING : COL_ERROR;
+  int32_t barW = secsTotal > 0 ? (int32_t)((SW - 32) * secsLeft / secsTotal) : 0;
+  spr.fillRoundRect(16, 174, SW - 32, 6, 3, COL_CARD);
+  if (barW > 0) spr.fillRoundRect(16, 174, barW, 6, 3, barCol);
+  spr.setFont(F_TINY); spr.setTextColor(barCol, COL_BG);
+  String ct = "Expires in " + String(secsLeft) + "s";
   tw = spr.textWidth(ct);
-  spr.setCursor((SW - tw) / 2, 228); spr.print(ct);
+  spr.setCursor((SW - tw) / 2, 185); spr.print(ct);
 
-  // ── Student count card ───────────────────────────────────────────────────
-  card(spr, 8, 252, SW - 16, 44, COL_CARD, COL_BORDER, 10);
-  spr.setTextFont(4); spr.setTextColor(COL_TEXT, COL_CARD);
-  String sc = String(studentsMarked);
-  tw = spr.textWidth(sc);
-  spr.setCursor((SW / 2) - tw - 4, 258); spr.print(sc);
-  spr.setTextFont(2); spr.setTextColor(COL_MUTED, COL_CARD);
-  spr.setCursor(SW / 2 + 2, 262); spr.print("students");
-  spr.setCursor(SW / 2 + 2, 278); spr.print("marked in");
+  // ── Stats row: Present | Time ──────────────────────────────────────────────
+  int32_t cw = (SW - 24) / 2;
 
-  // ── Time ────────────────────────────────────────────────────────────────
+  card(spr, 8, 198, cw, 64, COL_CARD, COL_BORDER, 10);
+  spr.setFont(F_TINY); spr.setTextColor(COL_MUTED, COL_CARD);
+  tw = spr.textWidth("Present");
+  spr.setCursor(8 + (cw - tw) / 2, 207); spr.print("Present");
+  spr.setFont(F_LARGE); spr.setTextColor(COL_SUCCESS, COL_CARD);
+  String ps = String(studentsMarked);
+  tw = spr.textWidth(ps);
+  spr.setCursor(8 + (cw - tw) / 2, 220); spr.print(ps);
+
+  card(spr, 16 + cw, 198, cw, 64, COL_CARD, COL_BORDER, 10);
   time_t now = time(nullptr); struct tm tmNow; localtime_r(&now, &tmNow);
   char timeBuf[9]; strftime(timeBuf, sizeof(timeBuf), "%I:%M %p", &tmNow);
-  spr.setTextFont(2); spr.setTextColor(COL_MUTED, COL_BG);
+  spr.setFont(F_TINY); spr.setTextColor(COL_MUTED, COL_CARD);
+  tw = spr.textWidth("Time");
+  spr.setCursor(16 + cw + (cw - tw) / 2, 207); spr.print("Time");
+  spr.setFont(F_SMALL); spr.setTextColor(COL_TEXT, COL_CARD);
   tw = spr.textWidth(timeBuf);
-  spr.setCursor((SW - tw) / 2, 302); spr.print(timeBuf);
+  spr.setCursor(16 + cw + (cw - tw) / 2, 228); spr.print(timeBuf);
+
+  // ── SD / sync footer ──────────────────────────────────────────────────────
+  uint16_t sdC = sdAvailable ? COL_SUCCESS : COL_MUTED;
+  String syncStr = sdAvailable
+    ? (sdRecordCount > 0 ? "SD: " + String(sdRecordCount) + " pending" : "SD: Ready")
+    : "RAM buffer active";
+  spr.fillCircle(14, 280, 3, sdC);
+  spr.setFont(F_TINY); spr.setTextColor(sdC, COL_BG);
+  spr.setCursor(22, 276); spr.print(syncStr);
 
   spr.pushSprite(0, 0);
 }
@@ -1066,8 +1420,8 @@ static const char PAIR_HTML[] PROGMEM = R"HTML(<!doctype html>
       <h3>Institution</h3>
       <label>Institution Code</label>
       <input id="ic" name="institutionCode" required autocomplete="off" placeholder="e.g. ABCD23" style="text-transform:uppercase">
-      <label>Pairing Code <span style="color:#334155;font-weight:400">(from Lecturer Portal)</span></label>
-      <input id="pc" name="pairingCode" required autocomplete="off" placeholder="6 characters" maxlength="6" style="text-transform:uppercase">
+      <label>Pairing Code <span style="color:#334155;font-weight:400">(from Admin Portal)</span></label>
+      <input id="pc" name="pairingCode" required autocomplete="off" placeholder="from admin portal" maxlength="8" style="text-transform:uppercase">
     </div>
     <div class="card">
       <h3>School WiFi</h3>
@@ -1183,7 +1537,7 @@ static void startApPortal() {
     while (time(nullptr) < 1000000000UL && millis() - tw < 5000) delay(100);
     if (!tryPair(pcode, inst)) {
       WiFi.disconnect(); WiFi.mode(WIFI_AP);
-      localHttp.send(401, "application/json", "{\"error\":\"Pairing rejected — check code (expires in 5 min)\"}");
+      localHttp.send(401, "application/json", "{\"error\":\"Pairing rejected — check institution code and pairing code\"}");
       return;
     }
     saveConfig();
@@ -1251,7 +1605,6 @@ static void registerLocalHttp() {
       localHttp.send(403, "application/json", "{\"error\":\"Incorrect code. Check the screen and try again.\"}"); return;
     }
     // ── Duplicate guard ───────────────────────────────────────────────────────
-    // Reset dedup table if this is a new session (edge case: device rebooted mid-session)
     if (dedupSession != sessionId) dedupClear(sessionId);
     const char* dedupKey = indexNum.length() ? indexNum.c_str() : userId.c_str();
     if (dedupCheck(dedupKey)) {
@@ -1260,7 +1613,7 @@ static void registerLocalHttp() {
     // ── Write to SD card (primary) ────────────────────────────────────────────
     bool stored = false;
     if (sdAvailable) {
-      File f = SD.open(SD_ATT_FILE, FILE_APPEND);
+      File f = SD_MMC.open(SD_ATT_FILE, FILE_APPEND);
       if (f) {
         JsonDocument entry;
         if (indexNum.length()) entry["indexNumber"] = indexNum;
@@ -1308,37 +1661,64 @@ static void registerLocalHttp() {
 //  SETUP & LOOP
 // ═════════════════════════════════════════════════════════════════════════════
 void setup() {
-  Serial.begin(115200); delay(150);
-  pinMode(LED_PIN, OUTPUT);
-
-  // Backlight on (GPIO 45 on ES3C28P — HIGH = on)
+  // Backlight FIRST — GPIO 45 on ES3C28P. Must be before anything that could
+  // crash/hang so we can always tell whether firmware has booted at all.
+  // LovyanGFX's Light_PWM will also manage this pin after display.init().
   pinMode(45, OUTPUT);
   digitalWrite(45, HIGH);
 
-  // Display init
-  tft.init(); tft.setRotation(0); // 0 = portrait, 2 = portrait flipped
-  tft.fillScreen(COL_BG);
-  // Sprite for flicker-free rendering (uses ~150 KB PSRAM — S3 has PSRAM)
+  Serial.begin(115200); delay(150);
+  pinMode(LED_PIN, OUTPUT);
+
+  // Display init — LovyanGFX with SPI2_HOST, ILI9341, pins confirmed working.
+  // cfg.invert=true in the LGFX class already sends INVON during panel init.
+  // Do NOT call invertDisplay() again here — double-inverting makes all colours wrong.
+  display.init();
+  display.setRotation(0);  // 0 = portrait
+  display.fillScreen(COL_BG);
+
+  // Sprite for flicker-free rendering (~150 KB PSRAM).
+  // Requires Tools → PSRAM → OPI PSRAM in Arduino IDE.
   spr.setColorDepth(16);
-  spr.createSprite(SW, SH);
+  void* sprBuf = spr.createSprite(SW, SH);
+  if (!sprBuf) {
+    LOG("PSRAM not available — sprite disabled, using direct display draw");
+    display.setTextColor(TFT_WHITE, COL_BG);
+    display.setTextSize(2);
+    display.drawString("DIKLY", 80, 140);
+    display.setTextSize(1);
+    display.drawString("Enable OPI PSRAM", 40, 170);
+    display.drawString("in Arduino IDE Tools", 30, 185);
+  }
 
   // Touch init
   touchInit();
 
-  // SD card init — shares FSPI bus (SCLK=12, MISO=13, MOSI=11) with display
-  sdSPI.begin(TFT_SCLK, TFT_MISO, TFT_MOSI, SD_CS_PIN);
-  sdAvailable = SD.begin(SD_CS_PIN, sdSPI, 25000000);
+  // SD card via SDIO (SD_MMC) — completely separate peripheral from the display's
+  // SPI bus, so no GPIO-matrix conflict. Try 4-bit first; fall back to 1-bit.
+  SD_MMC.setPins(SD_CLK, SD_CMD, SD_D0, SD_D1, SD_D2, SD_D3);
+  sdAvailable = SD_MMC.begin("/sdcard", false, false);  // false = 4-bit, no format
+  if (!sdAvailable) {
+    // 1-bit fallback — works with cards that don't negotiate 4-bit cleanly
+    SD_MMC.end();
+    SD_MMC.setPins(SD_CLK, SD_CMD, SD_D0);
+    sdAvailable = SD_MMC.begin("/sdcard", true, false);  // true = 1-bit
+  }
   if (sdAvailable) {
-    LOG("SD card OK — " + String(SD.totalBytes() / (1024 * 1024)) + " MB total");
-    // Count any existing unsent records so sync runs on first heartbeat
-    if (SD.exists(SD_ATT_FILE)) {
-      File f = SD.open(SD_ATT_FILE, FILE_READ);
-      while (f && f.available()) { if (f.readStringUntil('\n').length() > 2) sdRecordCount++; }
-      if (f) f.close();
-      if (sdRecordCount) LOG("Found " + String(sdRecordCount) + " pending offline records on SD");
+    uint64_t mb = SD_MMC.cardSize() / (1024ULL * 1024ULL);
+    LOG("SD card OK — " + String((uint32_t)mb) + " MB ("
+        + String(SD_MMC.cardType()) + "-type)");
+    // Count any pending offline records left from a previous interrupted session
+    if (SD_MMC.exists(SD_ATT_FILE)) {
+      File cf = SD_MMC.open(SD_ATT_FILE, FILE_READ);
+      if (cf) {
+        while (cf.available()) { if (cf.read() == '\n') sdRecordCount++; }
+        cf.close();
+        if (sdRecordCount) LOG("SD: " + String(sdRecordCount) + " pending records");
+      }
     }
   } else {
-    LOG("SD card not found — falling back to RAM buffer (GPIO " + String(SD_CS_PIN) + " — verify board schematic)");
+    LOG("SD not found — using 200-slot RAM buffer for offline records");
   }
 
   // Splash
@@ -1389,6 +1769,10 @@ void loop() {
     uint16_t tx, ty;
     bool touched = touchRead(tx, ty);
     if (touched) {
+      // Save position while finger is down so the tap handler gets the
+      // last known good coordinates when the finger lifts (touchRead returns
+      // false on release, leaving tx/ty uninitialised without this save).
+      touchX = tx; touchY = ty;
       if (!touchActive) {
         touchActive = true; touchDownMs = millis(); touchHandled = false;
       } else if (!touchHandled && millis() - touchDownMs >= 3000) {
@@ -1396,8 +1780,7 @@ void loop() {
       }
     } else {
       if (touchActive && !touchHandled) {
-        // Short tap released
-        handleWifiScanTap(tx, ty);
+        handleWifiScanTap(touchX, touchY);  // use saved position
       }
       touchActive = false; touchHandled = false;
     }
@@ -1410,6 +1793,7 @@ void loop() {
   if (deviceJWT.isEmpty() || WiFi.getMode() == WIFI_AP) {
     uint16_t tx, ty;
     if (touchRead(tx, ty)) {
+      touchX = tx; touchY = ty;
       if (!touchActive) { touchActive = true; touchDownMs = millis(); }
       else if (millis() - touchDownMs >= 3000) factoryReset();
     } else { touchActive = false; }
