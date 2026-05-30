@@ -249,31 +249,73 @@ static String deriveCode(const String& seed, uint32_t unixSec) {
   return String(buf);
 }
 
-// ─── Touch (FT6X36) ──────────────────────────────────────────────────────────
+// ─── Touch (FT6X36 capacitive, I2C) ──────────────────────────────────────────
+// Confirmed chip: FT6336G on ES3C28P board.
+// I2C: SDA=16, SCL=15. RST=18, INT=17.
+// Standard address 0x38; auto-scan fallback catches mis-documented variants.
+
+static uint8_t touchAddr = FT6X36_ADDR;  // updated by touchInit scan
+
 static void touchInit() {
   Wire.begin(TOUCH_SDA, TOUCH_SCL);
+  delay(50);  // stabilise bus before talking to chip
+
+  // Hard-reset the controller — FT6336G needs RST LOW ≥20ms, then ≥300ms
+  // settle time before first I2C transaction. Short timing caused silent fail.
   if (TOUCH_RST >= 0) {
     pinMode(TOUCH_RST, OUTPUT);
-    digitalWrite(TOUCH_RST, LOW); delay(10);
-    digitalWrite(TOUCH_RST, HIGH); delay(100);
+    digitalWrite(TOUCH_RST, LOW);  delay(20);
+    digitalWrite(TOUCH_RST, HIGH); delay(300);
   }
-  if (TOUCH_INT >= 0) pinMode(TOUCH_INT, INPUT);
+  // INT is open-drain — needs pull-up. External 10k on board may be absent.
+  if (TOUCH_INT >= 0) pinMode(TOUCH_INT, INPUT_PULLUP);
+
+  // Scan I2C bus and lock onto the first recognisable touch-controller address.
+  // Known addresses: FT6x36=0x38, FT6x06=0x3B, CST816=0x15, GT911=0x5D/0x14
+  LOG("[touch] scanning I2C bus...");
+  bool found = false;
+  const uint8_t KNOWN[] = { 0x38, 0x3B, 0x15, 0x14, 0x5D };
+  for (uint8_t addr = 0x08; addr < 0x78; addr++) {
+    Wire.beginTransmission(addr);
+    if (Wire.endTransmission() == 0) {
+      LOG("[touch]   device at 0x" + String(addr, HEX));
+      if (!found) {
+        for (uint8_t k : KNOWN) {
+          if (addr == k) { touchAddr = addr; found = true; break; }
+        }
+      }
+    }
+  }
+  if (found) {
+    LOG("[touch] using address 0x" + String(touchAddr, HEX));
+  } else {
+    LOG("[touch] WARNING: no touch controller found — check SDA/SCL pins");
+  }
 }
 
-// Returns true if a finger is down; sets tx, ty.
+// Returns true if a finger is down; writes screen-mapped coordinates to tx, ty.
 static bool touchRead(uint16_t& tx, uint16_t& ty) {
-  Wire.beginTransmission(FT6X36_ADDR);
-  Wire.write(0x02); // TD_STATUS
+  Wire.beginTransmission(touchAddr);
+  Wire.write(0x02);  // TD_STATUS register
   if (Wire.endTransmission(false) != 0) return false;
-  Wire.requestFrom((uint8_t)FT6X36_ADDR, (uint8_t)6);
+  Wire.requestFrom((uint8_t)touchAddr, (uint8_t)6);
   if (Wire.available() < 6) return false;
-  uint8_t td  = Wire.read();
-  uint8_t xh  = Wire.read(); uint8_t xl = Wire.read();
-  uint8_t yh  = Wire.read(); uint8_t yl = Wire.read();
-  Wire.read(); // misc
+
+  uint8_t td = Wire.read();                          // touch count
+  uint8_t xh = Wire.read(); uint8_t xl = Wire.read();
+  uint8_t yh = Wire.read(); uint8_t yl = Wire.read();
+  Wire.read();  // weight/misc
+
   if ((td & 0x0F) == 0) return false;
-  tx = ((xh & 0x0F) << 8) | xl;
-  ty = ((yh & 0x0F) << 8) | yl;
+
+  // Raw panel coordinates from FT6336G on ES3C28P in portrait (rotation=0).
+  // Panel physically reports X along the long axis (0-319) and Y along the
+  // short axis (0-239), opposite to the display — swap and invert X to get
+  // correct screen coordinates: screen_x = rawY, screen_y = (319 - rawX).
+  uint16_t rawX = ((xh & 0x0F) << 8) | xl;
+  uint16_t rawY = ((yh & 0x0F) << 8) | yl;
+  tx = rawY;
+  ty = (SH - 1) - rawX;
   return true;
 }
 
@@ -1492,6 +1534,10 @@ void loop() {
     uint16_t tx, ty;
     bool touched = touchRead(tx, ty);
     if (touched) {
+      // Save position while finger is down so the tap handler gets the
+      // last known good coordinates when the finger lifts (touchRead returns
+      // false on release, leaving tx/ty uninitialised without this save).
+      touchX = tx; touchY = ty;
       if (!touchActive) {
         touchActive = true; touchDownMs = millis(); touchHandled = false;
       } else if (!touchHandled && millis() - touchDownMs >= 3000) {
@@ -1499,8 +1545,7 @@ void loop() {
       }
     } else {
       if (touchActive && !touchHandled) {
-        // Short tap released
-        handleWifiScanTap(tx, ty);
+        handleWifiScanTap(touchX, touchY);  // use saved position
       }
       touchActive = false; touchHandled = false;
     }
@@ -1513,6 +1558,7 @@ void loop() {
   if (deviceJWT.isEmpty() || WiFi.getMode() == WIFI_AP) {
     uint16_t tx, ty;
     if (touchRead(tx, ty)) {
+      touchX = tx; touchY = ty;
       if (!touchActive) { touchActive = true; touchDownMs = millis(); }
       else if (millis() - touchDownMs >= 3000) factoryReset();
     } else { touchActive = false; }
