@@ -15,8 +15,13 @@ const DEVICE_MARK_WINDOW_MS   = 15_000;   // mark-attendance gate
 // Priority:
 //   1. Device assigned to the group enrolled in this course (new group model)
 //   2. Any online company device (fallback for admins or unassigned devices)
-async function _resolveSessionDevice(user, courseId) {
+async function _resolveSessionDevice(user, courseId, explicitDeviceId) {
   const companyId = user.company;
+
+  // If the caller explicitly picked a device, use it directly
+  if (explicitDeviceId) {
+    return Device.findOne({ deviceId: explicitDeviceId, companyId });
+  }
 
   // Try to find the device assigned to the group for this course
   if (courseId) {
@@ -67,7 +72,7 @@ exports.startSession = async (req, res) => {
     // The lecturer's paired ESP32 must be powered on and actively sending
     // heartbeats before any attendance session can start. The Device model
     // is the single source of truth — there is no "company-level" device.
-    const device  = await _resolveSessionDevice(req.user, req.body.courseId);
+    const device  = await _resolveSessionDevice(req.user, req.body.courseId, req.body.deviceId || null);
     const freshness = _deviceFreshness(device, DEVICE_ONLINE_WINDOW_MS);
 
     console.log(`[SESSION START] company=${company.name} deviceRegistered=${!!device} deviceOnline=${freshness.online} secondsAgo=${freshness.secondsAgo}`);

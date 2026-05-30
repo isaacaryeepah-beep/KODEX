@@ -6513,13 +6513,20 @@ async function showStartSessionModal() {
         <h3>Start New Session</h3>
         <div class="form-group">
           <label>Course <span style="color:red">*</span></label>
-          <select id="session-course" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
+          <select id="session-course" onchange="loadSessionDevices(this.value)" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
             <option value="">— Select Course —</option>
             ${courses
                 .filter(c => !c.needsApproval || c.approvalStatus === 'approved')
                 .map(c => `<option value="${c._id}">${esc(c.title)}${c.level?' · L'+c.level:''}${c.group?' · Grp '+c.group:''}</option>`).join('')}
           </select>
           ${courses.some(c => c.needsApproval && c.approvalStatus !== 'approved') ? `<p style="font-size:11px;color:#b45309;margin-top:4px">Some courses are hidden because they are pending approval or rejected.</p>` : ''}
+        </div>
+        <div class="form-group" id="session-device-group" style="display:none">
+          <label>Classroom Device <span style="color:red">*</span></label>
+          <select id="session-device" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
+            <option value="">— Loading devices… —</option>
+          </select>
+          <p id="session-device-hint" style="font-size:11px;color:var(--text-muted);margin-top:4px"></p>
         </div>
         <div class="form-group">
           <label>Session Title <span style="font-weight:400;color:var(--text-muted);font-size:12px">(optional)</span></label>
@@ -6534,11 +6541,54 @@ async function showStartSessionModal() {
   `;
 }
 
+async function loadSessionDevices(courseId) {
+  const group  = document.getElementById('session-device-group');
+  const select = document.getElementById('session-device');
+  const hint   = document.getElementById('session-device-hint');
+  if (!group || !select) return;
+
+  if (!courseId) {
+    group.style.display = 'none';
+    return;
+  }
+
+  group.style.display = 'block';
+  select.innerHTML = '<option value="">— Loading devices… —</option>';
+  if (hint) hint.textContent = '';
+
+  try {
+    const data = await api(`/api/devices/available?courseId=${encodeURIComponent(courseId)}`);
+    const devices = data.devices || [];
+    if (!devices.length) {
+      select.innerHTML = '<option value="">— No devices found for this course —</option>';
+      if (hint) hint.textContent = 'Ask an admin or class rep to assign a device to this group.';
+      return;
+    }
+    select.innerHTML = '<option value="">— Select Device —</option>' +
+      devices.map(d => {
+        const label = [d.deviceName || d.deviceId, d.assignedGroup ? 'Grp ' + d.assignedGroup : '', d.online ? '● Online' : '○ Offline'].filter(Boolean).join(' · ');
+        return `<option value="${esc(d.deviceId)}"${d.online ? '' : ' style="color:var(--text-muted)"'}>${esc(label)}</option>`;
+      }).join('');
+    if (hint) hint.textContent = devices.length === 1 ? 'One device found — selected automatically.' : `${devices.length} devices available for this course's group.`;
+    if (devices.length === 1) select.value = devices[0].deviceId;
+  } catch (e) {
+    select.innerHTML = '<option value="">— Failed to load devices —</option>';
+    if (hint) hint.textContent = e.message || 'Could not fetch devices.';
+  }
+}
+
 async function startSession() {
   const title    = document.getElementById('session-title')?.value?.trim();
   const courseId = document.getElementById('session-course')?.value;
+  const deviceEl = document.getElementById('session-device');
+  const deviceId = deviceEl?.closest('#session-device-group')?.style.display !== 'none'
+    ? deviceEl?.value || null
+    : null;
 
   if (!courseId) { toastWarning('Please select a course.'); return; }
+  if (deviceEl?.closest('#session-device-group')?.style.display !== 'none' && !deviceId) {
+    toastWarning('Please select a classroom device.'); return;
+  }
 
   // Don't close modal yet — keep it open so we can show errors in it
   const container = document.getElementById('modal-container');
@@ -6570,7 +6620,7 @@ async function startSession() {
     const result = await api('/api/attendance-sessions/start', {
       method: 'POST',
       headers: hotspotKey ? { 'x-esp32-hotspot-key': hotspotKey } : {},
-      body: JSON.stringify({ title, courseId }),
+      body: JSON.stringify({ title, courseId, ...(deviceId ? { deviceId } : {}) }),
     });
     closeModal();
     if (result.warning) {

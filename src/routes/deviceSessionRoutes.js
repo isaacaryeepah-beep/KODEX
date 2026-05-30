@@ -34,6 +34,9 @@ router.post('/devices/configure-wifi', authenticate, companyIsolation, deviceCtr
 // ─── ADMIN/HOD: ASSIGN DEVICE TO CLASS REP ───────────────────────────────────
 router.patch('/devices/:deviceId/assign-class-rep', authenticate, requireRole('admin', 'superadmin', 'hod'), deviceCtrl.assignClassRep);
 
+// ─── AVAILABLE DEVICES FOR A COURSE ──────────────────────────────────────────
+router.get('/devices/available', authenticate, companyIsolation, deviceCtrl.getAvailableDevices);
+
 // ─── ASSIGN DEVICE TO STUDENT GROUP ──────────────────────────────────────────
 router.post('/devices/assign-group', authenticate, companyIsolation, deviceCtrl.assignGroup);
 

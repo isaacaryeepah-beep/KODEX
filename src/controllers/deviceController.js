@@ -744,6 +744,104 @@ exports.assignClassRep = async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 };
 
+// ─── GET AVAILABLE DEVICES FOR A COURSE ──────────────────────────────────────
+// GET /api/devices/available?courseId=xxx
+// Returns devices in this institution that serve the groups enrolled in the
+// given course. For lecturers: only returns devices they are authorized for
+// (i.e. they must be assigned to the course). For admin/HOD: returns all
+// company devices with their online status.
+exports.getAvailableDevices = async (req, res) => {
+  try {
+    const companyId = req.user.company;
+    const { courseId } = req.query;
+
+    if (!courseId) {
+      return res.status(400).json({ message: 'courseId is required.' });
+    }
+
+    const mongoose = require('mongoose');
+    if (!mongoose.Types.ObjectId.isValid(courseId)) {
+      return res.status(400).json({ message: 'Invalid courseId.' });
+    }
+
+    const Course = require('../models/Course');
+
+    // Verify course exists in this company
+    const course = await Course.findOne({ _id: courseId, companyId });
+    if (!course) {
+      return res.status(404).json({ message: 'Course not found.' });
+    }
+
+    // Lecturers must be assigned to the course
+    const BYPASS_ROLES = ['admin', 'superadmin', 'hod'];
+    if (!BYPASS_ROLES.includes(req.user.role)) {
+      const CourseLecturerAssignment = require('../models/CourseLecturerAssignment');
+      const isLegacyOwner = course.lecturerId?.toString() === req.user._id.toString();
+      if (!isLegacyOwner) {
+        const assignment = await CourseLecturerAssignment.findActiveAssignment(
+          companyId, course._id, req.user._id
+        );
+        if (!assignment) {
+          return res.status(403).json({ message: 'You are not assigned to teach this course.' });
+        }
+      }
+    }
+
+    // Find groups enrolled in this course via StudentCourseEnrollment snapshots
+    const StudentCourseEnrollment = require('../models/StudentCourseEnrollment');
+    const enrollments = await StudentCourseEnrollment.find(
+      { course: courseId, company: companyId, status: 'active' },
+      { 'academicSnapshot.group': 1, 'academicSnapshot.level': 1, 'academicSnapshot.department': 1 }
+    ).lean();
+
+    // Collect unique group/level combos from enrollment snapshots
+    const groupSet = new Map();
+    for (const e of enrollments) {
+      const g = e.academicSnapshot?.group;
+      const l = e.academicSnapshot?.level;
+      if (g && l) {
+        const key = `${String(l).trim()}::${g.trim().toUpperCase()}`;
+        if (!groupSet.has(key)) groupSet.set(key, { level: String(l).trim(), group: g.trim().toUpperCase() });
+      }
+    }
+
+    let devices;
+    if (groupSet.size > 0) {
+      // Build OR query matching any of the group/level combos
+      const groupConditions = Array.from(groupSet.values()).map(({ level, group }) => ({
+        assignedLevel: level,
+        assignedGroup: group,
+      }));
+      devices = await Device.find({
+        companyId,
+        $or: groupConditions,
+      }).lean();
+    } else {
+      // No enrollment snapshots — fall back to all company devices
+      devices = await Device.find({ companyId }).lean();
+    }
+
+    const now = Date.now();
+    const result = devices.map(d => ({
+      deviceId:           d.deviceId,
+      deviceName:         d.deviceName,
+      assignedGroup:      d.assignedGroup,
+      assignedLevel:      d.assignedLevel,
+      assignedDepartment: d.assignedDepartment,
+      assignedRoom:       d.assignedRoom,
+      online: d.lastHeartbeat
+        ? (now - new Date(d.lastHeartbeat).getTime()) < 20000
+        : false,
+      lastHeartbeat: d.lastHeartbeat,
+    }));
+
+    res.json({ success: true, devices: result });
+  } catch (err) {
+    console.error('[getAvailableDevices]', err);
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+};
+
 // ─── SUPERADMIN TRANSFER (only way to reassign a device) ─────────────────────
 exports.transferDevice = async (req, res) => {
   try {
