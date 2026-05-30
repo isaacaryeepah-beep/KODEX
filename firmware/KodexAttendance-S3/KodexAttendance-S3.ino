@@ -207,6 +207,11 @@ uint8_t  hbFails     = 0;
 bool     timeSynced  = false;
 bool     forceReconn = false;
 
+// Async pairing (avoids iOS captive-portal dropping the fetch before we respond)
+bool     pairPending     = false;
+String   pairPendingInst = "";
+String   pairPendingCode = "";
+
 // Screen state machine
 enum Screen { SPLASH, SETUP, WIFI_SCAN, WIFI_RECONFIG, CONNECTING, READY, SESSION };
 Screen curScreen = SPLASH;
@@ -1473,7 +1478,7 @@ document.getElementById('f').onsubmit=async(e)=>{
     const r=await fetch('/pair',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(d)});
     const j=await r.json();
     if(!r.ok)throw new Error(j.error||'Pairing failed');
-    m.className='ok';m.textContent='✓ Paired! Device is rebooting…';
+    m.className='ok';m.textContent='✓ Connecting to WiFi & pairing… device will reboot in ~30 s. You can close this.';
   }catch(err){m.className='err';m.textContent='✗ '+err.message;b.disabled=false;}
 };
 </script></body></html>)HTML";
@@ -1521,28 +1526,12 @@ static void startApPortal() {
     if (inst.length() < 4 || pcode.length() < 4 || ssid.isEmpty()) {
       localHttp.send(400, "application/json", "{\"error\":\"Missing fields\"}"); return;
     }
+    // Respond immediately so iOS captive-portal doesn't drop the connection
+    // while we're switching WiFi modes. Actual connect + pair happens in loop().
     apiBase = api; wifiSSID = ssid; wifiPass = pass;
-    WiFi.mode(WIFI_AP_STA);
-    WiFi.begin(ssid.c_str(), pass.c_str());
-    uint32_t t0 = millis();
-    while (WiFi.status() != WL_CONNECTED && millis() - t0 < WIFI_TIMEOUT_MS) {
-      delay(200); localHttp.handleClient();
-    }
-    if (WiFi.status() != WL_CONNECTED) {
-      WiFi.mode(WIFI_AP);
-      localHttp.send(502, "application/json", "{\"error\":\"WiFi connect failed\"}"); return;
-    }
-    configTime(0, 0, "pool.ntp.org", "time.google.com");
-    uint32_t tw = millis();
-    while (time(nullptr) < 1000000000UL && millis() - tw < 5000) delay(100);
-    if (!tryPair(pcode, inst)) {
-      WiFi.disconnect(); WiFi.mode(WIFI_AP);
-      localHttp.send(401, "application/json", "{\"error\":\"Pairing rejected — check institution code and pairing code\"}");
-      return;
-    }
-    saveConfig();
+    pairPendingInst = inst; pairPendingCode = pcode;
+    pairPending = true;
     localHttp.send(200, "application/json", "{\"ok\":true}");
-    delay(1200); ESP.restart();
   });
 
   localHttp.begin();
@@ -1786,6 +1775,34 @@ void loop() {
     }
     drawWifiScan();
     delay(80);
+    return;
+  }
+
+  // Async pairing: browser got 200 already; now do WiFi connect + server pair
+  if (pairPending) {
+    pairPending = false;
+    delay(300); // let HTTP response flush to the browser
+    drawSetup("Connecting…");
+    WiFi.mode(WIFI_AP_STA);
+    WiFi.begin(wifiSSID.c_str(), wifiPass.c_str());
+    uint32_t t0 = millis();
+    while (WiFi.status() != WL_CONNECTED && millis() - t0 < WIFI_TIMEOUT_MS) {
+      delay(200); localHttp.handleClient();
+    }
+    if (WiFi.status() != WL_CONNECTED) {
+      WiFi.mode(WIFI_AP);
+      drawSetup("WiFi failed — retry");
+      return;
+    }
+    configTime(0, 0, "pool.ntp.org", "time.google.com");
+    uint32_t tw = millis();
+    while (time(nullptr) < 1000000000UL && millis() - tw < 5000) delay(100);
+    if (!tryPair(pairPendingCode, pairPendingInst)) {
+      WiFi.disconnect(); WiFi.mode(WIFI_AP);
+      drawSetup("Pair rejected — check codes");
+      return;
+    }
+    delay(800); ESP.restart();
     return;
   }
 
