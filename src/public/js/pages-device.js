@@ -866,9 +866,8 @@ async function renderAdminDevices() {
   const content = document.getElementById('main-content');
   if (!content) return;
 
-  _injectDevStyles();
-
   content.innerHTML = `
+    <style>${_devCSS()}</style>
     <div class="dev-page">
       <div class="dev-page-header">
         <div>
