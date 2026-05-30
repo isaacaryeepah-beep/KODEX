@@ -1340,6 +1340,7 @@ void setup() {
 
   // Display init — LovyanGFX with SPI2_HOST, ILI9341, pins confirmed working
   display.init();
+  display.invertDisplay(true);  // ES3C28P ILI9341 requires INVON (sends 0x21)
   display.setRotation(0);  // 0 = portrait
   display.fillScreen(COL_BG);
 
