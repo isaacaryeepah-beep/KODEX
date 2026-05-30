@@ -1089,7 +1089,7 @@ static const char PAIR_HTML[] PROGMEM = R"HTML(<!doctype html>
       <label>Institution Code</label>
       <input id="ic" name="institutionCode" required autocomplete="off" placeholder="e.g. ABCD23" style="text-transform:uppercase">
       <label>Pairing Code <span style="color:#334155;font-weight:400">(from Lecturer Portal)</span></label>
-      <input id="pc" name="pairingCode" required autocomplete="off" placeholder="6 characters" maxlength="6" style="text-transform:uppercase">
+      <input id="pc" name="pairingCode" required autocomplete="off" placeholder="from lecturer portal" maxlength="8" style="text-transform:uppercase">
     </div>
     <div class="card">
       <h3>School WiFi</h3>
@@ -1102,7 +1102,7 @@ static const char PAIR_HTML[] PROGMEM = R"HTML(<!doctype html>
       <label>Password</label>
       <input name="password" type="password" autocomplete="new-password" placeholder="Leave blank if open">
       <label style="margin-top:16px;font-size:10px;color:#475569">Server (advanced)</label>
-      <input name="apiBase" value="https://kodex.it.com" style="font-size:12px;color:#475569">
+      <input name="apiBase" value="https://dikly.sbs" style="font-size:12px;color:#475569">
     </div>
     <button type="submit" class="submit" id="b">Pair Device</button>
   </form>
