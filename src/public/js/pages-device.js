@@ -576,15 +576,11 @@ async function _devGenerateCode() {
 
 let _devExpiryTimer = null;
 function _devStartExpiryCountdown(exp, el) {
-  clearInterval(_devExpiryTimer);
-  _devExpiryTimer = setInterval(() => {
-    const secs = Math.max(0, Math.ceil((exp - Date.now()) / 1000));
-    const m = Math.floor(secs / 60), s = secs % 60;
-    if (el) el.textContent = secs > 0
-      ? `Expires in ${m}:${String(s).padStart(2,'0')}`
-      : 'Code expired — please regenerate';
-    if (secs === 0) clearInterval(_devExpiryTimer);
-  }, 1000);
+  // Code is valid for 7 days — just show the expiry date, no countdown anxiety.
+  if (el) {
+    const d = new Date(exp);
+    el.textContent = `Valid until ${d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}`;
+  }
 }
 
 let _devPollTimer = null;
@@ -593,11 +589,11 @@ function _devPollForLink(code) {
   let attempts = 0;
   _devPollTimer = setInterval(async () => {
     attempts++;
-    if (attempts > 60) {
+    if (attempts > 360) {  // poll for up to 30 min (every 5s × 360)
       clearInterval(_devPollTimer);
       _devIStepError(3);
       const sub = document.getElementById('dev-istep-3-sub');
-      if (sub) sub.textContent = 'Setup timed out. The code expired — tap Start Over to try again.';
+      if (sub) sub.textContent = 'Still waiting — leave this page open and the device will pair automatically when connected.';
       const btn = document.getElementById('dev-connect-btn');
       if (btn) { btn.textContent = '↻ Start Over'; btn.style.display = ''; }
       return;

@@ -44,7 +44,8 @@ exports.generatePairingCode = async (req, res) => {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
     const code = Array.from({ length: 6 }, () => chars[crypto.randomInt(chars.length)]).join('');
     const hash = crypto.createHash('sha256').update(code).digest('hex');
-    const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
+    // Code stays valid for 7 days — lecturer generates once, pairs device at leisure.
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 
     await User.findByIdAndUpdate(req.user._id, {
       devicePairingCode:   hash,
