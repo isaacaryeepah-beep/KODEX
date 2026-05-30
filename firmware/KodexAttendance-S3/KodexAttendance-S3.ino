@@ -1205,7 +1205,7 @@ static void startApPortal() {
     while (time(nullptr) < 1000000000UL && millis() - tw < 5000) delay(100);
     if (!tryPair(pcode, inst)) {
       WiFi.disconnect(); WiFi.mode(WIFI_AP);
-      localHttp.send(401, "application/json", "{\"error\":\"Pairing rejected — check code (expires in 5 min)\"}");
+      localHttp.send(401, "application/json", "{\"error\":\"Pairing rejected — check institution code and pairing code\"}");
       return;
     }
     saveConfig();
