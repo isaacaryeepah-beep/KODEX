@@ -691,128 +691,95 @@ static void drawSplash() {
 static void drawSetup(const String& apName) {
   spr.fillSprite(COL_BG);
 
-  const uint16_t CYAN    = 0x07FF;  // #00ffff
-  const uint16_t CARDDK  = 0x0842;  // very dark card
-  const uint16_t GLOWBDR = 0x1A5F;  // dim cyan glow border
+  const uint16_t CYAN  = 0x07FF;
+  const uint16_t GLASS = 0x10A2;
 
-  // ── DIKLY — blue/cyan split, no header bar ──────────────────────────────────
-  spr.setFont(F_LOGO_L); spr.setTextSize(1);
-  spr.setTextColor(COL_PRIMARY, COL_BG);
-  spr.setCursor(12, 6); spr.print("DIK");
+  // ── DIKLY — smaller logo, single cyan ──────────────────────────────────────
+  spr.setFont(F_LOGO); spr.setTextSize(1);
   spr.setTextColor(CYAN, COL_BG);
-  spr.print("LY");
+  spr.setCursor(14, 12); spr.print("DIKLY");
 
-  // ── WiFi arc icon — standalone top right ────────────────────────────────────
+  // ── WiFi icon — compact, top right ─────────────────────────────────────────
   {
-    const int32_t wx = 214, wy = 28;
+    const int32_t wx = 216, wy = 22;
     spr.fillCircle(wx, wy, 2, CYAN);
-    spr.drawArc(wx, wy, 8,  6,  220, 320, CYAN);
-    spr.drawArc(wx, wy, 14, 12, 215, 325, CYAN);
-    spr.drawArc(wx, wy, 20, 18, 210, 330, CYAN);
+    spr.drawArc(wx, wy, 7,  5,  220, 320, CYAN);
+    spr.drawArc(wx, wy, 13, 11, 215, 325, CYAN);
   }
 
-  // ── "Device Setup" subtitle ─────────────────────────────────────────────────
+  // ── Subtitle ────────────────────────────────────────────────────────────────
   spr.setFont(F_TINY); spr.setTextSize(1);
   spr.setTextColor(COL_MUTED, COL_BG);
-  spr.setCursor(12, 46); spr.print("Device Setup");
+  spr.setCursor(14, 38); spr.print("Device Setup");
 
-  // ── Thin cyan divider ───────────────────────────────────────────────────────
-  spr.drawFastHLine(12, 62, SW - 24, CYAN);
+  // ── Divider ─────────────────────────────────────────────────────────────────
+  spr.drawFastHLine(14, 52, SW - 28, COL_BORDER);
 
   // ── Section label ───────────────────────────────────────────────────────────
   {
     const char* lbl = "3 STEPS TO CONNECT THIS DEVICE";
-    spr.setFont(F_TINY); spr.setTextSize(1);
-    spr.setTextColor(COL_MUTED, COL_BG);
-    spr.setCursor((SW - (int32_t)spr.textWidth(lbl)) / 2, 67);
+    spr.setFont(F_TINY); spr.setTextColor(COL_MUTED, COL_BG);
+    spr.setCursor((SW - (int32_t)spr.textWidth(lbl)) / 2, 58);
     spr.print(lbl);
   }
 
-  // ── Step card helper ─────────────────────────────────────────────────────────
-  // iconType: 1=WiFi  2=Globe  3=Lock
-  // vfont: font used for val1 line (F_SMALL for short values, F_TINY for long)
-  const int32_t CX = 8, CW = SW - 16, CG = 5;
-  int32_t cy = 80;
+  // ── Step cards — minimal glass panels, no borders ───────────────────────────
+  const int32_t CX = 10, CW = SW - 20, CG = 8;
+  int32_t cy = 72;
 
-  auto stepCard = [&](uint8_t num, uint8_t iconType, uint16_t acCol,
-                      int32_t ch, const char* hint,
-                      const lgfx::IFont* vfont,
-                      const char* val1, const char* val2, const char* note) {
-    // Dark card + glow border (two-pass for soft inner glow)
-    spr.fillRoundRect(CX,     cy,     CW,     ch,     14, CARDDK);
-    spr.drawRoundRect(CX,     cy,     CW,     ch,     14, GLOWBDR);
-    spr.drawRoundRect(CX + 1, cy + 1, CW - 2, ch - 2, 13, 0x1084);
+  auto stepCard = [&](uint8_t num,
+                      const char* hint, const lgfx::IFont* vfont,
+                      const char* val1, const char* val2,
+                      const char* note, int32_t ch) {
+    // Glass panel — flat fill only, no border
+    spr.fillRoundRect(CX, cy, CW, ch, 8, GLASS);
 
-    // Number badge
-    const int32_t bx = CX + 22, by = cy + ch / 2;
-    spr.fillCircle(bx, by, 12, acCol);
-    spr.setFont(F_TINY); spr.setTextColor(0xFFFF, acCol);
+    // Step indicator — dark circle with thin cyan ring
+    const int32_t bx = CX + 18, by = cy + ch / 2;
+    spr.fillCircle(bx, by, 8, COL_BG);
+    spr.drawCircle(bx, by, 8, CYAN);
+    spr.setFont(F_TINY); spr.setTextColor(CYAN, COL_BG);
     char ns[2] = {(char)('0' + num), '\0'};
     spr.setCursor(bx - (int32_t)spr.textWidth(ns) / 2, by - 4);
     spr.print(ns);
 
-    // Vector icon (centred vertically in card)
-    const int32_t ix = CX + 51, iy = cy + ch / 2;
-    if (iconType == 1) {  // WiFi fan
-      spr.fillCircle(ix, iy + 6, 2, acCol);
-      spr.drawArc(ix, iy + 6, 6,  4,  220, 320, acCol);
-      spr.drawArc(ix, iy + 6, 11, 9,  215, 325, acCol);
-    } else if (iconType == 2) {  // Globe
-      spr.drawCircle(ix, iy, 9, acCol);
-      spr.drawFastHLine(ix - 9, iy, 18, acCol);
-      spr.drawFastVLine(ix, iy - 9, 18, acCol);
-      spr.drawArc(ix, iy, 9, 7, 270, 90, acCol);
-    } else if (iconType == 3) {  // Lock
-      spr.drawArc(ix, iy - 4, 5, 3, 180, 360, acCol);
-      spr.drawFastVLine(ix - 5, iy - 4, 4, acCol);
-      spr.drawFastVLine(ix + 5, iy - 4, 4, acCol);
-      spr.fillRoundRect(ix - 8, iy, 16, 10, 2, acCol);
-      spr.fillCircle(ix, iy + 5, 2, CARDDK);
-    }
-
-    // Text (right of icon)
-    const int32_t tx = CX + 70;
-    spr.setFont(F_TINY); spr.setTextColor(COL_MUTED, CARDDK);
-    spr.setCursor(tx, cy + 9); spr.print(hint);
-    spr.setFont(vfont); spr.setTextColor(acCol, CARDDK);
-    spr.setCursor(tx, cy + 22); spr.print(val1);
+    // Text block
+    const int32_t tx = CX + 34;
+    spr.setFont(F_TINY); spr.setTextColor(COL_MUTED, GLASS);
+    spr.setCursor(tx, cy + 8); spr.print(hint);
+    spr.setFont(vfont); spr.setTextColor(CYAN, GLASS);
+    spr.setCursor(tx, cy + 20); spr.print(val1);
     if (val2) {
-      spr.setFont(F_TINY); spr.setTextColor(acCol, CARDDK);
-      spr.setCursor(tx, cy + 34); spr.print(val2);
+      spr.setFont(F_TINY); spr.setTextColor(CYAN, GLASS);
+      spr.setCursor(tx, cy + 32); spr.print(val2);
     }
     if (note) {
-      spr.setFont(F_TINY); spr.setTextColor(COL_MUTED, CARDDK);
-      spr.setCursor(tx, val2 ? cy + 46 : cy + 42); spr.print(note);
+      spr.setFont(F_TINY); spr.setTextColor(COL_MUTED, GLASS);
+      spr.setCursor(tx, val2 ? cy + 42 : cy + 32); spr.print(note);
     }
     cy += ch + CG;
   };
 
-  stepCard(1, 1, COL_PRIMARY, 60, "Connect phone to Wi-Fi:",
-           F_SMALL, apName.c_str(), nullptr, nullptr);
-  stepCard(2, 2, COL_PRIMARY, 60, "Open in your browser:",
-           F_SMALL, "192.168.4.1", nullptr, nullptr);
-  stepCard(3, 3, COL_SUCCESS, 72, "Enter your details:",
-           F_TINY, "Institution code +", "pairing code",
-           "then your school Wi-Fi");
+  stepCard(1, "Connect phone to Wi-Fi:", F_SMALL, apName.c_str(), nullptr, nullptr, 40);
+  stepCard(2, "Open in your browser:",   F_SMALL, "192.168.4.1", nullptr, nullptr, 40);
+  stepCard(3, "Enter your details:",     F_TINY,
+           "Institution code +", "pairing code",
+           "then your school Wi-Fi", 54);
 
-  // ── Factory reset pill ──────────────────────────────────────────────────────
-  cy += 2;
+  // ── Factory reset bar — subtle, minimal ─────────────────────────────────────
+  cy += 6;
   {
-    const int32_t bh = 24;
-    spr.fillRoundRect(CX, cy, CW, bh, 12, 0x200C);
-    spr.drawRoundRect(CX, cy, CW, bh, 12, 0x3818);
-    // Gear icon
+    const int32_t bh = 22;
+    spr.fillRoundRect(CX, cy, CW, bh, 11, 0x1800);
     const int32_t gx = CX + 14, gy = cy + bh / 2;
-    spr.fillCircle(gx, gy, 5, COL_WARNING);
-    spr.fillCircle(gx, gy, 2, 0x200C);
-    spr.fillRect(gx - 1, gy - 7, 2, 3, COL_WARNING);
-    spr.fillRect(gx - 1, gy + 4, 2, 3, COL_WARNING);
-    spr.fillRect(gx - 7, gy - 1, 3, 2, COL_WARNING);
-    spr.fillRect(gx + 4, gy - 1, 3, 2, COL_WARNING);
-    // Label
-    spr.setFont(F_TINY); spr.setTextColor(COL_WARNING, 0x200C);
-    const char* rst = "HOLD 3s  |  FACTORY RESET";
-    spr.setCursor(gx + 10, gy - 4); spr.print(rst);
+    spr.fillCircle(gx, gy, 4, COL_WARNING);
+    spr.fillCircle(gx, gy, 2, 0x1800);
+    spr.fillRect(gx - 1, gy - 6, 2, 2, COL_WARNING);
+    spr.fillRect(gx - 1, gy + 4, 2, 2, COL_WARNING);
+    spr.fillRect(gx - 6, gy - 1, 2, 2, COL_WARNING);
+    spr.fillRect(gx + 4, gy - 1, 2, 2, COL_WARNING);
+    spr.setFont(F_TINY); spr.setTextColor(COL_WARNING, 0x1800);
+    spr.setCursor(gx + 9, gy - 4); spr.print("HOLD 3s  |  FACTORY RESET");
   }
 
   spr.pushSprite(0, 0);
