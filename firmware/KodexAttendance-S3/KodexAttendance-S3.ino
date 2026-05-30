@@ -87,7 +87,7 @@ public:
 #include <mbedtls/md.h>
 #include <ArduinoJson.h>
 #include <SPI.h>
-#include <SD.h>
+#include <SD_MMC.h>   // SDIO driver — separate peripheral from SPI, no bus conflict
 
 // Forward declarations
 static void startWifiReconfigPortal();
@@ -102,8 +102,9 @@ static const uint8_t TOUCH_RST  = 18;
 static const uint8_t LED_PIN    = 42;  // single-wire RGB LED on IO42
 static const uint8_t FT6X36_ADDR = 0x38;
 
-// SD card — shares FSPI bus (SCLK=12, MISO=13, MOSI=11) with display.
-static const uint8_t SD_CS_PIN = 38;
+// SD card — SDIO bus (independent from FSPI/display, no conflict)
+static const uint8_t SD_CLK = 38, SD_CMD = 40, SD_D0 = 39;
+static const uint8_t SD_D1  = 41, SD_D2  = 48, SD_D3 = 47;
 
 // ─── App Config ──────────────────────────────────────────────────────────────
 static const char*   FIRMWARE_VERSION     = "s3-2.1.0";
@@ -178,9 +179,7 @@ static String   pendingSsid  = "";   // network tapped, waiting for password
 // Records are flushed to /api/devices/sync on the next successful heartbeat.
 static const char* SD_ATT_FILE = "/attendance.jsonl";
 
-// SD: ES3C28P uses SDIO (CLK=IO38, CMD=IO40, DATA0-3=IO39/41/48/47), not SPI.
-// SPI-mode SD init on the same FSPI bus as the display corrupts the GPIO matrix
-// and causes a white screen.  SDMMC driver support can be added later.
+// SD_MMC (SDIO): tries 4-bit first, falls back to 1-bit if card rejects it.
 static bool        sdAvailable  = false;
 static uint32_t    sdRecordCount = 0;  // tracks records written to SD file
 
@@ -387,8 +386,8 @@ static int postJson(const String& path, const String& body,
 // ─── Offline attendance sync ──────────────────────────────────────────────────
 static void syncOfflineAttendance() {
   // ── SD path ──────────────────────────────────────────────────────────────────
-  if (sdAvailable && sdRecordCount > 0 && SD.exists(SD_ATT_FILE)) {
-    File f = SD.open(SD_ATT_FILE, FILE_READ);
+  if (sdAvailable && sdRecordCount > 0 && SD_MMC.exists(SD_ATT_FILE)) {
+    File f = SD_MMC.open(SD_ATT_FILE, FILE_READ);
     if (f) {
       JsonDocument doc;
       JsonArray arr = doc["records"].to<JsonArray>();
@@ -409,12 +408,12 @@ static void syncOfflineAttendance() {
         }
       }
       f.close();
-      if (parsed == 0) { SD.remove(SD_ATT_FILE); sdRecordCount = 0; return; }
+      if (parsed == 0) { SD_MMC.remove(SD_ATT_FILE); sdRecordCount = 0; return; }
       String body; serializeJson(doc, body);
       String resp; int code = postJson("/api/devices/sync", body, resp);
       if (code == 200) {
         LOG("SD sync: " + String(parsed) + " records sent");
-        SD.remove(SD_ATT_FILE);
+        SD_MMC.remove(SD_ATT_FILE);
         sdRecordCount = 0;
       } else {
         LOG("SD sync failed " + String(code) + ": " + resp);
@@ -1400,7 +1399,7 @@ static void registerLocalHttp() {
     // ── Write to SD card (primary) ────────────────────────────────────────────
     bool stored = false;
     if (sdAvailable) {
-      File f = SD.open(SD_ATT_FILE, FILE_APPEND);
+      File f = SD_MMC.open(SD_ATT_FILE, FILE_APPEND);
       if (f) {
         JsonDocument entry;
         if (indexNum.length()) entry["indexNumber"] = indexNum;
@@ -1480,11 +1479,32 @@ void setup() {
   // Touch init
   touchInit();
 
-  // SD: ES3C28P uses SDIO (not SPI). Calling SPIClass::begin() on the same FSPI
-  // bus that LovyanGFX owns reconfigures the GPIO matrix and kills the display.
-  // SD is disabled here; use RAM buffer for offline records.
-  sdAvailable = false;
-  LOG("SD disabled — ES3C28P SD is SDIO, not SPI; using RAM buffer");
+  // SD card via SDIO (SD_MMC) — completely separate peripheral from the display's
+  // SPI bus, so no GPIO-matrix conflict. Try 4-bit first; fall back to 1-bit.
+  SD_MMC.setPins(SD_CLK, SD_CMD, SD_D0, SD_D1, SD_D2, SD_D3);
+  sdAvailable = SD_MMC.begin("/sdcard", false, false);  // false = 4-bit, no format
+  if (!sdAvailable) {
+    // 1-bit fallback — works with cards that don't negotiate 4-bit cleanly
+    SD_MMC.end();
+    SD_MMC.setPins(SD_CLK, SD_CMD, SD_D0);
+    sdAvailable = SD_MMC.begin("/sdcard", true, false);  // true = 1-bit
+  }
+  if (sdAvailable) {
+    uint64_t mb = SD_MMC.cardSize() / (1024ULL * 1024ULL);
+    LOG("SD card OK — " + String((uint32_t)mb) + " MB ("
+        + String(SD_MMC.cardType()) + "-type)");
+    // Count any pending offline records left from a previous interrupted session
+    if (SD_MMC.exists(SD_ATT_FILE)) {
+      File cf = SD_MMC.open(SD_ATT_FILE, FILE_READ);
+      if (cf) {
+        while (cf.available()) { if (cf.read() == '\n') sdRecordCount++; }
+        cf.close();
+        if (sdRecordCount) LOG("SD: " + String(sdRecordCount) + " pending records");
+      }
+    }
+  } else {
+    LOG("SD not found — using 200-slot RAM buffer for offline records");
+  }
 
   // Splash
   splashStart = millis();
