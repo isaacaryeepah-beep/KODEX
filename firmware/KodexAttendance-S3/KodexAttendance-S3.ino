@@ -304,48 +304,54 @@ static String deriveCode(const String& seed, uint32_t unixSec) {
 static uint8_t touchAddr = FT6X36_ADDR;  // updated by touchInit scan
 
 static void touchInit() {
-  // Hard-reset once with the configured RST pin before scanning.
+  // Datasheet-confirmed: RST=IO18 (active LOW), INT=IO17
   if (TOUCH_RST >= 0) {
     pinMode(TOUCH_RST, OUTPUT);
-    digitalWrite(TOUCH_RST, LOW);  delay(20);
-    digitalWrite(TOUCH_RST, HIGH); delay(300);
+    digitalWrite(TOUCH_RST, LOW);  delay(50);   // hold reset longer for cold-boot
+    digitalWrite(TOUCH_RST, HIGH); delay(500);  // FT6336G needs ~300 ms; give extra margin
   }
   if (TOUCH_INT >= 0) pinMode(TOUCH_INT, INPUT_PULLUP);
 
-  // Try every common SDA/SCL pair — result shown as text on Setup screen.
-  // This finds the correct pins without needing a Serial monitor.
+  // Datasheet confirms: SDA=IO16, SCL=IO15. Other pairs are fallback for board variants.
+  // Try each pin pair at both 100 kHz and 400 kHz — some FT6336G only respond at 100 kHz.
   const uint8_t PAIRS[][2] = {
-    { 16, 15 },  // ES3C28P silkscreen header
-    { 15, 16 },  // swapped
+    { 16, 15 },  // confirmed by ES3C28P datasheet
+    { 15, 16 },  // swapped (just in case)
     {  4,  5 },
     {  6,  7 },
     {  8,  9 },
     { 21, 22 },
   };
-  const uint8_t KNOWN[] = { 0x38, 0x3B, 0x15, 0x14, 0x5D };
+  const uint32_t CLOCKS[] = { 100000, 400000 };
+  const uint8_t  KNOWN[]  = { 0x38, 0x3B, 0x15, 0x14, 0x5D };
 
   for (auto& p : PAIRS) {
-    Wire.end(); delay(10);
-    Wire.begin(p[0], p[1]); delay(50);
-    for (uint8_t addr = 0x08; addr < 0x78; addr++) {
-      Wire.beginTransmission(addr);
-      if (Wire.endTransmission() != 0) continue;
-      for (uint8_t k : KNOWN) {
-        if (addr == k) {
-          touchAddr = addr;
-          touchDiag = "Touch SDA=" + String(p[0]) +
-                      " SCL=" + String(p[1]) +
-                      " @0x" + String(addr, HEX);
-          LOG("[touch] " + touchDiag);
-          return;  // Wire stays configured on the working pins
+    for (uint32_t clk : CLOCKS) {
+      Wire.end(); delay(10);
+      Wire.begin(p[0], p[1]); Wire.setClock(clk); delay(50);
+      for (uint8_t addr = 0x08; addr < 0x78; addr++) {
+        Wire.beginTransmission(addr);
+        if (Wire.endTransmission() != 0) continue;
+        for (uint8_t k : KNOWN) {
+          if (addr == k) {
+            touchAddr = addr;
+            touchDiag = "Touch SDA=" + String(p[0]) +
+                        " SCL=" + String(p[1]) +
+                        " @0x" + String(addr, HEX) +
+                        " " + String(clk / 1000) + "kHz";
+            LOG("[touch] " + touchDiag);
+            return;  // Wire stays on the working pins + speed
+          }
         }
+        // Non-known address — record for display but keep searching
+        touchDiag = "I2C 0x" + String(addr, HEX) +
+                    " SDA=" + String(p[0]) + " SCL=" + String(p[1]) +
+                    " " + String(clk / 1000) + "kHz";
       }
-      // Unknown address found — record but keep scanning for known one
-      touchDiag = "I2C 0x" + String(addr, HEX) +
-                  " SDA=" + String(p[0]) + " SCL=" + String(p[1]);
     }
   }
-  Wire.begin(PAIRS[0][0], PAIRS[0][1]);  // restore default if nothing found
+  // Nothing found — restore confirmed-correct pins at 100 kHz
+  Wire.end(); Wire.begin(16, 15); Wire.setClock(100000);
   if (!touchDiag.startsWith("I2C"))
     touchDiag = "No touch chip found";
   LOG("[touch] " + touchDiag);
