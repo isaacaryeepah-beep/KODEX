@@ -210,6 +210,7 @@ bool     touchActive  = false;
 uint16_t touchX = 0, touchY = 0;
 uint32_t touchDownMs  = 0;
 bool     touchHandled = false;   // prevents hold-repeat firing as a tap
+static String touchDiag = "Touch: scanning...";  // shown on Setup screen
 
 // ─── WiFi scanner ─────────────────────────────────────────────────────────────
 struct WifiNet { char ssid[33]; int8_t bars; bool open; };
@@ -303,40 +304,51 @@ static String deriveCode(const String& seed, uint32_t unixSec) {
 static uint8_t touchAddr = FT6X36_ADDR;  // updated by touchInit scan
 
 static void touchInit() {
-  Wire.begin(TOUCH_SDA, TOUCH_SCL);
-  delay(50);  // stabilise bus before talking to chip
-
-  // Hard-reset the controller — FT6336G needs RST LOW ≥20ms, then ≥300ms
-  // settle time before first I2C transaction. Short timing caused silent fail.
+  // Hard-reset once with the configured RST pin before scanning.
   if (TOUCH_RST >= 0) {
     pinMode(TOUCH_RST, OUTPUT);
     digitalWrite(TOUCH_RST, LOW);  delay(20);
     digitalWrite(TOUCH_RST, HIGH); delay(300);
   }
-  // INT is open-drain — needs pull-up. External 10k on board may be absent.
   if (TOUCH_INT >= 0) pinMode(TOUCH_INT, INPUT_PULLUP);
 
-  // Scan I2C bus and lock onto the first recognisable touch-controller address.
-  // Known addresses: FT6x36=0x38, FT6x06=0x3B, CST816=0x15, GT911=0x5D/0x14
-  LOG("[touch] scanning I2C bus...");
-  bool found = false;
+  // Try every common SDA/SCL pair — result shown as text on Setup screen.
+  // This finds the correct pins without needing a Serial monitor.
+  const uint8_t PAIRS[][2] = {
+    { 16, 15 },  // ES3C28P silkscreen header
+    { 15, 16 },  // swapped
+    {  4,  5 },
+    {  6,  7 },
+    {  8,  9 },
+    { 21, 22 },
+  };
   const uint8_t KNOWN[] = { 0x38, 0x3B, 0x15, 0x14, 0x5D };
-  for (uint8_t addr = 0x08; addr < 0x78; addr++) {
-    Wire.beginTransmission(addr);
-    if (Wire.endTransmission() == 0) {
-      LOG("[touch]   device at 0x" + String(addr, HEX));
-      if (!found) {
-        for (uint8_t k : KNOWN) {
-          if (addr == k) { touchAddr = addr; found = true; break; }
+
+  for (auto& p : PAIRS) {
+    Wire.end(); delay(10);
+    Wire.begin(p[0], p[1]); delay(50);
+    for (uint8_t addr = 0x08; addr < 0x78; addr++) {
+      Wire.beginTransmission(addr);
+      if (Wire.endTransmission() != 0) continue;
+      for (uint8_t k : KNOWN) {
+        if (addr == k) {
+          touchAddr = addr;
+          touchDiag = "Touch SDA=" + String(p[0]) +
+                      " SCL=" + String(p[1]) +
+                      " @0x" + String(addr, HEX);
+          LOG("[touch] " + touchDiag);
+          return;  // Wire stays configured on the working pins
         }
       }
+      // Unknown address found — record but keep scanning for known one
+      touchDiag = "I2C 0x" + String(addr, HEX) +
+                  " SDA=" + String(p[0]) + " SCL=" + String(p[1]);
     }
   }
-  if (found) {
-    LOG("[touch] using address 0x" + String(touchAddr, HEX));
-  } else {
-    LOG("[touch] WARNING: no touch controller found — check SDA/SCL pins");
-  }
+  Wire.begin(PAIRS[0][0], PAIRS[0][1]);  // restore default if nothing found
+  if (!touchDiag.startsWith("I2C"))
+    touchDiag = "No touch chip found";
+  LOG("[touch] " + touchDiag);
 }
 
 // Returns true if a finger is down; writes screen-mapped coordinates to tx, ty.
@@ -720,8 +732,15 @@ static void drawSetup(const String& apName) {
   // ── Pulse indicator dot ──────────────────────────────────────────────────
   spr.fillCircle(SW / 2, 313, 4, COL_PRIMARY);
 
-  // ── Touch debug: red dot + coordinates when finger is down ───────────────
-  // Remove this block once touch is confirmed working.
+  // ── Touch / I2C diagnosis — always visible on Setup screen ─────────────
+  {
+    bool found = touchDiag.startsWith("Touch ");
+    uint16_t diagCol = found ? COL_SUCCESS : COL_ERROR;
+    spr.setTextFont(1);
+    spr.setTextColor(diagCol, COL_BG);
+    spr.setCursor(4, SH - 14);
+    spr.print(touchDiag);
+  }
   if (touchActive) {
     spr.fillCircle(touchX, touchY, 10, COL_ERROR);
     spr.fillCircle(touchX, touchY,  4, COL_WHITE);
