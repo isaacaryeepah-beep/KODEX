@@ -1663,6 +1663,46 @@ static void registerLocalHttp() {
     String s; serializeJson(doc, s);
     localHttp.send(200, "application/json", s);
   });
+  // /session — returns a signed connection-proof token for hotspot attendance.
+  // Students connect to the device AP, call this endpoint with their studentId,
+  // get a short-lived HMAC-signed token, then submit it + the verbal code to
+  // the backend. Proves physical presence without the device touching the backend.
+  localHttp.on("/session", HTTP_GET, []() {
+    if (sessionId.isEmpty() || sessionSeed.isEmpty()) {
+      localHttp.send(503, "application/json", "{\"error\":\"No active session\"}"); return;
+    }
+    if (!timeSynced) {
+      localHttp.send(503, "application/json", "{\"error\":\"Device clock not synced\"}"); return;
+    }
+    String studentId = localHttp.arg("studentId");
+    if (studentId.isEmpty()) {
+      localHttp.send(400, "application/json", "{\"error\":\"studentId required\"}"); return;
+    }
+
+    // Build the message the backend will re-derive to verify the sig.
+    unsigned long issuedAt = (unsigned long)time(nullptr);
+    String message = "conn:" + sessionId + ":" + studentId + ":" + String(issuedAt);
+
+    // HMAC-SHA256(sessionSeed, message) — first 16 bytes = 32 hex chars = 128-bit sig
+    uint8_t hmacOut[32];
+    hmacSha256((const uint8_t*)sessionSeed.c_str(), sessionSeed.length(),
+               (const uint8_t*)message.c_str(),    message.length(), hmacOut);
+
+    char sigHex[33];
+    for (int i = 0; i < 16; i++) sprintf(sigHex + i * 2, "%02x", hmacOut[i]);
+    sigHex[32] = '\0';
+
+    JsonDocument resp;
+    resp["sessionId"] = sessionId;
+    resp["studentId"] = studentId;
+    resp["issuedAt"]  = issuedAt;
+    resp["sig"]       = sigHex;
+    String s; serializeJson(resp, s);
+
+    localHttp.sendHeader("Access-Control-Allow-Origin", "*");
+    localHttp.send(200, "application/json", s);
+  });
+
   // /attend — offline attendance submission (student on school WiFi, no internet)
   localHttp.on("/attend", HTTP_POST, []() {
     if (sessionId.isEmpty() || sessionSeed.isEmpty()) {

@@ -501,10 +501,11 @@ exports.markAttendance = async (req, res) => {
     const clientDeviceId = req.body.deviceId || req.headers["x-device-id"] || null;
 
     const methodMap = {
-      qr: "qr_mark",
-      ble: "ble_mark",
-      manual: "manual",
-      code: "code_mark",
+      qr:             "qr_mark",
+      ble:            "ble_mark",
+      manual:         "manual",
+      code:           "code_mark",
+      esp32_hotspot:  "esp32_ap",
     };
 
     // ── ESP32 liveness + same-network enforcement ─────────────────────────
@@ -588,28 +589,93 @@ exports.markAttendance = async (req, res) => {
       });
     }
 
-    // req.ip is set correctly by Express when trust proxy is enabled (server.js).
-    const studentIp = (req.ip || '').replace(/^::ffff:/, '');
+    // ── Proximity proof: hotspot connection token (primary) OR IP match (legacy) ─
+    //
+    // Primary flow: student connects to the device's AP hotspot, hits
+    // GET http://192.168.4.1/session?studentId=<id>, receives an HMAC-signed
+    // token, then submits that token here. We verify the HMAC against the
+    // session's esp32Seed — only the real device can produce a valid sig.
+    //
+    // Legacy flow: IP-based same-network check (kept for backward compat).
+    // ─────────────────────────────────────────────────────────────────────────
+    const connectionToken = req.body.connectionToken;
 
-    const TEN_MIN_AGO = Date.now() - 10 * 60 * 1000;
-    const deviceIps = (sessionDevice.recentPublicIps || [])
-      .filter(e => e.seenAt && new Date(e.seenAt).getTime() > TEN_MIN_AGO)
-      .map(e => e.ip);
+    if (connectionToken && typeof connectionToken === 'object') {
+      const { sessionId: tokenSession, studentId: tokenStudent, issuedAt, sig } = connectionToken;
 
-    if (deviceIps.length === 0) {
-      return res.status(503).json({
-        error: 'The classroom device has not reported its network yet. Wait a few seconds and try again.',
-        esp32Required: true,
-        networkNotReady: true,
-      });
-    }
+      if (!session.esp32Seed) {
+        return res.status(403).json({ error: 'Session has no device seed. Cannot verify hotspot token.' });
+      }
 
-    if (!deviceIps.includes(studentIp)) {
-      console.warn(`[MARK] Blocked ${req.user.name}: IP ${studentIp} not in device IPs [${deviceIps.join(', ')}]`);
-      return res.status(403).json({
-        error: 'You must be connected to the classroom WiFi to mark attendance.',
-        networkMismatch: true,
-      });
+      // Token must be fresh — reject after 10 minutes to prevent sharing
+      const tokenAgeMs = Date.now() - (Number(issuedAt) * 1000);
+      if (!issuedAt || tokenAgeMs < 0 || tokenAgeMs > 10 * 60 * 1000) {
+        return res.status(403).json({
+          error: 'Hotspot token expired. Reconnect to the classroom hotspot and try again.',
+          tokenExpired: true,
+        });
+      }
+
+      // Token must be bound to the submitting student
+      if (String(tokenStudent) !== req.user._id.toString()) {
+        return res.status(403).json({
+          error: 'Hotspot token was issued for a different account.',
+          networkMismatch: true,
+        });
+      }
+
+      // Token must be bound to the current session
+      if (String(tokenSession) !== resolvedSessionId) {
+        return res.status(403).json({
+          error: 'Hotspot token is for a different session.',
+          networkMismatch: true,
+        });
+      }
+
+      // Verify HMAC — recompute using session seed and compare timing-safely
+      const expectedSig = crypto
+        .createHmac('sha256', session.esp32Seed)
+        .update(`conn:${tokenSession}:${tokenStudent}:${issuedAt}`)
+        .digest('hex')
+        .slice(0, 32);
+
+      const sigStr      = String(sig || '').slice(0, 32).padEnd(32, '\0');
+      const sigBuf      = Buffer.from(sigStr);
+      const expectedBuf = Buffer.from(expectedSig);
+
+      if (sigBuf.length !== expectedBuf.length || !crypto.timingSafeEqual(sigBuf, expectedBuf)) {
+        console.warn(`[MARK] Invalid hotspot token sig for ${req.user.name}`);
+        return res.status(403).json({
+          error: 'Invalid hotspot token. Make sure you are connected to the classroom hotspot.',
+          networkMismatch: true,
+        });
+      }
+
+    } else {
+      // Legacy: student's public IP must match a recent IP from the ESP32
+      // (proves they are on the same school WiFi as the device).
+      const studentIp = (req.ip || '').replace(/^::ffff:/, '');
+
+      const TEN_MIN_AGO = Date.now() - 10 * 60 * 1000;
+      const deviceIps = (sessionDevice.recentPublicIps || [])
+        .filter(e => e.seenAt && new Date(e.seenAt).getTime() > TEN_MIN_AGO)
+        .map(e => e.ip);
+
+      if (deviceIps.length === 0) {
+        return res.status(503).json({
+          error: 'The classroom device has not reported its network yet. Wait a few seconds and try again.',
+          esp32Required: true,
+          networkNotReady: true,
+        });
+      }
+
+      if (!deviceIps.includes(studentIp)) {
+        console.warn(`[MARK] Blocked ${req.user.name}: IP ${studentIp} not in device IPs [${deviceIps.join(', ')}]`);
+        return res.status(403).json({
+          error: 'You must be connected to the classroom WiFi to mark attendance.',
+          networkMismatch: true,
+        });
+      }
     }
 
     // Anyone marking against a course-linked session must be enrolled in that course.
