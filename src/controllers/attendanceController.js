@@ -500,9 +500,12 @@ exports.markAttendance = async (req, res) => {
     const { sessionId, qrToken, code, method, meetingId } = req.body;
     const clientDeviceId = req.body.deviceId || req.headers["x-device-id"] || null;
 
+    // NOTE: 'ble' is intentionally absent — BLE is not yet implemented.
+    // The firmware has no BLE advertising and the backend has no RSSI/token
+    // validation. Accepting 'ble_mark' with no BLE checks would be misleading.
+    // Add it back once the full BLE flow (beacon + RSSI + signed token) is built.
     const methodMap = {
       qr:             "qr_mark",
-      ble:            "ble_mark",
       manual:         "manual",
       code:           "code_mark",
       esp32_hotspot:  "esp32_ap",
@@ -639,11 +642,19 @@ exports.markAttendance = async (req, res) => {
         .digest('hex')
         .slice(0, 32);
 
-      const sigStr      = String(sig || '').slice(0, 32).padEnd(32, '\0');
-      const sigBuf      = Buffer.from(sigStr);
+      // Both must be exactly 32 hex chars — any length mismatch is an immediate reject
+      const sigClean = String(sig || '').toLowerCase().replace(/[^0-9a-f]/g, '');
+      if (sigClean.length !== 32) {
+        return res.status(403).json({
+          error: 'Invalid hotspot token. Make sure you are connected to the classroom hotspot.',
+          networkMismatch: true,
+        });
+      }
+
+      const sigBuf      = Buffer.from(sigClean);
       const expectedBuf = Buffer.from(expectedSig);
 
-      if (sigBuf.length !== expectedBuf.length || !crypto.timingSafeEqual(sigBuf, expectedBuf)) {
+      if (!crypto.timingSafeEqual(sigBuf, expectedBuf)) {
         console.warn(`[MARK] Invalid hotspot token sig for ${req.user.name}`);
         return res.status(403).json({
           error: 'Invalid hotspot token. Make sure you are connected to the classroom hotspot.',
