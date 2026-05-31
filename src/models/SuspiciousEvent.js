@@ -25,6 +25,7 @@ const suspiciousEventSchema = new mongoose.Schema({
       'unverified_network_attempt',
       'already_marked_attempt',
       'wrong_session_attempt',
+      'new_device_for_user',
     ],
   },
 

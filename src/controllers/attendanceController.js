@@ -938,6 +938,46 @@ exports.markAttendance = async (req, res) => {
       { path: "session", select: "title startedAt" },
     ]);
 
+    // ── New-device detection ────────────────────────────────────────────────
+    // Check whether this student has ever used this phone before.
+    // If not, auto-flag the record and log a SuspiciousEvent so the lecturer
+    // can review it on the dashboard. A student marking from a stranger's phone
+    // is the primary signal of credential sharing.
+    if (clientDeviceId && session.course) {
+      const priorUse = await AttendanceRecord.findOne({
+        user:    req.user._id,
+        company: req.user.company,
+        deviceId: clientDeviceId,
+        _id:     { $ne: record._id },
+      }).select('_id').lean();
+
+      if (!priorUse) {
+        await AttendanceRecord.findByIdAndUpdate(record._id, {
+          $set: {
+            newDeviceFlag: true,
+            flagged:  true,
+            flagNote: `First-time device for this student (index: ${req.user.indexNumber || 'N/A'}) — auto-flagged for review`,
+          },
+        });
+
+        const SuspiciousEvent = require('../models/SuspiciousEvent');
+        await SuspiciousEvent.create({
+          sessionId:   session._id,
+          courseId:    session.course,
+          companyId:   req.user.company,
+          userId:      req.user._id,
+          deviceId:    clientDeviceId,
+          eventType:   'new_device_for_user',
+          reason:      `${req.user.name} (index: ${req.user.indexNumber || req.user._id}) marked attendance from a device not previously associated with their account.`,
+          actionTaken: 'flagged',
+        });
+
+        console.log(`[MARK] New device flagged for ${req.user.name} (${req.user.indexNumber}), device=${clientDeviceId}`);
+        populated.newDeviceFlag = true;
+        populated.flagged = true;
+      }
+    }
+
     res.status(201).json({ record: populated });
   } catch (error) {
     if (error.code === 11000) {
@@ -1132,6 +1172,54 @@ exports.getSignInStatus = async (req, res) => {
   } catch (error) {
     console.error("Sign-in status error:", error);
     res.status(500).json({ error: "Failed to get sign-in status" });
+  }
+};
+
+// GET /api/attendance-sessions/flagged/new-devices
+// Returns all attendance records where the student used a device for the first
+// time, grouped by session. Used by lecturers to audit potential credential sharing.
+exports.getFlaggedNewDevices = async (req, res) => {
+  try {
+    const { sessionId, limit = 50, page = 1 } = req.query;
+    const filter = { company: req.user.company, newDeviceFlag: true };
+
+    if (sessionId && mongoose.Types.ObjectId.isValid(sessionId)) {
+      filter.session = sessionId;
+    }
+
+    // Lecturers only see flags from their own sessions
+    if (req.user.role === 'lecturer') {
+      const sessions = await AttendanceSession.find({
+        company:   req.user.company,
+        createdBy: req.user._id,
+      }).select('_id').lean();
+      filter.session = { $in: sessions.map(s => s._id) };
+    }
+
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
+    const [records, total] = await Promise.all([
+      AttendanceRecord.find(filter)
+        .sort({ checkInTime: -1 })
+        .skip(skip)
+        .limit(parseInt(limit))
+        .populate('user',    'name email indexNumber')
+        .populate('session', 'title startedAt course')
+        .lean(),
+      AttendanceRecord.countDocuments(filter),
+    ]);
+
+    return res.json({
+      total,
+      page:    parseInt(page),
+      records: records.map(r => ({
+        ...r,
+        warning: `${r.user?.name} (${r.user?.indexNumber || 'N/A'}) marked from a device never seen before on their account`,
+      })),
+    });
+  } catch (err) {
+    console.error('getFlaggedNewDevices error:', err);
+    return res.status(500).json({ error: 'Failed to fetch flagged records' });
   }
 };
 
