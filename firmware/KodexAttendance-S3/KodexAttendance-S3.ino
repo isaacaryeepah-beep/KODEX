@@ -1852,7 +1852,7 @@ void loop() {
     delay(300); // let HTTP response flush to the browser
 
     // Step 1 — connect to school WiFi
-    drawPairStatus("Connecting to WiFi…", wifiSSID, "", 1);
+    drawPairStatus("Connecting to WiFi…", wifiSSID.c_str(), "", 1);
     WiFi.mode(WIFI_AP_STA);
     WiFi.begin(wifiSSID.c_str(), wifiPass.c_str());
     uint32_t t0 = millis();
@@ -1866,7 +1866,7 @@ void loop() {
     }
 
     // Step 2 — sync time
-    drawPairStatus("WiFi OK — Syncing clock…", WiFi.localIP().toString(), "", 2);
+    drawPairStatus("WiFi OK — Syncing clock…", WiFi.localIP().toString().c_str(), "", 2);
     configTime(0, 0, "pool.ntp.org", "time.google.com");
     uint32_t tw = millis();
     while (time(nullptr) < 1000000000UL && millis() - tw < 5000) delay(100);
