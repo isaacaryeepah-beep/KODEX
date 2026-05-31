@@ -90,6 +90,7 @@ public:
 #include <SD_MMC.h>   // SDIO driver — separate peripheral from SPI, no bus conflict
 #include <BLEDevice.h>
 #include <BLEAdvertising.h>
+#include <esp_bt.h>        // for esp_bt_controller_mem_release in AP mode
 
 // Forward declarations
 static void startWifiReconfigPortal();
@@ -1886,9 +1887,6 @@ void setup() {
     display.drawString("Free: " + String(ESP.getFreePsram()), 55, 185);
   }
 
-  // BLE init after sprite — PSRAM is already claimed, no fragmentation risk.
-  initBle();
-
   // Touch init
   touchInit();
 
@@ -1926,9 +1924,12 @@ void setup() {
   loadConfig();
   LOG("Boot — " + deviceId + " fw=" + String(FIRMWARE_VERSION));
 
-  // Unpaired or no WiFi → captive portal
+  // Unpaired or no WiFi → captive portal.
+  // Release BT controller memory so WiFi gets full radio access — BLE is not
+  // needed during setup mode and the shared radio causes init failures otherwise.
   if (deviceJWT.isEmpty() || wifiSSID.isEmpty()) {
     LOG("Entering setup AP mode");
+    esp_bt_controller_mem_release(ESP_BT_MODE_BTDM);
     startApPortal();
     return;
   }
@@ -1952,6 +1953,11 @@ void setup() {
   }
   digitalWrite(LED_PIN, HIGH);
   LOG("WiFi OK: " + WiFi.localIP().toString());
+
+  // BLE init only after WiFi is connected — both share the same radio and the
+  // coexistence layer needs WiFi established first to avoid hci init failures.
+  initBle();
+
   configTime(0, 0, "pool.ntp.org", "time.google.com");
   registerLocalHttp();
   localHttp.begin();
