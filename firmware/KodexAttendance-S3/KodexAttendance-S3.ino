@@ -524,7 +524,10 @@ static void syncOfflineAttendance() {
 }
 
 // ─── Pairing ─────────────────────────────────────────────────────────────────
+static String pairErrorMsg = "";  // set on failure, shown on screen
+
 static bool tryPair(const String& pcode, const String& inst) {
+  pairErrorMsg = "";
   JsonDocument req;
   req["pairingCode"]     = pcode;
   req["deviceId"]        = deviceId;
@@ -532,8 +535,18 @@ static bool tryPair(const String& pcode, const String& inst) {
   req["institutionCode"] = inst;
   String body; serializeJson(req, body);
   String resp; int code = postJson("/api/devices/pair", body, resp, false);
-  LOG("Pair → " + String(code));
-  if (code != 200 && code != 201) { LOG("Pair fail: " + resp); return false; }
+  LOG("Pair → " + String(code) + " : " + resp);
+  if (code != 200 && code != 201) {
+    // Try to extract a human-readable message from the JSON response
+    JsonDocument errDoc;
+    if (!deserializeJson(errDoc, resp)) {
+      if (errDoc["message"].is<const char*>())      pairErrorMsg = errDoc["message"].as<String>();
+      else if (errDoc["error"].is<const char*>())   pairErrorMsg = errDoc["error"].as<String>();
+    }
+    if (pairErrorMsg.isEmpty()) pairErrorMsg = "HTTP " + String(code);
+    LOG("Pair fail: " + pairErrorMsg);
+    return false;
+  }
   JsonDocument doc;
   if (deserializeJson(doc, resp)) return false;
   if (!doc["token"].is<const char*>()) return false;
@@ -1875,7 +1888,8 @@ void loop() {
     drawPairStatus("Contacting server…", "dikly.sbs", "", 3);
     if (!tryPair(pairPendingCode, pairPendingInst)) {
       WiFi.disconnect(); WiFi.mode(WIFI_AP);
-      drawPairStatus("Pairing Rejected", "Check institution + pairing code", "Hold 3s to reset and retry", 0);
+      String errLine = pairErrorMsg.isEmpty() ? "Check institution + pairing code" : pairErrorMsg;
+      drawPairStatus("Pairing Failed", errLine.c_str(), "Generate a new code and retry", 0);
       return;
     }
 
