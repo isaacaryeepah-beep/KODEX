@@ -1483,6 +1483,67 @@ document.getElementById('f').onsubmit=async(e)=>{
 };
 </script></body></html>)HTML";
 
+// ── PAIRING STATUS — step-by-step feedback during async pair ─────────────────
+// step: 0=error, 1=wifi, 2=clock, 3=server, 4=done
+static void drawPairStatus(const char* title, const char* line1, const char* line2, uint8_t step) {
+  spr.fillSprite(COL_BG);
+
+  const uint16_t CYAN = 0x07FF;
+
+  // Header
+  spr.setFont(F_LOGO); spr.setTextSize(1);
+  spr.setTextColor(CYAN, COL_BG);
+  spr.setCursor(14, 12); spr.print("DIKLY");
+  spr.setFont(F_TINY); spr.setTextColor(COL_MUTED, COL_BG);
+  spr.setCursor(14, 38); spr.print("Device Pairing");
+  spr.drawFastHLine(14, 52, SW - 28, COL_BORDER);
+
+  // Title
+  uint16_t titleCol = (step == 0) ? COL_ERROR : (step == 4) ? COL_SUCCESS : CYAN;
+  spr.setFont(F_SMALL); spr.setTextColor(titleCol, COL_BG);
+  int32_t tw = spr.textWidth(title);
+  spr.setCursor((SW - tw) / 2, 62); spr.print(title);
+
+  // Step progress dots
+  const uint8_t STEPS = 4;
+  int32_t dotSpacing = (SW - 28) / (STEPS - 1);
+  for (uint8_t i = 1; i <= STEPS; i++) {
+    int32_t dx = 14 + (i - 1) * dotSpacing;
+    uint16_t dc = (step == 0) ? COL_MUTED : (i < step) ? COL_SUCCESS : (i == step) ? titleCol : COL_BORDER;
+    spr.fillCircle(dx, 92, 6, dc);
+    if (i < STEPS) spr.drawFastHLine(dx + 7, 92, dotSpacing - 14, i < step ? COL_SUCCESS : COL_BORDER);
+    spr.setFont(F_TINY); spr.setTextColor(COL_MUTED, COL_BG);
+    const char* labels[] = {"WiFi", "Clock", "Server", "Done"};
+    int32_t lw = spr.textWidth(labels[i - 1]);
+    spr.setCursor(dx - lw / 2, 103); spr.print(labels[i - 1]);
+  }
+
+  // Info card
+  spr.fillRoundRect(10, 120, SW - 20, 80, 10, COL_CARD);
+  spr.drawRoundRect(10, 120, SW - 20, 80, 10, step == 0 ? COL_ERROR : step == 4 ? COL_SUCCESS : COL_BORDER);
+  spr.setFont(F_TINY); spr.setTextColor(COL_MUTED, COL_CARD);
+  spr.setCursor(20, 130); spr.print(line1);
+  if (line2 && line2[0]) {
+    spr.setTextColor(COL_ERROR, COL_CARD);
+    spr.setCursor(20, 148); spr.print(line2);
+  }
+
+  // Spinner / checkmark
+  if (step > 0 && step < 4) {
+    static uint8_t spin = 0; spin = (spin + 1) % 8;
+    const char* frames[] = {"|", "/", "—", "\\", "|", "/", "—", "\\"};
+    spr.setFont(F_MED); spr.setTextColor(CYAN, COL_BG);
+    tw = spr.textWidth(frames[spin]);
+    spr.setCursor((SW - tw) / 2, 215); spr.print(frames[spin]);
+  } else if (step == 4) {
+    spr.setFont(F_MED); spr.setTextColor(COL_SUCCESS, COL_BG);
+    tw = spr.textWidth("✓");
+    spr.setCursor((SW - tw) / 2, 215); spr.print("✓");
+  }
+
+  spr.pushSprite(0, 0);
+}
+
 // ─── Captive-portal AP startup ────────────────────────────────────────────────
 static void startApPortal() {
   WiFi.mode(WIFI_AP);
@@ -1782,7 +1843,9 @@ void loop() {
   if (pairPending) {
     pairPending = false;
     delay(300); // let HTTP response flush to the browser
-    drawSetup("Connecting…");
+
+    // Step 1 — connect to school WiFi
+    drawPairStatus("Connecting to WiFi…", wifiSSID, "", 1);
     WiFi.mode(WIFI_AP_STA);
     WiFi.begin(wifiSSID.c_str(), wifiPass.c_str());
     uint32_t t0 = millis();
@@ -1791,18 +1854,26 @@ void loop() {
     }
     if (WiFi.status() != WL_CONNECTED) {
       WiFi.mode(WIFI_AP);
-      drawSetup("WiFi failed — retry");
+      drawPairStatus("WiFi Failed", "Wrong password or network", "Hold 3s to reset and retry", 0);
       return;
     }
+
+    // Step 2 — sync time
+    drawPairStatus("WiFi OK — Syncing clock…", WiFi.localIP().toString(), "", 2);
     configTime(0, 0, "pool.ntp.org", "time.google.com");
     uint32_t tw = millis();
     while (time(nullptr) < 1000000000UL && millis() - tw < 5000) delay(100);
+
+    // Step 3 — call server
+    drawPairStatus("Contacting server…", "dikly.sbs", "", 3);
     if (!tryPair(pairPendingCode, pairPendingInst)) {
       WiFi.disconnect(); WiFi.mode(WIFI_AP);
-      drawSetup("Pair rejected — check codes");
+      drawPairStatus("Pairing Rejected", "Check institution + pairing code", "Hold 3s to reset and retry", 0);
       return;
     }
-    delay(800); ESP.restart();
+
+    drawPairStatus("Paired!", "Device rebooting…", "", 4);
+    delay(1500); ESP.restart();
     return;
   }
 
