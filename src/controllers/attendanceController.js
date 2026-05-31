@@ -606,17 +606,33 @@ exports.markAttendance = async (req, res) => {
     let skipCodeCheck = false;
 
     if (bleToken && typeof bleToken === 'object') {
-      // ── BLE path ────────────────────────────────────────────────────────────
+      // ── BLE + hotspot path (maximum strictness) ──────────────────────────────
+      // Both proofs are required together:
+      //   Factor 1 — BLE token   : proves student was within Bluetooth range (~10 m)
+      //   Factor 2 — Hotspot token: proves student connected to device AP (student-specific)
+      //
+      // Combining them closes the relay attack: forwarding the BLE slot+HMAC is
+      // useless without a hotspot token, and the hotspot token is bound to the
+      // student's own ID so it cannot be shared without giving away credentials.
+
+      if (!connectionToken || typeof connectionToken !== 'object') {
+        return res.status(400).json({
+          error: 'BLE attendance requires connecting to the classroom hotspot first. Connect to the Dikly hotspot, then try again.',
+          hotspotRequired: true,
+        });
+      }
+
       if (!session.esp32Seed) {
         return res.status(403).json({ error: 'Session has no device seed for BLE verification.' });
       }
 
+      // ── Factor 1: BLE slot HMAC ──────────────────────────────────────────────
       const slotNum = parseInt(bleToken.slot, 10);
       if (isNaN(slotNum) || slotNum < 0) {
         return res.status(400).json({ error: 'Invalid BLE token: missing or bad slot.' });
       }
 
-      // Slot freshness: allow current slot + 1 previous (≤60 s grace for slow networks)
+      // Allow current slot + 1 previous (≤ 60 s grace for network latency)
       const currentSlot = Math.floor(Date.now() / 30000);
       if (Math.abs(currentSlot - slotNum) > 1) {
         return res.status(403).json({
@@ -625,22 +641,15 @@ exports.markAttendance = async (req, res) => {
         });
       }
 
-      // Verify HMAC: HMAC-SHA256(esp32Seed, "ble:<slot>") → first 8 bytes = 16 hex chars
       const expectedBleHmac = crypto
         .createHmac('sha256', session.esp32Seed)
         .update(`ble:${slotNum}`)
         .digest('hex')
         .slice(0, 16);
 
-      const hmacClean = String(bleToken.hmac || '').toLowerCase().replace(/[^0-9a-f]/g, '');
-      if (hmacClean.length !== 16) {
-        return res.status(403).json({
-          error: 'Invalid BLE token. Make sure you are within range of the classroom device.',
-          networkMismatch: true,
-        });
-      }
-
-      if (!crypto.timingSafeEqual(Buffer.from(hmacClean), Buffer.from(expectedBleHmac))) {
+      const bleHmacClean = String(bleToken.hmac || '').toLowerCase().replace(/[^0-9a-f]/g, '');
+      if (bleHmacClean.length !== 16 ||
+          !crypto.timingSafeEqual(Buffer.from(bleHmacClean), Buffer.from(expectedBleHmac))) {
         console.warn(`[MARK] Invalid BLE hmac from ${req.user.name}`);
         return res.status(403).json({
           error: 'Invalid BLE token. Make sure you are within range of the classroom device.',
@@ -648,7 +657,48 @@ exports.markAttendance = async (req, res) => {
         });
       }
 
-      // BLE proximity verified — verbal code is not required for this path
+      // ── Factor 2: hotspot connection token (student-specific) ────────────────
+      const { sessionId: tokenSession, studentId: tokenStudent, issuedAt, sig } = connectionToken;
+
+      const tokenAgeMs = Date.now() - (Number(issuedAt) * 1000);
+      if (!issuedAt || tokenAgeMs < 0 || tokenAgeMs > 10 * 60 * 1000) {
+        return res.status(403).json({
+          error: 'Hotspot token expired. Reconnect to the classroom hotspot and try again.',
+          tokenExpired: true,
+        });
+      }
+
+      if (String(tokenStudent) !== req.user._id.toString()) {
+        return res.status(403).json({
+          error: 'Hotspot token was issued for a different account.',
+          networkMismatch: true,
+        });
+      }
+
+      if (String(tokenSession) !== resolvedSessionId) {
+        return res.status(403).json({
+          error: 'Hotspot token is for a different session.',
+          networkMismatch: true,
+        });
+      }
+
+      const expectedConnSig = crypto
+        .createHmac('sha256', session.esp32Seed)
+        .update(`conn:${tokenSession}:${tokenStudent}:${issuedAt}`)
+        .digest('hex')
+        .slice(0, 32);
+
+      const connSigClean = String(sig || '').toLowerCase().replace(/[^0-9a-f]/g, '');
+      if (connSigClean.length !== 32 ||
+          !crypto.timingSafeEqual(Buffer.from(connSigClean), Buffer.from(expectedConnSig))) {
+        console.warn(`[MARK] Invalid hotspot sig (BLE+hotspot path) for ${req.user.name}`);
+        return res.status(403).json({
+          error: 'Invalid hotspot token. Connect to the classroom hotspot and try again.',
+          networkMismatch: true,
+        });
+      }
+
+      // Both factors verified — no verbal code needed
       skipCodeCheck = true;
 
     } else if (connectionToken && typeof connectionToken === 'object') {
