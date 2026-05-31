@@ -1865,29 +1865,29 @@ void setup() {
   digitalWrite(45, HIGH);
 
   Serial.begin(115200); delay(150);
-  initBle();
   pinMode(LED_PIN, OUTPUT);
 
-  // Display init — LovyanGFX with SPI2_HOST, ILI9341, pins confirmed working.
-  // cfg.invert=true in the LGFX class already sends INVON during panel init.
-  // Do NOT call invertDisplay() again here — double-inverting makes all colours wrong.
+  // Display + sprite BEFORE BLE/WiFi so the 150 KB sprite buffer is allocated
+  // from unfragmented PSRAM. BLE grabs large contiguous chunks; if it runs first
+  // createSprite() can fail even though total free PSRAM is sufficient.
   display.init();
   display.setRotation(0);  // 0 = portrait
   display.fillScreen(COL_BG);
 
-  // Sprite for flicker-free rendering (~150 KB PSRAM).
-  // Requires Tools → PSRAM → OPI PSRAM in Arduino IDE.
   spr.setColorDepth(16);
   void* sprBuf = spr.createSprite(SW, SH);
   if (!sprBuf) {
-    LOG("PSRAM not available — sprite disabled, using direct display draw");
+    LOG("PSRAM sprite alloc failed — check OPI PSRAM setting or free heap");
     display.setTextColor(TFT_WHITE, COL_BG);
     display.setTextSize(2);
     display.drawString("DIKLY", 80, 140);
     display.setTextSize(1);
-    display.drawString("Enable OPI PSRAM", 40, 170);
-    display.drawString("in Arduino IDE Tools", 30, 185);
+    display.drawString("PSRAM alloc failed", 35, 170);
+    display.drawString("Free: " + String(ESP.getFreePsram()), 55, 185);
   }
+
+  // BLE init after sprite — PSRAM is already claimed, no fragmentation risk.
+  initBle();
 
   // Touch init
   touchInit();
