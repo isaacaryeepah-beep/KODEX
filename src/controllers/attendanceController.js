@@ -939,24 +939,29 @@ exports.markAttendance = async (req, res) => {
     ]);
 
     // ── New-device detection ────────────────────────────────────────────────
-    // Check whether this student has ever used this phone before.
-    // If not, auto-flag the record and log a SuspiciousEvent so the lecturer
-    // can review it on the dashboard. A student marking from a stranger's phone
-    // is the primary signal of credential sharing.
+    // The auth system (authController) already:
+    //   • locks the account for 6 hours when a new login device is seen, and
+    //   • requireNoDeviceLock middleware blocks this route while locked.
+    //
+    // So credential sharing is already stopped at login. What we add here is
+    // a secondary check: if the clientDeviceId sent with the mark request is
+    // NOT in the student's trustedDevices list (maintained by the auth system),
+    // it means the app device fingerprint diverges from the login fingerprint —
+    // which is unusual and worth flagging for the lecturer to review.
     if (clientDeviceId && session.course) {
-      const priorUse = await AttendanceRecord.findOne({
-        user:    req.user._id,
-        company: req.user.company,
-        deviceId: clientDeviceId,
-        _id:     { $ne: record._id },
-      }).select('_id').lean();
+      const userRecord = await User.findById(req.user._id)
+        .select('trustedDevices indexNumber name')
+        .lean();
 
-      if (!priorUse) {
+      const isKnownDevice = (userRecord?.trustedDevices || [])
+        .some(d => d.deviceId === clientDeviceId);
+
+      if (!isKnownDevice) {
         await AttendanceRecord.findByIdAndUpdate(record._id, {
           $set: {
             newDeviceFlag: true,
             flagged:  true,
-            flagNote: `First-time device for this student (index: ${req.user.indexNumber || 'N/A'}) — auto-flagged for review`,
+            flagNote: `Device fingerprint not in student's trusted-devices list (index: ${req.user.indexNumber || 'N/A'}) — auto-flagged for review`,
           },
         });
 
@@ -968,11 +973,11 @@ exports.markAttendance = async (req, res) => {
           userId:      req.user._id,
           deviceId:    clientDeviceId,
           eventType:   'new_device_for_user',
-          reason:      `${req.user.name} (index: ${req.user.indexNumber || req.user._id}) marked attendance from a device not previously associated with their account.`,
+          reason:      `${req.user.name} (index: ${req.user.indexNumber || req.user._id}) marked attendance from a device not in their trusted-devices list.`,
           actionTaken: 'flagged',
         });
 
-        console.log(`[MARK] New device flagged for ${req.user.name} (${req.user.indexNumber}), device=${clientDeviceId}`);
+        console.log(`[MARK] Untrusted device flagged for ${req.user.name} (${req.user.indexNumber}), device=${clientDeviceId}`);
         populated.newDeviceFlag = true;
         populated.flagged = true;
       }
