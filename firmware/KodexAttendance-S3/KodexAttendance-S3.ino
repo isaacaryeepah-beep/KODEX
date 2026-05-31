@@ -93,6 +93,7 @@ public:
 
 // Forward declarations
 static void startWifiReconfigPortal();
+static void drawPairStatus(const char* title, const char* line1, const char* line2, uint8_t step);
 
 // ─── Pin / Hardware Config ───────────────────────────────────────────────────
 // Confirmed from board silkscreen (Shenzhen Hong Shu Yuan ES3C28P):
@@ -352,7 +353,10 @@ static void bleUpdatePayload() {
   buf[7] = (slot >>24) & 0xFF;
   memcpy(buf + 8, hmacOut, 8);
 
-  std::string mfg(reinterpret_cast<const char*>(buf), sizeof(buf));
+  // Build Arduino String byte-by-byte so null bytes in the slot field are preserved
+  String mfg;
+  mfg.reserve(sizeof(buf));
+  for (size_t i = 0; i < sizeof(buf); i++) mfg += (char)buf[i];
 
   bleAdv->stop();
   BLEAdvertisementData adv;
