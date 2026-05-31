@@ -500,14 +500,11 @@ exports.markAttendance = async (req, res) => {
     const { sessionId, qrToken, code, method, meetingId } = req.body;
     const clientDeviceId = req.body.deviceId || req.headers["x-device-id"] || null;
 
-    // NOTE: 'ble' is intentionally absent — BLE is not yet implemented.
-    // The firmware has no BLE advertising and the backend has no RSSI/token
-    // validation. Accepting 'ble_mark' with no BLE checks would be misleading.
-    // Add it back once the full BLE flow (beacon + RSSI + signed token) is built.
     const methodMap = {
       qr:             "qr_mark",
       manual:         "manual",
       code:           "code_mark",
+      ble:            "ble_mark",
       esp32_hotspot:  "esp32_ap",
     };
 
@@ -592,25 +589,76 @@ exports.markAttendance = async (req, res) => {
       });
     }
 
-    // ── Proximity proof: hotspot connection token (primary) OR IP match (legacy) ─
+    // ── Proximity proof — three paths, highest-trust first ────────────────────
     //
-    // Primary flow: student connects to the device's AP hotspot, hits
-    // GET http://192.168.4.1/session?studentId=<id>, receives an HMAC-signed
-    // token, then submits that token here. We verify the HMAC against the
-    // session's esp32Seed — only the real device can produce a valid sig.
+    //  1. BLE token   — student was within BLE range (device broadcasts slot HMAC).
+    //                   No verbal code required; BLE proximity IS the proof.
+    //  2. Hotspot token — student connected to device AP and got a signed token.
+    //                   Verbal code still required as second factor.
+    //  3. IP match    — legacy same-network check (backward compat only).
+    //                   Verbal code still required.
     //
-    // Legacy flow: IP-based same-network check (kept for backward compat).
+    // Only one path runs. First match wins.
     // ─────────────────────────────────────────────────────────────────────────
+    const bleToken        = req.body.bleToken;
     const connectionToken = req.body.connectionToken;
 
-    if (connectionToken && typeof connectionToken === 'object') {
+    let skipCodeCheck = false;
+
+    if (bleToken && typeof bleToken === 'object') {
+      // ── BLE path ────────────────────────────────────────────────────────────
+      if (!session.esp32Seed) {
+        return res.status(403).json({ error: 'Session has no device seed for BLE verification.' });
+      }
+
+      const slotNum = parseInt(bleToken.slot, 10);
+      if (isNaN(slotNum) || slotNum < 0) {
+        return res.status(400).json({ error: 'Invalid BLE token: missing or bad slot.' });
+      }
+
+      // Slot freshness: allow current slot + 1 previous (≤60 s grace for slow networks)
+      const currentSlot = Math.floor(Date.now() / 30000);
+      if (Math.abs(currentSlot - slotNum) > 1) {
+        return res.status(403).json({
+          error: 'BLE token expired. Move closer to the classroom device and try again.',
+          bleTokenExpired: true,
+        });
+      }
+
+      // Verify HMAC: HMAC-SHA256(esp32Seed, "ble:<slot>") → first 8 bytes = 16 hex chars
+      const expectedBleHmac = crypto
+        .createHmac('sha256', session.esp32Seed)
+        .update(`ble:${slotNum}`)
+        .digest('hex')
+        .slice(0, 16);
+
+      const hmacClean = String(bleToken.hmac || '').toLowerCase().replace(/[^0-9a-f]/g, '');
+      if (hmacClean.length !== 16) {
+        return res.status(403).json({
+          error: 'Invalid BLE token. Make sure you are within range of the classroom device.',
+          networkMismatch: true,
+        });
+      }
+
+      if (!crypto.timingSafeEqual(Buffer.from(hmacClean), Buffer.from(expectedBleHmac))) {
+        console.warn(`[MARK] Invalid BLE hmac from ${req.user.name}`);
+        return res.status(403).json({
+          error: 'Invalid BLE token. Make sure you are within range of the classroom device.',
+          networkMismatch: true,
+        });
+      }
+
+      // BLE proximity verified — verbal code is not required for this path
+      skipCodeCheck = true;
+
+    } else if (connectionToken && typeof connectionToken === 'object') {
+      // ── Hotspot token path ──────────────────────────────────────────────────
       const { sessionId: tokenSession, studentId: tokenStudent, issuedAt, sig } = connectionToken;
 
       if (!session.esp32Seed) {
         return res.status(403).json({ error: 'Session has no device seed. Cannot verify hotspot token.' });
       }
 
-      // Token must be fresh — reject after 10 minutes to prevent sharing
       const tokenAgeMs = Date.now() - (Number(issuedAt) * 1000);
       if (!issuedAt || tokenAgeMs < 0 || tokenAgeMs > 10 * 60 * 1000) {
         return res.status(403).json({
@@ -619,7 +667,6 @@ exports.markAttendance = async (req, res) => {
         });
       }
 
-      // Token must be bound to the submitting student
       if (String(tokenStudent) !== req.user._id.toString()) {
         return res.status(403).json({
           error: 'Hotspot token was issued for a different account.',
@@ -627,7 +674,6 @@ exports.markAttendance = async (req, res) => {
         });
       }
 
-      // Token must be bound to the current session
       if (String(tokenSession) !== resolvedSessionId) {
         return res.status(403).json({
           error: 'Hotspot token is for a different session.',
@@ -635,14 +681,12 @@ exports.markAttendance = async (req, res) => {
         });
       }
 
-      // Verify HMAC — recompute using session seed and compare timing-safely
       const expectedSig = crypto
         .createHmac('sha256', session.esp32Seed)
         .update(`conn:${tokenSession}:${tokenStudent}:${issuedAt}`)
         .digest('hex')
         .slice(0, 32);
 
-      // Both must be exactly 32 hex chars — any length mismatch is an immediate reject
       const sigClean = String(sig || '').toLowerCase().replace(/[^0-9a-f]/g, '');
       if (sigClean.length !== 32) {
         return res.status(403).json({
@@ -651,10 +695,7 @@ exports.markAttendance = async (req, res) => {
         });
       }
 
-      const sigBuf      = Buffer.from(sigClean);
-      const expectedBuf = Buffer.from(expectedSig);
-
-      if (!crypto.timingSafeEqual(sigBuf, expectedBuf)) {
+      if (!crypto.timingSafeEqual(Buffer.from(sigClean), Buffer.from(expectedSig))) {
         console.warn(`[MARK] Invalid hotspot token sig for ${req.user.name}`);
         return res.status(403).json({
           error: 'Invalid hotspot token. Make sure you are connected to the classroom hotspot.',
@@ -663,8 +704,7 @@ exports.markAttendance = async (req, res) => {
       }
 
     } else {
-      // Legacy: student's public IP must match a recent IP from the ESP32
-      // (proves they are on the same school WiFi as the device).
+      // ── Legacy IP path ──────────────────────────────────────────────────────
       const studentIp = (req.ip || '').replace(/^::ffff:/, '');
 
       const TEN_MIN_AGO = Date.now() - 10 * 60 * 1000;
@@ -722,12 +762,9 @@ exports.markAttendance = async (req, res) => {
     }
 
     // ── Rotating code verification ─────────────────────────────────────────
-    // If this session has an esp32Seed (i.e. the ESP32 started it with a seed),
-    // the student MUST submit the current 6-digit code from the classroom's
-    // OLED display. The code rotates every 20s server-side, matching the ESP32
-    // firmware's derivation. No network round-trip between ESP32 and server —
-    // both run the same HMAC formula independently.
-    if (session.esp32Seed) {
+    // Required for hotspot-token and IP paths. Skipped for BLE — the slot HMAC
+    // already proves physical proximity; a second code would be redundant.
+    if (!skipCodeCheck && session.esp32Seed) {
       const { verifyCodeForSession } = require('../services/attendanceCodeService');
       const result = verifyCodeForSession(session, code);
       if (!result.ok) {

@@ -88,6 +88,8 @@ public:
 #include <ArduinoJson.h>
 #include <SPI.h>
 #include <SD_MMC.h>   // SDIO driver — separate peripheral from SPI, no bus conflict
+#include <BLEDevice.h>
+#include <BLEAdvertising.h>
 
 // Forward declarations
 static void startWifiReconfigPortal();
@@ -207,6 +209,10 @@ uint8_t  hbFails     = 0;
 bool     timeSynced  = false;
 bool     forceReconn = false;
 
+// BLE beacon state
+static BLEAdvertising *bleAdv  = nullptr;
+static uint32_t        bleSlot = UINT32_MAX;   // slot currently on-air
+
 // Async pairing (avoids iOS captive-portal dropping the fetch before we respond)
 bool     pairPending     = false;
 String   pairPendingInst = "";
@@ -307,6 +313,64 @@ static String deriveCode(const String& seed, uint32_t unixSec) {
                ((uint32_t)digest[2] <<  8) |  (uint32_t)digest[3];
   char buf[8]; snprintf(buf, sizeof(buf), "%06lu", (unsigned long)(n % 1000000UL));
   return String(buf);
+}
+
+// ── BLE BEACON ──────────────────────────────────────────────────────────────
+// Broadcasts a 30-second slot-bound HMAC token so student apps can verify
+// physical proximity. Payload (manufacturer data, 16 bytes):
+//   [0-1] company ID 0xFFFF (unregistered/test)
+//   [2-3] magic 'K' 'D'
+//   [4-7] slot (uint32, little-endian)  slot = floor(unixSeconds / 30)
+//   [8-15] HMAC-SHA256(sessionSeed, "ble:<slot>") first 8 bytes
+// Backend re-derives the HMAC using session.esp32Seed and rejects stale slots.
+
+static void initBle() {
+  BLEDevice::init(("Dikly-" + macSuffix()).c_str());
+  bleAdv = BLEDevice::getAdvertising();
+  LOG("BLE init OK");
+}
+
+static void bleUpdatePayload() {
+  if (!bleAdv || sessionId.isEmpty() || sessionSeed.isEmpty() || !timeSynced) return;
+
+  uint32_t slot = (uint32_t)(time(nullptr) / 30);
+  if (slot == bleSlot) return;   // slot unchanged — nothing to do
+  bleSlot = slot;
+
+  char slotMsg[20];
+  snprintf(slotMsg, sizeof(slotMsg), "ble:%lu", (unsigned long)slot);
+  uint8_t hmacOut[32];
+  hmacSha256((const uint8_t*)sessionSeed.c_str(), sessionSeed.length(),
+             (const uint8_t*)slotMsg, strlen(slotMsg), hmacOut);
+
+  uint8_t buf[16];
+  buf[0] = 0xFF; buf[1] = 0xFF;          // company ID (unregistered)
+  buf[2] = 0x4B; buf[3] = 0x44;          // magic 'K' 'D'
+  buf[4] = slot        & 0xFF;
+  buf[5] = (slot >> 8) & 0xFF;
+  buf[6] = (slot >>16) & 0xFF;
+  buf[7] = (slot >>24) & 0xFF;
+  memcpy(buf + 8, hmacOut, 8);
+
+  std::string mfg(reinterpret_cast<const char*>(buf), sizeof(buf));
+
+  bleAdv->stop();
+  BLEAdvertisementData adv;
+  adv.setFlags(0x06);                    // LE General Discoverable, no BR/EDR
+  adv.setManufacturerData(mfg);
+  bleAdv->setAdvertisementData(adv);
+  bleAdv->setMinInterval(320);           // ~200 ms  (units: 0.625 ms)
+  bleAdv->setMaxInterval(480);           // ~300 ms
+  bleAdv->start();
+  LOG("BLE slot=" + String(slot));
+}
+
+static void bleStop() {
+  if (bleAdv && bleSlot != UINT32_MAX) {
+    bleAdv->stop();
+    bleSlot = UINT32_MAX;
+    LOG("BLE stopped");
+  }
 }
 
 // ─── Touch (FT6X36 capacitive, I2C) ──────────────────────────────────────────
@@ -1797,6 +1861,7 @@ void setup() {
   digitalWrite(45, HIGH);
 
   Serial.begin(115200); delay(150);
+  initBle();
   pinMode(LED_PIN, OUTPUT);
 
   // Display init — LovyanGFX with SPI2_HOST, ILI9341, pins confirmed working.
@@ -2009,10 +2074,13 @@ void loop() {
     // Auto-clear if session window closed
     if (sessionStartedAt && unixNow > (time_t)(sessionStartedAt + sessionDuration)) {
       sessionId = ""; sessionSeed = "";
+      bleStop();
       curScreen = READY; drawReady(); return;
     }
+    bleUpdatePayload();   // update BLE slot every 30 s
     drawSession(code, secsLeft, WINDOW_SECONDS);
   } else {
+    bleStop();            // no active session — stop broadcasting
     curScreen = READY;
     drawReady();
   }
