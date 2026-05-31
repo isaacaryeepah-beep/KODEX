@@ -1087,10 +1087,13 @@ document.getElementById('f').onsubmit=async(e)=>{
 
 static void startWifiReconfigPortal() {
   WiFi.mode(WIFI_AP);
+  delay(100);
   String ap = "Dikly-" + macSuffix();
-  WiFi.softAP(ap.c_str()); delay(200);
-  IPAddress gw = WiFi.softAPIP();
-  LOG("WiFi reconfig AP: " + ap);
+  WiFi.softAP(ap.c_str());
+  IPAddress gw;
+  uint32_t t0 = millis();
+  do { delay(100); gw = WiFi.softAPIP(); } while (gw == IPAddress(0,0,0,0) && millis()-t0 < 5000);
+  LOG("WiFi reconfig AP: " + ap + " @ " + gw.toString());
 
   dns.start(53, "*", gw);
 
@@ -1547,9 +1550,13 @@ static void drawPairStatus(const char* title, const char* line1, const char* lin
 // ─── Captive-portal AP startup ────────────────────────────────────────────────
 static void startApPortal() {
   WiFi.mode(WIFI_AP);
+  delay(100);
   String ap = "Dikly-" + macSuffix();
-  WiFi.softAP(ap.c_str()); delay(200);
-  IPAddress gw = WiFi.softAPIP();
+  WiFi.softAP(ap.c_str());
+  // Wait until the AP has a real IP (0.0.0.0 means not ready yet)
+  IPAddress gw;
+  uint32_t t0 = millis();
+  do { delay(100); gw = WiFi.softAPIP(); } while (gw == IPAddress(0,0,0,0) && millis()-t0 < 5000);
   LOG("AP: " + ap + " @ " + gw.toString());
 
   dns.start(53, "*", gw);
