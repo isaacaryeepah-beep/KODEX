@@ -452,12 +452,15 @@ static void factoryReset() {
 static int postJson(const String& path, const String& body,
                     String& out, bool authed = true) {
   WiFiClientSecure client; client.setInsecure();
+  client.setTimeout(30);  // 30s SSL handshake timeout
   HTTPClient http;
-  if (!http.begin(client, apiBase + path)) return -1;
+  String url = apiBase + path;
+  if (!http.begin(client, url)) return -1;
   http.addHeader("Content-Type", "application/json");
+  http.addHeader("Connection", "close");
   if (authed && !deviceJWT.isEmpty())
     http.addHeader("Authorization", "Bearer " + deviceJWT);
-  http.setTimeout(20000);
+  http.setTimeout(30000);
   int code = http.POST(body); out = http.getString(); http.end();
   return code;
 }
@@ -534,22 +537,38 @@ static bool tryPair(const String& pcode, const String& inst) {
   req["deviceName"]      = "Dikly-" + macSuffix();
   req["institutionCode"] = inst;
   String body; serializeJson(req, body);
-  String resp; int code = postJson("/api/devices/pair", body, resp, false);
-  LOG("Pair → " + String(code) + " : " + resp);
+
+  String resp; int code = -1;
+  for (uint8_t attempt = 1; attempt <= 3; attempt++) {
+    resp = "";
+    code = postJson("/api/devices/pair", body, resp, false);
+    LOG("Pair attempt " + String(attempt) + " → HTTP " + String(code));
+    if (code > 0) break;          // got a real HTTP response (even if 4xx/5xx) — stop retrying
+    if (attempt < 3) {
+      LOG("Connection failed, retrying in 3s…");
+      drawPairStatus("Contacting server…",
+                     ("Attempt " + String(attempt) + "/3 failed, retrying…").c_str(),
+                     ("HTTP " + String(code)).c_str(), 3);
+      delay(3000);
+    }
+  }
+
   if (code != 200 && code != 201) {
-    // Try to extract a human-readable message from the JSON response
     JsonDocument errDoc;
     if (!deserializeJson(errDoc, resp)) {
-      if (errDoc["message"].is<const char*>())      pairErrorMsg = errDoc["message"].as<String>();
-      else if (errDoc["error"].is<const char*>())   pairErrorMsg = errDoc["error"].as<String>();
+      if (errDoc["message"].is<const char*>())    pairErrorMsg = errDoc["message"].as<String>();
+      else if (errDoc["error"].is<const char*>()) pairErrorMsg = errDoc["error"].as<String>();
     }
-    if (pairErrorMsg.isEmpty()) pairErrorMsg = "HTTP " + String(code);
+    if (pairErrorMsg.isEmpty()) {
+      pairErrorMsg = code < 0 ? "Cannot reach server (HTTP " + String(code) + ")"
+                               : "Server error HTTP " + String(code);
+    }
     LOG("Pair fail: " + pairErrorMsg);
     return false;
   }
   JsonDocument doc;
-  if (deserializeJson(doc, resp)) return false;
-  if (!doc["token"].is<const char*>()) return false;
+  if (deserializeJson(doc, resp)) { pairErrorMsg = "Bad response JSON"; return false; }
+  if (!doc["token"].is<const char*>()) { pairErrorMsg = "No token in response"; return false; }
   deviceJWT = doc["token"].as<String>();
   if (doc["deviceId"].is<const char*>()) deviceId = doc["deviceId"].as<String>();
   institutionCode = inst;
