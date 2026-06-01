@@ -1868,6 +1868,13 @@ void setup() {
   Serial.begin(115200); delay(150);
   pinMode(LED_PIN, OUTPUT);
 
+  // Soft resets don't reset the WiFi/BT peripheral registers — force a clean
+  // state before any WiFi or BT calls so previous-boot dirty state can't cause
+  // rx-buffer allocation failures or hci init errors.
+  WiFi.disconnect(true);
+  WiFi.mode(WIFI_OFF);
+  delay(100);
+
   // Display + sprite BEFORE BLE/WiFi so the 150 KB sprite buffer is allocated
   // from unfragmented PSRAM. BLE grabs large contiguous chunks; if it runs first
   // createSprite() can fail even though total free PSRAM is sufficient.
@@ -1929,7 +1936,7 @@ void setup() {
   // needed during setup mode and the shared radio causes init failures otherwise.
   if (deviceJWT.isEmpty() || wifiSSID.isEmpty()) {
     LOG("Entering setup AP mode");
-    esp_bt_controller_mem_release(ESP_BT_MODE_BTDM);
+    esp_bt_controller_mem_release(ESP_BT_MODE_BLE);
     startApPortal();
     return;
   }
