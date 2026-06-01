@@ -258,6 +258,7 @@ struct OfflineRec {
   char userId[32];
   char code[8];
   char sessionId[48];
+  char courseId[16];
   uint32_t ts;
 };
 // Allocated from PSRAM in setup() via heap_caps_calloc to free ~38 KB of
@@ -553,11 +554,12 @@ static void syncOfflineAttendance() {
         JsonDocument rec;
         if (!deserializeJson(rec, line)) {
           JsonObject o = arr.add<JsonObject>();
+          if (rec["id"].is<const char*>())          o["id"]          = rec["id"];
           if (rec["indexNumber"].is<const char*>()) o["indexNumber"] = rec["indexNumber"];
           if (rec["userId"].is<const char*>())      o["userId"]      = rec["userId"];
-          o["codeUsed"]  = rec["code"];
-          o["timestamp"] = rec["ts"];
-          o["sessionId"] = rec["sid"];
+          o["sessionId"] = rec["sessionId"].is<const char*>() ? rec["sessionId"] : rec["sid"];
+          o["courseId"]  = rec["courseId"]  | "";
+          o["timestamp"] = rec["timestamp"].is<uint32_t>() ? rec["timestamp"] : rec["ts"];
           parsed++;
         }
       }
@@ -584,9 +586,9 @@ static void syncOfflineAttendance() {
     JsonObject o = arr.add<JsonObject>();
     if (offlineBuf[i].indexNumber[0]) o["indexNumber"] = offlineBuf[i].indexNumber;
     if (offlineBuf[i].userId[0])      o["userId"]      = offlineBuf[i].userId;
-    o["codeUsed"]  = offlineBuf[i].code;
-    o["timestamp"] = offlineBuf[i].ts;
     o["sessionId"] = offlineBuf[i].sessionId[0] ? offlineBuf[i].sessionId : sessionId.c_str();
+    o["courseId"]  = offlineBuf[i].courseId[0]  ? offlineBuf[i].courseId  : "";
+    o["timestamp"] = offlineBuf[i].ts;
   }
   String body; serializeJson(doc, body);
   String resp; int code = postJson("/api/devices/sync", body, resp);
@@ -1335,11 +1337,13 @@ static void drawReady() {
   spr.fillRect(0, 44, SW, 2, COL_SUCCESS);
   spr.setFont(F_LOGO); spr.setTextColor(COL_PRIMARY, COL_CARD);
   spr.setCursor(14, 10); spr.print("DIKLY");
-  // Online pill badge
-  spr.fillRoundRect(SW - 62, 13, 50, 18, 9, COL_SUCCESS);
-  spr.fillCircle(SW - 54, 22, 3, COL_CARD);
-  spr.setFont(F_TINY); spr.setTextColor(COL_CARD, COL_SUCCESS);
-  spr.setCursor(SW - 46, 17); spr.print("Online");
+  // Sync status badge — green when STA connected to internet, grey when offline
+  bool syncOnline = (WiFi.status() == WL_CONNECTED);
+  uint16_t badgeCol = syncOnline ? COL_SUCCESS : COL_MUTED;
+  spr.fillRoundRect(SW - 66, 13, 54, 18, 9, badgeCol);
+  spr.fillCircle(SW - 58, 22, 3, COL_CARD);
+  spr.setFont(F_TINY); spr.setTextColor(COL_CARD, badgeCol);
+  spr.setCursor(SW - 50, 17); spr.print(syncOnline ? "Online" : "Offline");
 
   // ── Title ──────────────────────────────────────────────────────────────────
   spr.setFont(F_MED); spr.setTextColor(COL_PRIMARY, COL_BG);
@@ -1350,10 +1354,13 @@ static void drawReady() {
 
   // ── Subtitle ───────────────────────────────────────────────────────────────
   spr.setFont(F_TINY); spr.setTextColor(COL_MUTED, COL_BG);
-  const char* sub1 = "The lecturer will start";
-  const char* sub2 = "the session from the portal";
+  const char* sub1 = "Connect to device hotspot";
+  String apLabel = "Dikly-" + macSuffix();
   spr.setCursor((SW - spr.textWidth(sub1)) / 2, 80); spr.print(sub1);
-  spr.setCursor((SW - spr.textWidth(sub2)) / 2, 92); spr.print(sub2);
+  int32_t alw = spr.textWidth(apLabel);
+  spr.setTextColor(COL_PRIMARY, COL_BG);
+  spr.setCursor((SW - alw) / 2, 92); spr.print(apLabel);
+  spr.setTextColor(COL_MUTED, COL_BG);
 
   // ── Outward ring pulse ─────────────────────────────────────────────────────
   static uint8_t pulse = 0; pulse = (pulse + 1) % 40;
@@ -1393,13 +1400,19 @@ static void drawReady() {
     }
   } else {
     spr.setFont(F_TINY); spr.setTextColor(COL_MUTED, COL_CARD);
-    String ip = "IP: " + WiFi.localIP().toString();
-    tw = spr.textWidth(ip);
-    spr.setCursor((SW - tw) / 2, 260); spr.print(ip);
+    String apIp = "AP: " + WiFi.softAPIP().toString();
+    tw = spr.textWidth(apIp);
+    spr.setCursor((SW - tw) / 2, 255); spr.print(apIp);
     uint16_t sdC = sdAvailable ? COL_SUCCESS : COL_WARNING;
-    spr.fillCircle(20, 281, 4, sdC);
+    spr.fillCircle(20, 277, 4, sdC);
     spr.setTextColor(sdC, COL_CARD);
-    spr.setCursor(29, 277); spr.print(sdAvailable ? "SD Ready" : "No SD Card");
+    spr.setCursor(29, 273); spr.print(sdAvailable ? "SD Ready" : "No SD");
+    // Sync status
+    bool syncing = (WiFi.status() == WL_CONNECTED);
+    uint16_t syncC = syncing ? COL_SUCCESS : COL_MUTED;
+    spr.fillCircle(20, 293, 4, syncC);
+    spr.setTextColor(syncC, COL_CARD);
+    spr.setCursor(29, 289); spr.print(syncing ? "Sync Online" : "Offline");
   }
 
   spr.pushSprite(0, 0);
@@ -1536,10 +1549,11 @@ static const char PAIR_HTML[] PROGMEM = R"HTML(<!doctype html>
       <input id="pc" name="pairingCode" required autocomplete="off" placeholder="from admin portal" maxlength="8" style="text-transform:uppercase">
     </div>
     <div class="card">
-      <h3>School WiFi</h3>
+      <h3>School WiFi <span style="font-size:10px;font-weight:400;color:#475569;text-transform:none">(optional — for sync only)</span></h3>
+      <p style="font-size:11px;color:#64748b;margin-bottom:10px">Device works offline without this. Add WiFi only if you want records to sync automatically to the portal.</p>
       <label>Network</label>
       <div class="row">
-        <input id="ssid" name="ssid" required autocomplete="off" placeholder="Select or type SSID">
+        <input id="ssid" name="ssid" autocomplete="off" placeholder="Select or type SSID (optional)">
         <button type="button" class="scan-btn" id="sb" onclick="scan()">Scan</button>
       </div>
       <div id="nl" class="nets" style="display:none"></div>
@@ -1695,8 +1709,8 @@ static void startApPortal() {
     String pass  = req["password"]        | "";
     String api   = req["apiBase"]         | DEFAULT_API_BASE;
     inst.toUpperCase(); pcode.toUpperCase();
-    if (inst.length() < 4 || pcode.length() < 4 || ssid.isEmpty()) {
-      localHttp.send(400, "application/json", "{\"error\":\"Missing fields\"}"); return;
+    if (inst.length() < 4 || pcode.length() < 4) {
+      localHttp.send(400, "application/json", "{\"error\":\"Institution code and pairing code required\"}"); return;
     }
     // Respond immediately so iOS captive-portal doesn't drop the connection
     // while we're switching WiFi modes. Actual connect + pair happens in loop().
@@ -1775,13 +1789,10 @@ static void registerLocalHttp() {
     localHttp.send(200, "application/json", s);
   });
 
-  // /attend — offline attendance submission (student on school WiFi, no internet)
+  // /attend — offline attendance submission (student connected to device AP)
   localHttp.on("/attend", HTTP_POST, []() {
     if (sessionId.isEmpty() || sessionSeed.isEmpty()) {
       localHttp.send(503, "application/json", "{\"error\":\"No active session\"}"); return;
-    }
-    if (!timeSynced) {
-      localHttp.send(503, "application/json", "{\"error\":\"Device clock not synced yet. Try again in a moment.\"}"); return;
     }
     // Capacity guard (SD: effectively unlimited; RAM fallback: 200 slots)
     if (!sdAvailable && offlineCount >= 200) {
@@ -1798,8 +1809,11 @@ static void registerLocalHttp() {
     if (submittedCode.length() != 6) {
       localHttp.send(400, "application/json", "{\"error\":\"Code must be 6 digits\"}"); return;
     }
-    // Validate against current and previous window (±20s clock tolerance)
+    // Use NTP time if available; fall back to millis-based offset if clock not synced
     time_t now = time(nullptr);
+    if (now < 1700000000UL) now = 1700000000UL + (millis() / 1000);
+
+    // Validate against current and previous window (±20s clock tolerance)
     bool valid = (submittedCode == deriveCode(sessionSeed, (uint32_t)now)) ||
                  (submittedCode == deriveCode(sessionSeed, (uint32_t)(now - WINDOW_SECONDS)));
     if (!valid) {
@@ -1816,12 +1830,16 @@ static void registerLocalHttp() {
     if (sdAvailable) {
       File f = SD_MMC.open(SD_ATT_FILE, FILE_APPEND);
       if (f) {
+        char recId[40];
+        snprintf(recId, sizeof(recId), "rec_%s_%lu", macSuffix().c_str(), (uint32_t)now);
         JsonDocument entry;
+        entry["id"]        = recId;
         if (indexNum.length()) entry["indexNumber"] = indexNum;
         if (userId.length())   entry["userId"]      = userId;
-        entry["code"] = submittedCode;
-        entry["sid"]  = sessionId;
-        entry["ts"]   = (uint32_t)now;
+        entry["sessionId"] = sessionId;
+        entry["courseId"]  = sessionCourse;
+        entry["timestamp"] = (uint32_t)now;
+        entry["synced"]    = false;
         String line; serializeJson(entry, line); line += "\n";
         f.print(line); f.close();
         sdRecordCount++;
@@ -1832,15 +1850,87 @@ static void registerLocalHttp() {
     // ── RAM fallback ──────────────────────────────────────────────────────────
     if (!stored) {
       OfflineRec& rec = offlineBuf[offlineCount++];
-      strncpy(rec.indexNumber, indexNum.c_str(), sizeof(rec.indexNumber) - 1);
-      strncpy(rec.userId,      userId.c_str(),   sizeof(rec.userId) - 1);
-      strncpy(rec.code,        submittedCode.c_str(), sizeof(rec.code) - 1);
-      strncpy(rec.sessionId,   sessionId.c_str(), sizeof(rec.sessionId) - 1);
+      strncpy(rec.indexNumber, indexNum.c_str(),       sizeof(rec.indexNumber) - 1);
+      strncpy(rec.userId,      userId.c_str(),         sizeof(rec.userId) - 1);
+      strncpy(rec.code,        submittedCode.c_str(),  sizeof(rec.code) - 1);
+      strncpy(rec.sessionId,   sessionId.c_str(),      sizeof(rec.sessionId) - 1);
+      strncpy(rec.courseId,    sessionCourse.c_str(),  sizeof(rec.courseId) - 1);
       rec.ts = (uint32_t)now;
       LOG("RAM attendance [" + String(offlineCount) + "] idx=" + indexNum);
     }
     dedupAdd(dedupKey);
-    localHttp.send(200, "application/json", "{\"ok\":true,\"message\":\"Attendance recorded. Will sync when internet returns.\"}");
+    localHttp.send(200, "application/json", "{\"ok\":true,\"message\":\"Attendance recorded.\"}");
+  });
+
+  // /session/start — lecturer creates a session locally (no internet required)
+  localHttp.on("/session/start", HTTP_POST, []() {
+    JsonDocument req;
+    if (deserializeJson(req, localHttp.arg("plain"))) {
+      localHttp.send(400, "application/json", "{\"error\":\"Bad JSON\"}"); return;
+    }
+    if (!sessionId.isEmpty()) {
+      localHttp.send(409, "application/json", "{\"error\":\"Session already active. Stop it first.\"}"); return;
+    }
+    String courseCode = req["courseCode"] | "";
+    String title      = req["title"]      | "Attendance";
+    String lecturer   = req["lecturer"]   | "";
+    uint32_t duration = req["duration"]   | 300;
+
+    time_t now = time(nullptr);
+    if (now < 1700000000UL) now = 1700000000UL + (millis() / 1000);
+
+    char sid[52]; snprintf(sid, sizeof(sid), "local_%s_%lu", macSuffix().c_str(), (uint32_t)now);
+    uint8_t seedBytes[32]; esp_fill_random(seedBytes, 32);
+    char seed[65];
+    for (int i = 0; i < 32; i++) snprintf(seed + i * 2, 3, "%02x", seedBytes[i]);
+    seed[64] = '\0';
+
+    sessionId       = String(sid);
+    sessionSeed     = String(seed);
+    sessionTitle    = title;
+    sessionCourse   = courseCode;
+    sessionLecturer = lecturer;
+    sessionDuration = duration;
+    sessionStartedAt = (uint32_t)now;
+    studentsMarked  = 0;
+    dedupClear(sessionId);
+    timeSynced      = true;  // allow code display — time is good enough
+
+    if (sdAvailable) {
+      File sf = SD_MMC.open("/sessions.jsonl", FILE_APPEND);
+      if (sf) {
+        JsonDocument sDoc;
+        sDoc["sessionId"]  = sessionId;
+        sDoc["courseCode"] = courseCode;
+        sDoc["title"]      = title;
+        sDoc["lecturer"]   = lecturer;
+        sDoc["startedAt"]  = (uint32_t)now;
+        sDoc["duration"]   = duration;
+        sDoc["synced"]     = false;
+        String sl; serializeJson(sDoc, sl); sl += "\n";
+        sf.print(sl); sf.close();
+      }
+    }
+    bleUpdatePayload();
+    JsonDocument resp;
+    resp["ok"] = true; resp["sessionId"] = sessionId;
+    String s; serializeJson(resp, s);
+    localHttp.sendHeader("Access-Control-Allow-Origin", "*");
+    localHttp.send(200, "application/json", s);
+  });
+
+  // /session/stop — end active session
+  localHttp.on("/session/stop", HTTP_POST, []() {
+    if (sessionId.isEmpty()) {
+      localHttp.send(409, "application/json", "{\"error\":\"No active session\"}"); return;
+    }
+    LOG("Session stopped: " + sessionId);
+    sessionId = ""; sessionSeed = "";
+    sessionTitle = ""; sessionCourse = ""; sessionLecturer = "";
+    studentsMarked = 0;
+    bleStop();
+    localHttp.sendHeader("Access-Control-Allow-Origin", "*");
+    localHttp.send(200, "application/json", "{\"ok\":true}");
   });
 
   localHttp.on("/wifi/configure", HTTP_POST, []() {
@@ -1916,9 +2006,8 @@ void setup() {
   loadConfig();
   LOG("Boot — " + deviceId + " fw=" + String(FIRMWARE_VERSION));
 
-  // AP / setup mode — SD not needed for pairing, and skipping it here keeps
-  // the full DMA-capable SRAM available for WiFi's rx-buffer pool.
-  if (deviceJWT.isEmpty() || wifiSSID.isEmpty()) {
+  // Not yet paired — go to captive portal for setup
+  if (deviceJWT.isEmpty()) {
     LOG("Entering setup AP mode");
     LOG("DMA heap free:    " + String(heap_caps_get_free_size(MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL)));
     LOG("DMA largest block:" + String(heap_caps_get_largest_free_block(MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL)));
@@ -1927,20 +2016,18 @@ void setup() {
     return;
   }
 
-  // Station mode — start WiFi BEFORE SD so WiFi secures its DMA rx-buffer
-  // pool from unfragmented internal SRAM. SD_MMC allocates from the same pool
-  // and if it runs first there may not be enough contiguous DRAM left for WiFi.
-  curScreen = CONNECTING;
-  WiFi.mode(WIFI_STA);
-  WiFi.setSleep(false);
-  WiFi.begin(wifiSSID.c_str(), wifiPass.c_str());
-  uint32_t t0 = millis();
-  while (WiFi.status() != WL_CONNECTED && millis() - t0 < WIFI_TIMEOUT_MS) {
-    drawConnecting(wifiSSID);
-    delay(180);
-  }
+  // ── Paired operation — device is always the AP ────────────────────────────
+  // Students connect directly to the device hotspot. No school WiFi needed for
+  // attendance. School WiFi (if configured) is used only for background sync.
+  String apName = "Dikly-" + macSuffix();
+  WiFi.mode(WIFI_AP);
+  WiFi.softAP(apName.c_str());
+  IPAddress apGw;
+  uint32_t apWait = millis();
+  do { delay(100); apGw = WiFi.softAPIP(); } while (apGw == IPAddress(0,0,0,0) && millis()-apWait < 5000);
+  LOG("Device AP: " + apName + " @ " + apGw.toString());
 
-  // Init SD after WiFi attempt — WiFi has its buffers, SD gets the remainder.
+  // SD after AP — WiFi AP has claimed its DMA buffers; SD gets the remainder.
   SD_MMC.setPins(SD_CLK, SD_CMD, SD_D0, SD_D1, SD_D2, SD_D3);
   sdAvailable = SD_MMC.begin("/sdcard", false, false);
   if (!sdAvailable) {
@@ -1957,30 +2044,32 @@ void setup() {
       if (cf) {
         while (cf.available()) { if (cf.read() == '\n') sdRecordCount++; }
         cf.close();
-        if (sdRecordCount) LOG("SD: " + String(sdRecordCount) + " pending records");
+        if (sdRecordCount) LOG("SD: " + String(sdRecordCount) + " unsynced records");
       }
     }
   } else {
-    LOG("SD not found — using 200-slot RAM buffer for offline records");
+    LOG("SD not found — using 200-slot RAM buffer");
   }
 
-  if (WiFi.status() != WL_CONNECTED) {
-    LOG("WiFi fail — showing on-device WiFi scanner");
-    curScreen = WIFI_SCAN;
-    wifiMsg = "Tap Scan to find networks.";
-    drawWifiScan();
-    return;
-  }
-  digitalWrite(LED_PIN, HIGH);
-  LOG("WiFi OK: " + WiFi.localIP().toString());
-
-  // BLE after WiFi — shared radio, coexistence layer needs WiFi up first.
+  // BLE after AP — radio coexistence layer is active once AP is up.
   initBle();
 
+  // NTP attempted now; succeeds only if STA connects later in loop().
+  // Records use millis-based fallback timestamps until NTP succeeds.
   configTime(0, 0, "pool.ntp.org", "time.google.com");
+
   registerLocalHttp();
   localHttp.begin();
   curScreen = READY;
+  digitalWrite(LED_PIN, HIGH);
+
+  // If WiFi credentials stored, add STA for background sync (non-blocking).
+  if (!wifiSSID.isEmpty()) {
+    WiFi.mode(WIFI_AP_STA);
+    WiFi.setSleep(false);
+    WiFi.begin(wifiSSID.c_str(), wifiPass.c_str());
+    LOG("STA: connecting to " + wifiSSID + " for sync");
+  }
 }
 
 void loop() {
@@ -2017,22 +2106,34 @@ void loop() {
     pairPending = false;
     delay(300); // let HTTP response flush to the browser
 
-    // Step 1 — connect to school WiFi
-    drawPairStatus("Connecting to WiFi…", wifiSSID.c_str(), "", 1);
-    WiFi.mode(WIFI_AP_STA);
-    WiFi.begin(wifiSSID.c_str(), wifiPass.c_str());
-    uint32_t t0 = millis();
-    while (WiFi.status() != WL_CONNECTED && millis() - t0 < WIFI_TIMEOUT_MS) {
-      delay(200); localHttp.handleClient();
-    }
-    if (WiFi.status() != WL_CONNECTED) {
-      WiFi.mode(WIFI_AP);
-      drawPairStatus("WiFi Failed", "Wrong password or network", "Hold 3s to reset and retry", 0);
-      return;
+    // Step 1 — connect to WiFi (if credentials provided; optional)
+    if (!wifiSSID.isEmpty()) {
+      drawPairStatus("Connecting to WiFi…", wifiSSID.c_str(), "", 1);
+      WiFi.mode(WIFI_AP_STA);
+      WiFi.begin(wifiSSID.c_str(), wifiPass.c_str());
+      uint32_t t0 = millis();
+      while (WiFi.status() != WL_CONNECTED && millis() - t0 < WIFI_TIMEOUT_MS) {
+        delay(200); localHttp.handleClient();
+      }
+      if (WiFi.status() != WL_CONNECTED) {
+        WiFi.mode(WIFI_AP);
+        drawPairStatus("WiFi Failed", "Wrong password or network", "WiFi skipped — will add later", 1);
+        wifiSSID = ""; wifiPass = "";  // clear bad creds, pairing continues
+        delay(1500);
+      }
+    } else {
+      drawPairStatus("No WiFi configured", "Pairing via internet needed", "Connect to WiFi with a phone hotspot", 1);
+      // Device needs internet to pair even if WiFi not configured for daily use.
+      // Try to find internet another way — nothing we can do without connectivity.
+      // Show an error if STA is not connected.
+      if (WiFi.status() != WL_CONNECTED) {
+        drawPairStatus("No Internet", "Provide a WiFi network to pair", "You can skip WiFi after pairing", 0);
+        delay(3000); return;
+      }
     }
 
     // Step 2 — sync time
-    drawPairStatus("WiFi OK — Syncing clock…", WiFi.localIP().toString().c_str(), "", 2);
+    drawPairStatus("Syncing clock…", "", "", 2);
     configTime(0, 0, "pool.ntp.org", "time.google.com");
     uint32_t tw = millis();
     while (time(nullptr) < 1000000000UL && millis() - tw < 5000) delay(100);
@@ -2051,8 +2152,8 @@ void loop() {
     return;
   }
 
-  // AP portal paths (setup or wifi-reconfig for password entry)
-  if (deviceJWT.isEmpty() || WiFi.getMode() == WIFI_AP) {
+  // Setup portal (not yet paired)
+  if (deviceJWT.isEmpty()) {
     uint16_t tx, ty;
     if (touchRead(tx, ty)) {
       touchX = tx; touchY = ty;
@@ -2065,28 +2166,30 @@ void loop() {
     return;
   }
 
-  // WiFi reconnect
-  if (WiFi.status() != WL_CONNECTED) {
-    curScreen = CONNECTING;
-    drawConnecting(wifiSSID);
+  // ── Paired operation (AP always on, STA optional for sync) ───────────────
+  // Background STA reconnect — only for sync, never blocks attendance.
+  bool staConnected = (WiFi.status() == WL_CONNECTED);
+  if (!wifiSSID.isEmpty()) {
     static uint32_t lastReconn = 0;
-    if (millis() - lastReconn > 10000) {
+    if (!staConnected && millis() - lastReconn > 30000) {
       lastReconn = millis();
+      if (WiFi.getMode() == WIFI_AP) WiFi.mode(WIFI_AP_STA);
+      WiFi.begin(wifiSSID.c_str(), wifiPass.c_str());
+    }
+    if (forceReconn) {
+      forceReconn = false;
       WiFi.disconnect(false); delay(200);
       WiFi.begin(wifiSSID.c_str(), wifiPass.c_str());
     }
-    delay(300); return;
-  }
-  if (forceReconn) {
-    forceReconn = false;
-    WiFi.disconnect(false); delay(200);
-    WiFi.begin(wifiSSID.c_str(), wifiPass.c_str());
-    return;
+    if (staConnected && !timeSynced) {
+      // NTP just came up — re-trigger time sync
+      configTime(0, 0, "pool.ntp.org", "time.google.com");
+    }
   }
 
-  // Heartbeat
+  // Heartbeat + sync (only when STA connected to internet)
   uint32_t now = millis();
-  if (now - lastHbMs >= HEARTBEAT_MS) { lastHbMs = now; sendHeartbeat(); }
+  if (staConnected && now - lastHbMs >= HEARTBEAT_MS) { lastHbMs = now; sendHeartbeat(); }
 
   // Render at ~10 fps
   static uint32_t lastDraw = 0;
