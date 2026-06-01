@@ -2147,6 +2147,13 @@ void loop() {
     while (time(nullptr) < 1000000000UL && millis() - tw < 5000) delay(100);
 
     // Step 3 — call server
+    // Stop DNS + HTTP server to reclaim internal heap before SSL handshake.
+    // mbedTLS needs ~20KB contiguous; the servers hold fragmented blocks.
+    dns.stop();
+    localHttp.stop();
+    delay(100);
+    LOG("Pre-pair heap free=" + String(ESP.getFreeHeap()) +
+        " maxBlock=" + String(ESP.getMaxAllocHeap()));
     drawPairStatus("Contacting server…", "dikly.sbs", "", 3);
     if (!tryPair(pairPendingCode, pairPendingInst)) {
       WiFi.disconnect(); WiFi.mode(WIFI_AP);
