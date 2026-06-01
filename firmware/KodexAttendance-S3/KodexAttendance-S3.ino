@@ -85,6 +85,7 @@ public:
 #include <Wire.h>
 #include <time.h>
 #include <mbedtls/md.h>
+#include <mbedtls/platform.h>   // mbedtls_platform_set_calloc_free
 #include <ArduinoJson.h>
 #include <SPI.h>
 #include <SD_MMC.h>   // SDIO driver — separate peripheral from SPI, no bus conflict
@@ -1971,6 +1972,19 @@ void setup() {
 
   Serial.begin(115200); delay(150);
   pinMode(LED_PIN, OUTPUT);
+
+  // Redirect mbedTLS heap allocations to PSRAM so TLS handshakes never fail
+  // due to internal SRAM fragmentation (maxBlock ~19KB when WiFi is active).
+  // mbedTLS is pure-software crypto — it needs no DMA, so PSRAM is fine.
+  // Falls back to internal heap if PSRAM is somehow exhausted.
+  mbedtls_platform_set_calloc_free(
+    [](size_t n, size_t sz) -> void* {
+      void* p = heap_caps_calloc(n, sz, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+      if (!p) p = calloc(n, sz);
+      return p;
+    },
+    free
+  );
 
   // Soft resets leave WiFi DMA rx-buffer pool partially allocated in internal
   // DRAM. Arduino WiFi.disconnect/mode(OFF) is not sufficient to free them —
