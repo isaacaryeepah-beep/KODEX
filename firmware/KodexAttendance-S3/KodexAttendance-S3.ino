@@ -529,7 +529,6 @@ static int postJson(const String& path, const String& body,
       " psram=" + String(ESP.getFreePsram()));
   WiFiClientSecure client;
   client.setInsecure();
-  client.setBufferSizes(2048, 2048);  // default 16KB+16KB exhausts the 19KB max heap block
   client.setTimeout(30);
   HTTPClient http;
   String url = apiBase + path;
