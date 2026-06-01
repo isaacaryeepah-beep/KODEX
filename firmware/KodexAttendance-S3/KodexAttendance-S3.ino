@@ -2044,6 +2044,12 @@ void setup() {
   // ── Paired operation — device is always the AP ────────────────────────────
   // Students connect directly to the device hotspot. No school WiFi needed for
   // attendance. School WiFi (if configured) is used only for background sync.
+
+  // BLE FIRST — must allocate its 4 KB EMI controller buffer from unfragmented
+  // internal SRAM. WiFi AP init fragments the heap enough to prevent this if BLE
+  // runs after.
+  initBle();
+
   String apName = "Dikly-" + macSuffix();
   WiFi.mode(WIFI_AP);
   WiFi.softAP(apName.c_str());
@@ -2075,9 +2081,6 @@ void setup() {
   } else {
     LOG("SD not found — using 200-slot RAM buffer");
   }
-
-  // BLE after AP — radio coexistence layer is active once AP is up.
-  initBle();
 
   // NTP attempted now; succeeds only if STA connects later in loop().
   // Records use millis-based fallback timestamps until NTP succeeds.
