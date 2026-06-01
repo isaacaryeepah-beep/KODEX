@@ -1504,10 +1504,21 @@ static void drawSession(const String& code, uint32_t secsLeft, uint32_t secsTota
   spr.setCursor(16 + cw + (cw - tw) / 2, 228); spr.print(timeBuf);
 
   // ── SD / sync footer ──────────────────────────────────────────────────────
-  uint16_t sdC = sdAvailable ? COL_SUCCESS : COL_MUTED;
-  String syncStr = sdAvailable
-    ? (sdRecordCount > 0 ? "SD: " + String(sdRecordCount) + " pending" : "SD: Ready")
-    : "RAM buffer active";
+  uint16_t sdC;
+  String syncStr;
+  if (sdAvailable) {
+    sdC     = COL_SUCCESS;
+    syncStr = sdRecordCount > 0 ? "SD: " + String(sdRecordCount) + " pending" : "SD: Ready";
+  } else if (offlineCount >= 150) {
+    sdC     = COL_ERROR;
+    syncStr = "RAM " + String(offlineCount) + "/200 — connect WiFi!";
+  } else if (offlineCount > 0) {
+    sdC     = COL_WARNING;
+    syncStr = "RAM " + String(offlineCount) + "/200 buffered";
+  } else {
+    sdC     = COL_MUTED;
+    syncStr = "RAM buffer active";
+  }
   spr.fillCircle(14, 280, 3, sdC);
   spr.setFont(F_TINY); spr.setTextColor(sdC, COL_BG);
   spr.setCursor(22, 276); spr.print(syncStr);
