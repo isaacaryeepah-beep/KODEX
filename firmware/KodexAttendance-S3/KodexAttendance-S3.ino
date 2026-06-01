@@ -1806,6 +1806,10 @@ static void registerLocalHttp() {
     String indexNum      = req["indexNumber"] | "";
     String userId        = req["userId"] | "";
     submittedCode.trim();
+    if (userId.isEmpty() && indexNum.isEmpty()) {
+      localHttp.send(400, "application/json",
+        "{\"error\":\"Login to the Dikly app to mark attendance\"}"); return;
+    }
     if (submittedCode.length() != 6) {
       localHttp.send(400, "application/json", "{\"error\":\"Code must be 6 digits\"}"); return;
     }
