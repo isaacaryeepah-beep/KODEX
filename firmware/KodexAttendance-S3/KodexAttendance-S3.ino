@@ -90,7 +90,8 @@ public:
 #include <SD_MMC.h>   // SDIO driver — separate peripheral from SPI, no bus conflict
 #include <BLEDevice.h>
 #include <BLEAdvertising.h>
-#include <esp_bt.h>        // for esp_bt_controller_mem_release in AP mode
+#include <esp_bt.h>        // esp_bt_controller_mem_release
+#include <esp_wifi.h>      // esp_wifi_stop / esp_wifi_deinit for hard reset
 
 // Forward declarations
 static void startWifiReconfigPortal();
@@ -1868,12 +1869,13 @@ void setup() {
   Serial.begin(115200); delay(150);
   pinMode(LED_PIN, OUTPUT);
 
-  // Soft resets don't reset the WiFi/BT peripheral registers — force a clean
-  // state before any WiFi or BT calls so previous-boot dirty state can't cause
-  // rx-buffer allocation failures or hci init errors.
-  WiFi.disconnect(true);
-  WiFi.mode(WIFI_OFF);
-  delay(100);
+  // Soft resets leave WiFi DMA rx-buffer pool partially allocated in internal
+  // DRAM. Arduino WiFi.disconnect/mode(OFF) is not sufficient to free them —
+  // call the raw ESP-IDF teardown so fresh init always gets a clean heap.
+  // These return ESP_ERR_WIFI_NOT_INIT on a true cold boot; that is fine.
+  esp_wifi_stop();
+  esp_wifi_deinit();
+  delay(200);
 
   // Display + sprite BEFORE BLE/WiFi so the 150 KB sprite buffer is allocated
   // from unfragmented PSRAM. BLE grabs large contiguous chunks; if it runs first
