@@ -501,10 +501,11 @@ exports.markAttendance = async (req, res) => {
     const clientDeviceId = req.body.deviceId || req.headers["x-device-id"] || null;
 
     const methodMap = {
-      qr: "qr_mark",
-      ble: "ble_mark",
-      manual: "manual",
-      code: "code_mark",
+      qr:             "qr_mark",
+      manual:         "manual",
+      code:           "code_mark",
+      ble:            "ble_mark",
+      esp32_hotspot:  "esp32_ap",
     };
 
     // ── ESP32 liveness + same-network enforcement ─────────────────────────
@@ -588,28 +589,194 @@ exports.markAttendance = async (req, res) => {
       });
     }
 
-    // req.ip is set correctly by Express when trust proxy is enabled (server.js).
-    const studentIp = (req.ip || '').replace(/^::ffff:/, '');
+    // ── Proximity proof — three paths, highest-trust first ────────────────────
+    //
+    //  1. BLE token   — student was within BLE range (device broadcasts slot HMAC).
+    //                   No verbal code required; BLE proximity IS the proof.
+    //  2. Hotspot token — student connected to device AP and got a signed token.
+    //                   Verbal code still required as second factor.
+    //  3. IP match    — legacy same-network check (backward compat only).
+    //                   Verbal code still required.
+    //
+    // Only one path runs. First match wins.
+    // ─────────────────────────────────────────────────────────────────────────
+    const bleToken        = req.body.bleToken;
+    const connectionToken = req.body.connectionToken;
 
-    const TEN_MIN_AGO = Date.now() - 10 * 60 * 1000;
-    const deviceIps = (sessionDevice.recentPublicIps || [])
-      .filter(e => e.seenAt && new Date(e.seenAt).getTime() > TEN_MIN_AGO)
-      .map(e => e.ip);
+    let skipCodeCheck = false;
 
-    if (deviceIps.length === 0) {
-      return res.status(503).json({
-        error: 'The classroom device has not reported its network yet. Wait a few seconds and try again.',
-        esp32Required: true,
-        networkNotReady: true,
-      });
-    }
+    if (bleToken && typeof bleToken === 'object') {
+      // ── BLE + hotspot path (maximum strictness) ──────────────────────────────
+      // Both proofs are required together:
+      //   Factor 1 — BLE token   : proves student was within Bluetooth range (~10 m)
+      //   Factor 2 — Hotspot token: proves student connected to device AP (student-specific)
+      //
+      // Combining them closes the relay attack: forwarding the BLE slot+HMAC is
+      // useless without a hotspot token, and the hotspot token is bound to the
+      // student's own ID so it cannot be shared without giving away credentials.
 
-    if (!deviceIps.includes(studentIp)) {
-      console.warn(`[MARK] Blocked ${req.user.name}: IP ${studentIp} not in device IPs [${deviceIps.join(', ')}]`);
-      return res.status(403).json({
-        error: 'You must be connected to the classroom WiFi to mark attendance.',
-        networkMismatch: true,
-      });
+      if (!connectionToken || typeof connectionToken !== 'object') {
+        return res.status(400).json({
+          error: 'BLE attendance requires connecting to the classroom hotspot first. Connect to the Dikly hotspot, then try again.',
+          hotspotRequired: true,
+        });
+      }
+
+      if (!session.esp32Seed) {
+        return res.status(403).json({ error: 'Session has no device seed for BLE verification.' });
+      }
+
+      // ── Factor 1: BLE slot HMAC ──────────────────────────────────────────────
+      const slotNum = parseInt(bleToken.slot, 10);
+      if (isNaN(slotNum) || slotNum < 0) {
+        return res.status(400).json({ error: 'Invalid BLE token: missing or bad slot.' });
+      }
+
+      // Allow current slot + 1 previous (≤ 60 s grace for network latency)
+      const currentSlot = Math.floor(Date.now() / 30000);
+      if (Math.abs(currentSlot - slotNum) > 1) {
+        return res.status(403).json({
+          error: 'BLE token expired. Move closer to the classroom device and try again.',
+          bleTokenExpired: true,
+        });
+      }
+
+      const expectedBleHmac = crypto
+        .createHmac('sha256', session.esp32Seed)
+        .update(`ble:${slotNum}`)
+        .digest('hex')
+        .slice(0, 16);
+
+      const bleHmacClean = String(bleToken.hmac || '').toLowerCase().replace(/[^0-9a-f]/g, '');
+      if (bleHmacClean.length !== 16 ||
+          !crypto.timingSafeEqual(Buffer.from(bleHmacClean), Buffer.from(expectedBleHmac))) {
+        console.warn(`[MARK] Invalid BLE hmac from ${req.user.name}`);
+        return res.status(403).json({
+          error: 'Invalid BLE token. Make sure you are within range of the classroom device.',
+          networkMismatch: true,
+        });
+      }
+
+      // ── Factor 2: hotspot connection token (student-specific) ────────────────
+      const { sessionId: tokenSession, studentId: tokenStudent, issuedAt, sig } = connectionToken;
+
+      const tokenAgeMs = Date.now() - (Number(issuedAt) * 1000);
+      if (!issuedAt || tokenAgeMs < 0 || tokenAgeMs > 10 * 60 * 1000) {
+        return res.status(403).json({
+          error: 'Hotspot token expired. Reconnect to the classroom hotspot and try again.',
+          tokenExpired: true,
+        });
+      }
+
+      if (String(tokenStudent) !== req.user._id.toString()) {
+        return res.status(403).json({
+          error: 'Hotspot token was issued for a different account.',
+          networkMismatch: true,
+        });
+      }
+
+      if (String(tokenSession) !== resolvedSessionId) {
+        return res.status(403).json({
+          error: 'Hotspot token is for a different session.',
+          networkMismatch: true,
+        });
+      }
+
+      const expectedConnSig = crypto
+        .createHmac('sha256', session.esp32Seed)
+        .update(`conn:${tokenSession}:${tokenStudent}:${issuedAt}`)
+        .digest('hex')
+        .slice(0, 32);
+
+      const connSigClean = String(sig || '').toLowerCase().replace(/[^0-9a-f]/g, '');
+      if (connSigClean.length !== 32 ||
+          !crypto.timingSafeEqual(Buffer.from(connSigClean), Buffer.from(expectedConnSig))) {
+        console.warn(`[MARK] Invalid hotspot sig (BLE+hotspot path) for ${req.user.name}`);
+        return res.status(403).json({
+          error: 'Invalid hotspot token. Connect to the classroom hotspot and try again.',
+          networkMismatch: true,
+        });
+      }
+
+      // Both factors verified — no verbal code needed
+      skipCodeCheck = true;
+
+    } else if (connectionToken && typeof connectionToken === 'object') {
+      // ── Hotspot token path ──────────────────────────────────────────────────
+      const { sessionId: tokenSession, studentId: tokenStudent, issuedAt, sig } = connectionToken;
+
+      if (!session.esp32Seed) {
+        return res.status(403).json({ error: 'Session has no device seed. Cannot verify hotspot token.' });
+      }
+
+      const tokenAgeMs = Date.now() - (Number(issuedAt) * 1000);
+      if (!issuedAt || tokenAgeMs < 0 || tokenAgeMs > 10 * 60 * 1000) {
+        return res.status(403).json({
+          error: 'Hotspot token expired. Reconnect to the classroom hotspot and try again.',
+          tokenExpired: true,
+        });
+      }
+
+      if (String(tokenStudent) !== req.user._id.toString()) {
+        return res.status(403).json({
+          error: 'Hotspot token was issued for a different account.',
+          networkMismatch: true,
+        });
+      }
+
+      if (String(tokenSession) !== resolvedSessionId) {
+        return res.status(403).json({
+          error: 'Hotspot token is for a different session.',
+          networkMismatch: true,
+        });
+      }
+
+      const expectedSig = crypto
+        .createHmac('sha256', session.esp32Seed)
+        .update(`conn:${tokenSession}:${tokenStudent}:${issuedAt}`)
+        .digest('hex')
+        .slice(0, 32);
+
+      const sigClean = String(sig || '').toLowerCase().replace(/[^0-9a-f]/g, '');
+      if (sigClean.length !== 32) {
+        return res.status(403).json({
+          error: 'Invalid hotspot token. Make sure you are connected to the classroom hotspot.',
+          networkMismatch: true,
+        });
+      }
+
+      if (!crypto.timingSafeEqual(Buffer.from(sigClean), Buffer.from(expectedSig))) {
+        console.warn(`[MARK] Invalid hotspot token sig for ${req.user.name}`);
+        return res.status(403).json({
+          error: 'Invalid hotspot token. Make sure you are connected to the classroom hotspot.',
+          networkMismatch: true,
+        });
+      }
+
+    } else {
+      // ── Legacy IP path ──────────────────────────────────────────────────────
+      const studentIp = (req.ip || '').replace(/^::ffff:/, '');
+
+      const TEN_MIN_AGO = Date.now() - 10 * 60 * 1000;
+      const deviceIps = (sessionDevice.recentPublicIps || [])
+        .filter(e => e.seenAt && new Date(e.seenAt).getTime() > TEN_MIN_AGO)
+        .map(e => e.ip);
+
+      if (deviceIps.length === 0) {
+        return res.status(503).json({
+          error: 'The classroom device has not reported its network yet. Wait a few seconds and try again.',
+          esp32Required: true,
+          networkNotReady: true,
+        });
+      }
+
+      if (!deviceIps.includes(studentIp)) {
+        console.warn(`[MARK] Blocked ${req.user.name}: IP ${studentIp} not in device IPs [${deviceIps.join(', ')}]`);
+        return res.status(403).json({
+          error: 'You must be connected to the classroom WiFi to mark attendance.',
+          networkMismatch: true,
+        });
+      }
     }
 
     // Anyone marking against a course-linked session must be enrolled in that course.
@@ -645,12 +812,9 @@ exports.markAttendance = async (req, res) => {
     }
 
     // ── Rotating code verification ─────────────────────────────────────────
-    // If this session has an esp32Seed (i.e. the ESP32 started it with a seed),
-    // the student MUST submit the current 6-digit code from the classroom's
-    // OLED display. The code rotates every 20s server-side, matching the ESP32
-    // firmware's derivation. No network round-trip between ESP32 and server —
-    // both run the same HMAC formula independently.
-    if (session.esp32Seed) {
+    // Required for hotspot-token and IP paths. Skipped for BLE — the slot HMAC
+    // already proves physical proximity; a second code would be redundant.
+    if (!skipCodeCheck && session.esp32Seed) {
       const { verifyCodeForSession } = require('../services/attendanceCodeService');
       const result = verifyCodeForSession(session, code);
       if (!result.ok) {
@@ -773,6 +937,51 @@ exports.markAttendance = async (req, res) => {
       { path: "user", select: "name email indexNumber role" },
       { path: "session", select: "title startedAt" },
     ]);
+
+    // ── New-device detection ────────────────────────────────────────────────
+    // The auth system (authController) already:
+    //   • locks the account for 6 hours when a new login device is seen, and
+    //   • requireNoDeviceLock middleware blocks this route while locked.
+    //
+    // So credential sharing is already stopped at login. What we add here is
+    // a secondary check: if the clientDeviceId sent with the mark request is
+    // NOT in the student's trustedDevices list (maintained by the auth system),
+    // it means the app device fingerprint diverges from the login fingerprint —
+    // which is unusual and worth flagging for the lecturer to review.
+    if (clientDeviceId && session.course) {
+      const userRecord = await User.findById(req.user._id)
+        .select('trustedDevices indexNumber name')
+        .lean();
+
+      const isKnownDevice = (userRecord?.trustedDevices || [])
+        .some(d => d.deviceId === clientDeviceId);
+
+      if (!isKnownDevice) {
+        await AttendanceRecord.findByIdAndUpdate(record._id, {
+          $set: {
+            newDeviceFlag: true,
+            flagged:  true,
+            flagNote: `Device fingerprint not in student's trusted-devices list (index: ${req.user.indexNumber || 'N/A'}) — auto-flagged for review`,
+          },
+        });
+
+        const SuspiciousEvent = require('../models/SuspiciousEvent');
+        await SuspiciousEvent.create({
+          sessionId:   session._id,
+          courseId:    session.course,
+          companyId:   req.user.company,
+          userId:      req.user._id,
+          deviceId:    clientDeviceId,
+          eventType:   'new_device_for_user',
+          reason:      `${req.user.name} (index: ${req.user.indexNumber || req.user._id}) marked attendance from a device not in their trusted-devices list.`,
+          actionTaken: 'flagged',
+        });
+
+        console.log(`[MARK] Untrusted device flagged for ${req.user.name} (${req.user.indexNumber}), device=${clientDeviceId}`);
+        populated.newDeviceFlag = true;
+        populated.flagged = true;
+      }
+    }
 
     res.status(201).json({ record: populated });
   } catch (error) {
@@ -968,6 +1177,54 @@ exports.getSignInStatus = async (req, res) => {
   } catch (error) {
     console.error("Sign-in status error:", error);
     res.status(500).json({ error: "Failed to get sign-in status" });
+  }
+};
+
+// GET /api/attendance-sessions/flagged/new-devices
+// Returns all attendance records where the student used a device for the first
+// time, grouped by session. Used by lecturers to audit potential credential sharing.
+exports.getFlaggedNewDevices = async (req, res) => {
+  try {
+    const { sessionId, limit = 50, page = 1 } = req.query;
+    const filter = { company: req.user.company, newDeviceFlag: true };
+
+    if (sessionId && mongoose.Types.ObjectId.isValid(sessionId)) {
+      filter.session = sessionId;
+    }
+
+    // Lecturers only see flags from their own sessions
+    if (req.user.role === 'lecturer') {
+      const sessions = await AttendanceSession.find({
+        company:   req.user.company,
+        createdBy: req.user._id,
+      }).select('_id').lean();
+      filter.session = { $in: sessions.map(s => s._id) };
+    }
+
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
+    const [records, total] = await Promise.all([
+      AttendanceRecord.find(filter)
+        .sort({ checkInTime: -1 })
+        .skip(skip)
+        .limit(parseInt(limit))
+        .populate('user',    'name email indexNumber')
+        .populate('session', 'title startedAt course')
+        .lean(),
+      AttendanceRecord.countDocuments(filter),
+    ]);
+
+    return res.json({
+      total,
+      page:    parseInt(page),
+      records: records.map(r => ({
+        ...r,
+        warning: `${r.user?.name} (${r.user?.indexNumber || 'N/A'}) marked from a device never seen before on their account`,
+      })),
+    });
+  } catch (err) {
+    console.error('getFlaggedNewDevices error:', err);
+    return res.status(500).json({ error: 'Failed to fetch flagged records' });
   }
 };
 

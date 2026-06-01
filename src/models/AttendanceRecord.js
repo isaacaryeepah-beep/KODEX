@@ -64,6 +64,13 @@ const attendanceRecordSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+
+    // ── Anti-cheat flags ──────────────────────────────────────────────────────
+    // Set automatically when deviceId has never been seen before for this student.
+    // Lecturers can see these on the session dashboard and resolve them.
+    newDeviceFlag: { type: Boolean, default: false },
+    flagged:       { type: Boolean, default: false },
+    flagNote:      { type: String,  default: null },
   },
   {
     timestamps: true,
@@ -74,5 +81,7 @@ const attendanceRecordSchema = new mongoose.Schema(
 attendanceRecordSchema.index({ session: 1, user: 1 }, { unique: true });
 attendanceRecordSchema.index({ company: 1, user: 1, checkInTime: -1 });
 attendanceRecordSchema.index({ syncStatus: 1 });
+attendanceRecordSchema.index({ company: 1, newDeviceFlag: 1 });
+attendanceRecordSchema.index({ company: 1, flagged: 1 });
 
 module.exports = mongoose.model("AttendanceRecord", attendanceRecordSchema);
