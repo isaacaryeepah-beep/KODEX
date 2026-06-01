@@ -14202,7 +14202,8 @@ async function _openSlotModal(slot, presetDay) {
   const container = document.getElementById('modal-container');
   container.classList.remove('hidden');
   const isEdit = !!slot;
-  const isAdminOrHod = ['admin','superadmin','hod','manager'].includes(currentUser?.role);
+  const isAdminOrHod = ['admin','superadmin','hod','manager'].includes(currentUser?.role)
+                    && currentUser?.company?.mode === 'academic';
 
   const colorOptions = TIMETABLE_COLORS.map(c =>
     `<span onclick="document.getElementById('slot-color').value='${c}';document.querySelectorAll('.color-dot').forEach(d=>d.style.outline='none');this.style.outline='3px solid ${c}';this.style.outlineOffset='2px'"
