@@ -525,24 +525,17 @@ static void factoryReset() {
 // ─── HTTP helpers ─────────────────────────────────────────────────────────────
 static int postJson(const String& path, const String& body,
                     String& out, bool authed = true) {
-  LOG("postJson heap free=" + String(ESP.getFreeHeap()) +
-      " maxBlock=" + String(ESP.getMaxAllocHeap()) +
-      " psram=" + String(ESP.getFreePsram()));
-  WiFiClientSecure client;
-  client.setInsecure();
-  client.setTimeout(30);
+  WiFiClientSecure client; client.setInsecure();
+  client.setTimeout(30);  // 30s SSL handshake timeout
   HTTPClient http;
   String url = apiBase + path;
-  LOG("postJson → " + url);
-  if (!http.begin(client, url)) { LOG("http.begin failed"); return -1; }
+  if (!http.begin(client, url)) return -1;
   http.addHeader("Content-Type", "application/json");
   http.addHeader("Connection", "close");
   if (authed && !deviceJWT.isEmpty())
     http.addHeader("Authorization", "Bearer " + deviceJWT);
   http.setTimeout(30000);
-  int code = http.POST(body);
-  LOG("postJson HTTP " + String(code));
-  out = http.getString(); http.end();
+  int code = http.POST(body); out = http.getString(); http.end();
   return code;
 }
 
@@ -1976,7 +1969,6 @@ void setup() {
   // Redirect mbedTLS heap allocations to PSRAM so TLS handshakes never fail
   // due to internal SRAM fragmentation (maxBlock ~19KB when WiFi is active).
   // mbedTLS is pure-software crypto — it needs no DMA, so PSRAM is fine.
-  // Falls back to internal heap if PSRAM is somehow exhausted.
   mbedtls_platform_set_calloc_free(
     [](size_t n, size_t sz) -> void* {
       void* p = heap_caps_calloc(n, sz, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
@@ -1985,6 +1977,7 @@ void setup() {
     },
     free
   );
+
 
   // Soft resets leave WiFi DMA rx-buffer pool partially allocated in internal
   // DRAM. Arduino WiFi.disconnect/mode(OFF) is not sufficient to free them —
