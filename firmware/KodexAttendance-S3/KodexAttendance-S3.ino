@@ -260,13 +260,13 @@ struct OfflineRec {
   char sessionId[48];
   uint32_t ts;
 };
-// EXT_RAM_BSS_ATTR places these large arrays in PSRAM instead of internal DRAM,
-// freeing ~38 KB of DMA-capable SRAM for the WiFi stack's task and rx buffers.
-static EXT_RAM_BSS_ATTR OfflineRec offlineBuf[200];
-static uint8_t    offlineCount = 0;
+// Allocated from PSRAM in setup() via heap_caps_calloc to free ~38 KB of
+// internal DRAM for WiFi's task stack and rx buffer pool.
+static OfflineRec* offlineBuf  = nullptr;
+static uint8_t     offlineCount = 0;
 
 // ─── Per-session duplicate guard ─────────────────────────────────────────────
-static EXT_RAM_BSS_ATTR char dedupIds[400][32];  // 400 × 32 = 12.5 KB → PSRAM
+static char (*dedupIds)[32] = nullptr;  // 400 × 32, allocated from PSRAM in setup()
 static uint16_t dedupCount   = 0;
 static String   dedupSession = "";   // session this list belongs to
 
@@ -1878,6 +1878,14 @@ void setup() {
   esp_wifi_stop();
   esp_wifi_deinit();
   delay(200);
+
+  // Move large arrays to PSRAM to free ~38 KB of internal DRAM for WiFi init.
+  // EXT_RAM_BSS_ATTR is ineffective without .ext_ram.bss in the linker script,
+  // so we allocate explicitly. Fall back to internal heap only if PSRAM is full.
+  offlineBuf = (OfflineRec*)heap_caps_calloc(200, sizeof(OfflineRec), MALLOC_CAP_SPIRAM);
+  if (!offlineBuf) offlineBuf = (OfflineRec*)calloc(200, sizeof(OfflineRec));
+  dedupIds = (char (*)[32])heap_caps_calloc(400, 32, MALLOC_CAP_SPIRAM);
+  if (!dedupIds) dedupIds = (char (*)[32])calloc(400, 32);
 
   // Display + sprite BEFORE BLE/WiFi so the 150 KB sprite buffer is allocated
   // from unfragmented PSRAM. BLE grabs large contiguous chunks; if it runs first
