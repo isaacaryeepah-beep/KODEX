@@ -114,9 +114,9 @@ exports.startSession = async (req, res) => {
     // ── End device check ──────────────────────────────────
 
     // ── Device-lecturer assignment check ──────────────────────────────────────
-    // Lecturer must be explicitly assigned to this device for the selected course.
-    // Admin/HOD/superadmin bypass for emergency use.
-    if (req.user.role === 'lecturer' && req.body.courseId) {
+    // ALL roles must be explicitly assigned to this device for the selected course.
+    // No bypass — admin/HOD/superadmin must also be in assignedLecturers.
+    if (req.body.courseId) {
       const assignment = (device.assignedLecturers || []).find(a => {
         const assignedLecId  = a.lecturerId?._id ? a.lecturerId._id.toString() : a.lecturerId?.toString();
         const assignedCrsId  = a.courseId?._id   ? a.courseId._id.toString()   : a.courseId?.toString();
