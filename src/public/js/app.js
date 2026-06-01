@@ -14198,20 +14198,43 @@ async function openEditSlotModal(slotId) {
   _openSlotModal(slot);
 }
 
-function _openSlotModal(slot, presetDay) {
+async function _openSlotModal(slot, presetDay) {
   const container = document.getElementById('modal-container');
   container.classList.remove('hidden');
   const isEdit = !!slot;
+  const isAdminOrHod = ['admin','superadmin','hod','manager'].includes(currentUser?.role);
+
   const colorOptions = TIMETABLE_COLORS.map(c =>
     `<span onclick="document.getElementById('slot-color').value='${c}';document.querySelectorAll('.color-dot').forEach(d=>d.style.outline='none');this.style.outline='3px solid ${c}';this.style.outlineOffset='2px'"
       class="color-dot" style="display:inline-block;width:22px;height:22px;border-radius:50%;background:${c};cursor:pointer;margin:2px;
       ${slot?.color===c||(!slot&&c==='#6366f1')?'outline:3px solid '+c+';outline-offset:2px':''}"></span>`
   ).join('');
 
+  // Fetch lecturers list for admin/HOD so they can assign slots to specific lecturers
+  let lecturerOptions = '';
+  if (isAdminOrHod) {
+    try {
+      const data = await api('/api/devices/lecturers-for-assignment');
+      const lecs = data.lecturers || [];
+      const currentLecId = slot?.lecturer?._id || slot?.lecturer || '';
+      lecturerOptions = `<div class="form-group">
+        <label>Lecturer <span style="color:red">*</span></label>
+        <select id="slot-lecturer" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
+          <option value="">— Select lecturer —</option>
+          ${lecs.map(l => `<option value="${l._id}" ${l._id === currentLecId ? 'selected' : ''}>${esc(l.name)}</option>`).join('')}
+        </select>
+      </div>`;
+    } catch(_) {
+      lecturerOptions = `<div class="form-group"><p style="font-size:12px;color:#b45309">Could not load lecturers list.</p></div>`;
+    }
+  }
+
   container.innerHTML = `
     <div class="modal-overlay" onclick="closeModal(event)">
       <div class="modal" onclick="event.stopPropagation()" style="max-width:420px">
         <h3 style="margin:0 0 16px">${isEdit ? 'Edit Class Slot' : 'Add Class to Timetable'}</h3>
+
+        ${lecturerOptions}
 
         <div class="form-group">
           <label>Course <span style="color:red">*</span></label>
@@ -14263,19 +14286,24 @@ function _openSlotModal(slot, presetDay) {
 }
 
 async function saveSlot(slotId) {
-  const courseId  = document.getElementById('slot-course').value;
-  const dayOfWeek = document.getElementById('slot-day').value;
-  const startTime = document.getElementById('slot-start').value;
-  const endTime   = document.getElementById('slot-end').value;
-  const room      = document.getElementById('slot-room').value.trim();
-  const color     = document.getElementById('slot-color').value;
+  const courseId   = document.getElementById('slot-course').value;
+  const dayOfWeek  = document.getElementById('slot-day').value;
+  const startTime  = document.getElementById('slot-start').value;
+  const endTime    = document.getElementById('slot-end').value;
+  const room       = document.getElementById('slot-room').value.trim();
+  const color      = document.getElementById('slot-color').value;
+  const lecturerId = document.getElementById('slot-lecturer')?.value || null;
 
   if (!courseId) { toastWarning('Please select a course'); return; }
   if (!startTime || !endTime) { toastWarning('Please set start and end time'); return; }
   if (startTime >= endTime) { toastWarning('End time must be after start time'); return; }
+  if (document.getElementById('slot-lecturer') && !lecturerId) {
+    toastWarning('Please select a lecturer'); return;
+  }
 
   try {
-    const body = { courseId, dayOfWeek: Number(dayOfWeek), startTime, endTime, room, color };
+    const body = { courseId, dayOfWeek: Number(dayOfWeek), startTime, endTime, room, color,
+                   ...(lecturerId ? { lecturerId } : {}) };
     if (slotId) {
       await api(`/api/timetable/${slotId}`, { method: 'PUT', body: JSON.stringify(body) });
       showToastNotif('Class updated', 'success');
