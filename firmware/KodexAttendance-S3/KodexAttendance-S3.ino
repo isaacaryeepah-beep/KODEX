@@ -260,11 +260,13 @@ struct OfflineRec {
   char sessionId[48];
   uint32_t ts;
 };
-static OfflineRec offlineBuf[200];
+// EXT_RAM_BSS_ATTR places these large arrays in PSRAM instead of internal DRAM,
+// freeing ~38 KB of DMA-capable SRAM for the WiFi stack's task and rx buffers.
+static EXT_RAM_BSS_ATTR OfflineRec offlineBuf[200];
 static uint8_t    offlineCount = 0;
 
 // ─── Per-session duplicate guard ─────────────────────────────────────────────
-static char     dedupIds[400][32];   // 400 students × 32 chars ≈ 12.5 KB
+static EXT_RAM_BSS_ATTR char dedupIds[400][32];  // 400 × 32 = 12.5 KB → PSRAM
 static uint16_t dedupCount   = 0;
 static String   dedupSession = "";   // session this list belongs to
 
