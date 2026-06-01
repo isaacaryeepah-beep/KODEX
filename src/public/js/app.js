@@ -14026,7 +14026,7 @@ function _timetableGrid(slots, canEdit) {
               </div>
               ${s.course?.code ? `<div style="font-size:10px;color:var(--text-muted);">${esc(s.course.code)}</div>` : ''}
               ${s.room ? `<div style="font-size:10px;color:var(--text-muted);">📍 ${esc(s.room)}</div>` : ''}
-              ${!canEdit && s.lecturer?.name ? `<div style="font-size:10px;color:var(--text-muted);">👤 ${esc(s.lecturer.name)}</div>` : ''}
+              ${s.lecturer?.name ? `<div style="font-size:10px;color:var(--text-muted);">👤 ${esc(s.lecturer.name)}</div>` : ''}
               ${canEdit ? `<button onclick="event.stopPropagation();deleteSlot('${s._id}')"
                 style="position:absolute;top:4px;right:4px;background:none;border:none;cursor:pointer;
                 color:var(--text-muted);font-size:14px;line-height:1;padding:2px;">×</button>` : ''}
@@ -14114,11 +14114,17 @@ async function renderLecturerTimetable() {
     _timetableSlots   = slotData.slots   || [];
     _timetableCourses = (courseData.courses || courseData || []);
 
+    const isAdminView = ['admin','superadmin','manager'].includes(currentUser?.role);
+    const ttTitle    = isAdminView ? 'All Timetables' : 'My Timetable';
+    const ttSubtitle = isAdminView
+      ? 'All lecturers\' class slots — click any slot to edit or delete'
+      : 'Your weekly class timetable — click any slot to edit';
+
     content.innerHTML = `
       <div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;margin-bottom:20px">
         <div>
-          <h2 style="font-size:22px;font-weight:800;letter-spacing:-.5px;color:#0f172a;margin-bottom:2px">My Timetable</h2>
-          <p style="color:#64748b;font-size:13px">Your weekly class timetable — click any slot to edit</p>
+          <h2 style="font-size:22px;font-weight:800;letter-spacing:-.5px;color:#0f172a;margin-bottom:2px">${ttTitle}</h2>
+          <p style="color:#64748b;font-size:13px">${ttSubtitle}</p>
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           <button class="btn btn-secondary" onclick="exportTimetableICS(_timetableSlots)" style="display:flex;align-items:center;gap:6px;font-size:13px">
