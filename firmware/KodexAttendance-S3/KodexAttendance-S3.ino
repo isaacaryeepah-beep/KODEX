@@ -113,7 +113,7 @@ static const uint8_t SD_D1  = 41, SD_D2  = 48, SD_D3 = 47;
 
 // ─── App Config ──────────────────────────────────────────────────────────────
 static const char*   FIRMWARE_VERSION     = "s3-2.1.0";
-static const char*   DEFAULT_API_BASE     = "https://dikly.sbs";
+static const char*   DEFAULT_API_BASE     = "https://app.dikly.live";
 static const uint32_t HEARTBEAT_MS        = 5000;
 static const uint32_t WIFI_TIMEOUT_MS     = 30000;
 static const uint32_t WINDOW_SECONDS      = 300;  // code rotation period (5 minutes)
@@ -1560,7 +1560,7 @@ static const char PAIR_HTML[] PROGMEM = R"HTML(<!doctype html>
       <label>Password</label>
       <input name="password" type="password" autocomplete="new-password" placeholder="Leave blank if open">
       <label style="margin-top:16px;font-size:10px;color:#475569">Server (advanced)</label>
-      <input name="apiBase" value="https://dikly.sbs" style="font-size:12px;color:#475569">
+      <input name="apiBase" value="https://app.dikly.live" style="font-size:12px;color:#475569">
     </div>
     <button type="submit" class="submit" id="b">Pair Device</button>
   </form>
@@ -2139,7 +2139,7 @@ void loop() {
     while (time(nullptr) < 1000000000UL && millis() - tw < 5000) delay(100);
 
     // Step 3 — call server
-    drawPairStatus("Contacting server…", "dikly.sbs", "", 3);
+    drawPairStatus("Contacting server…", "app.dikly.live", "", 3);
     if (!tryPair(pairPendingCode, pairPendingInst)) {
       WiFi.disconnect(); WiFi.mode(WIFI_AP);
       String errLine = pairErrorMsg.isEmpty() ? "Check institution + pairing code" : pairErrorMsg;
