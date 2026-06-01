@@ -114,8 +114,8 @@ exports.startSession = async (req, res) => {
     // ── End device check ──────────────────────────────────
 
     // ── Device-lecturer assignment check ──────────────────────────────────────
-    // Lecturer must be explicitly assigned to this device for the selected course.
-    // Admin/HOD/superadmin bypass for emergency use.
+    // Lecturers must be explicitly assigned to this device for the selected course.
+    // Admin/HOD/superadmin are exempt — they oversee all devices.
     if (req.user.role === 'lecturer' && req.body.courseId) {
       const assignment = (device.assignedLecturers || []).find(a => {
         const assignedLecId  = a.lecturerId?._id ? a.lecturerId._id.toString() : a.lecturerId?.toString();
@@ -133,6 +133,60 @@ exports.startSession = async (req, res) => {
     }
     // ── End device-lecturer assignment check ──────────────────────────────────
 
+    // ── Timetable time-window check ───────────────────────────────────────────
+    // Enforced only for lecturers, and only when timetable entries exist for
+    // this lecturer+course. If no entries exist the check is skipped so new
+    // deployments work before the timetable is configured.
+    if (req.user.role === 'lecturer' && req.body.courseId) {
+      const Timetable = require('../models/Timetable');
+      const BUFFER_MINUTES = 30; // allow 30 min early start / 30 min late end
+
+      const anyEntry = await Timetable.findOne({
+        company:  companyId,
+        lecturer: req.user._id,
+        course:   req.body.courseId,
+        isActive: true,
+      }).lean();
+
+      if (anyEntry) {
+        const now = new Date();
+        const dayOfWeek      = now.getDay(); // 0 = Sunday
+        const currentMinutes = now.getHours() * 60 + now.getMinutes();
+        const DAY_NAMES      = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+
+        const todayEntry = await Timetable.findOne({
+          company:  companyId,
+          lecturer: req.user._id,
+          course:   req.body.courseId,
+          dayOfWeek,
+          isActive: true,
+        }).lean();
+
+        if (!todayEntry) {
+          return res.status(403).json({
+            error: 'Not scheduled today',
+            message: `This course is not scheduled for today (${DAY_NAMES[dayOfWeek]}). Check your timetable or contact your admin.`,
+            timetableBlocked: true,
+          });
+        }
+
+        const [startH, startM] = todayEntry.startTime.split(':').map(Number);
+        const [endH,   endM]   = todayEntry.endTime.split(':').map(Number);
+        const windowStart = startH * 60 + startM - BUFFER_MINUTES;
+        const windowEnd   = endH   * 60 + endM   + BUFFER_MINUTES;
+        const fmt = m => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+
+        if (currentMinutes < windowStart || currentMinutes > windowEnd) {
+          return res.status(403).json({
+            error:  'Outside scheduled time window',
+            message: `Your scheduled class runs ${todayEntry.startTime}–${todayEntry.endTime}. Attendance can be started from ${fmt(windowStart)} to ${fmt(windowEnd)}.`,
+            timetableBlocked: true,
+            scheduledTime:    { start: todayEntry.startTime, end: todayEntry.endTime },
+          });
+        }
+      }
+    }
+    // ── End timetable check ───────────────────────────────────────────────────
     const activeFilter = { company: companyId, status: "active" };
     if (req.user.role === "lecturer") {
       activeFilter.createdBy = req.user._id;

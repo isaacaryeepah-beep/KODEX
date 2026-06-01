@@ -2092,8 +2092,6 @@ async function handleStudentRegister() {
     const studentGroup = document.getElementById('student-reg-group')?.value?.trim().toUpperCase();
     const sessionType = document.getElementById('student-reg-session-type')?.value?.trim();
     const semester = document.getElementById('student-reg-semester')?.value?.trim();
-    const email = document.getElementById('student-reg-email')?.value?.trim().toLowerCase();
-    const phone = document.getElementById('student-reg-phone')?.value?.trim();
     if (!name) return showStudentError('Please enter your full name.');
     if (!institutionCode) return showStudentError('Please enter your Institution Code.');
     if (!indexNumber) return showStudentError('Student ID / Index Number is required.');
@@ -2107,9 +2105,7 @@ async function handleStudentRegister() {
     if (!studentGroup) return showStudentError('Please enter your group (e.g. A, B, C).');
     if (!sessionType) return showStudentError('Please select your session type.');
     if (!semester) return showStudentError('Please select your semester.');
-    if (!email || !/^\S+@\S+\.\S+$/.test(email)) return showStudentError('Please enter a valid email address.');
-    if (!phone) return showStudentError('Phone number is required so lecturers can reach you by SMS.');
-    const data = await api('/api/auth/register-student', { method: 'POST', body: JSON.stringify({ name, indexNumber, email, phone, password, institutionCode, department, programme, studentLevel, studentGroup, sessionType, semester }) });
+    const data = await api('/api/auth/register-student', { method: 'POST', body: JSON.stringify({ name, indexNumber, password, institutionCode, department, programme, studentLevel, studentGroup, sessionType, semester }) });
     if (data.token) {
       token = data.token;
       localStorage.setItem('token', token);
@@ -6510,10 +6506,36 @@ async function showStartSessionModal() {
     return;
   }
 
+  // Build class group badge from the paired device info
+  const devData = deviceStatus?.hasDevice
+    ? (() => {
+        try { return null; } catch(_) { return null; } // populated below
+      })()
+    : null;
+  let groupBadge = '';
+  try {
+    const devResp = await api('/api/devices/my');
+    const dev = devResp?.data || null;
+    if (dev) {
+      const parts = [
+        dev.assignedDepartment,
+        dev.assignedLevel && 'Level ' + dev.assignedLevel,
+        dev.assignedGroup && 'Group ' + dev.assignedGroup,
+      ].filter(Boolean);
+      if (parts.length) {
+        groupBadge = `<div style="display:flex;align-items:center;gap:8px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:8px 12px;font-size:12px;color:#166534;margin-bottom:14px">
+          <span style="font-size:16px">📍</span>
+          <div><span style="font-weight:600">Device:</span> ${esc(dev.deviceName || dev.deviceId)}<br><span style="font-weight:600">Class Group:</span> ${esc(parts.join(' · '))}</div>
+        </div>`;
+      }
+    }
+  } catch(_) { /* non-critical */ }
+
   container.innerHTML = `
     <div class="modal-overlay" onclick="closeModal(event)">
       <div class="modal" onclick="event.stopPropagation()">
         <h3>Start New Session</h3>
+        ${groupBadge}
         <div class="form-group">
           <label>Course <span style="color:red">*</span></label>
           <select id="session-course" onchange="loadSessionDevices(this.value)" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
@@ -6653,6 +6675,35 @@ async function startSession() {
             <div style="display:flex;gap:8px;justify-content:center">
               <button class="btn btn-secondary btn-sm" onclick="closeModal()">Cancel</button>
               <button class="btn btn-primary btn-sm" onclick="showStartSessionModal()">↻ Retry</button>
+            </div>
+          </div>
+        </div>`;
+    } else if (e.status === 403 && e.data?.timetableBlocked) {
+      const msg  = e.data?.message || 'This session is outside your scheduled time window.';
+      const sched = e.data?.scheduledTime;
+      const schedLine = sched ? `<div style="background:#fef3c7;border:1px solid #fde68a;border-radius:8px;padding:10px 14px;font-size:12px;color:#92400e;margin-bottom:20px;text-align:left">Scheduled: <strong>${sched.start} – ${sched.end}</strong></div>` : '';
+      if (container) container.innerHTML = `
+        <div class="modal-overlay" onclick="closeModal(event)">
+          <div class="modal" onclick="event.stopPropagation()" style="text-align:center;max-width:400px">
+            <div style="font-size:40px;margin-bottom:12px">🕐</div>
+            <h3 style="margin-bottom:8px">Not Your Scheduled Time</h3>
+            <p style="font-size:13px;color:var(--text-muted);margin-bottom:14px;line-height:1.6">${esc(msg)}</p>
+            ${schedLine}
+            <div style="display:flex;gap:8px;justify-content:center">
+              <button class="btn btn-secondary btn-sm" onclick="closeModal()">OK</button>
+            </div>
+          </div>
+        </div>`;
+    } else if (e.status === 403 && e.data?.deviceAssigned === false) {
+      const msg = e.data?.message || 'You are not assigned to this attendance device.';
+      if (container) container.innerHTML = `
+        <div class="modal-overlay" onclick="closeModal(event)">
+          <div class="modal" onclick="event.stopPropagation()" style="text-align:center;max-width:400px">
+            <div style="font-size:40px;margin-bottom:12px">🚫</div>
+            <h3 style="margin-bottom:8px">Device Not Assigned to You</h3>
+            <p style="font-size:13px;color:var(--text-muted);margin-bottom:20px;line-height:1.6">${esc(msg)}</p>
+            <div style="display:flex;gap:8px;justify-content:center">
+              <button class="btn btn-secondary btn-sm" onclick="closeModal()">OK</button>
             </div>
           </div>
         </div>`;
@@ -13971,7 +14022,7 @@ function _timetableGrid(slots, canEdit) {
               </div>
               ${s.course?.code ? `<div style="font-size:10px;color:var(--text-muted);">${esc(s.course.code)}</div>` : ''}
               ${s.room ? `<div style="font-size:10px;color:var(--text-muted);">📍 ${esc(s.room)}</div>` : ''}
-              ${!canEdit && s.lecturer?.name ? `<div style="font-size:10px;color:var(--text-muted);">👤 ${esc(s.lecturer.name)}</div>` : ''}
+              ${s.lecturer?.name ? `<div style="font-size:10px;color:var(--text-muted);">👤 ${esc(s.lecturer.name)}</div>` : ''}
               ${canEdit ? `<button onclick="event.stopPropagation();deleteSlot('${s._id}')"
                 style="position:absolute;top:4px;right:4px;background:none;border:none;cursor:pointer;
                 color:var(--text-muted);font-size:14px;line-height:1;padding:2px;">×</button>` : ''}
@@ -14059,11 +14110,17 @@ async function renderLecturerTimetable() {
     _timetableSlots   = slotData.slots   || [];
     _timetableCourses = (courseData.courses || courseData || []);
 
+    const isAdminView = ['admin','superadmin','manager'].includes(currentUser?.role);
+    const ttTitle    = isAdminView ? 'All Timetables' : 'My Timetable';
+    const ttSubtitle = isAdminView
+      ? 'All lecturers\' class slots — click any slot to edit or delete'
+      : 'Your weekly class timetable — click any slot to edit';
+
     content.innerHTML = `
       <div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;margin-bottom:20px">
         <div>
-          <h2 style="font-size:22px;font-weight:800;letter-spacing:-.5px;color:#0f172a;margin-bottom:2px">My Timetable</h2>
-          <p style="color:#64748b;font-size:13px">Your weekly class timetable — click any slot to edit</p>
+          <h2 style="font-size:22px;font-weight:800;letter-spacing:-.5px;color:#0f172a;margin-bottom:2px">${ttTitle}</h2>
+          <p style="color:#64748b;font-size:13px">${ttSubtitle}</p>
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           <button class="btn btn-secondary" onclick="exportTimetableICS(_timetableSlots)" style="display:flex;align-items:center;gap:6px;font-size:13px">
@@ -14143,20 +14200,44 @@ async function openEditSlotModal(slotId) {
   _openSlotModal(slot);
 }
 
-function _openSlotModal(slot, presetDay) {
+async function _openSlotModal(slot, presetDay) {
   const container = document.getElementById('modal-container');
   container.classList.remove('hidden');
   const isEdit = !!slot;
+  const isAdminOrHod = ['admin','superadmin','hod','manager'].includes(currentUser?.role)
+                    && currentUser?.company?.mode === 'academic';
+
   const colorOptions = TIMETABLE_COLORS.map(c =>
     `<span onclick="document.getElementById('slot-color').value='${c}';document.querySelectorAll('.color-dot').forEach(d=>d.style.outline='none');this.style.outline='3px solid ${c}';this.style.outlineOffset='2px'"
       class="color-dot" style="display:inline-block;width:22px;height:22px;border-radius:50%;background:${c};cursor:pointer;margin:2px;
       ${slot?.color===c||(!slot&&c==='#6366f1')?'outline:3px solid '+c+';outline-offset:2px':''}"></span>`
   ).join('');
 
+  // Fetch lecturers list for admin/HOD so they can assign slots to specific lecturers
+  let lecturerOptions = '';
+  if (isAdminOrHod) {
+    try {
+      const data = await api('/api/devices/lecturers-for-assignment');
+      const lecs = data.lecturers || [];
+      const currentLecId = slot?.lecturer?._id || slot?.lecturer || '';
+      lecturerOptions = `<div class="form-group">
+        <label>Lecturer <span style="color:red">*</span></label>
+        <select id="slot-lecturer" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
+          <option value="">— Select lecturer —</option>
+          ${lecs.map(l => `<option value="${l._id}" ${l._id === currentLecId ? 'selected' : ''}>${esc(l.name)}</option>`).join('')}
+        </select>
+      </div>`;
+    } catch(_) {
+      lecturerOptions = `<div class="form-group"><p style="font-size:12px;color:#b45309">Could not load lecturers list.</p></div>`;
+    }
+  }
+
   container.innerHTML = `
     <div class="modal-overlay" onclick="closeModal(event)">
       <div class="modal" onclick="event.stopPropagation()" style="max-width:420px">
         <h3 style="margin:0 0 16px">${isEdit ? 'Edit Class Slot' : 'Add Class to Timetable'}</h3>
+
+        ${lecturerOptions}
 
         <div class="form-group">
           <label>Course <span style="color:red">*</span></label>
@@ -14208,19 +14289,24 @@ function _openSlotModal(slot, presetDay) {
 }
 
 async function saveSlot(slotId) {
-  const courseId  = document.getElementById('slot-course').value;
-  const dayOfWeek = document.getElementById('slot-day').value;
-  const startTime = document.getElementById('slot-start').value;
-  const endTime   = document.getElementById('slot-end').value;
-  const room      = document.getElementById('slot-room').value.trim();
-  const color     = document.getElementById('slot-color').value;
+  const courseId   = document.getElementById('slot-course').value;
+  const dayOfWeek  = document.getElementById('slot-day').value;
+  const startTime  = document.getElementById('slot-start').value;
+  const endTime    = document.getElementById('slot-end').value;
+  const room       = document.getElementById('slot-room').value.trim();
+  const color      = document.getElementById('slot-color').value;
+  const lecturerId = document.getElementById('slot-lecturer')?.value || null;
 
   if (!courseId) { toastWarning('Please select a course'); return; }
   if (!startTime || !endTime) { toastWarning('Please set start and end time'); return; }
   if (startTime >= endTime) { toastWarning('End time must be after start time'); return; }
+  if (document.getElementById('slot-lecturer') && !lecturerId) {
+    toastWarning('Please select a lecturer'); return;
+  }
 
   try {
-    const body = { courseId, dayOfWeek: Number(dayOfWeek), startTime, endTime, room, color };
+    const body = { courseId, dayOfWeek: Number(dayOfWeek), startTime, endTime, room, color,
+                   ...(lecturerId ? { lecturerId } : {}) };
     if (slotId) {
       await api(`/api/timetable/${slotId}`, { method: 'PUT', body: JSON.stringify(body) });
       showToastNotif('Class updated', 'success');

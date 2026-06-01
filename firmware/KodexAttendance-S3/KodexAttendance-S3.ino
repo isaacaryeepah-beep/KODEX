@@ -332,6 +332,13 @@ static String deriveCode(const String& seed, uint32_t unixSec) {
 // Backend re-derives the HMAC using session.esp32Seed and rejects stale slots.
 
 static void initBle() {
+  // ESP32-S3 Arduino core 3.x (ESP-IDF 5.x) races the NimBLE HCI transport
+  // init against the WiFi driver's background tasks when both are started in
+  // rapid succession. The race logs "hci inits failed" / "nimble host init
+  // failed" and silently breaks BLE advertising. A 200 ms yield after
+  // esp_wifi_init() lets WiFi's tasks settle before NimBLE registers its
+  // HCI callbacks, eliminating the race.
+  delay(200);
   BLEDevice::init(("Dikly-" + macSuffix()).c_str());
   bleAdv = BLEDevice::getAdvertising();
   LOG("BLE init OK");

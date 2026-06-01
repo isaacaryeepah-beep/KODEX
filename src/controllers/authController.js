@@ -356,12 +356,6 @@ exports.registerStudent = async (req, res) => {
     if (!name || !IndexNumber || !password || !institutionCode) {
       return res.status(400).json({ error: "Name, student ID, password, and institution code are required" });
     }
-    if (!email || !/^\S+@\S+\.\S+$/.test(email)) {
-      return res.status(400).json({ error: "A valid email address is required so lecturers can contact you." });
-    }
-    if (!phone) {
-      return res.status(400).json({ error: "A phone number is required so lecturers can reach you by SMS." });
-    }
     if (password.length < 8) {
       return res.status(400).json({ error: "Password must be at least 8 characters" });
     }
@@ -406,13 +400,6 @@ exports.registerStudent = async (req, res) => {
       return res.status(400).json({ error: "A student with this ID already exists at this institution" });
     }
 
-    const normPhone = normalisePhone(phone);
-    const phoneExists = await User.findOne({ phone: normPhone, company: company._id });
-    if (phoneExists) return res.status(400).json({ error: "Phone number is already in use" });
-
-    const emailExists = await User.findOne({ email, company: company._id });
-    if (emailExists) return res.status(400).json({ error: "Email address is already in use" });
-
     const studentTrialDays = await getStudentTrialDays();
     const studentTrialEnd  = new Date(Date.now() + studentTrialDays * 24 * 60 * 60 * 1000);
 
@@ -420,8 +407,6 @@ exports.registerStudent = async (req, res) => {
       name,
       IndexNumber: IndexNumber.trim().toUpperCase(),
       password,
-      phone: normPhone,
-      email,
       company: company._id,
       role: "student",
       isApproved: false,
