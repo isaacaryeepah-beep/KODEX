@@ -769,7 +769,7 @@ exports.listAllDevices = async (req, res) => {
     }
 
     const devices = await Device.find(filter)
-      .populate('pairedBy', 'name email role')
+      .populate('lecturerId', 'name email role')
       .sort({ createdAt: -1 })
       .lean();
 
@@ -788,7 +788,7 @@ exports.listAllDevices = async (req, res) => {
         ? (now - new Date(d.lastHeartbeat).getTime()) < 20000
         : false,
       lastHeartbeat: d.lastHeartbeat,
-      pairedBy:      d.pairedBy ? { name: d.pairedBy.name, role: d.pairedBy.role } : null,
+      pairedBy:      d.lecturerId ? { name: d.lecturerId.name, role: d.lecturerId.role } : null,
       createdAt:     d.createdAt,
     }));
 

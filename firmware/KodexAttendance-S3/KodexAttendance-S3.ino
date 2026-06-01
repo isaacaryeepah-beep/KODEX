@@ -2045,10 +2045,24 @@ void setup() {
   // Students connect directly to the device hotspot. No school WiFi needed for
   // attendance. School WiFi (if configured) is used only for background sync.
 
-  // BLE FIRST — must allocate its 4 KB EMI controller buffer from unfragmented
-  // internal SRAM. WiFi AP init fragments the heap enough to prevent this if BLE
-  // runs after.
-  initBle();
+  LOG("DMA heap free:    " + String(heap_caps_get_free_size(MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL)));
+  LOG("DMA largest block:" + String(heap_caps_get_largest_free_block(MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL)));
+
+  // In paired boot the BLE controller firmware is NOT released (we need BLE),
+  // so it occupies ~34 KB of DMA-capable SRAM permanently. This leaves ~40 KB
+  // for WiFi + BLE EMI. Default WiFi config allocates 10×1600 B = 16 KB in
+  // static RX DMA and 16×1600 B = 26 KB in static TX DMA — totalling ~42 KB,
+  // which exhausts the 40 KB budget. We reduce static RX to 4 buffers and use
+  // dynamic TX (general heap, not DMA) to cut WiFi's DMA footprint to ~12 KB.
+  // Arduino's WiFi.mode() detects the pre-init and skips its own esp_wifi_init.
+  {
+    wifi_init_config_t wcfg = WIFI_INIT_CONFIG_DEFAULT();
+    wcfg.static_rx_buf_num  = 4;  // was 10 → saves ~10 KB DMA
+    wcfg.static_tx_buf_num  = 0;  // was 16 → use dynamic TX
+    wcfg.tx_buf_type        = 1;  // WIFI_DYNAMIC_TX_BUFFER (from general heap)
+    wcfg.dynamic_tx_buf_num = 32;
+    esp_wifi_init(&wcfg);
+  }
 
   String apName = "Dikly-" + macSuffix();
   WiFi.mode(WIFI_AP);
@@ -2081,6 +2095,10 @@ void setup() {
   } else {
     LOG("SD not found — using 200-slot RAM buffer");
   }
+
+  // BLE after WiFi AP and SD — WiFi's reduced DMA footprint leaves ~28 KB of
+  // DMA-capable SRAM here; the BLE EMI controller needs exactly 4 KB of it.
+  initBle();
 
   // NTP attempted now; succeeds only if STA connects later in loop().
   // Records use millis-based fallback timestamps until NTP succeeds.
