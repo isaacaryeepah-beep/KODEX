@@ -43,4 +43,12 @@ router.get('/devices/available', authenticate, companyIsolation, deviceCtrl.getA
 // ─── ASSIGN DEVICE TO STUDENT GROUP ──────────────────────────────────────────
 router.post('/devices/assign-group', authenticate, companyIsolation, deviceCtrl.assignGroup);
 
+// ─── DEVICE-LECTURER ASSIGNMENT ───────────────────────────────────────────────
+// Strict per-device authorization: only explicitly assigned lecturers can start sessions.
+// Admin/HOD/superadmin bypass the check in startSession.
+router.get('/devices/lecturers-for-assignment', authenticate, companyIsolation, requireRole('admin', 'superadmin', 'hod', 'class_rep'), deviceCtrl.getLecturersForAssignment);
+router.post('/devices/:deviceId/assign-lecturer',  authenticate, companyIsolation, requireRole('admin', 'superadmin', 'hod', 'class_rep'), deviceCtrl.assignLecturer);
+router.delete('/devices/:deviceId/remove-lecturer', authenticate, companyIsolation, requireRole('admin', 'superadmin', 'hod', 'class_rep'), deviceCtrl.removeLecturer);
+router.get('/devices/:deviceId/lecturers',          authenticate, companyIsolation, deviceCtrl.getDeviceLecturers);
+
 module.exports = router;

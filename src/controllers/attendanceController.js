@@ -20,7 +20,9 @@ async function _resolveSessionDevice(user, courseId, explicitDeviceId) {
 
   // If the caller explicitly picked a device, use it directly
   if (explicitDeviceId) {
-    return Device.findOne({ deviceId: explicitDeviceId, companyId });
+    return Device.findOne({ deviceId: explicitDeviceId, companyId })
+      .populate('assignedLecturers.lecturerId', 'name email')
+      .populate('assignedLecturers.courseId',   'title code');
   }
 
   // Try to find the device assigned to the group for this course
@@ -38,13 +40,17 @@ async function _resolveSessionDevice(user, courseId, explicitDeviceId) {
         companyId,
         assignedGroup: enrollment.academicSnapshot.group,
         assignedLevel: String(enrollment.academicSnapshot.level),
-      });
+      })
+        .populate('assignedLecturers.lecturerId', 'name email')
+        .populate('assignedLecturers.courseId',   'title code');
       if (grouped) return grouped;
     }
   }
 
   // Fallback — return freshest device in the company
-  return Device.findOne({ companyId }).sort({ lastHeartbeat: -1 });
+  return Device.findOne({ companyId }).sort({ lastHeartbeat: -1 })
+    .populate('assignedLecturers.lecturerId', 'name email')
+    .populate('assignedLecturers.courseId',   'title code');
 }
 
 function _deviceFreshness(device, windowMs = DEVICE_ONLINE_WINDOW_MS) {
@@ -106,6 +112,26 @@ exports.startSession = async (req, res) => {
 
     console.log(`[SESSION START] ✓ Device ${device.deviceId} online (${freshness.secondsAgo}s ago) — allowing start for ${company.name}`);
     // ── End device check ──────────────────────────────────
+
+    // ── Device-lecturer assignment check ──────────────────────────────────────
+    // Lecturer must be explicitly assigned to this device for the selected course.
+    // Admin/HOD/superadmin bypass for emergency use.
+    if (req.user.role === 'lecturer' && req.body.courseId) {
+      const assignment = (device.assignedLecturers || []).find(a => {
+        const assignedLecId  = a.lecturerId?._id ? a.lecturerId._id.toString() : a.lecturerId?.toString();
+        const assignedCrsId  = a.courseId?._id   ? a.courseId._id.toString()   : a.courseId?.toString();
+        return assignedLecId === req.user._id.toString() &&
+               assignedCrsId === req.body.courseId.toString();
+      });
+      if (!assignment) {
+        return res.status(403).json({
+          error: 'Not assigned to this device',
+          message: 'You are not assigned to this attendance device. Please contact your Group Representative, HOD, or use your assigned departmental device.',
+          deviceAssigned: false,
+        });
+      }
+    }
+    // ── End device-lecturer assignment check ──────────────────────────────────
 
     const activeFilter = { company: companyId, status: "active" };
     if (req.user.role === "lecturer") {

@@ -770,6 +770,8 @@ exports.listAllDevices = async (req, res) => {
 
     const devices = await Device.find(filter)
       .populate('lecturerId', 'name email role')
+      .populate('assignedLecturers.lecturerId', 'name email')
+      .populate('assignedLecturers.courseId',   'title code')
       .sort({ createdAt: -1 })
       .lean();
 
@@ -788,7 +790,12 @@ exports.listAllDevices = async (req, res) => {
         ? (now - new Date(d.lastHeartbeat).getTime()) < 20000
         : false,
       lastHeartbeat: d.lastHeartbeat,
-      pairedBy:      d.lecturerId ? { name: d.lecturerId.name, role: d.lecturerId.role } : null,
+      pairedBy:         d.lecturerId ? { name: d.lecturerId.name, role: d.lecturerId.role } : null,
+      assignedLecturers: (d.assignedLecturers || []).map(a => ({
+        lecturerId: a.lecturerId,
+        courseId:   a.courseId,
+        assignedAt: a.assignedAt,
+      })),
       createdAt:     d.createdAt,
     }));
 
@@ -892,6 +899,211 @@ exports.getAvailableDevices = async (req, res) => {
     res.json({ success: true, devices: result });
   } catch (err) {
     console.error('[getAvailableDevices]', err);
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+};
+
+// ─── ASSIGN LECTURER TO DEVICE ───────────────────────────────────────────────
+// POST /api/devices/:deviceId/assign-lecturer
+// Binds a specific lecturer+course pair to this device.
+// Allowed roles: admin, superadmin, hod, class_rep
+exports.assignLecturer = async (req, res) => {
+  try {
+    const ALLOWED = ['admin', 'superadmin', 'hod', 'class_rep'];
+    if (!ALLOWED.includes(req.user.role)) {
+      return res.status(403).json({ message: 'Not authorized to assign lecturers to devices.' });
+    }
+
+    const { lecturerId, courseId } = req.body;
+    const deviceId = req.params.deviceId;
+
+    if (!deviceId || !lecturerId || !courseId) {
+      return res.status(400).json({ message: 'deviceId, lecturerId, and courseId are required.' });
+    }
+
+    const mongoose = require('mongoose');
+    if (!mongoose.Types.ObjectId.isValid(lecturerId) || !mongoose.Types.ObjectId.isValid(courseId)) {
+      return res.status(400).json({ message: 'Invalid lecturerId or courseId.' });
+    }
+
+    // Device must exist and belong to this company
+    const device = await Device.findOne({ deviceId, companyId: req.user.company });
+    if (!device) return res.status(404).json({ message: 'Device not found.' });
+
+    // Lecturer must exist, belong to company, and be a lecturer
+    const lecturer = await User.findOne({ _id: lecturerId, company: req.user.company, role: 'lecturer' });
+    if (!lecturer) return res.status(404).json({ message: 'Lecturer not found or is not a lecturer role.' });
+
+    const Course = require('../models/Course');
+    const course = await Course.findOne({ _id: courseId, companyId: req.user.company });
+    if (!course) return res.status(404).json({ message: 'Course not found.' });
+
+    // Verify lecturer teaches this course (legacy field or CourseLecturerAssignment)
+    const CourseLecturerAssignment = require('../models/CourseLecturerAssignment');
+    const isLegacyOwner = course.lecturerId?.toString() === lecturerId.toString();
+    if (!isLegacyOwner) {
+      const cla = await CourseLecturerAssignment.findActiveAssignment(req.user.company, course._id, lecturerId);
+      if (!cla) {
+        return res.status(422).json({
+          message: 'Lecturer is not assigned to teach this course. Assign the course first via Course Management.',
+        });
+      }
+    }
+
+    // Prevent duplicates
+    const alreadyAssigned = (device.assignedLecturers || []).some(a =>
+      a.lecturerId.toString() === lecturerId.toString() &&
+      a.courseId.toString()   === courseId.toString()
+    );
+    if (alreadyAssigned) {
+      return res.status(409).json({ message: 'This lecturer+course pair is already assigned to this device.' });
+    }
+
+    device.assignedLecturers.push({
+      lecturerId,
+      courseId,
+      assignedBy: req.user._id,
+      assignedAt: new Date(),
+    });
+    await device.save();
+
+    await device.populate([
+      { path: 'assignedLecturers.lecturerId', select: 'name email' },
+      { path: 'assignedLecturers.courseId',   select: 'title code' },
+    ]);
+
+    _auditDevice(req.user, AUDIT_ACTIONS.UPDATE, device, {
+      action: 'lecturer_assigned',
+      lecturerId,
+      courseId,
+    }, req);
+
+    res.json({ success: true, message: 'Lecturer assigned to device.', data: device.assignedLecturers });
+  } catch (err) {
+    console.error('[assignLecturer]', err);
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+};
+
+// ─── REMOVE LECTURER FROM DEVICE ─────────────────────────────────────────────
+// DELETE /api/devices/:deviceId/remove-lecturer
+// Removes a lecturer+course pair from this device.
+// Allowed roles: admin, superadmin, hod, class_rep
+exports.removeLecturer = async (req, res) => {
+  try {
+    const ALLOWED = ['admin', 'superadmin', 'hod', 'class_rep'];
+    if (!ALLOWED.includes(req.user.role)) {
+      return res.status(403).json({ message: 'Not authorized to remove lecturer assignments.' });
+    }
+
+    const { lecturerId, courseId } = req.body;
+    const deviceId = req.params.deviceId;
+
+    if (!deviceId || !lecturerId || !courseId) {
+      return res.status(400).json({ message: 'deviceId, lecturerId, and courseId are required.' });
+    }
+
+    const device = await Device.findOne({ deviceId, companyId: req.user.company });
+    if (!device) return res.status(404).json({ message: 'Device not found.' });
+
+    const before = (device.assignedLecturers || []).length;
+    device.assignedLecturers = (device.assignedLecturers || []).filter(a =>
+      !(a.lecturerId.toString() === lecturerId.toString() && a.courseId.toString() === courseId.toString())
+    );
+
+    if (device.assignedLecturers.length === before) {
+      return res.status(404).json({ message: 'Assignment not found on this device.' });
+    }
+
+    await device.save();
+
+    _auditDevice(req.user, AUDIT_ACTIONS.UPDATE, device, {
+      action: 'lecturer_removed',
+      lecturerId,
+      courseId,
+    }, req);
+
+    res.json({ success: true, message: 'Lecturer removed from device.', data: device.assignedLecturers });
+  } catch (err) {
+    console.error('[removeLecturer]', err);
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+};
+
+// ─── GET DEVICE LECTURERS ─────────────────────────────────────────────────────
+// GET /api/devices/:deviceId/lecturers
+// Returns populated assignedLecturers for the device.
+exports.getDeviceLecturers = async (req, res) => {
+  try {
+    const deviceId = req.params.deviceId;
+    const ALLOWED = ['admin', 'superadmin', 'hod', 'class_rep', 'lecturer'];
+    if (!ALLOWED.includes(req.user.role)) {
+      return res.status(403).json({ message: 'Not authorized.' });
+    }
+
+    const device = await Device.findOne({ deviceId, companyId: req.user.company })
+      .populate('assignedLecturers.lecturerId', 'name email')
+      .populate('assignedLecturers.courseId',   'title code');
+
+    if (!device) return res.status(404).json({ message: 'Device not found.' });
+
+    res.json({ success: true, assignedLecturers: device.assignedLecturers });
+  } catch (err) {
+    console.error('[getDeviceLecturers]', err);
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+};
+
+// ─── GET LECTURERS FOR ASSIGNMENT DROPDOWN ────────────────────────────────────
+// GET /api/devices/lecturers-for-assignment
+// Returns all lecturers in this company, each with their courses array.
+// Used to populate the assign-lecturer modal dropdown.
+exports.getLecturersForAssignment = async (req, res) => {
+  try {
+    const ALLOWED = ['admin', 'superadmin', 'hod', 'class_rep'];
+    if (!ALLOWED.includes(req.user.role)) {
+      return res.status(403).json({ message: 'Not authorized.' });
+    }
+
+    const companyId = req.user.company;
+    const Course = require('../models/Course');
+    const CourseLecturerAssignment = require('../models/CourseLecturerAssignment');
+
+    const lecturers = await User.find({ company: companyId, role: 'lecturer' }, 'name email').lean();
+
+    // Gather courses for each lecturer from both legacy field and CourseLecturerAssignment
+    const result = await Promise.all(lecturers.map(async (lec) => {
+      // Legacy: courses where lecturerId === this lecturer
+      const legacyCourses = await Course.find(
+        { lecturerId: lec._id, companyId, isArchived: { $ne: true } },
+        'title code'
+      ).lean();
+
+      // CLA: courses via active assignments
+      const assignments = await CourseLecturerAssignment.find(
+        { lecturer: lec._id, company: companyId, status: 'active' },
+        'course'
+      ).populate('course', 'title code').lean();
+
+      const claCoursesRaw = assignments.map(a => a.course).filter(Boolean);
+
+      // Merge and deduplicate by _id
+      const courseMap = new Map();
+      for (const c of [...legacyCourses, ...claCoursesRaw]) {
+        if (c && c._id) courseMap.set(c._id.toString(), { _id: c._id, name: c.title, courseCode: c.code });
+      }
+
+      return {
+        _id:     lec._id,
+        name:    lec.name,
+        email:   lec.email,
+        courses: Array.from(courseMap.values()),
+      };
+    }));
+
+    res.json({ success: true, lecturers: result });
+  } catch (err) {
+    console.error('[getLecturersForAssignment]', err);
     res.status(500).json({ message: 'Server error', error: err.message });
   }
 };
