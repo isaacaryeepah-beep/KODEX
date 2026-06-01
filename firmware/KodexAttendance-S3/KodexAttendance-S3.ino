@@ -1899,21 +1899,47 @@ void setup() {
   // Touch init
   touchInit();
 
-  // SD card via SDIO (SD_MMC) — completely separate peripheral from the display's
-  // SPI bus, so no GPIO-matrix conflict. Try 4-bit first; fall back to 1-bit.
+  // Splash (does not need SD or WiFi)
+  splashStart = millis();
+  drawSplash();
+
+  loadConfig();
+  LOG("Boot — " + deviceId + " fw=" + String(FIRMWARE_VERSION));
+
+  // AP / setup mode — SD not needed for pairing, and skipping it here keeps
+  // the full DMA-capable SRAM available for WiFi's rx-buffer pool.
+  if (deviceJWT.isEmpty() || wifiSSID.isEmpty()) {
+    LOG("Entering setup AP mode");
+    esp_bt_controller_mem_release(ESP_BT_MODE_BLE);
+    startApPortal();
+    return;
+  }
+
+  // Station mode — start WiFi BEFORE SD so WiFi secures its DMA rx-buffer
+  // pool from unfragmented internal SRAM. SD_MMC allocates from the same pool
+  // and if it runs first there may not be enough contiguous DRAM left for WiFi.
+  curScreen = CONNECTING;
+  WiFi.mode(WIFI_STA);
+  WiFi.setSleep(false);
+  WiFi.begin(wifiSSID.c_str(), wifiPass.c_str());
+  uint32_t t0 = millis();
+  while (WiFi.status() != WL_CONNECTED && millis() - t0 < WIFI_TIMEOUT_MS) {
+    drawConnecting(wifiSSID);
+    delay(180);
+  }
+
+  // Init SD after WiFi attempt — WiFi has its buffers, SD gets the remainder.
   SD_MMC.setPins(SD_CLK, SD_CMD, SD_D0, SD_D1, SD_D2, SD_D3);
-  sdAvailable = SD_MMC.begin("/sdcard", false, false);  // false = 4-bit, no format
+  sdAvailable = SD_MMC.begin("/sdcard", false, false);
   if (!sdAvailable) {
-    // 1-bit fallback — works with cards that don't negotiate 4-bit cleanly
     SD_MMC.end();
     SD_MMC.setPins(SD_CLK, SD_CMD, SD_D0);
-    sdAvailable = SD_MMC.begin("/sdcard", true, false);  // true = 1-bit
+    sdAvailable = SD_MMC.begin("/sdcard", true, false);
   }
   if (sdAvailable) {
     uint64_t mb = SD_MMC.cardSize() / (1024ULL * 1024ULL);
     LOG("SD card OK — " + String((uint32_t)mb) + " MB ("
         + String(SD_MMC.cardType()) + "-type)");
-    // Count any pending offline records left from a previous interrupted session
     if (SD_MMC.exists(SD_ATT_FILE)) {
       File cf = SD_MMC.open(SD_ATT_FILE, FILE_READ);
       if (cf) {
@@ -1926,33 +1952,6 @@ void setup() {
     LOG("SD not found — using 200-slot RAM buffer for offline records");
   }
 
-  // Splash
-  splashStart = millis();
-  drawSplash();
-
-  loadConfig();
-  LOG("Boot — " + deviceId + " fw=" + String(FIRMWARE_VERSION));
-
-  // Unpaired or no WiFi → captive portal.
-  // Release BT controller memory so WiFi gets full radio access — BLE is not
-  // needed during setup mode and the shared radio causes init failures otherwise.
-  if (deviceJWT.isEmpty() || wifiSSID.isEmpty()) {
-    LOG("Entering setup AP mode");
-    esp_bt_controller_mem_release(ESP_BT_MODE_BLE);
-    startApPortal();
-    return;
-  }
-
-  // Connect to school WiFi
-  curScreen = CONNECTING;
-  WiFi.mode(WIFI_STA);
-  WiFi.setSleep(false);
-  WiFi.begin(wifiSSID.c_str(), wifiPass.c_str());
-  uint32_t t0 = millis();
-  while (WiFi.status() != WL_CONNECTED && millis() - t0 < WIFI_TIMEOUT_MS) {
-    drawConnecting(wifiSSID);
-    delay(180);
-  }
   if (WiFi.status() != WL_CONNECTED) {
     LOG("WiFi fail — showing on-device WiFi scanner");
     curScreen = WIFI_SCAN;
@@ -1963,8 +1962,7 @@ void setup() {
   digitalWrite(LED_PIN, HIGH);
   LOG("WiFi OK: " + WiFi.localIP().toString());
 
-  // BLE init only after WiFi is connected — both share the same radio and the
-  // coexistence layer needs WiFi established first to avoid hci init failures.
+  // BLE after WiFi — shared radio, coexistence layer needs WiFi up first.
   initBle();
 
   configTime(0, 0, "pool.ntp.org", "time.google.com");
