@@ -2126,10 +2126,6 @@ void loop() {
         delay(1500);
       }
     } else {
-      drawPairStatus("No WiFi configured", "Pairing via internet needed", "Connect to WiFi with a phone hotspot", 1);
-      // Device needs internet to pair even if WiFi not configured for daily use.
-      // Try to find internet another way — nothing we can do without connectivity.
-      // Show an error if STA is not connected.
       if (WiFi.status() != WL_CONNECTED) {
         drawPairStatus("No Internet", "Provide a WiFi network to pair", "You can skip WiFi after pairing", 0);
         delay(3000); return;
