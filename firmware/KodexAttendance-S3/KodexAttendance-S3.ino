@@ -2145,17 +2145,24 @@ void loop() {
     uint32_t tw = millis();
     while (time(nullptr) < 1000000000UL && millis() - tw < 5000) delay(100);
 
-    // Step 3 — call server
-    // Stop DNS + HTTP server to reclaim internal heap before SSL handshake.
-    // mbedTLS needs ~20KB contiguous; the servers hold fragmented blocks.
+    // Step 3 — switch to STA-only to free AP heap for mbedTLS SSL context.
+    // AP+STA coexistence leaves maxBlock ~19KB; pure STA raises it above 36KB.
     dns.stop();
     localHttp.stop();
-    delay(100);
+    WiFi.softAPdisconnect(true);
+    WiFi.mode(WIFI_STA);
+    delay(300);
     LOG("Pre-pair heap free=" + String(ESP.getFreeHeap()) +
         " maxBlock=" + String(ESP.getMaxAllocHeap()));
     drawPairStatus("Contacting server…", "dikly.sbs", "", 3);
     if (!tryPair(pairPendingCode, pairPendingInst)) {
-      WiFi.disconnect(); WiFi.mode(WIFI_AP);
+      // Restart AP so user can retry
+      WiFi.disconnect();
+      WiFi.mode(WIFI_AP);
+      { String an = "Dikly-" + macSuffix(); WiFi.softAP(an.c_str()); }
+      delay(500);
+      dns.start(53, "*", WiFi.softAPIP());
+      localHttp.begin();
       String errLine = pairErrorMsg.isEmpty() ? "Check institution + pairing code" : pairErrorMsg;
       drawPairStatus("Pairing Failed", errLine.c_str(), "Generate a new code and retry", 0);
       return;
