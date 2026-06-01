@@ -6510,10 +6510,36 @@ async function showStartSessionModal() {
     return;
   }
 
+  // Build class group badge from the paired device info
+  const devData = deviceStatus?.hasDevice
+    ? (() => {
+        try { return null; } catch(_) { return null; } // populated below
+      })()
+    : null;
+  let groupBadge = '';
+  try {
+    const devResp = await api('/api/devices/my');
+    const dev = devResp?.data || null;
+    if (dev) {
+      const parts = [
+        dev.assignedDepartment,
+        dev.assignedLevel && 'Level ' + dev.assignedLevel,
+        dev.assignedGroup && 'Group ' + dev.assignedGroup,
+      ].filter(Boolean);
+      if (parts.length) {
+        groupBadge = `<div style="display:flex;align-items:center;gap:8px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:8px 12px;font-size:12px;color:#166534;margin-bottom:14px">
+          <span style="font-size:16px">📍</span>
+          <div><span style="font-weight:600">Device:</span> ${esc(dev.deviceName || dev.deviceId)}<br><span style="font-weight:600">Class Group:</span> ${esc(parts.join(' · '))}</div>
+        </div>`;
+      }
+    }
+  } catch(_) { /* non-critical */ }
+
   container.innerHTML = `
     <div class="modal-overlay" onclick="closeModal(event)">
       <div class="modal" onclick="event.stopPropagation()">
         <h3>Start New Session</h3>
+        ${groupBadge}
         <div class="form-group">
           <label>Course <span style="color:red">*</span></label>
           <select id="session-course" onchange="loadSessionDevices(this.value)" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
@@ -6653,6 +6679,35 @@ async function startSession() {
             <div style="display:flex;gap:8px;justify-content:center">
               <button class="btn btn-secondary btn-sm" onclick="closeModal()">Cancel</button>
               <button class="btn btn-primary btn-sm" onclick="showStartSessionModal()">↻ Retry</button>
+            </div>
+          </div>
+        </div>`;
+    } else if (e.status === 403 && e.data?.timetableBlocked) {
+      const msg  = e.data?.message || 'This session is outside your scheduled time window.';
+      const sched = e.data?.scheduledTime;
+      const schedLine = sched ? `<div style="background:#fef3c7;border:1px solid #fde68a;border-radius:8px;padding:10px 14px;font-size:12px;color:#92400e;margin-bottom:20px;text-align:left">Scheduled: <strong>${sched.start} – ${sched.end}</strong></div>` : '';
+      if (container) container.innerHTML = `
+        <div class="modal-overlay" onclick="closeModal(event)">
+          <div class="modal" onclick="event.stopPropagation()" style="text-align:center;max-width:400px">
+            <div style="font-size:40px;margin-bottom:12px">🕐</div>
+            <h3 style="margin-bottom:8px">Not Your Scheduled Time</h3>
+            <p style="font-size:13px;color:var(--text-muted);margin-bottom:14px;line-height:1.6">${esc(msg)}</p>
+            ${schedLine}
+            <div style="display:flex;gap:8px;justify-content:center">
+              <button class="btn btn-secondary btn-sm" onclick="closeModal()">OK</button>
+            </div>
+          </div>
+        </div>`;
+    } else if (e.status === 403 && e.data?.deviceAssigned === false) {
+      const msg = e.data?.message || 'You are not assigned to this attendance device.';
+      if (container) container.innerHTML = `
+        <div class="modal-overlay" onclick="closeModal(event)">
+          <div class="modal" onclick="event.stopPropagation()" style="text-align:center;max-width:400px">
+            <div style="font-size:40px;margin-bottom:12px">🚫</div>
+            <h3 style="margin-bottom:8px">Device Not Assigned to You</h3>
+            <p style="font-size:13px;color:var(--text-muted);margin-bottom:20px;line-height:1.6">${esc(msg)}</p>
+            <div style="display:flex;gap:8px;justify-content:center">
+              <button class="btn btn-secondary btn-sm" onclick="closeModal()">OK</button>
             </div>
           </div>
         </div>`;

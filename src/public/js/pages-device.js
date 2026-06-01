@@ -1020,11 +1020,19 @@ async function adLoadDevices() {
             </span>`;
           }).join('');
 
+          const setupData = JSON.stringify({
+            name: d.deviceName || '',
+            dept: d.assignedDepartment || '',
+            level: d.assignedLevel || '',
+            group: d.assignedGroup || '',
+          }).replace(/'/g, '&#39;');
+
           return `
             <div class="dev-card" style="display:flex;flex-direction:column;gap:10px">
               <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
                 <span style="font-size:15px;font-weight:700;color:var(--text-primary)">${d.deviceName}</span>
                 <span style="font-size:12px">${onlineDot}</span>
+                <button onclick="adOpenSetupModal('${d.deviceId}', ${setupData})" title="Setup device" style="margin-left:auto;background:none;border:1px solid #e2e8f0;border-radius:6px;padding:2px 8px;cursor:pointer;font-size:11px;color:#475569;font-weight:600">Setup</button>
               </div>
               <div style="font-size:12px;color:var(--text-secondary);font-weight:500">${deptLabel}</div>
               <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">
@@ -1152,4 +1160,103 @@ async function adRemoveLecturer(deviceId, lecturerId, courseId) {
   } catch (e) {
     alert('Failed to remove lecturer: ' + (e.message || 'Server error'));
   }
+}
+
+// ─── DEVICE SETUP MODAL (rename + dept/level/group) ──────────────────────────
+function adOpenSetupModal(deviceId, current) {
+  const existing = document.getElementById('ad-setup-modal-overlay');
+  if (existing) existing.remove();
+
+  const overlay = document.createElement('div');
+  overlay.id = 'ad-setup-modal-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9000;display:flex;align-items:center;justify-content:center;padding:16px';
+  overlay.innerHTML = `
+    <div style="background:var(--surface,#fff);border-radius:12px;padding:28px;width:100%;max-width:440px;box-shadow:0 20px 60px rgba(0,0,0,.25);position:relative">
+      <button onclick="document.getElementById('ad-setup-modal-overlay').remove()" style="position:absolute;top:14px;right:14px;background:none;border:none;cursor:pointer;font-size:20px;color:var(--text-secondary)">&times;</button>
+      <div style="font-size:16px;font-weight:700;margin-bottom:4px;color:var(--text-primary)">Device Setup</div>
+      <div style="font-size:12px;color:var(--text-secondary);margin-bottom:20px">ID: <strong>${deviceId}</strong></div>
+
+      <label style="display:block;font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:4px">Device Name</label>
+      <input id="ad-setup-name" value="${(current?.name || '').replace(/"/g,'&quot;')}" placeholder="e.g. DIKLY-CS-L100-A"
+        style="width:100%;padding:8px 10px;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;margin-bottom:14px;box-sizing:border-box;background:var(--surface,#fff);color:var(--text-primary)">
+
+      <label style="display:block;font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:4px">Department</label>
+      <input id="ad-setup-dept" value="${(current?.dept || '').replace(/"/g,'&quot;')}" placeholder="e.g. Computer Science"
+        style="width:100%;padding:8px 10px;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;margin-bottom:14px;box-sizing:border-box;background:var(--surface,#fff);color:var(--text-primary)">
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:20px">
+        <div>
+          <label style="display:block;font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:4px">Level</label>
+          <input id="ad-setup-level" value="${(current?.level || '').replace(/"/g,'&quot;')}" placeholder="e.g. 100"
+            style="width:100%;padding:8px 10px;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;box-sizing:border-box;background:var(--surface,#fff);color:var(--text-primary)">
+        </div>
+        <div>
+          <label style="display:block;font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:4px">Group</label>
+          <input id="ad-setup-group" value="${(current?.group || '').replace(/"/g,'&quot;')}" placeholder="e.g. A"
+            style="width:100%;padding:8px 10px;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;box-sizing:border-box;background:var(--surface,#fff);color:var(--text-primary)">
+        </div>
+      </div>
+
+      <div id="ad-setup-err" style="display:none;color:#dc2626;font-size:12px;margin-bottom:10px"></div>
+      <div style="display:flex;gap:10px;justify-content:flex-end">
+        <button onclick="document.getElementById('ad-setup-modal-overlay').remove()" style="padding:8px 18px;border:1px solid #e2e8f0;border-radius:8px;background:none;cursor:pointer;font-size:13px">Cancel</button>
+        <button id="ad-setup-submit" onclick="adSubmitSetup('${deviceId}')" style="padding:8px 18px;border:none;border-radius:8px;background:#6366f1;color:#fff;cursor:pointer;font-size:13px;font-weight:600">Save</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+}
+
+async function adSubmitSetup(deviceId) {
+  const nameEl  = document.getElementById('ad-setup-name');
+  const deptEl  = document.getElementById('ad-setup-dept');
+  const levelEl = document.getElementById('ad-setup-level');
+  const groupEl = document.getElementById('ad-setup-group');
+  const errEl   = document.getElementById('ad-setup-err');
+  const btn     = document.getElementById('ad-setup-submit');
+
+  const deviceName = nameEl?.value?.trim();
+  const department = deptEl?.value?.trim();
+  const level      = levelEl?.value?.trim();
+  const group      = groupEl?.value?.trim();
+
+  if (!level || !group) {
+    if (errEl) { errEl.textContent = 'Level and Group are required.'; errEl.style.display = 'block'; }
+    return;
+  }
+
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+  if (errEl) errEl.style.display = 'none';
+
+  const errors = [];
+  try {
+    await api('/api/devices/assign-group', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ deviceId, department, level, group }),
+    });
+  } catch (e) {
+    errors.push('Group: ' + (e.message || 'Failed'));
+  }
+
+  if (deviceName) {
+    try {
+      await api('/api/devices/my/rename', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ deviceName, deviceId }),
+      });
+    } catch (e) {
+      errors.push('Name: ' + (e.message || 'Failed'));
+    }
+  }
+
+  if (errors.length) {
+    if (errEl) { errEl.textContent = errors.join(' | '); errEl.style.display = 'block'; }
+    if (btn) { btn.disabled = false; btn.textContent = 'Save'; }
+    return;
+  }
+
+  document.getElementById('ad-setup-modal-overlay')?.remove();
+  await adLoadDevices();
 }
