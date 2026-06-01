@@ -2048,17 +2048,14 @@ void setup() {
   LOG("DMA heap free:    " + String(heap_caps_get_free_size(MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL)));
   LOG("DMA largest block:" + String(heap_caps_get_largest_free_block(MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL)));
 
-  // BLE FIRST — the heap is still unfragmented here (largest DMA block ~59 KB).
-  // The BLE EMI controller needs exactly 4 KB of contiguous DMA-capable SRAM
-  // (emi.c:164). After WiFi AP + SD allocate varied-size DMA buffers the heap
-  // fragments and no contiguous 4 KB block survives, causing Malloc failed.
-  // Reserving BLE's memory first guarantees the allocation succeeds.
-  initBle();
-
-  // Reduced WiFi DMA config — call esp_wifi_init() before WiFi.mode() so the
-  // Arduino library skips its own init and uses our config instead.
-  // static_rx_buf_num 4 (was 10) saves ~10 KB DMA; dynamic TX (tx_buf_type=1)
-  // moves TX buffers to the general 320 KB heap instead of DMA.
+  // WiFi driver init FIRST with reduced DMA config.
+  // esp_wifi_init() claims WiFi's internal structures (pp_wdev, DMA rings) from
+  // the still-unfragmented heap (~10-15 KB DMA). WiFi.mode/softAP later reuse
+  // these already-allocated structures and do not allocate fresh DMA.
+  // BLE then gets the remaining heap (~45+ KB) with a large contiguous block,
+  // easily satisfying the 4 KB EMI allocation (emi.c:164).
+  // tx_buf_type=1 (WIFI_DYNAMIC_TX_BUFFER) moves TX buffers to 320 KB general
+  // heap; static_rx_buf_num=4 (was 10) saves ~10 KB DMA.
   {
     wifi_init_config_t wcfg = WIFI_INIT_CONFIG_DEFAULT();
     wcfg.static_rx_buf_num  = 4;
@@ -2067,6 +2064,12 @@ void setup() {
     wcfg.dynamic_tx_buf_num = 32;
     esp_wifi_init(&wcfg);
   }
+  LOG("Post-WiFi-drv DMA free:  " + String(heap_caps_get_free_size(MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL)));
+  LOG("Post-WiFi-drv DMA block: " + String(heap_caps_get_largest_free_block(MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL)));
+
+  // BLE SECOND — after WiFi driver claimed its DMA, remaining heap still has a
+  // large contiguous block for BLE's 4 KB EMI controller buffer.
+  initBle();
 
   String apName = "Dikly-" + macSuffix();
   WiFi.mode(WIFI_AP);
