@@ -1037,7 +1037,7 @@ exports.removeDevice = async (req, res) => {
   try {
     const companyId = req.user.company;
     const { deviceId } = req.params;
-    const device = await Device.findOne({ deviceId, company: companyId });
+    const device = await Device.findOne({ deviceId, companyId });
     if (!device) return res.status(404).json({ message: 'Device not found' });
     await Device.deleteOne({ _id: device._id });
     res.json({ message: 'Device removed' });
