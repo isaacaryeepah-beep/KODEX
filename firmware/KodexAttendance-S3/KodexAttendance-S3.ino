@@ -2048,18 +2048,22 @@ void setup() {
   LOG("DMA heap free:    " + String(heap_caps_get_free_size(MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL)));
   LOG("DMA largest block:" + String(heap_caps_get_largest_free_block(MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL)));
 
-  // In paired boot the BLE controller firmware is NOT released (we need BLE),
-  // so it occupies ~34 KB of DMA-capable SRAM permanently. This leaves ~40 KB
-  // for WiFi + BLE EMI. Default WiFi config allocates 10×1600 B = 16 KB in
-  // static RX DMA and 16×1600 B = 26 KB in static TX DMA — totalling ~42 KB,
-  // which exhausts the 40 KB budget. We reduce static RX to 4 buffers and use
-  // dynamic TX (general heap, not DMA) to cut WiFi's DMA footprint to ~12 KB.
-  // Arduino's WiFi.mode() detects the pre-init and skips its own esp_wifi_init.
+  // BLE FIRST — the heap is still unfragmented here (largest DMA block ~59 KB).
+  // The BLE EMI controller needs exactly 4 KB of contiguous DMA-capable SRAM
+  // (emi.c:164). After WiFi AP + SD allocate varied-size DMA buffers the heap
+  // fragments and no contiguous 4 KB block survives, causing Malloc failed.
+  // Reserving BLE's memory first guarantees the allocation succeeds.
+  initBle();
+
+  // Reduced WiFi DMA config — call esp_wifi_init() before WiFi.mode() so the
+  // Arduino library skips its own init and uses our config instead.
+  // static_rx_buf_num 4 (was 10) saves ~10 KB DMA; dynamic TX (tx_buf_type=1)
+  // moves TX buffers to the general 320 KB heap instead of DMA.
   {
     wifi_init_config_t wcfg = WIFI_INIT_CONFIG_DEFAULT();
-    wcfg.static_rx_buf_num  = 4;  // was 10 → saves ~10 KB DMA
-    wcfg.static_tx_buf_num  = 0;  // was 16 → use dynamic TX
-    wcfg.tx_buf_type        = 1;  // WIFI_DYNAMIC_TX_BUFFER (from general heap)
+    wcfg.static_rx_buf_num  = 4;
+    wcfg.static_tx_buf_num  = 0;
+    wcfg.tx_buf_type        = 1;  // WIFI_DYNAMIC_TX_BUFFER
     wcfg.dynamic_tx_buf_num = 32;
     esp_wifi_init(&wcfg);
   }
@@ -2072,7 +2076,6 @@ void setup() {
   do { delay(100); apGw = WiFi.softAPIP(); } while (apGw == IPAddress(0,0,0,0) && millis()-apWait < 5000);
   LOG("Device AP: " + apName + " @ " + apGw.toString());
 
-  // SD after AP — WiFi AP has claimed its DMA buffers; SD gets the remainder.
   SD_MMC.setPins(SD_CLK, SD_CMD, SD_D0, SD_D1, SD_D2, SD_D3);
   sdAvailable = SD_MMC.begin("/sdcard", false, false);
   if (!sdAvailable) {
@@ -2095,10 +2098,6 @@ void setup() {
   } else {
     LOG("SD not found — using 200-slot RAM buffer");
   }
-
-  // BLE after WiFi AP and SD — WiFi's reduced DMA footprint leaves ~28 KB of
-  // DMA-capable SRAM here; the BLE EMI controller needs exactly 4 KB of it.
-  initBle();
 
   // NTP attempted now; succeeds only if STA connects later in loop().
   // Records use millis-based fallback timestamps until NTP succeeds.
