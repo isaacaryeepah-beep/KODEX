@@ -85,6 +85,7 @@ public:
 #include <Wire.h>
 #include <time.h>
 #include <mbedtls/md.h>
+#include <mbedtls/platform.h>   // mbedtls_platform_set_calloc_free
 #include <ArduinoJson.h>
 #include <SPI.h>
 #include <SD_MMC.h>   // SDIO driver — separate peripheral from SPI, no bus conflict
@@ -1965,6 +1966,19 @@ void setup() {
   Serial.begin(115200); delay(150);
   pinMode(LED_PIN, OUTPUT);
 
+  // Redirect mbedTLS heap allocations to PSRAM so TLS handshakes never fail
+  // due to internal SRAM fragmentation (maxBlock ~19KB when WiFi is active).
+  // mbedTLS is pure-software crypto — it needs no DMA, so PSRAM is fine.
+  mbedtls_platform_set_calloc_free(
+    [](size_t n, size_t sz) -> void* {
+      void* p = heap_caps_calloc(n, sz, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+      if (!p) p = calloc(n, sz);
+      return p;
+    },
+    free
+  );
+
+
   // Soft resets leave WiFi DMA rx-buffer pool partially allocated in internal
   // DRAM. Arduino WiFi.disconnect/mode(OFF) is not sufficient to free them —
   // call the raw ESP-IDF teardown so fresh init always gets a clean heap.
@@ -2023,6 +2037,33 @@ void setup() {
   // ── Paired operation — device is always the AP ────────────────────────────
   // Students connect directly to the device hotspot. No school WiFi needed for
   // attendance. School WiFi (if configured) is used only for background sync.
+
+  LOG("DMA heap free:    " + String(heap_caps_get_free_size(MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL)));
+  LOG("DMA largest block:" + String(heap_caps_get_largest_free_block(MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL)));
+
+  // WiFi driver init FIRST with reduced DMA config.
+  // esp_wifi_init() claims WiFi's internal structures (pp_wdev, DMA rings) from
+  // the still-unfragmented heap (~10-15 KB DMA). WiFi.mode/softAP later reuse
+  // these already-allocated structures and do not allocate fresh DMA.
+  // BLE then gets the remaining heap (~45+ KB) with a large contiguous block,
+  // easily satisfying the 4 KB EMI allocation (emi.c:164).
+  // tx_buf_type=1 (WIFI_DYNAMIC_TX_BUFFER) moves TX buffers to 320 KB general
+  // heap; static_rx_buf_num=4 (was 10) saves ~10 KB DMA.
+  {
+    wifi_init_config_t wcfg = WIFI_INIT_CONFIG_DEFAULT();
+    wcfg.static_rx_buf_num  = 4;
+    wcfg.static_tx_buf_num  = 0;
+    wcfg.tx_buf_type        = 1;  // WIFI_DYNAMIC_TX_BUFFER
+    wcfg.dynamic_tx_buf_num = 32;
+    esp_wifi_init(&wcfg);
+  }
+  LOG("Post-WiFi-drv DMA free:  " + String(heap_caps_get_free_size(MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL)));
+  LOG("Post-WiFi-drv DMA block: " + String(heap_caps_get_largest_free_block(MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL)));
+
+  // BLE SECOND — after WiFi driver claimed its DMA, remaining heap still has a
+  // large contiguous block for BLE's 4 KB EMI controller buffer.
+  initBle();
+
   String apName = "Dikly-" + macSuffix();
   WiFi.mode(WIFI_AP);
   WiFi.softAP(apName.c_str());
@@ -2031,7 +2072,6 @@ void setup() {
   do { delay(100); apGw = WiFi.softAPIP(); } while (apGw == IPAddress(0,0,0,0) && millis()-apWait < 5000);
   LOG("Device AP: " + apName + " @ " + apGw.toString());
 
-  // SD after AP — WiFi AP has claimed its DMA buffers; SD gets the remainder.
   SD_MMC.setPins(SD_CLK, SD_CMD, SD_D0, SD_D1, SD_D2, SD_D3);
   sdAvailable = SD_MMC.begin("/sdcard", false, false);
   if (!sdAvailable) {
@@ -2054,9 +2094,6 @@ void setup() {
   } else {
     LOG("SD not found — using 200-slot RAM buffer");
   }
-
-  // BLE after AP — radio coexistence layer is active once AP is up.
-  initBle();
 
   // NTP attempted now; succeeds only if STA connects later in loop().
   // Records use millis-based fallback timestamps until NTP succeeds.
@@ -2138,10 +2175,24 @@ void loop() {
     uint32_t tw = millis();
     while (time(nullptr) < 1000000000UL && millis() - tw < 5000) delay(100);
 
-    // Step 3 — call server
+    // Step 3 — switch to STA-only to free AP heap for mbedTLS SSL context.
+    // AP+STA coexistence leaves maxBlock ~19KB; pure STA raises it above 36KB.
+    dns.stop();
+    localHttp.stop();
+    WiFi.softAPdisconnect(true);
+    WiFi.mode(WIFI_STA);
+    delay(300);
+    LOG("Pre-pair heap free=" + String(ESP.getFreeHeap()) +
+        " maxBlock=" + String(ESP.getMaxAllocHeap()));
     drawPairStatus("Contacting server…", "dikly.sbs", "", 3);
     if (!tryPair(pairPendingCode, pairPendingInst)) {
-      WiFi.disconnect(); WiFi.mode(WIFI_AP);
+      // Restart AP so user can retry
+      WiFi.disconnect();
+      WiFi.mode(WIFI_AP);
+      { String an = "Dikly-" + macSuffix(); WiFi.softAP(an.c_str()); }
+      delay(500);
+      dns.start(53, "*", WiFi.softAPIP());
+      localHttp.begin();
       String errLine = pairErrorMsg.isEmpty() ? "Check institution + pairing code" : pairErrorMsg;
       drawPairStatus("Pairing Failed", errLine.c_str(), "Generate a new code and retry", 0);
       return;
