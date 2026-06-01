@@ -49,6 +49,7 @@ router.post('/devices/assign-group', authenticate, companyIsolation, deviceCtrl.
 router.get('/devices/lecturers-for-assignment', authenticate, companyIsolation, requireRole('admin', 'superadmin', 'hod', 'class_rep'), deviceCtrl.getLecturersForAssignment);
 router.post('/devices/:deviceId/assign-lecturer',  authenticate, companyIsolation, requireRole('admin', 'superadmin', 'hod', 'class_rep'), deviceCtrl.assignLecturer);
 router.delete('/devices/:deviceId/remove-lecturer', authenticate, companyIsolation, requireRole('admin', 'superadmin', 'hod', 'class_rep'), deviceCtrl.removeLecturer);
+router.delete('/devices/:deviceId/remove',          authenticate, companyIsolation, requireRole('admin', 'superadmin', 'hod'), deviceCtrl.removeDevice);
 router.get('/devices/:deviceId/lecturers',          authenticate, companyIsolation, deviceCtrl.getDeviceLecturers);
 
 module.exports = router;

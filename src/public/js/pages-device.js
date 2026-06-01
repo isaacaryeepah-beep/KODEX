@@ -1032,7 +1032,10 @@ async function adLoadDevices() {
               <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
                 <span style="font-size:15px;font-weight:700;color:var(--text-primary)">${d.deviceName}</span>
                 <span style="font-size:12px">${onlineDot}</span>
-                <button onclick="adOpenSetupModal('${d.deviceId}', ${setupData})" title="Setup device" style="margin-left:auto;background:none;border:1px solid #e2e8f0;border-radius:6px;padding:2px 8px;cursor:pointer;font-size:11px;color:#475569;font-weight:600">Setup</button>
+                <div style="margin-left:auto;display:flex;gap:6px">
+                  <button onclick="adOpenSetupModal('${d.deviceId}', ${setupData})" title="Setup device" style="background:none;border:1px solid #e2e8f0;border-radius:6px;padding:2px 8px;cursor:pointer;font-size:11px;color:#475569;font-weight:600">Setup</button>
+                  <button onclick="adRemoveDevice('${d.deviceId}','${d.deviceName}')" title="Remove device" style="background:none;border:1px solid #fecaca;border-radius:6px;padding:2px 8px;cursor:pointer;font-size:11px;color:#dc2626;font-weight:600">Remove</button>
+                </div>
               </div>
               <div style="font-size:12px;color:var(--text-secondary);font-weight:500">${deptLabel}</div>
               <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">
@@ -1259,4 +1262,15 @@ async function adSubmitSetup(deviceId) {
 
   document.getElementById('ad-setup-modal-overlay')?.remove();
   await adLoadDevices();
+}
+
+// ─── REMOVE DEVICE ────────────────────────────────────────────────────────────
+async function adRemoveDevice(deviceId, deviceName) {
+  if (!confirm(`Remove "${deviceName}" from your institution?\n\nThis will unpair the device and delete its JWT. The physical device will reset to setup mode on next boot.`)) return;
+  try {
+    await api(`/api/devices/${deviceId}/remove`, { method: 'DELETE' });
+    await adLoadDevices();
+  } catch (e) {
+    alert('Failed to remove device: ' + e.message);
+  }
 }
