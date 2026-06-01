@@ -16,7 +16,17 @@ const deviceSchema = new mongoose.Schema({
   companyId: { type: mongoose.Schema.Types.ObjectId, ref: 'Company', required: true },
 
   // ── OWNERSHIP ─────────────────────────────────────────────────────────────
+  // Legacy sparse field kept for backward compat (pairing audit only).
   lecturerId:      { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: false, sparse: true },
+
+  // Controlled device-lecturer assignment: each entry binds a lecturer to a
+  // specific course on this device. startSession enforces this list for 'lecturer' role.
+  assignedLecturers: [{
+    lecturerId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+    courseId:   { type: mongoose.Schema.Types.ObjectId, ref: 'Course', required: true },
+    assignedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    assignedAt: { type: Date, default: Date.now },
+  }],
   ownershipType:   { type: String, default: 'dedicated', enum: ['dedicated', 'shared'] },
   isTransferable:  { type: Boolean, default: false },
   classRepId:      { type: mongoose.Schema.Types.ObjectId, ref: 'User' },

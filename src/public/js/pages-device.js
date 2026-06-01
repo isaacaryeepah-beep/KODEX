@@ -1000,29 +1000,156 @@ async function adLoadDevices() {
           const last = d.lastHeartbeat
             ? new Date(d.lastHeartbeat).toLocaleString(undefined, { day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' })
             : 'Never';
-          const room  = [d.assignedLevel && 'Level ' + d.assignedLevel, d.assignedGroup && 'Group ' + d.assignedGroup, d.assignedRoom].filter(Boolean).join(' · ') || '—';
-          const dept  = d.assignedDepartment || '—';
+          const deptLabel = [
+            d.assignedDepartment,
+            d.assignedLevel && 'Level ' + d.assignedLevel,
+            d.assignedGroup && 'Group ' + d.assignedGroup,
+          ].filter(Boolean).join(' · ') || '—';
           const fw    = d.firmwareVersion || '—';
           const ip    = d.localIp || '—';
+
+          // Build lecturer pills
+          const lecturerPills = (d.assignedLecturers || []).map(a => {
+            const lecName  = a.lecturerId?.name  || 'Unknown';
+            const crsName  = a.courseId?.title   || a.courseId?.name || 'Unknown Course';
+            const lecId    = a.lecturerId?._id   || a.lecturerId   || '';
+            const crsId    = a.courseId?._id     || a.courseId     || '';
+            return `<span style="display:inline-flex;align-items:center;gap:4px;background:#ede9fe;color:#5b21b6;border-radius:999px;padding:2px 10px 2px 10px;font-size:11px;font-weight:600;white-space:nowrap">
+              ${lecName} – ${crsName}
+              <button onclick="adRemoveLecturer('${d.deviceId}','${lecId}','${crsId}')" title="Remove" style="background:none;border:none;cursor:pointer;color:#7c3aed;font-size:13px;padding:0 0 0 4px;line-height:1">&times;</button>
+            </span>`;
+          }).join('');
+
           return `
-            <div class="dev-card" style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
-              <div style="flex:1;min-width:0">
-                <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px">
-                  <span style="font-size:15px;font-weight:700;color:var(--text-primary)">${d.deviceName}</span>
-                  <span style="font-size:12px">${onlineDot}</span>
-                </div>
-                <div style="font-size:12px;color:var(--text-secondary);display:flex;flex-wrap:wrap;gap:14px;margin-top:4px">
-                  <span>📍 ${room}</span>
-                  <span>🏛 ${dept}</span>
-                  <span>🌐 ${ip}</span>
-                  <span>⚙ fw ${fw}</span>
-                  <span>🕒 ${last}</span>
-                </div>
+            <div class="dev-card" style="display:flex;flex-direction:column;gap:10px">
+              <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+                <span style="font-size:15px;font-weight:700;color:var(--text-primary)">${d.deviceName}</span>
+                <span style="font-size:12px">${onlineDot}</span>
+              </div>
+              <div style="font-size:12px;color:var(--text-secondary);font-weight:500">${deptLabel}</div>
+              <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">
+                ${lecturerPills || '<span style="font-size:12px;color:var(--text-secondary);font-style:italic">No lecturers assigned</span>'}
+                <button onclick="adOpenAssignModal('${d.deviceId}')" style="display:inline-flex;align-items:center;gap:4px;background:#f1f5f9;border:1px dashed #94a3b8;color:#475569;border-radius:999px;padding:3px 12px;font-size:11px;font-weight:600;cursor:pointer">
+                  + Assign Lecturer
+                </button>
+              </div>
+              <div style="font-size:11px;color:var(--text-secondary);display:flex;flex-wrap:wrap;gap:14px">
+                <span>IP: ${ip}</span>
+                <span>fw: ${fw}</span>
+                <span>${last}</span>
               </div>
             </div>`;
         }).join('')}
       </div>`;
   } catch (e) {
     list.innerHTML = `<div class="dev-card" style="border-left:4px solid var(--danger);font-size:13px;color:var(--danger)">Failed to load devices: ${e.message}</div>`;
+  }
+}
+
+// ─── ASSIGN LECTURER MODAL ────────────────────────────────────────────────────
+async function adOpenAssignModal(deviceId) {
+  // Remove any existing modal
+  const existing = document.getElementById('ad-assign-modal-overlay');
+  if (existing) existing.remove();
+
+  // Inject overlay
+  const overlay = document.createElement('div');
+  overlay.id = 'ad-assign-modal-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9000;display:flex;align-items:center;justify-content:center;padding:16px';
+  overlay.innerHTML = `
+    <div style="background:var(--surface,#fff);border-radius:12px;padding:28px;width:100%;max-width:440px;box-shadow:0 20px 60px rgba(0,0,0,.25);position:relative">
+      <button onclick="document.getElementById('ad-assign-modal-overlay').remove()" style="position:absolute;top:14px;right:14px;background:none;border:none;cursor:pointer;font-size:20px;color:var(--text-secondary)">&times;</button>
+      <div style="font-size:16px;font-weight:700;margin-bottom:4px;color:var(--text-primary)">Assign Lecturer to Device</div>
+      <div style="font-size:12px;color:var(--text-secondary);margin-bottom:20px">Device: <strong>${deviceId}</strong></div>
+
+      <label style="display:block;font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:4px">Lecturer</label>
+      <select id="ad-lec-select" style="width:100%;padding:8px 10px;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;margin-bottom:14px;background:var(--surface,#fff);color:var(--text-primary)">
+        <option value="">Loading lecturers…</option>
+      </select>
+
+      <label style="display:block;font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:4px">Course</label>
+      <select id="ad-crs-select" style="width:100%;padding:8px 10px;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;margin-bottom:20px;background:var(--surface,#fff);color:var(--text-primary)">
+        <option value="">Select a lecturer first</option>
+      </select>
+
+      <div id="ad-assign-err" style="display:none;color:#dc2626;font-size:12px;margin-bottom:10px"></div>
+      <div style="display:flex;gap:10px;justify-content:flex-end">
+        <button onclick="document.getElementById('ad-assign-modal-overlay').remove()" style="padding:8px 18px;border:1px solid #e2e8f0;border-radius:8px;background:none;cursor:pointer;font-size:13px">Cancel</button>
+        <button id="ad-assign-submit" onclick="adSubmitAssign('${deviceId}')" style="padding:8px 18px;border:none;border-radius:8px;background:#6366f1;color:#fff;cursor:pointer;font-size:13px;font-weight:600">Assign</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+
+  // Close on backdrop click
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+
+  // Load lecturers
+  try {
+    const data = await api('/api/devices/lecturers-for-assignment');
+    const lecturers = data.lecturers || [];
+    window._adLecturerData = lecturers;
+
+    const lecSel = document.getElementById('ad-lec-select');
+    lecSel.innerHTML = `<option value="">— Select lecturer —</option>` +
+      lecturers.map(l => `<option value="${l._id}">${l.name}</option>`).join('');
+
+    lecSel.addEventListener('change', () => {
+      const lec = lecturers.find(l => l._id === lecSel.value);
+      const crsSel = document.getElementById('ad-crs-select');
+      if (!lec || !lec.courses || !lec.courses.length) {
+        crsSel.innerHTML = `<option value="">No courses found for this lecturer</option>`;
+        return;
+      }
+      crsSel.innerHTML = `<option value="">— Select course —</option>` +
+        lec.courses.map(c => `<option value="${c._id}">${c.courseCode} – ${c.name}</option>`).join('');
+    });
+  } catch (e) {
+    const lecSel = document.getElementById('ad-lec-select');
+    if (lecSel) lecSel.innerHTML = `<option value="">Failed to load lecturers</option>`;
+  }
+}
+
+async function adSubmitAssign(deviceId) {
+  const lecSel = document.getElementById('ad-lec-select');
+  const crsSel = document.getElementById('ad-crs-select');
+  const errEl  = document.getElementById('ad-assign-err');
+  const btn    = document.getElementById('ad-assign-submit');
+
+  const lecturerId = lecSel?.value;
+  const courseId   = crsSel?.value;
+
+  if (!lecturerId || !courseId) {
+    if (errEl) { errEl.textContent = 'Please select both a lecturer and a course.'; errEl.style.display = 'block'; }
+    return;
+  }
+
+  if (btn) { btn.disabled = true; btn.textContent = 'Assigning…'; }
+  if (errEl) errEl.style.display = 'none';
+
+  try {
+    await api(`/api/devices/${deviceId}/assign-lecturer`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ lecturerId, courseId }),
+    });
+    document.getElementById('ad-assign-modal-overlay')?.remove();
+    await adLoadDevices();
+  } catch (e) {
+    if (errEl) { errEl.textContent = e.message || 'Failed to assign lecturer.'; errEl.style.display = 'block'; }
+    if (btn) { btn.disabled = false; btn.textContent = 'Assign'; }
+  }
+}
+
+async function adRemoveLecturer(deviceId, lecturerId, courseId) {
+  if (!confirm('Remove this lecturer from the device?')) return;
+  try {
+    await api(`/api/devices/${deviceId}/remove-lecturer`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ lecturerId, courseId }),
+    });
+    await adLoadDevices();
+  } catch (e) {
+    alert('Failed to remove lecturer: ' + (e.message || 'Server error'));
   }
 }
