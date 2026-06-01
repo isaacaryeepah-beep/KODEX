@@ -524,17 +524,23 @@ static void factoryReset() {
 // ─── HTTP helpers ─────────────────────────────────────────────────────────────
 static int postJson(const String& path, const String& body,
                     String& out, bool authed = true) {
+  LOG("postJson heap free=" + String(ESP.getFreeHeap()) +
+      " maxBlock=" + String(ESP.getMaxAllocHeap()) +
+      " psram=" + String(ESP.getFreePsram()));
   WiFiClientSecure client; client.setInsecure();
-  client.setTimeout(30);  // 30s SSL handshake timeout
+  client.setTimeout(30);
   HTTPClient http;
   String url = apiBase + path;
-  if (!http.begin(client, url)) return -1;
+  LOG("postJson → " + url);
+  if (!http.begin(client, url)) { LOG("http.begin failed"); return -1; }
   http.addHeader("Content-Type", "application/json");
   http.addHeader("Connection", "close");
   if (authed && !deviceJWT.isEmpty())
     http.addHeader("Authorization", "Bearer " + deviceJWT);
   http.setTimeout(30000);
-  int code = http.POST(body); out = http.getString(); http.end();
+  int code = http.POST(body);
+  LOG("postJson HTTP " + String(code));
+  out = http.getString(); http.end();
   return code;
 }
 
