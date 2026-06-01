@@ -60,7 +60,7 @@ public:
       cfg.pin_mosi    = 11;
       cfg.pin_miso    = 13;
       cfg.pin_dc      = 46;
-      cfg.dma_channel = SPI_DMA_CH_AUTO;
+      cfg.dma_channel = 0;            // no SPI DMA — frees ~4 KB DMA SRAM for WiFi
       _bus.config(cfg); _panel.setBus(&_bus); }
     { auto cfg = _panel.config();
       cfg.pin_cs      = 10;
@@ -1910,6 +1910,8 @@ void setup() {
   // the full DMA-capable SRAM available for WiFi's rx-buffer pool.
   if (deviceJWT.isEmpty() || wifiSSID.isEmpty()) {
     LOG("Entering setup AP mode");
+    LOG("DMA heap free:    " + String(heap_caps_get_free_size(MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL)));
+    LOG("DMA largest block:" + String(heap_caps_get_largest_free_block(MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL)));
     esp_bt_controller_mem_release(ESP_BT_MODE_BLE);
     startApPortal();
     return;
