@@ -884,6 +884,36 @@ static void drawSplash() {
   spr.pushSprite(0, 0);
 }
 
+// ── QR code bitmap for http://192.168.4.1 (25×25 modules) ───────────────────
+static const uint8_t QR_IP_SIZE = 25;
+static const uint8_t QR_IP[25][25] = {
+  {1,1,1,1,1,1,1,0,0,1,1,1,0,1,0,0,1,0,1,1,1,1,1,1,1},
+  {1,0,0,0,0,0,1,0,0,0,0,1,1,0,0,0,0,0,1,0,0,0,0,0,1},
+  {1,0,1,1,1,0,1,0,0,1,1,1,0,0,1,0,1,0,1,0,1,1,1,0,1},
+  {1,0,1,1,1,0,1,0,1,0,1,1,0,0,1,1,1,0,1,0,1,1,1,0,1},
+  {1,0,1,1,1,0,1,0,1,0,1,0,1,1,0,0,0,0,1,0,1,1,1,0,1},
+  {1,0,0,0,0,0,1,0,0,1,1,0,0,1,1,0,0,0,1,0,0,0,0,0,1},
+  {1,1,1,1,1,1,1,0,1,0,1,0,1,0,1,0,1,0,1,1,1,1,1,1,1},
+  {0,0,0,0,0,0,0,0,0,1,0,0,1,1,0,0,1,0,0,0,0,0,0,0,0},
+  {1,1,0,0,0,1,1,1,0,1,1,0,1,0,1,1,1,0,0,0,1,1,0,0,0},
+  {0,0,1,0,0,0,0,1,1,0,1,0,0,0,1,1,1,1,0,0,1,1,1,1,0},
+  {0,1,0,0,0,1,1,0,1,1,0,1,1,0,0,1,0,0,1,1,0,1,0,1,1},
+  {0,1,1,0,1,0,0,0,1,0,1,1,0,0,1,1,1,0,0,0,1,1,0,0,1},
+  {1,1,1,0,0,1,1,0,0,1,1,0,0,1,1,0,1,1,1,0,0,0,0,0,1},
+  {1,0,1,0,0,0,0,0,0,0,1,0,1,1,1,1,0,0,0,0,0,0,0,1,0},
+  {1,0,0,1,1,1,1,0,0,1,1,0,0,1,1,1,0,1,0,1,0,1,0,1,1},
+  {1,0,0,1,1,1,0,1,1,0,0,0,1,1,1,0,1,0,0,0,1,0,1,0,1},
+  {1,0,1,0,1,1,1,1,0,0,1,0,1,0,1,0,1,1,1,1,1,0,1,0,0},
+  {0,0,0,0,0,0,0,0,1,1,1,0,0,0,0,1,1,0,0,0,1,0,1,0,0},
+  {1,1,1,1,1,1,1,0,1,1,1,0,1,1,1,0,1,0,1,0,1,1,0,0,1},
+  {1,0,0,0,0,0,1,0,1,1,1,1,0,0,1,0,1,0,0,0,1,0,0,0,0},
+  {1,0,1,1,1,0,1,0,0,1,0,1,0,0,0,1,1,1,1,1,1,1,1,0,1},
+  {1,0,1,1,1,0,1,0,0,0,1,0,1,1,0,0,0,0,1,1,0,1,0,1,1},
+  {1,0,1,1,1,0,1,0,0,0,1,0,0,1,1,0,0,1,0,0,0,0,1,0,1},
+  {1,0,0,0,0,0,1,0,1,0,1,0,1,1,0,1,1,0,1,1,1,0,0,0,1},
+  {1,1,1,1,1,1,1,0,1,0,0,1,1,1,0,1,1,0,1,0,0,1,0,0,1},
+};
+
 // ── SETUP (captive portal) ────────────────────────────────────────────────────
 static void drawSetup(const String& apName) {
   spr.fillSprite(COL_BG);
@@ -958,7 +988,43 @@ static void drawSetup(const String& apName) {
   };
 
   stepCard(1, "Connect phone to Wi-Fi:", F_SMALL, apName.c_str(), nullptr, nullptr, 40);
-  stepCard(2, "Open in your browser:",   F_SMALL, "192.168.4.1", nullptr, nullptr, 40);
+
+  // Step 2 — wider card so QR code fits on the right
+  {
+    const int32_t card2H  = 90;
+    const int32_t card2Top = cy;
+    spr.fillRoundRect(CX, cy, CW, card2H, 8, GLASS);
+    // Step circle
+    const int32_t bx = CX + 18, by = cy + card2H / 2;
+    spr.fillCircle(bx, by, 8, COL_BG);
+    spr.drawCircle(bx, by, 8, CYAN);
+    spr.setFont(F_TINY); spr.setTextColor(CYAN, COL_BG);
+    spr.setCursor(bx - 3, by - 4); spr.print("2");
+    // Text (left of QR)
+    const int32_t tx = CX + 34;
+    spr.setFont(F_TINY); spr.setTextColor(COL_MUTED, GLASS);
+    spr.setCursor(tx, cy + 8); spr.print("Scan QR or open:");
+    spr.setFont(F_TINY); spr.setTextColor(CYAN, GLASS);
+    spr.setCursor(tx, cy + 22); spr.print("192.168.4.1");
+    spr.setFont(F_TINY); spr.setTextColor(COL_MUTED, GLASS);
+    spr.setCursor(tx, cy + 36); spr.print("in your browser");
+    // QR code — right side, white background
+    const int32_t QR_SCALE = 3;
+    const int32_t QR_PX    = QR_IP_SIZE * QR_SCALE; // 75px
+    const int32_t qrX      = CX + CW - QR_PX - 6;
+    const int32_t qrY      = card2Top + (card2H - QR_PX) / 2;
+    spr.fillRect(qrX - 2, qrY - 2, QR_PX + 4, QR_PX + 4, 0xFFFF);
+    for (int qy = 0; qy < QR_IP_SIZE; qy++) {
+      for (int qx = 0; qx < QR_IP_SIZE; qx++) {
+        if (QR_IP[qy][qx]) {
+          spr.fillRect(qrX + qx * QR_SCALE, qrY + qy * QR_SCALE,
+                       QR_SCALE, QR_SCALE, 0x0000);
+        }
+      }
+    }
+    cy += card2H + CG;
+  }
+
   stepCard(3, "Enter your details:",     F_TINY,
            "Institution code +", "pairing code",
            "then your school Wi-Fi", 54);
