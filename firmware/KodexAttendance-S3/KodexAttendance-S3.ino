@@ -206,7 +206,9 @@ String wifiSSID, wifiPass, deviceId, deviceJWT, apiBase, institutionCode;
 String   sessionId, sessionTitle, sessionSeed, sessionCourse, sessionLecturer;
 uint32_t sessionStartedAt = 0;
 uint32_t sessionDuration  = 300;
-uint32_t studentsMarked   = 0;
+uint32_t studentsMarked       = 0;
+uint32_t sessionTotalEnrolled = 0;   // parsed from heartbeat totalEnrolled
+uint32_t lastSyncMs           = 0;   // millis() at last successful heartbeat
 
 // ─── Session summary (saved on session end) ──────────────────────────────────
 uint32_t summaryTotal   = 0;
@@ -680,7 +682,8 @@ static void sendHeartbeat() {
     if (++hbFails >= 5) { hbFails = 0; forceReconn = true; }
     return;
   }
-  hbFails = 0;
+  hbFails    = 0;
+  lastSyncMs = millis();
   // Flush any offline attendance records now that we have internet.
   syncOfflineAttendance();
   JsonDocument doc;
@@ -696,7 +699,7 @@ static void sendHeartbeat() {
     if (!sessionId.isEmpty()) {
       LOG("Session ended"); sessionId = ""; sessionSeed = "";
       sessionTitle = ""; sessionCourse = ""; sessionLecturer = "";
-      studentsMarked = 0;
+      studentsMarked = 0; sessionTotalEnrolled = 0;
       dedupClear("");
     }
   } else {
@@ -708,7 +711,8 @@ static void sendHeartbeat() {
     sessionCourse   = sess["courseCode"]| "";
     sessionLecturer = sess["lecturer"]  | "";
     sessionDuration = sess["durationSeconds"] | 300;
-    studentsMarked  = sess["studentsMarked"]  | 0;
+    studentsMarked        = sess["studentsMarked"]  | 0;
+    sessionTotalEnrolled  = sess["totalEnrolled"]   | 0;
     if (sess["startedAt"].is<const char*>()) {
       struct tm tm = {};
       if (strptime(sess["startedAt"].as<const char*>(), "%Y-%m-%dT%H:%M:%S", &tm))
@@ -752,6 +756,57 @@ static void drawHeader(LGFX_Sprite& s, bool online) {
   String lbl = online ? "Online" : "Offline";
   int32_t lw = s.textWidth(lbl);
   s.setCursor(SW - 18 - 12 - lw, 16); s.print(lbl);
+}
+
+// ── Utility: 3-bar WiFi signal icon, right-edge at (rx,ty), 10px tall ────────
+static void _wifiBars(LGFX_Sprite& s, int32_t rx, int32_t ty, uint16_t col) {
+  s.fillRect(rx - 7, ty + 6, 2, 4, col);
+  s.fillRect(rx - 4, ty + 3, 2, 7, col);
+  s.fillRect(rx - 1, ty,     2, 10, col);
+}
+
+// ── Utility: bottom tab bar — active: 0=Home 1=Session 2=Records 3=Settings ──
+static void drawTabBar(LGFX_Sprite& s, uint8_t active) {
+  s.fillRect(0, 280, SW, 40, COL_CARD);
+  s.fillRect(0, 280, SW,  1, COL_BORDER);
+
+  const char* labels[4] = { "Home", "Session", "Records", "Settings" };
+  for (uint8_t i = 0; i < 4; i++) {
+    int32_t cx  = 30 + (int32_t)i * 60;
+    uint16_t col = (i == active) ? COL_PRIMARY : COL_MUTED;
+
+    if (i == active)
+      s.fillRect(cx - 18, 280, 36, 2, COL_PRIMARY);  // active indicator bar
+
+    int32_t iy = 293;
+    if (i == 0) {                          // House
+      s.fillTriangle(cx, iy - 7, cx - 7, iy, cx + 7, iy, col);
+      s.fillRect(cx - 5, iy, 10, 7, col);
+      s.fillRect(cx - 2, iy + 3, 4, 4, COL_CARD);
+    } else if (i == 1) {                   // Calendar
+      s.drawRoundRect(cx - 6, iy - 5, 13, 12, 2, col);
+      s.fillRect(cx - 2, iy - 9, 2, 5, col);
+      s.fillRect(cx + 2, iy - 9, 2, 5, col);
+      s.fillRect(cx - 4, iy - 1, 9, 1, col);
+      s.fillRect(cx - 3, iy + 2, 2, 2, col);
+      s.fillRect(cx + 2, iy + 2, 2, 2, col);
+    } else if (i == 2) {                   // List / Records
+      s.fillRect(cx - 7, iy - 5, 14, 2, col);
+      s.fillRect(cx - 7, iy,     14, 2, col);
+      s.fillRect(cx - 7, iy + 5, 10, 2, col);
+    } else {                               // Gear / Settings
+      s.fillCircle(cx, iy, 5, col);
+      s.fillCircle(cx, iy, 2, COL_CARD);
+      s.fillRect(cx - 1, iy - 8, 2, 4, col);
+      s.fillRect(cx - 1, iy + 4, 2, 4, col);
+      s.fillRect(cx - 8, iy - 1, 4, 2, col);
+      s.fillRect(cx + 4, iy - 1, 4, 2, col);
+    }
+
+    s.setFont(F_TINY); s.setTextColor(col, COL_CARD);
+    int32_t lw = s.textWidth(labels[i]);
+    s.setCursor(cx - lw / 2, 307); s.print(labels[i]);
+  }
 }
 
 // ── Utility: sub-screen header — back arrow + centred title + online dot ──────
