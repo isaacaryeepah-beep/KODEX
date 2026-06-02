@@ -6,6 +6,41 @@ const API = window.location.hostname === 'localhost' || window.location.hostname
   ? ''
   : window.location.origin;
 
+// Lazy script loader — returns a Promise that resolves when the script is ready.
+// Calling it twice for the same URL is a no-op (resolved immediately on 2nd call).
+const _loadedScripts = new Set();
+function _loadScript(src) {
+  if (_loadedScripts.has(src)) return Promise.resolve();
+  return new Promise((resolve, reject) => {
+    const el = document.createElement('script');
+    el.src = src;
+    el.onload  = () => { _loadedScripts.add(src); resolve(); };
+    el.onerror = () => reject(new Error('Script load failed: ' + src));
+    document.head.appendChild(el);
+  });
+}
+// Role → scripts that should be preloaded right after login so first navigation is instant.
+const _ROLE_SCRIPTS = {
+  student:    ['/js/pages-academic.js'],
+  lecturer:   ['/js/pages-academic.js'],
+  admin:      ['/js/pages-academic.js', '/js/pages-device.js', '/js/pages-corporate.js'],
+  manager:    ['/js/manager-portal.js', '/js/pages-corporate.js'],
+  hod:        ['/js/manager-portal.js', '/js/pages-academic.js'],
+  employee:   ['/js/pages-corporate.js'],
+  superadmin: ['/js/manager-portal.js', '/js/pages-corporate.js'],
+};
+function _preloadForRole(role) {
+  const scripts = _ROLE_SCRIPTS[role] || [];
+  scripts.forEach(src => _loadScript(src).catch(() => {}));
+}
+// Lazy-aware _safeRender: ensures `scriptSrc` is loaded before calling fn.
+// If the script is already loaded (preloaded for the role), resolves instantly.
+function _lazyRender(content, scriptSrc, fn, label) {
+  _loadScript(scriptSrc)
+    .catch(() => {}) // if CDN/network blip, try calling fn anyway
+    .then(() => _safeRender(content, fn, label));
+}
+
 // Opens external URLs in system browser. Uses Capacitor Browser plugin when
 // running inside the native app so the in-app WebView is not navigated away.
 async function openUrl(url, forceExternal = false) {
@@ -2845,7 +2880,7 @@ function navigateTo(view) {
   switch (view) {
     case 'dashboard': renderDashboard(); break;
     case 'sessions': renderSessions(); break;
-    case 'attendance-device': _safeRender(content, renderAttendanceDevice, 'Attendance Device'); break;
+    case 'attendance-device': _lazyRender(content, '/js/pages-device.js', renderAttendanceDevice, 'Attendance Device'); break;
     case 'users': renderUsers(); break;
     case 'meetings': renderMeetings(); break;
     case 'courses': renderCourses(); break;
@@ -2874,21 +2909,21 @@ function navigateTo(view) {
     case 'profile':     renderProfile(); break;
     case 'contact':     renderContact(); break;
     case 'about':       renderAbout(); break;
-    case 'superadmin-platform': renderSuperadminDashboard(document.getElementById('main-content')); break;
-    case 'hod-overview':         renderHodDashboard(); break;
-    case 'hod-courses':          renderHodCourses(); break;
-    case 'hod-sessions':         renderHodSessions(); break;
-    case 'hod-lecturers':        renderHodLecturers(); break;
-    case 'hod-students':         renderHodStudents(); break;
-    case 'hod-reports':          renderHodReports(); break;
+    case 'superadmin-platform': _loadScript('/js/manager-portal.js').then(() => renderSuperadminDashboard(document.getElementById('main-content'))).catch(() => {}); break;
+    case 'hod-overview':         _loadScript('/js/manager-portal.js').then(() => renderHodDashboard()).catch(() => {}); break;
+    case 'hod-courses':          _loadScript('/js/manager-portal.js').then(() => renderHodCourses()).catch(() => {}); break;
+    case 'hod-sessions':         _loadScript('/js/manager-portal.js').then(() => renderHodSessions()).catch(() => {}); break;
+    case 'hod-lecturers':        _loadScript('/js/manager-portal.js').then(() => renderHodLecturers()).catch(() => {}); break;
+    case 'hod-students':         _loadScript('/js/manager-portal.js').then(() => renderHodStudents()).catch(() => {}); break;
+    case 'hod-reports':          _loadScript('/js/manager-portal.js').then(() => renderHodReports()).catch(() => {}); break;
 
-    case 'admin-devices':        renderAdminDevices(); break;
-    case 'hod-course-approvals': renderHodCourseApprovals(); break;
-    case 'hod-unlock-students':  renderHodUnlockStudents(); break;
+    case 'admin-devices':        _loadScript('/js/pages-device.js').then(() => renderAdminDevices()).catch(() => {}); break;
+    case 'hod-course-approvals': _loadScript('/js/manager-portal.js').then(() => renderHodCourseApprovals()).catch(() => {}); break;
+    case 'hod-unlock-students':  _loadScript('/js/manager-portal.js').then(() => renderHodUnlockStudents()).catch(() => {}); break;
     case 'class-rep-mgmt':       renderClassRepMgmt(); break;
-    case 'hod-performance':      renderHodPerformance(); break;
-    case 'hod-alerts':           renderHodAlerts(); break;
-    case 'hod-messaging':        renderHodMessaging(); break;
+    case 'hod-performance':      _loadScript('/js/manager-portal.js').then(() => renderHodPerformance()).catch(() => {}); break;
+    case 'hod-alerts':           _loadScript('/js/manager-portal.js').then(() => renderHodAlerts()).catch(() => {}); break;
+    case 'hod-messaging':        _loadScript('/js/manager-portal.js').then(() => renderHodMessaging()).catch(() => {}); break;
     case 'announcements': renderAnnouncements(); break;
     case 'gradebook': renderGradeBook(); break;
     case 'training':       renderTraining(); break;
@@ -2911,18 +2946,18 @@ function navigateTo(view) {
     case 'assets':         renderAssets(); break;
     case 'my-assets':      renderMyAssets(); break;
     case 'messages':      renderMessages(); break;
-    case 'faq-center':    _safeRender(content, renderFAQCenter,    'FAQ Center');    break;
-    case 'support':       _safeRender(content, renderSupport,      'Support');       break;
-    case 'payroll':       _safeRender(content, renderPayroll,      'Payroll');       break;
-    case 'audit-logs':    _safeRender(content, renderAuditLogs,    'Audit Logs');    break;
-    case 'programmes':    _safeRender(content, renderProgrammes,   'Programmes');    break;
-    case 'calendar-events': _safeRender(content, renderCalendarEvents, 'Calendar'); break;
-    case 'forums':        _safeRender(content, renderForums,       'Forums');        break;
-    case 'badges':        _safeRender(content, renderBadges,       'Badges');        break;
-    case 'transcripts':   _safeRender(content, renderTranscripts,  'Transcripts');   break;
-    case 'evaluations':   _safeRender(content, renderEvaluations,  'Evaluations');   break;
-    case 'live-attendance': _safeRender(content, renderLiveAttendance, 'Live Attendance'); break;
-    case 'branches':        _safeRender(content, renderBranches,       'Branches');        break;
+    case 'faq-center':      _lazyRender(content, '/js/pages-faq.js',       renderFAQCenter,      'FAQ Center');      break;
+    case 'support':         _lazyRender(content, '/js/pages-faq.js',       renderSupport,        'Support');         break;
+    case 'payroll':         _lazyRender(content, '/js/pages-corporate.js', renderPayroll,        'Payroll');         break;
+    case 'audit-logs':      _lazyRender(content, '/js/pages-corporate.js', renderAuditLogs,      'Audit Logs');      break;
+    case 'programmes':      _lazyRender(content, '/js/pages-corporate.js', renderProgrammes,     'Programmes');      break;
+    case 'calendar-events': _lazyRender(content, '/js/pages-academic.js',  renderCalendarEvents, 'Calendar');        break;
+    case 'forums':          _lazyRender(content, '/js/pages-academic.js',  renderForums,         'Forums');          break;
+    case 'badges':          _lazyRender(content, '/js/pages-academic.js',  renderBadges,         'Badges');          break;
+    case 'transcripts':     _lazyRender(content, '/js/pages-academic.js',  renderTranscripts,    'Transcripts');     break;
+    case 'evaluations':     _lazyRender(content, '/js/pages-academic.js',  renderEvaluations,    'Evaluations');     break;
+    case 'live-attendance': _lazyRender(content, '/js/manager-portal.js',  renderLiveAttendance, 'Live Attendance'); break;
+    case 'branches':        _lazyRender(content, '/js/manager-portal.js',  renderBranches,       'Branches');        break;
     case 'my-profile':      renderProfile(); break;
     case 'class-device':         renderClassDevice(); break;
     case 'class-announcements':  renderClassAnnouncements(); break;
@@ -2954,6 +2989,7 @@ async function renderDashboard() {
   const content = document.getElementById('main-content');
   if (!content) return;
   const role = currentUser.role;
+  _preloadForRole(role);
 
   // Clear immediately so stale content from a previous role never flashes
   content.innerHTML = `<div class="dashboard-skeleton">
@@ -2968,6 +3004,8 @@ async function renderDashboard() {
   </div>`;
 
   try {
+    const roleScripts = _ROLE_SCRIPTS[role] || [];
+    await Promise.all(roleScripts.map(s => _loadScript(s).catch(() => {})));
     switch (role) {
       case 'admin':
         await renderAdminDashboard(content);
