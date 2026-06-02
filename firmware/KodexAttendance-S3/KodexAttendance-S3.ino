@@ -208,6 +208,13 @@ uint32_t sessionStartedAt = 0;
 uint32_t sessionDuration  = 300;
 uint32_t studentsMarked   = 0;
 
+// ─── Session summary (saved on session end) ──────────────────────────────────
+uint32_t summaryTotal   = 0;
+uint32_t summaryPresent = 0;
+float    summaryPct     = 0.0f;
+String   summaryCourse  = "";
+uint8_t  curBrightness  = 255;   // display backlight (0-255)
+
 uint32_t lastHbMs    = 0;
 uint8_t  hbFails     = 0;
 bool     timeSynced  = false;
@@ -223,7 +230,7 @@ String   pairPendingInst = "";
 String   pairPendingCode = "";
 
 // Screen state machine
-enum Screen { SPLASH, SETUP, WIFI_SCAN, WIFI_RECONFIG, CONNECTING, READY, SESSION };
+enum Screen { SPLASH, SETUP, WIFI_SCAN, WIFI_RECONFIG, CONNECTING, READY, SESSION, SUMMARY, SETTINGS, DEVICE_INFO, PAIR_SCREEN };
 Screen curScreen = SPLASH;
 String statusMsg = "";
 uint32_t splashStart = 0;
@@ -745,6 +752,22 @@ static void drawHeader(LGFX_Sprite& s, bool online) {
   String lbl = online ? "Online" : "Offline";
   int32_t lw = s.textWidth(lbl);
   s.setCursor(SW - 18 - 12 - lw, 16); s.print(lbl);
+}
+
+// ── Utility: sub-screen header — back arrow + centred title + online dot ──────
+static void _drawSubHeader(LGFX_Sprite& s, const char* title, bool online) {
+  s.fillRect(0, 0, SW, 44, COL_CARD);
+  s.fillRect(0, 44, SW, 2, COL_PRIMARY);
+  // Back arrow (left-pointing chevron)
+  s.fillTriangle(14, 22, 26, 13, 26, 31, COL_TEXT);
+  s.fillRect(26, 18, 6, 8, COL_TEXT);
+  // Centred title
+  s.setFont(F_SMALL); s.setTextColor(COL_TEXT, COL_CARD);
+  int32_t tw = s.textWidth(title);
+  s.setCursor((SW - tw) / 2, 15); s.print(title);
+  // Online dot (right side)
+  uint16_t dc = online ? COL_SUCCESS : COL_MUTED;
+  s.fillCircle(SW - 16, 22, 5, dc);
 }
 
 // ── SPLASH / WELCOME ─────────────────────────────────────────────────────────
@@ -1515,6 +1538,226 @@ static void drawSession(const String& code, uint32_t secsLeft, uint32_t secsTota
   spr.pushSprite(0, 0);
 }
 
+// ── PAIR LECTURER — Screen 2 (hotspot connection info + spinner) ──────────────
+static void drawPairScreen() {
+  spr.fillSprite(COL_BG);
+  bool online = (WiFi.status() == WL_CONNECTED);
+  _drawSubHeader(spr, "Pair Lecturer", online);
+
+  String apName = "Dikly-" + macSuffix();
+
+  // Connection info card
+  card(spr, 10, 56, SW - 20, 76, COL_CARD, COL_BORDER, 12);
+  spr.setFont(F_TINY); spr.setTextColor(COL_MUTED, COL_CARD);
+  spr.setCursor(20, 62); spr.print("Connect phone to hotspot:");
+  spr.setFont(F_SMALL); spr.setTextColor(COL_PRIMARY, COL_CARD);
+  spr.setCursor(20, 78); spr.print(apName);
+  spr.setFont(F_TINY); spr.setTextColor(COL_MUTED, COL_CARD);
+  spr.setCursor(20, 99); spr.print("Open network — no password");
+  spr.setCursor(20, 113); spr.print("Then open: 192.168.4.1");
+
+  // Device ID card
+  card(spr, 10, 138, SW - 20, 38, COL_CARD, COL_BORDER, 10);
+  spr.setFont(F_TINY); spr.setTextColor(COL_MUTED, COL_CARD);
+  spr.setCursor(20, 144); spr.print("Device ID");
+  spr.setFont(F_SMALL); spr.setTextColor(COL_TEXT, COL_CARD);
+  spr.setCursor(20, 158); spr.print(apName);
+
+  // Waiting for connection — animated spinner card
+  static uint8_t pairSpin = 0; pairSpin = (pairSpin + 1) % 8;
+  const char* sf[8] = { "|", "/", "-", "\\", "|", "/", "-", "\\" };
+  card(spr, 10, 182, SW - 20, 48, COL_CARD, COL_BORDER, 10);
+  spr.setFont(F_MED); spr.setTextColor(COL_PRIMARY, COL_CARD);
+  spr.setCursor(22, 194); spr.print(sf[pairSpin]);
+  spr.setFont(F_TINY); spr.setTextColor(COL_MUTED, COL_CARD);
+  spr.setCursor(48, 190); spr.print("Waiting for connection...");
+  spr.setCursor(48, 205); spr.print("Device is active as hotspot");
+
+  if (!institutionCode.isEmpty()) {
+    spr.setFont(F_TINY); spr.setTextColor(COL_MUTED, COL_BG);
+    String instLbl = "Institution: " + institutionCode;
+    int32_t lw2 = spr.textWidth(instLbl);
+    spr.setCursor((SW - lw2) / 2, 240); spr.print(instLbl);
+  }
+
+  drawTabBar(spr, 0);
+  spr.pushSprite(0, 0);
+}
+
+// ── ATTENDANCE SUMMARY — Screen 4 ─────────────────────────────────────────────
+static void drawSummary() {
+  spr.fillSprite(COL_BG);
+  bool online = (WiFi.status() == WL_CONNECTED);
+  _drawSubHeader(spr, "Session Summary", online);
+
+  int32_t gW = (SW - 28) / 2;  // ~106 px per cell
+
+  // Row 1: Total Students | Present
+  card(spr, 10, 58, gW, 64, COL_CARD, COL_BORDER, 10);
+  spr.setFont(F_TINY); spr.setTextColor(COL_MUTED, COL_CARD);
+  int32_t tw2 = spr.textWidth("Total Students");
+  spr.setCursor(10 + (gW - tw2) / 2, 64); spr.print("Total Students");
+  spr.setFont(F_MED); spr.setTextColor(COL_TEXT, COL_CARD);
+  String totStr = String(summaryTotal);
+  tw2 = spr.textWidth(totStr);
+  spr.setCursor(10 + (gW - tw2) / 2, 84); spr.print(totStr);
+
+  card(spr, 10 + gW + 8, 58, gW, 64, COL_CARD, COL_BORDER, 10);
+  spr.setFont(F_TINY); spr.setTextColor(COL_MUTED, COL_CARD);
+  tw2 = spr.textWidth("Present");
+  spr.setCursor(10 + gW + 8 + (gW - tw2) / 2, 64); spr.print("Present");
+  spr.setFont(F_MED); spr.setTextColor(COL_SUCCESS, COL_CARD);
+  String presStr = String(summaryPresent);
+  tw2 = spr.textWidth(presStr);
+  spr.setCursor(10 + gW + 8 + (gW - tw2) / 2, 84); spr.print(presStr);
+
+  // Row 2: Absent | Percentage
+  uint32_t absentNum = (summaryTotal > summaryPresent) ? summaryTotal - summaryPresent : 0;
+  card(spr, 10, 128, gW, 64, COL_CARD, COL_BORDER, 10);
+  spr.setFont(F_TINY); spr.setTextColor(COL_MUTED, COL_CARD);
+  tw2 = spr.textWidth("Absent");
+  spr.setCursor(10 + (gW - tw2) / 2, 134); spr.print("Absent");
+  spr.setFont(F_MED); spr.setTextColor(COL_ERROR, COL_CARD);
+  String absStr = String(absentNum);
+  tw2 = spr.textWidth(absStr);
+  spr.setCursor(10 + (gW - tw2) / 2, 154); spr.print(absStr);
+
+  card(spr, 10 + gW + 8, 128, gW, 64, COL_CARD, COL_BORDER, 10);
+  spr.setFont(F_TINY); spr.setTextColor(COL_MUTED, COL_CARD);
+  tw2 = spr.textWidth("Percentage");
+  spr.setCursor(10 + gW + 8 + (gW - tw2) / 2, 134); spr.print("Percentage");
+  spr.setFont(F_MED); spr.setTextColor(COL_PRIMARY, COL_CARD);
+  char pctBuf[8]; snprintf(pctBuf, sizeof(pctBuf), "%.0f%%", summaryPct);
+  tw2 = spr.textWidth(pctBuf);
+  spr.setCursor(10 + gW + 8 + (gW - tw2) / 2, 154); spr.print(pctBuf);
+
+  // Action: View Attendance List
+  card(spr, 10, 200, SW - 20, 34, COL_CARD, COL_BORDER, 8);
+  spr.setFont(F_TINY); spr.setTextColor(COL_TEXT, COL_CARD);
+  spr.setCursor(18, 208); spr.print("View Attendance List");
+  spr.setTextColor(COL_MUTED, COL_CARD);
+  String cLbl = summaryCourse.isEmpty() ? "Session complete" : summaryCourse;
+  spr.setCursor(18, 221); spr.print(cLbl);
+  spr.setFont(F_SMALL); spr.setTextColor(COL_MUTED, COL_CARD);
+  spr.setCursor(SW - 22, 212); spr.print(">");
+
+  // Action: Export Report (SD card)
+  card(spr, 10, 240, SW - 20, 30, COL_CARD, COL_BORDER, 8);
+  spr.drawRoundRect(18, 246, 8, 12, 2, sdAvailable ? COL_SUCCESS : COL_MUTED);
+  spr.fillRect(21, 244, 3, 3, COL_CARD);  // notch
+  spr.setFont(F_TINY); spr.setTextColor(COL_TEXT, COL_CARD);
+  spr.setCursor(32, 246); spr.print("Export Report");
+  spr.setTextColor(sdAvailable ? COL_SUCCESS : COL_MUTED, COL_CARD);
+  spr.setCursor(32, 259); spr.print(sdAvailable ? "SD card ready" : "No SD card");
+  spr.setFont(F_SMALL); spr.setTextColor(COL_MUTED, COL_CARD);
+  spr.setCursor(SW - 22, 252); spr.print(">");
+
+  drawTabBar(spr, 2);  // Records tab active
+  spr.pushSprite(0, 0);
+}
+
+// ── SETTINGS — Screen 5 ───────────────────────────────────────────────────────
+static void drawSettings() {
+  spr.fillSprite(COL_BG);
+  bool online = (WiFi.status() == WL_CONNECTED);
+  _drawSubHeader(spr, "Settings", online);
+
+  const int32_t ROW_H = 40;
+
+  auto settRow = [&](int32_t idx, uint16_t iconCol, const char* iconTxt,
+                     const char* label, const char* value, uint16_t valCol, bool danger) {
+    int32_t y = 58 + idx * ROW_H;
+    spr.fillRect(0, y, SW, ROW_H, COL_BG);
+    spr.fillRect(14, y + ROW_H - 1, SW - 28, 1, COL_BORDER);
+    spr.fillCircle(26, y + 20, 11, danger ? 0x2000U : (uint32_t)COL_CARD);
+    spr.drawCircle(26, y + 20, 11, danger ? COL_ERROR : COL_BORDER);
+    spr.setFont(F_TINY); spr.setTextColor(iconCol, danger ? 0x2000U : (uint32_t)COL_CARD);
+    int32_t iw = spr.textWidth(iconTxt);
+    spr.setCursor(26 - iw / 2, y + 16); spr.print(iconTxt);
+    spr.setFont(F_TINY); spr.setTextColor(danger ? COL_ERROR : COL_TEXT, COL_BG);
+    spr.setCursor(46, y + 10); spr.print(label);
+    if (value && value[0]) {
+      spr.setTextColor(valCol, COL_BG);
+      spr.setCursor(46, y + 24); spr.print(value);
+    }
+    spr.setTextColor(COL_MUTED, COL_BG);
+    spr.setCursor(SW - 14, y + 16); spr.print(">");
+  };
+
+  String wfVal = wifiSSID.isEmpty() ? "Not configured" :
+                 (WiFi.status() == WL_CONNECTED ? wifiSSID : "Connecting...");
+  uint16_t wfCol = (WiFi.status() == WL_CONNECTED) ? COL_SUCCESS : COL_MUTED;
+  String syncVal = (WiFi.status() == WL_CONNECTED) ? "Connected" : "Offline";
+  uint16_t syncCol2 = (WiFi.status() == WL_CONNECTED) ? COL_SUCCESS : COL_MUTED;
+  String brtStr = (curBrightness >= 220) ? "High" :
+                  (curBrightness >= 155) ? "Medium" : "Low";
+
+  settRow(0, COL_SUCCESS, "W", "Wi-Fi Network",     wfVal.c_str(),        wfCol,    false);
+  settRow(1, COL_PRIMARY, "S", "Sync Status",        syncVal.c_str(),      syncCol2, false);
+  settRow(2, COL_WARNING, "B", "Brightness",         brtStr.c_str(),       COL_TEXT, false);
+  settRow(3, COL_MUTED,   "i", "Device Information", "",                   COL_MUTED,false);
+  settRow(4, COL_ERROR,   "!", "Factory Reset",      "Hold 3s to confirm", COL_MUTED,true);
+
+  drawTabBar(spr, 3);  // Settings tab active
+  spr.pushSprite(0, 0);
+}
+
+// ── DEVICE INFO — Screen 6 ────────────────────────────────────────────────────
+static void drawDeviceInfo() {
+  spr.fillSprite(COL_BG);
+  bool online = (WiFi.status() == WL_CONNECTED);
+  _drawSubHeader(spr, "Device Info", online);
+
+  const int32_t ROW_H = 36;
+
+  auto infoRow = [&](int32_t idx, const char* label, const String& val, uint16_t valCol) {
+    int32_t y = 58 + idx * ROW_H;
+    spr.fillRect(0, y, SW, ROW_H, COL_BG);
+    spr.fillRect(14, y + ROW_H - 1, SW - 28, 1, COL_BORDER);
+    spr.setFont(F_TINY); spr.setTextColor(COL_MUTED, COL_BG);
+    spr.setCursor(14, y + 5); spr.print(label);
+    spr.setTextColor(valCol, COL_BG);
+    spr.setCursor(14, y + 19); spr.print(val);
+  };
+
+  infoRow(0, "Device ID",        "Dikly-" + macSuffix(),       COL_PRIMARY);
+  infoRow(1, "Model",            "ES3C28P  ESP32-S3",           COL_TEXT);
+  infoRow(2, "Firmware Version", String(FIRMWARE_VERSION),      COL_TEXT);
+
+  uint32_t upSec = millis() / 1000;
+  char upBuf[24]; snprintf(upBuf, sizeof(upBuf), "%uh %02um %02us",
+                           upSec / 3600, (upSec % 3600) / 60, upSec % 60);
+  infoRow(3, "Uptime", String(upBuf), COL_TEXT);
+
+  // Memory usage row — custom with purple progress bar
+  {
+    int32_t y = 58 + 4 * ROW_H;
+    spr.fillRect(0, y, SW, ROW_H, COL_BG);
+    spr.fillRect(14, y + ROW_H - 1, SW - 28, 1, COL_BORDER);
+    spr.setFont(F_TINY); spr.setTextColor(COL_MUTED, COL_BG);
+    spr.setCursor(14, y + 4); spr.print("Memory Usage");
+    uint32_t freeH  = ESP.getFreeHeap();
+    uint32_t totalH = ESP.getHeapSize();
+    uint32_t usedPct = (totalH > 0) ? (totalH - freeH) * 100 / totalH : 0;
+    char memBuf[30];
+    snprintf(memBuf, sizeof(memBuf), "%uKB free / %uKB total", freeH / 1024, totalH / 1024);
+    spr.setFont(F_TINY); spr.setTextColor(COL_TEXT, COL_BG);
+    spr.setCursor(14, y + 17); spr.print(memBuf);
+    int32_t bx = 14, bby = y + 28, bw = SW - 28;
+    int32_t bf = (int32_t)(bw * usedPct / 100);
+    spr.fillRoundRect(bx, bby, bw, 6, 3, COL_BORDER);
+    if (bf > 0) spr.fillRoundRect(bx, bby, bf, 6, 3, COL_PRIMARY);
+  }
+
+  String sdStr = sdAvailable ?
+    ("OK — " + String((uint32_t)(SD_MMC.cardSize() / (1024ULL * 1024ULL))) + " MB") :
+    "Not found";
+  infoRow(5, "SD Card", sdStr, sdAvailable ? COL_SUCCESS : COL_MUTED);
+
+  drawTabBar(spr, 3);  // Settings tab active
+  spr.pushSprite(0, 0);
+}
+
 // ─── Captive-Portal Pairing HTML ─────────────────────────────────────────────
 static const char PAIR_HTML[] PROGMEM = R"HTML(<!doctype html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -1960,6 +2203,64 @@ static void registerLocalHttp() {
   });
 }
 
+// ─── Paired-screen touch dispatcher ──────────────────────────────────────────
+static void handlePairedTap(uint16_t tx, uint16_t ty) {
+  // Tab bar (y ≥ 280)
+  if (ty >= 280) {
+    uint8_t tabIdx = (uint8_t)(tx / 60);
+    if      (tabIdx == 0) curScreen = READY;
+    else if (tabIdx == 1) curScreen = sessionId.isEmpty() ? READY : SESSION;
+    else if (tabIdx == 2) curScreen = SUMMARY;
+    else if (tabIdx == 3) curScreen = SETTINGS;
+    return;
+  }
+  // Back button (header area, left quarter)
+  if (ty < 46 && tx < 50) {
+    if (curScreen == PAIR_SCREEN || curScreen == SUMMARY) curScreen = READY;
+    else if (curScreen == SETTINGS)                       curScreen = READY;
+    else if (curScreen == DEVICE_INFO)                    curScreen = SETTINGS;
+    return;
+  }
+  // READY screen
+  if (curScreen == READY) {
+    if      (ty >= 138 && ty <= 168) curScreen = PAIR_SCREEN;  // Pair Lecturer button
+    else if (ty >= 250)              curScreen = DEVICE_INFO;  // Device ID row
+  }
+  // SESSION screen
+  else if (curScreen == SESSION) {
+    if (ty >= 262 && ty <= 278) {   // End Session button
+      summaryTotal   = sessionTotalEnrolled;
+      summaryPresent = studentsMarked;
+      summaryPct     = (summaryTotal > 0) ?
+                       (float)summaryPresent * 100.0f / (float)summaryTotal : 0.0f;
+      summaryCourse  = sessionCourse.isEmpty() ? sessionTitle : sessionCourse;
+      sessionId = ""; sessionSeed = "";
+      sessionTitle = ""; sessionCourse = ""; sessionLecturer = "";
+      studentsMarked = 0; sessionTotalEnrolled = 0;
+      bleStop();
+      curScreen = SUMMARY;
+    }
+  }
+  // SETTINGS screen — 5 rows × 40 px starting at y=58
+  else if (curScreen == SETTINGS) {
+    if (ty >= 58 && ty < 58 + 5 * 40) {
+      int32_t rowIdx = ((int32_t)ty - 58) / 40;
+      if (rowIdx == 0) {                           // Wi-Fi Network
+        if (wifiNetCount == 0) doWifiScan();
+        curScreen = WIFI_SCAN;
+      } else if (rowIdx == 2) {                    // Brightness cycle
+        if      (curBrightness >= 220) curBrightness = 180;
+        else if (curBrightness >= 155) curBrightness = 100;
+        else                           curBrightness = 255;
+        display.setBrightness(curBrightness);
+      } else if (rowIdx == 3) {                    // Device Information
+        curScreen = DEVICE_INFO;
+      }
+      // rowIdx == 4 (Factory Reset) requires long-press — handled in loop()
+    }
+  }
+}
+
 // ═════════════════════════════════════════════════════════════════════════════
 //  SETUP & LOOP
 // ═════════════════════════════════════════════════════════════════════════════
@@ -2249,29 +2550,75 @@ void loop() {
   uint32_t now = millis();
   if (staConnected && now - lastHbMs >= HEARTBEAT_MS) { lastHbMs = now; sendHeartbeat(); }
 
+  // ── Touch handling for all paired screens ────────────────────────────────
+  {
+    uint16_t tx, ty;
+    bool touched = touchRead(tx, ty);
+    if (touched) {
+      touchX = tx; touchY = ty;
+      if (!touchActive) {
+        touchActive = true; touchDownMs = millis(); touchHandled = false;
+      }
+      // Factory reset: 3-second hold on row 4 of Settings (y 218-258)
+      if (curScreen == SETTINGS && !touchHandled &&
+          touchY >= 218 && touchY < 258 &&
+          millis() - touchDownMs >= 3000) {
+        touchHandled = true; factoryReset();
+      }
+    } else {
+      if (touchActive && !touchHandled) handlePairedTap(touchX, touchY);
+      touchActive = false; touchHandled = false;
+    }
+  }
+
+  // ── Session state → screen transition ────────────────────────────────────
+  static bool wasSessActive = false;
+  bool sessActive = !sessionId.isEmpty() && !sessionSeed.isEmpty() && timeSynced;
+  if (sessActive && !wasSessActive) {
+    // Session just became active — navigate home screens to SESSION
+    if (curScreen == READY || curScreen == PAIR_SCREEN) curScreen = SESSION;
+  } else if (!sessActive && wasSessActive) {
+    // Session just ended via heartbeat (server removed it) — go to READY
+    if (curScreen == SESSION) curScreen = READY;
+  }
+  wasSessActive = sessActive;
+
   // Render at ~10 fps
   static uint32_t lastDraw = 0;
   if (now - lastDraw < 100) { delay(10); return; }
   lastDraw = now;
 
-  if (!sessionId.isEmpty() && !sessionSeed.isEmpty() && timeSynced) {
-    curScreen = SESSION;
-    time_t unixNow = time(nullptr);
-    uint32_t secsInWin = (uint32_t)unixNow % WINDOW_SECONDS;
-    uint32_t secsLeft  = WINDOW_SECONDS - secsInWin;
-    String code = deriveCode(sessionSeed, (uint32_t)unixNow);
-
-    // Auto-clear if session window closed
-    if (sessionStartedAt && unixNow > (time_t)(sessionStartedAt + sessionDuration)) {
-      sessionId = ""; sessionSeed = "";
-      bleStop();
-      curScreen = READY; drawReady(); return;
+  switch (curScreen) {
+    case SESSION: {
+      if (!sessActive) { curScreen = READY; drawReady(); break; }
+      time_t unixNow = time(nullptr);
+      uint32_t secsInWin = (uint32_t)unixNow % WINDOW_SECONDS;
+      uint32_t secsLeft  = WINDOW_SECONDS - secsInWin;
+      String code = deriveCode(sessionSeed, (uint32_t)unixNow);
+      // Auto-expire: session duration exceeded → show summary
+      if (sessionStartedAt && unixNow > (time_t)(sessionStartedAt + sessionDuration)) {
+        summaryTotal   = sessionTotalEnrolled;
+        summaryPresent = studentsMarked;
+        summaryPct     = (summaryTotal > 0) ?
+                         (float)summaryPresent * 100.0f / (float)summaryTotal : 0.0f;
+        summaryCourse  = sessionCourse.isEmpty() ? sessionTitle : sessionCourse;
+        sessionId = ""; sessionSeed = "";
+        sessionTitle = ""; sessionCourse = ""; sessionLecturer = "";
+        studentsMarked = 0; sessionTotalEnrolled = 0;
+        bleStop(); curScreen = SUMMARY; drawSummary(); return;
+      }
+      bleUpdatePayload();
+      drawSession(code, secsLeft, WINDOW_SECONDS);
+      break;
     }
-    bleUpdatePayload();   // update BLE slot every 30 s
-    drawSession(code, secsLeft, WINDOW_SECONDS);
-  } else {
-    bleStop();            // no active session — stop broadcasting
-    curScreen = READY;
-    drawReady();
+    case SUMMARY:     drawSummary();    break;
+    case PAIR_SCREEN: drawPairScreen(); break;
+    case SETTINGS:    drawSettings();   break;
+    case DEVICE_INFO: drawDeviceInfo(); break;
+    default:
+      bleStop();
+      curScreen = READY;
+      drawReady();
+      break;
   }
 }
