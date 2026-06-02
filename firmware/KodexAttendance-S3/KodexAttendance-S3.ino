@@ -93,6 +93,7 @@ public:
 #include <BLEAdvertising.h>
 #include <esp_bt.h>        // esp_bt_controller_mem_release
 #include <esp_wifi.h>      // esp_wifi_stop / esp_wifi_deinit for hard reset
+#include <ESPmDNS.h>       // dikly.local hostname on both AP and STA networks
 
 // Forward declarations
 static void startWifiReconfigPortal();
@@ -1005,9 +1006,9 @@ static void drawSetup(const String& apName) {
     spr.setFont(F_TINY); spr.setTextColor(COL_MUTED, GLASS);
     spr.setCursor(tx, cy + 8); spr.print("Scan QR or open:");
     spr.setFont(F_TINY); spr.setTextColor(CYAN, GLASS);
-    spr.setCursor(tx, cy + 22); spr.print("192.168.4.1");
+    spr.setCursor(tx, cy + 22); spr.print("dikly.local");
     spr.setFont(F_TINY); spr.setTextColor(COL_MUTED, GLASS);
-    spr.setCursor(tx, cy + 36); spr.print("in your browser");
+    spr.setCursor(tx, cy + 36); spr.print("or 192.168.4.1");
     // QR code — right side, white background
     const int32_t QR_SCALE = 3;
     const int32_t QR_PX    = QR_IP_SIZE * QR_SCALE; // 75px
@@ -2499,6 +2500,7 @@ void setup() {
   IPAddress apGw;
   uint32_t apWait = millis();
   do { delay(100); apGw = WiFi.softAPIP(); } while (apGw == IPAddress(0,0,0,0) && millis()-apWait < 5000);
+  MDNS.begin("dikly");  // reachable as http://dikly.local on both AP and school WiFi
   LOG("Device AP: " + apName + " @ " + apGw.toString());
 
   SD_MMC.setPins(SD_CLK, SD_CMD, SD_D0, SD_D1, SD_D2, SD_D3);
