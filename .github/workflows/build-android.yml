@@ -175,11 +175,11 @@ jobs:
           signing_block = """
               signingConfigs {
                   release {
-                      storeFile file("${{ github.workspace }}/ci/release.p12")
-                      storePassword "DiklySecure2026"
+                      storeFile file("${{ github.workspace }}/ci/dikly-upload.jks")
+                      storePassword "DiklyUpload2026"
                       keyAlias "dikly"
-                      keyPassword "DiklySecure2026"
-                      storeType "PKCS12"
+                      keyPassword "DiklyUpload2026"
+                      storeType "JKS"
                   }
               }
           """
