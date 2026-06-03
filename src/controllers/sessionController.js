@@ -233,10 +233,14 @@ exports.validateAttendance = async (req, res) => {
 // ─── HEARTBEAT WATCHDOG ───────────────────────────────────────────────────────
 exports.runWatchdog = async () => {
   try {
-    const threshold = new Date(Date.now() - 10000);
+    // 30 s gives 6 missed heartbeats (device sends every 5 s) before killing a
+    // session — enough to ride out brief network hiccups without leaving zombie
+    // sessions alive when the device is genuinely off.
+    const threshold = new Date(Date.now() - 30_000);
     const staleSessions = await AttendanceSession.find({ status: 'active' });
 
     for (const session of staleSessions) {
+      if (!session.deviceId) continue;
       const device = await Device.findOne({ deviceId: session.deviceId });
       if (!device) continue;
 

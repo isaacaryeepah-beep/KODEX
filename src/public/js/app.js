@@ -6323,11 +6323,20 @@ async function renderManagerDashboard(content) {
 let _sessionsFilterCourseId = '';
 let _sessionsFilterCourseTitle = '';
 
+let _sessionsAutoRefreshTimer = null;
+
 async function renderSessions(courseId, courseTitle) {
   // Allow passing a courseId to pre-filter (e.g. from course page)
   if (courseId) { _sessionsFilterCourseId = courseId; _sessionsFilterCourseTitle = courseTitle || ''; }
   const content = document.getElementById('main-content');
   if (!content) return;
+
+  // Auto-refresh every 30 s so the UI reflects watchdog-killed sessions
+  if (_sessionsAutoRefreshTimer) clearInterval(_sessionsAutoRefreshTimer);
+  _sessionsAutoRefreshTimer = setInterval(() => {
+    if (document.getElementById('main-content')) renderSessions();
+    else { clearInterval(_sessionsAutoRefreshTimer); _sessionsAutoRefreshTimer = null; }
+  }, 30_000);
 
   // Offline: render from cache immediately
   if (!isOnline()) {
@@ -6909,11 +6918,21 @@ async function generateQR(sessionId) {
       }, QR_EXPIRY_SECONDS * 1000);
 
     } catch (e) {
+      _stopQrTimers();
+      const sessionEnded = e.message?.toLowerCase().includes('not active') || e.message?.toLowerCase().includes('not found');
       container.innerHTML = `
-        <div class="modal-overlay" onclick="_stopQrTimers();closeModal(event)">
-          <div class="modal" style="text-align:center">
-            <p style="color:var(--danger)">${e.message}</p>
-            <button class="btn btn-primary btn-sm" onclick="_stopQrTimers();closeModal()">Close</button>
+        <div class="modal-overlay" onclick="closeModal(event)">
+          <div class="modal" style="text-align:center;max-width:360px">
+            <div style="font-size:40px;margin-bottom:12px">${sessionEnded ? '📴' : '⚠️'}</div>
+            <h3 style="margin:0 0 8px">${sessionEnded ? 'Session Ended' : 'QR Error'}</h3>
+            <p style="color:var(--text-light);font-size:14px;margin-bottom:20px">
+              ${sessionEnded
+                ? 'The classroom device went offline and the session was automatically stopped.'
+                : e.message}
+            </p>
+            <div class="modal-actions" style="justify-content:center">
+              <button class="btn btn-primary btn-sm" onclick="closeModal();renderSessions()">Back to Sessions</button>
+            </div>
           </div>
         </div>`;
     }
