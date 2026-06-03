@@ -663,6 +663,22 @@ static void downloadRoster() {
     resp = http.getString();
     File rf = SD_MMC.open("/roster.json", FILE_WRITE);
     if (rf) { rf.print(resp); rf.close(); LOG("Roster saved (" + String(resp.length()) + " bytes)"); }
+
+    // Write a companion line-per-index-number file for fast O(n) search during /attend
+    // without loading the full JSON into RAM.
+    JsonDocument rDoc;
+    if (!deserializeJson(rDoc, resp)) {
+      JsonArray arr = rDoc["roster"].as<JsonArray>();
+      File ix = SD_MMC.open("/roster_idx.txt", FILE_WRITE);
+      if (ix) {
+        for (JsonObject student : arr) {
+          const char* idx = student["indexNumber"] | "";
+          if (idx[0]) { ix.println(idx); }
+        }
+        ix.close();
+        LOG("Roster index written (" + String(arr.size()) + " entries)");
+      }
+    }
   } else {
     LOG("Roster fetch failed: " + String(code));
   }
@@ -726,6 +742,7 @@ static void sendHeartbeat() {
   req["localIp"]         = WiFi.localIP().toString();
   req["rtcValid"]        = timeSynced;
   req["firmwareVersion"] = FIRMWARE_VERSION;
+  req["pendingRecords"]  = (uint32_t)(sdRecordCount + offlineCount); // unsynced offline attendance records
   String body; serializeJson(req, body);
   String resp; int code = postJson("/api/devices/heartbeat", body, resp);
   if (code == 401) { LOG("JWT revoked — factory reset"); factoryReset(); return; }
@@ -2548,6 +2565,33 @@ static void registerLocalHttp() {
     // Use NTP time if available; fall back to millis-based offset if clock not synced
     time_t now = time(nullptr);
     if (now < 1700000000UL) now = 1700000000UL + (millis() / 1000);
+
+    // ── Session expiry check ──────────────────────────────────────────────────
+    // Reject submissions more than 60 s after the session's declared end time.
+    if (sessionStartedAt > 0 && sessionDuration > 0) {
+      time_t sessionEnd = (time_t)(sessionStartedAt + sessionDuration + 60); // 60 s grace
+      if (now > sessionEnd) {
+        localHttp.send(403, "application/json", "{\"error\":\"Session has ended. Attendance is no longer accepted.\"}"); return;
+      }
+    }
+
+    // ── Roster validation (soft — gracefully skips if index file missing) ─────
+    // Prevents unknown index numbers from being recorded offline.
+    if (indexNum.length() && sdAvailable && SD_MMC.exists("/roster_idx.txt")) {
+      File ix = SD_MMC.open("/roster_idx.txt", FILE_READ);
+      bool found = false;
+      if (ix) {
+        while (ix.available() && !found) {
+          String line = ix.readStringUntil('\n');
+          line.trim();
+          if (line.equalsIgnoreCase(indexNum)) found = true;
+        }
+        ix.close();
+      }
+      if (!found) {
+        localHttp.send(403, "application/json", "{\"error\":\"Your student ID is not enrolled in this class.\"}"); return;
+      }
+    }
 
     // Validate against current and previous window (±20s clock tolerance)
     bool valid = (submittedCode == deriveCode(sessionSeed, (uint32_t)now)) ||

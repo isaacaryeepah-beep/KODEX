@@ -195,7 +195,7 @@ exports.heartbeat = async (req, res) => {
     const device = req.device;
     if (!device) return res.status(401).json({ message: 'Device authentication missing' });
 
-    const { currentNetwork, mode, localIp, rtcValid, sdOK, firmwareVersion } = req.body || {};
+    const { currentNetwork, mode, localIp, rtcValid, sdOK, firmwareVersion, pendingRecords } = req.body || {};
 
     const wasOffline = device.status === 'offline';
     device.lastHeartbeat  = new Date();
@@ -205,7 +205,8 @@ exports.heartbeat = async (req, res) => {
     if (localIp)                   device.localIp        = localIp;
     if (rtcValid !== undefined)    device.rtcValid       = !!rtcValid;
     if (sdOK     !== undefined)    device.sdOK           = !!sdOK;
-    if (firmwareVersion)           device.firmwareVersion = String(firmwareVersion).slice(0, 32);
+    if (firmwareVersion)           device.firmwareVersion     = String(firmwareVersion).slice(0, 32);
+    if (pendingRecords !== undefined) device.pendingRecordsCount = Math.max(0, Number(pendingRecords) || 0);
 
     // Track the public IP this device is reaching the server from.
     // This is the same NAT IP the school router will hand to students on the
@@ -274,6 +275,14 @@ exports.syncOfflineRecords = async (req, res) => {
     // ── Step 1: sync device-initiated sessions ────────────────────────────────
     const sessionIdMap = {}; // localId → serverSessionId string
 
+    // Defensive size caps — a stolen device JWT must not be able to flood the DB
+    if (Array.isArray(sessions) && sessions.length > 50) {
+      return res.status(400).json({ message: 'Too many sessions in one sync (max 50)' });
+    }
+    if (Array.isArray(records) && records.length > 500) {
+      return res.status(400).json({ message: 'Too many records in one sync (max 500)' });
+    }
+
     if (Array.isArray(sessions) && sessions.length > 0) {
       const Course = require('../models/Course');
 
@@ -312,7 +321,7 @@ exports.syncOfflineRecords = async (req, res) => {
           const newSession = await AttendanceSession.create({
             company:            device.companyId,
             createdBy:          creatorId,
-            title:              s.title || 'Attendance',
+            title:              String(s.title || 'Attendance').slice(0, 120),
             course:             courseRef,
             deviceId:           device.deviceId,
             esp32Seed:          s.seed || '',

@@ -647,6 +647,15 @@ exports.markAttendance = async (req, res) => {
     // go through the device.
     const proximityExempt = ['qr_mark', 'manual', 'jitsi_join'].includes(resolvedMethod);
 
+    // Students cannot self-declare a proximity-exempt method other than QR —
+    // manual and jitsi marks are lecturer/admin-initiated actions only.
+    if (proximityExempt && req.user.role === 'student' && resolvedMethod !== 'qr_mark') {
+      return res.status(403).json({
+        error: 'Connect to the classroom device WiFi hotspot to mark attendance.',
+        requiresHotspot: true,
+      });
+    }
+
     // ── Device required ───────────────────────────────────────────────────────
     if (!proximityExempt) {
       if (!session.deviceId) {

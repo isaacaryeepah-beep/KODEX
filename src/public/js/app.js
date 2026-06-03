@@ -6347,9 +6347,27 @@ async function renderSessions(courseId, courseTitle) {
 
   try {
     const qs = _sessionsFilterCourseId ? `?courseId=${_sessionsFilterCourseId}` : '';
-    const data = await api('/api/attendance-sessions' + qs);
+    const [data, flaggedData, deviceData] = await Promise.allSettled([
+      api('/api/attendance-sessions' + qs),
+      ['lecturer', 'hod', 'admin', 'superadmin'].includes(currentUser.role)
+        ? api('/api/attendance-sessions/flagged/new-devices?limit=200')
+        : Promise.resolve(null),
+      api('/api/devices/my').catch(() => null),
+    ]).then(r => r.map(p => p.status === 'fulfilled' ? p.value : null));
+
     offlineCache('sessions', data);
-    _renderSessionsHTML(content, data.sessions || [], false);
+
+    // Build sessionId → flag count map for row badges
+    const flaggedBySession = {};
+    if (flaggedData?.records) {
+      for (const r of flaggedData.records) {
+        const sid = r.session?._id || r.session;
+        if (sid) flaggedBySession[sid] = (flaggedBySession[sid] || 0) + 1;
+      }
+    }
+    const pendingDeviceRecords = deviceData?.data?.pendingRecordsCount || 0;
+
+    _renderSessionsHTML(content, data?.sessions || [], false, { flaggedBySession, pendingDeviceRecords });
   } catch (e) {
     const cached = offlineRead('sessions');
     if (cached) {
@@ -6360,10 +6378,13 @@ async function renderSessions(courseId, courseTitle) {
   }
 }
 
-function _renderSessionsHTML(content, sessions, isOffline) {
+function _renderSessionsHTML(content, sessions, isOffline, extras) {
   const pendingCount = offlineQueueCount();
   const canStart = ['lecturer', 'manager'].includes(currentUser.role);
   const isLecturer = currentUser.role === 'lecturer';
+  const flaggedBySession = extras?.flaggedBySession || {};
+  const pendingDeviceRecords = extras?.pendingDeviceRecords || 0;
+  const totalFlags = Object.values(flaggedBySession).reduce((a, b) => a + b, 0);
 
   const filterPill = _sessionsFilterCourseId
     ? `<div style="display:flex;align-items:center;gap:6px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:20px;padding:3px 10px 3px 8px;font-size:12px;color:#1e40af;font-weight:600;">
@@ -6372,11 +6393,27 @@ function _renderSessionsHTML(content, sessions, isOffline) {
       </div>`
     : '';
 
+  const newDeviceBanner = totalFlags > 0
+    ? `<div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:10px 14px;margin-bottom:12px;display:flex;align-items:center;gap:10px;font-size:13px;color:#92400e;">
+        <span style="font-size:18px">⚠️</span>
+        <span><strong>${totalFlags} new-device flag${totalFlags !== 1 ? 's' : ''}</strong> detected — a student marked attendance from an unrecognised device. Check highlighted sessions below.</span>
+      </div>`
+    : '';
+
+  const pendingDeviceBanner = pendingDeviceRecords > 0
+    ? `<div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;padding:10px 14px;margin-bottom:12px;display:flex;align-items:center;gap:10px;font-size:13px;color:#0369a1;">
+        <span style="font-size:18px">📴</span>
+        <span><strong>${pendingDeviceRecords} record${pendingDeviceRecords !== 1 ? 's' : ''} pending sync</strong> — the classroom device recorded attendance offline and will sync to the server when it reconnects to the internet.</span>
+      </div>`
+    : '';
+
   content.innerHTML = `
     <div class="page-header">
       <h2>Attendance Sessions</h2>
       <p>Manage attendance sessions${isOffline ? ' <span style="color:#f59e0b;font-weight:600">(Offline — showing cached data)</span>' : ''}</p>
     </div>
+    ${newDeviceBanner}
+    ${pendingDeviceBanner}
     <div class="actions-bar" style="margin-bottom:14px;">
       ${canStart ? `<button class="btn btn-primary btn-sm" onclick="showStartSessionModal()">Start New Session</button>` : ''}
       ${filterPill}
@@ -6390,9 +6427,14 @@ function _renderSessionsHTML(content, sessions, isOffline) {
             ${isLecturer ? '<th>Course</th>' : ''}
             <th>Status</th><th>Started</th><th>Stopped</th><th>Actions</th>
           </tr></thead>
-          <tbody>${sessions.map((s, i) => `
-            <tr>
-              <td>${s.title || 'Untitled'}</td>
+          <tbody>${sessions.map((s, i) => {
+            const flags = flaggedBySession[s._id] || 0;
+            const flagBadge = flags > 0
+              ? `<span title="${flags} new-device flag${flags !== 1 ? 's' : ''}" style="background:#fef3c7;color:#92400e;border:1px solid #fbbf24;border-radius:4px;padding:1px 6px;font-size:11px;font-weight:700;margin-left:6px;">⚠️ ${flags}</span>`
+              : '';
+            return `
+            <tr style="${flags > 0 ? 'background:#fffbeb;' : ''}">
+              <td>${s.title || 'Untitled'}${flagBadge}</td>
               ${isLecturer ? `<td><span style="font-size:11px;font-weight:600;color:#6366f1;">${s.course ? esc(s.course.code || s.course.title || '') : '—'}</span></td>` : ''}
               <td><span class="status-badge status-${s.status}">${s.status}</span></td>
               <td>${new Date(s.startedAt).toLocaleString()}</td>
@@ -6405,8 +6447,8 @@ function _renderSessionsHTML(content, sessions, isOffline) {
               ` : ['active','live','paused','locked'].includes(s.status) ? `
                 <button class="btn btn-sm" style="font-size:11px;background:var(--bg);border:1px solid var(--border)" onclick="viewAttendees('${s._id}', '${(s.title||'Session').replace(/['\''\'']/g,'')}')">Attendees</button>
               ` : ''}</td>
-            </tr>
-          `).join('')}</tbody>
+            </tr>`;
+          }).join('')}</tbody>
         </table>
       ` : `<div class="empty-state"><p>${_sessionsFilterCourseId ? 'No sessions for this course yet.' : 'No sessions found'}</p></div>`}
     </div>
