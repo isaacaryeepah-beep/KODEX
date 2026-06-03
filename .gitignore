@@ -7,7 +7,7 @@ node_modules/
 /ios
 /www/capacitor-*
 *.keystore
-*.jks
+# ci/dikly-upload.jks is intentionally tracked for CI signing
 keystore.properties
 google-services.json
 GoogleService-Info.plist
