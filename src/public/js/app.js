@@ -6801,7 +6801,7 @@ async function stopSession(id) {
 // QR auto-rotation state
 let _qrRotateTimer = null;
 let _qrCountdownTimer = null;
-const QR_EXPIRY_SECONDS = 15;
+const QR_EXPIRY_SECONDS = 60;
 
 function _stopQrTimers() {
   if (_qrRotateTimer)   { clearTimeout(_qrRotateTimer);  _qrRotateTimer = null; }
@@ -6867,12 +6867,12 @@ async function generateQR(sessionId) {
                     style="transition:stroke-dashoffset 1s linear,stroke 0.3s"/>
                 </svg>
                 <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center">
-                  <span id="qr-countdown" style="font-size:16px;font-weight:800;color:var(--primary)">${QR_EXPIRY_SECONDS}</span>
+                  <span id="qr-countdown" style="font-size:16px;font-weight:800;color:var(--primary)">${Math.floor(QR_EXPIRY_SECONDS/60)}:${String(QR_EXPIRY_SECONDS%60).padStart(2,'0')}</span>
                 </div>
               </div>
               <div id="qr-status" style="display:inline-flex;align-items:center;gap:6px;background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.3);border-radius:999px;padding:5px 14px;font-size:12px;font-weight:600;color:#16a34a">
                 <span style="width:7px;height:7px;border-radius:50%;background:#16a34a;display:inline-block;animation:pulse-green 1.5s infinite"></span>
-                Live · Auto-refreshes every ${QR_EXPIRY_SECONDS}s
+                Live · Auto-refreshes every 1 min
               </div>
             </div>
 
@@ -6888,17 +6888,18 @@ async function generateQR(sessionId) {
       const ring = document.getElementById('qr-ring');
       const countEl = document.getElementById('qr-countdown');
       const circumference = 170;
+      const _fmtTime = s => `${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`;
 
       _qrCountdownTimer = setInterval(() => {
         remaining--;
-        if (countEl) countEl.textContent = remaining;
+        if (countEl) countEl.textContent = _fmtTime(remaining);
         if (ring) {
           const offset = circumference * (1 - remaining / QR_EXPIRY_SECONDS);
           ring.style.strokeDashoffset = offset;
-          // Turn orange at 5s, red at 3s
-          if (remaining <= 3)       ring.style.stroke = '#ef4444';
-          else if (remaining <= 5)  ring.style.stroke = '#f97316';
-          else                      ring.style.stroke = 'var(--primary)';
+          // Turn orange at 15s, red at 5s
+          if (remaining <= 5)        ring.style.stroke = '#ef4444';
+          else if (remaining <= 15)  ring.style.stroke = '#f97316';
+          else                       ring.style.stroke = 'var(--primary)';
         }
         if (remaining <= 0) {
           clearInterval(_qrCountdownTimer);
