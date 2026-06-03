@@ -93,24 +93,20 @@ exports.startSession = async (req, res) => {
       });
     }
 
+    let deviceOfflineWarning = null;
     if (!freshness.online) {
+      // Device is registered but not currently sending heartbeats.
+      // Allow the session to start in offline-ready mode rather than blocking —
+      // the device may be on the local hotspot with no internet, or briefly
+      // unreachable. The lecturer is physically present and can see the device.
       const lastSeenMsg = freshness.lastSeenAt
-        ? `Last seen ${freshness.secondsAgo}s ago.`
-        : "Device has never sent a heartbeat.";
-      return res.status(503).json({
-        error: "ESP32 device is offline",
-        message: `The DIKLY classroom device is not responding. ${lastSeenMsg} Power it on and wait a few seconds, then try again.`,
-        deviceStatus: {
-          online:      false,
-          registered:  true,
-          deviceId:    device.deviceId,
-          lastSeenAt:  freshness.lastSeenAt,
-          secondsAgo:  freshness.secondsAgo,
-        },
-      });
+        ? `last seen ${freshness.secondsAgo}s ago`
+        : "never sent a heartbeat";
+      deviceOfflineWarning = `Device is not responding (${lastSeenMsg}). Session started in offline mode — the device will sync codes when it reconnects.`;
+      console.warn(`[SESSION START] Device ${device?.deviceId} offline (${lastSeenMsg}) — starting offline session for ${company.name}`);
+    } else {
+      console.log(`[SESSION START] ✓ Device ${device.deviceId} online (${freshness.secondsAgo}s ago) — allowing start for ${company.name}`);
     }
-
-    console.log(`[SESSION START] ✓ Device ${device.deviceId} online (${freshness.secondsAgo}s ago) — allowing start for ${company.name}`);
     // ── End device check ──────────────────────────────────
 
     // ── Device-lecturer assignment check ──────────────────────────────────────
@@ -278,6 +274,8 @@ exports.startSession = async (req, res) => {
       durationSeconds: DURATION,
       status: "active",
       startedAt: new Date(),
+      mode: deviceOfflineWarning ? "offline-ready" : "online",
+      requiresDeviceOnline: !deviceOfflineWarning,
     };
 
     if (company.qrSeed)        sessionData.qrSeed        = company.qrSeed;
@@ -291,7 +289,12 @@ exports.startSession = async (req, res) => {
       { path: "course", select: "title code" },
     ]);
 
-    res.status(201).json({ session: populated, ...(courseWarning && { warning: courseWarning }) });
+    const warnings = [courseWarning, deviceOfflineWarning].filter(Boolean);
+    res.status(201).json({
+      session: populated,
+      ...(warnings.length > 0 && { warning: warnings.join(" ") }),
+      ...(deviceOfflineWarning && { offlineMode: true }),
+    });
   } catch (error) {
     if (error.name === "ValidationError") {
       const messages = Object.values(error.errors).map((e) => e.message);
@@ -661,7 +664,7 @@ exports.markAttendance = async (req, res) => {
     }
 
     const fresh = _deviceFreshness(sessionDevice, DEVICE_MARK_WINDOW_MS);
-    if (!fresh.online) {
+    if (!fresh.online && session.requiresDeviceOnline !== false && session.mode !== 'offline-ready') {
       return res.status(503).json({
         error: 'The classroom device is offline. Ask your lecturer to power it on.',
         esp32Required: true,
@@ -895,6 +898,7 @@ exports.markAttendance = async (req, res) => {
     // ── Rotating code verification ─────────────────────────────────────────
     // Required for hotspot-token and IP paths. Skipped for BLE — the slot HMAC
     // already proves physical proximity; a second code would be redundant.
+    let codeAlreadyVerified = false;
     if (!skipCodeCheck && session.esp32Seed) {
       const { verifyCodeForSession } = require('../services/attendanceCodeService');
       const result = verifyCodeForSession(session, code);
@@ -904,6 +908,7 @@ exports.markAttendance = async (req, res) => {
           codeRequired: true,
         });
       }
+      codeAlreadyVerified = true;
     }
 
     // ── Device lock enforcement ────────────────────────────────────────────
@@ -967,7 +972,10 @@ exports.markAttendance = async (req, res) => {
         return res.status(410).json({ error: "QR code has expired. Please scan the latest QR code on screen." });
       }
       qrTokenRef = tokenDoc._id;
-    } else if (qrToken || code) {
+    } else if (!codeAlreadyVerified && (qrToken || code)) {
+      // QrToken lookup for verbal/QR codes (QFTK-style tokens in the QrToken collection).
+      // Skipped when the rotating ESP32 code was already verified above — the 6-digit
+      // rotating code is NOT stored in QrToken and would falsely return "Invalid code".
       const query = {
         company: req.user.company,
         session: resolvedSessionId,

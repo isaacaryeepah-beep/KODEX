@@ -6405,7 +6405,7 @@ function _renderSessionsHTML(content, sessions, isOffline) {
 }
 
 
-async function showStartSessionModal() {
+async function showStartSessionModal(offlineOverride) {
   // Force a fresh connectivity check each time this is opened (covers Retry path)
   _serverCheckTs = 0;
 
@@ -6463,27 +6463,28 @@ async function showStartSessionModal() {
     return;
   }
 
-  // Device registered but offline
-  if (!checkError && deviceStatus && deviceStatus.hasDevice && !deviceStatus.deviceOnline) {
+  // Device registered but offline — show warning and let lecturer choose
+  if (!offlineOverride && !checkError && deviceStatus && deviceStatus.hasDevice && !deviceStatus.deviceOnline) {
     const lastSeen = deviceStatus.lastSeenAt
       ? `Last seen: ${new Date(deviceStatus.lastSeenAt).toLocaleString()}`
       : 'Last seen: Never';
     container.innerHTML = `
       <div class="modal-overlay" onclick="closeModal(event)">
-        <div class="modal" onclick="event.stopPropagation()" style="text-align:center;max-width:400px">
+        <div class="modal" onclick="event.stopPropagation()" style="text-align:center;max-width:420px">
           <div style="font-size:40px;margin-bottom:12px">📟</div>
           <h3 style="margin-bottom:8px">Device is Offline</h3>
           <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px;line-height:1.6">
             The <strong>DIKLY classroom device</strong> is not responding.<br>
-            Power it on, wait a few seconds, then try again.
+            Power it on and retry, or start an offline session — the device will sync the code when it reconnects.
           </p>
           <div style="background:#fef3c7;border:1px solid #fde68a;border-radius:8px;padding:10px 14px;font-size:12px;color:#92400e;margin-bottom:20px;text-align:left">
             <strong>${lastSeen}</strong><br>
             Status: Offline — no heartbeat in last 20s
           </div>
-          <div style="display:flex;gap:8px;justify-content:center">
+          <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
             <button class="btn btn-secondary btn-sm" onclick="closeModal()">Cancel</button>
-            <button class="btn btn-primary btn-sm" onclick="showStartSessionModal()">↻ Retry</button>
+            <button class="btn btn-secondary btn-sm" onclick="showStartSessionModal()">↻ Retry</button>
+            <button class="btn btn-primary btn-sm" onclick="showStartSessionModal('offline')">Start Offline Session</button>
           </div>
         </div>
       </div>`;
@@ -6492,7 +6493,7 @@ async function showStartSessionModal() {
 
   // Device check failed — network error or server unreachable.
   // BLOCK — never silently proceed. Show retry screen.
-  if (checkError) {
+  if (!offlineOverride && checkError) {
     container.innerHTML = `
       <div class="modal-overlay" onclick="closeModal(event)">
         <div class="modal" onclick="event.stopPropagation()" style="text-align:center;max-width:400px">
@@ -6510,7 +6511,7 @@ async function showStartSessionModal() {
       </div>`;
     return;
   }
-  // ── Device confirmed online — show session form ────────────
+  // ── Device confirmed online (or offline override) — show session form ────────────
 
   // Fetch courses — always from dikly.sbs (hardcoded in API constant)
   // If this fails, it means the server is unreachable — show clear error.
@@ -6569,10 +6570,17 @@ async function showStartSessionModal() {
     }
   } catch(_) { /* non-critical */ }
 
+  const offlineBanner = offlineOverride ? `
+    <div style="background:#fef3c7;border:1px solid #fde68a;border-radius:8px;padding:10px 14px;font-size:12px;color:#92400e;margin-bottom:14px;display:flex;align-items:flex-start;gap:8px">
+      <span style="font-size:16px;flex-shrink:0">📶</span>
+      <div><strong>Offline Mode</strong> — The classroom device is not responding. The session will start and the device will sync the rotating code when it reconnects. Students can still mark attendance using the code shown on the device screen.</div>
+    </div>` : '';
+
   container.innerHTML = `
     <div class="modal-overlay" onclick="closeModal(event)">
-      <div class="modal" onclick="event.stopPropagation()">
+      <div class="modal" onclick="event.stopPropagation()" data-offline="${offlineOverride ? '1' : ''}">
         <h3>Start New Session</h3>
+        ${offlineBanner}
         ${groupBadge}
         <div class="form-group">
           <label>Course <span style="color:red">*</span></label>
@@ -6686,7 +6694,9 @@ async function startSession() {
       body: JSON.stringify({ title, courseId, ...(deviceId ? { deviceId } : {}) }),
     });
     closeModal();
-    if (result.warning) {
+    if (result.offlineMode) {
+      toastInfo('Session started in offline mode — device will sync when it reconnects.');
+    } else if (result.warning) {
       if (container) container.innerHTML = `
         <div class="modal-overlay" onclick="closeModal(event)">
           <div class="modal" onclick="event.stopPropagation()" style="max-width:440px">
