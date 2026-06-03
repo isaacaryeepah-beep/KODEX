@@ -180,6 +180,10 @@ static const uint32_t WINDOW_SECONDS      = 300;  // code rotation period (5 min
 
 #define COL_WHITE     0xFFFF
 #define COL_BLACK     0x0000
+#define COL_CYAN      0x07FF  // electric cyan  #00ffff
+#define COL_SURFACE   0x18E3  // elevated card  #192030
+#define COL_INDIGO    0x4819  // indigo         #481990
+#define COL_TEAL      0x0493  // teal           #049390
 
 // ─── Font shortcuts (LovyanGFX built-in vector fonts) ────────────────────────
 #define F_TINY   (&lgfx::fonts::DejaVu9)
@@ -743,20 +747,17 @@ static void centreText(LGFX_Sprite& s, const String& txt, int32_t y,
 
 // ── Utility: draw status dot + "Dikly" header bar ────────────────────────────
 static void drawHeader(LGFX_Sprite& s, bool online) {
-  s.fillRect(0, 0, SW, 42, COL_CARD);
-  s.fillRect(0, 42, SW, 2, COL_PRIMARY);   // thin primary accent line under header
-  // Logo — Orbitron gives a premium tech feel
-  s.setFont(F_LOGO); s.setTextSize(1); s.setTextColor(COL_PRIMARY, COL_CARD);
-  s.setCursor(14, 10); s.print("DIKLY");
-  // Status badge
-  uint16_t dotCol = online ? COL_SUCCESS : COL_ERROR;
-  s.fillCircle(SW - 18, 21, 8, dotCol);
-  s.fillCircle(SW - 18, 21, 5, COL_CARD);   // ring effect
-  s.fillCircle(SW - 18, 21, 3, dotCol);
-  s.setFont(F_TINY); s.setTextColor(COL_MUTED, COL_CARD);
-  String lbl = online ? "Online" : "Offline";
-  int32_t lw = s.textWidth(lbl);
-  s.setCursor(SW - 18 - 12 - lw, 16); s.print(lbl);
+  // Header background + bottom border
+  s.fillRect(0, 0, SW, 44, COL_CARD);
+  s.drawFastHLine(0, 44, SW, COL_BORDER);
+  // "DIKLY" in Orbitron cyan — left-aligned
+  s.setFont(F_LOGO); s.setTextSize(1); s.setTextColor(COL_CYAN, COL_CARD);
+  s.setCursor(12, 8); s.print("DIKLY");
+  // Online indicator — dot + label top-right
+  uint16_t dotCol = online ? COL_SUCCESS : COL_MUTED;
+  s.fillCircle(220, 14, 4, dotCol);
+  s.setFont(F_TINY); s.setTextColor(dotCol, COL_CARD);
+  s.setCursor(228, 8); s.print(online ? "ON" : "OFF");
 }
 
 // ── Utility: 3-bar WiFi signal icon, right-edge at (rx,ty), 10px tall ────────
@@ -769,39 +770,50 @@ static void _wifiBars(LGFX_Sprite& s, int32_t rx, int32_t ty, uint16_t col) {
 // ── Utility: bottom tab bar — active: 0=Home 1=Session 2=Records 3=Settings ──
 static void drawTabBar(LGFX_Sprite& s, uint8_t active) {
   s.fillRect(0, 280, SW, 40, COL_CARD);
-  s.fillRect(0, 280, SW,  1, COL_BORDER);
+  s.drawFastHLine(0, 280, SW, COL_BORDER);
 
   const char* labels[4] = { "Home", "Session", "Records", "Settings" };
   for (uint8_t i = 0; i < 4; i++) {
     int32_t cx  = 30 + (int32_t)i * 60;
     uint16_t col = (i == active) ? COL_PRIMARY : COL_MUTED;
 
+    // Active 3px top accent bar
     if (i == active)
-      s.fillRect(cx - 18, 280, 36, 2, COL_PRIMARY);  // active indicator bar
+      s.fillRect(cx - 20, 280, 40, 3, COL_PRIMARY);
 
     int32_t iy = 293;
-    if (i == 0) {                          // House
-      s.fillTriangle(cx, iy - 7, cx - 7, iy, cx + 7, iy, col);
-      s.fillRect(cx - 5, iy, 10, 7, col);
-      s.fillRect(cx - 2, iy + 3, 4, 4, COL_CARD);
-    } else if (i == 1) {                   // Calendar
-      s.drawRoundRect(cx - 6, iy - 5, 13, 12, 2, col);
-      s.fillRect(cx - 2, iy - 9, 2, 5, col);
-      s.fillRect(cx + 2, iy - 9, 2, 5, col);
-      s.fillRect(cx - 4, iy - 1, 9, 1, col);
-      s.fillRect(cx - 3, iy + 2, 2, 2, col);
-      s.fillRect(cx + 2, iy + 2, 2, 2, col);
-    } else if (i == 2) {                   // List / Records
-      s.fillRect(cx - 7, iy - 5, 14, 2, col);
-      s.fillRect(cx - 7, iy,     14, 2, col);
-      s.fillRect(cx - 7, iy + 5, 10, 2, col);
-    } else {                               // Gear / Settings
+    if (i == 0) {                          // House icon
+      s.fillTriangle(cx, iy - 8, cx - 8, iy + 1, cx + 8, iy + 1, col);
+      s.fillRect(cx - 6, iy + 1, 12, 8, col);
+      s.fillRect(cx - 2, iy + 5, 4, 4, COL_CARD);  // door cutout
+    } else if (i == 1) {                   // Calendar / clock icon
+      s.fillRoundRect(cx - 7, iy - 5, 14, 13, 2, col);
+      s.fillRoundRect(cx - 5, iy - 3, 10, 9, 1, COL_CARD);
+      s.fillRect(cx - 3, iy - 9, 2, 6, col);
+      s.fillRect(cx + 1, iy - 9, 2, 6, col);
+      s.fillRect(cx - 5, iy - 1, 10, 1, col);
+      s.fillRect(cx - 3, iy + 1, 2, 2, col);
+      s.fillRect(cx + 1, iy + 1, 2, 2, col);
+    } else if (i == 2) {                   // List lines icon
+      s.fillRect(cx - 8, iy - 6, 3, 3, col);
+      s.fillRect(cx - 3, iy - 5, 11, 2, col);
+      s.fillRect(cx - 8, iy - 1, 3, 3, col);
+      s.fillRect(cx - 3, iy,     11, 2, col);
+      s.fillRect(cx - 8, iy + 4, 3, 3, col);
+      s.fillRect(cx - 3, iy + 5, 8,  2, col);
+    } else {                               // Gear icon
       s.fillCircle(cx, iy, 5, col);
-      s.fillCircle(cx, iy, 2, COL_CARD);
-      s.fillRect(cx - 1, iy - 8, 2, 4, col);
-      s.fillRect(cx - 1, iy + 4, 2, 4, col);
-      s.fillRect(cx - 8, iy - 1, 4, 2, col);
-      s.fillRect(cx + 4, iy - 1, 4, 2, col);
+      s.fillCircle(cx, iy, 3, COL_CARD);
+      s.fillRect(cx - 1, iy - 9, 3, 4, col);
+      s.fillRect(cx - 1, iy + 5, 3, 4, col);
+      s.fillRect(cx - 9, iy - 1, 4, 3, col);
+      s.fillRect(cx + 5, iy - 1, 4, 3, col);
+      // diagonal spokes
+      s.fillRect(cx - 7, iy - 7, 3, 3, col);
+      s.fillRect(cx + 4, iy + 4, 3, 3, col);
+      s.fillRect(cx - 7, iy + 4, 3, 3, col);
+      s.fillRect(cx + 4, iy - 7, 3, 3, col);
+      s.fillCircle(cx, iy, 3, COL_CARD);
     }
 
     s.setFont(F_TINY); s.setTextColor(col, COL_CARD);
@@ -813,74 +825,74 @@ static void drawTabBar(LGFX_Sprite& s, uint8_t active) {
 // ── Utility: sub-screen header — back arrow + centred title + online dot ──────
 static void _drawSubHeader(LGFX_Sprite& s, const char* title, bool online) {
   s.fillRect(0, 0, SW, 44, COL_CARD);
-  s.fillRect(0, 44, SW, 2, COL_PRIMARY);
-  // Back arrow (left-pointing chevron)
-  s.fillTriangle(14, 22, 26, 13, 26, 31, COL_TEXT);
-  s.fillRect(26, 18, 6, 8, COL_TEXT);
+  s.drawFastHLine(0, 44, SW, COL_BORDER);
+  // Back arrow — left chevron drawn with fillRect primitives
+  // Chevron tip at x=14, body pointing right
+  s.fillRect(14, 21, 14, 3, COL_TEXT);      // horizontal bar
+  s.fillRect(14, 14, 3, 8, COL_TEXT);       // upper arm
+  s.fillRect(14, 22, 3, 8, COL_TEXT);       // lower arm
   // Centred title
   s.setFont(F_SMALL); s.setTextColor(COL_TEXT, COL_CARD);
   int32_t tw = s.textWidth(title);
   s.setCursor((SW - tw) / 2, 15); s.print(title);
-  // Online dot (right side)
+  // Online dot top-right
   uint16_t dc = online ? COL_SUCCESS : COL_MUTED;
-  s.fillCircle(SW - 16, 22, 5, dc);
+  s.fillCircle(222, 14, 4, dc);
+  s.setFont(F_TINY); s.setTextColor(dc, COL_CARD);
+  s.setCursor(229, 8); s.print(online ? "ON" : "OFF");
 }
 
 // ── SPLASH / WELCOME ─────────────────────────────────────────────────────────
 static void drawSplash() {
   spr.fillSprite(COL_BG);
 
-  // ── Logo group (D badge + wordmark, centred horizontally) ─────────────────
-  spr.setFont(F_LOGO_L); spr.setTextSize(1);
-  int32_t logoTxtW = spr.textWidth("Dikly");
-  const int32_t BW = 56, BH = 56, BGAP = 10;
-  int32_t BX = (SW - BW - BGAP - logoTxtW) / 2;
-  const int32_t BY = 46;
-
-  spr.fillRoundRect(BX, BY, BW, BH, 14, COL_PRIMARY);
+  // ── Large "D" badge — filled circle with centred letter ──────────────────
+  const int32_t BCX = SW / 2, BCY = 118;
+  const int32_t BR = 36;
+  spr.fillCircle(BCX, BCY, BR, COL_PRIMARY);
+  // subtle inner ring highlight
+  spr.drawCircle(BCX, BCY, BR - 2, 0x3C9F);
+  spr.setFont(F_MED); spr.setTextSize(1);
   spr.setTextColor(COL_WHITE, COL_PRIMARY);
   int32_t dw = spr.textWidth("D");
   int32_t dh = spr.fontHeight();
-  spr.setCursor(BX + (BW - dw) / 2, BY + (BH - dh) / 2); spr.print("D");
+  spr.setCursor(BCX - dw / 2, BCY - dh / 2 + 2); spr.print("D");
 
-  spr.setFont(F_LOGO_L); spr.setTextColor(COL_TEXT, COL_BG);
-  spr.setCursor(BX + BW + BGAP, BY + 4); spr.print("Dikly");
+  // ── "DIKLY" wordmark ────────────────────────────────────────────────────
+  spr.setFont(F_LOGO); spr.setTextSize(1);
+  spr.setTextColor(COL_TEXT, COL_BG);
+  int32_t tw = spr.textWidth("DIKLY");
+  spr.setCursor((SW - tw) / 2, BCY + BR + 10); spr.print("DIKLY");
 
+  // ── Subtitle ────────────────────────────────────────────────────────────
   spr.setFont(F_TINY); spr.setTextColor(COL_MUTED, COL_BG);
-  int32_t subW = spr.textWidth("Smart Attendance System");
-  spr.setCursor((SW - subW) / 2, BY + BH + 8); spr.print("Smart Attendance System");
+  const char* sub = "Attendance System";
+  int32_t sw2 = spr.textWidth(sub);
+  spr.setCursor((SW - sw2) / 2, BCY + BR + 34); spr.print(sub);
 
-  // ── Divider ───────────────────────────────────────────────────────────────
-  spr.drawFastHLine(18, BY + BH + 22, SW - 36, COL_BORDER);
+  // ── Cyan accent line under wordmark ─────────────────────────────────────
+  spr.drawFastHLine(SW / 2 - 28, BCY + BR + 46, 56, COL_CYAN);
 
-  // ── Institution card ──────────────────────────────────────────────────────
-  int32_t cardY = BY + BH + 30;
-  card(spr, 14, cardY, SW - 28, 78, COL_CARD, COL_BORDER, 12);
+  // ── Version string ───────────────────────────────────────────────────────
+  spr.setFont(F_TINY); spr.setTextColor(COL_MUTED, COL_BG);
+  String verStr = "v2.1.0";
+  int32_t vw = spr.textWidth(verStr);
+  spr.setCursor((SW - vw) / 2, BCY + BR + 56); spr.print(verStr);
 
-  spr.fillCircle(38, cardY + 38, 20, COL_PRIMARY);
-  spr.setFont(F_SMALL); spr.setTextColor(COL_WHITE, COL_PRIMARY);
-  int32_t kw = spr.textWidth("K");
-  spr.setCursor(38 - kw / 2, cardY + 28); spr.print("K");
+  // ── Animated loading dots (millis-based, 4 states) ───────────────────────
+  uint8_t phase = (millis() / 500) % 4;
+  const int32_t dotY = BCY + BR + 78;
+  const int32_t dotSpacing = 14;
+  for (uint8_t d = 0; d < 3; d++) {
+    uint16_t dc = (d < phase) ? COL_PRIMARY : COL_DIM_CARD;
+    spr.fillCircle(SW / 2 - dotSpacing + d * dotSpacing, dotY, 4, dc);
+  }
 
-  spr.setFont(F_TINY); spr.setTextColor(COL_TEXT, COL_CARD);
-  String inst = institutionCode.isEmpty() ? "Attendance Device" : institutionCode;
-  spr.setCursor(66, cardY + 10); spr.print(inst);
-  spr.setFont(F_TINY); spr.setTextColor(COL_MUTED, COL_CARD);
-  spr.setCursor(66, cardY + 26); spr.print("Excellence · Integrity · Impact");
-  spr.setCursor(66, cardY + 42); spr.print("Firmware v" + String(FIRMWARE_VERSION));
-
-  // ── "Get Started" call-to-action button ──────────────────────────────────
-  int32_t btnY = cardY + 78 + 10;
-  spr.fillRoundRect(14, btnY, SW - 28, 54, 14, COL_PRIMARY);
-  // Highlight stripe
-  spr.fillRoundRect(14, btnY, SW - 28, 20, 14, 0x3C7F);
-  spr.fillRect(14, btnY + 10, SW - 28, 10, 0x3C7F);
-  spr.setFont(F_SMALL); spr.setTextColor(COL_WHITE, COL_PRIMARY);
-  String btn = "Get Started";
-  int32_t tw = spr.textWidth(btn);
-  spr.setCursor((SW - tw) / 2 - 10, btnY + 17); spr.print(btn);
-  int32_t ax = (SW + tw) / 2 + 2, ay = btnY + 27;
-  spr.fillTriangle(ax + 10, ay, ax, ay - 8, ax, ay + 8, COL_WHITE);
+  // ── Bottom watermark ─────────────────────────────────────────────────────
+  spr.setFont(F_TINY); spr.setTextColor(COL_DIM_CARD, COL_BG);
+  const char* wm = "dikly.sbs";
+  int32_t wmw = spr.textWidth(wm);
+  spr.setCursor((SW - wmw) / 2, SH - 18); spr.print(wm);
 
   spr.pushSprite(0, 0);
 }
