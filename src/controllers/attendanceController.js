@@ -638,57 +638,63 @@ exports.markAttendance = async (req, res) => {
       return res.status(404).json({ error: "No active session found. The manager needs to start a session first." });
     }
 
-    // ── Strict device proximity enforcement ──────────────────────────────────
-    // Physical presence is required. All three conditions must pass:
-    //   1. Session must be bound to a paired device (set at startSession).
-    //   2. That device must be online (heartbeat within 15 s).
-    //   3. Student's IP must exactly match one of the IPs the ESP32 has
-    //      reached the server from in the last 10 minutes.
-    // No exceptions — empty deviceIps means the device hasn't reported yet,
-    // which is also a hard block.
-    if (!session.deviceId) {
-      return res.status(403).json({
-        error: 'This session has no classroom device. Ask your lecturer to start a new session from a paired device.',
-        esp32Required: true,
-      });
+    // Resolve method early — needed to decide which proximity checks apply.
+    // (Full attendanceMethod is re-used below for record creation.)
+    const resolvedMethod = method ? (methodMap[method] || method) : "manual";
+
+    // QR scans, manual marks, and meeting-join marks carry their own proof and
+    // do not require device-hotspot proximity. All other paths (code, BLE) must
+    // go through the device.
+    const proximityExempt = ['qr_mark', 'manual', 'jitsi_join'].includes(resolvedMethod);
+
+    // ── Device required ───────────────────────────────────────────────────────
+    if (!proximityExempt) {
+      if (!session.deviceId) {
+        return res.status(403).json({
+          error: 'This session has no classroom device. Ask your lecturer to start a new session from a paired device.',
+          esp32Required: true,
+        });
+      }
     }
 
-    const sessionDevice = await Device.findOne({ deviceId: session.deviceId, companyId: req.user.company });
+    const sessionDevice = session.deviceId
+      ? await Device.findOne({ deviceId: session.deviceId, companyId: req.user.company })
+      : null;
 
-    if (!sessionDevice) {
-      return res.status(503).json({
-        error: 'The classroom device for this session is no longer paired.',
-        esp32Required: true,
-      });
+    if (!proximityExempt) {
+      if (!sessionDevice) {
+        return res.status(503).json({
+          error: 'The classroom device for this session is no longer paired.',
+          esp32Required: true,
+        });
+      }
+
+      const fresh = _deviceFreshness(sessionDevice, DEVICE_MARK_WINDOW_MS);
+      if (!fresh.online && session.requiresDeviceOnline !== false && session.mode !== 'offline-ready') {
+        return res.status(503).json({
+          error: 'The classroom device is offline. Ask your lecturer to power it on.',
+          esp32Required: true,
+          esp32Offline: true,
+          secondsAgo:    fresh.secondsAgo,
+        });
+      }
     }
 
-    const fresh = _deviceFreshness(sessionDevice, DEVICE_MARK_WINDOW_MS);
-    if (!fresh.online && session.requiresDeviceOnline !== false && session.mode !== 'offline-ready') {
-      return res.status(503).json({
-        error: 'The classroom device is offline. Ask your lecturer to power it on.',
-        esp32Required: true,
-        esp32Offline: true,
-        secondsAgo:    fresh.secondsAgo,
-      });
-    }
-
-    // ── Proximity proof — three paths, highest-trust first ────────────────────
+    // ── Proximity proof (only for non-exempt methods) ─────────────────────────
     //
-    //  1. BLE token   — student was within BLE range (device broadcasts slot HMAC).
-    //                   No verbal code required; BLE proximity IS the proof.
-    //  2. Hotspot token — student connected to device AP and got a signed token.
-    //                   Verbal code still required as second factor.
-    //  3. IP match    — legacy same-network check (backward compat only).
-    //                   Verbal code still required.
+    //  1. BLE token    — student within BLE range. No code needed; proximity proven.
+    //  2. Hotspot token — student connected to device WiFi AP. Code required as
+    //                    second factor.
     //
-    // Only one path runs. First match wins.
+    //  The legacy IP-match path has been removed. Students MUST connect to the
+    //  classroom device's WiFi hotspot — no bypass via same-network IP is allowed.
     // ─────────────────────────────────────────────────────────────────────────
     const bleToken        = req.body.bleToken;
     const connectionToken = req.body.connectionToken;
 
     let skipCodeCheck = false;
 
-    if (bleToken && typeof bleToken === 'object') {
+    if (!proximityExempt) if (bleToken && typeof bleToken === 'object') {
       // ── BLE + hotspot path (maximum strictness) ──────────────────────────────
       // Both proofs are required together:
       //   Factor 1 — BLE token   : proves student was within Bluetooth range (~10 m)
@@ -836,30 +842,15 @@ exports.markAttendance = async (req, res) => {
         });
       }
 
-    } else {
-      // ── Legacy IP path ──────────────────────────────────────────────────────
-      const studentIp = (req.ip || '').replace(/^::ffff:/, '');
-
-      const TEN_MIN_AGO = Date.now() - 10 * 60 * 1000;
-      const deviceIps = (sessionDevice.recentPublicIps || [])
-        .filter(e => e.seenAt && new Date(e.seenAt).getTime() > TEN_MIN_AGO)
-        .map(e => e.ip);
-
-      if (deviceIps.length === 0) {
-        return res.status(503).json({
-          error: 'The classroom device has not reported its network yet. Wait a few seconds and try again.',
-          esp32Required: true,
-          networkNotReady: true,
-        });
-      }
-
-      if (!deviceIps.includes(studentIp)) {
-        console.warn(`[MARK] Blocked ${req.user.name}: IP ${studentIp} not in device IPs [${deviceIps.join(', ')}]`);
-        return res.status(403).json({
-          error: 'You must be connected to the classroom WiFi to mark attendance.',
-          networkMismatch: true,
-        });
-      }
+    } else if (!proximityExempt) {
+      // No BLE token and no hotspot token — student is not on the device WiFi.
+      // Hard block: there is no fallback path. Students must connect to the
+      // classroom device's WiFi hotspot and submit the code through it.
+      return res.status(403).json({
+        error: 'You must connect to the classroom device WiFi hotspot to mark attendance. Open the Dikly app while connected to the classroom WiFi.',
+        requiresHotspot: true,
+        networkMismatch: true,
+      });
     }
 
     // Anyone marking against a course-linked session must be enrolled in that course.
@@ -952,7 +943,7 @@ exports.markAttendance = async (req, res) => {
       return res.status(409).json({ error: "Attendance already marked for this session" });
     }
 
-    let attendanceMethod = method ? (methodMap[method] || method) : "manual";
+    let attendanceMethod = resolvedMethod;
     let qrTokenRef = null;
 
     if (attendanceMethod === "qr_mark") {
